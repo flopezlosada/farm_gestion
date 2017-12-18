@@ -1,0 +1,15 @@
+<div class="alert alert-danger">
+    <h4>{{ task.title }} (Fecha fija)</h4>
+    {% if task.realDate %}
+        <p><strong>Fecha de finalización: </strong>{{ task.realDate|localizeddate("long","none","es") }}
+    {% else %}
+        <p><strong>Fecha prevista de realización: </strong>
+            {{ task.expectedDate|localizeddate("long","none","es") }}
+        </p>
+    {% endif %}
+    {% if task.users %}
+        <p><strong>Asignada a: {{ task.listUsers }} </strong></p>
+    {% endif %}
+    {{ task.content }}
+    {% include 'AppBundle:Task:record_actions.html.twig' %}
+</div>

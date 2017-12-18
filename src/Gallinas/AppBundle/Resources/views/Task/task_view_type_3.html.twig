@@ -1,0 +1,19 @@
+<div class="alert alert-warning ">
+    <h4>{{ task.title }} (Fecha aproximada)</h4>
+    {% if task.realDate %}
+        <p><strong>Fecha de finalización: </strong>{{ task.realDate|localizeddate("long","none","es") }}
+    {% else %}
+        <p><strong>Fecha prevista de realización: </strong>
+            {% if task.expectedDate %}
+                {{ task.expectedDate|localizeddate("long","none","es") }}
+            {% else %}
+                {{ task.month }}-{{ task.year }}
+            {% endif %}
+        </p>
+    {% endif %}
+    {% if task.users %}
+        <p><strong>Asignada a: {{ task.listUsers }} </strong></p>
+    {% endif %}
+    {{ task.content }}
+    {% include 'AppBundle:Task:record_actions.html.twig' %}
+</div>

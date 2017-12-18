@@ -1,0 +1,56 @@
+{% extends '::layout_graph.html.twig' %}
+{% block especific_graph_library_js %}
+    <script src="{{ asset('bundles/app/js/flot/jquery.flot.min.js') }}"></script>
+{% endblock %}
+{% block warning %}{% endblock %}
+
+{% block title_wrapper %}Puesta de huevos{% endblock %}
+{% block main %}
+    <div class="panel-heading">
+        Resultado de puesta por semana para el año {{ year }}
+    </div>
+    <div class="panel-body">
+        <div id="layweekchart" style="position: relative;height: 550px;"></div>
+    </div>
+{% endblock %}
+
+{% block graph_js %}
+    <script>
+
+        var data = [
+            {% for key, week in daily_lay %}
+            {label: "{{ key }}",
+                data: [
+                        {% for day ,amount in week %}[{{ day }}, {{ amount }}],
+                    {%  endfor %}
+                ]},
+            {%  endfor %}
+        ]
+
+        var options = {
+            series: {
+                lines: {
+                    show: true
+                },
+                points: {
+                    show: true
+                }
+            },
+            legend: {
+                noColumns: 2
+            },
+            xaxis: {
+                tickDecimals: 0
+            },
+            yaxis: {
+                min: 0
+            },
+            selection: {
+                mode: "x"
+            }
+        };
+
+        var plot = $.plot('#layweekchart', data, options)
+    </script>
+{% endblock %}
+

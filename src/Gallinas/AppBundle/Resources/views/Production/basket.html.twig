@@ -1,0 +1,43 @@
+{% extends '::layout_show.html.twig' %}
+
+{% block more_css %}
+    <link rel="stylesheet" href="{{ asset('bundles/app/fancybox/jquery.fancybox.css') }}"/>
+{% endblock %}
+{% block main -%}
+
+    <div class="panel panel-default">
+        <div class="panel-heading"><h4>Listado de cestas año {{ year }}</h4></div>
+        <div class="panel-body">
+            <div class="row">
+                {% for key,basket in baskets %}
+                    <div class="col-lg-6">
+                        <div class="panel  {{ cycle(['panel-info', 'panel-success','panel-warning','panel-danger'], loop.index0) }}">
+                            <div class="panel-heading"><h4>Cesta de la semana {{ key }} ({{ getDateFromWeek(year,key) }}
+                                    )</h4></div>
+                            <div class="panel-body">
+                                <h4>Listado de producción:</h4>
+                                <ul>
+                                    {% set total=0 %}
+                                    {% for production in basket |sort%}
+                                        <li><a href="{{ path('cropworking_show', {'year': year, 'id': production.cropworking.getId}) }}">{{ production.cropworking.getName }}</a> = {{ production.amount }} kg | <a
+                                                    href="{{ path('production_edit', {'id': production.id}) }}">Editar</a>
+                                        </li>
+                                        {% set total= total+production.amount %}
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                            <div class="panel-footer">Total semanal: {{ total }} kg</div>
+                        </div>
+                    </div>
+                    {% if loop.index is even %}
+                        <div class="clearfix"></div>
+                    {% endif %}
+                {% endfor %}
+
+            </div>
+        </div>
+        <div class="panel-footer">
+            <li><a href="{{ path('production_new') }}">Añadir producción</a></li>
+        </div>
+    </div>
+{% endblock %}

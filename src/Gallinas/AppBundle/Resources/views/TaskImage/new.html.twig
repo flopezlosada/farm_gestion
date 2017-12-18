@@ -1,0 +1,36 @@
+{% extends '::layout_crud.html.twig' %}
+
+    {% block title_wrapper %}Añadir {% endblock %}
+    {% block main -%}
+        <div class="panel panel-default">
+
+            <div class="panel-body">
+                {{ form_start(form, {'action': path('taskimage_create',{'task_id':entity.getTask.id}),'method': 'post','attr': {'role': 'form' }}) }}
+                <div class='row'>
+                    <div class="col-lg-12">
+                        <div class="form-group">
+                            {{ form_errors(form.title) }}
+                            <label>{{ form_label(form.title) }}</label>
+                            {{ form_widget(form.title,{'attr':{'class':'form-control','Placeholder':'Título'}}) }}
+                        </div>
+                        <div class="form-group">
+                            {{ form_errors(form.file) }}
+                            <label>{{ form_label(form.file) }}</label>
+                            {{ form_widget(form.file) }}
+                        </div>
+                    </div>
+                </div>
+                {{ form_widget(form.submit,{'attr':{'class':'btn btn-default'}}) }}
+                {{ form_rest(form) }}
+                {{ form_end(form, {'render_rest': false}) }}
+                <ul class="record_actions">
+                    <li>
+                        <a href="{{ path('taskimage') }}">
+                            Back to the list
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    {% endblock %}
+    {% block more_js %}{% endblock %}

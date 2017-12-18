@@ -1,0 +1,59 @@
+{% extends app.request.isXmlHttpRequest ? "AppBundle:Default:layout_identify_ajax.html.twig" : "AppBundle:Default:layout_identify_no_ajax.html.twig" %}
+
+   {% block identify %}
+  {{ dump(dichotomous_keys) }}
+
+       <div id="identify_process" class="identify">
+
+           <div class="panel panel-success">
+               <div class="panel-heading">
+                   Selecciona la clave que corresponde con tu pez:
+               </div>
+               <div class="panel-body">
+                   {{ form_start(form, {'action': path('collect_lucios'), 'method': 'post','attr': {'role': 'form' }})
+                   }}
+                   {{ form_errors(form) }}
+
+                   <div class="form-group">
+                       {{ form_errors(form.dichotomous_key) }}
+                       {{ form_widget(form.dichotomous_key) }}
+                   </div>
+
+                   {{ form_widget(form.submit,{'attr':{'class':'btn btn-default' }}) }}
+                   {{ form_rest(form) }}
+                   {{ form_end(form, {'render_rest': false}) }}
+               </div>
+
+           </div>
+       </div>
+       <div id="identify_process_2"></div>
+   {% endblock %}
+{% block more_js %}
+
+    <script>
+        $(document).ready(function () {
+            $('#fish_species_identify_form').submit(function (e) {
+                e.preventDefault();
+                $.ajax({
+                    type: "POST",
+                    url: "{{ url('collect_lucios') }}",
+                    data: $(this).serialize(),
+                    success: function (data) {
+                        var selectedVal = "";
+                        var selected = $("input[type='radio'][name='form[dichotomous_key]']:checked");
+                        if (selected.length > 0) {
+                            selectedVal = selected.val();
+                        }
+                        //alert(selectedVal);
+                        var route = "{{ path('collect_lucios',{'selected_dichotomous_key_id':"PLACEHODER"}) }}";
+                        var route_new = route.replace("PLACEHODER", selectedVal);
+                        $('#identify_process_2').load(route_new);
+                    }
+
+
+                });
+                return false;
+            });
+        });
+    </script>
+{% endblock %}

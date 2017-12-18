@@ -1,0 +1,72 @@
+{% extends '::layout_crud.html.twig' %}
+{% block title_wrapper %}Añadir evento{% endblock %}
+
+{% block main -%}
+    <div class="panel panel-default">
+        <div class="panel-body">
+            {{ form_start(form, {'action': path('event_create'), 'method': 'post','attr': {'role': 'form' }}) }}
+            <div class="row">
+                <div class="col-lg-6">
+                    <div class="form-group">
+                        {{ form_errors(form.title) }}
+                        <label>{{ form_label(form.title) }}</label>
+                        {{ form_widget(form.title,{'attr':{'class':'form-control','placeholder':'Título' }}) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(form.content) }}
+                        <label>{{ form_label(form.content) }}</label>
+                        {{ form_widget(form.content,{'attr':{'class':'form-control','placeholder':'Contenido' }}) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(form.start_date) }}
+                        <label>{{ form_label(form.start_date) }}</label>
+                        {{ form_widget(form.start_date,{'attr':{'placeholder':'Fecha de inicio' }}) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(form.end_date) }}
+                        <label>{{ form_label(form.end_date) }}</label>
+                        {{ form_widget(form.end_date,{'attr':{'placeholder':'Fecha de fin' }}) }}
+                    </div>
+                    <div class="checkbox">
+                        {{ form_errors(form.all_day_event) }}
+                        <label>
+                            {{ form_widget(form.all_day_event) }}
+                            Marca esta casilla si es un evento de día completo
+                        </label>
+                    </div>
+                </div>
+            </div>
+            {{ form_widget(form.submit,{'attr':{'class':'btn btn-default' }}) }}
+            {{ form_rest(form) }}
+            {{ form_end(form, {'render_rest': false}) }}
+        </div>
+    </div>
+    <ul class="list-inline">
+        <li>
+            <a href="{{ path('event') }}">
+                Listado de eventos
+            </a>
+        </li>
+    </ul>
+
+{% endblock %}
+{% block specific_js %}
+    <script>
+        $('.datepicker').pickadate({
+            formatSubmit: 'yyyy-mm-dd',
+            onStart: function()
+            {
+                var date= new Date("{{  entity.getStartDate()}}");
+                this.set('select', date)
+            }
+        })
+        $('.datepicker2').pickadate({
+            formatSubmit: 'yyyy-mm-dd',
+            onStart: function()
+            {
+                var date= new Date("{{  entity.getEndDate()}}");
+                this.set('select', date)
+            }
+        })
+    </script>
+{% endblock %}

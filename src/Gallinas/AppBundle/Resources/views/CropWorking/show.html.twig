@@ -1,0 +1,147 @@
+{% extends '::layout_show.html.twig' %}
+{% block more_css %}
+    <link rel="stylesheet" href="{{ asset('bundles/app/fancybox/jquery.fancybox.css') }}"/>
+{% endblock %}
+{% block main -%}
+
+    <div class="panel  panel-success">
+        <div class="panel-heading"><h4>{{ entity }} ({{ entity.status }})</h4></div>
+        <div class="panel-body">
+            <div class="row">
+                <div class="col-lg-12">
+
+                    <div class="col-lg-8">
+                        <p><strong>Cultivo: </strong><a
+                                    href="{{ path('crop_show', { 'id': entity.getCrop.getId}) }}"> {{ entity.getCrop }}</a>
+                        </p>
+                        {% if first_seed_work|length>0 %}
+                            <p><strong>Fecha de inicio del
+                                    cultivo: </strong>{{ first_seed_work.getRealDate|localizeddate('long','none','es') }}
+                            </p>
+                        {% endif %}
+                        {% if entity.finish ==1 %}
+                            <p><strong>Fecha de finalización del
+                                    cultivo: </strong>{{ entity.finishDate|localizeddate('long','none','es') }}
+                            </p>
+                        {% endif %}
+
+                        <p><strong>Superficie asignada (m<sup>2</sup>): </strong>{{ entity.surface }}</p>
+
+                        <p><strong>Producción estimada (Kg): </strong>{{ entity.estimatedProduction }}</p>
+
+                        <p><strong>Marco de plantación (cm x cm): </strong>{{ entity.plantingPattern }}</p>
+
+                        <p><strong>Observaciones: </strong> {{ entity.content|raw }}</p>
+
+                        <p><strong>Sectores de cultivo:</strong></p>
+                        <ul>
+                            {% for  sector in entity.sectors %}
+                                <li><a href="{{ path('sector_show', {'id': sector.id}) }}">{{ sector.getZone }}: {{ sector }}</a> | <a
+                                            href="{{ path('cropworking_delete_sector', {'sector_id': sector.id, 'crop_working_id': entity.id}) }}">Eliminar</a>
+                                </li>
+                            {% else %}
+                                <li>No se han definido sectores para este cultivo</li>
+                            {% endfor %}
+                        </ul>
+
+                    </div>
+                    <div class="col-lg-4">
+                        <div class="panel panel-warning">
+                            <div class="panel-heading">Acciones</div>
+                            <div class="panel-body">
+                                <ul class="list-unstyled">
+                                    {% include 'AppBundle:CropWorking:record_actions.html.twig' with {'crop_working':entity} %}
+                            </div>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="col-lg-6">
+                        <div class="panel panel-danger">
+                            <div class="panel-heading"><h4>Fechas de siembra/plantación</h4>
+                            </div>
+                            <div class="panel-body">
+
+
+                                {% for seedwork in entity.getseedworks %}
+                                    <div class="well ">
+                                        <p><strong>{{ seedwork.getSeedWorkType }}</strong> | <a
+                                                    href="{{ path('seedwork_edit', {'id': seedwork.id}) }}">Editar</a><br>
+                                            Fecha realización: {{ seedwork.getDate|localizeddate('long','none','es') }}
+                                            <br>
+                                            Fecha
+                                            prevista: {{ seedwork.getEstimatedDate|localizeddate('long','none','es') }}
+                                            <br>
+                                            Número de plantas: {{ seedwork.plant }}<br>
+                                            Número de bandejas: {{ seedwork.tray }} <br>
+                                            Superficie:{{ seedwork.surface }}<br>
+                                        </p>
+
+                                        {% if seedwork.content|length>0 %}
+                                            <div class="alert alert-success">
+                                                {{ seedwork.content|raw }}
+                                            </div>
+                                        {% endif %}
+                                    </div>
+
+
+                                {% else %}
+                                    <p>No se ha indicado ninguna producción para este producto este año</p>
+                                {% endfor %}
+
+                            </div>
+
+                        </div>
+                    </div>
+                    <div class="col-lg-6">
+                        <div class="panel panel-purple-tiny">
+                            <div class="panel-heading"><h4>Producción</h4>
+                            </div>
+                            <div class="panel-body">
+
+                                <ul>
+                                    {% for production in productions %}
+                                        <li>{{ production.getDate|localizeddate('long','none','es') }}
+                                            : {{ production.amount }}
+                                            kg |
+                                            <a href="{{ path('production_edit', {'id': production.id}) }}">Editar</a>
+                                        </li>
+                                    {% else %}
+                                        <p>No se ha indicado ninguna producción para este producto</p>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                            <div class="panel-footer">Total para el producto: {{ total_production }} | Semanas
+                                produciendo: {{ productions|length }}</div>
+                        </div>
+                    </div>
+                    <div class="col-lg-12">
+                        <div class="panel panel-info">
+                            <div class="panel-heading"><h4>Trabajos realizados</h4>
+                            </div>
+                            <div class="panel-body">
+
+                                <ul>
+                                    {% for cultural_work in entity.culturalWorks %}
+                                        <li>
+                                            <strong><a href="{{ path('culturalwork_show', {'id': cultural_work.id}) }}">{{ cultural_work.culturalWorkType }}</a></strong>: {{ cultural_work.getDate|localizeddate('long','none','es') }}
+                                            |<a href="{{ path('culturalwork_edit', {'id': cultural_work.id}) }}">Editar</a>
+                                            {{ cultural_work.content|raw }}
+
+
+                                        </li>
+                                    {% else %}
+                                        <p>No se ha indicado ningún trabajo para este producto este año</p>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="panel-footer">
+            <ul class="list-inline"> {% include 'AppBundle:CropWorking:record_actions.html.twig' with {'crop_working':entity} %}</ul>
+        </div>
+    </div>
+{% endblock %}

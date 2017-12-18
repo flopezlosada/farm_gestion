@@ -1,0 +1,109 @@
+{% extends '::layout.html.twig' %}
+{% block title_wrapper %}Listado de tareas{% endblock %}
+{% block warning %}{% endblock %}
+{% block main %}
+    <div class="row">
+        <div class="panel panel-primary">
+            <div class="panel-heading">
+                <h4 class="text-center">{{ "now"|format_date('MMMM / YYYY')|upper }}</h4>
+            </div>
+            <div class="panel-body">
+                <!-- Nav tabs -->
+                <ul class="nav nav-tabs">
+                    <li class="active"><a data-toggle="tab" href="#my_task" aria-expanded="true">Mis tareas Pendientes</a>
+                    </li>
+                    <li class=""><a data-toggle="tab" href="#home" aria-expanded="false">Todas</a>
+                    </li>
+                    <li class=""><a data-toggle="tab" href="#crop" aria-expanded="false">De cultivo</a>
+                    </li>
+                    <li class=""><a data-toggle="tab" href="#aprox" aria-expanded="false">Con fecha aproximada</a>
+                    </li>
+                    <li class=""><a data-toggle="tab" href="#periodic" aria-expanded="false">Periódicas</a>
+                    </li>
+                    <li class=""><a data-toggle="tab" href="#date" aria-expanded="false">Con fecha</a>
+                    </li>
+                    <li class=""><a data-toggle="tab" href="#punctual" aria-expanded="false">Sin fecha</a>
+                    </li>
+                    <li class=""><a data-toggle="tab" href="#ended" aria-expanded="false">Finalizadas</a>
+                    </li>
+                </ul>
+
+                <!-- Tab panes -->
+                <div class="tab-content">
+                    <div id="my_task" class="tab-pane fade  active in">
+                        <h4>Mis tares pendientes</h4>
+
+                        {% for task in user_tasks %}
+                            {% include 'AppBundle:Task:task_view_type_'~task.getTaskType.id~'.html.twig' with {'task':task} %}
+                        {% else %}
+                            <p>No tienes tareas asignadas pendientes de realizar</p>
+                        {% endfor %}
+                    </div>
+                    <div id="home" class="tab-pane fade">
+                        <h3>Tareas para este mes</h3>
+                        {% for task in pending_tasks %}
+                            {% include 'AppBundle:Task:task_view_type_'~task.getTaskType.id~'.html.twig' with {'task':task} %}
+                        {% else %}
+                            <p>No hay tareas pendientes de realizar</p>
+                        {% endfor %}
+                        {% for task in punctual_tasks %}
+                            {% include 'AppBundle:Task:task_view_type_'~task.getTaskType.id~'.html.twig' with {'task':task} %}
+                        {% endfor %}
+                    </div>
+                    <div id="crop" class="tab-pane fade">
+                        <h4>Tareas relacionadas con cultivos</h4>
+                        {% for task in crop_tasks %}
+                            {% include 'AppBundle:Task:task_view_type_'~task.getTaskType.id~'.html.twig' with {'task':task} %}
+                        {% else %}
+                            <p>No hay tareas pendientes de realizar</p>
+                        {% endfor %}
+                    </div>
+                    <div id="aprox" class="tab-pane fade">
+                        <h4>Tareas con fecha aproximada de realización {{ aprox_tasks|length }}</h4>
+                        {% for task in aprox_tasks %}
+                            {% include 'AppBundle:Task:task_view_type_'~task.getTaskType.id~'.html.twig' with {'task':task} %}
+                        {% else %}
+                            <p>No hay tareas pendientes de realizar</p>
+                        {% endfor %}
+                    </div>
+                    <div id="periodic" class="tab-pane fade">
+                        <h4>Tareas con repetición periódica</h4>
+                        {% for task in periodic_tasks %}
+                            {% include 'AppBundle:Task:task_view_type_'~task.getTaskType.id~'.html.twig' with {'task':task} %}
+                        {% else %}
+                            <p>No hay tareas pendientes de realizar</p>
+                        {% endfor %}
+                    </div>
+                    <div id="date" class="tab-pane fade">
+                        <h4>Tareas con fecha fija de realización</h4>
+                        {% for task in date_tasks %}
+                            {% include 'AppBundle:Task:task_view_type_'~task.getTaskType.id~'.html.twig' with {'task':task} %}
+                        {% else %}
+                            <p>No hay tareas pendientes de realizar</p>
+                        {% endfor %}
+                    </div>
+                    <div id="punctual" class="tab-pane fade">
+                        <h4>Tareas sin fecha fija</h4>
+                        {% for task in punctual_tasks %}
+                            {% include 'AppBundle:Task:task_view_type_'~task.getTaskType.id~'.html.twig' with {'task':task} %}
+                        {% else %}
+                            <p>No hay tareas pendientes de realizar</p>
+                        {% endfor %}
+                    </div>
+                    <div id="ended" class="tab-pane fade">
+                        <h4>Tareas finalizadas este mes</h4>
+                        {% for task in ended_tasks %}
+                            {% include 'AppBundle:Task:task_view_type_'~task.getTaskType.id~'.html.twig' with {'task':task} %}
+                        {% else %}
+                            <p>No hay tareas finalizadas este mes</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            <div class="panel-footer">
+                <a href="{{ path('task_dashboard') }}">Añadir tarea</a>
+            </div>
+        </div>
+
+    </div>
+{% endblock %}

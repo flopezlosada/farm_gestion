@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<routes xmlns="http://symfony.com/schema/routing"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://symfony.com/schema/routing http://symfony.com/schema/routing/routing-1.0.xsd">
+
+    <route id="sack" path="/">
+        <default key="_controller">AppBundle:Sack:index</default>
+    </route>
+
+    <route id="sack_show" path="/{id}/show">
+        <default key="_controller">AppBundle:Sack:show</default>
+    </route>
+
+    <route id="sack_new" path="/new/{batch_id}">
+        <default key="_controller">AppBundle:Sack:new</default>
+    </route>
+
+    <route id="sack_create" path="/create/{batch_id}" methods="POST">
+        <default key="_controller">AppBundle:Sack:create</default>
+    </route>
+
+    <route id="sack_edit" path="/{id}/edit">
+        <default key="_controller">AppBundle:Sack:edit</default>
+    </route>
+
+    <route id="sack_update" path="/{id}/update" methods="POST|PUT">
+        <default key="_controller">AppBundle:Sack:update</default>
+    </route>
+
+    <route id="sack_delete" path="/{id}/delete" methods="POST|DELETE">
+        <default key="_controller">AppBundle:Sack:delete</default>
+    </route>
+
+    <route id="sack_fast_delete" path="/{id}/fast_delete">
+        <default key="_controller">AppBundle:Sack:fastDelete</default>
+    </route>
+
+</routes>

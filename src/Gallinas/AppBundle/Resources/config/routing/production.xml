@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<routes xmlns="http://symfony.com/schema/routing"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://symfony.com/schema/routing http://symfony.com/schema/routing/routing-1.0.xsd">
+
+    <route id="production" path="/">
+        <default key="_controller">AppBundle:Production:index</default>
+    </route>
+
+
+
+    <route id="production_show" path="/{id}/show">
+        <default key="_controller">AppBundle:Production:show</default>
+        <requirement key="id">\d+</requirement>
+    </route>
+
+    <route id="production_new" path="/new">
+        <default key="_controller">AppBundle:Production:new</default>
+    </route>
+
+   <!-- <route id="production_new_crop" path="/new/{crop_id}">
+        <default key="_controller">AppBundle:Production:new</default>
+    </route>
+-->
+    <route id="production_new_crop_working" path="/new/{crop_working_id}">
+        <default key="_controller">AppBundle:Production:new</default>
+    </route>
+
+    <route id="production_create" path="/create" methods="POST">
+        <default key="_controller">AppBundle:Production:create</default>
+    </route>
+
+    <route id="production_edit" path="/{id}/edit">
+        <default key="_controller">AppBundle:Production:edit</default>
+    </route>
+
+    <route id="production_update" path="/{id}/update" methods="POST|PUT">
+        <default key="_controller">AppBundle:Production:update</default>
+    </route>
+
+    <route id="production_delete" path="/{id}/delete" methods="POST|DELETE">
+        <default key="_controller">AppBundle:Production:delete</default>
+    </route>
+
+    <route id="production_show_basket" path="/basket/show/{year}">
+        <default key="_controller">AppBundle:Production:basket</default>
+        <default key="year" xsi:nil="true"/>
+    </route>
+
+</routes>

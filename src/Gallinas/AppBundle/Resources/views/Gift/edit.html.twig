@@ -1,0 +1,74 @@
+{% extends '::layout_crud.html.twig' %}
+{% block title_wrapper %}Editar Regalo de productos{% endblock %}
+{% block main -%}
+    <div class="panel panel-default">
+        <div class="panel-heading">
+            Cantidad de producto regalado
+        </div>
+        <div class="panel-body">
+            {{ form_start(edit_form, {'action': path('gift_update',{'id':entity.id}), 'method': 'put','attr': {'role': 'form' }}) }}
+            <div class="row">
+                <div class="col-lg-6">
+                    <div class="form-group">
+                        {{ form_errors(edit_form.gift_date) }}
+                        <label>{{ form_label(edit_form.gift_date) }}</label>
+                        {{ form_widget(edit_form.gift_date,{'attr':{'placeholder':'Fecha de reparto'}}) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(edit_form.gift_type) }}
+                        <label>{{ form_label(edit_form.gift_type) }}</label>
+                        {{ form_widget(edit_form.gift_type,{'attr':{'class':'form-control'}}) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(edit_form.recipient) }}
+                        <label>{{ form_label(edit_form.recipient) }}</label>
+                        {{ form_widget(edit_form.recipient,{'attr':{'class':'form-control'}}) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(edit_form.amount) }}
+                        <label>{{ form_label(edit_form.amount) }}</label>
+                        {{ form_widget(edit_form.amount,{'attr':{'class':'form-control','placeholder':'Cantidad de producto'}}) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(edit_form.product) }}
+                        <label>{{ form_label(edit_form.product) }}</label>
+                        {{ form_widget(edit_form.product,{'attr':{'class':'form-control'}}) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(edit_form.unity) }}
+                        <label>{{ form_label(edit_form.unity) }}</label>
+                        {{ form_widget(edit_form.unity,{'attr':{'class':'form-control'}}) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(edit_form.single_price) }}
+                        <label>{{ form_label(edit_form.single_price) }}</label>
+                        {{ form_widget(edit_form.single_price,{'attr':{'class':'form-control','placeholder':'Precio por unidad'}}) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(edit_form.note) }}
+                        <label>{{ form_label(edit_form.note) }}</label>
+                        {{ form_widget(edit_form.note,{'attr':{'class':'form-control','placeholder':'Notas'}}) }}
+                    </div>
+
+                </div>
+            </div>
+            {{ form_widget(edit_form.submit,{'attr':{'class':'btn btn-default'}}) }}
+            {{ form_rest(edit_form) }}
+            {{ form_end(edit_form, {'render_rest': false}) }}
+        </div>
+    </div>
+
+
+
+
+
+
+    <ul class="record_actions">
+        <li>
+            <a href="{{ path('gift') }}">
+                Volver al listado de regalos
+            </a>
+        </li>
+    </ul>
+
+{% endblock %}

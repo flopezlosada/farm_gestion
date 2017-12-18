@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<routes xmlns="http://symfony.com/schema/routing"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://symfony.com/schema/routing http://symfony.com/schema/routing/routing-1.0.xsd">
+
+    <route id="harvest" path="/">
+        <default key="_controller">AppBundle:Harvest:index</default>
+    </route>
+
+    <route id="harvest_show" path="/{id}/show">
+        <default key="_controller">AppBundle:Harvest:show</default>
+    </route>
+
+    <route id="harvest_new" path="/new">
+        <default key="_controller">AppBundle:Harvest:new</default>
+    </route>
+
+    <route id="harvest_create" path="/create" methods="POST">
+        <default key="_controller">AppBundle:Harvest:create</default>
+    </route>
+
+    <route id="harvest_edit" path="/{id}/edit">
+        <default key="_controller">AppBundle:Harvest:edit</default>
+    </route>
+
+    <route id="harvest_update" path="/{id}/update" methods="POST|PUT">
+        <default key="_controller">AppBundle:Harvest:update</default>
+    </route>
+
+    <route id="harvest_delete" path="/{id}/delete" methods="POST|DELETE">
+        <default key="_controller">AppBundle:Harvest:delete</default>
+    </route>
+
+</routes>

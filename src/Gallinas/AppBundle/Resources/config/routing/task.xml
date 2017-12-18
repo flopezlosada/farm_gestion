@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<routes xmlns="http://symfony.com/schema/routing"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://symfony.com/schema/routing http://symfony.com/schema/routing/routing-1.0.xsd">
+
+    <route id="task" path="/">
+        <default key="_controller">AppBundle:Task:index</default>
+    </route>
+
+    <route id="task_show" path="/{id}/show">
+        <default key="_controller">AppBundle:Task:show</default>
+    </route>
+
+    <route id="task_new" path="/new/{task_type_id}">
+        <default key="_controller">AppBundle:Task:new</default>
+    </route>
+
+    <route id="task_create" path="/create/{task_type_id}" methods="POST">
+        <default key="_controller">AppBundle:Task:create</default>
+    </route>
+
+    <route id="task_edit" path="/{id}/edit">
+        <default key="_controller">AppBundle:Task:edit</default>
+    </route>
+
+    <route id="task_update" path="/{id}/update" methods="POST|PUT">
+        <default key="_controller">AppBundle:Task:update</default>
+    </route>
+
+    <route id="task_delete" path="/{id}/delete" methods="POST|DELETE">
+        <default key="_controller">AppBundle:Task:delete</default>
+    </route>
+
+    <route id="task_dashboard" path="/dashboard">
+        <default key="_controller">AppBundle:Task:dashboard</default>
+    </route>
+
+    <route id="task_aprox_new" path="/new_aprox/{task_type_id}">
+        <default key="_controller">AppBundle:Task:newAprox</default>
+    </route>
+    <route id="task_aprox_create" path="/create_aprox/{task_type_id}" methods="POST">
+        <default key="_controller">AppBundle:Task:createAprox</default>
+    </route>
+    <route id="task_periodic_new" path="/new_periodic/{task_type_id}">
+        <default key="_controller">AppBundle:Task:newPeriodic</default>
+    </route>
+    <route id="task_periodic_create" path="/create_periodic/{task_type_id}" methods="POST">
+        <default key="_controller">AppBundle:Task:createPeriodic</default>
+    </route>
+    <route id="task_date_new" path="/new_date/{task_type_id}">
+        <default key="_controller">AppBundle:Task:newDate</default>
+    </route>
+    <route id="task_date_create" path="/create_date/{task_type_id}" methods="POST">
+        <default key="_controller">AppBundle:Task:createDate</default>
+    </route>
+    <route id="task_finalize" path="/{id}/finalize">
+        <default key="_controller">AppBundle:Task:finalize</default>
+    </route>
+</routes>

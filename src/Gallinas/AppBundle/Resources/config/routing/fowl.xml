@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<routes xmlns="http://symfony.com/schema/routing"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://symfony.com/schema/routing http://symfony.com/schema/routing/routing-1.0.xsd">
+
+    <route id="fowl" path="/">
+        <default key="_controller">AppBundle:Fowl:index</default>
+    </route>
+
+    <route id="fowl_show" path="/{id}/show">
+        <default key="_controller">AppBundle:Fowl:show</default>
+    </route>
+
+    <route id="fowl_new" path="/new">
+        <default key="_controller">AppBundle:Fowl:new</default>
+    </route>
+
+    <route id="fowl_create" path="/create">
+        <default key="_controller">AppBundle:Fowl:create</default>
+        <requirement key="_method">post</requirement>
+    </route>
+
+    <route id="fowl_edit" path="/{id}/edit">
+        <default key="_controller">AppBundle:Fowl:edit</default>
+    </route>
+
+    <route id="fowl_update" path="/{id}/update">
+        <default key="_controller">AppBundle:Fowl:update</default>
+        <requirement key="_method">post|put</requirement>
+    </route>
+
+    <route id="fowl_delete" path="/{id}/delete">
+        <default key="_controller">AppBundle:Fowl:delete</default>
+        <requirement key="_method">post|delete</requirement>
+    </route>
+
+</routes>

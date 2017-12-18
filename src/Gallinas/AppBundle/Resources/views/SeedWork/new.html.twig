@@ -1,0 +1,97 @@
+{% extends '::layout_crud.html.twig' %}
+{% block title_wrapper %}Añadir siembra/plantación{% endblock %}
+{% block main -%}
+    <div class="panel panel-default">
+
+        <div class="panel-body">
+            {{ form_start(form, {'action': path('seedwork_create'), 'method': 'post','attr': {'role': 'form' }}) }}
+            <div class="row">
+                <div class="col-lg-6">
+                    <div class="form-group">
+                        {{ form_errors(form.crop_working) }}
+                        <label>{{ form_label(form.crop_working) }}</label>
+                        {{ form_widget(form.crop_working,{'attr':{'class':'form-control'}}) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(form.seed_work_type) }}
+                        <label>{{ form_label(form.seed_work_type) }}</label>
+                        {{ form_widget(form.seed_work_type,{'attr':{'class':'form-control'}}) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(form.estimated_date) }}
+                        <label>{{ form_label(form.estimated_date) }}</label>
+                        {{ form_widget(form.estimated_date,{'attr':{'placeholder':'Fecha de estimada'}}) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(form.real_date) }}
+                        <label>{{ form_label(form.real_date) }}</label>
+                        {{ form_widget(form.real_date,{'attr':{'placeholder':'Fecha real'}}) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(form.plant) }}
+                        <label>{{ form_label(form.plant) }}</label>
+                        {{ form_widget(form.plant,{'attr':{'class':'form-control','placeholder':'Número de plantas'}}) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(form.tray) }}
+                        <label>{{ form_label(form.tray) }}</label>
+                        {{ form_widget(form.tray,{'attr':{'class':'form-control','placeholder':'Número de bandejas'}}) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(form.surface) }}
+                        <label>{{ form_label(form.surface) }}</label>
+                        {{ form_widget(form.surface,{'attr':{'class':'form-control','placeholder':'Superficie'}}) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(form.content) }}
+                        <label>{{ form_label(form.content) }}</label>
+                        {{ form_widget(form.content,{'attr':{'class':'tinymce','placeholder':'Descripción' }}) }}
+                    </div>
+                </div>
+            </div>
+            {{ form_widget(form.submit,{'attr':{'class':'btn btn-default'}}) }}
+            {{ form_rest(form) }}
+            {{ form_end(form, {'render_rest': false}) }}
+        </div>
+    </div>
+
+
+
+
+
+
+    <ul class="record_actions">
+        <li>
+            <a href="{{ path('production_show_basket') }}">
+                Volver al listado de cestas
+            </a>
+        </li>
+    </ul>
+    {{ tinymce_init() }}
+{% endblock %}
+
+
+{% block specific_js %}
+    <script>
+        $('.datepicker').pickadate({
+            formatSubmit: 'yyyy-mm-dd',
+            onStart: function()
+            {
+                {% if entity.getRealDate() %}
+                var date= new Date("{{  entity.getRealDate()}}");
+                this.set('select', date)
+                {% endif %}
+            }
+        })
+        $('.datepicker2').pickadate({
+            formatSubmit: 'yyyy-mm-dd',
+            onStart: function()
+            {
+                {% if entity.getEstimatedDate() %}
+                var date= new Date("{{  entity.getEstimatedDate()}}");
+                this.set('select', date)
+                {% endif %}
+            }
+        })
+    </script>
+{% endblock %}

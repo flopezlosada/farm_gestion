@@ -1,0 +1,17 @@
+frontend_blog:
+    defaults: { _controller: AppBundle:Blog:frontend_index }
+    path:   /blog
+
+blog_show:
+        defaults: { _controller: AppBundle:Blog:show }
+        path:   /blog/{slug}
+
+blog_category_show:
+        defaults: { _controller: AppBundle:Blog:show_category }
+        path:   /blog/category/{id}
+app_contact:
+        defaults: { _controller: AppBundle:Default:contacted }
+        path:   /contact
+landing_contact:
+        defaults: { _controller: AppBundle:Default:landind_contact }
+        path:   /landing_contact

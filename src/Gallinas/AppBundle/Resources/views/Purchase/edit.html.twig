@@ -1,0 +1,83 @@
+{% extends '::layout_crud.html.twig' %}
+{% block title_wrapper %}Añadir Compra{% endblock %}
+{% block main -%}
+    <div class="panel panel-default">
+
+        <div class="panel-body">
+            {{ form_start(edit_form, {'action': path('purchase_update',{'id':entity.id}), 'method': 'put','attr': {'role': 'form' }}) }}
+            <div class="row">
+                <div class="col-lg-6">
+                    <div class="form-group">
+                        {{ form_errors(edit_form.purchase_date) }}
+                        <label>{{ form_label(edit_form.purchase_date) }}</label>
+                        {{ form_widget(edit_form.purchase_date,{'attr':{'placeholder':'Fecha de compra'}}) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(edit_form.provider) }}
+                        <label>{{ form_label(edit_form.provider) }}</label>
+                        {{ form_widget(edit_form.provider,{'attr':{'class':'form-control'}}) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(edit_form.amount) }}
+                        <label>{{ form_label(edit_form.amount) }}</label>
+                        {{ form_widget(edit_form.amount,{'attr':{'class':'form-control','placeholder':'Cantidad'}}) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(edit_form.product) }}
+                        <label>{{ form_label(edit_form.product) }}</label>
+                        {{ form_widget(edit_form.product,{'attr':{'class':'form-control'}}) }}
+                    </div>
+
+                    <div class="form-group">
+                        {{ form_errors(edit_form.unity) }}
+                        <label>{{ form_label(edit_form.unity) }}</label>
+                        {{ form_widget(edit_form.unity,{'attr':{'class':'form-control'}}) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(edit_form.single_price) }}
+                        <label>{{ form_label(edit_form.single_price) }}</label>
+                        {{ form_widget(edit_form.single_price,{'attr':{'class':'form-control','placeholder':'Precio por unidad'}}) }}
+                        <p class="help-block">Indica el precio unitario. Después se multiplicará por la cantidad que indiques para obtener el precio total.</p>
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(edit_form.batch) }}
+                        <label>{{ form_label(edit_form.batch) }}</label>
+                        {{ form_widget(edit_form.batch,{'attr':{'class':'form-control'}}) }}
+                        <p class="help-block">Si este pedido se relaciona con algún lote de animales, selecciona el lote correspondiente.</p>
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(edit_form.note) }}
+                        <label>{{ form_label(edit_form.note) }}</label>
+                        {{ form_widget(edit_form.note,{'attr':{'class':'form-control','placeholder':'Notas'}}) }}
+                    </div>
+                    <div class="checkbox">
+                        {{ form_errors(edit_form.paid) }}
+                        <label>
+                            {{ form_widget(edit_form.paid) }}
+                            Marca esta casilla si la compra está pagada
+                        </label>
+                    </div>
+                </div>
+            </div>
+            {{ form_widget(edit_form.submit,{'attr':{'class':'btn btn-default'}}) }}
+            {{ form_rest(edit_form) }}
+            {{ form_end(edit_form, {'render_rest': false}) }}
+        </div>
+    </div>
+
+
+
+
+
+
+    <ul class="record_actions">
+        <li>
+            <a href="{{ path('purchase') }}">
+                Back to the list
+            </a>
+        </li>
+
+        <li>{{ form(delete_form) }}</li>
+    </ul>
+
+{% endblock %}

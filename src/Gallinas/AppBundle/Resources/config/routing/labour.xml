@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<routes xmlns="http://symfony.com/schema/routing"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://symfony.com/schema/routing http://symfony.com/schema/routing/routing-1.0.xsd">
+
+    <route id="labour" path="/">
+        <default key="_controller">AppBundle:Labour:index</default>
+    </route>
+
+    <route id="labour_show" path="/{id}/show">
+        <default key="_controller">AppBundle:Labour:show</default>
+    </route>
+
+    <route id="labour_new" path="/new">
+        <default key="_controller">AppBundle:Labour:new</default>
+    </route>
+
+    <route id="labour_create" path="/create" methods="POST">
+        <default key="_controller">AppBundle:Labour:create</default>
+    </route>
+
+    <route id="labour_edit" path="/{id}/edit">
+        <default key="_controller">AppBundle:Labour:edit</default>
+    </route>
+
+    <route id="labour_update" path="/{id}/update" methods="POST|PUT">
+        <default key="_controller">AppBundle:Labour:update</default>
+    </route>
+
+    <route id="labour_delete" path="/{id}/delete" methods="POST|DELETE">
+        <default key="_controller">AppBundle:Labour:delete</default>
+    </route>
+
+</routes>

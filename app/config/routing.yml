@@ -1,0 +1,37 @@
+
+_liip_imagine:
+    resource: "@LiipImagineBundle/Resources/config/routing.xml"
+
+gallinas_app:
+    resource: "@AppBundle/Controller/"
+    type:     annotation
+    prefix:   /gestion
+
+
+gallinas:
+  resource: "@AppBundle/Resources/config/routing.yml"
+  prefix:   /gestion
+
+adesigns_calendar:
+  resource: "@ADesignsCalendarBundle/Resources/config/routing.xml"
+
+fos_user:
+    resource: "@FOSUserBundle/Resources/config/routing/all.xml"
+
+fos_js_routing:
+    resource: "@FOSJsRoutingBundle/Resources/config/routing/routing.xml"
+
+homepage:
+        pattern:  /
+        defaults: { _controller: AppBundle:Gestion:index }
+
+
+frontend:
+   resource: "@AppBundle/Resources/config/frontend.yml"
+   prefix:   /
+
+#
+#easy_admin_bundle:
+#    resource: "@EasyAdminBundle/Controller/"
+#    type:     annotation
+#    prefix:   /admin

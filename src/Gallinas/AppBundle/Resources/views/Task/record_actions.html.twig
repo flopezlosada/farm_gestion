@@ -1,0 +1,12 @@
+<ul class="list-inline">
+    <li><a href="{{ path('task_finalize', {'id': task.id}) }}">Finalizar</a> </li>
+    <li><a href="{{ path('task_edit', {'id': task.id}) }}" >Editar</a> </li>
+    {% if  app.request.attributes.get('_route') =='task_show'%}
+        <li><a href="{{ path('task') }}">Listado de tareas</a> </li>
+    {% else  %}
+        <li><a href="{{ path('task_show', {'id': task.id}) }}">Ver detalles</a> </li>
+    {% endif %}
+    <li><a href="{{ path('tasknote_new', {'task_id': task.id}) }}">Añadir nota</a> </li>
+    <li><a href="{{ path('taskimage_new', {'task_id': task.id}) }}">Añadir Imagen</a> </li>
+
+</ul>

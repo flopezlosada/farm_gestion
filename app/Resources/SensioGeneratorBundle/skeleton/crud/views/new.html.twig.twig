@@ -1,0 +1,23 @@
+{% block extends %}
+    {{ "{% extends '::layout_crud.html.twig' %}" }}
+{% endblock extends %}
+
+{% block body %}
+    {{ '{% block title_wrapper %}Añadir {% endblock %}' }}
+    {{ "{% block main -%}" }}
+    <div class="panel panel-default">
+
+        <div class="panel-body">
+            {{ "{{ form_start(form, {'action': path('"~route_name_prefix ~ "_create'),'method': 'post','attr': {'role': 'form' }}) }}" }}
+            <div class='row'>
+
+            </div>
+            {{ "{{ form_widget(form.submit,{'attr':{'class':'btn btn-default'}}) }}" }}
+            {{ "{{ form_rest(form) }}" }}
+            {{ "{{ form_end(form, {'render_rest': false}) }}" }}
+            {% set hide_edit, hide_delete = true, true %}
+            {% include 'crud/views/others/record_actions.html.twig.twig' %}
+        </div>
+    </div>
+    {{ "{% endblock %}" }}
+{% endblock body %}

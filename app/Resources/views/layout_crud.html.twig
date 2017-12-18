@@ -1,0 +1,28 @@
+{% extends '::layout.html.twig' %}
+{% block warning %}{% endblock %}
+ {% block more_css %}
+     <link rel="stylesheet" href="{{ asset('bundles/app/css/pickadate/default.css') }}"/>
+     <link rel="stylesheet" href="{{ asset('bundles/app/css/pickadate/default.date.css') }}"/>
+     <link rel="stylesheet" href="{{ asset('bundles/app/css/pickadate/default.time.css') }}"/>
+ {% endblock %}
+{% block more_js %}
+    <script src="{{ asset('bundles/app/js/pickadate/picker.js') }}"></script>
+    <script src="{{ asset('bundles/app/js/pickadate/picker.date.js') }}"></script>
+    <script src="{{ asset('bundles/app/js/pickadate/picker.time.js') }}"></script>
+    <script src="{{ asset('bundles/app/js/pickadate/legacy.js') }}"></script>
+    <script src="{{ asset('bundles/app/js/pickadate/translations/es_ES.js') }}"></script>
+
+    {% block specific_js %}
+        <script>
+            $('.datepicker').pickadate({
+                formatSubmit: 'yyyy-mm-dd',
+                onStart: function () {
+                    {% if entity.getDate() %}
+                    var date = new Date("{{  entity.getDate()}}");
+                    this.set('select', date)
+                    {% endif %}
+                }
+            })
+        </script>
+    {% endblock %}
+{% endblock %}

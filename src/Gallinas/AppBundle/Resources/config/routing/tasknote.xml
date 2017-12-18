@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<routes xmlns="http://symfony.com/schema/routing"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://symfony.com/schema/routing http://symfony.com/schema/routing/routing-1.0.xsd">
+
+    <route id="tasknote" path="/">
+        <default key="_controller">AppBundle:TaskNote:index</default>
+    </route>
+
+    <route id="tasknote_show" path="/{id}/show">
+        <default key="_controller">AppBundle:TaskNote:show</default>
+    </route>
+
+    <route id="tasknote_new" path="/new/{task_id}">
+        <default key="_controller">AppBundle:TaskNote:new</default>
+    </route>
+
+    <route id="tasknote_create" path="/create/{task_id}" methods="POST">
+        <default key="_controller">AppBundle:TaskNote:create</default>
+    </route>
+
+    <route id="tasknote_edit" path="/{id}/edit">
+        <default key="_controller">AppBundle:TaskNote:edit</default>
+    </route>
+
+    <route id="tasknote_update" path="/{id}/update" methods="POST|PUT">
+        <default key="_controller">AppBundle:TaskNote:update</default>
+    </route>
+
+    <route id="tasknote_delete" path="/{id}/delete" methods="POST|DELETE">
+        <default key="_controller">AppBundle:TaskNote:delete</default>
+    </route>
+
+</routes>

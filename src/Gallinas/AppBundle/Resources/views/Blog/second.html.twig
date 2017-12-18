@@ -1,0 +1,44 @@
+{% extends '::layout_crud.html.twig' %}
+
+{% block title_wrapper %}Añadir Noticia{% endblock %}
+{% block main -%}
+    <div class="panel panel-default">
+        <div class="panel-heading">
+            <h4>{{ entity.title }}</h4>
+        </div>
+
+        <div class="panel-body">
+            {{ form_start(form, {'action': path('blog_update_second',{'id':entity.id}),'method': 'put','attr': {'role': 'form', 'class': 'admin-form', 'data-place' : 'out-modal' }}) }}
+            <div class='row'>
+                <div class="col-lg-8">
+                    <div class="form-group">
+                        {{ form_errors(form.file) }}
+                        <label>{{ form_label(form.file) }}</label>
+                        {{ form_widget(form.file) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(form.content) }}
+                        <label>{{ form_label(form.content) }}</label>
+                        {{ form_widget(form.content,{'attr':{'placeholder':'Contenido'}}) }}
+                    </div>
+                </div>
+                <div class="col-lg-4">
+                    <aside class="admin-assets three columns">
+                        {{ render(controller('AppBundle:Blog:edition',{'id':entity.id,'object_class':entity.getClass|lower})) }}
+                    </aside>
+                </div>
+            </div>
+            <div class="row">
+                {{ form_widget(form.submit,{'attr':{'class':'btn btn-default'}}) }}
+                {{ form_rest(form) }}
+                {{ form_end(form, {'render_rest': false}) }}
+            </div>
+
+        </div>
+    </div> {{ tinymce_init() }}
+{% endblock %}
+    {% block more_js %}
+
+        <script src="{{ asset('bundles/app/js/jquery-modal/jquery.modal.min.js') }}"></script>
+
+    {% endblock %}

@@ -1,0 +1,83 @@
+{% extends '::layout_crud.html.twig' %}
+{% block title_wrapper %}Añadir lote de animales{% endblock %}
+{% block main -%}
+    <div class="panel panel-default">
+        <div class="panel-heading">
+            Nuevo lote de animales
+        </div>
+        <div class="panel-body">
+            {{ form_start(form, {'action': path('batch_create'), 'method': 'post','attr': {'role': 'form' }}) }}
+            <div class="row">
+                <div class="col-lg-6">
+                    <div class="form-group">
+                        {{ form_errors(form.purchase_date) }}
+                        <label>{{ form_label(form.purchase_date) }}</label>
+                        {{ form_widget(form.purchase_date,{'attr':{'placeholder':'Fecha de compra' }}) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(form.receipt_date) }}
+                        <label>{{ form_label(form.receipt_date) }}</label>
+                        {{ form_widget(form.receipt_date,{'attr':{'placeholder':'Fecha de recepción' }}) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(form.days_of_life) }}
+                        <label>{{ form_label(form.days_of_life) }}</label>
+                        {{ form_widget(form.days_of_life,{'attr':{'class':'form-control','placeholder':'Días de vida' }}
+                        ) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(form.price) }}
+                        <label>{{ form_label(form.price) }}</label>
+                        {{ form_widget(form.price,{'attr':{'class':'form-control','placeholder':'Precio de compra del lote' }}
+                        ) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(form.amount) }}
+                        <label>{{ form_label(form.amount) }}</label>
+                        {{ form_widget(form.amount,{'attr':{'class':'form-control','placeholder':'Cantidad de producto' }}
+                        ) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(form.product) }}
+                        <label>{{ form_label(form.product) }}</label>
+                        {{ form_widget(form.product,{'attr':{'class':'form-control' }}) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(form.weight) }}
+                        <label>{{ form_label(form.weight) }}</label>
+                        {{ form_widget(form.weight,{'attr':{'class':'form-control','placeholder':'Peso' }}) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(form.note) }}
+                        <label>{{ form_label(form.note) }}</label>
+                        {{ form_widget(form.note,{'attr':{'class':'form-control','placeholder':'Notas' }}) }}
+                    </div>
+
+                </div>
+            </div>
+            {{ form_widget(form.submit,{'attr':{'class':'btn btn-default' }}) }}
+            {{ form_rest(form) }}
+            {{ form_end(form, {'render_rest': false}) }}
+        </div>
+    </div>
+{% endblock %}
+ {% block specific_js %}
+     <script>
+         $('.datepicker2').pickadate({
+             formatSubmit: 'yyyy-mm-dd',
+             onStart: function()
+             {
+                 var date= new Date("{{  entity.getReceiptDate()}}");
+                 this.set('select', date)
+             }
+         })
+         $('.datepicker').pickadate({
+             formatSubmit: 'yyyy-mm-dd',
+             onStart: function()
+             {
+                 var date= new Date("{{  entity.getPurchaseDate()}}");
+                 this.set('select', date)
+             }
+         })
+     </script>
+ {% endblock %}
