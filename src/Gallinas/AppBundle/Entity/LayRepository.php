@@ -63,7 +63,7 @@ class LayRepository extends EntityRepository
      * Devuelve las estadísitcas de puesta por semana
      */
     public
-    function findWeekLay($weeks_number = null, $year = null)
+    function findWeekLay($weeks_number = null, $year = null,$batch=null)
     {
         if (!$year)
         {
@@ -71,9 +71,18 @@ class LayRepository extends EntityRepository
         }
         $em = $this->getEntityManager();
         $dql = "select sum(l.amount) as total, l.week as week, count(l.amount) as days, YEAR(l.lay_date)
-                  as year_date from AppBundle:Lay l where YEAR(l.lay_date)=:year and l.week<>53 group by l.week order by l.week desc";
+                  as year_date from AppBundle:Lay l where YEAR(l.lay_date)=:year and l.week<>53 ";
+        if ($batch)
+        {
+            $dql.=" and l.batch=:batch ";
+        }
+        $dql.=" group by l.week order by l.week desc";
         $query = $em->createQuery($dql);
         $query->setParameter("year", $year);
+        if ($batch)
+        {
+            $query->setParameter("batch", $batch);
+        }
         if ($weeks_number)
         {
             $query->setMaxResults($weeks_number);
