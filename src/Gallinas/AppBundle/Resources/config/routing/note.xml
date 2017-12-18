@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<routes xmlns="http://symfony.com/schema/routing"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://symfony.com/schema/routing http://symfony.com/schema/routing/routing-1.0.xsd">
+
+    <route id="note" path="/">
+        <default key="_controller">AppBundle:Note:index</default>
+    </route>
+
+    <route id="note_show" path="/{id}/show">
+        <default key="_controller">AppBundle:Note:show</default>
+    </route>
+
+    <route id="note_new" path="/new">
+        <default key="_controller">AppBundle:Note:new</default>
+    </route>
+
+    <route id="note_create" path="/create" methods="POST">
+        <default key="_controller">AppBundle:Note:create</default>
+    </route>
+
+    <route id="note_edit" path="/{id}/edit">
+        <default key="_controller">AppBundle:Note:edit</default>
+    </route>
+
+    <route id="note_update" path="/{id}/update" methods="POST|PUT">
+        <default key="_controller">AppBundle:Note:update</default>
+    </route>
+
+    <route id="note_delete" path="/{id}/delete" methods="POST|DELETE">
+        <default key="_controller">AppBundle:Note:delete</default>
+    </route>
+
+</routes>

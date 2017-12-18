@@ -1,0 +1,15 @@
+{% extends '::layout.html.twig' %}
+{% block more_js %}
+    <!--[if lte IE 8]>
+    <script src="{{ asset('bundles/app/js/flot/excanvas.min.js') }}"></script>
+    <![endif]-->
+    {% block especific_graph_library_js %}
+        <script src="{{ asset('bundles/app/js/morris/raphael-min.js') }}"></script>
+        <script src="{{ asset('bundles/app/js/morris/morris.min.js') }}"></script>
+    {% endblock %}
+    {% block graph_js %}
+    {% endblock %}
+{% endblock %}
+{% block more_css %}
+    <link rel="stylesheet" href="{{ asset('bundles/app/css/morris/morris.css') }}"/>
+{% endblock %}

@@ -1,0 +1,53 @@
+{% extends '::layout_crud.html.twig' %}
+{% block title_wrapper %}Añadir Reparto de productos{% endblock %}
+{% block main -%}
+    <div class="panel panel-default">
+        <div class="panel-heading">
+            Cantidad de producto que has recogido. Se anotará en tu cuenta.
+        </div>
+        <div class="panel-body">
+            {{ form_start(form, {'action': path('collect_create'), 'method': 'post','attr': {'role': 'form' }}) }}
+            <div class="row">
+                <div class="col-lg-6">
+                    <div class="form-group">
+                        {{ form_errors(form.collect_date) }}
+                        <label>{{ form_label(form.collect_date) }}</label>
+                        {{ form_widget(form.collect_date,{'attr':{'placeholder':'Fecha de reparto'}}) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(form.amount) }}
+                        <label>{{ form_label(form.amount) }}</label>
+                        {{ form_widget(form.amount,{'attr':{'class':'form-control','placeholder':'Cantidad de producto'}}) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(form.product) }}
+                        <label>{{ form_label(form.product) }}</label>
+                        {{ form_widget(form.product,{'attr':{'class':'form-control'}}) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(form.unity) }}
+                        <label>{{ form_label(form.unity) }}</label>
+                        {{ form_widget(form.unity,{'attr':{'class':'form-control'}}) }}
+                    </div>
+                </div>
+            </div>
+            {{ form_widget(form.submit,{'attr':{'class':'btn btn-default'}}) }}
+            {{ form_rest(form) }}
+            {{ form_end(form, {'render_rest': false}) }}
+        </div>
+    </div>
+
+
+
+
+
+
+    <ul class="record_actions">
+        <li>
+            <a href="{{ path('collect') }}">
+                Back to the list
+            </a>
+        </li>
+    </ul>
+
+{% endblock %}

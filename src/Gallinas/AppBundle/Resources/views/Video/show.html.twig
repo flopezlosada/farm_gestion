@@ -1,0 +1,55 @@
+{% extends 'AppBundle:Default:layout_admin.html.twig' %}
+{% block admin_content -%}
+    <h1>{{'Video'|trans}}</h1>
+
+    <table class="record_properties">
+        <tbody>
+            <tr>
+                <th>Id</th>
+                <td>{{ entity.id }}</td>
+            </tr>
+            <tr>
+                <th>Objectclass</th>
+                <td>{{ entity.objectClass }}</td>
+            </tr>
+            <tr>
+                <th>Foreignkey</th>
+                <td>{{ entity.foreignKey }}</td>
+            </tr>
+            <tr>
+                <th>Title</th>
+                <td>{{ entity.title }}</td>
+            </tr>
+            <tr>
+                <th>Html_content</th>
+                <td>{{ entity.htmlcontent }}</td>
+            </tr>
+            <tr>
+                <th>Created</th>
+                <td>{{ entity.created|date('Y-m-d H:i:s') }}</td>
+            </tr>
+            <tr>
+                <th>Updated</th>
+                <td>{{ entity.updated|date('Y-m-d H:i:s') }}</td>
+            </tr>
+            <tr>
+                <th>Slug</th>
+                <td>{{ entity.slug }}</td>
+            </tr>
+        </tbody>
+    </table>
+
+        <ul class="record_actions">
+    <li>
+        <a href="{{ path(entity.objectClass~'_show',{'id':entity.foreignKey}) }}">
+            {{ "Ver " }} {{ entity.objectClass }}
+        </a>
+    </li>
+    <li>
+        <a href="{{ path('video_edit', { 'id': entity.id }) }}">
+            Edit
+        </a>
+    </li>
+    <li>{{ form(delete_form) }}</li>
+</ul>
+{% endblock %}

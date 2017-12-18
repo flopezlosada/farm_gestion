@@ -1,0 +1,31 @@
+{% if purchaser_warnings|length>0 %}
+    <h1>Avisos</h1>
+    {% for purchaser_warning in purchaser_warnings %}
+        <div class="alert alert-{{ purchaser_warning['diff']>7?'danger':purchaser_warning['diff']>4?'warning':'info' }}">
+            La/el clientx <strong>{{ purchaser_warning[0].name }}</strong> compró por última
+            vez el {{ purchaser_warning[0].purchases[0].getSaleDate|localizeddate('long','none','es') }}.
+            Como compra cada {{ purchaser_warning[0].getOftenBuyingEggs }} días,
+            <strong>
+                {% if purchaser_warning['diff']>0 %}
+                    lleva {{ purchaser_warning['diff'] }} día/s de retraso
+                {% else %}
+                    le faltan {{ purchaser_warning['diff']|abs }} día/s para comprar
+                {% endif %}
+            </strong>
+        </div>
+    {% endfor %}
+    {% for recipient_warning in recipient_warnings %}
+        <div class="alert alert-{{ recipient_warning['diff']>7?'danger':recipient_warning['diff']>4?'warning':'info' }}">
+            La/el agraciadx <strong>{{ recipient_warning[0].name }}</strong> recibió por última
+            vez el {{ recipient_warning[0].gifts[0].getGiftDate|localizeddate('long','none','es') }}.
+            Como le regalamos cada {{ recipient_warning[0].getOftenBuyingEggs }} días,
+            <strong>
+                {% if recipient_warning['diff']>0 %}
+                    lleva {{ recipient_warning['diff'] }} día/s de retraso
+                {% else %}
+                    le faltan {{ recipient_warning['diff']|abs }} día/s para recibir el regalo
+                {% endif %}
+            </strong>
+        </div>
+    {% endfor %}
+{% endif %}

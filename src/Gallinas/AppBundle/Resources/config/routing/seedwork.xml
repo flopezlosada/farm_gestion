@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<routes xmlns="http://symfony.com/schema/routing"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://symfony.com/schema/routing http://symfony.com/schema/routing/routing-1.0.xsd">
+
+    <route id="seedwork" path="/">
+        <default key="_controller">AppBundle:SeedWork:index</default>
+    </route>
+
+    <route id="seedwork_show" path="/{id}/show">
+        <default key="_controller">AppBundle:SeedWork:show</default>
+    </route>
+
+    <route id="seedwork_new" path="/new/{crop_working_id}">
+        <default key="_controller">AppBundle:SeedWork:new</default>
+    </route>
+
+    <route id="seedwork_create" path="/create" methods="POST">
+        <default key="_controller">AppBundle:SeedWork:create</default>
+    </route>
+
+    <route id="seedwork_edit" path="/{id}/edit">
+        <default key="_controller">AppBundle:SeedWork:edit</default>
+    </route>
+
+    <route id="seedwork_update" path="/{id}/update" methods="POST|PUT">
+        <default key="_controller">AppBundle:SeedWork:update</default>
+    </route>
+
+    <route id="seedwork_delete" path="/{id}/delete" methods="POST|DELETE">
+        <default key="_controller">AppBundle:SeedWork:delete</default>
+    </route>
+
+</routes>

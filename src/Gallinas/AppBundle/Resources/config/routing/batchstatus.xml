@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<routes xmlns="http://symfony.com/schema/routing"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://symfony.com/schema/routing http://symfony.com/schema/routing/routing-1.0.xsd">
+
+    <route id="batchstatus" path="/">
+        <default key="_controller">AppBundle:BatchStatus:index</default>
+    </route>
+
+    <route id="batchstatus_show" path="/{id}/show">
+        <default key="_controller">AppBundle:BatchStatus:show</default>
+    </route>
+
+    <route id="batchstatus_new" path="/new">
+        <default key="_controller">AppBundle:BatchStatus:new</default>
+    </route>
+
+    <route id="batchstatus_create" path="/create" methods="POST">
+        <default key="_controller">AppBundle:BatchStatus:create</default>
+    </route>
+
+    <route id="batchstatus_edit" path="/{id}/edit">
+        <default key="_controller">AppBundle:BatchStatus:edit</default>
+    </route>
+
+    <route id="batchstatus_update" path="/{id}/update" methods="POST|PUT">
+        <default key="_controller">AppBundle:BatchStatus:update</default>
+    </route>
+
+    <route id="batchstatus_delete" path="/{id}/delete" methods="POST|DELETE">
+        <default key="_controller">AppBundle:BatchStatus:delete</default>
+    </route>
+
+</routes>

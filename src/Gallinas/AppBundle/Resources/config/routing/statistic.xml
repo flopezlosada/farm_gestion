@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<routes xmlns="http://symfony.com/schema/routing"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://symfony.com/schema/routing http://symfony.com/schema/routing/routing-1.0.xsd">
+
+    <route id="statistic" path="/">
+        <default key="_controller">AppBundle:Statistic:index</default>
+    </route>
+
+    <route id="statistic_eggs" path="/eggs">
+        <default key="_controller">AppBundle:Statistic:eggs</default>
+    </route>
+
+    <route id="statistic_sale" path="/sale">
+        <default key="_controller">AppBundle:Statistic:sale</default>
+    </route>
+
+    <route id="statistic_purchase" path="/purchase">
+        <default key="_controller">AppBundle:Statistic:purchase</default>
+    </route>
+
+    <route id="statistic_feed" path="/feed">
+        <default key="_controller">AppBundle:Statistic:feed</default>
+    </route>
+
+    <route id="statistic_eggs_sale" path="/eggs_sale">
+        <default key="_controller">AppBundle:Statistic:eggsSale</default>
+    </route>
+
+    <route id="statistic_hens_feed" path="/hens_feed">
+        <default key="_controller">AppBundle:Statistic:hensFeedTotal</default>
+    </route>
+
+    <route id="statistic_user_collect" path="/{user_id}/collect">
+        <default key="_controller">AppBundle:Statistic:userCollect</default>
+    </route>
+
+
+</routes>

@@ -1,0 +1,48 @@
+{% extends '::layout_show.html.twig' %}
+{% block more_css %}
+    <link rel="stylesheet" href="{{ asset('bundles/app/fancybox/jquery.fancybox.css') }}"/>
+{% endblock %}
+{% block main -%}
+
+    <div class="panel panel-default">
+        <div class="panel-heading"><h4>{{ entity }}</h4></div>
+        <div class="panel-body">
+            <div class="row">
+                <div class="col-lg-6">
+                    <div class="panel panel-info">
+                        <div class="panel-heading">Histórico de rotaciones</div>
+                        <div class="panel-body">
+                            <ul>
+                                {% for crop_working in entity.cropWorkings %}
+                                    {% include 'AppBundle:Crop:crop_list.html.twig' %}
+                                {% else %}
+                                    Este sector no se ha puesto en producción todavía
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        <div class="panel-footer"></div>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="panel panel-success">
+                        <div class="panel-heading">Histórico de trabajos culturales</div>
+                        <div class="panel-body">
+                            <ul>
+                                {% for cultural_work in entity.culturalWorks %}
+                                    <strong><a href="{{ path('culturalwork_show', {'id': cultural_work.id}) }}">{{ cultural_work }}</a></strong><br>
+                                    Fecha : {{ cultural_work.date|localizeddate('medium','none','es') }}<br>
+                                {% else %}
+                                    En este sector no se ha realizado ningún trabajo.
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        <div class="panel-footer"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="panel-footer">
+
+        </div>
+    </div>
+{% endblock %}

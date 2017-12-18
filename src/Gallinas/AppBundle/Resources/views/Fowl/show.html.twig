@@ -1,0 +1,56 @@
+{% extends '::base.html.twig' %}
+
+{% block body -%}
+    <h1>Fowl</h1>
+
+    <table class="record_properties">
+        <tbody>
+            <tr>
+                <th>Id</th>
+                <td>{{ entity.id }}</td>
+            </tr>
+            <tr>
+                <th>Put_down_date</th>
+                <td>{{ entity.putdowndate|date('Y-m-d H:i:s') }}</td>
+            </tr>
+            <tr>
+                <th>Put_down_weight</th>
+                <td>{{ entity.putdownweight }}</td>
+            </tr>
+            <tr>
+                <th>Carcass_weight</th>
+                <td>{{ entity.carcassweight }}</td>
+            </tr>
+            <tr>
+                <th>Sale_price</th>
+                <td>{{ entity.saleprice }}</td>
+            </tr>
+            <tr>
+                <th>Note</th>
+                <td>{{ entity.note }}</td>
+            </tr>
+            <tr>
+                <th>Created</th>
+                <td>{{ entity.created|date('Y-m-d H:i:s') }}</td>
+            </tr>
+            <tr>
+                <th>Updated</th>
+                <td>{{ entity.updated|date('Y-m-d H:i:s') }}</td>
+            </tr>
+        </tbody>
+    </table>
+
+        <ul class="record_actions">
+    <li>
+        <a href="{{ path('fowl') }}">
+            Back to the list
+        </a>
+    </li>
+    <li>
+        <a href="{{ path('fowl_edit', { 'id': entity.id }) }}">
+            Edit
+        </a>
+    </li>
+    <li>{{ form(delete_form) }}</li>
+</ul>
+{% endblock %}

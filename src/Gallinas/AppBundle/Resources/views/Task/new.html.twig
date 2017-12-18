@@ -1,0 +1,57 @@
+{% extends '::layout_crud.html.twig' %}
+{% form_theme form 'AppBundle:Form:form_crop_checkboxs.html.twig' %}
+    {% block title_wrapper %}Añadir Tarea puntual sin fecha {% endblock %}
+    {% block main -%}
+        <div class="panel panel-default">
+
+            <div class="panel-body">
+                {{ form_start(form, {'attr': {'role': 'form' }}) }}
+                <div class="row">
+                    <div class="col-lg-12">
+                        <div class="form-group">
+                            {{ form_errors(form.title) }}
+                            <label>{{ form_label(form.title) }}</label>
+                            {{ form_widget(form.title,{'attr':{'placeholder':'Título de la tarea','class':'form-control'}}) }}
+                        </div>
+                        <div class="form-group">
+                            {{ form_errors(form.content) }}
+                            <label>{{ form_label(form.content) }}</label>
+                            {{ form_widget(form.content,{'attr':{'class':'form-control'}}) }}
+                        </div>
+                        <div class="alert alert-warning">
+                            Si se trata de una tarea relacionada con uno o varios cultivos, indica la labor a realizar y
+                            el/los cultivo/s asociado/s.
+                        </div>
+                        <div class="form-group">
+                            {{ form_errors(form.labour) }}
+                            <label>{{ form_label(form.labour) }}</label>
+                            {{ form_widget(form.labour,{'attr':{'class':'form-control'}}) }}
+                        </div>
+                        <div class="form-group">
+                            {{ form_errors(form.crop_workings) }}
+                            <label>{{ form_label(form.crop_workings) }}</label>
+                            {{ form_widget(form.crop_workings) }}
+                        </div>
+                        <div class="alert alert-success">
+                           Indica a continuación si la tarea tiene alguna/ún responsable definido
+                        </div>
+                        <div class="form-group">
+                            {{ form_errors(form.users) }}
+                            <label>{{ form_label(form.users) }}</label><div class="clearfix"></div>
+                            {{ form_widget(form.users) }}
+                        </div>
+                    </div>
+                </div>
+                {{ form_widget(form.submit,{'attr':{'class':'btn btn-default'}}) }}
+                {{ form_rest(form) }}
+                {{ form_end(form, {'render_rest': false}) }}
+                <ul class="record_actions">
+                    <li>
+                        <a href="{{ path('task') }}">
+                            Back to the list
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    {% endblock %}

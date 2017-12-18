@@ -1,0 +1,242 @@
+{% extends '::layout_crud.html.twig' %}
+{% block title_wrapper %}Editar animal{% endblock %}
+{% block main -%}
+    <div class="panel panel-default">
+        <div class="panel-heading">
+            {{ entity.batch }}
+        </div>
+        <div class="panel-body">
+            {{ form_start(edit_form, {'action': path('fowl_update',{'id':entity.id}), 'method': 'put','attr': {'role': 'form' }}
+            ) }}
+            <div class="row">
+                <div class="col-lg-6">
+                    <div class="form-group">
+                        {{ form_errors(edit_form.fowl_status) }}
+                        <label>{{ form_label(edit_form.fowl_status) }}</label>
+                        {{ form_widget(edit_form.fowl_status) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(edit_form.note) }}
+                        <label>{{ form_label(edit_form.note) }}</label>
+                        {{ form_widget(edit_form.note,{'attr':{'class':'form-control','placeholder':'Notas' }}) }}
+                    </div>
+                    <div class="form-group hide" id="put_down_date">
+                        {{ form_errors(edit_form.put_down_date) }}
+                        <label>{{ form_label(edit_form.put_down_date) }}</label>
+                        {{ form_widget(edit_form.put_down_date) }}
+                    </div>
+                    <div class="form-group hide" id="put_down_weight">
+                        {{ form_errors(edit_form.put_down_weight) }}
+                        <label>{{ form_label(edit_form.put_down_weight) }}</label>
+                        {{ form_widget(edit_form.put_down_weight,{'attr':{'class':'form-control','placeholder':'Peso vivo al sacrificio' }}
+                        ) }}
+                    </div>
+                    <div class="form-group hide" id="carcass_weight">
+                        {{ form_errors(edit_form.carcass_weight) }}
+                        <label>{{ form_label(edit_form.carcass_weight) }}</label>
+                        {{ form_widget(edit_form.carcass_weight,{'attr':{'class':'form-control','placeholder':'Peso en canal' }}
+                        ) }}
+                    </div>
+                    <div class="form-group hide" id="fowl_destination">
+                        {{ form_errors(edit_form.fowl_destination) }}
+                        <label>{{ form_label(edit_form.fowl_destination) }}</label>
+                        {{ form_widget(edit_form.fowl_destination) }}
+                    </div>
+                    <div class="form-group hide" id="sale_price">
+                        {{ form_errors(edit_form.sale_price) }}
+                        <label>{{ form_label(edit_form.sale_price) }}</label>
+                        {{ form_widget(edit_form.sale_price,{'attr':{'class':'form-control','placeholder':'Precio de venta' }}
+                        ) }}
+                    </div>
+                    <div class="form-group hide" id="fowl_purchaser">
+                        {{ form_errors(edit_form.fowl_purchaser) }}
+                        <label>{{ form_label(edit_form.fowl_purchaser) }}</label>
+                        {{ form_widget(edit_form.fowl_purchaser) }}
+                    </div>
+                    <div class="form-group hide" id="fowl_recipient">
+                        {{ form_errors(edit_form.fowl_recipient) }}
+                        <label>{{ form_label(edit_form.fowl_recipient) }}</label>
+                        {{ form_widget(edit_form.fowl_recipient) }}
+                    </div>
+                    <div class="form-group hide" id="fowl_user">
+                        {{ form_errors(edit_form.fowl_user) }}
+                        <label>{{ form_label(edit_form.fowl_user) }}</label>
+                        {{ form_widget(edit_form.fowl_user) }}
+                    </div>
+
+                </div>
+            </div>
+            {{ form_widget(edit_form.submit,{'attr':{'class':'btn btn-default' }}) }}
+            {{ form_rest(edit_form) }}
+            {{ form_end(edit_form, {'render_rest': false}) }}
+        </div>
+    </div>
+
+
+
+
+
+
+    <ul class="record_actions">
+        <li>
+            <a href="{{ path('batch_show',{'id':entity.batch.id}) }}">
+                Volver al lote
+            </a>
+        </li>
+    </ul>
+
+{% endblock %}
+
+{% block specific_js %}
+    {{ parent() }}
+    <script>
+
+        $('#gallinas_appbundle_fowl_fowl_status').change(function () {
+            if ($(this).val() == 1 || $(this).val() == 2 || $(this).val() == 3) {
+                $('#gallinas_appbundle_fowl_put_down_weight').val('');
+                $('#put_down_weight').hide('slow');
+                $('#gallinas_appbundle_fowl_carcass_weight').val('');
+                $('#carcass_weight').hide('slow');
+                $('#gallinas_appbundle_fowl_fowl_destination').val('');
+                $('#fowl_destination').hide('slow');
+                $('#gallinas_appbundle_fowl_sale_price').val('');
+                $('#sale_price').hide('slow');
+                $('#gallinas_appbundle_fowl_sale_price').prop('required',false);
+                $('#gallinas_appbundle_fowl_fowl_purchaser').val('');
+                $('#fowl_purchaser').hide('slow');
+
+                if ($(this).val() == 1) {
+                    $('#gallinas_appbundle_fowl_put_down_date').val('');
+                    $('#put_down_date').hide('slow');
+                }
+                else {
+                    $('#put_down_date').removeClass('hide');
+                    $('#put_down_date').show('slow');
+                }
+            }
+            else if ($(this).val() == 4) {
+                $('#put_down_date').removeClass('hide');
+                $('#put_down_date').show('slow');
+                $('#put_down_weight').removeClass('hide');
+                $('#put_down_weight').show('slow');
+                $('#carcass_weight').removeClass('hide');
+                $('#carcass_weight').show('slow');
+                $('#fowl_destination').removeClass('hide');
+                $('#fowl_destination').show('slow');
+            }
+            else {
+                $('#put_down_date').removeClass('hide');
+                $('#put_down_date').show('slow');
+                $('#put_down_weight').removeClass('hide');
+                $('#put_down_weight').show('slow');
+                $('#carcass_weight').removeClass('hide');
+                $('#carcass_weight').show('slow');
+                $('#fowl_destination').removeClass('hide');
+                $('#fowl_destination').show('slow');
+                $('#gallinas_appbundle_fowl_put_down_weight').val('');
+                $('#put_down_weight').hide('slow');
+                $('#gallinas_appbundle_fowl_carcass_weight').val('');
+                $('#carcass_weight').hide('slow');
+                $('#gallinas_appbundle_fowl_fowl_destination').val('');
+                $('#fowl_destination').hide('slow');
+                $('#gallinas_appbundle_fowl_sale_price').val('');
+                $('#sale_price').hide('slow');
+                $('#gallinas_appbundle_fowl_sale_price').prop('required',false);
+                $('#gallinas_appbundle_fowl_fowl_purchaser').val('');
+                $('#fowl_purchaser').hide('slow');
+                $('#gallinas_appbundle_fowl_put_down_date').val('');
+                $('#put_down_date').hide('slow');
+                $('#gallinas_appbundle_fowl_fowl_purchaser').val('');
+                $('#fowl_purchaser').hide('slow');
+                $('#gallinas_appbundle_fowl_fowl_recipient').val('');
+                $('#fowl_recipient').hide('slow');
+                $('#gallinas_appbundle_fowl_fowl_user').val('');
+                $('#fowl_user').hide('slow');
+            }
+        });
+
+        $('#gallinas_appbundle_fowl_fowl_destination').change(function () {
+            if ($(this).val() == 1) {
+                $('#sale_price').removeClass('hide');
+                $('#sale_price').show('slow');
+                $('#gallinas_appbundle_fowl_sale_price').prop('required',true);
+
+                $('#fowl_purchaser').removeClass('hide');
+                $('#fowl_purchaser').show('slow');
+                $('#gallinas_appbundle_fowl_fowl_recipient').val('');
+                $('#fowl_recipient').hide('slow');
+                $('#gallinas_appbundle_fowl_fowl_user').val('');
+                $('#fowl_user').hide('slow');
+            }
+            else if ($(this).val() == 2) {
+                $('#gallinas_appbundle_fowl_sale_price').val('');
+                $('#sale_price').show('slow');
+                $('#gallinas_appbundle_fowl_sale_price').prop('required',false);
+                $('#gallinas_appbundle_fowl_fowl_purchaser').val('');
+                $('#fowl_purchaser').hide('slow');
+                $('#gallinas_appbundle_fowl_fowl_user').val('');
+                $('#fowl_user').hide('slow');
+
+                $('#fowl_recipient').removeClass('hide');
+                $('#fowl_recipient').show('slow');
+            }
+
+            else if ($(this).val() == 3) {
+                $('#gallinas_appbundle_fowl_sale_price').val('');
+                $('#sale_price').hide('slow');
+                $('#gallinas_appbundle_fowl_sale_price').prop('required',false);
+                $('#gallinas_appbundle_fowl_fowl_purchaser').val('');
+                $('#fowl_purchaser').hide('slow');
+                $('#gallinas_appbundle_fowl_fowl_recipient').val('');
+                $('#fowl_recipient').hide('slow');
+
+                $('#fowl_user').removeClass('hide');
+                $('#fowl_user').show('slow');
+            }
+            else {
+                $('#gallinas_appbundle_fowl_sale_price').val('');
+                $('#sale_price').hide('slow');
+                $('#gallinas_appbundle_fowl_sale_price').prop('required',false);
+                $('#gallinas_appbundle_fowl_fowl_purchaser').val('');
+                $('#fowl_purchaser').hide('slow');
+                $('#gallinas_appbundle_fowl_fowl_recipient').val('');
+                $('#fowl_recipient').hide('slow');
+                $('#gallinas_appbundle_fowl_fowl_user').val('');
+                $('#fowl_user').hide('slow');
+            }
+
+        });
+
+        if ($('#gallinas_appbundle_fowl_fowl_status').val() == 4) {
+            $('#put_down_date').removeClass('hide');
+            $('#put_down_date').show('slow');
+            $('#put_down_weight').removeClass('hide');
+            $('#put_down_weight').show('slow');
+            $('#carcass_weight').removeClass('hide');
+            $('#carcass_weight').show('slow');
+            $('#fowl_destination').removeClass('hide');
+            $('#fowl_destination').show('slow');
+        }
+        if ($('#gallinas_appbundle_fowl_fowl_status').val() == 2 || $('#gallinas_appbundle_fowl_fowl_status').val() == 3) {
+            $('#put_down_date').removeClass('hide');
+            $('#put_down_date').show('slow');
+        }
+        if ($('#gallinas_appbundle_fowl_fowl_destination').val() == 1) {
+            $('#sale_price').removeClass('hide');
+            $('#sale_price').show('slow');
+            $('#gallinas_appbundle_fowl_sale_price').prop('required',true);
+            $('#fowl_purchaser').removeClass('hide');
+            $('#fowl_purchaser').show('slow');
+        }
+        if ($('#gallinas_appbundle_fowl_fowl_destination').val() == 2) {
+            $('#fowl_recipient').removeClass('hide');
+            $('#fowl_recipient').show('slow');
+        }
+        if ($('#gallinas_appbundle_fowl_fowl_destination').val() == 3) {
+            $('#fowl_user').removeClass('hide');
+            $('#fowl_user').show('slow');
+        }
+
+
+    </script>
+{% endblock %}

@@ -1,0 +1,56 @@
+{% extends '::base.html.twig' %}
+
+{% block body -%}
+    <h1>SeedWork</h1>
+
+    <table class="record_properties">
+        <tbody>
+            <tr>
+                <th>Id</th>
+                <td>{{ entity.id }}</td>
+            </tr>
+            <tr>
+                <th>Surface</th>
+                <td>{{ entity.surface }}</td>
+            </tr>
+            <tr>
+                <th>Plant</th>
+                <td>{{ entity.plant }}</td>
+            </tr>
+            <tr>
+                <th>Tray</th>
+                <td>{{ entity.tray }}</td>
+            </tr>
+            <tr>
+                <th>Estimated_date</th>
+                <td>{{ entity.estimateddate|date('Y-m-d H:i:s') }}</td>
+            </tr>
+            <tr>
+                <th>Real_date</th>
+                <td>{{ entity.realdate|date('Y-m-d H:i:s') }}</td>
+            </tr>
+            <tr>
+                <th>Created</th>
+                <td>{{ entity.created|date('Y-m-d H:i:s') }}</td>
+            </tr>
+            <tr>
+                <th>Updated</th>
+                <td>{{ entity.updated|date('Y-m-d H:i:s') }}</td>
+            </tr>
+        </tbody>
+    </table>
+
+        <ul class="record_actions">
+    <li>
+        <a href="{{ path('seedwork') }}">
+            Back to the list
+        </a>
+    </li>
+    <li>
+        <a href="{{ path('seedwork_edit', { 'id': entity.id }) }}">
+            Edit
+        </a>
+    </li>
+    <li>{{ form(delete_form) }}</li>
+</ul>
+{% endblock %}

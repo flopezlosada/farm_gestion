@@ -1,0 +1,168 @@
+app_sector:
+    resource: "@AppBundle/Resources/config/routing/sector.xml"
+    prefix:   /sector
+
+app_cropworking:
+    resource: "@AppBundle/Resources/config/routing/cropworking.xml"
+    prefix:   /cropworking
+
+app_culturalwork:
+    resource: "@AppBundle/Resources/config/routing/culturalwork.xml"
+    prefix:   /culturalwork
+
+app_culturalworktype:
+    resource: "@AppBundle/Resources/config/routing/culturalworktype.xml"
+    prefix:   /culturalworktype
+
+app_zone:
+    resource: "@AppBundle/Resources/config/routing/zone.xml"
+    prefix:   /zone
+
+app_seedwork:
+    resource: "@AppBundle/Resources/config/routing/seedwork.xml"
+    prefix:   /seedwork
+
+app_production:
+    resource: "@AppBundle/Resources/config/routing/production.xml"
+    prefix:   /production
+
+app_category:
+    resource: "@AppBundle/Resources/config/routing/category.xml"
+    prefix:   /category
+
+app_gestion:
+        pattern:  /
+        defaults: { _controller: AppBundle:Gestion:gestion }
+app_user:
+    resource: "@AppBundle/Resources/config/routing/user.xml"
+    prefix:   /user
+
+app_task:
+    resource: "@AppBundle/Resources/config/routing/task.xml"
+    prefix:   /task
+
+app_variety:
+    resource: "@AppBundle/Resources/config/routing/variety.xml"
+    prefix:   /variety
+
+app_taskimage:
+    resource: "@AppBundle/Resources/config/routing/taskimage.xml"
+    prefix:   /taskimage
+
+app_tasktype:
+    resource: "@AppBundle/Resources/config/routing/tasktype.xml"
+    prefix:   /tasktype
+
+app_tasknote:
+    resource: "@AppBundle/Resources/config/routing/tasknote.xml"
+    prefix:   /tasknote
+
+app_note:
+    resource: "@AppBundle/Resources/config/routing/note.xml"
+    prefix:   /note
+
+app_crop:
+    resource: "@AppBundle/Resources/config/routing/crop.xml"
+    prefix:   /crop
+
+app_labour:
+    resource: "@AppBundle/Resources/config/routing/labour.xml"
+    prefix:   /labour
+
+app_harvest:
+    resource: "@AppBundle/Resources/config/routing/harvest.xml"
+    prefix:   /harvest
+
+app_sack:
+    resource: "@AppBundle/Resources/config/routing/sack.xml"
+    prefix:   /sack
+
+app_batchstatus:
+    resource: "@AppBundle/Resources/config/routing/batchstatus.xml"
+    prefix:   /batchstatus
+
+app_fowldestination:
+    resource: "@AppBundle/Resources/config/routing/fowldestination.xml"
+    prefix:   /fowldestination
+
+app_fowlstatus:
+    resource: "@AppBundle/Resources/config/routing/fowlstatus.xml"
+    prefix:   /fowlstatus
+
+app_fowl:
+    resource: "@AppBundle/Resources/config/routing/fowl.xml"
+    prefix:   /fowl
+
+app_batch:
+    resource: "@AppBundle/Resources/config/routing/batch.xml"
+    prefix:   /batch
+
+app_product:
+    resource: "@AppBundle/Resources/config/routing/product.xml"
+    prefix:   /product
+
+app_purchase:
+    resource: "@AppBundle/Resources/config/routing/purchase.xml"
+    prefix:   /purchase
+
+app_sale:
+    resource: "@AppBundle/Resources/config/routing/sale.xml"
+    prefix:   /sale
+
+app_recipient:
+    resource: "@AppBundle/Resources/config/routing/recipient.xml"
+    prefix:   /recipient
+
+app_purchaser:
+    resource: "@AppBundle/Resources/config/routing/purchaser.xml"
+    prefix:   /purchaser
+
+app_provider:
+    resource: "@AppBundle/Resources/config/routing/provider.xml"
+    prefix:   /provider
+
+app_gift:
+    resource: "@AppBundle/Resources/config/routing/gift.xml"
+    prefix:   /gift
+
+app_event:
+    resource: "@AppBundle/Resources/config/routing/event.xml"
+    prefix:   /event
+
+app_collect:
+    resource: "@AppBundle/Resources/config/routing/collect.xml"
+    prefix:   /collect
+
+app_lay:
+    resource: "@AppBundle/Resources/config/routing/lay.xml"
+    prefix:   /lay
+
+app_statistic:
+    resource: "@AppBundle/Resources/config/routing/statistic.xml"
+    prefix:   /statistic
+
+app_blog:
+    resource: "@AppBundle/Resources/config/routing/blog.xml"
+    prefix:   /blog
+
+app_galery:
+    resource: "@AppBundle/Resources/config/routing/gallery.xml"
+    prefix:   /gallery
+
+app_image:
+    resource: "@AppBundle/Resources/config/routing/image.xml"
+    prefix:   /image
+
+app_video:
+    resource: "@AppBundle/Resources/config/routing/video.xml"
+    prefix:   /video
+
+app_document:
+    resource: "@AppBundle/Resources/config/routing/document.xml"
+    prefix:   /document
+
+app_audio:
+    resource: "@AppBundle/Resources/config/routing/audio.xml"
+    prefix:   /audio
+
+

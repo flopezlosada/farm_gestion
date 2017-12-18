@@ -1,0 +1,85 @@
+{% extends '::layout_show.html.twig' %}
+{% block more_css %}
+    <link rel="stylesheet" href="{{ asset('bundles/app/fancybox/jquery.fancybox.css') }}"/>
+{% endblock %}
+{% block main -%}
+    <h1>{{ entity }} ({{ entity.getstatus }})</h1>
+    <div class="panel panel-default">
+
+        <div class="panel-body">
+            <div class="row">
+                <div class="col-lg-12">
+                    {% if entity.tasktype.id!= 1%}
+                    <p><strong>Fecha aproximada de realización: </strong>
+                        {% if entity.expectedDate %}
+                            {{ entity.expectedDate|localizeddate("long","none","es") }}
+                        {% else %}
+                            {{ entity.month}}-{{ entity.year }}
+                        {% endif %}
+                    </p>
+                    {% endif %}
+                    {% if entity.finish==1 %}
+                    <p><strong>Fecha de finalización: </strong> {{ entity.realDate|localizeddate("long","none","es") }}</p>
+                    {% endif %}
+                    {{ entity.content }}
+                </div>
+                <div class="col-lg-10">
+                    {% if entity.notes|length >0 %}
+                        <h4>Notas de la tarea</h4>
+                    {% endif %}
+
+                    {% for note in entity.notes %}
+                        <blockquote>
+                            <p>{{ note.content|raw }}</p>
+                            <ul class="list-inline">
+                                <li>
+                                    <small><a href="{{ path('tasknote_edit', {'id': note.id}) }}">Editar</a></small>
+                                </li>
+                            </ul>
+                        </blockquote>
+                    {% endfor %}
+                </div>
+
+                {% for image in entity.getImages %}
+                    {% if loop.first %}
+                        <div class="col-lg-12 text-center image_list">
+                    {% endif %}
+                    {% if loop.index0  is divisible by(3) and loop.index0>0 %}
+                        </div>
+                        <div class="col-lg-12 text-center  image_list">
+                    {% endif %}
+                    <a class="fancybox-button" rel="fancybox-button"
+                       href="{{ asset('uploads/task/images/' ~ image.image) | imagine_filter('image_task_big') }}"
+                       title="{{ image.title }}">
+                        <img class="img-thumbnail img-responsive image_task"
+                             src="{{ asset('uploads/task/images/' ~ image.image) | imagine_filter('image_task_show') }}"
+                                >
+                    </a>
+                    {% if loop.last %}
+                        </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+        <div class="panel-footer">
+            {% include 'AppBundle:Task:record_actions.html.twig' with {'task':entity} %}
+        </div>
+    </div>
+
+{% endblock %}
+{% block more_js %}
+    <script src="{{ asset('bundles/app/fancybox/jquery.fancybox.js') }}"></script>
+    <script>
+        $(document).ready(function() {
+            $(".fancybox-button").fancybox({
+                prevEffect		: 'none',
+                nextEffect		: 'none',
+                closeBtn		: false,
+                helpers		: {
+                    title	: { type : 'inside' },
+                    buttons	: {}
+                }
+            });
+        });
+    </script>
+{% endblock %}

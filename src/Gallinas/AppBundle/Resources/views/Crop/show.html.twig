@@ -1,0 +1,32 @@
+{% extends '::layout_show.html.twig' %}
+{% block more_css %}
+    <link rel="stylesheet" href="{{ asset('bundles/app/fancybox/jquery.fancybox.css') }}"/>
+{% endblock %}
+{% block main -%}
+
+    <div class="panel panel-default">
+        <div class="panel-heading"><h4>{{ entity }}</h4></div>
+        <div class="panel-body">
+            <div class="row">
+                <div class="col-lg-6">
+                    <div class="panel panel-info">
+                        <div class="panel-heading">Histórico de producción</div>
+                        <div class="panel-body">
+                            <ul>
+                                {% for crop_working in entity.cropWorkings %}
+                                    {% include 'AppBundle:Crop:crop_list.html.twig' %}
+                                {% else %}
+                                    Este cultivo no se ha puesto en producción todavía. <a href="{{ path('cropworking_new', {'crop_id': entity.id}) }}"><br>Poner en producción</a>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        <div class="panel-footer"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="panel-footer">
+            {% include 'AppBundle:Crop:record_actions.html.twig' with {'crop':entity} %}
+        </div>
+    </div>
+{% endblock %}

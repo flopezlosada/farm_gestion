@@ -1,0 +1,45 @@
+{% extends 'AppBundle:Blog:frontend_index.html.twig' %}
+
+{% block post_main -%}
+<div class="blog-item">
+    {% include 'AppBundle:Blog:post_main.html.twig' with {'extend':1} %} {#es para que no muestre el contenido sino el leer más#}
+</div>
+{% endblock %}
+
+{% block more_js %}
+
+        <script>
+            (function (d, u) {
+                var a = new XMLHttpRequest(),
+                        b = d.body;
+                // Check for CORS support
+                // If you're loading from same domain, you can remove the if statement
+                if ("withCredentials" in a) {
+                    a.open("GET", u, true);
+                    a.send();
+                    a.onload = function () {
+                        var c = d.createElement("div");
+                        c.setAttribute("hidden", "");
+                        c.innerHTML = a.responseText;
+                        b.insertBefore(c, b.childNodes[0]);
+                    }
+                }
+            })(document, "{{ asset('assets/plyr/dist/sprite.svg')}}");
+        </script>
+        <script type="text/javascript" src="{{ asset('bundles/app/assets/plyr/dist/plyr.js') }}"></script>
+        <script type="text/javascript">plyr.setup({});</script>
+        <script src="{{ asset('bundles/app/assets/lightgallery/dist/js/lightgallery.min.js') }}"></script>
+        <!-- lightgallery plugins -->
+        <script src="{{ asset('bundles/app/assets/lightgallery/dist/js/lg-thumbnail.min.js') }}"></script>
+        <script src="{{ asset('bundles/app/assets/lightgallery/dist/js/lg-fullscreen.min.js') }}"></script>
+        <script type="text/javascript">
+            $(document).ready(function () {
+                $(".gallery").lightGallery();
+            });
+        </script>
+
+{% endblock %}
+{% block more_css %}
+    <link rel="stylesheet" type="text/css" href="{{ asset('bundles/app/assets/plyr/dist/plyr.css') }}"/>
+    <link rel="stylesheet" type="text/css" href="{{ asset('bundles/app/assets/lightgallery/dist/css/lightgallery.min.css') }}"/>
+{% endblock %}

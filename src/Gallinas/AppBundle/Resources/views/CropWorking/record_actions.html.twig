@@ -1,0 +1,15 @@
+<li><a href="{{ path('cropworking_edit', {'id': crop_working.id}) }}">Editar</a></li>
+
+{% if crop_working.finish==0 %}
+    <li><a href="{{ path('production_new_crop_working', {'crop_working_id': crop_working.id}) }}">Añadir
+            producción</a>
+    </li>
+    <li><a href="{{ path('seedwork_new', {'crop_working_id': crop_working.id}) }}">Añadir fecha de
+            siembra/plantación</a></li>
+    <li><a href="{{ path('culturalwork_new') }}">Indicar trabajo cultural</a></li>
+    <li><a href="{{ path('cropworking_add_sector', {'id': crop_working.id}) }}">Añadir sector de producción</a></li>
+    <li><a href="{{ path('cropworking_finish', {'id': crop_working.id,'finish':1}) }}">Finalizar cultivo</a></li>
+{% else %}
+    <li><a href="{{ path('cropworking_finish', {'id': crop_working.id,'finish':0}) }}">Reactivar cultivo</a></li>
+{% endif %}
+<li><a href="{{ path('production_show_basket', {'year': year}) }}">Ver cestas {{ year }}</a></li>

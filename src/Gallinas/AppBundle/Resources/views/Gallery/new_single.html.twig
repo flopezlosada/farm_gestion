@@ -1,0 +1,14 @@
+{% extends 'AppBundle:Default:layout_admin.html.twig' %}
+
+{% block admin_content -%}
+    <h4>{{'Gallery creation'|trans}}</h4>
+
+	{{ form(form, {'attr': {'class': 'admin-form out-modal', 'data-place' : 'out-modal'}} ) }}
+
+
+{% endblock %}
+{% block javascripts %}
+    {{ tinymce_init() }}
+    <script src="{{ asset('assets/jquery-modal/jquery.modal.min.js') }}"></script>
+
+{% endblock %}

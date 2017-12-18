@@ -1,0 +1,36 @@
+{% extends '::layout_crud.html.twig' %}
+
+    {% block title_wrapper %}Añadir {% endblock %}
+    {% block main -%}
+        <div class="panel panel-default">
+
+            <div class="panel-body">
+                {{ form_start(form, {'action': path('crop_create'),'method': 'post','attr': {'role': 'form' }}) }}
+                <div class='row'>
+                    <div class="col-lg-6">
+                        <div class="form-group">
+                            {{ form_errors(form.name) }}
+                            <label>{{ form_label(form.name) }}</label>
+                            {{ form_widget(form.name,{'attr':{'class':'form-control','placeholder':'Nombre' }}) }}
+                        </div>
+                        <div class="form-group">
+                            {{ form_errors(form.latin_name) }}
+                            <label>{{ form_label(form.latin_name) }}</label>
+                            {{ form_widget(form.latin_name,{'attr':{'class':'form-control','placeholder':'Nombre en Latín' }}) }}
+                        </div>
+                    </div>
+                </div>
+                {{ form_widget(form.submit,{'attr':{'class':'btn btn-default'}}) }}
+                {{ form_rest(form) }}
+                {{ form_end(form, {'render_rest': false}) }}
+                <ul class="record_actions">
+                    <li>
+                        <a href="{{ path('crop') }}">
+                            Back to the list
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    {% endblock %}
+{% block more_js %}{% endblock %}

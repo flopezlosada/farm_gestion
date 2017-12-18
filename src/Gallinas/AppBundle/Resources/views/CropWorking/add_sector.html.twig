@@ -1,0 +1,63 @@
+{% extends '::layout_crud.html.twig' %}
+
+
+    {% block title_wrapper %}Añadir Sector de cultivo a producción {% endblock %}
+    {% block main -%}
+        <div class="panel panel-default">
+            <div class="panel-heading">
+                <h4>Selecciona primero la zona de cultivo y luego el sector donde se implanta el cultivo</h4>
+            </div>
+            <div class="panel-body">
+                {{ form_start(form, {'action': path('cropworking_added_sector',{'id':crop_working.id}),'method': 'post','attr': {'role': 'form' }}) }}
+                <div class='row'>
+                    <div class="col-lg-8">
+                        <div class="form-group">
+                            {{ form_errors(form.zone) }}
+                            <label>{{ form_label(form.zone) }}</label>
+                            {{ form_widget(form.zone,{'attr':{'class':'form-control' }}) }}
+                        </div>
+                        <div class="form-group">
+                            {{ form_errors(form.sector) }}
+                            <label>{{ form_label(form.sector) }}</label>
+                            {{ form_widget(form.sector,{'attr':{'class':'form-control' }}) }}
+                        </div>
+                    </div>
+                </div>
+                {{ form_widget(form.submit,{'attr':{'class':'btn btn-default'}}) }}
+                {{ form_rest(form) }}
+                {{ form_end(form, {'render_rest': false}) }}
+            </div>
+            <div class="panel-footer">
+                <ul class="record_actions">
+                    <li>
+                        <a href="{{ path('cropworking') }}">
+                            Back to the list
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+        {{ tinymce_init() }}
+    {% endblock %}
+     {% block specific_js %}
+         <script>
+             $(function () {
+                 $('#form_sector').html("");
+                 $('#form_sector').prop('required',true);
+                 $("#form_zone").change(function () {
+                     var data = {
+                         zone_id: $(this).val()
+                     };
+
+                     $.ajax({
+                         type: 'post',
+                         url: '{{ path("select_sector") }}',
+                         data: data,
+                         success: function (data) {
+                             $('#form_sector').html(data);
+                         }
+                     });
+                 });
+             });
+         </script>
+     {% endblock %}

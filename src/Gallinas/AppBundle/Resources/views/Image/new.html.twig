@@ -1,0 +1,31 @@
+{% extends '::layout_modal.html.twig' %}
+
+
+{% block main -%}
+    <div class="panel panel-default">
+        <div class="panel panel-green">
+            <div class="panel-heading">Añadir imagen</div>
+        </div>
+        <div class="panel-body">
+            {{ form_start(form, {'attr': {'class': 'admin-form on-modal', 'data-place' : 'on-modal', 'id':'form_'~object_class~'_'~entity.getClass|lower~'_'~foreign_key}} ) }}
+            <div class='row'>
+                <div class="col-lg-6">
+                    <div class="form-group">
+                        {{ form_errors(form.file) }}
+                        <label>{{ form_label(form.file) }}</label>
+                        {{ form_widget(form.file) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(form.title) }}
+                        <label>{{ form_label(form.title) }}</label>
+                        {{ form_widget(form.title,{'attr':{'class':'form-control','placeholder':'Título'}}) }}
+                    </div>
+                </div>
+            </div>
+            {{ form_widget(form.submit,{'attr':{'class':'btn btn-default'}}) }}
+            {{ form_rest(form) }}
+            {{ form_end(form, {'render_rest': false}) }}
+        </div>
+    </div>
+{% endblock %}
+

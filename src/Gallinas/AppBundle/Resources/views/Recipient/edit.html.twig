@@ -1,0 +1,50 @@
+{% extends '::layout_crud.html.twig' %}
+{% block title_wrapper %}Editar agraciadx{% endblock %}
+{% block main -%}
+    <div class="panel panel-default">
+
+        <div class="panel-body">
+            {{ form_start(edit_form, {'action': path('recipient_update',{'id':entity.id}), 'method': 'put','attr': {'role': 'form' }}) }}
+            <div class="row">
+                <div class="col-lg-6">
+                    <div class="form-group">
+                        {{ form_errors(edit_form.name) }}
+                        <label>{{ form_label(edit_form.name) }}</label>
+                        {{ form_widget(edit_form.name,{'attr':{'class':'form-control','placeholder':'Nombre'}}) }}
+                    </div>
+                    <div class="checkbox">
+                        {{ form_errors(edit_form.regular) }}
+                        <label>
+                            {{ form_widget(edit_form.regular) }}
+                            Marca esta casilla si a estx agraciadx le regalamos huevos de forma regular
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(edit_form.often_buying_eggs) }}
+                        <label>{{ form_label(edit_form.often_buying_eggs) }}</label>
+                        {{ form_widget(edit_form.often_buying_eggs,{'attr':{'class':'form-control'}}) }}
+                    </div>
+                </div>
+            </div>
+            {{ form_widget(edit_form.submit,{'attr':{'class':'btn btn-default'}}) }}
+            {{ form_rest(edit_form) }}
+            {{ form_end(edit_form, {'render_rest': false}) }}
+        </div>
+    </div>
+
+
+
+
+
+
+    <ul class="record_actions">
+        <li>
+            <a href="{{ path('recipient') }}">
+                Volver al listado
+            </a>
+        </li>
+        <li>{{ form(delete_form) }}</li>
+    </ul>
+
+{% endblock %}
+{% block specific_js %}{% endblock %}

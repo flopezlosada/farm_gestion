@@ -1,0 +1,24 @@
+    {% extends '::layout_crud.html.twig' %}
+
+    {% block title_wrapper %}Añadir {% endblock %}
+    {% block main -%}
+    <div class="panel panel-default">
+
+        <div class="panel-body">
+            {{ form_start(form, {'action': path('harvest_create'),'method': 'post','attr': {'role': 'form' }}) }}
+            <div class='row'>
+
+            </div>
+            {{ form_widget(form.submit,{'attr':{'class':'btn btn-default'}}) }}
+            {{ form_rest(form) }}
+            {{ form_end(form, {'render_rest': false}) }}
+                        <ul class="record_actions">
+    <li>
+        <a href="{{ path('harvest') }}">
+            Back to the list
+        </a>
+    </li>
+</ul>
+        </div>
+    </div>
+    {% endblock %}

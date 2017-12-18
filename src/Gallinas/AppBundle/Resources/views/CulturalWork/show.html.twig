@@ -1,0 +1,44 @@
+{% extends '::layout_show.html.twig' %}
+{% block more_css %}
+    <link rel="stylesheet" href="{{ asset('bundles/app/fancybox/jquery.fancybox.css') }}"/>
+{% endblock %}
+{% block main -%}
+    <div class="panel panel-default">
+        <div class="panel-body">
+            <div class="row">
+                <div class="col-lg-12">
+                    <div class="panel panel-info">
+                    <div class="panel-heading"><h4>{{ entity.culturalWorkType.title }}</h4></div>
+                    <div class="panel-body">
+                        <p><strong>Cultivos trabajados:</strong>
+                        {% for crop_working in entity.cropWorkings %}
+                            <a href="{{ path('cropworking_show', {'id': crop_working.id}) }}">{{ crop_working }}</a> |
+                            {% endfor %}
+                        </p>
+                        <p><strong>Fecha de trabajo:</strong> {{ entity.getDate|localizeddate('long','none','es')  }}</p>
+                        <p><strong>Sectores afectados:</strong>
+                            {% for sector in entity.sectors %}
+                                <a href="{{ path('sector_show', {'id': sector.id}) }}">{{ sector }}</a> |
+                            {% endfor %}
+                        </p>
+                        {{ entity.content|raw }}
+                    <div class="panel-footer">
+                        <ul class="record_actions list-inline">
+                            <li>
+                                <a href="{{ path('culturalwork') }}">
+                                    Listado
+                                </a>
+                            </li>
+                            <li>
+                                <a href="{{ path('culturalwork_edit', { 'id': entity.id }) }}">
+                                    Editar
+                                </a>
+                            </li>
+                            <li>{{ form(delete_form) }}</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

@@ -1,0 +1,91 @@
+{% extends '::layout_crud.html.twig' %}
+
+    {% block title_wrapper %}Editar {% endblock %}
+    {% block main -%}
+        <div class="panel panel-default">
+            <div class="panel-heading">
+
+            </div>
+            <div class="panel-body">
+                {{ form_start(edit_form, {'action': path('seedwork_update',{'id':entity.id}), 'method': 'put','attr': {'role': 'form' }}) }}
+                <div class="row">
+                    <div class="col-lg-6">
+                        <div class="form-group">
+                            {{ form_errors(edit_form.crop_working) }}
+                            <label>{{ form_label(edit_form.crop_working) }}</label>
+                            {{ form_widget(edit_form.crop_working,{'attr':{'class':'form-control'}}) }}
+                        </div>
+                        <div class="form-group">
+                            {{ form_errors(edit_form.seed_work_type) }}
+                            <label>{{ form_label(edit_form.seed_work_type) }}</label>
+                            {{ form_widget(edit_form.seed_work_type,{'attr':{'class':'form-control'}}) }}
+                        </div>
+                        <div class="form-group">
+                            {{ form_errors(edit_form.estimated_date) }}
+                            <label>{{ form_label(edit_form.estimated_date) }}</label>
+                            {{ form_widget(edit_form.estimated_date,{'attr':{'placeholder':'Fecha de estimada'}}) }}
+                        </div>
+                        <div class="form-group">
+                            {{ form_errors(edit_form.real_date) }}
+                            <label>{{ form_label(edit_form.real_date) }}</label>
+                            {{ form_widget(edit_form.real_date,{'attr':{'placeholder':'Fecha real'}}) }}
+                        </div>
+                        <div class="form-group">
+                            {{ form_errors(edit_form.plant) }}
+                            <label>{{ form_label(edit_form.plant) }}</label>
+                            {{ form_widget(edit_form.plant,{'attr':{'class':'form-control','placeholder':'Número de plantas'}}) }}
+                        </div>
+                        <div class="form-group">
+                            {{ form_errors(edit_form.tray) }}
+                            <label>{{ form_label(edit_form.tray) }}</label>
+                            {{ form_widget(edit_form.tray,{'attr':{'class':'form-control','placeholder':'Número de bandejas'}}) }}
+                        </div>
+                        <div class="form-group">
+                            {{ form_errors(edit_form.surface) }}
+                            <label>{{ form_label(edit_form.surface) }}</label>
+                            {{ form_widget(edit_form.surface,{'attr':{'class':'form-control','placeholder':'Superficie'}}) }}
+                        </div>
+                        <div class="form-group">
+                            {{ form_errors(edit_form.content) }}
+                            <label>{{ form_label(edit_form.content) }}</label>
+                            {{ form_widget(edit_form.content,{'attr':{'class':'tinymce','placeholder':'Descripción' }}) }}
+                        </div>
+                    </div>
+                </div>
+                {{ form_widget(edit_form.submit,{'attr':{'class':'btn btn-default'}}) }}
+                {{ form_rest(edit_form) }}
+                {{ form_end(edit_form, {'render_rest': false}) }}
+            </div>
+        </div>
+        <ul class="record_actions">
+            <li>
+                <a href="{{ path('seedwork') }}">
+                    Back to the list
+                </a>
+            </li>
+            <li>{{ form(delete_form) }}</li>
+        </ul>
+        {{ tinymce_init() }}
+    {% endblock %}
+
+
+{% block specific_js %}
+    <script>
+        $('.datepicker').pickadate({
+            formatSubmit: 'yyyy-mm-dd',
+            onStart: function()
+            {
+                var date= new Date("{{  entity.getRealDate()}}");
+                this.set('select', date)
+            }
+        })
+        $('.datepicker2').pickadate({
+            formatSubmit: 'yyyy-mm-dd',
+            onStart: function()
+            {
+                var date= new Date("{{  entity.getEstimatedDate()}}");
+                this.set('select', date)
+            }
+        })
+    </script>
+{% endblock %}

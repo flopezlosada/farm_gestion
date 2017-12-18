@@ -1,0 +1,10 @@
+{% extends '::layout_graph.html.twig' %}
+{% block warning %}{% endblock %}
+{% block more_js %}
+    {{ parent() }}
+{% include '::list_block.html.twig' %}
+{% endblock %}
+{% block more_css %}
+{{ parent() }}
+    <link rel="stylesheet" href="{{ asset('bundles/app/css/plugins/dataTables.bootstrap.css') }}"/>
+{% endblock %}

@@ -1,0 +1,260 @@
+imports:
+    - { resource: parameters.yml }
+    - { resource: security.yml }
+
+framework:
+    #esi:             ~
+    translator:      { fallback: "%locale%" }
+    secret:          "%secret%"
+    router:
+        resource: "%kernel.root_dir%/config/routing.yml"
+        strict_requirements: ~
+    form:            ~
+    csrf_protection: ~
+    validation:      { enable_annotations: true }
+    templating:
+        engines: ['twig']
+        #assets_version: SomeVersionScheme
+    default_locale:  "%locale%"
+    trusted_hosts:   ~
+    trusted_proxies: ~
+    session:
+        # handler_id set to null will use default session handler from php.ini
+        handler_id:  ~
+    fragments:       ~
+    http_method_override: true
+
+# Twig Configuration
+twig:
+    debug:            "%kernel.debug%"
+    strict_variables: "%kernel.debug%"
+    globals:
+      dozen_price: 3.5
+
+# Assetic Configuration
+assetic:
+    debug:          "%kernel.debug%"
+    use_controller: false
+    bundles:        [ ]
+    #java: /usr/bin/java
+    filters:
+        cssrewrite: ~
+        #closure:
+        #    jar: "%kernel.root_dir%/Resources/java/compiler.jar"
+        #yui_css:
+        #    jar: "%kernel.root_dir%/Resources/java/yuicompressor-2.4.7.jar"
+
+# Doctrine Configuration
+doctrine:
+    dbal:
+        driver:   "%database_driver%"
+        host:     "%database_host%"
+        port:     "%database_port%"
+        dbname:   "%database_name%"
+        user:     "%database_user%"
+        password: "%database_password%"
+        charset:  UTF8
+        mapping_types:
+            enum: string
+        # if using pdo_sqlite as your database driver:
+        #   1. add the path in parameters.yml
+        #     e.g. database_path: "%kernel.root_dir%/data/data.db3"
+        #   2. Uncomment database_path in parameters.yml.dist
+        #   3. Uncomment next line:
+        #     path:     "%database_path%"
+
+    orm:
+        auto_generate_proxy_classes: "%kernel.debug%"
+        auto_mapping: true
+        dql:
+          datetime_functions:
+            MONTH: DoctrineExtensions\Query\Mysql\Month
+            YEAR: DoctrineExtensions\Query\Mysql\Year
+            DATEDIFF: DoctrineExtensions\Query\Mysql\DateDiff
+            DAY: DoctrineExtensions\Query\Mysql\Day
+            DAYOFWEEK: Gallinas\AppBundle\Custom\DayOfWeek
+stof_doctrine_extensions:
+    orm:
+        default:
+            sluggable: true
+            timestampable: true
+
+# Swiftmailer Configuration
+swiftmailer:
+    transport: "%mailer_transport%"
+    host:      "%mailer_host%"
+    username:  "%mailer_user%"
+    password:  "%mailer_password%"
+    spool:     { type: memory }
+fos_user:
+    db_driver: orm # other valid values are 'mongodb', 'couchdb' and 'propel'
+    firewall_name: main
+    user_class: Gallinas\AppBundle\Entity\User
+    service:
+        mailer: fos_user.mailer.twig_swift
+    from_email:
+        address:        gallinas@diphda.net
+        sender_name:    Gallinas
+    registration:
+      confirmation:
+        enabled:    true
+services:
+    twig.extension.intl:
+        class: Twig_Extensions_Extension_Intl
+        tags:
+                - { name: twig.extension }
+    twig.extension.text:
+        class: Twig_Extensions_Extension_Text
+        tags:
+                - { name: twig.extension }
+    app.twig_extension:
+                class: Gallinas\AppBundle\Twig\Extension\AppExtension
+                public: false
+                arguments:
+                    doctrine: "@doctrine"
+                tags:
+                    - { name: twig.extension }
+#easy_admin:
+#    entities:
+#        - Gallinas\AppBundle\Entity\Lay
+#        - Gallinas\AppBundle\Entity\Recipient
+#        - Gallinas\AppBundle\Entity\Collect
+#        - Gallinas\AppBundle\Entity\Sale
+#        - Gallinas\AppBundle\Entity\Event
+#        - Gallinas\AppBundle\Entity\Product
+#        - Gallinas\AppBundle\Entity\Purchase
+#        - Gallinas\AppBundle\Entity\Purchaser
+#        - Gallinas\AppBundle\Entity\Unity
+sonata_intl:
+    timezone:
+        default: Europe/Madrid
+        locales:
+            es:    Europe/Madrid
+liip_imagine:
+    resolvers:
+        default:
+            web_path:
+                web_root: %kernel.root_dir%/../web
+                cache_prefix: media/cache
+    loaders:
+        default:
+            filesystem:
+                data_root: %kernel.root_dir%/../web/
+
+    driver:               gd
+    cache:                default
+    data_loader:          default
+    default_image:        null
+    controller:
+        filter_action:         liip_imagine.controller:filterAction
+        filter_runtime_action: liip_imagine.controller:filterRuntimeAction
+    filter_sets:
+        image_ig:
+            quality: 100
+            filters:
+                interlace:
+                    mode: line
+                strip: ~
+                relative_resize: { increase: 400 }
+                crop: { start: [0, 50], size: [700, 420] }
+        image_task_show:
+                    quality: 100
+                    filters:
+                        interlace:
+                            mode: line
+                        strip: ~
+                        thumbnail: { allow_upscale: true, size: [290, 200], mode: outbound }
+        image_post_snippet_show:
+                    quality: 100
+                    filters:
+                        interlace:
+                            mode: line
+                        strip: ~
+                        thumbnail: { allow_upscale: true, size: [600, 1450], mode: inset }
+        thumb_blog_article_main:
+                    quality: 100
+                    filters:
+                        interlace:
+                            mode: line
+                        strip: ~
+                        thumbnail: { allow_upscale: true, size: [701, 433], mode: outbound }
+        thumb_latest_post:
+                    quality: 100
+                    filters:
+                        interlace:
+                            mode: line
+                        strip: ~
+                        thumbnail: { allow_upscale: true, size: [81, 81], mode: crop }
+        image_task_big:
+            quality: 100
+            filters:
+                interlace:
+                    mode: line
+                strip: ~
+                thumbnail: { allow_upscale: true, size: [700,420], mode: outbound }
+        image_history:
+                    quality: 100
+                    filters:
+                        interlace:
+                            mode: line
+                        strip: ~
+                        thumbnail: { allow_upscale: true, size: [200, 200], mode: inset }
+stfalcon_tinymce:
+        include_jquery: true
+        tinymce_jquery: true
+        selector: ".tinymce"
+        #base_url: "http://yourdomain.com/" # this parameter may be included if you need to override the assets_base_urls for your template engine (to override a CDN base url)
+        # Get current language from the parameters.ini
+        language: %locale%
+        # Custom buttons
+        tinymce_buttons:
+            stfalcon: # Id of the first button
+                title: "Stfalcon"
+                image: "http://stfalcon.com/favicon.ico"
+        theme:
+            # Simple theme: same as default theme
+            simple: ~
+            # Custom theme with almost any enabled plugins
+            custom:
+                 menubar: false
+                 toolbar1: "insertfile undo redo | styleselect | bold italic | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | link image"
+                 image_advtab: true
+            # Advanced theme with almost all enabled plugins
+            advanced:
+                 plugins:
+                     - "advlist autolink lists link image charmap print preview hr anchor pagebreak"
+                     - "searchreplace wordcount visualblocks visualchars code fullscreen"
+                     - "insertdatetime media nonbreaking save table contextmenu directionality"
+                     - "emoticons template paste textcolor"
+                 toolbar1: "insertfile undo redo | styleselect | bold italic | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | link image"
+                 toolbar2: "print preview media | forecolor backcolor emoticons | stfalcon | example"
+                 image_advtab: true
+                 templates:
+                     - {title: 'Test template 1', content: 'Test 1'}
+                     - {title: 'Test template 2', content: 'Test 2'}
+            # BBCode tag compatible theme (see http://www.bbcode.org/reference.php)
+            bbcode:
+                 plugins: ["bbcode, code, link, preview"]
+                 menubar: false
+                 toolbar1: "bold,italic,underline,undo,redo,link,unlink,removeformat,cleanup,code,preview"
+white_october_breadcrumbs:
+    separator:          ''
+    separatorClass:     'separator'
+    listId:             'wo-breadcrumbs'
+    listClass:          'breadcrumb'
+    itemClass:          ''
+    linkRel:            ''
+    locale:             ~ # defaults to null, so the default locale is used
+    translation_domain: ~ # defaults to null, so the default domain is used
+    viewTemplate:       'WhiteOctoberBreadcrumbsBundle::breadcrumbs.html.twig'
+
+knp_paginator:
+    page_range: 5                      # default page range used in pagination control
+    default_options:
+        page_name: page                # page query parameter name
+        sort_field_name: sort          # sort field query parameter name
+        sort_direction_name: direction # sort direction query parameter name
+        distinct: true                 # ensure distinct results, useful when ORM queries are using GROUP BY statements
+    template:
+        pagination: KnpPaginatorBundle:Pagination:sliding.html.twig     # sliding pagination controls template
+        sortable: KnpPaginatorBundle:Pagination:sortable_link.html.twig # sort link template

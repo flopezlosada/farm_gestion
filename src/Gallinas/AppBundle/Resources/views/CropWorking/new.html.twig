@@ -1,0 +1,101 @@
+{% extends '::layout_crud.html.twig' %}
+{% form_theme form _self %}
+{% block checkbox_widget %}
+    <div class="checkbox-multiple">
+        <input type="checkbox" {{ block('widget_attributes') }}{% if value is defined %} value="{{ value }}"{% endif %}{% if checked %} checked="checked"{% endif %} />
+        <label>{{ label }}</label>
+    </div>
+{% endblock %}
+{%- block choice_widget_expanded -%}
+    <div {{ block('widget_container_attributes') }}>
+        {%- for child in form %}
+            {{- form_widget(child) -}}
+        {% endfor -%}
+    </div>
+{%- endblock choice_widget_expanded -%}
+
+
+    {% block title_wrapper %}Añadir {% endblock %}
+    {% block main -%}
+        <div class="panel panel-default">
+
+            <div class="panel-body">
+                {{ form_start(form, {'action': path('cropworking_create'),'method': 'post','attr': {'role': 'form' }}) }}
+                <div class='row'>
+                    <div class="col-lg-8">
+                        <div class="form-group">
+                            {{ form_errors(form.name) }}
+                            <label>{{ form_label(form.name) }}</label>
+                            {{ form_widget(form.name,{'attr':{'class':'form-control','placeholder':'Descripción' }}) }}
+                        </div>
+                        <div class="form-group">
+                            {{ form_errors(form.crop) }}
+                            <label>{{ form_label(form.crop) }}</label>
+                            {{ form_widget(form.crop,{'attr':{'class':'form-control','placeholder':'Cultivo' }}) }}
+                        </div>
+                        <div class="form-group">
+                            {{ form_errors(form.surface) }}
+                            <label>{{ form_label(form.surface) }}</label>
+                            {{ form_widget(form.surface,{'attr':{'class':'form-control','placeholder':'Superficie a cultivar' }}) }}
+                        </div>
+                        <div class="form-group">
+                            {{ form_errors(form.estimated_production) }}
+                            <label>{{ form_label(form.estimated_production) }}</label>
+                            {{ form_widget(form.estimated_production,{'attr':{'class':'form-control','placeholder':'Producción estimada' }}) }}
+                        </div>
+                        <div class="form-group">
+                            {{ form_errors(form.planting_pattern) }}
+                            <label>{{ form_label(form.planting_pattern) }}</label>
+                            {{ form_widget(form.planting_pattern,{'attr':{'class':'form-control','placeholder':'Marco de plantación' }}) }}
+                        </div>
+                        <div class="form-group">
+                            {{ form_errors(form.content) }}
+                            <label>{{ form_label(form.content) }}</label>
+                            {{ form_widget(form.content,{'attr':{'class':'tinymce','placeholder':'Descripción' }}) }}
+                        </div>
+                       {# <div class="form-group">
+                            {{ form_errors(form.zone) }}
+                            <label>{{ form_label(form.zone) }}</label>
+                            {{ form_widget(form.zone,{'attr':{'class':'form-control' }}) }}
+                        </div>
+                        <div class="form-group">
+                            {{ form_errors(form.sectors) }}
+                            <label>{{ form_label(form.sectors) }}</label>
+                            {{ form_widget(form.sectors,{'attr':{'class':'form-control' }}) }}
+                        </div>#}
+                    </div>
+                </div>
+                {{ form_widget(form.submit,{'attr':{'class':'btn btn-default'}}) }}
+                {{ form_rest(form) }}
+                {{ form_end(form, {'render_rest': false}) }}
+                <ul class="record_actions">
+                    <li>
+                        <a href="{{ path('cropworking') }}">
+                            Back to the list
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+        {{ tinymce_init() }}
+    {% endblock %}
+     {% block specific_js %}
+         {#<script>
+             $(function () {
+                 $("#gallinas_appbundle_cropworking_zone").change(function () {
+                     var data = {
+                         zone_id: $(this).val()
+                     };
+
+                     $.ajax({
+                         type: 'post',
+                         url: '{{ path("select_sector") }}',
+                         data: data,
+                         success: function (data) {
+                             $('#gallinas_appbundle_cropworking_sectors').html(data);
+                         }
+                     });
+                 });
+             });
+         </script>#}
+     {% endblock %}

@@ -1,0 +1,24 @@
+<div class="blog-post">
+    <h3>
+        Últimas Noticias
+    </h3>
+{% for post in entities %}
+    <div class="clearfix media">
+        <a class="pull-left gs" href="{{ path('blog_show', {'slug': post.slug}) }}">
+            <img src="{{ asset('uploads/blog/images/' ~post.getImage) | imagine_filter('thumb_latest_post') }}"/>
+        </a>
+
+        <div class="media-body">
+            <h5 class="media-heading">
+                <a href="{{ path('blog_show', {'slug': post.slug}) }}">
+                    {{ post.created|date('d-m-Y') }}
+                </a>
+            </h5>
+
+            <p>
+                {{ post.title }}
+            </p>
+        </div>
+    </div>
+</div>
+{% endfor %}

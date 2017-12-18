@@ -1,0 +1,4 @@
+<option value="">Selecciona Sector</option>
+{% for sector in sectors %}
+    <option value="{{ sector.id }}">{{ sector.name }}</option>
+{% endfor %}

@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<routes xmlns="http://symfony.com/schema/routing"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://symfony.com/schema/routing http://symfony.com/schema/routing/routing-1.0.xsd">
+
+    <route id="cropworking" path="/">
+        <default key="_controller">AppBundle:CropWorking:index</default>
+    </route>
+
+    <route id="cropworking_show" path="/{id}/show">
+        <default key="_controller">AppBundle:CropWorking:show</default>
+    </route>
+
+    <route id="cropworking_new" path="/new/{crop_id}">
+        <default key="_controller">AppBundle:CropWorking:new</default>
+        <default key="crop_id">null</default>
+    </route>
+
+    <route id="cropworking_create" path="/create" methods="POST">
+        <default key="_controller">AppBundle:CropWorking:create</default>
+    </route>
+
+    <route id="cropworking_edit" path="/{id}/edit">
+        <default key="_controller">AppBundle:CropWorking:edit</default>
+    </route>
+
+    <route id="cropworking_update" path="/{id}/update" methods="POST|PUT">
+        <default key="_controller">AppBundle:CropWorking:update</default>
+    </route>
+
+    <route id="cropworking_delete" path="/{id}/delete" methods="POST|DELETE">
+        <default key="_controller">AppBundle:CropWorking:delete</default>
+    </route>
+
+    <route id="cropworking_add_sector" path="/{id}/add_sector">
+        <default key="_controller">AppBundle:CropWorking:addSector</default>
+    </route>
+
+    <route id="cropworking_finish" path="/{id}/finish/{finish}">
+        <default key="_controller">AppBundle:CropWorking:finish</default>
+    </route>
+
+    <route id="cropworking_added_sector" path="/{id}/added_sector">
+        <default key="_controller">AppBundle:CropWorking:addedSector</default>
+    </route>
+
+    <route id="cropworking_delete_sector" path="/{sector_id}/{crop_working_id}/delete_sector">
+        <default key="_controller">AppBundle:CropWorking:deleteSector</default>
+    </route>
+
+
+</routes>
