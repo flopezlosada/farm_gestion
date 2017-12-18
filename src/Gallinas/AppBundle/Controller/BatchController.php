@@ -120,7 +120,7 @@ class BatchController extends Controller
         {
             throw $this->createNotFoundException('Unable to find Batch entity.');
         }
-
+        $week_lay = $em->getRepository('AppBundle:Lay')->findWeekLay(20,null,$id);
         $start_time = 0;
         $start_date = new \DateTime($entity->getReceiptDate()->format('Y-m-d'));
         $end_date = new \DateTime($entity->getReceiptDate()->format('Y-m-d'));
@@ -148,6 +148,7 @@ class BatchController extends Controller
 
         return $this->render('AppBundle:Batch:show.html.twig', array(
             'entity' => $entity,
+            'week_lay' => array_reverse($week_lay),
             'average_consumption'=> $average_consumption,
             'delete_form' => $deleteForm->createView(),
         ));
