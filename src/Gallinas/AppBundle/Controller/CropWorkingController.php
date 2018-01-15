@@ -4,6 +4,7 @@ namespace Gallinas\AppBundle\Controller;
 
 use Doctrine\ORM\EntityRepository;
 use Gallinas\AppBundle\Entity\Sector;
+use Gallinas\AppBundle\Form\CropWorkingEditType;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Bundle\FrameworkBundle\Controller\Controller;
 
@@ -195,7 +196,7 @@ class CropWorkingController extends Controller
      */
     private function createEditForm(CropWorking $entity)
     {
-        $form = $this->createForm(new CropWorkingType(), $entity, array(
+        $form = $this->createForm(new CropWorkingEditType(), $entity, array(
             'action' => $this->generateUrl('cropworking_update', array('id' => $entity->getId())),
             'method' => 'PUT',
         ));

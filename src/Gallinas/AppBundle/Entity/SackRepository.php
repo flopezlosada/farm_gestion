@@ -3,7 +3,7 @@
 namespace Gallinas\AppBundle\Entity;
 
 use Doctrine\ORM\EntityRepository;
-use Symfony\Component\Validator\Constraints\False;
+//use Symfony\Component\Validator\Constraints\False;
 
 
 /**
