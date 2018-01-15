@@ -51,6 +51,10 @@ class Sector
      */
     private $cultural_works;
 
+    /**
+     * @ORM\OneToMany(targetEntity="SeedWork", mappedBy="sector")
+     */
+    protected $seed_works;
 
     public function __toString()
     {

@@ -47,6 +47,12 @@ class SeedWork
      */
     private $seed_work_type;
 
+    /**
+     * @var smallint $sector
+     *
+     * @ORM\ManyToOne(targetEntity="Sector", inversedBy="seed_works", nullable=true)
+     */
+    private $sector;
 
     /**
      * Superficie cultivada
