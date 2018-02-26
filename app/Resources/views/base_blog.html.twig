@@ -270,7 +270,7 @@
         </div>
         <!--breadcrumbs end-->
     {% endblock %}
-{% block container %}{% endblock %}
+    {% block container %}{% endblock %}
     {% block footer %}
         <!--footer start-->
         <footer class="footer">
@@ -293,16 +293,16 @@
                                 Torremocha de Jarama, Madrid
                             </p>
 
-                            <p>
+                            {#<p>
                                 <i class="fa fa-mobile pr-10">
                                 </i>
-                                Móvil : (+34) 639 68 61 64
-                            </p>
+                                Móvil :
+                            </p>#}
 
                             {#<p>
                                 <i class="fa fa-phone pr-10">
                                 </i>
-                                Phone : (+34) 639 68 61 64
+                                Phone :
                             </p>#}
 
                             <p>
@@ -364,24 +364,30 @@
                                 </em>
                             </div>#}
                         </div>
-                            <a class="twitter-timeline" data-lang="es" data-width="263" data-height="241" data-dnt="true" data-theme="dark"
-                               href="https://twitter.com/csavegadejarama">Tweets by csavegadejarama</a>
+                        <a class="twitter-timeline" data-lang="es" data-width="263" data-height="241" data-dnt="true"
+                           data-theme="dark"
+                           href="https://twitter.com/csavegadejarama">Tweets by csavegadejarama</a>
                         <script async src="http://platform.twitter.com/widgets.js" charset="utf-8"></script>
 
                     </div>
                     <div class="col-lg-3 col-sm-3">
                         <div class="page-footer wow fadeInUp" data-wow-duration="2s" data-wow-delay=".5s">
                             <h1>
-                                Our Company
+                                Enlaces
                             </h1>
                             <ul class="page-footer-list">
-
                                 <li>
                                     <i class="fa fa-angle-right">
-                                    </i>
-                                    <a href="about.html">
-                                        About Us
+                                    </i> Datos climáticos
+
+                                    <a href="http://csavegadejarama.org/clima/index.php" target="_blank">
+                                        Torremocha de Jarama
+                                    </a><br>
+                                    <a href="http://csavegadejarama.org/clima/index.php" target="_blank">
+                                        Los Tomillares
                                     </a>
+
+
                                 </li>
                                 <li>
                                     <i class="fa fa-angle-right">
@@ -449,7 +455,8 @@
                 <div class="row">
                     <div class="col-lg-6 col-sm-6 pull-right">
                         <ul class="social-link-footer list-unstyled">
-                            <li class="wow flipInX" data-wow-duration="2s" data-wow-delay=".1s"><a href="https://www.facebook.com/CSA.Vega.de.Jarama/"><i
+                            <li class="wow flipInX" data-wow-duration="2s" data-wow-delay=".1s"><a
+                                        href="https://www.facebook.com/CSA.Vega.de.Jarama/"><i
                                             class="fa fa-facebook"></i></a></li>
                             {#<li class="wow flipInX" data-wow-duration="2s" data-wow-delay=".2s"><a href="#"><i
                                             class="fa fa-google-plus"></i></a></li>#}
@@ -457,15 +464,18 @@
                                             class="fa fa-dribbble"></i></a></li>
                             <li class="wow flipInX" data-wow-duration="2s" data-wow-delay=".4s"><a href="#"><i
                                             class="fa fa-linkedin"></i></a></li>#}
-                            <li class="wow flipInX" data-wow-duration="2s" data-wow-delay=".5s"><a href="https://twitter.com/csavegadejarama"><i
+                            <li class="wow flipInX" data-wow-duration="2s" data-wow-delay=".5s"><a
+                                        href="https://twitter.com/csavegadejarama"><i
                                             class="fa fa-twitter"></i></a></li>
                             {#<li class="wow flipInX" data-wow-duration="2s" data-wow-delay=".6s"><a href="#"><i
                                             class="fa fa-skype"></i></a></li>
                             <li class="wow flipInX" data-wow-duration="2s" data-wow-delay=".7s"><a href="#"><i
                                             class="fa fa-github"></i></a></li>#}
-                            <li class="wow flipInX" data-wow-duration="2s" data-wow-delay=".8s"><a href="https://www.youtube.com/channel/UCBi4lm55t6X3lqaql2tG8xg"><i
+                            <li class="wow flipInX" data-wow-duration="2s" data-wow-delay=".8s"><a
+                                        href="https://www.youtube.com/channel/UCBi4lm55t6X3lqaql2tG8xg"><i
                                             class="fa fa-youtube"></i></a></li>
-                            <li class="wow flipInX" data-wow-duration="2s" data-wow-delay=".5s"><a href="https://creativecommons.org/licenses/by-sa/4.0/"><i
+                            <li class="wow flipInX" data-wow-duration="2s" data-wow-delay=".5s"><a
+                                        href="https://creativecommons.org/licenses/by-sa/4.0/"><i
                                             class="fa fa-creative-commons"></i></a></li>
                         </ul>
                     </div>
@@ -491,7 +501,7 @@
         <script src="{{ asset('bundles/app/frontend/blog/js/jquery.easing.min.js') }}"></script>
         <script src="{{ asset('bundles/app/frontend/blog/js/link-hover.js') }}"></script>
 
-         <!--common script for all pages-->
+        <!--common script for all pages-->
         <script src="{{ asset('bundles/app/frontend/blog/js/common-scripts.js') }}"></script>
 
 

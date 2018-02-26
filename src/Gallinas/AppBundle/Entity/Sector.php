@@ -197,4 +197,37 @@ class Sector
     {
         return $this->cultural_works;
     }
+
+    /**
+     * Add seed_works
+     *
+     * @param \Gallinas\AppBundle\Entity\SeedWork $seedWorks
+     * @return Sector
+     */
+    public function addSeedWork(\Gallinas\AppBundle\Entity\SeedWork $seedWorks)
+    {
+        $this->seed_works[] = $seedWorks;
+
+        return $this;
+    }
+
+    /**
+     * Remove seed_works
+     *
+     * @param \Gallinas\AppBundle\Entity\SeedWork $seedWorks
+     */
+    public function removeSeedWork(\Gallinas\AppBundle\Entity\SeedWork $seedWorks)
+    {
+        $this->seed_works->removeElement($seedWorks);
+    }
+
+    /**
+     * Get seed_works
+     *
+     * @return \Doctrine\Common\Collections\Collection 
+     */
+    public function getSeedWorks()
+    {
+        return $this->seed_works;
+    }
 }

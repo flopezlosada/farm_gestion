@@ -1,5 +1,5 @@
 <?php
- 
+
 namespace Gallinas\AppBundle\Controller;
 
 use Gallinas\AppBundle\Entity\Fowl;
@@ -120,7 +120,8 @@ class BatchController extends Controller
         {
             throw $this->createNotFoundException('Unable to find Batch entity.');
         }
-        $week_lay = $em->getRepository('AppBundle:Lay')->findWeekLay(20,null,$id);
+        $week_lay = $em->getRepository('AppBundle:Lay')->findWeekLay(null, null, $id);
+        $highchart_week_lay = $em->getRepository('AppBundle:Lay')->findHighchartWeekLay($id);
         $start_time = 0;
         $start_date = new \DateTime($entity->getReceiptDate()->format('Y-m-d'));
         $end_date = new \DateTime($entity->getReceiptDate()->format('Y-m-d'));
@@ -142,15 +143,16 @@ class BatchController extends Controller
         }
 
 
-        $average_consumption = array_sum($consumption) *1000/ count($consumption);
+        $average_consumption = array_sum($consumption) * 1000 / count($consumption);
 
         $deleteForm = $this->createDeleteForm($id);
 
         return $this->render('AppBundle:Batch:show.html.twig', array(
             'entity' => $entity,
             'week_lay' => array_reverse($week_lay),
-            'average_consumption'=> $average_consumption,
+            'average_consumption' => $average_consumption,
             'delete_form' => $deleteForm->createView(),
+            'highchart_week_lay' => $highchart_week_lay
         ));
     }
 
@@ -333,4 +335,61 @@ class BatchController extends Controller
         return $this->redirect($this->generateUrl("batch_show", array('id' => $id)));
     }
 
+
+    public function analysesYearAction($product_id, $year)
+    {
+        $em = $this->getDoctrine()->getManager();
+
+
+        if (!$year)
+        {
+            $year = date('Y');
+        }
+
+        $product = $em->getRepository('AppBundle:Product')->find($product_id);//pollos o gallinas
+
+
+        $batchs = $em->getRepository('AppBundle:Batch')->findByProductYear($product_id, $year);
+
+
+        foreach ($batchs as $batch)
+        {
+            $put_down_fowls = 0;//número de animales sacrificados
+            $total_put_down_weight = 0;//peso vivo acumulado de todo el lote. Suma de pesos vivos individuales de animales sacrificados
+            $total_carcass_weight = 0;//peso canal acumulado de todo el lote. Suma de pesos canal individuales de animales sacrificados
+            foreach ($batch->getFowls() as $fowl)
+            {
+                if ($fowl->getFowlStatus()->getId() == 4)
+                {
+                    $put_down_fowls++;
+                    $total_put_down_weight += $fowl->getPutDownWeight();
+                    $total_carcass_weight += $fowl->getCarcassWeight();
+                }
+            }
+
+            $batch->setPutDownTotal($put_down_fowls);
+            $batch->setTotalPutDownWeight($total_put_down_weight);
+            $batch->setAveragePutDownWeight($total_put_down_weight / $put_down_fowls);
+            $batch->setTotalCarcassWeight($total_carcass_weight);
+            $batch->setAverageCarcassWeight($total_carcass_weight / $put_down_fowls);
+        }
+
+        return $this->render('AppBundle:Batch:analyses_year.html.twig', array(
+            'batchs' => $batchs,
+            'product' => $product,
+            'year'=>$year
+        ));
+    }
+
+    public function analysesAction($product_id)
+    {
+        $em = $this->getDoctrine()->getManager();
+        $product = $em->getRepository('AppBundle:Product')->find($product_id);//pollos o gallinas
+        $years = $em->getRepository('AppBundle:Batch')->findYearsInProduction($product_id);//devuelve los años en que se ha producido según el producto, ya sea gallinas o pollos
+
+        return $this->render('AppBundle:Batch:analyses.html.twig', array(
+            'years' => $years,
+            'product' => $product,
+        ));
+    }
 }

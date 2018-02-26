@@ -194,6 +194,122 @@ class Batch
 
 
     /**
+     * Media del peso en vivo de los animales sacrificados
+     */
+    private $average_put_down_weight;
+
+    /**
+     * Media del peso en canal de los animales sacrificados
+     */
+    private $average_carcass_weight;
+
+
+    /**
+     * Total del peso en vivo de los animales sacrificados
+     */
+    private $total_put_down_weight;
+
+
+    /**
+     * Total del peso en canal de los animales sacrificados
+     */
+    private $total_carcass_weight;
+
+
+
+
+    /**
+     * Total de Animales sacrificados
+     */
+    private $put_down_total;
+
+
+
+    /**
+     * @return mixed
+     */
+    public function getTotalPutDownWeight()
+    {
+        return $this->total_put_down_weight;
+    }
+
+    /**
+     * @param mixed $total_put_down_weight
+     */
+    public function setTotalPutDownWeight($total_put_down_weight)
+    {
+        $this->total_put_down_weight = $total_put_down_weight;
+    }
+
+    /**
+     * @return mixed
+     */
+    public function getTotalCarcassWeight()
+    {
+        return $this->total_carcass_weight;
+    }
+
+    /**
+     * @param mixed $total_carcass_weight
+     */
+    public function setTotalCarcassWeight($total_carcass_weight)
+    {
+        $this->total_carcass_weight = $total_carcass_weight;
+    }
+
+
+    /**
+     * @return mixed
+     */
+    public function getPutDownTotal()
+    {
+        return $this->put_down_total;
+    }
+
+    /**
+     * @param mixed $put_down_total
+     */
+    public function setPutDownTotal($put_down_total)
+    {
+        $this->put_down_total = $put_down_total;
+    }
+
+
+    /**
+     * @return mixed
+     */
+    public function getAverageCarcassWeight()
+    {
+        return $this->average_carcass_weight;
+    }
+
+    /**
+     * @param mixed $average_carcass_weight
+     */
+    public function setAverageCarcassWeight($average_carcass_weight)
+    {
+        $this->average_carcass_weight = $average_carcass_weight;
+    }
+
+    /**
+     * @return mixed
+     */
+    public function getAveragePutDownWeight()
+    {
+        return $this->average_put_down_weight;
+    }
+
+    /**
+     * @param mixed $average_put_down_weight
+     *
+     */
+    public function setAveragePutDownWeight($average_put_down_weight)
+    {
+        $this->average_put_down_weight = $average_put_down_weight;
+
+    }
+
+    /**
      * Constructor
      */
     public function __construct()
@@ -567,7 +683,7 @@ class Batch
         }
 
         return "1";*/
-        $string = "Lote nº: ".$this->getId()." en estado " . strtolower($this->getBatchStatus()) . " de " . $this->getAmount() . " " . strtolower($this->getProduct()) . "s";
+        $string = "Lote nº: " . $this->getId() . " en estado " . strtolower($this->getBatchStatus()) . " de " . $this->getAmount() . " " . strtolower($this->getProduct()) . "s";
 
         if (is_object($this->getPurchaseDate()))
         {
@@ -961,7 +1077,7 @@ class Batch
 
     public function getNameBatchLay()
     {
-        return "Lote nº ".$this->getId();
+        return "Lote nº " . $this->getId();
         //." de " . $this->getAmount() . " de " . $this->getProduct() . " comprado el día " . $this->getPurchaseDate()->format(("d/m/Y"));
     }
 
@@ -1001,7 +1117,7 @@ class Batch
         if ($this->getProduct()->getId() == 6)
         {
 
-            return $this->getTotalCost() *12/ $price;
+            return $this->getTotalCost() * 12 / $price;
 
 
             return 0;
