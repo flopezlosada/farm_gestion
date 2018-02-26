@@ -23,6 +23,7 @@ class SeedWorkType extends AbstractType
             ->add('crop_working', null, array('label'=>'Cultivo'))
             ->add('seed_work_type', null, array('label'=>'Tipo'))
             ->add('content', null, array('label'=>'Descripción'))
+            ->add('sector',null,array('label'=>'Sector'))
         ;
     }
     
