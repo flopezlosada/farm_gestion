@@ -47,6 +47,11 @@
                         <label>{{ form_label(form.content) }}</label>
                         {{ form_widget(form.content,{'attr':{'class':'tinymce','placeholder':'Descripción' }}) }}
                     </div>
+                    <div class="form-group">
+                        {{ form_errors(form.sector) }}
+                        <label>{{ form_label(form.sector) }}</label>
+                        {{ form_widget(form.sector,{'attr':{'class':'form-control','placeholder':'Sector' }}) }}
+                    </div>
                 </div>
             </div>
             {{ form_widget(form.submit,{'attr':{'class':'btn btn-default'}}) }}

@@ -36,7 +36,8 @@
                         <p><strong>Sectores de cultivo:</strong></p>
                         <ul>
                             {% for  sector in entity.sectors %}
-                                <li><a href="{{ path('sector_show', {'id': sector.id}) }}">{{ sector.getZone }}: {{ sector }}</a> | <a
+                                <li><a href="{{ path('sector_show', {'id': sector.id}) }}">{{ sector.getZone }}
+                                        : {{ sector }}</a> | <a
                                             href="{{ path('cropworking_delete_sector', {'sector_id': sector.id, 'crop_working_id': entity.id}) }}">Eliminar</a>
                                 </li>
                             {% else %}
@@ -51,8 +52,9 @@
                             <div class="panel-body">
                                 <ul class="list-unstyled">
                                     {% include 'AppBundle:CropWorking:record_actions.html.twig' with {'crop_working':entity} %}
+                                </ul>
                             </div>
-                            </ul>
+
                         </div>
                     </div>
                     <div class="col-lg-6">
@@ -74,6 +76,7 @@
                                             Número de plantas: {{ seedwork.plant }}<br>
                                             Número de bandejas: {{ seedwork.tray }} <br>
                                             Superficie:{{ seedwork.surface }}<br>
+                                            Sector: {{ seedwork.sector }}
                                         </p>
 
                                         {% if seedwork.content|length>0 %}

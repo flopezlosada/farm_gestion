@@ -50,6 +50,11 @@
                             <label>{{ form_label(edit_form.content) }}</label>
                             {{ form_widget(edit_form.content,{'attr':{'class':'tinymce','placeholder':'Descripción' }}) }}
                         </div>
+                        <div class="form-group">
+                            {{ form_errors(edit_form.sector) }}
+                            <label>{{ form_label(edit_form.sector) }}</label>
+                            {{ form_widget(edit_form.sector,{'attr':{'class':'form-control','placeholder':'Sector' }}) }}
+                        </div>
                     </div>
                 </div>
                 {{ form_widget(edit_form.submit,{'attr':{'class':'btn btn-default'}}) }}
