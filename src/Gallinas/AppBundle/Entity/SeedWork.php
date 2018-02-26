@@ -50,7 +50,7 @@ class SeedWork
     /**
      * @var smallint $sector
      *
-     * @ORM\ManyToOne(targetEntity="Sector", inversedBy="seed_works", nullable=true)
+     * @ORM\ManyToOne(targetEntity="Sector", inversedBy="seed_works")
      */
     private $sector;
 
@@ -378,5 +378,28 @@ class SeedWork
     public function __toString()
     {
         return $this->getSeedWorkType().": ".$this->getCropWorking()->getName();
+    }
+
+    /**
+     * Set sector
+     *
+     * @param \Gallinas\AppBundle\Entity\Sector $sector
+     * @return SeedWork
+     */
+    public function setSector(\Gallinas\AppBundle\Entity\Sector $sector = null)
+    {
+        $this->sector = $sector;
+
+        return $this;
+    }
+
+    /**
+     * Get sector
+     *
+     * @return \Gallinas\AppBundle\Entity\Sector 
+     */
+    public function getSector()
+    {
+        return $this->sector;
     }
 }

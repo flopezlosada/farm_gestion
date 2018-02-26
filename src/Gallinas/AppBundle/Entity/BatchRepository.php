@@ -63,4 +63,45 @@ class BatchRepository extends EntityRepository
         }
 
     }
+
+    /**
+     * @param $product_id
+     * @param $year
+     * @return array
+     * devuelve lotes finalizados según el año y el producto
+     */
+    public function findByProductYear($product_id, $year)
+
+    {
+        $em = $this->getEntityManager();
+        $dql = "select s from AppBundle:Batch s where YEAR(s.receipt_date)=:year  and s.product=:product_id and s.batch_status=2";
+        $query = $em->createQuery($dql);
+        $query->setParameter("product_id", $product_id);
+        $query->setParameter("year", $year);
+
+        if ($query->getResult())
+        {
+            return $query->getResult();
+        }
+
+    }
+
+    /**
+     * @param $product_id
+     * @return array
+     * devuelve los años en los que se ha producido algún lote del producto determinado. El lote tiene que estar finalizado para que se contabilice
+     */
+    public function findYearsInProduction($product_id)
+    {
+        $em = $this->getEntityManager();
+        $dql = "select YEAR(s.receipt_date) as year from AppBundle:Batch s where  s.product=:product_id and s.batch_status=2 GROUP  BY year ORDER BY year desc";
+
+        $query = $em->createQuery($dql);
+        $query->setParameter("product_id", $product_id);
+
+        if ($query->getResult())
+        {
+            return $query->getResult();
+        }
+    }
 }

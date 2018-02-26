@@ -40,4 +40,7 @@
     <route id="batch_reactivate" path="/{id}/reactivate">
         <default key="_controller">AppBundle:Batch:reactivate</default>
     </route>
+    <route id="batch_analyses" path="/{product_id}/analyses/">
+        <default key="_controller">AppBundle:Batch:analyses</default>
+    </route>
 </routes>

@@ -91,7 +91,8 @@
                                 {% endif %}
                                 {% if  entity.totalprofit %}
                                     {% if entity.getProduct.getId in [6] %}
-                                        <strong>Beneficios:</strong> {{ entity.totalprofit + 3.5*entity.getTotalLayEggs/12 }} €<br/>
+                                        <strong>Beneficios:</strong> {{ entity.totalprofit + 3.5*entity.getTotalLayEggs/12 }} €
+                                        <br/>
                                     {% else %}
                                         <strong>Beneficios:</strong> {{ entity.totalprofit }} €<br/>
                                     {% endif %}
@@ -144,14 +145,15 @@
                                 </div>
                             </div>
                             <div class="col-lg-12">
-                            <h4>Gráficas y estadísticas</h4>
+                                <h4>Gráficas y estadísticas</h4>
 
-                            {% if entity.getProduct.getId in [2,3] %}
+                                {% if entity.getProduct.getId in [2,3] %}
 
-                            {% elseif entity.getProduct.getId in [6] %}
-                                <div id="layweekchart" style="position: relative;height: 250px;"></div>
+                                {% elseif entity.getProduct.getId in [6] %}
+                                    {#<div id="layweekchart" style="position: relative;height: 250px;"></div>#}
+                                    <div id="container" style="width:100%; height:400px;"></div>
 
-                            {% endif %}
+                                {% endif %}
                             </div>
 
                         </div>
@@ -269,7 +271,7 @@
 
 {% block graph_js %}
     <script>
-        new Morris.Line({
+       /* new Morris.Line({
             // ID of the element in which to draw the chart.
             element: 'layweekchart',
             // Chart data records -- each entry in this array corresponds to a point on
@@ -292,8 +294,71 @@
             labels: ['Huevos', "Media Semanal"],
             hideHover: true,
 
-        });
+        });*/
 
+        $(function () {
+            var myChart = Highcharts.chart('container', {
+                chart: {
+                    type: 'spline',
+                    zoomType: 'x'
+                },
+                title: {
+                    text: 'Evolución puesta semanal'
+                },
+
+                subtitle: {
+                    text: 'Lote {{ entity.id  }}'
+                },
+
+                yAxis: {
+                    title: {
+                        text: 'Puesta semanal'
+                    }
+                },
+
+                legend: {
+                    layout: 'vertical',
+                    align: 'right',
+                    verticalAlign: 'middle'
+                },
+                xAxis: {
+                    title: {
+                        text: 'Semana'
+                    },
+                    categories: [
+                        {% for high_week in highchart_week_lay%}
+                        '{{ high_week.week }} - {{ high_week.year_date }}',
+                        {% endfor %}
+                    ]
+                },
+                plotOptions: {
+                    series: {
+                        label: {
+                            connectorAllowed: false
+                        },
+
+                    }
+                },
+
+                series: [{
+                    name: 'Puesta',
+                    data: [
+                        {% for high_week in highchart_week_lay%}
+                        {{ high_week.total }},
+                        {% endfor %}
+                    ]
+                }, {
+                    name: 'Media semanal',
+                    data: [
+                        {% for high_week in highchart_week_lay%}
+                        {{ (high_week.total/high_week.days) |number_format(2,'.',',') }},
+                        {% endfor %}
+                    ]
+                }],
+
+
+            });
+        })
 
     </script>
 {% endblock %}
