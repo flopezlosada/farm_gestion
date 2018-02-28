@@ -17,6 +17,7 @@ use Doctrine\ORM\EntityManager;
 
 use Gallinas\AppBundle\Entity\GiftEntity;
 use Gallinas\AppBundle\Entity\LayEntity;
+use Gallinas\AppBundle\Entity\MovementEntity;
 use Gallinas\AppBundle\Entity\PurchaseEntity;
 use Gallinas\AppBundle\Entity\SaleEntity;
 use Gallinas\AppBundle\Entity\SeedWorkEntity;
@@ -120,7 +121,7 @@ class CalendarEventListener
             $calendarEvent->addEvent($eventEntity);
         }
 
-
+/*
         //recogida
         $collect_query = $this->entityManager->getRepository('AppBundle:Collect')
             ->createQueryBuilder('collect_events')
@@ -153,7 +154,7 @@ class CalendarEventListener
             $calendarEvent->addEvent($sale_eventEntity);
         }
 
-
+*/
         //compras
         $purchase_query = $this->entityManager->getRepository('AppBundle:Purchase')
             ->createQueryBuilder('collect_events')
@@ -169,7 +170,7 @@ class CalendarEventListener
             $calendarEvent->addEvent($purchase_eventEntity);
         }
 
-        //regalos
+      /*  //regalos
         $gift_query = $this->entityManager->getRepository('AppBundle:Gift')
             ->createQueryBuilder('collect_events')
             ->where('collect_events.gift_date BETWEEN :startDate and :endDate')
@@ -183,7 +184,7 @@ class CalendarEventListener
             $gift_eventEntity = new GiftEntity($this->router, $giftEvent->getId(), $giftEvent->__toString(), $giftEvent->getGiftDate());
             $calendarEvent->addEvent($gift_eventEntity);
         }
-
+*/
         //tareas
         $task_query = $this->entityManager->getRepository('AppBundle:Task')
             ->createQueryBuilder('collect_events')
@@ -199,6 +200,20 @@ class CalendarEventListener
             $calendarEvent->addEvent($task_eventEntity);
         }
 
+        //movimientos lotes gallinas
+        $movement_query = $this->entityManager->getRepository('AppBundle:Movement')
+            ->createQueryBuilder('collect_events')
+            ->where('collect_events.date BETWEEN :startDate and :endDate')
+            ->setParameter('startDate', $startDate->format('Y-m-d'))
+            ->setParameter('endDate', $endDate->format('Y-m-d'))
+            ->getQuery();
+        $movementEvents = $movement_query->getResult();
+
+        foreach ($movementEvents as $movementEvent)
+        {
+            $movement_eventEntity = new MovementEntity($this->router, $movementEvent->getId(), $movementEvent->__toString(), $movementEvent->getDate());
+            $calendarEvent->addEvent($movement_eventEntity);
+        }
 
     }
 }

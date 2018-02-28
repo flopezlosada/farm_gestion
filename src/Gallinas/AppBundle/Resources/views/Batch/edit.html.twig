@@ -42,11 +42,11 @@
                         <label>{{ form_label(edit_form.note) }}</label>
                         {{ form_widget(edit_form.note,{'attr':{'class':'form-control','placeholder':'Notas' }}) }}
                     </div>
-                    <div class="form-group">
+                    {#<div class="form-group">
                         {{ form_errors(edit_form.finalized_date) }}
                         <label>{{ form_label(edit_form.note) }}</label>
                         {{ form_widget(edit_form.note,{'attr':{'class':'form-control','placeholder':'Notas' }}) }}
-                    </div>
+                    </div>#}
                 </div>
             </div>
             {{ form_widget(edit_form.submit,{'attr':{'class':'btn btn-default' }}) }}

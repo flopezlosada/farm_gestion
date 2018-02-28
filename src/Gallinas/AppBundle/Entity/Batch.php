@@ -176,6 +176,11 @@ class Batch
     protected $fowls;
 
     /**
+     * @ORM\OneToMany(targetEntity="Movement", mappedBy="batch")
+     */
+    protected $movements;
+
+    /**
      * @ORM\OneToMany(targetEntity="Lay", mappedBy="batch")
      */
     protected $lays;
@@ -1126,4 +1131,37 @@ class Batch
         return null;
     }
 
+
+    /**
+     * Add movements
+     *
+     * @param \Gallinas\AppBundle\Entity\Movement $movements
+     * @return Batch
+     */
+    public function addMovement(\Gallinas\AppBundle\Entity\Movement $movements)
+    {
+        $this->movements[] = $movements;
+
+        return $this;
+    }
+
+    /**
+     * Remove movements
+     *
+     * @param \Gallinas\AppBundle\Entity\Movement $movements
+     */
+    public function removeMovement(\Gallinas\AppBundle\Entity\Movement $movements)
+    {
+        $this->movements->removeElement($movements);
+    }
+
+    /**
+     * Get movements
+     *
+     * @return \Doctrine\Common\Collections\Collection 
+     */
+    public function getMovements()
+    {
+        return $this->movements;
+    }
 }

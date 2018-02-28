@@ -1,0 +1,35 @@
+{% extends '::layout_crud.html.twig' %}
+
+    {% block title_wrapper %}Añadir movimiento de lote de gallinas{% endblock %}
+    {% block main -%}
+        <div class="panel panel-default">
+
+            <div class="panel-body">
+                {{ form_start(form, {'action': path('movement_create', {'batch_id':batch.id}),'method': 'post','attr': {'role': 'form' }}) }}
+                <div class='row'>
+                    <div class="col-lg-6">
+                        <div class="form-group">
+                            {{ form_errors(form.date) }}
+                            <label>{{ form_label(form.date) }}</label>
+                            {{ form_widget(form.date,{'attr':{'placeholder':'Fecha' }}) }}
+                        </div>
+                        <div class="form-group">
+                            {{ form_errors(form.sector) }}
+                            <label>{{ form_label(form.sector) }}</label>
+                            {{ form_widget(form.sector,{'attr':{'placeholder':'Sector' }}) }}
+                        </div>
+                    </div>
+                </div>
+                {{ form_widget(form.submit,{'attr':{'class':'btn btn-default'}}) }}
+                {{ form_rest(form) }}
+                {{ form_end(form, {'render_rest': false}) }}
+                <ul class="record_actions">
+                    <li>
+                        <a href="{{ path('movement') }}">
+                            Back to the list
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    {% endblock %}

@@ -142,6 +142,8 @@ class BatchController extends Controller
             $end_date = new \DateTime($entity->getReceiptDate()->format('Y-m-d'));
         }
 
+        $movements=$em->getRepository("AppBundle:Movement")->findMovements($id);
+
 
         $average_consumption = array_sum($consumption) * 1000 / count($consumption);
 
@@ -152,7 +154,8 @@ class BatchController extends Controller
             'week_lay' => array_reverse($week_lay),
             'average_consumption' => $average_consumption,
             'delete_form' => $deleteForm->createView(),
-            'highchart_week_lay' => $highchart_week_lay
+            'highchart_week_lay' => $highchart_week_lay,
+            'movements'=>$movements
         ));
     }
 
