@@ -1,3 +1,7 @@
+app_movement:
+    resource: "@AppBundle/Resources/config/routing/movement.xml"
+    prefix:   /movement
+
 app_sector:
     resource: "@AppBundle/Resources/config/routing/sector.xml"
     prefix:   /sector

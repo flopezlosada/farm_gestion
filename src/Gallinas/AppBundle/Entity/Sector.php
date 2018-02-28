@@ -56,6 +56,12 @@ class Sector
      */
     protected $seed_works;
 
+    /**
+     * @ORM\OneToMany(targetEntity="Movement", mappedBy="sector")
+     */
+    protected $movements;
+
+
     public function __toString()
     {
         return $this->getZone()->getName()."-".$this->getName();
@@ -229,5 +235,38 @@ class Sector
     public function getSeedWorks()
     {
         return $this->seed_works;
+    }
+
+    /**
+     * Add movements
+     *
+     * @param \Gallinas\AppBundle\Entity\Movement $movements
+     * @return Sector
+     */
+    public function addMovement(\Gallinas\AppBundle\Entity\Movement $movements)
+    {
+        $this->movements[] = $movements;
+
+        return $this;
+    }
+
+    /**
+     * Remove movements
+     *
+     * @param \Gallinas\AppBundle\Entity\Movement $movements
+     */
+    public function removeMovement(\Gallinas\AppBundle\Entity\Movement $movements)
+    {
+        $this->movements->removeElement($movements);
+    }
+
+    /**
+     * Get movements
+     *
+     * @return \Doctrine\Common\Collections\Collection 
+     */
+    public function getMovements()
+    {
+        return $this->movements;
     }
 }
