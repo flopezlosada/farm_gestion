@@ -229,6 +229,29 @@ class Batch
     private $put_down_total;
 
 
+    /**
+     * puesta semanal
+     * @var smallint $week_lay
+     */
+    private $week_lay;
+
+    /**
+     * @return int
+     */
+    public function getWeekLay()
+    {
+        return $this->week_lay;
+    }
+
+    /**
+     * @param mixed $week_lay
+     */
+    public function setWeekLay($week_lay)
+    {
+        $this->week_lay = $week_lay;
+    }
+
+
 
     /**
      * @return mixed
