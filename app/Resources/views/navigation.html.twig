@@ -40,11 +40,11 @@
                 <a href="#"><i class="fa fa-bar-chart-o fa-fw"></i> Gráficos<span class="fa arrow"></span></a>
                 <ul class="nav nav-second-level">
                     <li>
-                        <a href="{{ path('graph_egg_week') }}">Huevos por semana</a>
+                        <a href="{{ path('hens_analyses') }}">Comparativo de puesta</a>
                     </li>
-                    <li>
+                    {#<li>
                         <a href="{{ path('graph_average_egg_week') }}">Evolución de media huevos semanales</a>
-                    </li>
+                    </li>#}
                 </ul>
                 <!-- /.nav-second-level -->
             </li>
@@ -205,12 +205,12 @@
                             class="fa arrow"></span></a>
                 <ul class="nav nav-second-level">
                     <li>
-                        <a href="#">Pienso <span class="fa arrow"></span></a>
+                        <a href="#">Producción <span class="fa arrow"></span></a>
                         <ul class="nav nav-third-level">
                             <li>
-                                <a href="{{ path('statistic_hens_feed') }}">Cálculos pienso gallina</a>
+                                <a href="{{ path('batch_analyses',{'product_id':2}) }}">Pollos</a>
                             </li>
-                            <li>
+                           {# <li>
                                 <a href="#">Pollos</a>
                             </li>
                             <li>
@@ -218,11 +218,11 @@
                             </li>
                             <li>
                                 <a href="#">Gallinas</a>
-                            </li>
+                            </li>#}
                         </ul>
                         <!-- /.nav-third-level -->
                     </li>
-                    <li>
+                   {# <li>
                         <a href="#">Repartos <span class="fa arrow"></span></a>
                         <ul class="nav nav-third-level">
                             <li>
@@ -239,14 +239,14 @@
                             </li>
                         </ul>
                         <!-- /.nav-third-level -->
-                    </li>
+                    </li>#}
                     <li>
                         <a href="#">Ventas <span class="fa arrow"></span></a>
                         <ul class="nav nav-third-level">
                             <li>
                                 <a href="{{ path('statistic_eggs_sale') }}">Huevos</a>
                             </li>
-                            <li>
+                            {#<li>
                                 <a href="#">Pollos</a>
                             </li>
                             <li>
@@ -254,11 +254,11 @@
                             </li>
                             <li>
                                 <a href="#">Gallinas</a>
-                            </li>
+                            </li>#}
                         </ul>
                         <!-- /.nav-third-level -->
                     </li>
-                    <li>
+                    {#<li>
                         <a href="#">Producción cultivos <span class="fa arrow"></span></a>
                         <ul class="nav nav-third-level">
                             <li>
@@ -269,7 +269,7 @@
                             </li>
                         </ul>
                         <!-- /.nav-third-level -->
-                    </li>
+                    </li>#}
                 </ul>
                 <!-- /.nav-second-level -->
             </li>
