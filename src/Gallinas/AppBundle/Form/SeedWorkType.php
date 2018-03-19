@@ -2,18 +2,32 @@
 
 namespace Gallinas\AppBundle\Form;
 
+use Doctrine\ORM\EntityRepository;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolverInterface;
 
 class SeedWorkType extends AbstractType
 {
+
+    public $crop_working;
+
+    public function __construct($crop_working){
+        $this->crop_working=$crop_working;//le paso el cultivo al formulario
+    }
+
     /**
      * @param FormBuilderInterface $builder
      * @param array $options
      */
     public function buildForm(FormBuilderInterface $builder, array $options)
     {
+        $crop_working=$this->crop_working;
+        $sectors=array();
+        foreach ($crop_working->getSectors() as $sector)
+        {
+            $sectors[]=$sector->getId();
+        }
         $builder
             ->add('surface', null, array('label'=>'Superficie','required'=>false))
             ->add('plant', null, array('label'=>'número de plantas'))
@@ -23,7 +37,15 @@ class SeedWorkType extends AbstractType
             ->add('crop_working', null, array('label'=>'Cultivo'))
             ->add('seed_work_type', null, array('label'=>'Tipo'))
             ->add('content', null, array('label'=>'Descripción'))
-            ->add('sector',null,array('label'=>'Sector'))
+
+            ->add('sector', null, array('label' => "Sector", 'query_builder' => function (EntityRepository $repository) use ($sectors)
+            {
+                $qb = $repository->createQueryBuilder('s')
+                    ->where('s  in (:crop_workings)')
+                    ->orderBy('s.id')
+                    ->setParameter('crop_workings', $sectors);
+                return $qb;
+            },))
         ;
     }
     

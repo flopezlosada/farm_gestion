@@ -1,7 +1,7 @@
 <?php
 namespace Gallinas\AppBundle\Form\DataTransformer;
 
-use JMS\SecurityExtraBundle\Security\Util\String;
+use JMS\SecurityExtraBundle\Security\Util\String as security_string;
 
 use Symfony\Component\Form\DataTransformerInterface;
 use Symfony\Component\Form\Exception\TransformationFailedException;

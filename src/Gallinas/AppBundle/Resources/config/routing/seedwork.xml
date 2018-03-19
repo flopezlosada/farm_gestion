@@ -16,7 +16,7 @@
         <default key="_controller">AppBundle:SeedWork:new</default>
     </route>
 
-    <route id="seedwork_create" path="/create" methods="POST">
+    <route id="seedwork_create" path="/create/{crop_working_id}" methods="POST">
         <default key="_controller">AppBundle:SeedWork:create</default>
     </route>
 
