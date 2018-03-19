@@ -4,7 +4,7 @@
     <div class="panel panel-default">
 
         <div class="panel-body">
-            {{ form_start(form, {'action': path('seedwork_create'), 'method': 'post','attr': {'role': 'form' }}) }}
+            {{ form_start(form, {'action': path('seedwork_create',{'crop_working_id':crop_working.id}), 'method': 'post','attr': {'role': 'form' }}) }}
             <div class="row">
                 <div class="col-lg-6">
                     <div class="form-group">

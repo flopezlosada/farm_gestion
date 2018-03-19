@@ -122,6 +122,8 @@ class BatchController extends Controller
         }
         $week_lay = $em->getRepository('AppBundle:Lay')->findWeekLay(null, null, $id);
         $highchart_week_lay = $em->getRepository('AppBundle:Lay')->findHighchartWeekLay($id);
+        $month_lay = $em->getRepository('AppBundle:Lay')->findAllMonthLay($id);//devuelve las puestas por meses, en orden
+
         $start_time = 0;
         $start_date = new \DateTime($entity->getReceiptDate()->format('Y-m-d'));
         $end_date = new \DateTime($entity->getReceiptDate()->format('Y-m-d'));
@@ -142,7 +144,7 @@ class BatchController extends Controller
             $end_date = new \DateTime($entity->getReceiptDate()->format('Y-m-d'));
         }
 
-        $movements=$em->getRepository("AppBundle:Movement")->findMovements($id);
+        $movements = $em->getRepository("AppBundle:Movement")->findMovements($id);
 
 
         $average_consumption = array_sum($consumption) * 1000 / count($consumption);
@@ -155,7 +157,8 @@ class BatchController extends Controller
             'average_consumption' => $average_consumption,
             'delete_form' => $deleteForm->createView(),
             'highchart_week_lay' => $highchart_week_lay,
-            'movements'=>$movements
+            'movements' => $movements,
+            'month_lay' => $month_lay
         ));
     }
 
@@ -185,6 +188,7 @@ class BatchController extends Controller
             'delete_form' => $deleteForm->createView(),
         ));
     }
+
 
     /**
      * Creates a form to edit a Batch entity.
@@ -380,7 +384,7 @@ class BatchController extends Controller
         return $this->render('AppBundle:Batch:analyses_year.html.twig', array(
             'batchs' => $batchs,
             'product' => $product,
-            'year'=>$year
+            'year' => $year
         ));
     }
 
@@ -393,6 +397,54 @@ class BatchController extends Controller
         return $this->render('AppBundle:Batch:analyses.html.twig', array(
             'years' => $years,
             'product' => $product,
+        ));
+    }
+
+    public function hens_analysesAction()
+    {
+        $em = $this->getDoctrine()->getManager();
+        $hens_batchs = $em->getRepository("AppBundle:Batch")->findBatchs(6, 5);//devuelve lotes del tipo 6 y límite 4 lotes
+        $batchs_week_lay = array();
+        $batchs_month_lay = array();
+
+        foreach ($hens_batchs as $batch)
+        {
+            $batchs_week_lay[] = array($em->getRepository('AppBundle:Lay')->findHighchartWeekLay($batch->getId()), $batch);
+            $batchs_month_lay[] = array($em->getRepository('AppBundle:Lay')->findAllMonthLay($batch->getId()), $batch);
+        }
+        $weeks_in_production = $em->getRepository("AppBundle:Lay")->findWeeksInProduction();
+
+        $graph_lay_weeks = array();
+        $i=0;
+        foreach ($hens_batchs as $batch)
+        {
+            $array=array();
+            foreach ($weeks_in_production as $week)
+            {
+                if(!$em->getRepository("AppBundle:Lay")->findLayInWeekYear($week['week'], $week['year_date'], $batch->getId()))
+                {
+                    $array[] = 0;
+                }
+                else
+                {
+                    $value=$em->getRepository("AppBundle:Lay")->findLayInWeekYear($week['week'], $week['year_date'], $batch->getId());
+                    $array[] = $value['total'];
+                }
+
+
+            }
+            $graph_lay_weeks[$i]=$array;
+            $i++;
+        }
+
+        //ladybug_dump($graph_lay_weeks);
+        //$month_lay = //devuelve las puestas por meses, en orden
+        return $this->render('AppBundle:Batch:hens_analyses.html.twig', array(
+            'hens_batchs' => $hens_batchs,
+            'batchs_week_lay' => $batchs_week_lay,
+            'batchs_month_lay' => $batchs_month_lay,
+            'weeks_in_production' => $weeks_in_production,
+            'graph_lay_weeks'=>$graph_lay_weeks
         ));
     }
 }

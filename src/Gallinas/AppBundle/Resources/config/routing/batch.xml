@@ -43,4 +43,7 @@
     <route id="batch_analyses" path="/{product_id}/analyses/">
         <default key="_controller">AppBundle:Batch:analyses</default>
     </route>
+    <route id="hens_analyses" path="/hens_analyses/">
+        <default key="_controller">AppBundle:Batch:hens_analyses</default>
+    </route>
 </routes>

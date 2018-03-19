@@ -161,12 +161,12 @@ class DefaultController extends Controller
     {
         $message = \Swift_Message::newInstance()
             ->setSubject('Contacto desde http://csavegadejarama.org')
-            ->setFrom($request->get("email"))
+            ->setFrom('flopezlosada@gmail.com')
             ->setTo('info@csavegadejarama.org')
             ->setBody(
                 $this->renderView(
                     'AppBundle:Default:contact_email.html.twig',
-                    array('name' => $request->get("name"),'subject'=>$request->get("subject"),'body'=>$request->get("body"))
+                    array('name' => $request->get("name"),'subject'=>$request->get("subject"),'body'=>$request->get("body"),'email'=>$request->get('email'))
                 )
             )
         ;

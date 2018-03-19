@@ -95,9 +95,22 @@ class BatchRepository extends EntityRepository
     {
         $em = $this->getEntityManager();
         $dql = "select YEAR(s.receipt_date) as year from AppBundle:Batch s where  s.product=:product_id and s.batch_status=2 GROUP  BY year ORDER BY year desc";
-
         $query = $em->createQuery($dql);
         $query->setParameter("product_id", $product_id);
+
+        if ($query->getResult())
+        {
+            return $query->getResult();
+        }
+    }
+
+    public function findBatchs($product_id, $limit)
+    {
+        $em = $this->getEntityManager();
+        $dql = 'select b from AppBundle:Batch b where b.product=:product_id order by b.id desc';
+        $query = $em->createQuery($dql);
+        $query->setParameter("product_id", $product_id);
+        $query->setMaxResults($limit);
 
         if ($query->getResult())
         {

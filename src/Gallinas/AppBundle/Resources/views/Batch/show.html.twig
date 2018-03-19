@@ -164,6 +164,7 @@
                                     <h4>Gráficas</h4>
                                     {#<div id="layweekchart" style="position: relative;height: 250px;"></div>#}
                                     <div id="container" style="width:100%; height:400px;"></div>
+                                    <div id="container2" style="width:100%; height:400px;"></div>
 
                                 {% endif %}
                             </div>
@@ -298,7 +299,10 @@
                         </li>
                         {% if entity.getProduct.getId in [2,3] %}
                             <li><a href="{{ path('batch_analyses', {'product_id': entity.product.id}) }}">Ver
-                                estadísticas</a> </li>{% endif %}
+                                estadísticas</a> </li>
+                        {% elseif entity.getProduct.getId in [6] %}
+                            <li><a href="{{ path('hens_analyses') }}">Análisis comparativo puesta</a> </li>
+                        {% endif %}
                         {#<li>{{ form(delete_form) }}</li>#}
                     </ul>
                 </div>
@@ -317,13 +321,13 @@
          // Chart data records -- each entry in this array corresponds to a point on
          // the chart.
          data: [
-        {% for week in week_lay %}
-         {
-         average: {{ (week.total/week.days)|number_format(2,'.',',') }},
-         week: '{{ week.year_date }}-{{ week.week }}',
-         value: {{ week.total }},
-         },
-        {%  endfor %}
+        {#{% for week in week_lay %}#}
+         {#{#}
+         {#average: {{ (week.total/week.days)|number_format(2,'.',',') }},#}
+         {#week: '{{ week.year_date }}-{{ week.week }}',#}
+         {#value: {{ week.total }},#}
+         {#},#}
+        {#{%  endfor %}#}
          ],
          // The name of the data record attribute that contains x-values.
          xkey: 'week',
@@ -377,13 +381,14 @@
                     series: {
                         label: {
                             connectorAllowed: false
-                        },
+                        }
 
                     }
                 },
 
                 series: [{
                     name: 'Puesta',
+                    color:Highcharts.getOptions().colors[5],
                     data: [
                         {% for high_week in highchart_week_lay%}
                         {{ high_week.total }},
@@ -391,16 +396,129 @@
                     ]
                 }, {
                     name: 'Media semanal',
+                    color:Highcharts.getOptions().colors[2],
                     data: [
                         {% for high_week in highchart_week_lay%}
                         {{ (high_week.total/high_week.days) |number_format(2,'.',',') }},
                         {% endfor %}
                     ]
-                }],
+                }]
 
 
             });
-        })
 
+
+            var myChart2 = Highcharts.chart('container2', {
+                chart: {
+                    zoomType: 'xy'
+                },
+                title: {
+                    text: 'Evolución puesta mensual'
+                },
+                subtitle: {
+                    text: 'Lote {{ entity.id  }}'
+                },
+                xAxis: {
+                    type: 'category',
+                    categories: [
+                        {% for lay in month_lay %}
+                        '{{ lay.month }} - {{ lay.year_date }}',
+                        {% endfor %}
+                    ],
+                    crosshair: true,
+                    labels: {
+                        rotation: -90,
+                        style: {
+                            fontSize: '13px',
+                            fontFamily: 'Verdana, sans-serif'
+                        }
+                    }
+                },
+                yAxis: [{
+                    min: 0,
+                    title: {
+                        text: 'Puesta mensual',
+                        style: {
+                            color: Highcharts.getOptions().colors[1]
+                        }
+                    }
+
+                }, {
+                    title: {
+                        text: 'Acumulado',
+                        style: {
+                            color: Highcharts.getOptions().colors[1]
+                        }
+                    },
+                    labels: {
+                        format: '{value}',
+                        style: {
+                            color: Highcharts.getOptions().colors[1]
+                        }
+                    },
+                    opposite: true
+                }
+                ],
+                legend: {
+                    layout: 'horizontal',
+                    align: 'left',
+                    x: 120,
+                    verticalAlign: 'top',
+                    y: 50,
+                    floating: true,
+                    backgroundColor: (Highcharts.theme && Highcharts.theme.legendBackgroundColor) || '#FFFFFF'
+
+                },
+                tooltip: {
+                    //pointFormat: 'Puesta: <b>{point.y:.0f} </b>',
+                    shared: true
+                },
+                series: [{
+                    name: 'Puesta',
+                    type: 'column',
+                    color:Highcharts.getOptions().colors[4],
+
+                    data: [
+                        {% for lay in month_lay %}
+                        ['{{ lay.month }} - {{ lay.year_date }}', {{ lay.total }}],
+                        {% endfor %}
+                    ],
+                    style: {
+                        color: Highcharts.getOptions().colors[1]
+                    },
+                    dataLabels: {
+                        enabled: true,
+                        rotation: -90,
+                        color: '#000000',
+                        align: 'right',
+                        format: '{point.y:.0f}', // one decimal
+                        y: 10, // 10 pixels down from the top
+                        style: {
+                            fontSize: '13px',
+                            fontFamily: 'Verdana, sans-serif',
+                            textOutline: 0,
+                        }
+                    }
+                },{
+                    name: 'Acumulada',
+                    yAxis: 1,
+                    type: 'spline',
+                    color:Highcharts.getOptions().colors[3],
+                    marker: {
+                        lineWidth: 2,
+                        lineColor: Highcharts.getOptions().colors[3],
+                        fillColor: 'white'
+                    },
+                    data: [
+                        {% set cumulative_lay=0 %}
+                        {% for lay in month_lay %}
+                        {% set cumulative_lay=cumulative_lay+lay.total %}
+                        {{ cumulative_lay}},
+                        {% endfor %}
+                    ]
+                }]
+            });
+
+        })
     </script>
 {% endblock %}

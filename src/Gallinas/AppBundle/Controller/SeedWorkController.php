@@ -2,6 +2,7 @@
 
 namespace Gallinas\AppBundle\Controller;
 
+use Gallinas\AppBundle\Entity\CropWorking;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Bundle\FrameworkBundle\Controller\Controller;
 
@@ -33,14 +34,17 @@ class SeedWorkController extends Controller
      * Creates a new SeedWork entity.
      *
      */
-    public function createAction(Request $request)
+    public function createAction($crop_working_id,Request $request)
     {
         $entity = new SeedWork();
-        $form = $this->createCreateForm($entity);
+        $em = $this->getDoctrine()->getManager();
+        $crop_working = $em->getRepository("AppBundle:CropWorking")->find($crop_working_id);
+
+        $form = $this->createCreateForm($entity,$crop_working);
         $form->handleRequest($request);
 
         if ($form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
+            $entity->setCropWorking($crop_working);
             $entity->setEstimatedDate(new \DateTime($entity->getEstimatedDate())) ;
             $entity->setRealDate(new \DateTime($entity->getRealDate())) ;
             $em->persist($entity);
@@ -62,10 +66,10 @@ class SeedWorkController extends Controller
      *
      * @return \Symfony\Component\Form\Form The form
      */
-    private function createCreateForm(SeedWork $entity)
+    private function createCreateForm(SeedWork $entity,CropWorking $cropWorking)
     {
-        $form = $this->createForm(new SeedWorkType(), $entity, array(
-            'action' => $this->generateUrl('seedwork_create'),
+        $form = $this->createForm(new SeedWorkType($cropWorking), $entity, array(
+            'action' => $this->generateUrl('seedwork_create', array('crop_working_id' => $cropWorking->getId())),
             'method' => 'POST',
         ));
 
@@ -87,11 +91,12 @@ class SeedWorkController extends Controller
             $crop_working = $em->getRepository("AppBundle:CropWorking")->find($crop_working_id);
             $entity->setCropWorking($crop_working);
         }
-        $form   = $this->createCreateForm($entity);
+        $form   = $this->createCreateForm($entity,$crop_working);
 
         return $this->render('AppBundle:SeedWork:new.html.twig', array(
             'entity' => $entity,
             'form'   => $form->createView(),
+            'crop_working'=>$crop_working
         ));
     }
 
@@ -133,7 +138,7 @@ class SeedWorkController extends Controller
         $entity->setEstimatedDate($entity->getEstimatedDate()->format('Y-m-d')) ;
         $entity->setRealDate($entity->getRealDate()->format('Y-m-d')) ;
 
-        $editForm = $this->createEditForm($entity);
+        $editForm = $this->createEditForm($entity,$entity->getCropWorking());
         $deleteForm = $this->createDeleteForm($id);
 
         return $this->render('AppBundle:SeedWork:edit.html.twig', array(
@@ -150,9 +155,9 @@ class SeedWorkController extends Controller
     *
     * @return \Symfony\Component\Form\Form The form
     */
-    private function createEditForm(SeedWork $entity)
+    private function createEditForm(SeedWork $entity,$crop_working)
     {
-        $form = $this->createForm(new SeedWorkType(), $entity, array(
+        $form = $this->createForm(new SeedWorkType($crop_working), $entity, array(
             'action' => $this->generateUrl('seedwork_update', array('id' => $entity->getId())),
             'method' => 'PUT',
         ));
@@ -180,7 +185,7 @@ class SeedWorkController extends Controller
         $entity->setEstimatedDate($entity->getEstimatedDate()->format('Y-m-d')) ;
         $entity->setRealDate($entity->getRealDate()->format('Y-m-d')) ;
 
-        $editForm = $this->createEditForm($entity);
+        $editForm = $this->createEditForm($entity,$entity->getCropWorking());
         $editForm->handleRequest($request);
 
         if ($editForm->isValid()) {

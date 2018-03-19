@@ -91,6 +91,38 @@ class LayRepository extends EntityRepository
         return $query->getResult();
     }
 
+
+    /**
+     * @param $week
+     * @param $year
+     * @param $batch_id
+     * @return array
+     * devuelve la puesta según una semana dada y un año y un lote
+     */
+    public
+    function findLayInWeekYear($week, $year, $batch_id)
+    {
+
+        $em = $this->getEntityManager();
+        $dql = "select sum(l.amount) as total, l.week as week, YEAR(l.lay_date)
+                  as year_date from AppBundle:Lay l where YEAR(l.lay_date)=:year and l.week=:week and l.batch=:batch_id ";
+
+        $dql .= " group by l.week, year_date order by l.week desc";
+        $query = $em->createQuery($dql);
+        $query->setParameter("year", $year);
+
+        $query->setParameter("batch_id", $batch_id);
+        $query->setParameter("week", $week);
+        $query->setParameter("year", $year);
+
+        if ($query->getResult()==null)
+        {
+            return 0;
+        }
+
+        return $query->getSingleResult();
+    }
+
     /**
      * @param null $weeks_number
      * @param null $year
@@ -103,7 +135,7 @@ class LayRepository extends EntityRepository
 
         $em = $this->getEntityManager();
         $dql = "select sum(l.amount) as total, l.week as week, count(l.amount) as days, YEAR(l.lay_date)
-                  as year_date from AppBundle:Lay l where l.batch=:batch";
+                  as year_date, l.lay_date from AppBundle:Lay l where l.batch=:batch";
 
         $dql .= " group by l.week,year_date order by l.lay_date asc";
         $query = $em->createQuery($dql);
@@ -177,5 +209,33 @@ class LayRepository extends EntityRepository
         $query->setParameter("year", $year);
 
         return $query->getResult(\Doctrine\ORM\Query::HYDRATE_ARRAY);
+    }
+
+    public function findAllMonthLay($batch)
+    {
+        $em = $this->getEntityManager();
+        $dql = "select l, sum(l.amount) as total, MONTH(l.lay_date) as month, YEAR(l.lay_date)
+                  as year_date from AppBundle:Lay l where l.batch=:batch";
+
+        $dql .= " group by month,year_date order by year_date,month asc";
+        $query = $em->createQuery($dql);
+
+        $query->setParameter("batch", $batch);
+
+
+        return $query->getResult();
+    }
+
+    public function findWeeksInProduction()
+    {
+        $em = $this->getEntityManager();
+        $dql = "select l.week as week, YEAR(l.lay_date)
+                  as year_date from AppBundle:Lay l group by l.week,year_date order by l.lay_date asc";
+
+
+        $query = $em->createQuery($dql);
+
+
+        return $query->getResult();
     }
 }
