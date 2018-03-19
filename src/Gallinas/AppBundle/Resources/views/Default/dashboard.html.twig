@@ -12,40 +12,46 @@
                 <div class="panel-heading">
                     <div class="row">
                         <div class="col-xs-3">
-                            <i class="fa fa-bicycle fa-5x"></i>
+                            <i class="fa fa-compass fa-5x"></i>
                         </div>
                         <div class="col-xs-9 text-right">
                             <div class="huge">{{ render(controller('AppBundle:Default:layWeek')) }}</div>
-                            <div><br>¡Huevos puestos esta semana!</div>
+                            <div><br>Puesta semanal total</div>
                         </div>
                     </div>
                 </div>
+                {% if is_granted('ROLE_COOP') %}
                 <a href="{{ path('lay_new') }}">
-                    <div class="panel-footer">
-                        <span class="pull-left">Añadir puesta</span>
-                        <span class="pull-right"><i class="fa fa-arrow-circle-right"></i></span>
+                    {% set link_2='Añadir puesta' %}
+                    {% elseif is_granted('ROLE_GUEST') %}
+                    <a href="{{ path('calendar') }}">
+                        {% set link_2='Ver calendario' %}
+                        {% endif %}
+                        <div class="panel-footer">
+                            <span class="pull-left">{{ link_2 }}</span>
+                            <span class="pull-right"><i class="fa fa-arrow-circle-right"></i></span>
 
-                        <div class="clearfix"></div>
-                    </div>
-                </a>
+                            <div class="clearfix"></div>
+                        </div>
+                    </a>
             </div>
         </div>
         <div class="col-lg-3 col-md-6">
-            <div class="panel panel-green">
+            <div class="panel panel-yellow">
                 <div class="panel-heading">
                     <div class="row">
                         <div class="col-xs-3">
-                            <i class="fa fa-shopping-cart fa-5x"></i>
+                            <i class="fa fa-flask fa-5x"></i>
                         </div>
                         <div class="col-xs-9 text-right">
-                            <div class="huge">{{ render(controller('AppBundle:Default:collectWeekUser',{'product_id':1})) }}</div>
-                            <div>¡Huevos te has llevado esta semana!</div>
+                            <div class="huge">{{ render(controller('AppBundle:Default:totalProductionYear'))|round }}</div>
+                            <div><br>Kilos producidos este año</div>
                         </div>
                     </div>
                 </div>
-                <a href="{{ path('collect_new') }}">
+                <a href="{{ path('production_show_basket') }}">
                     <div class="panel-footer">
-                        <span class="pull-left">Añadir reparto</span>
+                        <span class="pull-left">Listado de cestas</span>
                         <span class="pull-right"><i class="fa fa-arrow-circle-right"></i></span>
 
                         <div class="clearfix"></div>
@@ -58,26 +64,32 @@
                 <div class="panel-heading">
                     <div class="row">
                         <div class="col-xs-3">
-                            <i class="fa fa-barcode fa-5x"></i>
+                            <i class="fa fa-leaf fa-5x"></i>
                         </div>
                         <div class="col-xs-9 text-right">
-                            <div class="huge">{{ " " }}</div>
-                            <div><br>Lotes</div>
+                            <div class="huge">{{ render(controller('AppBundle:Default:totalCropWorking')) }}</div>
+                            <div><br>Cultivos en producción</div>
                         </div>
                     </div>
                 </div>
-                <a href="{{ path('batch_new') }}">
-                    <div class="panel-footer">
-                        <span class="pull-left">Añadir tarea</span>
-                        <span class="pull-right"><i class="fa fa-arrow-circle-right"></i></span>
+                {% if is_granted('ROLE_COOP') %}
+                <a href="{{ path('production_new') }}">
+                    {% set link='Añadir producción' %}
+                    {% elseif is_granted('ROLE_GUEST') %}
+                    <a href="{{ path('cropworking') }}">
+                        {% set link='Ver cultivos' %}
+                        {% endif %}
+                        <div class="panel-footer">
+                            <span class="pull-left">{{ link }}</span>
+                            <span class="pull-right"><i class="fa fa-arrow-circle-right"></i></span>
 
-                        <div class="clearfix"></div>
-                    </div>
-                </a>
+                            <div class="clearfix"></div>
+                        </div>
+                    </a>
             </div>
         </div>
     </div>
-    <div class="row">
+    {#<div class="row">
         <div class="col-lg-3 col-md-6">
             <div class="panel panel-yellow">
                 <div class="panel-heading">
@@ -121,8 +133,8 @@
                 </a>
             </div>
         </div>
-    </div>
-    <div class="row">
+    </div>#}
+    {#<div class="row">
         <div class="col-lg-3 col-md-6">
             <div class="panel panel-purple">
                 <div class="panel-heading">
@@ -169,7 +181,125 @@
                 </a>
             </div>
         </div>
+    </div>#}
+
+
+
+    <div class="row">
+        <div class="col-lg-12"><h4>Lotes de gallinas activos</h4></div>
+        {% if active_hen_batch|length>0 %}
+            {% for batch in active_hen_batch %}
+                <div class="col-lg-3 col-md-6">
+                    {% if loop.index==6 %}
+                        {% set panel='panel-green' %}
+                        {% set icon='anchor' %}
+                    {% elseif loop.index==3 %}
+                        {% set panel='panel-purple' %}
+                        {% set icon='bug' %}
+                    {% elseif loop.index==5 %}
+                        {% set panel='panel-yellow' %}
+                        {% set icon='bell' %}
+                    {% elseif loop.index==1 %}
+                        {% set panel='panel-greener' %}
+                        {% set icon='balance-scale' %}
+                    {% elseif loop.index==2 %}
+                        {% set panel='panel-red' %}
+                        {% set icon='area-chart' %}
+                    {% elseif loop.index==4 %}
+                        {% set panel='panel-primary' %}
+                        {% set icon='code-fork' %}
+                    {% endif %}
+                    <div class="panel {{ panel }}">
+                        <div class="panel-heading">
+                            <div class="row">
+                                <div class="col-xs-3">
+                                    <i class="fa fa-{{ icon }} fa-5x"></i>
+                                </div>
+                                <div class="col-xs-9 text-right">
+                                    <div class="huge">{{ batch.getWeekLay }}</div>
+                                    <div><br>Puesta semanal</div>
+                                </div>
+                            </div>
+                        </div>
+                        <a href="{{ path('batch_show',{'id':batch.id}) }}">
+                            <div class="panel-footer">
+                                <span class="pull-left">Ver lote {{ batch.id }}</span>
+                                <span class="pull-right"><i class="fa fa-arrow-circle-right"></i></span>
+
+                                <div class="clearfix"></div>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+            {% endfor %}
+
+        {% else %}
+            <p>No hay lotes de gallinas activos</p>
+        {% endif %}
     </div>
+
+    <div class="row">
+        <div class="col-lg-12"><h4>Lotes de pollos activos</h4></div>
+        {% if active_hen_batch|length>0 %}
+            {% for batch in active_chicken_batch %}
+                <div class="col-lg-3 col-md-6">
+                    {% if loop.index==1 %}
+                        {% set panel='panel-green' %}
+                        {% set icon='s15' %}
+                    {% elseif loop.index==2 %}
+                        {% set panel='panel-purple' %}
+                        {% set icon='ravelry' %}
+                    {% elseif loop.index==3 %}
+                        {% set panel='panel-yellow' %}
+                        {% set icon='podcast' %}
+                    {% elseif loop.index==4 %}
+                        {% set panel='panel-greener' %}
+                        {% set icon='tencent-weibo' %}
+                    {% elseif loop.index==5 %}
+                        {% set panel='panel-red' %}
+                        {% set icon='code' %}
+                    {% elseif loop.index==6 %}
+                        {% set panel='panel-primary' %}
+                        {% set icon='s15' %}
+                    {% endif %}
+                    <div class="panel {{ panel }}">
+                        <div class="panel-heading">
+                            <div class="row">
+                                <div class="col-xs-3">
+                                    <i class="fa fa-{{ icon }} fa-5x"></i>
+                                </div>
+                                <div class="col-xs-9 text-right">
+                                    <div class="huge">{{ batch.amount }}</div>
+                                    <div><br>Animales</div>
+                                </div>
+                            </div>
+                        </div>
+                        <a href="{{ path('batch_show',{'id':batch.id}) }}">
+                            <div class="panel-footer">
+                                <span class="pull-left">Ver lote {{ batch.id }} </span>
+                                <span class="pull-right"><i class="fa fa-arrow-circle-right"></i></span>
+
+                                <div class="clearfix"></div>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+            {% endfor %}
+
+        {% else %}
+            <p>No hay lotes de gallinas activos</p>
+        {% endif %}
+    </div>
+
+
+
+
+
+
+
+
+
+
     <div class="row">
         <div class="col-lg-8">
             <div class="panel panel-default">
@@ -194,24 +324,30 @@
                                     <span class="pull-right text-muted small"><em> {{ total_lay_eggs }}</em>
                                     </span>
                         </a>
-                        <a class="list-group-item" href="{{ path('statistic_sale') }}">
+                       {# <a class="list-group-item" href="{{ path('statistic_sale') }}">
                             <i class="fa fa-twitter fa-fw"></i> Huevos vendidos
                                     <span class="pull-right text-muted small"><em>{{ total_sale_eggs }}</em>
-                                    </span>
-                        </a>
-                        <a class="list-group-item" href="{{ path('statistic_user_collect',{'user_id':app.user.id}) }}">
-                            <i class="fa fa-envelope fa-fw"></i> Huevos que has consumido
-                                    <span class="pull-right text-muted small"><em>{{ total_collect_eggs_user }}</em>
                                     </span>
                         </a>
                         <a class="list-group-item" href="{{ path('statistic_feed') }}">
                             <i class="fa fa-tasks fa-fw"></i> Pienso de gallina (Kg)
                                     <span class="pull-right text-muted small"><em>{{ hens_feed_year }}</em>
                                     </span>
+                        </a>#}
+                        <a class="list-group-item" href="{{ path('statistic_user_collect',{'user_id':app.user.id}) }}">
+                            <i class="fa fa-envelope fa-fw"></i> Kg pollo
+                                    <span class="pull-right text-muted small"><em>{{ total_chicken }}</em>
+                                    </span>
+                        </a>
+
+                        <a class="list-group-item" href="{{ path('statistic_feed') }}">
+                            <i class="fa fa-tasks fa-fw"></i> Kg de verduras
+                                    <span class="pull-right text-muted small"><em>{{ render(controller('AppBundle:Default:totalProductionYear')) }}</em>
+                                    </span>
                         </a>
                         <a class="list-group-item" href="{{ path('statistic_feed') }}">
-                            <i class="fa fa-upload fa-fw"></i> Pienso de pavos (Kg)
-                                    <span class="pull-right text-muted small"><em>{{ turkey_feed_year }}</em>
+                            <i class="fa fa-upload fa-fw"></i> Trigo (Kg)
+                                    <span class="pull-right text-muted small"><em>{{ wheat_year }}</em>
                                     </span>
                         </a>
                         <a class="list-group-item" href="{{ path('statistic_feed') }}">
@@ -221,7 +357,9 @@
                         </a>
                     </div>
                     <!-- /.list-group -->
-                    <a class="btn btn-default btn-block" href="{{ path('statistic') }}">Ver todas las estadísticas {{ active_hen_batch }}</a>
+                    {#<a class="btn btn-default btn-block" href="{{ path('statistic') }}">Ver todas las
+                        estadísticas</a>#}
+
                 </div>
                 <!-- /.panel-body -->
             </div>
@@ -239,7 +377,7 @@
             data: [
                 {% for week in week_lay %}
                 {
-                    average: {{ (week.total*active_hen_batch/week.days)|number_format(2,'.',',') }},
+                    average: {{ (week.total*(active_hen_batch|length)/week.days)|number_format(2,'.',',') }},
                     week: '{{ week.year_date }}-{{ week.week }}',
                     value: {{ week.total }},
                 },

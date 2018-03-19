@@ -79,7 +79,7 @@ class ProductionRepository extends EntityRepository
         return $query->getResult();
     }
 
-    public function findProductionInWeek($week,$year)
+    public function findProductionInWeek($week, $year)
     {
 
         $em = $this->getEntityManager();
@@ -89,5 +89,20 @@ class ProductionRepository extends EntityRepository
         $query->setParameter("week", $week);
 
         return $query->getResult();
+    }
+
+    public function findByYear($year)
+    {
+        $em = $this->getEntityManager();
+        $dql = "select sum(p.amount) as total from AppBundle:Production p where YEAR(p.production_date)=:year";
+        $query = $em->createQuery($dql);
+        $query->setParameter("year", $year);
+        if ($query->getSingleScalarResult())
+        {
+            return $query->getSingleScalarResult();
+        } else
+        {
+            return "0";
+        }
     }
 }

@@ -34,5 +34,6 @@ security:
         - { path: ^/gestion/[a-z]\w+/[0-9]([0-9])?([0-9])?/reactivate, role: ROLE_COOP}
         - { path: ^/gestion/[a-z]\w+/[0-9]([0-9])?([0-9])?/close, role: ROLE_COOP}
         - { path: ^/gestion/[a-z]\w+/[0-9]([0-9])?([0-9])?/add_sector, role: ROLE_COOP}
+        - { path: ^/gestion/[a-z]\w+/[0-9]([0-9])?([0-9])?/fast_delete, role: ROLE_COOP}
         - { path: ^/gestion, role: ROLE_GUEST }
         - { path: ^/admin/, role: ROLE_ADMIN }

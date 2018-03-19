@@ -111,6 +111,7 @@
                                 <strong>Notas: </strong>{{ entity.note }}
                                 </p>
                             </div>
+                            {% if is_granted('ROLE_COOP') %}
                             <div class="col-lg-4">
                                 <div class="well">
                                     <h4>Acciones</h4>
@@ -155,6 +156,7 @@
 
                                 </div>
                             </div>
+                            {% endif %}
                             <div class="col-lg-12">
 
 

@@ -59,7 +59,7 @@ class BatchRepository extends EntityRepository
 
         if ($query->getResult())
         {
-            return count($query->getResult());
+            return $query->getResult();
         }
 
     }
@@ -115,6 +115,21 @@ class BatchRepository extends EntityRepository
         if ($query->getResult())
         {
             return $query->getResult();
+        }
+    }
+
+    public function getTotalCarcassWeight($year)
+    {
+        $em = $this->getEntityManager();
+        $dql = "select sum(p.carcass_weight) as total from AppBundle:Fowl p where YEAR(p.put_down_date)=:year";
+        $query = $em->createQuery($dql);
+        $query->setParameter("year", $year);
+        if ($query->getSingleScalarResult())
+        {
+            return $query->getSingleScalarResult();
+        } else
+        {
+            return "0";
         }
     }
 }
