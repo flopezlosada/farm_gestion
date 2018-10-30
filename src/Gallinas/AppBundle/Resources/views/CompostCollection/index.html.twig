@@ -1,0 +1,35 @@
+{% extends '::layout_list.html.twig' %}
+
+    {% block title_wrapper %}Listado de puntos de recogida {% endblock %}
+    {% block main -%}
+        <div class="panel panel-default">
+            <div class="panel-body">
+                {% for point in colletion_points %}
+                    <div class="col-lg-6 col-md-4">
+                        <div class="panel panel-green">
+                            <div class="panel-heading">
+                                {{ point }}
+                            </div>
+                            <div class="panel-body">
+                                <p>
+                                    <strong>Última recogida: </strong>{{ point.getLastCompostCollection.getCollectDate|localizeddate('long','none','es') }} - {{ point.getLastCompostCollection.getAmount }} kg
+                                </p>
+                                <p>Resumen de recogidas anuales:<br>
+                                    {% for year,amount in point. getYearCollections%}
+                                       Año {{ year }} = {{ amount }} kg<br>
+                                    {% endfor %}
+                                </p>
+                            </div>
+                            <div class="panel-footer">
+                                <a href="{{ path('compostcollectionpoint_show', {'id': point.id}) }}">Ver detalle</a>
+                            </div>
+                        </div>
+                    </div>
+                    {% if loop.index is divisible by(2) %}
+                        <div class="clearfix"></div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+
+    {% endblock %}

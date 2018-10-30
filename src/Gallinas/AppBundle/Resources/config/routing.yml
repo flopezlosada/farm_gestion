@@ -1,3 +1,11 @@
+app_compostcollectionpoint:
+    resource: "@AppBundle/Resources/config/routing/compostcollectionpoint.xml"
+    prefix:   /compostcollectionpoint
+
+app_compostcollection:
+    resource: "@AppBundle/Resources/config/routing/compostcollection.xml"
+    prefix:   /compostcollection
+
 app_movement:
     resource: "@AppBundle/Resources/config/routing/movement.xml"
     prefix:   /movement

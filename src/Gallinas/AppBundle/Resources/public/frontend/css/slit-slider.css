@@ -153,9 +153,15 @@
 	border-radius: 50%;
 	background: rgba(255,255,255,0.8);
 }
+.acompana {
+	color: #155b62;
+}
 
+#acompana{
+	color: #3083a4;
+}
 .bg-img-1 {
-	background-image: url(../img/slider/gallinas.jpg);
+	background-image: url(../img/slider/acompanaCSA.png);
 }
 .bg-img-2 {
 	background-image: url(../img/slider/pavos.jpg);
@@ -166,7 +172,9 @@
 .bg-img-4 {
 	background-image: url(../img/slider/cesta.jpg);
 }
-
+.bg-img-5 {
+	background-image: url(../img/slider/gallinas.jpg);
+}
 
 /* Animations for content elements */
 

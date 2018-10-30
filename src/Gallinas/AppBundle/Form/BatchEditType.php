@@ -14,6 +14,16 @@ use Symfony\Component\OptionsResolver\OptionsResolverInterface;
 
 class BatchEditType extends BatchType
 {
+    private $batch;
+    public function __construct($batch)
+    {
+        $this->batch=$batch;
+    }
+
+    public function getBatch()
+    {
+        return $this->batch;
+    }
     public function buildForm(FormBuilderInterface $builder, array $options)
     {
         $builder
@@ -24,5 +34,10 @@ class BatchEditType extends BatchType
             ->add('weight', null, array('label' => "Peso aproximado de un animal en el día de recepción"))
             ->add('note', null, array('label' => "Anotaciones"))
         ;
+
+        if ($this->getBatch()->getBatchStatus()->getId()==2)
+        {
+            $builder->add('finalization_date', 'text', array('label' => 'Fecha de finalización', 'attr' => array('class' => 'datepicker3 form-control')));
+        }
     }
 }

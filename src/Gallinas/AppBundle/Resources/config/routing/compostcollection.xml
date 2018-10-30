@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<routes xmlns="http://symfony.com/schema/routing"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://symfony.com/schema/routing http://symfony.com/schema/routing/routing-1.0.xsd">
+
+    <route id="compostcollection" path="/">
+        <default key="_controller">AppBundle:CompostCollection:index</default>
+    </route>
+
+    <route id="compostcollection_show" path="/{id}/show">
+        <default key="_controller">AppBundle:CompostCollection:show</default>
+    </route>
+
+    <route id="compostcollection_new" path="/new">
+        <default key="_controller">AppBundle:CompostCollection:new</default>
+    </route>
+
+    <route id="compostcollection_create" path="/create" methods="POST">
+        <default key="_controller">AppBundle:CompostCollection:create</default>
+    </route>
+
+    <route id="compostcollection_edit" path="/{id}/edit">
+        <default key="_controller">AppBundle:CompostCollection:edit</default>
+    </route>
+
+    <route id="compostcollection_update" path="/{id}/update" methods="POST|PUT">
+        <default key="_controller">AppBundle:CompostCollection:update</default>
+    </route>
+
+    <route id="compostcollection_delete" path="/{id}/delete" methods="POST|DELETE">
+        <default key="_controller">AppBundle:CompostCollection:delete</default>
+    </route>
+
+</routes>

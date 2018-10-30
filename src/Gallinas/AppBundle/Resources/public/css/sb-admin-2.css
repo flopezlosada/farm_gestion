@@ -380,7 +380,7 @@ table.dataTable thead .sorting:after {
 }
 
 .panel-purple-tiny a {
-    color: rrgba(219, 172, 226, 0.97);
+    color: rgba(219, 172, 226, 0.97);
 }
 
 .panel-purple-tiny a:hover {

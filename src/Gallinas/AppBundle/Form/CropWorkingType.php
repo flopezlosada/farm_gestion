@@ -26,16 +26,16 @@ class CropWorkingType extends AbstractType
             ->add('estimated_production', null, array('label' => "Producción estimada (kg)"))
             ->add('planting_pattern', null, array('label' => "Marco de plantación (cm x cm)"))
             ->add('content', null, array('label' => "Observaciones"))
-            ->add('crop', null, array('label' => "Cultivo", 'query_builder' => function (EntityRepository $repository)
+            /*->add('crop', null, array('label' => "Cultivo", 'query_builder' => function (EntityRepository $repository)
             {
                 $qb = $repository->createQueryBuilder('b')
                     ->where('b.is_in_production = :status')
                     ->orderBy('b.name')
                     ->setParameter('status', 0);
                 return $qb;
-            },))
+            },))*/
+            ->add('crop', null, array('label' => "Cultivo"))
             ->add('name', null, array('label' => "Descripción"))
-
             /*->add('zone', 'entity', array('class' => 'Gallinas\AppBundle\Entity\Zone', 'required'=>false,'empty_value'=>"Selecciona zona",'label' => "Zonas de cultivo", 'query_builder' => function (EntityRepository $er)
             {
                 return $er->createQueryBuilder('u')
@@ -44,7 +44,7 @@ class CropWorkingType extends AbstractType
 
 
             ->add('sectors', null, array("label" => "Sector"))*/
-            ;
+        ;
 
 
     }

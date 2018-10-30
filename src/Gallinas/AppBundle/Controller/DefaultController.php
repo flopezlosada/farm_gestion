@@ -59,26 +59,23 @@ class DefaultController extends Controller
         $hens_feed_product = $em->getRepository("AppBundle:Product")->find(4);
         $turkey_feed_product = $em->getRepository("AppBundle:Product")->find(7);
         $broiler_feed_product = $em->getRepository("AppBundle:Product")->find(5);
-        $wheat= $em->getRepository("AppBundle:Product")->find(13);
+        $wheat = $em->getRepository("AppBundle:Product")->find(13);
 
         $hens_feed_year = $em->getRepository("AppBundle:Purchase")->findByProductYear($hens_feed_product, date('Y'));
         $turkey_feed_year = $em->getRepository("AppBundle:Purchase")->findByProductYear($turkey_feed_product, date('Y'));
         $broiler_feed_year = $em->getRepository("AppBundle:Purchase")->findByProductYear($broiler_feed_product, date('Y'));
         $wheat_year = $em->getRepository("AppBundle:Purchase")->findByProductYear($wheat, date('Y')); //trigo comprado por año
 
-        $total_chicken=$em->getRepository("AppBundle:Batch")->getTotalCarcassWeight(date('Y'));
+        $total_chicken = $em->getRepository("AppBundle:Batch")->getTotalCarcassWeight(date('Y'));
 
 
         $active_hen_batch = $em->getRepository('AppBundle:Batch')->getActiveBatch(6); //lotes de gallina activos
         $active_chicken_batch = $em->getRepository('AppBundle:Batch')->getActiveBatch(2); //lotes de pollos activos
-        foreach ($active_hen_batch as $batch)
-        {
+        foreach ($active_hen_batch as $batch) {
             $week_batch_lay = $em->getRepository('AppBundle:Lay')->findLayInWeekYear(date('W'), date('Y'), $batch->getId());
-            if ($week_batch_lay['total'] > 0)
-            {
+            if ($week_batch_lay['total'] > 0) {
                 $batch->setWeekLay($week_batch_lay['total']);
-            } else
-            {
+            } else {
                 $batch->setWeekLay(0);
             }
 
@@ -94,9 +91,9 @@ class DefaultController extends Controller
             'turkey_feed_year' => $turkey_feed_year,
             'broiler_feed_year' => $broiler_feed_year,
             'active_hen_batch' => $active_hen_batch,
-            'active_chicken_batch'=>$active_chicken_batch,
-            'wheat_year'=>$wheat_year,
-            'total_chicken'=>$total_chicken
+            'active_chicken_batch' => $active_chicken_batch,
+            'wheat_year' => $wheat_year,
+            'total_chicken' => $total_chicken
         );
     }
 
@@ -114,6 +111,15 @@ class DefaultController extends Controller
         $crop_workings = count($em->getRepository('AppBundle:CropWorking')->findActive());
 
         return new Response($crop_workings);
+    }
+
+
+    public function totalCompostAction()
+    {
+        $em = $this->getDoctrine()->getManager();
+        $collection_amount = $em->getRepository('AppBundle:CompostCollection')->findTotalAmountCollection(date('Y'));
+
+        return new Response(number_format($collection_amount/1000,1));
     }
 
     public function totalProductionYearAction()
@@ -180,8 +186,7 @@ class DefaultController extends Controller
      */
     public function userCollectAction($product_id, $year)
     {
-        if (!$year)
-        {
+        if (!$year) {
             $year = date("Y");
         }
         $em = $this->getDoctrine()->getManager();

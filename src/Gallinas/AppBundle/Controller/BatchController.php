@@ -179,6 +179,10 @@ class BatchController extends Controller
 
         $entity->setPurchaseDate($entity->getPurchaseDate()->format('Y-m-d'));
         $entity->setReceiptDate($entity->getReceiptDate()->format('Y-m-d'));
+        if ($entity->getBatchStatus()->getId() == 2)
+        {
+            $entity->setFinalizationDate($entity->getFinalizationDate()->format('Y-m-d'));
+        }
         $editForm = $this->createEditForm($entity);
         $deleteForm = $this->createDeleteForm($id);
 
@@ -199,7 +203,7 @@ class BatchController extends Controller
      */
     private function createEditForm(Batch $entity)
     {
-        $form = $this->createForm(new BatchEditType(), $entity, array(
+        $form = $this->createForm(new BatchEditType($entity), $entity, array(
             'action' => $this->generateUrl('batch_update', array('id' => $entity->getId())),
             'method' => 'PUT',
         ));
@@ -226,6 +230,10 @@ class BatchController extends Controller
 
         $entity->setPurchaseDate($entity->getPurchaseDate()->format('Y-m-d'));
         $entity->setReceiptDate($entity->getReceiptDate()->format('Y-m-d'));
+        if ($entity->getBatchStatus()->getId() == 2)
+        {
+            $entity->setFinalizationDate($entity->getFinalizationDate()->format('Y-m-d'));
+        }
         $deleteForm = $this->createDeleteForm($id);
         $editForm = $this->createEditForm($entity);
         $editForm->handleRequest($request);
@@ -234,6 +242,10 @@ class BatchController extends Controller
         {
             $entity->setPurchaseDate(new \DateTime($entity->getPurchaseDate()));
             $entity->setReceiptDate(new \DateTime($entity->getReceiptDate()));
+            if ($entity->getBatchStatus()->getId() == 2)
+            {
+                $entity->setFinalizationDate(new \DateTime($entity->getFinalizationDate()));
+            }
             $em->flush();
 
             return $this->redirect($this->generateUrl('batch_edit', array('id' => $id)));
@@ -415,25 +427,24 @@ class BatchController extends Controller
         $weeks_in_production = $em->getRepository("AppBundle:Lay")->findWeeksInProduction();
 
         $graph_lay_weeks = array();
-        $i=0;
+        $i = 0;
         foreach ($hens_batchs as $batch)
         {
-            $array=array();
+            $array = array();
             foreach ($weeks_in_production as $week)
             {
-                if(!$em->getRepository("AppBundle:Lay")->findLayInWeekYear($week['week'], $week['year_date'], $batch->getId()))
+                if (!$em->getRepository("AppBundle:Lay")->findLayInWeekYear($week['week'], $week['year_date'], $batch->getId()))
                 {
                     $array[] = 0;
-                }
-                else
+                } else
                 {
-                    $value=$em->getRepository("AppBundle:Lay")->findLayInWeekYear($week['week'], $week['year_date'], $batch->getId());
+                    $value = $em->getRepository("AppBundle:Lay")->findLayInWeekYear($week['week'], $week['year_date'], $batch->getId());
                     $array[] = $value['total'];
                 }
 
 
             }
-            $graph_lay_weeks[$i]=$array;
+            $graph_lay_weeks[$i] = $array;
             $i++;
         }
 
@@ -444,7 +455,7 @@ class BatchController extends Controller
             'batchs_week_lay' => $batchs_week_lay,
             'batchs_month_lay' => $batchs_month_lay,
             'weeks_in_production' => $weeks_in_production,
-            'graph_lay_weeks'=>$graph_lay_weeks
+            'graph_lay_weeks' => $graph_lay_weeks
         ));
     }
 }
