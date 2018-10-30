@@ -21,6 +21,10 @@
                             <th>Trueques</th>
                             <th>Peso medio vivo</th>
                             <th>Peso medio canal</th>
+                            <th>Índice de conversión</th>
+                            <th>Pienso consumido</th>
+                            <th>Tiempo en producción</th>
+                            <th>Días de vida</th>
                             <th>Sacrificados</th>
                             <th>Bajas</th>
                         </tr>
@@ -36,6 +40,7 @@
                         {% set loss=0 %}
                         {% set put_down_weight=0 %}
                         {% set carcass_weight=0 %}
+                        {% set feed_amount=0 %}
                         {% for batch in batchs %}
                             <tr>
                                 <td><a href="{{ path('batch_show', {'id': batch.id}) }}">{{ batch.id }}</a></td>
@@ -47,6 +52,11 @@
                                 <td>{{ batch.getIncomeFormDestination(2) }} €</td>
                                 <td>{{ batch.getAveragePutDownWeight|number_format(2) }} kg</td>
                                 <td>{{ batch.getAverageCarcassWeight|number_format(2) }} kg</td>
+                                <td>{{ batch.getFeedConversion|number_format(2) }}</td>
+                                <td>{{ batch.getfeedamount }} kg</td>
+                                <td>{{ batch.getProductionTime }}</td>
+                                <td>{{ batch.getBatchAge }}
+                                </td>
                                 <td>{{ batch.getPutDownTotal }}</td>
                                 <td>{{ batch.amount-batch.getPutDownTotal }}</td>
                             </tr>
@@ -59,6 +69,7 @@
                             {% set loss=loss+ (batch.amount-batch.getPutDownTotal) %}
                             {% set put_down_weight=put_down_weight+ batch.getAveragePutDownWeight %}
                             {% set carcass_weight=carcass_weight+ batch.getAverageCarcassWeight %}
+                            {% set feed_amount=feed_amount+batch.getfeedamount %}
                         {% endfor %}
                         </tbody>
                         <tfoot>
@@ -72,6 +83,10 @@
                             <td>{{ barter }} €</td>
                             <td>{{ (put_down_weight/(batchs|length))|number_format(2) }} kg</td>
                             <td>{{ (carcass_weight/(batchs|length))|number_format(2) }} kg</td>
+                            <td></td>
+                            <td>{{ feed_amount }} kg</td>
+                            <td></td>
+                            <td></td>
                             <td>{{ animals }}</td>
                             <td>{{ loss }}</td>
                         </tr>

@@ -175,12 +175,15 @@ class CropWorkingController extends Controller
         if ($finish)
         {
             $entity->setFinishDate(new \DateTime('now'));
+            $entity->getCrop()->setIsInProduction(0);
         }
         else {
             $entity->setFinishDate(null);
+            $entity->getCrop()->setIsInProduction(1);
         }
 
         $entity->setFinish($finish);
+
         $em->persist($entity);
         $em->flush();
 

@@ -114,12 +114,13 @@ class SeedWorkController extends Controller
             throw $this->createNotFoundException('Unable to find SeedWork entity.');
         }
 
-        $deleteForm = $this->createDeleteForm($id);
+        return $this->redirect($this->generateUrl('cropworking_show', array('id' => $entity->getCropWorking()->getId())));
+       // $deleteForm = $this->createDeleteForm($id);
 
-        return $this->render('AppBundle:SeedWork:show.html.twig', array(
+        /*return $this->render('AppBundle:SeedWork:show.html.twig', array(
             'entity'      => $entity,
             'delete_form' => $deleteForm->createView(),
-        ));
+        ));*/
     }
 
     /**
