@@ -48,17 +48,20 @@ class CompostCollectionController extends Controller
     {
         $em = $this->getDoctrine()->getManager();
         $year_collections= array(); //valores por año
+        $year_week_collections= array(); // valores por semana
         $year_month_collections= array(); // valores por mes
         $current_year = date("Y");
         for ($i = 2017; $i <= $current_year; $i++) {
             $year_collections[$i] = $em->getRepository("AppBundle:CompostCollection")->findTotalAmountCollection($i);
             $year_month_collections[$i] = $em->getRepository("AppBundle:CompostCollection")->findAmountCollectionByMonth($i);
+            $year_week_collections[$i] = $em->getRepository("AppBundle:CompostCollection")->findAmountCollectionByWeek($i);
         }
 
 
         return $this->render('AppBundle:CompostCollection:resume.html.twig', array(
             'year_collections' => $year_collections,
             'year_month_collections' => $year_month_collections,
+            'year_week_collections' => $year_week_collections,
         ));
     }
 

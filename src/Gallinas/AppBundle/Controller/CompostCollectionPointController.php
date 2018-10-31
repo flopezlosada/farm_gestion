@@ -95,18 +95,33 @@ class CompostCollectionPointController extends Controller
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('AppBundle:CompostCollectionPoint')->find($id);
+        $point = $em->getRepository('AppBundle:CompostCollectionPoint')->find($id);
 
-        if (!$entity) {
+        if (!$point) {
             throw $this->createNotFoundException('Unable to find CompostCollectionPoint entity.');
         }
 
-        $deleteForm = $this->createDeleteForm($id);
+
+        $year_collections= array(); //valores por año
+        $year_month_collections= array(); // valores por mes
+        $year_week_collections= array(); // valores por semana
+        $current_year = date("Y");
+        for ($i = 2017; $i <= $current_year; $i++) {
+            $year_collections[$i] = $em->getRepository("AppBundle:CompostCollection")->findTotalAmountCollection($i,$point);
+            $year_month_collections[$i] = $em->getRepository("AppBundle:CompostCollection")->findAmountCollectionByMonth($i,$point);
+            $year_week_collections[$i] = $em->getRepository("AppBundle:CompostCollection")->findAmountCollectionByWeek($i,$point);
+        }
+
 
         return $this->render('AppBundle:CompostCollectionPoint:show.html.twig', array(
-            'entity'      => $entity,
-            'delete_form' => $deleteForm->createView(),
+            'point'=>$point,
+            'year_collections' => $year_collections,
+            'year_month_collections' => $year_month_collections,
+            'year_week_collections' => $year_week_collections,
         ));
+        //$deleteForm = $this->createDeleteForm($id);
+
+
     }
 
     /**
