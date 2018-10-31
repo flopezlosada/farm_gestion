@@ -7,6 +7,9 @@
     <route id="compostcollection" path="/">
         <default key="_controller">AppBundle:CompostCollection:index</default>
     </route>
+    <route id="compostcollection_resume" path="/resume">
+        <default key="_controller">AppBundle:CompostCollection:resume</default>
+    </route>
 
     <route id="compostcollection_show" path="/{id}/show">
         <default key="_controller">AppBundle:CompostCollection:show</default>

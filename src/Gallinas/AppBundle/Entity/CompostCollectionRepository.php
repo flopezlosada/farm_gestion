@@ -39,7 +39,7 @@ class CompostCollectionRepository extends EntityRepository
 
     }
 
-    public function getPointCollectionYear($year,CompostCollectionPoint $point)
+    public function findPointCollectionYear($year,CompostCollectionPoint $point)
     {
         $em = $this->getEntityManager();
         $dql = "select sum(p.amount) as total from AppBundle:CompostCollection p where YEAR(p.collect_date)=:year and p.compost_collection_point=:point";
@@ -54,4 +54,15 @@ class CompostCollectionRepository extends EntityRepository
             return "0";
         }
     }
+
+    public function findAmountCollectionByMonth($year)
+    {
+        $em = $this->getEntityManager();
+        $dql = "select sum(p.amount) as total, MONTH(p.collect_date) as month from AppBundle:CompostCollection p where YEAR(p.collect_date)=:year GROUP by month ORDER by month asc";
+        $query = $em->createQuery($dql);
+        $query->setParameter("year", $year);
+
+        return $query->getResult();
+    }
+
 }

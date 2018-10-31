@@ -1,0 +1,130 @@
+{% extends '::layout_graph.html.twig' %}
+
+{% block title_wrapper %}
+    Resumen de la recogida de residuos
+{% endblock %}
+
+{% block main %}
+    <div class="col-lg-6">
+        <div class="panel panel-info">
+            <div class="panel-heading">
+                Resumen anual
+            </div>
+            <!-- /.panel-heading -->
+            <div class="panel-body">
+                <div class="table-responsive">
+
+                    <table class="table table-striped table-bordered table-hover">
+
+                        <thead>
+                        <tr>
+                            <th>Año</th>
+                            <th>Kilogramos de residuo recogidos</th>
+                        </tr>
+                        </thead>
+
+                        <tbody>
+                        {% for key, amount in year_collections %}
+                            <tr>
+                                <td>{{ key }}</td>
+                                <td>{{ amount|number_format(0,',','.') }}</td>
+
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-12">
+        <div class="panel panel-purple">
+            <div class="panel-heading">
+                Gráfico anual
+            </div>
+            <!-- /.panel-heading -->
+            <div class="panel-body">
+                <div id="container" style="width:100%; height:400px;"></div>
+
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block graph_js %}
+
+    <script src="https://code.highcharts.com/modules/drilldown.js"></script>
+    <script>
+
+        $(function () {
+            var myChart = Highcharts.chart('container', {
+                chart: {
+                    type: 'column'
+                },
+                title: {
+                    text: 'Resumen recogidas anuales'
+                },
+
+                subtitle: {
+                    text: 'Restos orgánicos recogidos semanalmente'
+                },
+
+                yAxis: {
+                    title: {
+                        text: 'Kilogramos recogidos'
+                    }
+                },
+                xAxis: {
+                    type: 'category'
+                },
+
+                tooltip: {
+                    headerFormat: '<span style="font-size:11px">{series.name}</span><br>',
+                    pointFormat: '<span style="color:{point.color}">{point.name}</span>: <b>{point.y:.0f}</b> kg<br/>'
+                },
+
+                legend: {
+                    enabled: false
+                },
+
+                plotOptions: {
+                    series: {
+                        borderWidth: 0,
+                        dataLabels: {
+                            enabled: true,
+                            format: '{point.y:.0f}'
+                        }
+                    }
+                },
+
+                series: [{
+                    name: 'kilogramos',
+                    colorByPoint: true,
+                    data: [
+                        {% for key, amount in year_collections %}
+                        {
+                            name: '{{ key }}',
+                            y: {{ amount }},
+                            drilldown: '{{ key }}'
+                        },
+                        {% endfor %}
+                    ]
+                }],
+                drilldown: {
+                    series: [
+                        {% for key,data in year_month_collections %}
+                        {
+                            name: '{{  key }}',
+                            id: '{{ key }}',
+                            data: [{% for month in data %}
+                                ["{{ month.month|month_names }}", {{ month.total }}],
+                                {% endfor %}]
+
+                        },
+                        {% endfor %}
+                    ]
+                }
+            })
+        })
+    </script>
+{% endblock %}
