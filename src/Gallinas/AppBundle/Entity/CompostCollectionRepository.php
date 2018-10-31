@@ -12,17 +12,25 @@ use Doctrine\ORM\EntityRepository;
  */
 class CompostCollectionRepository extends EntityRepository
 {
-    public function findTotalAmountCollection($year)
+    public function findTotalAmountCollection($year, $point = null)
     {
         $em = $this->getEntityManager();
         $dql = "select sum(p.amount) as total from AppBundle:CompostCollection p where YEAR(p.collect_date)=:year";
+
+        if ($point) {
+            $dql .= " and p.compost_collection_point=:point";
+        }
+
         $query = $em->createQuery($dql);
         $query->setParameter("year", $year);
-        if ($query->getSingleScalarResult())
-        {
+
+        if ($point) {
+            $query->setParameter("point", $point);
+        }
+
+        if ($query->getSingleScalarResult()) {
             return $query->getSingleScalarResult();
-        } else
-        {
+        } else {
             return "0";
         }
     }
@@ -39,29 +47,50 @@ class CompostCollectionRepository extends EntityRepository
 
     }
 
-    public function findPointCollectionYear($year,CompostCollectionPoint $point)
+    public function findPointCollectionYear($year, CompostCollectionPoint $point)
     {
         $em = $this->getEntityManager();
         $dql = "select sum(p.amount) as total from AppBundle:CompostCollection p where YEAR(p.collect_date)=:year and p.compost_collection_point=:point";
         $query = $em->createQuery($dql);
         $query->setParameter("year", $year);
         $query->setParameter("point", $point);
-        if ($query->getSingleScalarResult())
-        {
+        if ($query->getSingleScalarResult()) {
             return $query->getSingleScalarResult();
-        } else
-        {
+        } else {
             return "0";
         }
     }
 
-    public function findAmountCollectionByMonth($year)
+    public function findAmountCollectionByMonth($year, $point = null)
     {
         $em = $this->getEntityManager();
-        $dql = "select sum(p.amount) as total, MONTH(p.collect_date) as month from AppBundle:CompostCollection p where YEAR(p.collect_date)=:year GROUP by month ORDER by month asc";
+        $dql = "select sum(p.amount) as total, MONTH(p.collect_date) as month from AppBundle:CompostCollection p where YEAR(p.collect_date)=:year";
+        if ($point) {
+            $dql .= " and p.compost_collection_point=:point";
+        }
+        $dql .= ' GROUP by month ORDER by month asc';
+
         $query = $em->createQuery($dql);
         $query->setParameter("year", $year);
+        if ($point) {
+            $query->setParameter("point", $point);
+        }
+        return $query->getResult();
+    }
 
+    public function findAmountCollectionByWeek($year, $point = null)
+    {
+        $em = $this->getEntityManager();
+        $dql = "select sum(p.amount) as total,p.week as week from AppBundle:CompostCollection p where YEAR(p.collect_date)=:year";
+        if ($point) {
+            $dql .= " and p.compost_collection_point=:point";
+        }
+        $dql .= '  GROUP BY week ORDER by p.collect_date asc';
+        $query = $em->createQuery($dql);
+        $query->setParameter("year", $year);
+        if ($point) {
+            $query->setParameter("point", $point);
+        }
         return $query->getResult();
     }
 

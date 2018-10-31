@@ -45,7 +45,17 @@
             <!-- /.panel-heading -->
             <div class="panel-body">
                 <div id="container" style="width:100%; height:400px;"></div>
-
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-12">
+        <div class="panel panel-greener">
+            <div class="panel-heading">
+                Gráfico comparativo recogidas semanales
+            </div>
+            <!-- /.panel-heading -->
+            <div class="panel-body">
+                <div id="container2" style="width:100%; height:400px;"></div>
             </div>
         </div>
     </div>
@@ -98,7 +108,7 @@
                 },
 
                 series: [{
-                    name: 'kilogramos',
+                    name: 'Resumen anual',
                     colorByPoint: true,
                     data: [
                         {% for key, amount in year_collections %}
@@ -124,7 +134,60 @@
                         {% endfor %}
                     ]
                 }
+            });
+            var myChart = Highcharts.chart('container2', {
+                chart: {
+                    type: 'spline'
+                },
+                title: {
+                    text: 'Comparativa semanal de recogida de residuos'
+                },
+
+                subtitle: {
+                    text: 'Total semanal de todos los puntos de recogida'
+                },
+
+                yAxis: {
+                    title: {
+                        text: 'Kilogramos recogidos'
+                    }
+                },
+                xAxis: {
+                    categories: [
+                        {% for i in 0..52 %}
+                        {{ i }},
+                        {% endfor %}
+                    ]
+                },
+                legend: {
+                    layout: 'vertical',
+                    align: 'right',
+                    verticalAlign: 'middle'
+                },
+
+                plotOptions: {
+                    series: {
+                        label: {
+                            connectorAllowed: false
+                        },
+                    }
+                },
+
+                series: [
+                    {% for key,data in year_week_collections %}
+                    {
+                        name: {{ key }},
+                        data: [
+                            {% for week in data %}
+                            [{{ week.week }},{{ week.total }}],
+                            {% endfor %}
+
+                        ]
+                    },
+                    {% endfor %}
+                ]
             })
+
         })
     </script>
 {% endblock %}
