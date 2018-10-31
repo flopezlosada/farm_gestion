@@ -201,7 +201,7 @@
 	-ms-animation: fadeOut 1s ease-in-out both;
 	animation: fadeOut 1s ease-in-out both;
 }
-.sl-trans-back-elems .caption-content span,,
+.sl-trans-back-elems .caption-content span,
 .sl-trans-back-elems .caption-content a {
 	-webkit-animation: fadeOut 1s linear both;
 	-moz-animation: fadeOut 1s linear both;

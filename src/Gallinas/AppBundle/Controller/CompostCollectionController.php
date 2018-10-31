@@ -23,29 +23,46 @@ class CompostCollectionController extends Controller
     {
         $em = $this->getDoctrine()->getManager();
 
-        $colletion_points= $em->getRepository('AppBundle:CompostCollectionPoint')->findAll();
+        $colletion_points = $em->getRepository('AppBundle:CompostCollectionPoint')->findAll();
 
-        $current_year=date("Y");
-        foreach ($colletion_points as $point ) {
-            $last_collection=$em->getRepository("AppBundle:CompostCollection")->findLastByPoint($point);
+        $current_year = date("Y");
+        foreach ($colletion_points as $point) {
+            $last_collection = $em->getRepository("AppBundle:CompostCollection")->findLastByPoint($point);
             $point->setLastCompostCollection($last_collection);
 
-            $year_collections=array();
-            for ($i=$current_year;$i>=2017;$i--)
-            {
-                $year_collections[$i]=$em->getRepository("AppBundle:CompostCollection")->getPointCollectionYear($i,$point);
+            $year_collections = array();
+            for ($i = $current_year; $i >= 2017; $i--) {
+                $year_collections[$i] = $em->getRepository("AppBundle:CompostCollection")->findPointCollectionYear($i, $point);
             }
             $point->setYearCollections($year_collections);
 
         }
 
 
-
-
         return $this->render('AppBundle:CompostCollection:index.html.twig', array(
             'colletion_points' => $colletion_points,
         ));
     }
+
+    public function resumeAction()
+    {
+        $em = $this->getDoctrine()->getManager();
+        $year_collections= array(); //valores por año
+        $year_month_collections= array(); // valores por mes
+        $current_year = date("Y");
+        for ($i = 2017; $i <= $current_year; $i++) {
+            $year_collections[$i] = $em->getRepository("AppBundle:CompostCollection")->findTotalAmountCollection($i);
+            $year_month_collections[$i] = $em->getRepository("AppBundle:CompostCollection")->findAmountCollectionByMonth($i);
+        }
+
+
+        return $this->render('AppBundle:CompostCollection:resume.html.twig', array(
+            'year_collections' => $year_collections,
+            'year_month_collections' => $year_month_collections,
+        ));
+    }
+
+
     /**
      * Creates a new CompostCollection entity.
      *
@@ -58,8 +75,8 @@ class CompostCollectionController extends Controller
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity->setWeek(date('W',strtotime($entity->getCollectDate())));
-            $entity->setCollectDate(new \DateTime($entity->getCollectDate())) ;
+            $entity->setWeek(date('W', strtotime($entity->getCollectDate())));
+            $entity->setCollectDate(new \DateTime($entity->getCollectDate()));
             $em->persist($entity);
             $em->flush();
 
@@ -68,7 +85,7 @@ class CompostCollectionController extends Controller
 
         return $this->render('AppBundle:CompostCollection:new.html.twig', array(
             'entity' => $entity,
-            'form'   => $form->createView(),
+            'form' => $form->createView(),
         ));
     }
 
@@ -98,13 +115,14 @@ class CompostCollectionController extends Controller
     public function newAction()
     {
         $entity = new CompostCollection();
-        $form   = $this->createCreateForm($entity);
+        $form = $this->createCreateForm($entity);
 
         return $this->render('AppBundle:CompostCollection:new.html.twig', array(
             'entity' => $entity,
-            'form'   => $form->createView(),
+            'form' => $form->createView(),
         ));
     }
+
 
     /**
      * Finds and displays a CompostCollection entity.
@@ -123,7 +141,7 @@ class CompostCollectionController extends Controller
         $deleteForm = $this->createDeleteForm($id);
 
         return $this->render('AppBundle:CompostCollection:show.html.twig', array(
-            'entity'      => $entity,
+            'entity' => $entity,
             'delete_form' => $deleteForm->createView(),
         ));
     }
@@ -146,19 +164,19 @@ class CompostCollectionController extends Controller
         $deleteForm = $this->createDeleteForm($id);
 
         return $this->render('AppBundle:CompostCollection:edit.html.twig', array(
-            'entity'      => $entity,
-            'edit_form'   => $editForm->createView(),
+            'entity' => $entity,
+            'edit_form' => $editForm->createView(),
             'delete_form' => $deleteForm->createView(),
         ));
     }
 
     /**
-    * Creates a form to edit a CompostCollection entity.
-    *
-    * @param CompostCollection $entity The entity
-    *
-    * @return \Symfony\Component\Form\Form The form
-    */
+     * Creates a form to edit a CompostCollection entity.
+     *
+     * @param CompostCollection $entity The entity
+     *
+     * @return \Symfony\Component\Form\Form The form
+     */
     private function createEditForm(CompostCollection $entity)
     {
         $form = $this->createForm(new CompostCollectionType(), $entity, array(
@@ -170,6 +188,7 @@ class CompostCollectionController extends Controller
 
         return $form;
     }
+
     /**
      * Edits an existing CompostCollection entity.
      *
@@ -195,11 +214,12 @@ class CompostCollectionController extends Controller
         }
 
         return $this->render('AppBundle:CompostCollection:edit.html.twig', array(
-            'entity'      => $entity,
-            'edit_form'   => $editForm->createView(),
+            'entity' => $entity,
+            'edit_form' => $editForm->createView(),
             'delete_form' => $deleteForm->createView(),
         ));
     }
+
     /**
      * Deletes a CompostCollection entity.
      *
@@ -237,7 +257,6 @@ class CompostCollectionController extends Controller
             ->setAction($this->generateUrl('compostcollection_delete', array('id' => $id)))
             ->setMethod('DELETE')
             ->add('submit', 'submit', array('label' => 'Delete'))
-            ->getForm()
-        ;
+            ->getForm();
     }
 }

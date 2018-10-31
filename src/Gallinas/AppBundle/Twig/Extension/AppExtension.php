@@ -33,7 +33,8 @@ class AppExtension extends \Twig_Extension
             'delete_image' => new \Twig_Filter_Method($this, 'deleteImage'),
             'get_class' => new \Twig_Filter_Method($this, 'getClassName'),
             'parseContentImageResponsive' => new \Twig_Filter_Method($this, 'parseContentImageResponsive'),
-            'glossary' => new \Twig_Filter_Method($this, 'glossary')
+            'glossary' => new \Twig_Filter_Method($this, 'glossary'),
+            'month_names' => new \Twig_Filter_Method($this, 'month_names'),
         );
     }
 
@@ -56,8 +57,7 @@ class AppExtension extends \Twig_Extension
         preg_match_all('/\[\[insert_media_\w*\]\]/', $field, $abstract);
         $array_medias = $abstract[0];
 
-        foreach ($array_medias as $media)
-        {
+        foreach ($array_medias as $media) {
             $media = str_ireplace("[[insert_media_", "", $media);
             $media = str_ireplace("]]", "", $media);
             $media_type[] = preg_split('/_/', $media);
@@ -67,11 +67,9 @@ class AppExtension extends \Twig_Extension
         $text = preg_split('/\[\[insert_media_\w*\]\]/', $field);
 
         $result = array();
-        for ($i = 0; $i < count($text); $i++)
-        {
+        for ($i = 0; $i < count($text); $i++) {
             $result[] = $text[$i];
-            if ($i < @count($media_type))
-            {
+            if ($i < @count($media_type)) {
                 $result[] = $media_type[$i];
             }
         }
@@ -82,8 +80,7 @@ class AppExtension extends \Twig_Extension
 
     public function hasImage($media)
     {
-        if ($media->hasImage())
-        {
+        if ($media->hasImage()) {
             return true;
         }
 
@@ -95,12 +92,9 @@ class AppExtension extends \Twig_Extension
 
         preg_match_all('/<img[^>]+>/i', $post->getContentParsed(), $abstract);
 
-        if (count($abstract) > 0)
-        {
-            foreach ($abstract as $image)
-            {
-                if (count($image) > 0)
-                {
+        if (count($abstract) > 0) {
+            foreach ($abstract as $image) {
+                if (count($image) > 0) {
                     return $this->parseImage($image[0], $class);
                 }
             }
@@ -121,8 +115,7 @@ class AppExtension extends \Twig_Extension
 
         $parse_image = preg_replace('/class=\"\d*\"/', "", $parse_image);
 
-        if ($class)
-        {
+        if ($class) {
 
             $parse_image = preg_replace('/>/', 'class="' . $class . '" >', $parse_image);
         }
@@ -169,8 +162,7 @@ class AppExtension extends \Twig_Extension
         $em = $this->doctrine->getManager();
         $words = $em->getRepository("AppBundle:Glossary")->getAllGlossaryWords();
         $keys = array();
-        foreach ($words as $word)
-        {
+        foreach ($words as $word) {
             $keys[] = $word['name'];
         }
         for ($i = 0; $i < count($keys); $i++)
@@ -205,14 +197,31 @@ class AppExtension extends \Twig_Extension
 
     }
 
-    public function fechaCastellano ($fecha) {
+    public function fechaCastellano($fecha)
+    {
 
         $numeroDia = date('d', strtotime($fecha));
         $mes = date('F', strtotime($fecha));
         $meses_ES = array("Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre");
         $meses_EN = array("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December");
         $nombreMes = str_replace($meses_EN, $meses_ES, $mes);
-        return $numeroDia." de ".$nombreMes;
+        return $numeroDia . " de " . $nombreMes;
     }
 
+    public function mesCastellano($mes)
+    {
+        $meses_ES = array("Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre");
+        $meses_EN = array("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December");
+
+        return $nombreMes = str_replace($meses_EN, $meses_ES, $mes);
+
+    }
+
+    public function month_names($month_number)
+    {
+        $fecha = \DateTime::createFromFormat('!m', $month_number);
+        $mes = $fecha->format('F');
+
+        return $this->mesCastellano($mes);
+    }
 }
