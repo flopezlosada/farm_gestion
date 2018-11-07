@@ -5,8 +5,8 @@ security:
     role_hierarchy:
         ROLE_ADMIN:       ROLE_USER
         ROLE_SUPER_ADMIN: ROLE_ADMIN
-        ROLE_COOP:        ROLE_GUEST
-        ROLE_GUEST:       ROLE_USER
+        ROLE_COOP:        ROLE_COMPOST, ROLE_GUEST
+        ROLE_GUEST:       ROLE_USER, ROLE_COMPOST
 
     providers:
         fos_userbundle:
@@ -26,8 +26,16 @@ security:
         - { path: ^/login$, role: IS_AUTHENTICATED_ANONYMOUSLY }
         - { path: ^/register, role: IS_AUTHENTICATED_ANONYMOUSLY }
         - { path: ^/resetting, role: IS_AUTHENTICATED_ANONYMOUSLY }
+        - { path: ^/gestion/compost/[a-z]\w+/new, role: ROLE_COMPOST}
+        - { path: ^/gestion/compost/[a-z]\w+/create, role: ROLE_COMPOST}
+        - { path: ^/gestion/compost/[a-z]\w+/[0-9]([0-9])?([0-9])?/edit, role: ROLE_COMPOST}
+        - { path: ^/gestion/compost/[a-z]\w+/[0-9]([0-9])?([0-9])?/update, role: ROLE_COMPOST}
+        - { path: ^/gestion/compost/[a-z]\w+/[0-9]([0-9])?([0-9])?/delete, role: ROLE_COMPOST}
+        - { path: ^/gestion/compost, role: ROLE_COMPOST}
+        - { path: ^/gestion/dashboard, role: [ROLE_COMPOST] }
         - { path: ^/gestion/[a-z]\w+/new, role: ROLE_COOP}
         - { path: ^/gestion/[a-z]\w+/create, role: ROLE_COOP}
+        - { path: ^/gestion/[a-z]\w+/[0-9]([0-9])?([0-9])?/show, role: ROLE_GUEST}
         - { path: ^/gestion/[a-z]\w+/[0-9]([0-9])?([0-9])?/edit, role: ROLE_COOP}
         - { path: ^/gestion/[a-z]\w+/[0-9]([0-9])?([0-9])?/update, role: ROLE_COOP}
         - { path: ^/gestion/[a-z]\w+/[0-9]([0-9])?([0-9])?/delete, role: ROLE_COOP}
@@ -35,5 +43,5 @@ security:
         - { path: ^/gestion/[a-z]\w+/[0-9]([0-9])?([0-9])?/close, role: ROLE_COOP}
         - { path: ^/gestion/[a-z]\w+/[0-9]([0-9])?([0-9])?/add_sector, role: ROLE_COOP}
         - { path: ^/gestion/[a-z]\w+/[0-9]([0-9])?([0-9])?/fast_delete, role: ROLE_COOP}
-        - { path: ^/gestion, role: ROLE_GUEST }
+        - { path: ^/gestion, role: [ROLE_GUEST] }
         - { path: ^/admin/, role: ROLE_ADMIN }

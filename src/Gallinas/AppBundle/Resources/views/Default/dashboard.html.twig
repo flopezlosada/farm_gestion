@@ -6,88 +6,398 @@
     {% block title_wrapper %}Panel de control{% endblock %}
 {% block warning %}{% endblock %}
 {% block main %}
-    <div class="row">
-        <div class="col-lg-3 col-md-6">
-            <div class="panel panel-primary">
-                <div class="panel-heading">
-                    <div class="row">
-                        <div class="col-xs-3">
-                            <i class="fa fa-compass fa-5x"></i>
-                        </div>
-                        <div class="col-xs-9 text-right">
-                            <div class="huge">{{ render(controller('AppBundle:Default:layWeek')) }}</div>
-                            <div><br>Puesta semanal total</div>
+
+    {% if is_granted("ROLE_GUEST")%}
+        <div class="row">
+            <div class="col-lg-3 col-md-6">
+                <div class="panel panel-primary">
+                    <div class="panel-heading">
+                        <div class="row">
+                            <div class="col-xs-3">
+                                <i class="fa fa-compass fa-5x"></i>
+                            </div>
+                            <div class="col-xs-9 text-right">
+                                <div class="huge">{{ render(controller('AppBundle:Default:layWeek')) }}</div>
+                                <div><br>Puesta semanal total</div>
+                            </div>
                         </div>
                     </div>
+                    {% if is_granted('ROLE_COOP') %}
+                    <a href="{{ path('lay_new') }}">
+                        {% set link_2='Añadir puesta' %}
+                        {% elseif is_granted('ROLE_GUEST') %}
+                        <a href="{{ path('calendar') }}">
+                            {% set link_2='Ver calendario' %}
+                            {% endif %}
+                            <div class="panel-footer">
+                                <span class="pull-left">{{ link_2 }}</span>
+                                <span class="pull-right"><i class="fa fa-arrow-circle-right"></i></span>
+
+                                <div class="clearfix"></div>
+                            </div>
+                        </a>
                 </div>
-                {% if is_granted('ROLE_COOP') %}
-                <a href="{{ path('lay_new') }}">
-                    {% set link_2='Añadir puesta' %}
-                    {% elseif is_granted('ROLE_GUEST') %}
-                    <a href="{{ path('calendar') }}">
-                        {% set link_2='Ver calendario' %}
-                        {% endif %}
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="panel panel-yellow">
+                    <div class="panel-heading">
+                        <div class="row">
+                            <div class="col-xs-3">
+                                <i class="fa fa-flask fa-5x"></i>
+                            </div>
+                            <div class="col-xs-9 text-right">
+                                <div class="huge">{{ render(controller('AppBundle:Default:totalProductionYear'))|round }}</div>
+                                <div><br>Kilos producidos este año</div>
+                            </div>
+                        </div>
+                    </div>
+                    <a href="{{ path('production_show_basket') }}">
                         <div class="panel-footer">
-                            <span class="pull-left">{{ link_2 }}</span>
+                            <span class="pull-left">Listado de cestas</span>
                             <span class="pull-right"><i class="fa fa-arrow-circle-right"></i></span>
 
                             <div class="clearfix"></div>
                         </div>
                     </a>
+                </div>
             </div>
-        </div>
-        <div class="col-lg-3 col-md-6">
-            <div class="panel panel-yellow">
-                <div class="panel-heading">
-                    <div class="row">
-                        <div class="col-xs-3">
-                            <i class="fa fa-flask fa-5x"></i>
-                        </div>
-                        <div class="col-xs-9 text-right">
-                            <div class="huge">{{ render(controller('AppBundle:Default:totalProductionYear'))|round }}</div>
-                            <div><br>Kilos producidos este año</div>
+            <div class="col-lg-3 col-md-6">
+                <div class="panel panel-greener">
+                    <div class="panel-heading">
+                        <div class="row">
+                            <div class="col-xs-3">
+                                <i class="fa fa-leaf fa-5x"></i>
+                            </div>
+                            <div class="col-xs-9 text-right">
+                                <div class="huge">{{ render(controller('AppBundle:Default:totalCropWorking')) }}</div>
+                                <div><br>Cultivos en producción</div>
+                            </div>
                         </div>
                     </div>
-                </div>
-                <a href="{{ path('production_show_basket') }}">
-                    <div class="panel-footer">
-                        <span class="pull-left">Listado de cestas</span>
-                        <span class="pull-right"><i class="fa fa-arrow-circle-right"></i></span>
+                    {% if is_granted('ROLE_COOP') %}
+                    <a href="{{ path('production_new') }}">
+                        {% set link='Añadir producción' %}
+                        {% elseif is_granted('ROLE_GUEST') %}
+                        <a href="{{ path('cropworking') }}">
+                            {% set link='Ver cultivos' %}
+                            {% endif %}
+                            <div class="panel-footer">
+                                <span class="pull-left">{{ link }}</span>
+                                <span class="pull-right"><i class="fa fa-arrow-circle-right"></i></span>
 
-                        <div class="clearfix"></div>
+                                <div class="clearfix"></div>
+                            </div>
+                        </a>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="panel panel-purple-tiny">
+                    <div class="panel-heading">
+                        <div class="row">
+                            <div class="col-xs-3">
+                                <i class="fa fa-trash fa-5x"></i>
+                            </div>
+                            <div class="col-xs-9 text-right">
+                                <div class="huge">{{ render(controller('AppBundle:Default:totalCompost')) }}</div>
+                                <div><br>Toneladas de residuo este año</div>
+                            </div>
+                        </div>
                     </div>
-                </a>
+                    {% if is_granted('ROLE_COOP') %}
+                    <a href="{{ path('compostcollection_new') }}">
+                        {% set link='Añadir recogida' %}
+                        {% elseif is_granted('ROLE_GUEST') %}
+                        <a href="{{ path('compostcollection') }}">
+                            {% set link='Ver recogidas' %}
+                            {% endif %}
+                            <div class="panel-footer">
+                                <span class="pull-left">{{ link }}</span>
+                                <span class="pull-right"><i class="fa fa-arrow-circle-right"></i></span>
+
+                                <div class="clearfix"></div>
+                            </div>
+                        </a>
+                </div>
             </div>
         </div>
-        <div class="col-lg-3 col-md-6">
-            <div class="panel panel-greener">
-                <div class="panel-heading">
-                    <div class="row">
-                        <div class="col-xs-3">
-                            <i class="fa fa-leaf fa-5x"></i>
-                        </div>
-                        <div class="col-xs-9 text-right">
-                            <div class="huge">{{ render(controller('AppBundle:Default:totalCropWorking')) }}</div>
-                            <div><br>Cultivos en producción</div>
+        {#<div class="row">
+            <div class="col-lg-3 col-md-6">
+                <div class="panel panel-yellow">
+                    <div class="panel-heading">
+                        <div class="row">
+                            <div class="col-xs-3">
+                                <i class="fa fa-eur fa-5x"></i>
+                            </div>
+                            <div class="col-xs-9 text-right">
+                                <div class="huge">{{ render(controller('AppBundle:Default:totalSalesAmount')) }}</div>
+                                <div>Total de dinero recaudado por las ventas</div>
+                            </div>
                         </div>
                     </div>
-                </div>
-                {% if is_granted('ROLE_COOP') %}
-                <a href="{{ path('production_new') }}">
-                    {% set link='Añadir producción' %}
-                    {% elseif is_granted('ROLE_GUEST') %}
-                    <a href="{{ path('cropworking') }}">
-                        {% set link='Ver cultivos' %}
-                        {% endif %}
+                    <a href="{{ path('sale_new') }}">
                         <div class="panel-footer">
-                            <span class="pull-left">{{ link }}</span>
+                            <span class="pull-left">Añadir venta</span>
                             <span class="pull-right"><i class="fa fa-arrow-circle-right"></i></span>
 
                             <div class="clearfix"></div>
                         </div>
                     </a>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="panel panel-red">
+                    <div class="panel-heading">
+                        <div class="row">
+                            <div class="col-xs-12 text-right">
+                                <div class="huge">{{ render(controller('AppBundle:Default:lastFeedPurchase')) |localizeddate('short','none','es') }}</div>
+                                <div><br>Fecha última compra de pienso</div>
+                            </div>
+                        </div>
+                    </div>
+                    <a href="{{ path('purchase_new') }}">
+                        <div class="panel-footer">
+                            <span class="pull-left">Añadir compra</span>
+                            <span class="pull-right"><i class="fa fa-arrow-circle-right"></i></span>
+
+                            <div class="clearfix"></div>
+                        </div>
+                    </a>
+                </div>
+            </div>
+        </div>#}
+        {#<div class="row">
+            <div class="col-lg-3 col-md-6">
+                <div class="panel panel-purple">
+                    <div class="panel-heading">
+                        <div class="row">
+                            <div class="col-xs-3">
+                                <i class="fa fa-gift fa-5x"></i>
+                            </div>
+                            <div class="col-xs-9 text-right">
+                                <div class="huge">{{ " " }}</div>
+                                <div><br>Regalos</div>
+                            </div>
+                        </div>
+                    </div>
+                    <a href="{{ path('gift_new') }}">
+                        <div class="panel-footer">
+                            <span class="pull-left">Añadir regalo</span>
+                            <span class="pull-right"><i class="fa fa-arrow-circle-right"></i></span>
+
+                            <div class="clearfix"></div>
+                        </div>
+                    </a>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="panel panel-greener">
+                    <div class="panel-heading">
+                        <div class="row">
+                            <div class="col-xs-3">
+                                <i class="fa fa-barcode fa-5x"></i>
+                            </div>
+                            <div class="col-xs-9 text-right">
+                                <div class="huge">{{ " " }}</div>
+                                <div><br>Lotes</div>
+                            </div>
+                        </div>
+                    </div>
+                    <a href="{{ path('batch_new') }}">
+                        <div class="panel-footer">
+                            <span class="pull-left">Añadir lote de animales</span>
+                            <span class="pull-right"><i class="fa fa-arrow-circle-right"></i></span>
+
+                            <div class="clearfix"></div>
+                        </div>
+                    </a>
+                </div>
+            </div>
+        </div>#}
+
+
+
+        <div class="row">
+            <div class="col-lg-12"><h4>Lotes de gallinas activos</h4></div>
+            {% if active_hen_batch|length>0 %}
+                {% for batch in active_hen_batch %}
+                    <div class="col-lg-3 col-md-6">
+                        {% if loop.index==6 %}
+                            {% set panel='panel-green' %}
+                            {% set icon='anchor' %}
+                        {% elseif loop.index==3 %}
+                            {% set panel='panel-purple' %}
+                            {% set icon='bug' %}
+                        {% elseif loop.index==5 %}
+                            {% set panel='panel-yellow' %}
+                            {% set icon='bell' %}
+                        {% elseif loop.index==1 %}
+                            {% set panel='panel-greener' %}
+                            {% set icon='balance-scale' %}
+                        {% elseif loop.index==2 %}
+                            {% set panel='panel-red' %}
+                            {% set icon='area-chart' %}
+                        {% elseif loop.index==4 %}
+                            {% set panel='panel-primary' %}
+                            {% set icon='code-fork' %}
+                        {% endif %}
+                        <div class="panel {{ panel }}">
+                            <div class="panel-heading">
+                                <div class="row">
+                                    <div class="col-xs-3">
+                                        <i class="fa fa-{{ icon }} fa-5x"></i>
+                                    </div>
+                                    <div class="col-xs-9 text-right">
+                                        <div class="huge">{{ batch.getWeekLay }}</div>
+                                        <div><br>Puesta semanal</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <a href="{{ path('batch_show',{'id':batch.id}) }}">
+                                <div class="panel-footer">
+                                    <span class="pull-left">Ver lote {{ batch.id }}</span>
+                                    <span class="pull-right"><i class="fa fa-arrow-circle-right"></i></span>
+
+                                    <div class="clearfix"></div>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+                {% endfor %}
+
+            {% else %}
+                <p>No hay lotes de gallinas activos</p>
+            {% endif %}
+        </div>
+
+        <div class="row">
+            <div class="col-lg-12"><h4>Lotes de pollos activos</h4></div>
+            {% if active_hen_batch|length>0 %}
+                {% for batch in active_chicken_batch %}
+                    <div class="col-lg-3 col-md-6">
+                        {% if loop.index==1 %}
+                            {% set panel='panel-green' %}
+                            {% set icon='s15' %}
+                        {% elseif loop.index==2 %}
+                            {% set panel='panel-purple' %}
+                            {% set icon='ravelry' %}
+                        {% elseif loop.index==3 %}
+                            {% set panel='panel-yellow' %}
+                            {% set icon='podcast' %}
+                        {% elseif loop.index==4 %}
+                            {% set panel='panel-greener' %}
+                            {% set icon='tencent-weibo' %}
+                        {% elseif loop.index==5 %}
+                            {% set panel='panel-red' %}
+                            {% set icon='code' %}
+                        {% elseif loop.index==6 %}
+                            {% set panel='panel-primary' %}
+                            {% set icon='s15' %}
+                        {% endif %}
+                        <div class="panel {{ panel }}">
+                            <div class="panel-heading">
+                                <div class="row">
+                                    <div class="col-xs-3">
+                                        <i class="fa fa-{{ icon }} fa-5x"></i>
+                                    </div>
+                                    <div class="col-xs-9 text-right">
+                                        <div class="huge">{{ batch.amount }}</div>
+                                        <div><br>Animales</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <a href="{{ path('batch_show',{'id':batch.id}) }}">
+                                <div class="panel-footer">
+                                    <span class="pull-left">Ver lote {{ batch.id }} </span>
+                                    <span class="pull-right"><i class="fa fa-arrow-circle-right"></i></span>
+
+                                    <div class="clearfix"></div>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+                {% endfor %}
+
+            {% else %}
+                <p>No hay lotes de gallinas activos</p>
+            {% endif %}
+        </div>
+
+
+
+
+
+
+
+
+
+
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="panel panel-default">
+                    <div class="panel-heading">
+                        Evolución de la puesta semanal
+                    </div>
+                    <div class="panel-body">
+                        <div id="layweekchart" style="position: relative;height: 250px;"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="panel panel-default">
+                    <div class="panel-heading">
+                        <i class="fa fa-bell fa-fw"></i> Resumen de datos {{ 'now'|date ('Y') }}
+                    </div>
+                    <!-- /.panel-heading -->
+                    <div class="panel-body">
+                        <div class="list-group">
+                            <a class="list-group-item" href="{{ path('statistic_eggs') }}">
+                                <i class="fa fa-comment fa-fw"></i> Huevos puestos
+                                    <span class="pull-right text-muted small"><em> {{ total_lay_eggs }}</em>
+                                    </span>
+                            </a>
+                            {# <a class="list-group-item" href="{{ path('statistic_sale') }}">
+                                 <i class="fa fa-twitter fa-fw"></i> Huevos vendidos
+                                         <span class="pull-right text-muted small"><em>{{ total_sale_eggs }}</em>
+                                         </span>
+                             </a>
+                             <a class="list-group-item" href="{{ path('statistic_feed') }}">
+                                 <i class="fa fa-tasks fa-fw"></i> Pienso de gallina (Kg)
+                                         <span class="pull-right text-muted small"><em>{{ hens_feed_year }}</em>
+                                         </span>
+                             </a>#}
+                            <a class="list-group-item"
+                               href="{{ path('statistic_user_collect',{'user_id':app.user.id}) }}">
+                                <i class="fa fa-envelope fa-fw"></i> Kg pollo
+                                    <span class="pull-right text-muted small"><em>{{ total_chicken }}</em>
+                                    </span>
+                            </a>
+
+                            <a class="list-group-item" href="{{ path('statistic_feed') }}">
+                                <i class="fa fa-tasks fa-fw"></i> Kg de verduras
+                                    <span class="pull-right text-muted small"><em>{{ render(controller('AppBundle:Default:totalProductionYear')) }}</em>
+                                    </span>
+                            </a>
+                            <a class="list-group-item" href="{{ path('statistic_feed') }}">
+                                <i class="fa fa-upload fa-fw"></i> Trigo (Kg)
+                                    <span class="pull-right text-muted small"><em>{{ wheat_year }}</em>
+                                    </span>
+                            </a>
+                            <a class="list-group-item" href="{{ path('statistic_feed') }}">
+                                <i class="fa fa-bolt fa-fw"></i> Pienso de pollos (Kg)
+                                    <span class="pull-right text-muted small"><em>{{ broiler_feed_year }}</em>
+                                    </span>
+                            </a>
+                        </div>
+                        <!-- /.list-group -->
+                        {#<a class="btn btn-default btn-block" href="{{ path('statistic') }}">Ver todas las
+                            estadísticas</a>#}
+
+                    </div>
+                    <!-- /.panel-body -->
+                </div>
             </div>
         </div>
+    {% elseif is_granted("ROLE_COMPOST")%}
         <div class="col-lg-3 col-md-6">
             <div class="panel panel-purple-tiny">
                 <div class="panel-heading">
@@ -101,13 +411,9 @@
                         </div>
                     </div>
                 </div>
-                {% if is_granted('ROLE_COOP') %}
+
                 <a href="{{ path('compostcollection_new') }}">
                     {% set link='Añadir recogida' %}
-                    {% elseif is_granted('ROLE_GUEST') %}
-                    <a href="{{ path('compostcollection') }}">
-                        {% set link='Ver recogidas' %}
-                        {% endif %}
                         <div class="panel-footer">
                             <span class="pull-left">{{ link }}</span>
                             <span class="pull-right"><i class="fa fa-arrow-circle-right"></i></span>
@@ -117,283 +423,7 @@
                     </a>
             </div>
         </div>
-    </div>
-    {#<div class="row">
-        <div class="col-lg-3 col-md-6">
-            <div class="panel panel-yellow">
-                <div class="panel-heading">
-                    <div class="row">
-                        <div class="col-xs-3">
-                            <i class="fa fa-eur fa-5x"></i>
-                        </div>
-                        <div class="col-xs-9 text-right">
-                            <div class="huge">{{ render(controller('AppBundle:Default:totalSalesAmount')) }}</div>
-                            <div>Total de dinero recaudado por las ventas</div>
-                        </div>
-                    </div>
-                </div>
-                <a href="{{ path('sale_new') }}">
-                    <div class="panel-footer">
-                        <span class="pull-left">Añadir venta</span>
-                        <span class="pull-right"><i class="fa fa-arrow-circle-right"></i></span>
-
-                        <div class="clearfix"></div>
-                    </div>
-                </a>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-6">
-            <div class="panel panel-red">
-                <div class="panel-heading">
-                    <div class="row">
-                        <div class="col-xs-12 text-right">
-                            <div class="huge">{{ render(controller('AppBundle:Default:lastFeedPurchase')) |localizeddate('short','none','es') }}</div>
-                            <div><br>Fecha última compra de pienso</div>
-                        </div>
-                    </div>
-                </div>
-                <a href="{{ path('purchase_new') }}">
-                    <div class="panel-footer">
-                        <span class="pull-left">Añadir compra</span>
-                        <span class="pull-right"><i class="fa fa-arrow-circle-right"></i></span>
-
-                        <div class="clearfix"></div>
-                    </div>
-                </a>
-            </div>
-        </div>
-    </div>#}
-    {#<div class="row">
-        <div class="col-lg-3 col-md-6">
-            <div class="panel panel-purple">
-                <div class="panel-heading">
-                    <div class="row">
-                        <div class="col-xs-3">
-                            <i class="fa fa-gift fa-5x"></i>
-                        </div>
-                        <div class="col-xs-9 text-right">
-                            <div class="huge">{{ " " }}</div>
-                            <div><br>Regalos</div>
-                        </div>
-                    </div>
-                </div>
-                <a href="{{ path('gift_new') }}">
-                    <div class="panel-footer">
-                        <span class="pull-left">Añadir regalo</span>
-                        <span class="pull-right"><i class="fa fa-arrow-circle-right"></i></span>
-
-                        <div class="clearfix"></div>
-                    </div>
-                </a>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-6">
-            <div class="panel panel-greener">
-                <div class="panel-heading">
-                    <div class="row">
-                        <div class="col-xs-3">
-                            <i class="fa fa-barcode fa-5x"></i>
-                        </div>
-                        <div class="col-xs-9 text-right">
-                            <div class="huge">{{ " " }}</div>
-                            <div><br>Lotes</div>
-                        </div>
-                    </div>
-                </div>
-                <a href="{{ path('batch_new') }}">
-                    <div class="panel-footer">
-                        <span class="pull-left">Añadir lote de animales</span>
-                        <span class="pull-right"><i class="fa fa-arrow-circle-right"></i></span>
-
-                        <div class="clearfix"></div>
-                    </div>
-                </a>
-            </div>
-        </div>
-    </div>#}
-
-
-
-    <div class="row">
-        <div class="col-lg-12"><h4>Lotes de gallinas activos</h4></div>
-        {% if active_hen_batch|length>0 %}
-            {% for batch in active_hen_batch %}
-                <div class="col-lg-3 col-md-6">
-                    {% if loop.index==6 %}
-                        {% set panel='panel-green' %}
-                        {% set icon='anchor' %}
-                    {% elseif loop.index==3 %}
-                        {% set panel='panel-purple' %}
-                        {% set icon='bug' %}
-                    {% elseif loop.index==5 %}
-                        {% set panel='panel-yellow' %}
-                        {% set icon='bell' %}
-                    {% elseif loop.index==1 %}
-                        {% set panel='panel-greener' %}
-                        {% set icon='balance-scale' %}
-                    {% elseif loop.index==2 %}
-                        {% set panel='panel-red' %}
-                        {% set icon='area-chart' %}
-                    {% elseif loop.index==4 %}
-                        {% set panel='panel-primary' %}
-                        {% set icon='code-fork' %}
-                    {% endif %}
-                    <div class="panel {{ panel }}">
-                        <div class="panel-heading">
-                            <div class="row">
-                                <div class="col-xs-3">
-                                    <i class="fa fa-{{ icon }} fa-5x"></i>
-                                </div>
-                                <div class="col-xs-9 text-right">
-                                    <div class="huge">{{ batch.getWeekLay }}</div>
-                                    <div><br>Puesta semanal</div>
-                                </div>
-                            </div>
-                        </div>
-                        <a href="{{ path('batch_show',{'id':batch.id}) }}">
-                            <div class="panel-footer">
-                                <span class="pull-left">Ver lote {{ batch.id }}</span>
-                                <span class="pull-right"><i class="fa fa-arrow-circle-right"></i></span>
-
-                                <div class="clearfix"></div>
-                            </div>
-                        </a>
-                    </div>
-                </div>
-            {% endfor %}
-
-        {% else %}
-            <p>No hay lotes de gallinas activos</p>
-        {% endif %}
-    </div>
-
-    <div class="row">
-        <div class="col-lg-12"><h4>Lotes de pollos activos</h4></div>
-        {% if active_hen_batch|length>0 %}
-            {% for batch in active_chicken_batch %}
-                <div class="col-lg-3 col-md-6">
-                    {% if loop.index==1 %}
-                        {% set panel='panel-green' %}
-                        {% set icon='s15' %}
-                    {% elseif loop.index==2 %}
-                        {% set panel='panel-purple' %}
-                        {% set icon='ravelry' %}
-                    {% elseif loop.index==3 %}
-                        {% set panel='panel-yellow' %}
-                        {% set icon='podcast' %}
-                    {% elseif loop.index==4 %}
-                        {% set panel='panel-greener' %}
-                        {% set icon='tencent-weibo' %}
-                    {% elseif loop.index==5 %}
-                        {% set panel='panel-red' %}
-                        {% set icon='code' %}
-                    {% elseif loop.index==6 %}
-                        {% set panel='panel-primary' %}
-                        {% set icon='s15' %}
-                    {% endif %}
-                    <div class="panel {{ panel }}">
-                        <div class="panel-heading">
-                            <div class="row">
-                                <div class="col-xs-3">
-                                    <i class="fa fa-{{ icon }} fa-5x"></i>
-                                </div>
-                                <div class="col-xs-9 text-right">
-                                    <div class="huge">{{ batch.amount }}</div>
-                                    <div><br>Animales</div>
-                                </div>
-                            </div>
-                        </div>
-                        <a href="{{ path('batch_show',{'id':batch.id}) }}">
-                            <div class="panel-footer">
-                                <span class="pull-left">Ver lote {{ batch.id }} </span>
-                                <span class="pull-right"><i class="fa fa-arrow-circle-right"></i></span>
-
-                                <div class="clearfix"></div>
-                            </div>
-                        </a>
-                    </div>
-                </div>
-            {% endfor %}
-
-        {% else %}
-            <p>No hay lotes de gallinas activos</p>
-        {% endif %}
-    </div>
-
-
-
-
-
-
-
-
-
-
-    <div class="row">
-        <div class="col-lg-8">
-            <div class="panel panel-default">
-                <div class="panel-heading">
-                    Evolución de la puesta semanal
-                </div>
-                <div class="panel-body">
-                    <div id="layweekchart" style="position: relative;height: 250px;"></div>
-                </div>
-            </div>
-        </div>
-        <div class="col-lg-4">
-            <div class="panel panel-default">
-                <div class="panel-heading">
-                    <i class="fa fa-bell fa-fw"></i> Resumen de datos {{ 'now'|date ('Y') }}
-                </div>
-                <!-- /.panel-heading -->
-                <div class="panel-body">
-                    <div class="list-group">
-                        <a class="list-group-item" href="{{ path('statistic_eggs') }}">
-                            <i class="fa fa-comment fa-fw"></i> Huevos puestos
-                                    <span class="pull-right text-muted small"><em> {{ total_lay_eggs }}</em>
-                                    </span>
-                        </a>
-                       {# <a class="list-group-item" href="{{ path('statistic_sale') }}">
-                            <i class="fa fa-twitter fa-fw"></i> Huevos vendidos
-                                    <span class="pull-right text-muted small"><em>{{ total_sale_eggs }}</em>
-                                    </span>
-                        </a>
-                        <a class="list-group-item" href="{{ path('statistic_feed') }}">
-                            <i class="fa fa-tasks fa-fw"></i> Pienso de gallina (Kg)
-                                    <span class="pull-right text-muted small"><em>{{ hens_feed_year }}</em>
-                                    </span>
-                        </a>#}
-                        <a class="list-group-item" href="{{ path('statistic_user_collect',{'user_id':app.user.id}) }}">
-                            <i class="fa fa-envelope fa-fw"></i> Kg pollo
-                                    <span class="pull-right text-muted small"><em>{{ total_chicken }}</em>
-                                    </span>
-                        </a>
-
-                        <a class="list-group-item" href="{{ path('statistic_feed') }}">
-                            <i class="fa fa-tasks fa-fw"></i> Kg de verduras
-                                    <span class="pull-right text-muted small"><em>{{ render(controller('AppBundle:Default:totalProductionYear')) }}</em>
-                                    </span>
-                        </a>
-                        <a class="list-group-item" href="{{ path('statistic_feed') }}">
-                            <i class="fa fa-upload fa-fw"></i> Trigo (Kg)
-                                    <span class="pull-right text-muted small"><em>{{ wheat_year }}</em>
-                                    </span>
-                        </a>
-                        <a class="list-group-item" href="{{ path('statistic_feed') }}">
-                            <i class="fa fa-bolt fa-fw"></i> Pienso de pollos (Kg)
-                                    <span class="pull-right text-muted small"><em>{{ broiler_feed_year }}</em>
-                                    </span>
-                        </a>
-                    </div>
-                    <!-- /.list-group -->
-                    {#<a class="btn btn-default btn-block" href="{{ path('statistic') }}">Ver todas las
-                        estadísticas</a>#}
-
-                </div>
-                <!-- /.panel-body -->
-            </div>
-        </div>
-    </div>
+    {% endif %}
 {% endblock %}
 {% block graph_js %}
     <script>

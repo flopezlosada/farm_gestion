@@ -12,4 +12,22 @@ use Doctrine\ORM\EntityRepository;
  */
 class CompostPileRepository extends EntityRepository
 {
+    public function findActivePile()
+    {
+        $em = $this->getEntityManager();
+        $dql = "select m from AppBundle:CompostPile m order by m.start_date desc";
+        $query = $em->createQuery($dql);
+
+        $query->setMaxResults(1);
+
+        if (count($query->getResult()))
+        {
+            return $query->getSingleResult();
+        }
+
+        return null;
+
+    }
+
+
 }

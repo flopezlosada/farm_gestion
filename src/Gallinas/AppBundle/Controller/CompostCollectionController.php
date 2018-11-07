@@ -80,10 +80,11 @@ class CompostCollectionController extends Controller
             $em = $this->getDoctrine()->getManager();
             $entity->setWeek(date('W', strtotime($entity->getCollectDate())));
             $entity->setCollectDate(new \DateTime($entity->getCollectDate()));
+            $entity->setCompostPile($em->getRepository("AppBundle:CompostPile")->findActivePile());
             $em->persist($entity);
             $em->flush();
 
-            return $this->redirect($this->generateUrl('compostcollection_show', array('id' => $entity->getId())));
+            return $this->redirect($this->generateUrl('compostcollectionpoint_show', array('id' => $entity->getCompostCollectionPoint()->getId())));
         }
 
         return $this->render('AppBundle:CompostCollection:new.html.twig', array(
