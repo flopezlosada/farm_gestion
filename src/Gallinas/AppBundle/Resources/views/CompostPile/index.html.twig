@@ -1,0 +1,36 @@
+{% extends '::layout_list.html.twig' %}
+
+    {% block title_wrapper %}Listado {% endblock %}
+    {% block main -%}
+
+        <table id="table_list"
+               class="table table-striped table-bordered table-hover dataTable no-footer"
+               aria-describedby="dataTables-example_info">
+            <thead>
+            <tr>
+                <th>Pila</th>
+                <th>Fecha inicio</th>
+                <th>Fecha de fin</th>
+                <th>Tiempo recogida</th>
+                <th>Fecha de abonado</th>
+                <th>Kilos recogidos</th>
+                <th>Acciones</th>
+
+            </tr>
+            </thead>
+            <tbody>
+            {% for pile in compost_piles %}
+                <tr>
+                    <td>{{ pile.id }}</td>
+                    <td>{{ pile.start_date|localizeddate('long','none','es') }}</td>
+                    <td>{{ pile.end_date|localizeddate('long','none','es') }}</td>
+                    <td></td>
+                    <td></td>
+                    <td>{{ pile.getAmount }}</td>
+                    <td></td>
+                    <td>{% if movement.amount %}{{ movement.amount|abs }} días{% else %}Activo actualmente{% endif %}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    {% endblock %}

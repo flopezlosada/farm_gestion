@@ -10,250 +10,262 @@
 <!-- /.navbar-header -->
 
 <ul class="nav navbar-top-links navbar-right">
-
-<li class="dropdown">
-    <a class="dropdown-toggle" data-toggle="dropdown" href="#">
-        <i class="fa fa-envelope fa-fw"></i> <i class="fa fa-caret-down"></i>
-    </a>
-    <ul class="dropdown-menu dropdown-messages">
-        <li>
-            <a href="#">
-                <div>
-                    <strong>John Smith</strong>
+    {% if is_granted("ROLE_GUEST") %}
+        <li class="dropdown">
+            <a class="dropdown-toggle" data-toggle="dropdown" href="#">
+                <i class="fa fa-envelope fa-fw"></i> <i class="fa fa-caret-down"></i>
+            </a>
+            <ul class="dropdown-menu dropdown-messages">
+                <li>
+                    <a href="#">
+                        <div>
+                            <strong>John Smith</strong>
                                     <span class="pull-right text-muted">
                                         <em>Yesterday</em>
                                     </span>
-                </div>
-                <div>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque eleifend...</div>
-            </a>
-        </li>
-        <li class="divider"></li>
-        <li>
-            <a href="#">
-                <div>
-                    <strong>John Smith</strong>
+                        </div>
+                        <div>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque eleifend...</div>
+                    </a>
+                </li>
+                <li class="divider"></li>
+                <li>
+                    <a href="#">
+                        <div>
+                            <strong>John Smith</strong>
                                     <span class="pull-right text-muted">
                                         <em>Yesterday</em>
                                     </span>
-                </div>
-                <div>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque eleifend...</div>
-            </a>
-        </li>
-        <li class="divider"></li>
-        <li>
-            <a href="#">
-                <div>
-                    <strong>John Smith</strong>
+                        </div>
+                        <div>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque eleifend...</div>
+                    </a>
+                </li>
+                <li class="divider"></li>
+                <li>
+                    <a href="#">
+                        <div>
+                            <strong>John Smith</strong>
                                     <span class="pull-right text-muted">
                                         <em>Yesterday</em>
                                     </span>
-                </div>
-                <div>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque eleifend...</div>
-            </a>
-        </li>
-        <li class="divider"></li>
-        <li>
-            <a class="text-center" href="#">
-                <strong>Read All Messages</strong>
-                <i class="fa fa-angle-right"></i>
-            </a>
-        </li>
-    </ul>
-    <!-- /.dropdown-messages -->
-</li>
-<!-- /.dropdown -->
-
-<li class="dropdown">
-    <a class="dropdown-toggle" data-toggle="dropdown" href="#">
-        <i class="fa fa-tasks fa-fw"></i> <i class="fa fa-caret-down"></i>
-    </a>
-    <ul class="dropdown-menu dropdown-tasks">
-        <li>
-            <a href="#">
-                <div>
-                    <p>
-                        <strong>Task 1</strong>
-                        <span class="pull-right text-muted">40% Complete</span>
-                    </p>
-
-                    <div class="progress progress-striped active">
-                        <div class="progress-bar progress-bar-success" role="progressbar" aria-valuenow="40"
-                             aria-valuemin="0" aria-valuemax="100" style="width: 40%">
-                            <span class="sr-only">40% Complete (success)</span>
                         </div>
-                    </div>
-                </div>
-            </a>
+                        <div>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque eleifend...</div>
+                    </a>
+                </li>
+                <li class="divider"></li>
+                <li>
+                    <a class="text-center" href="#">
+                        <strong>Read All Messages</strong>
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+                </li>
+            </ul>
+            <!-- /.dropdown-messages -->
         </li>
-        <li class="divider"></li>
-        <li>
-            <a href="#">
-                <div>
-                    <p>
-                        <strong>Task 2</strong>
-                        <span class="pull-right text-muted">20% Complete</span>
-                    </p>
+        <!-- /.dropdown -->
 
-                    <div class="progress progress-striped active">
-                        <div class="progress-bar progress-bar-info" role="progressbar" aria-valuenow="20"
-                             aria-valuemin="0" aria-valuemax="100" style="width: 20%">
-                            <span class="sr-only">20% Complete</span>
+        <li class="dropdown">
+            <a class="dropdown-toggle" data-toggle="dropdown" href="#">
+                <i class="fa fa-tasks fa-fw"></i> <i class="fa fa-caret-down"></i>
+            </a>
+            <ul class="dropdown-menu dropdown-tasks">
+                <li>
+                    <a href="#">
+                        <div>
+                            <p>
+                                <strong>Task 1</strong>
+                                <span class="pull-right text-muted">40% Complete</span>
+                            </p>
+
+                            <div class="progress progress-striped active">
+                                <div class="progress-bar progress-bar-success" role="progressbar" aria-valuenow="40"
+                                     aria-valuemin="0" aria-valuemax="100" style="width: 40%">
+                                    <span class="sr-only">40% Complete (success)</span>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                </div>
-            </a>
-        </li>
-        <li class="divider"></li>
-        <li>
-            <a href="#">
-                <div>
-                    <p>
-                        <strong>Task 3</strong>
-                        <span class="pull-right text-muted">60% Complete</span>
-                    </p>
+                    </a>
+                </li>
+                <li class="divider"></li>
+                <li>
+                    <a href="#">
+                        <div>
+                            <p>
+                                <strong>Task 2</strong>
+                                <span class="pull-right text-muted">20% Complete</span>
+                            </p>
 
-                    <div class="progress progress-striped active">
-                        <div class="progress-bar progress-bar-warning" role="progressbar" aria-valuenow="60"
-                             aria-valuemin="0" aria-valuemax="100" style="width: 60%">
-                            <span class="sr-only">60% Complete (warning)</span>
+                            <div class="progress progress-striped active">
+                                <div class="progress-bar progress-bar-info" role="progressbar" aria-valuenow="20"
+                                     aria-valuemin="0" aria-valuemax="100" style="width: 20%">
+                                    <span class="sr-only">20% Complete</span>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                </div>
-            </a>
-        </li>
-        <li class="divider"></li>
-        <li>
-            <a href="#">
-                <div>
-                    <p>
-                        <strong>Task 4</strong>
-                        <span class="pull-right text-muted">80% Complete</span>
-                    </p>
+                    </a>
+                </li>
+                <li class="divider"></li>
+                <li>
+                    <a href="#">
+                        <div>
+                            <p>
+                                <strong>Task 3</strong>
+                                <span class="pull-right text-muted">60% Complete</span>
+                            </p>
 
-                    <div class="progress progress-striped active">
-                        <div class="progress-bar progress-bar-danger" role="progressbar" aria-valuenow="80"
-                             aria-valuemin="0" aria-valuemax="100" style="width: 80%">
-                            <span class="sr-only">80% Complete (danger)</span>
+                            <div class="progress progress-striped active">
+                                <div class="progress-bar progress-bar-warning" role="progressbar" aria-valuenow="60"
+                                     aria-valuemin="0" aria-valuemax="100" style="width: 60%">
+                                    <span class="sr-only">60% Complete (warning)</span>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                </div>
-            </a>
-        </li>
-        <li class="divider"></li>
-        <li>
-            <a class="text-center" href="#">
-                <strong>See All Tasks</strong>
-                <i class="fa fa-angle-right"></i>
-            </a>
-        </li>
-    </ul>
-    <!-- /.dropdown-tasks -->
-</li>
-<!-- /.dropdown -->
-<li class="dropdown">
-    <a class="dropdown-toggle" data-toggle="dropdown" href="#">
-        <i class="fa fa-bell fa-fw"></i> <i class="fa fa-caret-down"></i>
-    </a>
-    <ul class="dropdown-menu">
-        <li>
-            <a href="{{ path("sale_new") }}">
-                <div>
-                    <i class="fa fa-comment fa-fw"></i> Añadir Venta
+                    </a>
+                </li>
+                <li class="divider"></li>
+                <li>
+                    <a href="#">
+                        <div>
+                            <p>
+                                <strong>Task 4</strong>
+                                <span class="pull-right text-muted">80% Complete</span>
+                            </p>
 
-                </div>
-            </a>
+                            <div class="progress progress-striped active">
+                                <div class="progress-bar progress-bar-danger" role="progressbar" aria-valuenow="80"
+                                     aria-valuemin="0" aria-valuemax="100" style="width: 80%">
+                                    <span class="sr-only">80% Complete (danger)</span>
+                                </div>
+                            </div>
+                        </div>
+                    </a>
+                </li>
+                <li class="divider"></li>
+                <li>
+                    <a class="text-center" href="#">
+                        <strong>See All Tasks</strong>
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+                </li>
+            </ul>
+            <!-- /.dropdown-tasks -->
         </li>
-        <li class="divider"></li>
-        <li>
-            <a href="{{ path("lay_new") }}">
-                <div>
-                    <i class="fa fa-twitter fa-fw"></i> Añadir Puesta
-                </div>
+        <!-- /.dropdown -->
+        <li class="dropdown">
+            <a class="dropdown-toggle" data-toggle="dropdown" href="#">
+                <i class="fa fa-bell fa-fw"></i> <i class="fa fa-caret-down"></i>
             </a>
-        </li>
-        <li>
-            <a href="{{ path("collect_new") }}">
-                <div>
-                    <i class="fa fa-sellsy fa-fw"></i> Añadir Reparto
+            <ul class="dropdown-menu">
+                <li>
+                    <a href="{{ path("sale_new") }}">
+                        <div>
+                            <i class="fa fa-comment fa-fw"></i> Añadir Venta
 
-                </div>
-            </a>
-        </li>
-        <li class="divider"></li>
-        <li>
-            <a href="{{ path("gift_new") }}">
-                <div>
-                    <i class="fa fa-subway fa-fw"></i> Añadir Regalo
-                </div>
-            </a>
-        </li>
-        <li class="divider"></li>
-        <li>
-            <a href="{{ path("batch_new") }}">
-                <div>
-                    <i class="fa fa-envelope fa-fw"></i> Añadir Lote
+                        </div>
+                    </a>
+                </li>
+                <li class="divider"></li>
+                <li>
+                    <a href="{{ path("lay_new") }}">
+                        <div>
+                            <i class="fa fa-twitter fa-fw"></i> Añadir Puesta
+                        </div>
+                    </a>
+                </li>
+                <li>
+                    <a href="{{ path("collect_new") }}">
+                        <div>
+                            <i class="fa fa-sellsy fa-fw"></i> Añadir Reparto
 
-                </div>
-            </a>
-        </li>
-        <li class="divider"></li>
-        <li>
-            <a href="{{ path("batch") }}">
-                <div>
-                    <i class="fa fa-tasks fa-fw"></i> Listado de Lotes
-                    {#<span class="pull-right text-muted small">asdasdfaf</span>#}
-                </div>
-            </a>
-        </li>
-        <li class="divider"></li>
-        <li>
-            <a href="{{ path("event_new") }}">
-                <div>
-                    <i class="fa fa-upload fa-fw"></i> Añadir Evento
-                </div>
-            </a>
-        </li>
-        <li class="divider"></li>
-        <li>
-            <a href="{{ path("production_new") }}">
-                <div>
-                    <i class="fa fa-binoculars fa-fw"></i> Añadir Producción
-                </div>
-            </a>
-        </li>
-        <li>
-            <a href="{{ path("production_show_basket") }}">
-                <div>
-                    <i class="fa fa-shopping-basket fa-fw"></i> Listado de cestas
-                </div>
-            </a>
-        </li>
-       {# <li class="divider"></li>
-        <li>
-            <a class="text-center" href="#">
-                <strong>See All Alerts</strong>
-                <i class="fa fa-angle-right"></i>
-            </a>
-        </li>#}
-    </ul>
-    <!-- /.dropdown-alerts -->
-</li>
-<!-- /.dropdown -->
+                        </div>
+                    </a>
+                </li>
+                <li class="divider"></li>
+                <li>
+                    <a href="{{ path("gift_new") }}">
+                        <div>
+                            <i class="fa fa-subway fa-fw"></i> Añadir Regalo
+                        </div>
+                    </a>
+                </li>
+                <li class="divider"></li>
+                <li>
+                    <a href="{{ path("batch_new") }}">
+                        <div>
+                            <i class="fa fa-envelope fa-fw"></i> Añadir Lote
 
-<li class="dropdown">
-    <a class="dropdown-toggle" data-toggle="dropdown" href="#">
-        <i class="fa fa-user fa-fw"></i> <i class="fa fa-caret-down"></i>
-    </a>
-    <ul class="dropdown-menu dropdown-user">
-        <li><a href="{{ path('fos_user_profile_show') }}"><i class="fa fa-user fa-fw"></i> Mi perfil</a>
+                        </div>
+                    </a>
+                </li>
+                <li class="divider"></li>
+                <li>
+                    <a href="{{ path("batch") }}">
+                        <div>
+                            <i class="fa fa-tasks fa-fw"></i> Listado de Lotes
+                            {#<span class="pull-right text-muted small">asdasdfaf</span>#}
+                        </div>
+                    </a>
+                </li>
+                <li class="divider"></li>
+                <li>
+                    <a href="{{ path("event_new") }}">
+                        <div>
+                            <i class="fa fa-upload fa-fw"></i> Añadir Evento
+                        </div>
+                    </a>
+                </li>
+                <li class="divider"></li>
+                <li>
+                    <a href="{{ path("production_new") }}">
+                        <div>
+                            <i class="fa fa-binoculars fa-fw"></i> Añadir Producción
+                        </div>
+                    </a>
+                </li>
+                <li>
+                    <a href="{{ path("production_show_basket") }}">
+                        <div>
+                            <i class="fa fa-shopping-basket fa-fw"></i> Listado de cestas
+                        </div>
+                    </a>
+                </li>
+                {# <li class="divider"></li>
+                 <li>
+                     <a class="text-center" href="#">
+                         <strong>See All Alerts</strong>
+                         <i class="fa fa-angle-right"></i>
+                     </a>
+                 </li>#}
+            </ul>
+            <!-- /.dropdown-alerts -->
         </li>
-        <li><a href="#"><i class="fa fa-gear fa-fw"></i> Settings</a>
+        <!-- /.dropdown -->
+
+        <li class="dropdown">
+            <a class="dropdown-toggle" data-toggle="dropdown" href="#">
+                <i class="fa fa-user fa-fw"></i> <i class="fa fa-caret-down"></i>
+            </a>
+            <ul class="dropdown-menu dropdown-user">
+                <li><a href="{{ path('fos_user_profile_show') }}"><i class="fa fa-user fa-fw"></i> Mi perfil</a>
+                </li>
+                <li><a href="#"><i class="fa fa-gear fa-fw"></i> Settings</a>
+                </li>
+                <li class="divider"></li>
+                <li><a href="{{ path('fos_user_security_logout') }}"><i class="fa fa-sign-out fa-fw"></i> Logout</a>
+                </li>
+            </ul>
+            <!-- /.dropdown-user -->
         </li>
-        <li class="divider"></li>
-        <li><a href="{{ path('fos_user_security_logout') }}"><i class="fa fa-sign-out fa-fw"></i> Logout</a>
+        <!-- /.dropdown -->
+    {% elseif is_granted("ROLE_COMPOST") %}
+        <li class="dropdown">
+            <a class="dropdown-toggle" data-toggle="dropdown" href="#">
+                <i class="fa fa-user fa-fw"></i> <i class="fa fa-caret-down"></i>
+            </a>
+            <ul class="dropdown-menu dropdown-user">
+                <li><a href="{{ path('fos_user_security_logout') }}"><i class="fa fa-sign-out fa-fw"></i> Logout</a>
+                </li>
+            </ul>
+            <!-- /.dropdown-user -->
         </li>
-    </ul>
-    <!-- /.dropdown-user -->
-</li>
-<!-- /.dropdown -->
+    {% endif %}
 </ul>

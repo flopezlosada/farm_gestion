@@ -1,0 +1,21 @@
+<li>
+    <a href="#"><i class="fa fa-ticket fa-fw"></i>Compost<span class="fa arrow"></span></a>
+    <ul class="nav nav-third-level">
+        <li>
+            <a href="{{ path('compostcollection_new') }}">Añadir recogida</a>
+        </li>
+        <li>
+            <a href="{{ path('compostcollection') }}">Listado Puntos de recogida</a>
+        </li>
+        <li><a href="{{ path('compostcollection_resume') }}">Resumen</a></li>
+        {% if is_granted("ROLE_GUEST") %}
+            <li>
+                <a href="{{ path('compostpile_new') }}">Añadir Pila</a>
+            </li>
+            <li>
+                <a href="{{ path('compostpile') }}">Listado de pilas</a>
+            </li>
+        {% endif %}
+    </ul>
+    <!-- /.nav-second-level -->
+</li>

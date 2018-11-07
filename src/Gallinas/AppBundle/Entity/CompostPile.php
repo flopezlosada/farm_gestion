@@ -17,11 +17,11 @@ use Gedmo\Mapping\Annotation as Gedmo;
  *
  * @ORM\Table(name="compost_pile")
  * @ORM\Entity(repositoryClass="Gallinas\AppBundle\Entity\CompostPileRepository")
+ *
  */
-
 class CompostPile
 {
-     /**
+    /**
      * @var integer $id
      *
      * @ORM\Column(name="id", type="integer")
@@ -43,7 +43,7 @@ class CompostPile
      * Fecha de compra del pedido
      * @Assert\Date()
      * @var string $end_date
-     * @ORM\Column(name="end_date", type="date")
+     * @ORM\Column(name="end_date", type="date", nullable=true)
      */
     private $end_date;
 
@@ -80,7 +80,7 @@ class CompostPile
     /**
      * Get id
      *
-     * @return integer 
+     * @return integer
      */
     public function getId()
     {
@@ -103,7 +103,7 @@ class CompostPile
     /**
      * Get start_date
      *
-     * @return \DateTime 
+     * @return \DateTime
      */
     public function getStartDate()
     {
@@ -126,7 +126,7 @@ class CompostPile
     /**
      * Get end_date
      *
-     * @return \DateTime 
+     * @return \DateTime
      */
     public function getEndDate()
     {
@@ -159,7 +159,7 @@ class CompostPile
     /**
      * Get compost_collections
      *
-     * @return \Doctrine\Common\Collections\Collection 
+     * @return \Doctrine\Common\Collections\Collection
      */
     public function getCompostCollections()
     {
@@ -182,7 +182,7 @@ class CompostPile
     /**
      * Get created
      *
-     * @return \DateTime 
+     * @return \DateTime
      */
     public function getCreated()
     {
@@ -205,10 +205,21 @@ class CompostPile
     /**
      * Get updated
      *
-     * @return \DateTime 
+     * @return \DateTime
      */
     public function getUpdated()
     {
         return $this->updated;
+    }
+
+    public function getAmount()
+    {
+        $amount = 0;
+
+        foreach ($this->getCompostCollections() as $collection) {
+            $amount += $collection->getAmount();
+        }
+
+        return $amount;
     }
 }
