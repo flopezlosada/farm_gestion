@@ -1,0 +1,50 @@
+    {% extends '::layout_list.html.twig' %}
+
+    {% block title_wrapper %}Listado {% endblock %}
+    {% block main -%}
+    <h1>Basket list</h1>
+
+    <table class="records_list">
+        <thead>
+        <tr>
+                <th>Id</th>
+                <th>Date</th>
+                <th>Amount</th>
+                <th>Note</th>
+                <th>Week</th>
+            <th>Actions</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for entity in entities %}
+        <tr>
+                    <td>
+                        <a href="{{ path('basket_show', { 'id': entity.id }) }}">{{ entity.id }}</a>
+                    </td>
+                    <td>{% if entity.date %}{{ entity.date|date('Y-m-d H:i:s') }}{% endif %}</td>
+                    <td>{{ entity.amount }}</td>
+                    <td>{{ entity.note }}</td>
+                    <td>{{ entity.week }}</td>
+                    <td>
+                <ul>
+                    <li>
+                        <a href="{{ path('basket_show', { 'id': entity.id }) }}">show</a>
+                    </li>
+                    <li>
+                        <a href="{{ path('basket_edit', { 'id': entity.id }) }}">edit</a>
+                    </li>
+                </ul>
+                    </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+            <ul>
+            <li>
+                <a href="{{ path('basket_new') }}">
+                    Create a new entry
+                </a>
+            </li>
+        </ul>
+        {% endblock %}

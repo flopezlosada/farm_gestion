@@ -1,3 +1,7 @@
+app_basket:
+    resource: "@AppBundle/Resources/config/routing/basket.xml"
+    prefix:   /basket
+
 app_compostpile:
     resource: "@AppBundle/Resources/config/routing/compostpile.xml"
     prefix:   /compostpile

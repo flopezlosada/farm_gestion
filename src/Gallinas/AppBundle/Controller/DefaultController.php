@@ -3,6 +3,7 @@
 namespace Gallinas\AppBundle\Controller;
 
 use ADesigns\CalendarBundle\Event\CalendarEvent;
+use Gallinas\AppBundle\Entity\Basket;
 use Symfony\Bundle\FrameworkBundle\Controller\Controller;
 use Sensio\Bundle\FrameworkExtraBundle\Configuration\Method;
 use Sensio\Bundle\FrameworkExtraBundle\Configuration\Route;
@@ -10,6 +11,7 @@ use Sensio\Bundle\FrameworkExtraBundle\Configuration\Template;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Validator\Constraints\DateTime;
 
 class DefaultController extends Controller
 {
@@ -81,6 +83,28 @@ class DefaultController extends Controller
 
         }
 
+/* creando las cestas
+        for ($i = 1; $i <= 52; $i++) {
+            $basket = new Basket();
+            $basket->setWeek($i);
+            $monday = date('d F Y', strtotime(2018 . "W" . str_pad($i, 2, "0", STR_PAD_LEFT)));
+            echo $monday."<br>";
+            $friday = strtotime("+4 day", strtotime($monday));
+            $basket->setDate(new \DateTime(date("Y-m-d", $friday)));
+            $em->persist($basket);
+
+        }
+        $em->flush();*/
+
+        $productions=$em->getRepository("AppBundle:Production")->findAll();
+        foreach($productions as $production)
+        {
+            $basket=$em->getRepository("AppBundle:Basket")->findBasketByWeekYear($production->getProductionDate()->format('Y-m-d'));
+            $production->setBasket($basket);
+            $em->persist($production);
+        }
+        $em->flush();
+
 
         return array(
             'week_lay' => array_reverse($week_lay),
@@ -119,7 +143,7 @@ class DefaultController extends Controller
         $em = $this->getDoctrine()->getManager();
         $collection_amount = $em->getRepository('AppBundle:CompostCollection')->findTotalAmountCollection(date('Y'));
 
-        return new Response(number_format($collection_amount/1000,1));
+        return new Response(number_format($collection_amount / 1000, 1));
     }
 
     public function totalProductionYearAction()

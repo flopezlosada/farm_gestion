@@ -48,4 +48,9 @@
         <default key="year" xsi:nil="true"/>
     </route>
 
+    <route id="production_show_basket_detail" path="/basket/detail/show/{id}">
+        <default key="_controller">AppBundle:Production:basketDetail</default>
+        <default key="year" xsi:nil="true"/>
+    </route>
+
 </routes>

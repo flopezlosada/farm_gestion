@@ -37,7 +37,13 @@ class Production
      */
     private $crop;
 
-
+    /**
+     * Notas
+     * @var string $note
+     * @ORM\Column(name="note", type="text", nullable=true)
+     */
+    private $note;
+    
     /**
      * @var smallint $crop_working
      * @ORM\ManyToOne(targetEntity="CropWorking", inversedBy="productions")
@@ -89,6 +95,14 @@ class Production
      * @ORM\Column(name="week", type="integer")
      */
     private $week;
+
+    /**
+     *
+     * @var smallint $batch
+     * @ORM\ManyToOne(targetEntity="Basket", inversedBy="productions")
+     */
+    private $basket;
+
 
     public function __toString()
     {
@@ -284,5 +298,51 @@ class Production
     public function getCropWorking()
     {
         return $this->crop_working;
+    }
+
+    /**
+     * Set basket
+     *
+     * @param \Gallinas\AppBundle\Entity\Basket $basket
+     * @return Production
+     */
+    public function setBasket(\Gallinas\AppBundle\Entity\Basket $basket = null)
+    {
+        $this->basket = $basket;
+
+        return $this;
+    }
+
+    /**
+     * Get basket
+     *
+     * @return \Gallinas\AppBundle\Entity\Basket 
+     */
+    public function getBasket()
+    {
+        return $this->basket;
+    }
+
+    /**
+     * Set note
+     *
+     * @param string $note
+     * @return Production
+     */
+    public function setNote($note)
+    {
+        $this->note = $note;
+
+        return $this;
+    }
+
+    /**
+     * Get note
+     *
+     * @return string 
+     */
+    public function getNote()
+    {
+        return $this->note;
     }
 }

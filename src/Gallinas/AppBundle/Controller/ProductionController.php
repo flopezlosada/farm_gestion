@@ -2,6 +2,7 @@
 
 namespace Gallinas\AppBundle\Controller;
 
+use Gallinas\AppBundle\Entity\Basket;
 use Proxies\__CG__\Gallinas\AppBundle\Entity\CropWorking;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Bundle\FrameworkBundle\Controller\Controller;
@@ -56,11 +57,24 @@ class ProductionController extends Controller
         $form = $this->createCreateForm($entity);
         $form->handleRequest($request);
 
-        if ($form->isValid())
-        {
+        if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
             $entity->setWeek(date('W', strtotime($entity->getProductionDate())));
+            $basket = $em->getRepository("AppBundle:Basket")->findBasketByWeekYear($entity->getProductionDate());
+            if (!$basket) {
+                $basket = new Basket();
+                $monday = date('d F', strtotime(date('Y', strtotime($entity->getProductionDate())) . "W" . str_pad($entity->getWeek(), 2, "0", STR_PAD_LEFT)));
+                //echo strtotime(date('Y', strtotime($entity->getProductionDate())) . "W" . str_pad($entity->getWeek(), 2, "0", STR_PAD_LEFT))."<br>";
+                //echo date('Y', strtotime($entity->getProductionDate()));
+                $friday = strtotime("+4 day", strtotime($monday));
+                //echo $friday;
+                $basket->setDate(new \DateTime(date("Y-m-d", $friday)));
+                //echo $basket->getDate()->format(("Y-m-d"));
+                $basket->setWeek($entity->getWeek());
+                $em->persist($basket);
+            }
             $entity->setProductionDate(new \DateTime($entity->getProductionDate()));
+            $entity->setBasket($basket);
             $em->persist($entity);
             $em->flush();
 
@@ -96,11 +110,10 @@ class ProductionController extends Controller
      * Displays a form to create a new Production entity.
      *
      */
-    public function newAction($crop_working_id=null)
+    public function newAction($crop_working_id = null)
     {
         $entity = new Production();
-        if ($crop_working_id)
-        {
+        if ($crop_working_id) {
             $em = $this->getDoctrine()->getManager();
             $crop_working = $em->getRepository("AppBundle:CropWorking")->find($crop_working_id);
             $entity->setCropWorking($crop_working);
@@ -123,8 +136,7 @@ class ProductionController extends Controller
 
         $entity = $em->getRepository('AppBundle:Production')->find($id);
 
-        if (!$entity)
-        {
+        if (!$entity) {
             throw $this->createNotFoundException('Unable to find Production entity.');
         }
 
@@ -146,11 +158,10 @@ class ProductionController extends Controller
 
         $entity = $em->getRepository('AppBundle:Production')->find($id);
 
-        if (!$entity)
-        {
+        if (!$entity) {
             throw $this->createNotFoundException('Unable to find Production entity.');
         }
-        $entity->setProductionDate($entity->getProductionDate()->format('Y-m-d')) ;
+        $entity->setProductionDate($entity->getProductionDate()->format('Y-m-d'));
 
         $editForm = $this->createEditForm($entity);
         $deleteForm = $this->createDeleteForm($id);
@@ -191,24 +202,22 @@ class ProductionController extends Controller
 
         $entity = $em->getRepository('AppBundle:Production')->find($id);
 
-        if (!$entity)
-        {
+        if (!$entity) {
             throw $this->createNotFoundException('Unable to find Production entity.');
         }
 
         $deleteForm = $this->createDeleteForm($id);
 
-        $entity->setProductionDate($entity->getProductionDate()->format('Y-m-d')) ;
+        $entity->setProductionDate($entity->getProductionDate()->format('Y-m-d'));
         $entity->setWeek(date('W', strtotime($entity->getProductionDate())));
         $editForm = $this->createEditForm($entity);
         $editForm->handleRequest($request);
 
-        if ($editForm->isValid())
-        {
-            $entity->setProductionDate(new \DateTime($entity->getProductionDate())) ;
+        if ($editForm->isValid()) {
+            $entity->setProductionDate(new \DateTime($entity->getProductionDate()));
             $em->flush();
 
-            return $this->redirect($this->generateUrl('production_edit', array('id' => $id)));
+            return $this->redirect($this->generateUrl('production_show_basket_detail', array('id' => $entity->getBasket()->getId())));
         }
 
         return $this->render('AppBundle:Production:edit.html.twig', array(
@@ -227,13 +236,11 @@ class ProductionController extends Controller
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
-        if ($form->isValid())
-        {
+        if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository('AppBundle:Production')->find($id);
 
-            if (!$entity)
-            {
+            if (!$entity) {
                 throw $this->createNotFoundException('Unable to find Production entity.');
             }
 
@@ -262,17 +269,14 @@ class ProductionController extends Controller
 
     public function basketAction($year)
     {
-        if (!$year)
-        {
+        if (!$year) {
             $year = date('Y');
         }
         $em = $this->getDoctrine()->getManager();
         $weeks = $em->getRepository("AppBundle:Production")->findWeeks($year);//semanas en las que hay producción declarada. Equivale a semanas en las que se entrega cesta.
 
 
-
-        foreach ($weeks as $week)
-        {
+        foreach ($weeks as $week) {
             $baskets[$week["week"]] = $em->getRepository("AppBundle:Production")->findProductionInWeek($week["week"], $year);
         }
 
@@ -281,6 +285,27 @@ class ProductionController extends Controller
             'weeks' => $weeks,
             'year' => $year,
             'baskets' => $baskets
+
+        ));
+    }
+
+    public function basketDetailAction($id)
+    {
+        $em = $this->getDoctrine()->getManager();
+
+        $basket = $em->getRepository('AppBundle:Basket')->find($id);
+        $amount=0;
+        foreach ($basket->getProductions() as $production) {
+            $amount+=$production->getAmount();
+        }
+        $basket->setAmount($amount);
+        $em->persist($basket);
+        $em->flush();
+
+
+        return $this->render('AppBundle:Production:basket_detail.html.twig', array(
+            'basket' => $basket,
+            'year' => $basket->getDate()->format('Y')
 
         ));
     }

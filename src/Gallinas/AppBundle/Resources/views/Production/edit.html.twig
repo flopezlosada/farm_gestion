@@ -1,46 +1,53 @@
-    {% extends '::layout_crud.html.twig' %}
+{% extends '::layout_crud.html.twig' %}
 
     {% block title_wrapper %}Editar {% endblock %}
     {% block main -%}
-    <div class="panel panel-default">
-        <div class="panel-heading">
+        <div class="panel panel-default">
+            <div class="panel-heading">
 
-        </div>
-        <div class="panel-body">
-            {{ form_start(edit_form, {'action': path('production_update',{'id':entity.id}), 'method': 'put','attr': {'role': 'form' }}) }}
-            {{ form_errors(edit_form) }}
-            <div class="row">
-                <div class="col-lg-6">
-                    <div class="form-group">
-                        {{ form_errors(edit_form.crop_working) }}
-                        <label>{{ form_label(edit_form.crop_working) }}</label>
-                        {{ form_widget(edit_form.crop_working,{'attr':{'class':'form-control'}}) }}
-                    </div>
-                    <div class="form-group">
-                        {{ form_errors(edit_form.production_date) }}
-                        <label>{{ form_label(edit_form.production_date) }}</label>
-                        {{ form_widget(edit_form.production_date,{'attr':{'placeholder':'Fecha de cosecha'}}) }}
-                    </div>
-                    <div class="form-group">
-                        {{ form_errors(edit_form.amount) }}
-                        <label>{{ form_label(edit_form.amount) }}</label>
-                        {{ form_widget(edit_form.amount,{'attr':{'class':'form-control','placeholder':'Kilogramos de producción'}}) }}
-                    </div>
-
-                </div>
             </div>
-            {{ form_widget(edit_form.submit,{'attr':{'class':'btn btn-default' }}) }}
-            {{ form_rest(edit_form) }}
-            {{ form_end(edit_form, {'render_rest': false}) }}
-            {{ form(edit_form) }}
+            <div class="panel-body">
+                {{ form_start(edit_form, {'action': path('production_update',{'id':entity.id}), 'method': 'put','attr': {'role': 'form' }}) }}
+                {{ form_errors(edit_form) }}
+                <div class="row">
+                    <div class="col-lg-6">
+                        <div class="form-group">
+                            {{ form_errors(edit_form.crop_working) }}
+                            <label>{{ form_label(edit_form.crop_working) }}</label>
+                            {{ form_widget(edit_form.crop_working,{'attr':{'class':'form-control'}}) }}
+                        </div>
+                        <div class="form-group">
+                            {{ form_errors(edit_form.production_date) }}
+                            <label>{{ form_label(edit_form.production_date) }}</label>
+                            {{ form_widget(edit_form.production_date,{'attr':{'placeholder':'Fecha de cosecha'}}) }}
+                        </div>
+                        <div class="form-group">
+                            {{ form_errors(edit_form.amount) }}
+                            <label>{{ form_label(edit_form.amount) }}</label>
+                            {{ form_widget(edit_form.amount,{'attr':{'class':'form-control','placeholder':'Kilogramos de producción'}}) }}
+                        </div>
+                        <div class="form-group">
+                            {{ form_errors(edit_form.note) }}
+                            <label>{{ form_label(edit_form.note) }}</label>
+                            {{ form_widget(edit_form.note,{'attr':{'class':'tinymce','placeholder':'Anotaciones'}}) }}
+                        </div>
+                    </div>
+                </div>
+                {{ form_widget(edit_form.submit,{'attr':{'class':'btn btn-default' }}) }}
+                {{ form_rest(edit_form) }}
+                {{ form_end(edit_form, {'render_rest': false}) }}
+                {{ form(edit_form) }}
+            </div>
         </div>
-    </div>
         <ul class="record_actions">
-    <li>
-        <a href="{{ path('production_show_basket') }}">
-            Volver al listado de cestas
-        </a>
-    </li>
-    <li>{{ form(delete_form) }}</li>
-</ul>
+            <li>
+
+                <a href="{{ path('production_show_basket_detail', {'id': entity.getBasket.id}) }}">Volver a la cesta de esta producción</a>
+            </li>
+            <li><a href="{{ path('production_show_basket') }}">
+                    Volver al listado de cestas
+                </a></li>
+            <li>{{ form(delete_form) }}</li>
+        </ul>
+        {{ tinymce_init() }}
     {% endblock %}

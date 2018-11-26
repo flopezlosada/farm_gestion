@@ -12,7 +12,7 @@
                 {% for key,basket in baskets %}
                     <div class="col-lg-6">
                         <div class="panel  {{ cycle(['panel-info', 'panel-success','panel-warning','panel-danger'], loop.index0) }}">
-                            <div class="panel-heading"><h4>Cesta de la semana {{ key }} ({{ getDateFromWeek(year,key) }}
+                            <div class="panel-heading"><h4><a href="{{ path('production_show_basket_detail', {'id': basket[0].getBasket.id}) }}"> Cesta de la semana {{ key }} ({{ getDateFromWeek(year,key) }}</a>
                                     )</h4></div>
                             <div class="panel-body">
                                 <h4>Listado de producción:</h4>

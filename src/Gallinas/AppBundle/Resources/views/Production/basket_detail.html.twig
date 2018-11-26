@@ -1,0 +1,47 @@
+{% extends '::layout_show.html.twig' %}
+
+
+{% block main -%}
+
+    <div class="panel panel-success">
+        <div class="panel-heading"><h4>Detalle de la cesta de la semana {{ basket.week }}
+                ({{ getDateFromWeek(year,basket.week) }}) | <a href="{{ path('basket_edit', {'id': basket.id}) }}">Editar</a></h4></div>
+        <div class="panel-body">
+
+
+            <p><strong>Kilos recogidos:</strong> {{ basket.amount }} kg</p>
+
+            <p><strong>Notas: </strong>{{ basket.note |raw }}</p>
+            {% for production in basket.getProductions %}
+                <div class="col-lg-12">
+                    <div class="panel  {{ cycle(['panel-info', 'panel-success','panel-warning','panel-danger'], loop.index0) }}">
+                        <div class="panel-heading">
+                            <a href="{{ path('cropworking_show', {'year': year, 'id': production.cropworking.getId}) }}">{{ production.cropworking.getName }}</a>
+                            = {{ production.amount }} kg | <a
+                                    href="{{ path('production_edit', {'id': production.id}) }}">Editar</a>
+                        </div>
+                        <div class="panel-body">
+                            {{ production.note|raw }}
+
+
+
+                        </div>
+
+                    </div>
+                </div>
+                {% if loop.index is even %}
+                    <div class="clearfix"></div>
+                {% endif %}
+            {% endfor %}
+
+        </div>
+        <div class="panel-footer"><a href="{{ path('production_show_basket', {'year':year}) }}">Volver al listao de cestas</a> </div>
+
+    </div>
+
+{% endblock %}
+
+{% block title_wrapper %}
+
+{% endblock %}
+

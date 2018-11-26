@@ -17,6 +17,7 @@ class ProductionType extends AbstractType
     {
         $builder
             ->add('production_date', 'text', array('label' => 'Fecha de producción', 'attr' => array('class' => 'datepicker form-control')))
+            ->add('note',null,array('label'=>'Anotaciones'))
             ->add('amount', null, array('label' => 'Cantidad (en kg)'))
             ->add('crop_working', null, array('label' => 'Cultivo', 'query_builder' => function (EntityRepository $er)
             {
