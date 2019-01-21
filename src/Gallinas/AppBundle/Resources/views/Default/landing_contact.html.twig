@@ -1,11 +1,46 @@
 {% extends 'AppBundle:Blog:frontend_index.html.twig' %}
-{% block main_description %}Contacto{% endblock %}
+{% block main_description %}<span class="contact">Contacto</span>{% endblock %}
 
 {% block post_main -%}
-<div class="blog-item">
-    {% block flash_messages %}
-        {% for flashMessage in app.session.flashbag.get('notice') %}     <div class="flash-notice">         {{ flashMessage }}     </div> {% endfor %}
-        {% for flashMessage in app.session.flashbag.get('error') %}     <div class="flash-error">         {{ flashMessage }}     </div> {% endfor %}
-    {% endblock %}
-</div>
+    <div class="blog-item">
+        {% block flash_messages %}
+            {% for flashMessage in app.session.flashbag.get('notice') %}
+                <div class="flash-notice">         {{ flashMessage }}     </div> {% endfor %}
+            {% for flashMessage in app.session.flashbag.get('error') %}
+                <div class="flash-error">         {{ flashMessage }}     </div> {% endfor %}
+        {% endblock %}
+    </div>
+    <div class="row">
+        <div class="col-md-7 contact-form wow animated fadeInLeft">
+            {{ form_start(form) }}
+
+            <div class="input-field">
+                {{ form_errors(form.name) }}
+                {{ form_widget(form.name) }}
+            </div>
+            <div class="input-field">
+                {{ form_errors(form.email) }}
+                {{ form_widget(form.email) }}
+            </div>
+            <div class="input-field">
+                {{ form_errors(form.subject) }}
+                {{ form_widget(form.subject) }}
+            </div>
+            <div class="input-field">
+                {{ form_errors(form.body) }}
+                {{ form_widget(form.body) }}
+            </div>
+            <div class="input-field">
+                {{ form_errors(form.captcha) }}
+                {{ form_widget(form.captcha) }}
+            </div>
+            {{ form_widget((form.submit)) }}
+
+            {{ form_end(form) }}
+
+        </div>
+    </div>
+{% endblock %}
+{% block more_css %}
+    <link rel="stylesheet" href="{{ asset('bundles/app/frontend/css/main.css') }}"/>
 {% endblock %}

@@ -1,0 +1,13 @@
+{% extends 'AppBundle:Blog:frontend_index.html.twig' %}
+{% block main_description %}<span class="contact">Contacto</span>{% endblock %}
+
+{% block post_main -%}
+    <div class="blog-item">
+        {% block flash_messages %}
+            {% for flashMessage in app.session.flashbag.get('notice') %}
+                <div class="flash-notice">         {{ flashMessage }}     </div> {% endfor %}
+            {% for flashMessage in app.session.flashbag.get('error') %}
+                <div class="flash-error">         {{ flashMessage }}     </div> {% endfor %}
+        {% endblock %}
+    </div>
+{% endblock %}

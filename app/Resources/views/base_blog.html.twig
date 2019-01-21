@@ -1,5 +1,8 @@
 {% extends '::base_front.html.twig' %}
     {% block stylesheets %}
+
+
+
         <!-- Bootstrap core CSS -->
         <link rel="stylesheet" href="{{ asset('bundles/app/frontend/css/bootstrap.min.css') }}"/>
         <link rel="stylesheet" href="{{ asset('bundles/app/frontend/blog/css/theme.css') }}"/>
@@ -17,6 +20,13 @@
         <!-- Custom styles for this template -->
         <link rel="stylesheet" href="{{ asset('bundles/app/frontend/blog/css/style.css') }}"/>
         <link rel="stylesheet" href="{{ asset('bundles/app/frontend/blog/css/style-responsive.css') }}"/>
+
+        <link href='http://fonts.googleapis.com/css?family=Open+Sans:400,300,700' rel='stylesheet' type='text/css'>
+
+
+
+
+
     {% endblock %}
 {% block head_js %}
     <!-- HTML5 shim and Respond.js IE8 support of HTML5 tooltipss and media queries -->
@@ -57,7 +67,7 @@
                         <a href="{{ path('blog_category_show',{'id':5}) }}">Galerías</a>
                     </li>
                     <li>
-                        <a href="{{ path('homepage') }}#contact">Contact</a>
+                        <a href="{{ path('app_contact') }}">Contacto</a>
                     </li>
                     <li><input class="form-control search" placeholder=" Buscar" type="text"></li>
                     {# <li class="dropdown">
