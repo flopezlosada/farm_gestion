@@ -79,7 +79,7 @@
                     <li><a class="external" href="{{ path('blog_category_show',{'id':4}) }}">Recetas</a></li>
                     <li><a class="external" href="{{ path('blog_category_show',{'id':5}) }}">Galerías</a></li>
                     <li><a class="external" href="http://csavegadejarama.org/seeddms51x/www/index.php">Recursos</a></li>
-                    <li><a href="#contact">Contacto</a></li>
+                    <li><a class="external" href="{{ path('app_contact') }}">Contacto</a></li>
                 </ul>
             </nav>
             <!-- /main nav -->
@@ -565,36 +565,14 @@
             <div class="container">
                 <div class="row">
 
-                    <div class="sec-title text-center wow animated fadeInDown">
+                    <div class="col-md-5 sec-title text-center wow animated fadeInDown">
                         <h2>Contacto</h2>
 
-                        <p>Envíanos un mensaje</p>
+                        <p><a href="{{ path('app_contact') }}"> Envíanos un mensaje</a></p>
                     </div>
 
 
-                    <div class="col-md-7 contact-form wow animated fadeInLeft">
-                        {{ form_start(form) }}
 
-                            <div class="input-field">
-                                {{ form_widget(form.name)}}
-                            </div>
-                            <div class="input-field">
-                                {{ form_widget(form.email)}}
-                            </div>
-                            <div class="input-field">
-                                {{ form_widget(form.subject)}}
-                            </div>
-                            <div class="input-field">
-                                {{ form_widget(form.body)}}
-                            </div>
-                            <div class="input-field">
-                                {{ form_widget(form.captcha)}}
-                            </div>
-                            {{ form_widget((form.submit)) }}
-
-                        {{ form_end(form) }}
-
-                    </div>
 
                     <div class="col-md-5 wow animated fadeInRight">
                         <address class="contact-details">
