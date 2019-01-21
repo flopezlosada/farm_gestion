@@ -6,7 +6,7 @@
 {% block main -%}
 
     <div class="panel panel-default">
-        <div class="panel-heading"><h4>Listado de cestas año {{ year }}</h4></div>
+        <div class="panel-heading"><h4>Listado de cestas año {{ year }}. Kilogramos recogidos: {{ render(controller('AppBundle:Default:totalProductionYear',{'year':year}))|round }} kg</h4></div>
         <div class="panel-body">
             <div class="row">
                 {% for key,basket in baskets %}

@@ -101,7 +101,7 @@
 
                 <div class="sl-slider">
 
-                    <div class="sl-slide" data-orientation="horizontal" data-slice1-rotation="-25"
+                    {#<div class="sl-slide" data-orientation="horizontal" data-slice1-rotation="-25"
                          data-slice2-rotation="-25" data-slice1-scale="2" data-slice2-scale="2">
 
                         <div class="bg-img bg-img-1"></div>
@@ -114,8 +114,22 @@
                             </div>
                         </div>
 
-                    </div>
+                    </div>#}
+                    <div class="sl-slide" data-orientation="horizontal" data-slice1-rotation="-25"
+                         data-slice2-rotation="-25" data-slice1-scale="2" data-slice2-scale="2">
 
+                        <div class="bg-img bg-img-5"></div>
+
+                        <div class="slide-caption">
+                            <div class="caption-content">
+                                <h2 class="animated fadeInDown">CSA Vega de Jarama</h2>
+                                <span class="animated fadeInDown">Asociación de Productorxs y Consumidorxs</span>
+                                <a href="#contact" class="btn btn-blue btn-effect">¡Hazte Socix!</a>
+                            </div>
+                        </div>
+
+
+                    </div>
                     <div class="sl-slide" data-orientation="vertical" data-slice1-rotation="10"
                          data-slice2-rotation="-15"
                          data-slice1-scale="1.5" data-slice2-scale="1.5">
@@ -160,21 +174,7 @@
 
                     </div>
 
-                    <div class="sl-slide" data-orientation="horizontal" data-slice1-rotation="-25"
-                         data-slice2-rotation="-25" data-slice1-scale="2" data-slice2-scale="2">
 
-                        <div class="bg-img bg-img-5"></div>
-
-                        <div class="slide-caption">
-                            <div class="caption-content">
-                                <h2 class="animated fadeInDown">CSA Vega de Jarama</h2>
-                                <span class="animated fadeInDown">Asociación de Productorxs y Consumidorxs</span>
-                                <a href="#contact" class="btn btn-blue btn-effect">¡Hazte Socix!</a>
-                            </div>
-                        </div>
-
-
-                    </div>
                 <!-- /sl-slider -->
 
                 <!--
@@ -573,21 +573,27 @@
 
 
                     <div class="col-md-7 contact-form wow animated fadeInLeft">
-                        <form action="{{ path('app_contact') }}" method="post">
+                        {{ form_start(form) }}
+
                             <div class="input-field">
-                                <input type="text" name="name" class="form-control" placeholder="Nombre...">
+                                {{ form_widget(form.name)}}
                             </div>
                             <div class="input-field">
-                                <input type="email" name="email" class="form-control" placeholder="Email...">
+                                {{ form_widget(form.email)}}
                             </div>
                             <div class="input-field">
-                                <input type="text" name="subject" class="form-control" placeholder="Asunto...">
+                                {{ form_widget(form.subject)}}
                             </div>
                             <div class="input-field">
-                                <textarea name="body" class="form-control" placeholder="Mensaje..."></textarea>
+                                {{ form_widget(form.body)}}
                             </div>
-                            <button type="submit" id="submit" class="btn btn-blue btn-effect">Enviar</button>
-                        </form>
+                            <div class="input-field">
+                                {{ form_widget(form.captcha)}}
+                            </div>
+                            {{ form_widget((form.submit)) }}
+
+                        {{ form_end(form) }}
+
                     </div>
 
                     <div class="col-md-5 wow animated fadeInRight">

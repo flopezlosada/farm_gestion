@@ -10,7 +10,7 @@ blog_category_show:
         defaults: { _controller: AppBundle:Blog:show_category }
         path:   /blog/category/{id}
 app_contact:
-        defaults: { _controller: AppBundle:Default:contacted }
+        defaults: { _controller: AppBundle:Gestion:contacted }
         path:   /contact
 landing_contact:
         defaults: { _controller: AppBundle:Default:landind_contact }
