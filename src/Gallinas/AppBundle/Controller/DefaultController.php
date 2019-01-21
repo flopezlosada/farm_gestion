@@ -96,7 +96,7 @@ class DefaultController extends Controller
         }
         $em->flush();*/
 
-        $productions=$em->getRepository("AppBundle:Production")->findAll();
+  /*      $productions=$em->getRepository("AppBundle:Production")->findAll();
         foreach($productions as $production)
         {
             $basket=$em->getRepository("AppBundle:Basket")->findBasketByWeekYear($production->getProductionDate()->format('Y-m-d'));
@@ -104,7 +104,7 @@ class DefaultController extends Controller
             $em->persist($production);
         }
         $em->flush();
-
+*/
 
         return array(
             'week_lay' => array_reverse($week_lay),
@@ -146,10 +146,14 @@ class DefaultController extends Controller
         return new Response(number_format($collection_amount / 1000, 1));
     }
 
-    public function totalProductionYearAction()
+    public function totalProductionYearAction($year=null)
     {
         $em = $this->getDoctrine()->getManager();
-        $production = $em->getRepository('AppBundle:Production')->findByYear(date('Y'));
+        if (!$year)
+        {
+            $year=date('Y');
+        }
+        $production = $em->getRepository('AppBundle:Production')->findByYear($year);
 
         return new Response($production);
     }
@@ -224,26 +228,6 @@ class DefaultController extends Controller
         );
     }
 
-    public function contactedAction(Request $request)
-    {
-        $message = \Swift_Message::newInstance()
-            ->setSubject('Contacto desde http://csavegadejarama.org')
-            ->setFrom('flopezlosada@gmail.com')
-            ->setTo('info@csavegadejarama.org')
-            ->setBody(
-                $this->renderView(
-                    'AppBundle:Default:contact_email.html.twig',
-                    array('name' => $request->get("name"), 'subject' => $request->get("subject"), 'body' => $request->get("body"), 'email' => $request->get('email'))
-                )
-            );
-        $this->get('mailer')->send($message);
-
-        $this->get('session')->getFlashBag()->add(
-            'notice',
-            'El mensaje se ha enviado correctamente'
-        );
-        return new RedirectResponse($this->generateUrl("landing_contact"));
-    }
 
 
     public function landind_contactAction()
