@@ -10,7 +10,7 @@ database:
   type: mysql
   version: "8.0"
 use_dns_when_possible: true
-composer_version: "2"
+composer_version: "2.2"  # LTS, compatible con la Flex 1.12.2 de la composer.lock
 nodejs_version: "16"
 web_environment:
   - APP_ENV=dev
@@ -18,8 +18,10 @@ web_environment:
   - MAILER_URL=smtp://localhost:1025
 hooks:
   post-start:
-    - exec: composer install --no-interaction
-    - exec: yarn install
+    # composer install se hace a mano la primera vez para resolver issues
+    # de allow-plugins interactivamente. Una vez verde, descomentar:
+    # - exec: composer install --no-interaction
+    - exec: echo "Container listo. Lanza 'ddev composer install' a mano."
 # Notas:
 # - PHP 7.4 elegido a propósito: es el mayor PHP con el que la composer.lock
 #   de marzo 2021 instala sin pelearse. Una vez verde, subiremos a 8.x progresivamente.
