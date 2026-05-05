@@ -1,0 +1,39 @@
+{% extends 'base.html.twig' %}
+{% block more_css %}
+    <style>
+        th, td {
+            border: 1px solid black;
+            border-collapse: collapse;
+            padding: 5px;
+        }
+
+        table {
+            border: 0px solid black;
+            border-collapse: collapse;
+            padding: 5px;
+        }
+
+        .huge {
+            font-size: 20px;
+            font-weight: bolder;
+
+        }
+
+        .division {
+            text-align: center;
+            border: 0px;
+            padding-top: 20px;
+        }
+    </style>
+{% endblock %}
+{% block body %}
+    {{ include('partner_basket_share/_pdf_table_list_basket.html.twig', {'entity':weekly_partners, 'class':'panel-info', 'type':'semanales' ,'basket_share_id':1}) }}
+    <div style="page-break-after:always;"></div>
+    {{ include('partner_basket_share/_pdf_table_list_basket.html.twig', {'entity':biweekly_partners, 'class':'panel-success', 'type':'quincenales','basket_share_id':2 }) }}
+    <div style="page-break-after:always;"></div>
+    {{ include('partner_basket_share/_pdf_table_list_basket_4_basket_share.html.twig', {'entity':old_half_basket_partners, 'class':'panel-danger', 'type':'semanales compartidas (antigua media cesta)','basket_share_id':4 }) }}
+
+    {{ include('partner_basket_share/_pdf_table_list_basket.html.twig', {'entity':monthly_partners, 'class':'panel-warning', 'type':'mensuales','basket_share_id':3 }) }}
+
+    {{ include('partner_basket_share/_pdf_table_list_basket.html.twig', {'entity':only_egg_partners, 'class':'panel-warning', 'type':'solo huevos','basket_share_id':5 }) }}
+{% endblock %}

@@ -1,0 +1,10 @@
+{% extends "FOSUserBundle::layout.html.twig" %}
+{% block more_css %}
+    <link rel="stylesheet" href="{{ asset('bundles/app/css/user_profile.css') }}"/>
+{% endblock %}
+{% block title_wrapper %}Perfil de Usuaria/o{% endblock %}
+{% block fos_user_content %}
+    {% include "FOSUserBundle:Profile:show_content.html.twig" %}
+{% endblock fos_user_content %}
+{% block logout %}{% endblock %}
+{% block warning %}{% endblock %}

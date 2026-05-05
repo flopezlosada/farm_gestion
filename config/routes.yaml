@@ -1,0 +1,35 @@
+
+#_liip_imagine:
+#    resource: "@LiipImagineBundle/Resources/config/routing.xml"
+
+
+controllers:
+    resource: '../src/Controller/'
+    type:     annotation
+
+homepage:
+        path:  /
+        #defaults: { _controller: App:Gestion:index }
+        controller: App\Controller\GestionController:index
+
+#
+dashboard:
+        path:  /gestion/dashboard
+        controller: App\Controller\DefaultController:dashboard
+
+calendar:
+        path:  /gestion/calendar
+        controller: App\Controller\DefaultController:calendar
+#
+#
+gallinas:
+  resource: "routes/routing.yml"
+  prefix:   /gestion
+
+#
+frontend:
+   resource: "routes/frontend.yml"
+   prefix:   /
+
+adesigns_calendar:
+  resource: "@ADesignsCalendarBundle/Resources/config/routing.xml"

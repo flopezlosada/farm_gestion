@@ -1,0 +1,13 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Edit PartnerEggShare{% endblock %}
+
+{% block body %}
+    <h1>Edit PartnerEggShare</h1>
+
+    {{ include('partner_egg_share/_form.html.twig', {'button_label': 'Update'}) }}
+
+    <a href="{{ path('partner_egg_share_index') }}">back to list</a>
+
+    {{ include('partner_egg_share/_delete_form.html.twig') }}
+{% endblock %}

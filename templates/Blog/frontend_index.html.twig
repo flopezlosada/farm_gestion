@@ -1,0 +1,41 @@
+{% extends 'base_blog.html.twig' %}
+{% block main_description %}Blog{% endblock %}
+    {% block container %}
+        <!--container start-->
+
+        <div class="container">
+
+            <div class="row">
+                <!--blog start-->
+                <div class="col-lg-9">
+                    {% block post_main %}
+                        {% for post in entities %}
+                            <div class="blog-item">
+                                {% include 'Blog/post_main.html.twig' with {'extend':0} %} {#es para que no muestre el contenido sino el leer más#}
+                            </div>
+                        {% endfor %}
+                        {{ knp_pagination_render(entities) }}
+                    {% endblock %}
+                </div>
+
+                <div class="col-lg-3">
+                    {% block aside %}
+                        <iframe frameborder="0" height="492px" src="https://www.goteo.org/widget/project/csa-vega-de-jarama" width="300px" scrolling="no"></iframe>
+                        <div class="blog-side-item">
+                            <div class="search-row">
+                                <input type="text" class="form-control" placeholder="Buscar">
+                            </div>
+                            <div class="category">
+                                <h3>
+                                    Categorías
+                                </h3>
+                                {{ render(controller('App\\Controller\\CategoryController::list_aside')) }}
+                            </div>
+                            {{ render(controller('App\\Controller\\BlogController:latest_post')) }}
+                        </div>
+                    {% endblock %}
+                </div>
+            </div>
+        </div>
+        <!--container end-->
+    {% endblock %}

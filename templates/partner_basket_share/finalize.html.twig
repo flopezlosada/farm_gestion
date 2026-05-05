@@ -1,0 +1,38 @@
+{% extends 'layout_crud.html.twig' %}
+
+{% block title %}Finalizar Cesta{% endblock %}
+
+{% block main %}
+    <h1>Finalizar Cesta para {{ partner_basket_share.partner }}</h1>
+    <div class="panel panel-default">
+
+        <div class="panel-body">
+            {{ form_start(form, {'action': path('partner_basket_share_finalize', {'id':partner_basket_share.id}), 'method': 'post','attr': {'role': 'form' }}) }}
+            <div class="row">
+                <div class="col-lg-6">
+                    <div class="form-group">
+                        {{ form_errors(form.end_date) }}
+                        <label>{{ form_label(form.end_date) }}</label>
+                        {{ form_widget(form.end_date,{'attr':{'placeholder':'Fecha de finalización de cesta'}}) }}
+                    </div>
+                </div>
+            </div>
+            {{ form_widget(form.save,{'attr':{'class':'btn btn-default'}}) }}
+            {{ form_rest(form) }}
+            {{ form_end(form, {'render_rest': false}) }}
+        </div>
+    </div>
+
+
+
+    <a href="{{ path('partner_basket_share_list_status', {'status': 1}) }}" >Volver al listado de cestas activas</a>
+
+
+{% endblock %}
+{% block specific_js %}
+    <script>
+        $('.datepicker').pickadate({
+            formatSubmit: 'yyyy-mm-dd',
+        })
+    </script>
+{% endblock %}

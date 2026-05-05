@@ -1,0 +1,12 @@
+{% extends 'layout_crud.html.twig' %}
+
+{% block title %}Nuevo grupo de recogida{% endblock %}
+
+{% block main %}
+    <h1>Añadir grupo de recogida</h1>
+
+    {{ include('weekly_basket_group/_form.html.twig') }}
+
+    <a href="{{ path('weekly_basket_group_index') }}">Ir al listado</a>
+{% endblock %}
+{% block specific_js %}{% endblock %}

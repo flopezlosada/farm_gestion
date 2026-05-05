@@ -1,0 +1,4 @@
+fc_load_events-public:
+    path: /fc-load-events-public
+    defaults:
+        _controller: CalendarBundle\Controller\CalendarController:loadAction

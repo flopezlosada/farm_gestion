@@ -1,0 +1,190 @@
+app_basket:
+    resource: "routing/basket.xml"
+    prefix:   /basket
+
+app_compostpile:
+    resource: "routing/compostpile.xml"
+    prefix:   /compostpile
+
+app_compostcollectionpoint:
+    resource: "routing/compostcollectionpoint.xml"
+    prefix:   /compost/compostcollectionpoint
+
+app_compostcollection:
+    resource: "routing/compostcollection.xml"
+    prefix:   /compost/compostcollection
+
+app_movement:
+    resource: "routing/movement.xml"
+    prefix:   /movement
+
+app_sector:
+    resource: "routing/sector.xml"
+    prefix:   /sector
+
+app_cropworking:
+    resource: "routing/cropworking.xml"
+    prefix:   /cropworking
+
+app_culturalwork:
+    resource: "routing/culturalwork.xml"
+    prefix:   /culturalwork
+
+app_culturalworktype:
+    resource: "routing/culturalworktype.xml"
+    prefix:   /culturalworktype
+
+app_zone:
+    resource: "routing/zone.xml"
+    prefix:   /zone
+
+app_seedwork:
+    resource: "routing/seedwork.xml"
+    prefix:   /seedwork
+
+app_production:
+    resource: "routing/production.xml"
+    prefix:   /production
+
+app_category:
+    resource: "routing/category.xml"
+    prefix:   /category
+
+app_gestion:
+        path:  /
+        controller: App\Controller\GestionController:gestionAction
+app_user:
+    resource: "routing/user.xml"
+    prefix:   /user
+
+app_task:
+    resource: "routing/task.xml"
+    prefix:   /task
+
+app_variety:
+    resource: "routing/variety.xml"
+    prefix:   /variety
+
+app_taskimage:
+    resource: "routing/taskimage.xml"
+    prefix:   /taskimage
+
+app_tasktype:
+    resource: "routing/tasktype.xml"
+    prefix:   /tasktype
+
+app_tasknote:
+    resource: "routing/tasknote.xml"
+    prefix:   /tasknote
+
+app_note:
+    resource: "routing/note.xml"
+    prefix:   /note
+
+app_crop:
+    resource: "routing/crop.xml"
+    prefix:   /crop
+
+app_labour:
+    resource: "routing/labour.xml"
+    prefix:   /labour
+
+app_harvest:
+    resource: "routing/harvest.xml"
+    prefix:   /harvest
+
+app_sack:
+    resource: "routing/sack.xml"
+    prefix:   /sack
+
+app_batchstatus:
+    resource: "routing/batchstatus.xml"
+    prefix:   /batchstatus
+
+app_fowldestination:
+    resource: "routing/fowldestination.xml"
+    prefix:   /fowldestination
+
+app_fowlstatus:
+    resource: "routing/fowlstatus.xml"
+    prefix:   /fowlstatus
+
+app_fowl:
+    resource: "routing/fowl.xml"
+    prefix:   /fowl
+
+app_batch:
+    resource: "routing/batch.xml"
+    prefix:   /batch
+
+app_product:
+    resource: "routing/product.xml"
+    prefix:   /product
+
+app_purchase:
+    resource: "routing/purchase.xml"
+    prefix:   /purchase
+
+app_sale:
+    resource: "routing/sale.xml"
+    prefix:   /sale
+
+app_recipient:
+    resource: "routing/recipient.xml"
+    prefix:   /recipient
+
+app_purchaser:
+    resource: "routing/purchaser.xml"
+    prefix:   /purchaser
+
+app_provider:
+    resource: "routing/provider.xml"
+    prefix:   /provider
+
+app_gift:
+    resource: "routing/gift.xml"
+    prefix:   /gift
+
+app_event:
+    resource: "routing/event.xml"
+    prefix:   /event
+
+app_collect:
+    resource: "routing/collect.xml"
+    prefix:   /collect
+
+app_lay:
+    resource: "routing/lay.xml"
+    prefix:   /lay
+
+app_statistic:
+    resource: "routing/statistic.xml"
+    prefix:   /statistic
+
+app_blog:
+    resource: "routing/blog.xml"
+    prefix:   /blog
+
+app_galery:
+    resource: "routing/gallery.xml"
+    prefix:   /gallery
+
+app_image:
+    resource: "routing/image.xml"
+    prefix:   /image
+
+app_video:
+    resource: "routing/video.xml"
+    prefix:   /video
+
+app_document:
+    resource: "routing/document.xml"
+    prefix:   /document
+
+app_audio:
+    resource: "routing/audio.xml"
+    prefix:   /audio
+
+app_booking:
+    resource: "routing/booking.xml"
+    prefix:   /booking

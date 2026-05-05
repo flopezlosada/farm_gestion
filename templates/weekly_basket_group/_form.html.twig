@@ -1,0 +1,17 @@
+{{ form_start(form) }}
+<div class="row">
+    <div class="col-lg-6">
+        <div class="form-group">
+            {{ form_errors(form.name) }}
+            <label>{{ form_label(form.name) }}</label>
+            {{ form_widget(form.name,{'attr':{'placeholder':'Nombre'}}) }}
+        </div>
+        <div class="form-group">
+            {{ form_errors(form.color) }}
+            <label>{{ form_label(form.color) }}</label>
+            {{ form_widget(form.color,{'attr':{'placeholder':'Apellidos'}}) }}
+        </div>
+        <p><button class="btn btn-outline btn-info">{{ button_label|default('Guardar') }}</button></p>
+        {{ form_end(form) }}
+    </div>
+</div>

@@ -1,0 +1,8 @@
+
+        <form method="post" action="{{ path('partner_delete', {'id': partner.id}) }}"
+              onsubmit="return confirm('¿Estás segura/o?');">
+            <p><input type="hidden" name="_method" value="DELETE"></p>
+            <input type="hidden" name="_token" value="{{ csrf_token('delete' ~ partner.id) }}">
+            <button class="btn btn-outline btn-danger">Eliminar</button>
+        </form>
+

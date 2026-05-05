@@ -1,0 +1,36 @@
+<h3>Listado de cestas {{ type }}. {{ entity|length }} cestas</h3>
+<table>
+    <thead>
+    <tr>
+        <th>Localidad</th>
+        <th>Nombre</th>
+        <th>Nº de cestas</th>
+        <th>Tipo de cesta</th>
+        <th>Huevos</th>
+        <th>Quién la recoge</th>
+    </tr>
+    </thead>
+    {% set has_basket=0 %}
+    {% for group in weekly_basket_groups %}
+        {% for basket in entity %}
+
+            {% if group.id==basket.partner.weeklyBasketGroup.id %}
+                {% if has_basket!=1 %}
+                    {% set has_basket=1 %}
+                    <tr>
+                        <td colspan="6" class="division"><span class="huge">{{ group.name }}</span></td>
+                    </tr>
+                {% endif %}
+                <tr>
+                    <td bgcolor="{{ group.color }}">{{ basket.partner.weeklyBasketGroup.name }} </td>
+                    <td>{{ basket.partner }}</td>
+                    <td>{{ basket.partner.getActiveBasket.amount }}</td>
+                    <td>{{ basket.basketShare.id==5?'Sin cesta':'Entera' }}</td>
+                    <td>{{ basket.partner.getActiveBasket.eggAmount }}</td>
+                    <td></td>
+                </tr>
+            {% endif %}
+        {% endfor %}
+        {% set has_basket=0 %}
+    {% endfor %}
+</table>

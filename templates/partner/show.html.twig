@@ -1,0 +1,274 @@
+{% extends 'layout_show.html.twig' %}
+{% block title %}Ficha de socia/o{% endblock %}
+{% block flash_messages %}
+    {% for message in app.flashes('success') %}
+        <div class="alert alert-success">
+            {{ message }}
+        </div>
+    {% endfor %}
+
+    {% for message in app.flashes('warning') %}
+        <div class="alert alert-warning">
+            {{ message }}
+        </div>
+    {% endfor %}
+{% endblock %}
+{% block main -%}
+
+    <div class="row">
+        <div class="col-lg-12">
+            <h1 class="page-header">Ficha de socia/o </h1>
+        </div>
+        <!-- /.col-lg-12 -->
+    </div>
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="panel panel-green">
+                <div class="panel-heading">
+                    {{ partner.name }} {{ partner.surname }}
+                </div>
+                <div class="panel-body">
+
+                    <ul class="nav nav-tabs">
+                        <li><a href="#home" data-toggle="tab">General</a>
+                        </li>
+                        <li><a href="#basket" data-toggle="tab">Cesta</a>
+                        </li>
+                        <li><a href="#history" data-toggle="tab">Historial</a>
+                        </li>
+                    </ul>
+                    <div class="tab-content">
+                        <div id="home" class="tab-pane fade active in ">
+                            {% if  partner.isActive==1 %}
+                                {% if partner.hasActiveBasket %}
+                                    <div class="alert alert-success">
+                                        <p>Es una/un socia/o con cesta {{ partner.getActiveBasket.basketShare }}</p>
+                                    </div>
+                                {% else %}
+                                    <div class="alert alert-info">
+                                        <p>Es una/un socia/o activa/o pero sin cesta</p>
+                                    </div>
+                                {% endif %}
+                            {% else %}
+                                <div class="alert alert-warning">
+                                    <p>Es una/un socia/o que no está activa/o</p>
+                                </div>
+                            {% endif %}
+
+                            <div class="col-lg-8">
+                                <p><strong>Nombre completo: </strong> {{ partner.name }} {{ partner.surname }}</p>
+                                {% if  partner.parent is null %}
+                                    <p><strong>Familiares: </strong>Es familiar
+                                    principal
+                                    {% if partner.relatives|length==0 %} pero no hay definidos familiares.
+                                    {% else %}
+                                        de las/os siguientes socias/os
+                                        <ul>
+                                            {% for relative in partner.relatives %}
+                                                <li>
+                                                    <a href="{{ path('partner_show', {'id': relative.id}) }}">{{ relative.name }} {{ relative.surname }}</a>
+                                                    | <a href="{{ path('remove_family', {'partner1_id': partner.id, 'partner2_id': relative.id}) }}">Quitar relación</a>
+                                                </li>
+                                            {% endfor %}
+                                        </ul>
+                                    {% endif %}
+                                {% else %}
+                                    <p><strong>Familiares: </strong>Es familiar relacionado con <a
+
+                                                href="{{ path('partner_show', {'id': partner.parent.id}) }}">{{ partner.parent.name }} {{ partner.parent.surname }}</a>
+                                    </p>
+                                {% endif %}
+
+                                {% if  partner.getActiveBasket and partner.getActiveBasket.basketShare.id==4 %}
+                                    {% if partner.sharePartner %}
+                                        <p><strong>Comparte con: </strong><a
+                                                    href="{{ path('partner_show', {'id': partner.sharePartner.id}) }}"> {{ partner.sharePartner }}</a>
+                                            |
+                                            <a href="{{ path('remove_share_partner', {'partner1_id': partner.id, 'partner2_id': partner.sharePartner.id}) }}">Quitar
+                                                relación</a>
+                                        </p>
+                                    {% else %}
+                                        <div class="alert alert-danger">
+                                            <p><strong>Comparte con: </strong>No se ha definido la/el socia/o con la/el
+                                                que comparte la cesta semanal</p>
+                                        </div>
+                                    {% endif %}
+                                {% endif %}
+
+                                <p><strong>Dirección: </strong> {{ partner.address }} - {{ partner.city }}
+                                    ({{ partner.state }})</p>
+                                <p><strong>Teléfono: </strong> {{ partner.celular }}</p>
+                                <p><strong>DNI: </strong>{{ partner.dNI }}</p>
+                                <p><strong>¿Recibe correos de productos
+                                        cárnicos? </strong>{{ partner.eatMeat? "Sí": "No" }}</p>
+                                <p><strong>Fecha de
+                                        inscripción: </strong>{{ partner.inscriptionDate ? partner.inscriptionDate|localizeddate('long','none','es') : '' }}
+                                </p>
+                                <p><strong>Email: </strong>{{ partner.email }}</p>
+                                <p><strong>¿Ha rellenado la ficha? </strong>
+                                    {% if (partner.hasFile) %}
+                                        Sí <a
+                                            href="{{ asset('uploads/partner/images/' ~partner.registrationFormImage) }}">Ver
+                                        imagen</a>
+                                    {% else %}
+                                        No
+                                    {% endif %}
+                                </p>
+                                <p><strong>¿Está activa/o? </strong>{{ partner.isActive? "Sí": "No" }}</p>
+                                <p><strong>Forma de pago: </strong>{{ partner.sharePayment.name }}</p>
+
+                                <p><strong>Grupo de recogida: </strong>{{ partner.weeklyBasketGroup }}</p>
+
+
+                            </div>
+                            {% if is_granted('ROLE_COOP') %}
+                                <div class="col-lg-4">
+                                    <div class="well">
+                                        <h4>Acciones</h4>
+                                        <p>
+                                            <a href="{{ path('partner_edit', {'id': partner.id}) }}">
+                                                <button class="btn btn-outline btn-success" type="button">
+                                                    Editar ficha
+                                                </button>
+                                            </a>
+                                            {% if partner.getActiveBasket and  partner.getActiveBasket.basketShare.id==4 and partner.sharePartner is null %}
+                                                <a href="{{ path('family', {'id': partner.id,'type':'add_share_partner'}) }}">
+                                                    <button class="btn btn-outline btn-info" type="button">
+                                                        ¿Comparte con?
+                                                    </button>
+                                                </a>
+
+                                            {% endif %}
+                                        </p>
+                                        {% if partner.isActive==1 %}
+                                            <p>
+                                                <a href="{{ path('partner_demote', {'id': partner.id}) }}">
+                                                    <button class="btn btn-outline btn-danger" type="button">
+                                                        Dar de baja
+                                                    </button>
+                                                </a>
+                                                <a href="{{ path('family', {'id': partner.id,'type':'add_family'}) }}">
+                                                    <button class="btn btn-outline btn-warning" type="button">
+                                                        Añadir familiar
+                                                    </button>
+                                                </a>
+                                            </p>
+                                            {% if not partner.hasActiveBasket %}
+                                                <p>
+                                                    <a href="{{ path('partner_add_basket', {'id': partner.id}) }}">
+                                                        <button class="btn btn-outline btn-info" type="button">
+                                                            Añadir cesta
+                                                        </button>
+                                                    </a>
+                                                </p>
+                                            {% endif %}
+                                        {% else %}
+                                            <p>
+                                                <a href="{{ path('partner_promote', {'id': partner.id}) }}">
+                                                    <button class="btn btn-outline btn-success" type="button">
+                                                        Activar
+                                                    </button>
+                                                </a>
+                                            </p>
+                                        {% endif %}
+
+                                    </div>
+                                </div>
+                            {% endif %}
+                        </div>
+                        <div id="basket" class="tab-pane fade">
+                            <h4></h4>
+                            <div class="row">
+                                <div class="col-lg-8">
+                                    <div class="panel panel-info">
+                                        <div class="panel-heading panel-info">
+                                            {% if partner.hasActiveBasket %}Cesta Actual {{ partner.activeBasket.amount==1?'':'(Esta/e socia/o tiene asociadas '~partner.activeBasket.amount~' cestas)' }}{% endif %}
+                                        </div>
+                                        <div class="panel-body">
+
+                                            {% if partner.hasActiveBasket %}
+                                                <p><strong>Tipo de cesta
+                                                        actual: </strong>{{ partner.getActiveBasket.basketShare }}
+                                                    {% if  partner.getActiveBasket.basketShare.id==3 %}
+                                                        ({{ partner.getActiveBasket.dayMonthOrder }}º viernes)
+                                                    {% endif %}
+                                                </p>
+                                                {% if partner.activeBasket.eggAmount %}
+                                                    <p><strong>Huevos: </strong>{{ partner.activeBasket.eggAmount }}
+                                                    {% if partner.activeBasket.basketShare.id==5 %}
+                                                        ({{ partner.activeBasket.eggPeriod }}
+                                                        {% if  partner.activeBasket.eggPeriod.id is defined and partner.activeBasket.eggPeriod.id==3 %}
+                                                            - {{ partner.getActiveBasket.dayMonthOrder }}º viernes
+                                                            {% endif %}
+                                                        )
+                                                        {% endif %}
+                                                    </p>
+                                                    {% else %}
+                                                    <p>Es una cesta sin huevos</p>
+                                                {% endif %}
+                                                <p><strong>Fecha de inicio
+                                                        cesta: </strong>{{ partner.getActiveBasket.startDate|date('d-m-Y') }}
+                                                </p>
+                                                {% if  partner.getActiveBasket.endDate %}
+                                                    <p><strong>Fecha de finalización
+                                                            cesta: </strong>{{ partner.getActiveBasket.endDate|date('d-m-Y') }}
+                                                    </p>
+                                                {% endif %}
+                                                <p><strong>Precio mensual: </strong>
+                                                    {% if partner.activeBasket.eggAmount %}
+                                                        {{ partner.getActiveBasket.monthPrice + partner.activeBasket.eggMonthPrice|number_format(2) }} €
+                                                    {% else %}
+                                                        {{ partner.getActiveBasket.monthPrice }}
+                                                    {% endif %}
+                                                </p>
+                                            {% endif %}
+
+
+                                        </div>
+                                    </div>
+                                </div>
+                                {% if is_granted('ROLE_COOP') %}
+                                    <div class="col-lg-4">
+                                        <div class="well">
+                                            <h4>Acciones</h4>
+                                            {% if partner.hasActiveBasket %}
+                                                <p>
+                                                    <a href="{{ path('partner_basket_share_finalize', {'id': partner.getActiveBasket.id}) }}">
+                                                        <button class="btn btn-outline btn-default" type="button">
+                                                            Dar de baja la cesta
+                                                        </button>
+                                                    </a>
+                                                </p>
+
+                                                <p>
+                                                    <a href="{{ path('partner_basket_share_edit', {'id': partner.getActiveBasket.id}) }}">
+                                                        <button class="btn btn-outline btn-success" type="button">
+                                                            Cambiar tipo de cesta
+                                                        </button>
+                                                    </a>
+                                                </p>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                {% endif %}
+                            </div>
+
+                        </div>
+                        <div id="history" class="tab-pane fade">
+                        </div>
+
+
+                    </div>
+                </div>
+            </div>
+            <!-- /.col-lg-12 -->
+        </div>
+    </div>
+
+    <ul class="list-inline">
+        <li><a href="{{ path('partner_index') }}">
+                <button class="btn btn-outline btn-info" type="button">Ir al listado</button>
+            </a></li>
+        {#<li>{{ include('partner/_delete_form.html.twig') }}</li>#}
+    </ul>
+{% endblock %}

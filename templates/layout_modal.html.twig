@@ -1,0 +1,35 @@
+{% extends 'layout_crud.html.twig' %}
+{% block body %}
+    <div class="admin-layout">
+        <div class="container">
+            <div class="row">
+                {% block main %}{% endblock %}
+            </div>
+        </div>
+    </div>
+{% endblock %}
+{% block more_css %}
+    <link rel="stylesheet" type="text/css" href="{{ asset('bundles/app/js/jquery-modal/jquery.modal.css') }} ">
+{% endblock %}
+{% block more_js %}
+    <script type="text/javascript" src="{{ asset('bundles/app/js/jquery.form.min.js') }}"></script>
+    <script src="{{ asset('bundles/app/js/scripts/admin.js') }}"></script>
+    <script>
+        // wait for the DOM to be loaded
+        $(document).ready(function () {
+            var options = {
+                success: updateEdition,
+                target: "#edition_aside_medias"
+            }
+
+            // bind 'myForm' and provide a simple callback function
+            $('#{{ 'form_'~object_class~'_'~entity.getClass|lower~'_'~foreign_key }}').ajaxForm(options);
+        });
+
+        function updateEdition() {
+            $('.jquery-modal').hide();
+            $('.modal').hide();
+        }
+
+    </script>
+{% endblock %}
