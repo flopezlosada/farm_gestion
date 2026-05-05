@@ -17,6 +17,13 @@ Software de gestión interna para la asociación: socixs, modalidades de cesta
 (semanal/quincenal/mensual), huevos por frecuencia/cantidad, calendario de
 reparto semanal, granja propia (huerta + gallinas + huevos + cosechas).
 
+**Importante: la app también sirve el frontend público** del blog de
+csavegadejarama.org. No es sólo gestión interna. `BlogController` tiene
+métodos `frontend_index`, `show`, `show_category` y `templates/Blog/*` +
+`templates/base_blog.html.twig` se renderizan para visitantes anónimos.
+Esto afecta a decisiones (ej. `whiteoctober/breadcrumbs-bundle` no se
+puede simplemente eliminar — se usa en el blog).
+
 **Punto de partida**: un proyecto Symfony 4.4 (`gestion_csa_4`) escrito en
 2020-2021 por el propio Paco y abandonado en marzo de 2021 sin haberse llegado
 a desplegar la parte de socios. Se está reviviendo y modernizando paso a paso,
@@ -32,55 +39,61 @@ todo el código de socios es código que nunca se ha ejercitado contra usuarixs
 reales, asumimos que tiene bugs latentes, y la regla "tests al tocar
 cualquier cosa de socios" es no negociable.
 
-## Estado actual: Fase 0 completada
+## Estado actual: Fases 0-3 completadas
 
-El código corre en local sobre DDEV (PHP 7.4 + MySQL 8 + Composer 2.2 LTS).
-Login funciona. Dashboard renderiza. Las pantallas centrales del módulo de
-socios cargan sin reventar (con BBDD vacía muestran un modal de "no hay
-datos", que es la UX correcta):
+DDEV con PHP 7.4 + MySQL 8 + Composer 2.2 LTS + Flex 1.22 (subido,
+ver decisiones). Login funciona, dashboard renderiza, las pantallas
+centrales de socios y de granja cargan limpias.
 
-- `/gestion/partner/`
-- `/gestion/partner/basket/share/`
-- `/gestion/weekly/basket/group/`
-- `/gestion/booking/`
-
-11 commits desde el snapshot baseline, todos pequeños y trazables. La
-historia git es legible y vale la pena revisarla — cada commit tiene en su
-mensaje el "por qué".
+- **Fase 0**: setup DDEV + auditoría + arreglos baseline.
+- **Fase 1**: fixtures con Faker (`CatalogFixtures`, `UserFixtures`,
+  `PartnerFixtures`). 30 socixs sintéticos + admin/admin + catálogos.
+- **Fase 2**: 11 smoke tests funcionales bajo `tests/Controller/`,
+  cubriendo login + 4 pantallas de socios + 5 de granja. BBDD `db_test`
+  separada en `.env.test`.
+- **Fase 3**: deps muertas fuera. Quitadas:
+  `incenteev/composer-parameter-handler`, `symfony/web-server-bundle`,
+  `twig/extensions` (migrado a `twig/intl-extra` + `twig/string-extra`),
+  `symfony/swiftmailer-bundle` (migrado a `symfony/mailer`).
+  **Pendiente de Fase 3**: `whiteoctober/breadcrumbs-bundle` queda en
+  pausa hasta tener PHP 8.x (todos los reemplazos requieren 8.1+).
 
 ## Hoja de ruta (orden de prioridad)
 
-1. **Fixtures con Faker** — siguiente paso inmediato. Instalar
-   `doctrine/doctrine-fixtures-bundle` + `fakerphp/faker`. Escribir fixtures
-   para Partner (con nodos/ciudades), BasketShare (semanal/quincenal),
-   EggPeriod, EggAmount, PartnerBasketShare (con start_date/end_date),
-   WeeklyBasketGroup. Permite navegar la app con datos realistas en lugar
-   de pelear contra BBDD vacía.
-2. **Tests funcionales baseline** del módulo de socios — antes de tocar nada
-   de ese módulo. "Golden tests" que fijan el comportamiento actual (aunque
-   sea defectuoso) para poder refactorizar con red.
-3. **Modernización de dependencias muertas**: `friendsofsymfony/user-bundle`
-   (→ seguridad nativa de Symfony), `symfony/swiftmailer-bundle` (→
-   `symfony/mailer`), `twig/extensions` (→ funciones de Twig core),
-   `symfony/web-server-bundle` (→ Symfony CLI),
-   `sensio/framework-extra-bundle` (→ atributos PHP 8 nativos),
-   `incenteev/composer-parameter-handler` (→ ya no necesario),
-   `whiteoctober/breadcrumbs-bundle dev-master` (abandonado).
-4. **Symfony 4.4 → 5.4 LTS** (cuando las deps muertas estén fuera).
-   Anotaciones → atributos PHP 8.
-5. **Symfony 5.4 → 6.4 LTS** (requiere PHP 8.1+).
-6. **Auth nuevo + roles**: reescribir con seguridad nativa de Symfony.
+1. ~~**Fixtures con Faker**~~ ✅ Fase 1.
+2. ~~**Tests funcionales baseline**~~ ✅ Fase 2.
+3. ~~**Modernización de dependencias muertas**~~ ✅ Fase 3 (parcial — ver
+   nota de breadcrumbs en "Estado actual"). Pendientes para más adelante:
+   `friendsofsymfony/user-bundle` (→ Fase 6, auth nueva),
+   `sensio/framework-extra-bundle` (→ Fase 5, requiere atributos PHP 8).
+4. **Symfony 4.4 → 5.4 LTS** (siguiente). Anotaciones se mantienen
+   (Symfony 5 las soporta); el salto a atributos espera a PHP 8.
+5. **PHP 7.4 → 8.3** entre Symfony 5.4 y 6.4. **Es una fase intermedia
+   descubierta en la sesión de Fase 3**: no se puede subir PHP estando
+   en Symfony 4.4 porque `stfalcon/tinymce-bundle` no tiene versión que
+   cubra Symfony 4.4 + PHP 8 simultáneamente (las 2.x son PHP 7 only,
+   las 3.x son Symfony 5+ only). Una vez en Symfony 5.4 LTS, todas las
+   deps tienen versiones modernas para PHP 8.
+   Beneficios extras: el hosting está cobrando *extended support* por
+   seguir en PHP 7.4 (ahorro económico inmediato), y desbloquea la
+   migración pendiente de `whiteoctober/breadcrumbs-bundle` →
+   `mhujer/breadcrumbs-bundle` (PHP 8.1+) o `Huluti/BreadcrumbsBundle`
+   (PHP 8.2+).
+6. **Symfony 5.4 → 6.4 LTS** (ya con PHP 8.3).
+7. **Auth nuevo + roles**: reescribir con seguridad nativa de Symfony.
    Roles `ROLE_PARTNER`, `ROLE_GESTION`, `ROLE_ADMIN`. Magic-link login
    (sin contraseñas) pensado para la brecha digital del colectivo:
    muchxs socixs nunca han usado software, una contraseña es una
    barrera real.
-7. **Acceso para socixs**: panel propio, primero solo lectura
+8. **Acceso para socixs**: panel propio, primero solo lectura
    (calendario de cestas, próximas semanas), luego escritura (saltar
    cesta, cambiar punto de recogida puntualmente).
-8. **Importación desde Excel** (sólo al ir a producción): comando
+9. **Importación desde Excel** (sólo al ir a producción): comando
    `app:import-partners-from-xlsx`. Sólo se importa lo de socios; la
    granja ya está en MySQL.
-9. **Despliegue**: hosting, CI/CD, copias, monitorización.
+10. **Despliegue**: hosting (LAMP clásico, sólo FTP, sin SSH; PHP
+    elegible hasta 8.5; servidor sirve `public/index.php` vía
+    `.htaccess` de `symfony/apache-pack`), CI/CD, copias, monitorización.
 
 Cada fase termina con tests en verde y un tag `vX.Y` en git.
 
@@ -89,11 +102,17 @@ Cada fase termina con tests en verde y un tag `vX.Y` en git.
 - **MySQL 8**, no Postgres. La prod usa MySQL, no compensa migrar.
 - **DDEV** para entorno local, no instalación nativa. Reproducible,
   portable, descarta toda una clase de problemas de "en mi máquina sí".
-- **PHP 7.4** como punto de partida (mayor versión con la que la
-  `composer.lock` de 2021 instala sin pelearse). Subimos progresivamente.
-- **Composer 2.2 LTS** porque Flex 1.12.2 no es compatible con Composer
-  2.3+ (firma `: void` en `RequireCommand::configure()`). Cuando
-  actualicemos Flex a ≥1.18, subimos Composer.
+- **PHP 7.4 hasta Symfony 5.4**, luego salto a 8.3. Razón en la hoja
+  de ruta (fase 5). Subir PHP antes de Symfony 5.4 está bloqueado por
+  `stfalcon/tinymce-bundle` (sin versión Symfony 4.4 + PHP 8).
+- **Composer 2.2 LTS** se mantiene por ahora; subir cuando toque
+  actualizar plugins/recipes. Ya no hay urgencia: Flex está sano.
+- **Symfony Flex 1.22** (subido desde 1.12.2 en `6d4cf26`). Versiones
+  anteriores de Flex 1.x apuntaban a `flex.symfony.com`, **dominio que
+  ya no resuelve (NXDOMAIN global)**, lo que rompía cualquier
+  `composer require/remove`. Flex 1.22 usa el endpoint de GitHub y
+  funciona. Si vuelves a topar con errores DNS de `flex.symfony.com`,
+  comprueba que la versión instalada de Flex sea ≥ 1.18.
 - **`doctrine:schema:create` en vez de `migrations:migrate`**. La única
   migración existente (`Version20210223093641.php`) es un delta parcial
   de 48 líneas que no cubre el esquema completo. Cuando todo esté limpio,
@@ -104,6 +123,11 @@ Cada fase termina con tests en verde y un tag `vX.Y` en git.
   No está en git (`/public/bundles/` está en `.gitignore`) — se crea a
   mano al hacer setup. Cuando se modernice el frontend: mover assets a
   `public/` o `assets/` y actualizar plantillas.
+  **Hook `restore-legacy-assets-symlink`** en `composer.json`
+  (commit `94ee36a`) lo recrea automáticamente tras `assets:install` —
+  cualquier `composer require/remove` borra `public/bundles/` y dejaría
+  la web sin CSS si no fuera por este hook. Si en algún momento ves la
+  web sin estilos: comprueba que el symlink existe.
 - **`ONLY_FULL_GROUP_BY` desactivado en MySQL** vía
   `.ddev/mysql/no_strict_group_by.cnf`. El código viejo tiene queries
   con `GROUP BY` incompletos. Cuando se modernicen los repositorios,
@@ -159,10 +183,23 @@ Cada fase termina con tests en verde y un tag `vX.Y` en git.
 - `src/Resources/public/` — assets legacy (bootstrap, jquery,
   metisMenu, datatables, fontawesome). Symlinkados a
   `public/bundles/app/`.
-- `tests/` — vacío. Aquí vive el trabajo de tests baseline cuando
-  arranquemos esa fase.
+- `tests/Controller/` — 11 smoke tests funcionales (Fase 2). Login,
+  4 pantallas de socios, 5 de granja. Helper `AbstractAuthenticatedTest`
+  centraliza el login admin/admin. Correr con
+  `ddev exec "php bin/phpunit tests/Controller/"`.
 - `config/packages/` — configuración de bundles. `security.yaml`,
   `doctrine.yaml`, etc.
+
+## Recursos disponibles fuera del repo
+
+- **Dump de producción** en `~/Downloads/` (Mac de Paco). Útil para:
+  validar migraciones contra datos reales, preparar la importación a
+  producción (Fase 9), o testing exhaustivo. **Nunca importarlo a la
+  BBDD `db` (dev) ni `db_test`** — contiene datos personales reales
+  (LOPD/GDPR). Si hace falta, crear `db_prod_snapshot` aislada.
+- **Mailpit en DDEV**: `http://csa-vega.ddev.site:8025`. Captura
+  cualquier email enviado por la app en local. `MAILER_DSN` ya apunta
+  ahí.
 
 ## Cómo trabajar conmigo (Paco)
 
