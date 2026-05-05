@@ -19,11 +19,23 @@ Requiere [Docker Desktop](https://www.docker.com/products/docker-desktop/) y [DD
 ```bash
 # Primera vez:
 ddev start                  # arranca PHP 7.4 + MySQL 8 + nginx
-ddev composer install       # ya lo hace post-start, pero por si acaso
+ddev composer install       # primera vez: pedirá permiso para varios plugins, todos 'y'
 ddev yarn install
-ddev exec bin/console doctrine:database:create
-ddev exec bin/console doctrine:migrations:migrate
-ddev exec yarn dev          # compila assets
+
+# Esquema DB. NO usamos doctrine:migrations:migrate por ahora — hay
+# una sola migración delta en src/Migrations/. Generamos el esquema
+# completo desde las entidades. Cuando todo esté limpio, regeneramos
+# un baseline de migraciones.
+ddev exec bin/console doctrine:database:create --if-not-exists
+ddev exec bin/console doctrine:schema:create
+
+# Workaround temporal: la plantilla base.html.twig pide assets en
+# public/bundles/app/... (estilo Symfony 2/3). En Symfony 4 sin un
+# AppBundle eso no se autoenlaza. Hacemos un symlink hasta que
+# limpiemos el frontend.
+ln -s ../../src/Resources/public public/bundles/app
+
+ddev exec yarn dev          # compila assets modernos (assets/ → public/build/)
 
 # Día a día:
 ddev start
