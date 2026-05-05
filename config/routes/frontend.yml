@@ -1,0 +1,21 @@
+frontend_blog:
+    controller: App\Controller\BlogController:frontend_index
+    path:   /blog
+
+blog_show:
+        controller: App\Controller\BlogController:show
+        path:   /blog/{slug}
+
+blog_category_show:
+        controller: App\Controller\BlogController:show_category
+        path:   /blog/category/{id}
+app_contact:
+        controller: App\Controller\GestionController:contacted
+        path:   /contact
+landing_contact:
+        controller: App\Controller\DefaultController:landind_contact
+        path:   /landing_contact
+
+booking_calendar_show:
+    controller: App\Controller\BookingController:show
+    path:   /booking/{id}

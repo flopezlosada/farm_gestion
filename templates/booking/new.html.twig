@@ -1,0 +1,46 @@
+{% extends 'layout_crud.html.twig' %}
+
+{% block title_wrapper %}Añadir evento público{% endblock %}
+{% block main -%}
+    <div class="panel panel-default">
+
+        <div class="panel-body">
+
+
+            {{ form_start(form, {'action': path('booking_new'), 'method': 'post','attr': {'role': 'form' }}) }}
+            <div class="row">
+                <div class="col-lg-4">
+                    <div class="form-group">
+                        {{ form_errors(form.title) }}
+                        <label>{{ form_label(form.title) }}</label>
+                        {{ form_widget(form.title,{'attr':{'class':'form-control','placeholder':'Título'}}) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(form.beginAt) }}
+                        <label>{{ form_label(form.beginAt) }}</label>
+                        {{ form_widget(form.beginAt,{'attr':{'placeholder':''}}) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(form.endAt) }}
+                        <label>{{ form_label(form.endAt) }}</label>
+                        {{ form_widget(form.endAt,{'attr':{'placeholder':''}}) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(form.content) }}
+                        <label>{{ form_label(form.content) }}</label>
+                        {{ form_widget(form.content,{'attr':{'class':'form-control'}}) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form_errors(form.file) }}
+                        <label>{{ form_label(form.file) }}</label>
+                        {{ form_widget(form.file,{'attr':{'class':'form-control'}}) }}
+                    </div>
+                </div>
+            </div>
+            <button class="btn">{{ button_label|default('Aceptar') }}</button>
+            {{ form_rest(form) }}
+            {{ form_end(form, {'render_rest': false}) }}
+        </div>
+    </div>
+    <a href="{{ path('booking_index') }}">back to list</a>
+{% endblock %}

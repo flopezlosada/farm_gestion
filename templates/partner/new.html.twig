@@ -1,0 +1,35 @@
+{% extends 'layout_crud.html.twig' %}
+
+{% block title %}Nueva/o Socia/o{% endblock %}
+
+{% block main %}
+
+    <h1>Crear nueva/o socia/o</h1>
+
+    {{ include('partner/_form.html.twig') }}
+
+{% endblock %}
+
+{% block specific_js %}
+    {{ parent() }}
+    <script>
+        $(function () {
+            $('#partner_city').html("");
+            $('#partner_city').prop('required', true);
+            $("#partner_state").change(function () {
+                var data = {
+                    state_id: $(this).val()
+                };
+
+                $.ajax({
+                    type: 'post',
+                    url: '{{ path("select_city") }}',
+                    data: data,
+                    success: function (data) {
+                        $('#partner_city').html(data);
+                    }
+                });
+            });
+        });
+    </script>
+{% endblock %}

@@ -1,0 +1,55 @@
+# Editor / OS
+/.idea
+/.vscode
+/.fleet
+/.zed
+.DS_Store
+*.swp
+*~
+
+###> symfony/framework-bundle ###
+/.env.local
+/.env.local.php
+/.env.*.local
+/public/bundles/
+/var/
+/vendor/
+###< symfony/framework-bundle ###
+
+###> liip/imagine-bundle ###
+/public/media/cache/
+###< liip/imagine-bundle ###
+
+###> symfony/phpunit-bridge ###
+.phpunit
+.phpunit.result.cache
+/phpunit.xml
+###< symfony/phpunit-bridge ###
+
+###> symfony/web-server-bundle ###
+/.web-server-pid
+###< symfony/web-server-bundle ###
+
+###> symfony/webpack-encore-bundle ###
+/node_modules/
+/public/build/
+npm-debug.log
+yarn-error.log
+###< symfony/webpack-encore-bundle ###
+
+# DDEV
+/.ddev/.gitignore
+/.ddev/db_snapshots/
+/.ddev/import-db/
+/.ddev/import.yaml
+/.ddev/.dbimageBuild
+/.ddev/.webimageBuild
+/.ddev/db-build/
+/.ddev/web-build/
+/.ddev/providers/
+/.ddev/.global_commands/
+/.ddev/homeadditions/
+/.ddev/commands/.gitattributes
+
+# User-uploaded data (binarios fuera de git, se sincronizan aparte)
+/public/uploads/

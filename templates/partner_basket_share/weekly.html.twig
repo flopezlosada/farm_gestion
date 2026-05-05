@@ -1,0 +1,35 @@
+{% extends 'layout_list.html.twig' %}
+
+{% block title %} Listado semanal cestas
+
+{% endblock %}
+
+{% block main %}
+
+    {{ include('partner_basket_share/_table_list_basket.html.twig', {'entity':weekly_partners, 'class':'panel-info', 'type':'semanales' ,'basket_share_id':1}) }}
+    {{ include('partner_basket_share/_table_list_basket.html.twig', {'entity':biweekly_partners, 'class':'panel-success', 'type':'quincenales','basket_share_id':2 }) }}
+    {{ include('partner_basket_share/_table_list_basket.html.twig', {'entity':old_half_basket_partners, 'class':'panel-danger', 'type':'semanales compartidas (antigua media cesta)','basket_share_id':4 }) }}
+    {{ include('partner_basket_share/_table_list_basket.html.twig', {'entity':monthly_partners, 'class':'panel-warning', 'type':'mensuales','basket_share_id':3 }) }}
+    {{ include('partner_basket_share/_table_list_basket.html.twig', {'entity':only_egg_partners, 'class':'panel-info', 'type':'Sólo huevos','basket_share_id':5 }) }}
+
+    <div class="row">
+        <p>
+            <a href="{{ path('generate_pdf_basket_weekly', {'basket_id': basket.id,'alternative_order':true}) }}">
+                <button class="btn btn-outline btn-info" type="button">Generar pdf</button></a>
+            <a href="{{ path('regenerate_weekly_list', {'weekly_basket_id': basket.id}) }}" onclick="return confirm('¿Estas segura/o?. Todos los cambios que hayas hecho en el listado se perderán')">
+                <button class="btn btn-outline btn-danger" type="button">Regenerar listado</button></a>
+        </p>
+    </div>
+{% endblock %}
+
+    {% block specific_js %}
+        <script>
+            $(document).ready(function () {
+                $('#table_list').DataTable({
+                    paging: false,
+                    searching: false,
+                    ordering: false
+                });
+            });
+        </script>
+    {% endblock %}

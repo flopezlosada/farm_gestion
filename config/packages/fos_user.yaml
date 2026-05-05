@@ -1,0 +1,12 @@
+fos_user:
+    db_driver: orm # other valid values are 'mongodb', 'couchdb' and 'propel'
+    firewall_name: main
+    user_class: App\Entity\User
+    service:
+        mailer: fos_user.mailer.twig_swift
+    from_email:
+        address:        info@csavegadejarama.org
+        sender_name:    CSA  Vega de Jarama
+    registration:
+      confirmation:
+        enabled:    true

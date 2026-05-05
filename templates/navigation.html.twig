@@ -1,0 +1,339 @@
+{% if is_granted("ROLE_GUEST") %}
+    <div class="navbar-default sidebar" role="navigation">
+        <div class="sidebar-nav navbar-collapse">
+            <ul class="nav" id="side-menu">
+                <li class="sidebar-search">
+                    <div class="input-group custom-search-form">
+                        <input type="text" class="form-control" placeholder="Search...">
+                        <span class="input-group-btn">
+                                    <button class="btn btn-default" type="button">
+                                        <i class="fa fa-search"></i>
+                                    </button>
+                                </span>
+                    </div>
+                    <!-- /input-group -->
+                </li>
+                <li>
+                    <a href="{{ path('dashboard') }}"><i class="fa fa-15x fa-dashboard fa-fw"></i> Panel de control</a>
+                </li>
+                <li>
+                    <a href="{{ path('calendar') }}"><i class="fa fa-15x fa-calendar fa-fw"></i> Calendario interno</a>
+                </li>
+                <li>
+                    <a href="#"><i class="fa fa-15x fa-newspaper-o fa-fw"></i> Blog<span class="fa arrow"></span></a>
+                    <ul class="nav nav-second-level">
+                        <li>
+                            <a href="{{ path('category') }}">Listado de categorías</a>
+                        </li>
+                        <li>
+                            <a href="{{ path('category_new') }}">Añadir categoría de noticias</a>
+                        </li>
+                        <li>
+                            <a href="{{ path('blog') }}">Listado de noticias</a>
+                        </li>
+                        <li>
+                            <a href="{{ path('blog_new') }}">Añadir noticia</a>
+                        </li>
+                    </ul>
+                    <!-- /.nav-second-level -->
+                </li>
+                <li>
+                    <a href="#"><i class="fa fa-15x fa-people-carry fa-fw"></i> Socias/os<span class="fa arrow"></span></a>
+                    <ul class="nav nav-second-level">
+                        <li><a href="#"><i class="fas fa-blender"></i> Listas de socias/os<span
+                                        class="fa arrow"></span></a>
+                            <ul class="nav nav-third-level">
+                                <li>
+                                    <a href="{{ path('partner_index') }}"><i class="fa fa-15xfa-users fa-fw"></i> Listado
+                                        completo</a>
+                                </li>
+                                <li><a href="{{ path('partner_basket_share_list_status', {'status': 1}) }}"><i
+                                                class="fa fa-15xfa-pepper-hot fa-fw"></i> Socias/os con cesta</a></li>
+                                <li><a href="{{ path('partner_list', {'type': 1}) }}"><i
+                                                class="fa fa-15xfa-user-secret fa-fw"></i> Socias activas sin cesta</a></li>
+                                <li><a href="{{ path('partner_list', {'type': 2}) }}"><i
+                                                class="fa fa-15xfa-cloud-sun-rain fa-fw"></i> Socias/os de baja</a></li>
+
+                            </ul>
+                        </li>
+
+                        <li><a href="{{ path('partner_new') }}"><i class="fa fa-15x fa-user-plus fa-fw"></i> Añadir socia/o</a>
+                        </li>
+                        <li><a href="{{ path('partner_basket_share_generate_weekly') }}"><i
+                                        class="fas fa-15x fa-cart-arrow-down"></i> Generar listado semanal</a></li>
+
+                        <li>
+                            <a href="{{ path('weekly_basket_group_index') }}"><i class="fab fa-15x fa-canadian-maple-leaf"></i> Listado de grupos de recogida</a>
+                        </li>
+                        <li><a href="{{ path('partner_evolution') }}"><i class="fas fa-fan"></i>
+                                Evolución número de socixs</a>
+
+                        </li>
+                    </ul>
+                    <!-- /.nav-second-level -->
+                </li>
+                <li>
+                    <a href="#"><i class="fa fa-15x fa-bar-chart-o fa-fw"></i> Gráficos<span class="fa arrow"></span></a>
+                    <ul class="nav nav-second-level">
+                        <li>
+                            <a href="{{ path('hens_analyses') }}">Comparativo de puesta</a>
+                        </li>
+                        {#<li>
+                            <a href="{{ path('graph_average_egg_week') }}">Evolución de media huevos semanales</a>
+                        </li>#}
+                    </ul>
+                    <!-- /.nav-second-level -->
+                </li>
+
+
+                <li>
+                    <a href="#"><i class="fa fa-15x fa-table fa-fw"></i> Listados<span class="fa arrow"></span></a>
+                    <ul class="nav nav-second-level">
+                        <li>
+                            <a href="#"><i class="fa fa-15x fa-leaf fa-fw"></i> Cultivos<span class="fa arrow"></span></a>
+                            <ul class="nav nav-third-level">
+                                <li>
+                                    <a href="{{ path('crop_new') }}">Añadir Cultivo</a>
+                                </li>
+                                <li>
+                                    <a href="{{ path('crop') }}">Listado de Cultivos</a>
+                                </li>
+                            </ul>
+                            <!-- /.nav-second-level -->
+                        </li>
+                        <li>
+                            <a href="#"><i class="fa fa-15x fa-cutlery fa-fw"></i> Cultivos en producción<span
+                                        class="fa arrow"></span></a>
+                            <ul class="nav nav-third-level">
+                                <li>
+                                    <a href="{{ path('cropworking_new') }}">Poner cultivo en producción</a>
+                                </li>
+                                <li>
+                                    <a href="{{ path('cropworking') }}">Listado de Cultivos en producción</a>
+                                </li>
+                            </ul>
+                            <!-- /.nav-second-level -->
+                        </li>
+                        <li>
+                            <a href="#"><i class="fa fa-15x fa-compass fa-fw"></i> Trabajos culturales<span
+                                        class="fa arrow"></span></a>
+                            <ul class="nav nav-third-level">
+                                <li>
+                                    <a href="{{ path('culturalwork_new') }}">Añadir trabajo</a>
+                                </li>
+                                <li>
+                                    <a href="{{ path('culturalwork') }}">Listado de trabajos</a>
+                                </li>
+                            </ul>
+                            <!-- /.nav-second-level -->
+                        </li>
+                        <li>
+                            <a href="#"><i class="fa fa-15x fa-tasks fa-fw"></i> Tareas<span class="fa arrow"></span></a>
+                            <ul class="nav nav-third-level">
+                                <li>
+                                    <a href="{{ path('task_dashboard') }}">Añadir Tarea</a>
+                                </li>
+                                <li>
+                                    <a href="{{ path('task') }}">Listado de Tareas</a>
+                                </li>
+                            </ul>
+                            <!-- /.nav-second-level -->
+                        </li>
+                        <li>
+                            <a href="#"><i class="fa fa-15x fa-rss fa-fw"></i> Eventos<span class="fa arrow"></span></a>
+                            <ul class="nav nav-third-level">
+                                <li>
+                                    <a href="{{ path('event_new') }}">Añadir Evento</a>
+                                </li>
+                                <li>
+                                    <a href="{{ path('event') }}">Listado</a>
+                                </li>
+                            </ul>
+                            <!-- /.nav-second-level -->
+                        </li>
+                        <li>
+                            <a href="#"><i class="fa fa-15x fa-money fa-fw"></i> Ventas<span class="fa arrow"></span></a>
+                            <ul class="nav nav-third-level">
+                                <li>
+                                    <a href="{{ path('sale_new') }}">Añadir Venta</a>
+                                </li>
+                                <li>
+                                    <a href="{{ path('sale') }}">Listado</a>
+                                </li>
+                            </ul>
+                            <!-- /.nav-second-level -->
+                        </li>
+                        <li>
+                            <a href="#"><i class="fa fa-15x fa-eur fa-fw"></i> Compras<span class="fa arrow"></span></a>
+                            <ul class="nav nav-third-level">
+                                <li>
+                                    <a href="{{ path('purchase_new') }}">Añadir Compra</a>
+                                </li>
+                                <li>
+                                    <a href="{{ path('purchase') }}">Listado</a>
+                                </li>
+                            </ul>
+                            <!-- /.nav-second-level -->
+                        </li>
+                        <li>
+                            <a href="#"><i class="fa fa-15x fa-weibo fa-fw"></i> Proveedorxs<span class="fa arrow"></span></a>
+                            <ul class="nav nav-third-level">
+                                <li>
+                                    <a href="{{ path('provider_new') }}">Añadir Proveedxr</a>
+                                </li>
+                                <li>
+                                    <a href="{{ path('provider') }}">Listado</a>
+                                </li>
+                            </ul>
+                            <!-- /.nav-second-level -->
+                        </li>
+                        <li>
+                            <a href="#"><i class="fa fa-15x fa-spinner fa-fw"></i> Clientxs<span class="fa arrow"></span></a>
+                            <ul class="nav nav-third-level">
+                                <li>
+                                    <a href="{{ path('purchaser_new') }}">Añadir Cliente</a>
+                                </li>
+                                <li>
+                                    <a href="{{ path('purchaser') }}">Listado</a>
+                                </li>
+                            </ul>
+                            <!-- /.nav-second-level -->
+                        </li>
+                        <li>
+                            <a href="#"><i class="fa fa-15x fa-gift fa-fw"></i> Regalos <span class="fa arrow"></span></a>
+                            <ul class="nav nav-third-level">
+                                <li>
+                                    <a href="{{ path('gift_new') }}">Añadir Regalo</a>
+                                </li>
+                                <li>
+                                    <a href="{{ path('gift') }}">Listado</a>
+                                </li>
+                            </ul>
+                            <!-- /.nav-second-level -->
+                        </li>
+                        {% include 'compost_navigation.html.twig' %}
+
+                        <li>
+                            <a href="#"><i class="fa fa-15x fa-sliders fa-fw"></i> Lotes <span class="fa arrow"></span></a>
+                            <ul class="nav nav-third-level">
+                                <li>
+                                    <a href="{{ path('batch_new') }}">Añadir Lote</a>
+                                </li>
+                                <li>
+                                    <a href="{{ path('batch') }}">Listado</a>
+                                </li>
+                            </ul>
+                            <!-- /.nav-second-level -->
+                        </li>
+                    </ul>
+                    <!-- /.nav-second-level -->
+                </li>
+                <li>
+                    <a href="#"><i class="fa fa-15x fa-sitemap fa-fw"></i> Estadísticas<span
+                                class="fa arrow"></span></a>
+                    <ul class="nav nav-second-level">
+                        <li>
+                            <a href="#">Producción <span class="fa arrow"></span></a>
+                            <ul class="nav nav-third-level">
+                                <li>
+                                    <a href="{{ path('batch_analyses',{'product_id':2}) }}">Pollos</a>
+                                </li>
+                                {# <li>
+                                     <a href="#">Pollos</a>
+                                 </li>
+                                 <li>
+                                     <a href="#">Pavos</a>
+                                 </li>
+                                 <li>
+                                     <a href="#">Gallinas</a>
+                                 </li>#}
+                            </ul>
+                            <!-- /.nav-third-level -->
+                        </li>
+                        {# <li>
+                             <a href="#">Repartos <span class="fa arrow"></span></a>
+                             <ul class="nav nav-third-level">
+                                 <li>
+                                     <a href="#">Huevos</a>
+                                 </li>
+                                 <li>
+                                     <a href="#">Pollos</a>
+                                 </li>
+                                 <li>
+                                     <a href="#">Pavos</a>
+                                 </li>
+                                 <li>
+                                     <a href="#">Gallinas</a>
+                                 </li>
+                             </ul>
+                             <!-- /.nav-third-level -->
+                         </li>#}
+                        <li>
+                            <a href="#">Ventas <span class="fa arrow"></span></a>
+                            <ul class="nav nav-third-level">
+                                <li>
+                                    <a href="{{ path('statistic_eggs_sale') }}">Huevos</a>
+                                </li>
+                                {#<li>
+                                    <a href="#">Pollos</a>
+                                </li>
+                                <li>
+                                    <a href="#">Pavos</a>
+                                </li>
+                                <li>
+                                    <a href="#">Gallinas</a>
+                                </li>#}
+                            </ul>
+                            <!-- /.nav-third-level -->
+                        </li>
+                        {#<li>
+                            <a href="#">Producción cultivos <span class="fa arrow"></span></a>
+                            <ul class="nav nav-third-level">
+                                <li>
+                                    <a href={{ path('production_new') }}>Añadir producción</a>
+                                </li>
+                                <li>
+                                    <a href="#">Resumen de producción</a>
+                                </li>
+                            </ul>
+                            <!-- /.nav-third-level -->
+                        </li>#}
+                    </ul>
+                    <!-- /.nav-second-level -->
+                </li>
+                <li>
+                    <a href="#"><i class="fa fa-15x fa-newspaper-o fa-fw"></i> Gestión Calendario Público<span class="fa arrow"></span></a>
+                    <ul class="nav nav-second-level">
+                       {# <li>
+                            <a href="{{ path('category') }}">Listado de categorías</a>
+                        </li>
+                        <li>
+                            <a href="{{ path('category_new') }}">Añadir categoría de noticias</a>
+                        </li>#}
+                        <li>
+                            <a href="{{ path('booking') }}">Listado de eventos</a>
+                        </li>
+                        <li>
+                            <a href="{{ path('booking_new') }}">Añadir evento</a>
+                        </li>
+                    </ul>
+                    <!-- /.nav-second-level -->
+                </li>
+
+
+            </ul>
+        </div>
+        <!-- /.sidebar-collapse -->
+    </div>
+{% elseif is_granted("ROLE_COMPOST") %}
+    <div class="navbar-default sidebar" role="navigation">
+        <div class="sidebar-nav navbar-collapse">
+            <ul class="nav" id="side-menu">
+                <li>
+                    <a href="{{ path('dashboard') }}"><i class="fa fa-15x fa-dashboard fa-fw"></i> Panel de control</a>
+                </li>
+                {% include 'compost_navigation.html.twig' %}
+            </ul>
+        </div>
+    </div>
+{% endif %}

@@ -1,0 +1,64 @@
+# See dos how to configure the bundle: https://symfony.com/doc/current/bundles/LiipImagineBundle/basic-usage.html
+liip_imagine:
+  resolvers:
+    default:
+      web_path:
+        cache_prefix: media/cache
+  driver:               "gd"
+  cache:                default
+  data_loader:          default
+  default_image:        null
+  controller:
+    filter_action:         liip_imagine.controller:filterAction
+    filter_runtime_action: liip_imagine.controller:filterRuntimeAction
+  filter_sets:
+    image_ig:
+      quality: 100
+      filters:
+        interlace:
+          mode: line
+        strip: ~
+        relative_resize: { increase: 400 }
+        crop: { start: [0, 50], size: [700, 420] }
+    image_task_show:
+      quality: 100
+      filters:
+        interlace:
+          mode: line
+        strip: ~
+        thumbnail: { allow_upscale: true, size: [290, 200], mode: outbound }
+    image_post_snippet_show:
+      quality: 100
+      filters:
+        interlace:
+          mode: line
+        strip: ~
+        thumbnail: { allow_upscale: true, size: [600, 1450], mode: inset }
+    thumb_blog_article_main:
+      quality: 100
+      filters:
+        interlace:
+          mode: line
+        strip: ~
+        thumbnail: { allow_upscale: true, size: [701, 433], mode: outbound }
+    thumb_latest_post:
+      quality: 100
+      filters:
+        interlace:
+          mode: line
+        strip: ~
+        thumbnail: { allow_upscale: true, size: [81, 81], mode: crop }
+    image_task_big:
+      quality: 100
+      filters:
+        interlace:
+          mode: line
+        strip: ~
+        thumbnail: { allow_upscale: true, size: [700,420], mode: outbound }
+    image_history:
+      quality: 100
+      filters:
+        interlace:
+          mode: line
+        strip: ~
+        thumbnail: { allow_upscale: true, size: [200, 200], mode: inset }

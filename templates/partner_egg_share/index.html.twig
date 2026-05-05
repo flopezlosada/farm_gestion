@@ -1,0 +1,45 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}PartnerEggShare index{% endblock %}
+
+{% block body %}
+    <h1>PartnerEggShare index</h1>
+
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Id</th>
+                <th>Name</th>
+                <th>Created</th>
+                <th>Updated</th>
+                <th>Start_date</th>
+                <th>End_date</th>
+                <th>Month_price</th>
+                <th>actions</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for partner_egg_share in partner_egg_shares %}
+            <tr>
+                <td>{{ partner_egg_share.id }}</td>
+                <td>{{ partner_egg_share.name }}</td>
+                <td>{{ partner_egg_share.created ? partner_egg_share.created|date('Y-m-d H:i:s') : '' }}</td>
+                <td>{{ partner_egg_share.updated ? partner_egg_share.updated|date('Y-m-d H:i:s') : '' }}</td>
+                <td>{{ partner_egg_share.startDate ? partner_egg_share.startDate|date('Y-m-d') : '' }}</td>
+                <td>{{ partner_egg_share.endDate ? partner_egg_share.endDate|date('Y-m-d') : '' }}</td>
+                <td>{{ partner_egg_share.monthPrice }}</td>
+                <td>
+                    <a href="{{ path('partner_egg_share_show', {'id': partner_egg_share.id}) }}">show</a>
+                    <a href="{{ path('partner_egg_share_edit', {'id': partner_egg_share.id}) }}">edit</a>
+                </td>
+            </tr>
+        {% else %}
+            <tr>
+                <td colspan="8">no records found</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    <a href="{{ path('partner_egg_share_new') }}">Create new</a>
+{% endblock %}

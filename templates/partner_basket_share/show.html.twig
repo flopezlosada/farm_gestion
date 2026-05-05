@@ -1,0 +1,46 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}PartnerBasketShare{% endblock %}
+
+{% block body %}
+    <h1>PartnerBasketShare</h1>
+
+    <table class="table">
+        <tbody>
+            <tr>
+                <th>Id</th>
+                <td>{{ partner_basket_share.id }}</td>
+            </tr>
+            <tr>
+                <th>Created</th>
+                <td>{{ partner_basket_share.created ? partner_basket_share.created|date('Y-m-d H:i:s') : '' }}</td>
+            </tr>
+            <tr>
+                <th>Updated</th>
+                <td>{{ partner_basket_share.updated ? partner_basket_share.updated|date('Y-m-d H:i:s') : '' }}</td>
+            </tr>
+            <tr>
+                <th>Start_date</th>
+                <td>{{ partner_basket_share.startDate ? partner_basket_share.startDate|date('Y-m-d') : '' }}</td>
+            </tr>
+            <tr>
+                <th>End_date</th>
+                <td>{{ partner_basket_share.endDate ? partner_basket_share.endDate|date('Y-m-d') : '' }}</td>
+            </tr>
+            <tr>
+                <th>Month_price</th>
+                <td>{{ partner_basket_share.monthPrice }}</td>
+            </tr>
+            <tr>
+                <th>Is_active</th>
+                <td>{{ partner_basket_share.isActive ? 'Yes' : 'No' }}</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <a href="{{ path('partner_basket_share_index') }}">back to list</a>
+
+    <a href="{{ path('partner_basket_share_edit', {'id': partner_basket_share.id}) }}">edit</a>
+
+    {{ include('partner_basket_share/_delete_form.html.twig') }}
+{% endblock %}

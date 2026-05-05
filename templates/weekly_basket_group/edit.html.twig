@@ -1,0 +1,12 @@
+{% extends 'layout_crud.html.twig' %}
+
+{% block title %}Edit WeeklyBasketGroup{% endblock %}
+
+{% block main %}
+    <h1>Editar grupo de recogida: {{ weekly_basket_group.name }}</h1>
+
+    {{ include('weekly_basket_group/_form.html.twig', {'button_label': 'Actualizar'}) }}
+
+    {#{{ include('weekly_basket_group/_delete_form.html.twig') }}#}
+{% endblock %}
+{% block specific_js %}{% endblock %}

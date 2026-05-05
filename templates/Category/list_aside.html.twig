@@ -1,0 +1,11 @@
+<ul class="list-unstyled">
+{% for category in entities %}
+    <li>
+        <a href="{{ path('blog_category_show', {'id': category.id}) }}">
+            <i class="fa fa-angle-right pr-10">
+            </i>
+            {{ category }}
+        </a>
+    </li>
+    {% endfor %}
+</ul>

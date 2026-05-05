@@ -1,0 +1,77 @@
+{{ form_start(form) }}
+    {#{{ form_widget(form) }}#}
+<div class="row">
+    <div class="col-lg-6">
+        <div class="form-group">
+            {{ form_errors(form.name) }}
+            <label>{{ form_label(form.name) }}</label>
+            {{ form_widget(form.name,{'attr':{'placeholder':'Nombre'}}) }}
+        </div>
+        <div class="form-group">
+            {{ form_errors(form.surname) }}
+            <label>{{ form_label(form.surname) }}</label>
+            {{ form_widget(form.surname,{'attr':{'placeholder':'Apellidos'}}) }}
+        </div>
+        <div class="form-group">
+            {{ form_errors(form.DNI) }}
+            <label>{{ form_label(form.DNI) }}</label>
+            {{ form_widget(form.DNI,{'attr':{'placeholder':'DNI'}}) }}
+        </div>
+        <div class="form-group">
+            {{ form_errors(form.celular) }}
+            <label>{{ form_label(form.celular) }}</label>
+            {{ form_widget(form.celular,{'attr':{'placeholder':'Teléfono'}}) }}
+        </div>
+        <div class="form-group">
+            {{ form_errors(form.address) }}
+            <label>{{ form_label(form.address) }}</label>
+            {{ form_widget(form.address,{'attr':{'placeholder':'Dirección'}}) }}
+        </div>
+        <div class="form-group">
+            {{ form_errors(form.inscription_date) }}
+            <label>{{ form_label(form.inscription_date) }}</label>
+            {{ form_widget(form.inscription_date,{'attr':{'placeholder':'Fecha de inscripción'}}) }}
+        </div>
+        <div class="form-group">
+            {{ form_errors(form.eat_meat) }}
+            <label>{{ form_label(form.eat_meat) }}</label>
+            {{ form_widget(form.eat_meat,{'attr':{'placeholder':'Come carne'}}) }}
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="form-group">
+            {{ form_errors(form.email) }}
+            <label>{{ form_label(form.email) }}</label>
+            {{ form_widget(form.email,{'attr':{'placeholder':'Correo electrónico'}}) }}
+        </div>
+        <div class="form-group">
+            {{ form_errors(form.state) }}
+            <label>{{ form_label(form.state) }}</label>
+            {{ form_widget(form.state,{'attr':{'placeholder':'Provincia'}}) }}
+        </div>
+        <div class="form-group">
+            {{ form_errors(form.city) }}
+            <label>{{ form_label(form.city) }}</label>
+            {{ form_widget(form.city,{'attr':{'placeholder':'Municipio'}}) }}
+        </div>
+        <div class="form-group">
+            {{ form_errors(form.share_payment) }}
+            <label>{{ form_label(form.share_payment) }}</label>
+            {{ form_widget(form.share_payment,{'attr':{'placeholder':'Forma de pago'}}) }}
+        </div>
+        <div class="form-group">
+            {{ form_errors(form.registration_form_file) }}
+            <label>{{ form_label(form.registration_form_file) }}</label>
+            {{ form_widget(form.registration_form_file,{'attr':{'placeholder':'Ficha de socia/o'}}) }}
+        </div>
+        <div class="form-group">
+            {{ form_errors(form.weekly_basket_group) }}
+            <label>{{ form_label(form.weekly_basket_group) }}</label>
+            {{ form_widget(form.weekly_basket_group,{'attr':{'placeholder':'Grupo de recogida'}}) }}
+        </div>
+    </div>
+</div>
+<p>
+    <button class="btn btn-outline btn-info">{{ button_label|default('Guardar') }}</button>
+</p>
+{{ form_end(form) }}
