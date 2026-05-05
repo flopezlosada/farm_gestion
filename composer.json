@@ -35,6 +35,7 @@
         "symfony/form": "4.4.*",
         "symfony/framework-bundle": "4.4.*",
         "symfony/intl": "4.4.*",
+        "symfony/mailer": "4.4.*",
         "symfony/monolog-bundle": "^3.4",
         "symfony/process": "4.4.*",
         "symfony/property-access": "4.4.*",
@@ -42,7 +43,6 @@
         "symfony/proxy-manager-bridge": "4.4.*",
         "symfony/security-bundle": "4.4.*",
         "symfony/serializer": "4.4.*",
-        "symfony/swiftmailer-bundle": "^3.2",
         "symfony/twig-bundle": "4.4.*",
         "symfony/validator": "4.4.*",
         "symfony/web-link": "4.4.*",
@@ -102,11 +102,16 @@
             "cache:clear": "symfony-cmd",
             "assets:install %PUBLIC_DIR%": "symfony-cmd"
         },
+        "restore-legacy-assets-symlink": [
+            "ln -sfn ../../src/Resources/public public/bundles/app"
+        ],
         "post-install-cmd": [
-            "@auto-scripts"
+            "@auto-scripts",
+            "@restore-legacy-assets-symlink"
         ],
         "post-update-cmd": [
-            "@auto-scripts"
+            "@auto-scripts",
+            "@restore-legacy-assets-symlink"
         ]
     },
     "conflict": {

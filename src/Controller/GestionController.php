@@ -9,6 +9,8 @@ use Symfony\Component\Form\Extension\Core\Type\TextareaType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Mailer\MailerInterface;
+use Symfony\Component\Mime\Email as MimeEmail;
 use Symfony\Component\Validator\Constraints\Email;
 use Symfony\Component\Validator\Constraints\NotBlank;
 use Symfony\Component\HttpFoundation\Request;
@@ -31,18 +33,18 @@ class GestionController extends AbstractController
         return $this->redirect($this->generateUrl('dashboard'));
     }
 
-    public function contacted(Request $request)
+    public function contacted(Request $request, MailerInterface $mailer)
     {
         $form = $this->createCreateForm();
         $form->handleRequest($request);
 
         if ($form->isValid()) {
             $data = $form->getData();
-            $message = \Swift_Message::newInstance()
-                ->setSubject('Contacto desde http://csavegadejarama.org')
-                ->setFrom('flopezlosada@gmail.com')
-                ->setTo('info@csavegadejarama.org')
-                ->setBody(
+            $email = (new MimeEmail())
+                ->subject('Contacto desde http://csavegadejarama.org')
+                ->from('flopezlosada@gmail.com')
+                ->to('info@csavegadejarama.org')
+                ->html(
                     $this->renderView(
                         'Default/contact_email.html.twig',
                         array('name' => $data["name"],
@@ -51,7 +53,7 @@ class GestionController extends AbstractController
                             'email' => $data["email"],
                         )
                     ));
-            $this->get('mailer')->send($message);
+            $mailer->send($email);
 
             $this->get('session')->getFlashBag()->add(
                 'notice',
