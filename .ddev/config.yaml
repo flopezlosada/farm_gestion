@@ -1,0 +1,27 @@
+name: csa-vega
+type: symfony
+docroot: public
+php_version: "7.4"
+webserver_type: nginx-fpm
+xdebug_enabled: false
+additional_hostnames: []
+additional_fqdns: []
+database:
+  type: mysql
+  version: "8.0"
+use_dns_when_possible: true
+composer_version: "2"
+nodejs_version: "16"
+web_environment:
+  - APP_ENV=dev
+  - DATABASE_URL=mysql://db:db@db:3306/db?serverVersion=8.0
+  - MAILER_URL=smtp://localhost:1025
+hooks:
+  post-start:
+    - exec: composer install --no-interaction
+    - exec: yarn install
+# Notas:
+# - PHP 7.4 elegido a propósito: es el mayor PHP con el que la composer.lock
+#   de marzo 2021 instala sin pelearse. Una vez verde, subiremos a 8.x progresivamente.
+# - MySQL 8.0 (la prod usa 5.7, EOL). Doctrine es agnóstico, no debería romper.
+# - nodejs_version: 16 para que Webpack Encore antiguo funcione. También se moverá luego.
