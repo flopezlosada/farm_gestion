@@ -73,8 +73,8 @@ class DefaultController extends AbstractController
         $total_chicken = $em->getRepository("App:Batch")->getTotalCarcassWeight(date('Y'));
 
 
-        $active_hen_batch = $em->getRepository('App:Batch')->getActiveBatch(6); //lotes de gallina activos
-        $active_chicken_batch = $em->getRepository('App:Batch')->getActiveBatch(2); //lotes de pollos activos
+        $active_hen_batch = $em->getRepository('App:Batch')->getActiveBatch(6) ?? []; //lotes de gallina activos
+        $active_chicken_batch = $em->getRepository('App:Batch')->getActiveBatch(2) ?? []; //lotes de pollos activos
         foreach ($active_hen_batch as $batch) {
             $week_batch_lay = $em->getRepository('App:Lay')->findLayInWeekYear(date('W'), date('Y'), $batch->getId());
             if (!empty($week_batch_lay['total'])) {
