@@ -12,14 +12,14 @@
                     {% if entity.tasktype.id!= 1%}
                     <p><strong>Fecha aproximada de realización: </strong>
                         {% if entity.expectedDate %}
-                            {{ entity.expectedDate|localizeddate("long","none","es") }}
+                            {{ entity.expectedDate|format_date("long", locale="es") }}
                         {% else %}
                             {{ entity.month}}-{{ entity.year }}
                         {% endif %}
                     </p>
                     {% endif %}
                     {% if entity.finish==1 %}
-                    <p><strong>Fecha de finalización: </strong> {{ entity.realDate|localizeddate("long","none","es") }}</p>
+                    <p><strong>Fecha de finalización: </strong> {{ entity.realDate|format_date("long", locale="es") }}</p>
                     {% endif %}
                     {{ entity.content }}
                 </div>

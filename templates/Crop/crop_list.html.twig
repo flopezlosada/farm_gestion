@@ -1,8 +1,8 @@
 <strong>{{ crop_working }}</strong><br>
 Estado: {% if crop_working.finish %} Finalizado {% else %} Activo {% endif %}<br>
-Fecha inicio: {{ crop_working.created|localizeddate('medium','none','es') }}<br>
+Fecha inicio: {{ crop_working.created|format_date('medium', locale='es') }}<br>
 {% if crop_working.finishdate %}
-    Fecha finalización: {{ crop_working.finishdate|localizeddate('medium','none','es') }}<br>
+    Fecha finalización: {{ crop_working.finishdate|format_date('medium', locale='es') }}<br>
 {% endif %}
 
 <a href="{{ path('cropworking_show', {'id': crop_working.id}) }}">Mostrar</a><br>

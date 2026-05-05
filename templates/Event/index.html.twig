@@ -21,8 +21,8 @@
         {% for entity in entities %}
             <tr>
                 <td><a href="{{ path('event_show', { 'id': entity.id }) }}">{{ entity.title }}</a></td>
-                <td>{% if entity.startdate %}{{ entity.startdate|localizeddate('long','none','es') }}{% endif %}</td>
-                <td>{% if entity.enddate %}{{ entity.enddate|localizeddate('long','none','es') }}{% endif %}</td>
+                <td>{% if entity.startdate %}{{ entity.startdate|format_date('long', locale='es') }}{% endif %}</td>
+                <td>{% if entity.enddate %}{{ entity.enddate|format_date('long', locale='es') }}{% endif %}</td>
                 <td>
                 <ul>
                     <li>

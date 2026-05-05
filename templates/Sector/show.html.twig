@@ -30,7 +30,7 @@
                             <ul>
                                 {% for cultural_work in entity.culturalWorks %}
                                     <strong><a href="{{ path('culturalwork_show', {'id': cultural_work.id}) }}">{{ cultural_work }}</a></strong><br>
-                                    Fecha : {{ cultural_work.date|localizeddate('medium','none','es') }}<br>
+                                    Fecha : {{ cultural_work.date|format_date('medium', locale='es') }}<br>
                                 {% else %}
                                     En este sector no se ha realizado ningún trabajo.
                                 {% endfor %}

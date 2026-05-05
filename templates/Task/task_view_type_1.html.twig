@@ -1,7 +1,7 @@
 <div class="alert alert-success ">
     <h4>{{ task.title }} (Sin fecha)</h4>
     {% if task.realDate %}
-        <p><strong>Fecha de finalización: </strong>{{ task.realDate|localizeddate("long","none","es") }}</p>
+        <p><strong>Fecha de finalización: </strong>{{ task.realDate|format_date("long", locale="es") }}</p>
     {% endif %}
     {% if task.users %}
     <p><strong>Asignada a: {{ task.listUsers }} </strong></p>

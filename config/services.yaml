@@ -31,13 +31,5 @@ services:
     App\EventListener\CalendarEventListener:
             tags:
                 - { name: kernel.event_listener, event: calendar.load_events, method: loadEvents }
-    twig.extension.intl:
-      class: Twig_Extensions_Extension_Intl
-      tags:
-        - { name: twig.extension }
-    twig.extension.text:
-      class: Twig_Extensions_Extension_Text
-      tags:
-        - { name: twig.extension }
 
     App\EventSubscriber\CalendarSubscriber:

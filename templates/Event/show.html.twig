@@ -18,9 +18,9 @@
                         {{ entity.content }}
                     </p>
                     <p>
-                        <strong>Fecha de inicio:</strong> {{ entity.startdate|localizeddate('long','none','es') }}<br>
+                        <strong>Fecha de inicio:</strong> {{ entity.startdate|format_date('long', locale='es') }}<br>
                         {% if  entity.enddate is defined %}
-                        <strong>Fecha de fin:</strong> {{ entity.enddate|localizeddate('long','none','es') }}
+                        <strong>Fecha de fin:</strong> {{ entity.enddate|format_date('long', locale='es') }}
                         {% endif %}
                     </p>
                 </div>

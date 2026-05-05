@@ -3,7 +3,7 @@
 {% block main -%}
     <div class="panel panel-default">
         <div class="panel-heading">
-          Reparto realizado el <strong>{{ entity.getCollectDate|localizeddate('long','none','es') }}</strong>
+          Reparto realizado el <strong>{{ entity.getCollectDate|format_date('long', locale='es') }}</strong>
         </div>
         <div class="panel-body">
             {{ form_start(edit_form, {'action': path('collect_update',{'id':entity.id}), 'method': 'put','attr': {'role': 'form' }}) }}

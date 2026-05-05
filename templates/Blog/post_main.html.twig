@@ -45,7 +45,7 @@
             </a>
         </h1>
         {% if extend ==0 %}
-            <p>{{ post.content|truncate(400,true,'...')|striptags|raw }}</p>
+            <p>{{ post.content|striptags|u.truncate(400, '...', false)|raw }}</p>
             <div class="clearfix"></div>
                 <a class="btn btn-primary" href="{{ path('blog_show', {'slug': post.slug}) }}">
                     Leer más

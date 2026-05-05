@@ -149,7 +149,7 @@
                     <div class="panel-heading">
                         <div class="row">
                             <div class="col-xs-12 text-right">
-                                <div class="huge">{{ render(controller('App:Default:lastFeedPurchase')) |localizeddate('short','none','es') }}</div>
+                                <div class="huge">{{ render(controller('App:Default:lastFeedPurchase')) |format_date('short', locale='es') }}</div>
                                 <div><br>Fecha última compra de pienso</div>
                             </div>
                         </div>

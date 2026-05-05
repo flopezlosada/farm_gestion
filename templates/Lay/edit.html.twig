@@ -3,7 +3,7 @@
 {% block main -%}
     <div class="panel panel-default">
         <div class="panel-heading">
-            Puesta realizado el <strong>{{ entity.getLayDate|localizeddate('long','none','es') }}</strong>
+            Puesta realizado el <strong>{{ entity.getLayDate|format_date('long', locale='es') }}</strong>
         </div>
         <div class="panel-body">
             {{ form_start(edit_form, {'action': path('lay_update',{'id':entity.id}), 'method': 'put','attr': {'role': 'form' }}) }}

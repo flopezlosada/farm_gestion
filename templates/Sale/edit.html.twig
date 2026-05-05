@@ -3,7 +3,7 @@
 {% block main -%}
     <div class="panel panel-default">
         <div class="panel-heading">
-            Venta realizado el <strong>{{ entity.getDate|localizeddate('long','none','es') }}</strong>
+            Venta realizado el <strong>{{ entity.getDate|format_date('long', locale='es') }}</strong>
         </div>
         <div class="panel-body">
             {{ form_start(edit_form, {'action': path('sale_update',{'id':entity.id}), 'method': 'put','attr': {'role': 'form' }}) }}

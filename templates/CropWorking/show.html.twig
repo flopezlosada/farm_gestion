@@ -16,12 +16,12 @@
                         </p>
                         {% if first_seed_work|length>0 %}
                             <p><strong>Fecha de inicio del
-                                    cultivo: </strong>{{ first_seed_work.getRealDate|localizeddate('long','none','es') }}
+                                    cultivo: </strong>{{ first_seed_work.getRealDate|format_date('long', locale='es') }}
                             </p>
                         {% endif %}
                         {% if entity.finish ==1 %}
                             <p><strong>Fecha de finalización del
-                                    cultivo: </strong>{{ entity.finishDate|localizeddate('long','none','es') }}
+                                    cultivo: </strong>{{ entity.finishDate|format_date('long', locale='es') }}
                             </p>
                         {% endif %}
 
@@ -68,10 +68,10 @@
                                     <div class="well ">
                                         <p><strong>{{ seedwork.getSeedWorkType }}</strong> | <a
                                                     href="{{ path('seedwork_edit', {'id': seedwork.id}) }}">Editar</a><br>
-                                            Fecha realización: {{ seedwork.getDate|localizeddate('long','none','es') }}
+                                            Fecha realización: {{ seedwork.getDate|format_date('long', locale='es') }}
                                             <br>
                                             Fecha
-                                            prevista: {{ seedwork.getEstimatedDate|localizeddate('long','none','es') }}
+                                            prevista: {{ seedwork.getEstimatedDate|format_date('long', locale='es') }}
                                             <br>
                                             Número de plantas: {{ seedwork.plant }}<br>
                                             Número de bandejas: {{ seedwork.tray }} <br>
@@ -103,7 +103,7 @@
 
                                 <ul>
                                     {% for production in productions %}
-                                        <li>{{ production.getDate|localizeddate('long','none','es') }}
+                                        <li>{{ production.getDate|format_date('long', locale='es') }}
                                             : {{ production.amount }}
                                             kg |
                                             <a href="{{ path('production_edit', {'id': production.id}) }}">Editar</a>
@@ -126,7 +126,7 @@
                                 <ul>
                                     {% for cultural_work in entity.culturalWorks %}
                                         <li>
-                                            <strong><a href="{{ path('culturalwork_show', {'id': cultural_work.id}) }}">{{ cultural_work.culturalWorkType }}</a></strong>: {{ cultural_work.getDate|localizeddate('long','none','es') }}
+                                            <strong><a href="{{ path('culturalwork_show', {'id': cultural_work.id}) }}">{{ cultural_work.culturalWorkType }}</a></strong>: {{ cultural_work.getDate|format_date('long', locale='es') }}
                                             |<a href="{{ path('culturalwork_edit', {'id': cultural_work.id}) }}">Editar</a>
                                             {{ cultural_work.content|raw }}
 

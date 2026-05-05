@@ -1,6 +1,6 @@
 <div class="panel-heading">
     Cálculos de consumo de huevos para los pedidos de pienso
-    de {{ last_but_one_hens_feed_purchase.getPurchaseDate|localizeddate('long','none','es') }} y {{ last_hens_feed_purchase.getPurchaseDate|localizeddate('long','none','es') }}
+    de {{ last_but_one_hens_feed_purchase.getPurchaseDate|format_date('long', locale='es') }} y {{ last_hens_feed_purchase.getPurchaseDate|format_date('long', locale='es') }}
     {{  last_hens_feed_purchase.getPurchaseDate=='now'|date('Y-m-d')?'(pedido virtual válido para cálculos, no existe)':''}}
     {{  last_hens_feed_purchase.getPurchaseDate=='now'|date('Y-m-d')?'(pedido virtual válido para cálculos, no existe)':''}}
     <br/>

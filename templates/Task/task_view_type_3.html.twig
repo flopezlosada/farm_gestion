@@ -1,11 +1,11 @@
 <div class="alert alert-warning ">
     <h4>{{ task.title }} (Fecha aproximada)</h4>
     {% if task.realDate %}
-        <p><strong>Fecha de finalización: </strong>{{ task.realDate|localizeddate("long","none","es") }}
+        <p><strong>Fecha de finalización: </strong>{{ task.realDate|format_date("long", locale="es") }}
     {% else %}
         <p><strong>Fecha prevista de realización: </strong>
             {% if task.expectedDate %}
-                {{ task.expectedDate|localizeddate("long","none","es") }}
+                {{ task.expectedDate|format_date("long", locale="es") }}
             {% else %}
                 {{ task.month }}-{{ task.year }}
             {% endif %}

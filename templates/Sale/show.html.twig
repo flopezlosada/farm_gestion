@@ -19,7 +19,7 @@
                     </p>
 
                     <p>
-                        <strong>Fecha de venta:</strong> {{ entity.saledate|localizeddate('long','none','es') }}
+                        <strong>Fecha de venta:</strong> {{ entity.saledate|format_date('long', locale='es') }}
                         <br>
                         <strong>Compradora/or:</strong> <a
                                 href='{{ path('purchaser_show',{'id':entity.getPurchaser.getId}) }}'>{{ entity.getPurchaser }}</a>
