@@ -15,7 +15,7 @@
                             <a href="{{ path('cropworking_show', {'id': crop_working.id}) }}">{{ crop_working }}</a> |
                             {% endfor %}
                         </p>
-                        <p><strong>Fecha de trabajo:</strong> {{ entity.getDate|localizeddate('long','none','es')  }}</p>
+                        <p><strong>Fecha de trabajo:</strong> {{ entity.getDate|format_date('long', locale='es')  }}</p>
                         <p><strong>Sectores afectados:</strong>
                             {% for sector in entity.sectors %}
                                 <a href="{{ path('sector_show', {'id': sector.id}) }}">{{ sector }}</a> |

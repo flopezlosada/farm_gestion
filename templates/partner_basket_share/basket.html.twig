@@ -45,7 +45,7 @@
                                             con {{ basket.eggAmount|lower}} de huevos
                                         {% endif %}
                                     </td>
-                                    <td>{{ basket.startDate|localizeddate('long','none') }}</td>
+                                    <td>{{ basket.startDate|format_date('long') }}</td>
                                     <td><a href="{{ path('partner_basket_share_finalize', {'id': basket.id}) }}">Finalizar
                                             cesta</a><br/>
                                         <a href="{{ path('partner_basket_share_edit', {'id': basket.id}) }}">Cambiar

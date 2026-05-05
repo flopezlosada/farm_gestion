@@ -102,7 +102,7 @@
                                 <p><strong>¿Recibe correos de productos
                                         cárnicos? </strong>{{ partner.eatMeat? "Sí": "No" }}</p>
                                 <p><strong>Fecha de
-                                        inscripción: </strong>{{ partner.inscriptionDate ? partner.inscriptionDate|localizeddate('long','none','es') : '' }}
+                                        inscripción: </strong>{{ partner.inscriptionDate ? partner.inscriptionDate|format_date('long', locale='es') : '' }}
                                 </p>
                                 <p><strong>Email: </strong>{{ partner.email }}</p>
                                 <p><strong>¿Ha rellenado la ficha? </strong>

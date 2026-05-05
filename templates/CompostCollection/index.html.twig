@@ -12,7 +12,7 @@
                             </div>
                             <div class="panel-body">
                                 <p>
-                                    <strong>Última recogida: </strong>{{ point.getLastCompostCollection.getCollectDate|localizeddate('long','none','es') }} - {{ point.getLastCompostCollection.getAmount }} kg
+                                    <strong>Última recogida: </strong>{{ point.getLastCompostCollection.getCollectDate|format_date('long', locale='es') }} - {{ point.getLastCompostCollection.getAmount }} kg
                                 </p>
                                 <p>Resumen de recogidas anuales:<br>
                                     {% for year,amount in point. getYearCollections%}

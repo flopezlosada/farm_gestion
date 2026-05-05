@@ -37,11 +37,11 @@
                                 <p>
                                     <strong>Animal: </strong>{{ entity.getProduct }}<br/>
                                     <strong>Fecha de
-                                        compra:</strong> {{ entity.getPurchaseDate|localizeddate('long','none','es') }}
+                                        compra:</strong> {{ entity.getPurchaseDate|format_date('long', locale='es') }}
                                     <br/>
                                     {% if  entity.receiptdate %}
                                         <strong>Fecha de
-                                            recepción:</strong> {{ entity.receiptdate|localizeddate('long','none','es') }}
+                                            recepción:</strong> {{ entity.receiptdate|format_date('long', locale='es') }}
                                         <br/>
                                     {% endif %}
                                     <strong>Días de vida en la compra: </strong> {{ entity.getDaysOfLife }}<br/>
@@ -51,7 +51,7 @@
                                     ({{ (entity.getProductionTime/30)|number_format(1) }} meses)<br/>
                                     {% if entity.batchStatus.getId==2 %}
                                         <strong>Fecha de
-                                            finalización:</strong> {{ entity.finalizationDate|localizeddate('long','none','es') }}
+                                            finalización:</strong> {{ entity.finalizationDate|format_date('long', locale='es') }}
                                         <br/>
                                     {% endif %}
                                     <strong>Precio de compra del lote: </strong> {{ entity.getPrice }}€<br/>
@@ -296,7 +296,7 @@
                             </p>
                             <ul>
                                 {% for sack in entity.getSacks %}
-                                    <li>{{ sack.getDate|localizeddate('short','none','es') }} - {{ sack.getWeight }}
+                                    <li>{{ sack.getDate|format_date('short', locale='es') }} - {{ sack.getWeight }}
                                         kg
                                         de {{ sack.getProduct }} - {{ sack.getTotalPrice }} € <a
                                                 href="{{ path('sack_fast_delete', {'id': sack.getId}) }}">Quitar</a>
@@ -334,7 +334,7 @@
                                             <td>{{ loop.index }}</td>
                                             <td>{{ fowl.fowlstatus }}</a></td>
                                             <td>{{ fowl.fowldestination }}</a></td>
-                                            <td>{% if fowl.putdowndate %}{{ fowl.putdowndate|localizeddate('long','none','es') }}{% endif %}</td>
+                                            <td>{% if fowl.putdowndate %}{{ fowl.putdowndate|format_date('long', locale='es') }}{% endif %}</td>
                                             <td>{{ fowl.putdownweight }}</td>
                                             <td>{{ fowl.carcassweight }}</td>
                                             <td>{{ fowl.saleprice }}</td>
@@ -371,7 +371,7 @@
                                 {% for movement in movements %}
                                     <tr>
                                         <td>{{ movement.sector }}</td>
-                                        <td>{{ movement.date|localizeddate('long','none','es') }}</td>
+                                        <td>{{ movement.date|format_date('long', locale='es') }}</td>
                                         <td>{% if movement.amount %}{{ movement.amount|abs }} días{% else %}Activo actualmente{% endif %}</td>
                                     </tr>
                                 {% endfor %}

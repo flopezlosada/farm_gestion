@@ -22,8 +22,8 @@
             {% for pile in compost_piles %}
                 <tr>
                     <td>{{ pile.id }}</td>
-                    <td>{{ pile.startDate|localizeddate('long','none','es') }}</td>
-                    <td>{{ pile.endDate|localizeddate('long','none','es') }}</td>
+                    <td>{{ pile.startDate|format_date('long', locale='es') }}</td>
+                    <td>{{ pile.endDate|format_date('long', locale='es') }}</td>
                     <td></td>
                     <td></td>
                     <td>{{ pile.getAmount }}</td>

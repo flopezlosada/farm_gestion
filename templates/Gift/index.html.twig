@@ -24,7 +24,7 @@
                     {% for entity in entities %}
                         <tr>
                             <td><a href="{{ path('gift_show', { 'id': entity.id }) }}">
-                                {% if entity.giftdate %}{{ entity.giftdate|localizeddate('long','none','es') }}{% endif %}</a></td>
+                                {% if entity.giftdate %}{{ entity.giftdate|format_date('long', locale='es') }}{% endif %}</a></td>
                             <td><a href="{{ path('recipient_show', { 'id': entity.getRecipient.id }) }}">{{ entity.getRecipient }}</a></td>
                             <td>{{ entity.Product}}</td>
                             <td>{{ entity.amount }}</td>
