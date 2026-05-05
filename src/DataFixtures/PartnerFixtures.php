@@ -1,0 +1,218 @@
+<?php
+
+namespace App\DataFixtures;
+
+use App\Entity\BasketShare;
+use App\Entity\City;
+use App\Entity\EggAmount;
+use App\Entity\EggPeriod;
+use App\Entity\Partner;
+use App\Entity\PartnerBasketShare;
+use App\Entity\SharePayment;
+use App\Entity\State;
+use App\Entity\WeeklyBasketGroup;
+use Doctrine\Bundle\FixturesBundle\Fixture;
+use Doctrine\Common\DataFixtures\DependentFixtureInterface;
+use Doctrine\Persistence\ObjectManager;
+use Faker\Factory;
+use Faker\Generator;
+
+/**
+ * Genera ~30 socixs sintéticos con su PartnerBasketShare activo.
+ *
+ * El reparto entre tipos de cesta intenta parecerse al real: mayoría
+ * semanales, algo de quincenal, mensual y solo-huevos.
+ */
+class PartnerFixtures extends Fixture implements DependentFixtureInterface
+{
+    private const PARTNER_COUNT = 30;
+
+    private const CITY_NAMES = [
+        'Madrid',
+        'San Sebastián de los Reyes',
+        'Algete',
+        'Tres Cantos',
+    ];
+
+    private const GROUP_NAMES = [
+        'Madrid',
+        'Vallecas',
+        'San Sebastián de los Reyes',
+    ];
+
+    /**
+     * Pesos relativos para repartir socixs entre tipos de cesta.
+     * Aproxima el patrón real (más semanales que mensuales).
+     */
+    private const BASKET_WEIGHTS = [
+        'Semanal'     => 50,
+        'Quincenal'   => 20,
+        'Mensual'     => 15,
+        'Solo huevos' => 15,
+    ];
+
+    private const EGG_AMOUNT_NAMES = [
+        'Media docena',
+        'Docena',
+        'Docena y media',
+        'Dos docenas',
+    ];
+
+    private const EGG_PERIOD_NAMES = ['Semanal', 'Quincenal'];
+
+    /**
+     * Carga los socixs sintéticos junto con su cesta activa.
+     *
+     * @param ObjectManager $manager
+     */
+    public function load(ObjectManager $manager): void
+    {
+        $faker = Factory::create('es_ES');
+
+        for ($i = 0; $i < self::PARTNER_COUNT; $i++) {
+            $partner = $this->createPartner($faker);
+            $manager->persist($partner);
+
+            $basketShare = $this->pickBasketShare($faker);
+            $partnerBasketShare = $this->createPartnerBasketShare($faker, $partner, $basketShare);
+            $manager->persist($partnerBasketShare);
+        }
+
+        $manager->flush();
+    }
+
+    /**
+     * Declara las dependencias de fixtures: los catálogos deben cargarse antes.
+     *
+     * @return array<class-string>
+     */
+    public function getDependencies(): array
+    {
+        return [CatalogFixtures::class];
+    }
+
+    /**
+     * Construye un Partner con datos sintéticos coherentes.
+     *
+     * @param Generator $faker
+     *
+     * @return Partner
+     */
+    private function createPartner(Generator $faker): Partner
+    {
+        $partner = new Partner();
+        $partner->setName($faker->firstName);
+        $partner->setSurname($faker->lastName . ' ' . $faker->lastName);
+        $partner->setDNI($faker->dni);
+        $partner->setCelular((int) $faker->numerify('6########'));
+        $partner->setAddress($faker->streetAddress);
+        $partner->setEmail($faker->unique()->safeEmail);
+        $partner->setEatMeat((int) $faker->boolean(70));
+        $partner->setHasFile($faker->boolean(80));
+        $partner->setIsActive(true);
+        $partner->setInscriptionDate($faker->dateTimeBetween('-3 years', '-1 month'));
+
+        $cityName = $faker->randomElement(self::CITY_NAMES);
+        /** @var City $city */
+        $city = $this->getReference(CatalogFixtures::REF_CITY_PREFIX . $cityName);
+        $partner->setCity($city);
+
+        /** @var State $state */
+        $state = $this->getReference(CatalogFixtures::REF_STATE_PREFIX . 'Madrid');
+        $partner->setState($state);
+
+        $groupName = $faker->randomElement(self::GROUP_NAMES);
+        /** @var WeeklyBasketGroup $group */
+        $group = $this->getReference(CatalogFixtures::REF_WEEKLY_GROUP_PREFIX . $groupName);
+        $partner->setWeeklyBasketGroup($group);
+
+        $paymentName = $faker->randomElement(['Anual', 'Mensual']);
+        /** @var SharePayment $payment */
+        $payment = $this->getReference(CatalogFixtures::REF_SHARE_PAYMENT_PREFIX . $paymentName);
+        $partner->setSharePayment($payment);
+
+        return $partner;
+    }
+
+    /**
+     * Crea un PartnerBasketShare activo coherente con el tipo de cesta.
+     *
+     * Reglas:
+     * - "Solo huevos": obligatoriamente egg_amount + egg_period; precio cesta verduras 0.
+     * - Otras: cesta de verduras con su precio; huevos opcionales (50%).
+     * - "Mensual": además, day_month_order obligatorio (1-4).
+     *
+     * @param Generator    $faker
+     * @param Partner      $partner
+     * @param BasketShare  $basketShare
+     *
+     * @return PartnerBasketShare
+     */
+    private function createPartnerBasketShare(
+        Generator $faker,
+        Partner $partner,
+        BasketShare $basketShare
+    ): PartnerBasketShare {
+        $partnerBasketShare = new PartnerBasketShare();
+        $partnerBasketShare->setPartner($partner);
+        $partnerBasketShare->setBasketShare($basketShare);
+        $partnerBasketShare->setIsActive(true);
+        $partnerBasketShare->setAmount(1);
+        $partnerBasketShare->setVegetablesBasketAmount(1);
+        $partnerBasketShare->setMonthPrice($basketShare->getMonthPrice());
+        $partnerBasketShare->setStartDate($faker->dateTimeBetween('-2 years', '-1 month'));
+
+        $isOnlyEggs = $basketShare->getName() === 'Solo huevos';
+        $hasEggs = $isOnlyEggs || $faker->boolean(50);
+
+        if ($hasEggs) {
+            $eggAmountName = $faker->randomElement(self::EGG_AMOUNT_NAMES);
+            /** @var EggAmount $eggAmount */
+            $eggAmount = $this->getReference(CatalogFixtures::REF_EGG_AMOUNT_PREFIX . $eggAmountName);
+            $partnerBasketShare->setEggAmount($eggAmount);
+            $partnerBasketShare->setEggMonthPrice($eggAmount->getMonthPrice());
+
+            $eggPeriodName = $faker->randomElement(self::EGG_PERIOD_NAMES);
+            /** @var EggPeriod $eggPeriod */
+            $eggPeriod = $this->getReference(CatalogFixtures::REF_EGG_PERIOD_PREFIX . $eggPeriodName);
+            $partnerBasketShare->setEggPeriod($eggPeriod);
+        } else {
+            $partnerBasketShare->setEggMonthPrice('0.00');
+        }
+
+        if ($basketShare->getName() === 'Mensual') {
+            $partnerBasketShare->setDayMonthOrder($faker->numberBetween(1, 4));
+        }
+
+        return $partnerBasketShare;
+    }
+
+    /**
+     * Selecciona un BasketShare ponderado por las probabilidades configuradas.
+     *
+     * @param Generator $faker
+     *
+     * @return BasketShare
+     */
+    private function pickBasketShare(Generator $faker): BasketShare
+    {
+        $total = array_sum(self::BASKET_WEIGHTS);
+        $roll = $faker->numberBetween(1, $total);
+        $cursor = 0;
+
+        foreach (self::BASKET_WEIGHTS as $name => $weight) {
+            $cursor += $weight;
+            if ($roll <= $cursor) {
+                /** @var BasketShare $basket */
+                $basket = $this->getReference(CatalogFixtures::REF_BASKET_PREFIX . $name);
+
+                return $basket;
+            }
+        }
+
+        /** @var BasketShare $basket */
+        $basket = $this->getReference(CatalogFixtures::REF_BASKET_PREFIX . 'Semanal');
+
+        return $basket;
+    }
+}

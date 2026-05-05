@@ -49,6 +49,8 @@
         "whiteoctober/breadcrumbs-bundle": "dev-master"
     },
     "require-dev": {
+        "doctrine/doctrine-fixtures-bundle": "^3.4",
+        "fakerphp/faker": "^1.20",
         "symfony/debug-pack": "*",
         "symfony/dotenv": "^4.1",
         "symfony/maker-bundle": "^1.0@dev",
