@@ -51,8 +51,8 @@ app_category:
     prefix:   /category
 
 app_gestion:
-        path:  /
-        controller: App\Controller\GestionController:gestionAction
+    path:  /
+    controller: App\Controller\GestionController::gestion
 app_user:
     resource: "routing/user.xml"
     prefix:   /user
