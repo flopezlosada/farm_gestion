@@ -12,7 +12,6 @@ use App\Form\PartnerBasketShareType;
 use App\Repository\PartnerBasketShareRepository;
 use Dompdf\Dompdf;
 use Dompdf\Options;
-use Sensio\Bundle\FrameworkExtraBundle\Configuration\ParamConverter;
 use App\Controller\AbstractAppController;
 use Symfony\Component\Form\Extension\Core\Type\DateType;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
@@ -491,8 +490,7 @@ class PartnerBasketShareController extends AbstractAppController
 
 
     /**
-     * @ParamConverter("weekly_basket_status_id", class=\App\Entity\WeeklyBasketStatus::class)
-     * Cambiar estado de la cesta mensual. Esto es para apuntar si lo recibe o no
+     * Cambiar estado de la cesta mensual. Esto es para apuntar si lo recibe o no.
      */
     #[Route("/{weekly_basket_status_id}/{weekly_basket_id}/change/status/basket_weekly", name: "partner_basket_weekly_change_status", methods: ["GET"])]
     public function changeStatusWeeklyBasket($weekly_basket_id, $weekly_basket_status_id)

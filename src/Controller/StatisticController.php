@@ -7,9 +7,7 @@ use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 
 use App\Entity\Purchase;
 use App\Controller\AbstractAppController;
-use Sensio\Bundle\FrameworkExtraBundle\Configuration\Method;
 use Symfony\Component\Routing\Annotation\Route;
-use Sensio\Bundle\FrameworkExtraBundle\Configuration\Template;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
