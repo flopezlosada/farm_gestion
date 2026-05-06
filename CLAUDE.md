@@ -32,14 +32,17 @@ se tomó tras una auditoría: el modelo de datos de socixs (Partner /
 PartnerBasketShare / WeeklyBasket / WeeklyBasketGroup / BasketShare /
 EggPeriod / EggAmount / Booking) está bien pensado y cubre el caso de uso.
 
-**Realidad importante**: la parte de socios NUNCA ha estado en producción.
-Hoy se gestionan ~100 socixs en Excel, manualmente. La parte de granja
-(Crops, Fowls, Lays, Batches, Harvests…) sí está en producción. Por tanto,
-todo el código de socios es código que nunca se ha ejercitado contra usuarixs
-reales, asumimos que tiene bugs latentes, y la regla "tests al tocar
-cualquier cosa de socios" es no negociable.
+**Realidad importante**: el sistema NUNCA se ha usado activamente para
+gestionar socios. En el dump de prod hay datos cargados (246 partners,
+1346 weekly_baskets) como pruebas históricas, pero la gestión real ocurre
+en Excel manualmente — los datos en BBDD nunca se han ejercitado contra
+usuarixs reales en flujos operativos. La parte de granja (Crops, Fowls,
+Lays, Batches, Harvests…) sí está en producción y se usa a diario. Por
+tanto, el código de socios es código que ha visto datos pero no flujo
+real, asumimos bugs latentes, y la regla "tests al tocar cualquier cosa
+de socios" es no negociable.
 
-## Estado actual: Fases 0-4 completadas
+## Estado actual: Fases 0-4 + validación contra dump de prod
 
 **Symfony 5.4 LTS + PHP 7.4** + MySQL 8 + Composer 2.2 LTS + Flex 1.22.
 Login funciona, dashboard renderiza, las pantallas centrales de socios
@@ -66,10 +69,33 @@ y de granja cargan limpias en navegación manual. 11 smoke tests verdes.
   `flopezlosada/calendar-bundle` actualizado en GitHub master con
   constraints `^5.0|^6.0` y `TreeBuilder` con nombre raíz.
 
-**Validación pendiente**: el dump de producción en `~/Downloads/` está
-sin importar. Plan: cargar contra una BBDD aislada `db_prod_snapshot`
-y navegar pantallas con datos reales para detectar regresiones que
-los smoke tests no capturan.
+**Validación contra dump de prod (mayo 2026)**: hecha. Dump cargado
+en `db_prod_snapshot`, navegación manual con datos reales. Cazó 4
+deudas que los smoke tests no detectaron, ya commiteadas:
+
+- `fix(twig)` `fd68da0`: `IntlExtension` no registrado tras la
+  migración a `twig/intl-extra` (Fase 3) — `format_date` desaparecía
+  y rompía `Partner/show.html.twig`. Y `stfalcon_tinymce.yaml`
+  perdido en algún momento → editor WYSIWYG no inicializaba.
+- `fix(doctrine)` `409ea8d`: ~78 DQL con alias legacy `App:Foo` en
+  22 repositorios + `BlogController` que doctrine/persistence 3.x
+  ya no soporta. La migración mecánica de Fase 4 cazó alias en
+  PHP pero no en strings DQL.
+- `fix(form)` `f4b4ab5`: 4 forms con `'a2lix_translations_gedmo'`
+  string legacy → `TranslationsType::class`. El bundle 3.x retiró
+  el type específico de Gedmo.
+- `chore(deps)` `0919014`: fork `flopezlosada/calendar-bundle`
+  actualizado en GitHub master con 3 fixes (routing legacy,
+  `extends Controller` eliminado, `Event` movido a `Contracts`).
+
+`.env.local` quedó con un toggle comentado: BBDD `db` activa
+(fixtures Faker) y `db_prod_snapshot` disponible para futuras
+validaciones (ej. tras subir PHP).
+
+**Quedan errores secundarios** identificados al navegar pero no
+arreglados (Paco no usa esas pantallas activamente): `add audio`,
+`add video`, `add documento` siguen rompiendo aunque
+`add grouped images` funcione. Se afrontan al final si compensa.
 
 ## Hoja de ruta (orden de prioridad)
 
@@ -84,9 +110,13 @@ los smoke tests no capturan.
    por seguir en 7.4 → ahorro económico inmediato. Y desbloquea
    `mhujer/breadcrumbs-bundle` v1.5.9+ y `Huluti/BreadcrumbsBundle`
    si quisiéramos rama mantenida (la 1.5.7 actual aún funciona).
-   Validación previa recomendada: cargar dump de producción y
-   navegar antes de tocar PHP, para tener punto de comparación.
-6. **Symfony 5.4 → 6.4 LTS** (ya con PHP 8.3).
+   Validación contra dump de prod ya hecha (ver "Estado actual").
+6. **Symfony 5.4 → 6.4 → 7.2 LTS**. La última LTS publicada (a
+   mayo 2026) es Symfony 7.2 (nov 2025). 6.4 sigue con soporte
+   hasta nov 2027. El camino es 5.4 → 6.4 → 7.2 (dos saltos
+   majors no se pueden encadenar sin pasar por la intermedia).
+   Objetivo declarado por Paco: llegar a la última LTS como
+   mínimo. Si la migración a 6.4 va sin sangre, seguimos a 7.2.
 7. **Auth nuevo + roles**: reescribir con seguridad nativa de Symfony.
    Roles `ROLE_PARTNER`, `ROLE_GESTION`, `ROLE_ADMIN`. Magic-link login
    (sin contraseñas) pensado para la brecha digital del colectivo:
@@ -136,10 +166,16 @@ Cada fase termina con tests en verde y un tag `vX.Y` en git.
   mano al hacer setup. Cuando se modernice el frontend: mover assets a
   `public/` o `assets/` y actualizar plantillas.
   **Hook `restore-legacy-assets-symlink`** en `composer.json`
-  (commit `94ee36a`) lo recrea automáticamente tras `assets:install` —
-  cualquier `composer require/remove` borra `public/bundles/` y dejaría
-  la web sin CSS si no fuera por este hook. Si en algún momento ves la
-  web sin estilos: comprueba que el symlink existe.
+  (commit `94ee36a`) lo recrea automáticamente tras
+  `composer install/update` (esos disparan `assets:install` por
+  Flex y luego el hook) — cualquier `composer require/remove`
+  borra `public/bundles/` y dejaría la web sin CSS si no fuera
+  por este hook. **Atención**: si ejecutas `bin/console assets:install`
+  manualmente, el hook NO se dispara y el symlink se queda borrado.
+  En ese caso, recrearlo a mano:
+  `ln -s ../../src/Resources/public public/bundles/app`.
+  Si en algún momento ves la web sin estilos: comprueba que el
+  symlink existe.
 - **`ONLY_FULL_GROUP_BY` desactivado en MySQL** vía
   `.ddev/mysql/no_strict_group_by.cnf`. El código viejo tiene queries
   con `GROUP BY` incompletos. Cuando se modernicen los repositorios,
