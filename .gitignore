@@ -3,6 +3,7 @@
 /.vscode
 /.fleet
 /.zed
+/.claude
 .DS_Store
 *.swp
 *~
