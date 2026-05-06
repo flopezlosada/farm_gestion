@@ -1,6 +1,6 @@
 security:
-    encoders:
-        FOS\UserBundle\Model\UserInterface: sha512
+    password_hashers:
+        FOS\UserBundle\Model\UserInterface: auto
 
     role_hierarchy:
         # Rama operativa
@@ -18,17 +18,17 @@ security:
     firewalls:
         main:
             pattern: ^/
+            lazy: true
             form_login:
                 provider: fos_userbundle
-                csrf_token_generator: security.csrf.token_manager
+                enable_csrf: true
                 default_target_path: /gestion/dashboard
             logout:       true
-            anonymous:    true
 
     access_control:
-        - { path: ^/login$, role: IS_AUTHENTICATED_ANONYMOUSLY }
-        - { path: ^/register, role: IS_AUTHENTICATED_ANONYMOUSLY }
-        - { path: ^/resetting, role: IS_AUTHENTICATED_ANONYMOUSLY }
+        - { path: ^/login$, role: PUBLIC_ACCESS }
+        - { path: ^/register, role: PUBLIC_ACCESS }
+        - { path: ^/resetting, role: PUBLIC_ACCESS }
         - { path: ^/gestion/compost/[a-z]\w+/new, role: ROLE_COMPOST}
         - { path: ^/gestion/compost/[a-z]\w+/create, role: ROLE_COMPOST}
         - { path: ^/gestion/compost/[a-z]\w+/[0-9]([0-9])?([0-9])?/edit, role: ROLE_COMPOST}
