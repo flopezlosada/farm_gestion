@@ -32,8 +32,8 @@ class BlogController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $category = $em->getRepository('App:Category')->find($category_id);
-        $entities = $em->getRepository('App:Blog')->findByCategory($category);
+        $category = $em->getRepository(\App\Entity\Category::class)->find($category_id);
+        $entities = $em->getRepository(\App\Entity\Blog::class)->findByCategory($category);
 
         return $this->render('Blog/index.html.twig', array(
             'entities' => $entities,
@@ -45,7 +45,7 @@ class BlogController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:Blog')->findAll();
+        $entities = $em->getRepository(\App\Entity\Blog::class)->findAll();
 
         return $this->render('Blog/index.html.twig', array(
             'entities' => $entities,
@@ -148,11 +148,11 @@ class BlogController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Blog')->find($id);
-        $galleries = $em->getRepository('App:Blog')->findMedia("Gallery", $id, "blog");
-        $audios = $em->getRepository('App:Blog')->findMedia("Audio", $id, "blog");
-        $videos = $em->getRepository('App:Blog')->findMedia("Video", $id, "blog");
-        $documents = $em->getRepository('App:Blog')->findMedia("Document", $id, "blog");
+        $entity = $em->getRepository(\App\Entity\Blog::class)->find($id);
+        $galleries = $em->getRepository(\App\Entity\Blog::class)->findMedia("Gallery", $id, "blog");
+        $audios = $em->getRepository(\App\Entity\Blog::class)->findMedia("Audio", $id, "blog");
+        $videos = $em->getRepository(\App\Entity\Blog::class)->findMedia("Video", $id, "blog");
+        $documents = $em->getRepository(\App\Entity\Blog::class)->findMedia("Document", $id, "blog");
 
         $form = $this->createSecondForm($entity);
 
@@ -182,7 +182,7 @@ class BlogController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Blog')->find($id);
+        $entity = $em->getRepository(\App\Entity\Blog::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Blog entity.');
@@ -215,7 +215,7 @@ class BlogController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Blog')->findPostsBySlug($slug);
+        $entity = $em->getRepository(\App\Entity\Blog::class)->findPostsBySlug($slug);
 
 
         $breadcrumbs->addItem("Home", $this->get("router")->generate("homepage"));
@@ -242,7 +242,7 @@ class BlogController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Blog')->find($id);
+        $entity = $em->getRepository(\App\Entity\Blog::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Blog entity.');
@@ -285,7 +285,7 @@ class BlogController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Blog')->find($id);
+        $entity = $em->getRepository(\App\Entity\Blog::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Blog entity.');
@@ -324,7 +324,7 @@ class BlogController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:Blog')->find($id);
+            $entity = $em->getRepository(\App\Entity\Blog::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find Blog entity.');
@@ -359,11 +359,11 @@ class BlogController extends AbstractController
         $em = $this->getDoctrine()->getManager();
 
         $entity = $em->getRepository('App:' . ucfirst($object_class))->find($id);
-        $single_images = $em->getRepository('App:Blog')->findMedia("Image", $id, $object_class, 1);
-        $grouped_images = $em->getRepository('App:Blog')->findMedia("Image", $id, $object_class, 0);
-        $audios = $em->getRepository('App:Blog')->findMedia("Audio", $id, $object_class);
-        $videos = $em->getRepository('App:Blog')->findMedia("Video", $id, $object_class);
-        $documents = $em->getRepository('App:Blog')->findMedia("Document", $id, $object_class);
+        $single_images = $em->getRepository(\App\Entity\Blog::class)->findMedia("Image", $id, $object_class, 1);
+        $grouped_images = $em->getRepository(\App\Entity\Blog::class)->findMedia("Image", $id, $object_class, 0);
+        $audios = $em->getRepository(\App\Entity\Blog::class)->findMedia("Audio", $id, $object_class);
+        $videos = $em->getRepository(\App\Entity\Blog::class)->findMedia("Video", $id, $object_class);
+        $documents = $em->getRepository(\App\Entity\Blog::class)->findMedia("Document", $id, $object_class);
 
 
         return $this->render('Blog/edition.html.twig', array(
@@ -386,7 +386,7 @@ class BlogController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $category = $em->getRepository('App:Category')->find($id);
+        $category = $em->getRepository(\App\Entity\Category::class)->find($id);
 
 
         $em = $this->getDoctrine()->getManager();
@@ -416,7 +416,7 @@ class BlogController extends AbstractController
     public function latest_post()
     {
         $em = $this->getDoctrine()->getManager();
-        $entities = $em->getRepository("App:Blog")->findLatest(3, 1);
+        $entities = $em->getRepository(\App\Entity\Blog::class)->findLatest(3, 1);
 
         return $this->render("Blog/latest_post.html.twig", array(
             'entities' => $entities,

@@ -25,7 +25,7 @@ class ZoneController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:Zone')->findAll();
+        $entities = $em->getRepository(\App\Entity\Zone::class)->findAll();
 
         return $this->render('Zone/index.html.twig', array(
             'entities' => $entities,
@@ -98,7 +98,7 @@ class ZoneController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Zone')->find($id);
+        $entity = $em->getRepository(\App\Entity\Zone::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Zone entity.');
@@ -120,7 +120,7 @@ class ZoneController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Zone')->find($id);
+        $entity = $em->getRepository(\App\Entity\Zone::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Zone entity.');
@@ -163,7 +163,7 @@ class ZoneController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Zone')->find($id);
+        $entity = $em->getRepository(\App\Entity\Zone::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Zone entity.');
@@ -197,7 +197,7 @@ class ZoneController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:Zone')->find($id);
+            $entity = $em->getRepository(\App\Entity\Zone::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find Zone entity.');

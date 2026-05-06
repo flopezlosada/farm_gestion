@@ -25,7 +25,7 @@ class MovementController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:Movement')->findAll();
+        $entities = $em->getRepository(\App\Entity\Movement::class)->findAll();
 
         return $this->render('Movement/index.html.twig', array(
             'entities' => $entities,
@@ -40,7 +40,7 @@ class MovementController extends AbstractController
     {
         $entity = new Movement();
         $em = $this->getDoctrine()->getManager();
-        $batch = $em->getRepository("App:Batch")->find($batch_id);
+        $batch = $em->getRepository(\App\Entity\Batch::class)->find($batch_id);
         $form = $this->createCreateForm($entity, $batch);
         $form->handleRequest($request);
 
@@ -49,7 +49,7 @@ class MovementController extends AbstractController
             $em = $this->getDoctrine()->getManager();
             $entity->setBatch($batch);
             $em->persist($entity);
-            $last_movement = $em->getRepository("App:Movement")->findLastMovement($batch_id);
+            $last_movement = $em->getRepository(\App\Entity\Movement::class)->findLastMovement($batch_id);
             if (count($last_movement) > 0) {
                 $interval = date_diff($last_movement[0]->getDate(), $entity->getDate(), false);
                 $last_movement[0]->setAmount($interval->format('%R%a'));
@@ -96,7 +96,7 @@ class MovementController extends AbstractController
     {
         $entity = new Movement();
         $em = $this->getDoctrine()->getManager();
-        $batch = $em->getRepository("App:Batch")->find($batch_id);
+        $batch = $em->getRepository(\App\Entity\Batch::class)->find($batch_id);
         $form = $this->createCreateForm($entity, $batch);
 
 
@@ -115,7 +115,7 @@ class MovementController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Movement')->find($id);
+        $entity = $em->getRepository(\App\Entity\Movement::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Movement entity.');
@@ -137,7 +137,7 @@ class MovementController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Movement')->find($id);
+        $entity = $em->getRepository(\App\Entity\Movement::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Movement entity.');
@@ -180,7 +180,7 @@ class MovementController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Movement')->find($id);
+        $entity = $em->getRepository(\App\Entity\Movement::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Movement entity.');
@@ -214,7 +214,7 @@ class MovementController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:Movement')->find($id);
+            $entity = $em->getRepository(\App\Entity\Movement::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find Movement entity.');

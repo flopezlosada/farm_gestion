@@ -25,7 +25,7 @@ class FowlDestinationController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:FowlDestination')->findAll();
+        $entities = $em->getRepository(\App\Entity\FowlDestination::class)->findAll();
 
         return $this->render('FowlDestination/index.html.twig', array(
             'entities' => $entities,
@@ -98,7 +98,7 @@ class FowlDestinationController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:FowlDestination')->find($id);
+        $entity = $em->getRepository(\App\Entity\FowlDestination::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find FowlDestination entity.');
@@ -120,7 +120,7 @@ class FowlDestinationController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:FowlDestination')->find($id);
+        $entity = $em->getRepository(\App\Entity\FowlDestination::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find FowlDestination entity.');
@@ -163,7 +163,7 @@ class FowlDestinationController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:FowlDestination')->find($id);
+        $entity = $em->getRepository(\App\Entity\FowlDestination::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find FowlDestination entity.');
@@ -197,7 +197,7 @@ class FowlDestinationController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:FowlDestination')->find($id);
+            $entity = $em->getRepository(\App\Entity\FowlDestination::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find FowlDestination entity.');

@@ -29,15 +29,15 @@ class TaskController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:Task')->findAll();
-        $pending_tasks = $em->getRepository("App:Task")->findPending(date('n'), date('Y'));
-        $aprox_tasks = $em->getRepository("App:Task")->findPending(date('n'), date('Y'), 3);
-        $periodic_tasks = $em->getRepository("App:Task")->findPending(date('n'), date('Y'), 4);
-        $date_tasks = $em->getRepository("App:Task")->findPending(date('n'), date('Y'), 2);
-        $punctual_tasks = $em->getRepository("App:Task")->findPending(null, null, 1);//sin fecha
-        $crop_tasks = $em->getRepository("App:Task")->findCrop(date('n'), date('Y'));
-        $ended_tasks = $em->getRepository("App:Task")->findEnded();
-        $user_tasks = $em->getRepository("App:Task")->findUserTask($this->getUser(), date('n'), date('Y'));
+        $entities = $em->getRepository(\App\Entity\Task::class)->findAll();
+        $pending_tasks = $em->getRepository(\App\Entity\Task::class)->findPending(date('n'), date('Y'));
+        $aprox_tasks = $em->getRepository(\App\Entity\Task::class)->findPending(date('n'), date('Y'), 3);
+        $periodic_tasks = $em->getRepository(\App\Entity\Task::class)->findPending(date('n'), date('Y'), 4);
+        $date_tasks = $em->getRepository(\App\Entity\Task::class)->findPending(date('n'), date('Y'), 2);
+        $punctual_tasks = $em->getRepository(\App\Entity\Task::class)->findPending(null, null, 1);//sin fecha
+        $crop_tasks = $em->getRepository(\App\Entity\Task::class)->findCrop(date('n'), date('Y'));
+        $ended_tasks = $em->getRepository(\App\Entity\Task::class)->findEnded();
+        $user_tasks = $em->getRepository(\App\Entity\Task::class)->findUserTask($this->getUser(), date('n'), date('Y'));
 
         return $this->render('Task/index.html.twig', array(
             'entities' => $entities,
@@ -64,7 +64,7 @@ class TaskController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $task_type = $em->getRepository("App:TaskType")->find($task_type_id);
+            $task_type = $em->getRepository(\App\Entity\TaskType::class)->find($task_type_id);
             $entity->setTaskType($task_type);
             $em->persist($entity);
             $em->flush();
@@ -142,7 +142,7 @@ class TaskController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $task_type = $em->getRepository("App:TaskType")->find($task_type_id);
+            $task_type = $em->getRepository(\App\Entity\TaskType::class)->find($task_type_id);
             $entity->setTaskType($task_type);
             if ($entity->getExpectedDate()) {
                 $entity->setExpectedDate(new \DateTime($entity->getExpectedDate()));
@@ -194,7 +194,7 @@ class TaskController extends AbstractController
 
         if ($form->isValid() && $entity->getExpectedDate()) {
             $em = $this->getDoctrine()->getManager();
-            $task_type = $em->getRepository("App:TaskType")->find($task_type_id);
+            $task_type = $em->getRepository(\App\Entity\TaskType::class)->find($task_type_id);
             $entity->setTaskType($task_type);
 
             $entity->setExpectedDate(new \DateTime($entity->getExpectedDate()));
@@ -243,7 +243,7 @@ class TaskController extends AbstractController
 
         if ($form->isValid() && $entity->getExpectedDate()) {
             $em = $this->getDoctrine()->getManager();
-            $task_type = $em->getRepository("App:TaskType")->find($task_type_id);
+            $task_type = $em->getRepository(\App\Entity\TaskType::class)->find($task_type_id);
             $entity->setTaskType($task_type);
 
             $entity->setExpectedDate(new \DateTime($entity->getExpectedDate()));
@@ -270,7 +270,7 @@ class TaskController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Task')->find($id);
+        $entity = $em->getRepository(\App\Entity\Task::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Task entity.');
@@ -292,7 +292,7 @@ class TaskController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Task')->find($id);
+        $entity = $em->getRepository(\App\Entity\Task::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Task entity.');
@@ -314,7 +314,7 @@ class TaskController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Task')->find($id);
+        $entity = $em->getRepository(\App\Entity\Task::class)->find($id);
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Task entity.');
         }
@@ -360,7 +360,7 @@ class TaskController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Task')->find($id);
+        $entity = $em->getRepository(\App\Entity\Task::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Task entity.');
@@ -399,7 +399,7 @@ class TaskController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:Task')->find($id);
+            $entity = $em->getRepository(\App\Entity\Task::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find Task entity.');

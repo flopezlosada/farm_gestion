@@ -25,7 +25,7 @@ class HarvestController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:Harvest')->findAll();
+        $entities = $em->getRepository(\App\Entity\Harvest::class)->findAll();
 
         return $this->render('Harvest/index.html.twig', array(
             'entities' => $entities,
@@ -98,7 +98,7 @@ class HarvestController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Harvest')->find($id);
+        $entity = $em->getRepository(\App\Entity\Harvest::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Harvest entity.');
@@ -120,7 +120,7 @@ class HarvestController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Harvest')->find($id);
+        $entity = $em->getRepository(\App\Entity\Harvest::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Harvest entity.');
@@ -163,7 +163,7 @@ class HarvestController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Harvest')->find($id);
+        $entity = $em->getRepository(\App\Entity\Harvest::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Harvest entity.');
@@ -197,7 +197,7 @@ class HarvestController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:Harvest')->find($id);
+            $entity = $em->getRepository(\App\Entity\Harvest::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find Harvest entity.');

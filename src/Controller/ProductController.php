@@ -25,7 +25,7 @@ class ProductController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:Product')->findAll();
+        $entities = $em->getRepository(\App\Entity\Product::class)->findAll();
 
         return $this->render('Product/index.html.twig', array(
             'entities' => $entities,
@@ -98,7 +98,7 @@ class ProductController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Product')->find($id);
+        $entity = $em->getRepository(\App\Entity\Product::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Product entity.');
@@ -120,7 +120,7 @@ class ProductController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Product')->find($id);
+        $entity = $em->getRepository(\App\Entity\Product::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Product entity.');
@@ -163,7 +163,7 @@ class ProductController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Product')->find($id);
+        $entity = $em->getRepository(\App\Entity\Product::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Product entity.');
@@ -197,7 +197,7 @@ class ProductController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:Product')->find($id);
+            $entity = $em->getRepository(\App\Entity\Product::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find Product entity.');

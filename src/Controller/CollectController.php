@@ -25,7 +25,7 @@ class CollectController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:Collect')->findAll();
+        $entities = $em->getRepository(\App\Entity\Collect::class)->findAll();
 
         return $this->render('Collect/index.html.twig', array(
             'entities' => $entities,
@@ -103,7 +103,7 @@ class CollectController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Collect')->find($id);
+        $entity = $em->getRepository(\App\Entity\Collect::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Collect entity.');
@@ -125,7 +125,7 @@ class CollectController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Collect')->find($id);
+        $entity = $em->getRepository(\App\Entity\Collect::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Collect entity.');
@@ -169,7 +169,7 @@ class CollectController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Collect')->find($id);
+        $entity = $em->getRepository(\App\Entity\Collect::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Collect entity.');
@@ -206,7 +206,7 @@ class CollectController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:Collect')->find($id);
+            $entity = $em->getRepository(\App\Entity\Collect::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find Collect entity.');
@@ -243,11 +243,11 @@ class CollectController extends AbstractController
             $id = $request->get('selected_dichotomous_key_id');
 
             echo $id;
-            $dichotomous_keys = $em->getRepository('App:Unity')->find($id);
+            $dichotomous_keys = $em->getRepository(\App\Entity\Unity::class)->find($id);
 
         } else {
             echo "cawsdadva";
-            $dichotomous_keys = $em->getRepository('App:Unity')->findAll();
+            $dichotomous_keys = $em->getRepository(\App\Entity\Unity::class)->findAll();
         }
         echo count($dichotomous_keys);
 

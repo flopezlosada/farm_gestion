@@ -25,7 +25,7 @@ class SaleController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:Sale')->findAll();
+        $entities = $em->getRepository(\App\Entity\Sale::class)->findAll();
 
         return $this->render('Sale/index.html.twig', array(
             'entities' => $entities,
@@ -104,7 +104,7 @@ class SaleController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Sale')->find($id);
+        $entity = $em->getRepository(\App\Entity\Sale::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Sale entity.');
@@ -126,7 +126,7 @@ class SaleController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Sale')->find($id);
+        $entity = $em->getRepository(\App\Entity\Sale::class)->find($id);
         $entity->setUser($this->getUser());
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Sale entity.');
@@ -170,7 +170,7 @@ class SaleController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Sale')->find($id);
+        $entity = $em->getRepository(\App\Entity\Sale::class)->find($id);
         $entity->setUser($this->getUser());
 
         if (!$entity) {
@@ -209,7 +209,7 @@ class SaleController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:Sale')->find($id);
+            $entity = $em->getRepository(\App\Entity\Sale::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find Sale entity.');
@@ -242,7 +242,7 @@ class SaleController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Sale')->find($id);
+        $entity = $em->getRepository(\App\Entity\Sale::class)->find($id);
         $entity->setPaid(1);
         $em->persist($entity);
         $em->flush();

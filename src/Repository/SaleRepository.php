@@ -32,7 +32,7 @@ class SaleRepository extends EntityRepository
     public function findTotalProductYear($product, $year)
     {
         $em = $this->getEntityManager();
-        $unity = $em->getRepository('App:Unity')->find(1);
+        $unity = $em->getRepository(\App\Entity\Unity::class)->find(1);
         $dql = "select sum(c.amount) as total from App:Sale c where YEAR (c.sale_date)=:year and c.unity=:unity  and c.product=:product";
         $query = $em->createQuery($dql);
         $query->setParameter("year", $year);
@@ -42,7 +42,7 @@ class SaleRepository extends EntityRepository
         $amount_single = $query->getSingleScalarResult();
 
         $dql_dozen = "select sum(c.amount) as total from App:Collect c where YEAR (c.sale_date)=:year and c.unity=:unity and c.product=:product";
-        $dozen = $em->getRepository('App:Unity')->find(3);
+        $dozen = $em->getRepository(\App\Entity\Unity::class)->find(3);
         $query_dozen = $em->createQuery($dql);
         $query_dozen->setParameter("year", $year);
         $query_dozen->setParameter("unity", $dozen);

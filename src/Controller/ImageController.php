@@ -25,7 +25,7 @@ class ImageController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:Image')->findAll();
+        $entities = $em->getRepository(\App\Entity\Image::class)->findAll();
 
         return $this->render('Image/index.html.twig', array(
             'entities' => $entities,
@@ -137,7 +137,7 @@ class ImageController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $gallery = $em->getRepository("App:Gallery")->find($gallery_id);
+            $gallery = $em->getRepository(\App\Entity\Gallery::class)->find($gallery_id);
             $entity->setForeignKey($foreign_key);
             $entity->setObjectClass($object_class);
             $entity->setGallery($gallery);
@@ -165,7 +165,7 @@ class ImageController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Image')->find($id);
+        $entity = $em->getRepository(\App\Entity\Image::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Image entity.');
@@ -187,7 +187,7 @@ class ImageController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Image')->find($id);
+        $entity = $em->getRepository(\App\Entity\Image::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Image entity.');
@@ -206,7 +206,7 @@ class ImageController extends AbstractController
     public function fastDelete($id)
     {
         $em = $this->getDoctrine()->getManager();
-        $entity = $em->getRepository('App:Image')->find($id);
+        $entity = $em->getRepository(\App\Entity\Image::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Image entity.');
@@ -249,7 +249,7 @@ class ImageController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Image')->find($id);
+        $entity = $em->getRepository(\App\Entity\Image::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Image entity.');
@@ -286,7 +286,7 @@ class ImageController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:Image')->find($id);
+            $entity = $em->getRepository(\App\Entity\Image::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find Image entity.');
@@ -325,7 +325,7 @@ class ImageController extends AbstractController
          * Entonces hay que coger las imágenes de la entidad (woman) que están agrupadas (single=0)
          */
 
-        $image = $em->getRepository('App:Image')->find($id);
+        $image = $em->getRepository(\App\Entity\Image::class)->find($id);
 
         return $this->render('Image/show_snippet.html.twig', array(
             'image' => $image,

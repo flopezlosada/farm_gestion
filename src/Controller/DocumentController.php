@@ -25,7 +25,7 @@ class DocumentController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:Document')->findAll();
+        $entities = $em->getRepository(\App\Entity\Document::class)->findAll();
 
         return $this->render('Document/index.html.twig', array(
             'entities' => $entities,
@@ -105,7 +105,7 @@ class DocumentController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Document')->find($id);
+        $entity = $em->getRepository(\App\Entity\Document::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Document entity.');
@@ -127,7 +127,7 @@ class DocumentController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Document')->find($id);
+        $entity = $em->getRepository(\App\Entity\Document::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Document entity.');
@@ -170,7 +170,7 @@ class DocumentController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Document')->find($id);
+        $entity = $em->getRepository(\App\Entity\Document::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Document entity.');
@@ -204,7 +204,7 @@ class DocumentController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:Document')->find($id);
+            $entity = $em->getRepository(\App\Entity\Document::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find Document entity.');
@@ -237,7 +237,7 @@ class DocumentController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Document')->find($id);
+        $entity = $em->getRepository(\App\Entity\Document::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Document entity.');
@@ -252,7 +252,7 @@ class DocumentController extends AbstractController
     public function fastDelete($id)
     {
         $em = $this->getDoctrine()->getManager();
-        $entity = $em->getRepository('App:Document')->find($id);
+        $entity = $em->getRepository(\App\Entity\Document::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Document entity.');

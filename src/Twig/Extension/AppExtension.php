@@ -181,7 +181,7 @@ class AppExtension extends AbstractExtension
     public function glossary($text)
     {
         $em = $this->manager;
-        $words = $em->getRepository("App:Glossary")->getAllGlossaryWords();
+        $words = $em->getRepository(\App\Entity\Glossary::class)->getAllGlossaryWords();
         $keys = array();
         foreach ($words as $word) {
             $keys[] = $word['name'];
@@ -197,13 +197,13 @@ class AppExtension extends AbstractExtension
     {
         $em = $this->manager;
 
-        return $em->getRepository("App:Glossary")->getId($word);
+        return $em->getRepository(\App\Entity\Glossary::class)->getId($word);
     }
 
     public function select_glossary_letters($letter)
     {
         $em = $this->manager;
-        $words = $em->getRepository("App:Glossary")->getWordsFromInitLetter($letter);
+        $words = $em->getRepository(\App\Entity\Glossary::class)->getWordsFromInitLetter($letter);
 
         return $words;
     }

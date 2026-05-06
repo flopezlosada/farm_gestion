@@ -25,7 +25,7 @@ class TaskNoteController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:TaskNote')->findAll();
+        $entities = $em->getRepository(\App\Entity\TaskNote::class)->findAll();
 
         return $this->render('TaskNote/index.html.twig', array(
             'entities' => $entities,
@@ -43,7 +43,7 @@ class TaskNoteController extends AbstractController
         $form->handleRequest($request);
         $em = $this->getDoctrine()->getManager();
 
-        $task = $em->getRepository('App:Task')->find($task_id);
+        $task = $em->getRepository(\App\Entity\Task::class)->find($task_id);
         $entity->setTask($task);
         if ($form->isValid()) {
             $em->persist($entity);
@@ -87,7 +87,7 @@ class TaskNoteController extends AbstractController
         $form = $this->createCreateForm($entity, $task_id);
         $em = $this->getDoctrine()->getManager();
 
-        $task = $em->getRepository('App:Task')->find($task_id);
+        $task = $em->getRepository(\App\Entity\Task::class)->find($task_id);
         $entity->setTask($task);
 
         return $this->render('TaskNote/new.html.twig', array(
@@ -104,7 +104,7 @@ class TaskNoteController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:TaskNote')->find($id);
+        $entity = $em->getRepository(\App\Entity\TaskNote::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find TaskNote entity.');
@@ -126,7 +126,7 @@ class TaskNoteController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:TaskNote')->find($id);
+        $entity = $em->getRepository(\App\Entity\TaskNote::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find TaskNote entity.');
@@ -169,7 +169,7 @@ class TaskNoteController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:TaskNote')->find($id);
+        $entity = $em->getRepository(\App\Entity\TaskNote::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find TaskNote entity.');
@@ -203,7 +203,7 @@ class TaskNoteController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:TaskNote')->find($id);
+            $entity = $em->getRepository(\App\Entity\TaskNote::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find TaskNote entity.');

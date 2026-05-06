@@ -26,7 +26,7 @@ class SeedWorkController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:SeedWork')->findAll();
+        $entities = $em->getRepository(\App\Entity\SeedWork::class)->findAll();
 
         return $this->render('SeedWork/index.html.twig', array(
             'entities' => $entities,
@@ -41,7 +41,7 @@ class SeedWorkController extends AbstractController
     {
         $entity = new SeedWork();
         $em = $this->getDoctrine()->getManager();
-        $crop_working = $em->getRepository("App:CropWorking")->find($crop_working_id);
+        $crop_working = $em->getRepository(\App\Entity\CropWorking::class)->find($crop_working_id);
 
         $form = $this->createCreateForm($entity, $crop_working);
         $form->handleRequest($request);
@@ -91,7 +91,7 @@ class SeedWorkController extends AbstractController
         $entity = new SeedWork();
         if ($crop_working_id) {
             $em = $this->getDoctrine()->getManager();
-            $crop_working = $em->getRepository("App:CropWorking")->find($crop_working_id);
+            $crop_working = $em->getRepository(\App\Entity\CropWorking::class)->find($crop_working_id);
             $entity->setCropWorking($crop_working);
         }
         $form = $this->createCreateForm($entity, $crop_working);
@@ -111,7 +111,7 @@ class SeedWorkController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:SeedWork')->find($id);
+        $entity = $em->getRepository(\App\Entity\SeedWork::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find SeedWork entity.');
@@ -134,7 +134,7 @@ class SeedWorkController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:SeedWork')->find($id);
+        $entity = $em->getRepository(\App\Entity\SeedWork::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find SeedWork entity.');
@@ -180,7 +180,7 @@ class SeedWorkController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:SeedWork')->find($id);
+        $entity = $em->getRepository(\App\Entity\SeedWork::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find SeedWork entity.');
@@ -221,7 +221,7 @@ class SeedWorkController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:SeedWork')->find($id);
+            $entity = $em->getRepository(\App\Entity\SeedWork::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find SeedWork entity.');

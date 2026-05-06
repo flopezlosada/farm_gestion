@@ -25,7 +25,7 @@ class BasketController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:Basket')->findAll();
+        $entities = $em->getRepository(\App\Entity\Basket::class)->findAll();
 
         return $this->render('Basket/index.html.twig', array(
             'entities' => $entities,
@@ -98,7 +98,7 @@ class BasketController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Basket')->find($id);
+        $entity = $em->getRepository(\App\Entity\Basket::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Basket entity.');
@@ -120,7 +120,7 @@ class BasketController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Basket')->find($id);
+        $entity = $em->getRepository(\App\Entity\Basket::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Basket entity.');
@@ -163,7 +163,7 @@ class BasketController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Basket')->find($id);
+        $entity = $em->getRepository(\App\Entity\Basket::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Basket entity.');
@@ -197,7 +197,7 @@ class BasketController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:Basket')->find($id);
+            $entity = $em->getRepository(\App\Entity\Basket::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find Basket entity.');

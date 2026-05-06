@@ -25,7 +25,7 @@ class FowlStatusController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:FowlStatus')->findAll();
+        $entities = $em->getRepository(\App\Entity\FowlStatus::class)->findAll();
 
         return $this->render('FowlStatus/index.html.twig', array(
             'entities' => $entities,
@@ -98,7 +98,7 @@ class FowlStatusController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:FowlStatus')->find($id);
+        $entity = $em->getRepository(\App\Entity\FowlStatus::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find FowlStatus entity.');
@@ -120,7 +120,7 @@ class FowlStatusController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:FowlStatus')->find($id);
+        $entity = $em->getRepository(\App\Entity\FowlStatus::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find FowlStatus entity.');
@@ -163,7 +163,7 @@ class FowlStatusController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:FowlStatus')->find($id);
+        $entity = $em->getRepository(\App\Entity\FowlStatus::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find FowlStatus entity.');
@@ -197,7 +197,7 @@ class FowlStatusController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:FowlStatus')->find($id);
+            $entity = $em->getRepository(\App\Entity\FowlStatus::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find FowlStatus entity.');

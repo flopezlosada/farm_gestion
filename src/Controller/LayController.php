@@ -25,7 +25,7 @@ class LayController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:Lay')->findAll();
+        $entities = $em->getRepository(\App\Entity\Lay::class)->findAll();
 
         return $this->render('Lay/index.html.twig', array(
             'entities' => $entities,
@@ -105,7 +105,7 @@ class LayController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Lay')->find($id);
+        $entity = $em->getRepository(\App\Entity\Lay::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Lay entity.');
@@ -127,7 +127,7 @@ class LayController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Lay')->find($id);
+        $entity = $em->getRepository(\App\Entity\Lay::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Lay entity.');
@@ -171,7 +171,7 @@ class LayController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Lay')->find($id);
+        $entity = $em->getRepository(\App\Entity\Lay::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Lay entity.');
@@ -208,7 +208,7 @@ class LayController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:Lay')->find($id);
+            $entity = $em->getRepository(\App\Entity\Lay::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find Lay entity.');

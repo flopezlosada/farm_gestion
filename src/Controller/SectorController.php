@@ -27,7 +27,7 @@ class SectorController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:Sector')->findAll();
+        $entities = $em->getRepository(\App\Entity\Sector::class)->findAll();
 
         return $this->render('Sector/index.html.twig', array(
             'entities' => $entities,
@@ -100,7 +100,7 @@ class SectorController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Sector')->find($id);
+        $entity = $em->getRepository(\App\Entity\Sector::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Sector entity.');
@@ -122,7 +122,7 @@ class SectorController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Sector')->find($id);
+        $entity = $em->getRepository(\App\Entity\Sector::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Sector entity.');
@@ -165,7 +165,7 @@ class SectorController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Sector')->find($id);
+        $entity = $em->getRepository(\App\Entity\Sector::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Sector entity.');
@@ -199,7 +199,7 @@ class SectorController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:Sector')->find($id);
+            $entity = $em->getRepository(\App\Entity\Sector::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find Sector entity.');
@@ -236,8 +236,8 @@ class SectorController extends AbstractController
     public function sectors(Request $request)
     {
         $em = $this->getDoctrine()->getManager();
-        $zone = $em->getRepository("App:Zone")->findById($request->get('zone_id'));
-        $sectors = $em->getRepository('App:Sector')->findByZone($zone);
+        $zone = $em->getRepository(\App\Entity\Zone::class)->findById($request->get('zone_id'));
+        $sectors = $em->getRepository(\App\Entity\Sector::class)->findByZone($zone);
 
 
         return array(

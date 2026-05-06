@@ -25,7 +25,7 @@ class PurchaseController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:Purchase')->findAll();
+        $entities = $em->getRepository(\App\Entity\Purchase::class)->findAll();
 
         return $this->render('Purchase/index.html.twig', array(
             'entities' => $entities,
@@ -103,7 +103,7 @@ class PurchaseController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Purchase')->find($id);
+        $entity = $em->getRepository(\App\Entity\Purchase::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Purchase entity.');
@@ -125,7 +125,7 @@ class PurchaseController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Purchase')->find($id);
+        $entity = $em->getRepository(\App\Entity\Purchase::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Purchase entity.');
@@ -170,7 +170,7 @@ class PurchaseController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Purchase')->find($id);
+        $entity = $em->getRepository(\App\Entity\Purchase::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Purchase entity.');
@@ -208,7 +208,7 @@ class PurchaseController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:Purchase')->find($id);
+            $entity = $em->getRepository(\App\Entity\Purchase::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find Purchase entity.');

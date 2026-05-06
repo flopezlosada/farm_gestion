@@ -25,7 +25,7 @@ class VideoController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:Video')->findAll();
+        $entities = $em->getRepository(\App\Entity\Video::class)->findAll();
 
         return $this->render('Video/index.html.twig', array(
             'entities' => $entities,
@@ -105,7 +105,7 @@ class VideoController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Video')->find($id);
+        $entity = $em->getRepository(\App\Entity\Video::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Video entity.');
@@ -127,7 +127,7 @@ class VideoController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Video')->find($id);
+        $entity = $em->getRepository(\App\Entity\Video::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Video entity.');
@@ -170,7 +170,7 @@ class VideoController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Video')->find($id);
+        $entity = $em->getRepository(\App\Entity\Video::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Video entity.');
@@ -204,7 +204,7 @@ class VideoController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:Video')->find($id);
+            $entity = $em->getRepository(\App\Entity\Video::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find Video entity.');
@@ -238,7 +238,7 @@ class VideoController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Video')->find($id);
+        $entity = $em->getRepository(\App\Entity\Video::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Video entity.');
@@ -253,7 +253,7 @@ class VideoController extends AbstractController
     public function fastDelete($id)
     {
         $em = $this->getDoctrine()->getManager();
-        $entity = $em->getRepository('App:Video')->find($id);
+        $entity = $em->getRepository(\App\Entity\Video::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Video entity.');

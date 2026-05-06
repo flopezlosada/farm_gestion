@@ -25,7 +25,7 @@ class SackController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:Sack')->findAll();
+        $entities = $em->getRepository(\App\Entity\Sack::class)->findAll();
 
         return $this->render('Sack/index.html.twig', array(
             'entities' => $entities,
@@ -40,14 +40,14 @@ class SackController extends AbstractController
     {
         $entity = new Sack();
         $em = $this->getDoctrine()->getManager();
-        $batch = $em->getRepository("App:Batch")->find($batch_id);
+        $batch = $em->getRepository(\App\Entity\Batch::class)->find($batch_id);
         $form = $this->createCreateForm($entity, $batch);
 
         $form->handleRequest($request);
 
 
-        //$sack_product = $em->getRepository("App:Product")->find($batch->getSackProductId());
-        //$purchase = $em->getRepository("App:Sack")->getPurchase($sack_product);
+        //$sack_product = $em->getRepository(\App\Entity\Product::class)->find($batch->getSackProductId());
+        //$purchase = $em->getRepository(\App\Entity\Sack::class)->getPurchase($sack_product);
 
 
         if ($form->isValid()) {
@@ -106,10 +106,10 @@ class SackController extends AbstractController
 
 
         $em = $this->getDoctrine()->getManager();
-        $batch = $em->getRepository("App:Batch")->find($batch_id);
+        $batch = $em->getRepository(\App\Entity\Batch::class)->find($batch_id);
         $form = $this->createCreateForm($entity, $batch);
-        $sack_product = $em->getRepository("App:Product")->find($batch->getSackProductId());
-        $purchase = $em->getRepository("App:Sack")->getPurchase($sack_product);
+        $sack_product = $em->getRepository(\App\Entity\Product::class)->find($batch->getSackProductId());
+        $purchase = $em->getRepository(\App\Entity\Sack::class)->getPurchase($sack_product);
         $available_amount = 0;
         if ($purchase) {
             $available_amount = $purchase->getAvailableAmount();
@@ -133,7 +133,7 @@ class SackController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Sack')->find($id);
+        $entity = $em->getRepository(\App\Entity\Sack::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Sack entity.');
@@ -155,7 +155,7 @@ class SackController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Sack')->find($id);
+        $entity = $em->getRepository(\App\Entity\Sack::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Sack entity.');
@@ -198,7 +198,7 @@ class SackController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Sack')->find($id);
+        $entity = $em->getRepository(\App\Entity\Sack::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Sack entity.');
@@ -232,7 +232,7 @@ class SackController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:Sack')->find($id);
+            $entity = $em->getRepository(\App\Entity\Sack::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find Sack entity.');
@@ -265,7 +265,7 @@ class SackController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Sack')->find($id);
+        $entity = $em->getRepository(\App\Entity\Sack::class)->find($id);
         $batch = $entity->getBatch();
 
         if (!$entity) {

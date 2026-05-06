@@ -25,7 +25,7 @@ class TaskImageController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:TaskImage')->findAll();
+        $entities = $em->getRepository(\App\Entity\TaskImage::class)->findAll();
 
         return $this->render('TaskImage/index.html.twig', array(
             'entities' => $entities,
@@ -43,7 +43,7 @@ class TaskImageController extends AbstractController
         $form->handleRequest($request);
         $em = $this->getDoctrine()->getManager();
 
-        $task = $em->getRepository('App:Task')->find($task_id);
+        $task = $em->getRepository(\App\Entity\Task::class)->find($task_id);
         $entity->setTask($task);
         if ($form->isValid()) {
 
@@ -88,7 +88,7 @@ class TaskImageController extends AbstractController
         $form = $this->createCreateForm($entity, $task_id);
         $em = $this->getDoctrine()->getManager();
 
-        $task = $em->getRepository('App:Task')->find($task_id);
+        $task = $em->getRepository(\App\Entity\Task::class)->find($task_id);
         $entity->setTask($task);
         return $this->render('TaskImage/new.html.twig', array(
             'entity' => $entity,
@@ -104,7 +104,7 @@ class TaskImageController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:TaskImage')->find($id);
+        $entity = $em->getRepository(\App\Entity\TaskImage::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find TaskImage entity.');
@@ -126,7 +126,7 @@ class TaskImageController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:TaskImage')->find($id);
+        $entity = $em->getRepository(\App\Entity\TaskImage::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find TaskImage entity.');
@@ -169,7 +169,7 @@ class TaskImageController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:TaskImage')->find($id);
+        $entity = $em->getRepository(\App\Entity\TaskImage::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find TaskImage entity.');
@@ -203,7 +203,7 @@ class TaskImageController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:TaskImage')->find($id);
+            $entity = $em->getRepository(\App\Entity\TaskImage::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find TaskImage entity.');

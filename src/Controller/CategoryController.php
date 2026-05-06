@@ -25,7 +25,7 @@ class CategoryController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:Category')->findAll();
+        $entities = $em->getRepository(\App\Entity\Category::class)->findAll();
 
         return $this->render('Category/index.html.twig', array(
             'entities' => $entities,
@@ -98,7 +98,7 @@ class CategoryController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Category')->find($id);
+        $entity = $em->getRepository(\App\Entity\Category::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Category entity.');
@@ -120,7 +120,7 @@ class CategoryController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Category')->find($id);
+        $entity = $em->getRepository(\App\Entity\Category::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Category entity.');
@@ -163,7 +163,7 @@ class CategoryController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Category')->find($id);
+        $entity = $em->getRepository(\App\Entity\Category::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Category entity.');
@@ -197,7 +197,7 @@ class CategoryController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:Category')->find($id);
+            $entity = $em->getRepository(\App\Entity\Category::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find Category entity.');
@@ -229,7 +229,7 @@ class CategoryController extends AbstractController
     public function list_aside()
     {
         $em = $this->getDoctrine()->getManager();
-        $entities = $em->getRepository("App:Category")->findAll();
+        $entities = $em->getRepository(\App\Entity\Category::class)->findAll();
 
         return $this->render("Category/list_aside.html.twig", array(
             'entities' => $entities,
