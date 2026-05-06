@@ -42,11 +42,13 @@ tanto, el código de socios es código que ha visto datos pero no flujo
 real, asumimos bugs latentes, y la regla "tests al tocar cualquier cosa
 de socios" es no negociable.
 
-## Estado actual: Fases 0-4 + validación contra dump de prod
+## Estado actual: Fases 0-6 completadas
 
-**Symfony 5.4 LTS + PHP 7.4** + MySQL 8 + Composer 2.2 LTS + Flex 1.22.
+**Symfony 6.4 LTS + PHP 8.3** + MySQL 8 + Composer 2.2 LTS + Flex 1.22.
 Login funciona, dashboard renderiza, las pantallas centrales de socios
-y de granja cargan limpias en navegación manual. 11 smoke tests verdes.
+y de granja cargan limpias en navegación manual contra el snapshot de
+prod (246 partners, 1346 weekly_baskets, 5188 lays). 11 smoke tests
+verdes (no re-validados contra SF 6 todavía — ver sección de pendientes).
 
 - **Fase 0**: setup DDEV + auditoría + arreglos baseline.
 - **Fase 1**: fixtures con Faker (`CatalogFixtures`, `UserFixtures`,
@@ -68,34 +70,52 @@ y de granja cargan limpias en navegación manual. 11 smoke tests verdes.
   forzado a `noop` mailer (sigue acoplado a Swift). Tu fork
   `flopezlosada/calendar-bundle` actualizado en GitHub master con
   constraints `^5.0|^6.0` y `TreeBuilder` con nombre raíz.
-
-**Validación contra dump de prod (mayo 2026)**: hecha. Dump cargado
-en `db_prod_snapshot`, navegación manual con datos reales. Cazó 4
-deudas que los smoke tests no detectaron, ya commiteadas:
-
-- `fix(twig)` `fd68da0`: `IntlExtension` no registrado tras la
-  migración a `twig/intl-extra` (Fase 3) — `format_date` desaparecía
-  y rompía `Partner/show.html.twig`. Y `stfalcon_tinymce.yaml`
-  perdido en algún momento → editor WYSIWYG no inicializaba.
-- `fix(doctrine)` `409ea8d`: ~78 DQL con alias legacy `App:Foo` en
-  22 repositorios + `BlogController` que doctrine/persistence 3.x
-  ya no soporta. La migración mecánica de Fase 4 cazó alias en
-  PHP pero no en strings DQL.
-- `fix(form)` `f4b4ab5`: 4 forms con `'a2lix_translations_gedmo'`
-  string legacy → `TranslationsType::class`. El bundle 3.x retiró
-  el type específico de Gedmo.
-- `chore(deps)` `0919014`: fork `flopezlosada/calendar-bundle`
-  actualizado en GitHub master con 3 fixes (routing legacy,
-  `extends Controller` eliminado, `Event` movido a `Contracts`).
+- **Validación contra dump de prod (mayo 2026)** entre Fases 4 y 5.
+  Cazó 4 deudas residuales: IntlExtension olvidado, ~78 DQL alias
+  `App:Foo`, 4 forms con `a2lix_translations_gedmo`, fork
+  calendar-bundle con 3 problemas (routing legacy, `extends Controller`,
+  `Event` movido a `Contracts`).
+- **Fase 5**: PHP 7.4 → 8.3. composer.json `^7.1.3` → `^8.3`,
+  `dompdf` → `^2.0` (única dep con pin a PHP 7). Sweep transitivo
+  bumpó data-fixtures, migrations, ckeditor-bundle, dompdf, etc.
+  Cazó 2 deudas adicionales: bundle `WhiteOctoberBreadcrumbsBundle`
+  nunca registrado en `bundles.php` (la migración de Symfony 3 a 4
+  lo olvidó), y `Twig\Extra\String\StringExtension` no registrado
+  (mismo patrón que `IntlExtension`).
+- **Fase 6**: Symfony 5.4 → 6.4 LTS. 21 paquetes pinned `5.4.*` →
+  `6.4.*`. `sensio/framework-extra-bundle` `^5.5` → `^6.2` (sigue
+  abandoned). `friendsofsymfony/jsrouting-bundle` `^2.4` → `^3.0`
+  (más fix paralelo en el fork de calendar-bundle para abrir su
+  propio constraint). Migración del Kernel a `RoutingConfigurator`,
+  retirada del loader `annotation` (eliminado en 6.0). Migración de
+  `security.yaml` al authenticator system (encoders → password_hashers,
+  sha512 → auto, anonymous → lazy, IS_AUTHENTICATED_ANONYMOUSLY →
+  PUBLIC_ACCESS). 376 single-colon controller refs en YAML/XML +
+  6 en templates → double colon. Trait compat
+  `AbstractAppController` para mantener viva la API
+  `$this->getDoctrine()` (52 controllers afectados, decisión KISS
+  para no tocar 373 llamadas). 51 `@Route` docblock → `#[Route]`
+  attribute en 7 controllers. Sweep `$this->get('router|session|request')`
+  → API moderna. 19 templates con `{{ form() }}` huérfano tras
+  widgets individuales, eliminados.
 
 `.env.local` quedó con un toggle comentado: BBDD `db` activa
-(fixtures Faker) y `db_prod_snapshot` disponible para futuras
-validaciones (ej. tras subir PHP).
+(fixtures Faker) y `db_prod_snapshot` disponible para validar
+con datos reales. Durante Fase 6 se navegó contra el snapshot.
 
-**Quedan errores secundarios** identificados al navegar pero no
-arreglados (Paco no usa esas pantallas activamente): `add audio`,
-`add video`, `add documento` siguen rompiendo aunque
-`add grouped images` funcione. Se afrontan al final si compensa.
+**Errores secundarios pendientes** identificados al navegar pero no
+arreglados (no son flujos críticos del día a día):
+- `add audio`, `add video`, `add documento` siguen rompiendo
+  aunque `add grouped images` funcione (residuo de a2lix Fase 4).
+- Plantilla pública `templates/base_front.html.twig:81` referencia
+  ruta `booking_calendar` que no existe en routing (deuda preexistente,
+  no regresión).
+- `dashboard` y `calendar` en `DefaultController` aún usan
+  `@Template` annotation de Sensio que devuelve `array`. SF 6 lo
+  ignora silenciosamente — habría que devolver `Response` explícito.
+  No se ejercitaron en navegación reciente.
+
+**11 smoke tests aún sin re-validar contra SF 6.4** — pendiente.
 
 ## Hoja de ruta (orden de prioridad)
 
@@ -106,29 +126,31 @@ arreglados (Paco no usa esas pantallas activamente): `add audio`,
    siguen instalados (se quitan cuando rehagamos auth en Fase 7 y
    migremos a atributos PHP 8 en Fase 6).
 4. ~~**Symfony 4.4 → 5.4 LTS**~~ ✅ Fase 4.
-5. **PHP 7.4 → 8.3** (siguiente). Hosting cobra *extended support*
-   por seguir en 7.4 → ahorro económico inmediato. Y desbloquea
-   `mhujer/breadcrumbs-bundle` v1.5.9+ y `Huluti/BreadcrumbsBundle`
-   si quisiéramos rama mantenida (la 1.5.7 actual aún funciona).
-   Validación contra dump de prod ya hecha (ver "Estado actual").
-6. **Symfony 5.4 → 6.4 → 7.2 LTS**. La última LTS publicada (a
-   mayo 2026) es Symfony 7.2 (nov 2025). 6.4 sigue con soporte
-   hasta nov 2027. El camino es 5.4 → 6.4 → 7.2 (dos saltos
-   majors no se pueden encadenar sin pasar por la intermedia).
-   Objetivo declarado por Paco: llegar a la última LTS como
-   mínimo. Si la migración a 6.4 va sin sangre, seguimos a 7.2.
-7. **Auth nuevo + roles**: reescribir con seguridad nativa de Symfony.
+5. ~~**PHP 7.4 → 8.3**~~ ✅ Fase 5.
+6. ~~**Symfony 5.4 → 6.4 LTS**~~ ✅ Fase 6.
+7. **Symfony 6.4 → 7.2 LTS** (siguiente). 7.2 es la última LTS
+   publicada (nov 2025). 6.4 mantenida hasta nov 2027. Mientras
+   no toquemos 6.4, seguimos seguros, pero el objetivo declarado
+   es la última LTS. Saltar ahora aprovecha que la mecánica del
+   salto major-a-major está fresca tras Fase 6.
+   Posible alternativa: dejar 6.4 estable y atacar Auth (Fase 8)
+   primero. Decisión a tomar al iniciar.
+8. **Auth nuevo + roles**: reescribir con seguridad nativa de Symfony.
    Roles `ROLE_PARTNER`, `ROLE_GESTION`, `ROLE_ADMIN`. Magic-link login
    (sin contraseñas) pensado para la brecha digital del colectivo:
    muchxs socixs nunca han usado software, una contraseña es una
-   barrera real.
-8. **Acceso para socixs**: panel propio, primero solo lectura
+   barrera real. Aprovechar para retirar `friendsofsymfony/user-bundle`
+   (sigue 3.4 sobre SF 6, marcada deprecated en su upstream),
+   `sensio/framework-extra-bundle` (abandoned), y eliminar
+   `AbstractAppController::getDoctrine()` migrando los 52 controllers
+   a inyección de `EntityManagerInterface` por parámetro del action.
+9. **Acceso para socixs**: panel propio, primero solo lectura
    (calendario de cestas, próximas semanas), luego escritura (saltar
    cesta, cambiar punto de recogida puntualmente).
-9. **Importación desde Excel** (sólo al ir a producción): comando
+10. **Importación desde Excel** (sólo al ir a producción): comando
    `app:import-partners-from-xlsx`. Sólo se importa lo de socios; la
    granja ya está en MySQL.
-10. **Despliegue**: hosting (LAMP clásico, sólo FTP, sin SSH; PHP
+11. **Despliegue**: hosting (LAMP clásico, sólo FTP, sin SSH; PHP
     elegible hasta 8.5; servidor sirve `public/index.php` vía
     `.htaccess` de `symfony/apache-pack`), CI/CD, copias, monitorización.
 
@@ -139,14 +161,28 @@ Cada fase termina con tests en verde y un tag `vX.Y` en git.
 - **MySQL 8**, no Postgres. La prod usa MySQL, no compensa migrar.
 - **DDEV** para entorno local, no instalación nativa. Reproducible,
   portable, descarta toda una clase de problemas de "en mi máquina sí".
-- **PHP 7.4** durante Fase 4 (Symfony 5.4 LTS lo soporta), salto a
-  PHP 8.3 en Fase 5. Razón histórica: subir PHP antes de Symfony 5.4
-  estaba bloqueado por `stfalcon/tinymce-bundle` (sin versión
-  Symfony 4.4 + PHP 8). Ahora ese bloqueo está resuelto.
-- **FOSUserBundle 3.x con `noop` mailer** y `registration.confirmation
-  = false`. FOSUser 3.x sigue acoplado a SwiftMailer (que ya no
-  usamos), pero el flujo de auth/email se rehace en Fase 7. Hasta
-  entonces, sin emails de FOSUser.
+- **PHP 8.3** desde Fase 5 (subido desde 7.4). Razón histórica: subir
+  PHP antes de Symfony 5.4 estaba bloqueado por `stfalcon/tinymce-bundle`.
+  Hosting cobraba extended support por 7.4 → ahorro económico al
+  subir.
+- **FOSUserBundle 3.4 con `noop` mailer** y `registration.confirmation
+  = false`. FOSUser 3.4 SÍ soporta SF 6 (verificado en Fase 6). Sigue
+  acoplado a SwiftMailer (que ya no usamos), pero el flujo de
+  auth/email se rehace en Fase 8. Hasta entonces, sin emails de FOSUser.
+- **`AbstractAppController` reimplementa `getDoctrine()`** vía
+  `#[Required]` setter de `ManagerRegistry`. Symfony 6 retiró
+  `getDoctrine()` de `AbstractController`. Migrar los 373 usos
+  distribuidos en 52 controllers es trabajo de Fase 8 (al rehacer
+  auth los controllers se reescriben de todos modos). El trait
+  compat permite que la app levante sin tocar el código de los
+  actions.
+- **`security.password_hashers: auto`** desde Fase 6 (era `sha512`
+  legacy). Las contraseñas de prod siguen hasheadas con sha512 y
+  dejarán de validar al migrar el dump. Plan: en Fase 9 (al
+  desplegar) un comando `app:rehash-passwords` que use
+  `migrate_from` o un script ad-hoc. Mientras tanto, en
+  `db_prod_snapshot` se rehashea admin/admin a mano cada vez que
+  cambia el algoritmo.
 - **Composer 2.2 LTS** se mantiene por ahora; subir cuando toque
   actualizar plugins/recipes. Ya no hay urgencia: Flex está sano.
 - **Symfony Flex 1.22** (subido desde 1.12.2 en `6d4cf26`). Versiones
