@@ -5,6 +5,7 @@ namespace App\Controller;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use App\Controller\AbstractAppController;
 
 use App\Entity\User;
@@ -36,13 +37,14 @@ class UserController extends AbstractAppController
      * Creates a new User entity.
      *
      */
-    public function create(Request $request)
+    public function create(Request $request, UserPasswordHasherInterface $hasher)
     {
         $entity = new User();
         $form = $this->createCreateForm($entity);
         $form->handleRequest($request);
 
         if ($form->isValid()) {
+            $entity->setPassword($hasher->hashPassword($entity, $form->get('plainPassword')->getData()));
             $em = $this->getDoctrine()->getManager();
             $em->persist($entity);
             $em->flush();
@@ -65,9 +67,10 @@ class UserController extends AbstractAppController
      */
     private function createCreateForm(User $entity)
     {
-        $form = $this->createForm(new UserType("App\Entity\User"), $entity, array(
+        $form = $this->createForm(UserType::class, $entity, array(
             'action' => $this->generateUrl('user_create'),
             'method' => 'POST',
+            'require_password' => true,
         ));
 
         $form->add('submit', SubmitType::class, array('label' => 'Create'));
@@ -145,9 +148,10 @@ class UserController extends AbstractAppController
      */
     private function createEditForm(User $entity)
     {
-        $form = $this->createForm(new UserType("App\Entity\User"), $entity, array(
+        $form = $this->createForm(UserType::class, $entity, array(
             'action' => $this->generateUrl('user_update', array('id' => $entity->getId())),
             'method' => 'PUT',
+            'require_password' => false,
         ));
 
         $form->add('submit', SubmitType::class, array('label' => 'Update'));
@@ -159,7 +163,7 @@ class UserController extends AbstractAppController
      * Edits an existing User entity.
      *
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, $id, UserPasswordHasherInterface $hasher)
     {
         $em = $this->getDoctrine()->getManager();
 
@@ -174,6 +178,10 @@ class UserController extends AbstractAppController
         $editForm->handleRequest($request);
 
         if ($editForm->isValid()) {
+            $plainPassword = $editForm->get('plainPassword')->getData();
+            if ($plainPassword) {
+                $entity->setPassword($hasher->hashPassword($entity, $plainPassword));
+            }
             $em->flush();
 
             return $this->redirect($this->generateUrl('user_edit', array('id' => $id)));
