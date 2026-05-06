@@ -5,7 +5,7 @@ namespace App\Controller;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\Controller\AbstractAppController;
 
 use App\Entity\Video;
 use App\Form\VideoType;
@@ -14,7 +14,7 @@ use App\Form\VideoType;
  * Video controller.
  *
  */
-class VideoController extends AbstractController
+class VideoController extends AbstractAppController
 {
 
     /**
@@ -49,7 +49,7 @@ class VideoController extends AbstractController
             $em->persist($entity);
             $em->flush();
 
-            if ($this->get('request')->isXmlHttpRequest()) {
+            if ($request->isXmlHttpRequest()) {
                 return $this->redirect($this->generateUrl($entity->getObjectClass() . "_edition", array('id' => $foreign_key, 'object_class' => $entity->getObjectClass())));
             }
             return $this->redirect($this->generateUrl($entity->getObjectClass() . '_show', array('id' => $entity->getForeignKey())));

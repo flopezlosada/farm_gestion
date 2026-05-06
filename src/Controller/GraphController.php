@@ -5,18 +5,18 @@ namespace App\Controller;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 
 
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\Controller\AbstractAppController;
 use Sensio\Bundle\FrameworkExtraBundle\Configuration\Method;
-use Sensio\Bundle\FrameworkExtraBundle\Configuration\Route;
+use Symfony\Component\Routing\Annotation\Route;
 use Sensio\Bundle\FrameworkExtraBundle\Configuration\Template;
 use Symfony\Component\HttpFoundation\Response;
 
-class GraphController extends AbstractController
+class GraphController extends AbstractAppController
 {
     /**
-     * @Route("/graph_egg_week", name="graph_egg_week")
      * @Template()
      */
+    #[Route("/graph_egg_week", name: "graph_egg_week")]
     public function graphEggWeek()
     {
         $em = $this->getDoctrine()->getManager();
@@ -37,9 +37,9 @@ class GraphController extends AbstractController
     }
 
     /**
-     * @Route("/graph_average_egg_week", name="graph_average_egg_week")
      * @Template()
      */
+    #[Route("/graph_average_egg_week", name: "graph_average_egg_week")]
     public function graphAverageEggWeek()
     {
         return array();

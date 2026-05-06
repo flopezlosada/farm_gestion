@@ -8,7 +8,7 @@ use App\Entity\Collect;
 use App\Entity\Gift;
 use App\Entity\Sale;
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\Controller\AbstractAppController;
 
 use App\Entity\Fowl;
 use App\Form\FowlType;
@@ -17,7 +17,7 @@ use App\Form\FowlType;
  * Fowl controller.
  *
  */
-class FowlController extends AbstractController
+class FowlController extends AbstractAppController
 {
 
     /**

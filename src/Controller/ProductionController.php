@@ -7,7 +7,7 @@ use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 use App\Entity\Basket;
 use Proxies\__CG__\App\Entity\CropWorking;
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\Controller\AbstractAppController;
 
 use App\Entity\Production;
 use App\Form\ProductionType;
@@ -16,7 +16,7 @@ use App\Form\ProductionType;
  * Production controller.
  *
  */
-class ProductionController extends AbstractController
+class ProductionController extends AbstractAppController
 {
 
     /**

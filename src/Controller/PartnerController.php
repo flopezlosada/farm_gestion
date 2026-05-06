@@ -10,20 +10,16 @@ use App\Form\PartnerBasketShareType;
 use App\Form\PartnerType;
 use App\Repository\PartnerRepository;
 use Sensio\Bundle\FrameworkExtraBundle\Configuration\Template;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\Controller\AbstractAppController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\Session\Session;
 use Symfony\Component\Routing\Annotation\Route;
 
-/**
- * @Route("/gestion/partner")
- */
-class PartnerController extends AbstractController
+#[Route("/gestion/partner")]
+class PartnerController extends AbstractAppController
 {
-    /**
-     * @Route("/", name="partner_index", methods={"GET"})
-     */
+    #[Route("/", name: "partner_index", methods: ["GET"])]
     public function index(PartnerRepository $partnerRepository): Response
     {
 
@@ -34,9 +30,7 @@ class PartnerController extends AbstractController
         ]);
     }
 
-    /**
-     * @Route("/{type}/list/", name="partner_list", methods={"GET"})
-     */
+    #[Route("/{type}/list/", name: "partner_list", methods: ["GET"])]
     public function list($type)
     {
         $entityManager = $this->getDoctrine()->getManager();
@@ -57,9 +51,7 @@ class PartnerController extends AbstractController
 
     }
 
-    /**
-     * @Route("/evolution", name="partner_evolution", methods={"GET"})
-     */
+    #[Route("/evolution", name: "partner_evolution", methods: ["GET"])]
     public function evolution()
     {
         $entityManager = $this->getDoctrine()->getManager();
@@ -82,9 +74,7 @@ class PartnerController extends AbstractController
     }
 
 
-    /**
-     * @Route("/new", name="partner_new", methods={"GET","POST"})
-     */
+    #[Route("/new", name: "partner_new", methods: ["GET","POST"])]
     public function new(Request $request): Response
     {
         $partner = new Partner();
@@ -112,9 +102,7 @@ class PartnerController extends AbstractController
         ]);
     }
 
-    /**
-     * @Route("/{id}", name="partner_show", methods={"GET"})
-     */
+    #[Route("/{id}", name: "partner_show", methods: ["GET"])]
     public function show(Partner $partner): Response
     {
 
@@ -123,9 +111,7 @@ class PartnerController extends AbstractController
         ]);
     }
 
-    /**
-     * @Route("/{id}/edit", name="partner_edit", methods={"GET","POST"})
-     */
+    #[Route("/{id}/edit", name: "partner_edit", methods: ["GET","POST"])]
     public function edit(Request $request, Partner $partner): Response
     {
         $form = $this->createForm(PartnerType::class, $partner);
@@ -160,9 +146,7 @@ class PartnerController extends AbstractController
         ]);
     }
 
-    /**
-     * @Route("/{id}", name="partner_delete", methods={"DELETE"})
-     */
+    #[Route("/{id}", name: "partner_delete", methods: ["DELETE"])]
     public function delete(Request $request, Partner $partner): Response
     {
         if ($this->isCsrfTokenValid('delete' . $partner->getId(), $request->request->get('_token'))) {
@@ -175,9 +159,7 @@ class PartnerController extends AbstractController
 
     }
 
-    /**
-     * @Route("/{id}/{type}/family", name="family", methods={"GET"})
-     */
+    #[Route("/{id}/{type}/family", name: "family", methods: ["GET"])]
     public function family(Request $request, Partner $partner, $type): Response
     {
         $entityManager = $this->getDoctrine()->getManager();
@@ -202,9 +184,7 @@ class PartnerController extends AbstractController
 
     }
 
-    /**
-     * @Route("/{partner1_id}/{partner2_id}/add_family", name="add_family", methods={"GET"})
-     */
+    #[Route("/{partner1_id}/{partner2_id}/add_family", name: "add_family", methods: ["GET"])]
     public function addFamily(Request $request, $partner1_id, $partner2_id): Response
     {
         $session = new Session();
@@ -239,9 +219,7 @@ class PartnerController extends AbstractController
 
     }
 
-    /**
-     * @Route("/{partner1_id}/{partner2_id}/remove_family", name="remove_family", methods={"GET"})
-     */
+    #[Route("/{partner1_id}/{partner2_id}/remove_family", name: "remove_family", methods: ["GET"])]
     public function removeFamily(Request $request, $partner1_id, $partner2_id): Response
     {
         $session = new Session();
@@ -265,9 +243,9 @@ class PartnerController extends AbstractController
 
 
     /**
-     * @Route("/cities", name="select_city")
      * @Template("partner/cities.html.twig")
      */
+    #[Route("/cities", name: "select_city")]
 
     public function cities(Request $request)
     {
@@ -281,9 +259,7 @@ class PartnerController extends AbstractController
         );
     }
 
-    /**
-     * @Route("/{id}/demote", name="partner_demote", methods={"GET"})
-     */
+    #[Route("/{id}/demote", name: "partner_demote", methods: ["GET"])]
     public function demote(Request $request, Partner $partner): Response
     {
         $entityManager = $this->getDoctrine()->getManager();
@@ -306,9 +282,7 @@ class PartnerController extends AbstractController
 
     }
 
-    /**
-     * @Route("/{id}/promote", name="partner_promote", methods={"GET"})
-     */
+    #[Route("/{id}/promote", name: "partner_promote", methods: ["GET"])]
     public function promote(Request $request, Partner $partner): Response
     {
         $entityManager = $this->getDoctrine()->getManager();
@@ -320,9 +294,7 @@ class PartnerController extends AbstractController
 
     }
 
-    /**
-     * @Route("/{id}/add_basket", name="partner_add_basket", methods={"GET","POST"})
-     */
+    #[Route("/{id}/add_basket", name: "partner_add_basket", methods: ["GET","POST"])]
     public function addBasket(Request $request, Partner $partner): Response
     {
         $partnerBasketShare = new PartnerBasketShare();
@@ -388,9 +360,7 @@ class PartnerController extends AbstractController
     }
 
 
-    /**
-     * @Route("/{partner1_id}/{partner2_id}/add_share_partner", name="add_share_partner", methods={"GET"})
-     */
+    #[Route("/{partner1_id}/{partner2_id}/add_share_partner", name: "add_share_partner", methods: ["GET"])]
     public function addSharePartner(Request $request, $partner1_id, $partner2_id): Response
     {
         $session = new Session();
@@ -422,9 +392,7 @@ class PartnerController extends AbstractController
 
     }
 
-    /**
-     * @Route("/{partner1_id}/{partner2_id}/remove_share_partner", name="remove_share_partner", methods={"GET"})
-     */
+    #[Route("/{partner1_id}/{partner2_id}/remove_share_partner", name: "remove_share_partner", methods: ["GET"])]
     public function removeSharePartner(Request $request, $partner1_id, $partner2_id): Response
     {
         $session = new Session();
@@ -449,9 +417,7 @@ class PartnerController extends AbstractController
 
 
 
-    /**
-     * @Route("/generate_historical", name="partner_generate_historical", methods={"GET"})
-     */
+    #[Route("/generate_historical", name: "partner_generate_historical", methods: ["GET"])]
     public function generateHistorical()
     {
         $entityManager = $this->getDoctrine()->getManager();

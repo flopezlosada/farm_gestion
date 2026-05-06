@@ -5,7 +5,7 @@ namespace App\Controller;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\Controller\AbstractAppController;
 
 use App\Entity\Crop;
 use App\Form\CropType;
@@ -14,7 +14,7 @@ use App\Form\CropType;
  * Crop controller.
  *
  */
-class CropController extends AbstractController
+class CropController extends AbstractAppController
 {
 
     /**

@@ -5,18 +5,18 @@ namespace App\Controller;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\Controller\AbstractAppController;
 
 use App\Entity\Sector;
 use App\Form\SectorType;
-use Sensio\Bundle\FrameworkExtraBundle\Configuration\Route;
+use Symfony\Component\Routing\Annotation\Route;
 use Sensio\Bundle\FrameworkExtraBundle\Configuration\Template;
 
 /**
  * Sector controller.
  *
  */
-class SectorController extends AbstractController
+class SectorController extends AbstractAppController
 {
 
     /**
@@ -229,9 +229,9 @@ class SectorController extends AbstractController
     }
 
     /**
-     * @Route("/sectors", name="select_sector")
      * @Template("Sector/sectors.html.twig")
      */
+    #[Route("/sectors", name: "select_sector")]
 
     public function sectors(Request $request)
     {

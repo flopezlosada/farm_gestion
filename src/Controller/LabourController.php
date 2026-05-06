@@ -5,7 +5,7 @@ namespace App\Controller;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\Controller\AbstractAppController;
 
 use App\Entity\Labour;
 use App\Form\LabourType;
@@ -14,7 +14,7 @@ use App\Form\LabourType;
  * Labour controller.
  *
  */
-class LabourController extends AbstractController
+class LabourController extends AbstractAppController
 {
 
     /**

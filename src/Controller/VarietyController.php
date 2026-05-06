@@ -5,7 +5,7 @@ namespace App\Controller;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\Controller\AbstractAppController;
 
 use App\Entity\Variety;
 use App\Form\VarietyType;
@@ -14,7 +14,7 @@ use App\Form\VarietyType;
  * Variety controller.
  *
  */
-class VarietyController extends AbstractController
+class VarietyController extends AbstractAppController
 {
 
     /**

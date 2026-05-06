@@ -5,7 +5,7 @@ namespace App\Controller;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\Controller\AbstractAppController;
 
 use App\Entity\CulturalWorkType;
 use App\Form\CulturalWorkTypeType;
@@ -14,7 +14,7 @@ use App\Form\CulturalWorkTypeType;
  * CulturalWorkType controller.
  *
  */
-class CulturalWorkTypeController extends AbstractController
+class CulturalWorkTypeController extends AbstractAppController
 {
 
     /**

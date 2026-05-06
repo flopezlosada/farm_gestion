@@ -5,7 +5,7 @@ namespace App\Controller;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\Controller\AbstractAppController;
 
 use App\Entity\BatchStatus;
 use App\Form\BatchStatusType;
@@ -14,7 +14,7 @@ use App\Form\BatchStatusType;
  * BatchStatus controller.
  *
  */
-class BatchStatusController extends AbstractController
+class BatchStatusController extends AbstractAppController
 {
 
     /**

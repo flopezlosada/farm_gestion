@@ -5,7 +5,7 @@ namespace App\Controller;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\Controller\AbstractAppController;
 
 use App\Entity\Category;
 use App\Form\CategoryType;
@@ -14,7 +14,7 @@ use App\Form\CategoryType;
  * Category controller.
  *
  */
-class CategoryController extends AbstractController
+class CategoryController extends AbstractAppController
 {
 
     /**

@@ -6,16 +6,16 @@ use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 
 
 use App\Entity\Basket;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\Controller\AbstractAppController;
 use Sensio\Bundle\FrameworkExtraBundle\Configuration\Method;
-use Sensio\Bundle\FrameworkExtraBundle\Configuration\Route;
+use Symfony\Component\Routing\Annotation\Route;
 use Sensio\Bundle\FrameworkExtraBundle\Configuration\Template;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Validator\Constraints\DateTime;
 
-class DefaultController extends AbstractController
+class DefaultController extends AbstractAppController
 {
 
 
@@ -25,9 +25,9 @@ class DefaultController extends AbstractController
     }
 
     /**
-     * @Route("/calendar", name="calendar")
      * @Template("Default/calendar.html.twig")
      */
+    #[Route("/calendar", name: "calendar")]
     public function calendar()
     {
         return array();
@@ -35,10 +35,10 @@ class DefaultController extends AbstractController
 
 
     /**
-     * @Route("/event_show/{id}", name="event_show")
      * @Method("GET")
      * @Template()
      */
+    #[Route("/event_show/{id}", name: "event_show")]
     public function eventShow($id)
     {
         return array();
@@ -46,9 +46,9 @@ class DefaultController extends AbstractController
 
 
     /**
-     * @Route("/dashboard", name="dashboard")
      * @Template("Default/dashboard.html.twig")
      */
+    #[Route("/dashboard", name: "dashboard")]
     public function dashboard()
     {
         $em = $this->getDoctrine()->getManager();
@@ -213,9 +213,9 @@ class DefaultController extends AbstractController
 
 
     /**
-     * @Route("/user_collect/{product_id}/{year}", name="user_collect",defaults={"year"=null} )
      * @Template()
      */
+    #[Route("/user_collect/{product_id}/{year}", name: "user_collect", defaults: ["year" => null])]
     public function userCollect($product_id, $year)
     {
         if (!$year) {

@@ -5,7 +5,7 @@ namespace App\Controller;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\Controller\AbstractAppController;
 
 use App\Entity\FowlStatus;
 use App\Form\FowlStatusType;
@@ -14,7 +14,7 @@ use App\Form\FowlStatusType;
  * FowlStatus controller.
  *
  */
-class FowlStatusController extends AbstractController
+class FowlStatusController extends AbstractAppController
 {
 
     /**

@@ -5,7 +5,7 @@ namespace App\Controller;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\Controller\AbstractAppController;
 
 use App\Entity\Gift;
 use App\Form\GiftType;
@@ -14,7 +14,7 @@ use App\Form\GiftType;
  * Gift controller.
  *
  */
-class GiftController extends AbstractController
+class GiftController extends AbstractAppController
 {
 
     /**

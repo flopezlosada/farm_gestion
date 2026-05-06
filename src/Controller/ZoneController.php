@@ -5,7 +5,7 @@ namespace App\Controller;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\Controller\AbstractAppController;
 
 use App\Entity\Zone;
 use App\Form\ZoneType;
@@ -14,7 +14,7 @@ use App\Form\ZoneType;
  * Zone controller.
  *
  */
-class ZoneController extends AbstractController
+class ZoneController extends AbstractAppController
 {
 
     /**

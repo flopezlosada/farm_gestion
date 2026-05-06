@@ -9,7 +9,7 @@ use Doctrine\ORM\EntityRepository;
 use App\Entity\Sector;
 use App\Form\CropWorkingEditType;
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\Controller\AbstractAppController;
 
 use App\Entity\CropWorking;
 use App\Form\CropWorkingType;
@@ -18,7 +18,7 @@ use App\Form\CropWorkingType;
  * CropWorking controller.
  *
  */
-class CropWorkingController extends AbstractController
+class CropWorkingController extends AbstractAppController
 {
 
     /**

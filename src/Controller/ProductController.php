@@ -5,7 +5,7 @@ namespace App\Controller;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\Controller\AbstractAppController;
 
 use App\Entity\Product;
 use App\Form\ProductType;
@@ -14,7 +14,7 @@ use App\Form\ProductType;
  * Product controller.
  *
  */
-class ProductController extends AbstractController
+class ProductController extends AbstractAppController
 {
 
     /**

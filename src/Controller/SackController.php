@@ -5,7 +5,7 @@ namespace App\Controller;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\Controller\AbstractAppController;
 
 use App\Entity\Sack;
 use App\Form\SackType;
@@ -14,7 +14,7 @@ use App\Form\SackType;
  * Sack controller.
  *
  */
-class SackController extends AbstractController
+class SackController extends AbstractAppController
 {
 
     /**

@@ -9,7 +9,7 @@ use App\Form\TaskDateType;
 use App\Form\TaskPeriodicType;
 use Symfony\Component\Form\FormError;
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\Controller\AbstractAppController;
 
 use App\Entity\Task;
 use App\Form\TaskType;
@@ -18,7 +18,7 @@ use App\Form\TaskType;
  * Task controller.
  *
  */
-class TaskController extends AbstractController
+class TaskController extends AbstractAppController
 {
 
     /**

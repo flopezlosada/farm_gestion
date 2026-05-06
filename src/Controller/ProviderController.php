@@ -5,7 +5,7 @@ namespace App\Controller;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\Controller\AbstractAppController;
 
 use App\Entity\Provider;
 use App\Form\ProviderType;
@@ -14,7 +14,7 @@ use App\Form\ProviderType;
  * Provider controller.
  *
  */
-class ProviderController extends AbstractController
+class ProviderController extends AbstractAppController
 {
 
     /**
