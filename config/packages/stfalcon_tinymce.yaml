@@ -1,0 +1,5 @@
+stfalcon_tinymce:
+    include_jquery: false
+    tinymce_jquery: false
+    selector: ".tinymce"
+    language: es
