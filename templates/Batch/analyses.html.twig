@@ -10,7 +10,7 @@
         </div>
         <!-- /.col-lg-12 -->
         {% for year in years %}
-            {{ render(controller('App\\Controller\\BatchController:analysesYear' , {'year':year.year,'product_id':product.id}) ) }}
+            {{ render(controller('App\\Controller\\BatchController::analysesYear' , {'year':year.year,'product_id':product.id}) ) }}
         {% endfor %}
     </div>
 {% endblock %}
