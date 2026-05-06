@@ -1974,12 +1974,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/flopezlosada/calendar-bundle.git",
-                "reference": "77198912411de92d7252003936bf9da315a13f74"
+                "reference": "fba8f9b894b983fdd1d54ca2729903ece46d31f5"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/flopezlosada/calendar-bundle/zipball/77198912411de92d7252003936bf9da315a13f74",
-                "reference": "77198912411de92d7252003936bf9da315a13f74",
+                "url": "https://api.github.com/repos/flopezlosada/calendar-bundle/zipball/fba8f9b894b983fdd1d54ca2729903ece46d31f5",
+                "reference": "fba8f9b894b983fdd1d54ca2729903ece46d31f5",
                 "shasum": ""
             },
             "require": {
@@ -2023,7 +2023,7 @@
             "support": {
                 "source": "https://github.com/flopezlosada/calendar-bundle/tree/master"
             },
-            "time": "2026-05-06T05:35:39+00:00"
+            "time": "2026-05-06T06:41:58+00:00"
         },
         {
             "name": "friendsofphp/proxy-manager-lts",
