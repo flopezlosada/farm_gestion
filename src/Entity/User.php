@@ -1,26 +1,20 @@
 <?php
-/**
- *
- * User: paco
- * Date: 4/11/14
- * Time: 11:27
- */
 
 namespace App\Entity;
 
-
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
-use FOS\UserBundle\Model\User as BaseUser;
 use Doctrine\ORM\Mapping as ORM;
 use Gedmo\Mapping\Annotation as Gedmo;
+use Symfony\Component\Security\Core\User\LegacyPasswordAuthenticatedUserInterface;
+use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
+use Symfony\Component\Security\Core\User\UserInterface;
 
 /**
- * @ORM\Entity
- * @ORM\Table(name="fos_user")
  * @ORM\Entity(repositoryClass="App\Repository\UserRepository")
+ * @ORM\Table(name="fos_user")
  */
-class User extends BaseUser
+class User implements UserInterface, PasswordAuthenticatedUserInterface, LegacyPasswordAuthenticatedUserInterface
 {
     /**
      * @ORM\Id
@@ -28,6 +22,61 @@ class User extends BaseUser
      * @ORM\GeneratedValue(strategy="AUTO")
      */
     protected $id;
+
+    /**
+     * @ORM\Column(type="string", length=180)
+     */
+    private $username;
+
+    /**
+     * @ORM\Column(name="username_canonical", type="string", length=180, unique=true)
+     */
+    private $usernameCanonical;
+
+    /**
+     * @ORM\Column(type="string", length=180)
+     */
+    private $email;
+
+    /**
+     * @ORM\Column(name="email_canonical", type="string", length=180, unique=true)
+     */
+    private $emailCanonical;
+
+    /**
+     * @ORM\Column(type="boolean")
+     */
+    private $enabled = true;
+
+    /**
+     * @ORM\Column(type="string", length=255, nullable=true)
+     */
+    private $salt;
+
+    /**
+     * @ORM\Column(type="string", length=255)
+     */
+    private $password;
+
+    /**
+     * @ORM\Column(name="last_login", type="datetime", nullable=true)
+     */
+    private $lastLogin;
+
+    /**
+     * @ORM\Column(name="confirmation_token", type="string", length=180, unique=true, nullable=true)
+     */
+    private $confirmationToken;
+
+    /**
+     * @ORM\Column(name="password_requested_at", type="datetime", nullable=true)
+     */
+    private $passwordRequestedAt;
+
+    /**
+     * @ORM\Column(type="array")
+     */
+    private $roles = [];
 
     /**
      * @var \DateTime $created
@@ -45,8 +94,6 @@ class User extends BaseUser
      */
     private $updated;
 
-
-
     /**
      * @ORM\OneToMany(targetEntity="App\Entity\Lay", mappedBy="user")
      */
@@ -61,7 +108,6 @@ class User extends BaseUser
      * @ORM\OneToMany(targetEntity="App\Entity\Gift", mappedBy="user")
      */
     protected $gifts;
-
 
     /**
      * @ORM\OneToMany(targetEntity="App\Entity\Sale", mappedBy="user")
@@ -90,12 +136,10 @@ class User extends BaseUser
      */
     private $tasks;
 
-
     private $consumed_product;
 
     public function __construct()
     {
-        parent::__construct();
         $this->lays = new ArrayCollection();
         $this->collects = new ArrayCollection();
         $this->gifts = new ArrayCollection();
@@ -104,336 +148,304 @@ class User extends BaseUser
         $this->egg_registry_users = new ArrayCollection();
         $this->fowls = new ArrayCollection();
         $this->tasks = new ArrayCollection();
-        // your own logic
     }
 
-    /**
-     * Get id
-     *
-     * @return integer 
-     */
     public function getId()
     {
         return $this->id;
     }
 
-    /**
-     * Set created
-     *
-     * @param \DateTime $created
-     * @return User
-     */
-    public function setCreated($created)
+    public function getUsername(): string
     {
-        $this->created = $created;
+        return (string) $this->username;
+    }
 
+    public function setUsername(string $username): self
+    {
+        $this->username = $username;
+        $this->usernameCanonical = mb_strtolower($username);
         return $this;
     }
 
-    /**
-     * Get created
-     *
-     * @return \DateTime 
-     */
-    public function getCreated()
+    public function getUserIdentifier(): string
+    {
+        return (string) $this->username;
+    }
+
+    public function getUsernameCanonical(): ?string
+    {
+        return $this->usernameCanonical;
+    }
+
+    public function setUsernameCanonical(string $usernameCanonical): self
+    {
+        $this->usernameCanonical = $usernameCanonical;
+        return $this;
+    }
+
+    public function getEmail(): ?string
+    {
+        return $this->email;
+    }
+
+    public function setEmail(string $email): self
+    {
+        $this->email = $email;
+        $this->emailCanonical = mb_strtolower($email);
+        return $this;
+    }
+
+    public function getEmailCanonical(): ?string
+    {
+        return $this->emailCanonical;
+    }
+
+    public function setEmailCanonical(string $emailCanonical): self
+    {
+        $this->emailCanonical = $emailCanonical;
+        return $this;
+    }
+
+    public function isEnabled(): bool
+    {
+        return (bool) $this->enabled;
+    }
+
+    public function setEnabled(bool $enabled): self
+    {
+        $this->enabled = $enabled;
+        return $this;
+    }
+
+    public function getPassword(): ?string
+    {
+        return $this->password;
+    }
+
+    public function setPassword(string $password): self
+    {
+        $this->password = $password;
+        return $this;
+    }
+
+    public function getSalt(): ?string
+    {
+        return $this->salt;
+    }
+
+    public function setSalt(?string $salt): self
+    {
+        $this->salt = $salt;
+        return $this;
+    }
+
+    public function getLastLogin(): ?\DateTimeInterface
+    {
+        return $this->lastLogin;
+    }
+
+    public function setLastLogin(?\DateTimeInterface $lastLogin): self
+    {
+        $this->lastLogin = $lastLogin;
+        return $this;
+    }
+
+    public function getConfirmationToken(): ?string
+    {
+        return $this->confirmationToken;
+    }
+
+    public function setConfirmationToken(?string $confirmationToken): self
+    {
+        $this->confirmationToken = $confirmationToken;
+        return $this;
+    }
+
+    public function getPasswordRequestedAt(): ?\DateTimeInterface
+    {
+        return $this->passwordRequestedAt;
+    }
+
+    public function setPasswordRequestedAt(?\DateTimeInterface $passwordRequestedAt): self
+    {
+        $this->passwordRequestedAt = $passwordRequestedAt;
+        return $this;
+    }
+
+    public function getRoles(): array
+    {
+        $roles = $this->roles;
+        $roles[] = 'ROLE_USER';
+        return array_unique($roles);
+    }
+
+    public function setRoles(array $roles): self
+    {
+        $this->roles = $roles;
+        return $this;
+    }
+
+    public function eraseCredentials(): void
+    {
+    }
+
+    public function setCreated($created): self
+    {
+        $this->created = $created;
+        return $this;
+    }
+
+    public function getCreated(): ?\DateTimeInterface
     {
         return $this->created;
     }
 
-    /**
-     * Set updated
-     *
-     * @param \DateTime $updated
-     * @return User
-     */
-    public function setUpdated($updated)
+    public function setUpdated($updated): self
     {
         $this->updated = $updated;
-
         return $this;
     }
 
-    /**
-     * Get updated
-     *
-     * @return \DateTime 
-     */
-    public function getUpdated()
+    public function getUpdated(): ?\DateTimeInterface
     {
         return $this->updated;
     }
 
-    /**
-     * Add lays
-     *
-     * @param \App\Entity\Lay $lays
-     * @return User
-     */
-    public function addLay(\App\Entity\Lay $lays)
+    public function addLay(\App\Entity\Lay $lay): self
     {
-        $this->lays[] = $lays;
-
+        $this->lays[] = $lay;
         return $this;
     }
 
-    /**
-     * Remove lays
-     *
-     * @param \App\Entity\Lay $lays
-     */
-    public function removeLay(\App\Entity\Lay $lays)
+    public function removeLay(\App\Entity\Lay $lay): void
     {
-        $this->lays->removeElement($lays);
+        $this->lays->removeElement($lay);
     }
 
-    /**
-     * Get lays
-     *
-     * @return \Doctrine\Common\Collections\Collection 
-     */
-    public function getLays()
+    public function getLays(): Collection
     {
         return $this->lays;
     }
 
-    /**
-     * Add collects
-     *
-     * @param \App\Entity\Collect $collects
-     * @return User
-     */
-    public function addCollect(\App\Entity\Collect $collects)
+    public function addCollect(\App\Entity\Collect $collect): self
     {
-        $this->collects[] = $collects;
-
+        $this->collects[] = $collect;
         return $this;
     }
 
-    /**
-     * Remove collects
-     *
-     * @param \App\Entity\Collect $collects
-     */
-    public function removeCollect(\App\Entity\Collect $collects)
+    public function removeCollect(\App\Entity\Collect $collect): void
     {
-        $this->collects->removeElement($collects);
+        $this->collects->removeElement($collect);
     }
 
-    /**
-     * Get collects
-     *
-     * @return \Doctrine\Common\Collections\Collection 
-     */
-    public function getCollects()
+    public function getCollects(): Collection
     {
         return $this->collects;
     }
 
-    /**
-     * Add sales
-     *
-     * @param \App\Entity\Sale $sales
-     * @return User
-     */
-    public function addSale(\App\Entity\Sale $sales)
+    public function addSale(\App\Entity\Sale $sale): self
     {
-        $this->sales[] = $sales;
-
+        $this->sales[] = $sale;
         return $this;
     }
 
-    /**
-     * Remove sales
-     *
-     * @param \App\Entity\Sale $sales
-     */
-    public function removeSale(\App\Entity\Sale $sales)
+    public function removeSale(\App\Entity\Sale $sale): void
     {
-        $this->sales->removeElement($sales);
+        $this->sales->removeElement($sale);
     }
 
-    /**
-     * Get sales
-     *
-     * @return \Doctrine\Common\Collections\Collection 
-     */
-    public function getSales()
+    public function getSales(): Collection
     {
         return $this->sales;
     }
 
-    /**
-     * Add purchases
-     *
-     * @param \App\Entity\Purchase $purchases
-     * @return User
-     */
-    public function addPurchase(\App\Entity\Purchase $purchases)
+    public function addPurchase(\App\Entity\Purchase $purchase): self
     {
-        $this->purchases[] = $purchases;
-
+        $this->purchases[] = $purchase;
         return $this;
     }
 
-    /**
-     * Remove purchases
-     *
-     * @param \App\Entity\Purchase $purchases
-     */
-    public function removePurchase(\App\Entity\Purchase $purchases)
+    public function removePurchase(\App\Entity\Purchase $purchase): void
     {
-        $this->purchases->removeElement($purchases);
+        $this->purchases->removeElement($purchase);
     }
 
-    /**
-     * Get purchases
-     *
-     * @return \Doctrine\Common\Collections\Collection 
-     */
-    public function getPurchases()
+    public function getPurchases(): Collection
     {
         return $this->purchases;
     }
 
-    /**
-     * Add gifts
-     *
-     * @param \App\Entity\Gift $gifts
-     * @return User
-     */
-    public function addGift(\App\Entity\Gift $gifts)
+    public function addGift(\App\Entity\Gift $gift): self
     {
-        $this->gifts[] = $gifts;
-
+        $this->gifts[] = $gift;
         return $this;
     }
 
-    /**
-     * Remove gifts
-     *
-     * @param \App\Entity\Gift $gifts
-     */
-    public function removeGift(\App\Entity\Gift $gifts)
+    public function removeGift(\App\Entity\Gift $gift): void
     {
-        $this->gifts->removeElement($gifts);
+        $this->gifts->removeElement($gift);
     }
 
-    /**
-     * Get gifts
-     *
-     * @return \Doctrine\Common\Collections\Collection 
-     */
-    public function getGifts()
+    public function getGifts(): Collection
     {
         return $this->gifts;
     }
 
-    public function  getConsumedProduct()
+    public function getConsumedProduct()
     {
         return $this->consumed_product;
     }
 
-    public function setConsumedProduct($product)
+    public function setConsumedProduct($product): self
     {
-        $this->consumed_product=$product;
-    }
-
-    /**
-     * Add egg_registry_users
-     *
-     * @param \App\Entity\EggRegistryUser $eggRegistryUsers
-     * @return User
-     */
-    public function addEggRegistryUser(\App\Entity\EggRegistryUser $eggRegistryUsers)
-    {
-        $this->egg_registry_users[] = $eggRegistryUsers;
-
+        $this->consumed_product = $product;
         return $this;
     }
 
-    /**
-     * Remove egg_registry_users
-     *
-     * @param \App\Entity\EggRegistryUser $eggRegistryUsers
-     */
-    public function removeEggRegistryUser(\App\Entity\EggRegistryUser $eggRegistryUsers)
+    public function addEggRegistryUser(\App\Entity\EggRegistryUser $eggRegistryUser): self
     {
-        $this->egg_registry_users->removeElement($eggRegistryUsers);
+        $this->egg_registry_users[] = $eggRegistryUser;
+        return $this;
     }
 
-    /**
-     * Get egg_registry_users
-     *
-     * @return \Doctrine\Common\Collections\Collection 
-     */
-    public function getEggRegistryUsers()
+    public function removeEggRegistryUser(\App\Entity\EggRegistryUser $eggRegistryUser): void
+    {
+        $this->egg_registry_users->removeElement($eggRegistryUser);
+    }
+
+    public function getEggRegistryUsers(): Collection
     {
         return $this->egg_registry_users;
     }
 
-    /**
-     * Add fowls
-     *
-     * @param \App\Entity\Fowl $fowls
-     * @return User
-     */
-    public function addFowl(\App\Entity\Fowl $fowls)
+    public function addFowl(\App\Entity\Fowl $fowl): self
     {
-        $this->fowls[] = $fowls;
-
+        $this->fowls[] = $fowl;
         return $this;
     }
 
-    /**
-     * Remove fowls
-     *
-     * @param \App\Entity\Fowl $fowls
-     */
-    public function removeFowl(\App\Entity\Fowl $fowls)
+    public function removeFowl(\App\Entity\Fowl $fowl): void
     {
-        $this->fowls->removeElement($fowls);
+        $this->fowls->removeElement($fowl);
     }
 
-    /**
-     * Get fowls
-     *
-     * @return \Doctrine\Common\Collections\Collection 
-     */
-    public function getFowls()
+    public function getFowls(): Collection
     {
         return $this->fowls;
     }
 
-    /**
-     * Add task
-     *
-     * @param \App\Entity\Task $task
-     *
-     * @return User
-     */
-    public function addTask(\App\Entity\Task $task)
+    public function addTask(\App\Entity\Task $task): self
     {
         $this->tasks[] = $task;
-
         return $this;
     }
 
-    /**
-     * Remove task
-     *
-     * @param \App\Entity\Task $task
-     */
-    public function removeTask(\App\Entity\Task $task)
+    public function removeTask(\App\Entity\Task $task): void
     {
         $this->tasks->removeElement($task);
     }
 
-    /**
-     * Get tasks
-     *
-     * @return \Doctrine\Common\Collections\Collection
-     */
-    public function getTasks()
+    public function getTasks(): Collection
     {
         return $this->tasks;
     }

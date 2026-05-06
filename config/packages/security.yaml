@@ -1,34 +1,48 @@
 security:
     password_hashers:
-        FOS\UserBundle\Model\UserInterface: auto
+        # Hasher legacy de FOSUser: sha512 con salt, 5000 iteraciones, base64.
+        # Mantener para validar contraseñas migradas del dump de prod.
+        # Symfony rehashea automáticamente al primer login con éxito.
+        legacy_fos_sha512:
+            algorithm: sha512
+            encode_as_base64: true
+            iterations: 5000
+        App\Entity\User:
+            algorithm: auto
+            migrate_from:
+                - legacy_fos_sha512
 
     role_hierarchy:
         # Rama operativa
         ROLE_GUEST:       [ROLE_USER, ROLE_COMPOST]
         ROLE_COOP:        [ROLE_COMPOST, ROLE_GUEST]
-        # Rama de admin: ahora cuelga de COOP, así heredan todo lo operativo.
-        # Esto se reescribirá cuando rehagamos auth con seguridad nativa de Symfony.
+        # Rama de admin: cuelga de COOP, así heredan todo lo operativo.
+        # Esto se reescribirá cuando rehagamos el dominio de roles.
         ROLE_ADMIN:       [ROLE_USER, ROLE_COOP]
         ROLE_SUPER_ADMIN: [ROLE_ADMIN]
 
     providers:
-        fos_userbundle:
-            id: fos_user.user_provider.username
+        app_user_provider:
+            entity:
+                class: App\Entity\User
+                property: username
 
     firewalls:
         main:
             pattern: ^/
             lazy: true
+            provider: app_user_provider
             form_login:
-                provider: fos_userbundle
+                login_path: app_login
+                check_path: app_login
                 enable_csrf: true
                 default_target_path: /gestion/dashboard
-            logout:       true
+            logout:
+                path: app_logout
+                target: /
 
     access_control:
         - { path: ^/login$, role: PUBLIC_ACCESS }
-        - { path: ^/register, role: PUBLIC_ACCESS }
-        - { path: ^/resetting, role: PUBLIC_ACCESS }
         - { path: ^/gestion/compost/[a-z]\w+/new, role: ROLE_COMPOST}
         - { path: ^/gestion/compost/[a-z]\w+/create, role: ROLE_COMPOST}
         - { path: ^/gestion/compost/[a-z]\w+/[0-9]([0-9])?([0-9])?/edit, role: ROLE_COMPOST}
