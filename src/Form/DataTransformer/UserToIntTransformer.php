@@ -1,7 +1,7 @@
 <?php
  
 namespace App\Form\DataTransformer;
-use Doctrine\Common\Persistence\ObjectManager;
+use Doctrine\Persistence\ObjectManager;
  
 class UserToIntTransformer extends EntityToIntTransformer
 {
@@ -12,7 +12,7 @@ class UserToIntTransformer extends EntityToIntTransformer
     {
         parent::__construct($om);
         $this->setEntityClass("App\Entity\User");
-        $this->setEntityRepository("App:User");
+        $this->setEntityRepository(\App\Entity\User::class);
         $this->setEntityType("User");
     }
  

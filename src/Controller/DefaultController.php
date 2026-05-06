@@ -52,31 +52,31 @@ class DefaultController extends AbstractController
     public function dashboard()
     {
         $em = $this->getDoctrine()->getManager();
-        $week_lay = $em->getRepository('App:Lay')->findWeekLay(10);
+        $week_lay = $em->getRepository(\App\Entity\Lay::class)->findWeekLay(10);
 
-        $total_lay_eggs = $em->getRepository('App:Lay')->findTotalEggs(date('Y'));
+        $total_lay_eggs = $em->getRepository(\App\Entity\Lay::class)->findTotalEggs(date('Y'));
 
-        $egg_product = $em->getRepository("App:Product")->find(1);
-        $total_sale_eggs = $em->getRepository('App:Sale')->findTotalProductYear($egg_product, date('Y'));
-        $total_collect_eggs_user = $em->getRepository('App:Collect')->findByUserYear($this->getUser(), $egg_product, date('Y'));
+        $egg_product = $em->getRepository(\App\Entity\Product::class)->find(1);
+        $total_sale_eggs = $em->getRepository(\App\Entity\Sale::class)->findTotalProductYear($egg_product, date('Y'));
+        $total_collect_eggs_user = $em->getRepository(\App\Entity\Collect::class)->findByUserYear($this->getUser(), $egg_product, date('Y'));
 
-        $hens_feed_product = $em->getRepository("App:Product")->find(4);
-        $turkey_feed_product = $em->getRepository("App:Product")->find(7);
-        $broiler_feed_product = $em->getRepository("App:Product")->find(5);
-        $wheat = $em->getRepository("App:Product")->find(13);
+        $hens_feed_product = $em->getRepository(\App\Entity\Product::class)->find(4);
+        $turkey_feed_product = $em->getRepository(\App\Entity\Product::class)->find(7);
+        $broiler_feed_product = $em->getRepository(\App\Entity\Product::class)->find(5);
+        $wheat = $em->getRepository(\App\Entity\Product::class)->find(13);
 
-        $hens_feed_year = $em->getRepository("App:Purchase")->findByProductYear($hens_feed_product, date('Y'));
-        $turkey_feed_year = $em->getRepository("App:Purchase")->findByProductYear($turkey_feed_product, date('Y'));
-        $broiler_feed_year = $em->getRepository("App:Purchase")->findByProductYear($broiler_feed_product, date('Y'));
-        $wheat_year = $em->getRepository("App:Purchase")->findByProductYear($wheat, date('Y')); //trigo comprado por año
+        $hens_feed_year = $em->getRepository(\App\Entity\Purchase::class)->findByProductYear($hens_feed_product, date('Y'));
+        $turkey_feed_year = $em->getRepository(\App\Entity\Purchase::class)->findByProductYear($turkey_feed_product, date('Y'));
+        $broiler_feed_year = $em->getRepository(\App\Entity\Purchase::class)->findByProductYear($broiler_feed_product, date('Y'));
+        $wheat_year = $em->getRepository(\App\Entity\Purchase::class)->findByProductYear($wheat, date('Y')); //trigo comprado por año
 
-        $total_chicken = $em->getRepository("App:Batch")->getTotalCarcassWeight(date('Y'));
+        $total_chicken = $em->getRepository(\App\Entity\Batch::class)->getTotalCarcassWeight(date('Y'));
 
 
-        $active_hen_batch = $em->getRepository('App:Batch')->getActiveBatch(6) ?? []; //lotes de gallina activos
-        $active_chicken_batch = $em->getRepository('App:Batch')->getActiveBatch(2) ?? []; //lotes de pollos activos
+        $active_hen_batch = $em->getRepository(\App\Entity\Batch::class)->getActiveBatch(6) ?? []; //lotes de gallina activos
+        $active_chicken_batch = $em->getRepository(\App\Entity\Batch::class)->getActiveBatch(2) ?? []; //lotes de pollos activos
         foreach ($active_hen_batch as $batch) {
-            $week_batch_lay = $em->getRepository('App:Lay')->findLayInWeekYear(date('W'), date('Y'), $batch->getId());
+            $week_batch_lay = $em->getRepository(\App\Entity\Lay::class)->findLayInWeekYear(date('W'), date('Y'), $batch->getId());
             if (!empty($week_batch_lay['total'])) {
                 $batch->setWeekLay($week_batch_lay['total']);
             } else {
@@ -101,10 +101,10 @@ class DefaultController extends AbstractController
         }
         $em->flush();*/
 
-        /*      $productions=$em->getRepository("App:Production")->findAll();
+        /*      $productions=$em->getRepository(\App\Entity\Production::class)->findAll();
               foreach($productions as $production)
               {
-                  $basket=$em->getRepository("App:Basket")->findBasketByWeekYear($production->getProductionDate()->format('Y-m-d'));
+                  $basket=$em->getRepository(\App\Entity\Basket::class)->findBasketByWeekYear($production->getProductionDate()->format('Y-m-d'));
                   $production->setBasket($basket);
                   $em->persist($production);
               }
@@ -129,7 +129,7 @@ class DefaultController extends AbstractController
     public function layWeek()
     {
         $em = $this->getDoctrine()->getManager();
-        $week_eggs = $em->getRepository('App:Lay')->findByWeek(date('W'), date('Y'));
+        $week_eggs = $em->getRepository(\App\Entity\Lay::class)->findByWeek(date('W'), date('Y'));
 
         return new Response($week_eggs);
     }
@@ -137,7 +137,7 @@ class DefaultController extends AbstractController
     public function totalCropWorking()
     {
         $em = $this->getDoctrine()->getManager();
-        $crop_workings = count($em->getRepository('App:CropWorking')->findActive());
+        $crop_workings = count($em->getRepository(\App\Entity\CropWorking::class)->findActive());
 
         return new Response($crop_workings);
     }
@@ -146,7 +146,7 @@ class DefaultController extends AbstractController
     public function totalCompost()
     {
         $em = $this->getDoctrine()->getManager();
-        $collection_amount = $em->getRepository('App:CompostCollection')->findTotalAmountCollection(date('Y'));
+        $collection_amount = $em->getRepository(\App\Entity\CompostCollection::class)->findTotalAmountCollection(date('Y'));
 
         return new Response(number_format($collection_amount / 1000, 1));
     }
@@ -157,7 +157,7 @@ class DefaultController extends AbstractController
         if (!$year) {
             $year = date('Y');
         }
-        $production = $em->getRepository('App:Production')->findByYear($year);
+        $production = $em->getRepository(\App\Entity\Production::class)->findByYear($year);
 
         return new Response($production);
     }
@@ -165,8 +165,8 @@ class DefaultController extends AbstractController
     public function collectWeekUser($product_id)
     {
         $em = $this->getDoctrine()->getManager();
-        $product = $em->getRepository("App:Product")->find($product_id);
-        $week_product = $em->getRepository('App:Collect')->findByUserWeek($this->getUser(), $product, date('W'));
+        $product = $em->getRepository(\App\Entity\Product::class)->find($product_id);
+        $week_product = $em->getRepository(\App\Entity\Collect::class)->findByUserWeek($this->getUser(), $product, date('W'));
 
         return new Response($week_product);
     }
@@ -174,7 +174,7 @@ class DefaultController extends AbstractController
     public function totalSalesAmount()
     {
         $em = $this->getDoctrine()->getManager();
-        $amount = $em->getRepository("App:Sale")->findTotalSalesAmount();
+        $amount = $em->getRepository(\App\Entity\Sale::class)->findTotalSalesAmount();
 
         return new Response($amount);
     }
@@ -182,8 +182,8 @@ class DefaultController extends AbstractController
     public function lastFeedPurchase()
     {
         $em = $this->getDoctrine()->getManager();
-        $product = $em->getRepository("App:Product")->find(4); //pienso para gallinas
-        $date = $em->getRepository("App:Purchase")->findLastFeedDate($product);
+        $product = $em->getRepository(\App\Entity\Product::class)->find(4); //pienso para gallinas
+        $date = $em->getRepository(\App\Entity\Purchase::class)->findLastFeedDate($product);
 
         return new Response($date);
     }
@@ -192,8 +192,8 @@ class DefaultController extends AbstractController
     public function warning()
     {
         $em = $this->getDoctrine()->getManager();
-        $purchaser_warnings = $em->getRepository('App:Purchaser')->findByEggWarning();
-        $recipient_warnings = $em->getRepository('App:Recipient')->findByEggWarning();
+        $purchaser_warnings = $em->getRepository(\App\Entity\Purchaser::class)->findByEggWarning();
+        $recipient_warnings = $em->getRepository(\App\Entity\Recipient::class)->findByEggWarning();
 
         return $this->render('Default/warnings.html.twig', array(
             'purchaser_warnings' => $purchaser_warnings,
@@ -205,8 +205,8 @@ class DefaultController extends AbstractController
     public function averageCollectUser($product_id, $year)
     {
         $em = $this->getDoctrine()->getManager();
-        $product = $em->getRepository("App:Product")->find($product_id);
-        $average = $em->getRepository('App:Collect')->findByUserAverageCollect($this->getUser(), $product, $year);
+        $product = $em->getRepository(\App\Entity\Product::class)->find($product_id);
+        $average = $em->getRepository(\App\Entity\Collect::class)->findByUserAverageCollect($this->getUser(), $product, $year);
 
         return new Response($average);
     }
@@ -222,8 +222,8 @@ class DefaultController extends AbstractController
             $year = date("Y");
         }
         $em = $this->getDoctrine()->getManager();
-        $product = $em->getRepository("App:Product")->find($product_id);
-        $collects = $em->getRepository("App:Collect")->findAllByUserProductYear($this->getUser(), $product, $year);
+        $product = $em->getRepository(\App\Entity\Product::class)->find($product_id);
+        $collects = $em->getRepository(\App\Entity\Collect::class)->findAllByUserProductYear($this->getUser(), $product, $year);
 
 
         return array(

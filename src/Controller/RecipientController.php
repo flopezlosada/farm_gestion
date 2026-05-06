@@ -25,7 +25,7 @@ class RecipientController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:Recipient')->findAll();
+        $entities = $em->getRepository(\App\Entity\Recipient::class)->findAll();
 
         return $this->render('Recipient/index.html.twig', array(
             'entities' => $entities,
@@ -98,7 +98,7 @@ class RecipientController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Recipient')->find($id);
+        $entity = $em->getRepository(\App\Entity\Recipient::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Recipient entity.');
@@ -120,7 +120,7 @@ class RecipientController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Recipient')->find($id);
+        $entity = $em->getRepository(\App\Entity\Recipient::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Recipient entity.');
@@ -163,7 +163,7 @@ class RecipientController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Recipient')->find($id);
+        $entity = $em->getRepository(\App\Entity\Recipient::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Recipient entity.');
@@ -197,7 +197,7 @@ class RecipientController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:Recipient')->find($id);
+            $entity = $em->getRepository(\App\Entity\Recipient::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find Recipient entity.');

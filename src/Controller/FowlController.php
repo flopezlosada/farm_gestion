@@ -28,7 +28,7 @@ class FowlController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:Fowl')->findAll();
+        $entities = $em->getRepository(\App\Entity\Fowl::class)->findAll();
 
         return $this->render('Fowl/index.html.twig', array(
             'entities' => $entities,
@@ -101,7 +101,7 @@ class FowlController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Fowl')->find($id);
+        $entity = $em->getRepository(\App\Entity\Fowl::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Fowl entity.');
@@ -123,7 +123,7 @@ class FowlController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Fowl')->find($id);
+        $entity = $em->getRepository(\App\Entity\Fowl::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Fowl entity.');
@@ -169,7 +169,7 @@ class FowlController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Fowl')->find($id);
+        $entity = $em->getRepository(\App\Entity\Fowl::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Fowl entity.');
@@ -218,7 +218,7 @@ class FowlController extends AbstractController
                     $sale->setWeek(date('W', strtotime($entity->getPutDownDate()->format('Y-m-d'))));
                     $sale->setPaid(false);
                     $sale->setTotalPrice($entity->getSalePrice() * $entity->getCarcassWeight());
-                    $sale->setUnity($em->getRepository('App:Unity')->find(2));
+                    $sale->setUnity($em->getRepository(\App\Entity\Unity::class)->find(2));
 
                     $em->persist($sale);
 
@@ -232,7 +232,7 @@ class FowlController extends AbstractController
                     $gift->setGiftDate(new \DateTime($entity->getPutDownDate()->format('Y-m-d')));
                     $gift->setAmount($entity->getCarcassWeight());
                     $gift->setWeek(date('W', strtotime($entity->getPutDownDate()->format('Y-m-d'))));
-                    $gift->setUnity($em->getRepository('App:Unity')->find(2));
+                    $gift->setUnity($em->getRepository(\App\Entity\Unity::class)->find(2));
 
                     $em->persist($gift);
 
@@ -244,7 +244,7 @@ class FowlController extends AbstractController
                     $collect->setCollectDate(new \DateTime($entity->getPutDownDate()->format('Y-m-d')));
                     $collect->setAmount($entity->getCarcassWeight());
                     $collect->setWeek(date('W', strtotime($entity->getPutDownDate()->format('Y-m-d'))));
-                    $collect->setUnity($em->getRepository('App:Unity')->find(2));
+                    $collect->setUnity($em->getRepository(\App\Entity\Unity::class)->find(2));
 
                     $em->persist($collect);
 
@@ -277,7 +277,7 @@ class FowlController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:Fowl')->find($id);
+            $entity = $em->getRepository(\App\Entity\Fowl::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find Fowl entity.');

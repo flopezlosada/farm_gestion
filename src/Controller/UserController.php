@@ -25,7 +25,7 @@ class UserController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:User')->findAll();
+        $entities = $em->getRepository(\App\Entity\User::class)->findAll();
 
         return $this->render('User/index.html.twig', array(
             'entities' => $entities,
@@ -98,7 +98,7 @@ class UserController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:User')->find($id);
+        $entity = $em->getRepository(\App\Entity\User::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find User entity.');
@@ -120,7 +120,7 @@ class UserController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:User')->find($id);
+        $entity = $em->getRepository(\App\Entity\User::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find User entity.');
@@ -163,7 +163,7 @@ class UserController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:User')->find($id);
+        $entity = $em->getRepository(\App\Entity\User::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find User entity.');
@@ -197,7 +197,7 @@ class UserController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:User')->find($id);
+            $entity = $em->getRepository(\App\Entity\User::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find User entity.');

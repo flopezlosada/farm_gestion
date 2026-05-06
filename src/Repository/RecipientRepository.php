@@ -15,7 +15,7 @@ class RecipientRepository extends EntityRepository
     public function findByEggWarning()
     {
         $em = $this->getEntityManager();
-        $product = $em->getRepository("App:Product")->find(1);
+        $product = $em->getRepository(\App\Entity\Product::class)->find(1);
         $dql = "
         select p, s, DATEDIFF(CURRENT_DATE(),s.gift_date)- (p.often_buying_eggs) as diff
         from App:Recipient p

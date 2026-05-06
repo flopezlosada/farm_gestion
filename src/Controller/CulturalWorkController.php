@@ -25,7 +25,7 @@ class CulturalWorkController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:CulturalWork')->findAll();
+        $entities = $em->getRepository(\App\Entity\CulturalWork::class)->findAll();
 
         return $this->render('CulturalWork/index.html.twig', array(
             'entities' => $entities,
@@ -99,7 +99,7 @@ class CulturalWorkController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:CulturalWork')->find($id);
+        $entity = $em->getRepository(\App\Entity\CulturalWork::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find CulturalWork entity.');
@@ -121,7 +121,7 @@ class CulturalWorkController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:CulturalWork')->find($id);
+        $entity = $em->getRepository(\App\Entity\CulturalWork::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find CulturalWork entity.');
@@ -166,7 +166,7 @@ class CulturalWorkController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:CulturalWork')->find($id);
+        $entity = $em->getRepository(\App\Entity\CulturalWork::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find CulturalWork entity.');
@@ -201,7 +201,7 @@ class CulturalWorkController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:CulturalWork')->find($id);
+            $entity = $em->getRepository(\App\Entity\CulturalWork::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find CulturalWork entity.');

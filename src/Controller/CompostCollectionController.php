@@ -25,16 +25,16 @@ class CompostCollectionController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $colletion_points = $em->getRepository('App:CompostCollectionPoint')->findAll();
+        $colletion_points = $em->getRepository(\App\Entity\CompostCollectionPoint::class)->findAll();
 
         $current_year = date("Y");
         foreach ($colletion_points as $point) {
-            $last_collection = $em->getRepository("App:CompostCollection")->findLastByPoint($point);
+            $last_collection = $em->getRepository(\App\Entity\CompostCollection::class)->findLastByPoint($point);
             $point->setLastCompostCollection($last_collection);
 
             $year_collections = array();
             for ($i = $current_year; $i >= 2017; $i--) {
-                $year_collections[$i] = $em->getRepository("App:CompostCollection")->findPointCollectionYear($i, $point);
+                $year_collections[$i] = $em->getRepository(\App\Entity\CompostCollection::class)->findPointCollectionYear($i, $point);
             }
             $point->setYearCollections($year_collections);
 
@@ -54,9 +54,9 @@ class CompostCollectionController extends AbstractController
         $year_month_collections = array(); // valores por mes
         $current_year = date("Y");
         for ($i = 2017; $i <= $current_year; $i++) {
-            $year_collections[$i] = $em->getRepository("App:CompostCollection")->findTotalAmountCollection($i);
-            $year_month_collections[$i] = $em->getRepository("App:CompostCollection")->findAmountCollectionByMonth($i);
-            $year_week_collections[$i] = $em->getRepository("App:CompostCollection")->findAmountCollectionByWeek($i);
+            $year_collections[$i] = $em->getRepository(\App\Entity\CompostCollection::class)->findTotalAmountCollection($i);
+            $year_month_collections[$i] = $em->getRepository(\App\Entity\CompostCollection::class)->findAmountCollectionByMonth($i);
+            $year_week_collections[$i] = $em->getRepository(\App\Entity\CompostCollection::class)->findAmountCollectionByWeek($i);
         }
 
 
@@ -82,7 +82,7 @@ class CompostCollectionController extends AbstractController
             $em = $this->getDoctrine()->getManager();
             $entity->setWeek(date('W', strtotime($entity->getCollectDate())));
             $entity->setCollectDate(new \DateTime($entity->getCollectDate()));
-            $entity->setCompostPile($em->getRepository("App:CompostPile")->findActivePile());
+            $entity->setCompostPile($em->getRepository(\App\Entity\CompostPile::class)->findActivePile());
             $em->persist($entity);
             $em->flush();
 
@@ -138,7 +138,7 @@ class CompostCollectionController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:CompostCollection')->find($id);
+        $entity = $em->getRepository(\App\Entity\CompostCollection::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find CompostCollection entity.');
@@ -160,7 +160,7 @@ class CompostCollectionController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:CompostCollection')->find($id);
+        $entity = $em->getRepository(\App\Entity\CompostCollection::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find CompostCollection entity.');
@@ -203,7 +203,7 @@ class CompostCollectionController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:CompostCollection')->find($id);
+        $entity = $em->getRepository(\App\Entity\CompostCollection::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find CompostCollection entity.');
@@ -237,7 +237,7 @@ class CompostCollectionController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:CompostCollection')->find($id);
+            $entity = $em->getRepository(\App\Entity\CompostCollection::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find CompostCollection entity.');

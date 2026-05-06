@@ -21,11 +21,11 @@ class GraphController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
         $year = date("Y");
-        $weeks_lay = $em->getRepository('App:Lay')->findWeeksYear($year);
+        $weeks_lay = $em->getRepository(\App\Entity\Lay::class)->findWeeksYear($year);
         $daily_lay = array();
         foreach ($weeks_lay as $week) {
             for ($i = 1; $i <= 7; $i++) {
-                $daily_lay[$week['week']][$i] = $em->getRepository('App:Lay')->findDailyLayYear($year, $week, $i);
+                $daily_lay[$week['week']][$i] = $em->getRepository(\App\Entity\Lay::class)->findDailyLayYear($year, $week, $i);
             }
         }
 

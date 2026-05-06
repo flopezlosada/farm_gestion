@@ -25,7 +25,7 @@ class CulturalWorkTypeController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:CulturalWorkType')->findAll();
+        $entities = $em->getRepository(\App\Entity\CulturalWorkType::class)->findAll();
 
         return $this->render('CulturalWorkType/index.html.twig', array(
             'entities' => $entities,
@@ -98,7 +98,7 @@ class CulturalWorkTypeController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:CulturalWorkType')->find($id);
+        $entity = $em->getRepository(\App\Entity\CulturalWorkType::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find CulturalWorkType entity.');
@@ -120,7 +120,7 @@ class CulturalWorkTypeController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:CulturalWorkType')->find($id);
+        $entity = $em->getRepository(\App\Entity\CulturalWorkType::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find CulturalWorkType entity.');
@@ -163,7 +163,7 @@ class CulturalWorkTypeController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:CulturalWorkType')->find($id);
+        $entity = $em->getRepository(\App\Entity\CulturalWorkType::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find CulturalWorkType entity.');
@@ -197,7 +197,7 @@ class CulturalWorkTypeController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:CulturalWorkType')->find($id);
+            $entity = $em->getRepository(\App\Entity\CulturalWorkType::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find CulturalWorkType entity.');

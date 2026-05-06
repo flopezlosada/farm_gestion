@@ -42,10 +42,10 @@ class PartnerController extends AbstractController
         $entityManager = $this->getDoctrine()->getManager();
 
         if ($type == 1) {
-            $partners = $entityManager->getRepository("App:Partner")->findActiveHasNoBasket();
+            $partners = $entityManager->getRepository(\App\Entity\Partner::class)->findActiveHasNoBasket();
             $title = 'Listado de socias activas sin cesta';
         } else if ($type == 2) {
-            $partners = $entityManager->getRepository("App:Partner")->findBy(array('is_active' => 0));
+            $partners = $entityManager->getRepository(\App\Entity\Partner::class)->findBy(array('is_active' => 0));
             $title = 'Listado de socias que están de baja';
         }
 
@@ -63,13 +63,13 @@ class PartnerController extends AbstractController
     public function evolution()
     {
         $entityManager = $this->getDoctrine()->getManager();
-        $baskets = $entityManager->getRepository("App:Basket")->findMonthlyBasket(date('Y-m-d'));//devuelve las cestas anteriores a hoy
+        $baskets = $entityManager->getRepository(\App\Entity\Basket::class)->findMonthlyBasket(date('Y-m-d'));//devuelve las cestas anteriores a hoy
         $amount_partners = array();
         $amount_baskets=array();
         foreach ($baskets as $basket) {
-            $amount = $entityManager->getRepository("App:Partner")->findAmountPartnersByMonth($basket[0]);
+            $amount = $entityManager->getRepository(\App\Entity\Partner::class)->findAmountPartnersByMonth($basket[0]);
             $amount_partners[] = array($basket, $amount);
-            $amount_basket=$entityManager->getRepository("App:Partner")->findAmountBasketsByMonth($basket[0]);
+            $amount_basket=$entityManager->getRepository(\App\Entity\Partner::class)->findAmountBasketsByMonth($basket[0]);
             $amount_baskets=array($basket,$amount_basket);
         }
 
@@ -140,8 +140,8 @@ class PartnerController extends AbstractController
             /*
              * aquí actualizo el grupo del socio para la última cesta si es que ya ha sido creada
              */
-            $basket = $entityManager->getRepository("App:Basket")->findBasketByWeekYear(date('Y-m-d'));//número de cesta actual
-            $partner_weekly_basket = $entityManager->getRepository("App:WeeklyBasket")->findOneBy(array("basket" => $basket->getId(), 'partner' => $partner));//para ver si ya la he creado, si está en la tabla weekly_basket la cesta actual para este socio
+            $basket = $entityManager->getRepository(\App\Entity\Basket::class)->findBasketByWeekYear(date('Y-m-d'));//número de cesta actual
+            $partner_weekly_basket = $entityManager->getRepository(\App\Entity\WeeklyBasket::class)->findOneBy(array("basket" => $basket->getId(), 'partner' => $partner));//para ver si ya la he creado, si está en la tabla weekly_basket la cesta actual para este socio
             if ($partner_weekly_basket) {
                 $partner_weekly_basket->setWeeklyBasketGroup($partner->getWeeklyBasketGroup());
                 $entityManager->persist($partner_weekly_basket);
@@ -182,9 +182,9 @@ class PartnerController extends AbstractController
     {
         $entityManager = $this->getDoctrine()->getManager();
         if ($type == 'add_family') {
-            $partners = $entityManager->getRepository("App:Partner")->findFamiliar($partner);
+            $partners = $entityManager->getRepository(\App\Entity\Partner::class)->findFamiliar($partner);
         } else {
-            $baskets = $entityManager->getRepository("App:PartnerBasketShare")->findBy(array('is_active' => 1, 'basket_share' => 4));
+            $baskets = $entityManager->getRepository(\App\Entity\PartnerBasketShare::class)->findBy(array('is_active' => 1, 'basket_share' => 4));
             foreach ($baskets as $basket) {
                 if (!$basket->getPartner()->getSharePartner()) //solo muestra los que no están ya relacionados
                 {
@@ -218,8 +218,8 @@ class PartnerController extends AbstractController
             return $this->redirectToRoute('partner_show', array('id' => $partner1_id));
         }
         $entityManager = $this->getDoctrine()->getManager();
-        $partner1 = $entityManager->getRepository("App:Partner")->find($partner1_id);
-        $partner2 = $entityManager->getRepository("App:Partner")->find($partner2_id);
+        $partner1 = $entityManager->getRepository(\App\Entity\Partner::class)->find($partner1_id);
+        $partner2 = $entityManager->getRepository(\App\Entity\Partner::class)->find($partner2_id);
         $partner1->addRelative($partner2);
         foreach ($partner2->getPartnerBasketShares() as $share) {
             $entityManager->remove($share);
@@ -246,8 +246,8 @@ class PartnerController extends AbstractController
     {
         $session = new Session();
         $entityManager = $this->getDoctrine()->getManager();
-        $partner1 = $entityManager->getRepository("App:Partner")->find($partner1_id);
-        $partner2 = $entityManager->getRepository("App:Partner")->find($partner2_id);
+        $partner1 = $entityManager->getRepository(\App\Entity\Partner::class)->find($partner1_id);
+        $partner2 = $entityManager->getRepository(\App\Entity\Partner::class)->find($partner2_id);
         $partner1->removeRelative($partner2);
 
 
@@ -272,8 +272,8 @@ class PartnerController extends AbstractController
     public function cities(Request $request)
     {
         $em = $this->getDoctrine()->getManager();
-        $state = $em->getRepository("App:State")->findById($request->get('state_id'));
-        $cities = $em->getRepository('App:City')->findByState($state);
+        $state = $em->getRepository(\App\Entity\State::class)->findById($request->get('state_id'));
+        $cities = $em->getRepository(\App\Entity\City::class)->findByState($state);
 
 
         return array(
@@ -357,15 +357,15 @@ class PartnerController extends AbstractController
             $entityManager->persist($partnerBasketShare);
 
 
-            $basket = $entityManager->getRepository("App:Basket")->findBasketByWeekYear(date('Y-m-d'));//número de cesta actual
+            $basket = $entityManager->getRepository(\App\Entity\Basket::class)->findBasketByWeekYear(date('Y-m-d'));//número de cesta actual
             if ($partnerBasketShare->getStartDate() <= $basket->getDate()) {
-                $control_weekly_basket = $entityManager->getRepository("App:WeeklyBasket")->findBy(array("basket" => $basket->getId()));//para ver si ya la he creado, si está en la tabla weekly_basket la cesta actual
+                $control_weekly_basket = $entityManager->getRepository(\App\Entity\WeeklyBasket::class)->findBy(array("basket" => $basket->getId()));//para ver si ya la he creado, si está en la tabla weekly_basket la cesta actual
                 if ($control_weekly_basket) {//si ya está creada la lista de esta semana, hay que añadir un registro más con el nuevo socio que empieza esta semana
                     $weekly_basket = new WeeklyBasket();
                     $weekly_basket->setBasket($basket);
                     $weekly_basket->setPartner($partner);
                     $weekly_basket->setAmount($partnerBasketShare->getAmount());
-                    $weekly_basket_status = $entityManager->getRepository("App:WeeklyBasketStatus")->find(1);
+                    $weekly_basket_status = $entityManager->getRepository(\App\Entity\WeeklyBasketStatus::class)->find(1);
                     $weekly_basket->setWeeklyBasketStatus($weekly_basket_status);
                     $weekly_basket->setBasketShare($partnerBasketShare->getBasketShare());
                     $entityManager->persist($weekly_basket);
@@ -402,8 +402,8 @@ class PartnerController extends AbstractController
             return $this->redirectToRoute('partner_show', array('id' => $partner1_id));
         }
         $entityManager = $this->getDoctrine()->getManager();
-        $partner1 = $entityManager->getRepository("App:Partner")->find($partner1_id);
-        $partner2 = $entityManager->getRepository("App:Partner")->find($partner2_id);
+        $partner1 = $entityManager->getRepository(\App\Entity\Partner::class)->find($partner1_id);
+        $partner2 = $entityManager->getRepository(\App\Entity\Partner::class)->find($partner2_id);
 
         $partner1->setSharePartner($partner2);
         $partner2->setSharePartner($partner1);
@@ -430,8 +430,8 @@ class PartnerController extends AbstractController
         $session = new Session();
 
         $entityManager = $this->getDoctrine()->getManager();
-        $partner1 = $entityManager->getRepository("App:Partner")->find($partner1_id);
-        $partner2 = $entityManager->getRepository("App:Partner")->find($partner2_id);
+        $partner1 = $entityManager->getRepository(\App\Entity\Partner::class)->find($partner1_id);
+        $partner2 = $entityManager->getRepository(\App\Entity\Partner::class)->find($partner2_id);
         $partner1->setSharePartner(null);
         $partner2->setSharePartner(null);
 
@@ -455,7 +455,7 @@ class PartnerController extends AbstractController
     public function generateHistorical()
     {
         $entityManager = $this->getDoctrine()->getManager();
-       $partners=$entityManager->getRepository("App:Partner")->findAll();
+       $partners=$entityManager->getRepository(\App\Entity\Partner::class)->findAll();
 
        foreach ($partners as $partner)
        {

@@ -54,7 +54,7 @@ class CalendarEventListener
         // load events using your custom logic here,
         // for instance, retrieving events from a repository
         //puesta
-        $lay_query = $this->entityManager->getRepository('App:Lay')
+        $lay_query = $this->entityManager->getRepository(\App\Entity\Lay::class)
             ->createQueryBuilder('lay_events')
             ->where('lay_events.lay_date BETWEEN :startDate and :endDate')
             ->setParameter('startDate', $startDate->format('Y-m-d'))
@@ -70,7 +70,7 @@ class CalendarEventListener
 
 
         //trabajos culturales
-        $culturalwork_query = $this->entityManager->getRepository('App:CulturalWork')
+        $culturalwork_query = $this->entityManager->getRepository(\App\Entity\CulturalWork::class)
             ->createQueryBuilder('culturalwork_events')
             ->where('culturalwork_events.date BETWEEN :startDate and :endDate')
             ->setParameter('startDate', $startDate->format('Y-m-d'))
@@ -85,7 +85,7 @@ class CalendarEventListener
         }
 
         //siembra y plantación
-        $seedwork_query = $this->entityManager->getRepository('App:SeedWork')
+        $seedwork_query = $this->entityManager->getRepository(\App\Entity\SeedWork::class)
             ->createQueryBuilder('seedwork_events')
             ->where('seedwork_events.real_date BETWEEN :startDate and :endDate')
             ->setParameter('startDate', $startDate->format('Y-m-d'))
@@ -101,7 +101,7 @@ class CalendarEventListener
 
 
         //eventos
-        $query = $this->entityManager->getRepository('App:Event')
+        $query = $this->entityManager->getRepository(\App\Entity\Event::class)
             ->createQueryBuilder('company_events')
             ->where('company_events.start_date BETWEEN :startDate and :endDate')
             ->setParameter('startDate', $startDate->format('Y-m-d H:i:s'))
@@ -127,7 +127,7 @@ class CalendarEventListener
 
 /*
         //recogida
-        $collect_query = $this->entityManager->getRepository('App:Collect')
+        $collect_query = $this->entityManager->getRepository(\App\Entity\Collect::class)
             ->createQueryBuilder('collect_events')
             ->where('collect_events.collect_date BETWEEN :startDate and :endDate')
             ->setParameter('startDate', $startDate->format('Y-m-d'))
@@ -144,7 +144,7 @@ class CalendarEventListener
 
 
         //ventas
-        $sale_query = $this->entityManager->getRepository('App:Sale')
+        $sale_query = $this->entityManager->getRepository(\App\Entity\Sale::class)
             ->createQueryBuilder('collect_events')
             ->where('collect_events.sale_date BETWEEN :startDate and :endDate')
             ->setParameter('startDate', $startDate->format('Y-m-d'))
@@ -160,7 +160,7 @@ class CalendarEventListener
 
 */
         //compras
-        $purchase_query = $this->entityManager->getRepository('App:Purchase')
+        $purchase_query = $this->entityManager->getRepository(\App\Entity\Purchase::class)
             ->createQueryBuilder('collect_events')
             ->where('collect_events.purchase_date BETWEEN :startDate and :endDate')
             ->setParameter('startDate', $startDate->format('Y-m-d'))
@@ -175,7 +175,7 @@ class CalendarEventListener
         }
 
       /*  //regalos
-        $gift_query = $this->entityManager->getRepository('App:Gift')
+        $gift_query = $this->entityManager->getRepository(\App\Entity\Gift::class)
             ->createQueryBuilder('collect_events')
             ->where('collect_events.gift_date BETWEEN :startDate and :endDate')
             ->setParameter('startDate', $startDate->format('Y-m-d'))
@@ -190,7 +190,7 @@ class CalendarEventListener
         }
 */
         //tareas
-        $task_query = $this->entityManager->getRepository('App:Task')
+        $task_query = $this->entityManager->getRepository(\App\Entity\Task::class)
             ->createQueryBuilder('collect_events')
             ->where('collect_events.expected_date BETWEEN :startDate and :endDate')
             ->setParameter('startDate', $startDate->format('Y-m-d'))
@@ -205,7 +205,7 @@ class CalendarEventListener
         }
 
         //movimientos lotes gallinas
-        $movement_query = $this->entityManager->getRepository('App:Movement')
+        $movement_query = $this->entityManager->getRepository(\App\Entity\Movement::class)
             ->createQueryBuilder('collect_events')
             ->where('collect_events.date BETWEEN :startDate and :endDate')
             ->setParameter('startDate', $startDate->format('Y-m-d'))

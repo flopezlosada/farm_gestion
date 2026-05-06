@@ -26,7 +26,7 @@ class AudioController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:Audio')->findAll();
+        $entities = $em->getRepository(\App\Entity\Audio::class)->findAll();
 
         return $this->render('Audio/index.html.twig', array(
             'entities' => $entities,
@@ -108,7 +108,7 @@ class AudioController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Audio')->find($id);
+        $entity = $em->getRepository(\App\Entity\Audio::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Audio entity.');
@@ -130,7 +130,7 @@ class AudioController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Audio')->find($id);
+        $entity = $em->getRepository(\App\Entity\Audio::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Audio entity.');
@@ -173,7 +173,7 @@ class AudioController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Audio')->find($id);
+        $entity = $em->getRepository(\App\Entity\Audio::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Audio entity.');
@@ -207,7 +207,7 @@ class AudioController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:Audio')->find($id);
+            $entity = $em->getRepository(\App\Entity\Audio::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find Audio entity.');
@@ -240,7 +240,7 @@ class AudioController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Audio')->find($id);
+        $entity = $em->getRepository(\App\Entity\Audio::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Audio entity.');
@@ -255,7 +255,7 @@ class AudioController extends AbstractController
     public function fastDelete($id)
     {
         $em = $this->getDoctrine()->getManager();
-        $entity = $em->getRepository('App:Audio')->find($id);
+        $entity = $em->getRepository(\App\Entity\Audio::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Audio entity.');

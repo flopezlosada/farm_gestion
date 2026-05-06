@@ -25,10 +25,10 @@ class CropController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:Crop')->findAll();
+        $entities = $em->getRepository(\App\Entity\Crop::class)->findAll();
         $year = date('Y');
         foreach ($entities as $entity) {
-            $entity->setTotalProduction($em->getRepository('App:Production')->findTotalProduction($entity, $year));
+            $entity->setTotalProduction($em->getRepository(\App\Entity\Production::class)->findTotalProduction($entity, $year));
         }
 
 
@@ -103,7 +103,7 @@ class CropController extends AbstractController
 
         $em = $this->getDoctrine()->getManager();
 
-        /*$productions=$em->getRepository("App:Production")->findAll();
+        /*$productions=$em->getRepository(\App\Entity\Production::class)->findAll();
         foreach ($productions as $production)
         {
             $production->setCrop($production->getCropWorking()->getCrop());
@@ -119,14 +119,14 @@ class CropController extends AbstractController
         }
 
 
-        $crops = $em->getRepository('App:Crop')->findAll();
+        $crops = $em->getRepository(\App\Entity\Crop::class)->findAll();
 
         $crop_resume_production = array();
         $production = array();
         foreach ($crops as $crop) {
             $crop_resume_production = array($crop);
             foreach ($years as $year) {
-                array_push($crop_resume_production, $em->getRepository('App:Production')->findTotalProduction($crop, $year));
+                array_push($crop_resume_production, $em->getRepository(\App\Entity\Production::class)->findTotalProduction($crop, $year));
             }
             $production[] = $crop_resume_production;
         }
@@ -148,7 +148,7 @@ class CropController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Crop')->find($id);
+        $entity = $em->getRepository(\App\Entity\Crop::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Crop entity.');
@@ -171,7 +171,7 @@ class CropController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Crop')->find($id);
+        $entity = $em->getRepository(\App\Entity\Crop::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Crop entity.');
@@ -214,7 +214,7 @@ class CropController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Crop')->find($id);
+        $entity = $em->getRepository(\App\Entity\Crop::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Crop entity.');
@@ -248,7 +248,7 @@ class CropController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:Crop')->find($id);
+            $entity = $em->getRepository(\App\Entity\Crop::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find Crop entity.');

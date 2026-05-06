@@ -25,7 +25,7 @@ class ProviderController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:Provider')->findAll();
+        $entities = $em->getRepository(\App\Entity\Provider::class)->findAll();
 
         return $this->render('Provider/index.html.twig', array(
             'entities' => $entities,
@@ -98,7 +98,7 @@ class ProviderController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Provider')->find($id);
+        $entity = $em->getRepository(\App\Entity\Provider::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Provider entity.');
@@ -120,7 +120,7 @@ class ProviderController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Provider')->find($id);
+        $entity = $em->getRepository(\App\Entity\Provider::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Provider entity.');
@@ -163,7 +163,7 @@ class ProviderController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Provider')->find($id);
+        $entity = $em->getRepository(\App\Entity\Provider::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Provider entity.');
@@ -197,7 +197,7 @@ class ProviderController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:Provider')->find($id);
+            $entity = $em->getRepository(\App\Entity\Provider::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find Provider entity.');

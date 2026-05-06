@@ -25,7 +25,7 @@ class TaskTypeController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:TaskType')->findAll();
+        $entities = $em->getRepository(\App\Entity\TaskType::class)->findAll();
 
         return $this->render('TaskType/index.html.twig', array(
             'entities' => $entities,
@@ -98,7 +98,7 @@ class TaskTypeController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:TaskType')->find($id);
+        $entity = $em->getRepository(\App\Entity\TaskType::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find TaskType entity.');
@@ -120,7 +120,7 @@ class TaskTypeController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:TaskType')->find($id);
+        $entity = $em->getRepository(\App\Entity\TaskType::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find TaskType entity.');
@@ -163,7 +163,7 @@ class TaskTypeController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:TaskType')->find($id);
+        $entity = $em->getRepository(\App\Entity\TaskType::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find TaskType entity.');
@@ -197,7 +197,7 @@ class TaskTypeController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:TaskType')->find($id);
+            $entity = $em->getRepository(\App\Entity\TaskType::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find TaskType entity.');

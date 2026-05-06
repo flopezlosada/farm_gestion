@@ -25,7 +25,7 @@ class CompostPileController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $compost_piles = $em->getRepository('App:CompostPile')->findAll();
+        $compost_piles = $em->getRepository(\App\Entity\CompostPile::class)->findAll();
 
         return $this->render('CompostPile/index.html.twig', array(
             'compost_piles' => $compost_piles,
@@ -84,7 +84,7 @@ class CompostPileController extends AbstractController
     public function new()
     {
         $em = $this->getDoctrine()->getManager();
-        $last_pile = $em->getRepository("App:CompostPile")->findActivePile();
+        $last_pile = $em->getRepository(\App\Entity\CompostPile::class)->findActivePile();
 
         if ($last_pile) {
             $last_pile->setEndDate(new \DateTime());
@@ -109,7 +109,7 @@ class CompostPileController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:CompostPile')->find($id);
+        $entity = $em->getRepository(\App\Entity\CompostPile::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find CompostPile entity.');
@@ -131,7 +131,7 @@ class CompostPileController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:CompostPile')->find($id);
+        $entity = $em->getRepository(\App\Entity\CompostPile::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find CompostPile entity.');
@@ -174,7 +174,7 @@ class CompostPileController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:CompostPile')->find($id);
+        $entity = $em->getRepository(\App\Entity\CompostPile::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find CompostPile entity.');
@@ -208,7 +208,7 @@ class CompostPileController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:CompostPile')->find($id);
+            $entity = $em->getRepository(\App\Entity\CompostPile::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find CompostPile entity.');

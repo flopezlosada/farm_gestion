@@ -18,9 +18,9 @@ class StatisticController extends AbstractController
     public function hensFeedTotal()
     {
         $em = $this->getDoctrine()->getManager();
-        $hens_feed = $em->getRepository("App:Product")->find(4); //pienso de gallinas
+        $hens_feed = $em->getRepository(\App\Entity\Product::class)->find(4); //pienso de gallinas
 
-        $feed_purchases = $em->getRepository("App:Purchase")->findByProduct($hens_feed);
+        $feed_purchases = $em->getRepository(\App\Entity\Purchase::class)->findByProduct($hens_feed);
 
         /**
          * con esta compra virtual, lo que hago es obtener los valores entre la última compra real y el día actual, como
@@ -45,21 +45,21 @@ class StatisticController extends AbstractController
     public function hensFeed($last_hens_feed_purchase, $last_but_one_hens_feed_purchase)
     {
         $em = $this->getDoctrine()->getManager();
-        $hens_feed = $em->getRepository("App:Product")->find(4);
-        /*$last_hens_feed_purchase = $em->getRepository("App:Purchase")->findLastFeedPurchase($hens_feed, 0);
-        $last_but_one_hens_feed_purchase = $em->getRepository("App:Purchase")->findLastFeedPurchase($hens_feed, 1);*/
+        $hens_feed = $em->getRepository(\App\Entity\Product::class)->find(4);
+        /*$last_hens_feed_purchase = $em->getRepository(\App\Entity\Purchase::class)->findLastFeedPurchase($hens_feed, 0);
+        $last_but_one_hens_feed_purchase = $em->getRepository(\App\Entity\Purchase::class)->findLastFeedPurchase($hens_feed, 1);*/
 
-        $product = $em->getRepository("App:Product")->find(1);
+        $product = $em->getRepository(\App\Entity\Product::class)->find(1);
 
-        $users = $em->getRepository("App:User")->findByRole('ROLE_COOP');
-        $total_product_collect_dates = $em->getRepository("App:Collect")->findCollectDates($product, $last_hens_feed_purchase->getDate(), $last_but_one_hens_feed_purchase->getDate());
+        $users = $em->getRepository(\App\Entity\User::class)->findByRole('ROLE_COOP');
+        $total_product_collect_dates = $em->getRepository(\App\Entity\Collect::class)->findCollectDates($product, $last_hens_feed_purchase->getDate(), $last_but_one_hens_feed_purchase->getDate());
         foreach ($users as $user) {
-            $consumed_eggs = $em->getRepository("App:Collect")->findCollectUserDates($user, $product, $last_hens_feed_purchase->getDate(), $last_but_one_hens_feed_purchase->getDate());
+            $consumed_eggs = $em->getRepository(\App\Entity\Collect::class)->findCollectUserDates($user, $product, $last_hens_feed_purchase->getDate(), $last_but_one_hens_feed_purchase->getDate());
             $user->setConsumedProduct($consumed_eggs);
 
         }
 
-        $egg_sales = $em->getRepository('App:Sale')->findPeriodSale($product, $last_hens_feed_purchase->getDate(), $last_but_one_hens_feed_purchase->getDate());
+        $egg_sales = $em->getRepository(\App\Entity\Sale::class)->findPeriodSale($product, $last_hens_feed_purchase->getDate(), $last_but_one_hens_feed_purchase->getDate());
 
         return $this->render('Statistic\hens_feed.html.twig', array(
             'last_hens_feed_purchase' => $last_hens_feed_purchase,
@@ -85,41 +85,41 @@ class StatisticController extends AbstractController
             5 => 'Mayo', 6 => 'Junio', 7 => 'Julio', 8 => 'Agosto', 9 => 'Septiembre', 10 => 'Octubre', 11 => 'Noviembre', 12 => 'Diciembre'); //array de meses
 
         foreach ($months as $month => $month_name) {
-            $lay_eggs_year[$month] = $em->getRepository("App:Lay")->getMonthLay($year, $month);
+            $lay_eggs_year[$month] = $em->getRepository(\App\Entity\Lay::class)->getMonthLay($year, $month);
         }
 
 
-        $product = $em->getRepository("App:Product")->find(1);
-        $unity = $em->getRepository('App:Unity')->find(1);
+        $product = $em->getRepository(\App\Entity\Product::class)->find(1);
+        $unity = $em->getRepository(\App\Entity\Unity::class)->find(1);
         $sale_eggs_year_single = array();
         foreach ($months as $month => $month_name) {
-            $sale_eggs_year_single[$month] = $em->getRepository("App:Sale")->findTotalProductYearMonth($product, $year, $month, $unity);
+            $sale_eggs_year_single[$month] = $em->getRepository(\App\Entity\Sale::class)->findTotalProductYearMonth($product, $year, $month, $unity);
         }
 
-        $dozen = $em->getRepository('App:Unity')->find(3);
+        $dozen = $em->getRepository(\App\Entity\Unity::class)->find(3);
         $sale_eggs_year_dozen = array();
         foreach ($months as $month => $month_name) {
-            $sale_eggs_year_dozen[$month] = $em->getRepository("App:Sale")->findTotalProductYearMonth($product, $year, $month, $dozen);
+            $sale_eggs_year_dozen[$month] = $em->getRepository(\App\Entity\Sale::class)->findTotalProductYearMonth($product, $year, $month, $dozen);
         }
 
         $collect_eggs_year_single = array();
         foreach ($months as $month => $month_name) {
-            $collect_eggs_year_single[$month] = $em->getRepository("App:Collect")->findTotalProductYearMonth($product, $year, $month, $unity);
+            $collect_eggs_year_single[$month] = $em->getRepository(\App\Entity\Collect::class)->findTotalProductYearMonth($product, $year, $month, $unity);
         }
 
         $collect_eggs_year_dozen = array();
         foreach ($months as $month => $month_name) {
-            $collect_eggs_year_dozen[$month] = $em->getRepository("App:Collect")->findTotalProductYearMonth($product, $year, $month, $dozen);
+            $collect_eggs_year_dozen[$month] = $em->getRepository(\App\Entity\Collect::class)->findTotalProductYearMonth($product, $year, $month, $dozen);
         }
 
         $gift_eggs_year_single = array();
         foreach ($months as $month => $month_name) {
-            $gift_eggs_year_single[$month] = $em->getRepository("App:Gift")->findTotalProductYearMonth($product, $year, $month, $unity);
+            $gift_eggs_year_single[$month] = $em->getRepository(\App\Entity\Gift::class)->findTotalProductYearMonth($product, $year, $month, $unity);
         }
 
         $gift_eggs_year_dozen = array();
         foreach ($months as $month => $month_name) {
-            $gift_eggs_year_dozen[$month] = $em->getRepository("App:Gift")->findTotalProductYearMonth($product, $year, $month, $dozen);
+            $gift_eggs_year_dozen[$month] = $em->getRepository(\App\Entity\Gift::class)->findTotalProductYearMonth($product, $year, $month, $dozen);
         }
 
 

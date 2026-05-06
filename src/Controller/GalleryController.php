@@ -25,7 +25,7 @@ class GalleryController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:Gallery')->findAll();
+        $entities = $em->getRepository(\App\Entity\Gallery::class)->findAll();
 
         return $this->render('Gallery/index.html.twig', array(
             'entities' => $entities,
@@ -150,7 +150,7 @@ class GalleryController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Gallery')->find($id);
+        $entity = $em->getRepository(\App\Entity\Gallery::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Gallery entity.');
@@ -172,7 +172,7 @@ class GalleryController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Gallery')->find($id);
+        $entity = $em->getRepository(\App\Entity\Gallery::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Gallery entity.');
@@ -215,7 +215,7 @@ class GalleryController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Gallery')->find($id);
+        $entity = $em->getRepository(\App\Entity\Gallery::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Gallery entity.');
@@ -249,7 +249,7 @@ class GalleryController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:Gallery')->find($id);
+            $entity = $em->getRepository(\App\Entity\Gallery::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find Gallery entity.');
@@ -288,8 +288,8 @@ class GalleryController extends AbstractController
          * o building o catchall.
          * Entonces hay que coger las imágenes de la entidad (woman) que están agrupadas (single=0)
          */
-        $blog = $em->getRepository('App:Blog')->find($id);
-        $images = $em->getRepository('App:Image')->findBlogGroupedImages($id, $object_class);
+        $blog = $em->getRepository(\App\Entity\Blog::class)->find($id);
+        $images = $em->getRepository(\App\Entity\Image::class)->findBlogGroupedImages($id, $object_class);
 
         return $this->render('Gallery/show_snippet.html.twig', array(
             'images' => $images,
@@ -300,7 +300,7 @@ class GalleryController extends AbstractController
     public function imageList($id)
     {
         $em = $this->getDoctrine()->getManager();
-        $gallery = $em->getRepository("App:Gallery")->find($id);
+        $gallery = $em->getRepository(\App\Entity\Gallery::class)->find($id);
 
         return $this->render('Gallery/image_list.html.twig', array(
             'gallery' => $gallery,

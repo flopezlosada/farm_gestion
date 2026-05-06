@@ -25,7 +25,7 @@ class EventController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:Event')->findAll();
+        $entities = $em->getRepository(\App\Entity\Event::class)->findAll();
 
         return $this->render('Event/index.html.twig', array(
             'entities' => $entities,
@@ -100,7 +100,7 @@ class EventController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Event')->find($id);
+        $entity = $em->getRepository(\App\Entity\Event::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Event entity.');
@@ -122,7 +122,7 @@ class EventController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Event')->find($id);
+        $entity = $em->getRepository(\App\Entity\Event::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Event entity.');
@@ -167,7 +167,7 @@ class EventController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Event')->find($id);
+        $entity = $em->getRepository(\App\Entity\Event::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Event entity.');
@@ -206,7 +206,7 @@ class EventController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:Event')->find($id);
+            $entity = $em->getRepository(\App\Entity\Event::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find Event entity.');

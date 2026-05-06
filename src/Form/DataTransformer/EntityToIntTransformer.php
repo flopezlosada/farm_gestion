@@ -5,13 +5,13 @@ use JMS\SecurityExtraBundle\Security\Util\String as security_string;
 
 use Symfony\Component\Form\DataTransformerInterface;
 use Symfony\Component\Form\Exception\TransformationFailedException;
-use Doctrine\Common\Persistence\ObjectManager;
+use Doctrine\Persistence\ObjectManager;
 
 
 class EntityToIntTransformer implements DataTransformerInterface
 {
   /**
-   * @var \Doctrine\Common\Persistence\ObjectManager
+   * @var \Doctrine\Persistence\ObjectManager
    */
   private $om;
   private $entityClass;

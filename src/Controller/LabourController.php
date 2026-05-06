@@ -25,7 +25,7 @@ class LabourController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:Labour')->findAll();
+        $entities = $em->getRepository(\App\Entity\Labour::class)->findAll();
 
         return $this->render('Labour/index.html.twig', array(
             'entities' => $entities,
@@ -98,7 +98,7 @@ class LabourController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Labour')->find($id);
+        $entity = $em->getRepository(\App\Entity\Labour::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Labour entity.');
@@ -120,7 +120,7 @@ class LabourController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Labour')->find($id);
+        $entity = $em->getRepository(\App\Entity\Labour::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Labour entity.');
@@ -163,7 +163,7 @@ class LabourController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Labour')->find($id);
+        $entity = $em->getRepository(\App\Entity\Labour::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Labour entity.');
@@ -197,7 +197,7 @@ class LabourController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:Labour')->find($id);
+            $entity = $em->getRepository(\App\Entity\Labour::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find Labour entity.');

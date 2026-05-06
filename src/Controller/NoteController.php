@@ -25,7 +25,7 @@ class NoteController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:Note')->findAll();
+        $entities = $em->getRepository(\App\Entity\Note::class)->findAll();
 
         return $this->render('Note/index.html.twig', array(
             'entities' => $entities,
@@ -98,7 +98,7 @@ class NoteController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Note')->find($id);
+        $entity = $em->getRepository(\App\Entity\Note::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Note entity.');
@@ -120,7 +120,7 @@ class NoteController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Note')->find($id);
+        $entity = $em->getRepository(\App\Entity\Note::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Note entity.');
@@ -163,7 +163,7 @@ class NoteController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Note')->find($id);
+        $entity = $em->getRepository(\App\Entity\Note::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Note entity.');
@@ -197,7 +197,7 @@ class NoteController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:Note')->find($id);
+            $entity = $em->getRepository(\App\Entity\Note::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find Note entity.');

@@ -25,7 +25,7 @@ class GiftController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:Gift')->findAll();
+        $entities = $em->getRepository(\App\Entity\Gift::class)->findAll();
 
         return $this->render('Gift/index.html.twig', array(
             'entities' => $entities,
@@ -104,7 +104,7 @@ class GiftController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Gift')->find($id);
+        $entity = $em->getRepository(\App\Entity\Gift::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Gift entity.');
@@ -126,7 +126,7 @@ class GiftController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Gift')->find($id);
+        $entity = $em->getRepository(\App\Entity\Gift::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Gift entity.');
@@ -170,7 +170,7 @@ class GiftController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Gift')->find($id);
+        $entity = $em->getRepository(\App\Entity\Gift::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Gift entity.');
@@ -206,7 +206,7 @@ class GiftController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:Gift')->find($id);
+            $entity = $em->getRepository(\App\Entity\Gift::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find Gift entity.');

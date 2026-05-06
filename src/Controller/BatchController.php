@@ -28,7 +28,7 @@ class BatchController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:Batch')->findAll();
+        $entities = $em->getRepository(\App\Entity\Batch::class)->findAll();
 
         return $this->render('Batch/index.html.twig', array(
             'entities' => $entities,
@@ -50,10 +50,10 @@ class BatchController extends AbstractController
 
             $entity->setPurchaseDate(new \DateTime($entity->getPurchaseDate()));
             $entity->setReceiptDate(new \DateTime($entity->getReceiptDate()));
-            $batch_status = $em->getRepository('App:BatchStatus')->find(1);
+            $batch_status = $em->getRepository(\App\Entity\BatchStatus::class)->find(1);
             $entity->setBatchStatus($batch_status);
 
-            $fowl_status = $em->getRepository('App:FowlStatus')->find(1);
+            $fowl_status = $em->getRepository(\App\Entity\FowlStatus::class)->find(1);
             for ($i = 1; $i <= $entity->getAmount(); $i++) {
                 $fowl = new Fowl();
                 $fowl->setBatch($entity);
@@ -114,32 +114,32 @@ class BatchController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Batch')->find($id);
+        $entity = $em->getRepository(\App\Entity\Batch::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Batch entity.');
         }
-        $week_lay = $em->getRepository('App:Lay')->findWeekLay(null, null, $id);
-        $highchart_week_lay = $em->getRepository('App:Lay')->findHighchartWeekLay($id);
-        $month_lay = $em->getRepository('App:Lay')->findAllMonthLay($id);//devuelve las puestas por meses, en orden
+        $week_lay = $em->getRepository(\App\Entity\Lay::class)->findWeekLay(null, null, $id);
+        $highchart_week_lay = $em->getRepository(\App\Entity\Lay::class)->findHighchartWeekLay($id);
+        $month_lay = $em->getRepository(\App\Entity\Lay::class)->findAllMonthLay($id);//devuelve las puestas por meses, en orden
 
         //gastos  e ingresos por mes
-        $month_expenses = $em->getRepository("App:Sack")->findAllMonthExpenses($id);
+        $month_expenses = $em->getRepository(\App\Entity\Sack::class)->findAllMonthExpenses($id);
         $incoming_expenses=array();
 
-        $wheat=$em->getRepository("App:Product")->find(13);//trigo grano
-        $feed=$em->getRepository("App:Product")->find(4);//pienso ponedoras
+        $wheat=$em->getRepository(\App\Entity\Product::class)->find(13);//trigo grano
+        $feed=$em->getRepository(\App\Entity\Product::class)->find(4);//pienso ponedoras
         foreach ($month_expenses as $dates_expenses)
         {
-            $data_incoming=$em->getRepository("App:Lay")->findIncoming($id,$dates_expenses['year_date'],$dates_expenses['month']);//huevos
-            $data_expenses = $em->getRepository("App:Sack")->findMonthExpenses($id,$dates_expenses['year_date'],$dates_expenses['month']);//consumos
+            $data_incoming=$em->getRepository(\App\Entity\Lay::class)->findIncoming($id,$dates_expenses['year_date'],$dates_expenses['month']);//huevos
+            $data_expenses = $em->getRepository(\App\Entity\Sack::class)->findMonthExpenses($id,$dates_expenses['year_date'],$dates_expenses['month']);//consumos
             if ($data_incoming==null)
             {
                 $data_incoming=array("total"=>0,"month"=>$data_expenses["month"],"year_date"=>$data_expenses["year_date"]);
             }
 
-            $wheat_amount=$em->getRepository("App:Sack")->findFoodEatForBatch($id,$dates_expenses['year_date'],$dates_expenses['month'],$wheat);
-            $feed_amount=$em->getRepository("App:Sack")->findFoodEatForBatch($id,$dates_expenses['year_date'],$dates_expenses['month'],$feed);
+            $wheat_amount=$em->getRepository(\App\Entity\Sack::class)->findFoodEatForBatch($id,$dates_expenses['year_date'],$dates_expenses['month'],$wheat);
+            $feed_amount=$em->getRepository(\App\Entity\Sack::class)->findFoodEatForBatch($id,$dates_expenses['year_date'],$dates_expenses['month'],$feed);
             $incoming_expenses[]=array($data_expenses,$data_incoming,$wheat_amount, $feed_amount);
         }
 
@@ -151,10 +151,10 @@ class BatchController extends AbstractController
         $period_number=ceil($days_in_work/$days);//número de períodos a contabilizar. Son períodos de 30 días
         for ($i=1; $i<=$period_number;$i++)
         {
-            $relative_incoming=$em->getRepository("App:Lay")->findRelativeIncoming($entity,$i,$days);
-            $relative_expenses=$em->getRepository("App:Sack")->findRelativeExpenses($entity,$i,$days);
-            $relative_wheat_amount=$em->getRepository("App:Sack")->findRelativeFoodEatForBatch($entity,$i,$wheat,$days);
-            $relative_feed_amount=$em->getRepository("App:Sack")->findRelativeFoodEatForBatch($entity,$i,$feed,$days);
+            $relative_incoming=$em->getRepository(\App\Entity\Lay::class)->findRelativeIncoming($entity,$i,$days);
+            $relative_expenses=$em->getRepository(\App\Entity\Sack::class)->findRelativeExpenses($entity,$i,$days);
+            $relative_wheat_amount=$em->getRepository(\App\Entity\Sack::class)->findRelativeFoodEatForBatch($entity,$i,$wheat,$days);
+            $relative_feed_amount=$em->getRepository(\App\Entity\Sack::class)->findRelativeFoodEatForBatch($entity,$i,$feed,$days);
 
             $relative_incoming_expenses[]=array($relative_incoming, $relative_expenses,$relative_wheat_amount,$relative_feed_amount);
         }
@@ -171,8 +171,8 @@ class BatchController extends AbstractController
             $start_date->add(date_interval_create_from_date_string($start_time . ' days'));
             $end_date->add(date_interval_create_from_date_string($end_time . ' days'));
             //echo $end_date->format("Y-m-d") . "<br>";
-            $feed_amount = $em->getRepository('App:Batch')->getFeedAmountInInterval($entity, $start_date, $end_date);//cantidad de pienso consumido en el intervalo
-            $fowls = $em->getRepository('App:Batch')->getFowlsAliveInInterval($entity, $end_date);//animales vivos en el intervalo.
+            $feed_amount = $em->getRepository(\App\Entity\Batch::class)->getFeedAmountInInterval($entity, $start_date, $end_date);//cantidad de pienso consumido en el intervalo
+            $fowls = $em->getRepository(\App\Entity\Batch::class)->getFowlsAliveInInterval($entity, $end_date);//animales vivos en el intervalo.
             //echo "comida: " . $feed_amount . " y bichos: " . $fowls . "<br>";
             @$consumption[] = $feed_amount / ($fowls * 14);
             $start_time += 14;
@@ -180,7 +180,7 @@ class BatchController extends AbstractController
             $end_date = new \DateTime($entity->getReceiptDate()->format('Y-m-d'));
         }
 
-        $movements = $em->getRepository("App:Movement")->findMovements($id);
+        $movements = $em->getRepository(\App\Entity\Movement::class)->findMovements($id);
 
 
         $average_consumption = array_sum($consumption) * 1000 / count($consumption);
@@ -210,7 +210,7 @@ class BatchController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Batch')->find($id);
+        $entity = $em->getRepository(\App\Entity\Batch::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Batch entity.');
@@ -260,7 +260,7 @@ class BatchController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Batch')->find($id);
+        $entity = $em->getRepository(\App\Entity\Batch::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Batch entity.');
@@ -304,7 +304,7 @@ class BatchController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:Batch')->find($id);
+            $entity = $em->getRepository(\App\Entity\Batch::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find Batch entity.');
@@ -337,8 +337,8 @@ class BatchController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Batch')->find($id);
-        $batch_status = $em->getRepository('App:BatchStatus')->find(2);
+        $entity = $em->getRepository(\App\Entity\Batch::class)->find($id);
+        $batch_status = $em->getRepository(\App\Entity\BatchStatus::class)->find(2);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Batch entity.');
@@ -364,8 +364,8 @@ class BatchController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Batch')->find($id);
-        $batch_status = $em->getRepository('App:BatchStatus')->find(1);
+        $entity = $em->getRepository(\App\Entity\Batch::class)->find($id);
+        $batch_status = $em->getRepository(\App\Entity\BatchStatus::class)->find(1);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Batch entity.');
@@ -394,10 +394,10 @@ class BatchController extends AbstractController
             $year = date('Y');
         }
 
-        $product = $em->getRepository('App:Product')->find($product_id);//pollos o gallinas
+        $product = $em->getRepository(\App\Entity\Product::class)->find($product_id);//pollos o gallinas
 
 
-        $batchs = $em->getRepository('App:Batch')->findByProductYear($product_id, $year);
+        $batchs = $em->getRepository(\App\Entity\Batch::class)->findByProductYear($product_id, $year);
 
 
         foreach ($batchs as $batch) {
@@ -429,8 +429,8 @@ class BatchController extends AbstractController
     public function analyses($product_id)
     {
         $em = $this->getDoctrine()->getManager();
-        $product = $em->getRepository('App:Product')->find($product_id);//pollos o gallinas
-        $years = $em->getRepository('App:Batch')->findYearsInProduction($product_id);//devuelve los años en que se ha producido según el producto, ya sea gallinas o pollos
+        $product = $em->getRepository(\App\Entity\Product::class)->find($product_id);//pollos o gallinas
+        $years = $em->getRepository(\App\Entity\Batch::class)->findYearsInProduction($product_id);//devuelve los años en que se ha producido según el producto, ya sea gallinas o pollos
 
         return $this->render('Batch/analyses.html.twig', array(
             'years' => $years,
@@ -441,25 +441,25 @@ class BatchController extends AbstractController
     public function hens_analyses()
     {
         $em = $this->getDoctrine()->getManager();
-        $hens_batchs = $em->getRepository("App:Batch")->findBatchs(6, 5);//devuelve lotes del tipo 6 y límite 4 lotes
+        $hens_batchs = $em->getRepository(\App\Entity\Batch::class)->findBatchs(6, 5);//devuelve lotes del tipo 6 y límite 4 lotes
         $batchs_week_lay = array();
         $batchs_month_lay = array();
 
         foreach ($hens_batchs as $batch) {
-            $batchs_week_lay[] = array($em->getRepository('App:Lay')->findHighchartWeekLay($batch->getId()), $batch);
-            $batchs_month_lay[] = array($em->getRepository('App:Lay')->findAllMonthLay($batch->getId()), $batch);
+            $batchs_week_lay[] = array($em->getRepository(\App\Entity\Lay::class)->findHighchartWeekLay($batch->getId()), $batch);
+            $batchs_month_lay[] = array($em->getRepository(\App\Entity\Lay::class)->findAllMonthLay($batch->getId()), $batch);
         }
-        $weeks_in_production = $em->getRepository("App:Lay")->findWeeksInProduction();
+        $weeks_in_production = $em->getRepository(\App\Entity\Lay::class)->findWeeksInProduction();
 
         $graph_lay_weeks = array();
         $i = 0;
         foreach ($hens_batchs as $batch) {
             $array = array();
             foreach ($weeks_in_production as $week) {
-                if (!$em->getRepository("App:Lay")->findLayInWeekYear($week['week'], $week['year_date'], $batch->getId())) {
+                if (!$em->getRepository(\App\Entity\Lay::class)->findLayInWeekYear($week['week'], $week['year_date'], $batch->getId())) {
                     $array[] = 0;
                 } else {
-                    $value = $em->getRepository("App:Lay")->findLayInWeekYear($week['week'], $week['year_date'], $batch->getId());
+                    $value = $em->getRepository(\App\Entity\Lay::class)->findLayInWeekYear($week['week'], $week['year_date'], $batch->getId());
                     $array[] = $value['total'];
                 }
 

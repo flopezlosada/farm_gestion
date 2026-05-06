@@ -25,7 +25,7 @@ class BatchStatusController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:BatchStatus')->findAll();
+        $entities = $em->getRepository(\App\Entity\BatchStatus::class)->findAll();
 
         return $this->render('BatchStatus/index.html.twig', array(
             'entities' => $entities,
@@ -98,7 +98,7 @@ class BatchStatusController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:BatchStatus')->find($id);
+        $entity = $em->getRepository(\App\Entity\BatchStatus::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find BatchStatus entity.');
@@ -120,7 +120,7 @@ class BatchStatusController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:BatchStatus')->find($id);
+        $entity = $em->getRepository(\App\Entity\BatchStatus::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find BatchStatus entity.');
@@ -163,7 +163,7 @@ class BatchStatusController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:BatchStatus')->find($id);
+        $entity = $em->getRepository(\App\Entity\BatchStatus::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find BatchStatus entity.');
@@ -197,7 +197,7 @@ class BatchStatusController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:BatchStatus')->find($id);
+            $entity = $em->getRepository(\App\Entity\BatchStatus::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find BatchStatus entity.');

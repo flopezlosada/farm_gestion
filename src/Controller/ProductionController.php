@@ -27,8 +27,8 @@ class ProductionController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:Production')->findAll();
-        /*$crops=$em->getRepository('App:Crop')->findAll();
+        $entities = $em->getRepository(\App\Entity\Production::class)->findAll();
+        /*$crops=$em->getRepository(\App\Entity\Crop::class)->findAll();
         foreach ($crops as $crop)
         {
             $crop_working=new CropWorking();
@@ -62,7 +62,7 @@ class ProductionController extends AbstractController
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
             $entity->setWeek(date('W', strtotime($entity->getProductionDate())));
-            $basket = $em->getRepository("App:Basket")->findBasketByWeekYear($entity->getProductionDate());
+            $basket = $em->getRepository(\App\Entity\Basket::class)->findBasketByWeekYear($entity->getProductionDate());
             if (!$basket) {
                 $basket = new Basket();
                 $monday = date('d F', strtotime(date('Y', strtotime($entity->getProductionDate())) . "W" . str_pad($entity->getWeek(), 2, "0", STR_PAD_LEFT)));
@@ -118,7 +118,7 @@ class ProductionController extends AbstractController
         $entity = new Production();
         if ($crop_working_id) {
             $em = $this->getDoctrine()->getManager();
-            $crop_working = $em->getRepository("App:CropWorking")->find($crop_working_id);
+            $crop_working = $em->getRepository(\App\Entity\CropWorking::class)->find($crop_working_id);
             $entity->setCropWorking($crop_working);
         }
         $form = $this->createCreateForm($entity);
@@ -137,7 +137,7 @@ class ProductionController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Production')->find($id);
+        $entity = $em->getRepository(\App\Entity\Production::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Production entity.');
@@ -159,7 +159,7 @@ class ProductionController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Production')->find($id);
+        $entity = $em->getRepository(\App\Entity\Production::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Production entity.');
@@ -203,7 +203,7 @@ class ProductionController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:Production')->find($id);
+        $entity = $em->getRepository(\App\Entity\Production::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Production entity.');
@@ -241,7 +241,7 @@ class ProductionController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:Production')->find($id);
+            $entity = $em->getRepository(\App\Entity\Production::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find Production entity.');
@@ -276,11 +276,11 @@ class ProductionController extends AbstractController
             $year = date('Y');
         }
         $em = $this->getDoctrine()->getManager();
-        $weeks = $em->getRepository("App:Production")->findWeeks($year);//semanas en las que hay producción declarada. Equivale a semanas en las que se entrega cesta.
+        $weeks = $em->getRepository(\App\Entity\Production::class)->findWeeks($year);//semanas en las que hay producción declarada. Equivale a semanas en las que se entrega cesta.
         $baskets = array();
 
         foreach ($weeks as $week) {
-            $baskets[$week["week"]] = $em->getRepository("App:Production")->findProductionInWeek($week["week"], $year);
+            $baskets[$week["week"]] = $em->getRepository(\App\Entity\Production::class)->findProductionInWeek($week["week"], $year);
         }
 
 
@@ -296,7 +296,7 @@ class ProductionController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $basket = $em->getRepository('App:Basket')->find($id);
+        $basket = $em->getRepository(\App\Entity\Basket::class)->find($id);
         $amount = 0;
         foreach ($basket->getProductions() as $production) {
             $amount += $production->getAmount();

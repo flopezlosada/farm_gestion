@@ -30,7 +30,7 @@ class AddSectorFieldSubscriber implements EventSubscriberInterface
     private function addSectorForm($form, $zone)
     {
         $form->add($this->factory->createNamed('sector','entity', null, array(
-            'class'         => 'App:Sector',
+            'class'         => \App\Entity\Sector::class,
             'empty_value'   => 'Sector',
             'query_builder' => function (EntityRepository $repository) use ($zone) {
                 $qb = $repository->createQueryBuilder('sector')

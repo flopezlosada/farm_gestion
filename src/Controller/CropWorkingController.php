@@ -29,10 +29,10 @@ class CropWorkingController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository('App:CropWorking')->findActive();
+        $entities = $em->getRepository(\App\Entity\CropWorking::class)->findActive();
 
         foreach ($entities as $entity) {
-            $entity->setTotalProduction($em->getRepository('App:Production')->findTotalCropProduction($entity));
+            $entity->setTotalProduction($em->getRepository(\App\Entity\Production::class)->findTotalCropProduction($entity));
         }
 
 
@@ -97,7 +97,7 @@ class CropWorkingController extends AbstractController
         $entity = new CropWorking();
         if ($crop_id) {
             $em = $this->getDoctrine()->getManager();
-            $crop = $em->getRepository("App:Crop")->find($crop_id);
+            $crop = $em->getRepository(\App\Entity\Crop::class)->find($crop_id);
             $entity->setCrop($crop);
         }
 
@@ -117,15 +117,15 @@ class CropWorkingController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:CropWorking')->find($id);
+        $entity = $em->getRepository(\App\Entity\CropWorking::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find CropWorking entity.');
         }
-        $total_production = $em->getRepository('App:Production')->findTotalCropProduction($entity);
+        $total_production = $em->getRepository(\App\Entity\Production::class)->findTotalCropProduction($entity);
         $year = date('Y');
-        $productions = $em->getRepository("App:Production")->findBy(array("crop_working" => $entity->getId()), array("production_date" => "ASC"));
-        $first_seed_work = $em->getRepository("App:SeedWork")->findFirstSeedWork($entity);
+        $productions = $em->getRepository(\App\Entity\Production::class)->findBy(array("crop_working" => $entity->getId()), array("production_date" => "ASC"));
+        $first_seed_work = $em->getRepository(\App\Entity\SeedWork::class)->findFirstSeedWork($entity);
 
         $deleteForm = $this->createDeleteForm($id);
 
@@ -148,7 +148,7 @@ class CropWorkingController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:CropWorking')->find($id);
+        $entity = $em->getRepository(\App\Entity\CropWorking::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find CropWorking entity.');
@@ -168,7 +168,7 @@ class CropWorkingController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:CropWorking')->find($id);
+        $entity = $em->getRepository(\App\Entity\CropWorking::class)->find($id);
 
         if ($finish) {
             $entity->setFinishDate(new \DateTime('now'));
@@ -213,7 +213,7 @@ class CropWorkingController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:CropWorking')->find($id);
+        $entity = $em->getRepository(\App\Entity\CropWorking::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find CropWorking entity.');
@@ -247,7 +247,7 @@ class CropWorkingController extends AbstractController
 
         if ($form->isValid()) {
             $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository('App:CropWorking')->find($id);
+            $entity = $em->getRepository(\App\Entity\CropWorking::class)->find($id);
 
             if (!$entity) {
                 throw $this->createNotFoundException('Unable to find CropWorking entity.');
@@ -281,7 +281,7 @@ class CropWorkingController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $crop_working = $em->getRepository('App:CropWorking')->find($id);
+        $crop_working = $em->getRepository(\App\Entity\CropWorking::class)->find($id);
 
         if (!$crop_working) {
             throw $this->createNotFoundException('Unable to find CropWorking entity.');
@@ -307,10 +307,10 @@ class CropWorkingController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $crop_working = $em->getRepository('App:CropWorking')->find($id);
+        $crop_working = $em->getRepository(\App\Entity\CropWorking::class)->find($id);
 
         $values = $request->get('form');
-        $sector = $em->getRepository('App:Sector')->find($values['sector']);
+        $sector = $em->getRepository(\App\Entity\Sector::class)->find($values['sector']);
 
         $crop_working->addSector($sector);
         $sector->addCropWorking($crop_working);
@@ -326,7 +326,7 @@ class CropWorkingController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $em->getRepository('App:Sector')->deleteSector($sector_id, $crop_working_id);
+        $em->getRepository(\App\Entity\Sector::class)->deleteSector($sector_id, $crop_working_id);
 
         return $this->redirect($this->generateUrl('cropworking_show', array('id' => $crop_working_id)));
     }
