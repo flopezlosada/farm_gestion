@@ -1,8 +1,6 @@
 <?php
 namespace App\Form\DataTransformer;
 
-use JMS\SecurityExtraBundle\Security\Util\String as security_string;
-
 use Symfony\Component\Form\DataTransformerInterface;
 use Symfony\Component\Form\Exception\TransformationFailedException;
 use Doctrine\Persistence\ObjectManager;
@@ -26,17 +24,9 @@ class EntityToIntTransformer implements DataTransformerInterface
     $this->om = $om;
   }
 
-  /**
-   * @param mixed $entity
-   *
-   * @throws \Symfony\Component\Form\Exception\TransformationFailedException
-   *
-   * @return integer
-   */
-  public function transform($entity)
+  public function transform(mixed $entity): mixed
   {
-    // Modified from comments to use instanceof so that base classes or interfaces can be specified
-    if (null === $entity ||!$entity instanceof $this->entityClass) {
+    if (null === $entity || !$entity instanceof $this->entityClass) {
       throw new TransformationFailedException("$this->entityType object must be provided");
     }
 
@@ -44,7 +34,7 @@ class EntityToIntTransformer implements DataTransformerInterface
   }
 
 
-  public function reverseTransform($id)
+  public function reverseTransform(mixed $id): mixed
   {
     if (!$id) {
       throw new TransformationFailedException("No $this->entityType id was submitted");

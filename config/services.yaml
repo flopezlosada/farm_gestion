@@ -31,6 +31,15 @@ services:
 
     App\EventSubscriber\CalendarSubscriber:
 
+    # SF 7 ya no registra annotation_reader automáticamente. Las entidades
+    # Doctrine siguen mapeadas con docblock annotations (74 entidades). Cuando
+    # se migren a attributes PHP 8 + Doctrine ORM 3, este servicio se quita
+    # y el driver de doctrine.yaml pasa a 'attribute'.
+    Doctrine\Common\Annotations\AnnotationReader: ~
+    annotation_reader:
+        alias: Doctrine\Common\Annotations\AnnotationReader
+        public: true
+
     Twig\Extra\Intl\IntlExtension:
         tags: ['twig.extension']
 
