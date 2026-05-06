@@ -25,6 +25,6 @@
 {% block title_wrapper %}Ventas de huevos{% endblock %}
 {% block main %}
     {% for year in  'now'|date('Y')..2014 %}
-        {{ render(controller('App\\Controller\\StatisticController:eggsSaleYear', {'year':year})) }}
+        {{ render(controller('App\\Controller\\StatisticController::eggsSaleYear', {'year':year})) }}
     {% endfor %}
 {% endblock %}
