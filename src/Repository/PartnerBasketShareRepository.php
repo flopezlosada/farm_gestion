@@ -66,7 +66,7 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
     {
         $em = $this->getEntityManager();
 
-        $dql = "select b from App:PartnerBasketShare b inner join b.partner p where b.basket_share=:basket_share and
+        $dql = "select b from App\\Entity\\PartnerBasketShare b inner join b.partner p where b.basket_share=:basket_share and
                       b.is_active=:status and b.start_date<=:date ";
         if ($only_eggs)
         {
@@ -92,7 +92,7 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
 
         $em = $this->getEntityManager();
 
-        $dql = "select b from App:WeeklyBasket b where b.basket=:basket";
+        $dql = "select b from App\\Entity\\WeeklyBasket b where b.basket=:basket";
         $query = $em->createQuery($dql);
 
         $query->setParameter("basket", $this->getPreviousBasket($current_basket->getId()));
@@ -100,7 +100,7 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
         $result = $query->getResult();
         $array_id_partners = array(); //es el array con las ids de los socios que recibieron la semana anterior. Habrá txdo tipo de socios, semanales, mensuales,...
 
-        $dql_partners = "select b from App:PartnerBasketShare b inner join b.partner p where b.basket_share=:basket_share and b.is_active=:status and b.start_date<=:date ";
+        $dql_partners = "select b from App\\Entity\\PartnerBasketShare b inner join b.partner p where b.basket_share=:basket_share and b.is_active=:status and b.start_date<=:date ";
         if (count($result) > 0) {
 
             foreach ($result as $weekly_basket) {
@@ -141,7 +141,7 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
     public function getPreviousBasket($current_basket_id)
     {
         $em = $this->getEntityManager();
-        $dql = "select b.id from App:Basket b where b.id < :id order by b.id desc";
+        $dql = "select b.id from App\\Entity\\Basket b where b.id < :id order by b.id desc";
         $query = $em->createQuery($dql);
         $query->setParameter("id", $current_basket_id);
         $query->setMaxResults(1);
@@ -161,7 +161,7 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
     public function findBasketPartnersMonthlyAndCity($current_basket,$basket, $day_order, $only_eggs=false)
     {
         $em = $this->getEntityManager();
-        $dql = "select b from App:Basket b where YEAR(b.date)=:year and MONTH(b.date)=:month and b.id<>:current_basket_id";
+        $dql = "select b from App\\Entity\\Basket b where YEAR(b.date)=:year and MONTH(b.date)=:month and b.id<>:current_basket_id";
 
         $query = $em->createQuery($dql);
         $query->setParameter("year", $current_basket->getDate()->format('Y'));
@@ -176,7 +176,7 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
             foreach ($result as $basket_result) {
                 $array_id_baskets[] = $basket_result->getId();
             }
-            $dql_partners = "select b from App:PartnerBasketShare b join App:WeeklyBasket w 
+            $dql_partners = "select b from App\\Entity\\PartnerBasketShare b join App\\Entity\\WeeklyBasket w 
                 where  b.partner=w.partner and b.basket_share=:basket_share and b.is_active=1 and w.basket in (:ids)";//busca los que ya han recogido la cesta en algun momento del mes
             $query_partners = $em->createQuery($dql_partners);
             $query_partners->setParameter("ids", $array_id_baskets);
@@ -192,7 +192,7 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
             }
         }
 
-        $dql_final = "select b from App:PartnerBasketShare b inner join b.partner p where b.basket_share=:basket_share and
+        $dql_final = "select b from App\\Entity\\PartnerBasketShare b inner join b.partner p where b.basket_share=:basket_share and
                       b.is_active=1 and b.day_month_order<=:day_order and b.start_date<=:date "; //pongo <= porque si alguien de la semana anterior no ha recogido y quiere recogerla esta, no aparece en el listado anterior (dql_partners) y así puede recogerla
         if (count($array_id_partners)) {
             $dql_final .= " and b.partner not in (:ids)";
@@ -221,7 +221,7 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
     public function findFinalized()
     {
         $em = $this->getEntityManager();
-        $dql = "Select b from App:PartnerBasketShare b where b.is_active=1 and b.end_date<:date";
+        $dql = "Select b from App\\Entity\\PartnerBasketShare b where b.is_active=1 and b.end_date<:date";
 
         //busco la fecha de la siguiente entrega, viernes
         $monday = date('d F', strtotime(date('Y', strtotime(date('Y-m-d'))) . "W" . str_pad(date('W'), 2, "0", STR_PAD_LEFT)));
@@ -242,7 +242,7 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
     public function deleteWeeklyBasket($basket_id)
     {
         $em = $this->getEntityManager();
-        $dql="Delete from App:WeeklyBasket w where w.basket=:basket";
+        $dql="Delete from App\\Entity\\WeeklyBasket w where w.basket=:basket";
         $query=$em->createQuery($dql);
         $query->setParameter("basket",$basket_id);
 

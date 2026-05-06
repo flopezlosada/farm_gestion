@@ -19,12 +19,12 @@ class PurchaserRepository extends EntityRepository
         $product = $em->getRepository(\App\Entity\Product::class)->find(1);
         $dql = "
         select p, s, DATEDIFF(CURRENT_DATE(),s.sale_date)- (p.often_buying_eggs) as diff
-        from App:Purchaser p
+        from App\\Entity\\Purchaser p
         inner join p.purchases s
         with (p.often_buying_eggs-3) < DATEDIFF(CURRENT_DATE(),s.sale_date)
         and s.product=:product
         and p.regular=1
-        and s.sale_date=(select max(ss.sale_date) from App:Sale ss where ss.purchaser=p and ss.product=:product)
+        and s.sale_date=(select max(ss.sale_date) from App\\Entity\\Sale ss where ss.purchaser=p and ss.product=:product)
         order by diff desc
         ";
 

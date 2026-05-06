@@ -19,7 +19,7 @@ class LayRepository extends EntityRepository
 
 
         if (in_array($week, array(1, 52, 53))) {
-            $dql = "select sum(l.amount) as total from App:Lay l where l.week=:week and (YEAR(l.lay_date)=:year or YEAR(l.lay_date)=:year2)";
+            $dql = "select sum(l.amount) as total from App\\Entity\\Lay l where l.week=:week and (YEAR(l.lay_date)=:year or YEAR(l.lay_date)=:year2)";
             $query = $em->createQuery($dql);
             $query->setParameter("week", $week);
             $query->setParameter("year", $year);
@@ -36,7 +36,7 @@ class LayRepository extends EntityRepository
             }
 
         } else {
-            $dql = "select sum(l.amount) as total from App:Lay l where l.week=:week and YEAR(l.lay_date)=:year";
+            $dql = "select sum(l.amount) as total from App\\Entity\\Lay l where l.week=:week and YEAR(l.lay_date)=:year";
             $query = $em->createQuery($dql);
             $query->setParameter("week", $week);
             $query->setParameter("year", $year);
@@ -62,7 +62,7 @@ class LayRepository extends EntityRepository
         }
         $em = $this->getEntityManager();
         $dql = "select sum(l.amount) as total, l.week as week, count(l.amount) as days, YEAR(l.lay_date)
-                  as year_date from App:Lay l where YEAR(l.lay_date)=:year and l.week<>53 ";
+                  as year_date from App\\Entity\\Lay l where YEAR(l.lay_date)=:year and l.week<>53 ";
         if ($batch) {
             $dql .= " and l.batch=:batch ";
         }
@@ -93,7 +93,7 @@ class LayRepository extends EntityRepository
 
         $em = $this->getEntityManager();
         $dql = "select sum(l.amount) as total, l.week as week, YEAR(l.lay_date)
-                  as year_date from App:Lay l where YEAR(l.lay_date)=:year and l.week=:week and l.batch=:batch_id ";
+                  as year_date from App\\Entity\\Lay l where YEAR(l.lay_date)=:year and l.week=:week and l.batch=:batch_id ";
 
         $dql .= " group by l.week, year_date order by l.week desc";
         $query = $em->createQuery($dql);
@@ -122,7 +122,7 @@ class LayRepository extends EntityRepository
 
         $em = $this->getEntityManager();
         $dql = "select sum(l.amount) as total, l.week as week, count(l.amount) as days, YEAR(l.lay_date)
-                  as year_date, l.lay_date from App:Lay l where l.batch=:batch";
+                  as year_date, l.lay_date from App\\Entity\\Lay l where l.batch=:batch";
 
         $dql .= " group by l.week,year_date order by l.lay_date asc";
         $query = $em->createQuery($dql);
@@ -137,7 +137,7 @@ class LayRepository extends EntityRepository
     public function findTotalEggs($year)
     {
         $em = $this->getEntityManager();
-        $dql = "select sum(l.amount) as total from App:Lay l where YEAR(l.lay_date)=:year";
+        $dql = "select sum(l.amount) as total from App\\Entity\\Lay l where YEAR(l.lay_date)=:year";
         $query = $em->createQuery($dql);
         $query->setParameter("year", $year);
         if ($query->getSingleScalarResult()) {
@@ -151,7 +151,7 @@ class LayRepository extends EntityRepository
     function getMonthLay($year, $month)
     {
         $em = $this->getEntityManager();
-        $dql = "select sum(l.amount) as total from App:Lay l where YEAR(l.lay_date)=:year and MONTH(l.lay_date)=:month";
+        $dql = "select sum(l.amount) as total from App\\Entity\\Lay l where YEAR(l.lay_date)=:year and MONTH(l.lay_date)=:month";
         $query = $em->createQuery($dql);
         $query->setParameter("year", $year);
         $query->setParameter("month", $month);
@@ -168,7 +168,7 @@ class LayRepository extends EntityRepository
     function findDailyLayYear($year, $week, $day_of_week)
     {
         $em = $this->getEntityManager();
-        $dql = "select l.amount  from App:Lay l  where YEAR(l.lay_date)=:year and l.week=:week and DAYOFWEEK(l.lay_date)=:day";
+        $dql = "select l.amount  from App\\Entity\\Lay l  where YEAR(l.lay_date)=:year and l.week=:week and DAYOFWEEK(l.lay_date)=:day";
         $query = $em->createQuery($dql);
         $query->setParameter("year", $year);
         $query->setParameter("week", $week);
@@ -185,7 +185,7 @@ class LayRepository extends EntityRepository
     function findWeeksYear($year)
     {
         $em = $this->getEntityManager();
-        $dql = "select l.week from App:Lay l where YEAR(l.lay_date)=:year group by l.week order by l.week";
+        $dql = "select l.week from App\\Entity\\Lay l where YEAR(l.lay_date)=:year group by l.week order by l.week";
         $query = $em->createQuery($dql);
         $query->setParameter("year", $year);
 
@@ -196,7 +196,7 @@ class LayRepository extends EntityRepository
     {
         $em = $this->getEntityManager();
         $dql = "select l, sum(l.amount) as total, MONTH(l.lay_date) as month, YEAR(l.lay_date)
-                  as year_date from App:Lay l where l.batch=:batch";
+                  as year_date from App\\Entity\\Lay l where l.batch=:batch";
 
         $dql .= " group by month,year_date order by year_date,month asc";
         $query = $em->createQuery($dql);
@@ -211,7 +211,7 @@ class LayRepository extends EntityRepository
     {
         $em = $this->getEntityManager();
         $dql = "select l.week as week, YEAR(l.lay_date)
-                  as year_date from App:Lay l group by l.week,year_date order by l.lay_date asc";
+                  as year_date from App\\Entity\\Lay l group by l.week,year_date order by l.lay_date asc";
 
 
         $query = $em->createQuery($dql);
@@ -225,7 +225,7 @@ class LayRepository extends EntityRepository
     {
         $em = $this->getEntityManager();
         $dql = "select   sum(l.amount) as total , MONTH(l.lay_date) as month, YEAR(l.lay_date) as year_date
-                from App:Lay l where l.batch=:batch and  YEAR(l.lay_date)=:year 
+                from App\\Entity\\Lay l where l.batch=:batch and  YEAR(l.lay_date)=:year 
                   and MONTH(l.lay_date)=:month";
 
         $dql .= " group by month,year_date order by year_date,month asc";
@@ -249,7 +249,7 @@ class LayRepository extends EntityRepository
     {
         $em = $this->getEntityManager();
         $dql = "select   sum(l.amount) as total
-                from App:Lay l where l.batch=:batch and  l.lay_date>=:start_date 
+                from App\\Entity\\Lay l where l.batch=:batch and  l.lay_date>=:start_date 
                   and l.lay_date<:end_date";
 
         //$dql .= " group by month,year_date order by year_date,month asc";

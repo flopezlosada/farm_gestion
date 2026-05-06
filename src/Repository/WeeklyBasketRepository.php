@@ -57,7 +57,7 @@ class WeeklyBasketRepository extends ServiceEntityRepository
     {
         $em = $this->getEntityManager();
 
-        $dql = "select w from App:WeeklyBasket w inner join w.partner p where w.basket_share<>:basket_share and
+        $dql = "select w from App\\Entity\\WeeklyBasket w inner join w.partner p where w.basket_share<>:basket_share and
                       w.basket=:basket order by w.weekly_basket_group,p.name,p.surname";
 
         $query = $em->createQuery($dql);

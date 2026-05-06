@@ -15,7 +15,7 @@ class CompostPileRepository extends EntityRepository
     public function findActivePile()
     {
         $em = $this->getEntityManager();
-        $dql = "select m from App:CompostPile m order by m.start_date desc";
+        $dql = "select m from App\\Entity\\CompostPile m order by m.start_date desc";
         $query = $em->createQuery($dql);
 
         $query->setMaxResults(1);

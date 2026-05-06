@@ -22,7 +22,7 @@ class CollectRepository extends EntityRepository
         $unity = $em->getRepository(\App\Entity\Unity::class)->find(1);
         if (in_array($week, array(1, 52, 53)))
         {
-            $dql = "select sum(c.amount) as total from App:Collect c
+            $dql = "select sum(c.amount) as total from App\\Entity\\Collect c
                       where c.week=:week and c.unity=:unity and c.user=:user and c.product=:product
                       and (YEAR(c.collect_date)=:year or YEAR(c.collect_date)=:year2)";
             $query = $em->createQuery($dql);
@@ -33,7 +33,7 @@ class CollectRepository extends EntityRepository
             $query->setParameter("product", $product);;
 
 
-            $dql_dozen = "select sum(c.amount) as total from App:Collect c
+            $dql_dozen = "select sum(c.amount) as total from App\\Entity\\Collect c
                               where c.week=:week and c.unity=:unity and c.user=:user and c.product=:product
                               and (YEAR(c.collect_date)=:year or YEAR(c.collect_date)=:year2)";
             $dozen = $em->getRepository(\App\Entity\Unity::class)->find(3);
@@ -65,7 +65,7 @@ class CollectRepository extends EntityRepository
 
         } else
         {
-            $dql = "select sum(c.amount) as total from App:Collect c
+            $dql = "select sum(c.amount) as total from App\\Entity\\Collect c
                       where c.week=:week and c.unity=:unity and c.user=:user and c.product=:product
                       and YEAR(c.collect_date)=:year";
             $query = $em->createQuery($dql);
@@ -76,7 +76,7 @@ class CollectRepository extends EntityRepository
             $query->setParameter("product", $product);
 
 
-            $dql_dozen = "select sum(c.amount) as total from App:Collect c
+            $dql_dozen = "select sum(c.amount) as total from App\\Entity\\Collect c
                               where c.week=:week and c.unity=:unity and c.user=:user and c.product=:product
                               and YEAR(c.collect_date)=:year";
             $dozen = $em->getRepository(\App\Entity\Unity::class)->find(3);
@@ -101,7 +101,7 @@ class CollectRepository extends EntityRepository
     {
         $em = $this->getEntityManager();
         $unity = $em->getRepository(\App\Entity\Unity::class)->find(1);
-        $dql = "select sum(c.amount) as total from App:Collect c where YEAR (c.collect_date)=:year and c.unity=:unity and c.user=:user and c.product=:product";
+        $dql = "select sum(c.amount) as total from App\\Entity\\Collect c where YEAR (c.collect_date)=:year and c.unity=:unity and c.user=:user and c.product=:product";
         $query = $em->createQuery($dql);
         $query->setParameter("year", $year);
         $query->setParameter("unity", $unity);
@@ -110,7 +110,7 @@ class CollectRepository extends EntityRepository
 
         $amount_single = $query->getSingleScalarResult();
 
-        $dql_dozen = "select sum(c.amount) as total from App:Collect c where YEAR (c.collect_date)=:year and c.unity=:unity and c.user=:user and c.product=:product";
+        $dql_dozen = "select sum(c.amount) as total from App\\Entity\\Collect c where YEAR (c.collect_date)=:year and c.unity=:unity and c.user=:user and c.product=:product";
         $dozen = $em->getRepository(\App\Entity\Unity::class)->find(3);
         $query_dozen = $em->createQuery($dql);
         $query_dozen->setParameter("year", $year);
@@ -136,7 +136,7 @@ class CollectRepository extends EntityRepository
         if ($product->getId() == 1)
         {
             $unity = $em->getRepository(\App\Entity\Unity::class)->find(1);
-            $dql = "select sum(c.amount) as total from App:Collect c where c.collect_date between :start_date and :end_date and c.unity=:unity and c.user=:user and c.product=:product";
+            $dql = "select sum(c.amount) as total from App\\Entity\\Collect c where c.collect_date between :start_date and :end_date and c.unity=:unity and c.user=:user and c.product=:product";
             $query = $em->createQuery($dql);
             $query->setParameter("start_date", $last_but_one_date);
             $query->setParameter("end_date", $last_date);
@@ -146,7 +146,7 @@ class CollectRepository extends EntityRepository
 
             $amount_single = $query->getSingleScalarResult();
 
-            $dql_dozen = "select sum(c.amount) as total from App:Collect c where c.collect_date between :start_date and :end_date and c.unity=:unity and c.user=:user and c.product=:product";
+            $dql_dozen = "select sum(c.amount) as total from App\\Entity\\Collect c where c.collect_date between :start_date and :end_date and c.unity=:unity and c.user=:user and c.product=:product";
             $dozen = $em->getRepository(\App\Entity\Unity::class)->find(3);
             $query_dozen = $em->createQuery($dql);
             $query_dozen->setParameter("start_date", $last_but_one_date);
@@ -160,7 +160,7 @@ class CollectRepository extends EntityRepository
 
         } else
         {
-            $dql = "select sum(c.amount) as total from App:Collect c where c.collect_date between :start_date and :end_date  and c.user=:user and c.product=:product";
+            $dql = "select sum(c.amount) as total from App\\Entity\\Collect c where c.collect_date between :start_date and :end_date  and c.user=:user and c.product=:product";
             $query = $em->createQuery($dql);
             $query->setParameter("start_date", $last_but_one_date);
             $query->setParameter("end_date", $last_date);
@@ -181,7 +181,7 @@ class CollectRepository extends EntityRepository
         if ($product->getId() == 1)
         {
             $unity = $em->getRepository(\App\Entity\Unity::class)->find(1);
-            $dql = "select sum(c.amount) as total from App:Collect c where c.collect_date between :start_date and :end_date and c.unity=:unity and  c.product=:product";
+            $dql = "select sum(c.amount) as total from App\\Entity\\Collect c where c.collect_date between :start_date and :end_date and c.unity=:unity and  c.product=:product";
             $query = $em->createQuery($dql);
             $query->setParameter("start_date", $last_but_one_date);
             $query->setParameter("end_date", $last_date);
@@ -190,7 +190,7 @@ class CollectRepository extends EntityRepository
 
             $amount_single = $query->getSingleScalarResult();
 
-            $dql_dozen = "select sum(c.amount) as total from App:Collect c where c.collect_date between :start_date and :end_date and c.unity=:unity and c.product=:product";
+            $dql_dozen = "select sum(c.amount) as total from App\\Entity\\Collect c where c.collect_date between :start_date and :end_date and c.unity=:unity and c.product=:product";
             $dozen = $em->getRepository(\App\Entity\Unity::class)->find(3);
             $query_dozen = $em->createQuery($dql);
             $query_dozen->setParameter("start_date", $last_but_one_date);
@@ -203,7 +203,7 @@ class CollectRepository extends EntityRepository
 
         } else
         {
-            $dql = "select sum(c.amount) as total from App:Collect c where c.collect_date between :start_date and :end_date and c.product=:product";
+            $dql = "select sum(c.amount) as total from App\\Entity\\Collect c where c.collect_date between :start_date and :end_date and c.product=:product";
             $query = $em->createQuery($dql);
             $query->setParameter("start_date", $last_but_one_date);
             $query->setParameter("end_date", $last_date);
@@ -220,7 +220,7 @@ class CollectRepository extends EntityRepository
     {
         $em = $this->getEntityManager();
         $dql = "select sum(c.amount) as total
-        from App:Collect c where YEAR (c.collect_date)=:year and c.unity=:unity  and c.product=:product
+        from App\\Entity\\Collect c where YEAR (c.collect_date)=:year and c.unity=:unity  and c.product=:product
         and MONTH (c.collect_date)=:month ";
         $query = $em->createQuery($dql);
         $query->setParameter("year", $year);
@@ -249,7 +249,7 @@ class CollectRepository extends EntityRepository
     private function getAmountWeek($year)
     {
         $em = $this->getEntityManager();
-        $dql = "select count(l.week) from App:Lay l where YEAR(l.lay_date)=:year group by l.week order by l.week";
+        $dql = "select count(l.week) from App\\Entity\\Lay l where YEAR(l.lay_date)=:year group by l.week order by l.week";
         $query = $em->createQuery($dql);
         $query->setParameter("year", $year);
 
@@ -261,7 +261,7 @@ class CollectRepository extends EntityRepository
     private function getListWeek($year)
     {
         $em = $this->getEntityManager();
-        $dql = "select l.week from App:Lay l where YEAR(l.lay_date)=:year group by l.week order by l.week asc";
+        $dql = "select l.week from App\\Entity\\Lay l where YEAR(l.lay_date)=:year group by l.week order by l.week asc";
         $query = $em->createQuery($dql);
         $query->setParameter("year", $year);
 

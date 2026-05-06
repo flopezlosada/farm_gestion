@@ -15,7 +15,7 @@ class PurchaseRepository extends EntityRepository
     public function findLastFeedDate($product)
     {
         $em = $this->getEntityManager();
-        $dql = "select p.purchase_date from App:Purchase p where p.product=:product order by p.purchase_date desc";
+        $dql = "select p.purchase_date from App\\Entity\\Purchase p where p.product=:product order by p.purchase_date desc";
         $query = $em->createQuery($dql);
         $query->setParameter("product", $product);
         $query->setMaxResults(1);
@@ -30,7 +30,7 @@ class PurchaseRepository extends EntityRepository
     public function findLastFeedPurchase($product, $offset)
     {
         $em = $this->getEntityManager();
-        $dql = "select p from App:Purchase p where p.product=:product order by p.purchase_date desc";
+        $dql = "select p from App\\Entity\\Purchase p where p.product=:product order by p.purchase_date desc";
         $query = $em->createQuery($dql);
         $query->setParameter("product", $product);
         $query->setFirstResult($offset);
@@ -43,7 +43,7 @@ class PurchaseRepository extends EntityRepository
     {
         $em = $this->getEntityManager();
 
-        $dql = "select sum(c.amount) as total from App:Purchase c where YEAR (c.purchase_date)=:year and c.product=:product";
+        $dql = "select sum(c.amount) as total from App\\Entity\\Purchase c where YEAR (c.purchase_date)=:year and c.product=:product";
         $query = $em->createQuery($dql);
         $query->setParameter("year", $year);
 

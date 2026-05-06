@@ -19,7 +19,7 @@ class SackRepository extends EntityRepository
     public function getPurchase(Product $product)
     {
         $em = $this->getEntityManager();
-        $dql = "select p from App:Purchase p where p.product=:product and (p.assigned is null or p.assigned=0) order by p.purchase_date asc";
+        $dql = "select p from App\\Entity\\Purchase p where p.product=:product and (p.assigned is null or p.assigned=0) order by p.purchase_date asc";
         $query = $em->createQuery($dql);
         $query->setParameter("product", $product);
 
@@ -37,7 +37,7 @@ class SackRepository extends EntityRepository
     {
         $em = $this->getEntityManager();
         $dql = "select   MONTH(s.delivery_date) as month, YEAR(s.delivery_date)
-                  as year_date from App:Sack s where s.batch=:batch";
+                  as year_date from App\\Entity\\Sack s where s.batch=:batch";
 
         $dql .= " group by month,year_date order by year_date,month asc";
         $query = $em->createQuery($dql);
@@ -52,7 +52,7 @@ class SackRepository extends EntityRepository
     {
         $em = $this->getEntityManager();
         $dql = "select  sum(s.total_price) as total , MONTH(s.delivery_date) as month, YEAR(s.delivery_date)
-                  as year_date from App:Sack s where s.batch=:batch and  YEAR(s.delivery_date)=:year 
+                  as year_date from App\\Entity\\Sack s where s.batch=:batch and  YEAR(s.delivery_date)=:year 
                   and MONTH(s.delivery_date)=:month";
 
         $dql .= " group by month,year_date order by year_date,month asc";
@@ -72,7 +72,7 @@ class SackRepository extends EntityRepository
     {
         $em = $this->getEntityManager();
         $dql = "select  sum(s.total_price) as total 
-                   from App:Sack s where s.batch=:batch and  s.delivery_date>=:start_date 
+                   from App\\Entity\\Sack s where s.batch=:batch and  s.delivery_date>=:start_date 
                   and s.delivery_date<:end_date";
 
         //$dql .= " group by month,year_date order by year_date,month asc";
@@ -95,7 +95,7 @@ class SackRepository extends EntityRepository
     {
         $em = $this->getEntityManager();
         $dql = "select  sum(s.weight) as total , MONTH(s.delivery_date) as month, YEAR(s.delivery_date)
-                  as year_date from App:Sack s where s.batch=:batch and  YEAR(s.delivery_date)=:year 
+                  as year_date from App\\Entity\\Sack s where s.batch=:batch and  YEAR(s.delivery_date)=:year 
                   and MONTH(s.delivery_date)=:month 
                   and s.product=:product ";
 
@@ -116,7 +116,7 @@ class SackRepository extends EntityRepository
     public function findRelativeFoodEatForBatch($batch, $period_number, $product,$days)
     {
         $em = $this->getEntityManager();
-        $dql = "select  sum(s.weight) as total from App:Sack s where s.batch=:batch and 
+        $dql = "select  sum(s.weight) as total from App\\Entity\\Sack s where s.batch=:batch and 
                       s.delivery_date>=:start_date 
                   and s.delivery_date<:end_date
                   and s.product=:product ";

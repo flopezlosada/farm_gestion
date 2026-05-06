@@ -15,7 +15,7 @@ class CompostCollectionRepository extends EntityRepository
     public function findTotalAmountCollection($year, $point = null)
     {
         $em = $this->getEntityManager();
-        $dql = "select sum(p.amount) as total from App:CompostCollection p where YEAR(p.collect_date)=:year";
+        $dql = "select sum(p.amount) as total from App\\Entity\\CompostCollection p where YEAR(p.collect_date)=:year";
 
         if ($point) {
             $dql .= " and p.compost_collection_point=:point";
@@ -38,7 +38,7 @@ class CompostCollectionRepository extends EntityRepository
     public function findLastByPoint(CompostCollectionPoint $point)
     {
         $em = $this->getEntityManager();
-        $dql = "select c from App:CompostCollection c where c.compost_collection_point=:point order by c.collect_date desc";
+        $dql = "select c from App\\Entity\\CompostCollection c where c.compost_collection_point=:point order by c.collect_date desc";
         $query = $em->createQuery($dql);
         $query->setParameter("point", $point);
         $query->setMaxResults(1);
@@ -50,7 +50,7 @@ class CompostCollectionRepository extends EntityRepository
     public function findPointCollectionYear($year, CompostCollectionPoint $point)
     {
         $em = $this->getEntityManager();
-        $dql = "select sum(p.amount) as total from App:CompostCollection p where YEAR(p.collect_date)=:year and p.compost_collection_point=:point";
+        $dql = "select sum(p.amount) as total from App\\Entity\\CompostCollection p where YEAR(p.collect_date)=:year and p.compost_collection_point=:point";
         $query = $em->createQuery($dql);
         $query->setParameter("year", $year);
         $query->setParameter("point", $point);
@@ -64,7 +64,7 @@ class CompostCollectionRepository extends EntityRepository
     public function findAmountCollectionByMonth($year, $point = null)
     {
         $em = $this->getEntityManager();
-        $dql = "select sum(p.amount) as total, MONTH(p.collect_date) as month from App:CompostCollection p where YEAR(p.collect_date)=:year";
+        $dql = "select sum(p.amount) as total, MONTH(p.collect_date) as month from App\\Entity\\CompostCollection p where YEAR(p.collect_date)=:year";
         if ($point) {
             $dql .= " and p.compost_collection_point=:point";
         }
@@ -81,7 +81,7 @@ class CompostCollectionRepository extends EntityRepository
     public function findAmountCollectionByWeek($year, $point = null)
     {
         $em = $this->getEntityManager();
-        $dql = "select sum(p.amount) as total,p.week as week from App:CompostCollection p where YEAR(p.collect_date)=:year";
+        $dql = "select sum(p.amount) as total,p.week as week from App\\Entity\\CompostCollection p where YEAR(p.collect_date)=:year";
         if ($point) {
             $dql .= " and p.compost_collection_point=:point";
         }

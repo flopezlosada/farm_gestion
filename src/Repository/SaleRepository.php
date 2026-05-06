@@ -15,7 +15,7 @@ class SaleRepository extends EntityRepository
     public function findTotalSalesAmount()
     {
         $em = $this->getEntityManager();
-        $dql = "select sum(s.total_price) as total from App:Sale s";
+        $dql = "select sum(s.total_price) as total from App\\Entity\\Sale s";
         $query = $em->createQuery($dql);
 
 
@@ -33,7 +33,7 @@ class SaleRepository extends EntityRepository
     {
         $em = $this->getEntityManager();
         $unity = $em->getRepository(\App\Entity\Unity::class)->find(1);
-        $dql = "select sum(c.amount) as total from App:Sale c where YEAR (c.sale_date)=:year and c.unity=:unity  and c.product=:product";
+        $dql = "select sum(c.amount) as total from App\\Entity\\Sale c where YEAR (c.sale_date)=:year and c.unity=:unity  and c.product=:product";
         $query = $em->createQuery($dql);
         $query->setParameter("year", $year);
         $query->setParameter("unity", $unity);
@@ -41,7 +41,7 @@ class SaleRepository extends EntityRepository
 
         $amount_single = $query->getSingleScalarResult();
 
-        $dql_dozen = "select sum(c.amount) as total from App:Collect c where YEAR (c.sale_date)=:year and c.unity=:unity and c.product=:product";
+        $dql_dozen = "select sum(c.amount) as total from App\\Entity\\Collect c where YEAR (c.sale_date)=:year and c.unity=:unity and c.product=:product";
         $dozen = $em->getRepository(\App\Entity\Unity::class)->find(3);
         $query_dozen = $em->createQuery($dql);
         $query_dozen->setParameter("year", $year);
@@ -63,7 +63,7 @@ class SaleRepository extends EntityRepository
     {
         $em = $this->getEntityManager();
         $dql = "select sum(c.amount) as total
-        from App:Sale c where YEAR (c.sale_date)=:year and c.unity=:unity  and c.product=:product
+        from App\\Entity\\Sale c where YEAR (c.sale_date)=:year and c.unity=:unity  and c.product=:product
         and MONTH (c.sale_date)=:month ";
         $query = $em->createQuery($dql);
         $query->setParameter("year", $year);
@@ -89,7 +89,7 @@ class SaleRepository extends EntityRepository
     public function findPeriodSale($product, $end_date, $start_date)
     {
         $em = $this->getEntityManager();
-        $dql = "select sum(c.total_price) as total from App:Sale c where c.sale_date between :start_date and :end_date and c.product=:product";
+        $dql = "select sum(c.total_price) as total from App\\Entity\\Sale c where c.sale_date between :start_date and :end_date and c.product=:product";
         $query = $em->createQuery($dql);
         $query->setParameter("start_date", $start_date);
         $query->setParameter("end_date", $end_date);

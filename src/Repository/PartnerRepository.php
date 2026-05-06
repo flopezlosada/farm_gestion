@@ -73,7 +73,7 @@ class PartnerRepository extends ServiceEntityRepository
     public function findActiveHasNoBasket()
     {
         $em = $this->getEntityManager();
-        $dql_partner_basket = "select b from App:PartnerBasketShare b where b.is_active=1";
+        $dql_partner_basket = "select b from App\\Entity\\PartnerBasketShare b where b.is_active=1";
         $query_partner_basket = $em->createQuery($dql_partner_basket);
         $result = $query_partner_basket->getResult();
 
@@ -86,7 +86,7 @@ class PartnerRepository extends ServiceEntityRepository
             }
         }
 
-        $dql = "select p from App:Partner p where p.is_active=1 and p.parent is null"; //no tiene que tener parent, si no saldrían muchos que sí tienen cesta en realidad porque está asociada al parent
+        $dql = "select p from App\\Entity\\Partner p where p.is_active=1 and p.parent is null"; //no tiene que tener parent, si no saldrían muchos que sí tienen cesta en realidad porque está asociada al parent
 
         if (count($array_id_partners)) {
             $dql .= ' and p.id not in (:ids) ';
@@ -109,7 +109,7 @@ class PartnerRepository extends ServiceEntityRepository
     public function findPartnersByBasketType($type)
     {
         $em = $this->getEntityManager();
-        $dql = 'select p from App:Partner p inner  join p.partner_basket_share b where b.basket_share=:type';
+        $dql = 'select p from App\Entity\Partner p inner  join p.partner_basket_share b where b.basket_share=:type';
         $query = $em->createQuery($dql);
         $query->setParameter("type", $type);
 
@@ -121,7 +121,7 @@ class PartnerRepository extends ServiceEntityRepository
     public function findAmountPartnersByMonth(Basket $basket)
     {
         $em = $this->getEntityManager();
-        $dql = "select count(p) from App:Partner p where p.inscription_date<=:basket_date and (p.demote_date is null or p.demote_date>=:basket_date)";
+        $dql = "select count(p) from App\\Entity\\Partner p where p.inscription_date<=:basket_date and (p.demote_date is null or p.demote_date>=:basket_date)";
         $query = $em->createQuery($dql);
         $query->setParameter("basket_date", $basket->getDate()->format(('Y-m-d')));
 
@@ -133,7 +133,7 @@ class PartnerRepository extends ServiceEntityRepository
     public function findAmountBasketsByMonth(Basket $basket)
     {
         $em = $this->getEntityManager();
-        $dql = "select p from App:Partner p where p.inscription_date<=:basket_date and (p.demote_date is null or p.demote_date>=:basket_date)";
+        $dql = "select p from App\\Entity\\Partner p where p.inscription_date<=:basket_date and (p.demote_date is null or p.demote_date>=:basket_date)";
         $query = $em->createQuery($dql);
         $query->setParameter("basket_date", $basket->getDate()->format(('Y-m-d')));
         $partners = $query->getResult();
