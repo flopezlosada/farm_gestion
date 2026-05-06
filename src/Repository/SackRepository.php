@@ -109,7 +109,7 @@ class SackRepository extends EntityRepository
         $query->setParameter("product", $product);
 
         $result = $query->getScalarResult();
-        return $result[0]["total"];
+        return $result[0]["total"] ?? 0;
     }
 
 
@@ -134,6 +134,6 @@ class SackRepository extends EntityRepository
         $query->setParameter("product", $product);
 
         $result = $query->getScalarResult();
-        return $result[0]["total"];
+        return $result[0]["total"] ?? 0;
     }
 }

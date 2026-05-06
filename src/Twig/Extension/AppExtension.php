@@ -77,6 +77,7 @@ class AppExtension extends AbstractExtension
     {
         preg_match_all('/\[\[insert_media_\w*\]\]/', $field, $abstract);
         $array_medias = $abstract[0];
+        $media_type = [];
 
         foreach ($array_medias as $media) {
             $media = str_ireplace("[[insert_media_", "", $media);
@@ -90,7 +91,7 @@ class AppExtension extends AbstractExtension
         $result = array();
         for ($i = 0; $i < count($text); $i++) {
             $result[] = $text[$i];
-            if ($i < @count($media_type)) {
+            if ($i < count($media_type)) {
                 $result[] = $media_type[$i];
             }
         }
