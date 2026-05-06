@@ -37,9 +37,9 @@ class TaskImage
     private $task;
     /**
      * @var string $title
-     * @Assert\NotBlank
      * @ORM\Column(name="title", type="string", length=255)
      */
+    #[Assert\NotBlank]
     private $title;
 
 
@@ -50,9 +50,7 @@ class TaskImage
      */
     private $image;
 
-    /**
-     * @Assert\File(maxSize="6000000")
-     */
+    #[Assert\File(maxSize: 6000000)]
     protected $file;
 
     /**

@@ -46,9 +46,7 @@ class Booking
      */
     private $image;
 
-    /**
-     * @Assert\File(maxSize="6000000")
-     */
+    #[Assert\File(maxSize: 6000000)]
     protected $file;
 
     /**

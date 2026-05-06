@@ -48,20 +48,19 @@ class Video
 
     /**
      * @var string $title
-     * @Assert\NotBlank
-     * @Assert\Length(max="255", min="5")
-
      * @ORM\Column(name="title", type="string", length=255)
      */
+    #[Assert\NotBlank]
+    #[Assert\Length(max: 255, min: 5)]
     private $title;
 
 
     /**
      * @var string $video_id
-     * @Assert\NotBlank
-     * @Assert\Length(max="255", min="5")
      * @ORM\Column(name="video_id", type="string", length=255)
      */
+    #[Assert\NotBlank]
+    #[Assert\Length(max: 255, min: 5)]
     private $video_id;
 
     /**

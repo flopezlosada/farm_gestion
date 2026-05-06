@@ -57,9 +57,9 @@ class Task
 
     /**
      * @var string $title
-     * @Assert\NotBlank
      * @ORM\Column(name="title", type="string", length=255)
      */
+    #[Assert\NotBlank]
     private $title;
 
     /**
@@ -78,9 +78,9 @@ class Task
 
     /**
      * @var string $content
-     * @Assert\NotBlank
      * @ORM\Column(name="content", type="text")
      */
+    #[Assert\NotBlank]
     private $content;
 
     /**
@@ -126,19 +126,19 @@ class Task
 
     /**
      * Fecha prevista de realización, en el caso que sea necesario
-     * @Assert\Date()
      * @var string $expected_date
      * @ORM\Column(name="expected_date", type="date", nullable=true)
      */
+    #[Assert\Date]
     private $expected_date;
 
     /**
      * Fecha exacta en la que se realizó completamente la tarea. Si dura más de dos días, se pondrá el día en que se terminó. En las notas ya se
      * verá que dura más de un día
-     * @Assert\Date()
      * @var string $real_date
      * @ORM\Column(name="real_date", type="date", nullable=true)
      */
+    #[Assert\Date]
     private $real_date;
 
 

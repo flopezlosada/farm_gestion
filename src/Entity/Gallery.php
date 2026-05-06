@@ -50,20 +50,18 @@ class Gallery
 
     /**
      * @var string $title
-     * @Assert\NotBlank
-     * @Assert\Length(max="255", min="5")
-
      * @ORM\Column(name="title", type="string", length=255)
      */
+    #[Assert\NotBlank]
+    #[Assert\Length(max: 255, min: 5)]
     private $title;
 
 
     /**
      * @var string $content
-     * @Assert\NotBlank
-
      * @ORM\Column(name="content", type="text")
      */
+    #[Assert\NotBlank]
     private $content;
 
     /**

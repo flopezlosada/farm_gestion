@@ -34,10 +34,10 @@ class Labour
 
 
     /**
-     * @Assert\NotBlank
      * @var string name
      * @ORM\Column(name="name", type="string", length=255)
      */
+    #[Assert\NotBlank]
     private $name;
 
     /**

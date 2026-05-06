@@ -32,30 +32,28 @@ class Lay
     private $id;
 
     /**
-     * @Assert\NotBlank
      * @var smallint $batch
      * @ORM\ManyToOne(targetEntity="Batch", inversedBy="lays")
      */
+    #[Assert\NotBlank]
     private $batch;
 
     /**
-     * @Assert\NotBlank
-     * @Assert\Date()
      * @var string $lay_date
      * @ORM\Column(name="lay_date", type="date")
      */
+    #[Assert\NotBlank]
+    #[Assert\Date]
     private $lay_date;
 
     /**
      * Cantidad de huevos puestos
-     * @Assert\NotBlank
-     * @Assert\Type(type="numeric", message="El valor {{value}} no es un {{type}} válido.")
-     * @Assert\GreaterThan(
-     *     value = 0
-     * )
      * @var smallint $amount
      * @ORM\Column(name="amount", type="integer")
      */
+    #[Assert\NotBlank]
+    #[Assert\Type(type: 'numeric', message: 'El valor {{value}} no es un {{type}} válido.')]
+    #[Assert\GreaterThan(value: 0)]
     private $amount;
 
     /**
@@ -84,10 +82,10 @@ class Lay
 
     /**
      * Quién lo ha subido?
-     * @Assert\NotBlank
      * @var smallint $user
      * @ORM\ManyToOne(targetEntity="App\Entity\User", inversedBy="lays")
      */
+    #[Assert\NotBlank]
     private $user;
 
     /**

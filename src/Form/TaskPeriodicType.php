@@ -34,7 +34,7 @@ class TaskPeriodicType extends AbstractType
                     return $qb;
                 }));
     }
-    
+
     /**
      *  {@inheritdoc}
      */

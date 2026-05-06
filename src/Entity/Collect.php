@@ -30,31 +30,29 @@ class Collect {
     private $id;
 
     /**
-     * @Assert\NotBlank
-     * @Assert\Date()
      * @var string $collect_date
      * @ORM\Column(name="collect_date", type="date")
      */
+    #[Assert\NotBlank]
+    #[Assert\Date]
     private $collect_date;
 
     /**
      * Cantidad de huevos repartidos
-     * @Assert\NotBlank
-     * @Assert\Type(type="numeric", message="El valor {{value}} no es un {{type}} válido.")
-     * @Assert\GreaterThan(
-     *     value = 0
-     * )
      * @var smallint $amount
      * @ORM\Column(name="amount",type="decimal", precision=8, scale=2)
      */
+    #[Assert\NotBlank]
+    #[Assert\Type(type: 'numeric', message: 'El valor {{value}} no es un {{type}} válido.')]
+    #[Assert\GreaterThan(value: 0)]
     private $amount;
 
 
     /**
-     * @Assert\NotBlank
      * @var smallint $unity
      * @ORM\ManyToOne(targetEntity="App\Entity\Unity", inversedBy="collects")
      */
+    #[Assert\NotBlank]
     private $unity;
     
     /**
@@ -67,19 +65,19 @@ class Collect {
 
     /**
      * Quién se ha llevado los huevos
-     * @Assert\NotBlank
      * @var smallint $user
      * @ORM\ManyToOne(targetEntity="App\Entity\User", inversedBy="collects")
      */
+    #[Assert\NotBlank]
     private $user;
 
 
   /**
      * qué se ha llevado
-     * @Assert\NotBlank
      * @var smallint $product
      * @ORM\ManyToOne(targetEntity="App\Entity\Product", inversedBy="collects")
      */
+    #[Assert\NotBlank]
     private $product;
 
     /**

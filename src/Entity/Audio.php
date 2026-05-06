@@ -49,11 +49,10 @@ class Audio
 
     /**
      * @var string $title
-     * @Assert\NotBlank
-     * @Assert\Length(max="255", min="5")
-     
      * @ORM\Column(name="title", type="string", length=255)
      */
+    #[Assert\NotBlank]
+    #[Assert\Length(max: 255, min: 5)]
     private $title;
 
 
@@ -64,9 +63,7 @@ class Audio
      */
     private $audio;
 
-    /**
-     * @Assert\File(maxSize="60000000")
-     */
+    #[Assert\File(maxSize: 60000000)]
     protected $file;
 
     /**

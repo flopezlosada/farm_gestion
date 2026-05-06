@@ -40,27 +40,23 @@ class EggRegistry
 
     /**
      * Cantidad de huevos puestos referidos a la compra de pienso correspondiente, es decir entre la fecha de compra de este pienso y la de la siguiente
-     * @Assert\NotBlank
-     * @Assert\Type(type="numeric", message="El valor {{value}} no es un {{type}} válido.")
-     * @Assert\GreaterThan(
-     *     value = 0
-     * )
      * @var smallint $total_lay_eggs
      * @ORM\Column(name="total_lay_eggs", type="integer", nullable=true)
      */
+    #[Assert\NotBlank]
+    #[Assert\Type(type: 'numeric', message: 'El valor {{value}} no es un {{type}} válido.')]
+    #[Assert\GreaterThan(value: 0)]
     private $total_lay_eggs;
 
 
     /**
      * Cantidad de huevos vendidos referidos a esta compra de pienso
-     * @Assert\NotBlank
-     * @Assert\Type(type="numeric", message="El valor {{value}} no es un {{type}} válido.")
-     * @Assert\GreaterThan(
-     *     value = 0
-     * )
      * @var smallint $total_sale_eggs
      * @ORM\Column(name="total_sale_eggs", type="integer", nullable=true)
      */
+    #[Assert\NotBlank]
+    #[Assert\Type(type: 'numeric', message: 'El valor {{value}} no es un {{type}} válido.')]
+    #[Assert\GreaterThan(value: 0)]
     private $total_sale_eggs;
 
     /**
@@ -72,37 +68,31 @@ class EggRegistry
 
 
     /**
-     * @Assert\NotBlank
-     * @Assert\Type(type="numeric", message="El valor {{value}} no es un {{type}} válido.")
-     * @Assert\GreaterThan(
-     *     value = 0
-     * )
      * @var smallint $total_gift_eggs
      * @ORM\Column(name="total_gift_eggs", type="integer", nullable=true)
      */
+    #[Assert\NotBlank]
+    #[Assert\Type(type: 'numeric', message: 'El valor {{value}} no es un {{type}} válido.')]
+    #[Assert\GreaterThan(value: 0)]
     private $total_gift_eggs;
 
     /**
-     * @Assert\NotBlank
-     * @Assert\Type(type="numeric", message="El valor {{value}} no es un {{type}} válido.")
-     * @Assert\GreaterThan(
-     *     value = 0
-     * )
      * @var smallint $total_collected_eggs
      * @ORM\Column(name="total_collected_eggs", type="integer", nullable=true)
      */
+    #[Assert\NotBlank]
+    #[Assert\Type(type: 'numeric', message: 'El valor {{value}} no es un {{type}} válido.')]
+    #[Assert\GreaterThan(value: 0)]
     private $total_collected_eggs;
 
     /**
      * La cantidad de huevos que se desconoce dónde han ido a parar. Debería ser cero, pero...
-     * @Assert\NotBlank
-     * @Assert\Type(type="numeric", message="El valor {{value}} no es un {{type}} válido.")
-     * @Assert\GreaterThan(
-     *     value = 0
-     * )
      * @var smallint $total_unknown_eggs
      * @ORM\Column(name="total_unknown_eggs", type="integer", nullable=true)
      */
+    #[Assert\NotBlank]
+    #[Assert\Type(type: 'numeric', message: 'El valor {{value}} no es un {{type}} válido.')]
+    #[Assert\GreaterThan(value: 0)]
     private $total_unknown_eggs;
 
     /**

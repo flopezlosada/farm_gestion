@@ -34,17 +34,17 @@ class SeedWork
 
     /**
      * @var smallint $crop_working
-     * @Assert\NotBlank
      * @ORM\ManyToOne(targetEntity="CropWorking", inversedBy="seed_works")
      *
      */
+    #[Assert\NotBlank]
     private $crop_working;
 
     /**
      * @var smallint $seed_work_type
-     * @Assert\NotBlank
      * @ORM\ManyToOne(targetEntity="SeedWorkType", inversedBy="seed_works")
      */
+    #[Assert\NotBlank]
     private $seed_work_type;
 
     /**
@@ -57,53 +57,49 @@ class SeedWork
     /**
      * Superficie cultivada
      *
-     * @Assert\Type(type="numeric", message="El valor {{value}} no es un {{type}} válido.")
-     * @Assert\GreaterThan(
-     *     value = 0
-     * )
      * @var smallint $surface
      * @ORM\Column(name="surface", type="integer", nullable=true)
      */
+    #[Assert\Type(type: 'numeric', message: 'El valor {{value}} no es un {{type}} válido.')]
+    #[Assert\GreaterThan(value: 0)]
     private $surface;
 
 
     /**
      * número de plantas
      *
-     * @Assert\Type(type="numeric", message="El valor {{value}} no es un {{type}} válido.")
-     * @Assert\GreaterThan(
-     *     value = 0
-     * )
      * @var smallint $plant
      * @ORM\Column(name="plant", type="integer", nullable=true)
      */
+    #[Assert\Type(type: 'numeric', message: 'El valor {{value}} no es un {{type}} válido.')]
+    #[Assert\GreaterThan(value: 0)]
     private $plant;
 
 
     /**
      * bandejas de semillero
-     * @Assert\Type(type="numeric", message="El valor {{value}} no es un {{type}} válido.")
      * @var smallint $plants
      * @ORM\Column(name="tray", type="integer", nullable=true)
      */
+    #[Assert\Type(type: 'numeric', message: 'El valor {{value}} no es un {{type}} válido.')]
     private $tray;
 
     /**
      * Fecha realización,
      *
-     * @Assert\Date()
      * @var string $estimated_date
      * @ORM\Column(name="estimated_date", type="date", nullable=true)
      */
+    #[Assert\Date]
     private $estimated_date;
 
     /**
      * Fecha realización,
-     * @Assert\NotBlank
-     * @Assert\Date()
      * @var string $real_date
      * @ORM\Column(name="real_date", type="date", nullable=true)
      */
+    #[Assert\NotBlank]
+    #[Assert\Date]
     private $real_date;
 
     /**

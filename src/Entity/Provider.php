@@ -36,85 +36,82 @@ class Provider
 
     /**
      * @var string $name
-     * @Assert\NotBlank
      * @ORM\Column(name="name", type="string", length=255)
      */
+    #[Assert\NotBlank]
     private $name;
 
     /**
-     * @Assert\NotBlank
      * @var string $contact
      * @ORM\Column(name="contact", type="string", length=255, nullable=true)
      */
+    #[Assert\NotBlank]
     private $contact;
 
     /**
-     * @Assert\NotBlank
      * @var string address
      * @ORM\Column(name="address", type="string", length=255)
      */
+    #[Assert\NotBlank]
     private $address;
 
 
     /**
-     * @Assert\NotBlank
      * @var smallint $state
      * @ORM\ManyToOne(targetEntity="State", inversedBy="providers")
      */
+    #[Assert\NotBlank]
     private $state;
 
     /**
-     * @Assert\NotBlank
      * @var smallint $city
      * @ORM\ManyToOne(targetEntity="City", inversedBy="providers")
      */
+    #[Assert\NotBlank]
     private $city;
 
     /**
-     * @Assert\NotBlank
      * @var smallint $country
      * @ORM\ManyToOne(targetEntity="Country", inversedBy="providers")
      */
+    #[Assert\NotBlank]
     private $country;
 
     /**
      *
-     * @Assert\Length(min=5,minMessage="El código postal debe tener al menos {{limit}} caracteres",
-     * max=5,maxMessage="El código postal debe tener como máximo {{limit}} caracteres")
      * @var integer postal_code
      * @ORM\Column(name="postal_code", type="integer", length=5,nullable=true)
      */
+    #[Assert\Length(min: 5, minMessage: 'El código postal debe tener al menos {{limit}} caracteres', max: 5, maxMessage: 'El código postal debe tener como máximo {{limit}} caracteres')]
     private $postal_code;
 
     /**
-     * @Assert\Length(min=9,minMessage="Un número de teléfono debe tener al menos {{limit}} caracteres",
-     * max=20,maxMessage="Un número de teléfono debe tener como máximo {{limit}} caracteres")
      * @var string phone
      * @ORM\Column(name="phone", type="string", length=20,nullable=true)
      */
+    #[Assert\Length(min: 9, minMessage: 'Un número de teléfono debe tener al menos {{limit}} caracteres', max: 20, maxMessage: 'Un número de teléfono debe tener como máximo {{limit}} caracteres')]
     private $phone;
 
     /**
-     * @Assert\Length(min=9,minMessage="Un número de teléfono móvil debe tener al menos {{limit}} caracteres",
-     * max=20,maxMessage="Un número de teléfono móvil debe tener como máximo {{limit}} caracteres")
      * @var string celular
      * @ORM\Column(name="celular", type="string", length=20,nullable=true)
      */
+    #[Assert\Length(min: 9, minMessage: 'Un número de teléfono móvil debe tener al menos {{limit}} caracteres', max: 20, maxMessage: 'Un número de teléfono móvil debe tener como máximo {{limit}} caracteres')]
     private $celular;
 
 
     /**
-     * @Assert\Url()
      * @var string web
      * @ORM\Column(name="web", type="string", length=255,nullable=true)
      */
+    #[Assert\Url]
     private $web;
 
     /**
      * @ORM\Column(type="string",nullable=true, length=255)
-     * @Assert\Email
      * @var string
      */
+    #[Assert\Email]
     private $email;
 
     /**

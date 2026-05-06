@@ -31,51 +31,45 @@ class Fowl
     private $id;
 
     /**
-     * @Assert\NotBlank
      * @var smallint $batch
      * @ORM\ManyToOne(targetEntity="Batch", inversedBy="fowls")
      */
+    #[Assert\NotBlank]
     private $batch;
 
     /**
      * Fecha de sacrificio
-     * @Assert\Date()
      * @var string $put_down_date
      * @ORM\Column(name="put_down_date", type="date", nullable=true)
      */
+    #[Assert\Date]
     private $put_down_date;
 
     /**
      * Peso del animal al sacrificio, en kilos
-     * @Assert\Type(type="numeric", message="El valor {{value}} no es un {{type}} válido.")
-     * @Assert\GreaterThan(
-     *     value = 0
-     * )
      * @var smallint $put_down_weight
      * @ORM\Column(name="put_down_weight",type="decimal", precision=8, scale=2, nullable=true)
      */
+    #[Assert\Type(type: 'numeric', message: 'El valor {{value}} no es un {{type}} válido.')]
+    #[Assert\GreaterThan(value: 0)]
     private $put_down_weight;
 
     /**
      * Peso en canal, en kilos
-     * @Assert\Type(type="numeric", message="El valor {{value}} no es un {{type}} válido.")
-     * @Assert\GreaterThan(
-     *     value = 0
-     * )
      * @var smallint $carcass_weight
      * @ORM\Column(name="carcass_weight",type="decimal", precision=8, scale=2, nullable=true)
      */
+    #[Assert\Type(type: 'numeric', message: 'El valor {{value}} no es un {{type}} válido.')]
+    #[Assert\GreaterThan(value: 0)]
     private $carcass_weight;
 
     /**
      * Precio de venta en €/kg
-     * @Assert\Type(type="numeric", message="El valor {{value}} no es un {{type}} válido.")
-     * @Assert\GreaterThan(
-     *     value = 0
-     * )
      * @var smallint $sale_price
      * @ORM\Column(name="sale_price",type="decimal", precision=8, scale=2, nullable=true)
      */
+    #[Assert\Type(type: 'numeric', message: 'El valor {{value}} no es un {{type}} válido.')]
+    #[Assert\GreaterThan(value: 0)]
     private $sale_price;
 
     /**

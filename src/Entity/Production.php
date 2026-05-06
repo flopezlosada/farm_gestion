@@ -55,22 +55,20 @@ class Production
 
 
     /**
-     * @Assert\Date()
      * @var string production_date
      * @ORM\Column(name="production_date", type="date", nullable=true)
      */
+    #[Assert\Date]
     private $production_date;
 
     /**
      * Cantidad de producto cosechado
-     * @Assert\NotBlank
-     * @Assert\Type(type="numeric", message="El valor {{value}} no es un {{type}} válido.")
-     * @Assert\GreaterThan(
-     *     value = 0
-     * )
      * @var smallint $amount
      * @ORM\Column(name="amount",type="decimal", precision=8, scale=2)
      */
+    #[Assert\NotBlank]
+    #[Assert\Type(type: 'numeric', message: 'El valor {{value}} no es un {{type}} válido.')]
+    #[Assert\GreaterThan(value: 0)]
     private $amount;
 
     /**

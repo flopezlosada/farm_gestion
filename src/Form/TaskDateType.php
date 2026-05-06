@@ -33,7 +33,7 @@ class TaskDateType extends AbstractType
                     return $qb;
                 }));
     }
-    
+
     /**
      *  {@inheritdoc}
      */

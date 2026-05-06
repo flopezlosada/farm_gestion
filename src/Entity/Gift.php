@@ -31,23 +31,21 @@ class Gift
     private $id;
 
     /**
-     * @Assert\NotBlank
-     * @Assert\Date()
      * @var string $gift_date
      * @ORM\Column(name="gift_date", type="date")
      */
+    #[Assert\NotBlank]
+    #[Assert\Date]
     private $gift_date;
 
     /**
      * Cantidad de huevos repartidos
-     * @Assert\NotBlank
-     * @Assert\Type(type="numeric", message="El valor {{value}} no es un {{type}} válido.")
-     * @Assert\GreaterThan(
-     *     value = 0
-     * )
      * @var smallint $amount
      * @ORM\Column(name="amount",type="decimal", precision=8, scale=2)
      */
+    #[Assert\NotBlank]
+    #[Assert\Type(type: 'numeric', message: 'El valor {{value}} no es un {{type}} válido.')]
+    #[Assert\GreaterThan(value: 0)]
     private $amount;
 
     /**
@@ -66,10 +64,10 @@ class Gift
     private $total_price;
 
     /**
-     * @Assert\NotBlank
      * @var smallint $unity
      * @ORM\ManyToOne(targetEntity="App\Entity\Unity", inversedBy="gifts")
      */
+    #[Assert\NotBlank]
     private $unity;
 
     /**
@@ -82,10 +80,10 @@ class Gift
 
     /**
      * Quién se ha llevado los huevos
-     * @Assert\NotBlank
      * @var smallint $recipient
      * @ORM\ManyToOne(targetEntity="App\Entity\Recipient", inversedBy="gifts")
      */
+    #[Assert\NotBlank]
     private $recipient;
 
 
@@ -108,19 +106,19 @@ class Gift
 
     /**
      * qué se ha llevado
-     * @Assert\NotBlank
      * @var smallint $product
      * @ORM\ManyToOne(targetEntity="App\Entity\Product", inversedBy="gifts")
      */
+    #[Assert\NotBlank]
     private $product;
 
 
     /**
      * tipo de regalo
-     * @Assert\NotBlank
      * @var smallint $gift_type
      * @ORM\ManyToOne(targetEntity="App\Entity\GiftType", inversedBy="gifts")
      */
+    #[Assert\NotBlank]
     private $gift_type;
 
 
@@ -135,10 +133,10 @@ class Gift
 
     /**
      * Quién ha anotado el regalo
-     * @Assert\NotBlank
      * @var smallint $user
      * @ORM\ManyToOne(targetEntity="App\Entity\User", inversedBy="gifts")
      */
+    #[Assert\NotBlank]
     private $user;
 
 

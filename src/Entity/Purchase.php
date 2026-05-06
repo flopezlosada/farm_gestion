@@ -34,31 +34,29 @@ class Purchase
     private $id;
 
     /**
-     * @Assert\NotBlank
-     * @Assert\Date()
      * @var string $purchase_date
      * @ORM\Column(name="purchase_date", type="date")
      */
+    #[Assert\NotBlank]
+    #[Assert\Date]
     private $purchase_date;
 
     /**
      * Cantidad de producto comprado
-     * @Assert\NotBlank
-     * @Assert\Type(type="numeric", message="El valor {{value}} no es un {{type}} válido.")
-     * @Assert\GreaterThan(
-     *     value = 0
-     * )
      * @var smallint $amount
      * @ORM\Column(name="amount",type="decimal", precision=8, scale=2)
      */
+    #[Assert\NotBlank]
+    #[Assert\Type(type: 'numeric', message: 'El valor {{value}} no es un {{type}} válido.')]
+    #[Assert\GreaterThan(value: 0)]
     private $amount;
 
 
     /**
-     * @Assert\NotBlank
      * @var smallint $unity
      * @ORM\ManyToOne(targetEntity="App\Entity\Unity", inversedBy="purchases")
      */
+    #[Assert\NotBlank]
     private $unity;
 
     /**
@@ -79,10 +77,10 @@ class Purchase
 
     /**
      * proveedor
-     * @Assert\NotBlank
      * @var smallint $purchaser
      * @ORM\ManyToOne(targetEntity="App\Entity\Provider", inversedBy="purchases")
      */
+    #[Assert\NotBlank]
     private $provider;
 
 
@@ -105,18 +103,18 @@ class Purchase
 
     /**
      * qué se ha llevado
-     * @Assert\NotBlank
      * @var smallint $product
      * @ORM\ManyToOne(targetEntity="App\Entity\Product", inversedBy="purchases")
      */
+    #[Assert\NotBlank]
     private $product;
 
     /**
      * Quién lo ha vendido?
-     * @Assert\NotBlank
      * @var smallint $user
      * @ORM\ManyToOne(targetEntity="App\Entity\User", inversedBy="purchases")
      */
+    #[Assert\NotBlank]
     private $user;
 
 

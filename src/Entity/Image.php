@@ -47,11 +47,10 @@ class Image
 
     /**
      * @var string $title
-     * @Assert\NotBlank
-     * @Assert\Length(min="5")
-
      * @ORM\Column(name="title", type="text")
      */
+    #[Assert\NotBlank]
+    #[Assert\Length(min: 5)]
     private $title;
 
     /**
@@ -61,9 +60,7 @@ class Image
      */
     private $image;
 
-    /**
-     * @Assert\File(maxSize="6000000")
-     */
+    #[Assert\File(maxSize: 6000000)]
     protected $file;
     /**
      * @var \DateTime $created

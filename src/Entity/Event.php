@@ -27,31 +27,31 @@ class Event
 
     /**
      * @var string $title
-     * @Assert\NotBlank
      * @ORM\Column(name="title", type="string", length=255)
      */
+    #[Assert\NotBlank]
     private $title;
 
     /**
      * @var string $content
-     * @Assert\NotBlank
      * @ORM\Column(name="content", type="text")
      */
+    #[Assert\NotBlank]
     private $content;
 
     /**
-     * @Assert\NotBlank
-     * @Assert\Date()
      * @var string $start_date
      * @ORM\Column(name="start_date", type="date")
      */
+    #[Assert\NotBlank]
+    #[Assert\Date]
     private $start_date;
 
     /**
-     * @Assert\Date()
      * @var string $end_date
      * @ORM\Column(name="end_date", type="date", nullable=true)
      */
+    #[Assert\Date]
     private $end_date;
 
     /**

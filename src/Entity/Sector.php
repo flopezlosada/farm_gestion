@@ -32,17 +32,17 @@ class Sector
     private $id;
 
     /**
-     * @Assert\NotBlank
      * @var string name
      * @ORM\Column(name="name", type="string", length=255)
      */
+    #[Assert\NotBlank]
     private $name;
 
     /**
-     * @Assert\NotBlank
      * @var smallint $zone
      * @ORM\ManyToOne(targetEntity="Zone", inversedBy="sectors")
      */
+    #[Assert\NotBlank]
     private $zone;
 
 

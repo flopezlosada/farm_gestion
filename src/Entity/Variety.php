@@ -35,17 +35,17 @@ class Variety
 
 
     /**
-     * @Assert\NotBlank
      * @var smallint $crop
      * @ORM\ManyToOne(targetEntity="Crop", inversedBy="varieties")
      */
+    #[Assert\NotBlank]
     private $crop;
     
     /**
-     * @Assert\NotBlank
      * @var string name
      * @ORM\Column(name="name", type="string", length=255)
      */
+    #[Assert\NotBlank]
     private $name;
 
     /**

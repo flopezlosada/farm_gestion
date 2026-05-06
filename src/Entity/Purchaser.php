@@ -34,9 +34,9 @@ class Purchaser
 
     /**
      * @var string $name
-     * @Assert\NotBlank
      * @ORM\Column(name="name", type="string", length=255)
      */
+    #[Assert\NotBlank]
     private $name;
 
 
@@ -49,13 +49,11 @@ class Purchaser
 
     /**
      * Frecuencia en días de la compra de huevos
-     * @Assert\Type(type="numeric", message="El valor {{value}} no es un {{type}} válido.")
-     * @Assert\GreaterThan(
-     *     value = 0
-     * )
      * @var smallint $often_buying_eggs
      * @ORM\Column(name="often_buying_eggs", type="integer", nullable=true)
      */
+    #[Assert\Type(type: 'numeric', message: 'El valor {{value}} no es un {{type}} válido.')]
+    #[Assert\GreaterThan(value: 0)]
     private $often_buying_eggs;
 
 

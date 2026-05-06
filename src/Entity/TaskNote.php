@@ -37,9 +37,9 @@ class TaskNote
 
     /**
      * @var string $content
-     * @Assert\NotBlank
      * @ORM\Column(name="content", type="text")
      */
+    #[Assert\NotBlank]
     private $content;
 
     /**

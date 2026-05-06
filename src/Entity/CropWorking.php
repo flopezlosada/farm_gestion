@@ -36,17 +36,17 @@ class CropWorking
     private $id;
 
     /**
-     * @Assert\NotBlank
      * @var string name
      * @ORM\Column(name="name", type="string", length=255)
      */
+    #[Assert\NotBlank]
     private $name;
 
     /**
-     * @Assert\NotBlank
      * @var smallint $crop
      * @ORM\ManyToOne(targetEntity="Crop", inversedBy="crop_workings")
      */
+    #[Assert\NotBlank]
     private $crop;
 
 
@@ -73,11 +73,11 @@ class CropWorking
 
 
     /**
-     * @Assert\NotBlank
      * @var smallint $crop
      * @ORM\ManyToMany(targetEntity="Sector", mappedBy="crop_workings")
      * @ORM\JoinTable(name="crop_working_sector")
      */
+    #[Assert\NotBlank]
     public $sectors;
 
     /**
@@ -88,26 +88,22 @@ class CropWorking
 
     /**
      * Superficie cultivada
-     * @Assert\NotBlank
-     * @Assert\Type(type="numeric", message="El valor {{value}} no es un {{type}} válido.")
-     * @Assert\GreaterThan(
-     *     value = 0
-     * )
      * @var smallint $surface
      * @ORM\Column(name="surface", type="integer")
      */
+    #[Assert\NotBlank]
+    #[Assert\Type(type: 'numeric', message: 'El valor {{value}} no es un {{type}} válido.')]
+    #[Assert\GreaterThan(value: 0)]
     private $surface;
 
     /**
      * Producción estimada
      *
-     * @Assert\Type(type="numeric", message="El valor {{value}} no es un {{type}} válido.")
-     * @Assert\GreaterThan(
-     *     value = 0
-     * )
      * @var smallint $estimated_production
      * @ORM\Column(name="estimated_production", type="integer")
      */
+    #[Assert\Type(type: 'numeric', message: 'El valor {{value}} no es un {{type}} válido.')]
+    #[Assert\GreaterThan(value: 0)]
     private $estimated_production;
 
 
@@ -151,11 +147,11 @@ class CropWorking
 
     /**
      * Fecha realización,
-     * @Assert\Date()
      * @var string $date
      * @ORM\Column(name="finish_date", type="date", nullable=true)
      * fecha de finalización. Se añade automáticamente al finalizar el cultivo
      */
+    #[Assert\Date]
     private $finish_date;
 
     /**
