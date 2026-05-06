@@ -39,11 +39,11 @@ todo el código de socios es código que nunca se ha ejercitado contra usuarixs
 reales, asumimos que tiene bugs latentes, y la regla "tests al tocar
 cualquier cosa de socios" es no negociable.
 
-## Estado actual: Fases 0-3 completadas
+## Estado actual: Fases 0-4 completadas
 
-DDEV con PHP 7.4 + MySQL 8 + Composer 2.2 LTS + Flex 1.22 (subido,
-ver decisiones). Login funciona, dashboard renderiza, las pantallas
-centrales de socios y de granja cargan limpias.
+**Symfony 5.4 LTS + PHP 7.4** + MySQL 8 + Composer 2.2 LTS + Flex 1.22.
+Login funciona, dashboard renderiza, las pantallas centrales de socios
+y de granja cargan limpias en navegación manual. 11 smoke tests verdes.
 
 - **Fase 0**: setup DDEV + auditoría + arreglos baseline.
 - **Fase 1**: fixtures con Faker (`CatalogFixtures`, `UserFixtures`,
@@ -54,31 +54,38 @@ centrales de socios y de granja cargan limpias.
 - **Fase 3**: deps muertas fuera. Quitadas:
   `incenteev/composer-parameter-handler`, `symfony/web-server-bundle`,
   `twig/extensions` (migrado a `twig/intl-extra` + `twig/string-extra`),
-  `symfony/swiftmailer-bundle` (migrado a `symfony/mailer`).
-  **Pendiente de Fase 3**: `whiteoctober/breadcrumbs-bundle` queda en
-  pausa hasta tener PHP 8.x (todos los reemplazos requieren 8.1+).
+  `symfony/swiftmailer-bundle` (migrado a `symfony/mailer`),
+  `whiteoctober/breadcrumbs-bundle` (migrado a `mhujer/breadcrumbs-bundle`
+  como drop-in en Fase 4).
+- **Fase 4**: salto a Symfony 5.4 LTS. Bumps de varias deps (FOSUser
+  v3.4, gedmo 3.x, doctrine/common 3.x, dompdf 2.x, etc). Migración
+  mecánica de 502 alias `App:Xxx` → `\App\Entity\Xxx::class` (Doctrine 3
+  no soporta alias cortos). Migración del namespace
+  `Doctrine\Common\Persistence` → `Doctrine\Persistence`. FOSUser
+  forzado a `noop` mailer (sigue acoplado a Swift). Tu fork
+  `flopezlosada/calendar-bundle` actualizado en GitHub master con
+  constraints `^5.0|^6.0` y `TreeBuilder` con nombre raíz.
+
+**Validación pendiente**: el dump de producción en `~/Downloads/` está
+sin importar. Plan: cargar contra una BBDD aislada `db_prod_snapshot`
+y navegar pantallas con datos reales para detectar regresiones que
+los smoke tests no capturan.
 
 ## Hoja de ruta (orden de prioridad)
 
 1. ~~**Fixtures con Faker**~~ ✅ Fase 1.
 2. ~~**Tests funcionales baseline**~~ ✅ Fase 2.
-3. ~~**Modernización de dependencias muertas**~~ ✅ Fase 3 (parcial — ver
-   nota de breadcrumbs en "Estado actual"). Pendientes para más adelante:
-   `friendsofsymfony/user-bundle` (→ Fase 6, auth nueva),
-   `sensio/framework-extra-bundle` (→ Fase 5, requiere atributos PHP 8).
-4. **Symfony 4.4 → 5.4 LTS** (siguiente). Anotaciones se mantienen
-   (Symfony 5 las soporta); el salto a atributos espera a PHP 8.
-5. **PHP 7.4 → 8.3** entre Symfony 5.4 y 6.4. **Es una fase intermedia
-   descubierta en la sesión de Fase 3**: no se puede subir PHP estando
-   en Symfony 4.4 porque `stfalcon/tinymce-bundle` no tiene versión que
-   cubra Symfony 4.4 + PHP 8 simultáneamente (las 2.x son PHP 7 only,
-   las 3.x son Symfony 5+ only). Una vez en Symfony 5.4 LTS, todas las
-   deps tienen versiones modernas para PHP 8.
-   Beneficios extras: el hosting está cobrando *extended support* por
-   seguir en PHP 7.4 (ahorro económico inmediato), y desbloquea la
-   migración pendiente de `whiteoctober/breadcrumbs-bundle` →
-   `mhujer/breadcrumbs-bundle` (PHP 8.1+) o `Huluti/BreadcrumbsBundle`
-   (PHP 8.2+).
+3. ~~**Modernización de dependencias muertas**~~ ✅ Fase 3.
+   `friendsofsymfony/user-bundle` y `sensio/framework-extra-bundle`
+   siguen instalados (se quitan cuando rehagamos auth en Fase 7 y
+   migremos a atributos PHP 8 en Fase 6).
+4. ~~**Symfony 4.4 → 5.4 LTS**~~ ✅ Fase 4.
+5. **PHP 7.4 → 8.3** (siguiente). Hosting cobra *extended support*
+   por seguir en 7.4 → ahorro económico inmediato. Y desbloquea
+   `mhujer/breadcrumbs-bundle` v1.5.9+ y `Huluti/BreadcrumbsBundle`
+   si quisiéramos rama mantenida (la 1.5.7 actual aún funciona).
+   Validación previa recomendada: cargar dump de producción y
+   navegar antes de tocar PHP, para tener punto de comparación.
 6. **Symfony 5.4 → 6.4 LTS** (ya con PHP 8.3).
 7. **Auth nuevo + roles**: reescribir con seguridad nativa de Symfony.
    Roles `ROLE_PARTNER`, `ROLE_GESTION`, `ROLE_ADMIN`. Magic-link login
@@ -102,9 +109,14 @@ Cada fase termina con tests en verde y un tag `vX.Y` en git.
 - **MySQL 8**, no Postgres. La prod usa MySQL, no compensa migrar.
 - **DDEV** para entorno local, no instalación nativa. Reproducible,
   portable, descarta toda una clase de problemas de "en mi máquina sí".
-- **PHP 7.4 hasta Symfony 5.4**, luego salto a 8.3. Razón en la hoja
-  de ruta (fase 5). Subir PHP antes de Symfony 5.4 está bloqueado por
-  `stfalcon/tinymce-bundle` (sin versión Symfony 4.4 + PHP 8).
+- **PHP 7.4** durante Fase 4 (Symfony 5.4 LTS lo soporta), salto a
+  PHP 8.3 en Fase 5. Razón histórica: subir PHP antes de Symfony 5.4
+  estaba bloqueado por `stfalcon/tinymce-bundle` (sin versión
+  Symfony 4.4 + PHP 8). Ahora ese bloqueo está resuelto.
+- **FOSUserBundle 3.x con `noop` mailer** y `registration.confirmation
+  = false`. FOSUser 3.x sigue acoplado a SwiftMailer (que ya no
+  usamos), pero el flujo de auth/email se rehace en Fase 7. Hasta
+  entonces, sin emails de FOSUser.
 - **Composer 2.2 LTS** se mantiene por ahora; subir cuando toque
   actualizar plugins/recipes. Ya no hay urgencia: Flex está sano.
 - **Symfony Flex 1.22** (subido desde 1.12.2 en `6d4cf26`). Versiones
