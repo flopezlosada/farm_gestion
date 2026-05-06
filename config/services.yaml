@@ -33,3 +33,6 @@ services:
                 - { name: kernel.event_listener, event: calendar.load_events, method: loadEvents }
 
     App\EventSubscriber\CalendarSubscriber:
+
+    Twig\Extra\Intl\IntlExtension:
+        tags: ['twig.extension']
