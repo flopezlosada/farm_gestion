@@ -5,31 +5,31 @@
     xsi:schemaLocation="http://symfony.com/schema/routing http://symfony.com/schema/routing/routing-1.0.xsd">
 
     <route id="tasktype" path="/">
-        <default key="_controller">App\Controller\TaskTypeController:index</default>
+        <default key="_controller">App\Controller\TaskTypeController::index</default>
     </route>
 
     <route id="tasktype_show" path="/{id}/show">
-        <default key="_controller">App\Controller\TaskTypeController:show</default>
+        <default key="_controller">App\Controller\TaskTypeController::show</default>
     </route>
 
     <route id="tasktype_new" path="/new">
-        <default key="_controller">App\Controller\TaskTypeController:new</default>
+        <default key="_controller">App\Controller\TaskTypeController::new</default>
     </route>
 
     <route id="tasktype_create" path="/create" methods="POST">
-        <default key="_controller">App\Controller\TaskTypeController:create</default>
+        <default key="_controller">App\Controller\TaskTypeController::create</default>
     </route>
 
     <route id="tasktype_edit" path="/{id}/edit">
-        <default key="_controller">App\Controller\TaskTypeController:edit</default>
+        <default key="_controller">App\Controller\TaskTypeController::edit</default>
     </route>
 
     <route id="tasktype_update" path="/{id}/update" methods="POST|PUT">
-        <default key="_controller">App\Controller\TaskTypeController:update</default>
+        <default key="_controller">App\Controller\TaskTypeController::update</default>
     </route>
 
     <route id="tasktype_delete" path="/{id}/delete" methods="POST|DELETE">
-        <default key="_controller">App\Controller\TaskTypeController:delete</default>
+        <default key="_controller">App\Controller\TaskTypeController::delete</default>
     </route>
 
 </routes>

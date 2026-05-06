@@ -5,31 +5,31 @@
     xsi:schemaLocation="http://symfony.com/schema/routing http://symfony.com/schema/routing/routing-1.0.xsd">
 
     <route id="zone" path="/">
-        <default key="_controller">App\Controller\ZoneController:index</default>
+        <default key="_controller">App\Controller\ZoneController::index</default>
     </route>
 
     <route id="zone_show" path="/{id}/show">
-        <default key="_controller">App\Controller\ZoneController:show</default>
+        <default key="_controller">App\Controller\ZoneController::show</default>
     </route>
 
     <route id="zone_new" path="/new">
-        <default key="_controller">App\Controller\ZoneController:new</default>
+        <default key="_controller">App\Controller\ZoneController::new</default>
     </route>
 
     <route id="zone_create" path="/create" methods="POST">
-        <default key="_controller">App\Controller\ZoneController:create</default>
+        <default key="_controller">App\Controller\ZoneController::create</default>
     </route>
 
     <route id="zone_edit" path="/{id}/edit">
-        <default key="_controller">App\Controller\ZoneController:edit</default>
+        <default key="_controller">App\Controller\ZoneController::edit</default>
     </route>
 
     <route id="zone_update" path="/{id}/update" methods="POST|PUT">
-        <default key="_controller">App\Controller\ZoneController:update</default>
+        <default key="_controller">App\Controller\ZoneController::update</default>
     </route>
 
     <route id="zone_delete" path="/{id}/delete" methods="POST|DELETE">
-        <default key="_controller">App\Controller\ZoneController:delete</default>
+        <default key="_controller">App\Controller\ZoneController::delete</default>
     </route>
 
 </routes>

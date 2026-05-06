@@ -5,31 +5,31 @@
     xsi:schemaLocation="http://symfony.com/schema/routing http://symfony.com/schema/routing/routing-1.0.xsd">
 
     <route id="compostpile" path="/">
-        <default key="_controller">App\Controller\CompostPileController:index</default>
+        <default key="_controller">App\Controller\CompostPileController::index</default>
     </route>
 
     <route id="compostpile_show" path="/{id}/show">
-        <default key="_controller">App\Controller\CompostPileController:show</default>
+        <default key="_controller">App\Controller\CompostPileController::show</default>
     </route>
 
     <route id="compostpile_new" path="/new">
-        <default key="_controller">App\Controller\CompostPileController:new</default>
+        <default key="_controller">App\Controller\CompostPileController::new</default>
     </route>
 
     <route id="compostpile_create" path="/create" methods="POST">
-        <default key="_controller">App\Controller\CompostPileController:create</default>
+        <default key="_controller">App\Controller\CompostPileController::create</default>
     </route>
 
     <route id="compostpile_edit" path="/{id}/edit">
-        <default key="_controller">App\Controller\CompostPileController:edit</default>
+        <default key="_controller">App\Controller\CompostPileController::edit</default>
     </route>
 
     <route id="compostpile_update" path="/{id}/update" methods="POST|PUT">
-        <default key="_controller">App\Controller\CompostPileController:update</default>
+        <default key="_controller">App\Controller\CompostPileController::update</default>
     </route>
 
     <route id="compostpile_delete" path="/{id}/delete" methods="POST|DELETE">
-        <default key="_controller">App\Controller\CompostPileController:delete</default>
+        <default key="_controller">App\Controller\CompostPileController::delete</default>
     </route>
 
 </routes>

@@ -5,28 +5,28 @@
     xsi:schemaLocation="http://symfony.com/schema/routing http://symfony.com/schema/routing/routing-1.0.xsd">
 
     <route id="booking" path="/">
-        <default key="_controller">App\Controller\BookingController:index</default>
+        <default key="_controller">App\Controller\BookingController::index</default>
     </route>
 
     <route id="booking_new" path="/new">
-        <default key="_controller">App\Controller\BookingController:new</default>
+        <default key="_controller">App\Controller\BookingController::new</default>
     </route>
 
     <route id="booking_create" path="/create/" methods="POST">
-        <default key="_controller">App\Controller\BookingController:create</default>
+        <default key="_controller">App\Controller\BookingController::create</default>
     </route>
 
     <route id="booking_edit" path="/{id}/edit">
-        <default key="_controller">App\Controller\BookingController:edit</default>
+        <default key="_controller">App\Controller\BookingController::edit</default>
     </route>
 
    
     <route id="booking_update" path="/{id}/update" methods="POST|PUT">
-        <default key="_controller">App\Controller\BookingController:update</default>
+        <default key="_controller">App\Controller\BookingController::update</default>
     </route>
 
     <route id="booking_delete" path="/{id}/delete" methods="POST|DELETE">
-        <default key="_controller">App\Controller\BookingController:delete</default>
+        <default key="_controller">App\Controller\BookingController::delete</default>
     </route>
 
 </routes>

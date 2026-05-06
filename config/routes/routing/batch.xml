@@ -5,45 +5,45 @@
     xsi:schemaLocation="http://symfony.com/schema/routing http://symfony.com/schema/routing/routing-1.0.xsd">
 
     <route id="batch" path="/">
-        <default key="_controller">App\Controller\BatchController:index</default>
+        <default key="_controller">App\Controller\BatchController::index</default>
     </route>
 
     <route id="batch_show" path="/{id}/show">
-        <default key="_controller">App\Controller\BatchController:show</default>
+        <default key="_controller">App\Controller\BatchController::show</default>
     </route>
 
     <route id="batch_new" path="/new">
-        <default key="_controller">App\Controller\BatchController:new</default>
+        <default key="_controller">App\Controller\BatchController::new</default>
     </route>
 
     <route id="batch_create" path="/create">
-        <default key="_controller">App\Controller\BatchController:create</default>
+        <default key="_controller">App\Controller\BatchController::create</default>
         <requirement key="_method">post</requirement>
     </route>
 
     <route id="batch_edit" path="/{id}/edit">
-        <default key="_controller">App\Controller\BatchController:edit</default>
+        <default key="_controller">App\Controller\BatchController::edit</default>
     </route>
 
     <route id="batch_update" path="/{id}/update">
-        <default key="_controller">App\Controller\BatchController:update</default>
+        <default key="_controller">App\Controller\BatchController::update</default>
         <requirement key="_method">post|put</requirement>
     </route>
 
     <route id="batch_delete" path="/{id}/delete">
-        <default key="_controller">App\Controller\BatchController:delete</default>
+        <default key="_controller">App\Controller\BatchController::delete</default>
         <requirement key="_method">post|delete</requirement>
     </route>
     <route id="batch_close" path="/{id}/close">
-        <default key="_controller">App\Controller\BatchController:close</default>
+        <default key="_controller">App\Controller\BatchController::close</default>
     </route>
     <route id="batch_reactivate" path="/{id}/reactivate">
-        <default key="_controller">App\Controller\BatchController:reactivate</default>
+        <default key="_controller">App\Controller\BatchController::reactivate</default>
     </route>
     <route id="batch_analyses" path="/{product_id}/analyses/">
-        <default key="_controller">App\Controller\BatchController:analyses</default>
+        <default key="_controller">App\Controller\BatchController::analyses</default>
     </route>
     <route id="hens_analyses" path="/hens_analyses/">
-        <default key="_controller">App\Controller\BatchController:hens_analyses</default>
+        <default key="_controller">App\Controller\BatchController::hens_analyses</default>
     </route>
 </routes>
