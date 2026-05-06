@@ -26,7 +26,7 @@ class TaskRepository extends \Doctrine\ORM\EntityRepository
             }
 
 
-            $dql = "select t from App:Task t where t.finish=:finish and ((MONTH(t.expected_date)<=:month and YEAR(t.expected_date)<=:year)
+            $dql = "select t from App\\Entity\\Task t where t.finish=:finish and ((MONTH(t.expected_date)<=:month and YEAR(t.expected_date)<=:year)
             or (t.month<=:month and t.year <=:year)) ";
             if ($task_type_id)
             {
@@ -35,7 +35,7 @@ class TaskRepository extends \Doctrine\ORM\EntityRepository
 
         } else
         {
-            $dql = "select t from App:Task t where t.finish=:finish and  t.task_type=:task_type";
+            $dql = "select t from App\\Entity\\Task t where t.finish=:finish and  t.task_type=:task_type";
         }
 
         $dql .= " ORDER BY  t.id asc";
@@ -92,7 +92,7 @@ class TaskRepository extends \Doctrine\ORM\EntityRepository
         {
             $month = date('n');
         }
-        $dql = "select t from App:Task t where t.finish=:finish and MONTH(t.real_date)=:month and YEAR(t.real_date)=:year ORDER BY  t.id asc";
+        $dql = "select t from App\\Entity\\Task t where t.finish=:finish and MONTH(t.real_date)=:month and YEAR(t.real_date)=:year ORDER BY  t.id asc";
 
         $query = $em->createQuery($dql);
         $query->setParameter("finish", 1);
@@ -114,7 +114,7 @@ class TaskRepository extends \Doctrine\ORM\EntityRepository
         {
             $month = date('n');
         }
-        $dql = "select t from App:Task t inner join t.users u where t.finish=:finish and ((MONTH(t.expected_date)<=:month and YEAR(t.expected_date)<=:year)
+        $dql = "select t from App\\Entity\\Task t inner join t.users u where t.finish=:finish and ((MONTH(t.expected_date)<=:month and YEAR(t.expected_date)<=:year)
             or (t.month<=:month and t.year <=:year)) and u=:user ORDER BY  t.id asc";
 
         $query = $em->createQuery($dql);

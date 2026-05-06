@@ -15,7 +15,7 @@ class BlogRepository extends EntityRepository
     public function findMedia($media_type, $foreign_key, $object_class, $image_type = null)
     {
         $em = $this->getEntityManager();
-        $dql = "select g from App:" . ucfirst($media_type) . " g where g.foreignKey=:foreign_key and g.objectClass=:object_class ";
+        $dql = "select g from App\\Entity\\" . ucfirst($media_type) . " g where g.foreignKey=:foreign_key and g.objectClass=:object_class ";
         if ($image_type !== null)
         {
             $dql .= ' and g.single=:single ';
@@ -36,7 +36,7 @@ class BlogRepository extends EntityRepository
     public function findPostsBySlug($slug)
     {
         $em = $this->getEntityManager();
-        $dql = "select b from App:Blog b where b.slug=:slug";
+        $dql = "select b from App\\Entity\\Blog b where b.slug=:slug";
         $query = $em->createQuery($dql);
         $query->setParameter('slug', $slug);
 
@@ -49,7 +49,7 @@ class BlogRepository extends EntityRepository
     {
         $em=$this->getEntityManager();
         $dql = 'SELECT p
-        FROM App:Blog p
+        FROM App\\Entity\\Blog p
         ORDER BY p.created DESC';
 
         $query = $em->createQuery($dql);

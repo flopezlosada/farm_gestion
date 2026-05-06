@@ -16,7 +16,7 @@ class GiftRepository extends EntityRepository
     {
         $em = $this->getEntityManager();
         $dql = "select sum(c.amount) as total
-        from App:Gift c where YEAR (c.gift_date)=:year and c.unity=:unity  and c.product=:product
+        from App\\Entity\\Gift c where YEAR (c.gift_date)=:year and c.unity=:unity  and c.product=:product
         and MONTH (c.gift_date)=:month ";
         $query = $em->createQuery($dql);
         $query->setParameter("year", $year);

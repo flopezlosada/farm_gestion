@@ -15,7 +15,7 @@ class MovementRepository extends EntityRepository
     public function findLastMovement($batch_id)
     {
         $em = $this->getEntityManager();
-        $dql = "select m from App:Movement m where m.batch=:batch_id order by m.date desc";
+        $dql = "select m from App\\Entity\\Movement m where m.batch=:batch_id order by m.date desc";
         $query = $em->createQuery($dql);
         $query->setParameter("batch_id", $batch_id);
         $query->setMaxResults(1);
@@ -26,7 +26,7 @@ class MovementRepository extends EntityRepository
       public function findMovements($batch_id)
     {
         $em = $this->getEntityManager();
-        $dql = "select m from App:Movement m where m.batch=:batch_id order by m.date desc";
+        $dql = "select m from App\\Entity\\Movement m where m.batch=:batch_id order by m.date desc";
         $query = $em->createQuery($dql);
         $query->setParameter("batch_id", $batch_id);
 

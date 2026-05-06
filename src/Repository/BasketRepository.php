@@ -16,7 +16,7 @@ class BasketRepository extends EntityRepository
     public function findBasketByWeekYear($date)
     {
         $em = $this->getEntityManager();
-        $dql = "select s from App:Basket s where s.week=:week and  YEAR(s.date)=:year ";
+        $dql = "select s from App\\Entity\\Basket s where s.week=:week and  YEAR(s.date)=:year ";
         $query = $em->createQuery($dql);
         $query->setParameter("week", date('W', strtotime($date)));
         $query->setParameter("year", date('Y', strtotime($date)));
@@ -38,7 +38,7 @@ class BasketRepository extends EntityRepository
     public function findMonthlyBasket($date)
     {
         $em = $this->getEntityManager();
-        $dql = "SELECT b, YEAR(b.date) as y, MONTH(b.date) as m FROM App:Basket b where b.date <:max_date  GROUP by y,m";
+        $dql = "SELECT b, YEAR(b.date) as y, MONTH(b.date) as m FROM App\\Entity\\Basket b where b.date <:max_date  GROUP by y,m";
         $query = $em->createQuery($dql);
         $query->setParameter("max_date", $date);
 

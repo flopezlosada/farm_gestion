@@ -16,7 +16,7 @@ class CropWorkingRepository extends \Doctrine\ORM\EntityRepository
     public function findActive()
     {
         $em = $this->getEntityManager();
-        $dql = "select s from App:CropWorking s where s.finish=false";
+        $dql = "select s from App\\Entity\\CropWorking s where s.finish=false";
         $query = $em->createQuery($dql);
 
         return $query->getResult();

@@ -16,7 +16,7 @@ class SeedWorkRepository extends EntityRepository
     public function findFirstSeedWork(CropWorking $crop_working)
     {
         $em = $this->getEntityManager();
-        $dql = "select sw from App:SeedWork sw where sw.crop_working=:crop_working ORDER by sw.real_date asc";
+        $dql = "select sw from App\\Entity\\SeedWork sw where sw.crop_working=:crop_working ORDER by sw.real_date asc";
         $query = $em->createQuery($dql);
         $query->setParameter("crop_working", $crop_working);
         $query->setMaxResults(1);

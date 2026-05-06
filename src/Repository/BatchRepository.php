@@ -15,7 +15,7 @@ class BatchRepository extends EntityRepository
     public function getFeedAmountInInterval($batch, $start_time, $end_time)
     {
         $em = $this->getEntityManager();
-        $dql = "select s from App:Sack s where s.batch=:batch and s.delivery_date >= :start_date and s.delivery_date < :end_date";
+        $dql = "select s from App\\Entity\\Sack s where s.batch=:batch and s.delivery_date >= :start_date and s.delivery_date < :end_date";
         $query = $em->createQuery($dql);
         $query->setParameter("batch", $batch);
         $query->setParameter("start_date", $start_time);
@@ -37,7 +37,7 @@ class BatchRepository extends EntityRepository
     public function getFowlsAliveInInterval($batch, $end_time)
     {
         $em = $this->getEntityManager();
-        $dql = "select s from App:Fowl s where s.batch=:batch and (s.put_down_date is null or s.put_down_date > :end_date)";
+        $dql = "select s from App\\Entity\\Fowl s where s.batch=:batch and (s.put_down_date is null or s.put_down_date > :end_date)";
         $query = $em->createQuery($dql);
         $query->setParameter("batch", $batch);
         $query->setParameter("end_date", $end_time);
@@ -50,7 +50,7 @@ class BatchRepository extends EntityRepository
     public function getActiveBatch($product_id)
     {
         $em = $this->getEntityManager();
-        $dql = "select s from App:Batch s where s.batch_status =1  and s.product=:product_id";
+        $dql = "select s from App\\Entity\\Batch s where s.batch_status =1  and s.product=:product_id";
         $query = $em->createQuery($dql);
         $query->setParameter("product_id", $product_id);
 
@@ -70,7 +70,7 @@ class BatchRepository extends EntityRepository
 
     {
         $em = $this->getEntityManager();
-        $dql = "select s from App:Batch s where YEAR(s.receipt_date)=:year  and s.product=:product_id and s.batch_status=2";
+        $dql = "select s from App\\Entity\\Batch s where YEAR(s.receipt_date)=:year  and s.product=:product_id and s.batch_status=2";
         $query = $em->createQuery($dql);
         $query->setParameter("product_id", $product_id);
         $query->setParameter("year", $year);
@@ -89,7 +89,7 @@ class BatchRepository extends EntityRepository
     public function findYearsInProduction($product_id)
     {
         $em = $this->getEntityManager();
-        $dql = "select YEAR(s.receipt_date) as year from App:Batch s where  s.product=:product_id and s.batch_status=2 GROUP  BY year ORDER BY year desc";
+        $dql = "select YEAR(s.receipt_date) as year from App\\Entity\\Batch s where  s.product=:product_id and s.batch_status=2 GROUP  BY year ORDER BY year desc";
         $query = $em->createQuery($dql);
         $query->setParameter("product_id", $product_id);
 
@@ -101,7 +101,7 @@ class BatchRepository extends EntityRepository
     public function findBatchs($product_id, $limit)
     {
         $em = $this->getEntityManager();
-        $dql = 'select b from App:Batch b where b.product=:product_id order by b.id desc';
+        $dql = 'select b from App\Entity\Batch b where b.product=:product_id order by b.id desc';
         $query = $em->createQuery($dql);
         $query->setParameter("product_id", $product_id);
         $query->setMaxResults($limit);
@@ -114,7 +114,7 @@ class BatchRepository extends EntityRepository
     public function getTotalCarcassWeight($year)
     {
         $em = $this->getEntityManager();
-        $dql = "select sum(p.carcass_weight) as total from App:Fowl p where YEAR(p.put_down_date)=:year";
+        $dql = "select sum(p.carcass_weight) as total from App\\Entity\\Fowl p where YEAR(p.put_down_date)=:year";
         $query = $em->createQuery($dql);
         $query->setParameter("year", $year);
         if ($query->getSingleScalarResult()) {

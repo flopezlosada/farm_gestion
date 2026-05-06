@@ -15,7 +15,7 @@ class ProductionRepository extends EntityRepository
     public function findRealProduction($crop, $year)
     {
         $em = $this->getEntityManager();
-        $dql = "select p from App:Production p where 
+        $dql = "select p from App\\Entity\\Production p where 
                       YEAR(p.production_date)=:year 
                       and p.crop=:crop order by p.production_date asc";
         $query = $em->createQuery($dql);
@@ -35,7 +35,7 @@ class ProductionRepository extends EntityRepository
     public function findTotalProduction($crop, $year)
     {
         $em = $this->getEntityManager();
-        $dql = "select sum(p.amount) as total from App:Production p where YEAR(p.production_date)=:year and p.crop=:crop";
+        $dql = "select sum(p.amount) as total from App\\Entity\\Production p where YEAR(p.production_date)=:year and p.crop=:crop";
         $query = $em->createQuery($dql);
         $query->setParameter("year", $year);
         $query->setParameter("crop", $crop);
@@ -58,7 +58,7 @@ class ProductionRepository extends EntityRepository
     public function findTotalCropProduction($crop_working)
     {
         $em = $this->getEntityManager();
-        $dql = "select sum(p.amount) as total from App:Production p where p.crop_working=:crop_working";
+        $dql = "select sum(p.amount) as total from App\\Entity\\Production p where p.crop_working=:crop_working";
         $query = $em->createQuery($dql);
         $query->setParameter("crop_working", $crop_working);
 
@@ -74,7 +74,7 @@ class ProductionRepository extends EntityRepository
     public function findWeeks($year)
     {
         $em = $this->getEntityManager();
-        $dql = "select p.week from App:Production p where YEAR(p.production_date)=:year GROUP BY p.week ORDER by p.week DESC ";
+        $dql = "select p.week from App\\Entity\\Production p where YEAR(p.production_date)=:year GROUP BY p.week ORDER by p.week DESC ";
         $query = $em->createQuery($dql);
         $query->setParameter("year", $year);
 
@@ -85,7 +85,7 @@ class ProductionRepository extends EntityRepository
     {
 
         $em = $this->getEntityManager();
-        $dql = "select p from App:Production p where YEAR(p.production_date)=:year  and p.week=:week";
+        $dql = "select p from App\\Entity\\Production p where YEAR(p.production_date)=:year  and p.week=:week";
         $query = $em->createQuery($dql);
         $query->setParameter("year", $year);
         $query->setParameter("week", $week);
@@ -96,7 +96,7 @@ class ProductionRepository extends EntityRepository
     public function findByYear($year)
     {
         $em = $this->getEntityManager();
-        $dql = "select sum(p.amount) as total from App:Production p where YEAR(p.production_date)=:year";
+        $dql = "select sum(p.amount) as total from App\\Entity\\Production p where YEAR(p.production_date)=:year";
         $query = $em->createQuery($dql);
         $query->setParameter("year", $year);
         if ($query->getSingleScalarResult())

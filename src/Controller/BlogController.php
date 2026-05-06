@@ -58,7 +58,7 @@ class BlogController extends AbstractController
         $blogs_repository = $em->getRepository(Blog::class);
 
 
-        $dql = "select b from App:Blog b order by b.created desc";
+        $dql = "select b from App\\Entity\\Blog b order by b.created desc";
 
         $query = $em->createQuery($dql);
 
@@ -358,7 +358,7 @@ class BlogController extends AbstractController
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entity = $em->getRepository('App:' . ucfirst($object_class))->find($id);
+        $entity = $em->getRepository('App\Entity\\' . ucfirst($object_class))->find($id);
         $single_images = $em->getRepository(\App\Entity\Blog::class)->findMedia("Image", $id, $object_class, 1);
         $grouped_images = $em->getRepository(\App\Entity\Blog::class)->findMedia("Image", $id, $object_class, 0);
         $audios = $em->getRepository(\App\Entity\Blog::class)->findMedia("Audio", $id, $object_class);
@@ -390,7 +390,7 @@ class BlogController extends AbstractController
 
 
         $em = $this->getDoctrine()->getManager();
-        $dql = "select b from App:Blog b  where b.category=:category order by b.created desc";
+        $dql = "select b from App\\Entity\\Blog b  where b.category=:category order by b.created desc";
         $query = $em->createQuery($dql);
         $query->setParameter("category", $category);
 

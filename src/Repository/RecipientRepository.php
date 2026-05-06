@@ -18,12 +18,12 @@ class RecipientRepository extends EntityRepository
         $product = $em->getRepository(\App\Entity\Product::class)->find(1);
         $dql = "
         select p, s, DATEDIFF(CURRENT_DATE(),s.gift_date)- (p.often_buying_eggs) as diff
-        from App:Recipient p
+        from App\\Entity\\Recipient p
         inner join p.gifts s
         with (p.often_buying_eggs-3) < DATEDIFF(CURRENT_DATE(),s.gift_date)
         and s.product=:product
         and p.regular=1
-        and s.gift_date=(select max(ss.gift_date) from App:Gift ss where ss.recipient=p and ss.product=:product)
+        and s.gift_date=(select max(ss.gift_date) from App\\Entity\\Gift ss where ss.recipient=p and ss.product=:product)
         order by diff desc
         ";
 

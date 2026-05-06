@@ -15,7 +15,7 @@ class ImageRepository extends EntityRepository
     public function findBlogGroupedImages($id,$object_class)
     {
         $em = $this->getEntityManager();
-        $dql = "select g from App:Image g where g.foreignKey=:foreign_key and g.objectClass=:object_class  and g.single=:single order by g.created desc";
+        $dql = "select g from App\\Entity\\Image g where g.foreignKey=:foreign_key and g.objectClass=:object_class  and g.single=:single order by g.created desc";
         $query = $em->createQuery($dql);
         $query->setParameter("foreign_key", $id);
         $query->setParameter("single", 0);
