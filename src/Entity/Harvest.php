@@ -37,23 +37,21 @@ class Harvest
     private $crop_working;
 
     /**
-     * @Assert\NotBlank
-     * @Assert\Date()
      * @var string $harvest_date
      * @ORM\Column(name="harvest_date", type="date")
      */
+    #[Assert\NotBlank]
+    #[Assert\Date]
     private $harvest_date;
 
     /**
      * Kilos recogidos
-     * @Assert\NotBlank
-     * @Assert\Type(type="numeric", message="El valor {{value}} no es un {{type}} válido.")
-     * @Assert\GreaterThan(
-     *     value = 0
-     * )
      * @var smallint $amount
      * @ORM\Column(name="amount", type="integer")
      */
+    #[Assert\NotBlank]
+    #[Assert\Type(type: 'numeric', message: 'El valor {{value}} no es un {{type}} válido.')]
+    #[Assert\GreaterThan(value: 0)]
     private $amount;
 
     /**

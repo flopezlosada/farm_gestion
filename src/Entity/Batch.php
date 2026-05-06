@@ -34,111 +34,99 @@ class Batch
 
     /**
      * Fecha de compra del pedido
-     * @Assert\NotBlank
-     * @Assert\Date()
      * @var string $purchase_date
      * @ORM\Column(name="purchase_date", type="date")
      */
+    #[Assert\NotBlank]
+    #[Assert\Date]
     private $purchase_date;
 
 
     /**
      * Fecha de compra del pedido
-     * @Assert\Date()
      * @var string $finalization_date
      * @ORM\Column(name="finalization_date", type="date", nullable=true)
      */
+    #[Assert\Date]
     private $finalization_date;
 
 
     /**
      * Fracha de recepción del pedido
-     * @Assert\Date()
      * @var string $receipt_date
      * @ORM\Column(name="receipt_date", type="date")
      */
+    #[Assert\Date]
     private $receipt_date;
 
 
     /**
      * Días de vida del animal respecto a la fecha de recepción
-     * @Assert\NotBlank
-     * @Assert\Type(type="numeric", message="El valor {{value}} no es un {{type}} válido.")
-     * @Assert\GreaterThan(
-     *     value = 0
-     * )
      * @var smallint $days_of_life
      * @ORM\Column(name="days_of_life",type="integer")
      */
+    #[Assert\NotBlank]
+    #[Assert\Type(type: 'numeric', message: 'El valor {{value}} no es un {{type}} válido.')]
+    #[Assert\GreaterThan(value: 0)]
     private $days_of_life;
 
 
     /**
      * Precio de compra del lote, de todos los animales más el transporte
-     * @Assert\NotBlank
-     * @Assert\Type(type="numeric", message="El valor {{value}} no es un {{type}} válido.")
-     * @Assert\GreaterThan(
-     *     value = 0
-     * )
      * @var smallint $price
      * @ORM\Column(name="price",type="decimal", precision=8, scale=2)
      */
+    #[Assert\NotBlank]
+    #[Assert\Type(type: 'numeric', message: 'El valor {{value}} no es un {{type}} válido.')]
+    #[Assert\GreaterThan(value: 0)]
     private $price;
 
     /**
      * Coste total del lote. Se calcula automáticamente según los insumos, cada vez que se añade una compra al lote y al crear el lote.
-     * @Assert\Type(type="numeric", message="El valor {{value}} no es un {{type}} válido.")
-     * @Assert\GreaterThan(
-     *     value = 0
-     * )
      * @var smallint $cost
      * @ORM\Column(name="cost",type="decimal", precision=8, scale=2, nullable=true)
      */
+    #[Assert\Type(type: 'numeric', message: 'El valor {{value}} no es un {{type}} válido.')]
+    #[Assert\GreaterThan(value: 0)]
     private $cost;
 
     /**
      * Beneficio final del lote. Se calcula automáticamente según las ventas, cada vez que se vende algo
-     * @Assert\Type(type="numeric", message="El valor {{value}} no es un {{type}} válido.")
-     * @Assert\GreaterThan(
-     *     value = 0
-     * )
      * @var smallint $profit
      * @ORM\Column(name="profit",type="decimal", precision=8, scale=2, nullable=true)
      */
+    #[Assert\Type(type: 'numeric', message: 'El valor {{value}} no es un {{type}} válido.')]
+    #[Assert\GreaterThan(value: 0)]
     private $profit;
 
 
     /**
      * Cantidad de animales en el lote
-     * @Assert\NotBlank
-     * @Assert\Type(type="numeric", message="El valor {{value}} no es un {{type}} válido.")
-     * @Assert\GreaterThan(
-     *     value = 0
-     * )
      * @var smallint $amount
      * @ORM\Column(name="amount",type="integer")
      */
+    #[Assert\NotBlank]
+    #[Assert\Type(type: 'numeric', message: 'El valor {{value}} no es un {{type}} válido.')]
+    #[Assert\GreaterThan(value: 0)]
     private $amount;
 
 
     /**
      * Peso aproximado del animal al recibirlo en kilogramos
-     * @Assert\NotBlank
-     * @Assert\Type(type="numeric", message="El valor {{value}} no es un {{type}} válido.")
-     * @Assert\GreaterThan(
-     *     value = 0
-     * )
      * @var smallint $weight
      * @ORM\Column(name="weight",type="decimal", precision=8, scale=2)
      */
+    #[Assert\NotBlank]
+    #[Assert\Type(type: 'numeric', message: 'El valor {{value}} no es un {{type}} válido.')]
+    #[Assert\GreaterThan(value: 0)]
     private $weight;
 
     /**
      * qué tipo de animal es
-     * @Assert\NotBlank
      * @var smallint $product
      * @ORM\ManyToOne(targetEntity="App\Entity\Product", inversedBy="batchs")
      */
+    #[Assert\NotBlank]
     private $product;
 
     /**

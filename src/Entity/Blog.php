@@ -33,17 +33,17 @@ class Blog
     private $id;
 
     /**
-     * @Assert\NotBlank
      * @ORM\ManyToOne(targetEntity="App\Entity\Category", inversedBy="blogs")
      * @ORM\JoinColumn(name="category_id", referencedColumnName="id")
      *
      **/
+    #[Assert\NotBlank]
     private $category;
 
     /**
-     * @Assert\NotBlank
      * @ORM\Column(name="title", type="string", length=128)
      */
+    #[Assert\NotBlank]
     private $title;
 
 
@@ -60,9 +60,7 @@ class Blog
      */
     private $image;
 
-    /**
-     * @Assert\File(maxSize="6000000")
-     */
+    #[Assert\File(maxSize: 6000000)]
     protected $file;
 
     /**

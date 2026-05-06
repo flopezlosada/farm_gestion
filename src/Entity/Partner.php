@@ -23,15 +23,15 @@ class Partner
     private $id;
 
     /**
-     * @Assert\NotBlank
      * @ORM\Column(type="string", length=255)
      */
+    #[Assert\NotBlank]
     private $name;
 
     /**
-     * @Assert\NotBlank
      * @ORM\Column(type="string", length=255, nullable=true)
      */
+    #[Assert\NotBlank]
     private $surname;
 
   
@@ -43,12 +43,10 @@ class Partner
     private $DNI;
 
     /**
-     * @Assert\Type(type="integer", message="El valor {{value}} no es un {{type}} válido.")
-     * @Assert\GreaterThan(
-     *     value = 0
-     * )
      * @ORM\Column(type="integer", nullable=true)
      */
+    #[Assert\Type(type: 'integer', message: 'El valor {{value}} no es un {{type}} válido.')]
+    #[Assert\GreaterThan(value: 0)]
     private $celular;
 
     /**
@@ -57,17 +55,17 @@ class Partner
     private $address;
 
     /**
-     * @Assert\NotBlank
      * @var smallint $state
      * @ORM\ManyToOne(targetEntity="State", inversedBy="partners")
      */
+    #[Assert\NotBlank]
     private $state;
 
     /**
-     * @Assert\NotBlank
      * @var smallint $city
      * @ORM\ManyToOne(targetEntity="City", inversedBy="partners")
      */
+    #[Assert\NotBlank]
     private $city;
 
 
@@ -103,9 +101,9 @@ class Partner
     /**
      * anual o mensual
      * @var smallint $share_payment
-     * @Assert\NotBlank()
      * @ORM\ManyToOne(targetEntity="SharePayment", inversedBy="partners")
      */
+    #[Assert\NotBlank]
     private $share_payment;
 
 
@@ -117,9 +115,7 @@ class Partner
      */
     private $registration_form_image;
 
-    /**
-     * @Assert\File(maxSize="6000000")
-     */
+    #[Assert\File(maxSize: 6000000)]
     protected $registration_form_file;
 
     /**
@@ -163,9 +159,9 @@ class Partner
     private $eat_meat;
 
     /**
-     * @Assert\Email
      * @ORM\Column(type="string", length=255)
      */
+    #[Assert\Email]
     private $email;
 
 

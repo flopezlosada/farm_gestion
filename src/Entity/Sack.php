@@ -52,23 +52,21 @@ class Sack
 
     /**
      * Fecha en que se usa el saco
-     * @Assert\NotBlank
-     * @Assert\Date()
      * @var string $delivery_date
      * @ORM\Column(name="delivery_date", type="date")
      */
+    #[Assert\NotBlank]
+    #[Assert\Date]
     private $delivery_date;
 
     /**
      * Peso del saco en Kg
-     * @Assert\NotBlank
-     * @Assert\Type(type="numeric", message="El valor {{value}} no es un {{type}} válido.")
-     * @Assert\GreaterThan(
-     *     value = 0
-     * )
      * @var smallint $weight
      * @ORM\Column(name="weight",type="decimal", precision=8, scale=2)
      */
+    #[Assert\NotBlank]
+    #[Assert\Type(type: 'numeric', message: 'El valor {{value}} no es un {{type}} válido.')]
+    #[Assert\GreaterThan(value: 0)]
     private $weight;
 
 

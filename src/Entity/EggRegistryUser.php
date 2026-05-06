@@ -32,30 +32,28 @@ class EggRegistryUser
 
     /**
      * usuario
-     * @Assert\NotBlank
      * @var smallint $user
      * @ORM\ManyToOne(targetEntity="App\Entity\User", inversedBy="egg_registry_users")
      */
+    #[Assert\NotBlank]
     private $user;
 
     /**
      * usuario
-     * @Assert\NotBlank
      * @var smallint $egg_registry
      * @ORM\ManyToOne(targetEntity="App\Entity\EggRegistry", inversedBy="egg_registry_users")
      */
+    #[Assert\NotBlank]
     private $egg_registry;
 
      /**
-      * Huevos repartidos para el usuario
-     * @Assert\NotBlank
-     * @Assert\Type(type="numeric", message="El valor {{value}} no es un {{type}} válido.")
-     * @Assert\GreaterThan(
-     *     value = 0
-     * )
+     * Huevos repartidos para el usuario
      * @var smallint $total_collected_eggs
      * @ORM\Column(name="total_collected_eggs", type="integer", nullable=true)
      */
+    #[Assert\NotBlank]
+    #[Assert\Type(type: 'numeric', message: 'El valor {{value}} no es un {{type}} válido.')]
+    #[Assert\GreaterThan(value: 0)]
     private $total_collected_eggs;
 
 

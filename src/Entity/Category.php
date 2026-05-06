@@ -34,10 +34,10 @@ class Category
 
     /**
      * @var string $name
-     * @Assert\NotBlank
-     * @Assert\Length(max="255", min="5")
      * @ORM\Column(name="title", type="string", length=255)
      */
+    #[Assert\NotBlank]
+    #[Assert\Length(max: 255, min: 5)]
     private $name;
 
 

@@ -35,9 +35,9 @@ class CulturalWork
 
     /**
      * @var smallint $cultural_work_type
-     * @Assert\NotBlank
      * @ORM\ManyToOne(targetEntity="CulturalWorkType", inversedBy="cultural_works")
      */
+    #[Assert\NotBlank]
     private $cultural_work_type;
 
     /**
@@ -57,17 +57,17 @@ class CulturalWork
 
     /**
      * Fecha realización,
-     * @Assert\Date()
      * @var string $date
      * @ORM\Column(name="date", type="date", nullable=true)
      */
+    #[Assert\Date]
     private $date;
 
     /**
      * @var string $content
-     * @Assert\NotBlank
      * @ORM\Column(name="content", type="text")
      */
+    #[Assert\NotBlank]
     private $content;
 
 

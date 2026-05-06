@@ -35,11 +35,11 @@ class Basket
 
     /**
      * Fecha de compra del pedido
-     * @Assert\NotBlank
-     * @Assert\Date()
      * @var string $date
      * @ORM\Column(name="date", type="date")
      */
+    #[Assert\NotBlank]
+    #[Assert\Date]
     private $date;
 
     /**

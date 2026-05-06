@@ -85,18 +85,18 @@ class PartnerBasketShare
 
     /**
      * Fecha de inicio de cesta
-     * @Assert\Date()
      * @var string $start_date
      * @ORM\Column(name="start_date", type="date", nullable=true)
      */
+    #[Assert\Date]
     private $start_date;
 
     /**
      * Fecha de fin o de cambio de cesta
-     * @Assert\Date()
      * @var string $end_date
      * @ORM\Column(name="end_date", type="date", nullable=true)
      */
+    #[Assert\Date]
     private $end_date;
 
     /**
@@ -150,14 +150,12 @@ class PartnerBasketShare
     /**
      * Cantidad cestas asociadas a este socio. Si hay más de una cesta, se entiende que todas son iguales en
      * periodicidad de verdurdas, y cantidad y periodicidad de huevos
-     * @Assert\NotBlank
-     * @Assert\Type(type="numeric", message="El valor {{value}} no es un {{type}} válido.")
-     * @Assert\GreaterThan(
-     *     value = 0
-     * )
      * @var smallint $amount
      * @ORM\Column(name="amount", type="smallint", options={"default" : 1})
      */
+    #[Assert\NotBlank]
+    #[Assert\Type(type: 'numeric', message: 'El valor {{value}} no es un {{type}} válido.')]
+    #[Assert\GreaterThan(value: 0)]
     private $amount;
 
 

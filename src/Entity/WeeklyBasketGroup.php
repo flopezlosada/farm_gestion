@@ -42,17 +42,17 @@ class WeeklyBasketGroup
 
 
     /**
-     * @Assert\NotBlank
      * @ORM\Column(type="string", length=255)
      */
+    #[Assert\NotBlank]
     private $name;
 
 
     /**
      * Es el color que sale en el listado impreso
-     * @Assert\NotBlank
      * @ORM\Column(type="string", length=255)
      */
+    #[Assert\NotBlank]
     private $color;
 
     /**

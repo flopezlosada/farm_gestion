@@ -33,11 +33,11 @@ class CompostCollection
 
     /**
      * Fecha de recogida
-     * @Assert\NotBlank
-     * @Assert\Date()
      * @var string $collect_date
      * @ORM\Column(name="collect_date", type="date")
      */
+    #[Assert\NotBlank]
+    #[Assert\Date]
     private $collect_date;
 
     /**
@@ -49,37 +49,31 @@ class CompostCollection
 
     /**
      * Cantidad de kilos
-     * @Assert\NotBlank
-     * @Assert\Type(type="numeric", message="El valor {{value}} no es un {{type}} válido.")
-     * @Assert\GreaterThan(
-     *     value = 0
-     * )
      * @var smallint $amount
      * @ORM\Column(name="amount",type="integer")
      */
+    #[Assert\NotBlank]
+    #[Assert\Type(type: 'numeric', message: 'El valor {{value}} no es un {{type}} válido.')]
+    #[Assert\GreaterThan(value: 0)]
     private $amount;
 
     /**
      * punto de recogida
-     * @Assert\NotBlank
      * @var smallint $compost_collection_point
      * @ORM\ManyToOne(targetEntity="App\Entity\CompostCollectionPoint", inversedBy="compost_collections")
      */
+    #[Assert\NotBlank]
     private $compost_collection_point;
 
 
     /**
      * porcentaje de impropios
-     * @Assert\Type(type="integer", message="El valor {{value}} no es un {{type}} válido.")
-     * @Assert\GreaterThanOrEqual(
-     *     value = 0
-     * )
-     * @Assert\LessThanOrEqual(
-     *     value = 100
-     * )
      * @var smallint $improper_percentage
      * @ORM\Column(name="improper_percentage",type="integer")
      */
+    #[Assert\Type(type: 'integer', message: 'El valor {{value}} no es un {{type}} válido.')]
+    #[Assert\GreaterThanOrEqual(value: 0)]
+    #[Assert\LessThanOrEqual(value: 100)]
     private $improper_percentage;
 
     /**

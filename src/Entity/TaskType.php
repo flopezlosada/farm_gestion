@@ -44,9 +44,9 @@ class TaskType
 
     /**
      * @var string $title
-     * @Assert\NotBlank
      * @ORM\Column(name="title", type="string", length=255)
      */
+    #[Assert\NotBlank]
     private $title;
 
     /**

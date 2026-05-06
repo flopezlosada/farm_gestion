@@ -34,9 +34,9 @@ class Product
 
     /**
      * @var string $name
-     * @Assert\NotBlank
      * @ORM\Column(name="name", type="string", length=255)
      */
+    #[Assert\NotBlank]
     private $name;
 
     /**
