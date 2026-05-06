@@ -4,22 +4,24 @@
 
 
 controllers:
-    resource: '../src/Controller/'
-    type:     annotation
+    resource:
+        path: ../src/Controller/
+        namespace: App\Controller
+    type: attribute
 
 homepage:
         path:  /
         #defaults: { _controller: App:Gestion:index }
-        controller: App\Controller\GestionController:index
+        controller: App\Controller\GestionController::index
 
 #
 dashboard:
         path:  /gestion/dashboard
-        controller: App\Controller\DefaultController:dashboard
+        controller: App\Controller\DefaultController::dashboard
 
 calendar:
         path:  /gestion/calendar
-        controller: App\Controller\DefaultController:calendar
+        controller: App\Controller\DefaultController::calendar
 #
 #
 gallinas:
