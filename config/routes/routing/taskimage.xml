@@ -5,31 +5,31 @@
     xsi:schemaLocation="http://symfony.com/schema/routing http://symfony.com/schema/routing/routing-1.0.xsd">
 
     <route id="taskimage" path="/">
-        <default key="_controller">App\Controller\TaskImageController:index</default>
+        <default key="_controller">App\Controller\TaskImageController::index</default>
     </route>
 
     <route id="taskimage_show" path="/{id}/show">
-        <default key="_controller">App\Controller\TaskImageController:show</default>
+        <default key="_controller">App\Controller\TaskImageController::show</default>
     </route>
 
     <route id="taskimage_new" path="/new/{task_id}">
-        <default key="_controller">App\Controller\TaskImageController:new</default>
+        <default key="_controller">App\Controller\TaskImageController::new</default>
     </route>
 
     <route id="taskimage_create" path="/create/{task_id}" methods="POST">
-        <default key="_controller">App\Controller\TaskImageController:create</default>
+        <default key="_controller">App\Controller\TaskImageController::create</default>
     </route>
 
     <route id="taskimage_edit" path="/{id}/edit">
-        <default key="_controller">App\Controller\TaskImageController:edit</default>
+        <default key="_controller">App\Controller\TaskImageController::edit</default>
     </route>
 
     <route id="taskimage_update" path="/{id}/update" methods="POST|PUT">
-        <default key="_controller">App\Controller\TaskImageController:update</default>
+        <default key="_controller">App\Controller\TaskImageController::update</default>
     </route>
 
     <route id="taskimage_delete" path="/{id}/delete" methods="POST|DELETE">
-        <default key="_controller">App\Controller\TaskImageController:delete</default>
+        <default key="_controller">App\Controller\TaskImageController::delete</default>
     </route>
 
 </routes>

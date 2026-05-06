@@ -5,31 +5,31 @@
     xsi:schemaLocation="http://symfony.com/schema/routing http://symfony.com/schema/routing/routing-1.0.xsd">
 
     <route id="sector" path="/">
-        <default key="_controller">App\Controller\SectorController:index</default>
+        <default key="_controller">App\Controller\SectorController::index</default>
     </route>
 
     <route id="sector_show" path="/{id}/show">
-        <default key="_controller">App\Controller\SectorController:show</default>
+        <default key="_controller">App\Controller\SectorController::show</default>
     </route>
 
     <route id="sector_new" path="/new">
-        <default key="_controller">App\Controller\SectorController:new</default>
+        <default key="_controller">App\Controller\SectorController::new</default>
     </route>
 
     <route id="sector_create" path="/create" methods="POST">
-        <default key="_controller">App\Controller\SectorController:create</default>
+        <default key="_controller">App\Controller\SectorController::create</default>
     </route>
 
     <route id="sector_edit" path="/{id}/edit">
-        <default key="_controller">App\Controller\SectorController:edit</default>
+        <default key="_controller">App\Controller\SectorController::edit</default>
     </route>
 
     <route id="sector_update" path="/{id}/update" methods="POST|PUT">
-        <default key="_controller">App\Controller\SectorController:update</default>
+        <default key="_controller">App\Controller\SectorController::update</default>
     </route>
 
     <route id="sector_delete" path="/{id}/delete" methods="POST|DELETE">
-        <default key="_controller">App\Controller\SectorController:delete</default>
+        <default key="_controller">App\Controller\SectorController::delete</default>
     </route>
 
 </routes>

@@ -5,31 +5,31 @@
     xsi:schemaLocation="http://symfony.com/schema/routing http://symfony.com/schema/routing/routing-1.0.xsd">
 
     <route id="user" path="/">
-        <default key="_controller">App\Controller\UserController:index</default>
+        <default key="_controller">App\Controller\UserController::index</default>
     </route>
 
     <route id="user_show" path="/{id}/show">
-        <default key="_controller">App\Controller\UserController:show</default>
+        <default key="_controller">App\Controller\UserController::show</default>
     </route>
 
     <route id="user_new" path="/new">
-        <default key="_controller">App\Controller\UserController:new</default>
+        <default key="_controller">App\Controller\UserController::new</default>
     </route>
 
     <route id="user_create" path="/create" methods="POST">
-        <default key="_controller">App\Controller\UserController:create</default>
+        <default key="_controller">App\Controller\UserController::create</default>
     </route>
 
     <route id="user_edit" path="/{id}/edit">
-        <default key="_controller">App\Controller\UserController:edit</default>
+        <default key="_controller">App\Controller\UserController::edit</default>
     </route>
 
     <route id="user_update" path="/{id}/update" methods="POST|PUT">
-        <default key="_controller">App\Controller\UserController:update</default>
+        <default key="_controller">App\Controller\UserController::update</default>
     </route>
 
     <route id="user_delete" path="/{id}/delete" methods="POST|DELETE">
-        <default key="_controller">App\Controller\UserController:delete</default>
+        <default key="_controller">App\Controller\UserController::delete</default>
     </route>
 
 </routes>

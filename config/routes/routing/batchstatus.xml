@@ -5,31 +5,31 @@
     xsi:schemaLocation="http://symfony.com/schema/routing http://symfony.com/schema/routing/routing-1.0.xsd">
 
     <route id="batchstatus" path="/">
-        <default key="_controller">App\Controller\BatchStatusController:index</default>
+        <default key="_controller">App\Controller\BatchStatusController::index</default>
     </route>
 
     <route id="batchstatus_show" path="/{id}/show">
-        <default key="_controller">App\Controller\BatchStatusController:show</default>
+        <default key="_controller">App\Controller\BatchStatusController::show</default>
     </route>
 
     <route id="batchstatus_new" path="/new">
-        <default key="_controller">App\Controller\BatchStatusController:new</default>
+        <default key="_controller">App\Controller\BatchStatusController::new</default>
     </route>
 
     <route id="batchstatus_create" path="/create" methods="POST">
-        <default key="_controller">App\Controller\BatchStatusController:create</default>
+        <default key="_controller">App\Controller\BatchStatusController::create</default>
     </route>
 
     <route id="batchstatus_edit" path="/{id}/edit">
-        <default key="_controller">App\Controller\BatchStatusController:edit</default>
+        <default key="_controller">App\Controller\BatchStatusController::edit</default>
     </route>
 
     <route id="batchstatus_update" path="/{id}/update" methods="POST|PUT">
-        <default key="_controller">App\Controller\BatchStatusController:update</default>
+        <default key="_controller">App\Controller\BatchStatusController::update</default>
     </route>
 
     <route id="batchstatus_delete" path="/{id}/delete" methods="POST|DELETE">
-        <default key="_controller">App\Controller\BatchStatusController:delete</default>
+        <default key="_controller">App\Controller\BatchStatusController::delete</default>
     </route>
 
 </routes>

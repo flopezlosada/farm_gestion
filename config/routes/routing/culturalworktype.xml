@@ -5,31 +5,31 @@
     xsi:schemaLocation="http://symfony.com/schema/routing http://symfony.com/schema/routing/routing-1.0.xsd">
 
     <route id="culturalworktype" path="/">
-        <default key="_controller">App\Controller\CulturalWorkTypeController:index</default>
+        <default key="_controller">App\Controller\CulturalWorkTypeController::index</default>
     </route>
 
     <route id="culturalworktype_show" path="/{id}/show">
-        <default key="_controller">App\Controller\CulturalWorkTypeController:show</default>
+        <default key="_controller">App\Controller\CulturalWorkTypeController::show</default>
     </route>
 
     <route id="culturalworktype_new" path="/new">
-        <default key="_controller">App\Controller\CulturalWorkTypeController:new</default>
+        <default key="_controller">App\Controller\CulturalWorkTypeController::new</default>
     </route>
 
     <route id="culturalworktype_create" path="/create" methods="POST">
-        <default key="_controller">App\Controller\CulturalWorkTypeController:create</default>
+        <default key="_controller">App\Controller\CulturalWorkTypeController::create</default>
     </route>
 
     <route id="culturalworktype_edit" path="/{id}/edit">
-        <default key="_controller">App\Controller\CulturalWorkTypeController:edit</default>
+        <default key="_controller">App\Controller\CulturalWorkTypeController::edit</default>
     </route>
 
     <route id="culturalworktype_update" path="/{id}/update" methods="POST|PUT">
-        <default key="_controller">App\Controller\CulturalWorkTypeController:update</default>
+        <default key="_controller">App\Controller\CulturalWorkTypeController::update</default>
     </route>
 
     <route id="culturalworktype_delete" path="/{id}/delete" methods="POST|DELETE">
-        <default key="_controller">App\Controller\CulturalWorkTypeController:delete</default>
+        <default key="_controller">App\Controller\CulturalWorkTypeController::delete</default>
     </route>
 
 </routes>

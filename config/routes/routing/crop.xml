@@ -5,35 +5,35 @@
     xsi:schemaLocation="http://symfony.com/schema/routing http://symfony.com/schema/routing/routing-1.0.xsd">
 
     <route id="crop" path="/">
-        <default key="_controller">App\Controller\CropController:index</default>
+        <default key="_controller">App\Controller\CropController::index</default>
     </route>
 
     <route id="crop_show" path="/{id}/show">
-        <default key="_controller">App\Controller\CropController:show</default>
+        <default key="_controller">App\Controller\CropController::show</default>
         <default key="year" xsi:nil="true"/>
     </route>
 
     <route id="crop_new" path="/new">
-        <default key="_controller">App\Controller\CropController:new</default>
+        <default key="_controller">App\Controller\CropController::new</default>
     </route>
 
     <route id="crop_create" path="/create" methods="POST">
-        <default key="_controller">App\Controller\CropController:create</default>
+        <default key="_controller">App\Controller\CropController::create</default>
     </route>
 
     <route id="crop_edit" path="/{id}/edit">
-        <default key="_controller">App\Controller\CropController:edit</default>
+        <default key="_controller">App\Controller\CropController::edit</default>
     </route>
 
     <route id="crop_update" path="/{id}/update" methods="POST|PUT">
-        <default key="_controller">App\Controller\CropController:update</default>
+        <default key="_controller">App\Controller\CropController::update</default>
     </route>
 
     <route id="crop_delete" path="/{id}/delete" methods="POST|DELETE">
-        <default key="_controller">App\Controller\CropController:delete</default>
+        <default key="_controller">App\Controller\CropController::delete</default>
     </route>
 
     <route id="crop_resume" path="/resume">
-        <default key="_controller">App\Controller\CropController:resume</default>
+        <default key="_controller">App\Controller\CropController::resume</default>
     </route>
 </routes>

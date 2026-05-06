@@ -5,35 +5,35 @@
     xsi:schemaLocation="http://symfony.com/schema/routing http://symfony.com/schema/routing/routing-1.0.xsd">
 
     <route id="sack" path="/">
-        <default key="_controller">App\Controller\SackController:index</default>
+        <default key="_controller">App\Controller\SackController::index</default>
     </route>
 
     <route id="sack_show" path="/{id}/show">
-        <default key="_controller">App\Controller\SackController:show</default>
+        <default key="_controller">App\Controller\SackController::show</default>
     </route>
 
     <route id="sack_new" path="/new/{batch_id}">
-        <default key="_controller">App\Controller\SackController:new</default>
+        <default key="_controller">App\Controller\SackController::new</default>
     </route>
 
     <route id="sack_create" path="/create/{batch_id}" methods="POST">
-        <default key="_controller">App\Controller\SackController:create</default>
+        <default key="_controller">App\Controller\SackController::create</default>
     </route>
 
     <route id="sack_edit" path="/{id}/edit">
-        <default key="_controller">App\Controller\SackController:edit</default>
+        <default key="_controller">App\Controller\SackController::edit</default>
     </route>
 
     <route id="sack_update" path="/{id}/update" methods="POST|PUT">
-        <default key="_controller">App\Controller\SackController:update</default>
+        <default key="_controller">App\Controller\SackController::update</default>
     </route>
 
     <route id="sack_delete" path="/{id}/delete" methods="POST|DELETE">
-        <default key="_controller">App\Controller\SackController:delete</default>
+        <default key="_controller">App\Controller\SackController::delete</default>
     </route>
 
     <route id="sack_fast_delete" path="/{id}/fast_delete">
-        <default key="_controller">App\Controller\SackController:fastDelete</default>
+        <default key="_controller">App\Controller\SackController::fastDelete</default>
     </route>
 
 </routes>

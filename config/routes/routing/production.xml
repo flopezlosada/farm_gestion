@@ -5,51 +5,51 @@
     xsi:schemaLocation="http://symfony.com/schema/routing http://symfony.com/schema/routing/routing-1.0.xsd">
 
     <route id="production" path="/">
-        <default key="_controller">App\Controller\ProductionController:index</default>
+        <default key="_controller">App\Controller\ProductionController::index</default>
     </route>
 
 
 
     <route id="production_show" path="/{id}/show">
-        <default key="_controller">App\Controller\ProductionController:show</default>
+        <default key="_controller">App\Controller\ProductionController::show</default>
         <requirement key="id">\d+</requirement>
     </route>
 
     <route id="production_new" path="/new">
-        <default key="_controller">App\Controller\ProductionController:new</default>
+        <default key="_controller">App\Controller\ProductionController::new</default>
     </route>
 
    <!-- <route id="production_new_crop" path="/new/{crop_id}">
-        <default key="_controller">App\Controller\ProductionController:new</default>
+        <default key="_controller">App\Controller\ProductionController::new</default>
     </route>
 -->
     <route id="production_new_crop_working" path="/new/{crop_working_id}">
-        <default key="_controller">App\Controller\ProductionController:new</default>
+        <default key="_controller">App\Controller\ProductionController::new</default>
     </route>
 
     <route id="production_create" path="/create" methods="POST">
-        <default key="_controller">App\Controller\ProductionController:create</default>
+        <default key="_controller">App\Controller\ProductionController::create</default>
     </route>
 
     <route id="production_edit" path="/{id}/edit">
-        <default key="_controller">App\Controller\ProductionController:edit</default>
+        <default key="_controller">App\Controller\ProductionController::edit</default>
     </route>
 
     <route id="production_update" path="/{id}/update" methods="POST|PUT">
-        <default key="_controller">App\Controller\ProductionController:update</default>
+        <default key="_controller">App\Controller\ProductionController::update</default>
     </route>
 
     <route id="production_delete" path="/{id}/delete" methods="POST|DELETE">
-        <default key="_controller">App\Controller\ProductionController:delete</default>
+        <default key="_controller">App\Controller\ProductionController::delete</default>
     </route>
 
     <route id="production_show_basket" path="/basket/show/{year}">
-        <default key="_controller">App\Controller\ProductionController:basket</default>
+        <default key="_controller">App\Controller\ProductionController::basket</default>
         <default key="year" xsi:nil="true"/>
     </route>
 
     <route id="production_show_basket_detail" path="/basket/detail/show/{id}">
-        <default key="_controller">App\Controller\ProductionController:basketDetail</default>
+        <default key="_controller">App\Controller\ProductionController::basketDetail</default>
         <default key="year" xsi:nil="true"/>
     </route>
 

@@ -5,33 +5,33 @@
     xsi:schemaLocation="http://symfony.com/schema/routing http://symfony.com/schema/routing/routing-1.0.xsd">
 
     <route id="event" path="/">
-        <default key="_controller">App\Controller\EventController:index</default>
+        <default key="_controller">App\Controller\EventController::index</default>
     </route>
 
     <route id="event_show" path="/{id}/show">
-        <default key="_controller">App\Controller\EventController:show</default>
+        <default key="_controller">App\Controller\EventController::show</default>
     </route>
 
     <route id="event_new" path="/new">
-        <default key="_controller">App\Controller\EventController:new</default>
+        <default key="_controller">App\Controller\EventController::new</default>
     </route>
 
     <route id="event_create" path="/create">
-        <default key="_controller">App\Controller\EventController:create</default>
+        <default key="_controller">App\Controller\EventController::create</default>
         <requirement key="_method">post</requirement>
     </route>
 
     <route id="event_edit" path="/{id}/edit">
-        <default key="_controller">App\Controller\EventController:edit</default>
+        <default key="_controller">App\Controller\EventController::edit</default>
     </route>
 
     <route id="event_update" path="/{id}/update">
-        <default key="_controller">App\Controller\EventController:update</default>
+        <default key="_controller">App\Controller\EventController::update</default>
         <requirement key="_method">post|put</requirement>
     </route>
 
     <route id="event_delete" path="/{id}/delete">
-        <default key="_controller">App\Controller\EventController:delete</default>
+        <default key="_controller">App\Controller\EventController::delete</default>
         <requirement key="_method">post|delete</requirement>
     </route>
 

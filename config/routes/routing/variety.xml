@@ -5,31 +5,31 @@
     xsi:schemaLocation="http://symfony.com/schema/routing http://symfony.com/schema/routing/routing-1.0.xsd">
 
     <route id="variety" path="/">
-        <default key="_controller">App\Controller\VarietyController:index</default>
+        <default key="_controller">App\Controller\VarietyController::index</default>
     </route>
 
     <route id="variety_show" path="/{id}/show">
-        <default key="_controller">App\Controller\VarietyController:show</default>
+        <default key="_controller">App\Controller\VarietyController::show</default>
     </route>
 
     <route id="variety_new" path="/new">
-        <default key="_controller">App\Controller\VarietyController:new</default>
+        <default key="_controller">App\Controller\VarietyController::new</default>
     </route>
 
     <route id="variety_create" path="/create" methods="POST">
-        <default key="_controller">App\Controller\VarietyController:create</default>
+        <default key="_controller">App\Controller\VarietyController::create</default>
     </route>
 
     <route id="variety_edit" path="/{id}/edit">
-        <default key="_controller">App\Controller\VarietyController:edit</default>
+        <default key="_controller">App\Controller\VarietyController::edit</default>
     </route>
 
     <route id="variety_update" path="/{id}/update" methods="POST|PUT">
-        <default key="_controller">App\Controller\VarietyController:update</default>
+        <default key="_controller">App\Controller\VarietyController::update</default>
     </route>
 
     <route id="variety_delete" path="/{id}/delete" methods="POST|DELETE">
-        <default key="_controller">App\Controller\VarietyController:delete</default>
+        <default key="_controller">App\Controller\VarietyController::delete</default>
     </route>
 
 </routes>
