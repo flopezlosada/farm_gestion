@@ -5,7 +5,7 @@ namespace App\Controller;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\Controller\AbstractAppController;
 
 use App\Entity\CompostCollectionPoint;
 use App\Form\CompostCollectionPointType;
@@ -14,7 +14,7 @@ use App\Form\CompostCollectionPointType;
  * CompostCollectionPoint controller.
  *
  */
-class CompostCollectionPointController extends AbstractController
+class CompostCollectionPointController extends AbstractAppController
 {
 
     /**

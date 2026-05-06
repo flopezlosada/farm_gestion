@@ -5,7 +5,7 @@ namespace App\Controller;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\Controller\AbstractAppController;
 
 use App\Entity\TaskType;
 use App\Form\TaskTypeType;
@@ -14,7 +14,7 @@ use App\Form\TaskTypeType;
  * TaskType controller.
  *
  */
-class TaskTypeController extends AbstractController
+class TaskTypeController extends AbstractAppController
 {
 
     /**

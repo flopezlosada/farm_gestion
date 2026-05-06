@@ -5,7 +5,7 @@ namespace App\Controller;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\Controller\AbstractAppController;
 
 use App\Entity\Basket;
 use App\Form\BasketType;
@@ -14,7 +14,7 @@ use App\Form\BasketType;
  * Basket controller.
  *
  */
-class BasketController extends AbstractController
+class BasketController extends AbstractAppController
 {
 
     /**

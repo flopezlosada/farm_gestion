@@ -6,7 +6,7 @@ use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\Controller\AbstractAppController;
 
 use App\Entity\Audio;
 use App\Form\AudioType;
@@ -15,7 +15,7 @@ use App\Form\AudioType;
  * Audio controller.
  *
  */
-class AudioController extends AbstractController
+class AudioController extends AbstractAppController
 {
 
     /**
@@ -50,7 +50,7 @@ class AudioController extends AbstractController
             $em->persist($entity);
             $em->flush();
 
-            if ($this->get('request')->isXmlHttpRequest()) {
+            if ($request->isXmlHttpRequest()) {
                 return $this->redirect($this->generateUrl($entity->getObjectClass() . "_edition", array('id' => $foreign_key, 'object_class' => $entity->getObjectClass())));
             }
             return $this->redirect($this->generateUrl($entity->getObjectClass() . '_show', array('id' => $entity->getForeignKey())));

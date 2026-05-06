@@ -2,7 +2,7 @@
 
 namespace App\Controller;
 
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\Controller\AbstractAppController;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 use Symfony\Component\HttpFoundation\Request;
 
@@ -14,7 +14,7 @@ use App\Form\LayType;
  * Lay controller.
  *
  */
-class LayController extends AbstractController
+class LayController extends AbstractAppController
 {
 
     /**

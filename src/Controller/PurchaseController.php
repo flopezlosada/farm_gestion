@@ -5,7 +5,7 @@ namespace App\Controller;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\Controller\AbstractAppController;
 
 use App\Entity\Purchase;
 use App\Form\PurchaseType;
@@ -14,7 +14,7 @@ use App\Form\PurchaseType;
  * Purchase controller.
  *
  */
-class PurchaseController extends AbstractController
+class PurchaseController extends AbstractAppController
 {
 
     /**

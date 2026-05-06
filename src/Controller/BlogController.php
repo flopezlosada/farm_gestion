@@ -9,7 +9,7 @@ use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 use App\Form\BlogEditType;
 use App\Form\BlogSecondType;
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\Controller\AbstractAppController;
 
 use App\Entity\Blog;
 use App\Form\BlogType;
@@ -19,7 +19,7 @@ use WhiteOctober\BreadcrumbsBundle\Model\Breadcrumbs;
  * Blog controller.
  *
  */
-class BlogController extends AbstractController
+class BlogController extends AbstractAppController
 {
 
     /**
@@ -68,8 +68,8 @@ class BlogController extends AbstractController
             5/*limit per page*/
         );
 
-        $breadcrumbs->addItem("Home", $this->get("router")->generate("homepage"));
-        $breadcrumbs->addItem("Blog", $this->get("router")->generate("frontend_blog"));
+        $breadcrumbs->addItem("Home", $this->generateUrl("homepage"));
+        $breadcrumbs->addItem("Blog", $this->generateUrl("frontend_blog"));
 
 
         return $this->render('Blog/frontend_index.html.twig', array(
@@ -218,8 +218,8 @@ class BlogController extends AbstractController
         $entity = $em->getRepository(\App\Entity\Blog::class)->findPostsBySlug($slug);
 
 
-        $breadcrumbs->addItem("Home", $this->get("router")->generate("homepage"));
-        $breadcrumbs->addItem("Blog", $this->get("router")->generate("frontend_blog"));
+        $breadcrumbs->addItem("Home", $this->generateUrl("homepage"));
+        $breadcrumbs->addItem("Blog", $this->generateUrl("frontend_blog"));
         $breadcrumbs->addItem($entity->getTitle(), "");
 
         if (!$entity) {
@@ -403,8 +403,8 @@ class BlogController extends AbstractController
 
 
 
-        $breadcrumbs->addItem("Home", $this->get("router")->generate("homepage"));
-        $breadcrumbs->addItem("Blog", $this->get("router")->generate("frontend_blog"));
+        $breadcrumbs->addItem("Home", $this->generateUrl("homepage"));
+        $breadcrumbs->addItem("Blog", $this->generateUrl("frontend_blog"));
 
         return $this->render("Blog/frontend_index.html.twig", array(
             'category' => $category,

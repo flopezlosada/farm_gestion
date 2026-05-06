@@ -5,7 +5,7 @@ namespace App\Controller;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\Controller\AbstractAppController;
 
 use App\Entity\Image;
 use App\Form\ImageType;
@@ -14,7 +14,7 @@ use App\Form\ImageType;
  * Image controller.
  *
  */
-class ImageController extends AbstractController
+class ImageController extends AbstractAppController
 {
 
     /**

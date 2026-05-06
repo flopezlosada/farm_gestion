@@ -5,7 +5,7 @@ namespace App\Controller;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\Controller\AbstractAppController;
 
 use App\Entity\Document;
 use App\Form\DocumentType;
@@ -14,7 +14,7 @@ use App\Form\DocumentType;
  * Document controller.
  *
  */
-class DocumentController extends AbstractController
+class DocumentController extends AbstractAppController
 {
 
     /**
@@ -49,7 +49,7 @@ class DocumentController extends AbstractController
             $em->persist($entity);
             $em->flush();
 
-            if ($this->get('request')->isXmlHttpRequest()) {
+            if ($request->isXmlHttpRequest()) {
                 return $this->redirect($this->generateUrl($entity->getObjectClass() . "_edition", array('id' => $foreign_key, 'object_class' => $entity->getObjectClass())));
             }
             return $this->redirect($this->generateUrl($entity->getObjectClass() . '_show', array('id' => $entity->getForeignKey())));

@@ -2,7 +2,7 @@
 
 namespace App\Controller;
 
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\Controller\AbstractAppController;
 use Symfony\Component\Form\Extension\Core\Type\EmailType;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 use Symfony\Component\Form\Extension\Core\Type\TextareaType;
@@ -15,7 +15,7 @@ use Symfony\Component\Validator\Constraints\Email;
 use Symfony\Component\Validator\Constraints\NotBlank;
 use Symfony\Component\HttpFoundation\Request;
 
-class GestionController extends AbstractController
+class GestionController extends AbstractAppController
 {
 
 
@@ -55,7 +55,7 @@ class GestionController extends AbstractController
                     ));
             $mailer->send($email);
 
-            $this->get('session')->getFlashBag()->add(
+            $this->addFlash(
                 'notice',
                 'El mensaje se ha enviado correctamente'
             );

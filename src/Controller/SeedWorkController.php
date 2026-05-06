@@ -6,7 +6,7 @@ use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 
 use App\Entity\CropWorking;
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\Controller\AbstractAppController;
 
 use App\Entity\SeedWork;
 use App\Form\SeedWorkType;
@@ -15,7 +15,7 @@ use App\Form\SeedWorkType;
  * SeedWork controller.
  *
  */
-class SeedWorkController extends AbstractController
+class SeedWorkController extends AbstractAppController
 {
 
     /**

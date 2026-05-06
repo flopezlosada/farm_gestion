@@ -5,19 +5,15 @@ namespace App\Controller;
 use App\Entity\WeeklyBasketGroup;
 use App\Form\WeeklyBasketGroupType;
 use App\Repository\WeeklyBasketGroupRepository;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\Controller\AbstractAppController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 
-/**
- * @Route("/gestion/weekly/basket/group")
- */
-class WeeklyBasketGroupController extends AbstractController
+#[Route("/gestion/weekly/basket/group")]
+class WeeklyBasketGroupController extends AbstractAppController
 {
-    /**
-     * @Route("/", name="weekly_basket_group_index", methods={"GET"})
-     */
+    #[Route("/", name: "weekly_basket_group_index", methods: ["GET"])]
     public function index(WeeklyBasketGroupRepository $weeklyBasketGroupRepository): Response
     {
         return $this->render('weekly_basket_group/index.html.twig', [
@@ -25,9 +21,7 @@ class WeeklyBasketGroupController extends AbstractController
         ]);
     }
 
-    /**
-     * @Route("/new", name="weekly_basket_group_new", methods={"GET","POST"})
-     */
+    #[Route("/new", name: "weekly_basket_group_new", methods: ["GET","POST"])]
     public function new(Request $request): Response
     {
         $weeklyBasketGroup = new WeeklyBasketGroup();
@@ -48,9 +42,7 @@ class WeeklyBasketGroupController extends AbstractController
         ]);
     }
 
-    /**
-     * @Route("/{id}", name="weekly_basket_group_show", methods={"GET"})
-     */
+    #[Route("/{id}", name: "weekly_basket_group_show", methods: ["GET"])]
     public function show(WeeklyBasketGroup $weeklyBasketGroup): Response
     {
         return $this->render('weekly_basket_group/show.html.twig', [
@@ -58,9 +50,7 @@ class WeeklyBasketGroupController extends AbstractController
         ]);
     }
 
-    /**
-     * @Route("/{id}/edit", name="weekly_basket_group_edit", methods={"GET","POST"})
-     */
+    #[Route("/{id}/edit", name: "weekly_basket_group_edit", methods: ["GET","POST"])]
     public function edit(Request $request, WeeklyBasketGroup $weeklyBasketGroup): Response
     {
         $form = $this->createForm(WeeklyBasketGroupType::class, $weeklyBasketGroup);
@@ -78,9 +68,7 @@ class WeeklyBasketGroupController extends AbstractController
         ]);
     }
 
-    /**
-     * @Route("/{id}", name="weekly_basket_group_delete", methods={"DELETE"})
-     */
+    #[Route("/{id}", name: "weekly_basket_group_delete", methods: ["DELETE"])]
     public function delete(Request $request, WeeklyBasketGroup $weeklyBasketGroup): Response
     {
         if ($this->isCsrfTokenValid('delete'.$weeklyBasketGroup->getId(), $request->request->get('_token'))) {

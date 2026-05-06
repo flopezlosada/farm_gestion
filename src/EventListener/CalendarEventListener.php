@@ -26,21 +26,17 @@ use App\Entity\SeedWorkEntity;
 use App\Entity\TaskEntity;
 
 use Symfony\Component\Config\Definition\Exception\Exception;
-use Symfony\Component\HttpFoundation\Session\Session;
-use Symfony\Component\HttpFoundation\Session\SessionInterface;
 use Symfony\Component\Routing\RouterInterface;
 
 class CalendarEventListener
 {
     private $entityManager;
     private $router;
-    private $session;
 
-    public function __construct(EntityManagerInterface $entityManager, RouterInterface $router, SessionInterface $session)
+    public function __construct(EntityManagerInterface $entityManager, RouterInterface $router)
     {
         $this->entityManager = $entityManager;
         $this->router = $router;
-        $this->session = $session;
     }
 
     public function loadEvents(CalendarEvent $calendarEvent)

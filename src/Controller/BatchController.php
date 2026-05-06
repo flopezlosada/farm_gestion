@@ -7,7 +7,7 @@ use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 use App\Entity\Fowl;
 use App\Form\BatchEditType;
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\Controller\AbstractAppController;
 
 use App\Entity\Batch;
 use App\Form\BatchType;
@@ -17,7 +17,7 @@ use Symfony\Component\Validator\Constraints\DateTime;
  * Batch controller.
  *
  */
-class BatchController extends AbstractController
+class BatchController extends AbstractAppController
 {
 
     /**
@@ -352,7 +352,7 @@ class BatchController extends AbstractController
         $em->persist($entity);
         $em->flush();
 
-        $this->get('session')->getFlashBag()->add(
+        $this->addFlash(
             'notice',
             'El lote se ha actualizado correctamente.'
         );
@@ -376,7 +376,7 @@ class BatchController extends AbstractController
         $em->persist($entity);
         $em->flush();
 
-        $this->get('session')->getFlashBag()->add(
+        $this->addFlash(
             'notice',
             'El lote se ha actualizado correctamente.'
         );

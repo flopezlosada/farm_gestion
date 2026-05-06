@@ -5,7 +5,7 @@ namespace App\Controller;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\Controller\AbstractAppController;
 
 use App\Entity\Collect;
 use App\Form\CollectType;
@@ -14,7 +14,7 @@ use App\Form\CollectType;
  * Collect controller.
  *
  */
-class CollectController extends AbstractController
+class CollectController extends AbstractAppController
 {
 
     /**
