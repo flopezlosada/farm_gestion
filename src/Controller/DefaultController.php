@@ -7,9 +7,7 @@ use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 
 use App\Entity\Basket;
 use App\Controller\AbstractAppController;
-use Sensio\Bundle\FrameworkExtraBundle\Configuration\Method;
 use Symfony\Component\Routing\Annotation\Route;
-use Sensio\Bundle\FrameworkExtraBundle\Configuration\Template;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -24,32 +22,22 @@ class DefaultController extends AbstractAppController
         return $this->redirect($this->generateUrl('dashboard'));
     }
 
-    /**
-     * @Template("Default/calendar.html.twig")
-     */
     #[Route("/calendar", name: "calendar")]
-    public function calendar()
+    public function calendar(): Response
     {
-        return array();
+        return $this->render('Default/calendar.html.twig');
     }
 
-
-    /**
-     * @Method("GET")
-     * @Template()
-     */
-    #[Route("/event_show/{id}", name: "event_show")]
-    public function eventShow($id)
+    #[Route("/event_show/{id}", name: "event_show", methods: ["GET"])]
+    public function eventShow($id): Response
     {
-        return array();
+        // Endpoint sin template propio — devolvía array() bajo @Template legacy.
+        // No tiene plantilla `templates/Default/eventShow.html.twig`, posiblemente código muerto.
+        return new Response('');
     }
 
-
-    /**
-     * @Template("Default/dashboard.html.twig")
-     */
     #[Route("/dashboard", name: "dashboard")]
-    public function dashboard()
+    public function dashboard(): Response
     {
         $em = $this->getDoctrine()->getManager();
         $week_lay = $em->getRepository(\App\Entity\Lay::class)->findWeekLay(10);
@@ -111,7 +99,7 @@ class DefaultController extends AbstractAppController
               $em->flush();
       */
 
-        return array(
+        return $this->render('Default/dashboard.html.twig', [
             'week_lay' => array_reverse($week_lay),
             'total_lay_eggs' => $total_lay_eggs,
             'total_sale_eggs' => $total_sale_eggs,
@@ -122,8 +110,8 @@ class DefaultController extends AbstractAppController
             'active_hen_batch' => $active_hen_batch,
             'active_chicken_batch' => $active_chicken_batch,
             'wheat_year' => $wheat_year,
-            'total_chicken' => $total_chicken
-        );
+            'total_chicken' => $total_chicken,
+        ]);
     }
 
     public function layWeek()
@@ -212,11 +200,8 @@ class DefaultController extends AbstractAppController
     }
 
 
-    /**
-     * @Template()
-     */
     #[Route("/user_collect/{product_id}/{year}", name: "user_collect", defaults: ["year" => null])]
-    public function userCollect($product_id, $year)
+    public function userCollect($product_id, $year): Response
     {
         if (!$year) {
             $year = date("Y");
@@ -225,11 +210,10 @@ class DefaultController extends AbstractAppController
         $product = $em->getRepository(\App\Entity\Product::class)->find($product_id);
         $collects = $em->getRepository(\App\Entity\Collect::class)->findAllByUserProductYear($this->getUser(), $product, $year);
 
-
-        return array(
+        return $this->render('Default/userCollect.html.twig', [
             'year' => $year,
-            'collects' => $collects
-        );
+            'collects' => $collects,
+        ]);
     }
 
 

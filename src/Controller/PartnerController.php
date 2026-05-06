@@ -9,7 +9,6 @@ use App\Entity\WeeklyBasket;
 use App\Form\PartnerBasketShareType;
 use App\Form\PartnerType;
 use App\Repository\PartnerRepository;
-use Sensio\Bundle\FrameworkExtraBundle\Configuration\Template;
 use App\Controller\AbstractAppController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -242,21 +241,16 @@ class PartnerController extends AbstractAppController
     }
 
 
-    /**
-     * @Template("partner/cities.html.twig")
-     */
     #[Route("/cities", name: "select_city")]
-
-    public function cities(Request $request)
+    public function cities(Request $request): Response
     {
         $em = $this->getDoctrine()->getManager();
         $state = $em->getRepository(\App\Entity\State::class)->findById($request->get('state_id'));
         $cities = $em->getRepository(\App\Entity\City::class)->findByState($state);
 
-
-        return array(
-            'cities' => $cities
-        );
+        return $this->render('partner/cities.html.twig', [
+            'cities' => $cities,
+        ]);
     }
 
     #[Route("/{id}/demote", name: "partner_demote", methods: ["GET"])]

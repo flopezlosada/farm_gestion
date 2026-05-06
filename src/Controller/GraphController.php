@@ -2,48 +2,36 @@
 
 namespace App\Controller;
 
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-
-
 use App\Controller\AbstractAppController;
-use Sensio\Bundle\FrameworkExtraBundle\Configuration\Method;
-use Symfony\Component\Routing\Annotation\Route;
-use Sensio\Bundle\FrameworkExtraBundle\Configuration\Template;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Routing\Annotation\Route;
 
 class GraphController extends AbstractAppController
 {
-    /**
-     * @Template()
-     */
     #[Route("/graph_egg_week", name: "graph_egg_week")]
-    public function graphEggWeek()
+    public function graphEggWeek(): Response
     {
         $em = $this->getDoctrine()->getManager();
         $year = date("Y");
         $weeks_lay = $em->getRepository(\App\Entity\Lay::class)->findWeeksYear($year);
-        $daily_lay = array();
+        $daily_lay = [];
         foreach ($weeks_lay as $week) {
             for ($i = 1; $i <= 7; $i++) {
                 $daily_lay[$week['week']][$i] = $em->getRepository(\App\Entity\Lay::class)->findDailyLayYear($year, $week, $i);
             }
         }
 
-
-        return array(
+        return $this->render('Graph/graphEggWeek.html.twig', [
             'daily_lay' => $daily_lay,
-            'year' => $year
-        );
+            'year' => $year,
+        ]);
     }
 
-    /**
-     * @Template()
-     */
     #[Route("/graph_average_egg_week", name: "graph_average_egg_week")]
-    public function graphAverageEggWeek()
+    public function graphAverageEggWeek(): Response
     {
-        return array();
+        // Endpoint sin template propio — devolvía array() bajo @Template legacy.
+        // No tiene plantilla `templates/Graph/graphAverageEggWeek.html.twig`, posiblemente código muerto.
+        return new Response('');
     }
-
-
 }

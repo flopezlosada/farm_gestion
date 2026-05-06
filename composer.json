@@ -22,7 +22,6 @@
         "liip/imagine-bundle": "^2.1",
         "phpdocumentor/reflection-docblock": "^5.2",
         "phpoffice/phpspreadsheet": "^1.10",
-        "sensio/framework-extra-bundle": "^6.2",
         "stfalcon/tinymce-bundle": "^3.0",
         "stof/doctrine-extensions-bundle": "^1.5",
         "symfony/apache-pack": "^1.0",

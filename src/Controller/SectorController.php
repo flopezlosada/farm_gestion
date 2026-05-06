@@ -9,8 +9,8 @@ use App\Controller\AbstractAppController;
 
 use App\Entity\Sector;
 use App\Form\SectorType;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
-use Sensio\Bundle\FrameworkExtraBundle\Configuration\Template;
 
 /**
  * Sector controller.
@@ -228,21 +228,16 @@ class SectorController extends AbstractAppController
             ->getForm();
     }
 
-    /**
-     * @Template("Sector/sectors.html.twig")
-     */
     #[Route("/sectors", name: "select_sector")]
-
-    public function sectors(Request $request)
+    public function sectors(Request $request): Response
     {
         $em = $this->getDoctrine()->getManager();
         $zone = $em->getRepository(\App\Entity\Zone::class)->findById($request->get('zone_id'));
         $sectors = $em->getRepository(\App\Entity\Sector::class)->findByZone($zone);
 
-
-        return array(
-            'sectors' => $sectors
-        );
+        return $this->render('Sector/sectors.html.twig', [
+            'sectors' => $sectors,
+        ]);
     }
 
 }
