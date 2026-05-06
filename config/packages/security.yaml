@@ -37,6 +37,10 @@ security:
                 check_path: app_login
                 enable_csrf: true
                 default_target_path: /gestion/dashboard
+            remember_me:
+                secret: '%kernel.secret%'
+                lifetime: 604800
+                path: /
             logout:
                 path: app_logout
                 target: /
