@@ -2,6 +2,7 @@
 
 namespace App\Form;
 
+use A2lix\TranslationFormBundle\Form\Type\TranslationsType;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
@@ -16,8 +17,7 @@ class VideoType extends AbstractType
     {
         $builder
 
-            ->add('translations', 'a2lix_translations_gedmo', array(
-                    'translatable_class' => "App\Entity\Video",
+            ->add('translations', TranslationsType::class, array(
                     'fields' => array(
                         'slug'  => array(
                             'display' => false
