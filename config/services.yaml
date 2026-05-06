@@ -37,5 +37,8 @@ services:
     Twig\Extra\Intl\IntlExtension:
         tags: ['twig.extension']
 
+    Twig\Extra\String\StringExtension:
+        tags: ['twig.extension']
+
     ADesigns\CalendarBundle\Controller\CalendarController:
         tags: ['controller.service_arguments']
