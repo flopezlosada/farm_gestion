@@ -184,9 +184,6 @@
     "monolog/monolog": {
         "version": "1.25.1"
     },
-    "myclabs/php-enum": {
-        "version": "1.7.7"
-    },
     "nikic/php-parser": {
         "version": "v4.2.4"
     },
@@ -222,9 +219,6 @@
     },
     "psr/container": {
         "version": "1.0.0"
-    },
-    "psr/http-message": {
-        "version": "1.0.1"
     },
     "psr/link": {
         "version": "1.0.0"
