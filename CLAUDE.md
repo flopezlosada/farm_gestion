@@ -42,13 +42,14 @@ tanto, el código de socios es código que ha visto datos pero no flujo
 real, asumimos bugs latentes, y la regla "tests al tocar cualquier cosa
 de socios" es no negociable.
 
-## Estado actual: Fases 0-6 completadas
+## Estado actual: Fases 0-7 + sub-fases 8.1-8.4 completadas
 
-**Symfony 6.4 LTS + PHP 8.3** + MySQL 8 + Composer 2.2 LTS + Flex 1.22.
+**Symfony 7.4 LTS + PHP 8.3** + MySQL 8 + Composer 2.2 + Flex 2.x.
+Auth nativa de Symfony (sin FOSUser ni Sensio FrameworkExtraBundle).
 Login funciona, dashboard renderiza, las pantallas centrales de socios
 y de granja cargan limpias en navegación manual contra el snapshot de
 prod (246 partners, 1346 weekly_baskets, 5188 lays). 11 smoke tests
-verdes (no re-validados contra SF 6 todavía — ver sección de pendientes).
+verdes hasta Fase 4 incluida — no re-validados desde Fase 5.
 
 - **Fase 0**: setup DDEV + auditoría + arreglos baseline.
 - **Fase 1**: fixtures con Faker (`CatalogFixtures`, `UserFixtures`,
@@ -83,25 +84,44 @@ verdes (no re-validados contra SF 6 todavía — ver sección de pendientes).
   lo olvidó), y `Twig\Extra\String\StringExtension` no registrado
   (mismo patrón que `IntlExtension`).
 - **Fase 6**: Symfony 5.4 → 6.4 LTS. 21 paquetes pinned `5.4.*` →
-  `6.4.*`. `sensio/framework-extra-bundle` `^5.5` → `^6.2` (sigue
-  abandoned). `friendsofsymfony/jsrouting-bundle` `^2.4` → `^3.0`
-  (más fix paralelo en el fork de calendar-bundle para abrir su
-  propio constraint). Migración del Kernel a `RoutingConfigurator`,
-  retirada del loader `annotation` (eliminado en 6.0). Migración de
-  `security.yaml` al authenticator system (encoders → password_hashers,
-  sha512 → auto, anonymous → lazy, IS_AUTHENTICATED_ANONYMOUSLY →
-  PUBLIC_ACCESS). 376 single-colon controller refs en YAML/XML +
-  6 en templates → double colon. Trait compat
-  `AbstractAppController` para mantener viva la API
+  `6.4.*`. `sensio/framework-extra-bundle` `^5.5` → `^6.2`.
+  `friendsofsymfony/jsrouting-bundle` `^2.4` → `^3.0` (más fix
+  paralelo en el fork de calendar-bundle). Migración del Kernel a
+  `RoutingConfigurator`, retirada del loader `annotation`. Migración
+  de `security.yaml` al authenticator system. 376 single-colon
+  controller refs en YAML/XML + 6 en templates → double colon.
+  Trait compat `AbstractAppController` para mantener viva la API
   `$this->getDoctrine()` (52 controllers afectados, decisión KISS
   para no tocar 373 llamadas). 51 `@Route` docblock → `#[Route]`
-  attribute en 7 controllers. Sweep `$this->get('router|session|request')`
-  → API moderna. 19 templates con `{{ form() }}` huérfano tras
-  widgets individuales, eliminados.
+  attribute en 7 controllers.
+- **Sub-fase 8.1+8.2+8.3**: retira FOSUserBundle y monta auth
+  nativa de Symfony. User propio sin extender FOSUser, schema
+  `fos_user` reusado. password_hashers con migrate_from
+  legacy_fos_sha512 → bcrypt: el primer login con sha512 rehashea
+  automáticamente (sin pérdida de logins en prod). Provider entity
+  + form_login con `app_login`/`app_logout` rutas propias en
+  `SecurityController`. Templates de FOSUser en `templates/bundles/`
+  borrados (28 ficheros).
+- **Sub-fase 8.4**: retira `sensio/framework-extra-bundle`. 6
+  endpoints con `@Template` migrados a `$this->render(...)` explícito.
+  `@Method`/`@ParamConverter` legacy retirados.
+- **Fase 7**: Symfony 6.4 → 7.4 LTS. 21 paquetes pinned `6.4.*` →
+  `7.4.*`. `symfony/proxy-manager-bridge` retirado (eliminado en SF 7).
+  `symfony/flex` `^1.22` → `^2.4`, `symfony/webpack-encore-bundle`
+  `^1.7` → `^2.0`, `knplabs/knp-paginator-bundle` `^5.0` → `^6.0`,
+  `twig/twig` y intl-extra/string-extra `^2.x` → `^3.12`,
+  `symfony/translation` añadido manualmente. Más bumps en el fork
+  calendar-bundle (`|^7.0` y `getConfigTreeBuilder(): TreeBuilder`).
+  `EntityToIntTransformer` adopta firma estricta `mixed -> mixed`.
+  240 `@Assert\X` annotations → `#[Assert\X]` attributes en 62
+  archivos via Rector. Workaround: `Doctrine\Common\Annotations\AnnotationReader`
+  registrado a mano en services.yaml + alias `annotation_reader`,
+  porque las 74 entidades aún usan `@ORM\` annotations docblock
+  (Doctrine ORM 2.x).
 
-`.env.local` quedó con un toggle comentado: BBDD `db` activa
-(fixtures Faker) y `db_prod_snapshot` disponible para validar
-con datos reales. Durante Fase 6 se navegó contra el snapshot.
+`.env.local` con toggle comentado: BBDD `db` (fixtures Faker) y
+`db_prod_snapshot`. Durante Fases 6, 7 y sub-fases 8.x se navegó
+contra el snapshot.
 
 **Errores secundarios pendientes** identificados al navegar pero no
 arreglados (no son flujos críticos del día a día):
@@ -110,12 +130,12 @@ arreglados (no son flujos críticos del día a día):
 - Plantilla pública `templates/base_front.html.twig:81` referencia
   ruta `booking_calendar` que no existe en routing (deuda preexistente,
   no regresión).
-- `dashboard` y `calendar` en `DefaultController` aún usan
-  `@Template` annotation de Sensio que devuelve `array`. SF 6 lo
-  ignora silenciosamente — habría que devolver `Response` explícito.
-  No se ejercitaron en navegación reciente.
+- `DefaultController::eventShow` y `GraphController::graphAverageEggWeek`
+  no tienen plantilla propia y devuelven `Response('')` desde
+  sub-fase 8.4. Sospechosos de ser código muerto, dejados con un
+  comentario hasta confirmarlo.
 
-**11 smoke tests aún sin re-validar contra SF 6.4** — pendiente.
+**11 smoke tests aún sin re-validar** desde Fase 5 — pendiente.
 
 ## Hoja de ruta (orden de prioridad)
 
@@ -128,22 +148,23 @@ arreglados (no son flujos críticos del día a día):
 4. ~~**Symfony 4.4 → 5.4 LTS**~~ ✅ Fase 4.
 5. ~~**PHP 7.4 → 8.3**~~ ✅ Fase 5.
 6. ~~**Symfony 5.4 → 6.4 LTS**~~ ✅ Fase 6.
-7. **Symfony 6.4 → 7.2 LTS** (siguiente). 7.2 es la última LTS
-   publicada (nov 2025). 6.4 mantenida hasta nov 2027. Mientras
-   no toquemos 6.4, seguimos seguros, pero el objetivo declarado
-   es la última LTS. Saltar ahora aprovecha que la mecánica del
-   salto major-a-major está fresca tras Fase 6.
-   Posible alternativa: dejar 6.4 estable y atacar Auth (Fase 8)
-   primero. Decisión a tomar al iniciar.
-8. **Auth nuevo + roles**: reescribir con seguridad nativa de Symfony.
-   Roles `ROLE_PARTNER`, `ROLE_GESTION`, `ROLE_ADMIN`. Magic-link login
-   (sin contraseñas) pensado para la brecha digital del colectivo:
-   muchxs socixs nunca han usado software, una contraseña es una
-   barrera real. Aprovechar para retirar `friendsofsymfony/user-bundle`
-   (sigue 3.4 sobre SF 6, marcada deprecated en su upstream),
-   `sensio/framework-extra-bundle` (abandoned), y eliminar
-   `AbstractAppController::getDoctrine()` migrando los 52 controllers
-   a inyección de `EntityManagerInterface` por parámetro del action.
+7. ~~**Symfony 6.4 → 7.4 LTS**~~ ✅ Fase 7 (orden invertido con la 8
+   tras topar con FOSUser bloqueando SF 7).
+8. **Auth nuevo + roles** (parcial): sub-fases 8.1-8.4 hechas
+   (retirada FOSUser y Sensio, auth nativa Symfony). Pendientes:
+   - **8.5 Magic-link login**: usar `LoginLinkAuthenticator` nativo
+     de Symfony. Pensado para la brecha digital del colectivo —
+     muchxs socixs nunca han usado software, una contraseña es una
+     barrera real. Crear panel de "Mi perfil" propio (el enlace está
+     fuera del menú desde sub-fase 8.3).
+   - **8.6 Migrar 52 controllers**: a inyección de
+     `EntityManagerInterface` por parámetro del action; eliminar
+     `AbstractAppController::getDoctrine()` (compat layer registrada
+     en sub-fase Fase 6). Sweep mecánico, ~373 llamadas a
+     `$this->getDoctrine()->getManager()` en src/Controller/.
+   - **8.7 Diseño de roles**: `ROLE_PARTNER`, `ROLE_GESTION`,
+     `ROLE_ADMIN` y rejerarquización. La actual cuelga ROLE_ADMIN
+     de ROLE_COOP como workaround.
 9. **Acceso para socixs**: panel propio, primero solo lectura
    (calendario de cestas, próximas semanas), luego escritura (saltar
    cesta, cambiar punto de recogida puntualmente).
@@ -165,15 +186,25 @@ Cada fase termina con tests en verde y un tag `vX.Y` en git.
   PHP antes de Symfony 5.4 estaba bloqueado por `stfalcon/tinymce-bundle`.
   Hosting cobraba extended support por 7.4 → ahorro económico al
   subir.
-- **FOSUserBundle 3.4 con `noop` mailer** y `registration.confirmation
-  = false`. FOSUser 3.4 SÍ soporta SF 6 (verificado en Fase 6). Sigue
-  acoplado a SwiftMailer (que ya no usamos), pero el flujo de
-  auth/email se rehace en Fase 8. Hasta entonces, sin emails de FOSUser.
+- **Auth nativa Symfony** desde sub-fase 8.1+. FOSUserBundle retirado;
+  el User propio (`App\Entity\User`) implementa `UserInterface`,
+  `PasswordAuthenticatedUserInterface`, `LegacyPasswordAuthenticatedUserInterface`.
+  La tabla `fos_user` se mantiene con todas sus columnas legacy
+  (username_canonical, salt, confirmation_token, password_requested_at)
+  hasta que rehagamos schema.
+- **`Doctrine\Common\Annotations\AnnotationReader` registrado a mano**
+  en `config/services.yaml` desde Fase 7 (alias `annotation_reader`).
+  SF 7 ya no lo provee automáticamente. Las 74 entidades aún usan
+  `@ORM\` annotations docblock (Doctrine ORM 2.x). Cuando subamos a
+  Doctrine ORM 3 + entidades a `#[ORM\]` attributes, el servicio se
+  retira.
+- **Doctrine ORM en 2.x** a propósito. La 3.x elimina
+  `Doctrine\Common\Annotations` y solo soporta attributes/XML —
+  migración de las 74 entidades es trabajo separado de Fase 7.
 - **`AbstractAppController` reimplementa `getDoctrine()`** vía
   `#[Required]` setter de `ManagerRegistry`. Symfony 6 retiró
   `getDoctrine()` de `AbstractController`. Migrar los 373 usos
-  distribuidos en 52 controllers es trabajo de Fase 8 (al rehacer
-  auth los controllers se reescriben de todos modos). El trait
+  distribuidos en 52 controllers se difiere a sub-fase 8.6. El trait
   compat permite que la app levante sin tocar el código de los
   actions.
 - **`security.password_hashers: auto`** desde Fase 6 (era `sha512`
