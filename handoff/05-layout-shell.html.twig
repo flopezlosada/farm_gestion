@@ -1,0 +1,101 @@
+{# ============================================================
+ # CSA Vega de Jarama — Layout shell nuevo
+ # ============================================================
+ # Layout con sidebar nuevo + topbar nuevo, separado del de SB Admin 2.
+ # Las pantallas migradas extienden de aquí; las viejas siguen
+ # extendiendo de layout_list.html.twig / layout_crud.html.twig sin tocar.
+ #
+ # Herencia:
+ #   templates/base.html.twig                     ← raíz (no se toca)
+ #     └── templates/_layouts/csa_shell.html.twig ← este archivo
+ #            └── templates/Batch/index.html.twig (rediseñado)
+ #
+ # base.html.twig sigue cargando bootstrap.min.css + sb-admin-2.css
+ # como hasta ahora. Webpack Encore añade tokens/base/components al
+ # final mediante {{ encore_entry_link_tags('app') }} (ver
+ # 10-migration-plan.md, paso 2).
+ #
+ # Ubicación sugerida: templates/_layouts/csa_shell.html.twig
+ # ============================================================ #}
+
+{% extends 'base.html.twig' %}
+
+{% block body %}
+<div class="csa-app">
+    <div class="csa-shell">
+
+        {# ---------- SIDEBAR ---------- #}
+        <aside class="csa-sidebar" id="csa-sidebar">
+            <div class="csa-sidebar__brand">
+                <div class="csa-sidebar__brand-name">CSA Vega de Jarama</div>
+                <div class="csa-sidebar__brand-sub">Gestión interna</div>
+            </div>
+
+            <nav class="csa-sidebar__nav">
+                {% block csa_nav %}
+                    {# Sobreescribir en cada layout específico (gestión vs granja vs cestas)
+                       o aquí mismo si quieres una nav única para todo el back-office.
+                       Por defecto, esqueleto mínimo: #}
+
+                    <div class="csa-sidebar__group">Día a día</div>
+                    {{ _self.nav_link('Panel', path('dashboard'), 'fa-home', app.request.attributes.get('_route') == 'dashboard') }}
+
+                    <div class="csa-sidebar__group">Granja</div>
+                    {{ _self.nav_link('Lotes', path('batch'), 'fa-egg',
+                       app.request.attributes.get('_route') starts with 'batch') }}
+                    {{ _self.nav_link('Cultivos', path('crop'), 'fa-leaf',
+                       app.request.attributes.get('_route') starts with 'crop') }}
+                    {# añade el resto de secciones siguiendo el mismo patrón #}
+                {% endblock %}
+            </nav>
+        </aside>
+
+        {# ---------- MAIN ---------- #}
+        <div class="csa-main">
+
+            {# TOPBAR #}
+            <header class="csa-topbar">
+                <button type="button" class="csa-btn csa-btn--ghost csa-btn--sm csa-sidebar-toggle"
+                        aria-label="Abrir navegación"
+                        onclick="document.getElementById('csa-sidebar').classList.toggle('csa-sidebar--open')">
+                    <i class="fa fa-bars"></i>
+                </button>
+
+                <nav class="csa-topbar__crumbs" aria-label="Migas de pan">
+                    {% block csa_crumbs %}
+                        <a href="{{ path('dashboard') }}">Inicio</a>
+                    {% endblock %}
+                </nav>
+
+                <div class="csa-topbar__user">
+                    {% if app.user %}
+                        <span>{{ app.user.userIdentifier }}</span>
+                        <span class="csa-avatar">
+                            {{- app.user.userIdentifier|first|upper -}}
+                        </span>
+                        <a href="{{ path('app_logout') }}" class="csa-link-muted" title="Salir">
+                            <i class="fa fa-sign-out"></i>
+                        </a>
+                    {% endif %}
+                </div>
+            </header>
+
+            {# CONTENIDO #}
+            <main class="csa-content">
+                {% block csa_main %}{% endblock %}
+            </main>
+        </div>
+
+    </div>
+</div>
+{% endblock %}
+
+
+{# Macro local: link de la sidebar.
+ # Definido como _self porque solo se usa aquí. #}
+{% macro nav_link(label, href, icon = null, active = false) %}
+    <a href="{{ href }}" class="csa-sidebar__link{% if active %} csa-sidebar__link--active{% endif %}">
+        {% if icon %}<i class="csa-sidebar__icon fa {{ icon }}"></i>{% endif %}
+        <span>{{ label }}</span>
+    </a>
+{% endmacro %}

@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Referencia · Listado de lotes</title>
+<link rel="stylesheet" href="../01-tokens.css">
+<link rel="stylesheet" href="../02-base.css">
+<link rel="stylesheet" href="../03-components.css">
+<style>
+  /* Mock de iconos para no depender de Font Awesome aquí */
+  .fa { display: inline-block; width: 14px; text-align: center; opacity: 0.6; }
+  .fa::before { content: "•"; }
+</style>
+</head>
+<body>
+<div class="csa-app">
+<div class="csa-shell">
+
+  <aside class="csa-sidebar">
+    <div class="csa-sidebar__brand">
+      <div class="csa-sidebar__brand-name">CSA Vega de Jarama</div>
+      <div class="csa-sidebar__brand-sub">Gestión interna</div>
+    </div>
+    <nav class="csa-sidebar__nav">
+      <div class="csa-sidebar__group">Día a día</div>
+      <a href="#" class="csa-sidebar__link"><i class="csa-sidebar__icon fa"></i><span>Panel</span></a>
+      <a href="#" class="csa-sidebar__link"><i class="csa-sidebar__icon fa"></i><span>Calendario</span></a>
+
+      <div class="csa-sidebar__group">Granja</div>
+      <a href="#" class="csa-sidebar__link csa-sidebar__link--active"><i class="csa-sidebar__icon fa"></i><span>Lotes</span></a>
+      <a href="#" class="csa-sidebar__link"><i class="csa-sidebar__icon fa"></i><span>Cultivos</span></a>
+      <a href="#" class="csa-sidebar__link"><i class="csa-sidebar__icon fa"></i><span>Producción</span></a>
+      <a href="#" class="csa-sidebar__link"><i class="csa-sidebar__icon fa"></i><span>Tareas</span></a>
+
+      <div class="csa-sidebar__group">Personas</div>
+      <a href="#" class="csa-sidebar__link"><i class="csa-sidebar__icon fa"></i><span>Socixs</span></a>
+      <a href="#" class="csa-sidebar__link"><i class="csa-sidebar__icon fa"></i><span>Grupos de recogida</span></a>
+    </nav>
+  </aside>
+
+  <div class="csa-main">
+    <header class="csa-topbar">
+      <nav class="csa-topbar__crumbs">
+        <a href="#">Inicio</a>
+        <span class="csa-topbar__crumbs-sep">/</span>
+        <span>Granja</span>
+        <span class="csa-topbar__crumbs-sep">/</span>
+        <span class="csa-topbar__crumb-active">Lotes</span>
+      </nav>
+      <div class="csa-topbar__user">
+        <span>paco</span>
+        <span class="csa-avatar">P</span>
+      </div>
+    </header>
+
+    <main class="csa-content">
+
+      <div class="csa-page-header">
+        <div class="csa-kicker">Granja · Animales</div>
+        <h1>Lotes</h1>
+        <div class="csa-lead">Gestión de lotes de gallinas y pollos. Compra, recepción, finalización y censo.</div>
+      </div>
+
+      <div class="csa-row-between" style="margin-bottom: var(--csa-sp-5);">
+        <div class="csa-row">
+          <input type="search" class="csa-input" placeholder="Buscar lote…" style="width: 280px;">
+        </div>
+        <div class="csa-row">
+          <a href="#" class="csa-btn csa-btn--ghost"><i class="fa"></i><span>Análisis de pollos</span></a>
+          <a href="#" class="csa-btn csa-btn--primary"><i class="fa"></i><span>Nuevo lote</span></a>
+        </div>
+      </div>
+
+      <div class="csa-table-wrap">
+        <table class="csa-table">
+          <thead>
+            <tr>
+              <th style="width: 80px;">ID</th>
+              <th>Lote</th>
+              <th>Estado</th>
+              <th class="csa-table__actions">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="csa-table__id">#024</td>
+              <td><a class="csa-table__primary csa-link-muted" href="#">Gallinero norte 2019 · Lohmann Brown</a></td>
+              <td><span class="csa-badge csa-badge--green">Activo</span></td>
+              <td class="csa-table__actions"><a href="#">Ver</a><a href="#">Editar</a></td>
+            </tr>
+            <tr>
+              <td class="csa-table__id">#023</td>
+              <td><a class="csa-table__primary csa-link-muted" href="#">Engorde primavera · Pollos camperos</a></td>
+              <td><span class="csa-badge csa-badge--green">Activo</span></td>
+              <td class="csa-table__actions"><a href="#">Ver</a><a href="#">Editar</a></td>
+            </tr>
+            <tr>
+              <td class="csa-table__id">#022</td>
+              <td><a class="csa-table__primary csa-link-muted" href="#">Gallinero sur 2018 · Isa Brown</a></td>
+              <td><span class="csa-badge csa-badge--neutral">Finalizado</span></td>
+              <td class="csa-table__actions"><a href="#">Ver</a><a href="#">Editar</a></td>
+            </tr>
+            <tr>
+              <td class="csa-table__id">#021</td>
+              <td><a class="csa-table__primary csa-link-muted" href="#">Engorde otoño 2024</a></td>
+              <td><span class="csa-badge csa-badge--ochre">Atención sanitaria</span></td>
+              <td class="csa-table__actions"><a href="#">Ver</a><a href="#">Editar</a></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+    </main>
+  </div>
+</div>
+</div>
+</body>
+</html>

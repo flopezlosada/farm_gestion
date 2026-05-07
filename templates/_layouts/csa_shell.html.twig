@@ -1,0 +1,135 @@
+{# ============================================================
+ # CSA Vega de Jarama — Layout shell nuevo
+ # ============================================================
+ # Layout con sidebar nuevo + topbar nuevo, separado del de SB Admin 2.
+ # Las pantallas migradas extienden de aquí; las viejas siguen
+ # extendiendo de layout_list.html.twig / layout_crud.html.twig sin
+ # tocar.
+ #
+ # Herencia:
+ #   templates/base.html.twig                     ← raíz (no se toca)
+ #     └── templates/_layouts/csa_shell.html.twig ← este archivo
+ #            └── templates/Batch/index.html.twig (rediseñado)
+ #
+ # base.html.twig sigue cargando bootstrap.min.css + sb-admin-2.css.
+ # Nosotros añadimos los CSS/JS compilados por Webpack Encore al final
+ # vía encore_entry_link_tags / script_tags. Como esto se hace solo en
+ # las plantillas que extienden de csa_shell, las pantallas viejas no
+ # cargan el bundle nuevo.
+ # ============================================================ #}
+
+{% extends 'base.html.twig' %}
+
+{% block more_css %}
+    {{ parent() }}
+    {{ encore_entry_link_tags('app') }}
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    {{ encore_entry_script_tags('app') }}
+{% endblock %}
+
+{% block body %}
+<div class="csa-app">
+    <div class="csa-shell">
+
+        {# ---------- SIDEBAR ---------- #}
+        <aside class="csa-sidebar" id="csa-sidebar">
+            <div class="csa-sidebar__brand">
+                <div class="csa-sidebar__brand-name">CSA Vega de Jarama</div>
+                <div class="csa-sidebar__brand-sub">Gestión interna</div>
+            </div>
+
+            <nav class="csa-sidebar__nav">
+                {% block csa_nav %}
+                    {%- set route = app.request.attributes.get('_route') -%}
+
+                    <div class="csa-sidebar__group">Día a día</div>
+                    {{ _self.nav_link('Panel', path('dashboard'), 'fa-home',
+                       route == 'dashboard') }}
+                    {{ _self.nav_link('Calendario', path('calendar'), 'fa-calendar',
+                       route starts with 'calendar') }}
+
+                    <div class="csa-sidebar__group">Granja</div>
+                    {{ _self.nav_link('Lotes', path('batch'), 'fa-sliders',
+                       route starts with 'batch') }}
+                    {{ _self.nav_link('Cultivos', path('crop'), 'fa-leaf',
+                       route starts with 'crop') }}
+                    {{ _self.nav_link('Tareas', path('task'), 'fa-tasks',
+                       route starts with 'task') }}
+                    {{ _self.nav_link('Cosechas / huevos', path('lay'), 'fa-egg',
+                       route starts with 'lay') }}
+                    {{ _self.nav_link('Trabajos culturales', path('culturalwork'), 'fa-compass',
+                       route starts with 'culturalwork') }}
+
+                    <div class="csa-sidebar__group">Socixs</div>
+                    {{ _self.nav_link('Listado', path('partner_index'), 'fa-people-carry',
+                       route starts with 'partner') }}
+                    {{ _self.nav_link('Grupos de recogida', path('weekly_basket_group_index'), 'fa-canadian-maple-leaf',
+                       route starts with 'weekly_basket_group') }}
+
+                    <div class="csa-sidebar__group">Comercio</div>
+                    {{ _self.nav_link('Ventas', path('sale'), 'fa-money',
+                       route starts with 'sale') }}
+                    {{ _self.nav_link('Compras', path('purchase'), 'fa-eur',
+                       route starts with 'purchase') }}
+
+                    <div class="csa-sidebar__group">Comunicación</div>
+                    {{ _self.nav_link('Blog', path('blog'), 'fa-newspaper-o',
+                       route starts with 'blog') }}
+                    {{ _self.nav_link('Eventos públicos', path('booking'), 'fa-calendar-check-o',
+                       route starts with 'booking') }}
+                {% endblock %}
+            </nav>
+        </aside>
+
+        {# ---------- MAIN ---------- #}
+        <div class="csa-main">
+
+            {# TOPBAR #}
+            <header class="csa-topbar">
+                <button type="button" class="csa-btn csa-btn--ghost csa-btn--sm csa-sidebar-toggle"
+                        aria-label="Abrir navegación"
+                        onclick="document.getElementById('csa-sidebar').classList.toggle('csa-sidebar--open')">
+                    <i class="fa fa-bars"></i>
+                </button>
+
+                <nav class="csa-topbar__crumbs" aria-label="Migas de pan">
+                    {% block csa_crumbs %}
+                        <a href="{{ path('dashboard') }}">Inicio</a>
+                    {% endblock %}
+                </nav>
+
+                <div class="csa-topbar__user">
+                    {% if app.user %}
+                        <span>{{ app.user.userIdentifier }}</span>
+                        <span class="csa-avatar">
+                            {{- app.user.userIdentifier|first|upper -}}
+                        </span>
+                        <a href="{{ path('app_logout') }}" class="csa-link-muted" title="Salir">
+                            <i class="fa fa-sign-out"></i>
+                        </a>
+                    {% endif %}
+                </div>
+            </header>
+
+            {# CONTENIDO #}
+            <main class="csa-content">
+                {% block csa_main %}{% endblock %}
+            </main>
+        </div>
+
+    </div>
+</div>
+{% endblock %}
+
+
+{# Macro local: link de la sidebar.
+ # Definido como _self porque solo se usa aquí. #}
+{% macro nav_link(label, href, icon = null, active = false) %}
+    <a href="{{ href }}" class="csa-sidebar__link{% if active %} csa-sidebar__link--active{% endif %}">
+        {% if icon %}<i class="csa-sidebar__icon fa {{ icon }}"></i>{% endif %}
+        <span>{{ label }}</span>
+    </a>
+{% endmacro %}

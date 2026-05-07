@@ -50,14 +50,6 @@
   --csa-plum-soft:    #f0d3df;
   --csa-amber:        #a3702a;   /* contrast oscuro, ocre tostado */
 
-  /* ---------- Paleta sage (sidebar y superficies tranquilas) ---------- */
-  --csa-sage-bg:       #e8ede0;   /* fondo del sidebar */
-  --csa-sage-bg-hover: #f5f8ee;   /* hover sobre fondo sage */
-  --csa-sage-rule:     #d4dbc8;   /* borde / divisores en superficie sage */
-  --csa-sage-ink:      #1f2a1d;   /* texto fuerte sobre sage */
-  --csa-sage-text:     #4a5a48;   /* texto normal sobre sage */
-  --csa-sage-muted:    #85907f;   /* texto atenuado sobre sage */
-
   /* ---------- Tipografía ---------- */
   --csa-serif: Fraunces, "Instrument Serif", Georgia, serif;
   --csa-sans:  Inter, -apple-system, system-ui, sans-serif;
@@ -106,7 +98,7 @@
   --csa-sidebar-w:      260px;
   --csa-sidebar-w-collapsed: 64px;
   --csa-topbar-h:       60px;
-  --csa-content-max:    1600px;
+  --csa-content-max:    1280px;
 
   /* ---------- Transiciones ---------- */
   --csa-t-fast:    120ms ease;
