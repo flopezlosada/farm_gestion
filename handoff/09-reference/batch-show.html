@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Referencia · Detalle de lote</title>
+<link rel="stylesheet" href="../01-tokens.css">
+<link rel="stylesheet" href="../02-base.css">
+<link rel="stylesheet" href="../03-components.css">
+<style>
+  .fa { display: inline-block; width: 14px; text-align: center; opacity: 0.6; }
+  .fa::before { content: "•"; }
+</style>
+</head>
+<body>
+<div class="csa-app">
+<div class="csa-shell">
+
+  <aside class="csa-sidebar">
+    <div class="csa-sidebar__brand">
+      <div class="csa-sidebar__brand-name">CSA Vega de Jarama</div>
+      <div class="csa-sidebar__brand-sub">Gestión interna</div>
+    </div>
+    <nav class="csa-sidebar__nav">
+      <div class="csa-sidebar__group">Granja</div>
+      <a href="#" class="csa-sidebar__link csa-sidebar__link--active"><i class="csa-sidebar__icon fa"></i><span>Lotes</span></a>
+      <a href="#" class="csa-sidebar__link"><i class="csa-sidebar__icon fa"></i><span>Cultivos</span></a>
+    </nav>
+  </aside>
+
+  <div class="csa-main">
+    <header class="csa-topbar">
+      <nav class="csa-topbar__crumbs">
+        <a href="#">Inicio</a>
+        <span class="csa-topbar__crumbs-sep">/</span>
+        <a href="#">Lotes</a>
+        <span class="csa-topbar__crumbs-sep">/</span>
+        <span class="csa-topbar__crumb-active">#024</span>
+      </nav>
+      <div class="csa-topbar__user">
+        <span>paco</span>
+        <span class="csa-avatar">P</span>
+      </div>
+    </header>
+
+    <main class="csa-content">
+
+      <div class="csa-row-between" style="margin-bottom: var(--csa-sp-6);">
+        <div>
+          <div class="csa-kicker">Granja · Lote #024</div>
+          <h1 style="margin-top: var(--csa-sp-2);">Gallinero norte 2019</h1>
+          <div style="margin-top: var(--csa-sp-3);">
+            <span class="csa-badge csa-badge--green">Activo</span>
+          </div>
+        </div>
+        <div class="csa-row">
+          <a href="#" class="csa-btn csa-btn--secondary"><i class="fa"></i><span>Editar</span></a>
+          <a href="#" class="csa-btn csa-btn--ghost"><span>Volver al listado</span></a>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 320px; gap: var(--csa-sp-6); align-items: flex-start;">
+
+        <div class="csa-stack-lg">
+
+          <section class="csa-card csa-card--flush">
+            <header class="csa-card__header">
+              <div>
+                <h3 class="csa-card__title">Resumen del lote</h3>
+                <div class="csa-card__subtitle">Información operativa principal.</div>
+              </div>
+            </header>
+            <div class="csa-card__body">
+              <div class="csa-form-grid">
+                <div>
+                  <div class="csa-kpi__label">Fecha de compra</div>
+                  <div class="csa-serif" style="font-size: var(--csa-fs-lg); margin-top: 4px;">14/03/2024</div>
+                </div>
+                <div>
+                  <div class="csa-kpi__label">Fecha de recepción</div>
+                  <div class="csa-serif" style="font-size: var(--csa-fs-lg); margin-top: 4px;">21/03/2024</div>
+                </div>
+                <div>
+                  <div class="csa-kpi__label">Días de vida al recibir</div>
+                  <div class="csa-serif" style="font-size: var(--csa-fs-lg); margin-top: 4px;">126</div>
+                </div>
+                <div>
+                  <div class="csa-kpi__label">Peso medio</div>
+                  <div class="csa-serif" style="font-size: var(--csa-fs-lg); margin-top: 4px;">1.85 kg</div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="csa-card csa-card--flush">
+            <header class="csa-card__header">
+              <div>
+                <h3 class="csa-card__title">Notas</h3>
+              </div>
+            </header>
+            <div class="csa-card__body">
+              <div class="csa-soft" style="line-height: var(--csa-lh-normal);">
+                Lote recibido en buenas condiciones. Ajustar la dosis de pienso al alza desde el día 60.
+                Vacunación al día. Próxima revisión veterinaria: primera semana de junio.
+              </div>
+            </div>
+          </section>
+
+        </div>
+
+        <aside class="csa-stack-lg">
+          <div class="csa-kpi">
+            <div class="csa-kpi__label">Precio de compra</div>
+            <div class="csa-kpi__value">3.420<span class="csa-kpi__unit">€</span></div>
+          </div>
+          <div class="csa-kpi">
+            <div class="csa-kpi__label">Huevos puestos (mes)</div>
+            <div class="csa-kpi__value">8.412</div>
+            <div class="csa-kpi__delta csa-kpi__delta--up">+5.2% vs mes anterior</div>
+          </div>
+          <div class="csa-kpi">
+            <div class="csa-kpi__label">Mortalidad</div>
+            <div class="csa-kpi__value">2.1<span class="csa-kpi__unit">%</span></div>
+            <div class="csa-kpi__delta">Dentro del rango habitual</div>
+          </div>
+        </aside>
+      </div>
+
+    </main>
+  </div>
+</div>
+</div>
+</body>
+</html>

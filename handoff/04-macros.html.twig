@@ -1,0 +1,185 @@
+{# ============================================================
+ # CSA Vega de Jarama — Macros de componentes
+ # ============================================================
+ # Cómo usar:
+ #
+ #   {% import '_macros/csa.html.twig' as csa %}
+ #
+ #   {{ csa.btn('Guardar', { variant: 'primary', type: 'submit' }) }}
+ #   {{ csa.badge('Activo', 'green') }}
+ #   {{ csa.kpi('Huevos hoy', 412, 'unidades', '+8% vs ayer', 'up') }}
+ #
+ # Convención: el primer argumento es siempre el contenido principal
+ # (label, valor, etc). Las opciones van en un hash al final.
+ #
+ # Ubicación sugerida: templates/_macros/csa.html.twig
+ # ============================================================ #}
+
+
+{# ---------- BOTÓN ----------
+ # opts: variant (primary|secondary|ghost|danger), size (sm|lg),
+ #       type (button|submit|reset), href (renderiza <a>), icon (clase FA),
+ #       disabled, attr (hash de atributos extra)
+ #}
+{% macro btn(label, opts = {}) %}
+    {%- set variant = opts.variant|default('secondary') -%}
+    {%- set size = opts.size|default('') -%}
+    {%- set classes = ['csa-btn', 'csa-btn--' ~ variant] -%}
+    {%- if size %}{% set classes = classes|merge(['csa-btn--' ~ size]) %}{% endif -%}
+    {%- if opts.block|default(false) %}{% set classes = classes|merge(['csa-btn--block']) %}{% endif -%}
+
+    {%- if opts.href is defined -%}
+        <a href="{{ opts.href }}" class="{{ classes|join(' ') }}"
+           {%- if opts.disabled|default(false) %} aria-disabled="true"{% endif -%}
+           {%- for k, v in opts.attr|default({}) %} {{ k }}="{{ v }}"{% endfor -%}>
+            {%- if opts.icon is defined %}<i class="fa {{ opts.icon }}"></i>{% endif -%}
+            <span>{{ label }}</span>
+        </a>
+    {%- else -%}
+        <button type="{{ opts.type|default('button') }}" class="{{ classes|join(' ') }}"
+                {%- if opts.disabled|default(false) %} disabled{% endif -%}
+                {%- for k, v in opts.attr|default({}) %} {{ k }}="{{ v }}"{% endfor -%}>
+            {%- if opts.icon is defined %}<i class="fa {{ opts.icon }}"></i>{% endif -%}
+            <span>{{ label }}</span>
+        </button>
+    {%- endif -%}
+{% endmacro %}
+
+
+{# ---------- BADGE ----------
+ # tone: green | ochre | terracotta | sky | plum | neutral
+ # opts: no_dot (true para badge sin punto)
+ #}
+{% macro badge(label, tone = 'neutral', opts = {}) %}
+    <span class="csa-badge csa-badge--{{ tone }}{% if opts.no_dot|default(false) %} csa-badge--no-dot{% endif %}">
+        {{ label }}
+    </span>
+{% endmacro %}
+
+
+{# ---------- CARD ----------
+ # Usar como bloque:
+ #   {% call csa.card('Título', 'Subtítulo opcional') %}
+ #     contenido…
+ #   {% endcall %}
+ #}
+{% macro card(title = null, subtitle = null) %}
+    <section class="csa-card csa-card--flush">
+        {% if title %}
+            <header class="csa-card__header">
+                <div>
+                    <h3 class="csa-card__title">{{ title }}</h3>
+                    {% if subtitle %}<div class="csa-card__subtitle">{{ subtitle }}</div>{% endif %}
+                </div>
+            </header>
+        {% endif %}
+        <div class="csa-card__body">
+            {{ caller() }}
+        </div>
+    </section>
+{% endmacro %}
+
+
+{# ---------- KPI ----------
+ # value se imprime tal cual (puedes pasar un número formateado).
+ # delta_dir: up | down | null
+ #}
+{% macro kpi(label, value, unit = null, delta = null, delta_dir = null) %}
+    <div class="csa-kpi">
+        <div class="csa-kpi__label">{{ label }}</div>
+        <div class="csa-kpi__value">
+            {{ value }}{% if unit %}<span class="csa-kpi__unit">{{ unit }}</span>{% endif %}
+        </div>
+        {% if delta %}
+            <div class="csa-kpi__delta{% if delta_dir %} csa-kpi__delta--{{ delta_dir }}{% endif %}">
+                {{ delta }}
+            </div>
+        {% endif %}
+    </div>
+{% endmacro %}
+
+
+{# ---------- FIELD ----------
+ # Envuelve un Symfony form_widget con la etiqueta y el hint nuestros.
+ # Pensado para sustituir el patrón verboso de {{ form_label }} +
+ # {{ form_widget }} + {{ form_errors }} repetido en cada formulario.
+ #
+ # Uso:
+ #   {{ csa.field(form.purchase_date, 'Fecha de compra', { hint: 'opcional' }) }}
+ #
+ # Si necesitas más control, usa la versión bloque:
+ #   {% call csa.field_block('Notas', { hint: 'opcional', required: false }) %}
+ #     {{ form_widget(form.note, { attr: { class: 'csa-textarea', rows: 4 } }) }}
+ #   {% endcall %}
+ #}
+{% macro field(field, label, opts = {}) %}
+    {%- set required = opts.required ?? field.vars.required ?? false -%}
+    {%- set widget_class = opts.widget_class|default('csa-input') -%}
+    <div class="csa-field{% if opts.full|default(false) %} csa-field--full{% endif %}">
+        <div class="csa-field__label-row">
+            <label class="csa-field__label" for="{{ field.vars.id }}">
+                {{ label }}{% if required %}<span class="csa-field__required">*</span>{% endif %}
+            </label>
+            {% if opts.hint is defined %}
+                <span class="csa-field__hint">{{ opts.hint }}</span>
+            {% endif %}
+        </div>
+        {{ form_widget(field, { attr: { class: widget_class }|merge(opts.attr|default({})) }) }}
+        {% if not field.vars.valid %}
+            <div class="csa-field__error">{{ form_errors(field) }}</div>
+        {% endif %}
+    </div>
+{% endmacro %}
+
+{% macro field_block(label, opts = {}) %}
+    {%- set required = opts.required|default(false) -%}
+    <div class="csa-field{% if opts.full|default(false) %} csa-field--full{% endif %}">
+        <div class="csa-field__label-row">
+            <label class="csa-field__label">
+                {{ label }}{% if required %}<span class="csa-field__required">*</span>{% endif %}
+            </label>
+            {% if opts.hint is defined %}
+                <span class="csa-field__hint">{{ opts.hint }}</span>
+            {% endif %}
+        </div>
+        {{ caller() }}
+    </div>
+{% endmacro %}
+
+
+{# ---------- FORM SECTION ----------
+ # Tarjeta numerada agrupando campos relacionados.
+ # Uso:
+ #   {% call csa.form_section('1', 'Identidad', 'Cómo se identifica el lote') %}
+ #     <div class="csa-form-grid">
+ #       {{ csa.field(form.id, 'Identificador') }}
+ #       {{ csa.field(form.name, 'Nombre interno', { hint: 'opcional' }) }}
+ #     </div>
+ #   {% endcall %}
+ #}
+{% macro form_section(num, title, subtitle = null) %}
+    <section class="csa-form-section">
+        <header class="csa-form-section__head">
+            <span class="csa-form-section__num">{{ num }}</span>
+            <div>
+                <div class="csa-form-section__title">{{ title }}</div>
+                {% if subtitle %}<div class="csa-form-section__subtitle">{{ subtitle }}</div>{% endif %}
+            </div>
+        </header>
+        {{ caller() }}
+    </section>
+{% endmacro %}
+
+
+{# ---------- PAGE HEADER ----------
+ # Cabecera de pantalla: kicker + título + lead.
+ #
+ #   {{ csa.page_header('Granja · Lotes', 'Listado de lotes', 'Animales activos…') }}
+ #}
+{% macro page_header(kicker = null, title = '', lead = null) %}
+    <div class="csa-page-header">
+        {% if kicker %}<div class="csa-kicker">{{ kicker }}</div>{% endif %}
+        <h1>{{ title }}</h1>
+        {% if lead %}<div class="csa-lead">{{ lead }}</div>{% endif %}
+    </div>
+{% endmacro %}

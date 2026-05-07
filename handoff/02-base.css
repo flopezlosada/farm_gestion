@@ -11,15 +11,6 @@
  * Carga después de tokens.css y antes de components.css.
  * ============================================================ */
 
-/* Bootstrap 3 fija html { font-size: 10px } en base.html.twig.
-   Eso reduce todos nuestros tokens en rem al 62.5% de su tamaño esperado.
-   Restablecemos al estándar del navegador solo cuando nuestro CSS se carga
-   (es decir, en pantallas que extienden csa_shell.html.twig). Las pantallas
-   legacy no cargan este CSS y mantienen el comportamiento anterior. */
-html {
-  font-size: 16px;
-}
-
 .csa-app, .csa-app * {
   box-sizing: border-box;
 }
@@ -78,15 +69,13 @@ html {
 
 /* ---------- Links ---------- */
 
-/* :where() mantiene especificidad 0 — así cualquier link con su propia
-   clase (sidebar, topbar, etc.) gana sin tener que repetir .csa-app. */
-.csa-app :where(a) {
+.csa-app a {
   color: var(--csa-green);
   text-decoration: none;
   border-bottom: 1px solid transparent;
   transition: border-color var(--csa-t-fast);
 }
-.csa-app :where(a):hover {
+.csa-app a:hover {
   border-bottom-color: var(--csa-green);
 }
 .csa-app a.csa-link-muted { color: var(--csa-ink-soft); }
@@ -127,7 +116,6 @@ html {
 /* Padding del área de contenido */
 .csa-content {
   padding: var(--csa-sp-8) var(--csa-sp-10);
-  width: 100%;
   max-width: var(--csa-content-max);
   margin: 0 auto;
 }

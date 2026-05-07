@@ -1,0 +1,23 @@
+{# ---------- FIELD BLOCK ----------
+ # Envoltorio de campo de formulario con control total sobre el widget.
+ # Para casos donde csa.field() no basta (textareas custom, agrupaciones,
+ # etc).
+ #
+ #   {% embed '_components/csa_field_block.html.twig' with {
+ #       label: 'Notas', hint: 'opcional', required: false, full: true } %}
+ #       {% block body %}
+ #           {{ form_widget(form.note, { attr: { class: 'csa-textarea', rows: 4 } }) }}
+ #       {% endblock %}
+ #   {% endembed %}
+ #}
+<div class="csa-field{% if full|default(false) %} csa-field--full{% endif %}">
+    <div class="csa-field__label-row">
+        <label class="csa-field__label">
+            {{ label }}{% if required|default(false) %}<span class="csa-field__required">*</span>{% endif %}
+        </label>
+        {% if hint is defined and hint %}
+            <span class="csa-field__hint">{{ hint }}</span>
+        {% endif %}
+    </div>
+    {% block body %}{% endblock %}
+</div>

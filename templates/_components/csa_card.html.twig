@@ -1,0 +1,26 @@
+{# ---------- CARD ----------
+ # Tarjeta con header opcional. Usar con embed:
+ #
+ #   {% embed '_components/csa_card.html.twig' with {
+ #       title: 'Título', subtitle: 'Subtítulo' } %}
+ #       {% block body %}contenido…{% endblock %}
+ #   {% endembed %}
+ #
+ # title y subtitle son opcionales. Si no hay title, no se renderiza el
+ # header.
+ #}
+<section class="csa-card csa-card--flush">
+    {% if title is defined and title %}
+        <header class="csa-card__header">
+            <div>
+                <h3 class="csa-card__title">{{ title }}</h3>
+                {% if subtitle is defined and subtitle %}
+                    <div class="csa-card__subtitle">{{ subtitle }}</div>
+                {% endif %}
+            </div>
+        </header>
+    {% endif %}
+    <div class="csa-card__body">
+        {% block body %}{% endblock %}
+    </div>
+</section>

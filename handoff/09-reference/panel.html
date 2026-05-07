@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Referencia · Panel</title>
+<link rel="stylesheet" href="../01-tokens.css">
+<link rel="stylesheet" href="../02-base.css">
+<link rel="stylesheet" href="../03-components.css">
+<style>
+  .fa { display: inline-block; width: 14px; text-align: center; opacity: 0.6; }
+  .fa::before { content: "•"; }
+</style>
+</head>
+<body>
+<div class="csa-app">
+<div class="csa-shell">
+
+  <aside class="csa-sidebar">
+    <div class="csa-sidebar__brand">
+      <div class="csa-sidebar__brand-name">CSA Vega de Jarama</div>
+      <div class="csa-sidebar__brand-sub">Gestión interna</div>
+    </div>
+    <nav class="csa-sidebar__nav">
+      <div class="csa-sidebar__group">Día a día</div>
+      <a href="#" class="csa-sidebar__link csa-sidebar__link--active"><i class="csa-sidebar__icon fa"></i><span>Panel</span></a>
+      <a href="#" class="csa-sidebar__link"><i class="csa-sidebar__icon fa"></i><span>Calendario</span></a>
+
+      <div class="csa-sidebar__group">Granja</div>
+      <a href="#" class="csa-sidebar__link"><i class="csa-sidebar__icon fa"></i><span>Lotes</span></a>
+      <a href="#" class="csa-sidebar__link"><i class="csa-sidebar__icon fa"></i><span>Cultivos</span></a>
+      <a href="#" class="csa-sidebar__link"><i class="csa-sidebar__icon fa"></i><span>Producción</span></a>
+      <a href="#" class="csa-sidebar__link"><i class="csa-sidebar__icon fa"></i><span>Tareas</span></a>
+
+      <div class="csa-sidebar__group">Personas</div>
+      <a href="#" class="csa-sidebar__link"><i class="csa-sidebar__icon fa"></i><span>Socixs</span></a>
+      <a href="#" class="csa-sidebar__link"><i class="csa-sidebar__icon fa"></i><span>Grupos de recogida</span></a>
+    </nav>
+  </aside>
+
+  <div class="csa-main">
+    <header class="csa-topbar">
+      <nav class="csa-topbar__crumbs">
+        <span class="csa-topbar__crumb-active">Inicio</span>
+      </nav>
+      <div class="csa-topbar__user">
+        <span>paco</span>
+        <span class="csa-avatar">P</span>
+      </div>
+    </header>
+
+    <main class="csa-content">
+
+      <div class="csa-page-header">
+        <div class="csa-kicker">Día a día · Resumen</div>
+        <h1>Buenos días, paco</h1>
+        <div class="csa-lead">Estado general de la cooperativa hoy. 14 de mayo, jueves.</div>
+      </div>
+
+      <!-- KPIs -->
+      <section style="display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--csa-sp-4); margin-bottom: var(--csa-sp-7);">
+        <div class="csa-kpi">
+          <div class="csa-kpi__label">Socixs activos</div>
+          <div class="csa-kpi__value">142</div>
+          <div class="csa-kpi__delta csa-kpi__delta--up">+3 este mes</div>
+        </div>
+        <div class="csa-kpi">
+          <div class="csa-kpi__label">Cestas semana</div>
+          <div class="csa-kpi__value">128</div>
+          <div class="csa-kpi__delta">98% completadas</div>
+        </div>
+        <div class="csa-kpi">
+          <div class="csa-kpi__label">Lotes activos</div>
+          <div class="csa-kpi__value">7</div>
+          <div class="csa-kpi__delta">2 próximos a finalizar</div>
+        </div>
+        <div class="csa-kpi">
+          <div class="csa-kpi__label">Ingresos del mes</div>
+          <div class="csa-kpi__value">12.840<span class="csa-kpi__unit">€</span></div>
+          <div class="csa-kpi__delta csa-kpi__delta--up">+8.4% vs abril</div>
+        </div>
+      </section>
+
+      <div style="display: grid; grid-template-columns: 1fr 320px; gap: var(--csa-sp-6); align-items: flex-start;">
+
+        <div class="csa-stack-lg">
+
+          <section class="csa-card csa-card--flush">
+            <header class="csa-card__header">
+              <div>
+                <h3 class="csa-card__title">Tareas de hoy</h3>
+                <div class="csa-card__subtitle">5 tareas asignadas, 2 completadas.</div>
+              </div>
+              <a href="#" class="csa-link-muted">Ver todas →</a>
+            </header>
+            <div class="csa-card__body">
+              <ul class="csa-list">
+                <li class="csa-list__item">
+                  <div>
+                    <div class="csa-list__primary">Recoger huevos · Gallinero norte</div>
+                    <div class="csa-list__secondary">Asignada a maría · vence 11:00</div>
+                  </div>
+                  <span class="csa-badge csa-badge--green">Hecha</span>
+                </li>
+                <li class="csa-list__item">
+                  <div>
+                    <div class="csa-list__primary">Riego invernadero 2</div>
+                    <div class="csa-list__secondary">Asignada a luis · vence 14:00</div>
+                  </div>
+                  <span class="csa-badge csa-badge--green">Hecha</span>
+                </li>
+                <li class="csa-list__item">
+                  <div>
+                    <div class="csa-list__primary">Preparar cestas grupo Tetuán</div>
+                    <div class="csa-list__secondary">Asignada a paco · vence 17:00</div>
+                  </div>
+                  <span class="csa-badge csa-badge--ochre">En curso</span>
+                </li>
+                <li class="csa-list__item">
+                  <div>
+                    <div class="csa-list__primary">Vacunación lote #024</div>
+                    <div class="csa-list__secondary">Asignada a vet externo · vence 18:00</div>
+                  </div>
+                  <span class="csa-badge csa-badge--neutral">Pendiente</span>
+                </li>
+                <li class="csa-list__item">
+                  <div>
+                    <div class="csa-list__primary">Limpiar compost este</div>
+                    <div class="csa-list__secondary">Asignada a equipo · vence 19:00</div>
+                  </div>
+                  <span class="csa-badge csa-badge--neutral">Pendiente</span>
+                </li>
+              </ul>
+            </div>
+          </section>
+
+          <section class="csa-card csa-card--flush">
+            <header class="csa-card__header">
+              <div>
+                <h3 class="csa-card__title">Producción reciente</h3>
+                <div class="csa-card__subtitle">Últimas entradas registradas.</div>
+              </div>
+              <a href="#" class="csa-link-muted">Histórico →</a>
+            </header>
+            <div class="csa-card__body" style="padding: 0;">
+              <table class="csa-table">
+                <thead>
+                  <tr>
+                    <th>Producto</th>
+                    <th>Cantidad</th>
+                    <th>Origen</th>
+                    <th>Fecha</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><a class="csa-table__primary csa-link-muted" href="#">Huevos camperos</a></td>
+                    <td>342 ud</td>
+                    <td>Lote #024</td>
+                    <td class="csa-muted">hoy 09:42</td>
+                  </tr>
+                  <tr>
+                    <td><a class="csa-table__primary csa-link-muted" href="#">Acelga</a></td>
+                    <td>18.4 kg</td>
+                    <td>Bancal 7</td>
+                    <td class="csa-muted">hoy 08:15</td>
+                  </tr>
+                  <tr>
+                    <td><a class="csa-table__primary csa-link-muted" href="#">Lechuga roble</a></td>
+                    <td>62 ud</td>
+                    <td>Invernadero 2</td>
+                    <td class="csa-muted">ayer 17:30</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+        </div>
+
+        <aside class="csa-stack-lg">
+          <section class="csa-card csa-card--flush">
+            <header class="csa-card__header">
+              <h3 class="csa-card__title">Próximas entregas</h3>
+            </header>
+            <div class="csa-card__body">
+              <ul class="csa-list">
+                <li class="csa-list__item">
+                  <div>
+                    <div class="csa-list__primary">Grupo Tetuán</div>
+                    <div class="csa-list__secondary">Hoy · 18:00 · 24 cestas</div>
+                  </div>
+                </li>
+                <li class="csa-list__item">
+                  <div>
+                    <div class="csa-list__primary">Grupo Lavapiés</div>
+                    <div class="csa-list__secondary">Mañana · 19:00 · 31 cestas</div>
+                  </div>
+                </li>
+                <li class="csa-list__item">
+                  <div>
+                    <div class="csa-list__primary">Grupo Vallecas</div>
+                    <div class="csa-list__secondary">Vie · 18:30 · 28 cestas</div>
+                  </div>
+                </li>
+              </ul>
+            </div>
+          </section>
+
+          <section class="csa-card csa-card--flush">
+            <header class="csa-card__header">
+              <h3 class="csa-card__title">Avisos</h3>
+            </header>
+            <div class="csa-card__body">
+              <div class="csa-soft" style="font-size: var(--csa-fs-sm);">
+                Lote #022 (Gallinero sur) lleva 3 días sin registrar puesta. Revisar.
+              </div>
+            </div>
+          </section>
+        </aside>
+      </div>
+
+    </main>
+  </div>
+</div>
+</div>
+</body>
+</html>
