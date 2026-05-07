@@ -732,6 +732,65 @@ a.csa-table__primary:hover {
 
 
 /* ============================================================
+ * TABS
+ * ============================================================
+ * Mantiene compatibilidad con el JS de Bootstrap 3 (data-toggle="tab").
+ * Pisamos el estilo visual y el `.active` lo sigue gestionando Bootstrap
+ * en el <li>. */
+
+.csa-tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--csa-sp-6);
+  list-style: none;
+  padding: 0;
+  margin: 0 0 var(--csa-sp-5) 0;
+  border-bottom: 1px solid var(--csa-rule);
+}
+.csa-tabs__item {
+  margin: 0;
+}
+/* La doble clase (.csa-app .csa-tabs__link) sube especificidad por encima
+   de .csa-app a:link/:visited de Bootstrap 3, que pisaba color y
+   text-decoration. */
+.csa-app .csa-tabs__link,
+.csa-app .csa-tabs__link:link,
+.csa-app .csa-tabs__link:visited {
+  display: inline-block;
+  padding: var(--csa-sp-3) 0;
+  font-family: var(--csa-sans);
+  font-size: var(--csa-fs-md);
+  font-weight: 500;
+  color: var(--csa-ink-soft);
+  text-decoration: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px; /* solapa con el border-bottom del .csa-tabs */
+  transition: color var(--csa-t-fast), border-color var(--csa-t-fast);
+}
+.csa-app .csa-tabs__link:hover {
+  color: var(--csa-ink);
+  border-bottom-color: transparent;
+  text-decoration: none;
+}
+.csa-tabs__link:focus,
+.csa-tabs__link:active {
+  outline: none;
+}
+.csa-tabs__link:focus-visible {
+  outline: 2px solid var(--csa-ink);
+  outline-offset: 2px;
+  border-radius: var(--csa-radius-sm);
+}
+.csa-app .csa-tabs__item.active > .csa-tabs__link,
+.csa-app .csa-tabs__item.active > .csa-tabs__link:visited {
+  color: var(--csa-ink);
+  border-bottom-color: var(--csa-ink);
+  text-decoration: none;
+}
+
+
+/* ============================================================
  * ADAPTACIÓN DataTables → csa
  * ============================================================
  * Cargamos solo el JS core de DataTables (no su CSS Bootstrap).

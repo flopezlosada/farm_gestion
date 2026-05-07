@@ -1,31 +1,83 @@
-{% extends 'layout_graph.html.twig' %}
- {% block more_css %}
-     <link rel="stylesheet" href="{{ asset('bundles/app/css/morris/morris.css') }}"/>
- {% endblock %}
-{% block warning %}{% endblock %}
-{% block main -%}
-    <div class="row">
-        <div class="col-lg-12">
-            <h1 class="page-header">Lote de animales</h1>
-        </div>
-        <!-- /.col-lg-12 -->
-    </div>
-    <div class="row">
-        <div class="col-lg-12">
-            <div class="panel panel-green">
-                <div class="panel-heading">
-                    {{ entity }}
+{# ============================================================
+ # Detalle de lote — migrado al shell csa.
+ # ============================================================
+ # El contenido interno (panel verde + tabs + tablas + JS de
+ # gráficas) sigue en su forma legacy y se migrará a csa-card /
+ # csa-table en commits separados, uno por bloque.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Lote #{{ entity.id }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('batch') }}">Lotes</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">#{{ entity.id }}</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    <link rel="stylesheet" href="{{ asset('bundles/app/css/morris/morris.css') }}"/>
+{% endblock %}
+
+{% block csa_main -%}
+
+    {# Cabecera nueva — estilo csa. El h1 legacy y sus wrappers row/col-lg-12 se han retirado. #}
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-6); align-items: flex-start;">
+        <div class="csa-row" style="align-items: flex-start; gap: var(--csa-sp-4);">
+            <span class="csa-table__id-marker" style="width: 64px; height: 64px; font-size: 28px; border-radius: var(--csa-radius-lg);">
+                <i class="fa fa-egg"></i>
+            </span>
+            <div>
+                <div class="csa-row" style="gap: var(--csa-sp-3); margin-bottom: var(--csa-sp-2);">
+                    {% if entity.batchStatus.id == 1 %}
+                        {{ csa.badge('Activo · ' ~ entity.product, 'green') }}
+                    {% elseif entity.batchStatus.id == 2 %}
+                        {{ csa.badge('Finalizado', 'neutral') }}
+                    {% endif %}
+                    <span class="csa-muted" style="font-size: var(--csa-fs-sm);">
+                        ID #L-{{ '%03d'|format(entity.id) }}
+                    </span>
+                    {% if entity.purchaseDate %}
+                        <span class="csa-muted" style="font-size: var(--csa-fs-sm);">·</span>
+                        <span class="csa-muted" style="font-size: var(--csa-fs-sm);">{{ entity.purchaseDate|date('Y-m-d') }}</span>
+                    {% endif %}
                 </div>
-                <div class="panel-body">
-                    <ul class="nav nav-tabs">
-                        <li><a href="#home" data-toggle="tab">General</a>
+                <h1>Lote #{{ entity.id }}</h1>
+                <div class="csa-serif csa-italic csa-soft" style="margin-top: var(--csa-sp-2);">
+                    {{ entity.product }} · {{ entity.amount }} animales
+                </div>
+            </div>
+        </div>
+        <div class="csa-row">
+            {% if entity.getProduct.getId in [2, 3] %}
+                {{ csa.btn('Ver estadísticas', { variant: 'ghost', href: path('batch_analyses', { product_id: entity.product.id }), icon: 'fa-bar-chart' }) }}
+            {% elseif entity.getProduct.getId == 6 %}
+                {{ csa.btn('Análisis comparativo', { variant: 'ghost', href: path('hens_analyses'), icon: 'fa-bar-chart' }) }}
+            {% endif %}
+            {{ csa.btn('Editar', { variant: 'secondary', href: path('batch_edit', { id: entity.id }), icon: 'fa-pencil' }) }}
+            {{ csa.btn('Volver al listado', { variant: 'ghost', href: path('batch') }) }}
+        </div>
+    </div>
+
+    {# ===== Contenido legacy: tabs, gráficas, tablas (sin panel verde wrapper) ===== #}
+                    <ul class="csa-tabs">
+                        <li class="csa-tabs__item active">
+                            <a class="csa-tabs__link" href="#home" data-toggle="tab">General</a>
                         </li>
-                        <li><a href="#consum" data-toggle="tab">Consumo</a>
+                        <li class="csa-tabs__item">
+                            <a class="csa-tabs__link" href="#consum" data-toggle="tab">Consumo</a>
                         </li>
-                        <li><a href="#animals" data-toggle="tab">Animales</a>
+                        <li class="csa-tabs__item">
+                            <a class="csa-tabs__link" href="#animals" data-toggle="tab">Animales</a>
                         </li>
                         {% if entity.getProduct.getId in [6] %}
-                            <li><a href="#movements" data-toggle="tab">Movimientos</a>
+                            <li class="csa-tabs__item">
+                                <a class="csa-tabs__link" href="#movements" data-toggle="tab">Movimientos</a>
                             </li>
                         {% endif %}
                     </ul>
@@ -380,36 +432,14 @@
                         </div>
 
                     </div>
-                </div>
-                <div class="panel-footer">
-                    <ul class="list-inline">
-                        <li>
-                            <a href="{{ path('batch') }}">
-                                Ir al listado
-                            </a>
-                        </li>
-                        <li>
-                            <a href="{{ path('batch_edit', { 'id': entity.id }) }}">
-                                Editar
-                            </a>
-                        </li>
-                        {% if entity.getProduct.getId in [2,3] %}
-                            <li><a href="{{ path('batch_analyses', {'product_id': entity.product.id}) }}">Ver
-                                    estadísticas</a></li>
-                        {% elseif entity.getProduct.getId in [6] %}
-                            <li><a href="{{ path('hens_analyses') }}">Análisis comparativo puesta</a></li>
-                        {% endif %}
-                        {#<li>{{ form(delete_form) }}</li>#}
-                    </ul>
-                </div>
-            </div>
-            <!-- /.col-lg-12 -->
-        </div>
-    </div>
 {% endblock %}
 
 
-{% block graph_js %}
+{% block more_js %}
+    {{ parent() }}
+    <script src="{{ asset('bundles/app/js/morris/raphael-min.js') }}"></script>
+    <script src="{{ asset('bundles/app/js/morris/morris.min.js') }}"></script>
+    <script src="https://code.highcharts.com/highcharts.src.js"></script>
     <script>
         /* new Morris.Line({
          // ID of the element in which to draw the chart.
