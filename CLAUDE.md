@@ -256,17 +256,22 @@ Cada fase termina con tests en verde y un tag `vX.Y` en git.
 
 ## Tareas pendientes que NO se te pueden olvidar
 
-- **#15 (crítica)**: el primer commit del repo (`acc543c`, baseline)
-  contiene credenciales reales de producción dentro de
-  `config/packages/doctrine.yaml`: usuario `gallinas`, password
-  `REDACTED`, BBDD `gestioncsa`. Los commits posteriores las
-  retiran del fichero, pero siguen en historia git. **Antes de subir
-  el repo a cualquier remoto** hay que (1) rotar la password en el
-  servidor de producción y (2) `git filter-repo` para limpiar la
-  historia. Mientras el repo está sólo en disco externo no hay leak.
+- **#15 (resuelta 2026-05-07)**: el commit baseline tenía una password
+  histórica de pruebas (no la activa en prod actual) hardcoded en
+  `config/packages/doctrine.yaml`. Limpiada de toda la historia con
+  `git filter-repo --replace-text` antes del primer push a remoto. Todos
+  los hashes del repo cambiaron en esa operación; el baseline pasó de
+  `acc543c` a `0c3313d`. La cadena ya no aparece en `git log -p --all`.
 - **#16**: queries con `GROUP BY` incompletos (al menos en
   `LayRepository`, probablemente más). Hay que arreglarlas y reactivar
   `ONLY_FULL_GROUP_BY` cuando se modernicen los repositorios.
+- **#17**: en producción las credenciales de BBDD viven en archivo
+  plano legible. Mitigaciones para Fase 11 (despliegue): permisos
+  restrictivos (`chmod 600`, owner = user del web server), variables
+  de entorno del panel del hosting si lo soporta, o `composer dump-env
+  prod` que compila a `.env.local.php`. No bloquea el push del repo
+  (los archivos vivos del repo sólo llevan defaults DDEV inocuos), es
+  deuda operativa del servidor.
 
 ## Convenciones
 
