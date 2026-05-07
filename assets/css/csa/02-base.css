@@ -88,6 +88,7 @@ html {
 }
 .csa-app :where(a):hover {
   border-bottom-color: var(--csa-green);
+  text-decoration: none; /* pisa a:hover{text-decoration:underline} de Bootstrap 3 */
 }
 .csa-app a.csa-link-muted { color: var(--csa-ink-soft); }
 .csa-app a.csa-link-muted:hover { color: var(--csa-ink); border-bottom-color: var(--csa-ink); }
