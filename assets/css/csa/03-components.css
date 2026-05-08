@@ -40,19 +40,33 @@
   pointer-events: none;
 }
 
-.csa-btn--primary {
-  background: var(--csa-ink);
+.csa-btn--primary,
+.csa-btn--primary:link,
+.csa-btn--primary:visited {
+  background: var(--csa-green);
   color: var(--csa-bg);
-  border-color: var(--csa-ink);
+  border-color: var(--csa-green);
 }
-.csa-btn--primary:hover { background: #000; border-color: #000; }
+.csa-btn--primary:hover,
+.csa-btn--primary:focus {
+  background: #3c6630;
+  border-color: #3c6630;
+  color: var(--csa-bg);
+}
 
-.csa-btn--secondary {
-  background: var(--csa-surface);
+.csa-btn--secondary,
+.csa-btn--secondary:link,
+.csa-btn--secondary:visited {
+  background: var(--csa-surface-alt);
   color: var(--csa-ink);
   border-color: var(--csa-rule);
 }
-.csa-btn--secondary:hover { border-color: var(--csa-ink-soft); }
+.csa-btn--secondary:hover,
+.csa-btn--secondary:focus {
+  background: var(--csa-bg);
+  border-color: var(--csa-ink-soft);
+  color: var(--csa-ink);
+}
 
 .csa-btn--ghost {
   background: transparent;
@@ -186,6 +200,210 @@
 }
 .csa-kpi__delta--up   { color: var(--csa-green); }
 .csa-kpi__delta--down { color: var(--csa-terracotta); }
+
+/* Tonos: trazo superior fino para diferenciar el tipo de métrica. */
+.csa-kpi--green,
+.csa-kpi--ochre,
+.csa-kpi--terracotta,
+.csa-kpi--sky,
+.csa-kpi--plum { border-top-width: 2px; }
+.csa-kpi--green      { border-top-color: var(--csa-green); }
+.csa-kpi--ochre      { border-top-color: var(--csa-ochre); }
+.csa-kpi--terracotta { border-top-color: var(--csa-terracotta); }
+.csa-kpi--sky        { border-top-color: var(--csa-sky); }
+.csa-kpi--plum       { border-top-color: var(--csa-plum); }
+
+/* Fila de KPIs: rejilla auto-fit que reflueye en mobile. */
+.csa-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--csa-sp-4);
+}
+
+
+/* ============================================================
+ * LIST (filas semánticas: icono + título + subtítulo)
+ *  Pensado para listas de tareas, acciones, items navegables.
+ *  Cada item puede ser un <a> (action) o solo info (sin link).
+ * ============================================================ */
+
+.csa-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.csa-list__item {
+  border-top: 1px solid var(--csa-rule);
+}
+.csa-list__item:first-child { border-top: none; }
+
+.csa-list__link,
+.csa-list__row {
+  display: flex;
+  align-items: center;
+  gap: var(--csa-sp-3);
+  padding: var(--csa-sp-3) 0;
+  color: var(--csa-ink);
+  text-decoration: none;
+  transition: background var(--csa-t-fast);
+}
+.csa-list__link {
+  cursor: pointer;
+  margin: 0 calc(var(--csa-sp-3) * -1);
+  padding-left: var(--csa-sp-3);
+  padding-right: var(--csa-sp-3);
+  border-radius: var(--csa-radius-md);
+}
+.csa-list__link:hover {
+  background: var(--csa-surface-alt);
+  color: var(--csa-ink);
+}
+
+.csa-list__icon {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--csa-radius-md);
+  background: var(--csa-surface-alt);
+  color: var(--csa-ink-soft);
+  flex-shrink: 0;
+  transition: background var(--csa-t-fast), color var(--csa-t-fast);
+}
+.csa-list__link:hover .csa-list__icon {
+  background: var(--csa-bg);
+  color: var(--csa-ink);
+}
+
+.csa-list__body { flex: 1; min-width: 0; }
+.csa-list__primary {
+  font-weight: 500;
+  color: var(--csa-ink);
+}
+.csa-list__secondary {
+  font-size: var(--csa-fs-sm);
+  color: var(--csa-ink-soft);
+  margin-top: 2px;
+}
+.csa-list__chevron {
+  color: var(--csa-ink-muted);
+  flex-shrink: 0;
+  font-size: var(--csa-fs-sm);
+}
+
+/* Variante destructiva — para acciones tipo "Finalizar lote". */
+.csa-list__link--danger .csa-list__icon {
+  background: var(--csa-terracotta-soft);
+  color: var(--csa-terracotta);
+}
+.csa-list__link--danger .csa-list__primary { color: var(--csa-terracotta); }
+.csa-list__link--danger:hover {
+  background: var(--csa-terracotta-soft);
+}
+
+/* Variante primaria — para la acción dominante. */
+.csa-list__link--primary .csa-list__icon {
+  background: var(--csa-green-soft);
+  color: var(--csa-green);
+}
+.csa-list__link--primary .csa-list__primary { color: var(--csa-green); }
+.csa-list__link--primary:hover {
+  background: var(--csa-green-soft);
+}
+
+
+/* ============================================================
+ * CALLOUT (mensaje inline destacado dentro de cards/secciones)
+ * ============================================================ */
+
+.csa-app .csa-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--csa-sp-3);
+  padding: var(--csa-sp-3) var(--csa-sp-4);
+  background: var(--csa-surface-alt);
+  border-left: 3px solid var(--csa-rule);
+  border-radius: var(--csa-radius-sm);
+  font-size: var(--csa-fs-sm);
+  color: var(--csa-ink-soft);
+  margin: 0;
+  line-height: var(--csa-lh-snug);
+}
+.csa-callout__icon {
+  margin-top: 2px;
+  flex-shrink: 0;
+  color: var(--csa-ink-muted);
+}
+.csa-callout--info    { border-left-color: var(--csa-sky); }
+.csa-callout--info    .csa-callout__icon { color: var(--csa-sky); }
+.csa-callout--warning { border-left-color: var(--csa-ochre); }
+.csa-callout--warning .csa-callout__icon { color: var(--csa-ochre); }
+.csa-callout--danger  { border-left-color: var(--csa-terracotta); }
+.csa-callout--danger  .csa-callout__icon { color: var(--csa-terracotta); }
+
+
+/* ============================================================
+ * DEFINITIONS GRID (clave / valor para pantallas de detalle)
+ * ============================================================ */
+
+.csa-defs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  column-gap: var(--csa-sp-6);
+  row-gap: var(--csa-sp-4);
+  margin: 0;
+}
+.csa-defs__row { margin: 0; }
+.csa-defs__row--full { grid-column: 1 / -1; }
+.csa-defs__label {
+  font-size: var(--csa-fs-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--csa-ink-muted);
+  font-weight: 500;
+  margin: 0 0 2px;
+}
+.csa-defs__value {
+  margin: 0;
+  color: var(--csa-ink);
+  line-height: var(--csa-lh-snug);
+}
+.csa-defs__sub {
+  margin: var(--csa-sp-2) 0 0;
+  padding-left: var(--csa-sp-5);
+  list-style: disc;
+  color: var(--csa-ink-soft);
+  font-size: var(--csa-fs-sm);
+}
+.csa-defs__sub li + li { margin-top: 2px; }
+
+/* Sección dentro de un bloque de definiciones — agrupa visualmente. */
+.csa-defs-section + .csa-defs-section {
+  margin-top: var(--csa-sp-6);
+  padding-top: var(--csa-sp-6);
+  border-top: 1px solid var(--csa-rule);
+}
+.csa-defs-section__title {
+  font-family: var(--csa-sans);
+  font-size: var(--csa-fs-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--csa-ink-muted);
+  font-weight: 500;
+  margin: 0 0 var(--csa-sp-4) 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--csa-sp-2);
+}
+.csa-defs-section__icon {
+  font-size: var(--csa-fs-sm);
+}
+.csa-defs-section__icon--green      { color: var(--csa-green); }
+.csa-defs-section__icon--ochre      { color: var(--csa-ochre); }
+.csa-defs-section__icon--terracotta { color: var(--csa-terracotta); }
+.csa-defs-section__icon--sky        { color: var(--csa-sky); }
+.csa-defs-section__icon--plum       { color: var(--csa-plum); }
 
 
 /* ============================================================

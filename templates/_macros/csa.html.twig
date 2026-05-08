@@ -75,9 +75,10 @@
 {# ---------- KPI ----------
  # value se imprime tal cual (puedes pasar un número formateado).
  # delta_dir: up | down | null
+ # tone: green | ochre | terracotta | sky | plum (franja superior)
  #}
-{% macro kpi(label, value, unit = null, delta = null, delta_dir = null) %}
-    <div class="csa-kpi">
+{% macro kpi(label, value, unit = null, delta = null, delta_dir = null, tone = null) %}
+    <div class="csa-kpi{% if tone %} csa-kpi--{{ tone }}{% endif %}">
         <div class="csa-kpi__label">{{ label }}</div>
         <div class="csa-kpi__value">
             {{ value }}{% if unit %}<span class="csa-kpi__unit">{{ unit }}</span>{% endif %}
@@ -119,6 +120,21 @@
             <div class="csa-field__error">{{ form_errors(field) }}</div>
         {% endif %}
     </div>
+{% endmacro %}
+
+
+{# ---------- CALLOUT ----------
+ # Mensaje inline destacado dentro de cards o secciones.
+ # tone: info | warning | danger (default: info)
+ # icon: clase de Font Awesome sin el prefijo "fa fa-"
+ #
+ #   {{ csa.callout('No se puede cerrar el lote.', 'warning', 'exclamation-triangle') }}
+ #}
+{% macro callout(message, tone = 'info', icon = 'info-circle') %}
+    <p class="csa-callout csa-callout--{{ tone }}">
+        <i class="csa-callout__icon fa fa-{{ icon }}"></i>
+        <span>{{ message }}</span>
+    </p>
 {% endmacro %}
 
 

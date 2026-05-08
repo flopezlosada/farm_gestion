@@ -110,8 +110,8 @@ html {
 .csa-muted { color: var(--csa-ink-muted); }
 .csa-soft  { color: var(--csa-ink-soft); }
 
-.csa-stack > * + * { margin-top: var(--csa-sp-3); }
-.csa-stack-lg > * + * { margin-top: var(--csa-sp-6); }
+.csa-stack    { display: flex; flex-direction: column; gap: var(--csa-sp-3); }
+.csa-stack-lg { display: flex; flex-direction: column; gap: var(--csa-sp-6); }
 
 .csa-row {
   display: flex;
