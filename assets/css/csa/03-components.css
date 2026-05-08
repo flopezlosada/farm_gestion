@@ -465,6 +465,9 @@
 
 .csa-field { display: block; }
 .csa-field + .csa-field { margin-top: var(--csa-sp-4); }
+/* Dentro de csa-form-grid el espaciado lo da `gap` — anular el margin
+ * que se aplicaría por sibling order y descuadra las columnas. */
+.csa-form-grid > .csa-field + .csa-field { margin-top: 0; }
 
 .csa-field__label-row {
   display: flex;
@@ -500,6 +503,13 @@
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: var(--csa-sp-4);
+}
+
+/* Form con ancho legible — pensado para edits/news estándar.
+ * Evita inputs gigantes en pantallas anchas. */
+.csa-form-narrow {
+  max-width: 720px;
+  margin: 0 auto;
 }
 .csa-form-grid--full > .csa-field { grid-column: 1 / -1; }
 .csa-field--full { grid-column: 1 / -1; }
