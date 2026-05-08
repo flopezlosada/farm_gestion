@@ -707,6 +707,7 @@ a.csa-table__primary:hover {
 .csa-table__actions {
   text-align: right;
   white-space: nowrap;
+  width: 1%;
 }
 .csa-table__actions a {
   color: var(--csa-ink-soft);
@@ -714,7 +715,9 @@ a.csa-table__primary:hover {
   margin-left: var(--csa-sp-3);
   font-size: var(--csa-fs-sm);
 }
-.csa-table__actions a:hover { color: var(--csa-ink); border-bottom: 1px solid var(--csa-ink); }
+.csa-table__actions a:hover { color: var(--csa-ink); border-bottom: none; }
+.csa-table__actions a.csa-table__action--danger { color: var(--csa-terracotta); }
+.csa-table__actions a.csa-table__action--danger:hover { color: #b04e22; }
 
 
 /* ============================================================
@@ -1014,6 +1017,46 @@ a.csa-table__primary:hover {
  * Cargamos solo el JS core de DataTables (no su CSS Bootstrap).
  * Aquí mapeamos las clases que genera (`.dataTables_*`,
  * `.paginate_button`, etc.) al lenguaje visual csa. */
+
+/* Sort indicators de DataTables — pegados al texto, no a la derecha del th.
+ * El CSS legacy de DataTables pinta la flecha como background-image (PNG)
+ * sobre el <th>. Lo apagamos y la pintamos como pseudoelemento inline. */
+table.csa-table thead th.sorting,
+table.csa-table thead th.sorting_asc,
+table.csa-table thead th.sorting_desc {
+  cursor: pointer;
+  position: relative;
+  background-image: none;
+  padding-right: var(--csa-sp-3);
+}
+table.csa-table thead th.sorting::before,
+table.csa-table thead th.sorting_asc::before,
+table.csa-table thead th.sorting_desc::before {
+  display: none;
+  content: none;
+}
+
+table.csa-table thead th.sorting::after,
+table.csa-table thead th.sorting_asc::after,
+table.csa-table thead th.sorting_desc::after {
+  position: static;
+  display: inline;
+  float: none;
+  font-family: var(--csa-sans);
+  margin-left: var(--csa-sp-1);
+  background: none;
+  opacity: 1;
+  font-size: 10px;
+  color: var(--csa-ink-muted);
+  bottom: auto;
+  right: auto;
+  top: auto;
+  width: auto;
+  height: auto;
+}
+table.csa-table thead th.sorting::after      { content: " ↕"; }
+table.csa-table thead th.sorting_asc::after  { content: " ↑"; color: var(--csa-ink); }
+table.csa-table thead th.sorting_desc::after { content: " ↓"; color: var(--csa-ink); }
 
 /* Filas top/bottom inyectadas vía la opción `dom` de DataTables. */
 .csa-dt-top,
