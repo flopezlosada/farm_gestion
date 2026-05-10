@@ -216,7 +216,7 @@ class CompostCollectionController extends AbstractAppController
         if ($editForm->isSubmitted() && $editForm->isValid()) {
             $em->flush();
 
-            return $this->redirect($this->generateUrl('compostcollection_edit', array('id' => $id)));
+            return $this->redirect($this->generateUrl('compostcollection_show', array('id' => $id)));
         }
 
         return $this->render('CompostCollection/edit.html.twig', array(

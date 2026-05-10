@@ -176,7 +176,7 @@ class FowlDestinationController extends AbstractAppController
         if ($editForm->isSubmitted() && $editForm->isValid()) {
             $em->flush();
 
-            return $this->redirect($this->generateUrl('fowldestination_edit', array('id' => $id)));
+            return $this->redirect($this->generateUrl('fowldestination_show', array('id' => $id)));
         }
 
         return $this->render('FowlDestination/edit.html.twig', array(

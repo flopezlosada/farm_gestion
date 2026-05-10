@@ -176,7 +176,7 @@ class ProviderController extends AbstractAppController
         if ($editForm->isSubmitted() && $editForm->isValid()) {
             $em->flush();
 
-            return $this->redirect($this->generateUrl('provider_edit', array('id' => $id)));
+            return $this->redirect($this->generateUrl('provider_show', array('id' => $id)));
         }
 
         return $this->render('Provider/edit.html.twig', array(

@@ -193,7 +193,7 @@ class MovementController extends AbstractAppController
         if ($editForm->isSubmitted() && $editForm->isValid()) {
             $em->flush();
 
-            return $this->redirect($this->generateUrl('movement_edit', array('id' => $id)));
+            return $this->redirect($this->generateUrl('movement_show', array('id' => $id)));
         }
 
         return $this->render('Movement/edit.html.twig', array(
