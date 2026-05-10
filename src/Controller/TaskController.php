@@ -192,7 +192,7 @@ class TaskController extends AbstractAppController
         $form->add('submit', SubmitType::class, array('label' => 'Create'));
         $form->handleRequest($request);
 
-        if ($form->isValid() && $entity->getExpectedDate()) {
+        if ($form->isSubmitted() && $form->isValid() && $entity->getExpectedDate()) {
             $em = $this->getDoctrine()->getManager();
             $task_type = $em->getRepository(\App\Entity\TaskType::class)->find($task_type_id);
             $entity->setTaskType($task_type);
@@ -241,7 +241,7 @@ class TaskController extends AbstractAppController
         $form->add('submit', SubmitType::class, array('label' => 'Create'));
         $form->handleRequest($request);
 
-        if ($form->isValid() && $entity->getExpectedDate()) {
+        if ($form->isSubmitted() && $form->isValid() && $entity->getExpectedDate()) {
             $em = $this->getDoctrine()->getManager();
             $task_type = $em->getRepository(\App\Entity\TaskType::class)->find($task_type_id);
             $entity->setTaskType($task_type);
