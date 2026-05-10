@@ -1,44 +1,105 @@
-{% extends 'layout_show.html.twig' %}
-{% block more_css %}
-    <link rel="stylesheet" href="{{ asset('bundles/app/fancybox/jquery.fancybox.css') }}"/>
+{# ============================================================
+ # Detalle de trabajo cultural (CulturalWork) — shell csa.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}{{ entity.culturalWorkType }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('culturalwork') }}">Trabajos culturales</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ entity.culturalWorkType }}</span>
 {% endblock %}
-{% block main -%}
-    <div class="panel panel-default">
-        <div class="panel-body">
-            <div class="row">
-                <div class="col-lg-12">
-                    <div class="panel panel-info">
-                    <div class="panel-heading"><h4>{{ entity.culturalWorkType.title }}</h4></div>
-                    <div class="panel-body">
-                        <p><strong>Cultivos trabajados:</strong>
-                        {% for crop_working in entity.cropWorkings %}
-                            <a href="{{ path('cropworking_show', {'id': crop_working.id}) }}">{{ crop_working }}</a> |
-                            {% endfor %}
-                        </p>
-                        <p><strong>Fecha de trabajo:</strong> {{ entity.getDate|format_date('long', locale='es')  }}</p>
-                        <p><strong>Sectores afectados:</strong>
-                            {% for sector in entity.sectors %}
-                                <a href="{{ path('sector_show', {'id': sector.id}) }}">{{ sector }}</a> |
-                            {% endfor %}
-                        </p>
-                        {{ entity.content|raw }}
-                    <div class="panel-footer">
-                        <ul class="record_actions list-inline">
-                            <li>
-                                <a href="{{ path('culturalwork') }}">
-                                    Listado
-                                </a>
-                            </li>
-                            <li>
-                                <a href="{{ path('culturalwork_edit', { 'id': entity.id }) }}">
-                                    Editar
-                                </a>
-                            </li>
-                            <li>{{ form(delete_form) }}</li>
-                        </ul>
+
+{% block csa_main %}
+
+    {# delete_form oculto fuera de la página principal #}
+    <div style="display: none;">
+        {{ form_start(delete_form, { attr: { id: 'culturalwork-delete-form' } }) }}
+            {{ form_rest(delete_form) }}
+        {{ form_end(delete_form, { render_rest: false }) }}
+    </div>
+
+    {# ===== Cabecera ===== #}
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-6); align-items: flex-start;">
+        <div class="csa-row" style="align-items: flex-start; gap: var(--csa-sp-4);">
+            <span class="csa-table__id-marker" style="width: 64px; height: 64px; font-size: 28px; border-radius: var(--csa-radius-lg);">
+                <i class="fa fa-wrench"></i>
+            </span>
+            <div>
+                <h1>{{ entity.culturalWorkType }}</h1>
+                {% if entity.date %}
+                    <div class="csa-serif csa-italic csa-soft" style="margin-top: var(--csa-sp-2);">
+                        {{ entity.date|format_date('long', locale='es') }}
                     </div>
-                </div>
+                {% endif %}
             </div>
         </div>
+        <div class="csa-row">
+            <button type="submit" form="culturalwork-delete-form" class="csa-btn csa-btn--ghost"
+                    onclick="return confirm('¿Seguro? Esta acción no se puede deshacer.');">
+                Eliminar
+            </button>
+            {{ csa.btn('Editar', { variant: 'secondary', href: path('culturalwork_edit', { id: entity.id }), icon: 'fa-pencil' }) }}
+            {{ csa.btn('Volver', { variant: 'ghost', href: path('culturalwork') }) }}
+        </div>
     </div>
+
+    {# ===== Detalle ===== #}
+    {% embed '_components/csa_card.html.twig' with {
+        title: 'Datos del trabajo',
+        accent: 'plum'
+    } %}
+        {% block body %}
+            <section class="csa-defs-section">
+                <dl class="csa-defs">
+                    <div class="csa-defs__row">
+                        <dt class="csa-defs__label">Tipo</dt>
+                        <dd class="csa-defs__value">{{ entity.culturalWorkType }}</dd>
+                    </div>
+                    {% if entity.date %}
+                        <div class="csa-defs__row">
+                            <dt class="csa-defs__label">Fecha</dt>
+                            <dd class="csa-defs__value">{{ entity.date|format_date('long', locale='es') }}</dd>
+                        </div>
+                    {% endif %}
+                    <div class="csa-defs__row csa-defs__row--full">
+                        <dt class="csa-defs__label">Cultivos trabajados</dt>
+                        <dd class="csa-defs__value">
+                            {% for crop_working in entity.cropWorkings %}
+                                <a href="{{ path('cropworking_show', { id: crop_working.id }) }}">{{ crop_working }}</a>{% if not loop.last %} · {% endif %}
+                            {% else %}
+                                <span class="csa-muted">—</span>
+                            {% endfor %}
+                        </dd>
+                    </div>
+                    <div class="csa-defs__row csa-defs__row--full">
+                        <dt class="csa-defs__label">Sectores afectados</dt>
+                        <dd class="csa-defs__value">
+                            {% for sector in entity.sectors %}
+                                <a href="{{ path('sector_show', { id: sector.id }) }}">{{ sector }}</a>{% if not loop.last %} · {% endif %}
+                            {% else %}
+                                <span class="csa-muted">—</span>
+                            {% endfor %}
+                        </dd>
+                    </div>
+                </dl>
+            </section>
+
+            {% if entity.content %}
+                <section class="csa-defs-section">
+                    <h4 class="csa-defs-section__title">
+                        <i class="csa-defs-section__icon csa-defs-section__icon--plum fa fa-sticky-note-o"></i>
+                        Notas
+                    </h4>
+                    <div class="csa-soft" style="line-height: var(--csa-lh-normal);">{{ entity.content|raw }}</div>
+                </section>
+            {% endif %}
+        {% endblock %}
+    {% endembed %}
+
 {% endblock %}
