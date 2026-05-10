@@ -107,58 +107,63 @@
 
             <div class="csa-stack-lg">
 
-                {# ===== Lotes activos (gallinas + pollos en una sola card) ===== #}
-                {% embed '_components/csa_card.html.twig' with {
-                    title: 'Lotes activos'
-                } %}
-                    {% block body %}
-                        {% if active_hen_batch|length == 0 and active_chicken_batch|length == 0 %}
-                            <p class="csa-muted">No hay lotes activos en este momento.</p>
-                        {% endif %}
+                {# ===== Lotes activos: dos cards en paralelo ===== #}
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--csa-sp-6);">
 
-                        {% if active_hen_batch|length > 0 %}
-                            <div class="csa-list-group">
-                                <div class="csa-list-group__label">Gallinas · {{ active_hen_batch|length }} activos</div>
+                    {# --- Gallinas --- #}
+                    {% embed '_components/csa_card.html.twig' with {
+                        title: 'Lotes de gallinas',
+                        subtitle: active_hen_batch|length ~ ' activos · puesta semanal'
+                    } %}
+                        {% block body %}
+                            {% if active_hen_batch|length > 0 %}
                                 <ul class="csa-list">
                                     {% for batch in active_hen_batch %}
                                         <li class="csa-list__item">
                                             <a class="csa-list__link" href="{{ path('batch_show', {'id': batch.id}) }}">
-                                                <span class="csa-list__icon csa-list__icon--green">
+                                                <span class="csa-list__icon csa-list__icon--ochre">
                                                     <i class="fa fa-egg" aria-hidden="true"></i>
                                                 </span>
                                                 <div class="csa-list__body">
                                                     <div class="csa-list__primary">Lote #{{ batch.id }}</div>
                                                     <div class="csa-list__secondary">
-                                                        {{ batch.amount }} {{ batch.product|lower }} · puesta
+                                                        {{ batch.amount }} {{ batch.product|lower }}
                                                         {%- if batch.purchaseDate %} · desde {{ batch.purchaseDate|date('d-m-Y') }}{% endif %}
                                                     </div>
                                                 </div>
                                                 <div class="csa-list__metric csa-list__metric--ochre">
                                                     <span class="csa-list__metric-value">{{ batch.weekLay }}</span>
-                                                    <span class="csa-list__metric-unit">huevos / sem</span>
+                                                    <span class="csa-list__metric-unit">/ sem</span>
                                                 </div>
                                                 <i class="csa-list__chevron fa fa-chevron-right" aria-hidden="true"></i>
                                             </a>
                                         </li>
                                     {% endfor %}
                                 </ul>
-                            </div>
-                        {% endif %}
+                            {% else %}
+                                <p class="csa-muted">No hay lotes de gallinas activos.</p>
+                            {% endif %}
+                        {% endblock %}
+                    {% endembed %}
 
-                        {% if active_chicken_batch|length > 0 %}
-                            <div class="csa-list-group">
-                                <div class="csa-list-group__label">Pollos · {{ active_chicken_batch|length }} activos</div>
+                    {# --- Pollos --- #}
+                    {% embed '_components/csa_card.html.twig' with {
+                        title: 'Lotes de pollos',
+                        subtitle: active_chicken_batch|length ~ ' activos · cría para carne'
+                    } %}
+                        {% block body %}
+                            {% if active_chicken_batch|length > 0 %}
                                 <ul class="csa-list">
                                     {% for batch in active_chicken_batch %}
                                         <li class="csa-list__item">
                                             <a class="csa-list__link" href="{{ path('batch_show', {'id': batch.id}) }}">
-                                                <span class="csa-list__icon csa-list__icon--green">
-                                                    <i class="fa fa-drumstick-bite" aria-hidden="true"></i>
+                                                <span class="csa-list__icon csa-list__icon--terracotta">
+                                                    <i class="fa fa-feather" aria-hidden="true"></i>
                                                 </span>
                                                 <div class="csa-list__body">
                                                     <div class="csa-list__primary">Lote #{{ batch.id }}</div>
                                                     <div class="csa-list__secondary">
-                                                        {{ batch.amount }} {{ batch.product|lower }} · carne
+                                                        {{ batch.product|lower }}
                                                         {%- if batch.purchaseDate %} · desde {{ batch.purchaseDate|date('d-m-Y') }}{% endif %}
                                                     </div>
                                                 </div>
@@ -171,10 +176,13 @@
                                         </li>
                                     {% endfor %}
                                 </ul>
-                            </div>
-                        {% endif %}
-                    {% endblock %}
-                {% endembed %}
+                            {% else %}
+                                <p class="csa-muted">No hay lotes de pollos activos.</p>
+                            {% endif %}
+                        {% endblock %}
+                    {% endembed %}
+
+                </div>
 
                 {# ===== Gráfica de evolución ===== #}
                 {% embed '_components/csa_card.html.twig' with {
