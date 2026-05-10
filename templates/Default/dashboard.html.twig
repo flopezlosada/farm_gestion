@@ -52,10 +52,13 @@
 
     {% if is_granted('ROLE_GUEST') %}
 
+        {%- set hour = 'now'|date('G') -%}
+        {%- set greeting = hour < 14 ? 'Buenos días' : (hour < 21 ? 'Buenas tardes' : 'Buenas noches') -%}
+
         {{ csa.page_header(
             'Día a día · Resumen',
-            'Panel de control',
-            'Estado general de la cooperativa.'
+            greeting ~ ', ' ~ app.user.userIdentifier,
+            'Hoy, ' ~ ('now'|format_date('full', locale='es')) ~ '.'
         ) }}
 
         {# ===== KPIs ===== #}
@@ -64,25 +67,33 @@
                 'Puesta semanal',
                 render(controller('App\\Controller\\DefaultController::layWeek')),
                 'huevos',
-                null, null, 'sky'
+                total_lay_eggs ~ ' acumulado en ' ~ 'now'|date('Y'),
+                null,
+                'sky'
             ) }}
             {{ csa.kpi(
                 'Producción del año',
                 render(controller('App\\Controller\\DefaultController::totalProductionYear'))|round,
                 'kg',
-                null, null, 'green'
+                'verduras y hortalizas',
+                null,
+                'green'
             ) }}
             {{ csa.kpi(
                 'Cultivos activos',
                 render(controller('App\\Controller\\DefaultController::totalCropWorking')),
                 null,
-                null, null, 'green'
+                'en producción ahora mismo',
+                null,
+                'green'
             ) }}
             {{ csa.kpi(
                 'Residuo recogido',
                 render(controller('App\\Controller\\DefaultController::totalCompost')),
                 't',
-                null, null, 'plum'
+                'compostaje · ' ~ 'now'|date('Y'),
+                null,
+                'plum'
             ) }}
         </div>
 
@@ -93,9 +104,11 @@
                 {# ===== Lotes de gallinas activos ===== #}
                 {% embed '_components/csa_card.html.twig' with {
                     title: 'Lotes de gallinas activos',
-                    subtitle: 'Puesta de la semana en curso.'
+                    subtitle: 'Puesta de la semana en curso.',
+                    accent: 'sky'
                 } %}
                     {% block body %}
+                        {% import '_macros/csa.html.twig' as csa %}
                         {% if active_hen_batch|length > 0 %}
                             <ul class="csa-list">
                                 {% for batch in active_hen_batch %}
@@ -103,11 +116,19 @@
                                         <a class="csa-list__link" href="{{ path('batch_show', {'id': batch.id}) }}">
                                             <i class="csa-list__icon fa fa-egg"></i>
                                             <div class="csa-list__body">
-                                                <div class="csa-list__primary">Lote #{{ batch.id }}</div>
+                                                <div class="csa-list__primary">Lote #{{ batch.id }} · {{ batch.amount }} {{ batch.product|lower }}</div>
                                                 <div class="csa-list__secondary">
-                                                    {{ batch.getWeekLay }} huevos esta semana
+                                                    {% if batch.purchaseDate %}
+                                                        Iniciado el {{ batch.purchaseDate|date('d-m-Y') }} · {{ batch.batchAge }} días
+                                                    {% else %}
+                                                        {{ batch.batchAge }} días en producción
+                                                    {% endif %}
+                                                    {% if batch.weekLay > 0 %}
+                                                        · {{ batch.weekLay }} huevos esta semana
+                                                    {% endif %}
                                                 </div>
                                             </div>
+                                            {{ csa.badge('Activo', 'green') }}
                                         </a>
                                     </li>
                                 {% endfor %}
@@ -121,9 +142,11 @@
                 {# ===== Lotes de pollos activos ===== #}
                 {% embed '_components/csa_card.html.twig' with {
                     title: 'Lotes de pollos activos',
-                    subtitle: 'Animales en cría.'
+                    subtitle: 'Animales en cría.',
+                    accent: 'ochre'
                 } %}
                     {% block body %}
+                        {% import '_macros/csa.html.twig' as csa %}
                         {% if active_chicken_batch|length > 0 %}
                             <ul class="csa-list">
                                 {% for batch in active_chicken_batch %}
@@ -131,11 +154,16 @@
                                         <a class="csa-list__link" href="{{ path('batch_show', {'id': batch.id}) }}">
                                             <i class="csa-list__icon fa fa-paw"></i>
                                             <div class="csa-list__body">
-                                                <div class="csa-list__primary">Lote #{{ batch.id }}</div>
+                                                <div class="csa-list__primary">Lote #{{ batch.id }} · {{ batch.amount }} {{ batch.product|lower }}</div>
                                                 <div class="csa-list__secondary">
-                                                    {{ batch.amount }} animales
+                                                    {% if batch.purchaseDate %}
+                                                        Iniciado el {{ batch.purchaseDate|date('d-m-Y') }} · {{ batch.batchAge }} días
+                                                    {% else %}
+                                                        {{ batch.batchAge }} días en producción
+                                                    {% endif %}
                                                 </div>
                                             </div>
+                                            {{ csa.badge('Activo', 'green') }}
                                         </a>
                                     </li>
                                 {% endfor %}
@@ -148,10 +176,11 @@
 
                 {# ===== Gráfica de evolución ===== #}
                 {% embed '_components/csa_card.html.twig' with {
-                    title: 'Evolución de la puesta semanal'
+                    title: 'Evolución de la puesta semanal',
+                    subtitle: 'Últimas 10 semanas.'
                 } %}
                     {% block body %}
-                        <div id="layweekchart" style="position: relative; height: 250px;"></div>
+                        <div id="layweekchart" style="position: relative; height: 260px;"></div>
                     {% endblock %}
                 {% endembed %}
 
@@ -161,7 +190,9 @@
 
                 {# ===== Resumen del año ===== #}
                 {% embed '_components/csa_card.html.twig' with {
-                    title: 'Resumen del año ' ~ 'now'|date('Y')
+                    title: 'Resumen del año ' ~ 'now'|date('Y'),
+                    subtitle: 'Acumulado hasta hoy.',
+                    accent: 'plum'
                 } %}
                     {% block body %}
                         <ul class="csa-list">
