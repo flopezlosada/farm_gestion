@@ -180,6 +180,29 @@
   flex-direction: column;
   gap: var(--csa-sp-3);
 }
+.csa-kpi__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--csa-sp-3);
+}
+.csa-kpi__icon-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--csa-radius-md);
+  font-size: 0.875rem;
+  background: var(--csa-surface-alt);
+  color: var(--csa-ink-soft);
+  flex-shrink: 0;
+}
+.csa-kpi--green      .csa-kpi__icon-box { background: var(--csa-green-soft);      color: var(--csa-green); }
+.csa-kpi--ochre      .csa-kpi__icon-box { background: var(--csa-ochre-soft);      color: var(--csa-ochre); }
+.csa-kpi--terracotta .csa-kpi__icon-box { background: var(--csa-terracotta-soft); color: var(--csa-terracotta); }
+.csa-kpi--sky        .csa-kpi__icon-box { background: var(--csa-sky-soft);        color: var(--csa-sky); }
+.csa-kpi--plum       .csa-kpi__icon-box { background: var(--csa-plum-soft);       color: var(--csa-plum); }
 .csa-kpi__label {
   font-size: var(--csa-fs-xs);
   letter-spacing: 0.08em;
@@ -211,17 +234,23 @@
 .csa-kpi__delta--up   { color: var(--csa-green); }
 .csa-kpi__delta--down { color: var(--csa-terracotta); }
 
-/* Tonos: trazo superior fino para diferenciar el tipo de métrica. */
+/* Tonos: trazo superior + valor coloreado del mismo tono.
+ * Ese color en el valor es el que da carácter a cada KPI. */
 .csa-kpi--green,
 .csa-kpi--ochre,
 .csa-kpi--terracotta,
 .csa-kpi--sky,
-.csa-kpi--plum { border-top-width: 2px; }
+.csa-kpi--plum { border-top-width: 3px; }
 .csa-kpi--green      { border-top-color: var(--csa-green); }
 .csa-kpi--ochre      { border-top-color: var(--csa-ochre); }
 .csa-kpi--terracotta { border-top-color: var(--csa-terracotta); }
 .csa-kpi--sky        { border-top-color: var(--csa-sky); }
 .csa-kpi--plum       { border-top-color: var(--csa-plum); }
+.csa-kpi--green      .csa-kpi__value { color: var(--csa-green); }
+.csa-kpi--ochre      .csa-kpi__value { color: var(--csa-ochre); }
+.csa-kpi--terracotta .csa-kpi__value { color: var(--csa-terracotta); }
+.csa-kpi--sky        .csa-kpi__value { color: var(--csa-sky); }
+.csa-kpi--plum       .csa-kpi__value { color: var(--csa-plum); }
 
 /* Fila de KPIs: rejilla auto-fit que reflueye en mobile. */
 .csa-kpi-row {
@@ -425,12 +454,15 @@
 .csa-textarea {
   display: block;
   width: 100%;
-  padding: 9px 12px;
+  box-sizing: border-box;
+  height: 40px;
+  padding: 8px 12px;
   background: var(--csa-surface);
   border: 1px solid var(--csa-rule);
   border-radius: var(--csa-radius-md);
   font-family: var(--csa-sans);
   font-size: var(--csa-fs-base);
+  line-height: 1.4;
   color: var(--csa-ink);
   outline: none;
   transition: border-color var(--csa-t-fast), background var(--csa-t-fast);
@@ -441,7 +473,13 @@
   border-color: var(--csa-ink);
   background: white;
 }
-.csa-textarea { resize: vertical; min-height: 88px; line-height: var(--csa-lh-snug); }
+/* Textarea: expande según contenido, no altura fija de 40px */
+.csa-textarea {
+  height: auto;
+  min-height: 88px;
+  resize: vertical;
+  line-height: var(--csa-lh-snug);
+}
 .csa-input::placeholder,
 .csa-textarea::placeholder { color: var(--csa-ink-muted); }
 
