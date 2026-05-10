@@ -131,13 +131,23 @@
   padding: var(--csa-sp-6);
 }
 .csa-card--flush { padding: 0; }
+
+/* Acento de color por tipo de sección. Línea fina con color principal — presencia sin saturar. */
+.csa-card--accent-sky        { border-top: 2px solid var(--csa-sky); }
+.csa-card--accent-ochre      { border-top: 2px solid var(--csa-ochre); }
+.csa-card--accent-plum       { border-top: 2px solid var(--csa-plum); }
+.csa-card--accent-green      { border-top: 2px solid var(--csa-green); }
+.csa-card--accent-terracotta { border-top: 2px solid var(--csa-terracotta); }
+
 .csa-card__header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--csa-sp-3);
   padding: var(--csa-sp-5) var(--csa-sp-6);
+  background: var(--csa-surface-alt);
   border-bottom: 1px solid var(--csa-rule);
+  border-radius: var(--csa-radius-lg) var(--csa-radius-lg) 0 0;
 }
 .csa-card__header h3,
 .csa-card__title {
@@ -667,6 +677,16 @@
 }
 .csa-table tbody tr:last-child td { border-bottom: none; }
 .csa-table tbody tr:hover td { background: var(--csa-bg); }
+
+/* Compactar contenido HTML (p de CKEditor) dentro de celdas */
+.csa-table td p { margin: 0; }
+.csa-table td p + p { margin-top: var(--csa-sp-2); }
+
+/* Modificador para columnas con valores cortos: ancho mínimo, sin wrap */
+.csa-table .csa-table__col-tight {
+  width: 1%;
+  white-space: nowrap;
+}
 
 .csa-table__id {
   font-family: var(--csa-mono);

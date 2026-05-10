@@ -2,14 +2,14 @@
  # Tarjeta con header opcional. Usar con embed:
  #
  #   {% embed '_components/csa_card.html.twig' with {
- #       title: 'Título', subtitle: 'Subtítulo' } %}
+ #       title: 'Título', subtitle: 'Subtítulo', accent: 'sky' } %}
  #       {% block body %}contenido…{% endblock %}
  #   {% endembed %}
  #
  # title y subtitle son opcionales. Si no hay title, no se renderiza el
- # header.
+ # header. accent es opcional; valores: sky, ochre, plum, green, terracotta.
  #}
-<section class="csa-card csa-card--flush">
+<section class="csa-card csa-card--flush{% if accent is defined and accent %} csa-card--accent-{{ accent }}{% endif %}">
     {% if title is defined and title %}
         <header class="csa-card__header">
             <div>

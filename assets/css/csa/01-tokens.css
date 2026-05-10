@@ -26,9 +26,9 @@
 
 :root {
   /* ---------- Color · superficies y tinta ---------- */
-  --csa-bg:           #faf8f3;   /* fondo general, papel cálido */
+  --csa-bg:           #fbfbfa;   /* fondo general, off-white */
   --csa-surface:      #ffffff;   /* cards, panels */
-  --csa-surface-alt:  #f0ece2;   /* sidebar cream, secciones secundarias */
+  --csa-surface-alt:  #f5f5f3;   /* sidebar, header de card, secciones secundarias */
   --csa-ink:          #1c1d1a;   /* texto principal, casi negro cálido */
   --csa-ink-soft:     #5a5b56;   /* texto secundario */
   --csa-ink-muted:    #8a8b85;   /* texto terciario, hints, captions */
