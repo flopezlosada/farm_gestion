@@ -42,7 +42,6 @@ class Fowl
      * @var string $put_down_date
      * @ORM\Column(name="put_down_date", type="date", nullable=true)
      */
-    #[Assert\Date]
     private $put_down_date;
 
     /**
