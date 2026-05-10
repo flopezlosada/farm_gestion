@@ -331,6 +331,51 @@
   font-size: var(--csa-fs-sm);
 }
 
+/* Variantes de tono del icono — coherente con .csa-kpi__icon-box.
+ * Útil para listas de items "informativos" (huevos, verduras, pollos…)
+ * sin convertir el link entero en --primary o --danger. */
+.csa-list__icon--green      { background: var(--csa-green-soft);      color: var(--csa-green); }
+.csa-list__icon--ochre      { background: var(--csa-ochre-soft);      color: var(--csa-ochre); }
+.csa-list__icon--terracotta { background: var(--csa-terracotta-soft); color: var(--csa-terracotta); }
+.csa-list__icon--sky        { background: var(--csa-sky-soft);        color: var(--csa-sky); }
+.csa-list__icon--plum       { background: var(--csa-plum-soft);       color: var(--csa-plum); }
+
+/* Métrica a la derecha del item (valor + unidad sutil). Tinte opcional. */
+.csa-list__metric {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.csa-list__metric-value {
+  font-family: var(--csa-serif);
+  font-size: var(--csa-fs-lg);
+  color: var(--csa-ink);
+  line-height: 1;
+}
+.csa-list__metric-unit {
+  font-size: var(--csa-fs-xs);
+  color: var(--csa-ink-muted);
+}
+.csa-list__metric--green      .csa-list__metric-value { color: var(--csa-green); }
+.csa-list__metric--ochre      .csa-list__metric-value { color: var(--csa-ochre); }
+.csa-list__metric--terracotta .csa-list__metric-value { color: var(--csa-terracotta); }
+.csa-list__metric--sky        .csa-list__metric-value { color: var(--csa-sky); }
+.csa-list__metric--plum       .csa-list__metric-value { color: var(--csa-plum); }
+
+/* Encabezado de subgrupo dentro de una lista — "GALLINAS · 3 ACTIVOS". */
+.csa-list-group__label {
+  font-size: var(--csa-fs-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--csa-ink-muted);
+  font-weight: 500;
+  padding: var(--csa-sp-4) 0 var(--csa-sp-2);
+  border-bottom: 1px solid var(--csa-rule-soft);
+}
+.csa-list-group + .csa-list-group { margin-top: var(--csa-sp-2); }
+
 /* Variante destructiva — para acciones tipo "Finalizar lote". */
 .csa-list__link--danger .csa-list__icon {
   background: var(--csa-terracotta-soft);
@@ -1281,3 +1326,207 @@ table.csa-table thead th.sorting_desc::after { content: " ↓"; color: var(--csa
 .csa-status-finalized  { color: var(--csa-ink-muted); }
 .csa-status-attention  { color: var(--csa-amber); }
 .csa-status-incident   { color: var(--csa-terracotta); }
+
+
+/* ============================================================
+ * BASKET CARD (cestas semanales de producción)
+ * ============================================================ */
+
+.csa-basket-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: var(--csa-sp-5);
+}
+
+.csa-basket-card {
+  background: var(--csa-surface);
+  border: 1px solid var(--csa-rule);
+  border-radius: var(--csa-radius-lg);
+  overflow: hidden;
+  transition: transform var(--csa-t-fast), box-shadow var(--csa-t-fast), border-color var(--csa-t-fast);
+}
+.csa-basket-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.06);
+  border-color: var(--csa-ink-muted);
+}
+.csa-basket-card__link {
+  display: block;
+  padding: var(--csa-sp-5) var(--csa-sp-6);
+  color: var(--csa-ink);
+  text-decoration: none;
+}
+.csa-basket-card__link:hover { color: var(--csa-ink); }
+
+/* Acentos por tono */
+.csa-basket-card--sky        { border-top: 3px solid var(--csa-sky); }
+.csa-basket-card--green      { border-top: 3px solid var(--csa-green); }
+.csa-basket-card--ochre      { border-top: 3px solid var(--csa-ochre); }
+.csa-basket-card--terracotta { border-top: 3px solid var(--csa-terracotta); }
+.csa-basket-card--plum       { border-top: 3px solid var(--csa-plum); }
+
+.csa-basket-card__head {
+  display: flex;
+  align-items: center;
+  gap: var(--csa-sp-3);
+  margin-bottom: var(--csa-sp-4);
+}
+.csa-basket-card__icon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--csa-radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+.csa-basket-card--sky        .csa-basket-card__icon { background: var(--csa-sky-soft);        color: var(--csa-sky); }
+.csa-basket-card--green      .csa-basket-card__icon { background: var(--csa-green-soft);      color: var(--csa-green); }
+.csa-basket-card--ochre      .csa-basket-card__icon { background: var(--csa-ochre-soft);      color: var(--csa-ochre); }
+.csa-basket-card--terracotta .csa-basket-card__icon { background: var(--csa-terracotta-soft); color: var(--csa-terracotta); }
+.csa-basket-card--plum       .csa-basket-card__icon { background: var(--csa-plum-soft);       color: var(--csa-plum); }
+
+.csa-basket-card__meta { flex: 1; min-width: 0; }
+.csa-basket-card__week {
+  font-family: var(--csa-serif);
+  font-size: var(--csa-fs-lg);
+  font-weight: 500;
+  color: var(--csa-ink);
+}
+.csa-basket-card__date {
+  font-size: var(--csa-fs-sm);
+  color: var(--csa-ink-soft);
+  font-style: italic;
+}
+.csa-basket-card__total {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.csa-basket-card__kg {
+  font-family: var(--csa-serif);
+  font-size: 2rem;
+  font-weight: 500;
+  color: var(--csa-ink);
+  line-height: 1;
+}
+.csa-basket-card__unit {
+  font-size: var(--csa-fs-sm);
+  color: var(--csa-ink-muted);
+}
+
+.csa-basket-card__bar {
+  height: 4px;
+  background: var(--csa-rule-soft);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: var(--csa-sp-4);
+}
+.csa-basket-card__bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width var(--csa-t-medium, 200ms);
+}
+.csa-basket-card--sky        .csa-basket-card__bar-fill { background: var(--csa-sky); }
+.csa-basket-card--green      .csa-basket-card__bar-fill { background: var(--csa-green); }
+.csa-basket-card--ochre      .csa-basket-card__bar-fill { background: var(--csa-ochre); }
+.csa-basket-card--terracotta .csa-basket-card__bar-fill { background: var(--csa-terracotta); }
+.csa-basket-card--plum       .csa-basket-card__bar-fill { background: var(--csa-plum); }
+
+/* Stack horizontal proporcional: una fila de franjas de color, cada una
+ * con flex-grow proporcional al peso del cultivo. */
+.csa-basket-card__stack {
+  display: flex;
+  height: 14px;
+  background: var(--csa-rule-soft);
+  border-radius: var(--csa-radius-pill);
+  overflow: hidden;
+  margin-bottom: var(--csa-sp-4);
+  box-shadow: inset 0 0 0 1px var(--csa-rule);
+}
+.csa-basket-card__seg {
+  display: block;
+  height: 100%;
+  transition: filter var(--csa-t-fast);
+}
+.csa-basket-card__seg + .csa-basket-card__seg {
+  border-left: 1px solid rgba(255,255,255,0.6);
+}
+.csa-basket-card__seg:hover { filter: brightness(1.1); }
+
+/* Leyenda: cultivo con dot de color matching, peso a la derecha.
+ * Grid de 2 columnas para no extenderse vertical con muchas entradas. */
+.csa-basket-card__legend {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px var(--csa-sp-4);
+  list-style: none;
+  margin: 0 0 var(--csa-sp-4);
+  padding: 0;
+}
+.csa-basket-card__legend-item {
+  display: flex;
+  align-items: center;
+  gap: var(--csa-sp-2);
+  font-size: var(--csa-fs-sm);
+  min-width: 0;
+}
+.csa-basket-card__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.csa-basket-card__legend-name {
+  flex: 1;
+  min-width: 0;
+  color: var(--csa-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.csa-basket-card__legend-kg {
+  color: var(--csa-ink-muted);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--csa-fs-xs);
+  flex-shrink: 0;
+}
+
+/* Paleta cíclica de 7 tonos para segmentos y dots. */
+.csa-basket-card__seg--0,
+.csa-basket-card__dot--0 { background: var(--csa-green); }
+.csa-basket-card__seg--1,
+.csa-basket-card__dot--1 { background: var(--csa-ochre); }
+.csa-basket-card__seg--2,
+.csa-basket-card__dot--2 { background: var(--csa-sky); }
+.csa-basket-card__seg--3,
+.csa-basket-card__dot--3 { background: var(--csa-terracotta); }
+.csa-basket-card__seg--4,
+.csa-basket-card__dot--4 { background: var(--csa-plum); }
+.csa-basket-card__seg--5,
+.csa-basket-card__dot--5 { background: var(--csa-amber); }
+.csa-basket-card__seg--6,
+.csa-basket-card__dot--6 { background: var(--csa-ink-soft); }
+
+.csa-basket-card__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: var(--csa-sp-3);
+  border-top: 1px solid var(--csa-rule-soft);
+}
+.csa-basket-card__cta {
+  font-size: var(--csa-fs-sm);
+  font-weight: 500;
+  color: var(--csa-ink-soft);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: color var(--csa-t-fast), gap var(--csa-t-fast);
+}
+.csa-basket-card:hover .csa-basket-card__cta {
+  color: var(--csa-ink);
+  gap: 10px;
+}
