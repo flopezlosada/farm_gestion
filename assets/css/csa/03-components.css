@@ -445,6 +445,60 @@
 .csa-input::placeholder,
 .csa-textarea::placeholder { color: var(--csa-ink-muted); }
 
+/* Selects: chevron csa en lugar del nativo del navegador.
+ * Aplica también a <select> que reciben class="csa-input" desde csa.field. */
+select.csa-input,
+.csa-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none' stroke='%235a5b56' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='1 1.5 6 6.5 11 1.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 36px;
+  cursor: pointer;
+}
+
+/* Choice expanded multiple (EntityType multiple+expanded) renderizado por
+ * form_div_layout: <div><input type="checkbox" name="x[]"><label>...</label>...</div>
+ * Convertimos a "pills" clicables para que se lean como chips y respondan
+ * visualmente al estado checked. */
+.csa-field input[type="checkbox"][name$="[]"] {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+.csa-field input[type="checkbox"][name$="[]"] + label {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--csa-sp-2) var(--csa-sp-3);
+  margin: 0 var(--csa-sp-2) var(--csa-sp-2) 0;
+  background: var(--csa-surface);
+  border: 1px solid var(--csa-rule);
+  border-radius: var(--csa-radius-md);
+  font-weight: 400;
+  font-size: var(--csa-fs-sm);
+  color: var(--csa-ink);
+  cursor: pointer;
+  transition: background var(--csa-t-fast), border-color var(--csa-t-fast), color var(--csa-t-fast);
+  user-select: none;
+}
+.csa-field input[type="checkbox"][name$="[]"] + label:hover {
+  border-color: var(--csa-ink-muted);
+}
+.csa-field input[type="checkbox"][name$="[]"]:checked + label {
+  background: var(--csa-green-soft);
+  border-color: var(--csa-green);
+  color: var(--csa-green);
+  font-weight: 500;
+}
+.csa-field input[type="checkbox"][name$="[]"]:focus + label {
+  outline: 2px solid var(--csa-green);
+  outline-offset: 2px;
+}
+
 .csa-input--with-prefix {
   display: flex;
   align-items: center;
