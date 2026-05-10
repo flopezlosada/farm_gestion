@@ -211,7 +211,7 @@ class SackController extends AbstractAppController
         if ($editForm->isSubmitted() && $editForm->isValid()) {
             $em->flush();
 
-            return $this->redirect($this->generateUrl('sack_edit', array('id' => $id)));
+            return $this->redirect($this->generateUrl('sack_show', array('id' => $id)));
         }
 
         return $this->render('Sack/edit.html.twig', array(

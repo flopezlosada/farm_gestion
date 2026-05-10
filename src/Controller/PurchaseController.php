@@ -187,7 +187,7 @@ class PurchaseController extends AbstractAppController
             $entity->setPurchaseDate(new \DateTime($entity->getPurchaseDate()));
             $em->flush();
 
-            return $this->redirect($this->generateUrl('purchase_edit', array('id' => $id)));
+            return $this->redirect($this->generateUrl('purchase_show', array('id' => $id)));
         }
 
         return $this->render('Purchase/edit.html.twig', array(

@@ -176,7 +176,7 @@ class NoteController extends AbstractAppController
         if ($editForm->isSubmitted() && $editForm->isValid()) {
             $em->flush();
 
-            return $this->redirect($this->generateUrl('note_edit', array('id' => $id)));
+            return $this->redirect($this->generateUrl('note_show', array('id' => $id)));
         }
 
         return $this->render('Note/edit.html.twig', array(

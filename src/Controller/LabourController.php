@@ -176,7 +176,7 @@ class LabourController extends AbstractAppController
         if ($editForm->isSubmitted() && $editForm->isValid()) {
             $em->flush();
 
-            return $this->redirect($this->generateUrl('labour_edit', array('id' => $id)));
+            return $this->redirect($this->generateUrl('labour_show', array('id' => $id)));
         }
 
         return $this->render('Labour/edit.html.twig', array(

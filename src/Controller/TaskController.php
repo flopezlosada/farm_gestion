@@ -378,7 +378,7 @@ class TaskController extends AbstractAppController
             }
             $em->flush();
 
-            return $this->redirect($this->generateUrl('task_edit', array('id' => $id)));
+            return $this->redirect($this->generateUrl('task_show', array('id' => $id)));
         }
 
         return $this->render('Task/edit.html.twig', array(

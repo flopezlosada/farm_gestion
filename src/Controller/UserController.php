@@ -184,7 +184,7 @@ class UserController extends AbstractAppController
             }
             $em->flush();
 
-            return $this->redirect($this->generateUrl('user_edit', array('id' => $id)));
+            return $this->redirect($this->generateUrl('user_show', array('id' => $id)));
         }
 
         return $this->render('User/edit.html.twig', array(

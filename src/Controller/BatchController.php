@@ -283,7 +283,7 @@ class BatchController extends AbstractAppController
             }
             $em->flush();
 
-            return $this->redirect($this->generateUrl('batch_edit', array('id' => $id)));
+            return $this->redirect($this->generateUrl('batch_show', array('id' => $id)));
         }
 
         return $this->render('Batch/edit.html.twig', array(

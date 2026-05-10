@@ -176,7 +176,7 @@ class RecipientController extends AbstractAppController
         if ($editForm->isSubmitted() && $editForm->isValid()) {
             $em->flush();
 
-            return $this->redirect($this->generateUrl('recipient_edit', array('id' => $id)));
+            return $this->redirect($this->generateUrl('recipient_show', array('id' => $id)));
         }
 
         return $this->render('Recipient/edit.html.twig', array(
