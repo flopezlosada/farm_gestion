@@ -1,48 +1,73 @@
-{% extends 'layout_list.html.twig' %}
+{# ============================================================
+ # Resumen de producción por años (Crop) — migrado al shell csa.
+ # ============================================================
+ # Tabla pivote: una fila por cultivo, una columna por año. Solo
+ # se muestran cultivos con producción > 0 en el año actual
+ # (criterio del legacy: production[crop][1] > 0).
+ # ============================================================ #}
 
-{% block main %}
-<div class="panel panel-default">
-    <div class="panel-heading">
-        Listado producción por años
-    </div>
-    <div class="panel-body">
-        <div class="table-responsive">
-            <table id="table_list" class="table table-striped table-bordered table-hover dataTable no-footer"
-                   aria-describedby="dataTables-example_info">
-                <thead>
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Producción por años{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span>Granja</span>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('crop') }}">Catálogo de cultivos</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Producción por años</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Granja · Huerta',
+        'Producción por años',
+        'Histórico de kilos producidos por cada cultivo. Solo se listan cultivos con producción este año.'
+    ) }}
+
+    <div class="csa-table-wrap">
+        <table class="csa-table" data-paginate>
+            <thead>
                 <tr>
                     <th>Cultivo</th>
                     {% for year in years %}
-                        <th>{{ year }}</th>
+                        <th class="csa-table__col-tight">{{ year }}</th>
                     {% endfor %}
                 </tr>
-                </thead>
-                <tfoot>
-                <tr role="row">
-                </tr>
-                </tfoot>
-                <tbody>
+            </thead>
+            <tbody>
                 {% for crop_production in production %}
-                    {% if crop_production[1]>0 %}
+                    {% if crop_production[1] > 0 %}
                         <tr>
-                            <td>{{ crop_production[0].name }}</td>
-                            <td>{{ crop_production [1] }}</td>
-                            <td>{{ crop_production [2] }}</td>
-                            <td>{{ crop_production [3] }}</td>
-                            <td>{{ crop_production [4] }}</td>
+                            <td>
+                                <a class="csa-table__primary" href="{{ path('crop_show', { id: crop_production[0].id }) }}">
+                                    {{ crop_production[0].name }}
+                                </a>
+                            </td>
+                            {% for i in 1..(years|length) %}
+                                <td class="csa-table__col-tight">
+                                    {% if crop_production[i] %}
+                                        {{ crop_production[i] }} kg
+                                    {% else %}
+                                        <span class="csa-muted">—</span>
+                                    {% endif %}
+                                </td>
+                            {% endfor %}
                         </tr>
                     {% endif %}
+                {% else %}
+                    <tr>
+                        <td colspan="{{ 1 + years|length }}" class="csa-muted" style="text-align: center; padding: var(--csa-sp-8);">
+                            Sin producción registrada.
+                        </td>
+                    </tr>
                 {% endfor %}
-                </tbody>
-            </table>
-        </div>
+            </tbody>
+        </table>
     </div>
-</div>
 
 {% endblock %}
-
-{% block title_wrapper %}
-
-{% endblock %}
-
-
