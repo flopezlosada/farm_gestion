@@ -54,46 +54,52 @@
 
         {%- set hour = 'now'|date('G') -%}
         {%- set greeting = hour < 14 ? 'Buenos días' : (hour < 21 ? 'Buenas tardes' : 'Buenas noches') -%}
+        {%- set lay_week = render(controller('App\\Controller\\DefaultController::layWeek'))|trim -%}
+        {%- set production_year = render(controller('App\\Controller\\DefaultController::totalProductionYear'))|trim -%}
 
         {{ csa.page_header(
-            'Día a día · Resumen',
-            greeting ~ ', ' ~ app.user.userIdentifier,
-            'Hoy, ' ~ ('now'|format_date('full', locale='es')) ~ '.'
+            'Panel de control · ' ~ 'now'|date('Y'),
+            greeting ~ ', ' ~ app.user.userIdentifier ~ '.',
+            'Esto es lo que pasa hoy en la granja.'
         ) }}
 
         {# ===== KPIs ===== #}
-        <div class="csa-kpi-row" style="margin-bottom: var(--csa-sp-7);">
+        <div class="csa-kpi-row" style="margin-bottom: var(--csa-sp-10);">
             {{ csa.kpi(
                 'Puesta semanal',
-                render(controller('App\\Controller\\DefaultController::layWeek')),
+                lay_week,
                 'huevos',
-                total_lay_eggs ~ ' acumulado en ' ~ 'now'|date('Y'),
+                lay_week == '0' ? 'Aún sin registrar →' : (total_lay_eggs ~ ' acumulado en ' ~ 'now'|date('Y')),
                 null,
-                'sky'
+                'ochre',
+                'fa-egg'
             ) }}
             {{ csa.kpi(
-                'Producción del año',
-                render(controller('App\\Controller\\DefaultController::totalProductionYear'))|round,
+                'Producidos · año',
+                production_year|number_format(0, ',', '.'),
                 'kg',
                 'verduras y hortalizas',
                 null,
-                'green'
+                'green',
+                'fa-leaf'
             ) }}
             {{ csa.kpi(
-                'Cultivos activos',
+                'Cultivos en producción',
                 render(controller('App\\Controller\\DefaultController::totalCropWorking')),
                 null,
-                'en producción ahora mismo',
+                'sectores activos ahora',
                 null,
-                'green'
+                'sky',
+                'fa-seedling'
             ) }}
             {{ csa.kpi(
-                'Residuo recogido',
+                'Residuo · año',
                 render(controller('App\\Controller\\DefaultController::totalCompost')),
                 't',
-                'compostaje · ' ~ 'now'|date('Y'),
+                'compostaje recogido',
                 null,
-                'plum'
+                'terracotta',
+                'fa-recycle'
             ) }}
         </div>
 
@@ -101,75 +107,71 @@
 
             <div class="csa-stack-lg">
 
-                {# ===== Lotes de gallinas activos ===== #}
+                {# ===== Lotes activos (gallinas + pollos en una sola card) ===== #}
                 {% embed '_components/csa_card.html.twig' with {
-                    title: 'Lotes de gallinas activos',
-                    subtitle: 'Puesta de la semana en curso.',
-                    accent: 'sky'
+                    title: 'Lotes activos'
                 } %}
                     {% block body %}
-                        {% import '_macros/csa.html.twig' as csa %}
-                        {% if active_hen_batch|length > 0 %}
-                            <ul class="csa-list">
-                                {% for batch in active_hen_batch %}
-                                    <li class="csa-list__item">
-                                        <a class="csa-list__link" href="{{ path('batch_show', {'id': batch.id}) }}">
-                                            <i class="csa-list__icon fa fa-egg"></i>
-                                            <div class="csa-list__body">
-                                                <div class="csa-list__primary">Lote #{{ batch.id }} · {{ batch.amount }} {{ batch.product|lower }}</div>
-                                                <div class="csa-list__secondary">
-                                                    {% if batch.purchaseDate %}
-                                                        Iniciado el {{ batch.purchaseDate|date('d-m-Y') }} · {{ batch.batchAge }} días
-                                                    {% else %}
-                                                        {{ batch.batchAge }} días en producción
-                                                    {% endif %}
-                                                    {% if batch.weekLay > 0 %}
-                                                        · {{ batch.weekLay }} huevos esta semana
-                                                    {% endif %}
-                                                </div>
-                                            </div>
-                                            {{ csa.badge('Activo', 'green') }}
-                                        </a>
-                                    </li>
-                                {% endfor %}
-                            </ul>
-                        {% else %}
-                            <p class="csa-muted">No hay lotes de gallinas activos.</p>
+                        {% if active_hen_batch|length == 0 and active_chicken_batch|length == 0 %}
+                            <p class="csa-muted">No hay lotes activos en este momento.</p>
                         {% endif %}
-                    {% endblock %}
-                {% endembed %}
 
-                {# ===== Lotes de pollos activos ===== #}
-                {% embed '_components/csa_card.html.twig' with {
-                    title: 'Lotes de pollos activos',
-                    subtitle: 'Animales en cría.',
-                    accent: 'ochre'
-                } %}
-                    {% block body %}
-                        {% import '_macros/csa.html.twig' as csa %}
-                        {% if active_chicken_batch|length > 0 %}
-                            <ul class="csa-list">
-                                {% for batch in active_chicken_batch %}
-                                    <li class="csa-list__item">
-                                        <a class="csa-list__link" href="{{ path('batch_show', {'id': batch.id}) }}">
-                                            <i class="csa-list__icon fa fa-paw"></i>
-                                            <div class="csa-list__body">
-                                                <div class="csa-list__primary">Lote #{{ batch.id }} · {{ batch.amount }} {{ batch.product|lower }}</div>
-                                                <div class="csa-list__secondary">
-                                                    {% if batch.purchaseDate %}
-                                                        Iniciado el {{ batch.purchaseDate|date('d-m-Y') }} · {{ batch.batchAge }} días
-                                                    {% else %}
-                                                        {{ batch.batchAge }} días en producción
-                                                    {% endif %}
+                        {% if active_hen_batch|length > 0 %}
+                            <div class="csa-list-group">
+                                <div class="csa-list-group__label">Gallinas · {{ active_hen_batch|length }} activos</div>
+                                <ul class="csa-list">
+                                    {% for batch in active_hen_batch %}
+                                        <li class="csa-list__item">
+                                            <a class="csa-list__link" href="{{ path('batch_show', {'id': batch.id}) }}">
+                                                <span class="csa-list__icon csa-list__icon--green">
+                                                    <i class="fa fa-egg" aria-hidden="true"></i>
+                                                </span>
+                                                <div class="csa-list__body">
+                                                    <div class="csa-list__primary">Lote #{{ batch.id }}</div>
+                                                    <div class="csa-list__secondary">
+                                                        {{ batch.amount }} {{ batch.product|lower }} · puesta
+                                                        {%- if batch.purchaseDate %} · desde {{ batch.purchaseDate|date('d-m-Y') }}{% endif %}
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            {{ csa.badge('Activo', 'green') }}
-                                        </a>
-                                    </li>
-                                {% endfor %}
-                            </ul>
-                        {% else %}
-                            <p class="csa-muted">No hay lotes de pollos activos.</p>
+                                                <div class="csa-list__metric csa-list__metric--ochre">
+                                                    <span class="csa-list__metric-value">{{ batch.weekLay }}</span>
+                                                    <span class="csa-list__metric-unit">huevos / sem</span>
+                                                </div>
+                                                <i class="csa-list__chevron fa fa-chevron-right" aria-hidden="true"></i>
+                                            </a>
+                                        </li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        {% endif %}
+
+                        {% if active_chicken_batch|length > 0 %}
+                            <div class="csa-list-group">
+                                <div class="csa-list-group__label">Pollos · {{ active_chicken_batch|length }} activos</div>
+                                <ul class="csa-list">
+                                    {% for batch in active_chicken_batch %}
+                                        <li class="csa-list__item">
+                                            <a class="csa-list__link" href="{{ path('batch_show', {'id': batch.id}) }}">
+                                                <span class="csa-list__icon csa-list__icon--green">
+                                                    <i class="fa fa-drumstick-bite" aria-hidden="true"></i>
+                                                </span>
+                                                <div class="csa-list__body">
+                                                    <div class="csa-list__primary">Lote #{{ batch.id }}</div>
+                                                    <div class="csa-list__secondary">
+                                                        {{ batch.amount }} {{ batch.product|lower }} · carne
+                                                        {%- if batch.purchaseDate %} · desde {{ batch.purchaseDate|date('d-m-Y') }}{% endif %}
+                                                    </div>
+                                                </div>
+                                                <div class="csa-list__metric csa-list__metric--terracotta">
+                                                    <span class="csa-list__metric-value">{{ batch.amount }}</span>
+                                                    <span class="csa-list__metric-unit">animales</span>
+                                                </div>
+                                                <i class="csa-list__chevron fa fa-chevron-right" aria-hidden="true"></i>
+                                            </a>
+                                        </li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
                         {% endif %}
                     {% endblock %}
                 {% endembed %}
@@ -190,54 +192,74 @@
 
                 {# ===== Resumen del año ===== #}
                 {% embed '_components/csa_card.html.twig' with {
-                    title: 'Resumen del año ' ~ 'now'|date('Y'),
-                    subtitle: 'Acumulado hasta hoy.',
-                    accent: 'plum'
+                    title: 'Resumen ' ~ 'now'|date('Y'),
+                    subtitle: 'al ' ~ ('now'|format_date('long', locale='es'))
                 } %}
                     {% block body %}
                         <ul class="csa-list">
                             <li class="csa-list__item">
                                 <a class="csa-list__link" href="{{ path('statistic_eggs') }}">
-                                    <i class="csa-list__icon fa fa-egg"></i>
+                                    <span class="csa-list__icon csa-list__icon--ochre">
+                                        <i class="fa fa-egg" aria-hidden="true"></i>
+                                    </span>
                                     <div class="csa-list__body">
                                         <div class="csa-list__primary">Huevos puestos</div>
-                                        <div class="csa-list__secondary">{{ total_lay_eggs }}</div>
+                                    </div>
+                                    <div class="csa-list__metric csa-list__metric--ochre">
+                                        <span class="csa-list__metric-value">{{ total_lay_eggs|number_format(0, ',', '.') }}</span>
                                     </div>
                                 </a>
                             </li>
                             <li class="csa-list__item">
                                 <a class="csa-list__link" href="{{ path('statistic_user_collect', {'user_id': app.user.id}) }}">
-                                    <i class="csa-list__icon fa fa-paw"></i>
+                                    <span class="csa-list__icon csa-list__icon--terracotta">
+                                        <i class="fa fa-drumstick-bite" aria-hidden="true"></i>
+                                    </span>
                                     <div class="csa-list__body">
                                         <div class="csa-list__primary">Kg de pollo</div>
-                                        <div class="csa-list__secondary">{{ total_chicken }}</div>
+                                    </div>
+                                    <div class="csa-list__metric csa-list__metric--terracotta">
+                                        <span class="csa-list__metric-value">{{ total_chicken|number_format(0, ',', '.') }}</span>
                                     </div>
                                 </a>
                             </li>
                             <li class="csa-list__item">
                                 <a class="csa-list__link" href="{{ path('statistic_feed') }}">
-                                    <i class="csa-list__icon fa fa-leaf"></i>
+                                    <span class="csa-list__icon csa-list__icon--green">
+                                        <i class="fa fa-leaf" aria-hidden="true"></i>
+                                    </span>
                                     <div class="csa-list__body">
                                         <div class="csa-list__primary">Kg de verduras</div>
-                                        <div class="csa-list__secondary">{{ render(controller('App\\Controller\\DefaultController::totalProductionYear')) }}</div>
+                                    </div>
+                                    <div class="csa-list__metric csa-list__metric--green">
+                                        <span class="csa-list__metric-value">{{ render(controller('App\\Controller\\DefaultController::totalProductionYear'))|trim|number_format(0, ',', '.') }}</span>
+                                        <span class="csa-list__metric-unit">kg</span>
                                     </div>
                                 </a>
                             </li>
                             <li class="csa-list__item">
                                 <a class="csa-list__link" href="{{ path('statistic_feed') }}">
-                                    <i class="csa-list__icon fa fa-cubes"></i>
+                                    <span class="csa-list__icon csa-list__icon--ochre">
+                                        <i class="fa fa-wheat-awn" aria-hidden="true"></i>
+                                    </span>
                                     <div class="csa-list__body">
-                                        <div class="csa-list__primary">Trigo</div>
-                                        <div class="csa-list__secondary">{{ wheat_year }} kg</div>
+                                        <div class="csa-list__primary">Kg de trigo</div>
+                                    </div>
+                                    <div class="csa-list__metric csa-list__metric--ochre">
+                                        <span class="csa-list__metric-value">{{ wheat_year|number_format(0, ',', '.') }}</span>
                                     </div>
                                 </a>
                             </li>
                             <li class="csa-list__item">
                                 <a class="csa-list__link" href="{{ path('statistic_feed') }}">
-                                    <i class="csa-list__icon fa fa-bolt"></i>
+                                    <span class="csa-list__icon csa-list__icon--sky">
+                                        <i class="fa fa-bolt" aria-hidden="true"></i>
+                                    </span>
                                     <div class="csa-list__body">
-                                        <div class="csa-list__primary">Pienso de pollos</div>
-                                        <div class="csa-list__secondary">{{ broiler_feed_year }} kg</div>
+                                        <div class="csa-list__primary">Kg pienso pollos</div>
+                                    </div>
+                                    <div class="csa-list__metric csa-list__metric--sky">
+                                        <span class="csa-list__metric-value">{{ broiler_feed_year|number_format(0, ',', '.') }}</span>
                                     </div>
                                 </a>
                             </li>

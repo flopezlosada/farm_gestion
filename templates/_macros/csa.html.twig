@@ -75,11 +75,20 @@
 {# ---------- KPI ----------
  # value se imprime tal cual (puedes pasar un número formateado).
  # delta_dir: up | down | null
- # tone: green | ochre | terracotta | sky | plum (franja superior)
+ # tone: green | ochre | terracotta | sky | plum (franja superior + icono)
+ # icon: clase de Font Awesome (ej. 'fa-egg'). Decorativo en la esquina;
+ #       hereda el color del tono si tone está definido.
  #}
-{% macro kpi(label, value, unit = null, delta = null, delta_dir = null, tone = null) %}
+{% macro kpi(label, value, unit = null, delta = null, delta_dir = null, tone = null, icon = null) %}
     <div class="csa-kpi{% if tone %} csa-kpi--{{ tone }}{% endif %}">
-        <div class="csa-kpi__label">{{ label }}</div>
+        <div class="csa-kpi__head">
+            <div class="csa-kpi__label">{{ label }}</div>
+            {% if icon %}
+                <span class="csa-kpi__icon-box">
+                    <i class="fa {{ icon }}" aria-hidden="true"></i>
+                </span>
+            {% endif %}
+        </div>
         <div class="csa-kpi__value">
             {{ value }}{% if unit %}<span class="csa-kpi__unit">{{ unit }}</span>{% endif %}
         </div>
