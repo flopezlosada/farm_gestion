@@ -89,7 +89,7 @@ class BlogController extends AbstractAppController
 
         $form = $this->createCreateForm($entity);
         $form->handleRequest($request);
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $em->persist($entity);
             $em->flush();
 
@@ -192,7 +192,7 @@ class BlogController extends AbstractAppController
         $editForm = $this->createSecondForm($entity);
         $editForm->handleRequest($request);
 
-        if ($editForm->isValid()) {
+        if ($editForm->isSubmitted() && $editForm->isValid()) {
             $em->flush();
 
             return $this->redirect($this->generateUrl('blog_show', array('slug' => $entity->getSlug())));
@@ -295,7 +295,7 @@ class BlogController extends AbstractAppController
         $editForm = $this->createEditForm($entity);
         $editForm->handleRequest($request);
 
-        if ($editForm->isValid()) {
+        if ($editForm->isSubmitted() && $editForm->isValid()) {
             $entity->setModified(1);
             $em->persist($entity);
             $entity->setModified(0);
@@ -322,7 +322,7 @@ class BlogController extends AbstractAppController
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\Blog::class)->find($id);
 

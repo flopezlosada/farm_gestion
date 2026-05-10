@@ -42,7 +42,7 @@ class EventController extends AbstractAppController
         $form = $this->createCreateForm($entity);
         $form->handleRequest($request);
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $em = $this->getDoctrine()->getManager();
             $entity->setStartDate(new \DateTime($entity->getStartDate()));
             $entity->setEndDate(new \DateTime($entity->getEndDate()));
@@ -179,7 +179,7 @@ class EventController extends AbstractAppController
         $editForm = $this->createEditForm($entity);
         $editForm->handleRequest($request);
 
-        if ($editForm->isValid()) {
+        if ($editForm->isSubmitted() && $editForm->isValid()) {
             $entity->setStartDate(new \DateTime($entity->getStartDate()));
             $entity->setEndDate(new \DateTime($entity->getEndDate()));
             $em->flush();
@@ -204,7 +204,7 @@ class EventController extends AbstractAppController
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\Event::class)->find($id);
 

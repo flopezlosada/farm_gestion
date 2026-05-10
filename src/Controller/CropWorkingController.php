@@ -287,7 +287,12 @@ class CropWorkingController extends AbstractAppController
             throw $this->createNotFoundException('Unable to find CropWorking entity.');
         }
 
-        $form = $this->createFormBuilder($crop_working)
+        // Sin data binding: el form recoge zone+sector como inputs y la
+        // action addedSector procesa el array $request->get('form') a mano.
+        // Pasar $crop_working aquí hacía que PropertyAccess intentara mapear
+        // a propiedades de CropWorking y el EntityType reventaba con
+        // "IdReader::getIdValue(): Argument #1 must be of type ?object, true given".
+        $form = $this->createFormBuilder()
             ->add('zone', EntityType::class, array('class' => 'App\Entity\Zone', 'required' => true, 'placeholder' => "Selecciona zona", 'label' => "Zonas de cultivo",
                 'query_builder' => function (EntityRepository $er) {
                     return $er->createQueryBuilder('u')
