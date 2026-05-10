@@ -1,32 +1,115 @@
-{% extends 'layout_show.html.twig' %}
-{% block more_css %}
-    <link rel="stylesheet" href="{{ asset('bundles/app/fancybox/jquery.fancybox.css') }}"/>
-{% endblock %}
-{% block main -%}
+{# ============================================================
+ # Detalle de cultivo (Crop) — migrado al shell csa.
+ # ============================================================ #}
 
-    <div class="panel panel-default">
-        <div class="panel-heading"><h4>{{ entity }}</h4></div>
-        <div class="panel-body">
-            <div class="row">
-                <div class="col-lg-6">
-                    <div class="panel panel-info">
-                        <div class="panel-heading">Histórico de producción</div>
-                        <div class="panel-body">
-                            <ul>
-                                {% for crop_working in entity.cropWorkings %}
-                                    {% include 'Crop/crop_list.html.twig' %}
-                                {% else %}
-                                    Este cultivo no se ha puesto en producción todavía. <a href="{{ path('cropworking_new', {'crop_id': entity.id}) }}"><br>Poner en producción</a>
-                                {% endfor %}
-                            </ul>
-                        </div>
-                        <div class="panel-footer"></div>
-                    </div>
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}{{ entity }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('crop') }}">Catálogo de cultivos</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ entity }}</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {# ===== Cabecera ===== #}
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-6); align-items: flex-start;">
+        <div class="csa-row" style="align-items: flex-start; gap: var(--csa-sp-4);">
+            <span class="csa-table__id-marker" style="width: 64px; height: 64px; font-size: 28px; border-radius: var(--csa-radius-lg);">
+                <i class="fa fa-leaf"></i>
+            </span>
+            <div>
+                <div class="csa-row" style="gap: var(--csa-sp-3); margin-bottom: var(--csa-sp-2);">
+                    {% if entity.isInProduction == 1 %}
+                        {{ csa.badge('En producción', 'green') }}
+                    {% else %}
+                        {{ csa.badge('Inactivo', 'neutral') }}
+                    {% endif %}
                 </div>
+                <h1>{{ entity.name }}</h1>
+                {% if entity.latinName %}
+                    <div class="csa-serif csa-italic csa-soft" style="margin-top: var(--csa-sp-2);">
+                        {{ entity.latinName }}
+                    </div>
+                {% endif %}
             </div>
         </div>
-        <div class="panel-footer">
-            {% include 'Crop/record_actions.html.twig' with {'crop':entity} %}
+        <div class="csa-row">
+            {% if entity.isInProduction == 0 %}
+                {{ csa.btn('Poner en producción', { variant: 'primary', href: path('cropworking_new', { crop_id: entity.id }), icon: 'fa-play' }) }}
+            {% endif %}
+            {{ csa.btn('Editar', { variant: 'secondary', href: path('crop_edit', { id: entity.id }), icon: 'fa-pencil' }) }}
+            {{ csa.btn('Volver', { variant: 'ghost', href: path('crop') }) }}
         </div>
     </div>
+
+    {# ===== Histórico de producción ===== #}
+    {% embed '_components/csa_card.html.twig' with {
+        title: 'Histórico de producción',
+        subtitle: 'Ciclos de cultivo (CropWorking) registrados para esta variedad.',
+        accent: 'sky'
+    } %}
+        {% block body %}
+            {% import '_macros/csa.html.twig' as csa %}
+            {% if entity.cropWorkings|length > 0 %}
+                <div class="csa-table-wrap">
+                    <table class="csa-table">
+                        <thead>
+                            <tr>
+                                <th>Ciclo</th>
+                                <th class="csa-table__col-tight">Estado</th>
+                                <th class="csa-table__col-tight">Inicio</th>
+                                <th class="csa-table__col-tight">Finalización</th>
+                                <th class="csa-table__actions">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for crop_working in entity.cropWorkings %}
+                                <tr>
+                                    <td>
+                                        <a class="csa-table__primary" href="{{ path('cropworking_show', { id: crop_working.id }) }}">
+                                            {{ crop_working }}
+                                        </a>
+                                    </td>
+                                    <td class="csa-table__col-tight">
+                                        {% if crop_working.finish %}
+                                            {{ csa.badge('Finalizado', 'neutral') }}
+                                        {% else %}
+                                            {{ csa.badge('Activo', 'green') }}
+                                        {% endif %}
+                                    </td>
+                                    <td class="csa-table__col-tight">
+                                        {{ crop_working.created|format_date('medium', locale='es') }}
+                                    </td>
+                                    <td class="csa-table__col-tight">
+                                        {% if crop_working.finishdate %}
+                                            {{ crop_working.finishdate|format_date('medium', locale='es') }}
+                                        {% else %}
+                                            <span class="csa-muted">—</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="csa-table__actions">
+                                        <a href="{{ path('cropworking_show', { id: crop_working.id }) }}" title="Ver ciclo" aria-label="Ver ciclo"><i class="fa fa-eye"></i></a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="csa-soft" style="text-align: center; padding: var(--csa-sp-6) 0;">
+                    Este cultivo no se ha puesto en producción todavía.
+                    <div style="margin-top: var(--csa-sp-3);">
+                        {{ csa.btn('Abrir ciclo', { variant: 'primary', href: path('cropworking_new', { crop_id: entity.id }), icon: 'fa-play' }) }}
+                    </div>
+                </div>
+            {% endif %}
+        {% endblock %}
+    {% endembed %}
+
 {% endblock %}
