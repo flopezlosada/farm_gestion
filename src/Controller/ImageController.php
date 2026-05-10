@@ -42,7 +42,7 @@ class ImageController extends AbstractAppController
         $form = $this->createCreateForm($entity, $foreign_key, $object_class, $single);
         $form->handleRequest($request);
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $em = $this->getDoctrine()->getManager();
             $entity->setForeignKey($foreign_key);
             $entity->setObjectClass($object_class);
@@ -135,7 +135,7 @@ class ImageController extends AbstractAppController
         $form = $this->createCreateForm($entity, $foreign_key, $object_class, $single);
         $form->handleRequest($request);
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $em = $this->getDoctrine()->getManager();
             $gallery = $em->getRepository(\App\Entity\Gallery::class)->find($gallery_id);
             $entity->setForeignKey($foreign_key);
@@ -259,7 +259,7 @@ class ImageController extends AbstractAppController
         $editForm = $this->createEditForm($entity);
         $editForm->handleRequest($request);
 
-        if ($editForm->isValid()) {
+        if ($editForm->isSubmitted() && $editForm->isValid()) {
             $entity->setModified(1);
             $em->persist($entity);
             $entity->setModified(0);
@@ -284,7 +284,7 @@ class ImageController extends AbstractAppController
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\Image::class)->find($id);
 

@@ -44,7 +44,7 @@ class MovementController extends AbstractAppController
         $form = $this->createCreateForm($entity, $batch);
         $form->handleRequest($request);
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $entity->setDate(new \DateTime($entity->getDate()));
             $em = $this->getDoctrine()->getManager();
             $entity->setBatch($batch);
@@ -190,7 +190,7 @@ class MovementController extends AbstractAppController
         $editForm = $this->createEditForm($entity);
         $editForm->handleRequest($request);
 
-        if ($editForm->isValid()) {
+        if ($editForm->isSubmitted() && $editForm->isValid()) {
             $em->flush();
 
             return $this->redirect($this->generateUrl('movement_edit', array('id' => $id)));
@@ -212,7 +212,7 @@ class MovementController extends AbstractAppController
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\Movement::class)->find($id);
 

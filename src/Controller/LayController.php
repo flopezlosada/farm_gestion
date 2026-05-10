@@ -43,7 +43,7 @@ class LayController extends AbstractAppController
         $form = $this->createCreateForm($entity);
         $form->handleRequest($request);
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
 
             $em = $this->getDoctrine()->getManager();
             $entity->setWeek(date('W', strtotime($entity->getLayDate())));
@@ -183,7 +183,7 @@ class LayController extends AbstractAppController
         $editForm = $this->createEditForm($entity);
         $editForm->handleRequest($request);
 
-        if ($editForm->isValid()) {
+        if ($editForm->isSubmitted() && $editForm->isValid()) {
             $entity->setLayDate(new \DateTime($entity->getLayDate()));
             $em->flush();
 
@@ -206,7 +206,7 @@ class LayController extends AbstractAppController
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\Lay::class)->find($id);
 

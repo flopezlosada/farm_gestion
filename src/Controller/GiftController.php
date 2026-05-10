@@ -43,7 +43,7 @@ class GiftController extends AbstractAppController
         $form = $this->createCreateForm($entity);
         $form->handleRequest($request);
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $em = $this->getDoctrine()->getManager();
             $entity->setWeek(date('W', strtotime($entity->getGiftDate())));
             $entity->setGiftDate(new \DateTime($entity->getGiftDate()));
@@ -180,7 +180,7 @@ class GiftController extends AbstractAppController
         $editForm = $this->createEditForm($entity);
         $editForm->handleRequest($request);
 
-        if ($editForm->isValid()) {
+        if ($editForm->isSubmitted() && $editForm->isValid()) {
             $entity->setTotalPrice($entity->getSinglePrice() * $entity->getAmount());
             $entity->setGiftDate(new \DateTime($entity->getGiftDate()));
             $em->flush();
@@ -204,7 +204,7 @@ class GiftController extends AbstractAppController
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\Gift::class)->find($id);
 

@@ -42,7 +42,7 @@ class CulturalWorkController extends AbstractAppController
         $form = $this->createCreateForm($entity);
         $form->handleRequest($request);
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $em = $this->getDoctrine()->getManager();
             $entity->setDate(new \DateTime($entity->getDate()));
             $em->persist($entity);
@@ -176,7 +176,7 @@ class CulturalWorkController extends AbstractAppController
         $editForm = $this->createEditForm($entity);
         $editForm->handleRequest($request);
 
-        if ($editForm->isValid()) {
+        if ($editForm->isSubmitted() && $editForm->isValid()) {
             $entity->setDate(new \DateTime($entity->getDate()));
             $em->flush();
 
@@ -199,7 +199,7 @@ class CulturalWorkController extends AbstractAppController
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\CulturalWork::class)->find($id);
 

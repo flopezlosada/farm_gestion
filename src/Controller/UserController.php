@@ -43,7 +43,7 @@ class UserController extends AbstractAppController
         $form = $this->createCreateForm($entity);
         $form->handleRequest($request);
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $entity->setPassword($hasher->hashPassword($entity, $form->get('plainPassword')->getData()));
             $em = $this->getDoctrine()->getManager();
             $em->persist($entity);
@@ -177,7 +177,7 @@ class UserController extends AbstractAppController
         $editForm = $this->createEditForm($entity);
         $editForm->handleRequest($request);
 
-        if ($editForm->isValid()) {
+        if ($editForm->isSubmitted() && $editForm->isValid()) {
             $plainPassword = $editForm->get('plainPassword')->getData();
             if ($plainPassword) {
                 $entity->setPassword($hasher->hashPassword($entity, $plainPassword));
@@ -203,7 +203,7 @@ class UserController extends AbstractAppController
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\User::class)->find($id);
 

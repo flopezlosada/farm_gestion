@@ -50,7 +50,7 @@ class SackController extends AbstractAppController
         //$purchase = $em->getRepository(\App\Entity\Sack::class)->getPurchase($sack_product);
 
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $entity->setDeliveryDate(new \DateTime($entity->getDeliveryDate()));
             if ($entity->getWeight() >= $entity->getPurchase()->getAvailableAmount()) {
                 $entity->setWeight($entity->getPurchase()->getAvailableAmount());
@@ -208,7 +208,7 @@ class SackController extends AbstractAppController
         $editForm = $this->createEditForm($entity);
         $editForm->handleRequest($request);
 
-        if ($editForm->isValid()) {
+        if ($editForm->isSubmitted() && $editForm->isValid()) {
             $em->flush();
 
             return $this->redirect($this->generateUrl('sack_edit', array('id' => $id)));
@@ -230,7 +230,7 @@ class SackController extends AbstractAppController
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\Sack::class)->find($id);
 
