@@ -35,7 +35,6 @@ class Sale
      * @ORM\Column(name="sale_date", type="date")
      */
     #[Assert\NotBlank]
-    #[Assert\Date]
     private $sale_date;
 
     /**

@@ -43,7 +43,6 @@ class Lay
      * @ORM\Column(name="lay_date", type="date")
      */
     #[Assert\NotBlank]
-    #[Assert\Date]
     private $lay_date;
 
     /**

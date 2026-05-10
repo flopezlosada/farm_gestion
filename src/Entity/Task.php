@@ -129,7 +129,6 @@ class Task
      * @var string $expected_date
      * @ORM\Column(name="expected_date", type="date", nullable=true)
      */
-    #[Assert\Date]
     private $expected_date;
 
     /**
@@ -138,7 +137,6 @@ class Task
      * @var string $real_date
      * @ORM\Column(name="real_date", type="date", nullable=true)
      */
-    #[Assert\Date]
     private $real_date;
 
 

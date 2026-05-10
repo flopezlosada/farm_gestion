@@ -41,7 +41,6 @@ class Harvest
      * @ORM\Column(name="harvest_date", type="date")
      */
     #[Assert\NotBlank]
-    #[Assert\Date]
     private $harvest_date;
 
     /**
