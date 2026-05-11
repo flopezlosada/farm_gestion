@@ -122,7 +122,7 @@ class Document
     protected function getUploadRootDir()
     {
         // la ruta absoluta del directorio donde se deben guardar los archivos cargados
-        return __DIR__ . '/../../../../web/' . $this->getUploadDir();
+        return __DIR__ . '/../../public/' . $this->getUploadDir();
     }
 
     protected function getUploadDir()
