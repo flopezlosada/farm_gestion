@@ -610,7 +610,7 @@ select.csa-input,
 
 /* ---------- Field (label + input + hint + error) ---------- */
 
-.csa-field { display: block; }
+.csa-field { display: block; position: relative; }
 .csa-field + .csa-field { margin-top: var(--csa-sp-4); }
 /* Dentro de csa-form-grid el espaciado lo da `gap` — anular el margin
  * que se aplicaría por sibling order y descuadra las columnas. */
