@@ -1,38 +1,62 @@
-{% extends 'layout_crud.html.twig' %}
+{# ============================================================
+ # Nueva noticia del blog — shell csa.
+ # Form mínimo (category + title); el resto se rellena en edit.
+ # ============================================================ #}
 
-{% block title_wrapper %}Añadir Noticia{% endblock %}
-{% block main -%}
-    <div class="panel panel-default">
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% form_theme form 'form_div_layout.html.twig' %}
 
-        <div class="panel-body">
-            {{ form_start(form, {'action': path('blog_create'),'method': 'post','attr': {'role': 'form', 'class': 'admin-form', 'data-place' : 'out-modal' }}) }}
-            <div class='row'>
-                <div class="col-lg-6">
-                    <div class="form-group">
-                        {{ form_errors(form.category) }}
-                        <label>{{ form_label(form.category) }}</label>
-                        {{ form_widget(form.category,{'attr':{'class':'form-control','placeholder':'Categoría'}}) }}
-                    </div>
-                    <div class="form-group">
-                        {{ form_errors(form.title) }}
-                        <label>{{ form_label(form.title) }}</label>
-                        {{ form_widget(form.title,{'attr':{'class':'form-control','placeholder':'Título'}}) }}
-                    </div>
-                </div>
-            </div>
-            {{ form_widget(form.submit,{'attr':{'class':'btn btn-default'}}) }}
-            {{ form_rest(form) }}
-            {{ form_end(form, {'render_rest': false}) }}
-        </div>
-        <ul class="record_actions">
-            <li>
-                <a href="{{ path('blog') }}">
-                    Back to the list
-                </a>
-            </li>
-        </ul>
-    </div>
+{% block title %}Nueva noticia{% endblock %}
 
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('blog') }}">Blog</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Nueva</span>
 {% endblock %}
 
-{% block more_js %} {% endblock %}
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Comunicación · Blog',
+        'Nueva noticia',
+        'Empieza con categoría y título. El contenido y los medios se completan después.'
+    ) }}
+
+    {{ form_start(form, {
+        action: path('blog_create'),
+        method: 'post',
+        attr: { role: 'form', class: 'csa-form-narrow admin-form', 'data-place': 'out-modal' }
+    }) }}
+
+        <div class="csa-stack-lg">
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Identidad', subtitle: 'Categoría y título.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.category, 'Categoría') }}
+                        {{ csa.field(form.title, 'Título') }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                <div></div>
+                <div class="csa-row">
+                    {{ csa.btn('Cancelar', { variant: 'ghost', href: path('blog') }) }}
+                    {{ form_widget(form.submit, {
+                        label: 'Crear noticia',
+                        attr: { class: 'csa-btn csa-btn--primary' }
+                    }) }}
+                </div>
+            </div>
+
+        </div>
+
+        {{ form_rest(form) }}
+    {{ form_end(form, { render_rest: false }) }}
+
+{% endblock %}
