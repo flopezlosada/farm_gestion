@@ -1,40 +1,64 @@
-{% extends 'base.html.twig' %}
+{# ============================================================
+ # Detalle de una nota de tarea — shell csa.
+ # ============================================================ #}
 
-{% block body -%}
-    <h1>TaskNote</h1>
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
 
-    <table class="record_properties">
-        <tbody>
-            <tr>
-                <th>Id</th>
-                <td>{{ entity.id }}</td>
-            </tr>
-            <tr>
-                <th>Content</th>
-                <td>{{ entity.content }}</td>
-            </tr>
-            <tr>
-                <th>Created</th>
-                <td>{{ entity.created|date('Y-m-d H:i:s') }}</td>
-            </tr>
-            <tr>
-                <th>Updated</th>
-                <td>{{ entity.updated|date('Y-m-d H:i:s') }}</td>
-            </tr>
-        </tbody>
-    </table>
+{% block title %}Nota #{{ entity.id }}{% endblock %}
 
-        <ul class="record_actions">
-    <li>
-        <a href="{{ path('tasknote') }}">
-            Back to the list
-        </a>
-    </li>
-    <li>
-        <a href="{{ path('tasknote_edit', { 'id': entity.id }) }}">
-            Edit
-        </a>
-    </li>
-    <li>{{ form(delete_form) }}</li>
-</ul>
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('task') }}">Tareas</a>
+    {% if entity.task %}
+        <span class="csa-topbar__crumbs-sep">/</span>
+        <a href="{{ path('task_show', { id: entity.task.id }) }}">{{ entity.task }}</a>
+    {% endif %}
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Nota #{{ entity.id }}</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    <div style="display: none;">
+        {{ form_start(delete_form, { attr: { id: 'tasknote-delete-form' } }) }}
+            {{ form_rest(delete_form) }}
+        {{ form_end(delete_form, { render_rest: false }) }}
+    </div>
+
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-6); align-items: flex-start;">
+        <div class="csa-row" style="align-items: flex-start; gap: var(--csa-sp-4);">
+            <span class="csa-table__id-marker" style="width: 64px; height: 64px; font-size: 28px; border-radius: var(--csa-radius-lg);">
+                <i class="fa fa-sticky-note"></i>
+            </span>
+            <div>
+                <h1>Nota #{{ entity.id }}</h1>
+                {% if entity.task %}
+                    <div class="csa-serif csa-italic csa-soft" style="margin-top: var(--csa-sp-2);">
+                        Tarea: {{ entity.task }}
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        <div class="csa-row">
+            <button type="submit" form="tasknote-delete-form" class="csa-btn csa-btn--ghost"
+                    onclick="return confirm('¿Seguro? Esta acción no se puede deshacer.');">
+                Eliminar
+            </button>
+            {{ csa.btn('Editar', { variant: 'secondary', href: path('tasknote_edit', { id: entity.id }), icon: 'fa-pencil' }) }}
+            {% if entity.task %}
+                {{ csa.btn('Volver a la tarea', { variant: 'ghost', href: path('task_show', { id: entity.task.id }) }) }}
+            {% else %}
+                {{ csa.btn('Volver', { variant: 'ghost', href: path('tasknote') }) }}
+            {% endif %}
+        </div>
+    </div>
+
+    {% embed '_components/csa_card.html.twig' with { title: 'Contenido', accent: 'sky' } %}
+        {% block body %}
+            <div>{{ entity.content|raw }}</div>
+        {% endblock %}
+    {% endembed %}
+
 {% endblock %}
