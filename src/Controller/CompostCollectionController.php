@@ -165,6 +165,9 @@ class CompostCollectionController extends AbstractAppController
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find CompostCollection entity.');
         }
+        if ($entity->getCollectDate() instanceof \DateTimeInterface) {
+            $entity->setCollectDate($entity->getCollectDate()->format('Y-m-d'));
+        }
 
         $editForm = $this->createEditForm($entity);
         $deleteForm = $this->createDeleteForm($id);
@@ -185,7 +188,7 @@ class CompostCollectionController extends AbstractAppController
      */
     private function createEditForm(CompostCollection $entity)
     {
-        $form = $this->createForm(new CompostCollectionType(), $entity, array(
+        $form = $this->createForm(CompostCollectionType::class, $entity, array(
             'action' => $this->generateUrl('compostcollection_update', array('id' => $entity->getId())),
             'method' => 'PUT',
         ));
@@ -210,10 +213,14 @@ class CompostCollectionController extends AbstractAppController
         }
 
         $deleteForm = $this->createDeleteForm($id);
+        if ($entity->getCollectDate() instanceof \DateTimeInterface) {
+            $entity->setCollectDate($entity->getCollectDate()->format('Y-m-d'));
+        }
         $editForm = $this->createEditForm($entity);
         $editForm->handleRequest($request);
 
         if ($editForm->isSubmitted() && $editForm->isValid()) {
+            $entity->setCollectDate(new \DateTime($entity->getCollectDate()));
             $em->flush();
 
             return $this->redirect($this->generateUrl('compostcollection_show', array('id' => $id)));
