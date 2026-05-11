@@ -1,274 +1,303 @@
-{% extends 'layout_show.html.twig' %}
-{% block title %}Ficha de socia/o{% endblock %}
-{% block flash_messages %}
-    {% for message in app.flashes('success') %}
-        <div class="alert alert-success">
-            {{ message }}
-        </div>
-    {% endfor %}
+{# ============================================================
+ # Ficha de socix (Partner) — shell csa.
+ # ============================================================ #}
 
-    {% for message in app.flashes('warning') %}
-        <div class="alert alert-warning">
-            {{ message }}
-        </div>
-    {% endfor %}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Ficha · {{ partner.name }} {{ partner.surname }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('partner_index') }}">Socixs</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ partner.name }} {{ partner.surname }}</span>
 {% endblock %}
-{% block main -%}
 
-    <div class="row">
-        <div class="col-lg-12">
-            <h1 class="page-header">Ficha de socia/o </h1>
+{% block csa_main %}
+
+    {# Flash messages #}
+    {% for message in app.flashes('success') %}
+        <div style="margin-bottom: var(--csa-sp-4);">
+            <p class="csa-callout csa-callout--info">
+                <i class="csa-callout__icon fa fa-check-circle"></i>
+                <span>{{ message }}</span>
+            </p>
         </div>
-        <!-- /.col-lg-12 -->
-    </div>
-    <div class="row">
-        <div class="col-lg-12">
-            <div class="panel panel-green">
-                <div class="panel-heading">
-                    {{ partner.name }} {{ partner.surname }}
-                </div>
-                <div class="panel-body">
+    {% endfor %}
+    {% for message in app.flashes('warning') %}
+        <div style="margin-bottom: var(--csa-sp-4);">
+            <p class="csa-callout csa-callout--warning">
+                <i class="csa-callout__icon fa fa-exclamation-triangle"></i>
+                <span>{{ message }}</span>
+            </p>
+        </div>
+    {% endfor %}
 
-                    <ul class="nav nav-tabs">
-                        <li><a href="#home" data-toggle="tab">General</a>
-                        </li>
-                        <li><a href="#basket" data-toggle="tab">Cesta</a>
-                        </li>
-                        <li><a href="#history" data-toggle="tab">Historial</a>
-                        </li>
-                    </ul>
-                    <div class="tab-content">
-                        <div id="home" class="tab-pane fade active in ">
-                            {% if  partner.isActive==1 %}
-                                {% if partner.hasActiveBasket %}
-                                    <div class="alert alert-success">
-                                        <p>Es una/un socia/o con cesta {{ partner.getActiveBasket.basketShare }}</p>
-                                    </div>
-                                {% else %}
-                                    <div class="alert alert-info">
-                                        <p>Es una/un socia/o activa/o pero sin cesta</p>
-                                    </div>
-                                {% endif %}
-                            {% else %}
-                                <div class="alert alert-warning">
-                                    <p>Es una/un socia/o que no está activa/o</p>
-                                </div>
-                            {% endif %}
-
-                            <div class="col-lg-8">
-                                <p><strong>Nombre completo: </strong> {{ partner.name }} {{ partner.surname }}</p>
-                                {% if  partner.parent is null %}
-                                    <p><strong>Familiares: </strong>Es familiar
-                                    principal
-                                    {% if partner.relatives|length==0 %} pero no hay definidos familiares.
-                                    {% else %}
-                                        de las/os siguientes socias/os
-                                        <ul>
-                                            {% for relative in partner.relatives %}
-                                                <li>
-                                                    <a href="{{ path('partner_show', {'id': relative.id}) }}">{{ relative.name }} {{ relative.surname }}</a>
-                                                    | <a href="{{ path('remove_family', {'partner1_id': partner.id, 'partner2_id': relative.id}) }}">Quitar relación</a>
-                                                </li>
-                                            {% endfor %}
-                                        </ul>
-                                    {% endif %}
-                                {% else %}
-                                    <p><strong>Familiares: </strong>Es familiar relacionado con <a
-
-                                                href="{{ path('partner_show', {'id': partner.parent.id}) }}">{{ partner.parent.name }} {{ partner.parent.surname }}</a>
-                                    </p>
-                                {% endif %}
-
-                                {% if  partner.getActiveBasket and partner.getActiveBasket.basketShare.id==4 %}
-                                    {% if partner.sharePartner %}
-                                        <p><strong>Comparte con: </strong><a
-                                                    href="{{ path('partner_show', {'id': partner.sharePartner.id}) }}"> {{ partner.sharePartner }}</a>
-                                            |
-                                            <a href="{{ path('remove_share_partner', {'partner1_id': partner.id, 'partner2_id': partner.sharePartner.id}) }}">Quitar
-                                                relación</a>
-                                        </p>
-                                    {% else %}
-                                        <div class="alert alert-danger">
-                                            <p><strong>Comparte con: </strong>No se ha definido la/el socia/o con la/el
-                                                que comparte la cesta semanal</p>
-                                        </div>
-                                    {% endif %}
-                                {% endif %}
-
-                                <p><strong>Dirección: </strong> {{ partner.address }} - {{ partner.city }}
-                                    ({{ partner.state }})</p>
-                                <p><strong>Teléfono: </strong> {{ partner.celular }}</p>
-                                <p><strong>DNI: </strong>{{ partner.dNI }}</p>
-                                <p><strong>¿Recibe correos de productos
-                                        cárnicos? </strong>{{ partner.eatMeat? "Sí": "No" }}</p>
-                                <p><strong>Fecha de
-                                        inscripción: </strong>{{ partner.inscriptionDate ? partner.inscriptionDate|format_date('long', locale='es') : '' }}
-                                </p>
-                                <p><strong>Email: </strong>{{ partner.email }}</p>
-                                <p><strong>¿Ha rellenado la ficha? </strong>
-                                    {% if (partner.hasFile) %}
-                                        Sí <a
-                                            href="{{ asset('uploads/partner/images/' ~partner.registrationFormImage) }}">Ver
-                                        imagen</a>
-                                    {% else %}
-                                        No
-                                    {% endif %}
-                                </p>
-                                <p><strong>¿Está activa/o? </strong>{{ partner.isActive? "Sí": "No" }}</p>
-                                <p><strong>Forma de pago: </strong>{{ partner.sharePayment.name }}</p>
-
-                                <p><strong>Grupo de recogida: </strong>{{ partner.weeklyBasketGroup }}</p>
-
-
-                            </div>
-                            {% if is_granted('ROLE_COOP') %}
-                                <div class="col-lg-4">
-                                    <div class="well">
-                                        <h4>Acciones</h4>
-                                        <p>
-                                            <a href="{{ path('partner_edit', {'id': partner.id}) }}">
-                                                <button class="btn btn-outline btn-success" type="button">
-                                                    Editar ficha
-                                                </button>
-                                            </a>
-                                            {% if partner.getActiveBasket and  partner.getActiveBasket.basketShare.id==4 and partner.sharePartner is null %}
-                                                <a href="{{ path('family', {'id': partner.id,'type':'add_share_partner'}) }}">
-                                                    <button class="btn btn-outline btn-info" type="button">
-                                                        ¿Comparte con?
-                                                    </button>
-                                                </a>
-
-                                            {% endif %}
-                                        </p>
-                                        {% if partner.isActive==1 %}
-                                            <p>
-                                                <a href="{{ path('partner_demote', {'id': partner.id}) }}">
-                                                    <button class="btn btn-outline btn-danger" type="button">
-                                                        Dar de baja
-                                                    </button>
-                                                </a>
-                                                <a href="{{ path('family', {'id': partner.id,'type':'add_family'}) }}">
-                                                    <button class="btn btn-outline btn-warning" type="button">
-                                                        Añadir familiar
-                                                    </button>
-                                                </a>
-                                            </p>
-                                            {% if not partner.hasActiveBasket %}
-                                                <p>
-                                                    <a href="{{ path('partner_add_basket', {'id': partner.id}) }}">
-                                                        <button class="btn btn-outline btn-info" type="button">
-                                                            Añadir cesta
-                                                        </button>
-                                                    </a>
-                                                </p>
-                                            {% endif %}
-                                        {% else %}
-                                            <p>
-                                                <a href="{{ path('partner_promote', {'id': partner.id}) }}">
-                                                    <button class="btn btn-outline btn-success" type="button">
-                                                        Activar
-                                                    </button>
-                                                </a>
-                                            </p>
-                                        {% endif %}
-
-                                    </div>
-                                </div>
-                            {% endif %}
-                        </div>
-                        <div id="basket" class="tab-pane fade">
-                            <h4></h4>
-                            <div class="row">
-                                <div class="col-lg-8">
-                                    <div class="panel panel-info">
-                                        <div class="panel-heading panel-info">
-                                            {% if partner.hasActiveBasket %}Cesta Actual {{ partner.activeBasket.amount==1?'':'(Esta/e socia/o tiene asociadas '~partner.activeBasket.amount~' cestas)' }}{% endif %}
-                                        </div>
-                                        <div class="panel-body">
-
-                                            {% if partner.hasActiveBasket %}
-                                                <p><strong>Tipo de cesta
-                                                        actual: </strong>{{ partner.getActiveBasket.basketShare }}
-                                                    {% if  partner.getActiveBasket.basketShare.id==3 %}
-                                                        ({{ partner.getActiveBasket.dayMonthOrder }}º viernes)
-                                                    {% endif %}
-                                                </p>
-                                                {% if partner.activeBasket.eggAmount %}
-                                                    <p><strong>Huevos: </strong>{{ partner.activeBasket.eggAmount }}
-                                                    {% if partner.activeBasket.basketShare.id==5 %}
-                                                        ({{ partner.activeBasket.eggPeriod }}
-                                                        {% if  partner.activeBasket.eggPeriod.id is defined and partner.activeBasket.eggPeriod.id==3 %}
-                                                            - {{ partner.getActiveBasket.dayMonthOrder }}º viernes
-                                                            {% endif %}
-                                                        )
-                                                        {% endif %}
-                                                    </p>
-                                                    {% else %}
-                                                    <p>Es una cesta sin huevos</p>
-                                                {% endif %}
-                                                <p><strong>Fecha de inicio
-                                                        cesta: </strong>{{ partner.getActiveBasket.startDate|date('d-m-Y') }}
-                                                </p>
-                                                {% if  partner.getActiveBasket.endDate %}
-                                                    <p><strong>Fecha de finalización
-                                                            cesta: </strong>{{ partner.getActiveBasket.endDate|date('d-m-Y') }}
-                                                    </p>
-                                                {% endif %}
-                                                <p><strong>Precio mensual: </strong>
-                                                    {% if partner.activeBasket.eggAmount %}
-                                                        {{ partner.getActiveBasket.monthPrice + partner.activeBasket.eggMonthPrice|number_format(2) }} €
-                                                    {% else %}
-                                                        {{ partner.getActiveBasket.monthPrice }}
-                                                    {% endif %}
-                                                </p>
-                                            {% endif %}
-
-
-                                        </div>
-                                    </div>
-                                </div>
-                                {% if is_granted('ROLE_COOP') %}
-                                    <div class="col-lg-4">
-                                        <div class="well">
-                                            <h4>Acciones</h4>
-                                            {% if partner.hasActiveBasket %}
-                                                <p>
-                                                    <a href="{{ path('partner_basket_share_finalize', {'id': partner.getActiveBasket.id}) }}">
-                                                        <button class="btn btn-outline btn-default" type="button">
-                                                            Dar de baja la cesta
-                                                        </button>
-                                                    </a>
-                                                </p>
-
-                                                <p>
-                                                    <a href="{{ path('partner_basket_share_edit', {'id': partner.getActiveBasket.id}) }}">
-                                                        <button class="btn btn-outline btn-success" type="button">
-                                                            Cambiar tipo de cesta
-                                                        </button>
-                                                    </a>
-                                                </p>
-                                            {% endif %}
-                                        </div>
-                                    </div>
-                                {% endif %}
-                            </div>
-
-                        </div>
-                        <div id="history" class="tab-pane fade">
-                        </div>
-
-
-                    </div>
+    {# Cabecera con marker + nombre + status #}
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-6); align-items: flex-start;">
+        <div class="csa-row" style="align-items: flex-start; gap: var(--csa-sp-4);">
+            <span class="csa-table__id-marker" style="width: 64px; height: 64px; font-size: 28px; border-radius: var(--csa-radius-lg);">
+                <i class="fa fa-user"></i>
+            </span>
+            <div>
+                <h1>{{ partner.name }} {{ partner.surname }}</h1>
+                <div class="csa-row" style="gap: var(--csa-sp-2); margin-top: var(--csa-sp-2);">
+                    {% if partner.isActive == 1 %}
+                        <span class="csa-badge csa-badge--green">Activx</span>
+                        {% if partner.hasActiveBasket %}
+                            <span class="csa-badge csa-badge--sky">{{ partner.getActiveBasket.basketShare }}</span>
+                        {% else %}
+                            <span class="csa-badge csa-badge--ochre">Sin cesta</span>
+                        {% endif %}
+                    {% else %}
+                        <span class="csa-badge csa-badge--neutral">De baja</span>
+                    {% endif %}
                 </div>
             </div>
-            <!-- /.col-lg-12 -->
+        </div>
+        <div class="csa-row">
+            {{ csa.btn('Volver al listado', { variant: 'ghost', href: path('partner_index') }) }}
         </div>
     </div>
 
-    <ul class="list-inline">
-        <li><a href="{{ path('partner_index') }}">
-                <button class="btn btn-outline btn-info" type="button">Ir al listado</button>
-            </a></li>
-        {#<li>{{ include('partner/_delete_form.html.twig') }}</li>#}
-    </ul>
+    <div class="csa-stack-lg">
+
+        {# Datos personales #}
+        {% embed '_components/csa_card.html.twig' with { title: 'Datos personales', accent: 'sky' } %}
+            {% block body %}
+                <dl class="csa-defs">
+                    <div class="csa-defs__row">
+                        <dt class="csa-defs__label">Nombre completo</dt>
+                        <dd class="csa-defs__value">{{ partner.name }} {{ partner.surname }}</dd>
+                    </div>
+                    {% if partner.dNI %}
+                        <div class="csa-defs__row">
+                            <dt class="csa-defs__label">DNI</dt>
+                            <dd class="csa-defs__value">{{ partner.dNI }}</dd>
+                        </div>
+                    {% endif %}
+                    {% if partner.celular %}
+                        <div class="csa-defs__row">
+                            <dt class="csa-defs__label">Teléfono</dt>
+                            <dd class="csa-defs__value">{{ partner.celular }}</dd>
+                        </div>
+                    {% endif %}
+                    {% if partner.email %}
+                        <div class="csa-defs__row">
+                            <dt class="csa-defs__label">Email</dt>
+                            <dd class="csa-defs__value"><a href="mailto:{{ partner.email }}">{{ partner.email }}</a></dd>
+                        </div>
+                    {% endif %}
+                    {% if partner.address %}
+                        <div class="csa-defs__row csa-defs__row--full">
+                            <dt class="csa-defs__label">Dirección</dt>
+                            <dd class="csa-defs__value">{{ partner.address }} — {{ partner.city }} ({{ partner.state }})</dd>
+                        </div>
+                    {% endif %}
+                    {% if partner.inscriptionDate %}
+                        <div class="csa-defs__row">
+                            <dt class="csa-defs__label">Fecha de inscripción</dt>
+                            <dd class="csa-defs__value">{{ partner.inscriptionDate|format_date('long', locale='es') }}</dd>
+                        </div>
+                    {% endif %}
+                    <div class="csa-defs__row">
+                        <dt class="csa-defs__label">¿Consume cárnicos?</dt>
+                        <dd class="csa-defs__value">{{ partner.eatMeat ? 'Sí' : 'No' }}</dd>
+                    </div>
+                    {% if partner.sharePayment %}
+                        <div class="csa-defs__row">
+                            <dt class="csa-defs__label">Forma de pago</dt>
+                            <dd class="csa-defs__value">{{ partner.sharePayment.name }}</dd>
+                        </div>
+                    {% endif %}
+                    {% if partner.weeklyBasketGroup %}
+                        <div class="csa-defs__row">
+                            <dt class="csa-defs__label">Grupo de recogida</dt>
+                            <dd class="csa-defs__value">{{ partner.weeklyBasketGroup }}</dd>
+                        </div>
+                    {% endif %}
+                    <div class="csa-defs__row">
+                        <dt class="csa-defs__label">Ficha rellenada</dt>
+                        <dd class="csa-defs__value">
+                            {% if partner.hasFile %}
+                                Sí · <a href="{{ asset('uploads/partner/images/' ~ partner.registrationFormImage) }}" target="_blank" rel="noopener">Ver imagen</a>
+                            {% else %}
+                                No
+                            {% endif %}
+                        </dd>
+                    </div>
+                </dl>
+            {% endblock %}
+        {% endembed %}
+
+        {# Familia #}
+        {% embed '_components/csa_card.html.twig' with { title: 'Familiares', accent: 'plum' } %}
+            {% block body %}
+                {% if partner.parent is null %}
+                    <p>Es familiar principal{% if partner.relatives|length == 0 %}, sin familiares definidos.{% endif %}</p>
+                    {% if partner.relatives|length > 0 %}
+                        <ul class="csa-list">
+                            {% for relative in partner.relatives %}
+                                <li class="csa-list__item">
+                                    <div class="csa-list__row">
+                                        <span class="csa-list__body">
+                                            <a class="csa-list__primary" href="{{ path('partner_show', { id: relative.id }) }}">{{ relative.name }} {{ relative.surname }}</a>
+                                        </span>
+                                        <a href="{{ path('remove_family', { partner1_id: partner.id, partner2_id: relative.id }) }}"
+                                           class="csa-btn csa-btn--ghost csa-btn--sm"
+                                           onclick="return confirm('¿Quitar la relación familiar?');">
+                                            Quitar
+                                        </a>
+                                    </div>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                {% else %}
+                    <p>Es familiar relacionado con
+                        <a href="{{ path('partner_show', { id: partner.parent.id }) }}">{{ partner.parent.name }} {{ partner.parent.surname }}</a>.
+                    </p>
+                {% endif %}
+
+                {% if partner.getActiveBasket and partner.getActiveBasket.basketShare.id == 4 %}
+                    {% if partner.sharePartner %}
+                        <p style="margin-top: var(--csa-sp-4);">
+                            <strong>Comparte cesta con:</strong>
+                            <a href="{{ path('partner_show', { id: partner.sharePartner.id }) }}">{{ partner.sharePartner }}</a>
+                            ·
+                            <a href="{{ path('remove_share_partner', { partner1_id: partner.id, partner2_id: partner.sharePartner.id }) }}"
+                               onclick="return confirm('¿Quitar la relación?');">
+                                quitar
+                            </a>
+                        </p>
+                    {% else %}
+                        <p class="csa-callout csa-callout--warning" style="margin-top: var(--csa-sp-4);">
+                            <i class="csa-callout__icon fa fa-exclamation-triangle"></i>
+                            <span>Tiene cesta compartida pero no se ha definido con quién la comparte.</span>
+                        </p>
+                    {% endif %}
+                {% endif %}
+            {% endblock %}
+        {% endembed %}
+
+        {# Cesta activa #}
+        {% if partner.hasActiveBasket %}
+            {% embed '_components/csa_card.html.twig' with { title: 'Cesta actual', accent: 'green' } %}
+                {% block body %}
+                    <dl class="csa-defs">
+                        <div class="csa-defs__row">
+                            <dt class="csa-defs__label">Tipo de cesta</dt>
+                            <dd class="csa-defs__value">
+                                {{ partner.getActiveBasket.basketShare }}
+                                {% if partner.getActiveBasket.basketShare.id == 3 %}
+                                    · {{ partner.getActiveBasket.dayMonthOrder }}º viernes
+                                {% endif %}
+                            </dd>
+                        </div>
+                        {% if partner.activeBasket.amount > 1 %}
+                            <div class="csa-defs__row">
+                                <dt class="csa-defs__label">Cestas asociadas</dt>
+                                <dd class="csa-defs__value">{{ partner.activeBasket.amount }}</dd>
+                            </div>
+                        {% endif %}
+                        {% if partner.activeBasket.eggAmount %}
+                            <div class="csa-defs__row">
+                                <dt class="csa-defs__label">Huevos</dt>
+                                <dd class="csa-defs__value">
+                                    {{ partner.activeBasket.eggAmount }}
+                                    {% if partner.activeBasket.basketShare.id == 5 %}
+                                        · {{ partner.activeBasket.eggPeriod }}
+                                        {% if partner.activeBasket.eggPeriod.id is defined and partner.activeBasket.eggPeriod.id == 3 %}
+                                            ({{ partner.getActiveBasket.dayMonthOrder }}º viernes)
+                                        {% endif %}
+                                    {% endif %}
+                                </dd>
+                            </div>
+                        {% else %}
+                            <div class="csa-defs__row">
+                                <dt class="csa-defs__label">Huevos</dt>
+                                <dd class="csa-defs__value csa-muted">Sin huevos</dd>
+                            </div>
+                        {% endif %}
+                        <div class="csa-defs__row">
+                            <dt class="csa-defs__label">Inicio</dt>
+                            <dd class="csa-defs__value">{{ partner.getActiveBasket.startDate|format_date('long', locale='es') }}</dd>
+                        </div>
+                        {% if partner.getActiveBasket.endDate %}
+                            <div class="csa-defs__row">
+                                <dt class="csa-defs__label">Fin</dt>
+                                <dd class="csa-defs__value">{{ partner.getActiveBasket.endDate|format_date('long', locale='es') }}</dd>
+                            </div>
+                        {% endif %}
+                        <div class="csa-defs__row">
+                            <dt class="csa-defs__label">Precio mensual</dt>
+                            <dd class="csa-defs__value">
+                                {% if partner.activeBasket.eggAmount %}
+                                    {{ (partner.getActiveBasket.monthPrice + partner.activeBasket.eggMonthPrice)|number_format(2) }} €
+                                {% else %}
+                                    {{ partner.getActiveBasket.monthPrice }} €
+                                {% endif %}
+                            </dd>
+                        </div>
+                    </dl>
+
+                    {% if is_granted('ROLE_COOP') %}
+                        <div class="csa-row" style="flex-wrap: wrap; gap: var(--csa-sp-2); margin-top: var(--csa-sp-5); padding-top: var(--csa-sp-4); border-top: 1px solid var(--csa-rule);">
+                            <a href="{{ path('partner_basket_share_edit', { id: partner.getActiveBasket.id }) }}"
+                               class="csa-btn csa-btn--secondary csa-btn--sm">
+                                <i class="fa fa-pencil"></i> Cambiar tipo de cesta
+                            </a>
+                            <a href="{{ path('partner_basket_share_finalize', { id: partner.getActiveBasket.id }) }}"
+                               class="csa-btn csa-btn--ghost csa-btn--sm"
+                               onclick="return confirm('¿Dar de baja esta cesta?');">
+                                <i class="fa fa-times"></i> Dar de baja la cesta
+                            </a>
+                        </div>
+                    {% endif %}
+                {% endblock %}
+            {% endembed %}
+        {% endif %}
+
+        {# Acciones administrativas #}
+        {% if is_granted('ROLE_COOP') %}
+            {% embed '_components/csa_card.html.twig' with { title: 'Acciones', accent: 'ochre' } %}
+                {% block body %}
+                    <div class="csa-row" style="flex-wrap: wrap; gap: var(--csa-sp-3);">
+                        <a href="{{ path('partner_edit', { id: partner.id }) }}" class="csa-btn csa-btn--primary csa-btn--sm">
+                            <i class="fa fa-pencil"></i> Editar ficha
+                        </a>
+                        {% if partner.isActive == 1 %}
+                            {% if partner.getActiveBasket and partner.getActiveBasket.basketShare.id == 4 and partner.sharePartner is null %}
+                                <a href="{{ path('family', { id: partner.id, type: 'add_share_partner' }) }}" class="csa-btn csa-btn--secondary csa-btn--sm">
+                                    <i class="fa fa-handshake-o"></i> ¿Comparte con?
+                                </a>
+                            {% endif %}
+                            <a href="{{ path('family', { id: partner.id, type: 'add_family' }) }}" class="csa-btn csa-btn--ghost csa-btn--sm">
+                                <i class="fa fa-users"></i> Añadir familiar
+                            </a>
+                            {% if not partner.hasActiveBasket %}
+                                <a href="{{ path('partner_add_basket', { id: partner.id }) }}" class="csa-btn csa-btn--ghost csa-btn--sm">
+                                    <i class="fa fa-shopping-basket"></i> Añadir cesta
+                                </a>
+                            {% endif %}
+                            <a href="{{ path('partner_demote', { id: partner.id }) }}"
+                               class="csa-btn csa-btn--ghost csa-btn--sm"
+                               onclick="return confirm('¿Dar de baja a estx socix?');">
+                                <i class="fa fa-times"></i> Dar de baja
+                            </a>
+                        {% else %}
+                            <a href="{{ path('partner_promote', { id: partner.id }) }}"
+                               class="csa-btn csa-btn--secondary csa-btn--sm">
+                                <i class="fa fa-check"></i> Activar
+                            </a>
+                        {% endif %}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+        {% endif %}
+
+    </div>
+
 {% endblock %}
