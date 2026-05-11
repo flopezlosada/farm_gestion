@@ -1,50 +1,75 @@
-{% extends 'layout_crud.html.twig' %}
-{% block title_wrapper %}Editar agraciadx{% endblock %}
-{% block main -%}
-    <div class="panel panel-default">
+{# ============================================================
+ # Editar agraciadx — shell csa.
+ # ============================================================ #}
 
-        <div class="panel-body">
-            {{ form_start(edit_form, {'action': path('recipient_update',{'id':entity.id}), 'method': 'put','attr': {'role': 'form' }}) }}
-            <div class="row">
-                <div class="col-lg-6">
-                    <div class="form-group">
-                        {{ form_errors(edit_form.name) }}
-                        <label>{{ form_label(edit_form.name) }}</label>
-                        {{ form_widget(edit_form.name,{'attr':{'class':'form-control','placeholder':'Nombre'}}) }}
-                    </div>
-                    <div class="checkbox">
-                        {{ form_errors(edit_form.regular) }}
-                        <label>
-                            {{ form_widget(edit_form.regular) }}
-                            Marca esta casilla si a estx agraciadx le regalamos huevos de forma regular
-                        </label>
-                    </div>
-                    <div class="form-group">
-                        {{ form_errors(edit_form.often_buying_eggs) }}
-                        <label>{{ form_label(edit_form.often_buying_eggs) }}</label>
-                        {{ form_widget(edit_form.often_buying_eggs,{'attr':{'class':'form-control'}}) }}
-                    </div>
-                </div>
-            </div>
-            {{ form_widget(edit_form.submit,{'attr':{'class':'btn btn-default'}}) }}
-            {{ form_rest(edit_form) }}
-            {{ form_end(edit_form, {'render_rest': false}) }}
-        </div>
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% form_theme edit_form 'form_div_layout.html.twig' %}
+
+{% block title %}Editar agraciadx · {{ entity.name }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('recipient') }}">Agraciadxs</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('recipient_show', { id: entity.id }) }}">{{ entity.name }}</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Editar</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Comercio · Regalos',
+        'Editar ' ~ entity.name,
+        'Corrige el nombre o la cadencia del regalo.'
+    ) }}
+
+    <div style="display: none;">
+        {{ form_start(delete_form, { attr: { id: 'recipient-delete-form' } }) }}
+            {{ form_rest(delete_form) }}
+        {{ form_end(delete_form, { render_rest: false }) }}
     </div>
 
+    {{ form_start(edit_form, {
+        'action': path('recipient_update', { id: entity.id }),
+        'method': 'put',
+        'attr': { 'role': 'form', 'class': 'csa-form-narrow' }
+    }) }}
 
+        <div class="csa-stack-lg">
 
+            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Datos', subtitle: 'Identidad y cadencia.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(edit_form.name, 'Nombre', { full: true }) }}
+                        {{ csa.field(edit_form.regular, '¿Recibe con frecuencia?') }}
+                        {{ csa.field(edit_form.often_buying_eggs, 'Frecuencia en días', { hint: 'sólo si es regular' }) }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
 
+            <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                <div>
+                    <button type="submit" form="recipient-delete-form" class="csa-btn csa-btn--ghost"
+                            onclick="return confirm('¿Seguro? Esta acción no se puede deshacer.');">
+                        Eliminar agraciadx
+                    </button>
+                </div>
+                <div class="csa-row">
+                    {{ csa.btn('Cancelar', { variant: 'ghost', href: path('recipient_show', { id: entity.id }) }) }}
+                    {{ form_widget(edit_form.submit, {
+                        label: 'Guardar cambios',
+                        attr: { class: 'csa-btn csa-btn--primary' }
+                    }) }}
+                </div>
+            </div>
 
+        </div>
 
-    <ul class="record_actions">
-        <li>
-            <a href="{{ path('recipient') }}">
-                Volver al listado
-            </a>
-        </li>
-        <li>{{ form(delete_form) }}</li>
-    </ul>
+        {{ form_rest(edit_form) }}
+    {{ form_end(edit_form, { render_rest: false }) }}
 
 {% endblock %}
-{% block specific_js %}{% endblock %}
