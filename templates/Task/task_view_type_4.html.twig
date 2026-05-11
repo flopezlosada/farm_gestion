@@ -1,0 +1,20 @@
+{# ============================================================
+ # Tarjeta de tarea tipo 4 (periódica) — partial.
+ # La plantilla legacy estaba vacía; reconstruida siguiendo el
+ # mismo patrón que los otros 3 tipos.
+ # ============================================================ #}
+
+<div class="csa-task-card csa-task-card--plum" style="background: var(--csa-plum-soft); border-left: 4px solid var(--csa-plum); padding: var(--csa-sp-5); border-radius: var(--csa-radius-md); margin-bottom: var(--csa-sp-4);">
+    <h4 style="margin-top: 0;">{{ task.title }} <span class="csa-soft" style="font-weight: normal; font-size: 0.85em;">· Periódica{% if task.period %} (cada {{ task.period }} días){% endif %}</span></h4>
+    {% if task.realDate %}
+        <p><strong>Última realización:</strong> {{ task.realDate|format_date('long', locale='es') }}</p>
+    {% endif %}
+    {% if task.expectedDate %}
+        <p><strong>Próxima fecha prevista:</strong> {{ task.expectedDate|format_date('long', locale='es') }}</p>
+    {% endif %}
+    {% if task.users|length > 0 %}
+        <p><strong>Asignada a:</strong> {{ task.listUsers }}</p>
+    {% endif %}
+    <div>{{ task.content|raw }}</div>
+    {% include 'Task/record_actions.html.twig' with { task: task } %}
+</div>
