@@ -1,40 +1,26 @@
 {# ============================================================
  # Acciones inline de una tarea (partial usado desde index y show).
+ # Fila horizontal de botones compactos.
  # ============================================================ #}
 
-<ul class="csa-list csa-list--inline" style="margin-top: var(--csa-sp-3);">
-    <li class="csa-list__item">
-        <a class="csa-list__link csa-list__link--primary" href="{{ path('task_finalize', { id: task.id }) }}"
-           onclick="return confirm('¿Marcar como finalizada y registrar la fecha de hoy?');">
-            <i class="fa fa-check"></i> Finalizar
+<div class="csa-row" style="flex-wrap: wrap; gap: var(--csa-sp-2); margin-top: var(--csa-sp-3);">
+    <a href="{{ path('task_finalize', { id: task.id }) }}"
+       class="csa-btn csa-btn--ghost csa-btn--sm"
+       onclick="return confirm('¿Marcar como finalizada y registrar la fecha de hoy?');">
+        <i class="fa fa-check"></i> Finalizar
+    </a>
+    <a href="{{ path('task_edit', { id: task.id }) }}" class="csa-btn csa-btn--ghost csa-btn--sm">
+        <i class="fa fa-pencil"></i> Editar
+    </a>
+    {% if app.request.attributes.get('_route') != 'task_show' %}
+        <a href="{{ path('task_show', { id: task.id }) }}" class="csa-btn csa-btn--ghost csa-btn--sm">
+            <i class="fa fa-eye"></i> Ver
         </a>
-    </li>
-    <li class="csa-list__item">
-        <a class="csa-list__link" href="{{ path('task_edit', { id: task.id }) }}">
-            <i class="fa fa-pencil"></i> Editar
-        </a>
-    </li>
-    {% if app.request.attributes.get('_route') == 'task_show' %}
-        <li class="csa-list__item">
-            <a class="csa-list__link" href="{{ path('task') }}">
-                <i class="fa fa-list"></i> Listado
-            </a>
-        </li>
-    {% else %}
-        <li class="csa-list__item">
-            <a class="csa-list__link" href="{{ path('task_show', { id: task.id }) }}">
-                <i class="fa fa-eye"></i> Ver detalles
-            </a>
-        </li>
     {% endif %}
-    <li class="csa-list__item">
-        <a class="csa-list__link" href="{{ path('tasknote_new', { task_id: task.id }) }}">
-            <i class="fa fa-sticky-note"></i> Añadir nota
-        </a>
-    </li>
-    <li class="csa-list__item">
-        <a class="csa-list__link" href="{{ path('taskimage_new', { task_id: task.id }) }}">
-            <i class="fa fa-image"></i> Añadir imagen
-        </a>
-    </li>
-</ul>
+    <a href="{{ path('tasknote_new', { task_id: task.id }) }}" class="csa-btn csa-btn--ghost csa-btn--sm">
+        <i class="fa fa-sticky-note"></i> Nota
+    </a>
+    <a href="{{ path('taskimage_new', { task_id: task.id }) }}" class="csa-btn csa-btn--ghost csa-btn--sm">
+        <i class="fa fa-image"></i> Imagen
+    </a>
+</div>
