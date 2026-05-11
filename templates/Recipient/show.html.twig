@@ -1,16 +1,67 @@
-{% extends 'layout_show.html.twig' %}
-{% block main -%}
-    <div class="row">
-        <div class="col-lg-12">
-            <h1 class="page-header">{{ entity }}</h1>
-            <div class="panel-heading">
-                <strong>Total de regalos:</strong> {{ entity.getGiftPrice }} €
+{# ============================================================
+ # Detalle de unx agraciadx — shell csa.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Agraciadx · {{ entity.name }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('recipient') }}">Agraciadxs</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ entity.name }}</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-6); align-items: flex-start;">
+        <div class="csa-row" style="align-items: flex-start; gap: var(--csa-sp-4);">
+            <span class="csa-table__id-marker" style="width: 64px; height: 64px; font-size: 28px; border-radius: var(--csa-radius-lg);">
+                <i class="fa fa-gift"></i>
+            </span>
+            <div>
+                <h1>{{ entity.name }}</h1>
+                <div class="csa-serif csa-italic csa-soft" style="margin-top: var(--csa-sp-2);">
+                    {% if entity.regular == 1 %}
+                        Regalo regular · cada {{ entity.getOftenBuyingEggs }} días
+                    {% else %}
+                        Regalo ocasional
+                    {% endif %}
+                </div>
             </div>
         </div>
-        <!-- /.col-lg-12 -->
-    </div>
-    <div class="row">
-        <div class="col-lg-12">
+        <div class="csa-row">
+            {{ csa.btn('Editar', { variant: 'secondary', href: path('recipient_edit', { id: entity.id }), icon: 'fa-pencil' }) }}
+            {{ csa.btn('Volver', { variant: 'ghost', href: path('recipient') }) }}
         </div>
     </div>
+
+    {% embed '_components/csa_card.html.twig' with { title: 'Resumen', accent: 'plum' } %}
+        {% block body %}
+            <dl class="csa-defs">
+                <div class="csa-defs__row">
+                    <dt class="csa-defs__label">Nombre</dt>
+                    <dd class="csa-defs__value">{{ entity.name }}</dd>
+                </div>
+                <div class="csa-defs__row">
+                    <dt class="csa-defs__label">¿Recibe con frecuencia?</dt>
+                    <dd class="csa-defs__value">{% if entity.regular == 1 %}Sí{% else %}No{% endif %}</dd>
+                </div>
+                {% if entity.regular == 1 %}
+                    <div class="csa-defs__row">
+                        <dt class="csa-defs__label">Cadencia del regalo</dt>
+                        <dd class="csa-defs__value">cada {{ entity.getOftenBuyingEggs }} días</dd>
+                    </div>
+                {% endif %}
+                <div class="csa-defs__row">
+                    <dt class="csa-defs__label">Total de regalos</dt>
+                    <dd class="csa-defs__value">{{ entity.getGiftPrice }} €</dd>
+                </div>
+            </dl>
+        {% endblock %}
+    {% endembed %}
+
 {% endblock %}
