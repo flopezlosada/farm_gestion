@@ -104,7 +104,7 @@ class CompostCollectionController extends AbstractAppController
      */
     private function createCreateForm(CompostCollection $entity)
     {
-        $form = $this->createForm(new CompostCollectionType(), $entity, array(
+        $form = $this->createForm(CompostCollectionType::class, $entity, array(
             'action' => $this->generateUrl('compostcollection_create'),
             'method' => 'POST',
         ));

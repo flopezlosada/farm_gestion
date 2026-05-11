@@ -65,7 +65,7 @@ class CompostCollectionPointController extends AbstractAppController
      */
     private function createCreateForm(CompostCollectionPoint $entity)
     {
-        $form = $this->createForm(new CompostCollectionPointType(), $entity, array(
+        $form = $this->createForm(CompostCollectionPointType::class, $entity, array(
             'action' => $this->generateUrl('compostcollectionpoint_create'),
             'method' => 'POST',
         ));
@@ -160,7 +160,7 @@ class CompostCollectionPointController extends AbstractAppController
      */
     private function createEditForm(CompostCollectionPoint $entity)
     {
-        $form = $this->createForm(new CompostCollectionPointType(), $entity, array(
+        $form = $this->createForm(CompostCollectionPointType::class, $entity, array(
             'action' => $this->generateUrl('compostcollectionpoint_update', array('id' => $entity->getId())),
             'method' => 'PUT',
         ));
