@@ -1,45 +1,67 @@
-{% extends 'base.html.twig' %}
+{# ============================================================
+ # Listado de tipos de tarea (TaskType).
+ # ============================================================ #}
 
-{% block body -%}
-    <h1>TaskType list</h1>
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
 
-    <table class="records_list">
-        <thead>
-            <tr>
-                <th>Id</th>
-                <th>Title</th>
-                <th>Created</th>
-                <th>Updated</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-        {% for entity in entities %}
-            <tr>
-                <td><a href="{{ path('tasktype_show', { 'id': entity.id }) }}">{{ entity.id }}</a></td>
-                <td>{{ entity.title }}</td>
-                <td>{% if entity.created %}{{ entity.created|date('Y-m-d H:i:s') }}{% endif %}</td>
-                <td>{% if entity.updated %}{{ entity.updated|date('Y-m-d H:i:s') }}{% endif %}</td>
-                <td>
-                <ul>
-                    <li>
-                        <a href="{{ path('tasktype_show', { 'id': entity.id }) }}">show</a>
-                    </li>
-                    <li>
-                        <a href="{{ path('tasktype_edit', { 'id': entity.id }) }}">edit</a>
-                    </li>
-                </ul>
-                </td>
-            </tr>
-        {% endfor %}
-        </tbody>
-    </table>
+{% block title %}Tipos de tarea{% endblock %}
 
-        <ul>
-        <li>
-            <a href="{{ path('tasktype_new') }}">
-                Create a new entry
-            </a>
-        </li>
-    </ul>
-    {% endblock %}
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('task') }}">Tareas</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Tipos</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Tareas · Catálogo',
+        'Tipos de tarea',
+        'Etiquetas para clasificar las tareas del huerto: riego, deshierbe, cosecha, mantenimiento, etc.'
+    ) }}
+
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-5);">
+        <div></div>
+        <div class="csa-row">
+            {{ csa.btn('Nuevo tipo', { variant: 'primary', href: path('tasktype_new'), icon: 'fa-plus' }) }}
+        </div>
+    </div>
+
+    <div class="csa-table-wrap">
+        <table class="csa-table" data-paginate>
+            <thead>
+                <tr>
+                    <th>Tipo</th>
+                    <th class="csa-table__col-tight">Creado</th>
+                    <th class="csa-table__actions">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entity in entities %}
+                    <tr>
+                        <td>
+                            <a class="csa-table__primary" href="{{ path('tasktype_show', { id: entity.id }) }}">{{ entity.title }}</a>
+                        </td>
+                        <td class="csa-table__col-tight">
+                            {% if entity.created %}{{ entity.created|format_date('medium', locale='es') }}{% else %}—{% endif %}
+                        </td>
+                        <td class="csa-table__actions">
+                            <a href="{{ path('tasktype_show', { id: entity.id }) }}" title="Ver" aria-label="Ver"><i class="fa fa-eye"></i></a>
+                            <a href="{{ path('tasktype_edit', { id: entity.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="3" class="csa-muted" style="text-align: center; padding: var(--csa-sp-8);">
+                            No hay tipos de tarea registrados.
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+{% endblock %}
