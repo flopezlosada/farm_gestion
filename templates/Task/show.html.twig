@@ -125,11 +125,12 @@
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--csa-sp-4);">
                     {% for image in entity.getImages %}
                         <a class="fancybox-button" rel="fancybox-button"
-                           href="{{ asset('uploads/task/images/' ~ image.image) | imagine_filter('image_task_big') }}"
+                           href="{{ asset('uploads/task/images/' ~ image.image) }}"
                            title="{{ image.title }}">
-                            <img src="{{ asset('uploads/task/images/' ~ image.image) | imagine_filter('image_task_show') }}"
+                            <img src="{{ asset('uploads/task/images/' ~ image.image) }}"
                                  alt="{{ image.title }}"
-                                 style="width: 100%; height: 180px; object-fit: cover; border-radius: var(--csa-radius-md);">
+                                 loading="lazy"
+                                 style="width: 100%; height: 180px; object-fit: cover; border-radius: var(--csa-radius-md); display: block;">
                         </a>
                     {% endfor %}
                 </div>
