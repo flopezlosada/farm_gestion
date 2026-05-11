@@ -1,32 +1,61 @@
+{# ============================================================
+ # Modal de creación de imagen dentro de una Gallery (grouped).
+ # Carga vía jQuery Modal AJAX. Tras submit refresca el listado
+ # de thumbs de la gallery (target distinto al modal de blog).
+ # ============================================================ #}
+
 {% extends 'Default/layout_admin.html.twig' %}
+{% form_theme form 'form_div_layout.html.twig' %}
 
 {% block admin_content -%}
-    <h1>{{ "Image creation"|trans }}</h1>
+    <div class="csa-modal-card" style="max-width: 480px;">
+        <header style="display: flex; align-items: center; gap: var(--csa-sp-3); margin-bottom: var(--csa-sp-4);">
+            <span class="csa-table__id-marker" style="width: 44px; height: 44px; font-size: 18px; border-radius: var(--csa-radius-md);">
+                <i class="fa fa-image"></i>
+            </span>
+            <h3 style="font-family: var(--csa-serif); font-weight: 500; margin: 0;">Añadir imagen a la galería</h3>
+        </header>
 
+        {{ form_start(form, { attr: {
+            class: 'admin-form on-modal',
+            'data-place': 'on-modal',
+            id: 'form_' ~ object_class ~ '_' ~ entity.getClass|lower ~ '_' ~ foreign_key,
+            enctype: 'multipart/form-data'
+        } }) }}
 
-    {{ form(form, {'attr': {'class': 'admin-form on-modal', 'data-place' : 'on-modal', 'id':'form_'~object_class~'_'~entity.getClass|lower~'_'~foreign_key}} ) }}
+            <div class="csa-form-grid">
+                <div class="csa-field csa-field--full">
+                    <label class="csa-field__label" for="{{ form.title.vars.id }}">Título</label>
+                    {{ form_widget(form.title, { attr: { class: 'csa-input' } }) }}
+                </div>
+                <div class="csa-field csa-field--full">
+                    <label class="csa-field__label" for="{{ form.file.vars.id }}">Archivo de imagen</label>
+                    {{ form_widget(form.file) }}
+                </div>
+            </div>
 
+            <div style="margin-top: var(--csa-sp-5);">
+                {{ form_widget(form.submit, { label: 'Subir imagen', attr: { class: 'csa-btn csa-btn--primary' } }) }}
+            </div>
 
+            {{ form_rest(form) }}
+        {{ form_end(form, { render_rest: false }) }}
+    </div>
 {% endblock %}
+
 {% block javascripts %}
+    {{ parent() }}
     <script type="text/javascript" src="{{ asset('bundles/app/assets/jquery.form.min.js') }}"></script>
-    <script src="{{ asset('bundles/app/js/scripts/admin.js')}}"></script>
+    <script src="{{ asset('bundles/app/js/scripts/admin.js') }}"></script>
     <script>
-        // wait for the DOM to be loaded
         $(document).ready(function () {
-            var options = {
-                success: updateEdition,
-                target: "#gallery_image_thumbs"
-            }
-
-            // bind 'myForm' and provide a simple callback function
-            $('#{{ 'form_'~object_class~'_'~entity.getClass|lower~'_'~foreign_key }}').ajaxForm(options);
+            $('#{{ 'form_' ~ object_class ~ '_' ~ entity.getClass|lower ~ '_' ~ foreign_key }}').ajaxForm({
+                success: function () {
+                    $('.jquery-modal').hide();
+                    $('.modal').hide();
+                },
+                target: '#gallery_image_thumbs'
+            });
         });
-
-        function updateEdition() {
-            $('.jquery-modal').hide();
-            $('.modal').hide();
-        }
-
     </script>
 {% endblock %}
