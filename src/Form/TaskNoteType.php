@@ -3,6 +3,7 @@
 namespace App\Form;
 
 use Symfony\Component\Form\AbstractType;
+use Symfony\Component\Form\Extension\Core\Type\TextareaType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 
@@ -15,9 +16,9 @@ class TaskNoteType extends AbstractType
     public function buildForm(FormBuilderInterface $builder, array $options)
     {
         $builder
-            ->add('content',"textarea", array(
-                'attr' => array('class' => 'tinymce','data-theme' => 'advanced'),
-                'label' => "Contenido"    // simple, advanced, bbcode
+            ->add('content', TextareaType::class, array(
+                'attr' => array('class' => 'tinymce', 'data-theme' => 'advanced'),
+                'label' => 'Contenido'
             ));
     }
 
