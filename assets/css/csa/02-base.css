@@ -15,9 +15,14 @@
    Eso reduce todos nuestros tokens en rem al 62.5% de su tamaño esperado.
    Restablecemos al estándar del navegador solo cuando nuestro CSS se carga
    (es decir, en pantallas que extienden csa_shell.html.twig). Las pantallas
-   legacy no cargan este CSS y mantienen el comportamiento anterior. */
+   legacy no cargan este CSS y mantienen el comportamiento anterior.
+
+   !important: cuando un modal AJAX inserta HTML con <link> al CSS
+   compilado, algunos navegadores re-evalúan la cascada y revierten al
+   font-size de Bootstrap (10px). Eso reduce todos los rem de la página
+   a la mitad. Con !important la regla aguanta. */
 html {
-  font-size: 16px;
+  font-size: 16px !important;
 }
 
 .csa-app, .csa-app * {
