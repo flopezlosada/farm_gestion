@@ -34,7 +34,7 @@
                         <h4>Mis tares pendientes</h4>
 
                         {% for task in user_tasks %}
-                            {% include 'App:Task:task_view_type_'~task.getTaskType.id~'.html.twig' with {'task':task} %}
+                            {% include 'Task/task_view_type_'~task.getTaskType.id~'.html.twig' with {'task':task} %}
                         {% else %}
                             <p>No tienes tareas asignadas pendientes de realizar</p>
                         {% endfor %}
@@ -42,18 +42,18 @@
                     <div id="home" class="tab-pane fade">
                         <h3>Tareas para este mes</h3>
                         {% for task in pending_tasks %}
-                            {% include 'App:Task:task_view_type_'~task.getTaskType.id~'.html.twig' with {'task':task} %}
+                            {% include 'Task/task_view_type_'~task.getTaskType.id~'.html.twig' with {'task':task} %}
                         {% else %}
                             <p>No hay tareas pendientes de realizar</p>
                         {% endfor %}
                         {% for task in punctual_tasks %}
-                            {% include 'App:Task:task_view_type_'~task.getTaskType.id~'.html.twig' with {'task':task} %}
+                            {% include 'Task/task_view_type_'~task.getTaskType.id~'.html.twig' with {'task':task} %}
                         {% endfor %}
                     </div>
                     <div id="crop" class="tab-pane fade">
                         <h4>Tareas relacionadas con cultivos</h4>
                         {% for task in crop_tasks %}
-                            {% include 'App:Task:task_view_type_'~task.getTaskType.id~'.html.twig' with {'task':task} %}
+                            {% include 'Task/task_view_type_'~task.getTaskType.id~'.html.twig' with {'task':task} %}
                         {% else %}
                             <p>No hay tareas pendientes de realizar</p>
                         {% endfor %}
@@ -61,7 +61,7 @@
                     <div id="aprox" class="tab-pane fade">
                         <h4>Tareas con fecha aproximada de realización {{ aprox_tasks|length }}</h4>
                         {% for task in aprox_tasks %}
-                            {% include 'App:Task:task_view_type_'~task.getTaskType.id~'.html.twig' with {'task':task} %}
+                            {% include 'Task/task_view_type_'~task.getTaskType.id~'.html.twig' with {'task':task} %}
                         {% else %}
                             <p>No hay tareas pendientes de realizar</p>
                         {% endfor %}
@@ -69,7 +69,7 @@
                     <div id="periodic" class="tab-pane fade">
                         <h4>Tareas con repetición periódica</h4>
                         {% for task in periodic_tasks %}
-                            {% include 'App:Task:task_view_type_'~task.getTaskType.id~'.html.twig' with {'task':task} %}
+                            {% include 'Task/task_view_type_'~task.getTaskType.id~'.html.twig' with {'task':task} %}
                         {% else %}
                             <p>No hay tareas pendientes de realizar</p>
                         {% endfor %}
@@ -77,7 +77,7 @@
                     <div id="date" class="tab-pane fade">
                         <h4>Tareas con fecha fija de realización</h4>
                         {% for task in date_tasks %}
-                            {% include 'App:Task:task_view_type_'~task.getTaskType.id~'.html.twig' with {'task':task} %}
+                            {% include 'Task/task_view_type_'~task.getTaskType.id~'.html.twig' with {'task':task} %}
                         {% else %}
                             <p>No hay tareas pendientes de realizar</p>
                         {% endfor %}
@@ -85,7 +85,7 @@
                     <div id="punctual" class="tab-pane fade">
                         <h4>Tareas sin fecha fija</h4>
                         {% for task in punctual_tasks %}
-                            {% include 'App:Task:task_view_type_'~task.getTaskType.id~'.html.twig' with {'task':task} %}
+                            {% include 'Task/task_view_type_'~task.getTaskType.id~'.html.twig' with {'task':task} %}
                         {% else %}
                             <p>No hay tareas pendientes de realizar</p>
                         {% endfor %}
@@ -93,7 +93,7 @@
                     <div id="ended" class="tab-pane fade">
                         <h4>Tareas finalizadas este mes</h4>
                         {% for task in ended_tasks %}
-                            {% include 'App:Task:task_view_type_'~task.getTaskType.id~'.html.twig' with {'task':task} %}
+                            {% include 'Task/task_view_type_'~task.getTaskType.id~'.html.twig' with {'task':task} %}
                         {% else %}
                             <p>No hay tareas finalizadas este mes</p>
                         {% endfor %}
