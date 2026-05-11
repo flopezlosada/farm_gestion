@@ -1520,3 +1520,99 @@ table.csa-table thead th.sorting_desc::after { content: " ↓"; color: var(--csa
   color: var(--csa-ink-muted);
   font-family: var(--csa-sans);
 }
+
+
+/* ============================================================
+ * TASK CARD — tarjeta de tarea en listados.
+ * Background sobrio (surface), border-left tonal por tipo,
+ * header con icono + título + chip, meta inline, content libre.
+ * ============================================================ */
+
+.csa-task-card {
+  background: var(--csa-surface);
+  border: 1px solid var(--csa-rule);
+  border-left-width: 4px;
+  border-radius: var(--csa-radius-md);
+  padding: var(--csa-sp-5) var(--csa-sp-6);
+  margin-bottom: var(--csa-sp-4);
+  transition: box-shadow var(--csa-t-fast), transform var(--csa-t-fast);
+}
+.csa-task-card:hover {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+  transform: translateY(-1px);
+}
+
+.csa-task-card--green      { border-left-color: var(--csa-green); }
+.csa-task-card--ochre      { border-left-color: var(--csa-ochre); }
+.csa-task-card--terracotta { border-left-color: var(--csa-terracotta); }
+.csa-task-card--plum       { border-left-color: var(--csa-plum); }
+.csa-task-card--sky        { border-left-color: var(--csa-sky); }
+
+.csa-task-card__head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--csa-sp-3);
+  margin-bottom: var(--csa-sp-3);
+}
+.csa-task-card__icon {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--csa-radius-md);
+  flex-shrink: 0;
+  font-size: 14px;
+}
+.csa-task-card__icon--green      { background: var(--csa-green-soft);      color: var(--csa-green); }
+.csa-task-card__icon--ochre      { background: var(--csa-ochre-soft);      color: var(--csa-amber); }
+.csa-task-card__icon--terracotta { background: var(--csa-terracotta-soft); color: var(--csa-terracotta); }
+.csa-task-card__icon--plum       { background: var(--csa-plum-soft);       color: var(--csa-plum); }
+.csa-task-card__icon--sky        { background: var(--csa-sky-soft);        color: var(--csa-sky); }
+
+.csa-task-card__title-block {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--csa-sp-3);
+  flex-wrap: wrap;
+}
+.csa-task-card__title {
+  font-family: var(--csa-serif);
+  font-size: var(--csa-fs-lg);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  margin: 0;
+  color: var(--csa-ink);
+  line-height: 1.2;
+}
+
+.csa-task-card__chip {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: var(--csa-fs-xs);
+  font-weight: 500;
+  font-family: var(--csa-sans);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.csa-task-card__chip--green      { background: var(--csa-green-soft);      color: var(--csa-green); }
+.csa-task-card__chip--ochre      { background: var(--csa-ochre-soft);      color: var(--csa-amber); }
+.csa-task-card__chip--terracotta { background: var(--csa-terracotta-soft); color: var(--csa-terracotta); }
+.csa-task-card__chip--plum       { background: var(--csa-plum-soft);       color: var(--csa-plum); }
+.csa-task-card__chip--sky        { background: var(--csa-sky-soft);        color: var(--csa-sky); }
+
+.csa-task-card__meta {
+  font-size: var(--csa-fs-sm);
+  color: var(--csa-ink-soft);
+  margin-bottom: var(--csa-sp-3);
+}
+
+.csa-task-card__body {
+  color: var(--csa-ink);
+  margin-bottom: var(--csa-sp-3);
+}
+.csa-task-card__body p { margin: 0 0 var(--csa-sp-2) 0; }
+.csa-task-card__body p:last-child { margin-bottom: 0; }
