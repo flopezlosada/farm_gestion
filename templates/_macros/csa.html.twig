@@ -115,6 +115,7 @@
 {% macro field(field, label, opts = {}) %}
     {%- set required = opts.required ?? field.vars.required ?? false -%}
     {%- set widget_class = opts.widget_class|default('csa-input') -%}
+    {%- set is_expanded_multi = (field.vars.expanded|default(false)) and (field.vars.multiple|default(false)) -%}
     <div class="csa-field{% if opts.full|default(false) %} csa-field--full{% endif %}">
         <div class="csa-field__label-row">
             <label class="csa-field__label" for="{{ field.vars.id }}">
@@ -124,7 +125,15 @@
                 <span class="csa-field__hint">{{ opts.hint }}</span>
             {% endif %}
         </div>
-        {{ form_widget(field, { attr: { class: widget_class }|merge(opts.attr|default({})) }) }}
+        {% if is_expanded_multi %}
+            {# EntityType expanded+multiple: el widget es un wrapper de
+             # checkboxes que se convierten en pills via CSS. No le
+             # pasamos csa-input porque fijaría height:40px y las pills
+             # se desbordarían fuera del field. #}
+            {{ form_widget(field, { attr: opts.attr|default({}) }) }}
+        {% else %}
+            {{ form_widget(field, { attr: { class: widget_class }|merge(opts.attr|default({})) }) }}
+        {% endif %}
         {% if not field.vars.valid %}
             <div class="csa-field__error">{{ form_errors(field) }}</div>
         {% endif %}
