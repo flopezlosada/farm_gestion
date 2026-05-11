@@ -77,7 +77,7 @@ class AudioController extends AbstractAppController
             'method' => 'POST',
         ));
 
-        $form->add('button', 'submit', array('label' => 'Create'));
+        $form->add('button', SubmitType::class, array('label' => 'Create'));
 
         return $form;
     }
