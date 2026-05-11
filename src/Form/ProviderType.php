@@ -23,8 +23,6 @@ class ProviderType extends AbstractType
             ->add('celular')
             ->add('web')
             ->add('email')
-            ->add('created')
-            ->add('updated')
             ->add('state')
             ->add('city')
             ->add('country')
