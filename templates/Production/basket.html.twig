@@ -1,43 +1,106 @@
-{% extends 'layout_show.html.twig' %}
+{# ============================================================
+ # Cestas semanales — tarjetas en dos columnas.
+ # ============================================================ #}
 
-{% block more_css %}
-    <link rel="stylesheet" href="{{ asset('bundles/app/fancybox/jquery.fancybox.css') }}"/>
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Cestas semanales {{ year }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span>Granja</span>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Cestas {{ year }}</span>
 {% endblock %}
-{% block main -%}
 
-    <div class="panel panel-default">
-        <div class="panel-heading"><h4>Listado de cestas año {{ year }}. Kilogramos recogidos: {{ render(controller('App\\Controller\\DefaultController::totalProductionYear',{'year':year}))|round }} kg</h4></div>
-        <div class="panel-body">
-            <div class="row">
-                {% for key,basket in baskets %}
-                    <div class="col-lg-6">
-                        <div class="panel  {{ cycle(['panel-info', 'panel-success','panel-warning','panel-danger'], loop.index0) }}">
-                            <div class="panel-heading"><h4><a href="{{ path('production_show_basket_detail', {'id': basket[0].getBasket.id}) }}"> Cesta de la semana {{ key }} ({{ getDateFromWeek(year,key) }}</a>
-                                    )</h4></div>
-                            <div class="panel-body">
-                                <h4>Listado de producción:</h4>
-                                <ul>
-                                    {% set total=0 %}
-                                    {% for production in basket |sort%}
-                                        <li><a href="{{ path('cropworking_show', {'year': year, 'id': production.cropworking.getId}) }}">{{ production.cropworking.getName }}</a> = {{ production.amount }} kg | <a
-                                                    href="{{ path('production_edit', {'id': production.id}) }}">Editar</a>
-                                        </li>
-                                        {% set total= total+production.amount %}
-                                    {% endfor %}
-                                </ul>
-                            </div>
-                            <div class="panel-footer">Total semanal: {{ total }} kg</div>
-                        </div>
-                    </div>
-                    {% if loop.index is even %}
-                        <div class="clearfix"></div>
-                    {% endif %}
-                {% endfor %}
+{% block csa_main %}
 
-            </div>
-        </div>
-        <div class="panel-footer">
-            <li><a href="{{ path('production_new') }}">Añadir producción</a></li>
+    {% set total_year = render(controller('App\\Controller\\DefaultController::totalProductionYear', { year: year }))|round %}
+
+    {{ csa.page_header(
+        'Granja · Huerta · ' ~ year,
+        'Cestas semanales',
+        total_year ~ ' kg recogidos · ' ~ baskets|length ~ ' semana' ~ (baskets|length != 1 ? 's' : '') ~ ' con cosecha'
+    ) }}
+
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-6);">
+        <div></div>
+        <div class="csa-row">
+            {{ csa.btn('Registrar cosecha', { variant: 'primary', href: path('production_new'), icon: 'fa-plus' }) }}
         </div>
     </div>
+
+    {% if baskets|length > 0 %}
+
+        <ul class="csa-baskets">
+            {% for week, basket in baskets %}
+
+                {% set total = 0 %}
+                {% for production in basket %}{% set total = total + production.amount %}{% endfor %}
+
+                {% set sorted = basket|sort((a, b) => b.amount <=> a.amount) %}
+                {% set top = sorted|slice(0, 3) %}
+                {% set extras = basket|length - top|length %}
+
+                {# Temporada → color sutil + icono decorativo #}
+                {% if week >= 10 and week <= 22 %}
+                    {% set season = 'spring' %}{% set season_icon = 'fa-leaf' %}
+                {% elseif week >= 23 and week <= 39 %}
+                    {% set season = 'summer' %}{% set season_icon = 'fa-sun-o' %}
+                {% elseif week >= 40 and week <= 50 %}
+                    {% set season = 'autumn' %}{% set season_icon = 'fa-pagelines' %}
+                {% else %}
+                    {% set season = 'winter' %}{% set season_icon = 'fa-snowflake-o' %}
+                {% endif %}
+
+                <li class="csa-baskets__item">
+                    <a href="{{ path('production_show_basket_detail', { id: basket[0].getBasket.id }) }}"
+                       class="csa-baskets__card csa-baskets__card--{{ season }}">
+
+                        <i class="csa-baskets__season fa {{ season_icon }}" aria-hidden="true"></i>
+
+                        <header class="csa-baskets__head">
+                            <span class="csa-baskets__num">{{ week }}</span>
+                            <div class="csa-baskets__when">
+                                <div class="csa-baskets__week-label">Semana {{ week }}</div>
+                                <div class="csa-baskets__date">{{ getDateFromWeek(year, week) }}</div>
+                            </div>
+                        </header>
+
+                        <div class="csa-baskets__weight">
+                            <span class="csa-baskets__weight-num">{{ total|number_format(0, ',', '.') }}</span>
+                            <span class="csa-baskets__weight-unit">kg recogidos</span>
+                        </div>
+
+                        <p class="csa-baskets__cultivos">
+                            {%- for production in top -%}
+                                {{ production.cropworking.getName }}{% if not loop.last or extras > 0 %} · {% endif %}
+                            {%- endfor -%}
+                            {% if extras > 0 %}
+                                <span class="csa-baskets__extras">y {{ extras }} más</span>
+                            {% endif %}
+                        </p>
+
+                        <footer class="csa-baskets__foot">
+                            <span class="csa-baskets__count">{{ basket|length }} cosechas</span>
+                            <span class="csa-baskets__cta">
+                                Abrir
+                                <i class="fa fa-arrow-right" aria-hidden="true"></i>
+                            </span>
+                        </footer>
+
+                    </a>
+                </li>
+
+            {% endfor %}
+        </ul>
+
+    {% else %}
+        <div class="csa-baskets-empty">
+            Sin cosechas registradas en {{ year }}.
+        </div>
+    {% endif %}
+
 {% endblock %}

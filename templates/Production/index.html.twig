@@ -1,50 +1,68 @@
-    {% extends 'layout_list.html.twig' %}
+{# ============================================================
+ # Listado plano de cosechas (Production) — shell csa.
+ # ============================================================
+ # El flujo real de la huerta va por basket / basket_detail. Esta
+ # vista existe como listado plano de respaldo.
+ # ============================================================ #}
 
-    {% block title_wrapper %}Listado {% endblock %}
-    {% block main -%}
-    <h1>Production list</h1>
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
 
-    <table class="records_list">
-        <thead>
-        <tr>
-                <th>Id</th>
-                <th>Date</th>
-                <th>Amount</th>
-                <th>Created</th>
-                <th>Updated</th>
-            <th>Actions</th>
-        </tr>
-        </thead>
-        <tbody>
-        {% for entity in entities %}
-        <tr>
-                    <td>
-                        <a href="{{ path('production_show', { 'id': entity.id }) }}">{{ entity.id }}</a>
-                    </td>
-                    <td>{% if entity.date %}{{ entity.date|date('Y-m-d H:i:s') }}{% endif %}</td>
-                    <td>{{ entity.amount }}</td>
-                    <td>{% if entity.created %}{{ entity.created|date('Y-m-d H:i:s') }}{% endif %}</td>
-                    <td>{% if entity.updated %}{{ entity.updated|date('Y-m-d H:i:s') }}{% endif %}</td>
-                    <td>
-                <ul>
-                    <li>
-                        <a href="{{ path('production_show', { 'id': entity.id }) }}">show</a>
-                    </li>
-                    <li>
-                        <a href="{{ path('production_edit', { 'id': entity.id }) }}">edit</a>
-                    </li>
-                </ul>
-                    </td>
-        </tr>
-        {% endfor %}
-        </tbody>
-    </table>
+{% block title %}Listado de cosechas{% endblock %}
 
-            <ul>
-            <li>
-                <a href="{{ path('production_new') }}">
-                    Create a new entry
-                </a>
-            </li>
-        </ul>
-        {% endblock %}
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('production_show_basket') }}">Cestas</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Listado plano</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Granja · Huerta',
+        'Listado de cosechas',
+        'Vista plana de todas las cosechas registradas. Para gestionar por semana, usa Cestas.'
+    ) }}
+
+    <div class="csa-table-wrap">
+        <table class="csa-table" data-paginate>
+            <thead>
+                <tr>
+                    <th>Cultivo</th>
+                    <th class="csa-table__col-tight">Fecha</th>
+                    <th class="csa-table__col-tight">Cantidad</th>
+                    <th class="csa-table__actions">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entity in entities %}
+                    <tr>
+                        <td>
+                            {% if entity.cropWorking %}
+                                <a href="{{ path('cropworking_show', { id: entity.cropWorking.id }) }}">{{ entity.cropWorking }}</a>
+                            {% else %}
+                                <span class="csa-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="csa-table__col-tight">
+                            {% if entity.productionDate %}{{ entity.productionDate|format_date('medium', locale='es') }}{% else %}—{% endif %}
+                        </td>
+                        <td class="csa-table__col-tight">{{ entity.amount }} kg</td>
+                        <td class="csa-table__actions">
+                            <a href="{{ path('production_edit', { id: entity.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="4" class="csa-muted" style="text-align: center; padding: var(--csa-sp-8);">
+                            No hay cosechas registradas.
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+{% endblock %}
