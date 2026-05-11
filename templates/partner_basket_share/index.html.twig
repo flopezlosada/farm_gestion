@@ -1,45 +1,84 @@
-{% extends 'base.html.twig' %}
+{# ============================================================
+ # Listado histórico de PartnerBasketShare (todos los registros).
+ # Es la pantalla scaffolding base; la operativa real está en
+ # partner_basket_share_list_status (basket.html.twig).
+ # ============================================================ #}
 
-{% block title %}PartnerBasketShare index{% endblock %}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
 
-{% block body %}
-    <h1>PartnerBasketShare index</h1>
+{% block title %}Historial de cestas de socixs{% endblock %}
 
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Id</th>
-                <th>Created</th>
-                <th>Updated</th>
-                <th>Start_date</th>
-                <th>End_date</th>
-                <th>Month_price</th>
-                <th>Is_active</th>
-                <th>actions</th>
-            </tr>
-        </thead>
-        <tbody>
-        {% for partner_basket_share in partner_basket_shares %}
-            <tr>
-                <td>{{ partner_basket_share.id }}</td>
-                <td>{{ partner_basket_share.created ? partner_basket_share.created|date('Y-m-d H:i:s') : '' }}</td>
-                <td>{{ partner_basket_share.updated ? partner_basket_share.updated|date('Y-m-d H:i:s') : '' }}</td>
-                <td>{{ partner_basket_share.startDate ? partner_basket_share.startDate|date('Y-m-d') : '' }}</td>
-                <td>{{ partner_basket_share.endDate ? partner_basket_share.endDate|date('Y-m-d') : '' }}</td>
-                <td>{{ partner_basket_share.monthPrice }}</td>
-                <td>{{ partner_basket_share.isActive ? 'Yes' : 'No' }}</td>
-                <td>
-                    <a href="{{ path('partner_basket_share_show', {'id': partner_basket_share.id}) }}">show</a>
-                    <a href="{{ path('partner_basket_share_edit', {'id': partner_basket_share.id}) }}">edit</a>
-                </td>
-            </tr>
-        {% else %}
-            <tr>
-                <td colspan="8">no records found</td>
-            </tr>
-        {% endfor %}
-        </tbody>
-    </table>
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('partner_index') }}">Socixs</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Historial de cestas</span>
+{% endblock %}
 
-    <a href="{{ path('partner_basket_share_new') }}">Create new</a>
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Socixs · Cestas',
+        'Historial de cestas',
+        'Todos los registros de cestas asignadas a socixs (activas e históricas).'
+    ) }}
+
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-5);">
+        <div></div>
+        <div class="csa-row">
+            {{ csa.btn('Cestas activas', { variant: 'secondary', href: path('partner_basket_share_list_status', { status: 1 }), icon: 'fa-shopping-basket' }) }}
+            {{ csa.btn('Nueva cesta', { variant: 'primary', href: path('partner_basket_share_new'), icon: 'fa-plus' }) }}
+        </div>
+    </div>
+
+    <div class="csa-table-wrap">
+        <table class="csa-table" data-paginate>
+            <thead>
+                <tr>
+                    <th class="csa-table__col-tight">Id</th>
+                    <th class="csa-table__col-tight">Inicio</th>
+                    <th class="csa-table__col-tight">Fin</th>
+                    <th class="csa-table__col-tight">€ / mes</th>
+                    <th class="csa-table__col-tight">Estado</th>
+                    <th class="csa-table__actions">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for pbs in partner_basket_shares %}
+                    <tr>
+                        <td class="csa-table__col-tight">
+                            <a class="csa-table__primary" href="{{ path('partner_basket_share_show', { id: pbs.id }) }}">#{{ pbs.id }}</a>
+                        </td>
+                        <td class="csa-table__col-tight">
+                            {% if pbs.startDate %}{{ pbs.startDate|format_date('medium', locale='es') }}{% else %}—{% endif %}
+                        </td>
+                        <td class="csa-table__col-tight">
+                            {% if pbs.endDate %}{{ pbs.endDate|format_date('medium', locale='es') }}{% else %}—{% endif %}
+                        </td>
+                        <td class="csa-table__col-tight">{{ pbs.monthPrice }} €</td>
+                        <td class="csa-table__col-tight">
+                            {% if pbs.isActive %}
+                                <span class="csa-badge csa-badge--green">Activa</span>
+                            {% else %}
+                                <span class="csa-badge csa-badge--neutral">Cerrada</span>
+                            {% endif %}
+                        </td>
+                        <td class="csa-table__actions">
+                            <a href="{{ path('partner_basket_share_show', { id: pbs.id }) }}" title="Ver" aria-label="Ver"><i class="fa fa-eye"></i></a>
+                            <a href="{{ path('partner_basket_share_edit', { id: pbs.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="6" class="csa-muted" style="text-align: center; padding: var(--csa-sp-8);">
+                            No hay registros.
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
 {% endblock %}
