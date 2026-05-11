@@ -1328,205 +1328,195 @@ table.csa-table thead th.sorting_desc::after { content: " ↓"; color: var(--csa
 .csa-status-incident   { color: var(--csa-terracotta); }
 
 
+
+
 /* ============================================================
- * BASKET CARD (cestas semanales de producción)
+ * CESTAS SEMANALES (Production · basket)
+ * ============================================================
+ * Tarjetas en grid de 2 columnas. Cada tarjeta concentra la
+ * info de una cesta: número de semana, fecha, peso destacado,
+ * top de cultivos y meta. Peso en Fraunces opsz 30, no display
+ * — cálido pero no formal.
  * ============================================================ */
 
-.csa-basket-grid {
+.csa-baskets {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  grid-template-columns: 1fr;
   gap: var(--csa-sp-5);
 }
+@media (min-width: 720px) {
+  .csa-baskets { grid-template-columns: repeat(2, 1fr); }
+}
 
-.csa-basket-card {
+.csa-baskets__item { display: flex; }
+
+.csa-baskets__card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--csa-sp-4);
+  padding: var(--csa-sp-6);
   background: var(--csa-surface);
   border: 1px solid var(--csa-rule);
+  border-top-width: 2px;
   border-radius: var(--csa-radius-lg);
-  overflow: hidden;
-  transition: transform var(--csa-t-fast), box-shadow var(--csa-t-fast), border-color var(--csa-t-fast);
-}
-.csa-basket-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(0,0,0,0.06);
-  border-color: var(--csa-ink-muted);
-}
-.csa-basket-card__link {
-  display: block;
-  padding: var(--csa-sp-5) var(--csa-sp-6);
   color: var(--csa-ink);
   text-decoration: none;
+  position: relative;
+  transition: border-color var(--csa-t-fast), box-shadow var(--csa-t-fast), transform var(--csa-t-fast);
 }
-.csa-basket-card__link:hover { color: var(--csa-ink); }
+.csa-baskets__card:hover {
+  color: var(--csa-ink);
+  box-shadow: 0 4px 16px rgba(28, 29, 26, 0.06);
+  transform: translateY(-2px);
+}
 
-/* Acentos por tono */
-.csa-basket-card--sky        { border-top: 3px solid var(--csa-sky); }
-.csa-basket-card--green      { border-top: 3px solid var(--csa-green); }
-.csa-basket-card--ochre      { border-top: 3px solid var(--csa-ochre); }
-.csa-basket-card--terracotta { border-top: 3px solid var(--csa-terracotta); }
-.csa-basket-card--plum       { border-top: 3px solid var(--csa-plum); }
+/* Acento de color por temporada — borde superior fino. */
+.csa-baskets__card--spring { border-top-color: var(--csa-green); }
+.csa-baskets__card--summer { border-top-color: var(--csa-ochre); }
+.csa-baskets__card--autumn { border-top-color: var(--csa-terracotta); }
+.csa-baskets__card--winter { border-top-color: var(--csa-sky); }
 
-.csa-basket-card__head {
+/* Icono decorativo de la temporada en la esquina superior derecha. */
+.csa-baskets__season {
+  position: absolute;
+  top: var(--csa-sp-5);
+  right: var(--csa-sp-5);
+  font-size: 22px;
+  opacity: 0.35;
+  pointer-events: none;
+  transition: opacity var(--csa-t-fast), transform var(--csa-t-fast);
+}
+.csa-baskets__card--spring .csa-baskets__season { color: var(--csa-green); }
+.csa-baskets__card--summer .csa-baskets__season { color: var(--csa-ochre); }
+.csa-baskets__card--autumn .csa-baskets__season { color: var(--csa-terracotta); }
+.csa-baskets__card--winter .csa-baskets__season { color: var(--csa-sky); }
+.csa-baskets__card:hover .csa-baskets__season {
+  opacity: 0.85;
+  transform: rotate(-8deg) scale(1.08);
+}
+
+/* Head: número de semana + etiqueta y fecha */
+.csa-baskets__head {
   display: flex;
   align-items: center;
   gap: var(--csa-sp-3);
-  margin-bottom: var(--csa-sp-4);
 }
-.csa-basket-card__icon {
-  width: 48px;
-  height: 48px;
-  border-radius: var(--csa-radius-md);
-  display: flex;
+.csa-baskets__num {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 22px;
-  flex-shrink: 0;
-}
-.csa-basket-card--sky        .csa-basket-card__icon { background: var(--csa-sky-soft);        color: var(--csa-sky); }
-.csa-basket-card--green      .csa-basket-card__icon { background: var(--csa-green-soft);      color: var(--csa-green); }
-.csa-basket-card--ochre      .csa-basket-card__icon { background: var(--csa-ochre-soft);      color: var(--csa-ochre); }
-.csa-basket-card--terracotta .csa-basket-card__icon { background: var(--csa-terracotta-soft); color: var(--csa-terracotta); }
-.csa-basket-card--plum       .csa-basket-card__icon { background: var(--csa-plum-soft);       color: var(--csa-plum); }
-
-.csa-basket-card__meta { flex: 1; min-width: 0; }
-.csa-basket-card__week {
-  font-family: var(--csa-serif);
-  font-size: var(--csa-fs-lg);
-  font-weight: 500;
+  background: var(--csa-surface);
+  border: 1px solid var(--csa-rule);
+  border-radius: 50%;
+  font-family: var(--csa-sans);
+  font-size: 1rem;
+  font-weight: 600;
   color: var(--csa-ink);
+  font-variant-numeric: tabular-nums;
+  transition: background var(--csa-t-fast), border-color var(--csa-t-fast), color var(--csa-t-fast);
 }
-.csa-basket-card__date {
+/* En reposo: tinte sutil por temporada en el círculo. */
+.csa-baskets__card--spring .csa-baskets__num { background: var(--csa-green-soft);      border-color: var(--csa-green-soft);      color: var(--csa-green); }
+.csa-baskets__card--summer .csa-baskets__num { background: var(--csa-ochre-soft);      border-color: var(--csa-ochre-soft);      color: var(--csa-amber); }
+.csa-baskets__card--autumn .csa-baskets__num { background: var(--csa-terracotta-soft); border-color: var(--csa-terracotta-soft); color: var(--csa-terracotta); }
+.csa-baskets__card--winter .csa-baskets__num { background: var(--csa-sky-soft);        border-color: var(--csa-sky-soft);        color: var(--csa-sky); }
+/* En hover: refuerzo del borde del círculo con el mismo color. */
+.csa-baskets__card--spring:hover .csa-baskets__num { border-color: var(--csa-green); }
+.csa-baskets__card--summer:hover .csa-baskets__num { border-color: var(--csa-ochre); }
+.csa-baskets__card--autumn:hover .csa-baskets__num { border-color: var(--csa-terracotta); }
+.csa-baskets__card--winter:hover .csa-baskets__num { border-color: var(--csa-sky); }
+.csa-baskets__when { min-width: 0; }
+.csa-baskets__week-label {
+  font-family: var(--csa-sans);
+  font-size: var(--csa-fs-xs);
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--csa-ink-muted);
+  line-height: 1.1;
+}
+.csa-baskets__date {
+  font-family: var(--csa-sans);
   font-size: var(--csa-fs-sm);
-  color: var(--csa-ink-soft);
-  font-style: italic;
+  color: var(--csa-ink);
+  margin-top: 4px;
 }
-.csa-basket-card__total {
+
+/* Peso destacado: Fraunces opsz medio, lining-nums (modernos) */
+.csa-baskets__weight {
   display: flex;
   align-items: baseline;
-  gap: 4px;
-  flex-shrink: 0;
-}
-.csa-basket-card__kg {
-  font-family: var(--csa-serif);
-  font-size: 2rem;
-  font-weight: 500;
-  color: var(--csa-ink);
+  gap: var(--csa-sp-2);
   line-height: 1;
 }
-.csa-basket-card__unit {
-  font-size: var(--csa-fs-sm);
-  color: var(--csa-ink-muted);
-}
-
-.csa-basket-card__bar {
-  height: 4px;
-  background: var(--csa-rule-soft);
-  border-radius: 2px;
-  overflow: hidden;
-  margin-bottom: var(--csa-sp-4);
-}
-.csa-basket-card__bar-fill {
-  height: 100%;
-  border-radius: 2px;
-  transition: width var(--csa-t-medium, 200ms);
-}
-.csa-basket-card--sky        .csa-basket-card__bar-fill { background: var(--csa-sky); }
-.csa-basket-card--green      .csa-basket-card__bar-fill { background: var(--csa-green); }
-.csa-basket-card--ochre      .csa-basket-card__bar-fill { background: var(--csa-ochre); }
-.csa-basket-card--terracotta .csa-basket-card__bar-fill { background: var(--csa-terracotta); }
-.csa-basket-card--plum       .csa-basket-card__bar-fill { background: var(--csa-plum); }
-
-/* Stack horizontal proporcional: una fila de franjas de color, cada una
- * con flex-grow proporcional al peso del cultivo. */
-.csa-basket-card__stack {
-  display: flex;
-  height: 14px;
-  background: var(--csa-rule-soft);
-  border-radius: var(--csa-radius-pill);
-  overflow: hidden;
-  margin-bottom: var(--csa-sp-4);
-  box-shadow: inset 0 0 0 1px var(--csa-rule);
-}
-.csa-basket-card__seg {
-  display: block;
-  height: 100%;
-  transition: filter var(--csa-t-fast);
-}
-.csa-basket-card__seg + .csa-basket-card__seg {
-  border-left: 1px solid rgba(255,255,255,0.6);
-}
-.csa-basket-card__seg:hover { filter: brightness(1.1); }
-
-/* Leyenda: cultivo con dot de color matching, peso a la derecha.
- * Grid de 2 columnas para no extenderse vertical con muchas entradas. */
-.csa-basket-card__legend {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 6px var(--csa-sp-4);
-  list-style: none;
-  margin: 0 0 var(--csa-sp-4);
-  padding: 0;
-}
-.csa-basket-card__legend-item {
-  display: flex;
-  align-items: center;
-  gap: var(--csa-sp-2);
-  font-size: var(--csa-fs-sm);
-  min-width: 0;
-}
-.csa-basket-card__dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.csa-basket-card__legend-name {
-  flex: 1;
-  min-width: 0;
+.csa-baskets__weight-num {
+  font-family: var(--csa-serif);
+  font-size: 3.5rem;
+  font-weight: 500;
   color: var(--csa-ink);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  letter-spacing: -0.02em;
+  font-variant-numeric: lining-nums tabular-nums;
+  font-variation-settings: "opsz" 30;
 }
-.csa-basket-card__legend-kg {
+.csa-baskets__weight-unit {
+  font-family: var(--csa-sans);
+  font-size: var(--csa-fs-sm);
   color: var(--csa-ink-muted);
-  font-variant-numeric: tabular-nums;
-  font-size: var(--csa-fs-xs);
-  flex-shrink: 0;
+  letter-spacing: 0.02em;
 }
 
-/* Paleta cíclica de 7 tonos para segmentos y dots. */
-.csa-basket-card__seg--0,
-.csa-basket-card__dot--0 { background: var(--csa-green); }
-.csa-basket-card__seg--1,
-.csa-basket-card__dot--1 { background: var(--csa-ochre); }
-.csa-basket-card__seg--2,
-.csa-basket-card__dot--2 { background: var(--csa-sky); }
-.csa-basket-card__seg--3,
-.csa-basket-card__dot--3 { background: var(--csa-terracotta); }
-.csa-basket-card__seg--4,
-.csa-basket-card__dot--4 { background: var(--csa-plum); }
-.csa-basket-card__seg--5,
-.csa-basket-card__dot--5 { background: var(--csa-amber); }
-.csa-basket-card__seg--6,
-.csa-basket-card__dot--6 { background: var(--csa-ink-soft); }
+/* Cultivos: una línea, peso normal */
+.csa-baskets__cultivos {
+  margin: 0;
+  font-family: var(--csa-sans);
+  font-size: var(--csa-fs-base);
+  color: var(--csa-ink-soft);
+  line-height: var(--csa-lh-snug);
+}
+.csa-baskets__extras {
+  color: var(--csa-ink-muted);
+  margin-left: 4px;
+}
 
-.csa-basket-card__foot {
+/* Foot: meta + cta */
+.csa-baskets__foot {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-top: var(--csa-sp-3);
+  margin-top: auto;
+  padding-top: var(--csa-sp-4);
   border-top: 1px solid var(--csa-rule-soft);
-}
-.csa-basket-card__cta {
+  font-family: var(--csa-sans);
   font-size: var(--csa-fs-sm);
-  font-weight: 500;
-  color: var(--csa-ink-soft);
+}
+.csa-baskets__count { color: var(--csa-ink-muted); }
+.csa-baskets__cta {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  color: var(--csa-ink-soft);
+  font-weight: 500;
   transition: color var(--csa-t-fast), gap var(--csa-t-fast);
 }
-.csa-basket-card:hover .csa-basket-card__cta {
-  color: var(--csa-ink);
+.csa-baskets__cta .fa { font-size: 12px; transition: transform var(--csa-t-fast); }
+.csa-baskets__card:hover .csa-baskets__cta {
+  color: var(--csa-green);
   gap: 10px;
+}
+.csa-baskets__card:hover .csa-baskets__cta .fa {
+  transform: translateX(2px);
+}
+
+.csa-baskets-empty {
+  text-align: center;
+  padding: var(--csa-sp-12) var(--csa-sp-4);
+  color: var(--csa-ink-muted);
+  font-family: var(--csa-sans);
 }
