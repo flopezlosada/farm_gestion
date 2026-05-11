@@ -1,64 +1,128 @@
-{% extends 'base.html.twig' %}
+{# ============================================================
+ # Detalle de unx proveedorx — shell csa.
+ # ============================================================ #}
 
-{% block body -%}
-    <h1>Provider</h1>
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
 
-    <table class="record_properties">
-        <tbody>
-            <tr>
-                <th>Id</th>
-                <td>{{ entity.id }}</td>
-            </tr>
-            <tr>
-                <th>Name</th>
-                <td>{{ entity.name }}</td>
-            </tr>
-            <tr>
-                <th>Contact</th>
-                <td>{{ entity.contact }}</td>
-            </tr>
-            <tr>
-                <th>Address</th>
-                <td>{{ entity.address }}</td>
-            </tr>
-            <tr>
-                <th>Postal_code</th>
-                <td>{{ entity.postalcode }}</td>
-            </tr>
-            <tr>
-                <th>Phone</th>
-                <td>{{ entity.phone }}</td>
-            </tr>
-            <tr>
-                <th>Celular</th>
-                <td>{{ entity.celular }}</td>
-            </tr>
-            <tr>
-                <th>Web</th>
-                <td>{{ entity.web }}</td>
-            </tr>
-            <tr>
-                <th>Created</th>
-                <td>{{ entity.created|date('Y-m-d H:i:s') }}</td>
-            </tr>
-            <tr>
-                <th>Updated</th>
-                <td>{{ entity.updated|date('Y-m-d H:i:s') }}</td>
-            </tr>
-        </tbody>
-    </table>
+{% block title %}Proveedorx · {{ entity.name }}{% endblock %}
 
-        <ul class="record_actions">
-    <li>
-        <a href="{{ path('provider') }}">
-            Back to the list
-        </a>
-    </li>
-    <li>
-        <a href="{{ path('provider_edit', { 'id': entity.id }) }}">
-            Edit
-        </a>
-    </li>
-    <li>{{ form(delete_form) }}</li>
-</ul>
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('provider') }}">Proveedorxs</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ entity.name }}</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    <div style="display: none;">
+        {{ form_start(delete_form, { attr: { id: 'provider-delete-form' } }) }}
+            {{ form_rest(delete_form) }}
+        {{ form_end(delete_form, { render_rest: false }) }}
+    </div>
+
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-6); align-items: flex-start;">
+        <div class="csa-row" style="align-items: flex-start; gap: var(--csa-sp-4);">
+            <span class="csa-table__id-marker" style="width: 64px; height: 64px; font-size: 28px; border-radius: var(--csa-radius-lg);">
+                <i class="fa fa-truck"></i>
+            </span>
+            <div>
+                <h1>{{ entity.name }}</h1>
+                {% if entity.contact %}
+                    <div class="csa-serif csa-italic csa-soft" style="margin-top: var(--csa-sp-2);">
+                        Contacto: {{ entity.contact }}
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        <div class="csa-row">
+            <button type="submit" form="provider-delete-form" class="csa-btn csa-btn--ghost"
+                    onclick="return confirm('¿Seguro? Esta acción no se puede deshacer.');">
+                Eliminar
+            </button>
+            {{ csa.btn('Editar', { variant: 'secondary', href: path('provider_edit', { id: entity.id }), icon: 'fa-pencil' }) }}
+            {{ csa.btn('Volver', { variant: 'ghost', href: path('provider') }) }}
+        </div>
+    </div>
+
+    {% embed '_components/csa_card.html.twig' with { title: 'Contacto', accent: 'sky' } %}
+        {% block body %}
+            <dl class="csa-defs">
+                {% if entity.contact %}
+                    <div class="csa-defs__row">
+                        <dt class="csa-defs__label">Persona de contacto</dt>
+                        <dd class="csa-defs__value">{{ entity.contact }}</dd>
+                    </div>
+                {% endif %}
+                {% if entity.email %}
+                    <div class="csa-defs__row">
+                        <dt class="csa-defs__label">Email</dt>
+                        <dd class="csa-defs__value"><a href="mailto:{{ entity.email }}">{{ entity.email }}</a></dd>
+                    </div>
+                {% endif %}
+                {% if entity.phone %}
+                    <div class="csa-defs__row">
+                        <dt class="csa-defs__label">Teléfono</dt>
+                        <dd class="csa-defs__value">{{ entity.phone }}</dd>
+                    </div>
+                {% endif %}
+                {% if entity.celular %}
+                    <div class="csa-defs__row">
+                        <dt class="csa-defs__label">Móvil</dt>
+                        <dd class="csa-defs__value">{{ entity.celular }}</dd>
+                    </div>
+                {% endif %}
+                {% if entity.web %}
+                    <div class="csa-defs__row">
+                        <dt class="csa-defs__label">Web</dt>
+                        <dd class="csa-defs__value"><a href="{{ entity.web }}" target="_blank" rel="noopener">{{ entity.web }}</a></dd>
+                    </div>
+                {% endif %}
+            </dl>
+        {% endblock %}
+    {% endembed %}
+
+    {% if entity.address or entity.postalcode or entity.city or entity.state or entity.country %}
+        <div style="margin-top: var(--csa-sp-5);">
+        {% embed '_components/csa_card.html.twig' with { title: 'Dirección', accent: 'ochre' } %}
+            {% block body %}
+                <dl class="csa-defs">
+                    {% if entity.address %}
+                        <div class="csa-defs__row">
+                            <dt class="csa-defs__label">Dirección</dt>
+                            <dd class="csa-defs__value">{{ entity.address }}</dd>
+                        </div>
+                    {% endif %}
+                    {% if entity.postalcode %}
+                        <div class="csa-defs__row">
+                            <dt class="csa-defs__label">Código postal</dt>
+                            <dd class="csa-defs__value">{{ entity.postalcode }}</dd>
+                        </div>
+                    {% endif %}
+                    {% if entity.city %}
+                        <div class="csa-defs__row">
+                            <dt class="csa-defs__label">Localidad</dt>
+                            <dd class="csa-defs__value">{{ entity.city }}</dd>
+                        </div>
+                    {% endif %}
+                    {% if entity.state %}
+                        <div class="csa-defs__row">
+                            <dt class="csa-defs__label">Provincia / Estado</dt>
+                            <dd class="csa-defs__value">{{ entity.state }}</dd>
+                        </div>
+                    {% endif %}
+                    {% if entity.country %}
+                        <div class="csa-defs__row">
+                            <dt class="csa-defs__label">País</dt>
+                            <dd class="csa-defs__value">{{ entity.country }}</dd>
+                        </div>
+                    {% endif %}
+                </dl>
+            {% endblock %}
+        {% endembed %}
+        </div>
+    {% endif %}
+
 {% endblock %}
