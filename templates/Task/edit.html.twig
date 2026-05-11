@@ -1,50 +1,97 @@
-    {% extends 'layout_crud.html.twig' %}
+{# ============================================================
+ # Editar tarea — shell csa.
+ #
+ # Nota: el edit usa TaskType (base) que sólo expone title, content,
+ # labour, crop_workings y users. Las fechas y month/period no se
+ # editan desde aquí (sería bug del legacy si se necesita).
+ # ============================================================ #}
 
-    {% block title_wrapper %}Editar {% endblock %}
-    {% block main -%}
-    <div class="panel panel-default">
-        <div class="panel-heading">
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% form_theme edit_form 'form_div_layout.html.twig' %}
 
-        </div>
-        <div class="panel-body">
-            {{ form_start(edit_form, {'action': path('task_update',{'id':entity.id}), 'method': 'put','attr': {'role': 'form' }}) }}
-            {{ form_errors(edit_form) }}
-            <div class="row">
-                <div class="form-group">
-                    {{ form_errors(edit_form.title) }}
-                    <label>{{ form_label(edit_form.title) }}</label>
-                    {{ form_widget(edit_form.title,{'attr':{'placeholder':'Título de la tarea','class':'form-control'}}) }}
+{% block title %}Editar tarea · {{ entity.title }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('task') }}">Tareas</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('task_show', { id: entity.id }) }}">{{ entity.title }}</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Editar</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Granja · Tareas',
+        'Editar tarea',
+        'Cambia título, descripción, labor, cultivos o responsables.'
+    ) }}
+
+    <div style="display: none;">
+        {{ form_start(delete_form, { attr: { id: 'task-delete-form' } }) }}
+            {{ form_rest(delete_form) }}
+        {{ form_end(delete_form, { render_rest: false }) }}
+    </div>
+
+    {{ form_start(edit_form, {
+        action: path('task_update', { id: entity.id }),
+        method: 'put',
+        attr: { role: 'form', class: 'csa-form-narrow' }
+    }) }}
+
+        <div class="csa-stack-lg">
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Identidad', subtitle: 'Título y descripción.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(edit_form.title, 'Título', { full: true }) }}
+                        {{ csa.field(edit_form.content, 'Contenido', { full: true }) }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Cultivo y labor', subtitle: 'Si la tarea pertenece a uno o varios cultivos.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(edit_form.labour, 'Labor', { full: true }) }}
+                        {{ csa.field(edit_form.crop_workings, 'Cultivos asociados', { full: true }) }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '3', title: 'Responsables', subtitle: 'Personas asignadas a la tarea.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(edit_form.users, 'Responsables', { full: true }) }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                <div>
+                    <button type="submit" form="task-delete-form" class="csa-btn csa-btn--ghost"
+                            onclick="return confirm('¿Seguro? Esta acción no se puede deshacer.');">
+                        Eliminar tarea
+                    </button>
                 </div>
-                <div class="form-group">
-                    {{ form_errors(edit_form.content) }}
-                    <label>{{ form_label(edit_form.content) }}</label>
-                    {{ form_widget(edit_form.content,{'attr':{'class':'form-control'}}) }}
-                </div>
-                <div class="alert alert-warning">
-                    Si se trata de una tarea relacionada con uno o varios cultivos, indica la labor a realizar y el/los cultivo/s asociado/s.
-                </div>
-                <div class="form-group">
-                    {{ form_errors(edit_form.labour) }}
-                    <label>{{ form_label(edit_form.labour) }}</label>
-                    {{ form_widget(edit_form.labour,{'attr':{'class':'form-control'}}) }}
-                </div>
-                <div class="form-group">
-                    {{ form_errors(edit_form.crop_workings) }}
-                    <label>{{ form_label(edit_form.crop_workings) }}</label>
-                    {{ form_widget(edit_form.crop_workings) }}
+                <div class="csa-row">
+                    {{ csa.btn('Cancelar', { variant: 'ghost', href: path('task_show', { id: entity.id }) }) }}
+                    {{ form_widget(edit_form.submit, {
+                        label: 'Guardar cambios',
+                        attr: { class: 'csa-btn csa-btn--primary' }
+                    }) }}
                 </div>
             </div>
-            {{ form_widget(edit_form.submit,{'attr':{'class':'btn btn-default' }}) }}
-            {{ form_rest(edit_form) }}
-            {{ form_end(edit_form, {'render_rest': false}) }}
+
         </div>
-    </div>
-        <ul class="record_actions">
-    <li>
-        <a href="{{ path('task') }}">
-            Back to the list
-        </a>
-    </li>
-    <li>{{ form(delete_form) }}</li>
-</ul>
-    {% endblock %}
+
+        {{ form_rest(edit_form) }}
+    {{ form_end(edit_form, { render_rest: false }) }}
+
+{% endblock %}
