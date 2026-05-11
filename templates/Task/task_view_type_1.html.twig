@@ -1,11 +1,15 @@
-<div class="alert alert-success ">
-    <h4>{{ task.title }} (Sin fecha)</h4>
+{# ============================================================
+ # Tarjeta de tarea tipo 1 (sin fecha) — partial.
+ # ============================================================ #}
+
+<div class="csa-task-card csa-task-card--green" style="background: var(--csa-green-soft); border-left: 4px solid var(--csa-green); padding: var(--csa-sp-5); border-radius: var(--csa-radius-md); margin-bottom: var(--csa-sp-4);">
+    <h4 style="margin-top: 0;">{{ task.title }} <span class="csa-soft" style="font-weight: normal; font-size: 0.85em;">· Sin fecha</span></h4>
     {% if task.realDate %}
-        <p><strong>Fecha de finalización: </strong>{{ task.realDate|format_date("long", locale="es") }}</p>
+        <p><strong>Finalizada el:</strong> {{ task.realDate|format_date('long', locale='es') }}</p>
     {% endif %}
-    {% if task.users %}
-    <p><strong>Asignada a: {{ task.listUsers }} </strong></p>
+    {% if task.users|length > 0 %}
+        <p><strong>Asignada a:</strong> {{ task.listUsers }}</p>
     {% endif %}
-    {{ task.content }}
-    {% include 'Task/record_actions.html.twig' %}
+    <div>{{ task.content|raw }}</div>
+    {% include 'Task/record_actions.html.twig' with { task: task } %}
 </div>
