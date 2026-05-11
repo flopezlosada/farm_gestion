@@ -2,8 +2,8 @@
 
 namespace App\Form;
 
-use A2lix\TranslationFormBundle\Form\Type\TranslationsType;
 use Symfony\Component\Form\AbstractType;
+use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 
@@ -16,31 +16,11 @@ class VideoType extends AbstractType
     public function buildForm(FormBuilderInterface $builder, array $options)
     {
         $builder
-
-            ->add('translations', TranslationsType::class, array(
-                    'fields' => array(
-                        'slug'  => array(
-                            'display' => false
-                        ),
-                        'title' => array(
-                            'locale_options' => array(            // [3.b]
-                                'es' => array(
-                                    'label' => 'Título'
-                                ),
-                                'en' => array(
-                                    'label' => 'Title',
-                                    'required'=>false
-                                ),
-                            )
-                        )
-                    )
-                )
-            )
-            ->add('video_id' , TextType::class, array('label' => 'Youtube video ID'))
-
+            ->add('title', null, array('label' => 'Título'))
+            ->add('video_id', TextType::class, array('label' => 'ID del vídeo de YouTube'))
         ;
     }
-    
+
     /**
      *  {@inheritdoc}
      */

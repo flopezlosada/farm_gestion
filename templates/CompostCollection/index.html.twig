@@ -1,35 +1,78 @@
-{% extends 'layout_list.html.twig' %}
+{# ============================================================
+ # Listado de puntos de recogida (con su resumen).
+ # Render del index del CompostCollectionController, que pasa
+ # `colletion_points` (typo preexistente de "collection_points").
+ # ============================================================ #}
 
-    {% block title_wrapper %}Listado de puntos de recogida {% endblock %}
-    {% block main -%}
-        <div class="panel panel-default">
-            <div class="panel-body">
-                {% for point in colletion_points %}
-                    <div class="col-lg-6 col-md-4">
-                        <div class="panel panel-green">
-                            <div class="panel-heading">
-                                {{ point }}
-                            </div>
-                            <div class="panel-body">
-                                <p>
-                                    <strong>Última recogida: </strong>{{ point.getLastCompostCollection.getCollectDate|format_date('long', locale='es') }} - {{ point.getLastCompostCollection.getAmount }} kg
-                                </p>
-                                <p>Resumen de recogidas anuales:<br>
-                                    {% for year,amount in point. getYearCollections%}
-                                       Año {{ year }} = {{ amount }} kg<br>
-                                    {% endfor %}
-                                </p>
-                            </div>
-                            <div class="panel-footer">
-                                <a href="{{ path('compostcollectionpoint_show', {'id': point.id}) }}">Ver detalle</a>
-                            </div>
-                        </div>
-                    </div>
-                    {% if loop.index is divisible by(2) %}
-                        <div class="clearfix"></div>
-                    {% endif %}
-                {% endfor %}
-            </div>
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Puntos de recogida de compost{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Recogida de compost</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Compost · Recogida',
+        'Puntos de recogida de residuos',
+        'Cada tarjeta muestra el último registro y un resumen anual de kilos recogidos por punto.'
+    ) }}
+
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-5);">
+        <div></div>
+        <div class="csa-row">
+            {{ csa.btn('Pilas', { variant: 'ghost', href: path('compostpile'), icon: 'fa-cubes' }) }}
+            {{ csa.btn('Puntos', { variant: 'ghost', href: path('compostcollectionpoint'), icon: 'fa-map-marker' }) }}
+            {{ csa.btn('Resumen', { variant: 'secondary', href: path('compostcollection_resume'), icon: 'fa-bar-chart' }) }}
+            {{ csa.btn('Nueva recogida', { variant: 'primary', href: path('compostcollection_new'), icon: 'fa-plus' }) }}
         </div>
+    </div>
 
-    {% endblock %}
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--csa-sp-5);">
+        {% for point in colletion_points %}
+            {% embed '_components/csa_card.html.twig' with {
+                title: point|default('Punto') ~ '',
+                subtitle: 'Punto de recogida',
+                accent: 'green'
+            } %}
+                {% block body %}
+                    {% set last = point.getLastCompostCollection %}
+                    {% if last %}
+                        <p class="csa-soft" style="margin-bottom: var(--csa-sp-4);">
+                            <strong>Última recogida:</strong>
+                            {{ last.getCollectDate|format_date('long', locale='es') }} · {{ last.getAmount }} kg
+                        </p>
+                    {% else %}
+                        <p class="csa-muted" style="margin-bottom: var(--csa-sp-4);">Sin recogidas aún.</p>
+                    {% endif %}
+
+                    {% set years = point.getYearCollections %}
+                    {% if years|length > 0 %}
+                        <div class="csa-defs__row csa-defs__row--full" style="margin-top: var(--csa-sp-3);">
+                            <dt class="csa-defs__label">Resumen anual</dt>
+                        </div>
+                        <ul class="csa-list" style="margin-top: var(--csa-sp-2);">
+                            {% for year, amount in years %}
+                                <li class="csa-list__item">{{ year }}: <strong>{{ amount }} kg</strong></li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+
+                    <div style="margin-top: var(--csa-sp-5);">
+                        <a href="{{ path('compostcollectionpoint_show', { id: point.id }) }}" class="csa-btn csa-btn--ghost csa-btn--sm">
+                            Ver detalle <i class="fa fa-arrow-right"></i>
+                        </a>
+                    </div>
+                {% endblock %}
+            {% endembed %}
+        {% else %}
+            <p class="csa-muted">Aún no hay puntos de recogida registrados.</p>
+        {% endfor %}
+    </div>
+
+{% endblock %}

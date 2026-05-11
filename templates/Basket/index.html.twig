@@ -1,50 +1,71 @@
-    {% extends 'layout_list.html.twig' %}
+{# ============================================================
+ # Listado de cestas semanales (Basket).
+ # ============================================================ #}
 
-    {% block title_wrapper %}Listado {% endblock %}
-    {% block main -%}
-    <h1>Basket list</h1>
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
 
-    <table class="records_list">
-        <thead>
-        <tr>
-                <th>Id</th>
-                <th>Date</th>
-                <th>Amount</th>
-                <th>Note</th>
-                <th>Week</th>
-            <th>Actions</th>
-        </tr>
-        </thead>
-        <tbody>
-        {% for entity in entities %}
-        <tr>
-                    <td>
-                        <a href="{{ path('basket_show', { 'id': entity.id }) }}">{{ entity.id }}</a>
-                    </td>
-                    <td>{% if entity.date %}{{ entity.date|date('Y-m-d H:i:s') }}{% endif %}</td>
-                    <td>{{ entity.amount }}</td>
-                    <td>{{ entity.note }}</td>
-                    <td>{{ entity.week }}</td>
-                    <td>
-                <ul>
-                    <li>
-                        <a href="{{ path('basket_show', { 'id': entity.id }) }}">show</a>
-                    </li>
-                    <li>
-                        <a href="{{ path('basket_edit', { 'id': entity.id }) }}">edit</a>
-                    </li>
-                </ul>
-                    </td>
-        </tr>
-        {% endfor %}
-        </tbody>
-    </table>
+{% block title %}Cestas{% endblock %}
 
-            <ul>
-            <li>
-                <a href="{{ path('basket_new') }}">
-                    Create a new entry
-                </a>
-            </li>
-        </ul>
-        {% endblock %}
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Cestas</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Socixs · Cestas',
+        'Cestas semanales',
+        'Cestas de la cooperativa por semana, con su producción y notas.'
+    ) }}
+
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-5);">
+        <div></div>
+        <div class="csa-row">
+            {{ csa.btn('Nueva cesta', { variant: 'primary', href: path('basket_new'), icon: 'fa-plus' }) }}
+        </div>
+    </div>
+
+    <div class="csa-table-wrap">
+        <table class="csa-table" data-paginate>
+            <thead>
+                <tr>
+                    <th class="csa-table__col-tight">Id</th>
+                    <th class="csa-table__col-tight">Fecha</th>
+                    <th class="csa-table__col-tight">Semana</th>
+                    <th class="csa-table__col-tight">Cantidad</th>
+                    <th>Notas</th>
+                    <th class="csa-table__actions">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entity in entities %}
+                    <tr>
+                        <td class="csa-table__col-tight">
+                            <a class="csa-table__primary" href="{{ path('basket_show', { id: entity.id }) }}">#{{ entity.id }}</a>
+                        </td>
+                        <td class="csa-table__col-tight">
+                            {% if entity.date %}{{ entity.date|format_date('medium', locale='es') }}{% else %}—{% endif %}
+                        </td>
+                        <td class="csa-table__col-tight">{{ entity.week }}</td>
+                        <td class="csa-table__col-tight">{% if entity.amount %}{{ entity.amount }}{% else %}—{% endif %}</td>
+                        <td>{% if entity.note %}{{ entity.note|striptags|slice(0, 80) }}{% if entity.note|striptags|length > 80 %}…{% endif %}{% else %}—{% endif %}</td>
+                        <td class="csa-table__actions">
+                            <a href="{{ path('basket_show', { id: entity.id }) }}" title="Ver" aria-label="Ver"><i class="fa fa-eye"></i></a>
+                            <a href="{{ path('basket_edit', { id: entity.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="6" class="csa-muted" style="text-align: center; padding: var(--csa-sp-8);">
+                            Aún no hay cestas registradas.
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+{% endblock %}

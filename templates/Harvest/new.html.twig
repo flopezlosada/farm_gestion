@@ -1,24 +1,70 @@
-    {% extends 'layout_crud.html.twig' %}
+{# ============================================================
+ # Nueva cosecha — shell csa.
+ # ============================================================ #}
 
-    {% block title_wrapper %}Añadir {% endblock %}
-    {% block main -%}
-    <div class="panel panel-default">
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% form_theme form 'form_div_layout.html.twig' %}
 
-        <div class="panel-body">
-            {{ form_start(form, {'action': path('harvest_create'),'method': 'post','attr': {'role': 'form' }}) }}
-            <div class='row'>
+{% block title %}Nueva cosecha{% endblock %}
 
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('harvest') }}">Cosechas</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Nueva</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Granja · Huerta',
+        'Nueva cosecha',
+        'Anota la fecha, el cultivo y la cantidad recolectada.'
+    ) }}
+
+    {{ form_start(form, {
+        'action': path('harvest_create'),
+        'method': 'post',
+        'attr': { 'role': 'form', 'class': 'csa-form-narrow' }
+    }) }}
+
+        <div class="csa-stack-lg">
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Datos de la cosecha', subtitle: 'Fecha, cultivo y cantidad.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.harvest_date, 'Fecha de cosecha', { attr: { class: 'csa-input datepicker' } }) }}
+                        {{ csa.field(form.amount, 'Cantidad') }}
+                        {{ csa.field(form.crop_working, 'Cultivo', { full: true }) }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                <div></div>
+                <div class="csa-row">
+                    {{ csa.btn('Cancelar', { variant: 'ghost', href: path('harvest') }) }}
+                    {{ form_widget(form.submit, {
+                        label: 'Crear cosecha',
+                        attr: { class: 'csa-btn csa-btn--primary' }
+                    }) }}
+                </div>
             </div>
-            {{ form_widget(form.submit,{'attr':{'class':'btn btn-default'}}) }}
-            {{ form_rest(form) }}
-            {{ form_end(form, {'render_rest': false}) }}
-                        <ul class="record_actions">
-    <li>
-        <a href="{{ path('harvest') }}">
-            Back to the list
-        </a>
-    </li>
-</ul>
+
         </div>
-    </div>
-    {% endblock %}
+
+        {{ form_rest(form) }}
+    {{ form_end(form, { render_rest: false }) }}
+
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    <script>
+        document.querySelectorAll('.datepicker, .datepicker2, .datepicker3')
+            .forEach(function (el) { el.type = 'date'; });
+    </script>
+{% endblock %}

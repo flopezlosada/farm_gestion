@@ -1,47 +1,97 @@
-{% extends 'layout_show.html.twig' %}
+{# ============================================================
+ # Detalle de cesta semanal (Production) — shell csa.
+ # ============================================================ #}
 
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
 
-{% block main -%}
+{% block title %}Cesta semana {{ basket.week }}{% endblock %}
 
-    <div class="panel panel-success">
-        <div class="panel-heading"><h4>Detalle de la cesta de la semana {{ basket.week }}
-                ({{ getDateFromWeek(year,basket.week) }}) | <a href="{{ path('basket_edit', {'id': basket.id}) }}">Editar</a></h4></div>
-        <div class="panel-body">
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('production_show_basket', { year: year }) }}">Cestas {{ year }}</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Semana {{ basket.week }}</span>
+{% endblock %}
 
+{% block csa_main %}
 
-            <p><strong>Kilos recogidos:</strong> {{ basket.amount }} kg</p>
-
-            <p><strong>Notas: </strong>{{ basket.note |raw }}</p>
-            {% for production in basket.getProductions %}
-                <div class="col-lg-12">
-                    <div class="panel  {{ cycle(['panel-info', 'panel-success','panel-warning','panel-danger'], loop.index0) }}">
-                        <div class="panel-heading">
-                            <a href="{{ path('cropworking_show', {'year': year, 'id': production.cropworking.getId}) }}">{{ production.cropworking.getName }}</a>
-                            = {{ production.amount }} kg | <a
-                                    href="{{ path('production_edit', {'id': production.id}) }}">Editar</a>
-                        </div>
-                        <div class="panel-body">
-                            {{ production.note|raw }}
-
-
-
-                        </div>
-
-                    </div>
+    {# ===== Cabecera ===== #}
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-6); align-items: flex-start;">
+        <div class="csa-row" style="align-items: flex-start; gap: var(--csa-sp-4);">
+            <span class="csa-table__id-marker" style="width: 64px; height: 64px; font-size: 28px; border-radius: var(--csa-radius-lg);">
+                <i class="fa fa-shopping-basket"></i>
+            </span>
+            <div>
+                <h1>Cesta semana {{ basket.week }}</h1>
+                <div class="csa-serif csa-italic csa-soft" style="margin-top: var(--csa-sp-2);">
+                    {{ getDateFromWeek(year, basket.week) }} · {{ basket.amount }} kg recogidos
                 </div>
-                {% if loop.index is even %}
-                    <div class="clearfix"></div>
-                {% endif %}
-            {% endfor %}
-
+            </div>
         </div>
-        <div class="panel-footer"><a href="{{ path('production_show_basket', {'year':year}) }}">Volver al listado de cestas</a> </div>
+        <div class="csa-row">
+            {{ csa.btn('Editar cesta', { variant: 'secondary', href: path('basket_edit', { id: basket.id }), icon: 'fa-pencil' }) }}
+            {{ csa.btn('Volver', { variant: 'ghost', href: path('production_show_basket', { year: year }) }) }}
+        </div>
+    </div>
 
+    {# ===== Notas de la cesta ===== #}
+    {% if basket.note %}
+        {% embed '_components/csa_card.html.twig' with {
+            title: 'Notas de la cesta',
+            accent: 'plum'
+        } %}
+            {% block body %}
+                <div class="csa-soft" style="line-height: var(--csa-lh-normal);">{{ basket.note|raw }}</div>
+            {% endblock %}
+        {% endembed %}
+    {% endif %}
+
+    {# ===== Producciones ===== #}
+    <div style="margin-top: var(--csa-sp-6);">
+        {% embed '_components/csa_card.html.twig' with {
+            title: 'Cosechas de la semana',
+            subtitle: basket.getProductions|length ~ ' registro' ~ (basket.getProductions|length != 1 ? 's' : '') ~ '. ' ~ basket.amount ~ ' kg en total.',
+            accent: 'green'
+        } %}
+            {% block body %}
+                {% if basket.getProductions|length > 0 %}
+                    <div class="csa-table-wrap">
+                        <table class="csa-table">
+                            <thead>
+                                <tr>
+                                    <th>Cultivo</th>
+                                    <th class="csa-table__col-tight">Cantidad</th>
+                                    <th>Notas</th>
+                                    <th class="csa-table__actions">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for production in basket.getProductions %}
+                                    <tr>
+                                        <td>
+                                            <a class="csa-table__primary" href="{{ path('cropworking_show', { year: year, id: production.cropworking.getId }) }}">
+                                                {{ production.cropworking.getName }}
+                                            </a>
+                                        </td>
+                                        <td class="csa-table__col-tight">{{ production.amount }} kg</td>
+                                        <td>{{ production.note|striptags|slice(0, 100) }}{% if production.note|striptags|length > 100 %}…{% endif %}</td>
+                                        <td class="csa-table__actions">
+                                            <a href="{{ path('production_edit', { id: production.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="csa-soft" style="text-align: center; padding: var(--csa-sp-6) 0;">
+                        Sin cosechas registradas en esta cesta.
+                    </div>
+                {% endif %}
+            {% endblock %}
+        {% endembed %}
     </div>
 
 {% endblock %}
-
-{% block title_wrapper %}
-
-{% endblock %}
-

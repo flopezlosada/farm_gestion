@@ -1,0 +1,33 @@
+{# ============================================================
+ # Layout minimal para pantallas de media (Document, Audio, Video,
+ # Image, Gallery) que se cargan via jQuery Modal AJAX desde
+ # Blog/edit.
+ #
+ # Carga los estilos csa (mismo tipo, color, espaciados) pero NO
+ # incluye sidebar ni topbar — porque el contenido va embebido en
+ # un <div class="modal">. También funciona standalone (carga
+ # directa por URL) gracias al base.html.twig que aporta HTML
+ # válido.
+ #
+ # Las plantillas que lo extienden definen `admin_content`.
+ # ============================================================ #}
+
+{% extends 'base.html.twig' %}
+
+{% block more_css %}
+    {{ parent() }}
+    {{ encore_entry_link_tags('app') }}
+{% endblock %}
+
+{% block body %}
+    <div class="csa-app">
+        <main class="csa-admin-modal" style="padding: var(--csa-sp-5); max-width: 720px; margin: 0 auto;">
+            {% block admin_content %}{% endblock %}
+        </main>
+    </div>
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    {{ encore_entry_script_tags('app') }}
+{% endblock %}

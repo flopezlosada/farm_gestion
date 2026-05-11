@@ -1,0 +1,25 @@
+{# ---------- FORM SECTION ----------
+ # Tarjeta numerada agrupando campos relacionados. Embebible:
+ #
+ #   {% embed '_components/csa_form_section.html.twig' with {
+ #       num: '1', title: 'Identidad', subtitle: 'Cómo se identifica el lote' } %}
+ #       {% block body %}
+ #           <div class="csa-form-grid">
+ #               {{ csa.field(form.id, 'Identificador') }}
+ #               {{ csa.field(form.name, 'Nombre interno', { hint: 'opcional' }) }}
+ #           </div>
+ #       {% endblock %}
+ #   {% endembed %}
+ #}
+<section class="csa-form-section">
+    <header class="csa-form-section__head">
+        <span class="csa-form-section__num">{{ num }}</span>
+        <div>
+            <div class="csa-form-section__title">{{ title }}</div>
+            {% if subtitle is defined and subtitle %}
+                <div class="csa-form-section__subtitle">{{ subtitle }}</div>
+            {% endif %}
+        </div>
+    </header>
+    {% block body %}{% endblock %}
+</section>

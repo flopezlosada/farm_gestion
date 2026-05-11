@@ -1,15 +1,86 @@
-{% extends 'base.html.twig' %}
+{# ============================================================
+ # Nuevx proveedorx — shell csa.
+ # ============================================================ #}
 
-{% block body -%}
-    <h1>Provider creation</h1>
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% form_theme form 'form_div_layout.html.twig' %}
 
-    {{ form(form) }}
+{% block title %}Nuevx proveedorx{% endblock %}
 
-        <ul class="record_actions">
-    <li>
-        <a href="{{ path('provider') }}">
-            Back to the list
-        </a>
-    </li>
-</ul>
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('provider') }}">Proveedorxs</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Nuevx</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Comercio · Compras',
+        'Nuevx proveedorx',
+        'Datos de identidad, contacto y dirección.'
+    ) }}
+
+    {{ form_start(form, {
+        'action': path('provider_create'),
+        'method': 'post',
+        'attr': { 'role': 'form', 'class': 'csa-form-narrow' }
+    }) }}
+
+        <div class="csa-stack-lg">
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Identidad', subtitle: 'Nombre y persona de contacto.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.name, 'Nombre', { full: true }) }}
+                        {{ csa.field(form.contact, 'Persona de contacto', { full: true }) }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Contacto', subtitle: 'Teléfono, móvil, web y email.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.phone, 'Teléfono') }}
+                        {{ csa.field(form.celular, 'Móvil') }}
+                        {{ csa.field(form.web, 'Web') }}
+                        {{ csa.field(form.email, 'Email') }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '3', title: 'Dirección', subtitle: 'Localización postal.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.address, 'Dirección', { full: true }) }}
+                        {{ csa.field(form.postal_code, 'Código postal') }}
+                        {{ csa.field(form.city, 'Localidad') }}
+                        {{ csa.field(form.state, 'Provincia / Estado') }}
+                        {{ csa.field(form.country, 'País') }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                <div></div>
+                <div class="csa-row">
+                    {{ csa.btn('Cancelar', { variant: 'ghost', href: path('provider') }) }}
+                    {{ form_widget(form.submit, {
+                        label: 'Crear proveedorx',
+                        attr: { class: 'csa-btn csa-btn--primary' }
+                    }) }}
+                </div>
+            </div>
+
+        </div>
+
+        {{ form_rest(form) }}
+    {{ form_end(form, { render_rest: false }) }}
+
 {% endblock %}

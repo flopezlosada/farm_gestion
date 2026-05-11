@@ -1,44 +1,68 @@
-    {% extends 'layout_list.html.twig' %}
+{# ============================================================
+ # Listado de zonas (Zone) — shell csa.
+ # ============================================================
+ # Zone = unidad mayor de organización de la finca. Cada zona
+ # contiene varios sectores.
+ # ============================================================ #}
 
-    {% block title_wrapper %}Listado {% endblock %}
-    {% block main -%}
-    <h1>Zone list</h1>
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
 
-    <table class="records_list">
-        <thead>
-        <tr>
-                <th>Id</th>
-                <th>Name</th>
-            <th>Actions</th>
-        </tr>
-        </thead>
-        <tbody>
-        {% for entity in entities %}
-        <tr>
-                    <td>
-                        <a href="{{ path('zone_show', { 'id': entity.id }) }}">{{ entity.id }}</a>
-                    </td>
-                    <td>{{ entity.name }}</td>
-                    <td>
-                <ul>
-                    <li>
-                        <a href="{{ path('zone_show', { 'id': entity.id }) }}">show</a>
-                    </li>
-                    <li>
-                        <a href="{{ path('zone_edit', { 'id': entity.id }) }}">edit</a>
-                    </li>
-                </ul>
-                    </td>
-        </tr>
-        {% endfor %}
-        </tbody>
-    </table>
+{% block title %}Zonas{% endblock %}
 
-            <ul>
-            <li>
-                <a href="{{ path('zone_new') }}">
-                    Create a new entry
-                </a>
-            </li>
-        </ul>
-        {% endblock %}
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span>Granja</span>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Zonas</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Granja · Huerta',
+        'Zonas',
+        'Unidades mayores de organización de la finca. Cada zona agrupa varios sectores.'
+    ) }}
+
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-5);">
+        <div></div>
+        <div class="csa-row">
+            {{ csa.btn('Nueva zona', { variant: 'primary', href: path('zone_new'), icon: 'fa-plus' }) }}
+        </div>
+    </div>
+
+    <div class="csa-table-wrap">
+        <table class="csa-table" data-paginate>
+            <thead>
+                <tr>
+                    <th>Nombre</th>
+                    <th class="csa-table__col-tight">Sectores</th>
+                    <th class="csa-table__actions">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entity in entities %}
+                    <tr>
+                        <td>
+                            <a class="csa-table__primary" href="{{ path('zone_show', { id: entity.id }) }}">{{ entity.name }}</a>
+                        </td>
+                        <td class="csa-table__col-tight">{{ entity.sectors|length }}</td>
+                        <td class="csa-table__actions">
+                            <a href="{{ path('zone_show', { id: entity.id }) }}" title="Ver" aria-label="Ver"><i class="fa fa-eye"></i></a>
+                            <a href="{{ path('zone_edit', { id: entity.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="3" class="csa-muted" style="text-align: center; padding: var(--csa-sp-8);">
+                            No hay zonas registradas.
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+{% endblock %}

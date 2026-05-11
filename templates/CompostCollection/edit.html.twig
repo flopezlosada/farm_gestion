@@ -1,27 +1,87 @@
-    {% extends 'layout_crud.html.twig' %}
+{# ============================================================
+ # Editar recogida de compost — shell csa.
+ #
+ # La plantilla legacy estaba vacía (solo el submit, sin campos).
+ # Aquí se reproduce el form completo siguiendo el patrón del new.
+ # ============================================================ #}
 
-    {% block title_wrapper %}Editar {% endblock %}
-    {% block main -%}
-    <div class="panel panel-default">
-        <div class="panel-heading">
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% form_theme edit_form 'form_div_layout.html.twig' %}
 
-        </div>
-        <div class="panel-body">
-            {{ form_start(edit_form, {'action': path('compostcollection_update',{'id':entity.id}), 'method': 'put','attr': {'role': 'form' }}) }}
-            {{ form_errors(edit_form) }}
-            <div class="row">
-            </div>
-            {{ form_widget(edit_form.submit,{'attr':{'class':'btn btn-default' }}) }}
-            {{ form_rest(edit_form) }}
-            {{ form_end(edit_form, {'render_rest': false}) }}
-        </div>
+{% block title %}Editar recogida #{{ entity.id }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('compostcollection') }}">Recogida de compost</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('compostcollection_show', { id: entity.id }) }}">#{{ entity.id }}</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Editar</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Compost · Recogida',
+        'Editar recogida #' ~ entity.id,
+        'Corrige fecha, punto, kilos o impropios.'
+    ) }}
+
+    <div style="display: none;">
+        {{ form_start(delete_form, { attr: { id: 'compostcollection-delete-form' } }) }}
+            {{ form_rest(delete_form) }}
+        {{ form_end(delete_form, { render_rest: false }) }}
     </div>
-        <ul class="record_actions">
-    <li>
-        <a href="{{ path('compostcollection') }}">
-            Back to the list
-        </a>
-    </li>
-    <li>{{ form(delete_form) }}</li>
-</ul>
-    {% endblock %}
+
+    {{ form_start(edit_form, {
+        'action': path('compostcollection_update', { id: entity.id }),
+        'method': 'put',
+        'attr': { 'role': 'form', 'class': 'csa-form-narrow' }
+    }) }}
+
+        <div class="csa-stack-lg">
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Datos de la recogida', subtitle: 'Fecha, punto, kilos y calidad.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(edit_form.collect_date, 'Fecha', { attr: { class: 'csa-input datepicker' } }) }}
+                        {{ csa.field(edit_form.compost_collection_point, 'Punto de recogida') }}
+                        {{ csa.field(edit_form.amount, 'Kilos recogidos') }}
+                        {{ csa.field(edit_form.improper_percentage, '% de impropios', { hint: 'número de 0 a 100' }) }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                <div>
+                    <button type="submit" form="compostcollection-delete-form" class="csa-btn csa-btn--ghost"
+                            onclick="return confirm('¿Seguro? Esta acción no se puede deshacer.');">
+                        Eliminar recogida
+                    </button>
+                </div>
+                <div class="csa-row">
+                    {{ csa.btn('Cancelar', { variant: 'ghost', href: path('compostcollection_show', { id: entity.id }) }) }}
+                    {{ form_widget(edit_form.submit, {
+                        label: 'Guardar cambios',
+                        attr: { class: 'csa-btn csa-btn--primary' }
+                    }) }}
+                </div>
+            </div>
+
+        </div>
+
+        {{ form_rest(edit_form) }}
+    {{ form_end(edit_form, { render_rest: false }) }}
+
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    <script>
+        document.querySelectorAll('.datepicker, .datepicker2, .datepicker3')
+            .forEach(function (el) { el.type = 'date'; });
+    </script>
+{% endblock %}

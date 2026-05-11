@@ -59,7 +59,7 @@ class ProductionController extends AbstractAppController
         $form = $this->createCreateForm($entity);
         $form->handleRequest($request);
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $em = $this->getDoctrine()->getManager();
             $entity->setWeek(date('W', strtotime($entity->getProductionDate())));
             $basket = $em->getRepository(\App\Entity\Basket::class)->findBasketByWeekYear($entity->getProductionDate());
@@ -216,7 +216,7 @@ class ProductionController extends AbstractAppController
         $editForm = $this->createEditForm($entity);
         $editForm->handleRequest($request);
 
-        if ($editForm->isValid()) {
+        if ($editForm->isSubmitted() && $editForm->isValid()) {
             $entity->setProductionDate(new \DateTime($entity->getProductionDate()));
             $em->flush();
 
@@ -239,7 +239,7 @@ class ProductionController extends AbstractAppController
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\Production::class)->find($id);
 

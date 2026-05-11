@@ -37,7 +37,6 @@ class CompostCollection
      * @ORM\Column(name="collect_date", type="date")
      */
     #[Assert\NotBlank]
-    #[Assert\Date]
     private $collect_date;
 
     /**

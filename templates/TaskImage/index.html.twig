@@ -1,47 +1,68 @@
-{% extends 'base.html.twig' %}
+{# ============================================================
+ # Listado de imágenes de tareas (TaskImage).
+ # ============================================================ #}
 
-{% block body -%}
-    <h1>TaskImage list</h1>
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
 
-    <table class="records_list">
-        <thead>
-            <tr>
-                <th>Id</th>
-                <th>Image</th>
-                <th>Modified</th>
-                <th>Created</th>
-                <th>Updated</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-        {% for entity in entities %}
-            <tr>
-                <td><a href="{{ path('taskimage_show', { 'id': entity.id }) }}">{{ entity.id }}</a></td>
-                <td>{{ entity.image }}</td>
-                <td>{{ entity.modified }}</td>
-                <td>{% if entity.created %}{{ entity.created|date('Y-m-d H:i:s') }}{% endif %}</td>
-                <td>{% if entity.updated %}{{ entity.updated|date('Y-m-d H:i:s') }}{% endif %}</td>
-                <td>
-                <ul>
-                    <li>
-                        <a href="{{ path('taskimage_show', { 'id': entity.id }) }}">show</a>
-                    </li>
-                    <li>
-                        <a href="{{ path('taskimage_edit', { 'id': entity.id }) }}">edit</a>
-                    </li>
-                </ul>
-                </td>
-            </tr>
-        {% endfor %}
-        </tbody>
-    </table>
+{% block title %}Imágenes de tareas{% endblock %}
 
-        <ul>
-        <li>
-            <a href="{{ path('taskimage_new') }}">
-                Create a new entry
-            </a>
-        </li>
-    </ul>
-    {% endblock %}
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('task') }}">Tareas</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Imágenes</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Tareas · Imágenes',
+        'Imágenes de tareas',
+        'Imágenes adjuntas a las tareas.'
+    ) }}
+
+    <div class="csa-table-wrap">
+        <table class="csa-table" data-paginate>
+            <thead>
+                <tr>
+                    <th class="csa-table__col-tight">Id</th>
+                    <th class="csa-table__col-tight">Vista previa</th>
+                    <th>Título</th>
+                    <th class="csa-table__col-tight">Creada</th>
+                    <th class="csa-table__actions">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entity in entities %}
+                    <tr>
+                        <td class="csa-table__col-tight">
+                            <a class="csa-table__primary" href="{{ path('taskimage_show', { id: entity.id }) }}">#{{ entity.id }}</a>
+                        </td>
+                        <td class="csa-table__col-tight">
+                            {% if entity.image %}
+                                <img src="{{ asset(entity.getWebPath) }}" alt="{{ entity.title }}" style="max-width: 64px; max-height: 64px; border-radius: var(--csa-radius-sm);">
+                            {% else %}—{% endif %}
+                        </td>
+                        <td>{{ entity.title }}</td>
+                        <td class="csa-table__col-tight">
+                            {% if entity.created %}{{ entity.created|format_date('medium', locale='es') }}{% else %}—{% endif %}
+                        </td>
+                        <td class="csa-table__actions">
+                            <a href="{{ path('taskimage_show', { id: entity.id }) }}" title="Ver" aria-label="Ver"><i class="fa fa-eye"></i></a>
+                            <a href="{{ path('taskimage_edit', { id: entity.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="5" class="csa-muted" style="text-align: center; padding: var(--csa-sp-8);">
+                            Aún no hay imágenes.
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+{% endblock %}

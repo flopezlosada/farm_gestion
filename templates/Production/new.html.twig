@@ -1,52 +1,84 @@
-{% extends 'layout_crud.html.twig' %}
-{% block title_wrapper %}Añadir producción{% endblock %}
-{% block main -%}
-    <div class="panel panel-default">
+{# ============================================================
+ # Nueva producción/cosecha (Production) — shell csa.
+ # ============================================================
+ # Si llega con crop_working_id en la URL, el controller pre-rellena
+ # el dropdown. Si no, el usuario lo elige.
+ # ============================================================ #}
 
-        <div class="panel-body">
-            {{ form_start(form, {'action': path('production_create'), 'method': 'post','attr': {'role': 'form' }}) }}
-            <div class="row">
-                <div class="col-lg-6">
-                    <div class="form-group">
-                        {{ form_errors(form.crop_working) }}
-                        <label>{{ form_label(form.crop_working) }}</label>
-                        {{ form_widget(form.crop_working,{'attr':{'class':'form-control'}}) }}
-                    </div>
-                    <div class="form-group">
-                        {{ form_errors(form.production_date) }}
-                        <label>{{ form_label(form.production_date) }}</label>
-                        {{ form_widget(form.production_date,{'attr':{'placeholder':'Fecha de cosecha'}}) }}
-                    </div>
-                    <div class="form-group">
-                        {{ form_errors(form.amount) }}
-                        <label>{{ form_label(form.amount) }}</label>
-                        {{ form_widget(form.amount,{'attr':{'class':'form-control','placeholder':'Kilogramos de producción'}}) }}
-                    </div>
-                    <div class="form-group">
-                        {{ form_errors(form.note) }}
-                        <label>{{ form_label(form.note) }}</label>
-                        {{ form_widget(form.note,{'attr':{'class':'tinymce','placeholder':'Anotaciones'}}) }}
-                    </div>
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% form_theme form 'form_div_layout.html.twig' %}
 
+{% block title %}Registrar cosecha{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('cropworking') }}">Cultivos</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Registrar cosecha</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Granja · Huerta',
+        'Registrar cosecha',
+        'Anota la producción semanal de un cultivo. La cesta de la semana se calcula a partir de la fecha.'
+    ) }}
+
+    {{ form_start(form, {
+        'action': path('production_create'),
+        'method': 'post',
+        'attr': { 'role': 'form', 'class': 'csa-form-narrow' }
+    }) }}
+
+        <div class="csa-stack-lg">
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Cosecha', subtitle: 'Cultivo, fecha y cantidad recogida.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.crop_working, 'Cultivo', { full: true }) }}
+                        {{ csa.field(form.production_date, 'Fecha de cosecha', { attr: { class: 'csa-input datepicker' } }) }}
+                        {{ csa.field(form.amount, 'Cantidad', { hint: 'kg' }) }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Anotaciones', subtitle: 'Observaciones libres sobre la cosecha.' } %}
+                {% block body %}
+                    {% embed '_components/csa_field_block.html.twig' with { label: 'Anotaciones', hint: 'opcional', full: true } %}
+                        {% block body %}
+                            {{ form_widget(form.note, { attr: { class: 'tinymce' } }) }}
+                        {% endblock %}
+                    {% endembed %}
+                {% endblock %}
+            {% endembed %}
+
+            <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                <div></div>
+                <div class="csa-row">
+                    {{ csa.btn('Cancelar', { variant: 'ghost', href: path('production_show_basket') }) }}
+                    {{ form_widget(form.submit, {
+                        label: 'Registrar cosecha',
+                        attr: { class: 'csa-btn csa-btn--primary' }
+                    }) }}
                 </div>
             </div>
-            {{ form_widget(form.submit,{'attr':{'class':'btn btn-default'}}) }}
-            {{ form_rest(form) }}
-            {{ form_end(form, {'render_rest': false}) }}
+
         </div>
-    </div>
 
+        {{ form_rest(form) }}
+    {{ form_end(form, { render_rest: false }) }}
 
+{% endblock %}
 
-
-
-
-    <ul class="record_actions">
-        <li>
-            <a href="{{ path('production_show_basket') }}">
-                Volver al listado de cestas
-            </a>
-        </li>
-    </ul>
+{% block more_js %}
+    {{ parent() }}
     {{ tinymce_init() }}
+    <script>
+        document.querySelectorAll('.datepicker')
+            .forEach(function (el) { el.type = 'date'; });
+    </script>
 {% endblock %}

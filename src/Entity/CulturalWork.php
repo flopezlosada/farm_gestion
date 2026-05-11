@@ -60,7 +60,6 @@ class CulturalWork
      * @var string $date
      * @ORM\Column(name="date", type="date", nullable=true)
      */
-    #[Assert\Date]
     private $date;
 
     /**

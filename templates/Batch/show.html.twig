@@ -1,415 +1,545 @@
-{% extends 'layout_graph.html.twig' %}
- {% block more_css %}
-     <link rel="stylesheet" href="{{ asset('bundles/app/css/morris/morris.css') }}"/>
- {% endblock %}
-{% block warning %}{% endblock %}
-{% block main -%}
-    <div class="row">
-        <div class="col-lg-12">
-            <h1 class="page-header">Lote de animales</h1>
-        </div>
-        <!-- /.col-lg-12 -->
-    </div>
-    <div class="row">
-        <div class="col-lg-12">
-            <div class="panel panel-green">
-                <div class="panel-heading">
-                    {{ entity }}
+{# ============================================================
+ # Detalle de lote — migrado al shell csa.
+ # ============================================================
+ # El contenido interno (panel verde + tabs + tablas + JS de
+ # gráficas) sigue en su forma legacy y se migrará a csa-card /
+ # csa-table en commits separados, uno por bloque.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Lote #{{ entity.id }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('batch') }}">Lotes</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">#{{ entity.id }}</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    <link rel="stylesheet" href="{{ asset('bundles/app/css/morris/morris.css') }}"/>
+{% endblock %}
+
+{% block csa_main -%}
+
+    {# Cabecera nueva — estilo csa. El h1 legacy y sus wrappers row/col-lg-12 se han retirado. #}
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-6); align-items: flex-start;">
+        <div class="csa-row" style="align-items: flex-start; gap: var(--csa-sp-4);">
+            <span class="csa-table__id-marker" style="width: 64px; height: 64px; font-size: 28px; border-radius: var(--csa-radius-lg);">
+                <i class="fa fa-egg"></i>
+            </span>
+            <div>
+                <div class="csa-row" style="gap: var(--csa-sp-3); margin-bottom: var(--csa-sp-2);">
+                    {% if entity.batchStatus.id == 1 %}
+                        {{ csa.badge('Activo · ' ~ entity.product, 'green') }}
+                    {% elseif entity.batchStatus.id == 2 %}
+                        {{ csa.badge('Finalizado', 'neutral') }}
+                    {% endif %}
+                    <span class="csa-muted" style="font-size: var(--csa-fs-sm);">
+                        ID #L-{{ '%03d'|format(entity.id) }}
+                    </span>
+                    {% if entity.purchaseDate %}
+                        <span class="csa-muted" style="font-size: var(--csa-fs-sm);">·</span>
+                        <span class="csa-muted" style="font-size: var(--csa-fs-sm);">{{ entity.purchaseDate|date('Y-m-d') }}</span>
+                    {% endif %}
                 </div>
-                <div class="panel-body">
-                    <ul class="nav nav-tabs">
-                        <li><a href="#home" data-toggle="tab">General</a>
+                <h1>Lote #{{ entity.id }}</h1>
+                <div class="csa-serif csa-italic csa-soft" style="margin-top: var(--csa-sp-2);">
+                    {{ entity.product }} · {{ entity.amount }} animales
+                </div>
+            </div>
+        </div>
+        <div class="csa-row">
+            {% if entity.getProduct.getId in [2, 3] %}
+                {{ csa.btn('Ver estadísticas', { variant: 'ghost', href: path('batch_analyses', { product_id: entity.product.id }), icon: 'fa-bar-chart' }) }}
+            {% elseif entity.getProduct.getId == 6 %}
+                {{ csa.btn('Análisis comparativo', { variant: 'ghost', href: path('hens_analyses'), icon: 'fa-bar-chart' }) }}
+            {% endif %}
+            {{ csa.btn('Editar', { variant: 'secondary', href: path('batch_edit', { id: entity.id }), icon: 'fa-pencil' }) }}
+            {{ csa.btn('Volver al listado', { variant: 'ghost', href: path('batch') }) }}
+        </div>
+    </div>
+
+    {# ===== Contenido legacy: tabs, gráficas, tablas (sin panel verde wrapper) ===== #}
+                    <ul class="csa-tabs">
+                        <li class="csa-tabs__item active">
+                            <a class="csa-tabs__link" href="#home" data-toggle="tab">General</a>
                         </li>
-                        <li><a href="#consum" data-toggle="tab">Consumo</a>
+                        <li class="csa-tabs__item">
+                            <a class="csa-tabs__link" href="#consum" data-toggle="tab">Consumo</a>
                         </li>
-                        <li><a href="#animals" data-toggle="tab">Animales</a>
+                        <li class="csa-tabs__item">
+                            <a class="csa-tabs__link" href="#animals" data-toggle="tab">Animales</a>
                         </li>
                         {% if entity.getProduct.getId in [6] %}
-                            <li><a href="#movements" data-toggle="tab">Movimientos</a>
+                            <li class="csa-tabs__item">
+                                <a class="csa-tabs__link" href="#movements" data-toggle="tab">Movimientos</a>
                             </li>
                         {% endif %}
                     </ul>
                     <div class="tab-content">
                         <div id="home" class="tab-pane fade active in ">
-                            <h4>Resumen del lote</h4>
 
+                            {# ===== KPIs derivados arriba (full width) ===== #}
+                            <div class="csa-kpi-row" style="margin-bottom: var(--csa-sp-6);">
+                                {{ csa.kpi('Edad actual', entity.getBatchAge, 'días', null, null, 'green') }}
+                                {{ csa.kpi('En producción', entity.getProductionTime, 'días', null, null, 'green') }}
+                                {{ csa.kpi('Pienso consumido', entity.getfeedamount, 'kg', null, null, 'ochre') }}
+                                {{ csa.kpi('Consumo medio', average_consumption|number_format(0), 'g/día·animal', null, null, 'ochre') }}
+                                {% if entity.getProduct.getId in [2,3] %}
+                                    {{ csa.kpi('Conversión', entity.getFeedConversion|number_format(2), 'kg / kg canal', null, null, 'terracotta') }}
+                                {% elseif entity.getProduct.getId in [6] %}
+                                    {{ csa.kpi('Huevos puestos', entity.getTotalLayEggs, null, null, null, 'sky') }}
+                                    {{ csa.kpi('Coste por huevo', entity.getEggCost|number_format(2), '€', null, null, 'terracotta') }}
+                                {% endif %}
+                            </div>
+
+                            {# ===== Resumen del lote: card con definition grid ===== #}
                             <div class="col-lg-8">
-                                <p>
-                                    <strong>Animal: </strong>{{ entity.getProduct }}<br/>
-                                    <strong>Fecha de
-                                        compra:</strong> {{ entity.getPurchaseDate|format_date('long', locale='es') }}
-                                    <br/>
-                                    {% if  entity.receiptdate %}
-                                        <strong>Fecha de
-                                            recepción:</strong> {{ entity.receiptdate|format_date('long', locale='es') }}
-                                        <br/>
-                                    {% endif %}
-                                    <strong>Días de vida en la compra: </strong> {{ entity.getDaysOfLife }}<br/>
-                                    <strong>Edad a día de hoy: </strong> {{ entity.getBatchAge }} dias
-                                    ({{ (entity.getBatchAge/30)|number_format(1) }} meses)<br/>
-                                    <strong>Tiempo en producción: </strong> {{ entity.getProductionTime }} dias
-                                    ({{ (entity.getProductionTime/30)|number_format(1) }} meses)<br/>
-                                    {% if entity.batchStatus.getId==2 %}
-                                        <strong>Fecha de
-                                            finalización:</strong> {{ entity.finalizationDate|format_date('long', locale='es') }}
-                                        <br/>
-                                    {% endif %}
-                                    <strong>Precio de compra del lote: </strong> {{ entity.getPrice }}€<br/>
-                                    <strong>Número de animales: </strong>{{ entity.amount }}<br/>
-                                    {% if  entity.totalcost %}
-                                        <strong>Coste total del lote:</strong> {{ entity.totalcost }} €<br/>
-                                    {% endif %}
+                                {% embed '_components/csa_card.html.twig' with { title: 'Resumen del lote' } %}
+                                    {% block body %}
 
-                                <p><strong>Total de pienso consumido:</strong> {{ entity.getfeedamount }} kg
-                                <ul>
-                                    <li><strong>Consumo medio diario por
-                                            animal: </strong> {{ average_consumption|number_format(0) }} g
-                                    </li>
-                                    {% if entity.getProduct.getId in [2,3] %}
-                                        <li><strong>Índice de conversión del
-                                                lote: </strong> {{ entity.getFeedConversion|number_format(2) }} kg de
-                                            comida
-                                            por cada kg en canal
-                                        </li>
-                                    {% elseif entity.getProduct.getId in [6] %}
-                                        <li><strong>Total de huevos puestos:</strong> {{ entity.getTotalLayEggs }}</li>
-                                        <li><strong>Coste por huevo del
-                                                lote:</strong> {{ entity.getEggCost|number_format(2) }} € por huevo
-                                            ({{ 12*entity.getEggCost|number_format(2) }} € por docena)
-                                        </li>
-                                        <li><strong>Producción de
-                                                equilibrio:</strong> {{ entity.getBalaceProduction(dozen_price)|number_format(2) }}
-                                            huevos
-                                        </li>
-                                    {% endif %}
-                                </ul>
-                                </p>
+                                        {# ---- Datos básicos ---- #}
+                                        <section class="csa-defs-section">
+                                            <h4 class="csa-defs-section__title">
+                                                <i class="csa-defs-section__icon csa-defs-section__icon--sky fa fa-info-circle"></i>
+                                                Datos básicos
+                                            </h4>
+                                            <dl class="csa-defs">
+                                                <div class="csa-defs__row">
+                                                    <dt class="csa-defs__label">Animal</dt>
+                                                    <dd class="csa-defs__value">{{ entity.getProduct }}</dd>
+                                                </div>
+                                                <div class="csa-defs__row">
+                                                    <dt class="csa-defs__label">Número de animales</dt>
+                                                    <dd class="csa-defs__value">{{ entity.amount }}</dd>
+                                                </div>
+                                                <div class="csa-defs__row">
+                                                    <dt class="csa-defs__label">Fecha de compra</dt>
+                                                    <dd class="csa-defs__value">{{ entity.getPurchaseDate|format_date('long', locale='es') }}</dd>
+                                                </div>
+                                                {% if entity.receiptdate %}
+                                                    <div class="csa-defs__row">
+                                                        <dt class="csa-defs__label">Fecha de recepción</dt>
+                                                        <dd class="csa-defs__value">{{ entity.receiptdate|format_date('long', locale='es') }}</dd>
+                                                    </div>
+                                                {% endif %}
+                                                <div class="csa-defs__row">
+                                                    <dt class="csa-defs__label">Días de vida en la compra</dt>
+                                                    <dd class="csa-defs__value">{{ entity.getDaysOfLife }}</dd>
+                                                </div>
+                                                <div class="csa-defs__row">
+                                                    <dt class="csa-defs__label">Edad hoy</dt>
+                                                    <dd class="csa-defs__value">{{ entity.getBatchAge }} días <span class="csa-muted">({{ (entity.getBatchAge/30)|number_format(1) }} meses)</span></dd>
+                                                </div>
+                                                <div class="csa-defs__row">
+                                                    <dt class="csa-defs__label">Tiempo en producción</dt>
+                                                    <dd class="csa-defs__value">{{ entity.getProductionTime }} días <span class="csa-muted">({{ (entity.getProductionTime/30)|number_format(1) }} meses)</span></dd>
+                                                </div>
+                                                {% if entity.batchStatus.getId == 2 %}
+                                                    <div class="csa-defs__row">
+                                                        <dt class="csa-defs__label">Fecha de finalización</dt>
+                                                        <dd class="csa-defs__value">{{ entity.finalizationDate|format_date('long', locale='es') }}</dd>
+                                                    </div>
+                                                {% endif %}
+                                            </dl>
+                                        </section>
 
-                                {% if  entity.totalincome %}
-                                    <strong>Ingresos:</strong>{{ entity.totalincome }} €
-                                    <ul>
-                                        <li><em>Ventas</em>: {{ entity.getIncomeFormDestination(1) }} €</li>
-                                        <li><em>Regalos</em>: {{ entity.getIncomeFormDestination(2) }} €</li>
-                                        <li><em>Sueldo</em>: {{ entity.getIncomeFormDestination(3) }} €</li>
-                                    </ul>
-                                {% endif %}
-                                {% if  entity.totalprofit %}
-                                    {% if entity.getProduct.getId in [6] %}
-                                        <strong>Beneficios:</strong> {{ entity.totalprofit + 3.5*entity.getTotalLayEggs/12 }} €
-                                        <br/>
-                                    {% else %}
-                                        <strong>Beneficios:</strong> {{ entity.totalprofit }} €<br/>
-                                    {% endif %}
-                                {% endif %}
-                                {% if  entity.balanceprice %}
-                                    <strong>Precio de equilibrio:</strong> {{ entity.balanceprice }} €/kg<br/>
-                                    {% if entity.getTotalWeightGifted %}
-                                        <strong>Precio de equilibrio incluyendo
-                                            regalos:</strong> {{ entity.getBalancePriceWithGifts }} €/kg<br/>
-                                    {% endif %}
-                                {% endif %}
-                                <strong>Notas: </strong>{{ entity.note }}
-                                </p>
+                                        {# ---- Económico ---- #}
+                                        <section class="csa-defs-section">
+                                            <h4 class="csa-defs-section__title">
+                                                <i class="csa-defs-section__icon csa-defs-section__icon--ochre fa fa-eur"></i>
+                                                Económico
+                                            </h4>
+                                            <dl class="csa-defs">
+                                                <div class="csa-defs__row">
+                                                    <dt class="csa-defs__label">Precio de compra</dt>
+                                                    <dd class="csa-defs__value">{{ entity.getPrice }} €</dd>
+                                                </div>
+                                                {% if entity.totalcost %}
+                                                    <div class="csa-defs__row">
+                                                        <dt class="csa-defs__label">Coste total</dt>
+                                                        <dd class="csa-defs__value">{{ entity.totalcost }} €</dd>
+                                                    </div>
+                                                {% endif %}
+                                                {% if entity.getProduct.getId == 6 %}
+                                                    <div class="csa-defs__row">
+                                                        <dt class="csa-defs__label">Coste por docena</dt>
+                                                        <dd class="csa-defs__value">{{ (12*entity.getEggCost)|number_format(2) }} €</dd>
+                                                    </div>
+                                                    <div class="csa-defs__row">
+                                                        <dt class="csa-defs__label">Producción de equilibrio</dt>
+                                                        <dd class="csa-defs__value">{{ entity.getBalaceProduction(dozen_price)|number_format(2) }} huevos</dd>
+                                                    </div>
+                                                {% endif %}
+                                                {% if entity.totalprofit %}
+                                                    <div class="csa-defs__row">
+                                                        <dt class="csa-defs__label">Beneficios</dt>
+                                                        <dd class="csa-defs__value">
+                                                            {% if entity.getProduct.getId == 6 %}
+                                                                {{ entity.totalprofit + 3.5*entity.getTotalLayEggs/12 }} €
+                                                            {% else %}
+                                                                {{ entity.totalprofit }} €
+                                                            {% endif %}
+                                                        </dd>
+                                                    </div>
+                                                {% endif %}
+                                                {% if entity.balanceprice %}
+                                                    <div class="csa-defs__row">
+                                                        <dt class="csa-defs__label">Precio de equilibrio</dt>
+                                                        <dd class="csa-defs__value">{{ entity.balanceprice }} €/kg</dd>
+                                                    </div>
+                                                    {% if entity.getTotalWeightGifted %}
+                                                        <div class="csa-defs__row">
+                                                            <dt class="csa-defs__label">Equilibrio con regalos</dt>
+                                                            <dd class="csa-defs__value">{{ entity.getBalancePriceWithGifts }} €/kg</dd>
+                                                        </div>
+                                                    {% endif %}
+                                                {% endif %}
+                                                {% if entity.totalincome %}
+                                                    <div class="csa-defs__row csa-defs__row--full">
+                                                        <dt class="csa-defs__label">Ingresos</dt>
+                                                        <dd class="csa-defs__value">
+                                                            <strong>{{ entity.totalincome }} €</strong>
+                                                            <ul class="csa-defs__sub">
+                                                                <li>Ventas: {{ entity.getIncomeFormDestination(1) }} €</li>
+                                                                <li>Regalos: {{ entity.getIncomeFormDestination(2) }} €</li>
+                                                                <li>Sueldo: {{ entity.getIncomeFormDestination(3) }} €</li>
+                                                            </ul>
+                                                        </dd>
+                                                    </div>
+                                                {% endif %}
+                                            </dl>
+                                        </section>
+
+                                        {# ---- Notas ---- #}
+                                        {% if entity.note %}
+                                            <section class="csa-defs-section">
+                                                <h4 class="csa-defs-section__title">
+                                                    <i class="csa-defs-section__icon csa-defs-section__icon--plum fa fa-sticky-note-o"></i>
+                                                    Notas
+                                                </h4>
+                                                <div class="csa-soft" style="line-height: var(--csa-lh-normal);">{{ entity.note }}</div>
+                                            </section>
+                                        {% endif %}
+
+                                    {% endblock %}
+                                {% endembed %}
                             </div>
                             {% if is_granted('ROLE_COOP') %}
                                 <div class="col-lg-4">
-                                    <div class="well">
-                                        <h4>Acciones</h4>
-                                        {% if entity.getBatchStatus.getId==1 %}
-                                            <p><a href="{{ path("sack_new",{'batch_id':entity.getId}) }}">
-                                                    <button class="btn btn-outline btn-default" type="button">Añadir
-                                                        saco de
-                                                        pienso o grano
-                                                    </button>
-                                                </a></p>
-                                            <p><a href="{{ path('batch_edit', { 'id': entity.id }) }}">
-                                                    <button class="btn btn-outline btn-success" type="button">Editar
-                                                        lote
-                                                    </button>
-                                                </a>
-                                                {% if entity.getProduct.getId in [6] %}
-                                                    <a href="{{ path('movement_new', {'batch_id': entity.id}) }}">
-                                                        <button class="btn btn-outline btn-primary" type="button">Mover
-                                                            lote
-                                                        </button>
-                                                    </a>
+                                    {% embed '_components/csa_card.html.twig' with { title: 'Acciones' } %}
+                                        {% block body %}
+                                            {% import '_macros/csa.html.twig' as csa %}
+                                            {% if entity.getBatchStatus.getId == 1 %}
+                                                <ul class="csa-list">
+                                                    <li class="csa-list__item">
+                                                        <a class="csa-list__link csa-list__link--primary" href="{{ path('sack_new', {'batch_id': entity.getId}) }}">
+                                                            <i class="csa-list__icon fa fa-plus"></i>
+                                                            <div class="csa-list__body">
+                                                                <div class="csa-list__primary">Añadir saco</div>
+                                                                <div class="csa-list__secondary">Pienso o grano para este lote</div>
+                                                            </div>
+                                                        </a>
+                                                    </li>
+                                                    <li class="csa-list__item">
+                                                        <a class="csa-list__link" href="{{ path('batch_edit', {'id': entity.id}) }}">
+                                                            <i class="csa-list__icon fa fa-pencil"></i>
+                                                            <div class="csa-list__body">
+                                                                <div class="csa-list__primary">Editar lote</div>
+                                                                <div class="csa-list__secondary">Modificar datos del lote</div>
+                                                            </div>
+                                                        </a>
+                                                    </li>
+                                                    {% if entity.getProduct.getId == 6 %}
+                                                        <li class="csa-list__item">
+                                                            <a class="csa-list__link" href="{{ path('movement_new', {'batch_id': entity.id}) }}">
+                                                                <i class="csa-list__icon fa fa-arrows"></i>
+                                                                <div class="csa-list__body">
+                                                                    <div class="csa-list__primary">Mover lote</div>
+                                                                    <div class="csa-list__secondary">Cambiar de sector</div>
+                                                                </div>
+                                                            </a>
+                                                        </li>
+                                                    {% endif %}
+                                                    {% if entity.canClose %}
+                                                        <li class="csa-list__item">
+                                                            <a class="csa-list__link csa-list__link--danger" href="{{ path('batch_close', {'id': entity.id}) }}">
+                                                                <i class="csa-list__icon fa fa-check"></i>
+                                                                <div class="csa-list__body">
+                                                                    <div class="csa-list__primary">Finalizar lote</div>
+                                                                    <div class="csa-list__secondary">Cerrar el ciclo del lote</div>
+                                                                </div>
+                                                            </a>
+                                                        </li>
+                                                    {% endif %}
+                                                </ul>
+                                                {% if not entity.canClose %}
+                                                    <div style="margin-top: var(--csa-sp-4);">
+                                                        {{ csa.callout('No se puede finalizar el lote hasta que todos los animales estén clasificados.', 'danger', 'exclamation-triangle') }}
+                                                    </div>
                                                 {% endif %}
-                                            </p>
-
-                                            <p>
-                                            {% if entity.canClose %}
-                                                <a href="{{ path('batch_close', { 'id': entity.id }) }}">
-                                                    <button class="btn btn-outline btn-danger" type="button">Finalizar
-                                                        lote
-                                                    </button>
-                                                </a>
                                             {% else %}
-                                                <div class="alert alert-danger">
-                                                    No se puede finalizar un lote hasta que todos sus animales hayan
-                                                    sido
-                                                    clasificados
-                                                </div>
+                                                {{ csa.callout('Lote finalizado. Solo se puede reactivar.', 'warning') }}
+                                                <ul class="csa-list" style="margin-top: var(--csa-sp-4);">
+                                                    <li class="csa-list__item">
+                                                        <a class="csa-list__link" href="{{ path('batch_reactivate', {'id': entity.id}) }}">
+                                                            <i class="csa-list__icon fa fa-undo"></i>
+                                                            <div class="csa-list__body">
+                                                                <div class="csa-list__primary">Reactivar lote</div>
+                                                                <div class="csa-list__secondary">Volver a poner activo</div>
+                                                            </div>
+                                                        </a>
+                                                    </li>
+                                                </ul>
                                             {% endif %}
-                                            </p>
-                                        {% else %}
-                                            <div class="alert alert-warning">
-                                                El lote está finalizado, no se puede realizar ninguna acción salvo
-                                                reactivarlo.
+                                        {% endblock %}
+                                    {% endembed %}
+                                </div>
+                            {% endif %}
+                            {% if entity.getProduct.getId == 6 %}
+                                <div class="col-lg-12" style="clear: both; margin-top: var(--csa-sp-8);">
+                                    <div class="csa-stack-lg">
+
+                                    {% embed '_components/csa_card.html.twig' with { title: 'Gráficas', subtitle: 'Evolución de la puesta y de los gastos / ingresos del lote.' } %}
+                                        {% block body %}
+                                            <div id="container" style="width: 100%; height: 400px;"></div>
+                                            <div id="container2" style="width: 100%; height: 400px; margin-top: var(--csa-sp-6);"></div>
+                                            <div id="container3" style="width: 100%; height: 600px; margin-top: var(--csa-sp-6);"></div>
+                                        {% endblock %}
+                                    {% endembed %}
+
+                                    {% embed '_components/csa_card.html.twig' with { title: 'Resumen mensual', subtitle: 'Ingresos, gastos y consumo de pienso/grano por mes.' } %}
+                                        {% block body %}
+                                            <div class="csa-table-wrap">
+                                                <table class="csa-table" data-paginate>
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Fecha</th>
+                                                            <th>Ingresos</th>
+                                                            <th>Gastos</th>
+                                                            <th>Beneficios</th>
+                                                            <th>Pienso (kg)</th>
+                                                            <th>Grano (kg)</th>
+                                                            <th>Pienso / grano</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {% for data in incoming_expenses %}
+                                                            <tr>
+                                                                <td>{{ data[0].month }} · {{ data[0].year_date }}</td>
+                                                                <td>{{ (data[1].total/3)|round(2) }} €</td>
+                                                                <td>{{ data[0].total }} €</td>
+                                                                <td>{{ (data[1].total/3)|round(2) - data[0].total }} €</td>
+                                                                <td>{{ data[3] }}</td>
+                                                                <td>{{ data[2] }}</td>
+                                                                <td>{{ (data[3]*100/(data[3]+data[2]))|round(0) }} / {{ (data[2]*100/(data[3]+data[2]))|round(0) }}</td>
+                                                            </tr>
+                                                        {% endfor %}
+                                                    </tbody>
+                                                </table>
                                             </div>
-                                            <p><a href="{{ path('batch_reactivate', { 'id': entity.id }) }}">
-                                                    <button class="btn btn-outline btn-warning" type="button">Reactivar
-                                                        lote
-                                                    </button>
-                                                </a></p>
-                                        {% endif %}
+                                        {% endblock %}
+                                    {% endembed %}
+
+                                    {% embed '_components/csa_card.html.twig' with { title: 'Resumen desde la entrada', subtitle: 'Datos agrupados por intervalos desde la fecha de entrada del lote.' } %}
+                                        {% block body %}
+                                            <div class="csa-table-wrap">
+                                                <table class="csa-table" data-paginate>
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Período</th>
+                                                            <th>Ingresos</th>
+                                                            <th>Gastos</th>
+                                                            <th>Beneficios</th>
+                                                            <th>Beneficio acum.</th>
+                                                            <th>Huevos acum.</th>
+                                                            <th>Pienso (kg)</th>
+                                                            <th>Grano (kg)</th>
+                                                            <th>Pienso / grano</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {% set accumulate = 0 %}
+                                                        {% set accumulate_eggs = 0 %}
+                                                        {% for data in relative_incoming_expenses %}
+                                                            {% set accumulate = accumulate + (data[0].total/3)|round(2) - data[1].total %}
+                                                            {% set accumulate_eggs = accumulate_eggs + data[0].total %}
+                                                            <tr>
+                                                                <td>Día {{ 1 + loop.index0 * days }} al {{ loop.index * days }}</td>
+                                                                <td>{{ (data[0].total/3)|round(2) }} € · {{ data[0].total }} huevos</td>
+                                                                <td>{{ data[1].total }} €</td>
+                                                                <td>{{ (data[0].total/3)|round(2) - data[1].total }} €</td>
+                                                                <td>{{ accumulate }} €</td>
+                                                                <td>{{ accumulate_eggs }}</td>
+                                                                <td>{{ data[3] }}</td>
+                                                                <td>{{ data[2] }}</td>
+                                                                <td>
+                                                                    {% if (data[3] + data[2]) > 0 %}
+                                                                        {{ (data[3]*100/(data[3]+data[2]))|round(0) }} / {{ (data[2]*100/(data[3]+data[2]))|round(0) }}
+                                                                    {% else %}
+                                                                        <span class="csa-muted">—</span>
+                                                                    {% endif %}
+                                                                </td>
+                                                            </tr>
+                                                        {% endfor %}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        {% endblock %}
+                                    {% endembed %}
 
                                     </div>
                                 </div>
                             {% endif %}
-                            <div class="col-lg-12">
-
-
-                                {% if entity.getProduct.getId in [2,3] %}
-
-                                {% elseif entity.getProduct.getId in [6] %}
-                                    <h4>Gráficas</h4>
-                                    {#<div id="layweekchart" style="position: relative;height: 250px;"></div>#}
-                                    <div id="container" style="width:100%; height:400px;"></div>
-                                    <div id="container2" style="width:100%; height:400px;"></div>
-                                    <div id="container3" style="width:100%; height:600px;"></div>
-                                    <h4>Resumen de consumos</h4>
-                                    <div class="table-responsive">
-                                        <table id="table_list"
-                                               class="table table-striped table-bordered table-hover dataTable no-footer "
-                                               aria-describedby="dataTables-example_info">
-                                            <thead>
-                                            <tr>
-                                                <th>Fecha</th>
-                                                <th>Ingresos</th>
-                                                <th>Gastos</th>
-                                                <th>Beneficios</th>
-                                                <th>Pienso (Kg)</th>
-                                                <th>Grano (Kg)</th>
-                                                <th>Relación pienso/grano</th>
-                                            </tr>
-                                            </thead>
-                                            <tbody>
-                                            {% for data in incoming_expenses %}
-                                                <tr>
-                                                    <td>{{ data[0].month }} - {{ data[0].year_date }}</td>
-                                                    <td>{{ (data[1].total/3)|round(2) }} €</td>
-                                                    <td>{{ data[0].total }}</td>
-                                                    <td>{{ (data[1].total/3)|round(2) - data[0].total }} €</td>
-                                                    <td>{{ data[3] }}</td>
-                                                    <td>{{ data[2] }}</td>
-                                                    <td>{{ (data[3]*100/(data[3]+data[2]))|round(0) }} /
-                                                        {{ (data[2]*100/(data[3]+data[2]))|round(0) }}</td>
-                                                </tr>
-
-                                            {% endfor %}
-
-                                            </tbody>
-                                        </table>
-                                    </div>
-
-
-                                    <h4>Resumen de consumos relativos a la fecha de entrada</h4>
-                                    <div class="table-responsive">
-                                        <table id="table_list"
-                                               class="table table-striped table-bordered table-hover dataTable no-footer "
-                                               aria-describedby="dataTables-example_info">
-                                            <thead>
-                                            <tr>
-                                                <th>Fecha</th>
-                                                <th>Ingresos</th>
-                                                <th>Gastos</th>
-                                                <th>Beneficios</th>
-                                                <th>Beneficio acumulado</th>
-                                                <th>Huevos acumulados</th>
-                                                <th>Pienso (Kg)</th>
-                                                <th>Grano (Kg)</th>
-                                                <th>Relación pienso/grano</th>
-                                            </tr>
-                                            </thead>
-                                            <tbody>
-                                            {% set accumulate=0 %}
-                                            {% set accumulate_eggs=0 %}
-                                            {% for data in  relative_incoming_expenses %}
-
-                                                <tr>
-                                                    <td>Día {{ 1+loop.index0*days }} al {{ loop.index*days }}</td>
-                                                    <td>{{ (data[0].total/3)|round(2) }} € | {{ (data[0].total) }} huevos</td>
-                                                    <td>{{ data[1].total }}</td>
-                                                    <td>{{ (data[0].total/3)|round(2) - data[1].total }} €</td>
-                                                    {%  set accumulate= accumulate+(data[0].total/3)|round(2) - data[1].total %}
-                                                    {%  set accumulate_eggs= accumulate_eggs+data[0].total %}
-                                                    <td>{{ accumulate }} €</td>
-                                                    <td>{{ accumulate_eggs }}</td>
-                                                    <td>{{ data[3] }}</td>
-                                                    <td>{{ data[2] }}</td>
-                                                    <td>{% if  (data[3]+data[2])>0%}
-                                                        {{ (data[3]*100/(data[3]+data[2]))|round(0) }} /
-                                                        {{ (data[2]*100/(data[3]+data[2]))|round(0) }}
-                                                    {% else %}
-                                                        NULL
-                                                        {% endif %}
-                                                    </td>
-                                                </tr>
-
-                                            {% endfor %}
-
-                                            </tbody>
-                                        </table>
-                                    </div>
-
-                                {% endif %}
-                            </div>
 
                         </div>
                         <div id="consum" class="tab-pane fade">
 
-                            <h4>Consumo de grano y pienso</h4>
-
-                            <p><strong>Total de pienso consumido:</strong> {{ entity.getfeedamount }} kg
-                            <ul>
-                                <li><strong>Consumo medio diario por
-                                        animal: </strong> {{ average_consumption|number_format(0) }} g
-                                </li>
-                                {% if entity.getProduct.getId in [2,3] %}
-                                    <li><strong>Índice de conversión del
-                                            lote: </strong> {{ entity.getFeedConversion|number_format(2) }} kg de
-                                        comida
-                                        por cada kg en canal
-                                    </li>
-                                {% elseif entity.getProduct.getId in [6] %}
-                                    <li><strong>Total de huevos puestos:</strong> {{ entity.getTotalLayEggs }}</li>
-                                    <li><strong>Coste por huevo del
-                                            lote:</strong> {{ entity.getEggCost|number_format(2) }} € por huevo
-                                        ({{ 12*entity.getEggCost|number_format(2) }} € por docena)
-                                    </li>
-                                    <li><strong>Producción de
-                                            equilibrio:</strong> {{ entity.getBalaceProduction(dozen_price)|number_format(2) }}
-                                        huevos
-                                    </li>
-                                {% endif %}
-                            </ul>
-                            </p>
-                            <ul>
-                                {% for sack in entity.getSacks %}
-                                    <li>{{ sack.getDate|format_date('short', locale='es') }} - {{ sack.getWeight }}
-                                        kg
-                                        de {{ sack.getProduct }} - {{ sack.getTotalPrice }} € <a
-                                                href="{{ path('sack_fast_delete', {'id': sack.getId}) }}">Quitar</a>
-                                    </li>
-                                {% else %}
-                                    <li>No se ha asignado ningún saco</li>
-                                {% endfor %}
-                            </ul>
+                            {% embed '_components/csa_card.html.twig' with { title: 'Sacos asignados al lote', subtitle: 'Pienso y grano consumido por este lote.' } %}
+                                {% block body %}
+                                    {% if entity.getSacks|length > 0 %}
+                                        <div class="csa-table-wrap">
+                                            <table class="csa-table" data-paginate>
+                                                <thead>
+                                                    <tr>
+                                                        <th>Fecha</th>
+                                                        <th>Producto</th>
+                                                        <th>Peso</th>
+                                                        <th>Precio</th>
+                                                        {% if is_granted('ROLE_COOP') %}
+                                                            <th class="csa-table__actions">Acciones</th>
+                                                        {% endif %}
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {% for sack in entity.getSacks %}
+                                                        <tr>
+                                                            <td>{{ sack.getDate|format_date('medium', locale='es') }}</td>
+                                                            <td>{{ sack.getProduct }}</td>
+                                                            <td>{{ sack.getWeight }} kg</td>
+                                                            <td>{{ sack.getTotalPrice }} €</td>
+                                                            {% if is_granted('ROLE_COOP') %}
+                                                                <td class="csa-table__actions">
+                                                                    <a href="{{ path('sack_fast_delete', {'id': sack.getId}) }}" class="csa-table__action--danger" title="Quitar saco" aria-label="Quitar saco"><i class="fa fa-trash"></i></a>
+                                                                </td>
+                                                            {% endif %}
+                                                        </tr>
+                                                    {% endfor %}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    {% else %}
+                                        <div class="csa-soft" style="text-align: center; padding: var(--csa-sp-6) 0;">
+                                            No se ha asignado ningún saco a este lote todavía.
+                                        </div>
+                                    {% endif %}
+                                {% endblock %}
+                            {% endembed %}
                         </div>
                         <div id="animals" class="tab-pane fade">
-
-
-                            <h4>Animales del lote</h4>
-
-                            <div class="table-responsive">
-                                <table id="table_list"
-                                       class="table table-striped table-bordered table-hover dataTable no-footer"
-                                       aria-describedby="dataTables-example_info">
-                                    <thead>
-                                    <tr>
-                                        <th>Orden</th>
-                                        <th>Estado</th>
-                                        <th>Destino</th>
-                                        <th>Fecha de sacrifio/muerte</th>
-                                        <th>Peso en vivo (kg)</th>
-                                        <th>Peso de canal (kg)</th>
-                                        <th>Precio de venta (€/kg)</th>
-                                        <th>Notas</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                    </thead>
-                                    <tbody>
-                                    {% for fowl in entity.fowls %}
-                                        <tr>
-                                            <td>{{ loop.index }}</td>
-                                            <td>{{ fowl.fowlstatus }}</a></td>
-                                            <td>{{ fowl.fowldestination }}</a></td>
-                                            <td>{% if fowl.putdowndate %}{{ fowl.putdowndate|format_date('long', locale='es') }}{% endif %}</td>
-                                            <td>{{ fowl.putdownweight }}</td>
-                                            <td>{{ fowl.carcassweight }}</td>
-                                            <td>{{ fowl.saleprice }}</td>
-                                            <td>{{ fowl.note }}</td>
-                                            <td>
-                                                <ul class="list-unstyled">
-                                                    {% if entity.getBatchStatus.getId==1 %}
-                                                        <li>
-                                                            <a href="{{ path('fowl_edit', { 'id': fowl.id }) }}">editar</a>
-                                                        </li>
-                                                    {% endif %}
-                                                </ul>
-                                            </td>
-                                        </tr>
-                                    {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
+                            {% embed '_components/csa_card.html.twig' with { title: 'Animales del lote', subtitle: 'Estado individual de cada animal del lote.' } %}
+                                {% block body %}
+                                    {% if entity.fowls|length > 0 %}
+                                        <div class="csa-table-wrap">
+                                            <table class="csa-table" data-paginate>
+                                                <thead>
+                                                    <tr>
+                                                        <th>#</th>
+                                                        <th>Estado</th>
+                                                        <th>Destino</th>
+                                                        <th>Fecha sacrificio/muerte</th>
+                                                        <th>Peso vivo</th>
+                                                        <th>Peso canal</th>
+                                                        <th>Precio venta</th>
+                                                        <th>Notas</th>
+                                                        {% if entity.getBatchStatus.getId == 1 %}
+                                                            <th class="csa-table__actions">Acciones</th>
+                                                        {% endif %}
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {% for fowl in entity.fowls %}
+                                                        <tr>
+                                                            <td>{{ loop.index }}</td>
+                                                            <td>{{ fowl.fowlstatus }}</td>
+                                                            <td>{{ fowl.fowldestination }}</td>
+                                                            <td>{% if fowl.putdowndate %}{{ fowl.putdowndate|format_date('long', locale='es') }}{% endif %}</td>
+                                                            <td>{% if fowl.putdownweight %}{{ fowl.putdownweight }} kg{% endif %}</td>
+                                                            <td>{% if fowl.carcassweight %}{{ fowl.carcassweight }} kg{% endif %}</td>
+                                                            <td>{% if fowl.saleprice %}{{ fowl.saleprice }} €/kg{% endif %}</td>
+                                                            <td>{{ fowl.note }}</td>
+                                                            {% if entity.getBatchStatus.getId == 1 %}
+                                                                <td class="csa-table__actions">
+                                                                    <a href="{{ path('fowl_edit', {'id': fowl.id}) }}" title="Editar animal" aria-label="Editar animal"><i class="fa fa-pencil"></i></a>
+                                                                </td>
+                                                            {% endif %}
+                                                        </tr>
+                                                    {% endfor %}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    {% else %}
+                                        <div class="csa-soft" style="text-align: center; padding: var(--csa-sp-6) 0;">
+                                            No hay animales registrados en este lote.
+                                        </div>
+                                    {% endif %}
+                                {% endblock %}
+                            {% endembed %}
                         </div>
                         <div id="movements" class="tab-pane fade">
-                            <h4>Movimientos del lote</h4>
-
-                            <table id="table_list"
-                                   class="table table-striped table-bordered table-hover dataTable no-footer"
-                                   aria-describedby="dataTables-example_info">
-                                <thead>
-                                <tr>
-                                    <th>Sector</th>
-                                    <th>Fecha inicio</th>
-                                    <th>Tiempo estancia</th>
-                                </tr>
-                                </thead>
-                                <tbody>
-                                {% for movement in movements %}
-                                    <tr>
-                                        <td>{{ movement.sector }}</td>
-                                        <td>{{ movement.date|format_date('long', locale='es') }}</td>
-                                        <td>{% if movement.amount %}{{ movement.amount|abs }} días{% else %}Activo actualmente{% endif %}</td>
-                                    </tr>
-                                {% endfor %}
-                                </tbody>
-                            </table>
+                            {% embed '_components/csa_card.html.twig' with { title: 'Movimientos del lote', subtitle: 'Histórico de cambios de sector del lote.' } %}
+                                {% block body %}
+                                    {% import '_macros/csa.html.twig' as csa %}
+                                    {% if movements|length > 0 %}
+                                        <div class="csa-table-wrap">
+                                            <table class="csa-table" data-paginate>
+                                                <thead>
+                                                    <tr>
+                                                        <th>Sector</th>
+                                                        <th>Fecha inicio</th>
+                                                        <th>Tiempo estancia</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {% for movement in movements %}
+                                                        <tr>
+                                                            <td>{{ movement.sector }}</td>
+                                                            <td>{{ movement.date|format_date('long', locale='es') }}</td>
+                                                            <td>
+                                                                {% if movement.amount %}
+                                                                    {{ movement.amount|abs }} días
+                                                                {% else %}
+                                                                    {{ csa.badge('Activo', 'green') }}
+                                                                {% endif %}
+                                                            </td>
+                                                        </tr>
+                                                    {% endfor %}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    {% else %}
+                                        <div class="csa-soft" style="text-align: center; padding: var(--csa-sp-6) 0;">
+                                            No hay movimientos registrados.
+                                        </div>
+                                    {% endif %}
+                                {% endblock %}
+                            {% endembed %}
                         </div>
 
                     </div>
-                </div>
-                <div class="panel-footer">
-                    <ul class="list-inline">
-                        <li>
-                            <a href="{{ path('batch') }}">
-                                Ir al listado
-                            </a>
-                        </li>
-                        <li>
-                            <a href="{{ path('batch_edit', { 'id': entity.id }) }}">
-                                Editar
-                            </a>
-                        </li>
-                        {% if entity.getProduct.getId in [2,3] %}
-                            <li><a href="{{ path('batch_analyses', {'product_id': entity.product.id}) }}">Ver
-                                    estadísticas</a></li>
-                        {% elseif entity.getProduct.getId in [6] %}
-                            <li><a href="{{ path('hens_analyses') }}">Análisis comparativo puesta</a></li>
-                        {% endif %}
-                        {#<li>{{ form(delete_form) }}</li>#}
-                    </ul>
-                </div>
-            </div>
-            <!-- /.col-lg-12 -->
-        </div>
-    </div>
 {% endblock %}
 
 
-{% block graph_js %}
+{% block more_js %}
+    {{ parent() }}
+    <script src="{{ asset('bundles/app/js/morris/raphael-min.js') }}"></script>
+    <script src="{{ asset('bundles/app/js/morris/morris.min.js') }}"></script>
+    <script src="https://code.highcharts.com/highcharts.src.js"></script>
     <script>
         /* new Morris.Line({
          // ID of the element in which to draw the chart.

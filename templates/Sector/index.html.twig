@@ -1,44 +1,76 @@
-    {% extends 'layout_list.html.twig' %}
+{# ============================================================
+ # Listado de sectores (Sector) — shell csa.
+ # ============================================================
+ # Sector = unidad concreta de cultivo dentro de una Zone. Es
+ # donde se siembra y se trabaja.
+ # ============================================================ #}
 
-    {% block title_wrapper %}Listado {% endblock %}
-    {% block main -%}
-    <h1>Sector list</h1>
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
 
-    <table class="records_list">
-        <thead>
-        <tr>
-                <th>Id</th>
-                <th>Name</th>
-            <th>Actions</th>
-        </tr>
-        </thead>
-        <tbody>
-        {% for entity in entities %}
-        <tr>
-                    <td>
-                        <a href="{{ path('sector_show', { 'id': entity.id }) }}">{{ entity.id }}</a>
-                    </td>
-                    <td>{{ entity.name }}</td>
-                    <td>
-                <ul>
-                    <li>
-                        <a href="{{ path('sector_show', { 'id': entity.id }) }}">show</a>
-                    </li>
-                    <li>
-                        <a href="{{ path('sector_edit', { 'id': entity.id }) }}">edit</a>
-                    </li>
-                </ul>
-                    </td>
-        </tr>
-        {% endfor %}
-        </tbody>
-    </table>
+{% block title %}Sectores{% endblock %}
 
-            <ul>
-            <li>
-                <a href="{{ path('sector_new') }}">
-                    Create a new entry
-                </a>
-            </li>
-        </ul>
-        {% endblock %}
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span>Granja</span>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Sectores</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Granja · Huerta',
+        'Sectores',
+        'Unidades concretas de cultivo dentro de cada zona. Es donde se siembra y se trabaja.'
+    ) }}
+
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-5);">
+        <div></div>
+        <div class="csa-row">
+            {{ csa.btn('Nuevo sector', { variant: 'primary', href: path('sector_new'), icon: 'fa-plus' }) }}
+        </div>
+    </div>
+
+    <div class="csa-table-wrap">
+        <table class="csa-table" data-paginate>
+            <thead>
+                <tr>
+                    <th>Sector</th>
+                    <th>Zona</th>
+                    <th class="csa-table__col-tight">Cultivos</th>
+                    <th class="csa-table__actions">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entity in entities %}
+                    <tr>
+                        <td>
+                            <a class="csa-table__primary" href="{{ path('sector_show', { id: entity.id }) }}">{{ entity.name }}</a>
+                        </td>
+                        <td>
+                            {% if entity.zone %}
+                                <a href="{{ path('zone_show', { id: entity.zone.id }) }}">{{ entity.zone.name }}</a>
+                            {% else %}
+                                <span class="csa-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="csa-table__col-tight">{{ entity.cropWorkings|length }}</td>
+                        <td class="csa-table__actions">
+                            <a href="{{ path('sector_show', { id: entity.id }) }}" title="Ver" aria-label="Ver"><i class="fa fa-eye"></i></a>
+                            <a href="{{ path('sector_edit', { id: entity.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="4" class="csa-muted" style="text-align: center; padding: var(--csa-sp-8);">
+                            No hay sectores registrados.
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+{% endblock %}

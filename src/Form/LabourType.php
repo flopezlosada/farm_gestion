@@ -16,8 +16,6 @@ class LabourType extends AbstractType
     {
         $builder
             ->add('name')
-            ->add('created')
-            ->add('updated')
         ;
     }
     

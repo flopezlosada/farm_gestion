@@ -43,7 +43,7 @@ class SaleController extends AbstractAppController
         $form = $this->createCreateForm($entity);
         $form->handleRequest($request);
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $em = $this->getDoctrine()->getManager();
             $entity->setWeek(date('W', strtotime($entity->getSaleDate())));
             $entity->setSaleDate(new \DateTime($entity->getSaleDate()));
@@ -183,7 +183,7 @@ class SaleController extends AbstractAppController
         $editForm = $this->createEditForm($entity);
         $editForm->handleRequest($request);
 
-        if ($editForm->isValid()) {
+        if ($editForm->isSubmitted() && $editForm->isValid()) {
             $entity->setTotalPrice($entity->getSinglePrice() * $entity->getAmount());
             $entity->setSaleDate(new \DateTime($entity->getSaleDate()));
             $em->flush();
@@ -207,7 +207,7 @@ class SaleController extends AbstractAppController
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\Sale::class)->find($id);
 

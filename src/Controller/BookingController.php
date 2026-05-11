@@ -62,10 +62,22 @@ class BookingController extends AbstractAppController
     #[Route("/{id}/edit", name: "booking_edit", methods: ["GET","POST"])]
     public function edit(Request $request, Booking $booking): Response
     {
+        if ($booking->getBeginAt() instanceof \DateTimeInterface) {
+            $booking->setBeginAt($booking->getBeginAt()->format('Y-m-d'));
+        }
+        if ($booking->getEndAt() instanceof \DateTimeInterface) {
+            $booking->setEndAt($booking->getEndAt()->format('Y-m-d'));
+        }
         $form = $this->createForm(BookingType::class, $booking);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
+            if ($booking->getBeginAt()) {
+                $booking->setBeginAt(new \DateTime($booking->getBeginAt()));
+            }
+            if ($booking->getEndAt()) {
+                $booking->setEndAt(new \DateTime($booking->getEndAt()));
+            }
             $this->getDoctrine()->getManager()->flush();
 
             return $this->redirectToRoute('booking_index');

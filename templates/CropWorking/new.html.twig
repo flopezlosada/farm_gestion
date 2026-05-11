@@ -1,101 +1,95 @@
-{% extends 'layout_crud.html.twig' %}
-{% form_theme form _self %}
-{% block checkbox_widget %}
-    <div class="checkbox-multiple">
-        <input type="checkbox" {{ block('widget_attributes') }}{% if value is defined %} value="{{ value }}"{% endif %}{% if checked %} checked="checked"{% endif %} />
-        <label>{{ label }}</label>
-    </div>
+{# ============================================================
+ # Nuevo cultivo (CropWorking) — migrado al shell csa.
+ # ============================================================
+ # Si llega con crop_id en la URL, el controller pre-rellena el
+ # entity.crop antes de renderizar — el dropdown aparece con el
+ # cultivo ya seleccionado.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% form_theme form 'form_div_layout.html.twig' %}
+
+{% block title %}Nuevo cultivo{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('cropworking') }}">Cultivos</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Nuevo</span>
 {% endblock %}
-{%- block choice_widget_expanded -%}
-    <div {{ block('widget_container_attributes') }}>
-        {%- for child in form %}
-            {{- form_widget(child) -}}
-        {% endfor -%}
-    </div>
-{%- endblock choice_widget_expanded -%}
 
+{% block csa_main %}
 
-    {% block title_wrapper %}Añadir {% endblock %}
-    {% block main -%}
-        <div class="panel panel-default">
+    {{ csa.page_header(
+        'Granja · Cultivo',
+        'Nuevo cultivo',
+        'Abre un ciclo de cultivo nuevo. Después podrás registrar siembras, sectores y producciones.'
+    ) }}
 
-            <div class="panel-body">
-                {{ form_start(form, {'action': path('cropworking_create'),'method': 'post','attr': {'role': 'form' }}) }}
-                <div class='row'>
-                    <div class="col-lg-8">
-                        <div class="form-group">
-                            {{ form_errors(form.name) }}
-                            <label>{{ form_label(form.name) }}</label>
-                            {{ form_widget(form.name,{'attr':{'class':'form-control','placeholder':'Descripción' }}) }}
-                        </div>
-                        <div class="form-group">
-                            {{ form_errors(form.crop) }}
-                            <label>{{ form_label(form.crop) }}</label>
-                            {{ form_widget(form.crop,{'attr':{'class':'form-control','placeholder':'Cultivo' }}) }}
-                        </div>
-                        <div class="form-group">
-                            {{ form_errors(form.surface) }}
-                            <label>{{ form_label(form.surface) }}</label>
-                            {{ form_widget(form.surface,{'attr':{'class':'form-control','placeholder':'Superficie a cultivar' }}) }}
-                        </div>
-                        <div class="form-group">
-                            {{ form_errors(form.estimated_production) }}
-                            <label>{{ form_label(form.estimated_production) }}</label>
-                            {{ form_widget(form.estimated_production,{'attr':{'class':'form-control','placeholder':'Producción estimada' }}) }}
-                        </div>
-                        <div class="form-group">
-                            {{ form_errors(form.planting_pattern) }}
-                            <label>{{ form_label(form.planting_pattern) }}</label>
-                            {{ form_widget(form.planting_pattern,{'attr':{'class':'form-control','placeholder':'Marco de plantación' }}) }}
-                        </div>
-                        <div class="form-group">
-                            {{ form_errors(form.content) }}
-                            <label>{{ form_label(form.content) }}</label>
-                            {{ form_widget(form.content,{'attr':{'class':'tinymce','placeholder':'Descripción' }}) }}
-                        </div>
-                       {# <div class="form-group">
-                            {{ form_errors(form.zone) }}
-                            <label>{{ form_label(form.zone) }}</label>
-                            {{ form_widget(form.zone,{'attr':{'class':'form-control' }}) }}
-                        </div>
-                        <div class="form-group">
-                            {{ form_errors(form.sectors) }}
-                            <label>{{ form_label(form.sectors) }}</label>
-                            {{ form_widget(form.sectors,{'attr':{'class':'form-control' }}) }}
-                        </div>#}
+    {{ form_start(form, {
+        'action': path('cropworking_create'),
+        'method': 'post',
+        'attr': { 'role': 'form', 'class': 'csa-form-narrow' }
+    }) }}
+
+        <div class="csa-stack-lg">
+
+            {# ---- 1. Identidad ---- #}
+            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Identidad', subtitle: 'Cultivo y descripción del ciclo.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.crop, 'Cultivo') }}
+                        {{ csa.field(form.name, 'Descripción', { hint: 'p. ej. "Acelga 2026"' }) }}
                     </div>
-                </div>
-                {{ form_widget(form.submit,{'attr':{'class':'btn btn-default'}}) }}
-                {{ form_rest(form) }}
-                {{ form_end(form, {'render_rest': false}) }}
-                <ul class="record_actions">
-                    <li>
-                        <a href="{{ path('cropworking') }}">
-                            Back to the list
-                        </a>
-                    </li>
-                </ul>
-            </div>
-        </div>
-        {{ tinymce_init() }}
-    {% endblock %}
-     {% block specific_js %}
-         {#<script>
-             $(function () {
-                 $("#app_cropworking_zone").change(function () {
-                     var data = {
-                         zone_id: $(this).val()
-                     };
+                {% endblock %}
+            {% endembed %}
 
-                     $.ajax({
-                         type: 'post',
-                         url: '{{ path("select_sector") }}',
-                         data: data,
-                         success: function (data) {
-                             $('#app_cropworking_sectors').html(data);
-                         }
-                     });
-                 });
-             });
-         </script>#}
-     {% endblock %}
+            {# ---- 2. Producción ---- #}
+            {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Producción', subtitle: 'Superficie, estimación y marco de plantación.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.surface, 'Superficie de cultivo', { hint: 'm²' }) }}
+                        {{ csa.field(form.estimated_production, 'Producción estimada', { hint: 'kg' }) }}
+                        {{ csa.field(form.planting_pattern, 'Marco de plantación', { hint: 'cm x cm', full: true }) }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            {# ---- 3. Observaciones ---- #}
+            {% embed '_components/csa_form_section.html.twig' with { num: '3', title: 'Observaciones', subtitle: 'Información libre sobre el cultivo.' } %}
+                {% block body %}
+                    {% embed '_components/csa_field_block.html.twig' with { label: 'Observaciones', hint: 'opcional', full: true } %}
+                        {% block body %}
+                            {{ form_widget(form.content, { attr: { class: 'tinymce' } }) }}
+                        {% endblock %}
+                    {% endembed %}
+                {% endblock %}
+            {% endembed %}
+
+            {# ---- Footer de acciones ---- #}
+            <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                <div></div>
+                <div class="csa-row">
+                    {{ csa.btn('Cancelar', { variant: 'ghost', href: path('cropworking') }) }}
+                    {{ form_widget(form.submit, {
+                        label: 'Crear cultivo',
+                        attr: { class: 'csa-btn csa-btn--primary' }
+                    }) }}
+                </div>
+            </div>
+
+        </div>
+
+        {{ form_rest(form) }}
+    {{ form_end(form, { render_rest: false }) }}
+
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    {{ tinymce_init() }}
+{% endblock %}

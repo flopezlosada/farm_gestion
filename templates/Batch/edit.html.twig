@@ -1,108 +1,111 @@
-{% extends 'layout_crud.html.twig' %}
-{% block title_wrapper %}Editar lote de animales{% endblock %}
-{% block main -%}
-    <div class="panel panel-default">
-        <div class="panel-heading">
-            {{ entity }}
-        </div>
-        <div class="panel-body">
-            {{ form_start(edit_form, {'action': path('batch_update',{'id':entity.id}), 'method': 'put','attr': {'role': 'form' }}
-            ) }}
-            <div class="row">
-                <div class="col-lg-6">
-                    <div class="form-group">
-                        {{ form_errors(edit_form.purchase_date) }}
-                        <label>{{ form_label(edit_form.purchase_date) }}</label>
-                        {{ form_widget(edit_form.purchase_date,{'attr':{'placeholder':'Fecha de compra' }}) }}
-                    </div>
-                    <div class="form-group">
-                        {{ form_errors(edit_form.receipt_date) }}
-                        <label>{{ form_label(edit_form.receipt_date) }}</label>
-                        {{ form_widget(edit_form.receipt_date,{'attr':{'placeholder':'Fecha de recepción' }}) }}
-                    </div>
+{# ============================================================
+ # Editar lote — migrado al shell csa.
+ # ============================================================
+ # form_theme 'form_div_layout.html.twig' evita que Bootstrap 3
+ # inyecte clases en los widgets. Los datepickers conservan sus
+ # clases (datepicker, datepicker2, datepicker3) para que el JS
+ # de pickadate los enganche.
+ # ============================================================ #}
 
-                    {% if entity.getBatchStatus.getId==2 %}
-                        <div class="form-group">
-                            {{ form_errors(edit_form.finalization_date) }}
-                            <label>{{ form_label(edit_form.finalization_date) }}</label>
-                            {{ form_widget(edit_form.finalization_date,{'attr':{'placeholder':'Fecha de finalización' }}) }}
-                        </div>
-                    {% endif %}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% form_theme edit_form 'form_div_layout.html.twig' %}
 
-                    <div class="form-group">
-                        {{ form_errors(edit_form.days_of_life) }}
-                        <label>{{ form_label(edit_form.days_of_life) }}</label>
-                        {{ form_widget(edit_form.days_of_life,{'attr':{'class':'form-control','placeholder':'Días de vida' }}
-                        ) }}
+{% block title %}Editar lote {{ entity }}{% endblock %}
+
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('batch') }}">Lotes</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('batch_show', { id: entity.id }) }}">#{{ entity.id }}</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Editar</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Granja · Lote #' ~ entity.id,
+        'Editar lote',
+        'Actualiza la información operativa del lote. Los cambios afectan a registros futuros, no a los históricos.'
+    ) }}
+
+    {{ form_start(edit_form, {
+        'action': path('batch_update', { id: entity.id }),
+        'method': 'put',
+        'attr': { 'role': 'form', 'class': 'csa-form-narrow' }
+    }) }}
+
+        <div class="csa-stack-lg">
+
+            {# ---- 1. Fechas ---- #}
+            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Fechas', subtitle: 'Cuándo se compró y recibió el lote.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(edit_form.purchase_date, 'Fecha de compra', { attr: { class: 'csa-input datepicker' } }) }}
+                        {{ csa.field(edit_form.receipt_date, 'Fecha de recepción', { attr: { class: 'csa-input datepicker2' } }) }}
+                        {% if entity.batchStatus.getId == 2 %}
+                            {{ csa.field(edit_form.finalization_date, 'Fecha de finalización', { attr: { class: 'csa-input datepicker3' } }) }}
+                        {% endif %}
                     </div>
-                    <div class="form-group">
-                        {{ form_errors(edit_form.price) }}
-                        <label>{{ form_label(edit_form.price) }}</label>
-                        {{ form_widget(edit_form.price,{'attr':{'class':'form-control','placeholder':'Precio de compra del lote' }}
-                        ) }}
+                {% endblock %}
+            {% endembed %}
+
+            {# ---- 2. Datos del lote ---- #}
+            {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Datos del lote', subtitle: 'Censo, peso y precio de compra.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(edit_form.days_of_life, 'Días de vida', { hint: 'al recibir' }) }}
+                        {{ csa.field(edit_form.weight, 'Peso medio', { hint: 'kg / animal' }) }}
+                        {{ csa.field(edit_form.price, 'Precio de compra', { hint: '€', full: true }) }}
                     </div>
-                    <div class="form-group">
-                        {{ form_errors(edit_form.weight) }}
-                        <label>{{ form_label(edit_form.weight) }}</label>
-                        {{ form_widget(edit_form.weight,{'attr':{'class':'form-control','placeholder':'Peso' }}) }}
-                    </div>
-                    <div class="form-group">
-                        {{ form_errors(edit_form.note) }}
-                        <label>{{ form_label(edit_form.note) }}</label>
-                        {{ form_widget(edit_form.note,{'attr':{'class':'form-control','placeholder':'Notas' }}) }}
-                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            {# ---- 3. Notas ---- #}
+            {% embed '_components/csa_form_section.html.twig' with { num: '3', title: 'Notas', subtitle: 'Información libre del lote.' } %}
+                {% block body %}
+                    {% embed '_components/csa_field_block.html.twig' with { label: 'Anotaciones', hint: 'opcional', full: true } %}
+                        {% block body %}
+                            {{ form_widget(edit_form.note, { attr: { class: 'csa-textarea', rows: 5 } }) }}
+                        {% endblock %}
+                    {% endembed %}
+                {% endblock %}
+            {% endembed %}
+
+            {# ---- Footer de acciones ---- #}
+            <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                <div class="csa-muted" style="font-size: var(--csa-fs-sm);">
+                    Cambios afectan a registros futuros, no a los históricos.
+                </div>
+                <div class="csa-row">
+                    {{ csa.btn('Cancelar', { variant: 'ghost', href: path('batch_show', { id: entity.id }) }) }}
+                    {{ form_widget(edit_form.submit, {
+                        label: 'Guardar cambios',
+                        attr: { class: 'csa-btn csa-btn--primary' }
+                    }) }}
                 </div>
             </div>
-            {{ form_widget(edit_form.submit,{'attr':{'class':'btn btn-default' }}) }}
-            {{ form_rest(edit_form) }}
-            {{ form_end(edit_form, {'render_rest': false}) }}
+
         </div>
-    </div>
 
-
-
-
-
-
-    <ul class="record_actions">
-        <li>
-            <a href="{{ path('batch') }}">
-                Volver al listado de lotes
-            </a>
-        </li>
-        <li>
-            <a href="{{ path('batch_show',{'id':entity.id}) }}">
-                Volver al lote
-            </a>
-        </li>
-    </ul>
+        {{ form_rest(edit_form) }}
+    {{ form_end(edit_form, { render_rest: false }) }}
 
 {% endblock %}
 
-{% block specific_js %}
+{% block more_js %}
+    {{ parent() }}
+    {# Convertimos los <input type="text"> con clases datepicker* a
+     # <input type="date"> nativo. El FormType sigue siendo TextType y
+     # el controller sigue tratando el valor como string YYYY-MM-DD —
+     # mismo formato que envía el date picker nativo del navegador. #}
     <script>
-        $('.datepicker2').pickadate({
-            formatSubmit: 'yyyy-mm-dd',
-            onStart: function () {
-                var date = new Date("{{  entity.getReceiptDate()}}");
-                this.set('select', date)
-            }
-        })
-        $('.datepicker').pickadate({
-            formatSubmit: 'yyyy-mm-dd',
-            onStart: function () {
-                var date = new Date("{{  entity.getPurchaseDate()}}");
-                this.set('select', date)
-            }
-        })
-        {% if entity.getBatchStatus.getId==2 %}
-        $('.datepicker3').pickadate({
-            formatSubmit: 'yyyy-mm-dd',
-            onStart: function () {
-                var date = new Date("{{  entity.getFinalizationDate()}}");
-                this.set('select', date)
-            }
-        })
-        {% endif %}
+        document.querySelectorAll('.datepicker, .datepicker2, .datepicker3')
+            .forEach(function (el) { el.type = 'date'; });
     </script>
 {% endblock %}

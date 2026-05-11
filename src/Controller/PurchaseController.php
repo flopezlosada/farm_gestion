@@ -43,7 +43,7 @@ class PurchaseController extends AbstractAppController
         $form = $this->createCreateForm($entity);
         $form->handleRequest($request);
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $em = $this->getDoctrine()->getManager();
             $entity->setPurchaseDate(new \DateTime($entity->getPurchaseDate()));
             $entity->setTotalPrice($entity->getSinglePrice() * $entity->getAmount());
@@ -182,12 +182,12 @@ class PurchaseController extends AbstractAppController
         $editForm = $this->createEditForm($entity);
         $editForm->handleRequest($request);
 
-        if ($editForm->isValid()) {
+        if ($editForm->isSubmitted() && $editForm->isValid()) {
             $entity->setTotalPrice($entity->getSinglePrice() * $entity->getAmount());
             $entity->setPurchaseDate(new \DateTime($entity->getPurchaseDate()));
             $em->flush();
 
-            return $this->redirect($this->generateUrl('purchase_edit', array('id' => $id)));
+            return $this->redirect($this->generateUrl('purchase_show', array('id' => $id)));
         }
 
         return $this->render('Purchase/edit.html.twig', array(
@@ -206,7 +206,7 @@ class PurchaseController extends AbstractAppController
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\Purchase::class)->find($id);
 

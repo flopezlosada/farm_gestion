@@ -1,30 +1,64 @@
-{% extends 'App:Default:layout_admin.html.twig' %}
+{# ============================================================
+ # Modal de creación de documento adjunto a una entidad
+ # polimórfica. Carga vía jQuery Modal AJAX desde Blog/edition.
+ # ============================================================ #}
+
+{% extends 'Default/layout_admin.html.twig' %}
+{% form_theme form 'form_div_layout.html.twig' %}
 
 {% block admin_content -%}
-    <h4>{{'Document creation'|trans}}</h4>
+    <div class="csa-modal-card" style="max-width: 480px;">
+        <header style="display: flex; align-items: center; gap: var(--csa-sp-3); margin-bottom: var(--csa-sp-4);">
+            <span class="csa-table__id-marker" style="width: 44px; height: 44px; font-size: 18px; border-radius: var(--csa-radius-md);">
+                <i class="fa fa-file-text-o"></i>
+            </span>
+            <h3 style="font-family: var(--csa-serif); font-weight: 500; margin: 0;">Añadir documento</h3>
+        </header>
 
-    {{ form(form, {'attr': {'class': 'admin-form on-modal', 'data-place' : 'on-modal', 'id':'form_'~object_class~'_'~entity.getClass|lower~'_'~foreign_key}} ) }}
-    <div class="file-error hide">Debes usar pdfs</div>
+        {{ form_start(form, { attr: {
+            class: 'admin-form on-modal',
+            'data-place': 'on-modal',
+            id: 'form_' ~ object_class ~ '_' ~ entity.getClass|lower ~ '_' ~ foreign_key,
+            enctype: 'multipart/form-data'
+        } }) }}
+
+            <div class="csa-form-grid">
+                <div class="csa-field csa-field--full">
+                    <label class="csa-field__label" for="{{ form.title.vars.id }}">Título</label>
+                    {{ form_widget(form.title, { attr: { class: 'csa-input' } }) }}
+                </div>
+                <div class="csa-field csa-field--full">
+                    <label class="csa-field__label" for="{{ form.content.vars.id }}">Descripción</label>
+                    {{ form_widget(form.content, { attr: { class: 'csa-input' } }) }}
+                </div>
+                <div class="csa-field csa-field--full">
+                    <label class="csa-field__label" for="{{ form.file.vars.id }}">Archivo</label>
+                    {{ form_widget(form.file) }}
+                </div>
+            </div>
+
+            <div style="margin-top: var(--csa-sp-5);">
+                {{ form_widget(form.submit, { label: 'Subir documento', attr: { class: 'csa-btn csa-btn--primary' } }) }}
+            </div>
+
+            {{ form_rest(form) }}
+        {{ form_end(form, { render_rest: false }) }}
+    </div>
 {% endblock %}
+
 {% block javascripts %}
-    <script src="{{ asset('scripts/admin.js')}}"></script>
-    <script type="text/javascript" src="{{ asset('assets/jquery.form.min.js') }}"></script>
+    {{ parent() }}
+    <script type="text/javascript" src="{{ asset('bundles/app/assets/jquery.form.min.js') }}"></script>
+    <script src="{{ asset('bundles/app/js/scripts/admin.js') }}"></script>
     <script>
-        // wait for the DOM to be loaded
         $(document).ready(function () {
-            var options = {
-                success: updateEdition,
-                target: "#edition_aside_medias"
-            }
-
-            // bind 'myForm' and provide a simple callback function
-            $('#{{ 'form_'~object_class~'_'~entity.getClass|lower~'_'~foreign_key }}').ajaxForm(options);
+            $('#{{ 'form_' ~ object_class ~ '_' ~ entity.getClass|lower ~ '_' ~ foreign_key }}').ajaxForm({
+                success: function () {
+                    $('.jquery-modal').hide();
+                    $('.modal').hide();
+                },
+                target: '#edition_aside_medias'
+            });
         });
-
-        function updateEdition() {
-            $('.jquery-modal').hide();
-            $('.modal').hide();
-        }
-
     </script>
 {% endblock %}

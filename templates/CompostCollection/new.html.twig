@@ -1,47 +1,71 @@
-{% extends 'layout_crud.html.twig' %}
+{# ============================================================
+ # Nueva recogida de compost — shell csa.
+ # ============================================================ #}
 
-    {% block title_wrapper %}Añadir {% endblock %}
-    {% block main -%}
-        <div class="panel panel-default">
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% form_theme form 'form_div_layout.html.twig' %}
 
-            <div class="panel-body">
-                {{ form_start(form, {'action': path('compostcollection_create'),'method': 'post','attr': {'role': 'form' }}) }}
-                <div class='row'>
-                    <div class="col-lg-6">
-                        <div class="form-group">
-                            {{ form_errors(form.collect_date) }}
-                            <label>{{ form_label(form.collect_date) }}</label>
-                            {{ form_widget(form.collect_date,{'attr':{'placeholder':'Fecha' }}) }}
-                        </div>
-                        <div class="form-group">
-                            {{ form_errors(form.amount) }}
-                            <label>{{ form_label(form.amount) }}</label>
-                            {{ form_widget(form.amount,{'attr':{'class':'form-control','placeholder':'Cantidad recogida' }}) }}
-                        </div>
-                        <div class="form-group">
-                            {{ form_errors(form.improper_percentage) }}
-                            <label>{{ form_label(form.improper_percentage) }}</label>
-                            {{ form_widget(form.improper_percentage,{'attr':{'class':'form-control','placeholder':'Porcentaje de impropios' }}) }}
-                        </div>
-                        <div class="form-group">
-                            {{ form_errors(form.compost_collection_point) }}
-                            <label>{{ form_label(form.compost_collection_point) }}</label>
-                            {{ form_widget(form.compost_collection_point,{'attr':{'class':'form-control','placeholder':'Punto de recogida' }}) }}
-                        </div>
+{% block title %}Nueva recogida de compost{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('compostcollection') }}">Recogida de compost</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Nueva</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Compost · Recogida',
+        'Nueva recogida',
+        'Anota fecha, punto de recogida, kilos y porcentaje de impropios.'
+    ) }}
+
+    {{ form_start(form, {
+        'action': path('compostcollection_create'),
+        'method': 'post',
+        'attr': { 'role': 'form', 'class': 'csa-form-narrow' }
+    }) }}
+
+        <div class="csa-stack-lg">
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Datos de la recogida', subtitle: 'Fecha, punto, kilos y calidad.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.collect_date, 'Fecha', { attr: { class: 'csa-input datepicker' } }) }}
+                        {{ csa.field(form.compost_collection_point, 'Punto de recogida') }}
+                        {{ csa.field(form.amount, 'Kilos recogidos') }}
+                        {{ csa.field(form.improper_percentage, '% de impropios', { hint: 'número de 0 a 100' }) }}
                     </div>
+                {% endblock %}
+            {% endembed %}
+
+            <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                <div></div>
+                <div class="csa-row">
+                    {{ csa.btn('Cancelar', { variant: 'ghost', href: path('compostcollection') }) }}
+                    {{ form_widget(form.submit, {
+                        label: 'Crear recogida',
+                        attr: { class: 'csa-btn csa-btn--primary' }
+                    }) }}
                 </div>
-                {{ form_widget(form.submit,{'attr':{'class':'btn btn-default'}}) }}
-                {{ form_rest(form) }}
-                {{ form_end(form, {'render_rest': false}) }}
-
             </div>
-            <div class="panel-footer">
-                <ul class="record_actions">
-                    <li>
-                        <a href="{{ path('compostcollection') }}">Volver al listado</a>
 
-                    </li>
-                </ul>
-            </div>
         </div>
-    {% endblock %}
+
+        {{ form_rest(form) }}
+    {{ form_end(form, { render_rest: false }) }}
+
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    <script>
+        document.querySelectorAll('.datepicker, .datepicker2, .datepicker3')
+            .forEach(function (el) { el.type = 'date'; });
+    </script>
+{% endblock %}

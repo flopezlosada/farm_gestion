@@ -56,7 +56,6 @@ class Sack
      * @ORM\Column(name="delivery_date", type="date")
      */
     #[Assert\NotBlank]
-    #[Assert\Date]
     private $delivery_date;
 
     /**

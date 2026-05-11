@@ -1,44 +1,86 @@
-{% extends 'layout_crud.html.twig' %}
+{# ============================================================
+ # Segundo paso al crear noticia del blog — shell csa.
+ # Tras Blog/new (categoría + título), BlogController::create
+ # redirige a blog_second_step para añadir imagen, contenido y
+ # medios. Es esencialmente clon de Blog/edit con menos campos.
+ # ============================================================ #}
 
-{% block title_wrapper %}Añadir Noticia{% endblock %}
-{% block main -%}
-    <div class="panel panel-default">
-        <div class="panel-heading">
-            <h4>{{ entity.title }}</h4>
-        </div>
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% form_theme form 'form_div_layout.html.twig' %}
 
-        <div class="panel-body">
-            {{ form_start(form, {'action': path('blog_update_second',{'id':entity.id}),'method': 'put','attr': {'role': 'form', 'class': 'admin-form', 'data-place' : 'out-modal' }}) }}
-            <div class='row'>
-                <div class="col-lg-8">
-                    <div class="form-group">
-                        {{ form_errors(form.file) }}
-                        <label>{{ form_label(form.file) }}</label>
-                        {{ form_widget(form.file) }}
-                    </div>
-                    <div class="form-group">
-                        {{ form_errors(form.content) }}
-                        <label>{{ form_label(form.content) }}</label>
-                        {{ form_widget(form.content,{'attr':{'placeholder':'Contenido'}}) }}
-                    </div>
-                </div>
-                <div class="col-lg-4">
-                    <aside class="admin-assets three columns">
-                        {{ render(controller('App\\Controller\\BlogController::edition',{'id':entity.id,'object_class':entity.getClass|lower})) }}
-                    </aside>
-                </div>
-            </div>
-            <div class="row">
-                {{ form_widget(form.submit,{'attr':{'class':'btn btn-default'}}) }}
-                {{ form_rest(form) }}
-                {{ form_end(form, {'render_rest': false}) }}
-            </div>
+{% block title %}Completar noticia · {{ entity.title }}{% endblock %}
 
-        </div>
-    </div> {{ tinymce_init() }}
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('blog') }}">Blog</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ entity.title }}</span>
 {% endblock %}
-    {% block more_js %}
 
-        <script src="{{ asset('bundles/app/js/jquery-modal/jquery.modal.min.js') }}"></script>
+{% block csa_main %}
 
-    {% endblock %}
+    {{ csa.page_header(
+        'Comunicación · Blog',
+        'Completar ' ~ entity.title,
+        'Añade la imagen de portada, el contenido y los medios.'
+    ) }}
+
+    {{ form_start(form, {
+        action: path('blog_update_second', { id: entity.id }),
+        method: 'put',
+        attr: { role: 'form', class: 'admin-form', 'data-place': 'out-modal', enctype: 'multipart/form-data' }
+    }) }}
+
+        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: var(--csa-sp-6);">
+
+            <div class="csa-stack-lg">
+
+                {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Portada', subtitle: 'Imagen de cabecera.' } %}
+                    {% block body %}
+                        {% import '_macros/csa.html.twig' as csa %}
+                        <div class="csa-form-grid">
+                            {{ csa.field(form.file, 'Imagen', { full: true, hint: 'opcional' }) }}
+                        </div>
+                    {% endblock %}
+                {% endembed %}
+
+                {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Contenido', subtitle: 'Texto enriquecido con TinyMCE.' } %}
+                    {% block body %}
+                        {% import '_macros/csa.html.twig' as csa %}
+                        <div class="csa-form-grid">
+                            {{ csa.field(form.content, 'Contenido', { full: true, attr: { class: 'tinymce', 'data-theme': 'advanced' } }) }}
+                        </div>
+                    {% endblock %}
+                {% endembed %}
+
+            </div>
+
+            <aside class="admin-assets">
+                {{ render(controller('App\\Controller\\BlogController::edition', { id: entity.id, object_class: entity.getClass|lower })) }}
+            </aside>
+
+        </div>
+
+        <div class="csa-row-between" style="margin-top: var(--csa-sp-6); padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+            <div></div>
+            <div class="csa-row">
+                {{ csa.btn('Volver al listado', { variant: 'ghost', href: path('blog') }) }}
+                {{ form_widget(form.submit, {
+                    label: 'Guardar y publicar',
+                    attr: { class: 'csa-btn csa-btn--primary' }
+                }) }}
+            </div>
+        </div>
+
+        {{ form_rest(form) }}
+    {{ form_end(form, { render_rest: false }) }}
+
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    {{ tinymce_init() }}
+    <script src="{{ asset('bundles/app/js/jquery-modal/jquery.modal.min.js') }}"></script>
+{% endblock %}

@@ -1,72 +1,96 @@
-{% extends 'layout_crud.html.twig' %}
-{% block title_wrapper %}Editar Venta{% endblock %}
-{% block main -%}
-    <div class="panel panel-default">
-        <div class="panel-heading">
-            Venta realizado el <strong>{{ entity.getDate|format_date('long', locale='es') }}</strong>
-        </div>
-        <div class="panel-body">
-            {{ form_start(edit_form, {'action': path('sale_update',{'id':entity.id}), 'method': 'put','attr': {'role': 'form' }}) }}
-            {{ form_errors(edit_form) }}
-            <div class="row">
-                <div class="col-lg-6">
-                    <div class="form-group">
-                        {{ form_errors(edit_form.sale_date) }}
-                        <label>{{ form_label(edit_form.sale_date) }}</label>
-                        {{ form_widget(edit_form.sale_date,{'attr':{'placeholder':'Fecha de venta' }}) }}
-                    </div>
-                    <div class="form-group">
-                        {{ form_errors(edit_form.purchaser) }}
-                        <label>{{ form_label(edit_form.purchaser) }}</label>
-                        {{ form_widget(edit_form.purchaser,{'attr':{'class':'form-control' }}) }}
-                    </div>
-                    <div class="form-group">
-                        {{ form_errors(edit_form.amount) }}
-                        <label>{{ form_label(edit_form.amount) }}</label>
-                        {{ form_widget(edit_form.amount,{'attr':{'class':'form-control','placeholder':'Cantidad' }}) }}
-                    </div>
-                    <div class="form-group">
-                        {{ form_errors(edit_form.product) }}
-                        <label>{{ form_label(edit_form.product) }}</label>
-                        {{ form_widget(edit_form.product,{'attr':{'class':'form-control','placeholder':'Producto' }}) }}
-                    </div>
-                    <div class="form-group">
-                        {{ form_errors(edit_form.unity) }}
-                        <label>{{ form_label(edit_form.unity) }}</label>
-                        {{ form_widget(edit_form.unity,{'attr':{'class':'form-control','placeholder':'Unidades' }}) }}
-                    </div>
-                    <div class="form-group">
-                        {{ form_errors(edit_form.single_price) }}
-                        <label>{{ form_label(edit_form.single_price) }}</label>
-                        {{ form_widget(edit_form.single_price,{'attr':{'class':'form-control','placeholder':'Precio por unidad'}}) }}
-                        <p class="help-block">Indica el precio unitario. Después se multiplicará por la cantidad que indiques para obtener el precio total.</p>
-                    </div>
-                    <div class="form-group">
-                        {{ form_errors(edit_form.note) }}
-                        <label>{{ form_label(edit_form.note) }}</label>
-                        {{ form_widget(edit_form.note,{'attr':{'class':'form-control','placeholder':'Notas'}}) }}
-                    </div>
-                    <div class="checkbox">
-                        {{ form_errors(edit_form.paid) }}
-                        <label>
-                            {{ form_widget(edit_form.paid) }}
-                            Marca esta casilla si la venta está pagada
-                        </label>
-                    </div>
+{# ============================================================
+ # Editar venta — shell csa.
+ # ============================================================ #}
 
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% form_theme edit_form 'form_div_layout.html.twig' %}
+
+{% block title %}Editar venta #{{ entity.id }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('sale') }}">Ventas</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('sale_show', { id: entity.id }) }}">#{{ entity.id }}</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Editar</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Comercio · Ventas',
+        'Editar venta #' ~ entity.id,
+        'Corrige fecha, clientx, producto o cantidades.'
+    ) }}
+
+    <div style="display: none;">
+        {{ form_start(delete_form, { attr: { id: 'sale-delete-form' } }) }}
+            {{ form_rest(delete_form) }}
+        {{ form_end(delete_form, { render_rest: false }) }}
+    </div>
+
+    {{ form_start(edit_form, {
+        'action': path('sale_update', { id: entity.id }),
+        'method': 'put',
+        'attr': { 'role': 'form', 'class': 'csa-form-narrow' }
+    }) }}
+
+        <div class="csa-stack-lg">
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Cuándo y a quién', subtitle: 'Fecha y clientx.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(edit_form.sale_date, 'Fecha de venta', { attr: { class: 'csa-input datepicker' } }) }}
+                        {{ csa.field(edit_form.purchaser, 'Clientx') }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Qué y cuánto', subtitle: 'Producto, cantidad y precio unitario.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(edit_form.product, 'Producto vendido', { full: true }) }}
+                        {{ csa.field(edit_form.amount, 'Cantidad') }}
+                        {{ csa.field(edit_form.unity, 'Unidades') }}
+                        {{ csa.field(edit_form.single_price, 'Precio por unidad (€)', { hint: 'se multiplica por la cantidad' }) }}
+                        {{ csa.field(edit_form.paid, '¿Pagada?') }}
+                        {{ csa.field(edit_form.note, 'Notas', { full: true }) }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                <div>
+                    <button type="submit" form="sale-delete-form" class="csa-btn csa-btn--ghost"
+                            onclick="return confirm('¿Seguro? Esta acción no se puede deshacer.');">
+                        Eliminar venta
+                    </button>
+                </div>
+                <div class="csa-row">
+                    {{ csa.btn('Cancelar', { variant: 'ghost', href: path('sale_show', { id: entity.id }) }) }}
+                    {{ form_widget(edit_form.submit, {
+                        label: 'Guardar cambios',
+                        attr: { class: 'csa-btn csa-btn--primary' }
+                    }) }}
                 </div>
             </div>
-            {{ form_widget(edit_form.submit,{'attr':{'class':'btn btn-default' }}) }}
-            {{ form_rest(edit_form) }}
-            {{ form_end(edit_form, {'render_rest': false}) }}
+
         </div>
-    </div>
-    <ul class="list-inline">
-        <li>
-            <a href="{{ path('sale') }}">
-                Listado de ventas
-            </a>
-        </li>
-        <li>{{ form(delete_form) }}</li>
-    </ul>
+
+        {{ form_rest(edit_form) }}
+    {{ form_end(edit_form, { render_rest: false }) }}
+
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    <script>
+        document.querySelectorAll('.datepicker, .datepicker2, .datepicker3')
+            .forEach(function (el) { el.type = 'date'; });
+    </script>
 {% endblock %}

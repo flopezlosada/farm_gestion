@@ -1,4 +1,4 @@
-{% extends 'App:Default:layout_admin.html.twig' %}
+{% extends 'Default/layout_admin.html.twig' %}
 
 {% block admin_content -%}
     <h1>{{'Gallery edit'|trans}}</h1>
@@ -8,6 +8,6 @@
 {% endblock %}
 {% block javascripts %}
     {{ tinymce_init() }}
-    <script src="{{ asset('assets/jquery-modal/jquery.modal.min.js') }}"></script>
+    <script src="{{ asset('bundles/app/assets/jquery-modal/jquery.modal.min.js') }}"></script>
 
 {% endblock %}

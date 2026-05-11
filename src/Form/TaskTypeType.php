@@ -16,8 +16,6 @@ class TaskTypeType extends AbstractType
     {
         $builder
             ->add('title')
-            ->add('created')
-            ->add('updated')
         ;
     }
     

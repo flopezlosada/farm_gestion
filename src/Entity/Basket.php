@@ -39,7 +39,6 @@ class Basket
      * @ORM\Column(name="date", type="date")
      */
     #[Assert\NotBlank]
-    #[Assert\Date]
     private $date;
 
     /**

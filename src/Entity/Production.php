@@ -58,7 +58,6 @@ class Production
      * @var string production_date
      * @ORM\Column(name="production_date", type="date", nullable=true)
      */
-    #[Assert\Date]
     private $production_date;
 
     /**

@@ -7,7 +7,7 @@
         {% for i in length..0 %}
             {% set last_hens_feed_purchase=feed_purchases[i+1] %}
             {% set last_but_one_hens_feed_purchase=feed_purchases[i] %}
-            {{ render(controller('App:Statistic:hensFeed',{'last_hens_feed_purchase':last_hens_feed_purchase,'last_but_one_hens_feed_purchase':last_but_one_hens_feed_purchase})) }}
+            {{ render(controller('App\\Controller\\StatisticController::hensFeed', {'last_hens_feed_purchase': last_hens_feed_purchase, 'last_but_one_hens_feed_purchase': last_but_one_hens_feed_purchase})) }}
         {% endfor %}
 
     </div>

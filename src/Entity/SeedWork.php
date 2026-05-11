@@ -90,7 +90,6 @@ class SeedWork
      * @var string $estimated_date
      * @ORM\Column(name="estimated_date", type="date", nullable=true)
      */
-    #[Assert\Date]
     private $estimated_date;
 
     /**
@@ -99,7 +98,6 @@ class SeedWork
      * @ORM\Column(name="real_date", type="date", nullable=true)
      */
     #[Assert\NotBlank]
-    #[Assert\Date]
     private $real_date;
 
     /**
