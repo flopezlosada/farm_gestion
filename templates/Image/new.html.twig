@@ -1,32 +1,60 @@
-{% extends 'layout_modal.html.twig' %}
+{# ============================================================
+ # Modal de creación de imagen single adjunto a una entidad
+ # polimórfica. Carga vía jQuery Modal AJAX desde Blog/edition.
+ # ============================================================ #}
 
+{% extends 'Default/layout_admin.html.twig' %}
+{% form_theme form 'form_div_layout.html.twig' %}
 
-{% block main -%}
-    <div class="panel panel-default">
-        <div class="panel panel-green">
-            <div class="panel-heading">Añadir imagen</div>
-        </div>
-        <div class="panel-body">
-            {{ form_start(form, {'attr': {'class': 'admin-form on-modal', 'data-place' : 'on-modal',
-                'id':'form_'~object_class~'_'~entity.getClass|lower~'_'~foreign_key}} ) }}
-            <div class='row'>
-                <div class="col-lg-6">
-                    <div class="form-group">
-                        {{ form_errors(form.file) }}
-                        <label>{{ form_label(form.file) }}</label>
-                        {{ form_widget(form.file) }}
-                    </div>
-                    <div class="form-group">
-                        {{ form_errors(form.title) }}
-                        <label>{{ form_label(form.title) }}</label>
-                        {{ form_widget(form.title,{'attr':{'class':'form-control','placeholder':'Título'}}) }}
-                    </div>
+{% block admin_content -%}
+    <div class="csa-modal-card" style="max-width: 480px;">
+        <header style="display: flex; align-items: center; gap: var(--csa-sp-3); margin-bottom: var(--csa-sp-4);">
+            <span class="csa-table__id-marker" style="width: 44px; height: 44px; font-size: 18px; border-radius: var(--csa-radius-md);">
+                <i class="fa fa-image"></i>
+            </span>
+            <h3 style="font-family: var(--csa-serif); font-weight: 500; margin: 0;">Añadir imagen</h3>
+        </header>
+
+        {{ form_start(form, { attr: {
+            class: 'admin-form on-modal',
+            'data-place': 'on-modal',
+            id: 'form_' ~ object_class ~ '_' ~ entity.getClass|lower ~ '_' ~ foreign_key,
+            enctype: 'multipart/form-data'
+        } }) }}
+
+            <div class="csa-form-grid">
+                <div class="csa-field csa-field--full">
+                    <label class="csa-field__label" for="{{ form.title.vars.id }}">Título</label>
+                    {{ form_widget(form.title, { attr: { class: 'csa-input' } }) }}
+                </div>
+                <div class="csa-field csa-field--full">
+                    <label class="csa-field__label" for="{{ form.file.vars.id }}">Archivo de imagen</label>
+                    {{ form_widget(form.file) }}
                 </div>
             </div>
-            {{ form_widget(form.submit,{'attr':{'class':'btn btn-default'}}) }}
+
+            <div style="margin-top: var(--csa-sp-5);">
+                {{ form_widget(form.submit, { label: 'Subir imagen', attr: { class: 'csa-btn csa-btn--primary' } }) }}
+            </div>
+
             {{ form_rest(form) }}
-            {{ form_end(form, {'render_rest': false}) }}
-        </div>
+        {{ form_end(form, { render_rest: false }) }}
     </div>
 {% endblock %}
 
+{% block javascripts %}
+    {{ parent() }}
+    <script type="text/javascript" src="{{ asset('bundles/app/js/jquery.form.min.js') }}"></script>
+    <script src="{{ asset('bundles/app/js/scripts/admin.js') }}"></script>
+    <script>
+        $(document).ready(function () {
+            $('#{{ 'form_' ~ object_class ~ '_' ~ entity.getClass|lower ~ '_' ~ foreign_key }}').ajaxForm({
+                success: function () {
+                    $('.jquery-modal').hide();
+                    $('.modal').hide();
+                },
+                target: '#edition_aside_medias'
+            });
+        });
+    </script>
+{% endblock %}
