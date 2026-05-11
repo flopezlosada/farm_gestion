@@ -26,7 +26,9 @@
     <div class="csa-row-between" style="margin-bottom: var(--csa-sp-5);">
         <div></div>
         <div class="csa-row">
-            {{ csa.btn('Resumen general', { variant: 'secondary', href: path('compostcollection_resume'), icon: 'fa-bar-chart' }) }}
+            {{ csa.btn('Pilas', { variant: 'ghost', href: path('compostpile'), icon: 'fa-cubes' }) }}
+            {{ csa.btn('Puntos', { variant: 'ghost', href: path('compostcollectionpoint'), icon: 'fa-map-marker' }) }}
+            {{ csa.btn('Resumen', { variant: 'secondary', href: path('compostcollection_resume'), icon: 'fa-bar-chart' }) }}
             {{ csa.btn('Nueva recogida', { variant: 'primary', href: path('compostcollection_new'), icon: 'fa-plus' }) }}
         </div>
     </div>
