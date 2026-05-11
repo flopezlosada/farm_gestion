@@ -1,46 +1,74 @@
-{% extends 'layout.html.twig' %}
+{# ============================================================
+ # Detalle de un evento — shell csa.
+ # ============================================================ #}
 
-{% block main -%}
-    <div class="row">
-        <div class="col-lg-12">
-            <h1 class="page-header">Eventos</h1>
-        </div>
-        <!-- /.col-lg-12 -->
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Evento · {{ entity.title }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('event') }}">Eventos</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ entity.title }}</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    <div style="display: none;">
+        {{ form_start(delete_form, { attr: { id: 'event-delete-form' } }) }}
+            {{ form_rest(delete_form) }}
+        {{ form_end(delete_form, { render_rest: false }) }}
     </div>
-    <div class="row">
-        <div class="col-lg-12">
-            <div class="panel panel-green">
-                <div class="panel-heading">
-                    {{ entity.getTitle }}
-                </div>
-                <div class="panel-body">
-                    <p>
-                        {{ entity.content }}
-                    </p>
-                    <p>
-                        <strong>Fecha de inicio:</strong> {{ entity.startdate|format_date('long', locale='es') }}<br>
-                        {% if  entity.enddate is defined %}
-                        <strong>Fecha de fin:</strong> {{ entity.enddate|format_date('long', locale='es') }}
-                        {% endif %}
-                    </p>
-                </div>
-                <div class="panel-footer">
-                    <ul class="list-inline">
-                        <li>
-                            <a href="{{ path('event') }}">
-                                Ir al listado
-                            </a>
-                        </li>
-                        <li>
-                            <a href="{{ path('event_edit', { 'id': entity.id }) }}">
-                                Editar
-                            </a>
-                        </li>
-                        <li>{{ form(delete_form) }}</li>
-                    </ul>
+
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-6); align-items: flex-start;">
+        <div class="csa-row" style="align-items: flex-start; gap: var(--csa-sp-4);">
+            <span class="csa-table__id-marker" style="width: 64px; height: 64px; font-size: 28px; border-radius: var(--csa-radius-lg);">
+                <i class="fa fa-calendar"></i>
+            </span>
+            <div>
+                <h1>{{ entity.title }}</h1>
+                <div class="csa-serif csa-italic csa-soft" style="margin-top: var(--csa-sp-2);">
+                    {{ entity.startdate|format_date('long', locale='es') }}{% if entity.enddate %} — {{ entity.enddate|format_date('long', locale='es') }}{% endif %}
+                    {% if entity.allDayEvent %} · Todo el día{% endif %}
                 </div>
             </div>
-            <!-- /.col-lg-12 -->
+        </div>
+        <div class="csa-row">
+            <button type="submit" form="event-delete-form" class="csa-btn csa-btn--ghost"
+                    onclick="return confirm('¿Seguro? Esta acción no se puede deshacer.');">
+                Eliminar
+            </button>
+            {{ csa.btn('Editar', { variant: 'secondary', href: path('event_edit', { id: entity.id }), icon: 'fa-pencil' }) }}
+            {{ csa.btn('Volver', { variant: 'ghost', href: path('event') }) }}
         </div>
     </div>
+
+    {% embed '_components/csa_card.html.twig' with { title: 'Datos del evento', accent: 'sky' } %}
+        {% block body %}
+            <dl class="csa-defs">
+                <div class="csa-defs__row">
+                    <dt class="csa-defs__label">Fecha de inicio</dt>
+                    <dd class="csa-defs__value">{{ entity.startdate|format_date('long', locale='es') }}</dd>
+                </div>
+                {% if entity.enddate %}
+                    <div class="csa-defs__row">
+                        <dt class="csa-defs__label">Fecha de fin</dt>
+                        <dd class="csa-defs__value">{{ entity.enddate|format_date('long', locale='es') }}</dd>
+                    </div>
+                {% endif %}
+                <div class="csa-defs__row">
+                    <dt class="csa-defs__label">¿Todo el día?</dt>
+                    <dd class="csa-defs__value">{% if entity.allDayEvent %}Sí{% else %}No{% endif %}</dd>
+                </div>
+                <div class="csa-defs__row csa-defs__row--full">
+                    <dt class="csa-defs__label">Descripción</dt>
+                    <dd class="csa-defs__value">{{ entity.content|raw }}</dd>
+                </div>
+            </dl>
+        {% endblock %}
+    {% endembed %}
+
 {% endblock %}

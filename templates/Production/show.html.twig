@@ -1,44 +1,91 @@
-{% extends 'base.html.twig' %}
+{# ============================================================
+ # Detalle de cosecha (Production) — shell csa.
+ # ============================================================
+ # No se enlaza desde el flujo real (basket/basket_detail llevan
+ # a edit). Se mantiene migrada al shell por si se accede a mano.
+ # ============================================================ #}
 
-{% block body -%}
-    <h1>Production</h1>
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
 
-    <table class="record_properties">
-        <tbody>
-            <tr>
-                <th>Id</th>
-                <td>{{ entity.id }}</td>
-            </tr>
-            <tr>
-                <th>Date</th>
-                <td>{{ entity.date|date('Y-m-d H:i:s') }}</td>
-            </tr>
-            <tr>
-                <th>Amount</th>
-                <td>{{ entity.amount }}</td>
-            </tr>
-            <tr>
-                <th>Created</th>
-                <td>{{ entity.created|date('Y-m-d H:i:s') }}</td>
-            </tr>
-            <tr>
-                <th>Updated</th>
-                <td>{{ entity.updated|date('Y-m-d H:i:s') }}</td>
-            </tr>
-        </tbody>
-    </table>
+{% block title %}Cosecha #{{ entity.id }}{% endblock %}
 
-        <ul class="record_actions">
-    <li>
-        <a href="{{ path('production') }}">
-            Back to the list
-        </a>
-    </li>
-    <li>
-        <a href="{{ path('production_edit', { 'id': entity.id }) }}">
-            Edit
-        </a>
-    </li>
-    <li>{{ form(delete_form) }}</li>
-</ul>
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('production_show_basket') }}">Cestas</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Cosecha #{{ entity.id }}</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    <div style="display: none;">
+        {{ form_start(delete_form, { attr: { id: 'production-delete-form' } }) }}
+            {{ form_rest(delete_form) }}
+        {{ form_end(delete_form, { render_rest: false }) }}
+    </div>
+
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-6); align-items: flex-start;">
+        <div class="csa-row" style="align-items: flex-start; gap: var(--csa-sp-4);">
+            <span class="csa-table__id-marker" style="width: 64px; height: 64px; font-size: 28px; border-radius: var(--csa-radius-lg);">
+                <i class="fa fa-leaf"></i>
+            </span>
+            <div>
+                <h1>Cosecha #{{ entity.id }}</h1>
+                <div class="csa-serif csa-italic csa-soft" style="margin-top: var(--csa-sp-2);">
+                    {% if entity.cropWorking %}{{ entity.cropWorking }} · {% endif %}{{ entity.amount }} kg
+                </div>
+            </div>
+        </div>
+        <div class="csa-row">
+            <button type="submit" form="production-delete-form" class="csa-btn csa-btn--ghost"
+                    onclick="return confirm('¿Seguro? Esta acción no se puede deshacer.');">
+                Eliminar
+            </button>
+            {{ csa.btn('Editar', { variant: 'secondary', href: path('production_edit', { id: entity.id }), icon: 'fa-pencil' }) }}
+            {{ csa.btn('Volver', { variant: 'ghost', href: path('production_show_basket') }) }}
+        </div>
+    </div>
+
+    {% embed '_components/csa_card.html.twig' with { title: 'Datos de la cosecha', accent: 'green' } %}
+        {% block body %}
+            <dl class="csa-defs">
+                <div class="csa-defs__row">
+                    <dt class="csa-defs__label">Cultivo</dt>
+                    <dd class="csa-defs__value">
+                        {% if entity.cropWorking %}
+                            <a href="{{ path('cropworking_show', { id: entity.cropWorking.id }) }}">{{ entity.cropWorking }}</a>
+                        {% else %}<span class="csa-muted">—</span>{% endif %}
+                    </dd>
+                </div>
+                <div class="csa-defs__row">
+                    <dt class="csa-defs__label">Fecha de cosecha</dt>
+                    <dd class="csa-defs__value">{% if entity.productionDate %}{{ entity.productionDate|format_date('long', locale='es') }}{% else %}—{% endif %}</dd>
+                </div>
+                <div class="csa-defs__row">
+                    <dt class="csa-defs__label">Cantidad</dt>
+                    <dd class="csa-defs__value">{{ entity.amount }} kg</dd>
+                </div>
+                {% if entity.basket %}
+                    <div class="csa-defs__row">
+                        <dt class="csa-defs__label">Cesta semanal</dt>
+                        <dd class="csa-defs__value">
+                            <a href="{{ path('production_show_basket_detail', { id: entity.basket.id }) }}">Semana {{ entity.basket.week }}</a>
+                        </dd>
+                    </div>
+                {% endif %}
+            </dl>
+            {% if entity.note %}
+                <section class="csa-defs-section" style="margin-top: var(--csa-sp-5);">
+                    <h4 class="csa-defs-section__title">
+                        <i class="csa-defs-section__icon csa-defs-section__icon--plum fa fa-sticky-note-o"></i>
+                        Notas
+                    </h4>
+                    <div class="csa-soft" style="line-height: var(--csa-lh-normal);">{{ entity.note|raw }}</div>
+                </section>
+            {% endif %}
+        {% endblock %}
+    {% endembed %}
+
 {% endblock %}

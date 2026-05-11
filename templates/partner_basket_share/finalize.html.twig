@@ -1,38 +1,70 @@
-{% extends 'layout_crud.html.twig' %}
+{# ============================================================
+ # Finalizar (dar de baja) una cesta de socix — shell csa.
+ # ============================================================ #}
 
-{% block title %}Finalizar Cesta{% endblock %}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% form_theme form 'form_div_layout.html.twig' %}
 
-{% block main %}
-    <h1>Finalizar Cesta para {{ partner_basket_share.partner }}</h1>
-    <div class="panel panel-default">
+{% block title %}Finalizar cesta · {{ partner_basket_share.partner }}{% endblock %}
 
-        <div class="panel-body">
-            {{ form_start(form, {'action': path('partner_basket_share_finalize', {'id':partner_basket_share.id}), 'method': 'post','attr': {'role': 'form' }}) }}
-            <div class="row">
-                <div class="col-lg-6">
-                    <div class="form-group">
-                        {{ form_errors(form.end_date) }}
-                        <label>{{ form_label(form.end_date) }}</label>
-                        {{ form_widget(form.end_date,{'attr':{'placeholder':'Fecha de finalización de cesta'}}) }}
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('partner_index') }}">Socixs</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('partner_show', { id: partner_basket_share.partner.id }) }}">{{ partner_basket_share.partner }}</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Finalizar cesta</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Socixs · Cesta',
+        'Finalizar cesta de ' ~ partner_basket_share.partner,
+        'Indica la fecha en la que finaliza la suscripción. A partir de esa fecha la cesta deja de aparecer en el reparto.'
+    ) }}
+
+    {{ form_start(form, {
+        action: path('partner_basket_share_finalize', { id: partner_basket_share.id }),
+        method: 'post',
+        attr: { role: 'form', class: 'csa-form-narrow' }
+    }) }}
+
+        <div class="csa-stack-lg">
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Fecha de baja', subtitle: 'Día en que la socix recibe la última cesta.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.end_date, 'Fecha de fin', { full: true, attr: { class: 'csa-input datepicker' } }) }}
                     </div>
+                {% endblock %}
+            {% endembed %}
+
+            <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                <div></div>
+                <div class="csa-row">
+                    {{ csa.btn('Volver al listado', { variant: 'ghost', href: path('partner_basket_share_list_status', { status: 1 }) }) }}
+                    {{ form_widget(form.save, {
+                        label: 'Finalizar cesta',
+                        attr: { class: 'csa-btn csa-btn--primary' }
+                    }) }}
                 </div>
             </div>
-            {{ form_widget(form.save,{'attr':{'class':'btn btn-default'}}) }}
-            {{ form_rest(form) }}
-            {{ form_end(form, {'render_rest': false}) }}
+
         </div>
-    </div>
 
-
-
-    <a href="{{ path('partner_basket_share_list_status', {'status': 1}) }}" >Volver al listado de cestas activas</a>
-
+        {{ form_rest(form) }}
+    {{ form_end(form, { render_rest: false }) }}
 
 {% endblock %}
-{% block specific_js %}
+
+{% block more_js %}
+    {{ parent() }}
     <script>
-        $('.datepicker').pickadate({
-            formatSubmit: 'yyyy-mm-dd',
-        })
+        document.querySelectorAll('.datepicker, .datepicker2, .datepicker3')
+            .forEach(function (el) { el.type = 'date'; });
     </script>
 {% endblock %}

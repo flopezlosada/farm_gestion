@@ -160,6 +160,11 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface, LegacyP
         return (string) $this->username;
     }
 
+    public function __toString(): string
+    {
+        return $this->username ?? 'Usuario #' . $this->id;
+    }
+
     public function setUsername(string $username): self
     {
         $this->username = $username;

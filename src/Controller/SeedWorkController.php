@@ -46,7 +46,7 @@ class SeedWorkController extends AbstractAppController
         $form = $this->createCreateForm($entity, $crop_working);
         $form->handleRequest($request);
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $entity->setCropWorking($crop_working);
             $entity->setEstimatedDate(new \DateTime($entity->getEstimatedDate()));
             $entity->setRealDate(new \DateTime($entity->getRealDate()));
@@ -194,7 +194,7 @@ class SeedWorkController extends AbstractAppController
         $editForm = $this->createEditForm($entity, $entity->getCropWorking());
         $editForm->handleRequest($request);
 
-        if ($editForm->isValid()) {
+        if ($editForm->isSubmitted() && $editForm->isValid()) {
 
             $entity->setEstimatedDate(new \DateTime($entity->getEstimatedDate()));
             $entity->setRealDate(new \DateTime($entity->getRealDate()));
@@ -219,7 +219,7 @@ class SeedWorkController extends AbstractAppController
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\SeedWork::class)->find($id);
 

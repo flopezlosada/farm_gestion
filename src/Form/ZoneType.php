@@ -14,9 +14,10 @@ class ZoneType extends AbstractType
      */
     public function buildForm(FormBuilderInterface $builder, array $options)
     {
+        // 'crop_workings' retirado: la entidad Zone no expone esa propiedad
+        // (la relación con cultivos va a través de los sectores).
         $builder
             ->add('name')
-            ->add('crop_workings')
         ;
     }
     

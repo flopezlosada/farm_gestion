@@ -1,15 +1,172 @@
-{% extends 'base.html.twig' %}
+{# ============================================================
+ # Nuevo animal — shell csa.
+ #
+ # Esta pantalla en la práctica no se usa: los Fowl se crean al
+ # registrar/actualizar el lote desde Batch. Se migra igual con el
+ # mismo JS condicional que el edit por coherencia.
+ # ============================================================ #}
 
-{% block body -%}
-    <h1>Fowl creation</h1>
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% form_theme form 'form_div_layout.html.twig' %}
 
-    {{ form(form) }}
+{% block title %}Nuevo animal{% endblock %}
 
-        <ul class="record_actions">
-    <li>
-        <a href="{{ path('fowl') }}">
-            Back to the list
-        </a>
-    </li>
-</ul>
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('fowl') }}">Animales</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Nuevo</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Granja · Animal',
+        'Nuevo animal',
+        'Los campos de sacrificio y destino aparecen al elegir el estado correspondiente.'
+    ) }}
+
+    {{ form_start(form, {
+        'action': path('fowl_create'),
+        'method': 'post',
+        'attr': { 'role': 'form', 'class': 'csa-form-narrow' }
+    }) }}
+
+        <div class="csa-stack-lg">
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Estado', subtitle: 'Estado actual del animal y notas.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.fowl_status, 'Estado del animal', { full: true }) }}
+                        {{ csa.field(form.note, 'Notas', { full: true }) }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Sacrificio y destino', subtitle: 'Sólo aplica cuando el estado lo requiere.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        <div id="put_down_date" class="csa-field--full hide">
+                            {{ csa.field(form.put_down_date, 'Fecha de sacrificio/muerte', { full: true, attr: { class: 'csa-input datepicker' } }) }}
+                        </div>
+                        <div id="put_down_weight" class="csa-field--full hide">
+                            {{ csa.field(form.put_down_weight, 'Peso vivo al sacrificio (Kg)', { full: true }) }}
+                        </div>
+                        <div id="carcass_weight" class="csa-field--full hide">
+                            {{ csa.field(form.carcass_weight, 'Peso en canal (Kg)', { full: true }) }}
+                        </div>
+                        <div id="fowl_destination" class="csa-field--full hide">
+                            {{ csa.field(form.fowl_destination, 'Destino del animal', { full: true }) }}
+                        </div>
+                        <div id="sale_price" class="csa-field--full hide">
+                            {{ csa.field(form.sale_price, 'Precio de venta (€/Kg)', { full: true }) }}
+                        </div>
+                        <div id="fowl_purchaser" class="csa-field--full hide">
+                            {{ csa.field(form.fowl_purchaser, 'Cliente', { full: true }) }}
+                        </div>
+                        <div id="fowl_recipient" class="csa-field--full hide">
+                            {{ csa.field(form.fowl_recipient, 'Agraciada/o', { full: true }) }}
+                        </div>
+                        <div id="fowl_user" class="csa-field--full hide">
+                            {{ csa.field(form.fowl_user, 'Repartido a', { full: true }) }}
+                        </div>
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                <div></div>
+                <div class="csa-row">
+                    {{ csa.btn('Cancelar', { variant: 'ghost', href: path('fowl') }) }}
+                    {{ form_widget(form.submit, {
+                        label: 'Crear animal',
+                        attr: { class: 'csa-btn csa-btn--primary' }
+                    }) }}
+                </div>
+            </div>
+
+        </div>
+
+        {{ form_rest(form) }}
+    {{ form_end(form, { render_rest: false }) }}
+
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    <script>
+        document.querySelectorAll('.datepicker, .datepicker2, .datepicker3')
+            .forEach(function (el) { el.type = 'date'; });
+
+        $('#fowl_fowl_status').change(function () {
+            if ($(this).val() == 1 || $(this).val() == 2 || $(this).val() == 3) {
+                $('#fowl_put_down_weight').val('');
+                $('#put_down_weight').hide('slow');
+                $('#fowl_carcass_weight').val('');
+                $('#carcass_weight').hide('slow');
+                $('#fowl_fowl_destination').val('');
+                $('#fowl_destination').hide('slow');
+                $('#fowl_sale_price').val('');
+                $('#sale_price').hide('slow');
+                $('#fowl_sale_price').prop('required', false);
+                $('#fowl_fowl_purchaser').val('');
+                $('#fowl_purchaser').hide('slow');
+
+                if ($(this).val() == 1) {
+                    $('#fowl_put_down_date').val('');
+                    $('#put_down_date').hide('slow');
+                } else {
+                    $('#put_down_date').removeClass('hide');
+                    $('#put_down_date').show('slow');
+                }
+            } else if ($(this).val() == 4) {
+                $('#put_down_date').removeClass('hide');
+                $('#put_down_date').show('slow');
+                $('#put_down_weight').removeClass('hide');
+                $('#put_down_weight').show('slow');
+                $('#carcass_weight').removeClass('hide');
+                $('#carcass_weight').show('slow');
+                $('#fowl_destination').removeClass('hide');
+                $('#fowl_destination').show('slow');
+            }
+        });
+
+        $('#fowl_fowl_destination').change(function () {
+            if ($(this).val() == 1) {
+                $('#sale_price').removeClass('hide');
+                $('#sale_price').show('slow');
+                $('#fowl_sale_price').prop('required', true);
+                $('#fowl_purchaser').removeClass('hide');
+                $('#fowl_purchaser').show('slow');
+                $('#fowl_fowl_recipient').val('');
+                $('#fowl_recipient').hide('slow');
+                $('#fowl_fowl_user').val('');
+                $('#fowl_user').hide('slow');
+            } else if ($(this).val() == 2) {
+                $('#fowl_sale_price').val('');
+                $('#sale_price').show('slow');
+                $('#fowl_sale_price').prop('required', false);
+                $('#fowl_fowl_purchaser').val('');
+                $('#fowl_purchaser').hide('slow');
+                $('#fowl_fowl_user').val('');
+                $('#fowl_user').hide('slow');
+                $('#fowl_recipient').removeClass('hide');
+                $('#fowl_recipient').show('slow');
+            } else if ($(this).val() == 3) {
+                $('#fowl_sale_price').val('');
+                $('#sale_price').hide('slow');
+                $('#fowl_sale_price').prop('required', false);
+                $('#fowl_fowl_purchaser').val('');
+                $('#fowl_purchaser').hide('slow');
+                $('#fowl_fowl_recipient').val('');
+                $('#fowl_recipient').hide('slow');
+                $('#fowl_user').removeClass('hide');
+                $('#fowl_user').show('slow');
+            }
+        });
+    </script>
 {% endblock %}

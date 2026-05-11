@@ -35,7 +35,6 @@ class Gift
      * @ORM\Column(name="gift_date", type="date")
      */
     #[Assert\NotBlank]
-    #[Assert\Date]
     private $gift_date;
 
     /**

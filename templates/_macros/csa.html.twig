@@ -1,0 +1,170 @@
+{# ============================================================
+ # CSA Vega de Jarama — Macros de componentes
+ # ============================================================
+ # Cómo usar:
+ #
+ #   {% import '_macros/csa.html.twig' as csa %}
+ #
+ #   {{ csa.btn('Guardar', { variant: 'primary', type: 'submit' }) }}
+ #   {{ csa.badge('Activo', 'green') }}
+ #   {{ csa.kpi('Huevos hoy', 412, 'unidades', '+8% vs ayer', 'up') }}
+ #
+ # Convención: el primer argumento es siempre el contenido principal
+ # (label, valor, etc). Las opciones van en un hash al final.
+ #
+ # Componentes con body (card, form_section, field_block) NO viven aquí.
+ # Twig 3 retiró {% call %} y caller(), así que esos componentes son
+ # partials embebibles — ver templates/_components/.
+ #
+ # Uso de los partials con body:
+ #
+ #   {% embed '_components/csa_card.html.twig' with {
+ #       title: 'Botones', subtitle: 'Variantes' } %}
+ #       {% block body %}
+ #           {% import '_macros/csa.html.twig' as csa %}
+ #           {{ csa.btn('Aceptar', { variant: 'primary' }) }}
+ #       {% endblock %}
+ #   {% endembed %}
+ #
+ # IMPORTANTE: dentro de un {% embed %} hay que reimportar las macros.
+ # Twig no propaga los imports del template padre al partial embebido.
+ # ============================================================ #}
+
+
+{# ---------- BOTÓN ----------
+ # opts: variant (primary|secondary|ghost|danger), size (sm|lg),
+ #       type (button|submit|reset), href (renderiza <a>), icon (clase FA),
+ #       disabled, attr (hash de atributos extra)
+ #}
+{% macro btn(label, opts = {}) %}
+    {%- set variant = opts.variant|default('secondary') -%}
+    {%- set size = opts.size|default('') -%}
+    {%- set classes = ['csa-btn', 'csa-btn--' ~ variant] -%}
+    {%- if size %}{% set classes = classes|merge(['csa-btn--' ~ size]) %}{% endif -%}
+    {%- if opts.block|default(false) %}{% set classes = classes|merge(['csa-btn--block']) %}{% endif -%}
+
+    {%- if opts.href is defined -%}
+        <a href="{{ opts.href }}" class="{{ classes|join(' ') }}"
+           {%- if opts.disabled|default(false) %} aria-disabled="true"{% endif -%}
+           {%- for k, v in opts.attr|default({}) %} {{ k }}="{{ v }}"{% endfor -%}>
+            {%- if opts.icon is defined %}<i class="fa {{ opts.icon }}"></i>{% endif -%}
+            <span>{{ label }}</span>
+        </a>
+    {%- else -%}
+        <button type="{{ opts.type|default('button') }}" class="{{ classes|join(' ') }}"
+                {%- if opts.disabled|default(false) %} disabled{% endif -%}
+                {%- for k, v in opts.attr|default({}) %} {{ k }}="{{ v }}"{% endfor -%}>
+            {%- if opts.icon is defined %}<i class="fa {{ opts.icon }}"></i>{% endif -%}
+            <span>{{ label }}</span>
+        </button>
+    {%- endif -%}
+{% endmacro %}
+
+
+{# ---------- BADGE ----------
+ # tone: green | ochre | terracotta | sky | plum | neutral
+ # opts: no_dot (true para badge sin punto)
+ #}
+{% macro badge(label, tone = 'neutral', opts = {}) %}
+    <span class="csa-badge csa-badge--{{ tone }}{% if opts.no_dot|default(false) %} csa-badge--no-dot{% endif %}">
+        {{ label }}
+    </span>
+{% endmacro %}
+
+
+{# ---------- KPI ----------
+ # value se imprime tal cual (puedes pasar un número formateado).
+ # delta_dir: up | down | null
+ # tone: green | ochre | terracotta | sky | plum (franja superior + icono)
+ # icon: clase de Font Awesome (ej. 'fa-egg'). Decorativo en la esquina;
+ #       hereda el color del tono si tone está definido.
+ #}
+{% macro kpi(label, value, unit = null, delta = null, delta_dir = null, tone = null, icon = null) %}
+    <div class="csa-kpi{% if tone %} csa-kpi--{{ tone }}{% endif %}">
+        <div class="csa-kpi__head">
+            <div class="csa-kpi__label">{{ label }}</div>
+            {% if icon %}
+                <span class="csa-kpi__icon-box">
+                    <i class="fa {{ icon }}" aria-hidden="true"></i>
+                </span>
+            {% endif %}
+        </div>
+        <div class="csa-kpi__value">
+            {{ value }}{% if unit %}<span class="csa-kpi__unit">{{ unit }}</span>{% endif %}
+        </div>
+        {% if delta %}
+            <div class="csa-kpi__delta{% if delta_dir %} csa-kpi__delta--{{ delta_dir }}{% endif %}">
+                {{ delta }}
+            </div>
+        {% endif %}
+    </div>
+{% endmacro %}
+
+
+{# ---------- FIELD ----------
+ # Envuelve un Symfony form_widget con la etiqueta y el hint nuestros.
+ # Pensado para sustituir el patrón verboso de {{ form_label }} +
+ # {{ form_widget }} + {{ form_errors }} repetido en cada formulario.
+ #
+ # Uso:
+ #   {{ csa.field(form.purchase_date, 'Fecha de compra', { hint: 'opcional' }) }}
+ #
+ # Si necesitas más control sobre el widget, usa el partial
+ # _components/csa_field_block.html.twig vía embed.
+ #}
+{% macro field(field, label, opts = {}) %}
+    {%- set required = opts.required ?? field.vars.required ?? false -%}
+    {%- set widget_class = opts.widget_class|default('csa-input') -%}
+    {%- set is_expanded_multi = (field.vars.expanded|default(false)) and (field.vars.multiple|default(false)) -%}
+    <div class="csa-field{% if opts.full|default(false) %} csa-field--full{% endif %}">
+        <div class="csa-field__label-row">
+            <label class="csa-field__label" for="{{ field.vars.id }}">
+                {{ label }}{% if required %}<span class="csa-field__required">*</span>{% endif %}
+            </label>
+            {% if opts.hint is defined %}
+                <span class="csa-field__hint">{{ opts.hint }}</span>
+            {% endif %}
+        </div>
+        {% if is_expanded_multi %}
+            {# EntityType expanded+multiple: el widget es un wrapper de
+             # checkboxes que se convierten en pills via CSS. No le
+             # pasamos csa-input porque fijaría height:40px y las pills
+             # se desbordarían fuera del field. #}
+            {{ form_widget(field, { attr: opts.attr|default({}) }) }}
+        {% else %}
+            {{ form_widget(field, { attr: { class: widget_class }|merge(opts.attr|default({})) }) }}
+        {% endif %}
+        {% if not field.vars.valid %}
+            <div class="csa-field__error">{{ form_errors(field) }}</div>
+        {% endif %}
+    </div>
+{% endmacro %}
+
+
+{# ---------- CALLOUT ----------
+ # Mensaje inline destacado dentro de cards o secciones.
+ # tone: info | warning | danger (default: info)
+ # icon: clase de Font Awesome sin el prefijo "fa fa-"
+ #
+ #   {{ csa.callout('No se puede cerrar el lote.', 'warning', 'exclamation-triangle') }}
+ #}
+{% macro callout(message, tone = 'info', icon = 'info-circle') %}
+    <p class="csa-callout csa-callout--{{ tone }}">
+        <i class="csa-callout__icon fa fa-{{ icon }}"></i>
+        <span>{{ message }}</span>
+    </p>
+{% endmacro %}
+
+
+{# ---------- PAGE HEADER ----------
+ # Cabecera de pantalla: kicker + título + lead.
+ #
+ #   {{ csa.page_header('Granja · Lotes', 'Listado de lotes', 'Animales activos…') }}
+ #}
+{% macro page_header(kicker = null, title = '', lead = null) %}
+    <div class="csa-page-header">
+        {% if kicker %}<div class="csa-kicker">{{ kicker }}</div>{% endif %}
+        <h1>{{ title }}</h1>
+        {% if lead %}<div class="csa-lead">{{ lead }}</div>{% endif %}
+    </div>
+{% endmacro %}

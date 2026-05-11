@@ -1,40 +1,70 @@
-{% extends 'layout_list.html.twig' %}
+{# ============================================================
+ # Listado de eventos públicos (Booking) — admin.
+ # La vista pública es Booking/calendar.html.twig (no se toca).
+ # ============================================================ #}
 
-{% block title %}Booking index{% endblock %}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
 
-{% block main %}
-    <h1>Booking index</h1>
+{% block title %}Eventos públicos{% endblock %}
 
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Id</th>
-                <th>BeginAt</th>
-                <th>EndAt</th>
-                <th>Title</th>
-                <th>actions</th>
-            </tr>
-        </thead>
-        <tbody>
-        {% for booking in bookings %}
-            <tr>
-                <td>{{ booking.id }}</td>
-                <td>{{ booking.beginAt ? booking.beginAt|date('Y-m-d H:i:s') : '' }}</td>
-                <td>{{ booking.endAt ? booking.endAt|date('Y-m-d H:i:s') : '' }}</td>
-                <td>{{ booking.title }}</td>
-                <td>
-                    <a href="{{ path('booking_show', {'id': booking.id}) }}">show</a>
-                    <a href="{{ path('booking_edit', {'id': booking.id}) }}">edit</a>
-                    {{ include('booking/_delete_form.html.twig') }}
-                </td>
-            </tr>
-        {% else %}
-            <tr>
-                <td colspan="5">no records found</td>
-            </tr>
-        {% endfor %}
-        </tbody>
-    </table>
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Eventos públicos</span>
+{% endblock %}
 
-    <a href="{{ path('booking_new') }}">Create new</a>
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Comunicación · Web pública',
+        'Eventos públicos',
+        'Citas que aparecen en el calendario de la web pública (booking).'
+    ) }}
+
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-5);">
+        <div></div>
+        <div class="csa-row">
+            {{ csa.btn('Nuevo evento', { variant: 'primary', href: path('booking_new'), icon: 'fa-plus' }) }}
+        </div>
+    </div>
+
+    <div class="csa-table-wrap">
+        <table class="csa-table" data-paginate>
+            <thead>
+                <tr>
+                    <th>Título</th>
+                    <th class="csa-table__col-tight">Inicio</th>
+                    <th class="csa-table__col-tight">Fin</th>
+                    <th class="csa-table__actions">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for booking in bookings %}
+                    <tr>
+                        <td>
+                            <a class="csa-table__primary" href="{{ path('booking_show', { id: booking.id }) }}">{{ booking.title }}</a>
+                        </td>
+                        <td class="csa-table__col-tight">
+                            {% if booking.beginAt %}{{ booking.beginAt|format_date('medium', locale='es') }}{% else %}—{% endif %}
+                        </td>
+                        <td class="csa-table__col-tight">
+                            {% if booking.endAt %}{{ booking.endAt|format_date('medium', locale='es') }}{% else %}—{% endif %}
+                        </td>
+                        <td class="csa-table__actions">
+                            <a href="{{ path('booking_show', { id: booking.id }) }}" title="Ver" aria-label="Ver"><i class="fa fa-eye"></i></a>
+                            <a href="{{ path('booking_edit', { id: booking.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="4" class="csa-muted" style="text-align: center; padding: var(--csa-sp-8);">
+                            Aún no hay eventos públicos.
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
 {% endblock %}

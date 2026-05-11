@@ -1,30 +1,65 @@
-{% extends 'base.html.twig' %}
+{# ============================================================
+ # Detalle de grupo de recogida — shell csa.
+ # ============================================================ #}
 
-{% block title %}WeeklyBasketGroup{% endblock %}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
 
-{% block body %}
-    <h1>WeeklyBasketGroup</h1>
+{% block title %}Grupo · {{ weekly_basket_group.name }}{% endblock %}
 
-    <table class="table">
-        <tbody>
-            <tr>
-                <th>Id</th>
-                <td>{{ weekly_basket_group.id }}</td>
-            </tr>
-            <tr>
-                <th>Name</th>
-                <td>{{ weekly_basket_group.name }}</td>
-            </tr>
-            <tr>
-                <th>Color</th>
-                <td>{{ weekly_basket_group.color }}</td>
-            </tr>
-        </tbody>
-    </table>
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('weekly_basket_group_index') }}">Grupos de recogida</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ weekly_basket_group.name }}</span>
+{% endblock %}
 
-    <a href="{{ path('weekly_basket_group_index') }}">back to list</a>
+{% block csa_main %}
 
-    <a href="{{ path('weekly_basket_group_edit', {'id': weekly_basket_group.id}) }}">edit</a>
+    <form id="weekly-basket-group-delete-form" method="post"
+          action="{{ path('weekly_basket_group_delete', { id: weekly_basket_group.id }) }}"
+          onsubmit="return confirm('¿Seguro? Esta acción no se puede deshacer.');"
+          style="display: none;">
+        <input type="hidden" name="_method" value="DELETE">
+        <input type="hidden" name="_token" value="{{ csrf_token('delete' ~ weekly_basket_group.id) }}">
+    </form>
 
-    {{ include('weekly_basket_group/_delete_form.html.twig') }}
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-6); align-items: flex-start;">
+        <div class="csa-row" style="align-items: flex-start; gap: var(--csa-sp-4);">
+            <span style="width: 64px; height: 64px; border-radius: var(--csa-radius-lg); background: {{ weekly_basket_group.color }}; border: 1px solid var(--csa-rule); flex-shrink: 0;"></span>
+            <div>
+                <h1>{{ weekly_basket_group.name }}</h1>
+                <div class="csa-serif csa-italic csa-soft" style="margin-top: var(--csa-sp-2);">
+                    Color: {{ weekly_basket_group.color }}
+                </div>
+            </div>
+        </div>
+        <div class="csa-row">
+            <button type="submit" form="weekly-basket-group-delete-form" class="csa-btn csa-btn--ghost">
+                Eliminar
+            </button>
+            {{ csa.btn('Editar', { variant: 'secondary', href: path('weekly_basket_group_edit', { id: weekly_basket_group.id }), icon: 'fa-pencil' }) }}
+            {{ csa.btn('Volver', { variant: 'ghost', href: path('weekly_basket_group_index') }) }}
+        </div>
+    </div>
+
+    {% embed '_components/csa_card.html.twig' with { title: 'Datos del grupo', accent: 'sky' } %}
+        {% block body %}
+            <dl class="csa-defs">
+                <div class="csa-defs__row">
+                    <dt class="csa-defs__label">Nombre</dt>
+                    <dd class="csa-defs__value">{{ weekly_basket_group.name }}</dd>
+                </div>
+                <div class="csa-defs__row">
+                    <dt class="csa-defs__label">Color</dt>
+                    <dd class="csa-defs__value">
+                        <span style="display: inline-block; width: 16px; height: 16px; border-radius: 3px; background: {{ weekly_basket_group.color }}; border: 1px solid var(--csa-rule); vertical-align: middle; margin-right: var(--csa-sp-2);"></span>
+                        {{ weekly_basket_group.color }}
+                    </dd>
+                </div>
+            </dl>
+        {% endblock %}
+    {% endembed %}
+
 {% endblock %}

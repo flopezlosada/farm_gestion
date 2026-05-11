@@ -1,40 +1,59 @@
-{% extends 'App:Default:layout_admin.html.twig' %}
+{# ============================================================
+ # Modal de creación de video (YouTube ID) adjunto a una entidad
+ # polimórfica. Carga vía jQuery Modal AJAX desde Blog/edition.
+ # ============================================================ #}
+
+{% extends 'Default/layout_admin.html.twig' %}
+{% form_theme form 'form_div_layout.html.twig' %}
 
 {% block admin_content -%}
-    <h4>{{'Video creation'|trans}}</h4>
+    <div class="csa-modal-card" style="max-width: 480px;">
+        <header style="display: flex; align-items: center; gap: var(--csa-sp-3); margin-bottom: var(--csa-sp-4);">
+            <span class="csa-table__id-marker" style="width: 44px; height: 44px; font-size: 18px; border-radius: var(--csa-radius-md);">
+                <i class="fa fa-video-camera"></i>
+            </span>
+            <h3 style="font-family: var(--csa-serif); font-weight: 500; margin: 0;">Añadir vídeo</h3>
+        </header>
 
-	{{ form(form, {'attr': {'class': 'admin-form on-modal', 'data-place' : 'on-modal', 'id':'form_'~object_class~'_'~entity.getClass|lower~'_'~foreign_key}} ) }}
-    {#
-	    <p>{{'Insert this code wherever you want it be displayed'|trans}} :</p>
-	    <p class="snippet">**insert.video.<span id="display"></span>**</p>
+        {{ form_start(form, { attr: {
+            class: 'admin-form on-modal',
+            'data-place': 'on-modal',
+            id: 'form_' ~ object_class ~ '_' ~ entity.getClass|lower ~ '_' ~ foreign_key
+        } }) }}
 
-<script type="text/javascript">
-	$('textarea').keyup(function () {
-		var snippet = $(this).val();
-	  $('#display').text(snippet);
-	});
-</script>
-#}
+            <div class="csa-form-grid">
+                <div class="csa-field csa-field--full">
+                    <label class="csa-field__label" for="{{ form.title.vars.id }}">Título</label>
+                    {{ form_widget(form.title, { attr: { class: 'csa-input' } }) }}
+                </div>
+                <div class="csa-field csa-field--full">
+                    <label class="csa-field__label" for="{{ form.video_id.vars.id }}">ID de YouTube</label>
+                    {{ form_widget(form.video_id, { attr: { class: 'csa-input', placeholder: 'Ej. dQw4w9WgXcQ' } }) }}
+                </div>
+            </div>
+
+            <div style="margin-top: var(--csa-sp-5);">
+                {{ form_widget(form.submit, { label: 'Añadir vídeo', attr: { class: 'csa-btn csa-btn--primary' } }) }}
+            </div>
+
+            {{ form_rest(form) }}
+        {{ form_end(form, { render_rest: false }) }}
+    </div>
 {% endblock %}
+
 {% block javascripts %}
-	<script type="text/javascript" src="{{ asset('assets/jquery.form.min.js') }}"></script>
-	<script src="{{ asset('scripts/admin.js')}}"></script>
-	<script>
-		// wait for the DOM to be loaded
-		$(document).ready(function () {
-			var options = {
-				success: updateEdition,
-				target: "#edition_aside_medias"
-			}
-
-			// bind 'myForm' and provide a simple callback function
-			$('#{{ 'form_'~object_class~'_'~entity.getClass|lower~'_'~foreign_key }}').ajaxForm(options);
-		});
-
-		function updateEdition() {
-			$('.jquery-modal').hide();
-			$('.modal').hide();
-		}
-
-	</script>
+    {{ parent() }}
+    <script type="text/javascript" src="{{ asset('bundles/app/assets/jquery.form.min.js') }}"></script>
+    <script src="{{ asset('bundles/app/js/scripts/admin.js') }}"></script>
+    <script>
+        $(document).ready(function () {
+            $('#{{ 'form_' ~ object_class ~ '_' ~ entity.getClass|lower ~ '_' ~ foreign_key }}').ajaxForm({
+                success: function () {
+                    $('.jquery-modal').hide();
+                    $('.modal').hide();
+                },
+                target: '#edition_aside_medias'
+            });
+        });
+    </script>
 {% endblock %}

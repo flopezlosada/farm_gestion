@@ -1,36 +1,70 @@
-{% extends 'layout_crud.html.twig' %}
+{# ============================================================
+ # Nueva imagen de tarea — shell csa.
+ # Form con multipart/form-data porque hay upload de fichero.
+ # ============================================================ #}
 
-    {% block title_wrapper %}Añadir {% endblock %}
-    {% block main -%}
-        <div class="panel panel-default">
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% form_theme form 'form_div_layout.html.twig' %}
 
-            <div class="panel-body">
-                {{ form_start(form, {'action': path('taskimage_create',{'task_id':entity.getTask.id}),'method': 'post','attr': {'role': 'form' }}) }}
-                <div class='row'>
-                    <div class="col-lg-12">
-                        <div class="form-group">
-                            {{ form_errors(form.title) }}
-                            <label>{{ form_label(form.title) }}</label>
-                            {{ form_widget(form.title,{'attr':{'class':'form-control','Placeholder':'Título'}}) }}
-                        </div>
-                        <div class="form-group">
-                            {{ form_errors(form.file) }}
-                            <label>{{ form_label(form.file) }}</label>
-                            {{ form_widget(form.file) }}
-                        </div>
+{% block title %}Nueva imagen{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('task') }}">Tareas</a>
+    {% if entity.task %}
+        <span class="csa-topbar__crumbs-sep">/</span>
+        <a href="{{ path('task_show', { id: entity.task.id }) }}">{{ entity.task }}</a>
+    {% endif %}
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Nueva imagen</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Tareas · Imágenes',
+        'Nueva imagen',
+        entity.task ? ('Para la tarea: ' ~ entity.task) : 'Sube una imagen y dale un título.'
+    ) }}
+
+    {{ form_start(form, {
+        'action': path('taskimage_create', { task_id: entity.getTask.id }),
+        'method': 'post',
+        'attr': { 'role': 'form', 'class': 'csa-form-narrow', 'enctype': 'multipart/form-data' }
+    }) }}
+
+        <div class="csa-stack-lg">
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Imagen', subtitle: 'Título y archivo.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.title, 'Título', { full: true }) }}
+                        {{ csa.field(form.file, 'Archivo de imagen', { full: true }) }}
                     </div>
+                {% endblock %}
+            {% endembed %}
+
+            <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                <div></div>
+                <div class="csa-row">
+                    {% if entity.task %}
+                        {{ csa.btn('Cancelar', { variant: 'ghost', href: path('task_show', { id: entity.task.id }) }) }}
+                    {% else %}
+                        {{ csa.btn('Cancelar', { variant: 'ghost', href: path('taskimage') }) }}
+                    {% endif %}
+                    {{ form_widget(form.submit, {
+                        label: 'Subir imagen',
+                        attr: { class: 'csa-btn csa-btn--primary' }
+                    }) }}
                 </div>
-                {{ form_widget(form.submit,{'attr':{'class':'btn btn-default'}}) }}
-                {{ form_rest(form) }}
-                {{ form_end(form, {'render_rest': false}) }}
-                <ul class="record_actions">
-                    <li>
-                        <a href="{{ path('taskimage') }}">
-                            Back to the list
-                        </a>
-                    </li>
-                </ul>
             </div>
+
         </div>
-    {% endblock %}
-    {% block more_js %}{% endblock %}
+
+        {{ form_rest(form) }}
+    {{ form_end(form, { render_rest: false }) }}
+
+{% endblock %}

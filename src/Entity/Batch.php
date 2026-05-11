@@ -38,7 +38,6 @@ class Batch
      * @ORM\Column(name="purchase_date", type="date")
      */
     #[Assert\NotBlank]
-    #[Assert\Date]
     private $purchase_date;
 
 
@@ -47,7 +46,6 @@ class Batch
      * @var string $finalization_date
      * @ORM\Column(name="finalization_date", type="date", nullable=true)
      */
-    #[Assert\Date]
     private $finalization_date;
 
 
@@ -56,7 +54,6 @@ class Batch
      * @var string $receipt_date
      * @ORM\Column(name="receipt_date", type="date")
      */
-    #[Assert\Date]
     private $receipt_date;
 
 

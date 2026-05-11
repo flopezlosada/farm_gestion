@@ -1,0 +1,1618 @@
+/* ============================================================
+ * CSA Vega de Jarama — Componentes
+ * ============================================================
+ * Todo prefijado `csa-` para no chocar con Bootstrap 3 / SB Admin 2.
+ * Carga después de tokens.css y base.css.
+ * Ubicación sugerida: assets/css/components.css
+ * ============================================================ */
+
+
+/* ============================================================
+ * BOTONES
+ * ============================================================ */
+
+.csa-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--csa-sp-2);
+  padding: 9px 16px;
+  border-radius: var(--csa-radius-md);
+  font-family: var(--csa-sans);
+  font-size: var(--csa-fs-base);
+  font-weight: 500;
+  line-height: 1;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background var(--csa-t-fast), border-color var(--csa-t-fast), color var(--csa-t-fast);
+  white-space: nowrap;
+  user-select: none;
+}
+.csa-btn:focus-visible {
+  outline: 2px solid var(--csa-green);
+  outline-offset: 2px;
+}
+.csa-btn:disabled,
+.csa-btn[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.csa-btn--primary,
+.csa-btn--primary:link,
+.csa-btn--primary:visited {
+  background: var(--csa-green);
+  color: var(--csa-bg);
+  border-color: var(--csa-green);
+}
+.csa-btn--primary:hover,
+.csa-btn--primary:focus {
+  background: #3c6630;
+  border-color: #3c6630;
+  color: var(--csa-bg);
+}
+
+.csa-btn--secondary,
+.csa-btn--secondary:link,
+.csa-btn--secondary:visited {
+  background: var(--csa-surface-alt);
+  color: var(--csa-ink);
+  border-color: var(--csa-rule);
+}
+.csa-btn--secondary:hover,
+.csa-btn--secondary:focus {
+  background: var(--csa-bg);
+  border-color: var(--csa-ink-soft);
+  color: var(--csa-ink);
+}
+
+.csa-btn--ghost {
+  background: transparent;
+  color: var(--csa-ink-soft);
+  border-color: transparent;
+}
+.csa-btn--ghost:hover { color: var(--csa-ink); background: var(--csa-surface-alt); }
+
+.csa-btn--danger {
+  background: var(--csa-terracotta);
+  color: white;
+  border-color: var(--csa-terracotta);
+}
+.csa-btn--danger:hover { background: #c45c33; }
+
+.csa-btn--sm { padding: 6px 12px; font-size: var(--csa-fs-sm); }
+.csa-btn--lg { padding: 12px 22px; font-size: var(--csa-fs-md); }
+.csa-btn--block { display: flex; width: 100%; }
+
+
+/* ============================================================
+ * BADGES (estados, etiquetas)
+ * ============================================================ */
+
+.csa-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: var(--csa-radius-pill);
+  font-family: var(--csa-sans);
+  font-size: var(--csa-fs-xs);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+}
+.csa-badge::before {
+  content: '';
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+.csa-badge--no-dot::before { display: none; }
+
+.csa-badge--green      { background: var(--csa-green-soft);      color: var(--csa-green); }
+.csa-badge--ochre      { background: var(--csa-ochre-soft);      color: var(--csa-amber); }
+.csa-badge--terracotta { background: var(--csa-terracotta-soft); color: #b04e22; }
+.csa-badge--sky        { background: var(--csa-sky-soft);        color: var(--csa-sky); }
+.csa-badge--plum       { background: var(--csa-plum-soft);       color: var(--csa-plum); }
+.csa-badge--neutral    { background: var(--csa-surface-alt);     color: var(--csa-ink-soft); }
+
+
+/* ============================================================
+ * CARDS
+ * ============================================================ */
+
+.csa-card {
+  background: var(--csa-surface);
+  border: 1px solid var(--csa-rule);
+  border-radius: var(--csa-radius-lg);
+  padding: var(--csa-sp-6);
+}
+.csa-card--flush { padding: 0; }
+
+/* Acento de color por tipo de sección. Línea fina con color principal — presencia sin saturar. */
+.csa-card--accent-sky        { border-top: 2px solid var(--csa-sky); }
+.csa-card--accent-ochre      { border-top: 2px solid var(--csa-ochre); }
+.csa-card--accent-plum       { border-top: 2px solid var(--csa-plum); }
+.csa-card--accent-green      { border-top: 2px solid var(--csa-green); }
+.csa-card--accent-terracotta { border-top: 2px solid var(--csa-terracotta); }
+
+.csa-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--csa-sp-3);
+  padding: var(--csa-sp-5) var(--csa-sp-6);
+  background: var(--csa-surface-alt);
+  border-bottom: 1px solid var(--csa-rule);
+  border-radius: var(--csa-radius-lg) var(--csa-radius-lg) 0 0;
+}
+.csa-card__header h3,
+.csa-card__title {
+  font-family: var(--csa-serif);
+  font-size: var(--csa-fs-xl);
+  font-weight: 400;
+  letter-spacing: -0.015em;
+  margin: 0;
+}
+.csa-card__subtitle {
+  font-family: var(--csa-serif);
+  font-style: italic;
+  font-size: var(--csa-fs-sm);
+  color: var(--csa-ink-soft);
+  margin-top: 2px;
+}
+.csa-card__body { padding: var(--csa-sp-5) var(--csa-sp-6); }
+
+
+/* ============================================================
+ * KPI (tarjeta de métrica del panel)
+ * ============================================================ */
+
+.csa-kpi {
+  background: var(--csa-surface);
+  border: 1px solid var(--csa-rule);
+  border-radius: var(--csa-radius-lg);
+  padding: var(--csa-sp-5) var(--csa-sp-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--csa-sp-3);
+}
+.csa-kpi__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--csa-sp-3);
+}
+.csa-kpi__icon-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--csa-radius-md);
+  font-size: 0.875rem;
+  background: var(--csa-surface-alt);
+  color: var(--csa-ink-soft);
+  flex-shrink: 0;
+}
+.csa-kpi--green      .csa-kpi__icon-box { background: var(--csa-green-soft);      color: var(--csa-green); }
+.csa-kpi--ochre      .csa-kpi__icon-box { background: var(--csa-ochre-soft);      color: var(--csa-ochre); }
+.csa-kpi--terracotta .csa-kpi__icon-box { background: var(--csa-terracotta-soft); color: var(--csa-terracotta); }
+.csa-kpi--sky        .csa-kpi__icon-box { background: var(--csa-sky-soft);        color: var(--csa-sky); }
+.csa-kpi--plum       .csa-kpi__icon-box { background: var(--csa-plum-soft);       color: var(--csa-plum); }
+.csa-kpi__label {
+  font-size: var(--csa-fs-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--csa-ink-muted);
+  font-weight: 500;
+}
+.csa-kpi__value {
+  font-family: var(--csa-serif);
+  font-size: 2.25rem;
+  font-weight: 400;
+  color: var(--csa-ink);
+  letter-spacing: -0.02em;
+  line-height: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.csa-kpi__unit {
+  font-family: var(--csa-sans);
+  font-size: var(--csa-fs-sm);
+  color: var(--csa-ink-muted);
+  font-weight: 400;
+}
+.csa-kpi__delta {
+  font-size: var(--csa-fs-xs);
+  color: var(--csa-ink-soft);
+}
+.csa-kpi__delta--up   { color: var(--csa-green); }
+.csa-kpi__delta--down { color: var(--csa-terracotta); }
+
+/* Tonos: trazo superior + valor coloreado del mismo tono.
+ * Ese color en el valor es el que da carácter a cada KPI. */
+.csa-kpi--green,
+.csa-kpi--ochre,
+.csa-kpi--terracotta,
+.csa-kpi--sky,
+.csa-kpi--plum { border-top-width: 3px; }
+.csa-kpi--green      { border-top-color: var(--csa-green); }
+.csa-kpi--ochre      { border-top-color: var(--csa-ochre); }
+.csa-kpi--terracotta { border-top-color: var(--csa-terracotta); }
+.csa-kpi--sky        { border-top-color: var(--csa-sky); }
+.csa-kpi--plum       { border-top-color: var(--csa-plum); }
+.csa-kpi--green      .csa-kpi__value { color: var(--csa-green); }
+.csa-kpi--ochre      .csa-kpi__value { color: var(--csa-ochre); }
+.csa-kpi--terracotta .csa-kpi__value { color: var(--csa-terracotta); }
+.csa-kpi--sky        .csa-kpi__value { color: var(--csa-sky); }
+.csa-kpi--plum       .csa-kpi__value { color: var(--csa-plum); }
+
+/* Fila de KPIs: rejilla auto-fit que reflueye en mobile. */
+.csa-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--csa-sp-4);
+}
+
+
+/* ============================================================
+ * LIST (filas semánticas: icono + título + subtítulo)
+ *  Pensado para listas de tareas, acciones, items navegables.
+ *  Cada item puede ser un <a> (action) o solo info (sin link).
+ * ============================================================ */
+
+.csa-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.csa-list__item {
+  border-top: 1px solid var(--csa-rule);
+}
+.csa-list__item:first-child { border-top: none; }
+
+.csa-list__link,
+.csa-list__row {
+  display: flex;
+  align-items: center;
+  gap: var(--csa-sp-3);
+  padding: var(--csa-sp-3) 0;
+  color: var(--csa-ink);
+  text-decoration: none;
+  transition: background var(--csa-t-fast);
+}
+.csa-list__link {
+  cursor: pointer;
+  margin: 0 calc(var(--csa-sp-3) * -1);
+  padding-left: var(--csa-sp-3);
+  padding-right: var(--csa-sp-3);
+  border-radius: var(--csa-radius-md);
+}
+.csa-list__link:hover {
+  background: var(--csa-surface-alt);
+  color: var(--csa-ink);
+}
+
+.csa-list__icon {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--csa-radius-md);
+  background: var(--csa-surface-alt);
+  color: var(--csa-ink-soft);
+  flex-shrink: 0;
+  transition: background var(--csa-t-fast), color var(--csa-t-fast);
+}
+.csa-list__link:hover .csa-list__icon {
+  background: var(--csa-bg);
+  color: var(--csa-ink);
+}
+
+.csa-list__body { flex: 1; min-width: 0; }
+.csa-list__primary {
+  font-weight: 500;
+  color: var(--csa-ink);
+}
+.csa-list__secondary {
+  font-size: var(--csa-fs-sm);
+  color: var(--csa-ink-soft);
+  margin-top: 2px;
+}
+.csa-list__chevron {
+  color: var(--csa-ink-muted);
+  flex-shrink: 0;
+  font-size: var(--csa-fs-sm);
+}
+
+/* Variantes de tono del icono — coherente con .csa-kpi__icon-box.
+ * Útil para listas de items "informativos" (huevos, verduras, pollos…)
+ * sin convertir el link entero en --primary o --danger. */
+.csa-list__icon--green      { background: var(--csa-green-soft);      color: var(--csa-green); }
+.csa-list__icon--ochre      { background: var(--csa-ochre-soft);      color: var(--csa-ochre); }
+.csa-list__icon--terracotta { background: var(--csa-terracotta-soft); color: var(--csa-terracotta); }
+.csa-list__icon--sky        { background: var(--csa-sky-soft);        color: var(--csa-sky); }
+.csa-list__icon--plum       { background: var(--csa-plum-soft);       color: var(--csa-plum); }
+
+/* Métrica a la derecha del item (valor + unidad sutil). Tinte opcional. */
+.csa-list__metric {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.csa-list__metric-value {
+  font-family: var(--csa-serif);
+  font-size: var(--csa-fs-lg);
+  color: var(--csa-ink);
+  line-height: 1;
+}
+.csa-list__metric-unit {
+  font-size: var(--csa-fs-xs);
+  color: var(--csa-ink-muted);
+}
+.csa-list__metric--green      .csa-list__metric-value { color: var(--csa-green); }
+.csa-list__metric--ochre      .csa-list__metric-value { color: var(--csa-ochre); }
+.csa-list__metric--terracotta .csa-list__metric-value { color: var(--csa-terracotta); }
+.csa-list__metric--sky        .csa-list__metric-value { color: var(--csa-sky); }
+.csa-list__metric--plum       .csa-list__metric-value { color: var(--csa-plum); }
+
+/* Encabezado de subgrupo dentro de una lista — "GALLINAS · 3 ACTIVOS". */
+.csa-list-group__label {
+  font-size: var(--csa-fs-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--csa-ink-muted);
+  font-weight: 500;
+  padding: var(--csa-sp-4) 0 var(--csa-sp-2);
+  border-bottom: 1px solid var(--csa-rule-soft);
+}
+.csa-list-group + .csa-list-group { margin-top: var(--csa-sp-2); }
+
+/* Variante destructiva — para acciones tipo "Finalizar lote". */
+.csa-list__link--danger .csa-list__icon {
+  background: var(--csa-terracotta-soft);
+  color: var(--csa-terracotta);
+}
+.csa-list__link--danger .csa-list__primary { color: var(--csa-terracotta); }
+.csa-list__link--danger:hover {
+  background: var(--csa-terracotta-soft);
+}
+
+/* Variante primaria — para la acción dominante. */
+.csa-list__link--primary .csa-list__icon {
+  background: var(--csa-green-soft);
+  color: var(--csa-green);
+}
+.csa-list__link--primary .csa-list__primary { color: var(--csa-green); }
+.csa-list__link--primary:hover {
+  background: var(--csa-green-soft);
+}
+
+
+/* ============================================================
+ * CALLOUT (mensaje inline destacado dentro de cards/secciones)
+ * ============================================================ */
+
+.csa-app .csa-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--csa-sp-3);
+  padding: var(--csa-sp-3) var(--csa-sp-4);
+  background: var(--csa-surface-alt);
+  border-left: 3px solid var(--csa-rule);
+  border-radius: var(--csa-radius-sm);
+  font-size: var(--csa-fs-sm);
+  color: var(--csa-ink-soft);
+  margin: 0;
+  line-height: var(--csa-lh-snug);
+}
+.csa-callout__icon {
+  margin-top: 2px;
+  flex-shrink: 0;
+  color: var(--csa-ink-muted);
+}
+.csa-callout--info    { border-left-color: var(--csa-sky); }
+.csa-callout--info    .csa-callout__icon { color: var(--csa-sky); }
+.csa-callout--warning { border-left-color: var(--csa-ochre); }
+.csa-callout--warning .csa-callout__icon { color: var(--csa-ochre); }
+.csa-callout--danger  { border-left-color: var(--csa-terracotta); }
+.csa-callout--danger  .csa-callout__icon { color: var(--csa-terracotta); }
+
+
+/* ============================================================
+ * DEFINITIONS GRID (clave / valor para pantallas de detalle)
+ * ============================================================ */
+
+.csa-defs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  column-gap: var(--csa-sp-6);
+  row-gap: var(--csa-sp-4);
+  margin: 0;
+}
+.csa-defs__row { margin: 0; }
+.csa-defs__row--full { grid-column: 1 / -1; }
+.csa-defs__label {
+  font-size: var(--csa-fs-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--csa-ink-muted);
+  font-weight: 500;
+  margin: 0 0 2px;
+}
+.csa-defs__value {
+  margin: 0;
+  color: var(--csa-ink);
+  line-height: var(--csa-lh-snug);
+}
+.csa-defs__sub {
+  margin: var(--csa-sp-2) 0 0;
+  padding-left: var(--csa-sp-5);
+  list-style: disc;
+  color: var(--csa-ink-soft);
+  font-size: var(--csa-fs-sm);
+}
+.csa-defs__sub li + li { margin-top: 2px; }
+
+/* Sección dentro de un bloque de definiciones — agrupa visualmente. */
+.csa-defs-section + .csa-defs-section {
+  margin-top: var(--csa-sp-6);
+  padding-top: var(--csa-sp-6);
+  border-top: 1px solid var(--csa-rule);
+}
+.csa-defs-section__title {
+  font-family: var(--csa-sans);
+  font-size: var(--csa-fs-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--csa-ink-muted);
+  font-weight: 500;
+  margin: 0 0 var(--csa-sp-4) 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--csa-sp-2);
+}
+.csa-defs-section__icon {
+  font-size: var(--csa-fs-sm);
+}
+.csa-defs-section__icon--green      { color: var(--csa-green); }
+.csa-defs-section__icon--ochre      { color: var(--csa-ochre); }
+.csa-defs-section__icon--terracotta { color: var(--csa-terracotta); }
+.csa-defs-section__icon--sky        { color: var(--csa-sky); }
+.csa-defs-section__icon--plum       { color: var(--csa-plum); }
+
+
+/* ============================================================
+ * INPUTS / SELECT / TEXTAREA
+ * ============================================================ */
+
+.csa-input,
+.csa-select,
+.csa-textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  height: 40px;
+  padding: 8px 12px;
+  background: var(--csa-surface);
+  border: 1px solid var(--csa-rule);
+  border-radius: var(--csa-radius-md);
+  font-family: var(--csa-sans);
+  font-size: var(--csa-fs-base);
+  line-height: 1.4;
+  color: var(--csa-ink);
+  outline: none;
+  transition: border-color var(--csa-t-fast), background var(--csa-t-fast);
+}
+.csa-input:focus,
+.csa-select:focus,
+.csa-textarea:focus {
+  border-color: var(--csa-ink);
+  background: white;
+}
+/* Textarea: expande según contenido, no altura fija de 40px */
+.csa-textarea {
+  height: auto;
+  min-height: 88px;
+  resize: vertical;
+  line-height: var(--csa-lh-snug);
+}
+.csa-input::placeholder,
+.csa-textarea::placeholder { color: var(--csa-ink-muted); }
+
+/* Selects: chevron csa en lugar del nativo del navegador.
+ * Aplica también a <select> que reciben class="csa-input" desde csa.field. */
+select.csa-input,
+.csa-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none' stroke='%235a5b56' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='1 1.5 6 6.5 11 1.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 36px;
+  cursor: pointer;
+}
+
+/* Choice expanded multiple (EntityType multiple+expanded) renderizado por
+ * form_div_layout: <div><input type="checkbox" name="x[]"><label>...</label>...</div>
+ * Convertimos a "pills" clicables para que se lean como chips y respondan
+ * visualmente al estado checked. */
+.csa-field input[type="checkbox"][name$="[]"] {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+.csa-field input[type="checkbox"][name$="[]"] + label {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--csa-sp-2) var(--csa-sp-3);
+  margin: 0 var(--csa-sp-2) var(--csa-sp-2) 0;
+  background: var(--csa-surface);
+  border: 1px solid var(--csa-rule);
+  border-radius: var(--csa-radius-md);
+  font-weight: 400;
+  font-size: var(--csa-fs-sm);
+  color: var(--csa-ink);
+  cursor: pointer;
+  transition: background var(--csa-t-fast), border-color var(--csa-t-fast), color var(--csa-t-fast);
+  user-select: none;
+}
+.csa-field input[type="checkbox"][name$="[]"] + label:hover {
+  border-color: var(--csa-ink-muted);
+}
+.csa-field input[type="checkbox"][name$="[]"]:checked + label {
+  background: var(--csa-green-soft);
+  border-color: var(--csa-green);
+  color: var(--csa-green);
+  font-weight: 500;
+}
+.csa-field input[type="checkbox"][name$="[]"]:focus + label {
+  outline: 2px solid var(--csa-green);
+  outline-offset: 2px;
+}
+
+.csa-input--with-prefix {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  background: var(--csa-surface);
+  border: 1px solid var(--csa-rule);
+  border-radius: var(--csa-radius-md);
+}
+.csa-input--with-prefix > .csa-input-prefix {
+  color: var(--csa-ink-muted);
+  font-family: var(--csa-mono);
+  font-size: var(--csa-fs-sm);
+  margin-right: var(--csa-sp-2);
+  flex-shrink: 0;
+}
+.csa-input--with-prefix > input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  outline: none;
+  padding: 9px 0;
+  font: inherit;
+  color: inherit;
+}
+
+
+/* ---------- Field (label + input + hint + error) ---------- */
+
+.csa-field { display: block; position: relative; }
+.csa-field + .csa-field { margin-top: var(--csa-sp-4); }
+/* Dentro de csa-form-grid el espaciado lo da `gap` — anular el margin
+ * que se aplicaría por sibling order y descuadra las columnas. */
+.csa-form-grid > .csa-field + .csa-field { margin-top: 0; }
+
+.csa-field__label-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--csa-sp-2);
+  margin-bottom: var(--csa-sp-2);
+}
+.csa-field__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--csa-fs-sm);
+  font-weight: 600;
+  color: var(--csa-ink);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.csa-field__required { color: var(--csa-terracotta); margin-left: 3px; }
+.csa-field__hint {
+  flex-shrink: 0;
+  font-size: var(--csa-fs-xs);
+  color: var(--csa-ink-muted);
+}
+.csa-field__error {
+  margin-top: var(--csa-sp-2);
+  font-size: var(--csa-fs-xs);
+  color: var(--csa-terracotta);
+}
+
+/* Grid de campos en formularios */
+.csa-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--csa-sp-4);
+}
+
+/* Form con ancho legible — pensado para edits/news estándar.
+ * Evita inputs gigantes en pantallas anchas. */
+.csa-form-narrow {
+  max-width: 720px;
+  margin: 0 auto;
+}
+.csa-form-grid--full > .csa-field { grid-column: 1 / -1; }
+.csa-field--full { grid-column: 1 / -1; }
+@media (max-width: 768px) {
+  .csa-form-grid { grid-template-columns: 1fr; }
+}
+
+
+/* ============================================================
+ * SECCIÓN NUMERADA DE FORMULARIO
+ * (patrón usado en editar/crear lote)
+ * ============================================================ */
+
+.csa-form-section {
+  background: var(--csa-surface);
+  border: 1px solid var(--csa-rule);
+  border-radius: var(--csa-radius-lg);
+  padding: var(--csa-sp-6) var(--csa-sp-7, 28px);
+  margin-bottom: var(--csa-sp-5);
+}
+.csa-form-section__head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--csa-sp-3);
+  margin-bottom: var(--csa-sp-5);
+}
+.csa-form-section__num {
+  width: 26px; height: 26px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--csa-surface-alt);
+  color: var(--csa-ink-soft);
+  font-size: var(--csa-fs-xs);
+  font-weight: 500;
+  flex-shrink: 0;
+}
+.csa-form-section__title {
+  font-family: var(--csa-serif);
+  font-size: var(--csa-fs-xl);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+.csa-form-section__subtitle {
+  font-family: var(--csa-serif);
+  font-style: italic;
+  font-size: var(--csa-fs-sm);
+  color: var(--csa-ink-soft);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+
+/* ============================================================
+ * RADIO GROUP (cards seleccionables)
+ * ============================================================ */
+
+.csa-radio-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--csa-sp-2);
+}
+.csa-radio-card {
+  flex: 1 1 200px;
+  display: flex;
+  align-items: center;
+  gap: var(--csa-sp-3);
+  padding: 12px 14px;
+  background: var(--csa-surface);
+  border: 1px solid var(--csa-rule);
+  border-radius: var(--csa-radius-md);
+  cursor: pointer;
+  transition: border-color var(--csa-t-fast), background var(--csa-t-fast);
+}
+.csa-radio-card:hover { border-color: var(--csa-ink-muted); }
+.csa-radio-card--checked {
+  border-color: var(--csa-ochre);
+  background: #fffaf0;
+}
+.csa-radio-card__dot {
+  width: 16px; height: 16px; border-radius: 50%;
+  border: 1.5px solid var(--csa-rule);
+  flex-shrink: 0;
+  position: relative;
+  transition: border-color var(--csa-t-fast);
+}
+.csa-radio-card--checked .csa-radio-card__dot {
+  border-color: var(--csa-ochre);
+}
+.csa-radio-card--checked .csa-radio-card__dot::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: var(--csa-ochre);
+}
+
+
+/* ============================================================
+ * TOGGLE (switch)
+ * ============================================================ */
+
+.csa-toggle { display: inline-flex; align-items: center; gap: var(--csa-sp-3); cursor: pointer; }
+.csa-toggle__track {
+  width: 36px; height: 20px;
+  border-radius: var(--csa-radius-pill);
+  background: var(--csa-rule);
+  position: relative;
+  transition: background var(--csa-t-fast);
+  flex-shrink: 0;
+}
+.csa-toggle__thumb {
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  transition: left var(--csa-t-fast);
+}
+.csa-toggle--on .csa-toggle__track { background: var(--csa-green); }
+.csa-toggle--on .csa-toggle__thumb { left: 18px; }
+
+
+/* ============================================================
+ * TABLA
+ * ============================================================ */
+
+.csa-table-wrap {
+  background: var(--csa-surface);
+  border: 1px solid var(--csa-rule);
+  border-radius: var(--csa-radius-lg);
+  overflow: hidden;
+}
+.csa-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--csa-fs-base);
+}
+.csa-table thead th {
+  text-align: left;
+  padding: 12px 16px;
+  font-size: var(--csa-fs-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--csa-ink-muted);
+  font-weight: 500;
+  border-bottom: 1px solid var(--csa-rule);
+  background: var(--csa-bg);
+}
+.csa-table tbody td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--csa-rule-soft);
+  vertical-align: middle;
+  color: var(--csa-ink);
+}
+.csa-table tbody tr:last-child td { border-bottom: none; }
+.csa-table tbody tr:hover td { background: var(--csa-bg); }
+
+/* Compactar contenido HTML (p de CKEditor) dentro de celdas */
+.csa-table td p { margin: 0; }
+.csa-table td p + p { margin-top: var(--csa-sp-2); }
+
+/* Modificador para columnas con valores cortos: ancho mínimo, sin wrap */
+.csa-table .csa-table__col-tight {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.csa-table__id {
+  font-family: var(--csa-mono);
+  font-size: var(--csa-fs-sm);
+  color: var(--csa-ink-soft);
+}
+/* Celda compuesta de "marcador + ID" — usada cuando el dominio tiene
+   un icono representativo (lote de gallinas, lote de pollos, etc.). */
+.csa-table__id-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--csa-sp-3);
+}
+.csa-table__id-marker {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--csa-radius-md);
+  background: var(--csa-ochre-soft);
+  color: var(--csa-amber);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.csa-table__primary {
+  font-family: var(--csa-serif);
+  font-size: var(--csa-fs-md);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--csa-ink);
+}
+.csa-table__sub {
+  font-size: var(--csa-fs-sm);
+  color: var(--csa-ink-soft);
+  margin-top: 2px;
+}
+/* Cuando el primary es un link: sin subrayado, hover cambia color.
+   El feedback de "fila clickable" ya lo da el background del tr:hover. */
+a.csa-table__primary,
+a.csa-table__primary:hover {
+  border-bottom: none;
+  text-decoration: none;
+}
+a.csa-table__primary:hover {
+  color: var(--csa-green);
+}
+.csa-table__actions {
+  text-align: right;
+  white-space: nowrap;
+  width: 1%;
+}
+.csa-table__actions a {
+  color: var(--csa-ink-soft);
+  border-bottom: none;
+  margin-left: var(--csa-sp-3);
+  font-size: var(--csa-fs-sm);
+}
+.csa-table__actions a:hover { color: var(--csa-ink); border-bottom: none; }
+.csa-table__actions a.csa-table__action--danger { color: var(--csa-terracotta); }
+.csa-table__actions a.csa-table__action--danger:hover { color: #b04e22; }
+
+
+/* ============================================================
+ * SIDEBAR (navegación principal)
+ * ============================================================ */
+
+.csa-shell {
+  display: flex;
+  min-height: 100vh;
+  background: var(--csa-bg);
+}
+
+.csa-sidebar {
+  width: var(--csa-sidebar-w);
+  flex-shrink: 0;
+  background: var(--csa-sage-bg);
+  border-right: 1px solid var(--csa-sage-rule);
+  display: flex;
+  flex-direction: column;
+  font-family: var(--csa-sans);
+}
+.csa-sidebar__brand {
+  padding: var(--csa-sp-6) var(--csa-sp-5);
+  border-bottom: 1px solid var(--csa-sage-rule);
+}
+.csa-sidebar__brand-name {
+  font-family: var(--csa-serif);
+  font-size: var(--csa-fs-lg);
+  letter-spacing: -0.01em;
+  color: var(--csa-sage-ink);
+}
+.csa-sidebar__brand-sub {
+  font-size: var(--csa-fs-xs);
+  color: var(--csa-sage-muted);
+  margin-top: 2px;
+}
+
+.csa-sidebar__nav {
+  flex: 1;
+  padding: var(--csa-sp-4) 0;
+  overflow-y: auto;
+}
+.csa-sidebar__group {
+  padding: var(--csa-sp-4) var(--csa-sp-5) var(--csa-sp-2);
+  font-size: var(--csa-fs-xs);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--csa-sage-muted);
+  font-weight: 500;
+}
+.csa-sidebar__link {
+  display: flex;
+  align-items: center;
+  gap: var(--csa-sp-3);
+  padding: 9px var(--csa-sp-5);
+  color: var(--csa-sage-text);
+  font-size: var(--csa-fs-base);
+  border: none;
+  border-left: 2px solid transparent;
+  transition: background var(--csa-t-fast), color var(--csa-t-fast), border-color var(--csa-t-fast);
+}
+.csa-sidebar__link:hover {
+  color: var(--csa-sage-ink);
+  background: var(--csa-sage-bg-hover);
+  border-bottom: none;
+}
+.csa-sidebar__link--active {
+  color: var(--csa-sage-ink);
+  background: var(--csa-surface);
+  border-left-color: var(--csa-green);
+  font-weight: 500;
+}
+.csa-sidebar__icon {
+  width: 18px;
+  color: var(--csa-sage-muted);
+  font-size: 14px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.csa-sidebar__link--active .csa-sidebar__icon { color: var(--csa-green); }
+
+
+/* ============================================================
+ * TOPBAR
+ * ============================================================ */
+
+.csa-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.csa-topbar {
+  height: var(--csa-topbar-h);
+  padding: 0 var(--csa-sp-8);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--csa-surface);
+  border-bottom: 1px solid var(--csa-rule);
+}
+.csa-topbar__crumbs {
+  display: flex;
+  align-items: center;
+  gap: var(--csa-sp-2);
+  font-size: var(--csa-fs-sm);
+  color: var(--csa-ink-soft);
+}
+.csa-topbar__crumbs a { color: var(--csa-ink-soft); border: none; }
+.csa-topbar__crumbs a:hover { color: var(--csa-ink); }
+.csa-topbar__crumbs-sep { color: var(--csa-ink-muted); }
+.csa-topbar__crumb-active { color: var(--csa-ink); font-weight: 500; }
+
+.csa-topbar__user {
+  display: flex; align-items: center; gap: var(--csa-sp-3);
+  font-size: var(--csa-fs-sm); color: var(--csa-ink-soft);
+}
+.csa-avatar {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: var(--csa-green-soft);
+  color: var(--csa-green);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: var(--csa-fs-sm);
+  font-weight: 600;
+  font-family: var(--csa-sans);
+}
+
+
+/* ============================================================
+ * RESPONSIVE — sidebar colapsable en < 900px
+ * ============================================================ */
+
+@media (max-width: 900px) {
+  .csa-sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 100;
+    transform: translateX(-100%);
+    transition: transform var(--csa-t-normal);
+    box-shadow: var(--csa-shadow-lg);
+  }
+  .csa-sidebar--open { transform: translateX(0); }
+  .csa-topbar { padding: 0 var(--csa-sp-4); }
+}
+
+
+/* ============================================================
+ * PAGINACIÓN
+ * ============================================================
+ * Patrón listo para cuando los listados se conecten a KnpPaginator
+ * (o paginación equivalente). Estructura esperada:
+ *
+ *   <nav class="csa-pagination">
+ *     <span class="csa-pagination__summary">Mostrando 1–8 de 31 lotes</span>
+ *     <ul class="csa-pagination__list">
+ *       <li><a class="csa-pagination__item" href="…">‹</a></li>
+ *       <li><a class="csa-pagination__item csa-pagination__item--active">1</a></li>
+ *       <li><a class="csa-pagination__item" href="…">2</a></li>
+ *       <li><span class="csa-pagination__ellipsis">…</span></li>
+ *       <li><a class="csa-pagination__item" href="…">›</a></li>
+ *     </ul>
+ *   </nav>
+ */
+
+.csa-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--csa-sp-4);
+  margin-top: var(--csa-sp-5);
+  padding: var(--csa-sp-3) var(--csa-sp-2);
+  flex-wrap: wrap;
+}
+.csa-pagination__summary {
+  font-size: var(--csa-fs-sm);
+  color: var(--csa-ink-soft);
+}
+.csa-pagination__summary strong {
+  color: var(--csa-ink);
+  font-weight: 600;
+}
+.csa-pagination__list {
+  display: flex;
+  align-items: center;
+  gap: var(--csa-sp-1);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.csa-pagination__item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 var(--csa-sp-2);
+  border-radius: var(--csa-radius-sm);
+  font-size: var(--csa-fs-sm);
+  color: var(--csa-ink-soft);
+  border: 1px solid transparent;
+  transition: background var(--csa-t-fast), color var(--csa-t-fast), border-color var(--csa-t-fast);
+}
+.csa-pagination__item:hover {
+  background: var(--csa-surface-alt);
+  color: var(--csa-ink);
+  border-bottom: none;
+}
+.csa-pagination__item--active {
+  background: var(--csa-ink);
+  color: var(--csa-bg);
+  font-weight: 500;
+}
+.csa-pagination__item--active:hover {
+  background: var(--csa-ink);
+  color: var(--csa-bg);
+}
+.csa-pagination__item--disabled,
+.csa-pagination__item[aria-disabled="true"] {
+  opacity: 0.4;
+  pointer-events: none;
+}
+.csa-pagination__ellipsis {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  color: var(--csa-ink-muted);
+  font-size: var(--csa-fs-sm);
+}
+
+
+/* ============================================================
+ * TABS
+ * ============================================================
+ * Mantiene compatibilidad con el JS de Bootstrap 3 (data-toggle="tab").
+ * Pisamos el estilo visual y el `.active` lo sigue gestionando Bootstrap
+ * en el <li>. */
+
+.csa-tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--csa-sp-6);
+  list-style: none;
+  padding: 0;
+  margin: 0 0 var(--csa-sp-5) 0;
+  border-bottom: 1px solid var(--csa-rule);
+}
+.csa-tabs__item {
+  margin: 0;
+}
+/* La doble clase (.csa-app .csa-tabs__link) sube especificidad por encima
+   de .csa-app a:link/:visited de Bootstrap 3, que pisaba color y
+   text-decoration. */
+.csa-app .csa-tabs__link,
+.csa-app .csa-tabs__link:link,
+.csa-app .csa-tabs__link:visited {
+  display: inline-block;
+  padding: var(--csa-sp-3) 0;
+  font-family: var(--csa-sans);
+  font-size: var(--csa-fs-md);
+  font-weight: 500;
+  color: var(--csa-ink-soft);
+  text-decoration: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px; /* solapa con el border-bottom del .csa-tabs */
+  transition: color var(--csa-t-fast), border-color var(--csa-t-fast);
+}
+.csa-app .csa-tabs__link:hover {
+  color: var(--csa-ink);
+  border-bottom-color: transparent;
+  text-decoration: none;
+}
+.csa-tabs__link:focus,
+.csa-tabs__link:active {
+  outline: none;
+}
+.csa-tabs__link:focus-visible {
+  outline: 2px solid var(--csa-ink);
+  outline-offset: 2px;
+  border-radius: var(--csa-radius-sm);
+}
+.csa-app .csa-tabs__item.active > .csa-tabs__link,
+.csa-app .csa-tabs__item.active > .csa-tabs__link:visited {
+  color: var(--csa-ink);
+  border-bottom-color: var(--csa-ink);
+  text-decoration: none;
+}
+
+
+/* ============================================================
+ * ADAPTACIÓN DataTables → csa
+ * ============================================================
+ * Cargamos solo el JS core de DataTables (no su CSS Bootstrap).
+ * Aquí mapeamos las clases que genera (`.dataTables_*`,
+ * `.paginate_button`, etc.) al lenguaje visual csa. */
+
+/* Sort indicators de DataTables — pegados al texto, no a la derecha del th.
+ * El CSS legacy de DataTables pinta la flecha como background-image (PNG)
+ * sobre el <th>. Lo apagamos y la pintamos como pseudoelemento inline. */
+table.csa-table thead th.sorting,
+table.csa-table thead th.sorting_asc,
+table.csa-table thead th.sorting_desc {
+  cursor: pointer;
+  position: relative;
+  background-image: none;
+  padding-right: var(--csa-sp-3);
+}
+table.csa-table thead th.sorting::before,
+table.csa-table thead th.sorting_asc::before,
+table.csa-table thead th.sorting_desc::before {
+  display: none;
+  content: none;
+}
+
+table.csa-table thead th.sorting::after,
+table.csa-table thead th.sorting_asc::after,
+table.csa-table thead th.sorting_desc::after {
+  position: static;
+  display: inline;
+  float: none;
+  font-family: var(--csa-sans);
+  margin-left: var(--csa-sp-1);
+  background: none;
+  opacity: 1;
+  font-size: 10px;
+  color: var(--csa-ink-muted);
+  bottom: auto;
+  right: auto;
+  top: auto;
+  width: auto;
+  height: auto;
+}
+table.csa-table thead th.sorting::after      { content: " ↕"; }
+table.csa-table thead th.sorting_asc::after  { content: " ↑"; color: var(--csa-ink); }
+table.csa-table thead th.sorting_desc::after { content: " ↓"; color: var(--csa-ink); }
+
+/* Filas top/bottom inyectadas vía la opción `dom` de DataTables. */
+.csa-dt-top,
+.csa-dt-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--csa-sp-4);
+  padding: var(--csa-sp-3) var(--csa-sp-4);
+  flex-wrap: wrap;
+}
+.csa-dt-top {
+  border-bottom: 1px solid var(--csa-rule);
+}
+.csa-dt-bottom {
+  border-top: 1px solid var(--csa-rule);
+}
+.dataTables_wrapper .dataTables_length,
+.dataTables_wrapper .dataTables_filter {
+  font-size: var(--csa-fs-sm);
+  color: var(--csa-ink-soft);
+}
+
+.dataTables_length select,
+.dataTables_filter input {
+  display: inline-block;
+  width: auto;
+  margin: 0 var(--csa-sp-2);
+  padding: 6px 10px;
+  background: var(--csa-surface);
+  border: 1px solid var(--csa-rule);
+  border-radius: var(--csa-radius-md);
+  font-family: var(--csa-sans);
+  font-size: var(--csa-fs-sm);
+  color: var(--csa-ink);
+  outline: none;
+  transition: border-color var(--csa-t-fast);
+}
+.dataTables_length select:focus,
+.dataTables_filter input:focus {
+  border-color: var(--csa-ink);
+}
+
+.dataTables_wrapper .dataTables_info {
+  font-size: var(--csa-fs-sm);
+  color: var(--csa-ink-soft);
+}
+.dataTables_wrapper .dataTables_paginate {
+  display: flex;
+  align-items: center;
+  gap: var(--csa-sp-1);
+}
+
+.dataTables_paginate .paginate_button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 var(--csa-sp-2);
+  border-radius: var(--csa-radius-sm);
+  font-size: var(--csa-fs-sm);
+  color: var(--csa-ink-soft);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background var(--csa-t-fast), color var(--csa-t-fast), border-color var(--csa-t-fast);
+}
+.dataTables_paginate .paginate_button:hover {
+  background: var(--csa-surface-alt);
+  color: var(--csa-ink);
+}
+.dataTables_paginate .paginate_button.current,
+.dataTables_paginate .paginate_button.current:hover {
+  background: var(--csa-ink);
+  color: var(--csa-bg);
+  font-weight: 500;
+}
+.dataTables_paginate .paginate_button.disabled,
+.dataTables_paginate .paginate_button.disabled:hover {
+  opacity: 0.4;
+  pointer-events: none;
+  background: transparent;
+}
+.dataTables_paginate .ellipsis {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  color: var(--csa-ink-muted);
+  font-size: var(--csa-fs-sm);
+}
+
+
+/* ============================================================
+ * ESTADOS DE LOTE (semántica de granja)
+ * ============================================================ */
+
+.csa-status-active     { color: var(--csa-green); }
+.csa-status-finalized  { color: var(--csa-ink-muted); }
+.csa-status-attention  { color: var(--csa-amber); }
+.csa-status-incident   { color: var(--csa-terracotta); }
+
+
+
+
+/* ============================================================
+ * CESTAS SEMANALES (Production · basket)
+ * ============================================================
+ * Tarjetas en grid de 2 columnas. Cada tarjeta concentra la
+ * info de una cesta: número de semana, fecha, peso destacado,
+ * top de cultivos y meta. Peso en Fraunces opsz 30, no display
+ * — cálido pero no formal.
+ * ============================================================ */
+
+.csa-baskets {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--csa-sp-5);
+}
+@media (min-width: 720px) {
+  .csa-baskets { grid-template-columns: repeat(2, 1fr); }
+}
+
+.csa-baskets__item { display: flex; }
+
+.csa-baskets__card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--csa-sp-4);
+  padding: var(--csa-sp-6);
+  background: var(--csa-surface);
+  border: 1px solid var(--csa-rule);
+  border-top-width: 2px;
+  border-radius: var(--csa-radius-lg);
+  color: var(--csa-ink);
+  text-decoration: none;
+  position: relative;
+  transition: border-color var(--csa-t-fast), box-shadow var(--csa-t-fast), transform var(--csa-t-fast);
+}
+.csa-baskets__card:hover {
+  color: var(--csa-ink);
+  box-shadow: 0 4px 16px rgba(28, 29, 26, 0.06);
+  transform: translateY(-2px);
+}
+
+/* Acento de color por temporada — borde superior fino. */
+.csa-baskets__card--spring { border-top-color: var(--csa-green); }
+.csa-baskets__card--summer { border-top-color: var(--csa-ochre); }
+.csa-baskets__card--autumn { border-top-color: var(--csa-terracotta); }
+.csa-baskets__card--winter { border-top-color: var(--csa-sky); }
+
+/* Icono decorativo de la temporada en la esquina superior derecha. */
+.csa-baskets__season {
+  position: absolute;
+  top: var(--csa-sp-5);
+  right: var(--csa-sp-5);
+  font-size: 22px;
+  opacity: 0.35;
+  pointer-events: none;
+  transition: opacity var(--csa-t-fast), transform var(--csa-t-fast);
+}
+.csa-baskets__card--spring .csa-baskets__season { color: var(--csa-green); }
+.csa-baskets__card--summer .csa-baskets__season { color: var(--csa-ochre); }
+.csa-baskets__card--autumn .csa-baskets__season { color: var(--csa-terracotta); }
+.csa-baskets__card--winter .csa-baskets__season { color: var(--csa-sky); }
+.csa-baskets__card:hover .csa-baskets__season {
+  opacity: 0.85;
+  transform: rotate(-8deg) scale(1.08);
+}
+
+/* Head: número de semana + etiqueta y fecha */
+.csa-baskets__head {
+  display: flex;
+  align-items: center;
+  gap: var(--csa-sp-3);
+}
+.csa-baskets__num {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--csa-surface);
+  border: 1px solid var(--csa-rule);
+  border-radius: 50%;
+  font-family: var(--csa-sans);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--csa-ink);
+  font-variant-numeric: tabular-nums;
+  transition: background var(--csa-t-fast), border-color var(--csa-t-fast), color var(--csa-t-fast);
+}
+/* En reposo: tinte sutil por temporada en el círculo. */
+.csa-baskets__card--spring .csa-baskets__num { background: var(--csa-green-soft);      border-color: var(--csa-green-soft);      color: var(--csa-green); }
+.csa-baskets__card--summer .csa-baskets__num { background: var(--csa-ochre-soft);      border-color: var(--csa-ochre-soft);      color: var(--csa-amber); }
+.csa-baskets__card--autumn .csa-baskets__num { background: var(--csa-terracotta-soft); border-color: var(--csa-terracotta-soft); color: var(--csa-terracotta); }
+.csa-baskets__card--winter .csa-baskets__num { background: var(--csa-sky-soft);        border-color: var(--csa-sky-soft);        color: var(--csa-sky); }
+/* En hover: refuerzo del borde del círculo con el mismo color. */
+.csa-baskets__card--spring:hover .csa-baskets__num { border-color: var(--csa-green); }
+.csa-baskets__card--summer:hover .csa-baskets__num { border-color: var(--csa-ochre); }
+.csa-baskets__card--autumn:hover .csa-baskets__num { border-color: var(--csa-terracotta); }
+.csa-baskets__card--winter:hover .csa-baskets__num { border-color: var(--csa-sky); }
+.csa-baskets__when { min-width: 0; }
+.csa-baskets__week-label {
+  font-family: var(--csa-sans);
+  font-size: var(--csa-fs-xs);
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--csa-ink-muted);
+  line-height: 1.1;
+}
+.csa-baskets__date {
+  font-family: var(--csa-sans);
+  font-size: var(--csa-fs-sm);
+  color: var(--csa-ink);
+  margin-top: 4px;
+}
+
+/* Peso destacado: Fraunces opsz medio, lining-nums (modernos) */
+.csa-baskets__weight {
+  display: flex;
+  align-items: baseline;
+  gap: var(--csa-sp-2);
+  line-height: 1;
+}
+.csa-baskets__weight-num {
+  font-family: var(--csa-serif);
+  font-size: 3.5rem;
+  font-weight: 500;
+  color: var(--csa-ink);
+  letter-spacing: -0.02em;
+  font-variant-numeric: lining-nums tabular-nums;
+  font-variation-settings: "opsz" 30;
+}
+.csa-baskets__weight-unit {
+  font-family: var(--csa-sans);
+  font-size: var(--csa-fs-sm);
+  color: var(--csa-ink-muted);
+  letter-spacing: 0.02em;
+}
+
+/* Cultivos: una línea, peso normal */
+.csa-baskets__cultivos {
+  margin: 0;
+  font-family: var(--csa-sans);
+  font-size: var(--csa-fs-base);
+  color: var(--csa-ink-soft);
+  line-height: var(--csa-lh-snug);
+}
+.csa-baskets__extras {
+  color: var(--csa-ink-muted);
+  margin-left: 4px;
+}
+
+/* Foot: meta + cta */
+.csa-baskets__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: auto;
+  padding-top: var(--csa-sp-4);
+  border-top: 1px solid var(--csa-rule-soft);
+  font-family: var(--csa-sans);
+  font-size: var(--csa-fs-sm);
+}
+.csa-baskets__count { color: var(--csa-ink-muted); }
+.csa-baskets__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--csa-ink-soft);
+  font-weight: 500;
+  transition: color var(--csa-t-fast), gap var(--csa-t-fast);
+}
+.csa-baskets__cta .fa { font-size: 12px; transition: transform var(--csa-t-fast); }
+.csa-baskets__card:hover .csa-baskets__cta {
+  color: var(--csa-green);
+  gap: 10px;
+}
+.csa-baskets__card:hover .csa-baskets__cta .fa {
+  transform: translateX(2px);
+}
+
+.csa-baskets-empty {
+  text-align: center;
+  padding: var(--csa-sp-12) var(--csa-sp-4);
+  color: var(--csa-ink-muted);
+  font-family: var(--csa-sans);
+}
+
+
+/* ============================================================
+ * TASK CARD — tarjeta de tarea en listados.
+ * Background sobrio (surface), border-left tonal por tipo,
+ * header con icono + título + chip, meta inline, content libre.
+ * ============================================================ */
+
+.csa-task-card {
+  background: var(--csa-surface);
+  border: 1px solid var(--csa-rule);
+  border-left-width: 4px;
+  border-radius: var(--csa-radius-md);
+  padding: var(--csa-sp-5) var(--csa-sp-6);
+  margin-bottom: var(--csa-sp-4);
+  transition: box-shadow var(--csa-t-fast), transform var(--csa-t-fast);
+}
+.csa-task-card:hover {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+  transform: translateY(-1px);
+}
+
+.csa-task-card--green      { border-left-color: var(--csa-green); }
+.csa-task-card--ochre      { border-left-color: var(--csa-ochre); }
+.csa-task-card--terracotta { border-left-color: var(--csa-terracotta); }
+.csa-task-card--plum       { border-left-color: var(--csa-plum); }
+.csa-task-card--sky        { border-left-color: var(--csa-sky); }
+
+.csa-task-card__head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--csa-sp-3);
+  margin-bottom: var(--csa-sp-3);
+}
+.csa-task-card__icon {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--csa-radius-md);
+  flex-shrink: 0;
+  font-size: 14px;
+}
+.csa-task-card__icon--green      { background: var(--csa-green-soft);      color: var(--csa-green); }
+.csa-task-card__icon--ochre      { background: var(--csa-ochre-soft);      color: var(--csa-amber); }
+.csa-task-card__icon--terracotta { background: var(--csa-terracotta-soft); color: var(--csa-terracotta); }
+.csa-task-card__icon--plum       { background: var(--csa-plum-soft);       color: var(--csa-plum); }
+.csa-task-card__icon--sky        { background: var(--csa-sky-soft);        color: var(--csa-sky); }
+
+.csa-task-card__title-block {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--csa-sp-3);
+  flex-wrap: wrap;
+}
+.csa-task-card__title {
+  font-family: var(--csa-serif);
+  font-size: var(--csa-fs-lg);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  margin: 0;
+  color: var(--csa-ink);
+  line-height: 1.2;
+}
+
+.csa-task-card__chip {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: var(--csa-fs-xs);
+  font-weight: 500;
+  font-family: var(--csa-sans);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.csa-task-card__chip--green      { background: var(--csa-green-soft);      color: var(--csa-green); }
+.csa-task-card__chip--ochre      { background: var(--csa-ochre-soft);      color: var(--csa-amber); }
+.csa-task-card__chip--terracotta { background: var(--csa-terracotta-soft); color: var(--csa-terracotta); }
+.csa-task-card__chip--plum       { background: var(--csa-plum-soft);       color: var(--csa-plum); }
+.csa-task-card__chip--sky        { background: var(--csa-sky-soft);        color: var(--csa-sky); }
+
+.csa-task-card__meta {
+  font-size: var(--csa-fs-sm);
+  color: var(--csa-ink-soft);
+  margin-bottom: var(--csa-sp-3);
+}
+
+.csa-task-card__body {
+  color: var(--csa-ink);
+  margin-bottom: var(--csa-sp-3);
+}
+.csa-task-card__body p { margin: 0 0 var(--csa-sp-2) 0; }
+.csa-task-card__body p:last-child { margin-bottom: 0; }

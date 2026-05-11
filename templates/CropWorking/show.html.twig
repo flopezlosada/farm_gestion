@@ -1,150 +1,390 @@
-{% extends 'layout_show.html.twig' %}
+{# ============================================================
+ # Detalle de cultivo (CropWorking) — migrado al shell csa.
+ # ============================================================
+ # Cabecera csa + paneles internos migrados a csa-card / csa-defs
+ # / csa-list / csa-table. Las acciones (record_actions) están
+ # inline porque el partial solo se usaba en este archivo.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Cultivo · {{ entity }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('cropworking') }}">Cultivos</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ entity }}</span>
+{% endblock %}
+
 {% block more_css %}
+    {{ parent() }}
     <link rel="stylesheet" href="{{ asset('bundles/app/fancybox/jquery.fancybox.css') }}"/>
 {% endblock %}
-{% block main -%}
 
-    <div class="panel  panel-success">
-        <div class="panel-heading"><h4>{{ entity }} ({{ entity.status }})</h4></div>
-        <div class="panel-body">
-            <div class="row">
-                <div class="col-lg-12">
+{% block csa_main -%}
 
-                    <div class="col-lg-8">
-                        <p><strong>Cultivo: </strong><a
-                                    href="{{ path('crop_show', { 'id': entity.getCrop.getId}) }}"> {{ entity.getCrop }}</a>
-                        </p>
-                        {% if first_seed_work|length>0 %}
-                            <p><strong>Fecha de inicio del
-                                    cultivo: </strong>{{ first_seed_work.getRealDate|format_date('long', locale='es') }}
-                            </p>
-                        {% endif %}
-                        {% if entity.finish ==1 %}
-                            <p><strong>Fecha de finalización del
-                                    cultivo: </strong>{{ entity.finishDate|format_date('long', locale='es') }}
-                            </p>
-                        {% endif %}
-
-                        <p><strong>Superficie asignada (m<sup>2</sup>): </strong>{{ entity.surface }}</p>
-
-                        <p><strong>Producción estimada (Kg): </strong>{{ entity.estimatedProduction }}</p>
-
-                        <p><strong>Marco de plantación (cm x cm): </strong>{{ entity.plantingPattern }}</p>
-
-                        <p><strong>Observaciones: </strong> {{ entity.content|raw }}</p>
-
-                        <p><strong>Sectores de cultivo:</strong></p>
-                        <ul>
-                            {% for  sector in entity.sectors %}
-                                <li><a href="{{ path('sector_show', {'id': sector.id}) }}">{{ sector.getZone }}
-                                        : {{ sector }}</a> | <a
-                                            href="{{ path('cropworking_delete_sector', {'sector_id': sector.id, 'crop_working_id': entity.id}) }}">Eliminar</a>
-                                </li>
-                            {% else %}
-                                <li>No se han definido sectores para este cultivo</li>
-                            {% endfor %}
-                        </ul>
-
-                    </div>
-                    <div class="col-lg-4">
-                        <div class="panel panel-warning">
-                            <div class="panel-heading">Acciones</div>
-                            <div class="panel-body">
-                                <ul class="list-unstyled">
-                                    {% include 'CropWorking/record_actions.html.twig' with {'crop_working':entity} %}
-                                </ul>
-                            </div>
-
-                        </div>
-                    </div>
-                    <div class="col-lg-6">
-                        <div class="panel panel-danger">
-                            <div class="panel-heading"><h4>Fechas de siembra/plantación</h4>
-                            </div>
-                            <div class="panel-body">
-
-
-                                {% for seedwork in entity.getseedworks %}
-                                    <div class="well ">
-                                        <p><strong>{{ seedwork.getSeedWorkType }}</strong> | <a
-                                                    href="{{ path('seedwork_edit', {'id': seedwork.id}) }}">Editar</a><br>
-                                            Fecha realización: {{ seedwork.getDate|format_date('long', locale='es') }}
-                                            <br>
-                                            Fecha
-                                            prevista: {{ seedwork.getEstimatedDate|format_date('long', locale='es') }}
-                                            <br>
-                                            Número de plantas: {{ seedwork.plant }}<br>
-                                            Número de bandejas: {{ seedwork.tray }} <br>
-                                            Superficie:{{ seedwork.surface }}<br>
-                                            Sector: {{ seedwork.sector }}
-                                        </p>
-
-                                        {% if seedwork.content|length>0 %}
-                                            <div class="alert alert-success">
-                                                {{ seedwork.content|raw }}
-                                            </div>
-                                        {% endif %}
-                                    </div>
-
-
-                                {% else %}
-                                    <p>No se ha indicado ninguna producción para este producto este año</p>
-                                {% endfor %}
-
-                            </div>
-
-                        </div>
-                    </div>
-                    <div class="col-lg-6">
-                        <div class="panel panel-purple-tiny">
-                            <div class="panel-heading"><h4>Producción</h4>
-                            </div>
-                            <div class="panel-body">
-
-                                <ul>
-                                    {% for production in productions %}
-                                        <li>{{ production.getDate|format_date('long', locale='es') }}
-                                            : {{ production.amount }}
-                                            kg |
-                                            <a href="{{ path('production_edit', {'id': production.id}) }}">Editar</a>
-                                        </li>
-                                    {% else %}
-                                        <p>No se ha indicado ninguna producción para este producto</p>
-                                    {% endfor %}
-                                </ul>
-                            </div>
-                            <div class="panel-footer">Total para el producto: {{ total_production }} | Semanas
-                                produciendo: {{ productions|length }}</div>
-                        </div>
-                    </div>
-                    <div class="col-lg-12">
-                        <div class="panel panel-info">
-                            <div class="panel-heading"><h4>Trabajos realizados</h4>
-                            </div>
-                            <div class="panel-body">
-
-                                <ul>
-                                    {% for cultural_work in entity.culturalWorks %}
-                                        <li>
-                                            <strong><a href="{{ path('culturalwork_show', {'id': cultural_work.id}) }}">{{ cultural_work.culturalWorkType }}</a></strong>: {{ cultural_work.getDate|format_date('long', locale='es') }}
-                                            |<a href="{{ path('culturalwork_edit', {'id': cultural_work.id}) }}">Editar</a>
-                                            {{ cultural_work.content|raw }}
-
-
-                                        </li>
-                                    {% else %}
-                                        <p>No se ha indicado ningún trabajo para este producto este año</p>
-                                    {% endfor %}
-                                </ul>
-                            </div>
-
-                        </div>
-                    </div>
+    {# ===== Cabecera ===== #}
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-6); align-items: flex-start;">
+        <div class="csa-row" style="align-items: flex-start; gap: var(--csa-sp-4);">
+            <span class="csa-table__id-marker" style="width: 64px; height: 64px; font-size: 28px; border-radius: var(--csa-radius-lg);">
+                <i class="fa fa-leaf"></i>
+            </span>
+            <div>
+                <div class="csa-row" style="gap: var(--csa-sp-3); margin-bottom: var(--csa-sp-2);">
+                    {% if entity.finish == 0 %}
+                        {{ csa.badge('Activo · ' ~ entity.status, 'green') }}
+                    {% else %}
+                        {{ csa.badge('Finalizado', 'neutral') }}
+                    {% endif %}
+                    {% if first_seed_work|length > 0 %}
+                        <span class="csa-muted" style="font-size: var(--csa-fs-sm);">·</span>
+                        <span class="csa-muted" style="font-size: var(--csa-fs-sm);">
+                            Inicio {{ first_seed_work.getRealDate|format_date('long', locale='es') }}
+                        </span>
+                    {% endif %}
+                </div>
+                <h1>{{ entity }}</h1>
+                <div class="csa-serif csa-italic csa-soft" style="margin-top: var(--csa-sp-2);">
+                    Cultivo: <a href="{{ path('crop_show', { id: entity.getCrop.getId }) }}">{{ entity.getCrop }}</a>
+                    · {{ entity.surface }} m² · {{ entity.estimatedProduction }} kg estimados
                 </div>
             </div>
         </div>
-        <div class="panel-footer">
-            <ul class="list-inline"> {% include 'CropWorking/record_actions.html.twig' with {'crop_working':entity} %}</ul>
+        <div class="csa-row">
+            {{ csa.btn('Editar', { variant: 'secondary', href: path('cropworking_edit', { id: entity.id }), icon: 'fa-pencil' }) }}
+            {{ csa.btn('Volver al listado', { variant: 'ghost', href: path('cropworking') }) }}
         </div>
     </div>
+
+    {# ===== Fila 1: Datos del cultivo + Acciones ===== #}
+    <div class="col-lg-8">
+        {% embed '_components/csa_card.html.twig' with { title: 'Datos del cultivo', accent: 'sky' } %}
+            {% block body %}
+                <section class="csa-defs-section">
+                    <h4 class="csa-defs-section__title">
+                        <i class="csa-defs-section__icon csa-defs-section__icon--sky fa fa-info-circle"></i>
+                        Datos básicos
+                    </h4>
+                    <dl class="csa-defs">
+                        <div class="csa-defs__row">
+                            <dt class="csa-defs__label">Cultivo</dt>
+                            <dd class="csa-defs__value">
+                                <a href="{{ path('crop_show', { id: entity.getCrop.getId }) }}">{{ entity.getCrop }}</a>
+                            </dd>
+                        </div>
+                        {% if first_seed_work|length > 0 %}
+                            <div class="csa-defs__row">
+                                <dt class="csa-defs__label">Inicio del cultivo</dt>
+                                <dd class="csa-defs__value">{{ first_seed_work.getRealDate|format_date('long', locale='es') }}</dd>
+                            </div>
+                        {% endif %}
+                        {% if entity.finish == 1 %}
+                            <div class="csa-defs__row">
+                                <dt class="csa-defs__label">Finalización</dt>
+                                <dd class="csa-defs__value">{{ entity.finishDate|format_date('long', locale='es') }}</dd>
+                            </div>
+                        {% endif %}
+                        <div class="csa-defs__row">
+                            <dt class="csa-defs__label">Superficie asignada</dt>
+                            <dd class="csa-defs__value">{{ entity.surface }} m²</dd>
+                        </div>
+                        <div class="csa-defs__row">
+                            <dt class="csa-defs__label">Producción estimada</dt>
+                            <dd class="csa-defs__value">{{ entity.estimatedProduction }} kg</dd>
+                        </div>
+                        {% if entity.plantingPattern %}
+                            <div class="csa-defs__row">
+                                <dt class="csa-defs__label">Marco de plantación</dt>
+                                <dd class="csa-defs__value">{{ entity.plantingPattern }} cm</dd>
+                            </div>
+                        {% endif %}
+                    </dl>
+                </section>
+
+                {# ---- Sectores ---- #}
+                <section class="csa-defs-section">
+                    <h4 class="csa-defs-section__title">
+                        <i class="csa-defs-section__icon csa-defs-section__icon--ochre fa fa-th-large"></i>
+                        Sectores de cultivo
+                    </h4>
+                    {% if entity.sectors|length > 0 %}
+                        <ul class="csa-list">
+                            {% for sector in entity.sectors %}
+                                <li class="csa-list__item" style="display: flex; align-items: center;">
+                                    <a class="csa-list__link" href="{{ path('sector_show', { id: sector.id }) }}" style="flex: 1; min-width: 0;">
+                                        <i class="csa-list__icon fa fa-map-marker"></i>
+                                        <div class="csa-list__body">
+                                            <div class="csa-list__primary">{{ sector }}</div>
+                                            <div class="csa-list__secondary">{{ sector.getZone }}</div>
+                                        </div>
+                                    </a>
+                                    <a href="{{ path('cropworking_delete_sector', { sector_id: sector.id, crop_working_id: entity.id }) }}"
+                                       class="csa-table__action--danger" title="Quitar sector" aria-label="Quitar sector"
+                                       style="padding: var(--csa-sp-2) var(--csa-sp-3); flex-shrink: 0;">
+                                        <i class="fa fa-trash"></i>
+                                    </a>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <div class="csa-soft">No se han definido sectores para este cultivo.</div>
+                    {% endif %}
+                </section>
+
+                {# ---- Observaciones ---- #}
+                {% if entity.content %}
+                    <section class="csa-defs-section">
+                        <h4 class="csa-defs-section__title">
+                            <i class="csa-defs-section__icon csa-defs-section__icon--plum fa fa-sticky-note-o"></i>
+                            Observaciones
+                        </h4>
+                        <div class="csa-soft" style="line-height: var(--csa-lh-normal);">{{ entity.content|raw }}</div>
+                    </section>
+                {% endif %}
+            {% endblock %}
+        {% endembed %}
+    </div>
+
+    <div class="col-lg-4">
+        {% embed '_components/csa_card.html.twig' with { title: 'Acciones', accent: 'green' } %}
+            {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
+                {% if entity.finish == 0 %}
+                    <ul class="csa-list">
+                        <li class="csa-list__item">
+                            <a class="csa-list__link csa-list__link--primary" href="{{ path('production_new_crop_working', { crop_working_id: entity.id }) }}">
+                                <i class="csa-list__icon fa fa-plus"></i>
+                                <div class="csa-list__body">
+                                    <div class="csa-list__primary">Registrar cosecha</div>
+                                    <div class="csa-list__secondary">Añadir kg producidos</div>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="csa-list__item">
+                            <a class="csa-list__link" href="{{ path('seedwork_new', { crop_working_id: entity.id }) }}">
+                                <i class="csa-list__icon fa fa-calendar"></i>
+                                <div class="csa-list__body">
+                                    <div class="csa-list__primary">Añadir siembra/plantación</div>
+                                    <div class="csa-list__secondary">Nueva fecha y datos</div>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="csa-list__item">
+                            <a class="csa-list__link" href="{{ path('culturalwork_new') }}">
+                                <i class="csa-list__icon fa fa-wrench"></i>
+                                <div class="csa-list__body">
+                                    <div class="csa-list__primary">Indicar trabajo cultural</div>
+                                    <div class="csa-list__secondary">Riego, deshierbe, etc.</div>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="csa-list__item">
+                            <a class="csa-list__link" href="{{ path('cropworking_add_sector', { id: entity.id }) }}">
+                                <i class="csa-list__icon fa fa-th-large"></i>
+                                <div class="csa-list__body">
+                                    <div class="csa-list__primary">Añadir sector</div>
+                                    <div class="csa-list__secondary">Asignar zona de producción</div>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="csa-list__item">
+                            <a class="csa-list__link" href="{{ path('cropworking_edit', { id: entity.id }) }}">
+                                <i class="csa-list__icon fa fa-pencil"></i>
+                                <div class="csa-list__body">
+                                    <div class="csa-list__primary">Editar cultivo</div>
+                                    <div class="csa-list__secondary">Modificar datos</div>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="csa-list__item">
+                            <a class="csa-list__link csa-list__link--danger" href="{{ path('cropworking_finish', { id: entity.id, finish: 1 }) }}">
+                                <i class="csa-list__icon fa fa-check"></i>
+                                <div class="csa-list__body">
+                                    <div class="csa-list__primary">Finalizar cultivo</div>
+                                    <div class="csa-list__secondary">Cerrar el ciclo</div>
+                                </div>
+                            </a>
+                        </li>
+                    </ul>
+                {% else %}
+                    {{ csa.callout('Cultivo finalizado. Se puede reactivar si hace falta.', 'warning') }}
+                    <ul class="csa-list" style="margin-top: var(--csa-sp-4);">
+                        <li class="csa-list__item">
+                            <a class="csa-list__link" href="{{ path('cropworking_finish', { id: entity.id, finish: 0 }) }}">
+                                <i class="csa-list__icon fa fa-undo"></i>
+                                <div class="csa-list__body">
+                                    <div class="csa-list__primary">Reactivar cultivo</div>
+                                    <div class="csa-list__secondary">Volver a poner activo</div>
+                                </div>
+                            </a>
+                        </li>
+                    </ul>
+                {% endif %}
+                <div style="margin-top: var(--csa-sp-4); padding-top: var(--csa-sp-4); border-top: 1px solid var(--csa-rule);">
+                    <a href="{{ path('production_show_basket', { year: year }) }}" class="csa-link-muted">
+                        <i class="fa fa-shopping-basket"></i> Ver cestas {{ year }}
+                    </a>
+                </div>
+            {% endblock %}
+        {% endembed %}
+    </div>
+
+    {# ===== Fila 2: Fechas siembra + Producción ===== #}
+    <div class="col-lg-12" style="clear: both; margin-top: var(--csa-sp-8);">
+        <div class="csa-row" style="align-items: flex-start; gap: var(--csa-sp-6);">
+
+            <div style="flex: 1 1 0; min-width: 0;">
+                {% embed '_components/csa_card.html.twig' with {
+                    title: 'Fechas de siembra/plantación',
+                    subtitle: 'Cada hito de siembra registrado para este cultivo.',
+                    accent: 'ochre'
+                } %}
+                    {% block body %}
+                        {% if entity.getseedworks|length > 0 %}
+                            {% for seedwork in entity.getseedworks %}
+                                {# Mapeo tipo → color/icono. ids: 1=semillero, 2=siembra directa, 3=plantación #}
+                                {% set type_id = seedwork.getSeedWorkType.id %}
+                                {% set type_color = type_id == 3 ? 'green' : 'ochre' %}
+                                {% set type_icon = type_id == 1 ? 'fa-flask' : (type_id == 3 ? 'fa-tree' : 'fa-leaf') %}
+
+                                <div style="padding: var(--csa-sp-4) 0 var(--csa-sp-4) var(--csa-sp-4); border-left: 3px solid var(--csa-{{ type_color }}); {% if not loop.last %}border-bottom: 1px solid var(--csa-rule);{% endif %}">
+                                    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-2); align-items: baseline;">
+                                        <div>
+                                            <i class="fa {{ type_icon }}" style="color: var(--csa-{{ type_color }}); margin-right: var(--csa-sp-2);"></i>
+                                            <strong>{{ seedwork.getSeedWorkType }}</strong>
+                                            {% if seedwork.getDate %}
+                                                <span class="csa-muted" style="font-size: var(--csa-fs-sm); margin-left: var(--csa-sp-2);">·
+                                                    {{ seedwork.getDate|format_date('long', locale='es') }}
+                                                </span>
+                                            {% endif %}
+                                        </div>
+                                        <a href="{{ path('seedwork_edit', { id: seedwork.id }) }}" class="csa-link-muted" title="Editar siembra" aria-label="Editar siembra"><i class="fa fa-pencil"></i></a>
+                                    </div>
+
+                                    {# Datos inline con separadores #}
+                                    {% set parts = [] %}
+                                    {% if seedwork.plant %}{% set parts = parts|merge(['<strong>' ~ seedwork.plant ~ '</strong> plantas']) %}{% endif %}
+                                    {% if seedwork.tray %}{% set parts = parts|merge(['<strong>' ~ seedwork.tray ~ '</strong> bandejas']) %}{% endif %}
+                                    {% if seedwork.surface %}{% set parts = parts|merge(['<strong>' ~ seedwork.surface ~ '</strong> m²']) %}{% endif %}
+                                    {% if seedwork.sector %}{% set parts = parts|merge([seedwork.sector|e]) %}{% endif %}
+                                    {% if parts|length > 0 %}
+                                        <div class="csa-soft" style="font-size: var(--csa-fs-sm);">
+                                            {{ parts|join(' · ')|raw }}
+                                        </div>
+                                    {% endif %}
+
+                                    {# Fecha prevista solo si difiere de la real #}
+                                    {% if seedwork.getEstimatedDate and (not seedwork.getDate or seedwork.getEstimatedDate|date('Y-m-d') != seedwork.getDate|date('Y-m-d')) %}
+                                        <div class="csa-muted" style="font-size: var(--csa-fs-xs); margin-top: 2px;">
+                                            Previsto el {{ seedwork.getEstimatedDate|format_date('long', locale='es') }}
+                                        </div>
+                                    {% endif %}
+
+                                    {# Notas #}
+                                    {% if seedwork.content|length > 0 %}
+                                        <div class="csa-callout csa-callout--info" style="margin-top: var(--csa-sp-3);">
+                                            <i class="csa-callout__icon fa fa-info-circle"></i>
+                                            <div>{{ seedwork.content|raw }}</div>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="csa-soft" style="text-align: center; padding: var(--csa-sp-6) 0;">
+                                No se han registrado fechas de siembra/plantación.
+                            </div>
+                        {% endif %}
+                    {% endblock %}
+                {% endembed %}
+            </div>
+
+            <div style="flex: 1 1 0; min-width: 0;">
+                {% embed '_components/csa_card.html.twig' with {
+                    title: 'Producción',
+                    subtitle: 'Cosechas registradas. Total: ' ~ total_production ~ ' kg en ' ~ productions|length ~ ' semanas.',
+                    accent: 'terracotta'
+                } %}
+                    {% block body %}
+                        {% if productions|length > 0 %}
+                            <div class="csa-table-wrap">
+                                <table class="csa-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Fecha</th>
+                                            <th>Cantidad</th>
+                                            <th class="csa-table__actions">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for production in productions %}
+                                            <tr>
+                                                <td>{{ production.getDate|format_date('medium', locale='es') }}</td>
+                                                <td>{{ production.amount }} kg</td>
+                                                <td class="csa-table__actions">
+                                                    <a href="{{ path('production_edit', { id: production.id }) }}" title="Editar producción" aria-label="Editar producción"><i class="fa fa-pencil"></i></a>
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <div class="csa-soft" style="text-align: center; padding: var(--csa-sp-6) 0;">
+                                No se han registrado cosechas para este cultivo.
+                            </div>
+                        {% endif %}
+                    {% endblock %}
+                {% endembed %}
+            </div>
+
+        </div>
+    </div>
+
+    {# ===== Fila 3: Trabajos realizados ===== #}
+    <div class="col-lg-12" style="margin-top: var(--csa-sp-6);">
+        {% embed '_components/csa_card.html.twig' with {
+            title: 'Trabajos realizados',
+            subtitle: 'Histórico de trabajos culturales aplicados al cultivo.',
+            accent: 'plum'
+        } %}
+            {% block body %}
+                {% if entity.culturalWorks|length > 0 %}
+                    <div class="csa-table-wrap">
+                        <table class="csa-table" data-paginate>
+                            <thead>
+                                <tr>
+                                    <th class="csa-table__col-tight">Tipo</th>
+                                    <th class="csa-table__col-tight">Fecha</th>
+                                    <th>Notas</th>
+                                    <th class="csa-table__actions">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for cultural_work in entity.culturalWorks %}
+                                    <tr>
+                                        <td class="csa-table__col-tight">
+                                            <a href="{{ path('culturalwork_show', { id: cultural_work.id }) }}">{{ cultural_work.culturalWorkType }}</a>
+                                        </td>
+                                        <td class="csa-table__col-tight">{{ cultural_work.getDate|format_date('medium', locale='es') }}</td>
+                                        <td>{{ cultural_work.content|raw }}</td>
+                                        <td class="csa-table__actions">
+                                            <a href="{{ path('culturalwork_edit', { id: cultural_work.id }) }}" title="Editar trabajo" aria-label="Editar trabajo"><i class="fa fa-pencil"></i></a>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="csa-soft" style="text-align: center; padding: var(--csa-sp-6) 0;">
+                        No se han registrado trabajos para este cultivo.
+                    </div>
+                {% endif %}
+            {% endblock %}
+        {% endembed %}
+    </div>
+
 {% endblock %}

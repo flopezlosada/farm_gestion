@@ -51,7 +51,7 @@ class CropWorkingController extends AbstractAppController
         $form = $this->createCreateForm($entity);
         $form->handleRequest($request);
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $em = $this->getDoctrine()->getManager();
             $em->persist($entity);
 
@@ -223,7 +223,7 @@ class CropWorkingController extends AbstractAppController
         $editForm = $this->createEditForm($entity);
         $editForm->handleRequest($request);
 
-        if ($editForm->isValid()) {
+        if ($editForm->isSubmitted() && $editForm->isValid()) {
             $em->flush();
 
             return $this->redirect($this->generateUrl('cropworking_show', array('id' => $id)));
@@ -245,7 +245,7 @@ class CropWorkingController extends AbstractAppController
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\CropWorking::class)->find($id);
 
@@ -287,7 +287,12 @@ class CropWorkingController extends AbstractAppController
             throw $this->createNotFoundException('Unable to find CropWorking entity.');
         }
 
-        $form = $this->createFormBuilder($crop_working)
+        // Sin data binding: el form recoge zone+sector como inputs y la
+        // action addedSector procesa el array $request->get('form') a mano.
+        // Pasar $crop_working aquí hacía que PropertyAccess intentara mapear
+        // a propiedades de CropWorking y el EntityType reventaba con
+        // "IdReader::getIdValue(): Argument #1 must be of type ?object, true given".
+        $form = $this->createFormBuilder()
             ->add('zone', EntityType::class, array('class' => 'App\Entity\Zone', 'required' => true, 'placeholder' => "Selecciona zona", 'label' => "Zonas de cultivo",
                 'query_builder' => function (EntityRepository $er) {
                     return $er->createQueryBuilder('u')

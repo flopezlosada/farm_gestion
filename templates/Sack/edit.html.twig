@@ -1,16 +1,93 @@
-{% extends 'base.html.twig' %}
+{# ============================================================
+ # Editar saco — shell csa.
+ #
+ # NOTA: el SackController::createEditForm() no pasa la opción `batch`
+ # que SackType requiere, así que esta ruta lanza MissingOptionsException
+ # antes de llegar a la plantilla. Es deuda preexistente del legacy.
+ # La plantilla se migra por completitud; el endpoint no funciona hasta
+ # que se arregle el controller.
+ # ============================================================ #}
 
-{% block body -%}
-    <h1>Sack edit</h1>
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% form_theme edit_form 'form_div_layout.html.twig' %}
 
-    {{ form(edit_form) }}
+{% block title %}Editar saco #{{ entity.id }}{% endblock %}
 
-        <ul class="record_actions">
-    <li>
-        <a href="{{ path('sack') }}">
-            Back to the list
-        </a>
-    </li>
-    <li>{{ form(delete_form) }}</li>
-</ul>
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('sack') }}">Sacos</a>
+    {% if entity.batch %}
+        <span class="csa-topbar__crumbs-sep">/</span>
+        <a href="{{ path('batch_show', { id: entity.batch.id }) }}">{{ entity.batch }}</a>
+    {% endif %}
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('sack_show', { id: entity.id }) }}">#{{ entity.id }}</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Editar</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Granja · Gallinas',
+        'Editar saco #' ~ entity.id,
+        'Corrige los datos del saco.'
+    ) }}
+
+    <div style="display: none;">
+        {{ form_start(delete_form, { attr: { id: 'sack-delete-form' } }) }}
+            {{ form_rest(delete_form) }}
+        {{ form_end(delete_form, { render_rest: false }) }}
+    </div>
+
+    {{ form_start(edit_form, {
+        'action': path('sack_update', { id: entity.id }),
+        'method': 'put',
+        'attr': { 'role': 'form', 'class': 'csa-form-narrow' }
+    }) }}
+
+        <div class="csa-stack-lg">
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Datos del saco', subtitle: 'Fecha de uso, contenido y peso.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(edit_form.delivery_date, 'Fecha de uso del saco', { attr: { class: 'csa-input datepicker' } }) }}
+                        {{ csa.field(edit_form.weight, 'Peso del saco (Kg)') }}
+                        {{ csa.field(edit_form.purchase, 'Contenido del saco', { full: true }) }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                <div>
+                    <button type="submit" form="sack-delete-form" class="csa-btn csa-btn--ghost"
+                            onclick="return confirm('¿Seguro? Esta acción no se puede deshacer.');">
+                        Eliminar saco
+                    </button>
+                </div>
+                <div class="csa-row">
+                    {{ csa.btn('Cancelar', { variant: 'ghost', href: path('sack_show', { id: entity.id }) }) }}
+                    {{ form_widget(edit_form.submit, {
+                        label: 'Guardar cambios',
+                        attr: { class: 'csa-btn csa-btn--primary' }
+                    }) }}
+                </div>
+            </div>
+
+        </div>
+
+        {{ form_rest(edit_form) }}
+    {{ form_end(edit_form, { render_rest: false }) }}
+
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    <script>
+        document.querySelectorAll('.datepicker, .datepicker2, .datepicker3')
+            .forEach(function (el) { el.type = 'date'; });
+    </script>
 {% endblock %}

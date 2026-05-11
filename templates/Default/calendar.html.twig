@@ -1,7 +1,47 @@
-{% extends 'calendar_base.html.twig' %}
-{% block title_wrapper %}Calendario{% endblock %}
-{% block main %}
-    <div class="calendar_layout">{% include '@ADesignsCalendar/calendar.html.twig' %}</div>
-    <div class="clear"></div>
+{# ============================================================
+ # Calendario interno (FullCalendar) — shell csa.
+ # Esta es la plantilla que renderiza DefaultController::calendar
+ # (path 'calendar'). El bundle ADesignsCalendar solo aporta
+ # <div id="calendar-holder"></div>; el JS calendar-settings.js
+ # busca ese div y pinta el calendario.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Calendario{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    <link rel="stylesheet" href="{{ asset('bundles/adesignscalendar/css/fullcalendar/fullcalendar.css') }}">
 {% endblock %}
-{% block warning %}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Calendario</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Día a día · Vista',
+        'Calendario',
+        'Eventos de la asociación: tareas, recogidas, puestas y reparto.'
+    ) }}
+
+    {% embed '_components/csa_card.html.twig' with { title: 'Mes en curso', accent: 'green' } %}
+        {% block body %}
+            {% include '@ADesignsCalendar/calendar.html.twig' %}
+        {% endblock %}
+    {% endembed %}
+
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    <script src="{{ asset('bundles/fosjsrouting/js/router.js') }}"></script>
+    <script src="{{ path('fos_js_routing_js', { callback: 'fos.Router.setData' }) }}"></script>
+    <script type="text/javascript" src="{{ asset('bundles/adesignscalendar/js/fullcalendar/jquery.fullcalendar.min.js') }}"></script>
+    <script type="text/javascript" src="{{ asset('bundles/adesignscalendar/js/calendar-settings.js') }}"></script>
+{% endblock %}

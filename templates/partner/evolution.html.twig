@@ -1,115 +1,67 @@
-{% extends 'layout_graph.html.twig' %}
+{# ============================================================
+ # Evolución del número de socixs — shell csa.
+ # Gráfico Highcharts con datos por mes.
+ # ============================================================ #}
 
-{% block title %}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Evolución de socixs{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('partner_index') }}">Socixs</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Evolución</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Socixs · Estadísticas',
+        'Evolución del número de socixs',
+        'Variación mensual del total de socias y socios.'
+    ) }}
+
+    {% embed '_components/csa_card.html.twig' with { title: 'Gráfico', accent: 'green' } %}
+        {% block body %}
+            <div id="container" style="width: 100%; height: 400px;"></div>
+        {% endblock %}
+    {% endembed %}
 
 {% endblock %}
 
-{% block main %}
-    <div class="row">
-        <div class="col-lg-12">
-            <h1 class="page-header">Evolución del número de socixs</h1>
-        </div>
-        <!-- /.col-lg-12 -->
-    </div>
-    <div class="row">
-        <div class="col-lg-12">
-            <div class="panel panel-green">
-                <div class="panel-heading">
-
-                </div>
-                <div class="panel-body">
-
-                    <div id="container" style="width:100%; height:400px;"></div>
-                </div>
-            </div>
-        </div>
-    </div>
-{% endblock %}
-
- {% block more_css %}
-     <link rel="stylesheet" href="{{ asset('bundles/app/css/morris/morris.css') }}"/>
- {% endblock %}
-
-
-{% block graph_js %}
-<script>
-    /* new Morris.Line({
-     // ID of the element in which to draw the chart.
-     element: 'layweekchart',
-     // Chart data records -- each entry in this array corresponds to a point on
-     // the chart.
-     data: [
-{#{% for week in week_lay %}#}
-         {#{#}
-         {#average: {{ (week.total/week.days)|number_format(2,'.',',') }},#}
-         {#week: '{{ week.year_date }}-{{ week.week }}',#}
-         {#value: {{ week.total }},#}
-         {#},#}
-        {#{%  endfor %}#}
-         ],
-         // The name of the data record attribute that contains x-values.
-         xkey: 'week',
-         // A list of names of data record attributes that contain y-values.
-         ykeys: ['value', 'average'],
-         // Labels for the ykeys -- will be displayed when you hover over the
-         // chart.
-         labels: ['Huevos', "Media Semanal"],
-         hideHover: true,
-
-         });*/
-
-    $(function () {
-        var myChart = Highcharts.chart('container', {
-            chart: {
-                type: 'spline',
-                zoomType: 'x'
-            },
-            title: {
-                text: 'Evolución número de socixs'
-            },
-
-            yAxis: {
-                title: {
-                    text: 'Número de socixs'
-                }
-            },
-            tooltip: {
-                shared: true
-            },
-            legend: {
-                layout: 'vertical',
-                align: 'right',
-                verticalAlign: 'middle'
-            },
-            xAxis: {
-                title: {
-                    text: 'meses'
+{% block more_js %}
+    {{ parent() }}
+    <script src="https://code.highcharts.com/highcharts.js"></script>
+    <script>
+        (function () {
+            Highcharts.chart('container', {
+                chart: { type: 'spline', zoomType: 'x' },
+                title: { text: 'Evolución número de socixs' },
+                yAxis: { title: { text: 'Número de socixs' } },
+                tooltip: { shared: true },
+                legend: { layout: 'vertical', align: 'right', verticalAlign: 'middle' },
+                xAxis: {
+                    title: { text: 'meses' },
+                    categories: [
+                        {% for amount in amount_partners %}
+                            '{{ amount[0][0].date|date("m/d/Y") }}',
+                        {% endfor %}
+                    ]
                 },
-                categories: [
-                    {% for amount in amount_partners %}
-                    '{{ amount[0][0].date|date("m/d/Y") }}',
-                    {% endfor %}
-                ]
-            },
-            plotOptions: {
-                series: {
-                    label: {
-                        connectorAllowed: false
-                    }
-
-                }
-            },
-
-            series: [{
-                name: 'Nº de socixs',
-                color: Highcharts.getOptions().colors[5],
-                data: [
-                    {% for amount in amount_partners %}
-                    {{ amount[1] }},
-                    {% endfor %}
-                ]
-            }]
-        });
-    })
-</script>
+                plotOptions: { series: { label: { connectorAllowed: false } } },
+                series: [{
+                    name: 'Nº de socixs',
+                    color: Highcharts.getOptions().colors[5],
+                    data: [
+                        {% for amount in amount_partners %}
+                            {{ amount[1] }},
+                        {% endfor %}
+                    ]
+                }]
+            });
+        })();
+    </script>
 {% endblock %}

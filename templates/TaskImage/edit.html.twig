@@ -1,27 +1,89 @@
-    {% extends 'layout_crud.html.twig' %}
+{# ============================================================
+ # Editar imagen de tarea — shell csa.
+ # La plantilla legacy estaba vacía (solo submit). Reconstruida.
+ # ============================================================ #}
 
-    {% block title_wrapper %}Editar {% endblock %}
-    {% block main -%}
-    <div class="panel panel-default">
-        <div class="panel-heading">
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% form_theme edit_form 'form_div_layout.html.twig' %}
 
-        </div>
-        <div class="panel-body">
-            {{ form_start(edit_form, {'action': path('taskimage_update',{'id':entity.id}), 'method': 'put','attr': {'role': 'form' }}) }}
-            {{ form_errors(edit_form) }}
-            <div class="row">
-            </div>
-            {{ form_widget(edit_form.submit,{'attr':{'class':'btn btn-default' }}) }}
-            {{ form_rest(edit_form) }}
-            {{ form_end(edit_form, {'render_rest': false}) }}
-        </div>
+{% block title %}Editar imagen · {{ entity.title }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('task') }}">Tareas</a>
+    {% if entity.task %}
+        <span class="csa-topbar__crumbs-sep">/</span>
+        <a href="{{ path('task_show', { id: entity.task.id }) }}">{{ entity.task }}</a>
+    {% endif %}
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('taskimage_show', { id: entity.id }) }}">{{ entity.title }}</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Editar</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Tareas · Imágenes',
+        'Editar ' ~ entity.title,
+        'Cambia el título o sustituye el archivo de la imagen.'
+    ) }}
+
+    <div style="display: none;">
+        {{ form_start(delete_form, { attr: { id: 'taskimage-delete-form' } }) }}
+            {{ form_rest(delete_form) }}
+        {{ form_end(delete_form, { render_rest: false }) }}
     </div>
-        <ul class="record_actions">
-    <li>
-        <a href="{{ path('taskimage') }}">
-            Back to the list
-        </a>
-    </li>
-    <li>{{ form(delete_form) }}</li>
-</ul>
-    {% endblock %}
+
+    {{ form_start(edit_form, {
+        'action': path('taskimage_update', { id: entity.id }),
+        'method': 'put',
+        'attr': { 'role': 'form', 'class': 'csa-form-narrow', 'enctype': 'multipart/form-data' }
+    }) }}
+
+        <div class="csa-stack-lg">
+
+            {% if entity.image %}
+                {% embed '_components/csa_card.html.twig' with { title: 'Imagen actual', accent: 'ochre' } %}
+                    {% block body %}
+                        <div style="text-align: center;">
+                            <img src="{{ asset(entity.getWebPath) }}" alt="{{ entity.title }}" style="max-width: 100%; max-height: 320px; border-radius: var(--csa-radius-md);">
+                        </div>
+                    {% endblock %}
+                {% endembed %}
+            {% endif %}
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Datos', subtitle: 'Título y archivo (opcional para mantener el actual).' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(edit_form.title, 'Título', { full: true }) }}
+                        {{ csa.field(edit_form.file, 'Sustituir archivo', { full: true, hint: 'opcional' }) }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                <div>
+                    <button type="submit" form="taskimage-delete-form" class="csa-btn csa-btn--ghost"
+                            onclick="return confirm('¿Seguro? Esta acción no se puede deshacer.');">
+                        Eliminar imagen
+                    </button>
+                </div>
+                <div class="csa-row">
+                    {{ csa.btn('Cancelar', { variant: 'ghost', href: path('taskimage_show', { id: entity.id }) }) }}
+                    {{ form_widget(edit_form.submit, {
+                        label: 'Guardar cambios',
+                        attr: { class: 'csa-btn csa-btn--primary' }
+                    }) }}
+                </div>
+            </div>
+
+        </div>
+
+        {{ form_rest(edit_form) }}
+    {{ form_end(edit_form, { render_rest: false }) }}
+
+{% endblock %}

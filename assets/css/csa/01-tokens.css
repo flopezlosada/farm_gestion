@@ -1,0 +1,114 @@
+/* ============================================================
+ * CSA Vega de Jarama — Tokens de diseño
+ * ============================================================
+ * Variables CSS de toda la nueva capa visual.
+ *
+ * Convención: TODO va prefijado `--csa-` para no chocar con
+ * Bootstrap 3 ni con SB Admin 2 que ya están cargados.
+ *
+ * Ubicación sugerida: assets/css/tokens.css
+ * Cómo cargarlo: import en assets/js/app.js antes que app.css.
+ *
+ *   require('../css/tokens.css');
+ *   require('../css/app.css');
+ *
+ * Después, en base.html.twig, añade dentro de {% block stylesheets %}
+ * (sin quitar nada de lo que ya hay):
+ *
+ *   {{ encore_entry_link_tags('app') }}
+ *
+ * Eso carga el CSS compilado por Webpack Encore al final de la
+ * cascada, así nuestros estilos pisan a SB Admin 2 cuando convivan
+ * en una misma pantalla.
+ * ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  /* ---------- Color · superficies y tinta ---------- */
+  --csa-bg:           #fbfbfa;   /* fondo general, off-white */
+  --csa-surface:      #ffffff;   /* cards, panels */
+  --csa-surface-alt:  #f5f5f3;   /* sidebar, header de card, secciones secundarias */
+  --csa-ink:          #1c1d1a;   /* texto principal, casi negro cálido */
+  --csa-ink-soft:     #5a5b56;   /* texto secundario */
+  --csa-ink-muted:    #8a8b85;   /* texto terciario, hints, captions */
+  --csa-rule:         #e6e0d0;   /* divisores, bordes */
+  --csa-rule-soft:    #efeadb;   /* bordes muy suaves */
+
+  /* ---------- Color · acentos semánticos ----------
+   * Cada acento tiene su versión "soft" para fondos suaves
+   * (badges, estados, highlights). */
+  --csa-green:        #4a7c3a;   /* primario · agroecología, OK, activo */
+  --csa-green-soft:   #dceac6;
+  --csa-ochre:        #d4943a;   /* aviso suave, "atención" */
+  --csa-ochre-soft:   #fae3b8;
+  --csa-terracotta:   #d96e3f;   /* destructivo / requerido / alerta */
+  --csa-terracotta-soft: #fbd9c4;
+  --csa-sky:          #3a7ca5;   /* informativo, links secundarios */
+  --csa-sky-soft:     #cfe3ee;
+  --csa-plum:         #9c4a6e;   /* categórico, etiquetas especiales */
+  --csa-plum-soft:    #f0d3df;
+  --csa-amber:        #a3702a;   /* contrast oscuro, ocre tostado */
+
+  /* ---------- Paleta sage (sidebar y superficies tranquilas) ---------- */
+  --csa-sage-bg:       #e8ede0;   /* fondo del sidebar */
+  --csa-sage-bg-hover: #f5f8ee;   /* hover sobre fondo sage */
+  --csa-sage-rule:     #d4dbc8;   /* borde / divisores en superficie sage */
+  --csa-sage-ink:      #1f2a1d;   /* texto fuerte sobre sage */
+  --csa-sage-text:     #4a5a48;   /* texto normal sobre sage */
+  --csa-sage-muted:    #85907f;   /* texto atenuado sobre sage */
+
+  /* ---------- Tipografía ---------- */
+  --csa-serif: Fraunces, "Instrument Serif", Georgia, serif;
+  --csa-sans:  Inter, -apple-system, system-ui, sans-serif;
+  --csa-mono:  "JetBrains Mono", ui-monospace, "Menlo", monospace;
+
+  /* Escala tipográfica · paso 1.125 (perfect fourth suave).
+   * Usamos rem para que respete el zoom del usuario. */
+  --csa-fs-xs:   0.75rem;    /* 12px — captions, hints */
+  --csa-fs-sm:   0.8125rem;  /* 13px — UI secundaria */
+  --csa-fs-base: 0.875rem;   /* 14px — cuerpo de texto, inputs */
+  --csa-fs-md:   1rem;       /* 16px — UI relevante */
+  --csa-fs-lg:   1.125rem;   /* 18px — subtítulos */
+  --csa-fs-xl:   1.375rem;   /* 22px — títulos de card */
+  --csa-fs-2xl:  1.75rem;    /* 28px — h2 */
+  --csa-fs-3xl:  2.5rem;     /* 40px — h1 (desktop) */
+
+  --csa-lh-tight:  1.15;
+  --csa-lh-snug:   1.35;
+  --csa-lh-normal: 1.5;
+
+  /* ---------- Espaciado · escala de 4 ---------- */
+  --csa-sp-1:  4px;
+  --csa-sp-2:  8px;
+  --csa-sp-3:  12px;
+  --csa-sp-4:  16px;
+  --csa-sp-5:  20px;
+  --csa-sp-6:  24px;
+  --csa-sp-8:  32px;
+  --csa-sp-10: 40px;
+  --csa-sp-12: 48px;
+  --csa-sp-16: 64px;
+
+  /* ---------- Radios ---------- */
+  --csa-radius-sm: 6px;
+  --csa-radius-md: 8px;
+  --csa-radius-lg: 12px;
+  --csa-radius-xl: 16px;
+  --csa-radius-pill: 999px;
+
+  /* ---------- Sombras (sutiles, papel) ---------- */
+  --csa-shadow-sm: 0 1px 2px rgba(28, 29, 26, 0.04);
+  --csa-shadow-md: 0 2px 8px rgba(28, 29, 26, 0.06);
+  --csa-shadow-lg: 0 8px 24px rgba(28, 29, 26, 0.08);
+
+  /* ---------- Layout ---------- */
+  --csa-sidebar-w:      260px;
+  --csa-sidebar-w-collapsed: 64px;
+  --csa-topbar-h:       60px;
+  --csa-content-max:    1600px;
+
+  /* ---------- Transiciones ---------- */
+  --csa-t-fast:    120ms ease;
+  --csa-t-normal:  180ms ease;
+}

@@ -1,83 +1,159 @@
-{% extends 'layout_show.html.twig' %}
+{# ============================================================
+ # Detalle de una tarea — shell csa.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Tarea · {{ entity.title }}{% endblock %}
+
 {% block more_css %}
-    <link rel="stylesheet" href="{{ asset('bundles/app/fancybox/jquery.fancybox.css') }}"/>
+    {{ parent() }}
+    <link rel="stylesheet" href="{{ asset('bundles/app/fancybox/jquery.fancybox.css') }}">
 {% endblock %}
-{% block main -%}
-    <h1>{{ entity }} ({{ entity.getstatus }})</h1>
-    <div class="panel panel-default">
 
-        <div class="panel-body">
-            <div class="row">
-                <div class="col-lg-12">
-                    {% if entity.tasktype.id!= 1%}
-                    <p><strong>Fecha aproximada de realización: </strong>
-                        {% if entity.expectedDate %}
-                            {{ entity.expectedDate|format_date("long", locale="es") }}
-                        {% else %}
-                            {{ entity.month}}-{{ entity.year }}
-                        {% endif %}
-                    </p>
-                    {% endif %}
-                    {% if entity.finish==1 %}
-                    <p><strong>Fecha de finalización: </strong> {{ entity.realDate|format_date("long", locale="es") }}</p>
-                    {% endif %}
-                    {{ entity.content }}
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('task') }}">Tareas</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ entity.title }}</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    <div style="display: none;">
+        {{ form_start(delete_form, { attr: { id: 'task-delete-form' } }) }}
+            {{ form_rest(delete_form) }}
+        {{ form_end(delete_form, { render_rest: false }) }}
+    </div>
+
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-6); align-items: flex-start;">
+        <div class="csa-row" style="align-items: flex-start; gap: var(--csa-sp-4);">
+            <span class="csa-table__id-marker" style="width: 64px; height: 64px; font-size: 28px; border-radius: var(--csa-radius-lg);">
+                <i class="fa fa-tasks"></i>
+            </span>
+            <div>
+                <h1>{{ entity.title }}</h1>
+                <div class="csa-serif csa-italic csa-soft" style="margin-top: var(--csa-sp-2);">
+                    {{ entity.getStatus }}{% if entity.taskType %} · {{ entity.taskType }}{% endif %}
                 </div>
-                <div class="col-lg-10">
-                    {% if entity.notes|length >0 %}
-                        <h4>Notas de la tarea</h4>
-                    {% endif %}
-
-                    {% for note in entity.notes %}
-                        <blockquote>
-                            <p>{{ note.content|raw }}</p>
-                            <ul class="list-inline">
-                                <li>
-                                    <small><a href="{{ path('tasknote_edit', {'id': note.id}) }}">Editar</a></small>
-                                </li>
-                            </ul>
-                        </blockquote>
-                    {% endfor %}
-                </div>
-
-                {% for image in entity.getImages %}
-                    {% if loop.first %}
-                        <div class="col-lg-12 text-center image_list">
-                    {% endif %}
-                    {% if loop.index0  is divisible by(3) and loop.index0>0 %}
-                        </div>
-                        <div class="col-lg-12 text-center  image_list">
-                    {% endif %}
-                    <a class="fancybox-button" rel="fancybox-button"
-                       href="{{ asset('uploads/task/images/' ~ image.image) | imagine_filter('image_task_big') }}"
-                       title="{{ image.title }}">
-                        <img class="img-thumbnail img-responsive image_task"
-                             src="{{ asset('uploads/task/images/' ~ image.image) | imagine_filter('image_task_show') }}"
-                                >
-                    </a>
-                    {% if loop.last %}
-                        </div>
-                    {% endif %}
-                {% endfor %}
             </div>
         </div>
-        <div class="panel-footer">
-            {% include 'App:Task:record_actions.html.twig' with {'task':entity} %}
+        <div class="csa-row">
+            <button type="submit" form="task-delete-form" class="csa-btn csa-btn--ghost"
+                    onclick="return confirm('¿Seguro? Esta acción no se puede deshacer.');">
+                Eliminar
+            </button>
+            {{ csa.btn('Editar', { variant: 'secondary', href: path('task_edit', { id: entity.id }), icon: 'fa-pencil' }) }}
+            {{ csa.btn('Volver', { variant: 'ghost', href: path('task') }) }}
         </div>
     </div>
 
+    {% embed '_components/csa_card.html.twig' with { title: 'Datos de la tarea', accent: 'sky' } %}
+        {% block body %}
+            <dl class="csa-defs">
+                {% if entity.taskType.id != 1 %}
+                    <div class="csa-defs__row">
+                        <dt class="csa-defs__label">Fecha prevista</dt>
+                        <dd class="csa-defs__value">
+                            {% if entity.expectedDate %}
+                                {{ entity.expectedDate|format_date('long', locale='es') }}
+                            {% else %}
+                                {{ entity.month }}-{{ entity.year }}
+                            {% endif %}
+                        </dd>
+                    </div>
+                {% endif %}
+                {% if entity.finish == 1 %}
+                    <div class="csa-defs__row">
+                        <dt class="csa-defs__label">Finalizada el</dt>
+                        <dd class="csa-defs__value">{{ entity.realDate|format_date('long', locale='es') }}</dd>
+                    </div>
+                {% endif %}
+                {% if entity.users|length > 0 %}
+                    <div class="csa-defs__row">
+                        <dt class="csa-defs__label">Asignada a</dt>
+                        <dd class="csa-defs__value">{{ entity.listUsers }}</dd>
+                    </div>
+                {% endif %}
+                {% if entity.labour %}
+                    <div class="csa-defs__row">
+                        <dt class="csa-defs__label">Labor</dt>
+                        <dd class="csa-defs__value">{{ entity.labour }}</dd>
+                    </div>
+                {% endif %}
+                {% if entity.cropWorkings|length > 0 %}
+                    <div class="csa-defs__row csa-defs__row--full">
+                        <dt class="csa-defs__label">Cultivos asociados</dt>
+                        <dd class="csa-defs__value">
+                            {% for cw in entity.cropWorkings %}
+                                <a href="{{ path('cropworking_show', { id: cw.id }) }}">{{ cw }}</a>{% if not loop.last %}, {% endif %}
+                            {% endfor %}
+                        </dd>
+                    </div>
+                {% endif %}
+                <div class="csa-defs__row csa-defs__row--full">
+                    <dt class="csa-defs__label">Contenido</dt>
+                    <dd class="csa-defs__value">{{ entity.content|raw }}</dd>
+                </div>
+            </dl>
+
+            {% include 'Task/record_actions.html.twig' with { task: entity } %}
+        {% endblock %}
+    {% endembed %}
+
+    {% if entity.notes|length > 0 %}
+        <div style="margin-top: var(--csa-sp-5);">
+        {% embed '_components/csa_card.html.twig' with { title: 'Notas (' ~ entity.notes|length ~ ')', accent: 'plum' } %}
+            {% block body %}
+                {% for note in entity.notes %}
+                    <blockquote style="border-left: 3px solid var(--csa-plum); padding-left: var(--csa-sp-4); margin-bottom: var(--csa-sp-4);">
+                        <div>{{ note.content|raw }}</div>
+                        <small><a href="{{ path('tasknote_edit', { id: note.id }) }}">Editar</a></small>
+                    </blockquote>
+                {% endfor %}
+            {% endblock %}
+        {% endembed %}
+        </div>
+    {% endif %}
+
+    {% if entity.getImages|length > 0 %}
+        <div style="margin-top: var(--csa-sp-5);">
+        {% embed '_components/csa_card.html.twig' with { title: 'Imágenes (' ~ entity.getImages|length ~ ')', accent: 'ochre' } %}
+            {% block body %}
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, 160px); gap: var(--csa-sp-4);">
+                    {% for image in entity.getImages %}
+                        <a class="fancybox-button" rel="fancybox-button"
+                           href="{{ asset('uploads/task/images/' ~ image.image) }}"
+                           title="{{ image.title }}"
+                           style="display: block; width: 160px; height: 160px; background: var(--csa-surface-alt); border: 1px solid var(--csa-rule); border-radius: var(--csa-radius-md); overflow: hidden;">
+                            <img src="{{ asset('uploads/task/images/' ~ image.image) }}"
+                                 alt="{{ image.title }}"
+                                 loading="lazy"
+                                 style="width: 100%; height: 100%; object-fit: contain; display: block;">
+                        </a>
+                    {% endfor %}
+                </div>
+            {% endblock %}
+        {% endembed %}
+        </div>
+    {% endif %}
+
 {% endblock %}
+
 {% block more_js %}
+    {{ parent() }}
     <script src="{{ asset('bundles/app/fancybox/jquery.fancybox.js') }}"></script>
     <script>
-        $(document).ready(function() {
-            $(".fancybox-button").fancybox({
-                prevEffect		: 'none',
-                nextEffect		: 'none',
-                closeBtn		: false,
-                helpers		: {
-                    title	: { type : 'inside' },
-                    buttons	: {}
+        $(document).ready(function () {
+            $('.fancybox-button').fancybox({
+                prevEffect: 'none',
+                nextEffect: 'none',
+                closeBtn: false,
+                helpers: {
+                    title: { type: 'inside' },
+                    buttons: {}
                 }
             });
         });

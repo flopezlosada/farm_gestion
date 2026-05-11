@@ -38,7 +38,6 @@ class CompostPile
      * @ORM\Column(name="start_date", type="date")
      */
     #[Assert\NotBlank]
-    #[Assert\Date]
     private $start_date;
 
     /**
@@ -46,7 +45,6 @@ class CompostPile
      * @var string $end_date
      * @ORM\Column(name="end_date", type="date", nullable=true)
      */
-    #[Assert\Date]
     private $end_date;
 
     /**

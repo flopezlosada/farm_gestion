@@ -38,7 +38,7 @@ class GestionController extends AbstractAppController
         $form = $this->createCreateForm();
         $form->handleRequest($request);
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $data = $form->getData();
             $email = (new MimeEmail())
                 ->subject('Contacto desde http://csavegadejarama.org')

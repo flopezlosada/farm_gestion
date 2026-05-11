@@ -1,32 +1,71 @@
-{% extends 'base.html.twig' %}
+{# ============================================================
+ # Detalle de zona (Zone) — shell csa.
+ # ============================================================ #}
 
-{% block body -%}
-    <h1>Zone</h1>
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
 
-    <table class="record_properties">
-        <tbody>
-            <tr>
-                <th>Id</th>
-                <td>{{ entity.id }}</td>
-            </tr>
-            <tr>
-                <th>Name</th>
-                <td>{{ entity.name }}</td>
-            </tr>
-        </tbody>
-    </table>
+{% block title %}Zona · {{ entity.name }}{% endblock %}
 
-        <ul class="record_actions">
-    <li>
-        <a href="{{ path('zone') }}">
-            Back to the list
-        </a>
-    </li>
-    <li>
-        <a href="{{ path('zone_edit', { 'id': entity.id }) }}">
-            Edit
-        </a>
-    </li>
-    <li>{{ form(delete_form) }}</li>
-</ul>
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('zone') }}">Zonas</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ entity.name }}</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    <div style="display: none;">
+        {{ form_start(delete_form, { attr: { id: 'zone-delete-form' } }) }}
+            {{ form_rest(delete_form) }}
+        {{ form_end(delete_form, { render_rest: false }) }}
+    </div>
+
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-6); align-items: flex-start;">
+        <div class="csa-row" style="align-items: flex-start; gap: var(--csa-sp-4);">
+            <span class="csa-table__id-marker" style="width: 64px; height: 64px; font-size: 28px; border-radius: var(--csa-radius-lg);">
+                <i class="fa fa-map"></i>
+            </span>
+            <div>
+                <h1>{{ entity.name }}</h1>
+                <div class="csa-serif csa-italic csa-soft" style="margin-top: var(--csa-sp-2);">
+                    {{ entity.sectors|length }} sector{{ entity.sectors|length != 1 ? 'es' : '' }}
+                </div>
+            </div>
+        </div>
+        <div class="csa-row">
+            <button type="submit" form="zone-delete-form" class="csa-btn csa-btn--ghost"
+                    onclick="return confirm('¿Seguro? Esta acción no se puede deshacer.');">
+                Eliminar
+            </button>
+            {{ csa.btn('Editar', { variant: 'secondary', href: path('zone_edit', { id: entity.id }), icon: 'fa-pencil' }) }}
+            {{ csa.btn('Volver', { variant: 'ghost', href: path('zone') }) }}
+        </div>
+    </div>
+
+    {% embed '_components/csa_card.html.twig' with { title: 'Sectores de la zona', accent: 'sky' } %}
+        {% block body %}
+            {% if entity.sectors|length > 0 %}
+                <ul class="csa-list">
+                    {% for sector in entity.sectors %}
+                        <li class="csa-list__item">
+                            <a class="csa-list__link" href="{{ path('sector_show', { id: sector.id }) }}">
+                                <i class="csa-list__icon fa fa-map-marker"></i>
+                                <div class="csa-list__body">
+                                    <div class="csa-list__primary">{{ sector.name }}</div>
+                                </div>
+                            </a>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <div class="csa-soft" style="text-align: center; padding: var(--csa-sp-6) 0;">
+                    Esta zona no tiene sectores asignados.
+                </div>
+            {% endif %}
+        {% endblock %}
+    {% endembed %}
+
 {% endblock %}

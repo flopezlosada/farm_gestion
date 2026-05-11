@@ -1,4 +1,4 @@
-{% extends app.request.isXmlHttpRequest ? "App:Default:layout_identify_ajax.html.twig" : "App:Default:layout_identify_no_ajax.html.twig" %}
+{% extends app.request.isXmlHttpRequest ? "Default/layout_identify_ajax.html.twig" : "Default/layout_identify_no_ajax.html.twig" %}
 
    {% block identify %}
   {{ dump(dichotomous_keys) }}

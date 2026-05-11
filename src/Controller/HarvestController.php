@@ -42,8 +42,9 @@ class HarvestController extends AbstractAppController
         $form = $this->createCreateForm($entity);
         $form->handleRequest($request);
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $em = $this->getDoctrine()->getManager();
+            $entity->setHarvestDate(new \DateTime($entity->getHarvestDate()));
             $em->persist($entity);
             $em->flush();
 
@@ -125,6 +126,9 @@ class HarvestController extends AbstractAppController
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Harvest entity.');
         }
+        if ($entity->getHarvestDate()) {
+            $entity->setHarvestDate($entity->getHarvestDate()->format('Y-m-d'));
+        }
 
         $editForm = $this->createEditForm($entity);
         $deleteForm = $this->createDeleteForm($id);
@@ -170,13 +174,17 @@ class HarvestController extends AbstractAppController
         }
 
         $deleteForm = $this->createDeleteForm($id);
+        if ($entity->getHarvestDate() instanceof \DateTimeInterface) {
+            $entity->setHarvestDate($entity->getHarvestDate()->format('Y-m-d'));
+        }
         $editForm = $this->createEditForm($entity);
         $editForm->handleRequest($request);
 
-        if ($editForm->isValid()) {
+        if ($editForm->isSubmitted() && $editForm->isValid()) {
+            $entity->setHarvestDate(new \DateTime($entity->getHarvestDate()));
             $em->flush();
 
-            return $this->redirect($this->generateUrl('harvest_edit', array('id' => $id)));
+            return $this->redirect($this->generateUrl('harvest_show', array('id' => $id)));
         }
 
         return $this->render('Harvest/edit.html.twig', array(
@@ -195,7 +203,7 @@ class HarvestController extends AbstractAppController
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\Harvest::class)->find($id);
 

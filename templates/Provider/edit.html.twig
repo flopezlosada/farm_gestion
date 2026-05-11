@@ -1,16 +1,99 @@
-{% extends 'base.html.twig' %}
+{# ============================================================
+ # Editar proveedorx — shell csa.
+ # ============================================================ #}
 
-{% block body -%}
-    <h1>Provider edit</h1>
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% form_theme edit_form 'form_div_layout.html.twig' %}
 
-    {{ form(edit_form) }}
+{% block title %}Editar proveedorx · {{ entity.name }}{% endblock %}
 
-        <ul class="record_actions">
-    <li>
-        <a href="{{ path('provider') }}">
-            Back to the list
-        </a>
-    </li>
-    <li>{{ form(delete_form) }}</li>
-</ul>
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('provider') }}">Proveedorxs</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('provider_show', { id: entity.id }) }}">{{ entity.name }}</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Editar</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Comercio · Compras',
+        'Editar ' ~ entity.name,
+        'Corrige los datos de contacto y dirección.'
+    ) }}
+
+    <div style="display: none;">
+        {{ form_start(delete_form, { attr: { id: 'provider-delete-form' } }) }}
+            {{ form_rest(delete_form) }}
+        {{ form_end(delete_form, { render_rest: false }) }}
+    </div>
+
+    {{ form_start(edit_form, {
+        'action': path('provider_update', { id: entity.id }),
+        'method': 'put',
+        'attr': { 'role': 'form', 'class': 'csa-form-narrow' }
+    }) }}
+
+        <div class="csa-stack-lg">
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Identidad', subtitle: 'Nombre y persona de contacto.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(edit_form.name, 'Nombre', { full: true }) }}
+                        {{ csa.field(edit_form.contact, 'Persona de contacto', { full: true }) }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Contacto', subtitle: 'Teléfono, móvil, web y email.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(edit_form.phone, 'Teléfono') }}
+                        {{ csa.field(edit_form.celular, 'Móvil') }}
+                        {{ csa.field(edit_form.web, 'Web') }}
+                        {{ csa.field(edit_form.email, 'Email') }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '3', title: 'Dirección', subtitle: 'Localización postal.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(edit_form.address, 'Dirección', { full: true }) }}
+                        {{ csa.field(edit_form.postal_code, 'Código postal') }}
+                        {{ csa.field(edit_form.city, 'Localidad') }}
+                        {{ csa.field(edit_form.state, 'Provincia / Estado') }}
+                        {{ csa.field(edit_form.country, 'País') }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                <div>
+                    <button type="submit" form="provider-delete-form" class="csa-btn csa-btn--ghost"
+                            onclick="return confirm('¿Seguro? Esta acción no se puede deshacer.');">
+                        Eliminar proveedorx
+                    </button>
+                </div>
+                <div class="csa-row">
+                    {{ csa.btn('Cancelar', { variant: 'ghost', href: path('provider_show', { id: entity.id }) }) }}
+                    {{ form_widget(edit_form.submit, {
+                        label: 'Guardar cambios',
+                        attr: { class: 'csa-btn csa-btn--primary' }
+                    }) }}
+                </div>
+            </div>
+
+        </div>
+
+        {{ form_rest(edit_form) }}
+    {{ form_end(edit_form, { render_rest: false }) }}
+
 {% endblock %}

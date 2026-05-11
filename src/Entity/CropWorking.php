@@ -147,11 +147,10 @@ class CropWorking
 
     /**
      * Fecha realización,
-     * @var string $date
+     * @var \DateTime|null $date
      * @ORM\Column(name="finish_date", type="date", nullable=true)
      * fecha de finalización. Se añade automáticamente al finalizar el cultivo
      */
-    #[Assert\Date]
     private $finish_date;
 
     /**

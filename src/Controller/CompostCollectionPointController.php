@@ -42,7 +42,7 @@ class CompostCollectionPointController extends AbstractAppController
         $form = $this->createCreateForm($entity);
         $form->handleRequest($request);
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $em = $this->getDoctrine()->getManager();
             $em->persist($entity);
             $em->flush();
@@ -65,7 +65,7 @@ class CompostCollectionPointController extends AbstractAppController
      */
     private function createCreateForm(CompostCollectionPoint $entity)
     {
-        $form = $this->createForm(new CompostCollectionPointType(), $entity, array(
+        $form = $this->createForm(CompostCollectionPointType::class, $entity, array(
             'action' => $this->generateUrl('compostcollectionpoint_create'),
             'method' => 'POST',
         ));
@@ -160,7 +160,7 @@ class CompostCollectionPointController extends AbstractAppController
      */
     private function createEditForm(CompostCollectionPoint $entity)
     {
-        $form = $this->createForm(new CompostCollectionPointType(), $entity, array(
+        $form = $this->createForm(CompostCollectionPointType::class, $entity, array(
             'action' => $this->generateUrl('compostcollectionpoint_update', array('id' => $entity->getId())),
             'method' => 'PUT',
         ));
@@ -188,10 +188,10 @@ class CompostCollectionPointController extends AbstractAppController
         $editForm = $this->createEditForm($entity);
         $editForm->handleRequest($request);
 
-        if ($editForm->isValid()) {
+        if ($editForm->isSubmitted() && $editForm->isValid()) {
             $em->flush();
 
-            return $this->redirect($this->generateUrl('compostcollectionpoint_edit', array('id' => $id)));
+            return $this->redirect($this->generateUrl('compostcollectionpoint_show', array('id' => $id)));
         }
 
         return $this->render('CompostCollectionPoint/edit.html.twig', array(
@@ -210,7 +210,7 @@ class CompostCollectionPointController extends AbstractAppController
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\CompostCollectionPoint::class)->find($id);
 

@@ -45,7 +45,7 @@ class BatchController extends AbstractAppController
         $form = $this->createCreateForm($entity);
         $form->handleRequest($request);
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $em = $this->getDoctrine()->getManager();
 
             $entity->setPurchaseDate(new \DateTime($entity->getPurchaseDate()));
@@ -275,7 +275,7 @@ class BatchController extends AbstractAppController
         $editForm = $this->createEditForm($entity);
         $editForm->handleRequest($request);
 
-        if ($editForm->isValid()) {
+        if ($editForm->isSubmitted() && $editForm->isValid()) {
             $entity->setPurchaseDate(new \DateTime($entity->getPurchaseDate()));
             $entity->setReceiptDate(new \DateTime($entity->getReceiptDate()));
             if ($entity->getBatchStatus()->getId() == 2) {
@@ -283,7 +283,7 @@ class BatchController extends AbstractAppController
             }
             $em->flush();
 
-            return $this->redirect($this->generateUrl('batch_edit', array('id' => $id)));
+            return $this->redirect($this->generateUrl('batch_show', array('id' => $id)));
         }
 
         return $this->render('Batch/edit.html.twig', array(
@@ -302,7 +302,7 @@ class BatchController extends AbstractAppController
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\Batch::class)->find($id);
 

@@ -1,16 +1,77 @@
-{% extends 'layout_show.html.twig' %}
-{% block main -%}
-    <div class="row">
-        <div class="col-lg-12">
-            <h1 class="page-header">{{ entity }}</h1>
-            <div class="panel-heading">
-                <strong>Total de dinero gastado:</strong> {{ entity.purchasePrice }} €
+{# ============================================================
+ # Detalle de unx clientx — shell csa.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Clientx · {{ entity.name }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('purchaser') }}">Clientxs</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ entity.name }}</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    <div style="display: none;">
+        {{ form_start(delete_form, { attr: { id: 'purchaser-delete-form' } }) }}
+            {{ form_rest(delete_form) }}
+        {{ form_end(delete_form, { render_rest: false }) }}
+    </div>
+
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-6); align-items: flex-start;">
+        <div class="csa-row" style="align-items: flex-start; gap: var(--csa-sp-4);">
+            <span class="csa-table__id-marker" style="width: 64px; height: 64px; font-size: 28px; border-radius: var(--csa-radius-lg);">
+                <i class="fa fa-user"></i>
+            </span>
+            <div>
+                <h1>{{ entity.name }}</h1>
+                <div class="csa-serif csa-italic csa-soft" style="margin-top: var(--csa-sp-2);">
+                    {% if entity.regular == 1 %}
+                        Cliente regular · cada {{ entity.getOftenBuyingEggs }} días
+                    {% else %}
+                        Cliente ocasional
+                    {% endif %}
+                </div>
             </div>
         </div>
-        <!-- /.col-lg-12 -->
-    </div>
-    <div class="row">
-        <div class="col-lg-12">
+        <div class="csa-row">
+            <button type="submit" form="purchaser-delete-form" class="csa-btn csa-btn--ghost"
+                    onclick="return confirm('¿Seguro? Esta acción no se puede deshacer.');">
+                Eliminar
+            </button>
+            {{ csa.btn('Editar', { variant: 'secondary', href: path('purchaser_edit', { id: entity.id }), icon: 'fa-pencil' }) }}
+            {{ csa.btn('Volver', { variant: 'ghost', href: path('purchaser') }) }}
         </div>
     </div>
+
+    {% embed '_components/csa_card.html.twig' with { title: 'Resumen', accent: 'green' } %}
+        {% block body %}
+            <dl class="csa-defs">
+                <div class="csa-defs__row">
+                    <dt class="csa-defs__label">Nombre</dt>
+                    <dd class="csa-defs__value">{{ entity.name }}</dd>
+                </div>
+                <div class="csa-defs__row">
+                    <dt class="csa-defs__label">¿Compra con frecuencia?</dt>
+                    <dd class="csa-defs__value">{% if entity.regular == 1 %}Sí{% else %}No{% endif %}</dd>
+                </div>
+                {% if entity.regular == 1 %}
+                    <div class="csa-defs__row">
+                        <dt class="csa-defs__label">Cadencia de compra</dt>
+                        <dd class="csa-defs__value">cada {{ entity.getOftenBuyingEggs }} días</dd>
+                    </div>
+                {% endif %}
+                <div class="csa-defs__row">
+                    <dt class="csa-defs__label">Total gastado</dt>
+                    <dd class="csa-defs__value">{{ entity.purchasePrice }} €</dd>
+                </div>
+            </dl>
+        {% endblock %}
+    {% endembed %}
+
 {% endblock %}

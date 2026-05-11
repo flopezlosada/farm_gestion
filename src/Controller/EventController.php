@@ -42,10 +42,12 @@ class EventController extends AbstractAppController
         $form = $this->createCreateForm($entity);
         $form->handleRequest($request);
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $em = $this->getDoctrine()->getManager();
             $entity->setStartDate(new \DateTime($entity->getStartDate()));
-            $entity->setEndDate(new \DateTime($entity->getEndDate()));
+            if ($entity->getEndDate()) {
+                $entity->setEndDate(new \DateTime($entity->getEndDate()));
+            }
             $em->persist($entity);
             $em->flush();
 
@@ -127,8 +129,12 @@ class EventController extends AbstractAppController
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Event entity.');
         }
-        $entity->setStartDate($entity->getStartDate()->format('Y-m-d'));
-        $entity->setEndDate($entity->getEndDate()->format('Y-m-d'));
+        if ($entity->getStartDate() instanceof \DateTimeInterface) {
+            $entity->setStartDate($entity->getStartDate()->format('Y-m-d'));
+        }
+        if ($entity->getEndDate() instanceof \DateTimeInterface) {
+            $entity->setEndDate($entity->getEndDate()->format('Y-m-d'));
+        }
 
         $editForm = $this->createEditForm($entity);
         $deleteForm = $this->createDeleteForm($id);
@@ -174,14 +180,22 @@ class EventController extends AbstractAppController
         }
 
         $deleteForm = $this->createDeleteForm($id);
-        $entity->setStartDate($entity->getStartDate()->format('Y-m-d'));
-        $entity->setEndDate($entity->getEndDate()->format('Y-m-d'));
+        if ($entity->getStartDate() instanceof \DateTimeInterface) {
+            $entity->setStartDate($entity->getStartDate()->format('Y-m-d'));
+        }
+        if ($entity->getEndDate() instanceof \DateTimeInterface) {
+            $entity->setEndDate($entity->getEndDate()->format('Y-m-d'));
+        }
         $editForm = $this->createEditForm($entity);
         $editForm->handleRequest($request);
 
-        if ($editForm->isValid()) {
-            $entity->setStartDate(new \DateTime($entity->getStartDate()));
-            $entity->setEndDate(new \DateTime($entity->getEndDate()));
+        if ($editForm->isSubmitted() && $editForm->isValid()) {
+            if ($entity->getStartDate()) {
+                $entity->setStartDate(new \DateTime($entity->getStartDate()));
+            }
+            if ($entity->getEndDate()) {
+                $entity->setEndDate(new \DateTime($entity->getEndDate()));
+            }
             $em->flush();
 
             return $this->redirect($this->generateUrl('calendar'));
@@ -204,7 +218,7 @@ class EventController extends AbstractAppController
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\Event::class)->find($id);
 

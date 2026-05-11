@@ -1,46 +1,70 @@
-{% extends 'layout_crud.html.twig' %}
-{% block title_wrapper %}Añadir puesta{% endblock %}
-{% block main -%}
-    <div class="panel panel-default">
+{# ============================================================
+ # Nueva puesta de huevos — shell csa.
+ # ============================================================ #}
 
-        <div class="panel-body">
-            {{ form_start(form, {'action': path('lay_create'), 'method': 'post','attr': {'role': 'form' }}) }}
-            <div class="row">
-                <div class="col-lg-6">
-                    <div class="form-group">
-                        {{ form_errors(form.lay_date) }}
-                        <label>{{ form_label(form.lay_date) }}</label>
-                        {{ form_widget(form.lay_date,{'attr':{'placeholder':'Fecha de puesta'}}) }}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% form_theme form 'form_div_layout.html.twig' %}
+
+{% block title %}Nueva puesta{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('lay') }}">Puestas</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Nueva</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Granja · Puesta',
+        'Nueva puesta de huevos',
+        'Anota la fecha de recogida, el lote y la cantidad. La semana se calcula automáticamente.'
+    ) }}
+
+    {{ form_start(form, {
+        'action': path('lay_create'),
+        'method': 'post',
+        'attr': { 'role': 'form', 'class': 'csa-form-narrow' }
+    }) }}
+
+        <div class="csa-stack-lg">
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Datos de la puesta', subtitle: 'Fecha, lote y cantidad.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.lay_date, 'Fecha de puesta', { attr: { class: 'csa-input datepicker' } }) }}
+                        {{ csa.field(form.amount, 'Cantidad') }}
+                        {{ csa.field(form.batch, 'Lote', { full: true }) }}
                     </div>
-                    <div class="form-group">
-                        {{ form_errors(form.amount) }}
-                        <label>{{ form_label(form.amount) }}</label>
-                        {{ form_widget(form.amount,{'attr':{'class':'form-control','placeholder':'Cantidad de huevos'}}) }}
-                    </div>
-                    <div class="form-group">
-                        {{ form_errors(form.batch) }}
-                        <label>{{ form_label(form.batch) }}</label>
-                        {{ form_widget(form.batch,{'attr':{'class':'form-control'}}) }}
-                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                <div></div>
+                <div class="csa-row">
+                    {{ csa.btn('Cancelar', { variant: 'ghost', href: path('lay') }) }}
+                    {{ form_widget(form.submit, {
+                        label: 'Crear puesta',
+                        attr: { class: 'csa-btn csa-btn--primary' }
+                    }) }}
                 </div>
             </div>
-            {{ form_widget(form.submit,{'attr':{'class':'btn btn-default'}}) }}
-            {{ form_rest(form) }}
-            {{ form_end(form, {'render_rest': false}) }}
+
         </div>
-    </div>
 
+        {{ form_rest(form) }}
+    {{ form_end(form, { render_rest: false }) }}
 
+{% endblock %}
 
-
-
-
-    <ul class="record_actions">
-        <li>
-            <a href="{{ path('lay') }}">
-                Back to the list
-            </a>
-        </li>
-    </ul>
-
+{% block more_js %}
+    {{ parent() }}
+    <script>
+        document.querySelectorAll('.datepicker, .datepicker2, .datepicker3')
+            .forEach(function (el) { el.type = 'date'; });
+    </script>
 {% endblock %}

@@ -1,5 +1,0 @@
-<form method="post" action="{{ path('partner_egg_share_delete', {'id': partner_egg_share.id}) }}" onsubmit="return confirm('Are you sure you want to delete this item?');">
-    <input type="hidden" name="_method" value="DELETE">
-    <input type="hidden" name="_token" value="{{ csrf_token('delete' ~ partner_egg_share.id) }}">
-    <button class="btn">Delete</button>
-</form>

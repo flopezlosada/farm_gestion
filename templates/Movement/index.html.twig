@@ -1,48 +1,68 @@
-    {% extends 'layout_list.html.twig' %}
+{# ============================================================
+ # Listado de movimientos de lotes de gallinas (Movement).
+ # ============================================================ #}
 
-    {% block title_wrapper %}Listado {% endblock %}
-    {% block main -%}
-    <h1>Movement list</h1>
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
 
-    <table class="records_list">
-        <thead>
-        <tr>
-                <th>Id</th>
-                <th>Date</th>
-                <th>Created</th>
-                <th>Updated</th>
-            <th>Actions</th>
-        </tr>
-        </thead>
-        <tbody>
-        {% for entity in entities %}
-        <tr>
-                    <td>
-                        <a href="{{ path('movement_show', { 'id': entity.id }) }}">{{ entity.id }}</a>
-                    </td>
-                    <td>{% if entity.date %}{{ entity.date|date('Y-m-d H:i:s') }}{% endif %}</td>
-                    <td>{% if entity.created %}{{ entity.created|date('Y-m-d H:i:s') }}{% endif %}</td>
-                    <td>{% if entity.updated %}{{ entity.updated|date('Y-m-d H:i:s') }}{% endif %}</td>
-                    <td>
-                <ul>
-                    <li>
-                        <a href="{{ path('movement_show', { 'id': entity.id }) }}">show</a>
-                    </li>
-                    <li>
-                        <a href="{{ path('movement_edit', { 'id': entity.id }) }}">edit</a>
-                    </li>
-                </ul>
-                    </td>
-        </tr>
-        {% endfor %}
-        </tbody>
-    </table>
+{% block title %}Movimientos{% endblock %}
 
-            <ul>
-            <li>
-                <a href="{{ path('movement_new') }}">
-                    Create a new entry
-                </a>
-            </li>
-        </ul>
-        {% endblock %}
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Movimientos</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Granja · Gallinas',
+        'Movimientos de lote',
+        'Cambios de sector de cada lote de gallinas. Cada movimiento marca cuándo el lote pasa al sector indicado.'
+    ) }}
+
+    <div class="csa-table-wrap">
+        <table class="csa-table" data-paginate>
+            <thead>
+                <tr>
+                    <th class="csa-table__col-tight">Id</th>
+                    <th class="csa-table__col-tight">Fecha</th>
+                    <th>Lote</th>
+                    <th>Sector</th>
+                    <th class="csa-table__col-tight">Días</th>
+                    <th class="csa-table__actions">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entity in entities %}
+                    <tr>
+                        <td class="csa-table__col-tight">
+                            <a class="csa-table__primary" href="{{ path('movement_show', { id: entity.id }) }}">{{ entity.id }}</a>
+                        </td>
+                        <td class="csa-table__col-tight">
+                            {% if entity.date %}{{ entity.date|format_date('medium', locale='es') }}{% else %}—{% endif %}
+                        </td>
+                        <td>
+                            {% if entity.batch %}
+                                <a href="{{ path('batch_show', { id: entity.batch.id }) }}">{{ entity.batch }}</a>
+                            {% else %}—{% endif %}
+                        </td>
+                        <td>{% if entity.sector %}{{ entity.sector }}{% else %}—{% endif %}</td>
+                        <td class="csa-table__col-tight">{% if entity.amount %}{{ entity.amount }}{% else %}—{% endif %}</td>
+                        <td class="csa-table__actions">
+                            <a href="{{ path('movement_show', { id: entity.id }) }}" title="Ver" aria-label="Ver"><i class="fa fa-eye"></i></a>
+                            <a href="{{ path('movement_edit', { id: entity.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="6" class="csa-muted" style="text-align: center; padding: var(--csa-sp-8);">
+                            No hay movimientos registrados.
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+{% endblock %}

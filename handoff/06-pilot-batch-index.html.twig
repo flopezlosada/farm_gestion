@@ -1,0 +1,87 @@
+{# ============================================================
+ # Listado de lotes — versión rediseñada
+ # ============================================================
+ # Sustituye templates/Batch/index.html.twig.
+ # Compara con el original: la lógica del controller no cambia,
+ # solo el HTML/clases/macros.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Lotes{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span>Granja</span>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Lotes</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Granja · Animales',
+        'Lotes',
+        'Gestión de lotes de gallinas y pollos. Compra, recepción, finalización y censo.'
+    ) }}
+
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-5);">
+        <div class="csa-row">
+            {# filtros / búsqueda — placeholders por ahora #}
+            <input type="search" class="csa-input" placeholder="Buscar lote…" style="width: 280px;"/>
+        </div>
+        <div class="csa-row">
+            {{ csa.btn('Análisis de pollos', { variant: 'ghost', href: path('batch_analyses', { product_id: 2 }), icon: 'fa-bar-chart' }) }}
+            {{ csa.btn('Nuevo lote', { variant: 'primary', href: path('batch_new'), icon: 'fa-plus' }) }}
+        </div>
+    </div>
+
+    <div class="csa-table-wrap">
+        <table class="csa-table">
+            <thead>
+                <tr>
+                    <th style="width: 80px;">ID</th>
+                    <th>Lote</th>
+                    <th>Estado</th>
+                    <th class="csa-table__actions">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entity in entities %}
+                    <tr>
+                        <td class="csa-table__id">#{{ entity.id }}</td>
+                        <td>
+                            <a class="csa-table__primary csa-link-muted" href="{{ path('batch_show', { id: entity.id }) }}">
+                                {{ entity }}
+                            </a>
+                        </td>
+                        <td>
+                            {# Asume método getBatchStatus().getId() — adáptalo si difiere.
+                             # 1=activo, 2=finalizado en el original. #}
+                            {% if entity.batchStatus.id == 1 %}
+                                {{ csa.badge('Activo', 'green') }}
+                            {% elseif entity.batchStatus.id == 2 %}
+                                {{ csa.badge('Finalizado', 'neutral') }}
+                            {% else %}
+                                {{ csa.badge(entity.batchStatus|default('—'), 'neutral') }}
+                            {% endif %}
+                        </td>
+                        <td class="csa-table__actions">
+                            <a href="{{ path('batch_show', { id: entity.id }) }}">Ver</a>
+                            <a href="{{ path('batch_edit', { id: entity.id }) }}">Editar</a>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="4" class="csa-muted" style="text-align: center; padding: var(--csa-sp-8);">
+                            No hay lotes registrados.
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+{% endblock %}

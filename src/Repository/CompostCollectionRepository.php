@@ -2,6 +2,7 @@
 
 namespace App\Repository;
 
+use App\Entity\CompostCollectionPoint;
 use Doctrine\ORM\EntityRepository;
 
 /**

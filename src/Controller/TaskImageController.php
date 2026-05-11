@@ -45,7 +45,7 @@ class TaskImageController extends AbstractAppController
 
         $task = $em->getRepository(\App\Entity\Task::class)->find($task_id);
         $entity->setTask($task);
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
 
             $em->persist($entity);
             $em->flush();
@@ -179,10 +179,10 @@ class TaskImageController extends AbstractAppController
         $editForm = $this->createEditForm($entity);
         $editForm->handleRequest($request);
 
-        if ($editForm->isValid()) {
+        if ($editForm->isSubmitted() && $editForm->isValid()) {
             $em->flush();
 
-            return $this->redirect($this->generateUrl('taskimage_edit', array('id' => $id)));
+            return $this->redirect($this->generateUrl('taskimage_show', array('id' => $id)));
         }
 
         return $this->render('TaskImage/edit.html.twig', array(
@@ -201,7 +201,7 @@ class TaskImageController extends AbstractAppController
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\TaskImage::class)->find($id);
 

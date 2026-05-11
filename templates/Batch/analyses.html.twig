@@ -1,17 +1,39 @@
-{% extends 'layout_crud.html.twig' %}
- {% block more_css %}
-     <link rel="stylesheet" href="{{ asset('bundles/app/css/morris/morris.css') }}"/>
- {% endblock %}
-{% block warning %}{% endblock %}
-{% block main -%}
-    <div class="row">
-        <div class="col-lg-12">
-            <h1 class="page-header">Análisis de lotes de animales de {{ product }}</h1>
-        </div>
-        <!-- /.col-lg-12 -->
+{# ============================================================
+ # Análisis de lotes de un producto — shell csa.
+ # Para cada año disponible se incrusta el render(controller)
+ # de analysesYear que pinta las gráficas Morris.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Análisis de lotes · {{ product }}{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    <link rel="stylesheet" href="{{ asset('bundles/app/css/morris/morris.css') }}">
+{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('batch') }}">Lotes</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Análisis · {{ product }}</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Granja · Lotes',
+        'Análisis de lotes de ' ~ product,
+        'Gráficas anuales por lote.'
+    ) }}
+
+    <div class="csa-stack-lg">
         {% for year in years %}
-            {{ render(controller('App\\Controller\\BatchController::analysesYear' , {'year':year.year,'product_id':product.id}) ) }}
+            {{ render(controller('App\\Controller\\BatchController::analysesYear', { year: year.year, product_id: product.id })) }}
         {% endfor %}
     </div>
+
 {% endblock %}
- {% block specific_js %}{% endblock %}

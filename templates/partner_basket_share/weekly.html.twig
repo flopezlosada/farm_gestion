@@ -1,35 +1,48 @@
-{% extends 'layout_list.html.twig' %}
+{# ============================================================
+ # Vista semanal del reparto de cestas — shell csa.
+ # Renderiza 5 sub-tablas (semanales/quincenales/compartidas/
+ # mensuales/sólo huevos) via _table_list_basket.html.twig.
+ # ============================================================ #}
 
-{% block title %} Listado semanal cestas
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
 
+{% block title %}Reparto semanal{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('partner_index') }}">Socixs</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Reparto semanal</span>
 {% endblock %}
 
-{% block main %}
+{% block csa_main %}
 
-    {{ include('partner_basket_share/_table_list_basket.html.twig', {'entity':weekly_partners, 'class':'panel-info', 'type':'semanales' ,'basket_share_id':1}) }}
-    {{ include('partner_basket_share/_table_list_basket.html.twig', {'entity':biweekly_partners, 'class':'panel-success', 'type':'quincenales','basket_share_id':2 }) }}
-    {{ include('partner_basket_share/_table_list_basket.html.twig', {'entity':old_half_basket_partners, 'class':'panel-danger', 'type':'semanales compartidas (antigua media cesta)','basket_share_id':4 }) }}
-    {{ include('partner_basket_share/_table_list_basket.html.twig', {'entity':monthly_partners, 'class':'panel-warning', 'type':'mensuales','basket_share_id':3 }) }}
-    {{ include('partner_basket_share/_table_list_basket.html.twig', {'entity':only_egg_partners, 'class':'panel-info', 'type':'Sólo huevos','basket_share_id':5 }) }}
+    {{ csa.page_header(
+        'Socixs · Reparto',
+        'Reparto semanal de cestas',
+        'Listado de cestas que toca repartir esta semana, agrupado por modalidad.'
+    ) }}
 
-    <div class="row">
-        <p>
-            <a href="{{ path('generate_pdf_basket_weekly', {'basket_id': basket.id,'alternative_order':true}) }}">
-                <button class="btn btn-outline btn-info" type="button">Generar pdf</button></a>
-            <a href="{{ path('regenerate_weekly_list', {'weekly_basket_id': basket.id}) }}" onclick="return confirm('¿Estas segura/o?. Todos los cambios que hayas hecho en el listado se perderán')">
-                <button class="btn btn-outline btn-danger" type="button">Regenerar listado</button></a>
-        </p>
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-5);">
+        <div></div>
+        <div class="csa-row">
+            <a href="{{ path('regenerate_weekly_list', { weekly_basket_id: basket.id }) }}"
+               class="csa-btn csa-btn--ghost"
+               onclick="return confirm('Esto regenerará el listado y se perderán los cambios manuales. ¿Continuar?');">
+                <i class="fa fa-refresh"></i> Regenerar listado
+            </a>
+            {{ csa.btn('Generar PDF', { variant: 'primary', href: path('generate_pdf_basket_weekly', { basket_id: basket.id, alternative_order: true }), icon: 'fa-file-pdf-o' }) }}
+        </div>
     </div>
-{% endblock %}
 
-    {% block specific_js %}
-        <script>
-            $(document).ready(function () {
-                $('#table_list').DataTable({
-                    paging: false,
-                    searching: false,
-                    ordering: false
-                });
-            });
-        </script>
-    {% endblock %}
+    <div class="csa-stack-lg">
+        {{ include('partner_basket_share/_table_list_basket.html.twig', { entity: weekly_partners,         accent: 'sky',        type: 'semanales',                                  basket_share_id: 1 }) }}
+        {{ include('partner_basket_share/_table_list_basket.html.twig', { entity: biweekly_partners,       accent: 'green',      type: 'quincenales',                                basket_share_id: 2 }) }}
+        {{ include('partner_basket_share/_table_list_basket.html.twig', { entity: old_half_basket_partners, accent: 'terracotta', type: 'semanales compartidas (antigua media cesta)', basket_share_id: 4 }) }}
+        {{ include('partner_basket_share/_table_list_basket.html.twig', { entity: monthly_partners,        accent: 'ochre',      type: 'mensuales',                                  basket_share_id: 3 }) }}
+        {{ include('partner_basket_share/_table_list_basket.html.twig', { entity: only_egg_partners,       accent: 'plum',       type: 'sólo huevos',                                basket_share_id: 5 }) }}
+    </div>
+
+{% endblock %}

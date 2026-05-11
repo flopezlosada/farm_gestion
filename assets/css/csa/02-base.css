@@ -1,0 +1,145 @@
+/* ============================================================
+ * CSA Vega de Jarama — Base
+ * ============================================================
+ * Reset suave + estilos base de tipografía y elementos comunes,
+ * scopeados para no romper páginas que aún corren con SB Admin 2.
+ *
+ * Aplica solo a elementos dentro de `.csa-app` (el wrapper del
+ * nuevo layout). Las pantallas viejas siguen sin tocar.
+ *
+ * Ubicación sugerida: assets/css/base.css
+ * Carga después de tokens.css y antes de components.css.
+ * ============================================================ */
+
+/* Bootstrap 3 fija html { font-size: 10px } en base.html.twig.
+   Eso reduce todos nuestros tokens en rem al 62.5% de su tamaño esperado.
+   Restablecemos al estándar del navegador solo cuando nuestro CSS se carga
+   (es decir, en pantallas que extienden csa_shell.html.twig). Las pantallas
+   legacy no cargan este CSS y mantienen el comportamiento anterior.
+
+   !important: cuando un modal AJAX inserta HTML con <link> al CSS
+   compilado, algunos navegadores re-evalúan la cascada y revierten al
+   font-size de Bootstrap (10px). Eso reduce todos los rem de la página
+   a la mitad. Con !important la regla aguanta. */
+html {
+  font-size: 16px !important;
+}
+
+.csa-app, .csa-app * {
+  box-sizing: border-box;
+}
+
+.csa-app {
+  font-family: var(--csa-sans);
+  font-size: var(--csa-fs-base);
+  line-height: var(--csa-lh-normal);
+  color: var(--csa-ink);
+  background: var(--csa-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* ---------- Tipografía ---------- */
+
+.csa-app h1, .csa-app h2, .csa-app h3, .csa-app h4 {
+  font-family: var(--csa-serif);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: var(--csa-lh-tight);
+  margin: 0;
+  color: var(--csa-ink);
+}
+
+.csa-app h1 { font-size: var(--csa-fs-3xl); letter-spacing: -0.025em; }
+.csa-app h2 { font-size: var(--csa-fs-2xl); }
+.csa-app h3 { font-size: var(--csa-fs-xl); }
+.csa-app h4 { font-size: var(--csa-fs-lg); font-weight: 500; }
+
+.csa-app p {
+  margin: 0 0 var(--csa-sp-3) 0;
+  text-wrap: pretty;
+}
+
+/* Cabecera de página, patrón típico: kicker + título + lead */
+.csa-page-header { margin-bottom: var(--csa-sp-6); }
+.csa-page-header .csa-kicker {
+  font-size: var(--csa-fs-xs);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--csa-ink-muted);
+  font-weight: 500;
+  margin-bottom: var(--csa-sp-2);
+}
+.csa-page-header h1 { margin-bottom: var(--csa-sp-2); }
+.csa-page-header .csa-lead {
+  font-family: var(--csa-serif);
+  font-style: italic;
+  font-size: var(--csa-fs-md);
+  color: var(--csa-ink-soft);
+  line-height: var(--csa-lh-snug);
+  max-width: 60ch;
+}
+
+/* ---------- Links ---------- */
+
+/* :where() mantiene especificidad 0 — así cualquier link con su propia
+   clase (sidebar, topbar, etc.) gana sin tener que repetir .csa-app. */
+.csa-app :where(a) {
+  color: var(--csa-green);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color var(--csa-t-fast);
+}
+.csa-app :where(a):hover {
+  border-bottom-color: var(--csa-green);
+  text-decoration: none; /* pisa a:hover{text-decoration:underline} de Bootstrap 3 */
+}
+.csa-app a.csa-link-muted { color: var(--csa-ink-soft); }
+.csa-app a.csa-link-muted:hover { color: var(--csa-ink); border-bottom-color: var(--csa-ink); }
+
+/* ---------- HR / dividers ---------- */
+
+.csa-app hr,
+.csa-divider {
+  border: none;
+  border-top: 1px solid var(--csa-rule);
+  margin: var(--csa-sp-6) 0;
+}
+
+/* ---------- Helpers ---------- */
+
+.csa-mono { font-family: var(--csa-mono); }
+.csa-serif { font-family: var(--csa-serif); }
+.csa-italic { font-style: italic; }
+.csa-muted { color: var(--csa-ink-muted); }
+.csa-soft  { color: var(--csa-ink-soft); }
+
+.csa-stack    { display: flex; flex-direction: column; gap: var(--csa-sp-3); }
+.csa-stack-lg { display: flex; flex-direction: column; gap: var(--csa-sp-6); }
+
+.csa-row {
+  display: flex;
+  align-items: center;
+  gap: var(--csa-sp-3);
+}
+.csa-row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--csa-sp-3);
+}
+
+/* Padding del área de contenido */
+.csa-content {
+  padding: var(--csa-sp-8) var(--csa-sp-10);
+  width: 100%;
+  max-width: var(--csa-content-max);
+  margin: 0 auto;
+}
+
+@media (max-width: 768px) {
+  .csa-app h1 { font-size: 1.75rem; }
+  .csa-app h2 { font-size: 1.375rem; }
+  .csa-content { padding: var(--csa-sp-5) var(--csa-sp-4); }
+}

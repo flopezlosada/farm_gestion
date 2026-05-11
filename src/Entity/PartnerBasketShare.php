@@ -88,7 +88,6 @@ class PartnerBasketShare
      * @var string $start_date
      * @ORM\Column(name="start_date", type="date", nullable=true)
      */
-    #[Assert\Date]
     private $start_date;
 
     /**
@@ -96,7 +95,6 @@ class PartnerBasketShare
      * @var string $end_date
      * @ORM\Column(name="end_date", type="date", nullable=true)
      */
-    #[Assert\Date]
     private $end_date;
 
     /**

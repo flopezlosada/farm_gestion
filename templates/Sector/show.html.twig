@@ -1,48 +1,118 @@
-{% extends 'layout_show.html.twig' %}
-{% block more_css %}
-    <link rel="stylesheet" href="{{ asset('bundles/app/fancybox/jquery.fancybox.css') }}"/>
-{% endblock %}
-{% block main -%}
+{# ============================================================
+ # Detalle de sector (Sector) — shell csa.
+ # ============================================================ #}
 
-    <div class="panel panel-default">
-        <div class="panel-heading"><h4>{{ entity }}</h4></div>
-        <div class="panel-body">
-            <div class="row">
-                <div class="col-lg-6">
-                    <div class="panel panel-info">
-                        <div class="panel-heading">Histórico de rotaciones</div>
-                        <div class="panel-body">
-                            <ul>
-                                {% for crop_working in entity.cropWorkings %}
-                                    {% include 'App:Crop:crop_list.html.twig' %}
-                                {% else %}
-                                    Este sector no se ha puesto en producción todavía
-                                {% endfor %}
-                            </ul>
-                        </div>
-                        <div class="panel-footer"></div>
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Sector · {{ entity.name }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('sector') }}">Sectores</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ entity.name }}</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    <div style="display: none;">
+        {{ form_start(delete_form, { attr: { id: 'sector-delete-form' } }) }}
+            {{ form_rest(delete_form) }}
+        {{ form_end(delete_form, { render_rest: false }) }}
+    </div>
+
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-6); align-items: flex-start;">
+        <div class="csa-row" style="align-items: flex-start; gap: var(--csa-sp-4);">
+            <span class="csa-table__id-marker" style="width: 64px; height: 64px; font-size: 28px; border-radius: var(--csa-radius-lg);">
+                <i class="fa fa-map-marker"></i>
+            </span>
+            <div>
+                <h1>{{ entity.name }}</h1>
+                {% if entity.zone %}
+                    <div class="csa-serif csa-italic csa-soft" style="margin-top: var(--csa-sp-2);">
+                        Zona: <a href="{{ path('zone_show', { id: entity.zone.id }) }}">{{ entity.zone.name }}</a>
                     </div>
-                </div>
-                <div class="col-lg-6">
-                    <div class="panel panel-success">
-                        <div class="panel-heading">Histórico de trabajos culturales</div>
-                        <div class="panel-body">
-                            <ul>
-                                {% for cultural_work in entity.culturalWorks %}
-                                    <strong><a href="{{ path('culturalwork_show', {'id': cultural_work.id}) }}">{{ cultural_work }}</a></strong><br>
-                                    Fecha : {{ cultural_work.date|format_date('medium', locale='es') }}<br>
-                                {% else %}
-                                    En este sector no se ha realizado ningún trabajo.
-                                {% endfor %}
-                            </ul>
-                        </div>
-                        <div class="panel-footer"></div>
-                    </div>
-                </div>
+                {% endif %}
             </div>
         </div>
-        <div class="panel-footer">
-
+        <div class="csa-row">
+            <button type="submit" form="sector-delete-form" class="csa-btn csa-btn--ghost"
+                    onclick="return confirm('¿Seguro? Esta acción no se puede deshacer.');">
+                Eliminar
+            </button>
+            {{ csa.btn('Editar', { variant: 'secondary', href: path('sector_edit', { id: entity.id }), icon: 'fa-pencil' }) }}
+            {{ csa.btn('Volver', { variant: 'ghost', href: path('sector') }) }}
         </div>
     </div>
+
+    <div class="csa-row" style="align-items: flex-start; gap: var(--csa-sp-6); flex-wrap: wrap;">
+
+        <div style="flex: 1 1 0; min-width: 320px;">
+            {% embed '_components/csa_card.html.twig' with {
+                title: 'Histórico de rotaciones',
+                subtitle: 'Cultivos que han pasado por este sector.',
+                accent: 'sky'
+            } %}
+                {% block body %}
+                    {% if entity.cropWorkings|length > 0 %}
+                        <ul class="csa-list">
+                            {% for crop_working in entity.cropWorkings %}
+                                <li class="csa-list__item">
+                                    <a class="csa-list__link" href="{{ path('cropworking_show', { id: crop_working.id }) }}">
+                                        <i class="csa-list__icon fa fa-leaf"></i>
+                                        <div class="csa-list__body">
+                                            <div class="csa-list__primary">{{ crop_working }}</div>
+                                            <div class="csa-list__secondary">
+                                                {% if crop_working.finish %}Finalizado{% else %}Activo{% endif %}
+                                            </div>
+                                        </div>
+                                    </a>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <div class="csa-soft" style="text-align: center; padding: var(--csa-sp-6) 0;">
+                            Este sector no se ha puesto en producción todavía.
+                        </div>
+                    {% endif %}
+                {% endblock %}
+            {% endembed %}
+        </div>
+
+        <div style="flex: 1 1 0; min-width: 320px;">
+            {% embed '_components/csa_card.html.twig' with {
+                title: 'Trabajos culturales',
+                subtitle: 'Trabajos aplicados al sector.',
+                accent: 'plum'
+            } %}
+                {% block body %}
+                    {% if entity.culturalWorks|length > 0 %}
+                        <ul class="csa-list">
+                            {% for cw in entity.culturalWorks %}
+                                <li class="csa-list__item">
+                                    <a class="csa-list__link" href="{{ path('culturalwork_show', { id: cw.id }) }}">
+                                        <i class="csa-list__icon fa fa-wrench"></i>
+                                        <div class="csa-list__body">
+                                            <div class="csa-list__primary">{{ cw.culturalWorkType }}</div>
+                                            <div class="csa-list__secondary">
+                                                {% if cw.date %}{{ cw.date|format_date('medium', locale='es') }}{% endif %}
+                                            </div>
+                                        </div>
+                                    </a>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <div class="csa-soft" style="text-align: center; padding: var(--csa-sp-6) 0;">
+                            En este sector no se ha realizado ningún trabajo.
+                        </div>
+                    {% endif %}
+                {% endblock %}
+            {% endembed %}
+        </div>
+
+    </div>
+
 {% endblock %}

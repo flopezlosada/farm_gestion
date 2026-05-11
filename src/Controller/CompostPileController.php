@@ -44,7 +44,7 @@ class CompostPileController extends AbstractAppController
         $form = $this->createCreateForm($entity);
         $form->handleRequest($request);
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $em = $this->getDoctrine()->getManager();
             $em->persist($entity);
             $em->flush();
@@ -136,6 +136,12 @@ class CompostPileController extends AbstractAppController
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find CompostPile entity.');
         }
+        if ($entity->getStartDate() instanceof \DateTimeInterface) {
+            $entity->setStartDate($entity->getStartDate()->format('Y-m-d'));
+        }
+        if ($entity->getEndDate() instanceof \DateTimeInterface) {
+            $entity->setEndDate($entity->getEndDate()->format('Y-m-d'));
+        }
 
         $editForm = $this->createEditForm($entity);
         $deleteForm = $this->createDeleteForm($id);
@@ -181,13 +187,25 @@ class CompostPileController extends AbstractAppController
         }
 
         $deleteForm = $this->createDeleteForm($id);
+        if ($entity->getStartDate() instanceof \DateTimeInterface) {
+            $entity->setStartDate($entity->getStartDate()->format('Y-m-d'));
+        }
+        if ($entity->getEndDate() instanceof \DateTimeInterface) {
+            $entity->setEndDate($entity->getEndDate()->format('Y-m-d'));
+        }
         $editForm = $this->createEditForm($entity);
         $editForm->handleRequest($request);
 
-        if ($editForm->isValid()) {
+        if ($editForm->isSubmitted() && $editForm->isValid()) {
+            if ($entity->getStartDate()) {
+                $entity->setStartDate(new \DateTime($entity->getStartDate()));
+            }
+            if ($entity->getEndDate()) {
+                $entity->setEndDate(new \DateTime($entity->getEndDate()));
+            }
             $em->flush();
 
-            return $this->redirect($this->generateUrl('compostpile_edit', array('id' => $id)));
+            return $this->redirect($this->generateUrl('compostpile_show', array('id' => $id)));
         }
 
         return $this->render('CompostPile/edit.html.twig', array(
@@ -206,7 +224,7 @@ class CompostPileController extends AbstractAppController
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
-        if ($form->isValid()) {
+        if ($form->isSubmitted() && $form->isValid()) {
             $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\CompostPile::class)->find($id);
 

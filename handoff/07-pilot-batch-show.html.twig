@@ -1,0 +1,92 @@
+{# ============================================================
+ # Detalle de lote — versión rediseñada
+ # ============================================================
+ # Sustituye templates/Batch/show.html.twig (orientativo;
+ # adapta los nombres de campos a los reales de tu Batch entity).
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Lote {{ entity }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('batch') }}">Lotes</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">#{{ entity.id }}</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-6);">
+        <div>
+            <div class="csa-kicker">Granja · Lote #{{ entity.id }}</div>
+            <h1 style="margin-top: var(--csa-sp-2);">{{ entity }}</h1>
+            <div style="margin-top: var(--csa-sp-3);">
+                {% if entity.batchStatus.id == 1 %}
+                    {{ csa.badge('Activo', 'green') }}
+                {% elseif entity.batchStatus.id == 2 %}
+                    {{ csa.badge('Finalizado', 'neutral') }}
+                {% endif %}
+            </div>
+        </div>
+        <div class="csa-row">
+            {{ csa.btn('Editar', { variant: 'secondary', href: path('batch_edit', { id: entity.id }), icon: 'fa-pencil' }) }}
+            {{ csa.btn('Volver al listado', { variant: 'ghost', href: path('batch') }) }}
+        </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 320px; gap: var(--csa-sp-6); align-items: flex-start;">
+
+        {# Columna principal #}
+        <div class="csa-stack-lg">
+
+            {% call csa.card('Resumen del lote') %}
+                <div class="csa-form-grid">
+                    <div>
+                        <div class="csa-kpi__label">Fecha de compra</div>
+                        <div class="csa-serif" style="font-size: var(--csa-fs-lg); margin-top: 4px;">
+                            {{ entity.purchaseDate ? entity.purchaseDate|date('d/m/Y') : '—' }}
+                        </div>
+                    </div>
+                    <div>
+                        <div class="csa-kpi__label">Fecha de recepción</div>
+                        <div class="csa-serif" style="font-size: var(--csa-fs-lg); margin-top: 4px;">
+                            {{ entity.receiptDate ? entity.receiptDate|date('d/m/Y') : '—' }}
+                        </div>
+                    </div>
+                    <div>
+                        <div class="csa-kpi__label">Días de vida</div>
+                        <div class="csa-serif" style="font-size: var(--csa-fs-lg); margin-top: 4px;">
+                            {{ entity.daysOfLife ?? '—' }}
+                        </div>
+                    </div>
+                    <div>
+                        <div class="csa-kpi__label">Peso</div>
+                        <div class="csa-serif" style="font-size: var(--csa-fs-lg); margin-top: 4px;">
+                            {{ entity.weight ?? '—' }}
+                        </div>
+                    </div>
+                </div>
+            {% endcall %}
+
+            {% if entity.note %}
+                {% call csa.card('Notas') %}
+                    <div class="csa-soft" style="line-height: var(--csa-lh-normal);">
+                        {{ entity.note|nl2br }}
+                    </div>
+                {% endcall %}
+            {% endif %}
+
+        </div>
+
+        {# Aside #}
+        <aside class="csa-stack-lg">
+            {{ csa.kpi('Precio de compra', entity.price ?? '—', '€') }}
+            {# Añade aquí más KPIs derivados del lote (huevos puestos, mortalidad, etc) #}
+        </aside>
+    </div>
+
+{% endblock %}

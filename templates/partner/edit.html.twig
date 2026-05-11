@@ -1,37 +1,123 @@
-{% extends 'layout_crud.html.twig' %}
+{# ============================================================
+ # Editar socix — shell csa.
+ # ============================================================ #}
 
-{% block title %}Editar Socia/o{% endblock %}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% form_theme form 'form_div_layout.html.twig' %}
 
-{% block main %}
-    <h1>Editar Socia/o</h1>
+{% block title %}Editar socix{% endblock %}
 
-    {{ include('partner/_form.html.twig', {'button_label': 'Actualizar'}) }}
-
-
-
-    {{ include('partner/_delete_form.html.twig') }}
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('partner_index') }}">Socixs</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('partner_show', { id: partner.id }) }}">{{ partner.name }} {{ partner.surname }}</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Editar</span>
 {% endblock %}
 
+{% block csa_main %}
 
-{% block specific_js %}
+    {{ csa.page_header(
+        'Socixs · Edición',
+        'Editar ' ~ partner.name ~ ' ' ~ partner.surname,
+        'Datos personales, contacto y elección de grupo de recogida.'
+    ) }}
+
+    <form id="partner-delete-form" method="post"
+          action="{{ path('partner_delete', { id: partner.id }) }}"
+          onsubmit="return confirm('¿Estás segurx? Esta acción no se puede deshacer.');"
+          style="display: none;">
+        <input type="hidden" name="_method" value="DELETE">
+        <input type="hidden" name="_token" value="{{ csrf_token('delete' ~ partner.id) }}">
+    </form>
+
+    {{ form_start(form, { attr: { role: 'form', class: 'csa-form-narrow', enctype: 'multipart/form-data' } }) }}
+
+        <div class="csa-stack-lg">
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Identidad', subtitle: 'Nombre, apellidos y DNI.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.name, 'Nombre') }}
+                        {{ csa.field(form.surname, 'Apellidos') }}
+                        {{ csa.field(form.DNI, 'DNI') }}
+                        {{ csa.field(form.inscription_date, 'Fecha de inscripción', { attr: { class: 'csa-input datepicker' } }) }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Contacto', subtitle: 'Teléfono y email.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.celular, 'Teléfono') }}
+                        {{ csa.field(form.email, 'Email') }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '3', title: 'Dirección', subtitle: 'Localización postal.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.address, 'Dirección', { full: true }) }}
+                        {{ csa.field(form.state, 'Provincia') }}
+                        {{ csa.field(form.city, 'Municipio') }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '4', title: 'Cesta y preferencias', subtitle: 'Forma de pago, grupo de recogida y consumo.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.share_payment, 'Forma de pago') }}
+                        {{ csa.field(form.weekly_basket_group, 'Grupo de recogida') }}
+                        {{ csa.field(form.eat_meat, '¿Consume cárnicos?', { full: true }) }}
+                        {{ csa.field(form.registration_form_file, 'Ficha de socix', { full: true, hint: 'opcional · sustituye la actual' }) }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                <div>
+                    <button type="submit" form="partner-delete-form" class="csa-btn csa-btn--ghost">
+                        Eliminar
+                    </button>
+                </div>
+                <div class="csa-row">
+                    {{ csa.btn('Cancelar', { variant: 'ghost', href: path('partner_show', { id: partner.id }) }) }}
+                    <button type="submit" class="csa-btn csa-btn--primary">Guardar cambios</button>
+                </div>
+            </div>
+
+        </div>
+
+        {{ form_rest(form) }}
+    {{ form_end(form, { render_rest: false }) }}
+
+{% endblock %}
+
+{% block more_js %}
     {{ parent() }}
     <script>
-        $(function () {
+        document.querySelectorAll('.datepicker, .datepicker2, .datepicker3')
+            .forEach(function (el) { el.type = 'date'; });
 
-            $('#partner_city').prop('required', true);
-            $("#partner_state").change(function () {
-                var data = {
-                    state_id: $(this).val()
-                };
-
-                $.ajax({
-                    type: 'post',
-                    url: '{{ path("select_city") }}',
-                    data: data,
-                    success: function (data) {
-                        $('#partner_city').html(data);
-                    }
-                });
+        // AJAX dependiente provincia → municipio
+        $('#partner_city').prop('required', true);
+        $('#partner_state').change(function () {
+            $.ajax({
+                type: 'post',
+                url: '{{ path("select_city") }}',
+                data: { state_id: $(this).val() },
+                success: function (data) {
+                    $('#partner_city').html(data);
+                }
             });
         });
     </script>

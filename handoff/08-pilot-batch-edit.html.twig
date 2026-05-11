@@ -1,0 +1,115 @@
+{# ============================================================
+ # Formulario de edición de lote — versión rediseñada
+ # ============================================================
+ # Sustituye templates/Batch/edit.html.twig.
+ #
+ # IMPORTANTE: este template asume que el Form Type de Batch
+ # NO añade clase 'form-control' por defecto en sus widgets, o que
+ # se sobreescribe pasando attr en form_widget. Si Bootstrap 3 form
+ # theme estaba siendo aplicado globalmente, conviene cambiar el
+ # form theme a uno mínimo (form_div_layout.html.twig) solo para
+ # esta plantilla:
+ #
+ #   {% form_theme edit_form 'form_div_layout.html.twig' %}
+ #
+ # Ya está hecho abajo.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% form_theme edit_form 'form_div_layout.html.twig' %}
+
+{% block title %}Editar lote {{ entity }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('batch') }}">Lotes</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('batch_show', { id: entity.id }) }}">#{{ entity.id }}</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Editar</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Granja · Lote #' ~ entity.id,
+        'Editar lote',
+        'Actualiza la información operativa del lote. Los cambios afectarán a registros futuros, no a los históricos.'
+    ) }}
+
+    {{ form_start(edit_form, {
+        'action': path('batch_update', { id: entity.id }),
+        'method': 'put',
+        'attr': { 'role': 'form' }
+    }) }}
+
+        {% call csa.form_section('1', 'Fechas', 'Cuándo se compró y recibió el lote.') %}
+            <div class="csa-form-grid">
+                {{ csa.field(edit_form.purchase_date, 'Fecha de compra', { attr: { class: 'csa-input datepicker' } }) }}
+                {{ csa.field(edit_form.receipt_date, 'Fecha de recepción', { attr: { class: 'csa-input datepicker2' } }) }}
+                {% if entity.batchStatus.id == 2 %}
+                    {{ csa.field(edit_form.finalization_date, 'Fecha de finalización', { attr: { class: 'csa-input datepicker3' } }) }}
+                {% endif %}
+            </div>
+        {% endcall %}
+
+        {% call csa.form_section('2', 'Datos del lote', 'Censo, peso y precio de compra.') %}
+            <div class="csa-form-grid">
+                {{ csa.field(edit_form.days_of_life, 'Días de vida', { hint: 'al recibir' }) }}
+                {{ csa.field(edit_form.weight, 'Peso', { hint: 'kg' }) }}
+                {{ csa.field(edit_form.price, 'Precio de compra', { hint: '€' }) }}
+            </div>
+        {% endcall %}
+
+        {% call csa.form_section('3', 'Notas', 'Información libre del lote.') %}
+            {% call csa.field_block('Notas', { hint: 'opcional' }) %}
+                {{ form_widget(edit_form.note, { attr: { class: 'csa-textarea', rows: 5 } }) }}
+            {% endcall %}
+        {% endcall %}
+
+        {# Footer de acciones #}
+        <div class="csa-row-between" style="margin-top: var(--csa-sp-6); padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+            <div class="csa-muted" style="font-size: var(--csa-fs-sm);">
+                Cambios afectan a registros futuros, no a históricos.
+            </div>
+            <div class="csa-row">
+                {{ csa.btn('Cancelar', { variant: 'ghost', href: path('batch_show', { id: entity.id }) }) }}
+                {{ csa.btn('Guardar cambios', { variant: 'primary', type: 'submit' }) }}
+            </div>
+        </div>
+
+        {{ form_rest(edit_form) }}
+    {{ form_end(edit_form, { render_rest: false }) }}
+
+{% endblock %}
+
+{% block specific_js %}
+    {# Mantenemos pickadate como en el original #}
+    <script>
+        $('.datepicker2').pickadate({
+            formatSubmit: 'yyyy-mm-dd',
+            onStart: function () {
+                var date = new Date("{{ entity.getReceiptDate() }}");
+                this.set('select', date);
+            }
+        });
+        $('.datepicker').pickadate({
+            formatSubmit: 'yyyy-mm-dd',
+            onStart: function () {
+                var date = new Date("{{ entity.getPurchaseDate() }}");
+                this.set('select', date);
+            }
+        });
+        {% if entity.getBatchStatus.getId == 2 %}
+        $('.datepicker3').pickadate({
+            formatSubmit: 'yyyy-mm-dd',
+            onStart: function () {
+                var date = new Date("{{ entity.getFinalizationDate() }}");
+                this.set('select', date);
+            }
+        });
+        {% endif %}
+    </script>
+{% endblock %}
