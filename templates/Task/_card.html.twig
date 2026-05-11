@@ -1,0 +1,60 @@
+{# ============================================================
+ # Tarjeta de tarea — partial unificado.
+ # Recibe `task`. Decide accent + icono + label según task.taskType.id.
+ # ============================================================ #}
+
+{%- set type_id = task.getTaskType ? task.getTaskType.id : 0 -%}
+{%- set type_map = {
+    1: { accent: 'green',      icon: 'fa-crosshairs', label: 'Sin fecha' },
+    2: { accent: 'terracotta', icon: 'fa-gavel',      label: 'Fecha fija' },
+    3: { accent: 'ochre',      icon: 'fa-compass',    label: 'Aproximada' },
+    4: { accent: 'plum',       icon: 'fa-cogs',       label: 'Periódica' }
+} -%}
+{%- set meta = type_map[type_id]|default({ accent: 'sky', icon: 'fa-tasks', label: '' }) -%}
+
+<article class="csa-task-card csa-task-card--{{ meta.accent }}">
+    <header class="csa-task-card__head">
+        <span class="csa-task-card__icon csa-task-card__icon--{{ meta.accent }}">
+            <i class="fa {{ meta.icon }}"></i>
+        </span>
+        <div class="csa-task-card__title-block">
+            <h4 class="csa-task-card__title">{{ task.title }}</h4>
+            {% if meta.label %}
+                <span class="csa-task-card__chip csa-task-card__chip--{{ meta.accent }}">{{ meta.label }}</span>
+            {% endif %}
+        </div>
+    </header>
+
+    {%- set meta_parts = [] -%}
+    {% if task.realDate %}
+        {%- set meta_parts = meta_parts|merge(['Finalizada el ' ~ task.realDate|format_date('long', locale='es')]) -%}
+    {% elseif type_id == 3 %}
+        {% if task.expectedDate %}
+            {%- set meta_parts = meta_parts|merge(['Fecha prevista ' ~ task.expectedDate|format_date('long', locale='es')]) -%}
+        {% elseif task.month %}
+            {%- set meta_parts = meta_parts|merge(['Previsto ' ~ task.month ~ '-' ~ task.year]) -%}
+        {% endif %}
+    {% elseif type_id == 4 %}
+        {% if task.expectedDate %}
+            {%- set meta_parts = meta_parts|merge(['Próxima ' ~ task.expectedDate|format_date('long', locale='es')]) -%}
+        {% endif %}
+        {% if task.period %}
+            {%- set meta_parts = meta_parts|merge(['cada ' ~ task.period ~ ' días']) -%}
+        {% endif %}
+    {% elseif task.expectedDate %}
+        {%- set meta_parts = meta_parts|merge(['Fecha prevista ' ~ task.expectedDate|format_date('long', locale='es')]) -%}
+    {% endif %}
+    {% if task.users|length > 0 %}
+        {%- set meta_parts = meta_parts|merge([task.listUsers]) -%}
+    {% endif %}
+
+    {% if meta_parts|length > 0 %}
+        <div class="csa-task-card__meta">
+            {{ meta_parts|join(' · ') }}
+        </div>
+    {% endif %}
+
+    <div class="csa-task-card__body">{{ task.content|raw }}</div>
+
+    {% include 'Task/record_actions.html.twig' with { task: task } %}
+</article>

@@ -44,7 +44,7 @@
         <div role="tabpanel" class="tab-pane fade in active" id="my_task">
             <h3>Mis tareas pendientes</h3>
             {% for task in user_tasks %}
-                {% include 'Task/task_view_type_' ~ task.getTaskType.id ~ '.html.twig' with { task: task } %}
+                {% include 'Task/_card.html.twig' with { task: task } %}
             {% else %}
                 <p class="csa-muted">No tienes tareas asignadas pendientes.</p>
             {% endfor %}
@@ -52,18 +52,18 @@
         <div role="tabpanel" class="tab-pane fade" id="home">
             <h3>Tareas pendientes este mes</h3>
             {% for task in pending_tasks %}
-                {% include 'Task/task_view_type_' ~ task.getTaskType.id ~ '.html.twig' with { task: task } %}
+                {% include 'Task/_card.html.twig' with { task: task } %}
             {% else %}
                 <p class="csa-muted">No hay tareas pendientes este mes.</p>
             {% endfor %}
             {% for task in punctual_tasks %}
-                {% include 'Task/task_view_type_' ~ task.getTaskType.id ~ '.html.twig' with { task: task } %}
+                {% include 'Task/_card.html.twig' with { task: task } %}
             {% endfor %}
         </div>
         <div role="tabpanel" class="tab-pane fade" id="crop">
             <h3>Tareas relacionadas con cultivos</h3>
             {% for task in crop_tasks %}
-                {% include 'Task/task_view_type_' ~ task.getTaskType.id ~ '.html.twig' with { task: task } %}
+                {% include 'Task/_card.html.twig' with { task: task } %}
             {% else %}
                 <p class="csa-muted">No hay tareas de cultivo pendientes.</p>
             {% endfor %}
@@ -71,7 +71,7 @@
         <div role="tabpanel" class="tab-pane fade" id="aprox">
             <h3>Con fecha aproximada ({{ aprox_tasks|length }})</h3>
             {% for task in aprox_tasks %}
-                {% include 'Task/task_view_type_' ~ task.getTaskType.id ~ '.html.twig' with { task: task } %}
+                {% include 'Task/_card.html.twig' with { task: task } %}
             {% else %}
                 <p class="csa-muted">No hay tareas aproximadas pendientes.</p>
             {% endfor %}
@@ -79,7 +79,7 @@
         <div role="tabpanel" class="tab-pane fade" id="periodic">
             <h3>Tareas periódicas</h3>
             {% for task in periodic_tasks %}
-                {% include 'Task/task_view_type_' ~ task.getTaskType.id ~ '.html.twig' with { task: task } %}
+                {% include 'Task/_card.html.twig' with { task: task } %}
             {% else %}
                 <p class="csa-muted">No hay tareas periódicas pendientes.</p>
             {% endfor %}
@@ -87,7 +87,7 @@
         <div role="tabpanel" class="tab-pane fade" id="date">
             <h3>Con fecha fija</h3>
             {% for task in date_tasks %}
-                {% include 'Task/task_view_type_' ~ task.getTaskType.id ~ '.html.twig' with { task: task } %}
+                {% include 'Task/_card.html.twig' with { task: task } %}
             {% else %}
                 <p class="csa-muted">No hay tareas con fecha fija pendientes.</p>
             {% endfor %}
@@ -95,7 +95,7 @@
         <div role="tabpanel" class="tab-pane fade" id="punctual">
             <h3>Sin fecha</h3>
             {% for task in punctual_tasks %}
-                {% include 'Task/task_view_type_' ~ task.getTaskType.id ~ '.html.twig' with { task: task } %}
+                {% include 'Task/_card.html.twig' with { task: task } %}
             {% else %}
                 <p class="csa-muted">No hay tareas sin fecha pendientes.</p>
             {% endfor %}
@@ -103,7 +103,7 @@
         <div role="tabpanel" class="tab-pane fade" id="ended">
             <h3>Finalizadas este mes</h3>
             {% for task in ended_tasks %}
-                {% include 'Task/task_view_type_' ~ task.getTaskType.id ~ '.html.twig' with { task: task } %}
+                {% include 'Task/_card.html.twig' with { task: task } %}
             {% else %}
                 <p class="csa-muted">No hay tareas finalizadas este mes.</p>
             {% endfor %}
