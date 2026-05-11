@@ -1,6 +1,18 @@
+{# ============================================================
+ # Detalle de un punto de recogida — extiende el resume del
+ # CompostCollection y solo sobreescribe título y migas.
+ # ============================================================ #}
+
 {% extends 'CompostCollection/resume.html.twig' %}
 
-{% block title_wrapper %}
-    Detalle del punto de recogida <br>
-    {{ point }}
+{% block resume_title %}Punto de recogida · {{ point }}{% endblock %}
+
+{% block resume_crumb %}{{ point }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('compostcollection') }}">Recogida de compost</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ point }}</span>
 {% endblock %}
