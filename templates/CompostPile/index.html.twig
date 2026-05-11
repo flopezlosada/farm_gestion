@@ -1,36 +1,87 @@
-{% extends 'layout_list.html.twig' %}
+{# ============================================================
+ # Listado de pilas de compost (CompostPile).
+ #
+ # El botón "Nueva pila" llama directamente a compostpile_new, que
+ # cierra la pila activa y abre una nueva con fecha actual SIN
+ # pasar por formulario. Es destructivo, va con confirm().
+ # ============================================================ #}
 
-    {% block title_wrapper %}Listado {% endblock %}
-    {% block main -%}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
 
-        <table id="table_list"
-               class="table table-striped table-bordered table-hover dataTable no-footer"
-               aria-describedby="dataTables-example_info">
+{% block title %}Pilas de compost{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('compostcollection') }}">Recogida de compost</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Pilas</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Compost · Pilas',
+        'Pilas de compost',
+        'Cada pila agrupa las recogidas hasta que se cierra para abonar. Solo hay una pila activa a la vez.'
+    ) }}
+
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-5);">
+        <div></div>
+        <div class="csa-row">
+            <a href="{{ path('compostpile_new') }}"
+               class="csa-btn csa-btn--primary"
+               onclick="return confirm('Esto cerrará la pila activa con la fecha de hoy y abrirá una nueva. ¿Continuar?');">
+                <i class="fa fa-plus"></i> Nueva pila
+            </a>
+        </div>
+    </div>
+
+    <div class="csa-table-wrap">
+        <table class="csa-table" data-paginate>
             <thead>
-            <tr>
-                <th>Pila</th>
-                <th>Fecha inicio</th>
-                <th>Fecha de fin</th>
-                <th>Tiempo recogida</th>
-                <th>Fecha de abonado</th>
-                <th>Kilos recogidos</th>
-                <th>Acciones</th>
-
-            </tr>
+                <tr>
+                    <th class="csa-table__col-tight">Pila</th>
+                    <th class="csa-table__col-tight">Inicio</th>
+                    <th class="csa-table__col-tight">Cierre</th>
+                    <th class="csa-table__col-tight">Estado</th>
+                    <th class="csa-table__col-tight">Kilos</th>
+                    <th class="csa-table__actions">Acciones</th>
+                </tr>
             </thead>
             <tbody>
-            {% for pile in compost_piles %}
-                <tr>
-                    <td>{{ pile.id }}</td>
-                    <td>{{ pile.startDate|format_date('long', locale='es') }}</td>
-                    <td>{{ pile.endDate|format_date('long', locale='es') }}</td>
-                    <td></td>
-                    <td></td>
-                    <td>{{ pile.getAmount }}</td>
-                    <td></td>
-                    {#<td>{% if movement.amount %}{{ movement.amount|abs }} días{% else %}Activo actualmente{% endif %}</td>#}
-                </tr>
-            {% endfor %}
+                {% for pile in compost_piles %}
+                    <tr>
+                        <td class="csa-table__col-tight">
+                            <a class="csa-table__primary" href="{{ path('compostpile_show', { id: pile.id }) }}">#{{ pile.id }}</a>
+                        </td>
+                        <td class="csa-table__col-tight">{{ pile.startDate|format_date('medium', locale='es') }}</td>
+                        <td class="csa-table__col-tight">
+                            {% if pile.endDate %}{{ pile.endDate|format_date('medium', locale='es') }}{% else %}—{% endif %}
+                        </td>
+                        <td class="csa-table__col-tight">
+                            {% if pile.endDate %}
+                                <span class="csa-badge csa-badge--neutral">Cerrada</span>
+                            {% else %}
+                                <span class="csa-badge csa-badge--green">Activa</span>
+                            {% endif %}
+                        </td>
+                        <td class="csa-table__col-tight">{{ pile.getAmount|default(0) }} kg</td>
+                        <td class="csa-table__actions">
+                            <a href="{{ path('compostpile_show', { id: pile.id }) }}" title="Ver" aria-label="Ver"><i class="fa fa-eye"></i></a>
+                            <a href="{{ path('compostpile_edit', { id: pile.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="6" class="csa-muted" style="text-align: center; padding: var(--csa-sp-8);">
+                            Aún no hay pilas registradas.
+                        </td>
+                    </tr>
+                {% endfor %}
             </tbody>
         </table>
-    {% endblock %}
+    </div>
+
+{% endblock %}

@@ -3,6 +3,7 @@
 namespace App\Form;
 
 use Symfony\Component\Form\AbstractType;
+use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 
@@ -15,10 +16,8 @@ class CompostPileType extends AbstractType
     public function buildForm(FormBuilderInterface $builder, array $options)
     {
         $builder
-            ->add('start_date')
-            ->add('end_date')
-            ->add('created')
-            ->add('updated')
+            ->add('start_date', TextType::class, array('label' => 'Fecha de inicio', 'attr' => array('class' => 'datepicker form-control')))
+            ->add('end_date', TextType::class, array('label' => 'Fecha de cierre', 'required' => false, 'attr' => array('class' => 'datepicker form-control')))
         ;
     }
     
