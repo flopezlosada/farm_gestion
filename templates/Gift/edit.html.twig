@@ -1,74 +1,96 @@
-{% extends 'layout_crud.html.twig' %}
-{% block title_wrapper %}Editar Regalo de productos{% endblock %}
-{% block main -%}
-    <div class="panel panel-default">
-        <div class="panel-heading">
-            Cantidad de producto regalado
-        </div>
-        <div class="panel-body">
-            {{ form_start(edit_form, {'action': path('gift_update',{'id':entity.id}), 'method': 'put','attr': {'role': 'form' }}) }}
-            <div class="row">
-                <div class="col-lg-6">
-                    <div class="form-group">
-                        {{ form_errors(edit_form.gift_date) }}
-                        <label>{{ form_label(edit_form.gift_date) }}</label>
-                        {{ form_widget(edit_form.gift_date,{'attr':{'placeholder':'Fecha de reparto'}}) }}
-                    </div>
-                    <div class="form-group">
-                        {{ form_errors(edit_form.gift_type) }}
-                        <label>{{ form_label(edit_form.gift_type) }}</label>
-                        {{ form_widget(edit_form.gift_type,{'attr':{'class':'form-control'}}) }}
-                    </div>
-                    <div class="form-group">
-                        {{ form_errors(edit_form.recipient) }}
-                        <label>{{ form_label(edit_form.recipient) }}</label>
-                        {{ form_widget(edit_form.recipient,{'attr':{'class':'form-control'}}) }}
-                    </div>
-                    <div class="form-group">
-                        {{ form_errors(edit_form.amount) }}
-                        <label>{{ form_label(edit_form.amount) }}</label>
-                        {{ form_widget(edit_form.amount,{'attr':{'class':'form-control','placeholder':'Cantidad de producto'}}) }}
-                    </div>
-                    <div class="form-group">
-                        {{ form_errors(edit_form.product) }}
-                        <label>{{ form_label(edit_form.product) }}</label>
-                        {{ form_widget(edit_form.product,{'attr':{'class':'form-control'}}) }}
-                    </div>
-                    <div class="form-group">
-                        {{ form_errors(edit_form.unity) }}
-                        <label>{{ form_label(edit_form.unity) }}</label>
-                        {{ form_widget(edit_form.unity,{'attr':{'class':'form-control'}}) }}
-                    </div>
-                    <div class="form-group">
-                        {{ form_errors(edit_form.single_price) }}
-                        <label>{{ form_label(edit_form.single_price) }}</label>
-                        {{ form_widget(edit_form.single_price,{'attr':{'class':'form-control','placeholder':'Precio por unidad'}}) }}
-                    </div>
-                    <div class="form-group">
-                        {{ form_errors(edit_form.note) }}
-                        <label>{{ form_label(edit_form.note) }}</label>
-                        {{ form_widget(edit_form.note,{'attr':{'class':'form-control','placeholder':'Notas'}}) }}
-                    </div>
+{# ============================================================
+ # Editar regalo — shell csa.
+ # ============================================================ #}
 
-                </div>
-            </div>
-            {{ form_widget(edit_form.submit,{'attr':{'class':'btn btn-default'}}) }}
-            {{ form_rest(edit_form) }}
-            {{ form_end(edit_form, {'render_rest': false}) }}
-        </div>
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% form_theme edit_form 'form_div_layout.html.twig' %}
+
+{% block title %}Editar regalo #{{ entity.id }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('gift') }}">Regalos</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('gift_show', { id: entity.id }) }}">#{{ entity.id }}</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Editar</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Comercio · Regalos',
+        'Editar regalo #' ~ entity.id,
+        'Corrige fecha, agraciadx, producto o cantidades.'
+    ) }}
+
+    <div style="display: none;">
+        {{ form_start(delete_form, { attr: { id: 'gift-delete-form' } }) }}
+            {{ form_rest(delete_form) }}
+        {{ form_end(delete_form, { render_rest: false }) }}
     </div>
 
+    {{ form_start(edit_form, {
+        'action': path('gift_update', { id: entity.id }),
+        'method': 'put',
+        'attr': { 'role': 'form', 'class': 'csa-form-narrow' }
+    }) }}
 
+        <div class="csa-stack-lg">
 
+            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Cuándo y a quién', subtitle: 'Fecha del regalo, agraciadx y tipo.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(edit_form.gift_date, 'Fecha del regalo', { attr: { class: 'csa-input datepicker' } }) }}
+                        {{ csa.field(edit_form.gift_type, 'Tipo de regalo') }}
+                        {{ csa.field(edit_form.recipient, 'Persona que recibe', { full: true }) }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
 
+            {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Qué y cuánto', subtitle: 'Producto, cantidad y precio.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(edit_form.product, 'Producto regalado', { full: true }) }}
+                        {{ csa.field(edit_form.amount, 'Cantidad') }}
+                        {{ csa.field(edit_form.unity, 'Unidades') }}
+                        {{ csa.field(edit_form.single_price, 'Precio por unidad (€)') }}
+                        {{ csa.field(edit_form.note, 'Notas', { full: true }) }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
 
+            <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                <div>
+                    <button type="submit" form="gift-delete-form" class="csa-btn csa-btn--ghost"
+                            onclick="return confirm('¿Seguro? Esta acción no se puede deshacer.');">
+                        Eliminar regalo
+                    </button>
+                </div>
+                <div class="csa-row">
+                    {{ csa.btn('Cancelar', { variant: 'ghost', href: path('gift_show', { id: entity.id }) }) }}
+                    {{ form_widget(edit_form.submit, {
+                        label: 'Guardar cambios',
+                        attr: { class: 'csa-btn csa-btn--primary' }
+                    }) }}
+                </div>
+            </div>
 
-    <ul class="record_actions">
-        <li>
-            <a href="{{ path('gift') }}">
-                Volver al listado de regalos
-            </a>
-        </li>
-    </ul>
+        </div>
 
+        {{ form_rest(edit_form) }}
+    {{ form_end(edit_form, { render_rest: false }) }}
+
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    <script>
+        document.querySelectorAll('.datepicker, .datepicker2, .datepicker3')
+            .forEach(function (el) { el.type = 'date'; });
+    </script>
 {% endblock %}
