@@ -51,7 +51,7 @@
                     {% import '_macros/csa.html.twig' as csa %}
                     <div class="csa-form-grid">
                         <div id="put_down_date" class="csa-field--full hide">
-                            {{ csa.field(form.put_down_date, 'Fecha de sacrificio/muerte', { full: true }) }}
+                            {{ csa.field(form.put_down_date, 'Fecha de sacrificio/muerte', { full: true, attr: { class: 'csa-input datepicker' } }) }}
                         </div>
                         <div id="put_down_weight" class="csa-field--full hide">
                             {{ csa.field(form.put_down_weight, 'Peso vivo al sacrificio (Kg)', { full: true }) }}

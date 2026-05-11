@@ -40,7 +40,7 @@
                 {% block body %}
                     {% import '_macros/csa.html.twig' as csa %}
                     <div class="csa-form-grid">
-                        {{ csa.field(form.date, 'Fecha') }}
+                        {{ csa.field(form.date, 'Fecha', { attr: { class: 'csa-input datepicker' } }) }}
                         {{ csa.field(form.sector, 'Sector al que se dirige') }}
                     </div>
                 {% endblock %}

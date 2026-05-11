@@ -44,7 +44,7 @@
                 {% block body %}
                     {% import '_macros/csa.html.twig' as csa %}
                     <div class="csa-form-grid">
-                        {{ csa.field(edit_form.lay_date, 'Fecha de puesta') }}
+                        {{ csa.field(edit_form.lay_date, 'Fecha de puesta', { attr: { class: 'csa-input datepicker' } }) }}
                         {{ csa.field(edit_form.amount, 'Cantidad') }}
                         {{ csa.field(edit_form.batch, 'Lote', { full: true }) }}
                     </div>
