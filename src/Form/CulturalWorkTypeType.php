@@ -14,10 +14,10 @@ class CulturalWorkTypeType extends AbstractType
      */
     public function buildForm(FormBuilderInterface $builder, array $options)
     {
+        // 'created' y 'updated' son Gedmo Timestampable y se gestionan
+        // automáticamente — no tiene sentido exponerlos al formulario.
         $builder
             ->add('title')
-            ->add('created')
-            ->add('updated')
         ;
     }
     
