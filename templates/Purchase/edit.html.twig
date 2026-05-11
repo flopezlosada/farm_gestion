@@ -1,83 +1,105 @@
-{% extends 'layout_crud.html.twig' %}
-{% block title_wrapper %}Añadir Compra{% endblock %}
-{% block main -%}
-    <div class="panel panel-default">
+{# ============================================================
+ # Editar compra — shell csa.
+ # ============================================================ #}
 
-        <div class="panel-body">
-            {{ form_start(edit_form, {'action': path('purchase_update',{'id':entity.id}), 'method': 'put','attr': {'role': 'form' }}) }}
-            <div class="row">
-                <div class="col-lg-6">
-                    <div class="form-group">
-                        {{ form_errors(edit_form.purchase_date) }}
-                        <label>{{ form_label(edit_form.purchase_date) }}</label>
-                        {{ form_widget(edit_form.purchase_date,{'attr':{'placeholder':'Fecha de compra'}}) }}
-                    </div>
-                    <div class="form-group">
-                        {{ form_errors(edit_form.provider) }}
-                        <label>{{ form_label(edit_form.provider) }}</label>
-                        {{ form_widget(edit_form.provider,{'attr':{'class':'form-control'}}) }}
-                    </div>
-                    <div class="form-group">
-                        {{ form_errors(edit_form.amount) }}
-                        <label>{{ form_label(edit_form.amount) }}</label>
-                        {{ form_widget(edit_form.amount,{'attr':{'class':'form-control','placeholder':'Cantidad'}}) }}
-                    </div>
-                    <div class="form-group">
-                        {{ form_errors(edit_form.product) }}
-                        <label>{{ form_label(edit_form.product) }}</label>
-                        {{ form_widget(edit_form.product,{'attr':{'class':'form-control'}}) }}
-                    </div>
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% form_theme edit_form 'form_div_layout.html.twig' %}
 
-                    <div class="form-group">
-                        {{ form_errors(edit_form.unity) }}
-                        <label>{{ form_label(edit_form.unity) }}</label>
-                        {{ form_widget(edit_form.unity,{'attr':{'class':'form-control'}}) }}
-                    </div>
-                    <div class="form-group">
-                        {{ form_errors(edit_form.single_price) }}
-                        <label>{{ form_label(edit_form.single_price) }}</label>
-                        {{ form_widget(edit_form.single_price,{'attr':{'class':'form-control','placeholder':'Precio por unidad'}}) }}
-                        <p class="help-block">Indica el precio unitario. Después se multiplicará por la cantidad que indiques para obtener el precio total.</p>
-                    </div>
-                    <div class="form-group">
-                        {{ form_errors(edit_form.batch) }}
-                        <label>{{ form_label(edit_form.batch) }}</label>
-                        {{ form_widget(edit_form.batch,{'attr':{'class':'form-control'}}) }}
-                        <p class="help-block">Si este pedido se relaciona con algún lote de animales, selecciona el lote correspondiente.</p>
-                    </div>
-                    <div class="form-group">
-                        {{ form_errors(edit_form.note) }}
-                        <label>{{ form_label(edit_form.note) }}</label>
-                        {{ form_widget(edit_form.note,{'attr':{'class':'form-control','placeholder':'Notas'}}) }}
-                    </div>
-                    <div class="checkbox">
-                        {{ form_errors(edit_form.paid) }}
-                        <label>
-                            {{ form_widget(edit_form.paid) }}
-                            Marca esta casilla si la compra está pagada
-                        </label>
-                    </div>
-                </div>
-            </div>
-            {{ form_widget(edit_form.submit,{'attr':{'class':'btn btn-default'}}) }}
-            {{ form_rest(edit_form) }}
-            {{ form_end(edit_form, {'render_rest': false}) }}
-        </div>
+{% block title %}Editar compra #{{ entity.id }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('purchase') }}">Compras</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('purchase_show', { id: entity.id }) }}">#{{ entity.id }}</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Editar</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Comercio · Compras',
+        'Editar compra #' ~ entity.id,
+        'Corrige fecha, proveedorx, producto o cantidades.'
+    ) }}
+
+    <div style="display: none;">
+        {{ form_start(delete_form, { attr: { id: 'purchase-delete-form' } }) }}
+            {{ form_rest(delete_form) }}
+        {{ form_end(delete_form, { render_rest: false }) }}
     </div>
 
+    {{ form_start(edit_form, {
+        'action': path('purchase_update', { id: entity.id }),
+        'method': 'put',
+        'attr': { 'role': 'form', 'class': 'csa-form-narrow' }
+    }) }}
 
+        <div class="csa-stack-lg">
 
+            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Cuándo y a quién', subtitle: 'Fecha y proveedorx.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(edit_form.purchase_date, 'Fecha de compra', { attr: { class: 'csa-input datepicker' } }) }}
+                        {{ csa.field(edit_form.provider, 'Proveedorx') }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
 
+            {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Qué y cuánto', subtitle: 'Producto, cantidad y precio unitario.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(edit_form.product, 'Producto comprado', { full: true }) }}
+                        {{ csa.field(edit_form.amount, 'Cantidad') }}
+                        {{ csa.field(edit_form.unity, 'Unidades') }}
+                        {{ csa.field(edit_form.single_price, 'Precio por unidad (€)', { hint: 'se multiplica por la cantidad' }) }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
 
+            {% embed '_components/csa_form_section.html.twig' with { num: '3', title: 'Vínculo y estado', subtitle: 'Lote relacionado y estado de pago.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(edit_form.batch, 'Lote relacionado', { full: true, hint: 'sólo si la compra se asocia a un lote' }) }}
+                        {{ csa.field(edit_form.paid, '¿Pagada?') }}
+                        {{ csa.field(edit_form.note, 'Notas', { full: true }) }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
 
-    <ul class="record_actions">
-        <li>
-            <a href="{{ path('purchase') }}">
-                Back to the list
-            </a>
-        </li>
+            <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                <div>
+                    <button type="submit" form="purchase-delete-form" class="csa-btn csa-btn--ghost"
+                            onclick="return confirm('¿Seguro? Esta acción no se puede deshacer.');">
+                        Eliminar compra
+                    </button>
+                </div>
+                <div class="csa-row">
+                    {{ csa.btn('Cancelar', { variant: 'ghost', href: path('purchase_show', { id: entity.id }) }) }}
+                    {{ form_widget(edit_form.submit, {
+                        label: 'Guardar cambios',
+                        attr: { class: 'csa-btn csa-btn--primary' }
+                    }) }}
+                </div>
+            </div>
 
-        <li>{{ form(delete_form) }}</li>
-    </ul>
+        </div>
 
+        {{ form_rest(edit_form) }}
+    {{ form_end(edit_form, { render_rest: false }) }}
+
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    <script>
+        document.querySelectorAll('.datepicker, .datepicker2, .datepicker3')
+            .forEach(function (el) { el.type = 'date'; });
+    </script>
 {% endblock %}

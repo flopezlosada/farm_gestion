@@ -1,60 +1,119 @@
-{% extends 'base.html.twig' %}
+{# ============================================================
+ # Detalle de una compra — shell csa.
+ # ============================================================ #}
 
-{% block body -%}
-    <h1>Purchase</h1>
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
 
-    <table class="record_properties">
-        <tbody>
-            <tr>
-                <th>Id</th>
-                <td>{{ entity.id }}</td>
-            </tr>
-            <tr>
-                <th>Purchase_date</th>
-                <td>{{ entity.purchasedate|date('Y-m-d H:i:s') }}</td>
-            </tr>
-            <tr>
-                <th>Amount</th>
-                <td>{{ entity.amount }}</td>
-            </tr>
-            <tr>
-                <th>Single_price</th>
-                <td>{{ entity.singleprice }}</td>
-            </tr>
-            <tr>
-                <th>Total_price</th>
-                <td>{{ entity.totalprice }}</td>
-            </tr>
-            <tr>
-                <th>Created</th>
-                <td>{{ entity.created|date('Y-m-d H:i:s') }}</td>
-            </tr>
-            <tr>
-                <th>Updated</th>
-                <td>{{ entity.updated|date('Y-m-d H:i:s') }}</td>
-            </tr>
-            <tr>
-                <th>Note</th>
-                <td>{{ entity.note }}</td>
-            </tr>
-            <tr>
-                <th>Paid</th>
-                <td>{{ entity.paid }}</td>
-            </tr>
-        </tbody>
-    </table>
+{% block title %}Compra #{{ entity.id }}{% endblock %}
 
-        <ul class="record_actions">
-    <li>
-        <a href="{{ path('purchase') }}">
-            Back to the list
-        </a>
-    </li>
-    <li>
-        <a href="{{ path('purchase_edit', { 'id': entity.id }) }}">
-            Edit
-        </a>
-    </li>
-    <li>{{ form(delete_form) }}</li>
-</ul>
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('purchase') }}">Compras</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">#{{ entity.id }}</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    <div style="display: none;">
+        {{ form_start(delete_form, { attr: { id: 'purchase-delete-form' } }) }}
+            {{ form_rest(delete_form) }}
+        {{ form_end(delete_form, { render_rest: false }) }}
+    </div>
+
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-6); align-items: flex-start;">
+        <div class="csa-row" style="align-items: flex-start; gap: var(--csa-sp-4);">
+            <span class="csa-table__id-marker" style="width: 64px; height: 64px; font-size: 28px; border-radius: var(--csa-radius-lg);">
+                <i class="fa fa-eur"></i>
+            </span>
+            <div>
+                <h1>Compra del {{ entity.purchasedate|format_date('long', locale='es') }}</h1>
+                {% if entity.Provider %}
+                    <div class="csa-serif csa-italic csa-soft" style="margin-top: var(--csa-sp-2);">
+                        A {{ entity.Provider }} · {{ entity.totalprice }} €
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        <div class="csa-row">
+            <button type="submit" form="purchase-delete-form" class="csa-btn csa-btn--ghost"
+                    onclick="return confirm('¿Seguro? Esta acción no se puede deshacer.');">
+                Eliminar
+            </button>
+            {{ csa.btn('Editar', { variant: 'secondary', href: path('purchase_edit', { id: entity.id }), icon: 'fa-pencil' }) }}
+            {{ csa.btn('Volver', { variant: 'ghost', href: path('purchase') }) }}
+        </div>
+    </div>
+
+    <div style="margin-bottom: var(--csa-sp-5);">
+        {% if entity.paid == 1 %}
+            {{ csa.callout('Esta compra está pagada.', 'info', 'check-circle') }}
+        {% else %}
+            {{ csa.callout('Esta compra está sin pagar.', 'warning', 'exclamation-triangle') }}
+        {% endif %}
+    </div>
+
+    {% embed '_components/csa_card.html.twig' with { title: 'Datos de la compra', accent: 'terracotta' } %}
+        {% block body %}
+            <dl class="csa-defs">
+                <div class="csa-defs__row">
+                    <dt class="csa-defs__label">Fecha</dt>
+                    <dd class="csa-defs__value">{{ entity.purchasedate|format_date('long', locale='es') }}</dd>
+                </div>
+                {% if entity.Provider %}
+                    <div class="csa-defs__row">
+                        <dt class="csa-defs__label">Proveedorx</dt>
+                        <dd class="csa-defs__value">
+                            <a href="{{ path('provider_show', { id: entity.Provider.id }) }}">{{ entity.Provider }}</a>
+                        </dd>
+                    </div>
+                {% endif %}
+                {% if entity.product %}
+                    <div class="csa-defs__row">
+                        <dt class="csa-defs__label">Producto</dt>
+                        <dd class="csa-defs__value">{{ entity.product }}</dd>
+                    </div>
+                {% endif %}
+                <div class="csa-defs__row">
+                    <dt class="csa-defs__label">Cantidad</dt>
+                    <dd class="csa-defs__value">{{ entity.amount }}{% if entity.Unity %} {{ entity.Unity }}{% endif %}</dd>
+                </div>
+                <div class="csa-defs__row">
+                    <dt class="csa-defs__label">Precio por unidad</dt>
+                    <dd class="csa-defs__value">{{ entity.singleprice }} €</dd>
+                </div>
+                <div class="csa-defs__row">
+                    <dt class="csa-defs__label">Precio total</dt>
+                    <dd class="csa-defs__value">{{ entity.totalprice }} €</dd>
+                </div>
+                {% if entity.batch %}
+                    <div class="csa-defs__row">
+                        <dt class="csa-defs__label">Lote relacionado</dt>
+                        <dd class="csa-defs__value">
+                            <a href="{{ path('batch_show', { id: entity.batch.id }) }}">{{ entity.batch }}</a>
+                        </dd>
+                    </div>
+                {% endif %}
+                <div class="csa-defs__row">
+                    <dt class="csa-defs__label">Estado</dt>
+                    <dd class="csa-defs__value">
+                        {% if entity.paid %}
+                            <span class="csa-badge csa-badge--green">Pagada</span>
+                        {% else %}
+                            <span class="csa-badge csa-badge--terracotta">Sin pagar</span>
+                        {% endif %}
+                    </dd>
+                </div>
+                {% if entity.note %}
+                    <div class="csa-defs__row csa-defs__row--full">
+                        <dt class="csa-defs__label">Notas</dt>
+                        <dd class="csa-defs__value">{{ entity.note|nl2br }}</dd>
+                    </div>
+                {% endif %}
+            </dl>
+        {% endblock %}
+    {% endembed %}
+
 {% endblock %}
