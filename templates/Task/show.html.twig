@@ -122,12 +122,12 @@
         <div style="margin-top: var(--csa-sp-5);">
         {% embed '_components/csa_card.html.twig' with { title: 'Imágenes (' ~ entity.getImages|length ~ ')', accent: 'ochre' } %}
             {% block body %}
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--csa-sp-4);">
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, 160px); gap: var(--csa-sp-4);">
                     {% for image in entity.getImages %}
                         <a class="fancybox-button" rel="fancybox-button"
                            href="{{ asset('uploads/task/images/' ~ image.image) }}"
                            title="{{ image.title }}"
-                           style="display: block; aspect-ratio: 4/3; background: var(--csa-surface-alt); border-radius: var(--csa-radius-md); overflow: hidden;">
+                           style="display: block; width: 160px; height: 160px; background: var(--csa-surface-alt); border: 1px solid var(--csa-rule); border-radius: var(--csa-radius-md); overflow: hidden;">
                             <img src="{{ asset('uploads/task/images/' ~ image.image) }}"
                                  alt="{{ image.title }}"
                                  loading="lazy"
