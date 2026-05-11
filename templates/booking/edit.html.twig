@@ -1,13 +1,100 @@
-{% extends 'base.html.twig' %}
+{# ============================================================
+ # Editar evento público (Booking) — admin.
+ # ============================================================ #}
 
-{% block title %}Edit Booking{% endblock %}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% form_theme form 'form_div_layout.html.twig' %}
 
-{% block body %}
-    <h1>Edit Booking</h1>
+{% block title %}Editar evento público · {{ booking.title }}{% endblock %}
 
-    {{ include('booking/_form.html.twig', {'button_label': 'Update'}) }}
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('booking_index') }}">Eventos públicos</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('booking_show', { id: booking.id }) }}">{{ booking.title }}</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Editar</span>
+{% endblock %}
 
-    <a href="{{ path('booking_index') }}">back to list</a>
+{% block csa_main %}
 
-    {{ include('booking/_delete_form.html.twig') }}
+    {{ csa.page_header(
+        'Comunicación · Web pública',
+        'Editar ' ~ booking.title,
+        'Corrige datos, fechas o cartel del evento.'
+    ) }}
+
+    <form id="booking-delete-form" method="post"
+          action="{{ path('booking_delete', { id: booking.id }) }}"
+          onsubmit="return confirm('¿Seguro? Esta acción no se puede deshacer.');"
+          style="display: none;">
+        <input type="hidden" name="_method" value="DELETE">
+        <input type="hidden" name="_token" value="{{ csrf_token('delete' ~ booking.id) }}">
+    </form>
+
+    {{ form_start(form, {
+        action: path('booking_edit', { id: booking.id }),
+        method: 'post',
+        attr: { role: 'form', class: 'csa-form-narrow', enctype: 'multipart/form-data' }
+    }) }}
+
+        <div class="csa-stack-lg">
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Identidad', subtitle: 'Título y descripción.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.title, 'Título', { full: true }) }}
+                        {{ csa.field(form.content, 'Contenido', { full: true, attr: { class: 'tinymce', 'data-theme': 'advanced' } }) }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Fechas', subtitle: 'Cuándo empieza y termina el evento.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.beginAt, 'Inicio', { attr: { class: 'csa-input datepicker' } }) }}
+                        {{ csa.field(form.endAt, 'Fin', { attr: { class: 'csa-input datepicker' } }) }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '3', title: 'Imagen', subtitle: 'Sustituye el cartel del evento (opcional).' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.file, 'Sustituir archivo', { full: true, hint: 'opcional' }) }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                <div>
+                    <button type="submit" form="booking-delete-form" class="csa-btn csa-btn--ghost">
+                        Eliminar evento
+                    </button>
+                </div>
+                <div class="csa-row">
+                    {{ csa.btn('Cancelar', { variant: 'ghost', href: path('booking_show', { id: booking.id }) }) }}
+                    <button type="submit" class="csa-btn csa-btn--primary">Guardar cambios</button>
+                </div>
+            </div>
+
+        </div>
+
+        {{ form_rest(form) }}
+    {{ form_end(form, { render_rest: false }) }}
+
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    {{ tinymce_init() }}
+    <script>
+        document.querySelectorAll('.datepicker, .datepicker2, .datepicker3')
+            .forEach(function (el) { el.type = 'date'; });
+    </script>
 {% endblock %}
