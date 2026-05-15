@@ -12,14 +12,37 @@ security:
             migrate_from:
                 - legacy_fos_sha512
 
+    # ===========================================================
+    # ROLES DEL PROYECTO
+    # ===========================================================
+    # Los roles son flags independientes — un User puede tener una
+    # combinación cualquiera. NO hay jerarquía entre los roles de
+    # gestión (tener ROLE_GESTION_GRANJA no implica tener ROLE_BLOG).
+    #
+    # El único atajo es ROLE_ADMIN, que se interpreta como "alias"
+    # que incluye todos los demás. Es por conveniencia: crear un
+    # admin = darle ROLE_ADMIN sin tener que listar 5 roles.
+    #
+    # Roles activos:
+    #   ROLE_ADMIN              acceso a todo (alias de todos los demás)
+    #   ROLE_GESTION_GRANJA     lotes, gallinas, cosechas, gastos granja
+    #   ROLE_GESTION_SOCIXS     alta/baja/edición de Partner
+    #   ROLE_GESTION_CESTAS     reparto semanal, baskets, shares
+    #   ROLE_BLOG               blog público (admin) + categorías + media
+    #   ROLE_PARTNER            panel propio del socix
+    #
+    # ROLE_COOP es legacy (FOSUser); se acepta temporalmente en
+    # access_control para no echar a usuarios existentes mientras
+    # migramos. Cuando todos los users tengan los roles nuevos en
+    # BBDD, se elimina.
+    # ===========================================================
     role_hierarchy:
-        # Rama operativa
-        ROLE_GUEST:       [ROLE_USER, ROLE_COMPOST]
-        ROLE_COOP:        [ROLE_COMPOST, ROLE_GUEST]
-        # Rama de admin: cuelga de COOP, así heredan todo lo operativo.
-        # Esto se reescribirá cuando rehagamos el dominio de roles.
-        ROLE_ADMIN:       [ROLE_USER, ROLE_COOP]
-        ROLE_SUPER_ADMIN: [ROLE_ADMIN]
+        ROLE_ADMIN:
+            - ROLE_GESTION_GRANJA
+            - ROLE_GESTION_SOCIXS
+            - ROLE_GESTION_CESTAS
+            - ROLE_BLOG
+            - ROLE_PARTNER
 
     providers:
         app_user_provider:
@@ -46,23 +69,11 @@ security:
                 target: /
 
     access_control:
-        - { path: ^/login$, role: PUBLIC_ACCESS }
-        - { path: ^/gestion/compost/[a-z]\w+/new, role: ROLE_COMPOST}
-        - { path: ^/gestion/compost/[a-z]\w+/create, role: ROLE_COMPOST}
-        - { path: ^/gestion/compost/[a-z]\w+/[0-9]([0-9])?([0-9])?/edit, role: ROLE_COMPOST}
-        - { path: ^/gestion/compost/[a-z]\w+/[0-9]([0-9])?([0-9])?/update, role: ROLE_COMPOST}
-        - { path: ^/gestion/compost/[a-z]\w+/[0-9]([0-9])?([0-9])?/delete, role: ROLE_COMPOST}
-        - { path: ^/gestion/compost, role: ROLE_COMPOST}
-        - { path: ^/gestion/dashboard, role: [ROLE_COMPOST] }
-        - { path: ^/gestion/[a-z]\w+/new, role: ROLE_COOP}
-        - { path: ^/gestion/[a-z]\w+/create, role: ROLE_COOP}
-        - { path: ^/gestion/[a-z]\w+/[0-9]([0-9])?([0-9])?/show, role: ROLE_GUEST}
-        - { path: ^/gestion/[a-z]\w+/[0-9]([0-9])?([0-9])?/edit, role: ROLE_COOP}
-        - { path: ^/gestion/[a-z]\w+/[0-9]([0-9])?([0-9])?/update, role: ROLE_COOP}
-        - { path: ^/gestion/[a-z]\w+/[0-9]([0-9])?([0-9])?/delete, role: ROLE_COOP}
-        - { path: ^/gestion/[a-z]\w+/[0-9]([0-9])?([0-9])?/reactivate, role: ROLE_COOP}
-        - { path: ^/gestion/[a-z]\w+/[0-9]([0-9])?([0-9])?/close, role: ROLE_COOP}
-        - { path: ^/gestion/[a-z]\w+/[0-9]([0-9])?([0-9])?/add_sector, role: ROLE_COOP}
-        - { path: ^/gestion/[a-z]\w+/[0-9]([0-9])?([0-9])?/fast_delete, role: ROLE_COOP}
-        - { path: ^/gestion, role: [ROLE_GUEST] }
-        - { path: ^/admin/, role: ROLE_ADMIN }
+        - { path: ^/login$, roles: PUBLIC_ACCESS }
+        - { path: ^/contact$, roles: PUBLIC_ACCESS }
+        # Cualquier rol de gestión (o el legacy ROLE_COOP, hasta que migremos) permite entrar a /gestion.
+        # Dentro, cada controller filtra con #[IsGranted('ROLE_GESTION_X')] según su sección.
+        - { path: ^/gestion,
+            roles: [ROLE_ADMIN, ROLE_GESTION_GRANJA, ROLE_GESTION_SOCIXS, ROLE_GESTION_CESTAS, ROLE_BLOG, ROLE_COOP] }
+        # Panel del socix (lo construiremos en breve).
+        - { path: ^/panel, roles: [ROLE_PARTNER, ROLE_ADMIN] }

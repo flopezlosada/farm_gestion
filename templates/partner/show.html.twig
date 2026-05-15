@@ -243,7 +243,7 @@
                         </div>
                     </dl>
 
-                    {% if is_granted('ROLE_COOP') %}
+                    {% if app.user %}
                         <div class="csa-row" style="flex-wrap: wrap; gap: var(--csa-sp-2); margin-top: var(--csa-sp-5); padding-top: var(--csa-sp-4); border-top: 1px solid var(--csa-rule);">
                             <a href="{{ path('partner_basket_share_edit', { id: partner.getActiveBasket.id }) }}"
                                class="csa-btn csa-btn--secondary csa-btn--sm">
@@ -261,7 +261,7 @@
         {% endif %}
 
         {# Acciones administrativas #}
-        {% if is_granted('ROLE_COOP') %}
+        {% if app.user %}
             {% embed '_components/csa_card.html.twig' with { title: 'Acciones', accent: 'ochre' } %}
                 {% block body %}
                     <div class="csa-row" style="flex-wrap: wrap; gap: var(--csa-sp-3);">

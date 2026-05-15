@@ -50,7 +50,7 @@
 
 {% block csa_main %}
 
-    {% if is_granted('ROLE_GUEST') %}
+    {% if app.user %}
 
         {%- set hour = 'now'|date('G') -%}
         {%- set greeting = hour < 14 ? 'Buenos días' : (hour < 21 ? 'Buenas tardes' : 'Buenas noches') -%}

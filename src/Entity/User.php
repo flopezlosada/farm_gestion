@@ -79,6 +79,16 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface, LegacyP
     private $roles = [];
 
     /**
+     * Vínculo opcional con un socix. Un User puede no tener Partner (admin,
+     * trabajadora no socia, etc.). Si se elimina el Partner, este campo
+     * queda a NULL en lugar de borrar el User.
+     *
+     * @ORM\OneToOne(targetEntity="App\Entity\Partner")
+     * @ORM\JoinColumn(name="partner_id", referencedColumnName="id", nullable=true, onDelete="SET NULL")
+     */
+    private ?Partner $partner = null;
+
+    /**
      * @var \DateTime $created
      *
      * @Gedmo\Timestampable(on="create")
@@ -287,6 +297,17 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface, LegacyP
     public function setRoles(array $roles): self
     {
         $this->roles = $roles;
+        return $this;
+    }
+
+    public function getPartner(): ?Partner
+    {
+        return $this->partner;
+    }
+
+    public function setPartner(?Partner $partner): self
+    {
+        $this->partner = $partner;
         return $this;
     }
 
