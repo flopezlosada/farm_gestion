@@ -70,45 +70,65 @@
                 {% block csa_nav %}
                     {%- set route = app.request.attributes.get('_route') -%}
 
+                    {# Día a día — siempre visible para usuarios autenticados con cualquier rol de gestión #}
                     <div class="csa-sidebar__group">Día a día</div>
                     {{ _self.nav_link('Panel', path('dashboard'), 'fa-home',
                        route == 'dashboard') }}
                     {{ _self.nav_link('Calendario', path('calendar'), 'fa-calendar',
                        route starts with 'calendar') }}
 
-                    <div class="csa-sidebar__group">Granja</div>
-                    {{ _self.nav_link('Lotes', path('batch'), 'fa-sliders',
-                       route starts with 'batch') }}
-                    {{ _self.nav_link('Cultivos', path('crop'), 'fa-leaf',
-                       route starts with 'crop') }}
-                    {{ _self.nav_link('Tareas', path('task'), 'fa-tasks',
-                       route starts with 'task') }}
-                    {{ _self.nav_link('Cosechas / huevos', path('lay'), 'fa-egg',
-                       route starts with 'lay') }}
-                    {{ _self.nav_link('Trabajos culturales', path('culturalwork'), 'fa-compass',
-                       route starts with 'culturalwork') }}
-                    {{ _self.nav_link('Compost', path('compostcollection'), 'fa-recycle',
-                       route starts with 'compostcollection') }}
+                    {% if is_granted('ROLE_GESTION_GRANJA') %}
+                        <div class="csa-sidebar__group">Granja</div>
+                        {{ _self.nav_link('Lotes', path('batch'), 'fa-sliders',
+                           route starts with 'batch') }}
+                        {{ _self.nav_link('Cultivos', path('crop'), 'fa-leaf',
+                           route starts with 'crop') }}
+                        {{ _self.nav_link('Tareas', path('task'), 'fa-tasks',
+                           route starts with 'task') }}
+                        {{ _self.nav_link('Cosechas / huevos', path('lay'), 'fa-egg',
+                           route starts with 'lay') }}
+                        {{ _self.nav_link('Trabajos culturales', path('culturalwork'), 'fa-compass',
+                           route starts with 'culturalwork') }}
+                        {{ _self.nav_link('Compost', path('compostcollection'), 'fa-recycle',
+                           route starts with 'compostcollection') }}
+                    {% endif %}
 
-                    <div class="csa-sidebar__group">Socixs</div>
-                    {{ _self.nav_link('Listado', path('partner_index'), 'fa-people-carry',
-                       route starts with 'partner') }}
-                    {{ _self.nav_link('Grupos de recogida', path('weekly_basket_group_index'), 'fa-map-marker',
-                       route starts with 'weekly_basket_group') }}
+                    {% if is_granted('ROLE_GESTION_SOCIXS') %}
+                        <div class="csa-sidebar__group">Socixs</div>
+                        {{ _self.nav_link('Listado', path('partner_index'), 'fa-people-carry',
+                           route starts with 'partner') }}
+                        {{ _self.nav_link('Grupos de recogida', path('weekly_basket_group_index'), 'fa-map-marker',
+                           route starts with 'weekly_basket_group') }}
+                    {% endif %}
 
-                    <div class="csa-sidebar__group">Comercio</div>
-                    {{ _self.nav_link('Cestas', path('production_show_basket', { year: 'now'|date('Y') }), 'fa-shopping-basket',
-                       route starts with 'production_show_basket' or route starts with 'production') }}
-                    {{ _self.nav_link('Ventas', path('sale'), 'fa-money',
-                       route starts with 'sale') }}
-                    {{ _self.nav_link('Compras', path('purchase'), 'fa-eur',
-                       route starts with 'purchase') }}
+                    {# Comercio: el grupo aparece si tienes cualquier rol que dé acceso a algún ítem #}
+                    {% if is_granted('ROLE_GESTION_CESTAS') or is_granted('ROLE_ADMIN') %}
+                        <div class="csa-sidebar__group">Comercio</div>
+                        {% if is_granted('ROLE_GESTION_CESTAS') %}
+                            {{ _self.nav_link('Cestas', path('production_show_basket', { year: 'now'|date('Y') }), 'fa-shopping-basket',
+                               route starts with 'production_show_basket' or route starts with 'production') }}
+                        {% endif %}
+                        {% if is_granted('ROLE_ADMIN') %}
+                            {{ _self.nav_link('Ventas', path('sale'), 'fa-money',
+                               route starts with 'sale') }}
+                            {{ _self.nav_link('Compras', path('purchase'), 'fa-eur',
+                               route starts with 'purchase') }}
+                        {% endif %}
+                    {% endif %}
 
-                    <div class="csa-sidebar__group">Comunicación</div>
-                    {{ _self.nav_link('Blog', path('blog'), 'fa-newspaper-o',
-                       route starts with 'blog') }}
-                    {{ _self.nav_link('Eventos públicos', path('booking'), 'fa-calendar-check-o',
-                       route starts with 'booking') }}
+                    {% if is_granted('ROLE_BLOG') %}
+                        <div class="csa-sidebar__group">Comunicación</div>
+                        {{ _self.nav_link('Blog', path('blog'), 'fa-newspaper-o',
+                           route starts with 'blog') }}
+                        {{ _self.nav_link('Eventos públicos', path('booking'), 'fa-calendar-check-o',
+                           route starts with 'booking') }}
+                    {% endif %}
+
+                    {% if is_granted('ROLE_ADMIN') %}
+                        <div class="csa-sidebar__group">Administración</div>
+                        {{ _self.nav_link('Usuarias', path('user'), 'fa-users',
+                           route starts with 'user') }}
+                    {% endif %}
                 {% endblock %}
             </nav>
         </aside>

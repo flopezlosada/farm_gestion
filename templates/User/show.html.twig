@@ -1,36 +1,64 @@
-{% extends 'base.html.twig' %}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
 
-{% block body -%}
-    <h1>User</h1>
+{% block title %}{{ entity.username }}{% endblock %}
 
-    <table class="record_properties">
-        <tbody>
-            <tr>
-                <th>Id</th>
-                <td>{{ entity.id }}</td>
-            </tr>
-            <tr>
-                <th>Created</th>
-                <td>{{ entity.created|date('Y-m-d H:i:s') }}</td>
-            </tr>
-            <tr>
-                <th>Updated</th>
-                <td>{{ entity.updated|date('Y-m-d H:i:s') }}</td>
-            </tr>
-        </tbody>
-    </table>
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('user') }}">Usuarias</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ entity.username }}</span>
+{% endblock %}
 
-        <ul class="record_actions">
-    <li>
-        <a href="{{ path('user') }}">
-            Back to the list
-        </a>
-    </li>
-    <li>
-        <a href="{{ path('user_edit', { 'id': entity.id }) }}">
-            Edit
-        </a>
-    </li>
-    <li>{{ form(delete_form) }}</li>
-</ul>
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Administración · Usuarias',
+        entity.username,
+        entity.email
+    ) }}
+
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-6);">
+        <div></div>
+        <div class="csa-row">
+            {{ csa.btn('Editar', { variant: 'primary', href: path('user_edit', { id: entity.id }), icon: 'fa-pencil' }) }}
+            {{ csa.btn('Volver al listado', { variant: 'ghost', href: path('user') }) }}
+        </div>
+    </div>
+
+    {% embed '_components/csa_card.html.twig' with { title: 'Datos de la cuenta' } %}
+        {% block body %}
+            <dl class="csa-defs">
+                <dt>Usuaria</dt><dd>{{ entity.username }}</dd>
+                <dt>Email</dt><dd>{{ entity.email }}</dd>
+                <dt>Creada</dt><dd>{{ entity.created ? entity.created|date('d/m/Y H:i') : '—' }}</dd>
+                <dt>Última actualización</dt><dd>{{ entity.updated ? entity.updated|date('d/m/Y H:i') : '—' }}</dd>
+                <dt>Último login</dt><dd>{{ entity.lastLogin ? entity.lastLogin|date('d/m/Y H:i') : '— nunca —' }}</dd>
+                <dt>Socix vinculadx</dt><dd>
+                    {% if entity.partner %}
+                        <a href="{{ path('partner_show', { id: entity.partner.id }) }}">{{ entity.partner.name }} {{ entity.partner.surname }}</a>
+                    {% else %}
+                        <span class="csa-muted">— sin vínculo —</span>
+                    {% endif %}
+                </dd>
+            </dl>
+        {% endblock %}
+    {% endembed %}
+
+    {% embed '_components/csa_card.html.twig' with { title: 'Permisos' } %}
+        {% block body %}
+            {% set assigned_roles = entity.roles|filter(r => r != 'ROLE_USER') %}
+            {% if assigned_roles is empty %}
+                <p class="csa-muted">Esta cuenta no tiene roles asignados. No podrá entrar a ninguna sección.</p>
+            {% else %}
+                <ul class="csa-stack">
+                    {% for role in assigned_roles %}
+                        <li><span class="csa-badge csa-badge--neutral">{{ role|replace({'ROLE_': ''}) }}</span></li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        {% endblock %}
+    {% endembed %}
+
 {% endblock %}

@@ -1,46 +1,79 @@
-    {% extends 'layout_list.html.twig' %}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
 
-    {% block title_wrapper %}Listado {% endblock %}
-    {% block main -%}
-    <h1>User list</h1>
+{% block title %}Usuarias{% endblock %}
 
-    <table class="records_list">
-        <thead>
-        <tr>
-                <th>Id</th>
-                <th>Created</th>
-                <th>Updated</th>
-            <th>Actions</th>
-        </tr>
-        </thead>
-        <tbody>
-        {% for entity in entities %}
-        <tr>
-                    <td>
-                        <a href="{{ path('user_show', { 'id': entity.id }) }}">{{ entity.id }}</a>
-                    </td>
-                    <td>{% if entity.created %}{{ entity.created|date('Y-m-d H:i:s') }}{% endif %}</td>
-                    <td>{% if entity.updated %}{{ entity.updated|date('Y-m-d H:i:s') }}{% endif %}</td>
-                    <td>
-                <ul>
-                    <li>
-                        <a href="{{ path('user_show', { 'id': entity.id }) }}">show</a>
-                    </li>
-                    <li>
-                        <a href="{{ path('user_edit', { 'id': entity.id }) }}">edit</a>
-                    </li>
-                </ul>
-                    </td>
-        </tr>
-        {% endfor %}
-        </tbody>
-    </table>
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Usuarias</span>
+{% endblock %}
 
-            <ul>
-            <li>
-                <a href="{{ path('user_new') }}">
-                    Create a new entry
-                </a>
-            </li>
-        </ul>
-        {% endblock %}
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Administración · Usuarias',
+        'Cuentas y permisos',
+        'Quién puede entrar al sistema y qué puede hacer.'
+    ) }}
+
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-6);">
+        <div></div>
+        <div class="csa-row">
+            {{ csa.btn('Nueva usuaria', { variant: 'primary', href: path('user_new'), icon: 'fa-plus' }) }}
+        </div>
+    </div>
+
+    <div class="csa-table-wrap">
+        <table class="csa-table">
+            <thead>
+                <tr>
+                    <th>Usuaria</th>
+                    <th>Email</th>
+                    <th>Roles</th>
+                    <th>Socix vinculadx</th>
+                    <th class="csa-table__actions">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in entities %}
+                    <tr>
+                        <td>
+                            <a class="csa-table__primary" href="{{ path('user_show', { id: user.id }) }}">
+                                {{ user.username }}
+                            </a>
+                        </td>
+                        <td>{{ user.email }}</td>
+                        <td>
+                            {% set assigned_roles = user.roles|filter(r => r != 'ROLE_USER') %}
+                            {% if assigned_roles is empty %}
+                                <span class="csa-muted">— sin roles —</span>
+                            {% else %}
+                                {% for role in assigned_roles %}
+                                    <span class="csa-badge csa-badge--neutral">{{ role|replace({'ROLE_': ''}) }}</span>
+                                {% endfor %}
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if user.partner %}
+                                {{ user.partner.name }} {{ user.partner.surname }}
+                            {% else %}
+                                <span class="csa-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="csa-table__actions">
+                            <a href="{{ path('user_edit', { id: user.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="5" class="csa-muted" style="text-align: center; padding: var(--csa-sp-6);">
+                            No hay usuarias registradas.
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+{% endblock %}

@@ -2,8 +2,11 @@
 
 namespace App\Form;
 
+use App\Entity\Partner;
 use App\Entity\User;
+use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
+use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\EmailType;
 use Symfony\Component\Form\Extension\Core\Type\PasswordType;
 use Symfony\Component\Form\Extension\Core\Type\RepeatedType;
@@ -15,6 +18,20 @@ use Symfony\Component\Validator\Constraints\NotBlank;
 
 class UserType extends AbstractType
 {
+    /**
+     * Catálogo de roles asignables desde la UI de admin. ROLE_USER NO está
+     * porque se añade automáticamente (en User::getRoles()), y ROLE_PARTNER
+     * suele ir junto a tener un Partner vinculado abajo.
+     */
+    public const ROLE_CHOICES = [
+        'Administradorx (acceso a todo)' => 'ROLE_ADMIN',
+        'Gestión de granja' => 'ROLE_GESTION_GRANJA',
+        'Gestión de socixs' => 'ROLE_GESTION_SOCIXS',
+        'Gestión de cestas' => 'ROLE_GESTION_CESTAS',
+        'Blog y comunicación' => 'ROLE_BLOG',
+        'Socix (panel propio)' => 'ROLE_PARTNER',
+    ];
+
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
         $builder
@@ -31,6 +48,21 @@ class UserType extends AbstractType
                     new NotBlank(),
                     new Length(['min' => 6]),
                 ] : [],
+            ])
+            ->add('roles', ChoiceType::class, [
+                'label' => 'Roles',
+                'choices' => self::ROLE_CHOICES,
+                'multiple' => true,
+                'expanded' => true,
+                'required' => false,
+            ])
+            ->add('partner', EntityType::class, [
+                'label' => 'Socix vinculadx',
+                'class' => Partner::class,
+                'choice_label' => fn (Partner $p) => $p->getName() . ' ' . $p->getSurname(),
+                'required' => false,
+                'placeholder' => '— sin vínculo —',
+                'help' => 'Solo necesario si esta cuenta corresponde a una persona socia y va a usar el panel /panel.',
             ]);
     }
 
