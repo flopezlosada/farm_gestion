@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Error{% endblock %} · CSA Vega de Jarama</title>
+    {{ encore_entry_link_tags('app') }}
+</head>
+<body>
+<div class="csa-app">
+    <main style="min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: var(--csa-sp-8);">
+        <div style="max-width: 480px; text-align: center;">
+            <div style="font-size: 80px; line-height: 1; font-family: var(--csa-serif); color: var(--csa-ochre); margin-bottom: var(--csa-sp-4);">
+                {% block code %}—{% endblock %}
+            </div>
+            <h1 style="font-family: var(--csa-serif); font-weight: 500; margin-bottom: var(--csa-sp-3);">
+                {% block heading %}Algo no salió bien{% endblock %}
+            </h1>
+            <p class="csa-muted" style="margin-bottom: var(--csa-sp-6);">
+                {% block message %}{% endblock %}
+            </p>
+            <div class="csa-row" style="justify-content: center;">
+                <a href="{{ path('homepage') }}" class="csa-btn csa-btn--ghost">Ir al inicio</a>
+                {% if app.user %}
+                    <a href="{{ path('dashboard') }}" class="csa-btn csa-btn--primary">Mi panel</a>
+                {% else %}
+                    <a href="{{ path('app_login') }}" class="csa-btn csa-btn--primary">Iniciar sesión</a>
+                {% endif %}
+            </div>
+        </div>
+    </main>
+</div>
+</body>
+</html>
