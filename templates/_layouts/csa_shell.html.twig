@@ -93,10 +93,12 @@
                     <div class="csa-sidebar__group">Socixs</div>
                     {{ _self.nav_link('Listado', path('partner_index'), 'fa-people-carry',
                        route starts with 'partner') }}
-                    {{ _self.nav_link('Grupos de recogida', path('weekly_basket_group_index'), 'fa-canadian-maple-leaf',
+                    {{ _self.nav_link('Grupos de recogida', path('weekly_basket_group_index'), 'fa-map-marker',
                        route starts with 'weekly_basket_group') }}
 
                     <div class="csa-sidebar__group">Comercio</div>
+                    {{ _self.nav_link('Cestas', path('production_show_basket', { year: 'now'|date('Y') }), 'fa-shopping-basket',
+                       route starts with 'production_show_basket' or route starts with 'production') }}
                     {{ _self.nav_link('Ventas', path('sale'), 'fa-money',
                        route starts with 'sale') }}
                     {{ _self.nav_link('Compras', path('purchase'), 'fa-eur',
