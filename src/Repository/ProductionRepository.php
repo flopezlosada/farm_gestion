@@ -81,6 +81,19 @@ class ProductionRepository extends EntityRepository
         return $query->getResult();
     }
 
+    /**
+     * Devuelve los años en los que hay alguna producción registrada,
+     * ordenados de más reciente a más antiguo. Útil para el selector
+     * del listado anual de cestas.
+     */
+    public function findYearsWithProduction(): array
+    {
+        $em = $this->getEntityManager();
+        $dql = "select YEAR(p.production_date) as y from App\\Entity\\Production p GROUP BY y ORDER BY y DESC";
+        $rows = $em->createQuery($dql)->getResult();
+        return array_map(static fn($r) => (int) $r['y'], $rows);
+    }
+
     public function findProductionInWeek($week, $year)
     {
 

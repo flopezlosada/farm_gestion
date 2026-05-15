@@ -26,7 +26,16 @@
     ) }}
 
     <div class="csa-row-between" style="margin-bottom: var(--csa-sp-6);">
-        <div></div>
+        <form method="get" action="{{ path('production_show_basket', { year: year }) }}" class="csa-row" style="gap: var(--csa-sp-2);">
+            <label for="basket-year" class="csa-muted">Ver año:</label>
+            <select id="basket-year" class="csa-input" style="width: auto;"
+                    onchange="window.location.href='{{ path('production_show_basket', { year: 'YEAR' })|raw }}'.replace('YEAR', this.value)">
+                {% set years = year in years_available ? years_available : [year]|merge(years_available) %}
+                {% for y in years %}
+                    <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+                {% endfor %}
+            </select>
+        </form>
         <div class="csa-row">
             {{ csa.btn('Registrar cosecha', { variant: 'primary', href: path('production_new'), icon: 'fa-plus' }) }}
         </div>
