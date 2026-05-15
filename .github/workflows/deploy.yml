@@ -62,8 +62,10 @@ jobs:
             set ftp:ssl-allow no;
             set net:max-retries 3;
             set net:reconnect-interval-base 10;
+            set cmd:show-status yes;
+            set xfer:log yes;
             open -u $FTP_USERNAME,$FTP_PASSWORD $FTP_SERVER;
-            mirror -R --only-newer --parallel=4 \
+            mirror -R --only-newer --parallel=4 --verbose=2 \
               --exclude-glob '.git*' \
               --exclude-glob '.github/' \
               --exclude-glob '.idea/' \
