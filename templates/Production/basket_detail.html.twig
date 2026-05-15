@@ -71,9 +71,13 @@
                                 {% for production in basket.getProductions %}
                                     <tr>
                                         <td>
-                                            <a class="csa-table__primary" href="{{ path('cropworking_show', { year: year, id: production.cropworking.getId }) }}">
-                                                {{ production.cropworking.getName }}
-                                            </a>
+                                            {% if production.cropworking %}
+                                                <a class="csa-table__primary" href="{{ path('cropworking_show', { year: year, id: production.cropworking.getId }) }}">
+                                                    {{ production.cropworking.getName }}
+                                                </a>
+                                            {% else %}
+                                                <span class="csa-muted">— cultivo eliminado —</span>
+                                            {% endif %}
                                         </td>
                                         <td class="csa-table__col-tight">{{ production.amount }} kg</td>
                                         <td>{{ production.note|striptags|slice(0, 100) }}{% if production.note|striptags|length > 100 %}…{% endif %}</td>

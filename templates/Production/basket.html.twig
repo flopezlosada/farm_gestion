@@ -76,7 +76,7 @@
 
                         <p class="csa-baskets__cultivos">
                             {%- for production in top -%}
-                                {{ production.cropworking.getName }}{% if not loop.last or extras > 0 %} · {% endif %}
+                                {{ production.cropworking ? production.cropworking.getName : '?' }}{% if not loop.last or extras > 0 %} · {% endif %}
                             {%- endfor -%}
                             {% if extras > 0 %}
                                 <span class="csa-baskets__extras">y {{ extras }} más</span>
