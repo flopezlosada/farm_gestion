@@ -121,11 +121,13 @@ html {
 .csa-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--csa-sp-3);
 }
 .csa-row-between {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: var(--csa-sp-3);
 }
