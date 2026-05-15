@@ -151,17 +151,36 @@
                 </nav>
 
                 <div class="csa-topbar__user">
-                    <a href="{{ path('homepage') }}" class="csa-link-muted" title="Ver web pública" target="_blank" rel="noopener">
-                        <i class="fa fa-globe"></i>
+                    {% if app.user and is_granted('ROLE_PARTNER') %}
+                        <div class="csa-areaswitch" role="group" aria-label="Cambiar de área">
+                            <span class="csa-areaswitch__item csa-areaswitch__item--active" aria-current="page">
+                                <i class="fa fa-cog" aria-hidden="true"></i>
+                                <span class="csa-areaswitch__label">Gestión</span>
+                                <span class="csa-areaswitch__short" aria-hidden="true">G</span>
+                            </span>
+                            <a href="{{ path('panel') }}" class="csa-areaswitch__item" title="Ir a mi panel personal">
+                                <i class="fa fa-user" aria-hidden="true"></i>
+                                <span class="csa-areaswitch__label">Mi panel</span>
+                                <span class="csa-areaswitch__short" aria-hidden="true">P</span>
+                            </a>
+                        </div>
+                    {% endif %}
+
+                    <a href="{{ path('homepage') }}" class="csa-topbar__util" target="_blank" rel="noopener" title="Abrir la web pública">
+                        <i class="fa fa-globe" aria-hidden="true"></i>
+                        <span class="csa-topbar__util-label">Ver web</span>
                     </a>
+
                     {% if app.user %}
-                        <span>{{ app.user.userIdentifier }}</span>
-                        <span class="csa-avatar">
-                            {{- app.user.userIdentifier|first|upper -}}
-                        </span>
-                        <a href="{{ path('app_logout') }}" class="csa-link-muted" title="Salir">
-                            <i class="fa fa-sign-out"></i>
-                        </a>
+                        <div class="csa-me">
+                            <span class="csa-me__id csa-me__id--static">
+                                <span class="csa-avatar">{{- app.user.userIdentifier|first|upper -}}</span>
+                                <span class="csa-me__name">{{ app.user.userIdentifier }}</span>
+                            </span>
+                            <a href="{{ path('app_logout') }}" class="csa-me__logout" title="Cerrar sesión" aria-label="Cerrar sesión">
+                                <i class="fa fa-sign-out" aria-hidden="true"></i>
+                            </a>
+                        </div>
                     {% endif %}
                 </div>
             </header>

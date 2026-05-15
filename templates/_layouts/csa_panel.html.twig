@@ -53,21 +53,38 @@
                     {% endblock %}
                 </nav>
 
+                {% set has_gestion = is_granted('ROLE_ADMIN') or is_granted('ROLE_GESTION_GRANJA') or is_granted('ROLE_GESTION_SOCIXS') or is_granted('ROLE_GESTION_CESTAS') or is_granted('ROLE_BLOG') %}
                 <div class="csa-topbar__user">
-                    {% if is_granted('ROLE_ADMIN') or is_granted('ROLE_GESTION_GRANJA') or is_granted('ROLE_GESTION_SOCIXS') or is_granted('ROLE_GESTION_CESTAS') or is_granted('ROLE_BLOG') %}
-                        <a href="{{ path('dashboard') }}" class="csa-link-muted" title="Ir al panel de gestión">
-                            <i class="fa fa-cog"></i>
-                        </a>
+                    {% if has_gestion %}
+                        <div class="csa-areaswitch" role="group" aria-label="Cambiar de área">
+                            <a href="{{ path('dashboard') }}" class="csa-areaswitch__item" title="Ir al back-office de gestión">
+                                <i class="fa fa-cog" aria-hidden="true"></i>
+                                <span class="csa-areaswitch__label">Gestión</span>
+                                <span class="csa-areaswitch__short" aria-hidden="true">G</span>
+                            </a>
+                            <span class="csa-areaswitch__item csa-areaswitch__item--active" aria-current="page">
+                                <i class="fa fa-user" aria-hidden="true"></i>
+                                <span class="csa-areaswitch__label">Mi panel</span>
+                                <span class="csa-areaswitch__short" aria-hidden="true">P</span>
+                            </span>
+                        </div>
                     {% endif %}
-                    <a href="{{ path('homepage') }}" class="csa-link-muted" title="Ver web pública" target="_blank" rel="noopener">
-                        <i class="fa fa-globe"></i>
+
+                    <a href="{{ path('homepage') }}" class="csa-topbar__util" target="_blank" rel="noopener" title="Abrir la web pública">
+                        <i class="fa fa-globe" aria-hidden="true"></i>
+                        <span class="csa-topbar__util-label">Ver web</span>
                     </a>
+
                     {% if app.user %}
-                        <span>{{ app.user.userIdentifier }}</span>
-                        <span class="csa-avatar">{{- app.user.userIdentifier|first|upper -}}</span>
-                        <a href="{{ path('app_logout') }}" class="csa-link-muted" title="Salir">
-                            <i class="fa fa-sign-out"></i>
-                        </a>
+                        <div class="csa-me">
+                            <a href="{{ path('panel_profile') }}" class="csa-me__id" title="Editar mis datos">
+                                <span class="csa-avatar">{{- app.user.userIdentifier|first|upper -}}</span>
+                                <span class="csa-me__name">{{ app.user.userIdentifier }}</span>
+                            </a>
+                            <a href="{{ path('app_logout') }}" class="csa-me__logout" title="Cerrar sesión" aria-label="Cerrar sesión">
+                                <i class="fa fa-sign-out" aria-hidden="true"></i>
+                            </a>
+                        </div>
                     {% endif %}
                 </div>
             </header>

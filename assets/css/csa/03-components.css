@@ -1034,12 +1034,124 @@ a.csa-table__primary:hover {
 .csa-topbar__crumbs-sep { color: var(--csa-ink-muted); }
 .csa-topbar__crumb-active { color: var(--csa-ink); font-weight: 500; }
 
+/* Zona derecha del topbar — gap mayor para separar los tres bloques. */
 .csa-topbar__user {
-  display: flex; align-items: center; gap: var(--csa-sp-3);
-  font-size: var(--csa-fs-sm); color: var(--csa-ink-soft);
+  display: flex;
+  align-items: center;
+  gap: var(--csa-sp-5);
+  font-size: var(--csa-fs-sm);
+  color: var(--csa-ink-soft);
 }
+
+/* ---------- Switch de área (Gestión / Mi panel) ----------
+ * Pill segmentada: la parte activa con fondo blanco e ink saturado,
+ * la otra link discreto. Comunica "elige un modo" mejor que dos
+ * enlaces sueltos uno al lado del otro. */
+.csa-areaswitch {
+  display: inline-flex;
+  align-items: stretch;
+  padding: 3px;
+  background: var(--csa-surface-alt);
+  border: 1px solid var(--csa-rule);
+  border-radius: var(--csa-radius-pill, 999px);
+  gap: 2px;
+}
+.csa-areaswitch__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: var(--csa-radius-pill, 999px);
+  font-size: var(--csa-fs-sm);
+  color: var(--csa-ink-soft);
+  text-decoration: none;
+  white-space: nowrap;
+  border-bottom: 0; /* anula el subrayado global de a:hover */
+  transition: background var(--csa-t-fast), color var(--csa-t-fast);
+}
+.csa-areaswitch__item:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--csa-ink);
+  border-bottom-color: transparent;
+  text-decoration: none;
+}
+.csa-areaswitch__item--active {
+  background: var(--csa-surface);
+  color: var(--csa-ink);
+  font-weight: 600;
+  box-shadow: var(--csa-shadow-sm, 0 1px 2px rgba(0,0,0,0.06));
+  cursor: default;
+}
+.csa-areaswitch__item--active:hover { background: var(--csa-surface); }
+.csa-areaswitch__item i { font-size: 0.9em; color: var(--csa-green); }
+.csa-areaswitch__short { display: none; }
+
+/* ---------- Util link (Ver web) — terciario, sin caja. ---------- */
+.csa-topbar__util {
+  display: inline-flex; align-items: center; gap: 6px;
+  color: var(--csa-ink-muted);
+  text-decoration: none;
+  padding: 6px 8px;
+  border-radius: var(--csa-radius-sm, 4px);
+  border-bottom: 0;
+  font-size: var(--csa-fs-sm);
+  transition: color var(--csa-t-fast), background var(--csa-t-fast);
+}
+.csa-topbar__util:hover {
+  color: var(--csa-ink);
+  background: var(--csa-surface-alt);
+  border-bottom-color: transparent;
+  text-decoration: none;
+}
+.csa-topbar__util i { font-size: 0.95em; }
+
+/* ---------- Bloque "yo" — pill cerrado avatar+nombre+salir ----------
+ * Lee como una unidad personal. Salir queda DENTRO porque
+ * "cerrar mi sesión" es mi acción, no una utilidad de la app. */
+.csa-me {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--csa-rule);
+  border-radius: var(--csa-radius-pill, 999px);
+  background: var(--csa-surface);
+  padding: 3px;
+  gap: 2px;
+}
+.csa-me__id {
+  display: inline-flex; align-items: center; gap: var(--csa-sp-2);
+  text-decoration: none;
+  padding: 1px 10px 1px 1px;
+  border-radius: var(--csa-radius-pill, 999px);
+  border-bottom: 0;
+  color: var(--csa-ink);
+  transition: background var(--csa-t-fast);
+}
+.csa-me__id:hover { background: rgba(0,0,0,0.05); border-bottom-color: transparent; text-decoration: none; }
+.csa-me__id--static { cursor: default; }
+.csa-me__id--static:hover { background: transparent; }
+.csa-me__name {
+  font-weight: 500;
+  font-size: var(--csa-fs-sm);
+  color: var(--csa-ink);
+}
+.csa-me__logout {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  border-bottom: 0;
+  color: var(--csa-ink-muted);
+  text-decoration: none;
+  transition: background var(--csa-t-fast), color var(--csa-t-fast);
+}
+.csa-me__logout:hover {
+  background: var(--csa-terracotta-soft, rgba(208, 89, 60, 0.12));
+  color: var(--csa-terracotta);
+  border-bottom-color: transparent;
+  text-decoration: none;
+}
+
 .csa-avatar {
-  width: 32px; height: 32px;
+  width: 30px; height: 30px;
   border-radius: 50%;
   background: var(--csa-green-soft);
   color: var(--csa-green);
@@ -1047,6 +1159,27 @@ a.csa-table__primary:hover {
   font-size: var(--csa-fs-sm);
   font-weight: 600;
   font-family: var(--csa-sans);
+  flex-shrink: 0;
+}
+
+/* ---------- Responsive <700px ----------
+ * El switch mantiene caja pero usa iniciales G/P (señal mínima).
+ * "Ver web" colapsa a solo icono. El nombre desaparece pero el
+ * avatar y el botón salir permanecen visibles. */
+@media (max-width: 700px) {
+  .csa-topbar__user { gap: var(--csa-sp-3); }
+  .csa-areaswitch__label { display: none; }
+  .csa-areaswitch__short {
+    display: inline;
+    font-weight: 600;
+    min-width: 14px;
+    text-align: center;
+  }
+  .csa-areaswitch__item { padding: 5px 10px; }
+  .csa-topbar__util-label { display: none; }
+  .csa-topbar__util i { font-size: 16px; }
+  .csa-me__name { display: none; }
+  .csa-me__id { padding: 1px; }
 }
 
 

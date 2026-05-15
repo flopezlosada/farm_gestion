@@ -32,7 +32,11 @@
             <div class="row bg-secondary py-2 px-lg-5">
                 <div class="col-lg-6 text-center text-lg-left mb-2 mb-lg-0">
                     {% if is_granted('IS_AUTHENTICATED_FULLY') %}
-                        <a class="text-white px-2" href="{{ path('dashboard') }}"><i class="fa fa-user-circle mr-1"></i>Mi panel</a>
+                        {% if is_granted('ROLE_PARTNER') %}
+                            <a class="text-white px-2" href="{{ path('panel') }}"><i class="fa fa-user-circle mr-1"></i>Mi panel</a>
+                        {% elseif is_granted('ROLE_ADMIN') or is_granted('ROLE_GESTION_GRANJA') or is_granted('ROLE_GESTION_SOCIXS') or is_granted('ROLE_GESTION_CESTAS') or is_granted('ROLE_BLOG') %}
+                            <a class="text-white px-2" href="{{ path('dashboard') }}"><i class="fa fa-cog mr-1"></i>Gestión</a>
+                        {% endif %}
                         <a class="text-white px-2" href="{{ path('app_logout') }}"><i class="fa fa-sign-out-alt mr-1"></i>Salir</a>
                     {% else %}
                         <a class="text-white px-2" href="{{ path('app_login') }}"><i class="fa fa-user mr-1"></i>Acceso socixs</a>
