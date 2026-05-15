@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use App\Controller\AbstractAppController;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 use Symfony\Component\HttpFoundation\Request;
 
@@ -14,6 +15,7 @@ use App\Form\LayType;
  * Lay controller.
  *
  */
+#[IsGranted('ROLE_GESTION_GRANJA')]
 class LayController extends AbstractAppController
 {
 

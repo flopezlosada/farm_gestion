@@ -6,6 +6,7 @@ use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 
 use Symfony\Component\HttpFoundation\Request;
 use App\Controller\AbstractAppController;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 use App\Entity\Gallery;
 use App\Form\GalleryType;
@@ -14,6 +15,7 @@ use App\Form\GalleryType;
  * Gallery controller.
  *
  */
+#[IsGranted('ROLE_BLOG')]
 class GalleryController extends AbstractAppController
 {
 

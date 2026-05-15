@@ -10,6 +10,7 @@ use App\Form\BlogEditType;
 use App\Form\BlogSecondType;
 use Symfony\Component\HttpFoundation\Request;
 use App\Controller\AbstractAppController;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 use App\Entity\Blog;
 use App\Form\BlogType;
@@ -19,6 +20,7 @@ use WhiteOctober\BreadcrumbsBundle\Model\Breadcrumbs;
  * Blog controller.
  *
  */
+#[IsGranted('ROLE_BLOG')]
 class BlogController extends AbstractAppController
 {
 

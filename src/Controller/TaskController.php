@@ -10,6 +10,7 @@ use App\Form\TaskPeriodicType;
 use Symfony\Component\Form\FormError;
 use Symfony\Component\HttpFoundation\Request;
 use App\Controller\AbstractAppController;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 use App\Entity\Task;
 use App\Form\TaskType;
@@ -18,6 +19,7 @@ use App\Form\TaskType;
  * Task controller.
  *
  */
+#[IsGranted('ROLE_GESTION_GRANJA')]
 class TaskController extends AbstractAppController
 {
 

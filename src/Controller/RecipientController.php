@@ -6,6 +6,7 @@ use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 
 use Symfony\Component\HttpFoundation\Request;
 use App\Controller\AbstractAppController;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 use App\Entity\Recipient;
 use App\Form\RecipientType;
@@ -14,6 +15,7 @@ use App\Form\RecipientType;
  * Recipient controller.
  *
  */
+#[IsGranted('ROLE_ADMIN')]
 class RecipientController extends AbstractAppController
 {
 

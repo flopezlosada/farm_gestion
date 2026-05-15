@@ -6,11 +6,13 @@ use App\Entity\WeeklyBasketGroup;
 use App\Form\WeeklyBasketGroupType;
 use App\Repository\WeeklyBasketGroupRepository;
 use App\Controller\AbstractAppController;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 
 #[Route("/gestion/weekly/basket/group")]
+#[IsGranted('ROLE_GESTION_SOCIXS')]
 class WeeklyBasketGroupController extends AbstractAppController
 {
     #[Route("/", name: "weekly_basket_group_index", methods: ["GET"])]

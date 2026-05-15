@@ -13,6 +13,7 @@ use App\Repository\PartnerBasketShareRepository;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use App\Controller\AbstractAppController;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\Form\Extension\Core\Type\DateType;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
@@ -21,6 +22,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 
 #[Route("/gestion/partner/basket/share")]
+#[IsGranted('ROLE_GESTION_SOCIXS')]
 class PartnerBasketShareController extends AbstractAppController
 {
     #[Route("/", name: "partner_basket_share_index", methods: ["GET"])]

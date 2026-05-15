@@ -6,6 +6,7 @@ use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 
 use Symfony\Component\HttpFoundation\Request;
 use App\Controller\AbstractAppController;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 use App\Entity\Sale;
 use App\Form\SaleType;
@@ -14,6 +15,7 @@ use App\Form\SaleType;
  * Sale controller.
  *
  */
+#[IsGranted('ROLE_ADMIN')]
 class SaleController extends AbstractAppController
 {
 

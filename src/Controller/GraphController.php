@@ -3,9 +3,11 @@
 namespace App\Controller;
 
 use App\Controller\AbstractAppController;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 
+#[IsGranted('ROLE_GESTION_GRANJA')]
 class GraphController extends AbstractAppController
 {
     #[Route("/graph_egg_week", name: "graph_egg_week")]

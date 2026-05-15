@@ -6,6 +6,7 @@ use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 
 use Symfony\Component\HttpFoundation\Request;
 use App\Controller\AbstractAppController;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 use App\Entity\Basket;
 use App\Form\BasketType;
@@ -14,6 +15,7 @@ use App\Form\BasketType;
  * Basket controller.
  *
  */
+#[IsGranted('ROLE_GESTION_CESTAS')]
 class BasketController extends AbstractAppController
 {
 

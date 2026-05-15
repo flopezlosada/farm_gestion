@@ -6,6 +6,7 @@ use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 
 use Symfony\Component\HttpFoundation\Request;
 use App\Controller\AbstractAppController;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 use App\Entity\Purchase;
 use App\Form\PurchaseType;
@@ -14,6 +15,7 @@ use App\Form\PurchaseType;
  * Purchase controller.
  *
  */
+#[IsGranted('ROLE_ADMIN')]
 class PurchaseController extends AbstractAppController
 {
 

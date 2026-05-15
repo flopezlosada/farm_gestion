@@ -7,6 +7,7 @@ use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use App\Controller\AbstractAppController;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 use App\Entity\Audio;
 use App\Form\AudioType;
@@ -15,6 +16,7 @@ use App\Form\AudioType;
  * Audio controller.
  *
  */
+#[IsGranted('ROLE_BLOG')]
 class AudioController extends AbstractAppController
 {
 

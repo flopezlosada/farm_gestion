@@ -6,11 +6,13 @@ use App\Entity\Booking;
 use App\Form\BookingType;
 use App\Repository\BookingRepository;
 use App\Controller\AbstractAppController;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 
 #[Route("/booking")]
+#[IsGranted('ROLE_BLOG')]
 class BookingController extends AbstractAppController
 {
 

@@ -6,6 +6,7 @@ use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 
 use Symfony\Component\HttpFoundation\Request;
 use App\Controller\AbstractAppController;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 use App\Entity\FowlStatus;
 use App\Form\FowlStatusType;
@@ -14,6 +15,7 @@ use App\Form\FowlStatusType;
  * FowlStatus controller.
  *
  */
+#[IsGranted('ROLE_GESTION_GRANJA')]
 class FowlStatusController extends AbstractAppController
 {
 

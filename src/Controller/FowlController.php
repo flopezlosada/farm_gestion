@@ -9,6 +9,7 @@ use App\Entity\Gift;
 use App\Entity\Sale;
 use Symfony\Component\HttpFoundation\Request;
 use App\Controller\AbstractAppController;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 use App\Entity\Fowl;
 use App\Form\FowlType;
@@ -17,6 +18,7 @@ use App\Form\FowlType;
  * Fowl controller.
  *
  */
+#[IsGranted('ROLE_GESTION_GRANJA')]
 class FowlController extends AbstractAppController
 {
 

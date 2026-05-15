@@ -7,6 +7,7 @@ use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 use App\Entity\CropWorking;
 use Symfony\Component\HttpFoundation\Request;
 use App\Controller\AbstractAppController;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 use App\Entity\SeedWork;
 use App\Form\SeedWorkType;
@@ -15,6 +16,7 @@ use App\Form\SeedWorkType;
  * SeedWork controller.
  *
  */
+#[IsGranted('ROLE_GESTION_GRANJA')]
 class SeedWorkController extends AbstractAppController
 {
 

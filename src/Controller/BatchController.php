@@ -8,6 +8,7 @@ use App\Entity\Fowl;
 use App\Form\BatchEditType;
 use Symfony\Component\HttpFoundation\Request;
 use App\Controller\AbstractAppController;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 use App\Entity\Batch;
 use App\Form\BatchType;
@@ -17,6 +18,7 @@ use Symfony\Component\Validator\Constraints\DateTime;
  * Batch controller.
  *
  */
+#[IsGranted('ROLE_GESTION_GRANJA')]
 class BatchController extends AbstractAppController
 {
 

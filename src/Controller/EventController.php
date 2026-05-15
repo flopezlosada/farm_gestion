@@ -6,6 +6,7 @@ use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 
 use Symfony\Component\HttpFoundation\Request;
 use App\Controller\AbstractAppController;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 use App\Entity\Event;
 use App\Form\EventType;
@@ -14,6 +15,7 @@ use App\Form\EventType;
  * Event controller.
  *
  */
+#[IsGranted('ROLE_BLOG')]
 class EventController extends AbstractAppController
 {
 

@@ -6,6 +6,7 @@ use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 
 use Symfony\Component\HttpFoundation\Request;
 use App\Controller\AbstractAppController;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 use App\Entity\CompostCollectionPoint;
 use App\Form\CompostCollectionPointType;
@@ -14,6 +15,7 @@ use App\Form\CompostCollectionPointType;
  * CompostCollectionPoint controller.
  *
  */
+#[IsGranted('ROLE_GESTION_GRANJA')]
 class CompostCollectionPointController extends AbstractAppController
 {
 

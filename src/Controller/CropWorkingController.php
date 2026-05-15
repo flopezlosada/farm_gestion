@@ -10,6 +10,7 @@ use App\Entity\Sector;
 use App\Form\CropWorkingEditType;
 use Symfony\Component\HttpFoundation\Request;
 use App\Controller\AbstractAppController;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 use App\Entity\CropWorking;
 use App\Form\CropWorkingType;
@@ -18,6 +19,7 @@ use App\Form\CropWorkingType;
  * CropWorking controller.
  *
  */
+#[IsGranted('ROLE_GESTION_GRANJA')]
 class CropWorkingController extends AbstractAppController
 {
 

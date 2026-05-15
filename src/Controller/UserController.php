@@ -7,6 +7,7 @@ use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use App\Controller\AbstractAppController;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 use App\Entity\User;
 use App\Form\UserType;
@@ -15,6 +16,7 @@ use App\Form\UserType;
  * User controller.
  *
  */
+#[IsGranted('ROLE_ADMIN')]
 class UserController extends AbstractAppController
 {
 

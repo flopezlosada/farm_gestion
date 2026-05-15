@@ -6,6 +6,7 @@ use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 
 use Symfony\Component\HttpFoundation\Request;
 use App\Controller\AbstractAppController;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 use App\Entity\Harvest;
 use App\Form\HarvestType;
@@ -14,6 +15,7 @@ use App\Form\HarvestType;
  * Harvest controller.
  *
  */
+#[IsGranted('ROLE_GESTION_GRANJA')]
 class HarvestController extends AbstractAppController
 {
 

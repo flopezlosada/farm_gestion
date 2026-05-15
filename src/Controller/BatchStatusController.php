@@ -6,6 +6,7 @@ use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 
 use Symfony\Component\HttpFoundation\Request;
 use App\Controller\AbstractAppController;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 use App\Entity\BatchStatus;
 use App\Form\BatchStatusType;
@@ -14,6 +15,7 @@ use App\Form\BatchStatusType;
  * BatchStatus controller.
  *
  */
+#[IsGranted('ROLE_GESTION_GRANJA')]
 class BatchStatusController extends AbstractAppController
 {
 

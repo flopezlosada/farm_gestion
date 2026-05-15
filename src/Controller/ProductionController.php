@@ -8,6 +8,7 @@ use App\Entity\Basket;
 use Proxies\__CG__\App\Entity\CropWorking;
 use Symfony\Component\HttpFoundation\Request;
 use App\Controller\AbstractAppController;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 use App\Entity\Production;
 use App\Form\ProductionType;
@@ -16,6 +17,7 @@ use App\Form\ProductionType;
  * Production controller.
  *
  */
+#[IsGranted('ROLE_GESTION_GRANJA')]
 class ProductionController extends AbstractAppController
 {
 
