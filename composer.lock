@@ -1984,12 +1984,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/flopezlosada/calendar-bundle.git",
-                "reference": "4f5bed069f2d72b78148724686fe92335c59c12a"
+                "reference": "19181cb398c59b9fc5b078b829e3fab569857596"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/flopezlosada/calendar-bundle/zipball/4f5bed069f2d72b78148724686fe92335c59c12a",
-                "reference": "4f5bed069f2d72b78148724686fe92335c59c12a",
+                "url": "https://api.github.com/repos/flopezlosada/calendar-bundle/zipball/19181cb398c59b9fc5b078b829e3fab569857596",
+                "reference": "19181cb398c59b9fc5b078b829e3fab569857596",
                 "shasum": ""
             },
             "require": {
@@ -2033,7 +2033,7 @@
             "support": {
                 "source": "https://github.com/flopezlosada/calendar-bundle/tree/master"
             },
-            "time": "2026-05-06T11:51:52+00:00"
+            "time": "2026-05-15T13:40:59+00:00"
         },
         {
             "name": "friendsofsymfony/ckeditor-bundle",
