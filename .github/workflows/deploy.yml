@@ -30,6 +30,9 @@ jobs:
           coverage: none
 
       - name: Composer install (solo deps de producción)
+        env:
+          APP_ENV: prod
+          APP_DEBUG: '0'
         run: composer install --no-dev --optimize-autoloader --no-interaction --no-progress
 
       - name: Setup Node 16
