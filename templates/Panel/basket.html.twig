@@ -1,0 +1,80 @@
+{% extends '_layouts/csa_panel.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Mi cesta{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('panel') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Mi cesta</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Mi área · Cesta',
+        'Mi cesta y mi grupo',
+        'Lo que recibes y dónde lo recoges.'
+    ) }}
+
+    <div class="csa-dashboard-pair">
+
+        {# ===== Cesta activa ===== #}
+        {% embed '_components/csa_card.html.twig' with { title: 'Mi cesta activa', accent: 'green' } %}
+            {% block body %}
+                {% if active_share %}
+                    <dl class="csa-defs">
+                        <dt>Tipo</dt>
+                        <dd>{{ active_share.basketShare.name|default('—') }}</dd>
+                        <dt>Cantidad de cestas</dt>
+                        <dd>{{ active_share.vegetablesBasketAmount|default(1) }}</dd>
+                        <dt>Precio mensual</dt>
+                        <dd>{% if active_share.monthPrice %}{{ active_share.monthPrice }} €{% else %}—{% endif %}</dd>
+                        <dt>Huevos</dt>
+                        <dd>
+                            {% if active_share.eggAmount and active_share.eggPeriod %}
+                                {{ active_share.eggAmount.amount|default(active_share.eggAmount) }} · {{ active_share.eggPeriod.name|default(active_share.eggPeriod) }}
+                            {% else %}
+                                <span class="csa-muted">— sin huevos —</span>
+                            {% endif %}
+                        </dd>
+                        <dt>Carne</dt>
+                        <dd>{{ partner.eatMeat ? 'Sí' : 'No' }}</dd>
+                        <dt>En vigor desde</dt>
+                        <dd>{{ active_share.startDate ? active_share.startDate|date('d/m/Y') : '—' }}</dd>
+                    </dl>
+                {% else %}
+                    <p class="csa-muted">No tienes una cesta activa registrada actualmente.</p>
+                    <p>Si crees que es un error o quieres darte de alta, escríbenos a <a href="mailto:info@csavegadejarama.org">info@csavegadejarama.org</a>.</p>
+                {% endif %}
+            {% endblock %}
+        {% endembed %}
+
+        {# ===== Grupo de recogida ===== #}
+        {% embed '_components/csa_card.html.twig' with { title: 'Mi grupo de recogida', accent: 'ochre' } %}
+            {% block body %}
+                {% if group %}
+                    <dl class="csa-defs">
+                        <dt>Grupo</dt>
+                        <dd>{{ group.name }}</dd>
+                        {% if group.address is defined and group.address %}
+                            <dt>Punto de entrega</dt>
+                            <dd>{{ group.address }}</dd>
+                        {% endif %}
+                        {% if group.day is defined and group.day %}
+                            <dt>Día de reparto</dt>
+                            <dd>{{ group.day }}</dd>
+                        {% endif %}
+                    </dl>
+                {% else %}
+                    <p class="csa-muted">Aún no tienes asignado un grupo de recogida.</p>
+                {% endif %}
+                <p class="csa-muted" style="margin-top: var(--csa-sp-4); font-size: var(--csa-fs-sm);">
+                    Para cambiar de grupo o saltar una cesta puntual, contacta con la administración.
+                </p>
+            {% endblock %}
+        {% endembed %}
+
+    </div>
+
+{% endblock %}

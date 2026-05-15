@@ -1,0 +1,73 @@
+{% extends '_layouts/csa_panel.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Mi panel{% endblock %}
+
+{% block csa_crumbs %}
+    <span class="csa-topbar__crumb-active">Inicio</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {% set hour = 'now'|date('G') %}
+    {% set greeting = hour < 14 ? 'Buenos días' : (hour < 21 ? 'Buenas tardes' : 'Buenas noches') %}
+
+    {{ csa.page_header(
+        'Mi panel',
+        greeting ~ ', ' ~ partner.name ~ '.',
+        'Aquí puedes ver tu cesta, tus datos y tu familia.'
+    ) }}
+
+    <div class="csa-kpi-row" style="margin-bottom: var(--csa-sp-8);">
+        {% if active_share %}
+            {{ csa.kpi('Cesta', active_share.basketShare.name|default('Activa'), null, null, null, 'green', 'fa-shopping-basket') }}
+        {% else %}
+            {{ csa.kpi('Cesta', '—', 'sin cesta activa', null, null, 'neutral', 'fa-shopping-basket') }}
+        {% endif %}
+
+        {% if partner.weeklyBasketGroup %}
+            {{ csa.kpi('Grupo de recogida', partner.weeklyBasketGroup.name, 'punto de entrega', null, null, 'ochre', 'fa-map-marker') }}
+        {% else %}
+            {{ csa.kpi('Grupo de recogida', '—', 'sin grupo asignado', null, null, 'neutral', 'fa-map-marker') }}
+        {% endif %}
+    </div>
+
+    <div class="csa-dashboard-pair">
+
+        {% embed '_components/csa_card.html.twig' with { title: 'Mis datos', subtitle: 'Identidad y contacto.' } %}
+            {% block body %}
+                <dl class="csa-defs">
+                    <dt>Nombre</dt><dd>{{ partner.name }} {{ partner.surname }}</dd>
+                    <dt>Email</dt><dd>{{ partner.email ?: '—' }}</dd>
+                    <dt>Teléfono</dt><dd>{{ partner.celular ?: '—' }}</dd>
+                </dl>
+                <div style="margin-top: var(--csa-sp-4);">
+                    <a href="{{ path('panel_profile') }}" class="csa-btn csa-btn--ghost csa-btn--sm">
+                        <i class="fa fa-pencil"></i> Editar mis datos
+                    </a>
+                </div>
+            {% endblock %}
+        {% endembed %}
+
+        {% embed '_components/csa_card.html.twig' with { title: 'Mi cesta', subtitle: 'Cómo recibes tu reparto.' } %}
+            {% block body %}
+                {% if active_share %}
+                    <dl class="csa-defs">
+                        <dt>Tipo</dt><dd>{{ active_share.basketShare.name|default('—') }}</dd>
+                        <dt>Cantidad</dt><dd>{{ active_share.vegetablesBasketAmount|default(1) }} cesta(s)</dd>
+                        <dt>Desde</dt><dd>{{ active_share.startDate ? active_share.startDate|date('d/m/Y') : '—' }}</dd>
+                    </dl>
+                {% else %}
+                    <p class="csa-muted">No tienes una cesta activa registrada. Si crees que es un error, escribe a info@csavegadejarama.org.</p>
+                {% endif %}
+                <div style="margin-top: var(--csa-sp-4);">
+                    <a href="{{ path('panel_basket') }}" class="csa-btn csa-btn--ghost csa-btn--sm">
+                        Ver detalles
+                    </a>
+                </div>
+            {% endblock %}
+        {% endembed %}
+
+    </div>
+
+{% endblock %}

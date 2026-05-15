@@ -1,0 +1,85 @@
+{% extends '_layouts/csa_panel.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% form_theme profile_form 'form_div_layout.html.twig' %}
+{% form_theme password_form 'form_div_layout.html.twig' %}
+
+{% block title %}Mi perfil{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('panel') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Mi perfil</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Mi área · Perfil',
+        'Mis datos',
+        'Mantén tu información al día.'
+    ) }}
+
+    {% for label, messages in app.flashes(['notice', 'error']) %}
+        {% for message in messages %}
+            <div class="csa-callout csa-callout--{{ label == 'notice' ? 'green' : 'terracotta' }}" style="margin-bottom: var(--csa-sp-5);">{{ message }}</div>
+        {% endfor %}
+    {% endfor %}
+
+    <div class="csa-stack-lg">
+
+        {# ===== Datos personales ===== #}
+        {{ form_start(profile_form, { attr: { class: 'csa-form-narrow' } }) }}
+            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Identidad y contacto', subtitle: 'Nombre, DNI, email, teléfono y dirección.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(profile_form.name, 'Nombre') }}
+                        {{ csa.field(profile_form.surname, 'Apellidos') }}
+                        {{ csa.field(profile_form.DNI, 'DNI') }}
+                        {{ csa.field(profile_form.celular, 'Teléfono') }}
+                        {{ csa.field(profile_form.email, 'Email de contacto', { hint: 'distinto del email de acceso al sistema' }) }}
+                        {{ csa.field(profile_form.address, 'Dirección', { full: true }) }}
+                        {{ csa.field(profile_form.state, 'Provincia') }}
+                        {{ csa.field(profile_form.city, 'Municipio') }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule); margin-bottom: var(--csa-sp-6);">
+                <div></div>
+                <button type="submit" class="csa-btn csa-btn--primary">Guardar mis datos</button>
+            </div>
+            {{ form_rest(profile_form) }}
+        {{ form_end(profile_form, { render_rest: false }) }}
+
+        {# ===== Email del login (lectura) ===== #}
+        {% embed '_components/csa_card.html.twig' with { title: 'Email de acceso', subtitle: 'Es lo que escribes para entrar al sistema.' } %}
+            {% block body %}
+                <p style="margin-bottom: var(--csa-sp-3);"><strong>{{ app.user.email }}</strong></p>
+                <p class="csa-muted">Cambiarlo afecta a cómo entras a tu cuenta. Por seguridad, esa operación la hace la administración: escríbenos a <a href="mailto:info@csavegadejarama.org?subject=Cambio de email de acceso">info@csavegadejarama.org</a>.</p>
+            {% endblock %}
+        {% endembed %}
+
+        {# ===== Contraseña ===== #}
+        {{ form_start(password_form, { attr: { class: 'csa-form-narrow' } }) }}
+            {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Cambiar contraseña', subtitle: 'Necesitamos tu contraseña actual para confirmar que eres tú.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(password_form.currentPassword, 'Contraseña actual', { full: true }) }}
+                        {{ csa.field(password_form.newPassword.first, 'Nueva contraseña') }}
+                        {{ csa.field(password_form.newPassword.second, 'Repetir contraseña') }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                <div></div>
+                <button type="submit" class="csa-btn csa-btn--primary">Cambiar contraseña</button>
+            </div>
+            {{ form_rest(password_form) }}
+        {{ form_end(password_form, { render_rest: false }) }}
+
+    </div>
+
+{% endblock %}

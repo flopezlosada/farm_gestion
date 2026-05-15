@@ -1,0 +1,91 @@
+{# ============================================================
+ # Layout del panel de socix (vista propia).
+ # Separado del shell admin: el sidebar es minimal y el contenido
+ # gira en torno a "lo mío" (mis datos, mi cesta, mi familia).
+ # ============================================================ #}
+
+{% extends 'base.html.twig' %}
+
+{% block more_css %}
+    {{ parent() }}
+    {{ encore_entry_link_tags('app') }}
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    {{ encore_entry_script_tags('app') }}
+{% endblock %}
+
+{% block body %}
+<div class="csa-app">
+    <div class="csa-shell">
+
+        {% set route = app.request.attributes.get('_route') %}
+
+        {# ---------- SIDEBAR ---------- #}
+        <aside class="csa-sidebar" id="csa-sidebar">
+            <div class="csa-sidebar__brand">
+                <div class="csa-sidebar__brand-name">CSA Vega de Jarama</div>
+                <div class="csa-sidebar__brand-sub">Mi panel</div>
+            </div>
+
+            <nav class="csa-sidebar__nav">
+                <div class="csa-sidebar__group">Mi área</div>
+                {{ _self.nav_link('Inicio', path('panel'), 'fa-home', route == 'panel') }}
+                {{ _self.nav_link('Mi perfil', path('panel_profile'), 'fa-user', route starts with 'panel_profile') }}
+                {{ _self.nav_link('Mi cesta', path('panel_basket'), 'fa-shopping-basket', route starts with 'panel_basket') }}
+                {{ _self.nav_link('Mi familia', path('panel_family'), 'fa-users', route starts with 'panel_family') }}
+            </nav>
+        </aside>
+
+        {# ---------- MAIN ---------- #}
+        <div class="csa-main">
+            <header class="csa-topbar">
+                <button type="button" class="csa-btn csa-btn--ghost csa-btn--sm csa-sidebar-toggle"
+                        aria-label="Abrir navegación"
+                        onclick="document.getElementById('csa-sidebar').classList.toggle('csa-sidebar--open')">
+                    <i class="fa fa-bars"></i>
+                </button>
+
+                <nav class="csa-topbar__crumbs" aria-label="Migas de pan">
+                    {% block csa_crumbs %}
+                        <a href="{{ path('panel') }}">Inicio</a>
+                    {% endblock %}
+                </nav>
+
+                <div class="csa-topbar__user">
+                    {% if is_granted('ROLE_ADMIN') or is_granted('ROLE_GESTION_GRANJA') or is_granted('ROLE_GESTION_SOCIXS') or is_granted('ROLE_GESTION_CESTAS') or is_granted('ROLE_BLOG') %}
+                        <a href="{{ path('dashboard') }}" class="csa-link-muted" title="Ir al panel de gestión">
+                            <i class="fa fa-cog"></i>
+                        </a>
+                    {% endif %}
+                    <a href="{{ path('homepage') }}" class="csa-link-muted" title="Ver web pública" target="_blank" rel="noopener">
+                        <i class="fa fa-globe"></i>
+                    </a>
+                    {% if app.user %}
+                        <span>{{ app.user.userIdentifier }}</span>
+                        <span class="csa-avatar">{{- app.user.userIdentifier|first|upper -}}</span>
+                        <a href="{{ path('app_logout') }}" class="csa-link-muted" title="Salir">
+                            <i class="fa fa-sign-out"></i>
+                        </a>
+                    {% endif %}
+                </div>
+            </header>
+
+            <main class="csa-content">
+                {% block csa_main %}{% endblock %}
+            </main>
+        </div>
+
+    </div>
+</div>
+{% endblock %}
+
+
+{# Helper idéntico al del shell admin. Se duplica porque cada layout es self-contained. #}
+{% macro nav_link(label, href, icon, active) %}
+    <a href="{{ href }}" class="csa-sidebar__link{% if active %} csa-sidebar__link--active{% endif %}">
+        {% if icon %}<i class="csa-sidebar__icon fa {{ icon }}"></i>{% endif %}
+        <span>{{ label }}</span>
+    </a>
+{% endmacro %}
