@@ -1,0 +1,90 @@
+name: Deploy a producción
+
+# Se dispara en push a main. También se puede lanzar a mano desde la pestaña
+# Actions con "Run workflow".
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Evita que dos pushes seguidos se pisen.
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build y subida por FTP
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, intl, pdo_mysql, gd, exif, iconv
+          tools: composer:2.2
+          coverage: none
+
+      - name: Composer install (solo deps de producción)
+        run: composer install --no-dev --optimize-autoloader --no-interaction --no-progress
+
+      - name: Setup Node 16
+        uses: actions/setup-node@v4
+        with:
+          node-version: '16'
+
+      - name: Compilar assets para producción
+        run: |
+          npm ci
+          npm run build || npm run dev
+
+      - name: Restaurar symlink legacy de assets
+        run: ln -sfn ../../src/Resources/public public/bundles/app
+
+      - name: Instalar lftp
+        run: sudo apt-get update && sudo apt-get install -y lftp
+
+      - name: Subir cambios por FTP (solo lo más nuevo)
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        run: |
+          lftp -c "
+            set ssl:verify-certificate no;
+            set ftp:ssl-allow no;
+            set net:max-retries 3;
+            set net:reconnect-interval-base 10;
+            open -u $FTP_USERNAME,$FTP_PASSWORD $FTP_SERVER;
+            mirror -R --only-newer --parallel=4 \
+              --exclude-glob '.git*' \
+              --exclude-glob '.github/' \
+              --exclude-glob '.idea/' \
+              --exclude-glob '.vscode/' \
+              --exclude-glob '.ddev/' \
+              --exclude-glob '.claude/' \
+              --exclude-glob 'node_modules/' \
+              --exclude-glob 'tests/' \
+              --exclude-glob 'backup/' \
+              --exclude-glob 'handoff/' \
+              --exclude-glob '.env.local' \
+              --exclude-glob '.env.test' \
+              --exclude-glob '.env.*.local' \
+              --exclude-glob 'var/cache/' \
+              --exclude-glob 'var/log/' \
+              --exclude-glob 'var/sessions/' \
+              --exclude-glob 'CLAUDE.md' \
+              --exclude-glob 'README.md' \
+              --exclude-glob 'phpstan.dist.neon' \
+              --exclude-glob 'rector.php' \
+              --exclude-glob 'phpunit.xml*' \
+              --exclude-glob 'package.json' \
+              --exclude-glob 'yarn.lock' \
+              --exclude-glob 'webpack.config.js' \
+              --exclude-glob 'assets/' \
+              . gestion_csa_4/;
+          "

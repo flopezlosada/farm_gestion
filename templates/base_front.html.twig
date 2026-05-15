@@ -1,667 +1,159 @@
 <!DOCTYPE html>
-<!--[if lt IE 7]>
-<html lang="en" class="no-js lt-ie9 lt-ie8 lt-ie7"> <![endif]-->
-<!--[if IE 7]>
-<html lang="en" class="no-js lt-ie9 lt-ie8"> <![endif]-->
-<!--[if IE 8]>
-<html lang="en" class="no-js lt-ie9"> <![endif]-->
-<!--[if gt IE 8]><!-->
-<html lang="en" class="no-js"> <!--<![endif]-->
+<html lang="es">
 <head>
-    <meta charset="UTF-8"/>
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="">
-    <meta name="keywords" content="">
-    <meta name="author" content="">
-    <link rel="icon" type="image/x-icon" href="{{ asset('favicon.ico') }}"/>
-    <title>{% block title %}CSA Vega de Jarama. Asociación de Productorxs y Consumidorxs{% endblock %}</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}CSA Vega de Jarama{% endblock %}</title>
+
+    {% block analytics %}
+        <script async src="https://www.googletagmanager.com/gtag/js?id=G-SW7KHJSBGQ"></script>
+        <script>
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){ dataLayer.push(arguments); }
+            gtag('js', new Date());
+            gtag('config', 'G-SW7KHJSBGQ');
+        </script>
+    {% endblock %}
+
     {% block stylesheets %}
-        <link href='http://fonts.googleapis.com/css?family=Open+Sans:400,300,700' rel='stylesheet' type='text/css'>
-
-        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css">
-
-        <link rel="stylesheet" href="{{ asset('bundles/app/frontend/css/jquery.fancybox.css') }}"/>
-        <link rel="stylesheet" href="{{ asset('bundles/app/frontend/css/bootstrap.min.css') }}"/>
-        <link rel="stylesheet" href="{{ asset('bundles/app/frontend/css/owl.carousel.css') }}"/>
-        <link rel="stylesheet" href="{{ asset('bundles/app/frontend/css/slit-slider.css') }}"/>
-        <link rel="stylesheet" href="{{ asset('bundles/app/frontend/css/animate.css') }}"/>
-        <link rel="stylesheet" href="{{ asset('bundles/app/frontend/css/main.css') }}"/>
-
-    {% endblock %}
-    {% block more_css %}
-    {% endblock %}
-
-    {% block head_js %}
-        <script src="{{ asset('bundles/app/frontend/js/modernizr-2.6.2.min.js') }}"></script>
+        <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
+        <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.10.0/css/all.min.css" rel="stylesheet">
+        <link href="{{ asset('bundles/app/frontend/lib/flaticon/font/flaticon.css') }}" rel="stylesheet">
+        <link href="{{ asset('bundles/app/frontend/lib/owlcarousel/assets/owl.carousel.min.css') }}" rel="stylesheet">
+        <link href="{{ asset('bundles/app/frontend/lib/tempusdominus/css/tempusdominus-bootstrap-4.min.css') }}" rel="stylesheet">
+        <link href="{{ asset('bundles/app/frontend/css/style.css') }}" rel="stylesheet">
     {% endblock %}
 </head>
-{% block body %}
-    <body id="body">
 
-    <!-- preloader -->
-    <div id="preloader">
-        <div class="loder-box">
-            <div class="battery"></div>
+<body>
+
+    {% block topbar %}
+        <div class="container-fluid">
+            <div class="row bg-secondary py-2 px-lg-5">
+                <div class="col-lg-6 text-center text-lg-left mb-2 mb-lg-0">
+                    {% if is_granted('IS_AUTHENTICATED_FULLY') %}
+                        <a class="text-white px-2" href="{{ path('dashboard') }}"><i class="fa fa-user-circle mr-1"></i>Mi panel</a>
+                        <a class="text-white px-2" href="{{ path('app_logout') }}"><i class="fa fa-sign-out-alt mr-1"></i>Salir</a>
+                    {% else %}
+                        <a class="text-white px-2" href="{{ path('app_login') }}"><i class="fa fa-user mr-1"></i>Acceso socixs</a>
+                    {% endif %}
+                </div>
+                <div class="col-lg-6 text-center text-lg-right">
+                    <div class="d-inline-flex align-items-center">
+                        <a class="text-white px-3" target="_blank" href="https://www.facebook.com/CSA.Vega.de.Jarama/?locale=es_ES"><i class="fab fa-facebook-f"></i></a>
+                        <a class="text-white px-3" target="_blank" href="https://twitter.com/csavegadejarama"><i class="fab fa-twitter"></i></a>
+                        <a class="text-white px-3" target="_blank" href="https://masto.es/@csavegadejarama"><i class="fab fa-mastodon"></i></a>
+                        <a class="text-white px-3" target="_blank" href="https://www.instagram.com/csavegadejarama/?hl=es"><i class="fab fa-instagram"></i></a>
+                        <a class="text-white px-3" target="_blank" href="https://www.youtube.com/channel/UCBi4lm55t6X3lqaql2tG8xg"><i class="fab fa-youtube"></i></a>
+                    </div>
+                </div>
+            </div>
+            <div class="row py-3 px-lg-5">
+                <div class="col-lg-4">
+                    <a href="{{ path('homepage') }}" class="navbar-brand d-none d-lg-block">
+                        <h1 class="m-0 display-5 text-capitalize"><span style="color: rgb(151, 181, 57)">CSA</span>Vega de Jarama</h1>
+                    </a>
+                </div>
+                <div class="col-lg-8 text-center text-lg-right">
+                    <div class="d-inline-flex align-items-center">
+                        <div class="d-inline-flex flex-column text-center pr-2">
+                            <h6>Mantente al día</h6>
+                            <p class="m-0">Visita nuestro calendario</p>
+                        </div>
+                        <div class="d-inline-flex flex-column text-center px-3 border-right">
+                            <a target="_blank" href="https://cloud.disroot.org/apps/calendar/embed/T98qkKKSNgLnNx96/dayGridMonth/now">
+                                <img src="{{ asset('bundles/app/img/calendario.png') }}" width="50" height="50" alt="Calendario">
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
-    </div>
-    <!-- end preloader -->
+    {% endblock %}
 
-    <!--
-    Fixed Navigation
-    ==================================== -->
-    <header id="navigation" class="navbar-inverse navbar-fixed-top animated-header">
-        <div class="container">
-            <div class="navbar-header">
-                <!-- responsive nav button -->
-                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
-                    <span class="sr-only">Toggle navigation</span>
-                    <span class="icon-bar"></span>
-                    <span class="icon-bar"></span>
-                    <span class="icon-bar"></span>
+    {% block navbar %}
+        <div class="container-fluid p-0">
+            <nav class="navbar navbar-expand-lg bg-dark navbar-dark py-3 py-lg-0 px-lg-5">
+                <button type="button" class="navbar-toggler" data-toggle="collapse" data-target="#navbarCollapse">
+                    <span class="navbar-toggler-icon"></span>
                 </button>
-                <!-- /responsive nav button -->
-
-                <!-- logo -->
-                <h1 class="navbar-brand">
-                    <a href="{{ path('homepage') }}">CSA Vega de Jarama</a>
-                </h1>
-                <!-- /logo -->
-            </div>
-
-            <!-- main nav -->
-            <nav class="collapse navbar-collapse navbar-right" role="navigation">
-                <ul id="nav" class="nav navbar-nav">
-                    <li><a href="#body">Home</a></li>
-                    <li><a href="#about">Quiénes somos</a></li>
-                    <li><a href="#service">Objetivos</a></li>
-                    <li><a class="external" href="{{ path('frontend_blog') }}">Blog</a></li>
-                    <li><a class="external" href="{{ path('blog_category_show',{'id':4}) }}">Recetas</a></li>
-                    <li><a class="external" href="{{ path('blog_category_show',{'id':5}) }}">Galerías</a></li>
-                    <li><a class="external" href="{{ path('booking_calendar') }}">Calendario</a></li>
-                    {#<li><a class="external" href="http://csavegadejarama.org/seeddms51x/www/index.php">Recursos</a></li>#}
-                    <li><a class="external" href="{{ path('app_contact') }}">Contacto</a></li>
-                </ul>
+                <div class="collapse navbar-collapse justify-content-between px-3" id="navbarCollapse">
+                    <div class="navbar-nav mr-auto py-0">
+                        <div class="nav-item dropdown">
+                            <a href="#" class="nav-link dropdown-toggle" data-toggle="dropdown">Huerta</a>
+                            <div class="dropdown-menu rounded-0 m-0">
+                                <a href="{{ path('huerta') }}" class="dropdown-item">La huerta</a>
+                                <a href="{{ path('nuestroFuturo') }}" class="dropdown-item">Nuestro futuro</a>
+                            </div>
+                        </div>
+                        <div class="nav-item dropdown">
+                            <a href="#" class="nav-link dropdown-toggle" data-toggle="dropdown">Creando CSA</a>
+                            <div class="dropdown-menu rounded-0 m-0">
+                                <a href="{{ path('voluntariado') }}" class="dropdown-item">Voluntariado y comisiones</a>
+                                <a href="{{ path('asambleas') }}" class="dropdown-item">Asambleas y eventos</a>
+                            </div>
+                        </div>
+                        <a href="{{ path('somos') }}" class="nav-item nav-link">Quiénes somos</a>
+                        <a href="{{ path('frontend_blog') }}" class="nav-item nav-link">Blog</a>
+                        <a href="{{ path('blog_category_show', { id: 4 }) }}" class="nav-item nav-link">Recetas</a>
+                        <a href="{{ path('socios') }}" class="nav-item nav-link"><strong>Hazte socix</strong></a>
+                    </div>
+                </div>
             </nav>
-            <!-- /main nav -->
-
         </div>
-    </header>
-    <!--
-    End Fixed Navigation
-    ==================================== -->
+    {% endblock %}
 
-    <main class="site-content" role="main">
+    {% block content %}{% endblock %}
 
-        <!--
-        Home Slider
-        ==================================== -->
-
-        <section id="home-slider">
-            <div id="slider" class="sl-slider-wrapper">
-
-                <div class="sl-slider">
-
-                    {#<div class="sl-slide" data-orientation="horizontal" data-slice1-rotation="-25"
-                         data-slice2-rotation="-25" data-slice1-scale="2" data-slice2-scale="2">
-
-                        <div class="bg-img bg-img-1"></div>
-
-                        <div class="slide-caption">
-                            <div class="caption-content">
-                                <h2 class="animated fadeInDown" id="acompana">CSA Vega de Jarama</h2>
-                                    <span class="animated fadeInDown acompana">CAMPAÑA DE CROWDFUNDING</span>
-                                <a href="https://www.goteo.org/project/csa-vega-de-jarama" target="_blank" class="btn btn-blue btn-effect">¡Colabora!</a>
-                            </div>
-                        </div>
-
-                    </div>#}
-                    <div class="sl-slide" data-orientation="horizontal" data-slice1-rotation="-25"
-                         data-slice2-rotation="-25" data-slice1-scale="2" data-slice2-scale="2">
-
-                        <div class="bg-img bg-img-5"></div>
-
-                        <div class="slide-caption">
-                            <div class="caption-content">
-                                <h2 class="animated fadeInDown">CSA Vega de Jarama</h2>
-                                <span class="animated fadeInDown">Asociación de Productorxs y Consumidorxs</span>
-                                <a href="#contact" class="btn btn-blue btn-effect">¡Hazte Socix!</a>
-                            </div>
-                        </div>
-
-
-                    </div>
-                    <div class="sl-slide" data-orientation="vertical" data-slice1-rotation="10"
-                         data-slice2-rotation="-15"
-                         data-slice1-scale="1.5" data-slice2-scale="1.5">
-
-                        <div class="bg-img bg-img-2"></div>
-                        <div class="slide-caption">
-                            <div class="caption-content">
-                                <h2>CSA Vega de Jarama</h2>
-                                <span>Asociación de Productorxs y Consumidorxs</span>
-                                <a href="#contact" class="btn btn-blue btn-effect">¡Hazte Socix!</a>
-                            </div>
-                        </div>
-
-                    </div>
-
-                    <div class="sl-slide" data-orientation="horizontal" data-slice1-rotation="3"
-                         data-slice2-rotation="3"
-                         data-slice1-scale="2" data-slice2-scale="1">
-
-                        <div class="bg-img bg-img-3"></div>
-                        <div class="slide-caption">
-                            <div class="caption-content">
-                                <h2>CSA Vega de Jarama</h2>
-                                <span>Asociación de Productorxs y Consumidorxs</span>
-                                <a href="#contact" class="btn btn-blue btn-effect">¡Hazte Socix!</a>
-                            </div>
-                        </div>
-
-                    </div>
-                    <div class="sl-slide" data-orientation="horizontal" data-slice1-rotation="3"
-                         data-slice2-rotation="3"
-                         data-slice1-scale="2" data-slice2-scale="1">
-
-                        <div class="bg-img bg-img-4"></div>
-                        <div class="slide-caption">
-                            <div class="caption-content">
-                                <h2>CSA Vega de Jarama</h2>
-                                <span>Asociación de Productorxs y Consumidorxs</span>
-                                <a href="#contact" class="btn btn-blue btn-effect">¡Hazte Socix!</a>
-                            </div>
-                        </div>
-
-                    </div>
-
-
-                <!-- /sl-slider -->
-
-                <!--
-                <nav id="nav-arrows" class="nav-arrows">
-                    <span class="nav-arrow-prev">Previous</span>
-                    <span class="nav-arrow-next">Next</span>
-                </nav>
-                -->
-
-                <nav id="nav-arrows" class="nav-arrows hidden-xs hidden-sm visible-md visible-lg">
-                    <a href="javascript:;" class="sl-prev">
-                        <i class="fa fa-angle-left fa-3x"></i>
-                    </a>
-                    <a href="javascript:;" class="sl-next">
-                        <i class="fa fa-angle-right fa-3x"></i>
-                    </a>
-                </nav>
-
-
-                <nav id="nav-dots" class="nav-dots visible-xs visible-sm hidden-md hidden-lg">
-                    <span class="nav-dot-current"></span>
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                </nav>
-
-            </div>
-            <!-- /slider-wrapper -->
-        </section>
-
-        <!--
-        End Home SliderEnd
-        ==================================== -->
-
-        <!-- about section -->
-        <section id="about">
-            <div class="container">
-                <div class="row">
-                    <div class="col-md-4 wow animated fadeInLeft">
-                        <div class="recent-works">
-                            <h3>CSA Vega de Jarama</h3>
-
-                            <div id="works">
-                                <div class="work-item">
-                                    <p>Asociación sin ánimo de lucro dedicada al fomento de la producción local de
-                                        agricultura y ganadería ecológicas y regenerativas</p>
-                                </div>
-                                <div class="work-item">
-                                    <p>Abogamos por la producción local, evitando transportes innecesarios y ahorrando
-                                        energía.</p>
-                                </div>
-                                <div class="work-item">
-                                    <p>Producción sin agrotóxicos ni productos de síntesis. Cerramos ciclos,
-                                        reutilizamos
-                                        recursos, regeneramos el suelo.</p>
-
-                                    <p><br/></p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-7 col-md-offset-1 wow animated fadeInRight">
-                        <div class="welcome-block">
-                            <h3>Bienvenidxs</h3>
-
-                            <div class="message-body">
-                                <img src="{{ asset('bundles/app/images/lechuga.jpg') }}" class="pull-left" alt="member">
-
-                                <p>Nuestro objetivo es empujar para provocar cambios sociales a través de la
-                                    alimentación,
-                                    creando espacios colectivos para compartir, y produciendo alimentos sanos, de
-                                    calidad y
-                                    asequibles.</p>
-
-                                <p>Somos un grupo de personas preocupadas por nuestra alimentación y el entorno que nos
-                                    rodea. Creemos que es posible un mundo mejor y más justo.</p>
-                            </div>
-                            {#<a href="#" class="btn btn-border btn-effect pull-right">Read More</a>#}
-                        </div>
-                    </div>
+    {% block footer %}
+        <div class="container-fluid bg-dark text-white mt-5 py-5 px-sm-3 px-md-5">
+            <div class="row pt-5">
+                <div class="col-lg-4 col-md-12 mb-5">
+                    <h1 class="mb-3 display-5 text-capitalize text-white"><span class="text-primary">CSA</span>Vega de Jarama</h1>
                 </div>
-            </div>
-        </section>
-        <!-- end about section -->
-
-
-        <!-- Service section -->
-        <section id="service">
-            <div class="container">
-                <div class="row">
-
-                    <div class="sec-title text-center">
-                        <h2 class="wow animated bounceInLeft">Objetivos</h2>
-
-                        <p class="wow animated bounceInRight">Nuestros sueños se basan en estos cuatro puntos</p>
-                    </div>
-
-                    <div class="col-md-3 col-sm-6 col-xs-12 text-center wow animated zoomIn">
-                        <div class="service-item">
-                            <div class="service-icon">
-                                <i class="fa fa-group fa-3x"></i>
-                            </div>
-                            <h3>Comunidad</h3>
-
-                            <p>En nuestro mundo obligatoriamente individualista, las soluciones han de ser
-                                colectivas.</p>
-                        </div>
-                    </div>
-
-                    <div class="col-md-3 col-sm-6 col-xs-12 text-center wow animated zoomIn" data-wow-delay="0.3s">
-                        <div class="service-item">
-                            <div class="service-icon">
-                                <i class="fa fa-bug fa-3x"></i>
-                            </div>
-                            <h3>Producción</h3>
-
-                            <p>Agricultura y ganadería ecológicas y regenerativas </p>
-                        </div>
-                    </div>
-
-                    <div class="col-md-3 col-sm-6 col-xs-12 text-center wow animated zoomIn" data-wow-delay="0.6s">
-                        <div class="service-item">
-                            <div class="service-icon">
-                                <i class="fa fa-check fa-3x"></i>
-                            </div>
-                            <h3>Empleo</h3>
-
-                            <p>Apostamos por un trabajo digno y de calidad.</p>
-                        </div>
-                    </div>
-
-                    <div class="col-md-3 col-sm-6 col-xs-12 text-center wow animated zoomIn" data-wow-delay="0.9s">
-                        <div class="service-item">
-                            <div class="service-icon">
-                                <i class="fa fa-globe fa-3x"></i>
-                            </div>
-
-                            <h3>Suelo</h3>
-
-                            <p>Es posible regenerar nuestros suelos consumidos por la erosión y las prácticas agrícolas
-                                convencionales.</p>
-                        </div>
-                    </div>
-
-                </div>
-            </div>
-        </section>
-        <!-- end Service section -->
-
-        <!-- portfolio section -->
-        <section id="portfolio">
-            <div class="container">
-                <div class="row">
-
-                    <div class="sec-title text-center wow animated fadeInDown">
-                        <h2>Qué hacemos</h2>
-
-                        <p>Nos encanta compartir, alimentarnos bien, trabajar la tierra, cuidar a los animales.</p>
-                    </div>
-
-
-                    <ul class="project-wrapper wow animated fadeInUp">
-                        <li class="portfolio-item">
-                            <img src="{{ asset('bundles/app/images/carbon.jpg') }}" class="img-responsive"
-                                 alt="Carbón vegetal para abonos. Producción en zanja">
-                            <figcaption class="mask">
-                                <h3>Producción de carbón vegetal</h3>
-
-                                <p>Carbón vegetal para abonos. Producción en zanja</p>
-                            </figcaption>
-                            <ul class="external">
-                                <li><a class="fancybox" title="Producción de carbón en zanja"
-                                       data-fancybox-group="works"
-                                       href="{{ asset('bundles/app/images/carbon.jpg') }}"><i class="fa fa-search"></i></a>
-                                </li>
-                                <li><a href=""><i class="fa fa-link"></i></a></li>
-                            </ul>
-                        </li>
-
-                        <li class="portfolio-item">
-                            <img src="{{ asset('bundles/app/images/microtunel.jpeg') }}" class="img-responsive"
-                                 alt="Microtúnel con manta térmica para cultivos de hoja">
-                            <figcaption class="mask">
-                                <h3>Microtúnel</h3>
-
-                                <p>Microtúnel con manta térmica para cultivos de hoja</p>
-                            </figcaption>
-                            <ul class="external">
-                                <li><a class="fancybox" title="Microtúnel"
-                                       href="{{ asset('bundles/app/images/microtunel.jpeg') }}"
-                                       data-fancybox-group="works"><i
-                                                class="fa fa-search"></i></a></li>
-                                <li><a href=""><i class="fa fa-link"></i></a></li>
-                            </ul>
-                        </li>
-
-                        {#<li class="portfolio-item">
-                            <img src="img/portfolio/item3.jpg" class="img-responsive" alt="Lorem Ipsum is simply dummy text of the printing and typesetting ndustry. ">
-                            <figcaption class="mask">
-                                <h3>Wall street</h3>
-                                <p>Lorem Ipsum is simply dummy text of the printing and typesetting ndustry. </p>
-                            </figcaption>
-                            <ul class="external">
-                                <li><a class="fancybox" title="Behind The world" data-fancybox-group="works" href="img/portfolio/item3.jpg"><i class="fa fa-search"></i></a></li>
-                                <li><a href=""><i class="fa fa-link"></i></a></li>
-                            </ul>
-                        </li>
-
-                        <li class="portfolio-item">
-                            <img src="img/portfolio/item4.jpg" class="img-responsive" alt="Lorem Ipsum is simply dummy text of the printing and typesetting ndustry.">
-                            <figcaption class="mask">
-                                <h3>Wall street</h3>
-                                <p>Lorem Ipsum is simply dummy text of the printing and typesetting ndustry. </p>
-                            </figcaption>
-                            <ul class="external">
-                                <li><a class="fancybox" title="Wall street 4" data-fancybox-group="works" href="img/portfolio/item4.jpg"><i class="fa fa-search"></i></a></li>
-                                <li><a href=""><i class="fa fa-link"></i></a></li>
-                            </ul>
-                        </li>
-
-                        <li class="portfolio-item">
-                            <img src="img/portfolio/item5.jpg" class="img-responsive" alt="Lorem Ipsum is simply dummy text of the printing and typesetting ndustry. ">
-                            <figcaption class="mask">
-                                <h3>Wall street</h3>
-                                <p>Lorem Ipsum is simply dummy text of the printing and typesetting ndustry. </p>
-                            </figcaption>
-                            <ul class="external">
-                                <li><a class="fancybox" title="Wall street 5" data-fancybox-group="works" href="img/portfolio/item5.jpg"><i class="fa fa-search"></i></a></li>
-                                <li><a href=""><i class="fa fa-link"></i></a></li>
-                            </ul>
-                        </li>
-
-                        <li class="portfolio-item">
-                            <img src="img/portfolio/item6.jpg" class="img-responsive" alt="Lorem Ipsum is simply dummy text of the printing and typesetting ndustry. ">
-                            <figcaption class="mask">
-                                <h3>Wall street</h3>
-                                <p>Lorem Ipsum is simply dummy text of the printing and typesetting ndustry. </p>
-                            </figcaption>
-                            <ul class="external">
-                                <li><a class="fancybox" title="Wall street 6" data-fancybox-group="works" href="img/portfolio/item6.jpg"><i class="fa fa-search"></i></a></li>
-                                <li><a href=""><i class="fa fa-link"></i></a></li>
-                            </ul>
-                        </li>#}
-                    </ul>
-                </div>
-            </div>
-        </section>
-        <!-- end portfolio section -->
-
-        <!-- Testimonial section -->
-        {# <section id="testimonials" class="parallax">
-             <div class="overlay">
-                 <div class="container">
-                     <div class="row">
-
-                         <div class="sec-title text-center white wow animated fadeInDown">
-                             <h2>What people say</h2>
-                         </div>
-
-                         <div id="testimonial" class=" wow animated fadeInUp">
-                             <div class="testimonial-item text-center">
-                                 <img src="img/member-1.jpg" alt="Our Clients">
-                                 <div class="clearfix">
-                                     <span>Katty Flower</span>
-                                     <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.</p>
-                                 </div>
-                             </div>
-                             <div class="testimonial-item text-center">
-                                 <img src="img/member-1.jpg" alt="Our Clients">
-                                 <div class="clearfix">
-                                     <span>Katty Flower</span>
-                                     <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.</p>
-                                 </div>
-                             </div>
-                             <div class="testimonial-item text-center">
-                                 <img src="img/member-1.jpg" alt="Our Clients">
-                                 <div class="clearfix">
-                                     <span>Katty Flower</span>
-                                     <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.</p>
-                                 </div>
-                             </div>
-                         </div>
-
-                     </div>
-                 </div>
-             </div>
-         </section>#}
-        <!-- end Testimonial section -->
-
-        <!-- Price section -->
-        {# <section id="price">
-             <div class="container">
-                 <div class="row">
-
-                     <div class="sec-title text-center wow animated fadeInDown">
-                         <h2>Price</h2>
-                         <p>Our price for your company</p>
-                     </div>
-
-                     <div class="col-md-4 wow animated fadeInUp">
-                         <div class="price-table text-center">
-                             <span>Silver</span>
-                             <div class="value">
-                                 <span>$</span>
-                                 <span>24,35</span><br>
-                                 <span>month</span>
-                             </div>
-                             <ul>
-                                 <li>No Bonus Points</li>
-                                 <li>No Bonus Points</li>
-                                 <li>No Bonus Points</li>
-                                 <li>No Bonus Points</li>
-                                 <li><a href="#">sign up</a></li>
-                             </ul>
-                         </div>
-                     </div>
-
-                     <div class="col-md-4 wow animated fadeInUp" data-wow-delay="0.4s">
-                         <div class="price-table featured text-center">
-                             <span>Gold</span>
-                             <div class="value">
-                                 <span>$</span>
-                                 <span>50,00</span><br>
-                                 <span>month</span>
-                             </div>
-                             <ul>
-                                 <li>Free Trial</li>
-                                 <li>Free Trial</li>
-                                 <li>Free Trial</li>
-                                 <li>Free Trial</li>
-                                 <li><a href="#">sign up</a></li>
-                             </ul>
-                         </div>
-                     </div>
-
-                     <div class="col-md-4 wow animated fadeInUp" data-wow-delay="0.8s">
-                         <div class="price-table text-center">
-                             <span>Diamond</span>
-                             <div class="value">
-                                 <span>$</span>
-                                 <span>123,12</span><br>
-                                 <span>month</span>
-                             </div>
-                             <ul>
-                                 <li>All Bonus Points</li>
-                                 <li>All Bonus Points</li>
-                                 <li>All Bonus Points</li>
-                                 <li>All Bonus Points</li>
-                                 <li><a href="#">sign up</a></li>
-                             </ul>
-                         </div>
-                     </div>
-
-                 </div>
-             </div>
-         </section>#}
-        <!-- end Price section -->
-
-        <!-- Social section -->
-        <section id="social" class="parallax">
-            <div class="overlay">
-                <div class="container">
+                <div class="col-lg-8 col-md-12">
                     <div class="row">
-
-                        <div class="sec-title text-center white wow animated fadeInDown">
-                            <h2>SÍGUENOS EN</h2>
-
-                            <p>Redes sociales</p>
+                        <div class="col-md-4 mb-5">
+                            <h5 class="text-primary mb-4">Contacto</h5>
+                            <a id="mapa" class="fa fa-map-marker-alt mr-2" href="https://www.google.es/maps/@40.8339838,-3.4956325,150m/data=!3m1!1e3"> Torremocha de Jarama 28189, Madrid</a>
+                            <p>Dirección: Calle Olivar, 13</p>
+                            <p><i class="fa fa-envelope mr-2"></i>csa@csavegadejarama.org</p>
+                            <div class="d-flex justify-content-start mt-4">
+                                <a class="btn btn-outline-light rounded-circle text-center mr-2 px-0" style="width: 36px; height: 36px;" href="https://www.facebook.com/CSA.Vega.de.Jarama/?locale=es_ES"><i class="fab fa-facebook-f"></i></a>
+                                <a class="btn btn-outline-light rounded-circle text-center mr-2 px-0" style="width: 36px; height: 36px;" href="https://twitter.com/csavegadejarama"><i class="fab fa-twitter"></i></a>
+                                <a class="btn btn-outline-light rounded-circle text-center mr-2 px-0" style="width: 36px; height: 36px;" href="https://masto.es/@csavegadejarama"><i class="fab fa-mastodon"></i></a>
+                                <a class="btn btn-outline-light rounded-circle text-center mr-2 px-0" style="width: 36px; height: 36px;" href="https://www.instagram.com/csavegadejarama/?hl=es"><i class="fab fa-instagram"></i></a>
+                                <a class="btn btn-outline-light rounded-circle text-center mr-2 px-0" style="width: 36px; height: 36px;" href="https://www.youtube.com/channel/UCBi4lm55t6X3lqaql2tG8xg"><i class="fab fa-youtube"></i></a>
+                            </div>
                         </div>
-
-                        <ul class="social-button">
-                            {#<li class="wow animated zoomIn"><a href="#"><i class="fa fa-thumbs-up fa-2x"></i></a></li>#}
-                            <li class="wow animated zoomIn" data-wow-delay="0.3s"><a
-                                        href="https://twitter.com/csavegadejarama"><i
-                                            class="fa fa-twitter fa-2x"></i></a>
-                            </li>
-                            {#<li class="wow animated zoomIn" data-wow-delay="0.6s"><a href="#"><i class="fa fa-dribbble fa-2x"></i></a></li>#}
-                        </ul>
-
-                    </div>
-                </div>
-            </div>
-        </section>
-        <!-- end Social section -->
-
-        <!-- Contact section -->
-        <section id="contact">
-            <div class="container">
-                <div class="row">
-
-                    <div class="col-md-5 sec-title text-center wow animated fadeInDown">
-                        <h2>Contacto</h2>
-
-                        <p><a href="{{ path('app_contact') }}"> Envíanos un mensaje</a></p>
-                    </div>
-
-
-
-
-                    <div class="col-md-5 wow animated fadeInRight">
-                        <address class="contact-details">
-                            <h3>Contacta con nosotr@s</h3>
-
-                            <p><i class="fa fa-pencil"></i>CSA Vega de Jarama<span>Torremocha de Jarama</span>
-                                <span>Madrid</span></p><br>
-
-                            {#<p><i class="fa fa-phone"></i>Teléfono: (+34)</p>#}
-
-                            <p><i class="fa fa-envelope"></i>info@csavegadejarama.org</p>
-                        </address>
-                    </div>
-
-                </div>
-            </div>
-        </section>
-        <!-- end Contact section -->
-
-        <section id="google-map">
-            <div id="map-canvas" class="wow animated fadeInUp"></div>
-        </section>
-
-    </main>
-
-    <footer id="footer">
-        <div class="container">
-            <div class="row text-center">
-                <div class="footer-content">
-                    <div class="wow animated fadeInDown">
-                        <p>Suscríbete a nuestra revista</p>
-
-                        <p>Noticias y otras cuestiones</p>
-                    </div>
-                    <form action="#" method="post" class="subscribe-form wow animated fadeInUp">
-                        <div class="input-field">
-                            <input type="email" class="subscribe form-control"
-                                   placeholder="Indica tu correo electrónico...">
-                            <button type="button" class="submit-icon">
-                                <i class="fa fa-paper-plane fa-lg"></i>
-                            </button>
+                        <div class="col-md-4 mb-5">
+                            {{ render(controller('App\\Controller\\GestionController::contactWidget')) }}
                         </div>
-                    </form>
-                    <div class="footer-social">
-                        <ul>
-                            <li class="wow animated zoomIn"><a href="https://www.facebook.com/CSA.Vega.de.Jarama/"><i class="fa fa-thumbs-up fa-3x"></i></a></li>
-                            <li class="wow animated zoomIn" data-wow-delay="0.3s"><a href="https://twitter.com/csavegadejarama"><i
-                                            class="fa fa-twitter fa-3x"></i></a></li>
-                            {#<li class="wow animated zoomIn" data-wow-delay="0.6s"><a href="#"><i
-                                            class="fa fa-skype fa-3x"></i></a></li>#}
-                            {#<li class="wow animated zoomIn" data-wow-delay="0.9s"><a href="#"><i
-                                            class="fa fa-dribbble fa-3x"></i></a></li>#}
-                            <li class="wow animated zoomIn" data-wow-delay="1.2s"><a href="https://www.youtube.com/channel/UCBi4lm55t6X3lqaql2tG8xg"><i
-                                            class="fa fa-youtube fa-3x"></i></a></li>
-
-                            <li class="wow animated zoomIn" data-wow-delay="1.5s">
-                                <a href="http://csavegadejarama.org/clima/index.php">
-                                    <img  width="45" src="http://csavegadejarama.org/uploads/station.png"></a> </li>
-                        </ul>
                     </div>
-
-                    <p>Diseño adaptado de <a href="">Theme fisher</a></p>
                 </div>
             </div>
         </div>
-    </footer>
+        <div class="container-fluid text-white py-4 px-sm-3 px-md-5" style="background: #111111;">
+            <div class="row">
+                <div class="col-md-6 text-center text-md-left mb-3 mb-md-0">
+                    <p class="m-0 text-white">&copy; <a class="text-white font-weight-bold" href="{{ path('homepage') }}">CSA Vega de Jarama</a></p>
+                </div>
+            </div>
+        </div>
+
+        <a href="#" class="btn btn-lg btn-primary back-to-top"><i class="fa fa-angle-double-up"></i></a>
+    {% endblock %}
+
     {% block javascripts %}
-
-        <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
-        <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
-        <!--[if lt IE 9]>
-
-        <![endif]-->
-        <script src="{{ asset('bundles/app/frontend/js/jquery-1.11.1.min.js') }}"></script>
-        <script src="{{ asset('bundles/app/frontend/js/bootstrap.min.js') }}"></script>
-        <script src="{{ asset('bundles/app/frontend/js/jquery.singlePageNav.min.js') }}"></script>
-        <script src="{{ asset('bundles/app/frontend/js/jquery.fancybox.pack.js') }}"></script>
-        <script src="http://maps.google.com/maps/api/js?sensor=false"></script>
-        <script src="{{ asset('bundles/app/frontend/js/owl.carousel.min.js') }}"></script>
-        <script src="{{ asset('bundles/app/frontend/js/jquery.easing.min.js') }}"></script>
-        <script src="{{ asset('bundles/app/frontend/js/jquery.slitslider.js') }}"></script>
-        <script src="{{ asset('bundles/app/frontend/js/jquery.ba-cond.min.js') }}"></script>
-        <script src="{{ asset('bundles/app/frontend/js/wow.min.js') }}"></script>
+        <script src="https://code.jquery.com/jquery-3.4.1.min.js"></script>
+        <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.bundle.min.js"></script>
+        <script src="{{ asset('bundles/app/frontend/lib/easing/easing.min.js') }}"></script>
+        <script src="{{ asset('bundles/app/frontend/lib/owlcarousel/owl.carousel.min.js') }}"></script>
+        <script src="{{ asset('bundles/app/frontend/lib/tempusdominus/js/moment.min.js') }}"></script>
+        <script src="{{ asset('bundles/app/frontend/lib/tempusdominus/js/moment-timezone.min.js') }}"></script>
+        <script src="{{ asset('bundles/app/frontend/lib/tempusdominus/js/tempusdominus-bootstrap-4.min.js') }}"></script>
         <script src="{{ asset('bundles/app/frontend/js/main.js') }}"></script>
+    {% endblock %}
 
-    {% endblock %}
-    {% block more_js %}
-    {% endblock %}
-    </body>
-{% endblock body %}
+</body>
 </html>

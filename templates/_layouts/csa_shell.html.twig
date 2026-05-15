@@ -129,6 +129,9 @@
                 </nav>
 
                 <div class="csa-topbar__user">
+                    <a href="{{ path('homepage') }}" class="csa-link-muted" title="Ver web pública" target="_blank" rel="noopener">
+                        <i class="fa fa-globe"></i>
+                    </a>
                     {% if app.user %}
                         <span>{{ app.user.userIdentifier }}</span>
                         <span class="csa-avatar">

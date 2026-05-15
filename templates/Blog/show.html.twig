@@ -1,9 +1,9 @@
 {% extends 'Blog/frontend_index.html.twig' %}
 
 {% block post_main -%}
-<div class="blog-item">
-    {% include 'Blog/post_main.html.twig' with {'extend':1} %} {#es para que muestre el contenido completo#}
-</div>
+    <div class="blog-item">
+        {% include 'Blog/post_main.html.twig' with { extend: 1 } %}
+    </div>
 {% endblock %}
 
 {% block more_js %}

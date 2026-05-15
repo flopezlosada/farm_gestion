@@ -174,7 +174,7 @@ class BatchController extends AbstractAppController
             $feed_amount = $em->getRepository(\App\Entity\Batch::class)->getFeedAmountInInterval($entity, $start_date, $end_date);//cantidad de pienso consumido en el intervalo
             $fowls = $em->getRepository(\App\Entity\Batch::class)->getFowlsAliveInInterval($entity, $end_date);//animales vivos en el intervalo.
             //echo "comida: " . $feed_amount . " y bichos: " . $fowls . "<br>";
-            @$consumption[] = $feed_amount / ($fowls * 14);
+            $consumption[] = $fowls > 0 ? $feed_amount / ($fowls * 14) : 0;
             $start_time += 14;
             $start_date = new \DateTime($entity->getReceiptDate()->format('Y-m-d'));
             $end_date = new \DateTime($entity->getReceiptDate()->format('Y-m-d'));
@@ -414,9 +414,9 @@ class BatchController extends AbstractAppController
 
             $batch->setPutDownTotal($put_down_fowls);
             $batch->setTotalPutDownWeight($total_put_down_weight);
-            $batch->setAveragePutDownWeight($total_put_down_weight / $put_down_fowls);
+            $batch->setAveragePutDownWeight($put_down_fowls > 0 ? $total_put_down_weight / $put_down_fowls : 0);
             $batch->setTotalCarcassWeight($total_carcass_weight);
-            $batch->setAverageCarcassWeight($total_carcass_weight / $put_down_fowls);
+            $batch->setAverageCarcassWeight($put_down_fowls > 0 ? $total_carcass_weight / $put_down_fowls : 0);
         }
 
         return $this->render('Batch/analyses_year.html.twig', array(

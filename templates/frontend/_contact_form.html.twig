@@ -1,0 +1,17 @@
+<div class="contact-form">
+    <h5 class="text-primary mb-4">Pide información</h5>
+
+    {% for label, messages in app.flashes(['notice', 'error']) %}
+        {% for message in messages %}
+            <div class="alert alert-{{ label == 'notice' ? 'success' : 'danger' }} py-2 px-3">{{ message }}</div>
+        {% endfor %}
+    {% endfor %}
+
+    {{ form_start(form) }}
+        <div class="control-group mb-2">{{ form_widget(form.name) }}</div>
+        <div class="control-group mb-2">{{ form_widget(form.email) }}</div>
+        <div class="control-group mb-2">{{ form_widget(form.subject) }}</div>
+        <div class="control-group mb-2">{{ form_widget(form.body) }}</div>
+        {{ form_widget(form.submit) }}
+    {{ form_end(form) }}
+</div>

@@ -938,7 +938,7 @@
                         },
                         data: [
                             {% for data in incoming_expenses %}
-                            ['{{ data[0].month }} - {{ data[0].year_date }}', {{ (data[3]/data[2])|round(2) }}],
+                            ['{{ data[0].month }} - {{ data[0].year_date }}', {{ (data[2] > 0 ? (data[3]/data[2]) : 0)|round(2) }}],
                             {% endfor %}
                         ],
                         dataLabels: {

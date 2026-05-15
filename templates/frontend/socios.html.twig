@@ -1,0 +1,187 @@
+{% extends 'base_front.html.twig' %}
+
+{% block title %}Hazte socix · CSA Vega de Jarama{% endblock %}
+
+{% block content %}
+
+<!-- Features Start -->
+    <div class="container-xº bg-light">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="row py-5">
+            <div class="col-lg-7 pb-5 pb-lg-0 px-3 px-lg-5">
+                
+                <h1 class="display-4 mb-4"><span style="color:rgb(248, 177, 51)">CSA</span> <span style="color:#138504">Vega de jarama</span></h1>
+                <h5 class="text-muted mb-3">Nuestro modelo económico se basa en las cuotas que aportamos las personas socias, siendo la base
+				monetaria del sustento de la agricultura:</h5>
+                <p class="mb-4"> Las personas que trabajan la Tierra no tienen que dedicar
+				tiempo y energía a la venta de los alimentos que producen, con lo que se consigue sustituir los canales
+				de distribución propios de la economía de mercado que obligan a alimentarnos con estádares muy
+				alejados del respeto y el cuidado que necesita la Naturaleza..</p>
+                
+                <!--<a href="" class="btn btn-lg btn-primary mt-3 px-4">Learn More</a>-->
+            </div>
+            <div class="col-lg-5">
+                <div class="row px-3">
+                     <div class="col-12 p-0">
+                        <img  style="width:400px; height: 350px;" src="{{ asset('bundles/app/img/CestaImg1.jpg') }}" alt="">
+                    </div>
+                   
+					<!--<div class="col-6 p-0">
+                        <img class="img-fluid w-100" src="img/about-2.jpg" alt="">
+                    </div>
+                    <div class="col-6 p-0">
+                        <img class="img-fluid w-100" src="img/about-3.jpg" alt="">
+                    </div>-->
+					
+                </div>
+            </div>
+        </div>
+            </div>
+        </div>
+    </div>
+    <!-- Features End -->
+
+  <div class="container py-5">
+        <div class="row py-4">
+            <div class="col-lg-7 pb-5 pb-lg-0 px-3 px-lg-5">
+                <h1 class="display-4 mb-4"><span style="color:rgb(248, 177, 51)">Socios</span> <span style="color:#138504">Csa</span></h1>
+                <h5 class="text-muted mb-3">El modelo social de la CSA está implícito en la siglas que nos nombran:</h5>
+                <p class="mb-4">Comunidad que sotiene
+				agricultura, no solo porque interviene económicamente en su sutento haya o no cesta, si no porque se
+				implica en la gestión y administración de los bienes , los procesos, las tareas y los sueños del colectivo
+				de forma absolutamente voluntaria, cada una de acuerdo a su capacidad e interés. La cohesión de la
+				comunidad se gesta a través de la consecución de pequeños objetivos grupales comunes basados en la
+				relación y los cuidados: salir a cenar, compartir el rato de reparto, realización de tareas agrícolas
+				colectivas, acompañar a la que lo necesita, son alguna de las actividades que surgen de y por la
+				comunidad y que suman a caminar hacia el objetivo mayor que es revertir la direccionalidad del sustento
+				de la agricultura por la comunidad para sentir y comprobar que ésta se articula y sostiene por la
+				actividad agrícola comunitaria.</p>
+                
+                <a href="http://umap.openstreetmap.fr/en/map/csa-vega-de-jarama_855066#11/40.7736/-3.5412" class="btn btn-lg btn-primary mt-3 px-4">Mapa de socios</a>
+            </div>
+            <div class="col-lg-5">
+                <div class="row px-3">
+                    <div class="col-12 p-0">
+                        <img style="width:400px; height: 450px;" src="{{ asset('bundles/app/img/cestasemana.JPG') }}" alt="">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Booking Start -->
+    <!-- Booking Start -->
+    
+	<div class="container-xº bg-light">
+        <div class="container">
+            <div class="row align-items-center">
+			
+			
+             <div class="col-lg-5">
+                    <div class="bg-secondary py-5 px-4 px-sm-5">
+                        {{ render(controller('App\\Controller\\GestionController::contactWidget')) }}
+                    </div>
+                </div>
+				
+                <div class="col-lg-7 py-5 py-lg-0 px-3 px-lg-5">
+                    <h4 class="text-secondary mb-3">Quieres ser socio de la CSA?</h4>
+                    <h1 class="display-4 mb-4">Pide<span style="color:rgb(248, 177, 51)"> información</span></h1>
+                    <p>Pudes ser socio de la CSA segun el caso que mejor se te adapte</p>
+                    <div class="row py-2">
+                        <div class="col-sm-6">
+                            <div class="d-flex flex-column">
+                                <div class="d-flex align-items-center mb-2">
+                                   
+								   
+                                    <h5 class="text-truncate m-0">Cesta Semanal</h5>
+                                </div>
+                                <p>Una cesta cada viernes</p>
+                            </div>
+                        </div>
+                        <div class="col-sm-6">
+                            <div class="d-flex flex-column">
+                                <div class="d-flex align-items-center mb-2">
+                                    <!-- <h1 class="flaticon-food font-weight-normal text-secondary m-0 mr-3"></h1> -->
+                                    <h5 class="text-truncate m-0">Cesta Quincenal</h5>
+                                </div>
+                                <p>Cesta cada quince dias</p>
+                            </div>
+                        </div>
+                        <div class="col-sm-6">
+                            <div class="d-flex flex-column">
+                                <div class="d-flex align-items-center mb-2">
+                                  <!--    <h1 class="flaticon-grooming font-weight-normal text-secondary m-0 mr-3"></h1>-->
+                                    <h5 class="text-truncate m-0">Cesta mensual</h5>
+                                </div>
+                                <p class="m-0">Cesta Mensual</p>
+                            </div>
+                        </div>
+						
+						
+                    </div>
+					 
+					 <h4 class="mb-2 ">PUNTOS DE DISTRIBUCIÓN MADRID CAPITAL.</h4>
+					<ul>
+						<li>Bar La Lata (Lavapiés): lalatacascorro@gmail.com; C/ Embajadores, 1 (28012) Madrid.
+						Teléfono: 910 33 30 41. Recogida Miércoles de 6 a cierre.</li>
+						
+						<li>Tienda Sostenible Midori: efecto.midori@gmail.com C/Suecia 83, 28022 Madrid
+						Teléfono 625259110. (Zona San Blas)Recogida miércoles de 6 a 8</li>
+						
+						<li>Granel de la Villa c/ Donoso cortes, 1 28015 Madrid. Teléfono 640642132</li>
+						
+						</ul>
+						
+                </div>
+            </div>
+		</div>
+      </div>
+    
+    <!-- Booking end -->
+ <!-- Booking end -->
+
+     <!-- Testimonial Start -->
+    <div class="container p-4 pt-0">
+         <div class="d-flex flex-column text-center mb-0">
+            <p>Voluntariado y trabajos en la huerta</p>
+            </div>
+            <div class="owl-carousel testimonial-carousel">
+                 <div class="mx-0 p-2" >
+                    <div class="d-flex align-items-end mb-3 mt-n4 ml-n4">
+                        <img class="img-fluid" src="{{ asset('bundles/app/img/socios1.JPG') }}" style="width:350px; height: 250px;" alt=""> 
+                    </div>
+                     <p >Jornada de trabajo </p>
+                 </div>
+                 <div class="mx-0 p-2" >
+                      <div class="d-flex align-items-end mb-3 mt-n4 ml-n4">
+                        <img class="img-fluid" src="{{ asset('bundles/app/img/calabazas.jpg') }}" style="width:350px; height: 250px;" alt="">    
+                    </div>
+                      <p >Jornada de calabazas </p>
+                    </div>
+				<div class="mx-0 p-2">
+					<div class="d-flex align-items-end mb-3 mt-n4 ml-n4">
+					<img class="img-fluid" src="{{ asset('bundles/app/img/recolecta1.jpg') }}"style="width: 350px; height: 250px;" alt="">
+				</div>
+					<p>Cosecha</p>
+				</div>
+
+				<div class="mx-0 p-2">
+					<div class="d-flex align-items-end mb-3 mt-n4 ml-n4">
+                        <img class="img-fluid" src="{{ asset('bundles/app/img/trabajo3huerta.jpg') }}" style="width:350px; height: 250px;" alt=""> 
+                    </div>
+                    	<p>Jornada de trabajo</p>
+                	</div>
+                    
+                    <div class="mx-0 p-2">
+                     	<div class="d-flex align-items-end mb-3 mt-n4 ml-n4">
+                        <img class="img-fluid" src="{{ asset('bundles/app/img/cestaviernes.JPG') }}" style="width:350px; height: 250px;" alt=""> 
+                   	 </div>
+                   		 <p>Cesta de los viernes</p>
+                    </div>
+            </div>
+        </div>
+    <!-- Testimonial End -->
+
+
+{% endblock %}

@@ -1,0 +1,60 @@
+{% extends 'base_front.html.twig' %}
+
+{% block title %}Asambleas y eventos · CSA Vega de Jarama{% endblock %}
+
+{% block content %}
+    
+	<!-- About start -->
+<div class="container py-5">
+        <div class="row py-4">
+            <div class="col-lg-7 pb-5 pb-lg-0 px-3 px-lg-5"> 
+                <h1 class="display-4 mb-4"><span style="color:rgb(248, 177, 51)">Participa en</span> <span style="color:#138504">las decisiones</span></h1>
+                <h5 class="text-muted mb-3">La CSA vega de Jarama las decisiones las tomamos los socios.</h5>
+                <p class="mb-4">  En nuestras asambleas es importante la asistencia de los socios, ya que son parte fundamental 
+                de las decisiones del presente y futuro de la asociación. <br>
+                Es importante que todos los socios estén informados.<br>
+				Mira nuestro calendario, en el están las fechas de nuestras asambleas, reparto de cestas, voluntariado y diferentes eventos que 
+                tenemos a lo largo del año.<br>
+			   <h3>¡Asiste y Participa!</h3></p>
+			   <img src="{{ asset('bundles/app/img/calendario.png') }}" width="100" height="100"/></a>
+            </div>
+
+            <div class="col-lg-5">
+			
+                <div class="row px-4">
+                
+					<div class="col-10 p-0">
+                        <img style="width: 400px; height: px;" src="{{ asset('bundles/app/img/asamblea.JPG') }}" alt="">
+                    </div>
+                    
+					<!--<div class="col-6 p-0">
+                        <img class="img-fluid w-100" src="../public2/img/about-2.jpg" alt="">
+                    </div>
+                    <div class="col-6 p-0">
+                        <img class="img-fluid w-100" src="../public2/img/about-3.jpg" alt="">
+                    </div>-->
+                       
+                    </div>	
+                 
+                </div>
+            </div>
+             <!-- Blog Start -->
+   <div class="container pt-1">
+      <div >
+        <div class="container py-0">
+            <div class="row align-items-center">
+                <div class="col-lg-5">
+				 <h5>Mira en nuestro calendario y mantente al dia.</h5>
+               <!--<iframe src="https://calendar.google.com/calendar/embed?height=400&wkst=2&bgcolor=%230B8043&ctz=Europe%2FMadrid&showTitle=0&showDate=0&showNav=1&showTabs=0&showCalendars=0&showTz=0&showPrint=0&src=Y3NhdmVnYWRlamFyYW1hY2FsZW5kYXJAZ21haWwuY29t&color=%230B8043" style="border-width:0" width="1000" height="400" frameborder="0" scrolling="no"></iframe>-->  
+					 <iframe class="px-lg-0" src="https://cloud.disroot.org/apps/calendar/embed/T98qkKKSNgLnNx96/dayGridMonth/now" width="1050" height="500" frameborder="0"></iframe>
+				
+				<!--<iframe width="1000" height="400" class="external" src="{{ path('booking_calendar') }}"></iframe>-->
+				</div>
+            </div>
+        </div>
+    </div>
+  </div>
+  <!-- Blog end -->
+</div>
+
+{% endblock %}

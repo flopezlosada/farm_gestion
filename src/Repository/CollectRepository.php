@@ -239,7 +239,11 @@ class CollectRepository extends EntityRepository
 
     public function findByUserAverageCollect($user, $product, $year)
     {
-        return number_format($this->findCollectUserDates($user, $product, $year . '-12-31', $year . '-01-01') / $this->getAmountWeek($year), 2, ',', '.');
+        $weeks = $this->getAmountWeek($year);
+        if ($weeks <= 0) {
+            return number_format(0, 2, ',', '.');
+        }
+        return number_format($this->findCollectUserDates($user, $product, $year . '-12-31', $year . '-01-01') / $weeks, 2, ',', '.');
     }
 
     /**
