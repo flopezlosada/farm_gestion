@@ -9,8 +9,8 @@ liip_imagine:
   data_loader:          default
   default_image:        null
   controller:
-    filter_action:         liip_imagine.controller:filterAction
-    filter_runtime_action: liip_imagine.controller:filterRuntimeAction
+    filter_action:         liip_imagine.controller::filterAction
+    filter_runtime_action: liip_imagine.controller::filterRuntimeAction
   filter_sets:
     image_ig:
       quality: 100

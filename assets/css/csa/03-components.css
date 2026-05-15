@@ -1019,6 +1019,9 @@ a.csa-table__primary:hover {
  * RESPONSIVE — sidebar colapsable en < 900px
  * ============================================================ */
 
+/* El botón hamburguesa solo se ve cuando el sidebar es colapsable. */
+.csa-sidebar-toggle { display: none; }
+
 @media (max-width: 900px) {
   .csa-sidebar {
     position: fixed;
@@ -1030,6 +1033,7 @@ a.csa-table__primary:hover {
   }
   .csa-sidebar--open { transform: translateX(0); }
   .csa-topbar { padding: 0 var(--csa-sp-4); }
+  .csa-sidebar-toggle { display: inline-flex; }
 }
 
 
