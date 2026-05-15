@@ -1,2 +1,114 @@
 {% extends 'base_front.html.twig' %}
 
+{% block title %}CSA Vega de Jarama · Asociación de Productorxs y Consumidorxs{% endblock %}
+
+{% block content %}
+
+    {# Carousel #}
+    <div class="container-fluid p-0">
+        <div id="header-carousel" class="carousel slide" data-ride="carousel">
+            <div class="carousel-inner">
+                <div class="carousel-item active">
+                    <img style="width: 800px; height: 600px;" src="{{ asset('bundles/app/img/CSA_LOGO1.jpg') }}" alt="CSA Vega de Jarama">
+                    <div class="carousel-caption d-flex flex-column align-items-center justify-content-center">
+                        <div class="p-3" style="max-width: 900px;">
+                            <h1 class="display-4 text-white mb-3">¿Quieres ser parte de la CSA?</h1>
+                            <h3 class="text-white mb-3 d-none d-sm-block">Producto de temporada, de cercanía y de la huerta a tu mesa</h3>
+                            <a href="{{ path('socios') }}" class="btn btn-lg btn-primary mt-3 mt-md-4 px-4">Más info</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="carousel-item">
+                    <center><img style="width: 1450px; height: 600px;" src="{{ asset('bundles/app/img/huertadoble.jpg') }}" alt="Huerta"></center>
+                    <div class="carousel-caption d-flex flex-column align-items-center justify-content-center">
+                        <div class="p-3" style="max-width: 900px;">
+                            <h1 class="display-3 text-white mb-3">Visita nuestra huerta</h1>
+                            <h2 class="text-white mb-3 d-none d-sm-block">Entra y descubre nuestro espacio</h2>
+                            <a href="{{ path('huerta') }}" class="btn btn-lg btn-secondary mt-3 mt-md-4 px-4">Huerta</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <a class="carousel-control-prev" href="#header-carousel" data-slide="prev">
+                <div class="btn btn-primary rounded" style="width: 45px; height: 45px;">
+                    <span class="carousel-control-prev-icon mb-n2"></span>
+                </div>
+            </a>
+            <a class="carousel-control-next" href="#header-carousel" data-slide="next">
+                <div class="btn btn-primary rounded" style="width: 45px; height: 45px;">
+                    <span class="carousel-control-next-icon mb-n2"></span>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    {# Verdura de calidad #}
+    <div class="container-xº bg-light">
+        <div class="container py-3">
+            <div class="row align-items-center">
+                <div class="col-lg-5 mb-3">
+                    <img style="width: 440px; height: 400px; margin-left: 40px;" src="{{ asset('bundles/app/img/CestaImg2.jpg') }}" alt="Cesta">
+                </div>
+                <div class="col-lg-7 py-5 py-lg-0 px-3 px-lg-5">
+                    <h1 class="display-4 mb-4">Verdura de calidad, <span style="color: #138504">fresca y ecológica</span>...</h1>
+                    <p class="mb-4">
+                        Verdura recolectada por la mañana en <strong>Torremocha de Jarama</strong>, un pueblo ubicado en la zona norte de la Comunidad de Madrid. Puedes recibir tu cesta de forma semanal, quincenal o mensual.
+                        <br>
+                        Nuestra Asociación funciona de manera horizontal y autogestionada. Las decisiones se toman de forma asamblearia por parte de todas las socias/os.
+                        <br>
+                        También se organizan jornadas de trabajo colectivo y formaciones en agroecología.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Entrevista a la CSA #}
+    <div class="container py-5">
+        <div class="row py-5">
+            <div class="col-lg-7 pb-5 pb-lg-0 px-3 px-lg-5">
+                <h1 class="display-4 mb-4"><span style="color: rgb(248, 177, 51)">Entrevista a la</span> <span style="color: #138504">CSA</span></h1>
+                <p class="mb-4">
+                    Tuvimos una importante representación de la Asociación CSA Vega del Jarama. Nos hablaron de su proyecto que ya es una realidad haciendo posible una manera diferente de hacer las cosas. Sostenibilidad alimentaria, trabajo de calidad, economía circular… y muchas más cosas de las que nos hablaron.
+                </p>
+                <a href="http://www.radioutopia.org.es/c-s-a-vega-del-jarama-en-los-mundos-de-utopia/" class="btn btn-lg btn-primary mt-3 px-4" target="_blank">Escúchala</a>
+            </div>
+            <div class="col-lg-5">
+                <div class="row px-3">
+                    <div class="col-10 p-0">
+                        <img style="width: 440px; height: 400px;" src="{{ asset('bundles/app/img/entrevistaradio.jpg') }}" alt="Entrevista en radio">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Nuestros objetivos #}
+    <div class="container-xº bg-light">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-lg-7 py-5 py-lg-0 px-3 px-lg-3">
+                    <h1 class="display-4 mb-4 bg-light p-3"><span style="color: #138504">Nuestros objetivos</span></h1>
+                </div>
+            </div>
+            <div class="row pb-4">
+                {% set goals = [
+                    { img: 'cuidado.png', title: 'COMUNIDAD', text: 'En nuestro mundo obligatoriamente individualista, las soluciones han de ser colectivas.' },
+                    { img: 'agricultura.png', title: 'PRODUCCIÓN', text: 'Agricultura y ganadería ecológicas y regenerativas.' },
+                    { img: 'granjera.png', title: 'EMPLEO', text: 'Apostamos por un trabajo digno y de calidad.' },
+                    { img: 'siembra.png', title: 'SUELO', text: 'Es posible regenerar nuestros suelos consumidos por la erosión y las prácticas agrícolas convencionales.' }
+                ] %}
+                {% for goal in goals %}
+                    <div class="col-lg-3 mb-4">
+                        <div class="d-flex flex-column mb-2">
+                            <center><img src="{{ asset('bundles/app/img/' ~ goal.img) }}" alt="{{ goal.title }}"></center>
+                            <h4 class="mb-2 text-center">{{ goal.title }}</h4>
+                            <p>{{ goal.text }}</p>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+{% endblock %}

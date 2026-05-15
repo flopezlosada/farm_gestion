@@ -1,0 +1,153 @@
+{% extends 'base_front.html.twig' %}
+
+{% block title %}Voluntariado y comisiones · CSA Vega de Jarama{% endblock %}
+
+{% block content %}
+
+    <div class="container py-5">
+        <div class="row py-4">
+            <div class="col-lg-7 pb-5 pb-lg-0 px-3 px-lg-5">
+                
+                <h1 class="display-4 mb-4"><span style="color:rgb(248, 177, 51)">Comisiones</span> <span style="color:#138504" >CSA</span></h1>
+                <h5 class="text-muted mb-3">Las comisiones en la CSA son una parte fundamental para la organización y funcionamiento,  
+				sin estas comisiones y por los voluntarios que la forman seria muy difícil llevar todo esto por el buen camino</h5>
+                <p class="mb-4">Estas comisiones son libres sin ningún tipo de restricciones, en la CSA siempre eres bienvenido a participar.<br>					
+				Para ver como está organizada la CSA accede al mapa de comisiones y aporta tu talento para que sigamos adelante.</p>
+           
+                
+				<!--<a id=mapa href="https://view.genial.ly/60ad1d2302c81a0de6cf73d8/interactive-content-mapa-csa-cartel" class="btn btn-lg btn-primary mt-3 px-4">Mapa de comisiones</a>-->
+			
+		   </div>
+            <div class="col-lg-5">
+			
+					<div >
+						<iframe width="500" height="300" title="2023-02- Mapa CSA SIN TELÉFONOS" src="https://view.genial.ly/640df2ba3be2aa0018300730" type="text/html" allowscriptaccess="always" allowfullscreen="true" scrolling="yes" allownetworking="all"></iframe> 
+					</div> 
+				
+                <!--
+				<div class="row px-3">
+                    <div class="col-12 p-0">
+                        <img class="img-fluid w-100" src="../img/comisiones1.jpg" alt="">
+                    </div>
+                    <div class="col-6 p-0">
+                        <img class="img-fluid w-100" src="../img/comisiones2.jpg" alt="">
+                    </div>
+                    <div class="col-6 p-0">
+                        <img class="img-fluid w-100" src="../img/comisiones3.jpg" alt="">
+                    </div>
+                </div>
+				-->
+            </div>
+        </div>
+    </div>
+
+    <!-- Services Start -->
+    <div class="container-fluid bg-light pt-5">
+        <div class="container py-6">
+            <div class="d-flex flex-column text-center mb-5">
+                <!--  <h4 class="text-secondary mb-3">Our Services</h4>-->
+                <h1 class="display-4 m-0"><span style="color:#138504" >Rellena el formulario.</span> PARTICIPA!!!</h1>
+            </div>
+            <div class="row pb-2">
+                <div class="col-md-4 col-lg-0 mb-4">
+				
+                    <div class="d-flex flex-column  mb-2 ">
+					<center><img  src="{{ asset('bundles/app/img/reunion.png') }}" alt=""></center>
+                       <h4 class="mb-2 text-center ">Administración</h4>
+						<ul>
+						<li>Gestión de correo CSA</li>
+						<li>Contacto con los socios</li>
+						<li>Archivo de documentación</li>
+						<li>Contacto con organismos oficiales</li>
+						<li>Toma de decisiones urgentes</li>
+						</ul>
+                       <!-- <a class="text-uppercase font-weight-bold" href="">Read More</a>-->
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-4 mb-4">
+                    <div class="d-flex flex-column  mb-2 ">
+					<center><img src="{{ asset('bundles/app/img/volunhuerta.png') }}" alt=""></center>
+                       <h4 class="mb-2 text-center ">Huerta</h4>
+                       <ul>
+						<li>Trabajo en la huerta los fines de semana</li>
+						<li>Apoyo a los trabajadores durante día laborables</li>
+						</ul>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-4 mb-4">
+                    <div class="d-flex flex-column mb-2">
+					<center><img src="{{ asset('bundles/app/img/filosofia.png') }}" alt=""></center>
+                        <h3 class="mb-3 text-center">Filosofía/Dinamizacion</h3>
+                         <ul>
+						<li>Dinamización de las asambleas</li>
+						<li>Organización de las asambleas filosóficas</li>
+						</ul>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-4 mb-4">
+                    <div class="d-flex flex-column mb-2">
+					<center><img src="{{ asset('bundles/app/img/rrss.png') }}" alt=""></center>
+						<h3 class="mb-3 text-center ">Comunicación/RRSS</h3>
+                          <ul>
+						<li>Comunicación de los socios</li>
+						<li>Gestión de las redes sociales</li>
+						</ul>	
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-4 mb-4">
+                   <div class="d-flex flex-column mb-2">
+					<center><img src="{{ asset('bundles/app/img/cesta1.png') }}" alt=""></center>
+						<h3 class="mb-3 text-center">Cestas</h3>
+                       <ul>
+						<li>Preparación y reparto de las cestas los viernes por la tarde</li>	
+						</ul>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-4 mb-4">
+                   <div class="d-flex flex-column mb-2">
+					<center><img src="{{ asset('bundles/app/img/economia.png') }}" alt=""></center>
+						<h3 class="mb-3 text-center">Economía/Contratación</h3>
+                         <ul>
+						<li>Estudio de viabilidad económica</li>
+						<li>Análisis situación economica-finaciera</li> 
+						<li>Gestión con la gestoría</li>
+						<li>Cobros y pagos</li>
+						<li>selección y contratación de personal</li>
+						</ul>
+
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-4 mb-4">
+                    <div class="d-flex flex-column mb-2">
+					<center><img src="{{ asset('bundles/app/img/grupoconsumo.png') }}" alt=""></center>
+                        <h3 class="mb-3 text-center">Grupo de consumo</h3>
+                       <ul>  
+					  <li>Puesta en marcha de reparto de productos externos</li>
+					   <li>Contacto con grupos de consumos como nuevos socios</li>
+					   </ul>  
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-4 mb-4">
+                    <div class="d-flex flex-column mb-2">
+					<center><img  src="{{ asset('bundles/app/img/bombilla.png') }}" alt=""></center>
+						<h3 class="mb-3 text-center">Proyectos</h3>
+                          <ul>  
+						<li>Preparación de convocatorias de proyectos, concursos y subvenciones</li>
+					   </ul>  
+
+                    </div>
+                </div>
+                 <!--
+				 <div class="col-md-6 col-lg-4 mb-4">
+                   <div class="d-flex flex-column mb-2">
+					<center><img class= "justificadoIconosIndex img-icon-comi" src="../img/agricultura.png" alt=""></center>
+                        <h3 class="mb-3 text-center">Proyectos</h3>
+                        <p>Diam amet eos at no eos sit lorem, amet rebum ipsum clita stet, diam sea est magna diam eos, rebum sit vero stet ipsum justo</p>
+                    </div>
+                </div>-->
+            </div>
+        </div>
+    </div>
+    <!-- Services End -->
+
+{% endblock %}

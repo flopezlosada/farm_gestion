@@ -1,0 +1,71 @@
+{% extends 'base_front.html.twig' %}
+
+{% block title %}Quiénes somos · CSA Vega de Jarama{% endblock %}
+
+{% block content %}
+
+    <div class="container py-5">
+        <div class="row py-4">
+            <div class="col-lg-7 pb-5 pb-lg-0 px-3 px-lg-5">
+                <h1 class="display-4 mb-4"><span style="color: rgb(248, 177, 51)">CSA</span> <span style="color: #138504">Vega de Jarama</span></h1>
+                <h5 class="text-muted mb-3">Somos una asociación de productores y consumidores. Estamos en Torremocha de Jarama, en la Sierra Norte de Madrid.</h5>
+                <p class="mb-4">
+                    Iniciamos nuestro camino en 2016 siendo 20 familias, pero actualmente somos más de 150. Producimos alimentos de cercanía, de variedades locales y de temporada.
+                    Los fundamentos del proyecto son: producir alimentación de calidad, educar sobre la alimentación de temporada, cuidar nuestro entorno (tanto los espacios como a las personas), crear puestos de trabajo dignos para las personas que producen nuestra comida y potenciar el trabajo comunitario.
+                    Como proyecto agroecológico buscamos nexos entre las prácticas tradicionales y el complejo futuro de lo agro. Participamos en varios proyectos de investigación con el IMIDRA (planta de compostaje de residuo orgánico y Proyecto Simbiosis que une la agricultura ecológica con la apicultura).
+                </p>
+            </div>
+            <div class="col-lg-5">
+                <div class="row px-5">
+                    <div class="col-10 p-3">
+                        <img style="width: 400px; height: 400px;" src="{{ asset('bundles/app/img/visitacsa.JPG') }}" alt="Visita CSA">
+                    </div>
+                    <div class="col-6 p-0">
+                        <img class="img-fluid w-100" src="{{ asset('bundles/app/img/about-2.jpg') }}" alt="">
+                    </div>
+                    <div class="col-6 p-0">
+                        <img class="img-fluid w-100" src="{{ asset('bundles/app/img/about-3.jpg') }}" alt="">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container-xº bg-light">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-lg-5">
+                    <iframe width="450" height="310" src="https://www.youtube.com/embed/TDwyigb1JYU" title="#AcompañaCsa Dos" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+                </div>
+                <div class="col-lg-7 py-5 py-lg-0 px-3 px-lg-5">
+                    <h1 class="display-4 mb-4"><span style="color: rgb(248, 177, 51)">Somos</span>..</h1>
+                    <p class="mb-4">
+                        Un proyecto agroecológico innovador, especialmente en lo relacionado con la producción, distribución y consumo de productos hortofrutícolas y el manejo de los recursos que nos definen (tierra, agua, residuo, compostaje, comunidad). De esta manera, en gran medida y con buena práxis, devolvemos a la tierra lo que de ella hemos obtenido.
+                        <br>
+                        Nuestra Asociación funciona de manera horizontal y autogestionada. Las decisiones se toman de forma asamblearia por parte de todas las socias/os. En las diferentes comisiones se mezclan los trabajadores con socias/os voluntarias/os. También se organizan jornadas de trabajo colectivo y formaciones en agroecología.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container py-5">
+        <div class="row py-5">
+            <div class="col-lg-7 pb-5 pb-lg-0 px-3 px-lg-5">
+                <h1 class="display-4 mb-4"><span style="color: rgb(248, 177, 51)">¿Qué</span> <span style="color: #138504">te ofrecemos?</span></h1>
+                <h5 class="text-muted mb-3">Producto de temporada, de cercanía con tu mesa. Verdura recolectada esa misma mañana en la zona norte de la Comunidad de Madrid.</h5>
+                <p class="mb-4">
+                    Si estás de paso por la sierra de Madrid te animamos a que vengas a nuestro local a visitar el entorno donde se generan vuestros alimentos, a conocer a los socios, voluntarios, trabajadores y las huertas.
+                </p>
+            </div>
+            <div class="col-lg-5">
+                <div class="row px-5">
+                    <div class="col-10 p-3">
+                        <img style="width: 400px; height: 300px;" src="{{ asset('bundles/app/img/liberybeto.JPG') }}" alt="">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+{% endblock %}

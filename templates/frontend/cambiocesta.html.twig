@@ -1,0 +1,128 @@
+{% extends 'base_front.html.twig' %}
+
+{% block title %}Cambio de cesta · CSA Vega de Jarama{% endblock %}
+
+{% block content %}
+
+	<div class="container-xº bg-light">
+        <div class="container">
+            <div class="row align-items-center">
+           
+
+             <div class="col-lg-5">
+                    <div class="bg-secondary py-5 px-4 px-sm-5">
+					
+                      <form action="{{ asset('bundles/phpmail/enviarCorreoCambioCesta.php') }}" method="POST">
+
+                             <div class="control-group">
+                            <input class="form-control p-3" type="text" id="nombre" name="nombre" placeholder="Nombre..." required="required"  />
+                            <p class="help-block text-danger"></p>
+                        </div>
+                        <div class="control-group">
+                            <input class="form-control p-3" type="email" id="email" name="email" placeholder="Correo..." required="required"  />
+                            <p class="help-block text-danger"></p>
+                        </div>
+                        <div class="control-group">
+                            <input class="form-control p-3" type="tel" id="telefono" name="telefono" pattern="[0-9]{9}"  placeholder="Telefono..." required="required" />
+                            <p class="help-block text-danger"></p>
+                        </div>
+
+                        <div class="form-group">
+                            <select name="municipios" id="municipios" class="custom-select border-0 px-4" style="height: 47px;" required="required">
+                                <option value="">-- De donde eres--</option>
+                                <option value="Alcobendas/Sanse/Tres Cantos">Alcobendas/Sanse/Tres Cantos</option>
+                                <option value="Buitrago">Buitrago</option>
+                                <option value="Bustarviejo">Bustarviejo</option>
+                                <option value="Caraquiz">Caraquiz</option>
+                                <option value="Casas de Uceda">Casas de Uceda</option>
+                                <option value="El Berrueco">El Berrueco</option>
+                                <option value="El Casar/Mesones">El Casar/Mesones</option>
+                                <option value="Galapagos">Galapagos</option>
+                                <option value="Fuente La Higuera">Fuente La Higuera</option>
+                                <option value="La Cabrera">La Cabrera</option>
+                                <option value="Lozoyuela/Madarcos/Manjiron">Lozoyuela/Madarcos/Manjiron</option>
+                                <option value="Patones">Patones</option>
+                                <option value="Pedrezuela/El Molar">Pedrezuela/El Molar</option>
+                                <option value="Puebla">Puebla</option>
+                                <option value="Redueña">Alcobendas</option>
+                                <option value="San Agustin/Valdeolmos">San Agustin/Valdeolmos</option>
+                                <option value="San Fernando de Henares">San Fernando de Henares</option>
+                                <option value="Tomillares">Tomillares</option>
+                                <option value="Torrelaguna">Torrelaguna</option>
+                                <option value="Torremocha de Jarama">Torremocha de Jarama</option>
+                                <option value="Uceda">Uceda</option>
+                                <option value="Valdepielagos">Valdepielagos</option>
+                                <option value="Valdetorres/Talamanca">Trabensol</option>
+                                <option value="Venturada">Venturada</option>                           
+                            </select>
+                        </div>
+
+
+                        <div class="form-group">
+                            <label style="color:#000000" for="opciones"><strong>Selecciona una opción: </strong></label>
+                            <select name="opciones" id="opciones" class="custom-select border-0 px-4" style="height: 47px;" required="required">
+                                <option value="">--Que deseas hacer--</option>
+                                <option value="Mover cesta a la semana siguiente" id="mover">Mover cesta</option>
+                                <option value="Desea donar su cesta" id="donar">Donar</option>
+                            </select>
+                            <strong> <p style="color:#bbb813" id="mensaje_jueves">Disculpe la opcion "Mover cesta" esta bloqueada los viernres.</p></strong>
+                        </div>
+                        
+							<div>
+                                <button class="btn btn-dark btn-block border-0 py-2" type="submit">Enviar mensaje</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+				
+                
+                <div class="col-lg-7 py-5 py-lg-5 px-3 px-lg-5">
+                    <h3 class="text-secondary mb-3">No puedes recoger tu cesta avisanos!!!</h3>
+                    <h1 class="display-4 mb-4">Cambio <span class="text-primary">de cesta</span></h1>
+                   
+					 <h4 class="mb-2 ">Si necesitas mover o donar tu cesta puedes hacerlo en este formulario.</h4>
+					<ul>
+						<li>Rellena el formulario</li>
+						
+						<li>Elige la opcion que necesites</li>
+						
+						<li>Pulsa enviar </li>
+						  
+						</ul>
+						  <div>
+                        <h4>Descargar listado</h4>
+                        <h5>Puedes verificar en la lista de reparto si te toca cesta</h5>
+                        <p>Haz clic en el enlace para descargar listado PDF:</p>
+                        <a href="{{ asset('descargaspdf/listado.pdf') }}" target="_blank" >Descargar PDF</a>
+                    </div>
+                </div>
+            </div>
+		</div>
+      </div>
+
+          <script>
+        function esJueves() {
+            var diaDeSemana = new Date().getDay();
+            return diaDeSemana === 5; // 0 = Domingo, 1 = Lunes, ..., 6 = Sábado
+        }
+
+        // Función para habilitar o deshabilitar la opción según el día de la semana
+        function habilitarOpcionSegunDia() {
+            var opcion = document.getElementById('mover');
+            var mensajeJueves = document.getElementById('mensaje_jueves');
+
+            if (esJueves()) {
+                opcion.disabled = true;
+                mensajeJueves.style.display = 'block';
+            } else {
+                opcion.disabled = false;
+                mensajeJueves.style.display = 'none';
+            }
+        }
+
+        // Llamar a la función al cargar la página y cada vez que cambia el valor del select
+        habilitarOpcionSegunDia();
+        document.getElementById('donar').addEventListener('change', habilitarOpcionSegunDia);
+    </script>
+
+{% endblock %}
