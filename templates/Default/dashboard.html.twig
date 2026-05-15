@@ -103,12 +103,12 @@
             ) }}
         </div>
 
-        <div style="display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: var(--csa-sp-6); align-items: flex-start;">
+        <div class="csa-dashboard-grid">
 
             <div class="csa-stack-lg">
 
                 {# ===== Lotes activos: dos cards en paralelo ===== #}
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--csa-sp-6);">
+                <div class="csa-dashboard-pair">
 
                     {# --- Gallinas --- #}
                     {% embed '_components/csa_card.html.twig' with {

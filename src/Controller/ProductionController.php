@@ -276,17 +276,20 @@ class ProductionController extends AbstractAppController
             $year = date('Y');
         }
         $em = $this->getDoctrine()->getManager();
-        $weeks = $em->getRepository(\App\Entity\Production::class)->findWeeks($year);//semanas en las que hay producción declarada. Equivale a semanas en las que se entrega cesta.
+        $repo = $em->getRepository(\App\Entity\Production::class);
+        $weeks = $repo->findWeeks($year);//semanas en las que hay producción declarada. Equivale a semanas en las que se entrega cesta.
         $baskets = array();
 
         foreach ($weeks as $week) {
-            $baskets[$week["week"]] = $em->getRepository(\App\Entity\Production::class)->findProductionInWeek($week["week"], $year);
+            $baskets[$week["week"]] = $repo->findProductionInWeek($week["week"], $year);
         }
 
+        $years_available = $repo->findYearsWithProduction();
 
         return $this->render('Production/basket.html.twig', array(
             'weeks' => $weeks,
-            'year' => $year,
+            'year' => (int) $year,
+            'years_available' => $years_available,
             'baskets' => $baskets
 
         ));

@@ -259,6 +259,41 @@
   gap: var(--csa-sp-4);
 }
 
+/* Dashboard: contenido principal (1fr) + aside lateral fijo. En móvil colapsa
+   a una columna apilada. */
+.csa-dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: var(--csa-sp-6);
+  align-items: flex-start;
+}
+@media (max-width: 900px) {
+  .csa-dashboard-grid { grid-template-columns: 1fr; }
+}
+
+/* Dos cards en paralelo (ej. Lotes de gallinas + Lotes de pollos). En móvil
+   se apilan. */
+.csa-dashboard-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--csa-sp-6);
+}
+@media (max-width: 700px) {
+  .csa-dashboard-pair { grid-template-columns: 1fr; }
+}
+
+/* Edición con aside lateral proporcional (ej. blog edit/second:
+   contenido 2fr + acciones 1fr). En móvil apila el aside al final. */
+.csa-content-aside {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--csa-sp-6);
+  align-items: flex-start;
+}
+@media (max-width: 900px) {
+  .csa-content-aside { grid-template-columns: 1fr; }
+}
+
 
 /* ============================================================
  * LIST (filas semánticas: icono + título + subtítulo)
@@ -788,7 +823,7 @@ select.csa-input,
   background: var(--csa-surface);
   border: 1px solid var(--csa-rule);
   border-radius: var(--csa-radius-lg);
-  overflow: hidden;
+  overflow-x: auto;
 }
 .csa-table {
   width: 100%;
@@ -1133,6 +1168,7 @@ a.csa-table__primary:hover {
 .csa-tabs {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--csa-sp-6);
   list-style: none;
   padding: 0;
