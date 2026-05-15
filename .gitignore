@@ -8,6 +8,12 @@
 *.swp
 *~
 
+# Backups locales del hosting (no subir a git)
+/backup/
+
+# Notas internas de seguimiento (no entran al repo)
+/handoff/
+
 ###> symfony/framework-bundle ###
 /.env.local
 /.env.local.php
