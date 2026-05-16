@@ -89,7 +89,18 @@ class SecurityController extends AbstractController
             ]);
         }
 
-        $partner = $partnerRepository->findOneBy(['email' => $email, 'celular' => $phone]);
+        // Lookup case-insensitive: el Partner pudo registrar su email en
+        // cualquier capitalización y no queremos que el socix tenga que
+        // recordar exactamente cómo se escribió.
+        $partner = $partnerRepository->createQueryBuilder('p')
+            ->where('LOWER(p.email) = LOWER(:email)')
+            ->andWhere('p.celular = :celular')
+            ->setParameter('email', $email)
+            ->setParameter('celular', $phone)
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+
         if ($partner !== null) {
             $user = $this->resolveOrCreateUserForPartner($partner, $em, $hasher, $userRepository);
             if ($user !== null) {
@@ -136,7 +147,7 @@ class SecurityController extends AbstractController
             ]);
         }
 
-        $user = $userRepository->findOneBy(['email' => $email]);
+        $user = $userRepository->loadUserByIdentifier($email);
         if ($user !== null) {
             $this->sendMagicLink($user, $loginLinkHandler, $mailer);
         }
@@ -204,12 +215,18 @@ class SecurityController extends AbstractController
         UserPasswordHasherInterface $hasher,
         UserRepository $userRepository,
     ): ?User {
-        $email = $partner->getEmail();
-        if ($email === null || $email === '') {
+        $rawEmail = $partner->getEmail();
+        if ($rawEmail === null || $rawEmail === '') {
             return null;
         }
 
-        $existing = $userRepository->findOneBy(['email' => $email]);
+        // Canonicalizamos a lowercase para no guardar "ADRIANA@x.com" como
+        // username/email del User: los logins son case-insensitive (vía
+        // UserRepository::loadUserByIdentifier) y los identificadores
+        // visibles quedan más limpios.
+        $email = mb_strtolower(trim($rawEmail));
+
+        $existing = $userRepository->loadUserByIdentifier($email);
         if ($existing !== null) {
             return $existing;
         }

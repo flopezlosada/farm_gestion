@@ -45,10 +45,13 @@ security:
             - ROLE_PARTNER
 
     providers:
+        # Sin "property": Symfony delega en UserRepository::loadUserByIdentifier
+        # (UserLoaderInterface), que busca contra usernameCanonical OR
+        # emailCanonical, ambos lowercased. Así el login es case-insensitive
+        # y el socix puede entrar tanto con su username como con su email.
         app_user_provider:
             entity:
                 class: App\Entity\User
-                property: username
 
     firewalls:
         main:
