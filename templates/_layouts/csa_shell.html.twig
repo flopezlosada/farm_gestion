@@ -91,29 +91,31 @@
                            route starts with 'culturalwork') }}
                         {{ _self.nav_link('Compost', path('compostcollection'), 'fa-recycle',
                            route starts with 'compostcollection') }}
+                        {# Composición de las cestas que se cosechan cada viernes (no confundir con
+                         # el reparto a socixs, que vive en el grupo Socixs > Reparto semanal). #}
+                        {{ _self.nav_link('Composición de cestas', path('production_show_basket', { year: 'now'|date('Y') }), 'fa-shopping-basket',
+                           route starts with 'production') }}
                     {% endif %}
 
                     {% if is_granted('ROLE_GESTION_SOCIXS') %}
                         <div class="csa-sidebar__group">Socixs</div>
                         {{ _self.nav_link('Listado', path('partner_index'), 'fa-people-carry',
-                           route starts with 'partner') }}
+                           (route starts with 'partner_' and not (route starts with 'partner_basket_share')) and route != 'partner_evolution') }}
+                        {{ _self.nav_link('Reparto semanal', path('partner_basket_share_generate_weekly'), 'fa-cart-arrow-down',
+                           route starts with 'partner_basket_share' or (route starts with 'weekly_basket' and not (route starts with 'weekly_basket_group'))) }}
                         {{ _self.nav_link('Grupos de recogida', path('weekly_basket_group_index'), 'fa-map-marker',
                            route starts with 'weekly_basket_group') }}
+                        {{ _self.nav_link('Evolución', path('partner_evolution'), 'fa-line-chart',
+                           route == 'partner_evolution') }}
                     {% endif %}
 
-                    {# Comercio: el grupo aparece si tienes cualquier rol que dé acceso a algún ítem #}
-                    {% if is_granted('ROLE_GESTION_CESTAS') or is_granted('ROLE_ADMIN') %}
+                    {# Comercio: ya no incluye Cestas (eso es composición de cosecha, está en Granja). #}
+                    {% if is_granted('ROLE_ADMIN') %}
                         <div class="csa-sidebar__group">Comercio</div>
-                        {% if is_granted('ROLE_GESTION_CESTAS') %}
-                            {{ _self.nav_link('Cestas', path('production_show_basket', { year: 'now'|date('Y') }), 'fa-shopping-basket',
-                               route starts with 'production_show_basket' or route starts with 'production') }}
-                        {% endif %}
-                        {% if is_granted('ROLE_ADMIN') %}
-                            {{ _self.nav_link('Ventas', path('sale'), 'fa-money',
-                               route starts with 'sale') }}
-                            {{ _self.nav_link('Compras', path('purchase'), 'fa-eur',
-                               route starts with 'purchase') }}
-                        {% endif %}
+                        {{ _self.nav_link('Ventas', path('sale'), 'fa-money',
+                           route starts with 'sale') }}
+                        {{ _self.nav_link('Compras', path('purchase'), 'fa-eur',
+                           route starts with 'purchase') }}
                     {% endif %}
 
                     {% if is_granted('ROLE_BLOG') %}
@@ -187,6 +189,24 @@
 
             {# CONTENIDO #}
             <main class="csa-content">
+                {# Flash messages: si no se pintan aquí, se quedan en sesión y
+                 # aparecen en la siguiente página que los renderice (que era
+                 # la confusión: dabas de baja y veías el mensaje al entrar
+                 # luego en una ficha). #}
+                {% for type, messages in app.flashes %}
+                    {% for message in messages %}
+                        {% set flash_class = {
+                            'success': 'csa-alert--success',
+                            'warning': 'csa-alert--warning',
+                            'error':   'csa-alert--error',
+                            'info':    'csa-alert--info'
+                        }[type]|default('csa-alert--info') %}
+                        <div class="csa-alert {{ flash_class }}" style="margin-bottom: var(--csa-sp-4);" role="status">
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                {% endfor %}
+
                 {% block csa_main %}{% endblock %}
             </main>
         </div>

@@ -1789,3 +1789,22 @@ table.csa-table thead th.sorting_desc::after { content: " ↓"; color: var(--csa
 }
 .csa-task-card__body p { margin: 0 0 var(--csa-sp-2) 0; }
 .csa-task-card__body p:last-child { margin-bottom: 0; }
+
+/* ---------- ALERTS ----------
+ * Usados por los flash messages renderizados en csa_shell. Mismas paletas que badges.
+ */
+.csa-alert {
+  display: flex;
+  gap: var(--csa-sp-3);
+  align-items: flex-start;
+  padding: var(--csa-sp-3) var(--csa-sp-4);
+  border-radius: var(--csa-radius-md);
+  border-left: 3px solid var(--csa-line);
+  background: var(--csa-surface-alt);
+  color: var(--csa-ink);
+  font-size: var(--csa-fs-sm);
+}
+.csa-alert--success { background: var(--csa-green-soft);      color: var(--csa-green);      border-left-color: var(--csa-green); }
+.csa-alert--warning { background: var(--csa-ochre-soft);      color: var(--csa-amber);      border-left-color: var(--csa-amber); }
+.csa-alert--error   { background: var(--csa-terracotta-soft); color: var(--csa-terracotta); border-left-color: var(--csa-terracotta); }
+.csa-alert--info    { background: var(--csa-sky-soft);        color: var(--csa-sky);        border-left-color: var(--csa-sky); }
