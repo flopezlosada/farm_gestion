@@ -156,6 +156,24 @@ class PartnerBasketShare
     #[Assert\GreaterThan(value: 0)]
     private $amount;
 
+    public const DELIVERY_GROUP_A = 'A';
+    public const DELIVERY_GROUP_B = 'B';
+    public const DELIVERY_GROUPS = [self::DELIVERY_GROUP_A, self::DELIVERY_GROUP_B];
+
+    /**
+     * Grupo de reparto A/B. Sirve para equilibrar la carga de cosecha viernes
+     * a viernes en quincenales y mensuales: la persona que cosecha quiere que
+     * cada semana haya aproximadamente la misma cantidad de cestas.
+     *
+     * Null para suscripciones semanales (reciben todos los viernes y por
+     * tanto no participan del balanceo) y para casos puntuales que aún no
+     * tengan grupo asignado.
+     *
+     * @ORM\Column(name="delivery_group", type="string", length=1, nullable=true)
+     */
+    #[Assert\Choice(choices: ['A', 'B'], message: 'Grupo de reparto inválido (solo A o B).')]
+    private ?string $delivery_group = null;
+
 
 
 
@@ -435,5 +453,22 @@ class PartnerBasketShare
         return $this;
     }
 
+    public function getDeliveryGroup(): ?string
+    {
+        return $this->delivery_group;
+    }
 
+    /**
+     * @param string|null $delivery_group Uno de PartnerBasketShare::DELIVERY_GROUP_* o null.
+     * @throws \InvalidArgumentException Si el valor no es A, B o null.
+     */
+    public function setDeliveryGroup(?string $delivery_group): self
+    {
+        if ($delivery_group !== null && !in_array($delivery_group, self::DELIVERY_GROUPS, true)) {
+            throw new \InvalidArgumentException(sprintf('Grupo de reparto inválido: %s', $delivery_group));
+        }
+        $this->delivery_group = $delivery_group;
+
+        return $this;
+    }
 }
