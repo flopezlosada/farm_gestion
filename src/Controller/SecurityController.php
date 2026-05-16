@@ -59,15 +59,41 @@ class SecurityController extends AbstractController
         }
 
         $email = trim((string) $request->request->get('email', ''));
-        $phone = $this->normalizePhone((string) $request->request->get('phone', ''));
+        $phoneRaw = trim((string) $request->request->get('phone', ''));
 
-        if ($email !== '' && $phone !== null) {
-            $partner = $partnerRepository->findOneBy(['email' => $email, 'celular' => $phone]);
-            if ($partner !== null) {
-                $user = $this->resolveOrCreateUserForPartner($partner, $em, $hasher, $userRepository);
-                if ($user !== null) {
-                    $this->sendMagicLink($user, $loginLinkHandler, $mailer);
-                }
+        // Validamos formato antes de buscar. Errores de formato sí se enseñan
+        // — son reglas públicas, no leak de qué emails están registrados.
+        // El "no encontrado" sigue por el camino antifuga (redirige a sent).
+        $errors = [];
+        if ($email === '') {
+            $errors['email'] = 'Indica tu email.';
+        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $errors['email'] = 'El email no tiene un formato válido.';
+        }
+
+        $phone = null;
+        if ($phoneRaw === '') {
+            $errors['phone'] = 'Indica tu teléfono.';
+        } else {
+            $phone = $this->normalizePhone($phoneRaw);
+            if ($phone === null) {
+                $errors['phone'] = 'El teléfono debe tener 9 dígitos (puedes incluir prefijo internacional, espacios o guiones).';
+            }
+        }
+
+        if (!empty($errors)) {
+            return $this->render('Security/first_access.html.twig', [
+                'errors' => $errors,
+                'last_email' => $email,
+                'last_phone' => $phoneRaw,
+            ]);
+        }
+
+        $partner = $partnerRepository->findOneBy(['email' => $email, 'celular' => $phone]);
+        if ($partner !== null) {
+            $user = $this->resolveOrCreateUserForPartner($partner, $em, $hasher, $userRepository);
+            if ($user !== null) {
+                $this->sendMagicLink($user, $loginLinkHandler, $mailer);
             }
         }
 
@@ -95,11 +121,24 @@ class SecurityController extends AbstractController
         }
 
         $email = trim((string) $request->request->get('email', ''));
-        if ($email !== '') {
-            $user = $userRepository->findOneBy(['email' => $email]);
-            if ($user !== null) {
-                $this->sendMagicLink($user, $loginLinkHandler, $mailer);
-            }
+
+        $errors = [];
+        if ($email === '') {
+            $errors['email'] = 'Indica tu email.';
+        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $errors['email'] = 'El email no tiene un formato válido.';
+        }
+
+        if (!empty($errors)) {
+            return $this->render('Security/forgot.html.twig', [
+                'errors' => $errors,
+                'last_email' => $email,
+            ]);
+        }
+
+        $user = $userRepository->findOneBy(['email' => $email]);
+        if ($user !== null) {
+            $this->sendMagicLink($user, $loginLinkHandler, $mailer);
         }
 
         return $this->redirectToRoute('app_login_link_sent');
