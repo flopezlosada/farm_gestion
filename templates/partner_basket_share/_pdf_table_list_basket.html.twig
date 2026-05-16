@@ -13,8 +13,10 @@
     {% set has_basket=0 %}
     {% for group in weekly_basket_groups %}
         {% for basket in entity %}
+            {% set partner_group = basket.partner.weeklyBasketGroup %}
+            {% set active = basket.partner.getActiveBasket %}
 
-            {% if group.id==basket.partner.weeklyBasketGroup.id %}
+            {% if partner_group and group.id == partner_group.id %}
                 {% if has_basket!=1 %}
                     {% set has_basket=1 %}
                     <tr>
@@ -22,11 +24,11 @@
                     </tr>
                 {% endif %}
                 <tr>
-                    <td bgcolor="{{ group.color }}">{{ basket.partner.weeklyBasketGroup.name }} </td>
+                    <td bgcolor="{{ group.color }}">{{ partner_group.name }} </td>
                     <td>{{ basket.partner }}</td>
-                    <td>{{ basket.partner.getActiveBasket.amount }}</td>
+                    <td>{{ active.amount ?? '—' }}</td>
                     <td>{{ basket.basketShare.id==5?'Sin cesta':'Entera' }}</td>
-                    <td>{{ basket.partner.getActiveBasket.eggAmount }}</td>
+                    <td>{{ active.eggAmount ?? '' }}</td>
                     <td></td>
                 </tr>
             {% endif %}
