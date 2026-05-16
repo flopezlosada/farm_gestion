@@ -59,6 +59,17 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface, LegacyP
     private $password;
 
     /**
+     * Marca si el User ha elegido su contraseña permanente. Los Users
+     * creados por la vía de "primer acceso" (magic-link) arrancan con
+     * un password aleatorio que nadie va a usar y passwordSet = false;
+     * la primera vez que entran por el link, el panel les redirige a
+     * /panel/setup antes de dejarles seguir.
+     *
+     * @ORM\Column(name="password_set", type="boolean", options={"default": false})
+     */
+    private bool $passwordSet = false;
+
+    /**
      * @ORM\Column(name="last_login", type="datetime", nullable=true)
      */
     private $lastLogin;
@@ -474,5 +485,16 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface, LegacyP
     public function getTasks(): Collection
     {
         return $this->tasks;
+    }
+
+    public function isPasswordSet(): bool
+    {
+        return $this->passwordSet;
+    }
+
+    public function setPasswordSet(bool $passwordSet): self
+    {
+        $this->passwordSet = $passwordSet;
+        return $this;
     }
 }

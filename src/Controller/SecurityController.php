@@ -2,12 +2,17 @@
 
 namespace App\Controller;
 
+use App\Entity\Partner;
+use App\Entity\User;
+use App\Repository\PartnerRepository;
 use App\Repository\UserRepository;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bridge\Twig\Mime\TemplatedEmail;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Mailer\MailerInterface;
+use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Security\Http\Authentication\AuthenticationUtils;
 use Symfony\Component\Security\Http\LoginLink\LoginLinkHandlerInterface;
@@ -28,46 +33,82 @@ class SecurityController extends AbstractController
     }
 
     /**
-     * Recibe el email de la socia, genera un magic-link (válido 30 min, un
-     * solo uso) y lo envía por correo. Para no filtrar qué emails están
-     * registrados, siempre redirige a la misma pantalla "te hemos enviado
-     * un correo": si el email no existe o el User no tiene email registrado,
-     * tampoco se envía nada, pero la pantalla es la misma.
+     * Primer acceso de un socix sin User aún. El socix mete email y celular;
+     * si la pareja coincide con un Partner registrado, se crea (o reutiliza)
+     * el User vinculado y se le envía el magic-link al correo.
+     *
+     * Antifuga: el flujo visual es siempre el mismo, encuentre o no. Así no
+     * se puede inventariar qué emails están registrados como socixs.
      */
-    #[Route('/login/magic', name: 'app_login_link_request', methods: ['POST'])]
-    public function requestMagicLink(
+    #[Route('/login/first-access', name: 'app_login_link_first', methods: ['GET', 'POST'])]
+    public function firstAccess(
         Request $request,
+        PartnerRepository $partnerRepository,
         UserRepository $userRepository,
+        EntityManagerInterface $em,
+        UserPasswordHasherInterface $hasher,
         LoginLinkHandlerInterface $loginLinkHandler,
         MailerInterface $mailer,
     ): Response {
+        if ($request->isMethod('GET')) {
+            return $this->render('Security/first_access.html.twig');
+        }
+
+        if (!$this->isCsrfTokenValid('login_link_first', (string) $request->request->get('_csrf_token'))) {
+            return $this->redirectToRoute('app_login_link_sent');
+        }
+
         $email = trim((string) $request->request->get('email', ''));
+        $phone = $this->normalizePhone((string) $request->request->get('phone', ''));
 
-        if ($email !== '') {
-            $user = $userRepository->findOneBy(['email' => $email]);
-            if ($user !== null && $user->getEmail() !== null) {
-                $details = $loginLinkHandler->createLoginLink($user);
-
-                $message = (new TemplatedEmail())
-                    ->to($user->getEmail())
-                    ->subject('Tu enlace de acceso a la CSA Vega de Jarama')
-                    ->htmlTemplate('email/magic_link.html.twig')
-                    ->textTemplate('email/magic_link.txt.twig')
-                    ->context([
-                        'link' => $details->getUrl(),
-                        'expires_at' => $details->getExpiresAt(),
-                    ]);
-                $mailer->send($message);
+        if ($email !== '' && $phone !== null) {
+            $partner = $partnerRepository->findOneBy(['email' => $email, 'celular' => $phone]);
+            if ($partner !== null) {
+                $user = $this->resolveOrCreateUserForPartner($partner, $em, $hasher, $userRepository);
+                if ($user !== null) {
+                    $this->sendMagicLink($user, $loginLinkHandler, $mailer);
+                }
             }
         }
 
         return $this->redirectToRoute('app_login_link_sent');
     }
 
-    #[Route('/login/magic/enviado', name: 'app_login_link_sent', methods: ['GET'])]
-    public function magicLinkSent(): Response
+    /**
+     * Recuperación de acceso para User existente: pide email, manda link.
+     * Para Partners sin User vinculado este flujo no aplica — esos pasan
+     * por /login/first-access.
+     */
+    #[Route('/login/forgot', name: 'app_login_link_forgot', methods: ['GET', 'POST'])]
+    public function forgot(
+        Request $request,
+        UserRepository $userRepository,
+        LoginLinkHandlerInterface $loginLinkHandler,
+        MailerInterface $mailer,
+    ): Response {
+        if ($request->isMethod('GET')) {
+            return $this->render('Security/forgot.html.twig');
+        }
+
+        if (!$this->isCsrfTokenValid('login_link_forgot', (string) $request->request->get('_csrf_token'))) {
+            return $this->redirectToRoute('app_login_link_sent');
+        }
+
+        $email = trim((string) $request->request->get('email', ''));
+        if ($email !== '') {
+            $user = $userRepository->findOneBy(['email' => $email]);
+            if ($user !== null) {
+                $this->sendMagicLink($user, $loginLinkHandler, $mailer);
+            }
+        }
+
+        return $this->redirectToRoute('app_login_link_sent');
+    }
+
+    #[Route('/login/sent', name: 'app_login_link_sent', methods: ['GET'])]
+    public function linkSent(): Response
     {
-        return $this->render('Security/magic_sent.html.twig');
+        return $this->render('Security/sent.html.twig');
     }
 
     /**
@@ -84,5 +125,91 @@ class SecurityController extends AbstractController
     public function logout(): never
     {
         throw new \LogicException('Esta ruta la intercepta el firewall de logout. Si la ves, hay un misconfig en security.yaml.');
+    }
+
+    /**
+     * Normaliza un teléfono español a 9 dígitos para comparar con
+     * Partner.celular (INTEGER). Quita todo lo que no sea dígito y, si
+     * sobran caracteres por delante (prefijo 34 o 0034), se queda con
+     * los últimos 9. Devuelve null si no se obtienen 9 dígitos limpios.
+     */
+    private function normalizePhone(string $raw): ?int
+    {
+        $digits = preg_replace('/\D+/', '', $raw);
+        if ($digits === null || $digits === '') {
+            return null;
+        }
+        if (strlen($digits) > 9) {
+            $digits = substr($digits, -9);
+        }
+        if (strlen($digits) !== 9) {
+            return null;
+        }
+        return (int) $digits;
+    }
+
+    /**
+     * Devuelve el User vinculado al Partner. Si no existe, crea uno con
+     * username = email, password aleatorio (placeholder) y passwordSet =
+     * false: la primera vez que entre, el panel le forzará a configurar
+     * su contraseña real.
+     *
+     * Edge case: si ya existe un User con ese email pero NO está vinculado
+     * a este Partner (familia que comparte buzón), se reutiliza el User
+     * existente y el link irá a su email. La asociación gestiona estos
+     * casos a mano.
+     */
+    private function resolveOrCreateUserForPartner(
+        Partner $partner,
+        EntityManagerInterface $em,
+        UserPasswordHasherInterface $hasher,
+        UserRepository $userRepository,
+    ): ?User {
+        $email = $partner->getEmail();
+        if ($email === null || $email === '') {
+            return null;
+        }
+
+        $existing = $userRepository->findOneBy(['email' => $email]);
+        if ($existing !== null) {
+            return $existing;
+        }
+
+        $user = new User();
+        $user->setUsername($email);
+        $user->setEmail($email);
+        $user->setRoles(['ROLE_PARTNER']);
+        $user->setPartner($partner);
+        $user->setPasswordSet(false);
+        $user->setPassword($hasher->hashPassword($user, bin2hex(random_bytes(16))));
+
+        $em->persist($user);
+        $em->flush();
+
+        return $user;
+    }
+
+    private function sendMagicLink(
+        User $user,
+        LoginLinkHandlerInterface $loginLinkHandler,
+        MailerInterface $mailer,
+    ): void {
+        if ($user->getEmail() === null) {
+            return;
+        }
+
+        $details = $loginLinkHandler->createLoginLink($user);
+
+        $message = (new TemplatedEmail())
+            ->to($user->getEmail())
+            ->subject('Tu enlace de acceso a la CSA Vega de Jarama')
+            ->htmlTemplate('email/magic_link.html.twig')
+            ->textTemplate('email/magic_link.txt.twig')
+            ->context([
+                'link' => $details->getUrl(),
+                'expires_at' => $details->getExpiresAt(),
+            ]);
+
+        $mailer->send($message);
     }
 }

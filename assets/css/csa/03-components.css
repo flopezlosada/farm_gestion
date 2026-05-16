@@ -1808,3 +1808,279 @@ table.csa-table thead th.sorting_desc::after { content: " ↓"; color: var(--csa
 .csa-alert--warning { background: var(--csa-ochre-soft);      color: var(--csa-amber);      border-left-color: var(--csa-amber); }
 .csa-alert--error   { background: var(--csa-terracotta-soft); color: var(--csa-terracotta); border-left-color: var(--csa-terracotta); }
 .csa-alert--info    { background: var(--csa-sky-soft);        color: var(--csa-sky);        border-left-color: var(--csa-sky); }
+
+
+/* ============================================================
+ * AUTH · pantallas públicas (login, magic-link, recuperación)
+ * ============================================================
+ * Layout standalone, sin shell ni sidebar. Mobile-first, una
+ * sola columna centrada vertical y horizontalmente. Pensado
+ * para socixs con baja familiaridad digital: jerarquía clara,
+ * pocas decisiones por pantalla, sin ruido.
+ * Se carga con templates/_layouts/csa_auth.html.twig.
+ * ============================================================ */
+
+.csa-auth {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--csa-bg);
+  /* textura muy sutil de papel: dos gradientes radiales y un velo verde
+     en la esquina superior izquierda. No introduce imágenes externas. */
+  background-image:
+    radial-gradient(900px 600px at -10% -10%, rgba(74, 124, 58, 0.06), transparent 60%),
+    radial-gradient(700px 500px at 110% 110%, rgba(212, 148, 58, 0.05), transparent 60%);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Hoja decorativa contenida en el fondo, sin interferir con el contenido.
+   El SVG va inline en la plantilla; aquí solo posición y opacidad. */
+.csa-auth__leaf {
+  position: absolute;
+  pointer-events: none;
+  user-select: none;
+  color: var(--csa-green);
+  opacity: 0.08;
+}
+.csa-auth__leaf--tl { top: -40px; left: -30px; width: 220px; transform: rotate(-18deg); }
+.csa-auth__leaf--br { bottom: -60px; right: -50px; width: 280px; transform: rotate(155deg); opacity: 0.06; }
+
+.csa-auth__shell {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: var(--csa-sp-6) var(--csa-sp-4);
+  position: relative;
+  z-index: 1;
+}
+
+.csa-auth__inner {
+  width: 100%;
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--csa-sp-6);
+}
+
+/* ---------- Brand mark ---------- */
+
+.csa-auth__brand {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--csa-sp-2);
+}
+.csa-auth__brand-mark {
+  font-family: var(--csa-serif);
+  font-style: italic;
+  font-size: 2.5rem;
+  line-height: 1;
+  color: var(--csa-green);
+  letter-spacing: -0.02em;
+}
+.csa-auth__brand-name {
+  font-family: var(--csa-sans);
+  font-size: var(--csa-fs-xs);
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--csa-ink-soft);
+}
+.csa-auth__brand-rule {
+  width: 32px;
+  height: 1px;
+  background: var(--csa-rule);
+  margin-top: var(--csa-sp-1);
+}
+
+/* ---------- Card ---------- */
+
+.csa-auth__card {
+  background: var(--csa-surface);
+  border: 1px solid var(--csa-rule-soft);
+  border-radius: var(--csa-radius-lg);
+  box-shadow: var(--csa-shadow-md);
+  padding: var(--csa-sp-8) var(--csa-sp-6);
+}
+@media (min-width: 480px) {
+  .csa-auth__card { padding: var(--csa-sp-10) var(--csa-sp-8); }
+}
+
+.csa-auth__title {
+  font-family: var(--csa-serif);
+  font-size: var(--csa-fs-2xl);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: var(--csa-lh-tight);
+  color: var(--csa-ink);
+  margin: 0 0 var(--csa-sp-2) 0;
+}
+.csa-auth__lead {
+  font-family: var(--csa-sans);
+  font-size: var(--csa-fs-base);
+  color: var(--csa-ink-soft);
+  line-height: var(--csa-lh-snug);
+  margin: 0 0 var(--csa-sp-6) 0;
+  text-wrap: pretty;
+}
+
+.csa-auth__form { display: flex; flex-direction: column; gap: var(--csa-sp-4); }
+
+/* Inputs más altos en auth: dedos en móvil. */
+.csa-auth .csa-input { height: 46px; font-size: var(--csa-fs-md); }
+
+/* Checkbox "recuérdame" con tipografía cómoda. */
+.csa-auth__check {
+  display: flex;
+  align-items: center;
+  gap: var(--csa-sp-2);
+  font-size: var(--csa-fs-sm);
+  color: var(--csa-ink-soft);
+  user-select: none;
+  cursor: pointer;
+}
+.csa-auth__check input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--csa-green);
+  margin: 0;
+  cursor: pointer;
+}
+
+/* Botón primario a ancho completo, alto cómodo para móvil. */
+.csa-auth__submit {
+  height: 48px;
+  font-size: var(--csa-fs-md);
+  margin-top: var(--csa-sp-2);
+}
+
+/* Divisor con título tipo "o" centrado entre dos líneas. Usado para
+   separar el form principal de las acciones secundarias. */
+.csa-auth__sep {
+  display: flex;
+  align-items: center;
+  gap: var(--csa-sp-3);
+  margin: var(--csa-sp-6) 0 var(--csa-sp-4);
+  color: var(--csa-ink-muted);
+  font-size: var(--csa-fs-xs);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.csa-auth__sep::before,
+.csa-auth__sep::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--csa-rule-soft);
+}
+
+/* Sección de acciones secundarias: lista de enlaces tipo "menú breve". */
+.csa-auth__links {
+  display: flex;
+  flex-direction: column;
+  gap: var(--csa-sp-1);
+}
+.csa-auth .csa-auth__link {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--csa-sp-3);
+  padding: var(--csa-sp-3) 0;
+  border-bottom: 1px solid var(--csa-rule-soft);
+  color: var(--csa-ink);
+  font-size: var(--csa-fs-md);
+  text-decoration: none;
+  transition: color var(--csa-t-fast);
+}
+.csa-auth .csa-auth__link:last-child { border-bottom: none; }
+.csa-auth .csa-auth__link:hover { color: var(--csa-green); border-bottom-color: var(--csa-rule-soft); }
+.csa-auth .csa-auth__link:hover .csa-auth__link-arrow { transform: translateX(3px); color: var(--csa-green); }
+.csa-auth__link-arrow {
+  flex-shrink: 0;
+  color: var(--csa-ink-muted);
+  font-family: var(--csa-serif);
+  font-size: var(--csa-fs-lg);
+  line-height: 1;
+  transition: transform var(--csa-t-fast), color var(--csa-t-fast);
+}
+.csa-auth__link-sub {
+  display: block;
+  font-size: var(--csa-fs-xs);
+  color: var(--csa-ink-muted);
+  margin-top: 2px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* "Volver" como link discreto centrado bajo formularios secundarios. */
+.csa-auth__back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--csa-sp-1);
+  margin-top: var(--csa-sp-5);
+  font-size: var(--csa-fs-sm);
+  color: var(--csa-ink-soft);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: color var(--csa-t-fast), border-color var(--csa-t-fast);
+}
+.csa-auth__back:hover { color: var(--csa-ink); border-bottom-color: var(--csa-ink); }
+.csa-auth__back::before { content: "←"; font-family: var(--csa-serif); }
+
+/* Pie del card: notas pequeñas (caducidad del enlace, etc). */
+.csa-auth__note {
+  margin-top: var(--csa-sp-5);
+  padding-top: var(--csa-sp-4);
+  border-top: 1px dashed var(--csa-rule-soft);
+  font-size: var(--csa-fs-xs);
+  color: var(--csa-ink-muted);
+  line-height: var(--csa-lh-snug);
+  text-wrap: pretty;
+}
+
+/* Confirmación: bloque de icono + mensaje en pantalla "enviado". */
+.csa-auth__confirm {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--csa-sp-4);
+}
+.csa-auth__confirm-mark {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--csa-green-soft);
+  color: var(--csa-green);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--csa-serif);
+  font-size: 2rem;
+  line-height: 1;
+}
+
+/* Footer minimalista al pie de la pantalla. */
+.csa-auth__footer {
+  padding: var(--csa-sp-5) var(--csa-sp-4);
+  text-align: center;
+  font-size: var(--csa-fs-xs);
+  color: var(--csa-ink-muted);
+  letter-spacing: 0.04em;
+  position: relative;
+  z-index: 1;
+}
+.csa-auth__footer a { color: var(--csa-ink-soft); }
+
+/* Estado focus visible reforzado para teclado (accesibilidad). */
+.csa-auth .csa-input:focus-visible,
+.csa-auth .csa-btn:focus-visible,
+.csa-auth__link:focus-visible,
+.csa-auth__back:focus-visible {
+  outline: 2px solid var(--csa-green);
+  outline-offset: 2px;
+}

@@ -1,0 +1,62 @@
+{# ============================================================
+ # /panel/setup — configurar contraseña tras primer magic-link
+ # ============================================================
+ # Pantalla bloqueante: tras entrar por primera vez con un enlace
+ # del email, el socix elige aquí su contraseña permanente. A
+ # partir de aquí ya entra con email + contraseña directamente.
+ # ============================================================ #}
+{% extends "_layouts/csa_auth.html.twig" %}
+
+{% block title %}Configura tu acceso{% endblock %}
+
+{% block csa_main %}
+
+    <section class="csa-auth__card" aria-labelledby="csa-auth-title">
+
+        <h1 id="csa-auth-title" class="csa-auth__title">Configura tu acceso</h1>
+        <p class="csa-auth__lead">
+            Elige una contraseña para entrar la próxima vez sin pedir un enlace.
+        </p>
+
+        {{ form_start(form, {'attr': {'class': 'csa-auth__form', 'novalidate': 'novalidate'}}) }}
+
+            <div class="csa-field">
+                {{ form_label(form.plainPassword.first, null, {'label_attr': {'class': 'csa-field__label', 'for': 'csa-pwd-1'}}) }}
+                {{ form_widget(form.plainPassword.first, {
+                    'attr': {
+                        'class': 'csa-input',
+                        'id': 'csa-pwd-1',
+                        'autocomplete': 'new-password',
+                        'required': 'required',
+                        'autofocus': 'autofocus',
+                    }
+                }) }}
+                {{ form_errors(form.plainPassword.first) }}
+            </div>
+
+            <div class="csa-field">
+                {{ form_label(form.plainPassword.second, null, {'label_attr': {'class': 'csa-field__label', 'for': 'csa-pwd-2'}}) }}
+                {{ form_widget(form.plainPassword.second, {
+                    'attr': {
+                        'class': 'csa-input',
+                        'id': 'csa-pwd-2',
+                        'autocomplete': 'new-password',
+                        'required': 'required',
+                    }
+                }) }}
+                {{ form_errors(form.plainPassword.second) }}
+            </div>
+
+            {{ form_errors(form.plainPassword) }}
+
+            {{ form_widget(form.submit, {'attr': {'class': 'csa-btn csa-btn--primary csa-btn--block csa-auth__submit'}}) }}
+
+        {{ form_end(form) }}
+
+        <p class="csa-auth__note">
+            Mínimo 8 caracteres. La próxima vez entras con tu email y esta contraseña desde la página de acceso.
+        </p>
+
+    </section>
+
+{% endblock %}

@@ -1,0 +1,58 @@
+{# ============================================================
+ # /login/olvide — recuperación por magic-link
+ # ============================================================
+ # Socix con cuenta que no recuerda la contraseña. Damos su email
+ # y enviamos un magic-link. Ruta destino: app_login_link_forgot.
+ # ============================================================ #}
+{% extends "_layouts/csa_auth.html.twig" %}
+
+{% block title %}Recuperar acceso{% endblock %}
+
+{% block csa_main %}
+
+    <section class="csa-auth__card" aria-labelledby="csa-auth-title">
+
+        <h1 id="csa-auth-title" class="csa-auth__title">Recuperar acceso</h1>
+        <p class="csa-auth__lead">
+            Te enviaremos un enlace al correo para que vuelvas a entrar.
+        </p>
+
+        <form action="{{ path('app_login_link_forgot') }}" method="post" class="csa-auth__form" novalidate>
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token('login_link_forgot') }}">
+
+            <div class="csa-field">
+                <div class="csa-field__label-row">
+                    <label for="csa-email" class="csa-field__label">Email</label>
+                </div>
+                <input
+                    id="csa-email"
+                    name="email"
+                    type="email"
+                    class="csa-input"
+                    value="{{ last_email|default('') }}"
+                    autocomplete="email"
+                    inputmode="email"
+                    autocapitalize="none"
+                    autocorrect="off"
+                    spellcheck="false"
+                    required
+                    autofocus
+                >
+            </div>
+
+            <button type="submit" class="csa-btn csa-btn--primary csa-btn--block csa-auth__submit">
+                Enviarme el enlace
+            </button>
+        </form>
+
+        <p class="csa-auth__note">
+            El enlace caduca a los 30 minutos y se puede usar una sola vez.
+        </p>
+
+        <div style="text-align: center;">
+            <a href="{{ path('app_login') }}" class="csa-auth__back">Volver</a>
+        </div>
+
+    </section>
+
+{% endblock %}
