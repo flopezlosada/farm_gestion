@@ -12,6 +12,7 @@ namespace App\EventListener;
 
 
 use ADesigns\CalendarBundle\Event\CalendarEvent;
+use App\Entity\BasketDeliveryEntity;
 use App\Entity\CollectEntity;
 use App\Entity\CulturalWorkEntity;
 use App\Entity\EventEntity;
@@ -198,6 +199,27 @@ class CalendarEventListener
         {
             $task_eventEntity = new TaskEntity($this->router, $taskEvent->getId(), $taskEvent->__toString(), $taskEvent->getExpectedDate());
             $calendarEvent->addEvent($task_eventEntity);
+        }
+
+        // Repartos de cesta (cada Basket = un viernes de reparto).
+        // Al pinchar en el calendario, se abre la vista detallada del reparto.
+        $basket_query = $this->entityManager->getRepository(\App\Entity\Basket::class)
+            ->createQueryBuilder('basket_events')
+            ->where('basket_events.date BETWEEN :startDate and :endDate')
+            ->setParameter('startDate', $startDate->format('Y-m-d'))
+            ->setParameter('endDate', $endDate->format('Y-m-d'))
+            ->getQuery();
+        $basketEvents = $basket_query->getResult();
+
+        foreach ($basketEvents as $basketEvent) {
+            $title = sprintf('Reparto · cesta #%d', $basketEvent->getId());
+            $entity = new BasketDeliveryEntity(
+                $this->router,
+                $basketEvent->getId(),
+                $title,
+                $basketEvent->getDate()
+            );
+            $calendarEvent->addEvent($entity);
         }
 
         //movimientos lotes gallinas
