@@ -76,10 +76,15 @@
                     </a>
 
                     {% if app.user %}
+                        {# En el panel del socix mostramos el nombre del Partner
+                         # cuando existe. Caer al userIdentifier solo si el User
+                         # no tiene Partner vinculado (caso de fallback). #}
+                        {% set me_partner = app.user.partner %}
+                        {% set me_name = me_partner ? me_partner.name|capitalize : app.user.userIdentifier %}
                         <div class="csa-me">
                             <a href="{{ path('panel_profile') }}" class="csa-me__id" title="Editar mis datos">
-                                <span class="csa-avatar">{{- app.user.userIdentifier|first|upper -}}</span>
-                                <span class="csa-me__name">{{ app.user.userIdentifier }}</span>
+                                <span class="csa-avatar">{{- me_name|first|upper -}}</span>
+                                <span class="csa-me__name">{{ me_name }}</span>
                             </a>
                             <a href="{{ path('app_logout') }}" class="csa-me__logout" title="Cerrar sesión" aria-label="Cerrar sesión">
                                 <i class="fa fa-sign-out" aria-hidden="true"></i>
