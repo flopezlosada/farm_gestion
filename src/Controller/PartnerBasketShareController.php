@@ -10,6 +10,7 @@ use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketStatus;
 use App\Form\PartnerBasketShareType;
 use App\Repository\PartnerBasketShareRepository;
+use App\Service\Delivery\WeeklyBasketGenerator;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use App\Controller\AbstractAppController;
@@ -197,189 +198,26 @@ class PartnerBasketShareController extends AbstractAppController
 
 
     /**
-     * Generar listado semanal
+     * Genera (o recupera) el listado de cestas a repartir el viernes de la
+     * semana en curso. La lógica vive en WeeklyBasketGenerator; aquí solo
+     * orquestamos: buscar el Basket de la semana, delegar, renderizar.
      */
     #[Route("/generate/weekly", name: "partner_basket_share_generate_weekly", methods: ["GET"])]
-    public function generateWeekly()
+    public function generateWeekly(WeeklyBasketGenerator $generator): Response
     {
         $entityManager = $this->getDoctrine()->getManager();
 
-        /*
-         * lo primero que hay que hacer es desactivar las cestas que han finalizado. Esto sucede porque quien se cambia de tipo de cesta, se crea
-         * una cesta nueva que empieza a partir de la fecha que decide, pero como no se sabe cuándo se va a realizar el cambio en la web, no se
-         * puede dar de baja la cesta antigua. Por ejemplo si un socio quiere cambiarse de cesta el mes que viene (por ejemplo quedan 3 viernes)
-         * y registramos el cambio en la web ahora mismo, quedan aún 3 viernes con la cesta antigua.
-         * Igual con las bajas
-         * Entonces hacemos una consulta para buscar si hay alguna cesta cuya fecha finalización sea posterior a hoy y cambiamos su estado
-         */
-        $end_basket = $entityManager->getRepository(\App\Entity\PartnerBasketShare::class)->findFinalized();
-        foreach ($end_basket as $weekly_basket) {
-            $weekly_basket->setIsActive(0);
-            if ($weekly_basket->getBasketShare()->getId() == 4)//cestas compartidas
-            {
-                $partner_share = $weekly_basket->getPartnet()->getBasketShare();//es el que comparte la cesta con el que se ha quitado
-                $weekly_basket->getPartner()->setSharePartnert(null);//quito la relación del que se da de baja
-                $partner_share->setSharePartner(null);//quito la relación del segundo
-                $entityManager->persist($partner_share);
-                $entityManager->persist($weekly_basket->getPartner());
-            }
-            $entityManager->persist($weekly_basket);
+        $basket = $entityManager->getRepository(\App\Entity\Basket::class)
+            ->findBasketByWeekYear(date('Y-m-d'));
+
+        if ($basket === false) {
+            $this->addFlash('warning', 'No hay cesta creada para la semana en curso. Crea una desde Granja > Composición de cestas.');
+            return $this->redirectToRoute('partner_basket_share_index');
         }
 
-        $basket = $entityManager->getRepository(\App\Entity\Basket::class)->findBasketByWeekYear(date('Y-m-d'));//número de cesta actual
+        $report = $generator->generateForBasket($basket);
 
-        $control_weekly_basket = $entityManager->getRepository(\App\Entity\WeeklyBasket::class)->findBy(array("basket" => $basket->getId()));//para ver si ya la he creado, si está en la tabla weekly_basket la cesta actual
-
-        $day_order = WeekOfMonth::dayOfWeekInMonth($basket->getDate());
-
-        if ($control_weekly_basket) {//este control es para crear las cestas en la tabla de cestas semanal
-
-            /*
-             *Como ya existe la cesta de esta semana, no hay que volver a crearla, y saco el listado de la tabla ya creada,
-             * no necesito hacer la misma consulta de antes, porque además, para los que se quieren cambiar de semana, se les
-             * borra el registro de la tabla weekly_basket, y no deben salir. Si lo hago de la otra manera saldrían de nuevo
-             */
-            $weekly_partners = $entityManager->getRepository(\App\Entity\WeeklyBasket::class)->findBy(array('basket_share' => 1, 'basket' => $basket));//cestas de socios semanales
-            $old_half_basket_partners = $entityManager->getRepository(\App\Entity\WeeklyBasket::class)->findBy(array('basket_share' => 4, 'basket' => $basket));//cestas de socios semanales media cesta
-            $biweekly_partners = $entityManager->getRepository(\App\Entity\WeeklyBasket::class)->findBy(array('basket_share' => 2, 'basket' => $basket));//cestas quincenales para esta semana, quitando las que ya recibieron la anterior
-            $monthly_partners = $entityManager->getRepository(\App\Entity\WeeklyBasket::class)->findBy(array('basket_share' => 3, 'basket' => $basket));//cestas mensuales para esta semana
-            $only_egg_partners = $entityManager->getRepository(\App\Entity\WeeklyBasket::class)->findBy(array('basket_share' => 5, 'basket' => $basket));//cestas de solo huevos, están incluidas semanales, quincenales y mensuales, se ponen todas juntas en el listado
-
-
-
-
-            $array_all_partners = array_merge($weekly_partners, $biweekly_partners, $monthly_partners, $only_egg_partners);
-            //en este caso del if están ya creadas las entradas de weekly basket
-
-            foreach ($array_all_partners as $all_partner) {//este bucle hay que hacerlo en ambos casos porque lo que hace es setear la variable currentbasket de cada socio
-                $all_basket_partner = $entityManager->getRepository(\App\Entity\WeeklyBasket::class)->findOneBy(array("basket" => $basket->getId(), "partner" => $all_partner->getPartner()->getId()));
-                $all_partner->getPartner()->setCurrentBasket($all_basket_partner);
-
-            }
-
-            /**
-             * para los de media cesta como hay que asociarlo con el socio que comparte, lo tengo que hacer fuera
-             */
-            foreach ($old_half_basket_partners as $weekly_partner) {
-                if (!$weekly_partner->getPartner()->getIsListed()) {
-                    $weekly_basket_partner = $entityManager->getRepository(\App\Entity\WeeklyBasket::class)->
-                    findOneBy(array("basket" => $basket->getId(), "partner" => $weekly_partner->getPartner()->getId()));
-                    $weekly_partner->getPartner()->setCurrentBasket($weekly_basket_partner);
-                    //echo $weekly_basket_partner->getID() . " | ";
-                    $weekly_basket_share_partner = $entityManager->getRepository(\App\Entity\WeeklyBasket::class)->
-                    findOneBy(array("basket" => $basket->getId(), "partner" => $weekly_partner->getPartner()->getSharePartner()->getId()));
-
-                    if ($weekly_basket_share_partner) {
-                        //echo $weekly_basket_share_partner->getID() . " <br>";
-                        $weekly_partner->getPartner()->getSharePartner()->setCurrentBasket($weekly_basket_share_partner);
-                    } else {//es un control para ver si alguno se ha dado de baja su socio de cesta, con el que comparte la media
-                        //echo $weekly_partner->getPartner()->getSharePartner()->getId();
-                    }
-
-
-                    //$weekly_partner->getPartner()->setIsListed(1);
-                    $weekly_partner->getPartner()->getSharePartner()->setIsListed(1);
-                }
-            }
-
-
-        } else {
-
-            $weekly_partners = $entityManager->getRepository(\App\Entity\PartnerBasketShare::class)->findBasketPartnersByTypeAndCity(1, 1, $basket);//cestas de socios semanales ordenados por ciudad
-            $old_half_basket_partners = $entityManager->getRepository(\App\Entity\PartnerBasketShare::class)->findBasketPartnersByTypeAndCity(4, 1, $basket);//cestas de socios semanales media cesta
-            $biweekly_partners = $entityManager->getRepository(\App\Entity\PartnerBasketShare::class)->findBasketPartnersBiweeklyAndCity($basket, 2, 1); //cestas quincenales para esta semana, quitando las que ya recibieron la anterior
-            $monthly_partners = $entityManager->getRepository(\App\Entity\PartnerBasketShare::class)->findBasketPartnersMonthlyAndCity($basket, 3, $day_order);//cestas mensuales para esta semana
-
-
-            $only_egg_weekly_partners = $entityManager->getRepository(\App\Entity\PartnerBasketShare::class)->findBasketPartnersByTypeAndCity(5, 1, $basket, true);
-            $only_egg_biweekly_partners = $entityManager->getRepository(\App\Entity\PartnerBasketShare::class)->findBasketPartnersBiweeklyAndCity($basket, 5, 1, true); //cestas quincenales para esta semana, quitando las que ya recibieron la anterior
-            $only_egg_monthly_partners = $entityManager->getRepository(\App\Entity\PartnerBasketShare::class)->findBasketPartnersMonthlyAndCity($basket, 5, $day_order, true);//cestas mensuales para esta semana
-
-            $only_egg_partners = array_merge($only_egg_weekly_partners, $only_egg_biweekly_partners, $only_egg_monthly_partners);
-            $array_all_partners = array_merge($weekly_partners, $old_half_basket_partners, $biweekly_partners, $monthly_partners, $only_egg_weekly_partners, $only_egg_biweekly_partners, $only_egg_monthly_partners);
-            //aquí se crean las entradas del weekly basket
-            foreach ($array_all_partners as $weekly_partner) {
-                $weekly_basket = new WeeklyBasket();
-                $weekly_basket->setBasket($basket);
-                $weekly_basket->setPartner($weekly_partner->getPartner());
-                $weekly_basket_status = $entityManager->getRepository(\App\Entity\WeeklyBasketStatus::class)->find(1);
-                $weekly_basket->setWeeklyBasketStatus($weekly_basket_status);
-                $weekly_basket->setBasketShare($weekly_partner->getBasketShare());
-                $weekly_basket->setWeeklyBasketGroup($weekly_partner->getPartner()->getWeeklyBasketGroup());
-                $weekly_basket->setAmount($weekly_partner->getAmount());
-                $entityManager->persist($weekly_basket);
-
-
-                $entityManager->flush();
-                $weekly_basket_partner = $entityManager->getRepository(\App\Entity\WeeklyBasket::class)->findOneBy(array("basket" => $basket->getId(), "partner" => $weekly_partner->getPartner()->getId()));
-                $weekly_partner->getPartner()->setCurrentBasket($weekly_basket_partner);
-
-            }
-
-
-        }
-
-
-        //contando cestas
-        $basket_weekly_partners_amount = 0;//es la variable que controla cuántas cestas hay en esta semana. Se hace sumando las cantidades de cestas de cada socio, y por cada tipo de cesta. En este caso son las semanales
-        foreach ($weekly_partners as $weekly_partner) {
-            $basket_weekly_partners_amount += $weekly_partner->getAmount();
-        }
-
-        $basket_biweekly_partners_amount = 0;
-        foreach ($biweekly_partners as $biweekly_partner) {
-            $basket_biweekly_partners_amount += $biweekly_partner->getAmount();
-        }
-
-        $basket_monthly_partners_amount = 0;
-        foreach ($monthly_partners as $monthly_partner) {
-            $basket_monthly_partners_amount += $monthly_partner->getAmount();
-        }
-
-        $basket_old_half_basket_partners_amount = 0;
-        foreach ($old_half_basket_partners as $old_half_basket_partner) {
-            $basket_old_half_basket_partners_amount += $old_half_basket_partner->getAmount();
-        }
-
-        $basket_only_egg_partners_amount = 0;
-        foreach ($only_egg_partners as $only_egg_partner) {
-            $basket_only_egg_partners_amount += $only_egg_partner->getAmount();
-        }
-         // -->fin contando cestas
-
-
-
-
-
-
-
-
-        $entityManager->flush();
-        /*$all_partners = $entityManager->getRepository(\App\Entity\Partner::class)->findAll();
-        foreach ($all_partners as $partner) {
-            $group = $entityManager->getRepository(\App\Entity\WeeklyBasketGroup::class)->find(rand(1, 13));
-            $partner->setWeeklyBasketGroup($group);
-             $entityManager->persist($partner);
-
-                $entityManager->flush();
-        }*/
-
-        $weekly_basket_groups = $entityManager->getRepository(\App\Entity\WeeklyBasketGroup::class)->findAll();
-
-        return $this->render('partner_basket_share/weekly.html.twig', [
-            'weekly_partners' => $weekly_partners,
-            'biweekly_partners' => $biweekly_partners,
-            'old_half_basket_partners' => $old_half_basket_partners,
-            'monthly_partners' => $monthly_partners,
-            'basket' => $basket,
-            'weekly_basket_groups' => $weekly_basket_groups,
-            'only_egg_partners' => $only_egg_partners,
-            'basket_weekly_partners_amount' => $basket_weekly_partners_amount,
-            'basket_biweekly_partners_amount' => $basket_biweekly_partners_amount,
-            'basket_monthly_partners_amount' => $basket_monthly_partners_amount,
-            'basket_old_half_basket_partners_amount' => $basket_old_half_basket_partners_amount,
-            'basket_only_egg_partners_amount' => $basket_only_egg_partners_amount
-        ]);
+        return $this->render('partner_basket_share/weekly.html.twig', $report->toTemplateContext());
     }
 
     #[Route("/{basket_id}/{alternative_order}/generate_pdf/basket_weekly", name: "generate_pdf_basket_weekly", methods: ["GET"])]

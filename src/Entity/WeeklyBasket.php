@@ -60,6 +60,15 @@ class WeeklyBasket
     protected $basket_share;
 
     /**
+     * Suscripción concreta del socio que originó este WeeklyBasket.
+     * Propiedad transitoria, sin mapping Doctrine ni columna en BBDD:
+     * el generador puede rellenarla para que la vista muestre el grupo
+     * A/B. Declarada explícitamente para evitar el deprecation de
+     * propiedades dinámicas en PHP 8.2+.
+     */
+    private ?PartnerBasketShare $partner_basket_share = null;
+
+    /**
      * @var smallint $weekly_basket_status
      * @ORM\ManyToOne(targetEntity="WeeklyBasketStatus", inversedBy="weekly_baskets")
      * según si ha sido recogida, rechazada, atrasada...
