@@ -62,7 +62,11 @@ security:
                 login_path: app_login
                 check_path: app_login
                 enable_csrf: true
-                default_target_path: /gestion/dashboard
+                # Dispatcher común: app_post_login decide a dónde mandar al
+                # User según sus roles (gestión → /gestion/dashboard,
+                # socix → /panel). Evita 403 al loguear un socix con
+                # password.
+                default_target_path: /post-login
             # Magic-link sin contraseña pensado para la brecha digital del
             # colectivo: socixs que no recuerdan password reciben un link en
             # su correo y entran al panel. Coexiste con form_login.
@@ -81,7 +85,7 @@ security:
                 signature_properties: [id]
                 lifetime: 1800
                 max_uses: 1
-                default_target_path: /panel
+                default_target_path: /post-login
                 always_use_default_target_path: true
             remember_me:
                 secret: '%kernel.secret%'
@@ -95,6 +99,9 @@ security:
         # ^/login cubre /login, /login/magic (request), /login/magic/check
         # (callback del link) y /login/magic/enviado (pantalla intermedia).
         - { path: ^/login, roles: PUBLIC_ACCESS }
+        # Dispatcher post-login: solo accesible logueado. Redirige a
+        # /gestion/dashboard o /panel según roles.
+        - { path: ^/post-login$, roles: IS_AUTHENTICATED_FULLY }
         - { path: ^/contact$, roles: PUBLIC_ACCESS }
         # Cualquier rol de gestión (o el legacy ROLE_COOP, hasta que migremos) permite entrar a /gestion.
         # Dentro, cada controller filtra con #[IsGranted('ROLE_GESTION_X')] según su sección.

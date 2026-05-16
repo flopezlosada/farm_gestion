@@ -23,13 +23,32 @@ class SecurityController extends AbstractController
     public function login(AuthenticationUtils $authenticationUtils): Response
     {
         if ($this->getUser()) {
-            return $this->redirectToRoute('dashboard');
+            return $this->redirectToRoute('app_post_login');
         }
 
         return $this->render('Security/login.html.twig', [
             'last_username' => $authenticationUtils->getLastUsername(),
             'error' => $authenticationUtils->getLastAuthenticationError(),
         ]);
+    }
+
+    /**
+     * Dispatcher tras el login. Si el User tiene cualquier rol de
+     * gestión va al dashboard de gestión; si solo tiene ROLE_PARTNER
+     * va al panel. Solución al 403 que sufría un socix recién logueado
+     * cuando el default_target_path apuntaba a /gestion/dashboard sin
+     * que tuviera permisos sobre /gestion.
+     */
+    #[Route('/post-login', name: 'app_post_login')]
+    public function postLogin(): Response
+    {
+        $managementRoles = ['ROLE_ADMIN', 'ROLE_GESTION_GRANJA', 'ROLE_GESTION_SOCIXS', 'ROLE_GESTION_CESTAS', 'ROLE_BLOG', 'ROLE_COOP'];
+        foreach ($managementRoles as $role) {
+            if ($this->isGranted($role)) {
+                return $this->redirectToRoute('dashboard');
+            }
+        }
+        return $this->redirectToRoute('panel');
     }
 
     /**
