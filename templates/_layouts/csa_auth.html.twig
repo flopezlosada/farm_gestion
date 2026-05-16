@@ -94,5 +94,60 @@
 
 </div>
 
+{# ============================================================
+ # Localización de los mensajes de validación HTML5 al español.
+ # El navegador ignora <html lang> y usa su propio idioma para los
+ # mensajes nativos de required/email/pattern: gente con el Chrome
+ # en inglés veía "Please fill out this field". Con setCustomValidity
+ # forzamos el texto. Se limpia en cada 'input' para que el campo
+ # vuelva a estar válido al corregir.
+ # ============================================================ #}
+<script>
+    (function () {
+        var messages = {
+            valueMissing: 'Este campo es obligatorio.',
+            typeMismatch: {
+                email: 'Introduce un email válido.',
+                url: 'Introduce una dirección válida.',
+                'default': 'El formato no es válido.'
+            },
+            patternMismatch: 'El formato no es válido.',
+            tooShort: 'El valor es demasiado corto.',
+            tooLong: 'El valor es demasiado largo.',
+            rangeUnderflow: 'El valor es demasiado bajo.',
+            rangeOverflow: 'El valor es demasiado alto.',
+            stepMismatch: 'El valor no es válido.',
+            badInput: 'El valor no es válido.'
+        };
+
+        function pickMessage(input) {
+            var v = input.validity;
+            if (v.valueMissing) return messages.valueMissing;
+            if (v.typeMismatch) {
+                return messages.typeMismatch[input.type] || messages.typeMismatch['default'];
+            }
+            if (v.patternMismatch) return messages.patternMismatch;
+            if (v.tooShort) return messages.tooShort;
+            if (v.tooLong) return messages.tooLong;
+            if (v.rangeUnderflow) return messages.rangeUnderflow;
+            if (v.rangeOverflow) return messages.rangeOverflow;
+            if (v.stepMismatch) return messages.stepMismatch;
+            if (v.badInput) return messages.badInput;
+            return '';
+        }
+
+        function attach(input) {
+            input.addEventListener('invalid', function () {
+                input.setCustomValidity(pickMessage(input));
+            });
+            input.addEventListener('input', function () {
+                input.setCustomValidity('');
+            });
+        }
+
+        document.querySelectorAll('input, textarea, select').forEach(attach);
+    })();
+</script>
+
 </body>
 </html>
