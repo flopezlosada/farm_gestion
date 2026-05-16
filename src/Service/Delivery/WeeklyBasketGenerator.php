@@ -120,6 +120,14 @@ class WeeklyBasketGenerator
      * Esta rama respeta los cambios puntuales: si alguien fue retirado del
      * listado (borrado el WeeklyBasket), no reaparece.
      *
+     * Nota sobre data legacy (snapshot 2026-05): hay ~8% de WeeklyBasket
+     * cuyos Partner ya no tienen ningún PartnerBasketShare activo (socios
+     * dados de baja en el pasado cuyos WeeklyBasket quedaron grabados).
+     * No es un bug aquí: PartnerLifecycleSubscriber::leave borra los
+     * WeeklyBasket futuros, pero los históricos del snapshot no pasaron
+     * por ese listener. El template _table_list_basket es defensivo
+     * ante este caso y muestra "—" para esos partners.
+     *
      * @return array{0:array,1:array,2:array,3:array,4:array} weekly, half, biweekly, monthly, onlyEgg
      */
     private function reuseExistingWeeklyBaskets(Basket $basket): array
