@@ -60,6 +60,26 @@ security:
                 check_path: app_login
                 enable_csrf: true
                 default_target_path: /gestion/dashboard
+            # Magic-link sin contraseña pensado para la brecha digital del
+            # colectivo: socixs que no recuerdan password reciben un link en
+            # su correo y entran al panel. Coexiste con form_login.
+            #
+            #   lifetime  - el link expira a los 30 min de generarse (es más
+            #               generoso que el default de 10 min para gente que
+            #               no abre el correo al instante).
+            #   max_uses  - un solo uso por link (si se reenvía o se hace
+            #               click dos veces, el segundo falla).
+            #   signature_properties: id solo. Lo firmamos por id porque
+            #               cambiar username/email no debería invalidar un
+            #               link válido en vuelo (no es información segura
+            #               como password, que sí firmaría).
+            login_link:
+                check_route: app_login_link_check
+                signature_properties: [id]
+                lifetime: 1800
+                max_uses: 1
+                default_target_path: /panel
+                always_use_default_target_path: true
             remember_me:
                 secret: '%kernel.secret%'
                 lifetime: 604800
@@ -69,7 +89,9 @@ security:
                 target: /
 
     access_control:
-        - { path: ^/login$, roles: PUBLIC_ACCESS }
+        # ^/login cubre /login, /login/magic (request), /login/magic/check
+        # (callback del link) y /login/magic/enviado (pantalla intermedia).
+        - { path: ^/login, roles: PUBLIC_ACCESS }
         - { path: ^/contact$, roles: PUBLIC_ACCESS }
         # Cualquier rol de gestión (o el legacy ROLE_COOP, hasta que migremos) permite entrar a /gestion.
         # Dentro, cada controller filtra con #[IsGranted('ROLE_GESTION_X')] según su sección.

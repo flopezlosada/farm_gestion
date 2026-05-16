@@ -1,0 +1,23 @@
+{% extends "base.html.twig" %}
+
+{% block body %}
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6 col-md-offset-3">
+                <div class="panel panel-default" style="margin-top: 40px;">
+                    <div class="panel-heading">
+                        <h3 class="panel-title">Comprueba tu correo</h3>
+                    </div>
+                    <div class="panel-body">
+                        <p>Si tu email está registrado, te hemos enviado un enlace para entrar.</p>
+                        <p class="text-muted" style="font-size: 13px;">
+                            El enlace es válido durante 30 minutos y solo se puede usar una vez.
+                            Si no llega, revisa la carpeta de spam o vuelve a pedirlo desde la
+                            <a href="{{ path('app_login') }}">página de acceso</a>.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
