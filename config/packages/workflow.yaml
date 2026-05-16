@@ -1,0 +1,37 @@
+framework:
+    workflows:
+
+        # Ciclo de vida de pertenencia de un socio (Partner). Estados:
+        #   ACTIVO  - recibe cesta y aparece en listados de reparto.
+        #   PAUSADO - vínculo activo pero no recibe cesta (vacaciones, baja médica).
+        #   BAJA    - dejó la asociación; el histórico se conserva.
+        #
+        # El estado se persiste en la columna partner.status. El campo legacy
+        # is_active se actualiza en mirror desde Partner::setStatus() hasta que
+        # todas las consultas migren a status.
+        partner_lifecycle:
+            type: state_machine
+            audit_trail: false
+            marking_store:
+                type: method
+                property: status
+            supports:
+                - App\Entity\Partner
+            initial_marking: ACTIVO
+            places:
+                - ACTIVO
+                - PAUSADO
+                - BAJA
+            transitions:
+                pause:
+                    from: ACTIVO
+                    to:   PAUSADO
+                resume:
+                    from: PAUSADO
+                    to:   ACTIVO
+                leave:
+                    from: [ACTIVO, PAUSADO]
+                    to:   BAJA
+                rejoin:
+                    from: BAJA
+                    to:   ACTIVO

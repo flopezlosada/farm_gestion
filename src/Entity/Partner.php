@@ -176,6 +176,24 @@ class Partner
      */
     private $is_active;
 
+    public const STATUS_ACTIVO = 'ACTIVO';
+    public const STATUS_PAUSADO = 'PAUSADO';
+    public const STATUS_BAJA = 'BAJA';
+    public const STATUSES = [self::STATUS_ACTIVO, self::STATUS_PAUSADO, self::STATUS_BAJA];
+
+    /**
+     * Estado actual del socio en el workflow de pertenencia. Sustituye
+     * progresivamente a is_active (que se mantiene como mirror temporal
+     * hasta migrar todas las consultas).
+     *
+     *   ACTIVO   - recibe cesta y aparece en listados de reparto
+     *   PAUSADO  - vínculo activo pero no recibe cesta (vacaciones, baja médica)
+     *   BAJA     - dejó la asociación; el histórico se conserva pero no genera reparto
+     *
+     * @ORM\Column(type="string", length=20, options={"default": "ACTIVO"})
+     */
+    private string $status = self::STATUS_ACTIVO;
+
     /**
      * parientes
      * One Category has Many Categories.
@@ -643,6 +661,26 @@ class Partner
     {
         $this->has_file = $has_file;
 
+        return $this;
+    }
+
+    public function getStatus(): string
+    {
+        return $this->status;
+    }
+
+    /**
+     * @param string $status Uno de Partner::STATUS_*.
+     * @throws \InvalidArgumentException Si el valor no está en STATUSES.
+     */
+    public function setStatus(string $status): self
+    {
+        if (!in_array($status, self::STATUSES, true)) {
+            throw new \InvalidArgumentException(sprintf('Estado desconocido: %s', $status));
+        }
+        $this->status = $status;
+        // Mirror temporal: is_active sigue alimentando las consultas legacy.
+        $this->is_active = ($status === self::STATUS_ACTIVO);
         return $this;
     }
 
