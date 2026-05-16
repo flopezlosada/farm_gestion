@@ -35,73 +35,81 @@
                     {% for basket in entity %}
                         {% if not basket.partner.isListed %}
                             {{ basket.partner.setIsListed(1) }}
+                            {% set active = basket.partner.getActiveBasket %}
+                            {% set current = basket.partner.getCurrentBasket %}
+                            {% set share = basket.partner.sharePartner %}
+                            {% set share_current = share ? share.getCurrentBasket : null %}
                             {% set color = randColor(true) %}
                             <tr style="background-color: {{ color }};">
-                                <td>{{ basket.partner.weeklyBasketGroup.name }}</td>
+                                <td>{{ basket.partner.weeklyBasketGroup.name ?? '—' }}</td>
                                 <td>
                                     <a href="{{ path('partner_show', { id: basket.partner.id }) }}">{{ basket.partner }}</a>
                                 </td>
-                                <td class="csa-table__col-tight">{{ basket.partner.getActiveBasket.eggAmount ?: 'Sin huevos' }}</td>
-                                <td>{{ basket.partner.getCurrentBasket.getWeeklyBasketStatus }}</td>
+                                <td class="csa-table__col-tight">{{ active.eggAmount|default('Sin huevos') ?: 'Sin huevos' }}</td>
+                                <td>{{ current ? current.getWeeklyBasketStatus : '—' }}</td>
                                 <td>
-                                    {% if basket.partner.getCurrentBasket.getWeeklyBasketStatus.id == 1 %}
-                                        <a href="{{ path('partner_basket_weekly_change_status', { weekly_basket_status_id: 2, weekly_basket_id: basket.partner.getCurrentBasket.id }) }}">No la recoge</a>
-                                    {% elseif basket.partner.getCurrentBasket.getWeeklyBasketStatus.id == 2 %}
-                                        <a href="{{ path('partner_basket_weekly_change_status', { weekly_basket_status_id: 1, weekly_basket_id: basket.partner.getCurrentBasket.id }) }}">Al final sí recoge</a>
+                                    {% if current and current.getWeeklyBasketStatus.id == 1 %}
+                                        <a href="{{ path('partner_basket_weekly_change_status', { weekly_basket_status_id: 2, weekly_basket_id: current.id }) }}">No la recoge</a>
+                                    {% elseif current and current.getWeeklyBasketStatus.id == 2 %}
+                                        <a href="{{ path('partner_basket_weekly_change_status', { weekly_basket_status_id: 1, weekly_basket_id: current.id }) }}">Al final sí recoge</a>
                                     {% endif %}
                                 </td>
                             </tr>
-                            <tr style="background-color: {{ color }};">
-                                {{ basket.partner.sharePartner.setIsListed(1) }}
-                                <td>{{ basket.partner.sharePartner.weeklyBasketGroup.name }}</td>
-                                <td>
-                                    <a href="{{ path('partner_show', { id: basket.partner.sharePartner.id }) }}">{{ basket.partner.sharePartner }}</a>
-                                </td>
-                                <td class="csa-table__col-tight">{{ basket.partner.getActiveBasket.eggAmount ?: 'Sin huevos' }}</td>
-                                <td>{{ basket.partner.sharePartner.getCurrentBasket.getWeeklyBasketStatus }}</td>
-                                <td>
-                                    {% if basket.partner.sharePartner.getCurrentBasket.getWeeklyBasketStatus.id == 1 %}
-                                        <a href="{{ path('partner_basket_weekly_change_status', { weekly_basket_status_id: 2, weekly_basket_id: basket.partner.sharePartner.getCurrentBasket.id }) }}">No la recoge</a>
-                                    {% elseif basket.partner.sharePartner.getCurrentBasket.getWeeklyBasketStatus.id == 2 %}
-                                        <a href="{{ path('partner_basket_weekly_change_status', { weekly_basket_status_id: 1, weekly_basket_id: basket.partner.sharePartner.getCurrentBasket.id }) }}">Al final sí recoge</a>
-                                    {% endif %}
-                                </td>
-                            </tr>
+                            {% if share %}
+                                <tr style="background-color: {{ color }};">
+                                    {{ share.setIsListed(1) }}
+                                    <td>{{ share.weeklyBasketGroup.name ?? '—' }}</td>
+                                    <td>
+                                        <a href="{{ path('partner_show', { id: share.id }) }}">{{ share }}</a>
+                                    </td>
+                                    <td class="csa-table__col-tight">{{ active.eggAmount|default('Sin huevos') ?: 'Sin huevos' }}</td>
+                                    <td>{{ share_current ? share_current.getWeeklyBasketStatus : '—' }}</td>
+                                    <td>
+                                        {% if share_current and share_current.getWeeklyBasketStatus.id == 1 %}
+                                            <a href="{{ path('partner_basket_weekly_change_status', { weekly_basket_status_id: 2, weekly_basket_id: share_current.id }) }}">No la recoge</a>
+                                        {% elseif share_current and share_current.getWeeklyBasketStatus.id == 2 %}
+                                            <a href="{{ path('partner_basket_weekly_change_status', { weekly_basket_status_id: 1, weekly_basket_id: share_current.id }) }}">Al final sí recoge</a>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endif %}
                         {% endif %}
                     {% else %}
                         <tr><td colspan="5" class="csa-muted" style="text-align: center;">Sin cestas compartidas.</td></tr>
                     {% endfor %}
                 {% else %}
                     {% for basket in entity %}
+                        {% set active = basket.partner.getActiveBasket %}
+                        {% set current = basket.partner.getCurrentBasket %}
                         <tr>
-                            <td>{{ basket.partner.weeklyBasketGroup.name }}</td>
+                            <td>{{ basket.partner.weeklyBasketGroup.name ?? '—' }}</td>
                             <td>
                                 <a href="{{ path('partner_show', { id: basket.partner.id }) }}">{{ basket.partner }}</a>
                             </td>
-                            <td class="csa-table__col-tight">{{ basket.partner.getActiveBasket.amount }}</td>
+                            <td class="csa-table__col-tight">{{ active.amount ?? '—' }}</td>
                             <td class="csa-table__col-tight">
-                                {{ basket.partner.getActiveBasket.eggAmount ?: 'Sin huevos' }}
-                                {% if basket.partner.getActiveBasket.eggPeriod %}
-                                    ({{ basket.partner.getActiveBasket.eggPeriod }})
+                                {{ active.eggAmount|default('Sin huevos') ?: 'Sin huevos' }}
+                                {% if active and active.eggPeriod %}
+                                    ({{ active.eggPeriod }})
                                 {% endif %}
                             </td>
-                            <td>{{ basket.partner.getCurrentBasket.getWeeklyBasketStatus }}</td>
+                            <td>{{ current ? current.getWeeklyBasketStatus : '—' }}</td>
                             <td>
-                                {% if basket.partner.getCurrentBasket.getWeeklyBasketStatus.id == 1 %}
+                                {% if current and current.getWeeklyBasketStatus.id == 1 %}
                                     <a href="{{ path('partner_basket_weekly_change_status', { weekly_basket_status_id: 2, weekly_basket_id: basket.partner.getCurrentBasket.id }) }}">No la recoge</a>
-                                {% elseif basket.partner.getCurrentBasket.getWeeklyBasketStatus.id == 2 %}
+                                {% elseif current and current.getWeeklyBasketStatus.id == 2 %}
                                     <a href="{{ path('partner_basket_weekly_change_status', { weekly_basket_status_id: 1, weekly_basket_id: basket.partner.getCurrentBasket.id }) }}">Al final sí recoge</a>
                                 {% endif %}
 
                                 {% if basket_share_id == 2 %}
-                                    {% if basket.partner.getCurrentBasket.getWeeklyBasketStatus.id == 1 %}
+                                    {% if current and current.getWeeklyBasketStatus.id == 1 %}
                                         <br><a href="{{ path('partner_basket_monthly_change_week', { weekly_basket_id: basket.partner.getCurrentBasket.id }) }}"
                                                onclick="return confirm('Esta acción no se puede deshacer. ¿Estás segurx?');">
                                             Cambiar a otra semana
                                         </a>
                                     {% endif %}
                                 {% elseif basket_share_id == 3 %}
-                                    {% if basket.partner.getCurrentBasket.getWeeklyBasketStatus.id == 1 %}
+                                    {% if current and current.getWeeklyBasketStatus.id == 1 %}
                                         <br><a href="{{ path('partner_basket_monthly_change_week', { weekly_basket_id: basket.partner.getCurrentBasket.id }) }}"
                                                onclick="return confirm('Esta acción no se puede deshacer. ¿Estás segurx?');">
                                             La recoge la semana siguiente
