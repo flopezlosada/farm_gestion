@@ -2,6 +2,7 @@
 
 namespace App\Repository;
 
+use App\Entity\Partner;
 use App\Entity\WeeklyBasket;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
@@ -66,5 +67,27 @@ class WeeklyBasketRepository extends ServiceEntityRepository
 
 
         return $query->getResult();
+    }
+
+    /**
+     * Próxima WeeklyBasket de un Partner: la asignada al primer Basket con
+     * fecha >= hoy. Si el socix ya recogió todas las cestas pendientes
+     * o aún no tiene asignación, devuelve null.
+     *
+     * Usado por el panel del socix para saber sobre qué cesta operar
+     * cuando pide saltar la próxima o cambiar de nodo puntualmente.
+     */
+    public function findNextForPartner(Partner $partner): ?WeeklyBasket
+    {
+        return $this->createQueryBuilder('wb')
+            ->innerJoin('wb.basket', 'b')
+            ->where('wb.partner = :partner')
+            ->andWhere('b.date >= :today')
+            ->setParameter('partner', $partner)
+            ->setParameter('today', (new \DateTimeImmutable('today'))->format('Y-m-d'))
+            ->orderBy('b.date', 'ASC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
     }
 }

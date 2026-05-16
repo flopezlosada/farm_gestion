@@ -31,6 +31,8 @@ class PartnerEvent
     public const TYPE_GROUP_CHANGE_PERMANENT = 'GROUP_CHANGE_PERMANENT';
     public const TYPE_WEEK_SWAP = 'WEEK_SWAP';
     public const TYPE_NODE_CHANGE = 'NODE_CHANGE';
+    public const TYPE_BASKET_SKIP = 'BASKET_SKIP';
+    public const TYPE_BASKET_UNSKIP = 'BASKET_UNSKIP';
 
     public const TYPES = [
         self::TYPE_JOIN,
@@ -42,6 +44,8 @@ class PartnerEvent
         self::TYPE_GROUP_CHANGE_PERMANENT,
         self::TYPE_WEEK_SWAP,
         self::TYPE_NODE_CHANGE,
+        self::TYPE_BASKET_SKIP,
+        self::TYPE_BASKET_UNSKIP,
     ];
 
     public const ACTOR_SYSTEM = 'system';

@@ -55,7 +55,7 @@
             {% block body %}
                 {% if group %}
                     <dl class="csa-defs">
-                        <dt>Grupo</dt>
+                        <dt>Grupo habitual</dt>
                         <dd>{{ group.name }}</dd>
                         {% if group.address is defined and group.address %}
                             <dt>Punto de entrega</dt>
@@ -69,12 +69,86 @@
                 {% else %}
                     <p class="csa-muted">Aún no tienes asignado un grupo de recogida.</p>
                 {% endif %}
-                <p class="csa-muted" style="margin-top: var(--csa-sp-4); font-size: var(--csa-fs-sm);">
-                    Para cambiar de grupo o saltar una cesta puntual, contacta con la administración.
-                </p>
             {% endblock %}
         {% endembed %}
 
     </div>
+
+    {# ===== Acciones puntuales sobre la próxima cesta ===== #}
+    {% if next_basket %}
+        {% embed '_components/csa_card.html.twig' with { title: 'Próxima cesta', accent: 'sky' } %}
+            {% block body %}
+                <p>
+                    Tu próxima cesta es el
+                    <strong>{{ next_basket.basket.date|format_date('full', locale='es') }}</strong>
+                    {% if next_basket_group %}
+                        en <strong>{{ next_basket_group.name }}</strong>
+                    {% endif %}.
+                </p>
+
+                {% if next_basket_skipped %}
+                    <div class="csa-alert csa-alert--warning" role="status" style="margin: var(--csa-sp-3) 0;">
+                        Has marcado que <strong>no recogerás</strong> la cesta esta semana.
+                    </div>
+                {% endif %}
+
+                {% if can_change_next %}
+                    <div class="csa-stack" style="margin-top: var(--csa-sp-4);">
+
+                        {# --- Saltar / recuperar --- #}
+                        <form action="{{ path('panel_basket_skip_toggle') }}" method="post">
+                            <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_basket_skip') }}">
+                            {% if next_basket_skipped %}
+                                <button type="submit" class="csa-btn csa-btn--secondary csa-btn--block">
+                                    Al final sí recogeré la cesta
+                                </button>
+                            {% else %}
+                                <button type="submit" class="csa-btn csa-btn--secondary csa-btn--block"
+                                        onclick="return confirm('¿Confirmas que NO recoges la cesta de esta semana?');">
+                                    No recogeré la cesta esta semana
+                                </button>
+                            {% endif %}
+                        </form>
+
+                        {# --- Cambiar de nodo puntualmente --- #}
+                        {% if not next_basket_skipped and pickup_groups|length > 1 %}
+                            <form action="{{ path('panel_basket_change_group') }}" method="post" class="csa-stack">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_basket_change_group') }}">
+                                <div class="csa-field">
+                                    <label for="csa-pickup-group" class="csa-field__label">
+                                        Cambiar nodo de recogida solo para esta semana
+                                    </label>
+                                    <select id="csa-pickup-group" name="group_id" class="csa-input" required>
+                                        <option value="">— selecciona un grupo —</option>
+                                        {% for g in pickup_groups %}
+                                            <option value="{{ g.id }}"
+                                                    {% if next_basket_group and next_basket_group.id == g.id %}selected{% endif %}>
+                                                {{ g.name }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <button type="submit" class="csa-btn csa-btn--secondary csa-btn--block">
+                                    Cambiar nodo para esta cesta
+                                </button>
+                            </form>
+                        {% endif %}
+
+                        <p class="csa-muted" style="font-size: var(--csa-fs-sm); margin: 0;">
+                            Plazo para cambiar: hasta el
+                            <strong>{{ pickup_deadline|format_datetime('long', 'short', locale='es') }}</strong>.
+                            Después tendrás que avisar a la administración.
+                        </p>
+                    </div>
+                {% else %}
+                    <p class="csa-muted" style="margin-top: var(--csa-sp-3);">
+                        Ya no puedes cambiar la cesta de esta semana desde aquí — el plazo terminó.
+                        Si necesitas avisar, escribe a
+                        <a href="mailto:info@csavegadejarama.org">info@csavegadejarama.org</a>.
+                    </p>
+                {% endif %}
+            {% endblock %}
+        {% endembed %}
+    {% endif %}
 
 {% endblock %}

@@ -4,8 +4,15 @@ namespace App\Controller;
 
 use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
+use App\Entity\PartnerEvent;
+use App\Entity\WeeklyBasket;
+use App\Entity\WeeklyBasketGroup;
+use App\Entity\WeeklyBasketStatus;
 use App\Form\ChangePasswordType;
 use App\Form\PartnerProfileType;
+use App\Repository\WeeklyBasketGroupRepository;
+use App\Repository\WeeklyBasketRepository;
+use App\Repository\WeeklyBasketStatusRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Form\Extension\Core\Type\PasswordType;
@@ -92,20 +99,199 @@ class PanelController extends AbstractController
         ]);
     }
 
+    /**
+     * Deadline para acciones autoservicio sobre la próxima cesta. El
+     * socix puede saltar la cesta o cambiar de nodo de recogida hasta
+     * esta hora del miércoles previo al viernes de reparto, en hora
+     * local (Europe/Madrid). Pasada esa hora, las acciones se bloquean
+     * y se le pide contactar con la administración.
+     *
+     * Valor temporal hardcoded — pendiente de parametrizar cuando la
+     * asociación decida la regla definitiva.
+     */
+    private const PICKUP_DEADLINE_WEEKDAY = 3;   // ISO 8601: 3 = miércoles
+    private const PICKUP_DEADLINE_HOUR = 23;
+    private const PICKUP_DEADLINE_MINUTE = 59;
+
     #[Route('/cesta', name: 'panel_basket', methods: ['GET'])]
-    public function basket(): Response
+    public function basket(WeeklyBasketRepository $weeklyBasketRepository, WeeklyBasketGroupRepository $weeklyBasketGroupRepository): Response
     {
         if (($redirect = $this->ensureReady()) !== null) {
             return $redirect;
         }
 
         $partner = $this->getUser()->getPartner();
+        $next = $weeklyBasketRepository->findNextForPartner($partner);
 
         return $this->render('Panel/basket.html.twig', [
             'partner' => $partner,
             'active_share' => $this->activeShare($partner),
             'group' => $partner->getWeeklyBasketGroup(),
+            'next_basket' => $next,
+            'next_basket_skipped' => $next?->getWeeklyBasketStatus()?->getId() === 2,
+            'next_basket_group' => $next?->getWeeklyBasketGroup(),
+            'can_change_next' => $next !== null && $this->isWithinPickupDeadline($next),
+            'pickup_deadline' => $next !== null ? $this->pickupDeadlineFor($next) : null,
+            'pickup_groups' => $weeklyBasketGroupRepository->findBy([], ['name' => 'ASC']),
         ]);
+    }
+
+    /**
+     * Saltar / volver a recoger la próxima cesta. Acción toggle (status
+     * 1 ↔ 2) limitada al deadline previo al viernes. Cada toggle deja
+     * un PartnerEvent en el feed del socix para que admin lo vea en el
+     * resumen periódico.
+     */
+    #[Route('/cesta/skip-toggle', name: 'panel_basket_skip_toggle', methods: ['POST'])]
+    public function skipNextBasket(
+        Request $request,
+        WeeklyBasketRepository $weeklyBasketRepository,
+        WeeklyBasketStatusRepository $weeklyBasketStatusRepository,
+        EntityManagerInterface $em,
+    ): Response {
+        if (($redirect = $this->ensureReady()) !== null) {
+            return $redirect;
+        }
+
+        if (!$this->isCsrfTokenValid('panel_basket_skip', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
+            return $this->redirectToRoute('panel_basket');
+        }
+
+        $partner = $this->getUser()->getPartner();
+        $next = $weeklyBasketRepository->findNextForPartner($partner);
+
+        if ($next === null) {
+            $this->addFlash('warning', 'No tienes una próxima cesta sobre la que actuar.');
+            return $this->redirectToRoute('panel_basket');
+        }
+
+        if (!$this->isWithinPickupDeadline($next)) {
+            $this->addFlash('error', 'Ya no se puede cambiar la cesta de esta semana — el plazo terminó. Si necesitas avisar, contacta con la administración.');
+            return $this->redirectToRoute('panel_basket');
+        }
+
+        $currentStatus = $next->getWeeklyBasketStatus();
+        $currentId = $currentStatus?->getId();
+
+        // Status 1 = "Recoge", 2 = "No la recoge". El toggle solo opera
+        // entre estos dos; cualquier otro estado lo deja como está y
+        // avisa al socix (caso defensivo, no debería ocurrir en panel).
+        if ($currentId === 1) {
+            $next->setWeeklyBasketStatus($weeklyBasketStatusRepository->find(2));
+            $em->persist(new PartnerEvent($partner, PartnerEvent::TYPE_BASKET_SKIP));
+            $this->addFlash('notice', 'Listo: hemos marcado que esta semana no recogerás la cesta. Si cambias de opinión, puedes deshacerlo desde aquí antes del plazo.');
+        } elseif ($currentId === 2) {
+            $next->setWeeklyBasketStatus($weeklyBasketStatusRepository->find(1));
+            $em->persist(new PartnerEvent($partner, PartnerEvent::TYPE_BASKET_UNSKIP));
+            $this->addFlash('notice', 'Listo: al final sí recogerás la cesta esta semana.');
+        } else {
+            $this->addFlash('warning', 'Tu cesta está en un estado especial y no se puede cambiar desde aquí. Contacta con la administración si necesitas modificarla.');
+        }
+
+        $em->flush();
+        return $this->redirectToRoute('panel_basket');
+    }
+
+    /**
+     * Cambio puntual de nodo de recogida para la próxima cesta. Toca
+     * solo WeeklyBasket.weekly_basket_group (que es histórico por
+     * diseño), NO Partner.weekly_basket_group (que es el por defecto).
+     */
+    #[Route('/cesta/change-group', name: 'panel_basket_change_group', methods: ['POST'])]
+    public function changePickupGroup(
+        Request $request,
+        WeeklyBasketRepository $weeklyBasketRepository,
+        WeeklyBasketGroupRepository $weeklyBasketGroupRepository,
+        EntityManagerInterface $em,
+    ): Response {
+        if (($redirect = $this->ensureReady()) !== null) {
+            return $redirect;
+        }
+
+        if (!$this->isCsrfTokenValid('panel_basket_change_group', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
+            return $this->redirectToRoute('panel_basket');
+        }
+
+        $partner = $this->getUser()->getPartner();
+        $next = $weeklyBasketRepository->findNextForPartner($partner);
+
+        if ($next === null) {
+            $this->addFlash('warning', 'No tienes una próxima cesta sobre la que actuar.');
+            return $this->redirectToRoute('panel_basket');
+        }
+
+        if (!$this->isWithinPickupDeadline($next)) {
+            $this->addFlash('error', 'Ya no se puede cambiar de nodo para esta semana — el plazo terminó. Contacta con la administración si necesitas avisar.');
+            return $this->redirectToRoute('panel_basket');
+        }
+
+        $groupId = (int) $request->request->get('group_id', 0);
+        $group = $groupId > 0 ? $weeklyBasketGroupRepository->find($groupId) : null;
+        if ($group === null) {
+            $this->addFlash('error', 'Selecciona un grupo de recogida válido.');
+            return $this->redirectToRoute('panel_basket');
+        }
+
+        $previousGroup = $next->getWeeklyBasketGroup();
+        if ($previousGroup !== null && $previousGroup->getId() === $group->getId()) {
+            $this->addFlash('warning', 'Ya recoges la cesta en ese grupo esta semana.');
+            return $this->redirectToRoute('panel_basket');
+        }
+
+        $next->setWeeklyBasketGroup($group);
+
+        $event = new PartnerEvent($partner, PartnerEvent::TYPE_NODE_CHANGE);
+        $event->setPayload([
+            'scope' => 'one_off',
+            'basket_id' => $next->getBasket()?->getId(),
+            'from_group_id' => $previousGroup?->getId(),
+            'from_group_name' => $previousGroup?->getName(),
+            'to_group_id' => $group->getId(),
+            'to_group_name' => $group->getName(),
+        ]);
+        $em->persist($event);
+        $em->flush();
+
+        $this->addFlash('notice', sprintf('Listo: esta semana recogerás la cesta en "%s". El cambio aplica solo a este reparto.', $group->getName()));
+        return $this->redirectToRoute('panel_basket');
+    }
+
+    /**
+     * El deadline para tocar una WeeklyBasket concreta es el miércoles
+     * 23:59 (zona horaria local) anterior al viernes de reparto del
+     * Basket asociado.
+     */
+    private function pickupDeadlineFor(WeeklyBasket $weeklyBasket): ?\DateTimeImmutable
+    {
+        $basketDate = $weeklyBasket->getBasket()?->getDate();
+        if ($basketDate === null) {
+            return null;
+        }
+
+        // Basket.date es \DateTime mutable; clonamos como immutable para
+        // operar con seguridad sin pisar el original.
+        $pickup = \DateTimeImmutable::createFromMutable($basketDate);
+
+        // ISO weekday del viernes habitual = 5. Para llegar al miércoles
+        // restamos (viernes - miércoles) días = 2. Si por excepción de
+        // calendario el reparto cae en otro día, garantizamos que el
+        // deadline siempre se sitúa antes con abs().
+        $diffDays = abs((int) $pickup->format('N') - self::PICKUP_DEADLINE_WEEKDAY);
+
+        return $pickup
+            ->setTime(self::PICKUP_DEADLINE_HOUR, self::PICKUP_DEADLINE_MINUTE, 0)
+            ->modify(sprintf('-%d days', $diffDays));
+    }
+
+    private function isWithinPickupDeadline(WeeklyBasket $weeklyBasket): bool
+    {
+        $deadline = $this->pickupDeadlineFor($weeklyBasket);
+        if ($deadline === null) {
+            return false;
+        }
+        return new \DateTimeImmutable('now') < $deadline;
     }
 
     #[Route('/familia', name: 'panel_family', methods: ['GET'])]
