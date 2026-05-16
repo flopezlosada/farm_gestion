@@ -10,24 +10,57 @@ use App\Form\PartnerBasketShareType;
 use App\Form\PartnerType;
 use App\Repository\PartnerRepository;
 use App\Controller\AbstractAppController;
+use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\Session\Session;
 use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Workflow\WorkflowInterface;
 
 #[Route("/gestion/partner")]
 #[IsGranted('ROLE_GESTION_SOCIXS')]
 class PartnerController extends AbstractAppController
 {
     #[Route("/", name: "partner_index", methods: ["GET"])]
-    public function index(PartnerRepository $partnerRepository): Response
+    public function index(Request $request, PartnerRepository $partnerRepository): Response
     {
+        $status = $request->query->get('status');
+        if ($status !== null && in_array($status, Partner::STATUSES, true)) {
+            $partners = $partnerRepository->findBy(['status' => $status], ['surname' => 'ASC', 'name' => 'ASC']);
+            $title = match ($status) {
+                Partner::STATUS_ACTIVO => 'Socias y socios activos',
+                Partner::STATUS_PAUSADO => 'Socias y socios pausados',
+                Partner::STATUS_BAJA => 'Socias y socios de baja',
+            };
+        } else {
+            $partners = $partnerRepository->findBy([], ['surname' => 'ASC', 'name' => 'ASC']);
+            $title = 'Listado completo de socias y socios';
+            $status = null;
+        }
+
+        // Conteos para las pestañas. Una sola query agrupada.
+        $rawCounts = $partnerRepository->createQueryBuilder('p')
+            ->select('p.status AS status, COUNT(p.id) AS total')
+            ->groupBy('p.status')
+            ->getQuery()
+            ->getArrayResult();
+        $counts = ['ALL' => 0];
+        foreach (Partner::STATUSES as $s) {
+            $counts[$s] = 0;
+        }
+        foreach ($rawCounts as $row) {
+            $counts[$row['status']] = (int) $row['total'];
+            $counts['ALL'] += (int) $row['total'];
+        }
 
         return $this->render('partner/index.html.twig', [
-            'partners' => $partnerRepository->findAll(),
-            'title' => 'Listado completo de socias y socios',
-            'type' => null
+            'partners' => $partners,
+            'title' => $title,
+            'type' => null,
+            'status_filter' => $status,
+            'statuses' => Partner::STATUSES,
+            'status_counts' => $counts,
         ]);
     }
 
@@ -53,25 +86,37 @@ class PartnerController extends AbstractAppController
     }
 
     #[Route("/evolution", name: "partner_evolution", methods: ["GET"])]
-    public function evolution()
+    public function evolution(PartnerRepository $partnerRepository): Response
     {
-        $entityManager = $this->getDoctrine()->getManager();
-        $baskets = $entityManager->getRepository(\App\Entity\Basket::class)->findMonthlyBasket(date('Y-m-d'));//devuelve las cestas anteriores a hoy
-        $amount_partners = array();
-        $amount_baskets=array();
-        foreach ($baskets as $basket) {
-            $amount = $entityManager->getRepository(\App\Entity\Partner::class)->findAmountPartnersByMonth($basket[0]);
-            $amount_partners[] = array($basket, $amount);
-            $amount_basket=$entityManager->getRepository(\App\Entity\Partner::class)->findAmountBasketsByMonth($basket[0]);
-            $amount_baskets=array($basket,$amount_basket);
+        // Conteo actual por estado.
+        $currentByStatus = [Partner::STATUS_ACTIVO => 0, Partner::STATUS_PAUSADO => 0, Partner::STATUS_BAJA => 0];
+        foreach ($partnerRepository->createQueryBuilder('p')
+            ->select('p.status AS status, COUNT(p.id) AS total')
+            ->groupBy('p.status')
+            ->getQuery()->getArrayResult() as $row) {
+            $currentByStatus[$row['status']] = (int) $row['total'];
+        }
+        $currentByStatus['TOTAL'] = array_sum($currentByStatus);
+
+        // Serie temporal de los últimos 13 meses: altas, bajas, neto y total
+        // de personas socias activas al cierre de cada mes. Las altas se
+        // detectan por inscription_date; las bajas por demote_date. Cuando
+        // existan PartnerEvent retroactivos, se podrá afinar este cálculo.
+        $monthlyAggregates = $partnerRepository->countMonthlyJoinsAndLeaves(13);
+
+        // Acumulado de activos: el valor de "hoy" lo conocemos, así que
+        // proyectamos hacia atrás restando net mes a mes.
+        $runningActive = $currentByStatus[Partner::STATUS_ACTIVO];
+        $monthsCount = count($monthlyAggregates);
+        for ($i = $monthsCount - 1; $i >= 0; $i--) {
+            $monthlyAggregates[$i]['active_at_end'] = $runningActive;
+            $runningActive -= ($monthlyAggregates[$i]['joins'] - $monthlyAggregates[$i]['leaves']);
         }
 
-
         return $this->render('partner/evolution.html.twig', [
-            "amount_partners" => $amount_partners,
-            "amount_baskets"=>$amount_baskets
+            'current' => $currentByStatus,
+            'monthly' => $monthlyAggregates,
         ]);
-
     }
 
 
@@ -104,11 +149,13 @@ class PartnerController extends AbstractAppController
     }
 
     #[Route("/{id}", name: "partner_show", methods: ["GET"])]
-    public function show(Partner $partner): Response
-    {
-
+    public function show(
+        Partner $partner,
+        \App\Repository\PartnerEventRepository $partnerEventRepository,
+    ): Response {
         return $this->render('partner/show.html.twig', [
             'partner' => $partner,
+            'events' => $partnerEventRepository->findForPartner($partner),
         ]);
     }
 
@@ -256,38 +303,191 @@ class PartnerController extends AbstractAppController
     }
 
     #[Route("/{id}/demote", name: "partner_demote", methods: ["GET"])]
-    public function demote(Request $request, Partner $partner): Response
-    {
+    public function demote(
+        Request $request,
+        Partner $partner,
+        #[Target('partner_lifecycle')] WorkflowInterface $workflow,
+    ): Response {
         $entityManager = $this->getDoctrine()->getManager();
-        $partner->setIsActive(false);
 
-        $redirect_to_basket = false;
-
-        if ($partner->hasActiveBasket()) {
-            $redirect_to_basket = true;
-            $basket_id = $partner->getActiveBasket()->getId();
+        if (!$workflow->can($partner, 'leave')) {
+            $this->addFlash('warning', sprintf(
+                '%s %s ya está de baja.',
+                $partner->getName(),
+                $partner->getSurname()
+            ));
+            return $this->redirectToRoute('partner_show', ['id' => $partner->getId()]);
         }
-        $entityManager->persist($partner);
+
+        // Si tiene una cesta activa, mantenemos el flujo legacy: pasar por la
+        // pantalla de finalización para que la gestora elija fecha de fin.
+        // El workflow aún no se dispara; lo hace finalize() cuando guarde.
+        if ($partner->hasActiveBasket()) {
+            $basket_id = $partner->getActiveBasket()->getId();
+            return $this->redirectToRoute('partner_basket_share_finalize', ['id' => $basket_id]);
+        }
+
+        // Sin cesta activa: la baja es directa. El listener emite PartnerEvent
+        // y borra WeeklyBasket futuros (ninguno aquí, pero por consistencia).
+        $workflow->apply($partner, 'leave');
         $entityManager->flush();
 
-        if ($redirect_to_basket) {
-            return $this->redirectToRoute('partner_basket_share_finalize', array('id' => $basket_id));
-        }
-
-        return $this->redirectToRoute('partner_show', array('id' => $partner->getId()));
-
+        $this->addFlash('success', sprintf('%s %s ahora está de baja.', $partner->getName(), $partner->getSurname()));
+        return $this->redirectToRoute('partner_show', ['id' => $partner->getId()]);
     }
 
     #[Route("/{id}/promote", name: "partner_promote", methods: ["GET"])]
-    public function promote(Request $request, Partner $partner): Response
-    {
+    public function promote(
+        Request $request,
+        Partner $partner,
+        #[Target('partner_lifecycle')] WorkflowInterface $workflow,
+    ): Response {
         $entityManager = $this->getDoctrine()->getManager();
-        $partner->setIsActive(true);
-        $entityManager->persist($partner);
+
+        $transition = match (true) {
+            $workflow->can($partner, 'rejoin') => 'rejoin',
+            $workflow->can($partner, 'resume') => 'resume',
+            default => null,
+        };
+
+        if ($transition === null) {
+            $this->addFlash('warning', sprintf(
+                '%s %s ya está activx.',
+                $partner->getName(),
+                $partner->getSurname()
+            ));
+            return $this->redirectToRoute('partner_show', ['id' => $partner->getId()]);
+        }
+
+        $workflow->apply($partner, $transition);
         $entityManager->flush();
 
-        return $this->redirectToRoute('partner_show', array('id' => $partner->getId()));
+        $this->addFlash('success', sprintf('%s %s vuelve a estar activx.', $partner->getName(), $partner->getSurname()));
+        return $this->redirectToRoute('partner_show', ['id' => $partner->getId()]);
+    }
 
+    /** Transiciones admitidas en la acción masiva y su copia de UI. */
+    private const BULK_TRANSITIONS = [
+        'leave'  => ['verb' => 'dar de baja', 'past' => 'dadx de baja', 'icon' => 'fa-user-times'],
+        'pause'  => ['verb' => 'pausar',      'past' => 'pausadx',      'icon' => 'fa-pause'],
+        'resume' => ['verb' => 'reactivar',   'past' => 'reactivadx',   'icon' => 'fa-play'],
+        'rejoin' => ['verb' => 'reactivar',   'past' => 'reactivadx',   'icon' => 'fa-undo'],
+    ];
+
+    /**
+     * Primer paso de una transición masiva: muestra la lista de socixs
+     * seleccionadxs para que la gestora pueda confirmar visualmente antes
+     * de aplicar nada. Útil sobre todo con paginación, donde no se ve toda
+     * la selección de un golpe.
+     */
+    #[Route("/bulk/transition", name: "partner_bulk_transition", methods: ["POST"])]
+    public function bulkTransitionConfirm(
+        Request $request,
+        PartnerRepository $partnerRepository,
+    ): Response {
+        if (!$this->isCsrfTokenValid('partner_bulk_transition', $request->request->get('_token', ''))) {
+            $this->addFlash('error', 'Token CSRF inválido. Vuelve a intentarlo.');
+            return $this->redirectToRoute('partner_index');
+        }
+
+        $transition = (string) $request->request->get('transition', '');
+        if (!isset(self::BULK_TRANSITIONS[$transition])) {
+            $this->addFlash('error', 'Transición masiva desconocida.');
+            return $this->redirectToRoute('partner_index');
+        }
+
+        $ids = $request->request->all('partner_ids');
+        if (empty($ids)) {
+            $this->addFlash('warning', 'No has seleccionado ningún socix.');
+            return $this->redirectToRoute('partner_index');
+        }
+
+        $partners = $partnerRepository->findBy(['id' => $ids], ['surname' => 'ASC', 'name' => 'ASC']);
+
+        return $this->render('partner/bulk_transition_confirm.html.twig', [
+            'partners' => $partners,
+            'transition' => $transition,
+            'copy' => self::BULK_TRANSITIONS[$transition],
+        ]);
+    }
+
+    /**
+     * Segundo paso: aplica la transición elegida a cada socix confirmadx.
+     * Los que no admitan la transición (por estar ya en otro estado) se
+     * cuentan como ignoradxs.
+     */
+    #[Route("/bulk/transition/apply", name: "partner_bulk_transition_apply", methods: ["POST"])]
+    public function bulkTransitionApply(
+        Request $request,
+        PartnerRepository $partnerRepository,
+        #[Target('partner_lifecycle')] WorkflowInterface $workflow,
+    ): Response {
+        if (!$this->isCsrfTokenValid('partner_bulk_transition_apply', $request->request->get('_token', ''))) {
+            $this->addFlash('error', 'Token CSRF inválido. Vuelve a intentarlo.');
+            return $this->redirectToRoute('partner_index');
+        }
+
+        $transition = (string) $request->request->get('transition', '');
+        if (!isset(self::BULK_TRANSITIONS[$transition])) {
+            $this->addFlash('error', 'Transición masiva desconocida.');
+            return $this->redirectToRoute('partner_index');
+        }
+
+        $ids = $request->request->all('partner_ids');
+        if (empty($ids)) {
+            $this->addFlash('warning', 'La selección estaba vacía.');
+            return $this->redirectToRoute('partner_index');
+        }
+
+        $em = $this->getDoctrine()->getManager();
+        $partners = $partnerRepository->findBy(['id' => $ids]);
+        $copy = self::BULK_TRANSITIONS[$transition];
+
+        $applied = 0;
+        $skipped = 0;
+        foreach ($partners as $partner) {
+            if ($workflow->can($partner, $transition)) {
+                $workflow->apply($partner, $transition);
+                $applied++;
+            } else {
+                $skipped++;
+            }
+        }
+        $em->flush();
+
+        $this->addFlash('success', sprintf(
+            '%d socix%s %s%s.',
+            $applied,
+            $applied === 1 ? '' : 's',
+            $copy['past'] . ($applied === 1 ? '' : 's'),
+            $skipped > 0 ? sprintf(' (%d no se podían procesar y se ignoraron)', $skipped) : ''
+        ));
+
+        return $this->redirectToRoute('partner_index');
+    }
+
+    /**
+     * Pausa temporal del socio: deja de recibir cesta pero sigue siendo socix.
+     * Útil para vacaciones, baja médica, etc. El borrado de WeeklyBasket futuros
+     * NO se dispara (a diferencia de "leave"); la pausa es reversible vía promote.
+     */
+    #[Route("/{id}/pause", name: "partner_pause", methods: ["GET"])]
+    public function pause(
+        Partner $partner,
+        #[Target('partner_lifecycle')] WorkflowInterface $workflow,
+    ): Response {
+        $entityManager = $this->getDoctrine()->getManager();
+
+        if (!$workflow->can($partner, 'pause')) {
+            $this->addFlash('warning', 'Solo se puede pausar a un socix activx.');
+            return $this->redirectToRoute('partner_show', ['id' => $partner->getId()]);
+        }
+
+        $workflow->apply($partner, 'pause');
+        $entityManager->flush();
+
+        $this->addFlash('success', sprintf('%s %s queda en pausa.', $partner->getName(), $partner->getSurname()));
+        return $this->redirectToRoute('partner_show', ['id' => $partner->getId()]);
     }
 
     #[Route("/{id}/add_basket", name: "partner_add_basket", methods: ["GET","POST"])]

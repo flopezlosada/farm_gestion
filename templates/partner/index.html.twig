@@ -1,11 +1,27 @@
 {# ============================================================
  # Listado de socixs (Partner).
  #
- # El controller pasa `title` y `type` (1=activos, otro valor=todos).
+ # El controller pasa:
+ #   - title           cabecera de la página
+ #   - type            (legacy) 1=activos sin cesta, 2=baja
+ #   - status_filter   ACTIVO / PAUSADO / BAJA / null
+ #   - statuses        array de estados conocidos
+ #   - status_counts   ['ALL'=>N, 'ACTIVO'=>N, ...]
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
+
+{% set status_labels = {
+    'ACTIVO':  'Activxs',
+    'PAUSADO': 'Pausadxs',
+    'BAJA':    'De baja'
+} %}
+{% set status_tones = {
+    'ACTIVO':  'green',
+    'PAUSADO': 'ochre',
+    'BAJA':    'neutral'
+} %}
 
 {% block title %}{{ title|default('Socixs') }}{% endblock %}
 
@@ -13,6 +29,76 @@
     <a href="{{ path('dashboard') }}">Inicio</a>
     <span class="csa-topbar__crumbs-sep">/</span>
     <span class="csa-topbar__crumb-active">{{ title|default('Socixs') }}</span>
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    <script>
+        $(function() {
+            // Selección masiva con persistencia entre páginas de DataTables.
+            //
+            // Aprendí en el camino que esta versión de DataTables sí retira
+            // filas del DOM al paginar, así que los checkboxes "pierden" el
+            // estado. La solución es separar estado y vista: un Set en JS
+            // guarda los IDs marcados, y se sincroniza con <input type="hidden">
+            // dentro del form (que es lo que viaja al submit) y se repinta
+            // sobre los checkboxes visibles tras cada draw.
+            const $form = $('form[action$="/bulk/transition"]');
+            if ($form.length === 0) return;
+
+            const $table = $form.find('.csa-table[data-paginate]');
+            const $counter = $('#bulk-selected-counter');
+            const $bulkButtons = $form.find('[data-bulk-button]');
+            const selected = new Set();
+            const $hidden = $('<div style="display:none"></div>').appendTo($form);
+
+            function syncFormState() {
+                $hidden.empty();
+                selected.forEach(function (id) {
+                    $hidden.append('<input type="hidden" name="partner_ids[]" value="' + id + '">');
+                });
+                $counter.text(selected.size);
+                $bulkButtons.prop('disabled', selected.size === 0);
+            }
+
+            function applyVisualState() {
+                $table.find('input[type="checkbox"][data-partner-id]').each(function () {
+                    this.checked = selected.has(String($(this).data('partner-id')));
+                });
+            }
+
+            $form.on('change', 'input[type="checkbox"][data-partner-id]', function () {
+                const id = String($(this).data('partner-id'));
+                if (this.checked) selected.add(id); else selected.delete(id);
+                syncFormState();
+            });
+
+            // DataTables emite "draw.dt" en cada redibujo (paginar, buscar, ordenar).
+            $table.on('draw.dt', applyVisualState);
+
+            // Marca TODOS los socixs del filtro/búsqueda activos (no solo los visibles
+            // en la página actual). Si no se ha iniciado DataTables, recae sobre el DOM.
+            $('#bulk-select-all').on('click', function () {
+                const dt = $.fn.dataTable && $.fn.dataTable.isDataTable($table[0]) ? $table.DataTable() : null;
+                const $rows = dt
+                    ? dt.rows({ search: 'applied' }).nodes().to$().find('input[type="checkbox"][data-partner-id]')
+                    : $table.find('input[type="checkbox"][data-partner-id]');
+                $rows.each(function () {
+                    selected.add(String($(this).data('partner-id')));
+                });
+                syncFormState();
+                applyVisualState();
+            });
+
+            $('#bulk-clear').on('click', function () {
+                selected.clear();
+                syncFormState();
+                applyVisualState();
+            });
+
+            syncFormState();
+        });
+    </script>
 {% endblock %}
 
 {% block csa_main %}
@@ -23,53 +109,125 @@
         'Personas asociadas a la cooperativa.'
     ) }}
 
+    {# Qué acciones masivas tienen sentido en la pestaña actual. Solo se ofrecen
+     # en pestañas mono-estado: en "Todxs" se mezclarían estados y aplicar
+     # una transición a quien no la admite es confuso. "Todxs" queda como
+     # vista de consulta. #}
+    {% set bulk_leave  = status_filter == 'ACTIVO' or status_filter == 'PAUSADO' %}
+    {% set bulk_pause  = status_filter == 'ACTIVO' %}
+    {% set bulk_resume = status_filter == 'PAUSADO' %}
+    {% set bulk_rejoin = status_filter == 'BAJA' %}
+    {% set bulk_any    = bulk_leave or bulk_pause or bulk_resume or bulk_rejoin %}
+
     <div class="csa-row-between" style="margin-bottom: var(--csa-sp-5);">
-        <div></div>
+        <div class="csa-tabs" role="tablist">
+            {% for s in statuses %}
+                <a href="{{ path('partner_index', { status: s }) }}"
+                   class="csa-tabs__item{% if status_filter == s %} csa-tabs__item--active{% endif %}">
+                    {{ status_labels[s] }} <span class="csa-pill">{{ status_counts[s] ?? 0 }}</span>
+                </a>
+            {% endfor %}
+            <a href="{{ path('partner_index') }}"
+               class="csa-tabs__item{% if status_filter is null and type is null %} csa-tabs__item--active{% endif %}">
+                Todxs <span class="csa-pill">{{ status_counts.ALL ?? 0 }}</span>
+            </a>
+        </div>
         <div class="csa-row">
             {{ csa.btn('Evolución', { variant: 'ghost', href: path('partner_evolution'), icon: 'fa-line-chart' }) }}
             {{ csa.btn('Nuevx socix', { variant: 'primary', href: path('partner_new'), icon: 'fa-plus' }) }}
         </div>
     </div>
 
-    <div class="csa-table-wrap">
-        <table class="csa-table" data-paginate>
-            <thead>
-                <tr>
-                    <th>Nombre</th>
-                    <th class="csa-table__col-tight">Teléfono</th>
-                    <th class="csa-table__col-tight">Fecha de alta</th>
-                    <th>Email</th>
-                    <th class="csa-table__actions">Acciones</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for partner in partners %}
+    <form method="post" action="{{ path('partner_bulk_transition') }}">
+        <input type="hidden" name="_token" value="{{ csrf_token('partner_bulk_transition') }}">
+
+        {% if bulk_any %}
+            <div class="csa-row" style="margin-bottom: var(--csa-sp-3); gap: var(--csa-sp-2); align-items: center; flex-wrap: wrap;">
+                <span class="csa-badge csa-badge--sky">
+                    <span id="bulk-selected-counter">0</span> seleccionadxs
+                </span>
+                <button type="button" id="bulk-select-all" class="csa-btn csa-btn--ghost csa-btn--sm">
+                    <i class="fa fa-check-square-o"></i> <span>Marcar todxs</span>
+                </button>
+                <button type="button" id="bulk-clear" class="csa-btn csa-btn--ghost csa-btn--sm">
+                    <i class="fa fa-square-o"></i> <span>Quitar selección</span>
+                </button>
+                <span style="flex: 1;"></span>
+                {% if bulk_resume %}
+                    <button type="submit" name="transition" value="resume" class="csa-btn csa-btn--primary" data-bulk-button>
+                        <i class="fa fa-play"></i> <span>Reactivar</span>
+                    </button>
+                {% endif %}
+                {% if bulk_rejoin %}
+                    <button type="submit" name="transition" value="rejoin" class="csa-btn csa-btn--primary" data-bulk-button>
+                        <i class="fa fa-undo"></i> <span>Reactivar</span>
+                    </button>
+                {% endif %}
+                {% if bulk_pause %}
+                    <button type="submit" name="transition" value="pause" class="csa-btn csa-btn--ghost" data-bulk-button>
+                        <i class="fa fa-pause"></i> <span>Pausar</span>
+                    </button>
+                {% endif %}
+                {% if bulk_leave %}
+                    <button type="submit" name="transition" value="leave" class="csa-btn csa-btn--secondary" data-bulk-button>
+                        <i class="fa fa-user-times"></i> <span>Dar de baja</span>
+                    </button>
+                {% endif %}
+            </div>
+        {% endif %}
+
+        <div class="csa-table-wrap">
+            <table class="csa-table" data-paginate>
+                <thead>
                     <tr>
-                        <td>
-                            <a class="csa-table__primary" href="{{ path('partner_show', { id: partner.id }) }}">{{ partner.name }} {{ partner.surname }}</a>
-                        </td>
-                        <td class="csa-table__col-tight">{% if partner.celular %}{{ partner.celular }}{% else %}—{% endif %}</td>
-                        <td class="csa-table__col-tight">
-                            {% if partner.inscriptionDate %}{{ partner.inscriptionDate|format_date('medium', locale='es') }}{% else %}—{% endif %}
-                        </td>
-                        <td>{% if partner.email %}{{ partner.email }}{% else %}—{% endif %}</td>
-                        <td class="csa-table__actions">
-                            <a href="{{ path('partner_show', { id: partner.id }) }}" title="Ver" aria-label="Ver"><i class="fa fa-eye"></i></a>
-                            <a href="{{ path('partner_edit', { id: partner.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>
-                            {% if type == 1 %}
-                                <a href="{{ path('partner_add_basket', { id: partner.id }) }}" title="Añadir cesta" aria-label="Añadir cesta"><i class="fa fa-shopping-basket"></i></a>
+                        {% if bulk_any %}<th class="csa-table__col-tight"><span class="sr-only">Selección</span></th>{% endif %}
+                        <th>Nombre</th>
+                        <th class="csa-table__col-tight">Estado</th>
+                        <th class="csa-table__col-tight">Teléfono</th>
+                        <th class="csa-table__col-tight">Fecha de alta</th>
+                        <th>Email</th>
+                        <th class="csa-table__actions">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for partner in partners %}
+                        <tr>
+                            {% if bulk_any %}
+                                <td class="csa-table__col-tight">
+                                    {# Sin name a propósito: los IDs reales viajan vía hidden inputs
+                                     # gestionados por JS, así sobreviven a la paginación. #}
+                                    <input type="checkbox" data-partner-id="{{ partner.id }}" aria-label="Seleccionar {{ partner.name }}">
+                                </td>
                             {% endif %}
-                        </td>
-                    </tr>
-                {% else %}
-                    <tr>
-                        <td colspan="5" class="csa-muted" style="text-align: center; padding: var(--csa-sp-8);">
-                            Aún no hay socixs registradxs.
-                        </td>
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
+                            <td>
+                                <a class="csa-table__primary" href="{{ path('partner_show', { id: partner.id }) }}">{{ partner.name }} {{ partner.surname }}</a>
+                            </td>
+                            <td class="csa-table__col-tight">
+                                {{ csa.badge(status_labels[partner.status]|default(partner.status), status_tones[partner.status]|default('neutral')) }}
+                            </td>
+                            <td class="csa-table__col-tight">{% if partner.celular %}{{ partner.celular }}{% else %}—{% endif %}</td>
+                            <td class="csa-table__col-tight">
+                                {% if partner.inscriptionDate %}{{ partner.inscriptionDate|format_date('medium', locale='es') }}{% else %}—{% endif %}
+                            </td>
+                            <td>{% if partner.email %}{{ partner.email }}{% else %}—{% endif %}</td>
+                            <td class="csa-table__actions">
+                                <a href="{{ path('partner_show', { id: partner.id }) }}" title="Ver" aria-label="Ver"><i class="fa fa-eye"></i></a>
+                                <a href="{{ path('partner_edit', { id: partner.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>
+                                {% if type == 1 %}
+                                    <a href="{{ path('partner_add_basket', { id: partner.id }) }}" title="Añadir cesta" aria-label="Añadir cesta"><i class="fa fa-shopping-basket"></i></a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="{{ bulk_any ? 7 : 6 }}" class="csa-muted" style="text-align: center; padding: var(--csa-sp-8);">
+                                Aún no hay socixs registradxs{% if status_filter %} con estado {{ status_labels[status_filter]|lower }}{% endif %}.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </form>
 
 {% endblock %}

@@ -146,4 +146,63 @@ class PartnerRepository extends ServiceEntityRepository
 
         return $amount;
     }
+
+    /**
+     * Para los últimos N meses (incluyendo el actual), devuelve por mes el
+     * número de altas (inscription_date) y de bajas (demote_date). Sirve
+     * de base para la pantalla de evolución; cuando importemos los
+     * PartnerEvent retroactivos podremos afinar y diferenciar pausas.
+     *
+     * @return array<int, array{month:string, label:string, joins:int, leaves:int, net:int}>
+     */
+    public function countMonthlyJoinsAndLeaves(int $months = 13): array
+    {
+        $em = $this->getEntityManager();
+
+        $joinsRaw = $em->createQuery(
+            "SELECT SUBSTRING(p.inscription_date, 1, 7) AS month, COUNT(p.id) AS total
+             FROM App\\Entity\\Partner p
+             WHERE p.inscription_date IS NOT NULL
+             GROUP BY month"
+        )->getArrayResult();
+
+        $leavesRaw = $em->createQuery(
+            "SELECT SUBSTRING(p.demote_date, 1, 7) AS month, COUNT(p.id) AS total
+             FROM App\\Entity\\Partner p
+             WHERE p.demote_date IS NOT NULL
+             GROUP BY month"
+        )->getArrayResult();
+
+        $joinsByMonth = [];
+        foreach ($joinsRaw as $row) {
+            $joinsByMonth[$row['month']] = (int) $row['total'];
+        }
+        $leavesByMonth = [];
+        foreach ($leavesRaw as $row) {
+            $leavesByMonth[$row['month']] = (int) $row['total'];
+        }
+
+        $monthsEs = [
+            1 => 'ene', 2 => 'feb', 3 => 'mar', 4 => 'abr', 5 => 'may', 6 => 'jun',
+            7 => 'jul', 8 => 'ago', 9 => 'sep', 10 => 'oct', 11 => 'nov', 12 => 'dic',
+        ];
+
+        $series = [];
+        $startOfCurrent = new \DateTimeImmutable('first day of this month');
+        for ($i = $months - 1; $i >= 0; $i--) {
+            $monthDate = $startOfCurrent->modify("-{$i} months");
+            $key = $monthDate->format('Y-m');
+            $joins = $joinsByMonth[$key] ?? 0;
+            $leaves = $leavesByMonth[$key] ?? 0;
+            $series[] = [
+                'month' => $key,
+                'label' => $monthsEs[(int) $monthDate->format('n')] . ' ' . $monthDate->format('y'),
+                'joins' => $joins,
+                'leaves' => $leaves,
+                'net' => $joins - $leaves,
+            ];
+        }
+
+        return $series;
+    }
 }

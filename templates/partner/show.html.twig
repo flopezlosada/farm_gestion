@@ -44,15 +44,19 @@
             <div>
                 <h1>{{ partner.name }} {{ partner.surname }}</h1>
                 <div class="csa-row" style="gap: var(--csa-sp-2); margin-top: var(--csa-sp-2);">
-                    {% if partner.isActive == 1 %}
-                        <span class="csa-badge csa-badge--green">Activx</span>
+                    {% set status_badge = {
+                        'ACTIVO':  { label: 'Activx',  tone: 'green' },
+                        'PAUSADO': { label: 'Pausadx', tone: 'ochre' },
+                        'BAJA':    { label: 'De baja', tone: 'neutral' }
+                    } %}
+                    {% set sb = status_badge[partner.status]|default({ label: partner.status, tone: 'neutral' }) %}
+                    <span class="csa-badge csa-badge--{{ sb.tone }}">{{ sb.label }}</span>
+                    {% if partner.status == 'ACTIVO' %}
                         {% if partner.hasActiveBasket %}
                             <span class="csa-badge csa-badge--sky">{{ partner.getActiveBasket.basketShare }}</span>
                         {% else %}
                             <span class="csa-badge csa-badge--ochre">Sin cesta</span>
                         {% endif %}
-                    {% else %}
-                        <span class="csa-badge csa-badge--neutral">De baja</span>
                     {% endif %}
                 </div>
             </div>
@@ -282,6 +286,13 @@
                                     <i class="fa fa-shopping-basket"></i> Añadir cesta
                                 </a>
                             {% endif %}
+                            {% if partner.status == 'ACTIVO' %}
+                                <a href="{{ path('partner_pause', { id: partner.id }) }}"
+                                   class="csa-btn csa-btn--ghost csa-btn--sm"
+                                   onclick="return confirm('¿Pausar a estx socix? Dejará de recibir cesta pero seguirá siendo socix.');">
+                                    <i class="fa fa-pause"></i> Pausar
+                                </a>
+                            {% endif %}
                             <a href="{{ path('partner_demote', { id: partner.id }) }}"
                                class="csa-btn csa-btn--ghost csa-btn--sm"
                                onclick="return confirm('¿Dar de baja a estx socix?');">
@@ -290,13 +301,60 @@
                         {% else %}
                             <a href="{{ path('partner_promote', { id: partner.id }) }}"
                                class="csa-btn csa-btn--secondary csa-btn--sm">
-                                <i class="fa fa-check"></i> Activar
+                                <i class="fa fa-check"></i> Reactivar
                             </a>
                         {% endif %}
                     </div>
                 {% endblock %}
             {% endembed %}
         {% endif %}
+
+        {# Histórico de eventos de pertenencia. Siempre visible, aunque esté
+         # vacío, para que se sepa que la sección existe. #}
+        {% set event_labels = {
+            'JOIN':                   { label: 'Alta',                      icon: 'fa-user-plus' },
+            'LEAVE':                  { label: 'Baja',                      icon: 'fa-user-times' },
+            'PAUSE':                  { label: 'Pausa',                     icon: 'fa-pause' },
+            'RESUME':                 { label: 'Reanudación',               icon: 'fa-play' },
+            'BASKET_START':           { label: 'Empieza cesta',             icon: 'fa-shopping-basket' },
+            'BASKET_END':             { label: 'Termina cesta',             icon: 'fa-shopping-basket' },
+            'GROUP_CHANGE_PERMANENT': { label: 'Cambio definitivo A/B',     icon: 'fa-exchange' },
+            'WEEK_SWAP':              { label: 'Cambio puntual de viernes', icon: 'fa-calendar-times-o' },
+            'NODE_CHANGE':            { label: 'Cambio de nodo',            icon: 'fa-map-marker' }
+        } %}
+
+        {% embed '_components/csa_card.html.twig' with { title: 'Histórico', accent: 'neutral' } %}
+            {% block body %}
+                {% if events|default([])|length == 0 %}
+                    <p class="csa-muted" style="margin: 0;">
+                        Aún no hay eventos registrados para este socix. Las próximas
+                        transiciones (pausa, baja, cambios de cesta, cambios de grupo A/B)
+                        irán dejando rastro aquí.
+                    </p>
+                {% else %}
+                    <ul class="csa-timeline" style="list-style: none; margin: 0; padding: 0;">
+                        {% for event in events %}
+                            {% set meta = event_labels[event.type]|default({ label: event.type, icon: 'fa-circle' }) %}
+                            <li style="padding: var(--csa-sp-2) 0; border-bottom: 1px solid var(--csa-line);">
+                                <div class="csa-row" style="gap: var(--csa-sp-3); align-items: baseline;">
+                                    <i class="fa {{ meta.icon }} csa-muted"></i>
+                                    <strong>{{ meta.label }}</strong>
+                                    <span class="csa-muted csa-small">{{ event.occurredAt|format_datetime('medium', 'short', locale='es') }}</span>
+                                    {% if event.actor %}
+                                        <span class="csa-muted csa-small">· {{ event.actor }}</span>
+                                    {% endif %}
+                                </div>
+                                {% if event.notes %}
+                                    <div class="csa-muted csa-small" style="margin-top: var(--csa-sp-1); padding-left: var(--csa-sp-5);">
+                                        {{ event.notes }}
+                                    </div>
+                                {% endif %}
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+            {% endblock %}
+        {% endembed %}
 
     </div>
 
