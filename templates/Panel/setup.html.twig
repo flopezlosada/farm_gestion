@@ -18,7 +18,7 @@
             Elige una contraseña para entrar la próxima vez sin pedir un enlace.
         </p>
 
-        {{ form_start(form, {'attr': {'class': 'csa-auth__form', 'novalidate': 'novalidate'}}) }}
+        {{ form_start(form, {'attr': {'class': 'csa-auth__form'}}) }}
 
             <div class="csa-field">
                 {{ form_label(form.plainPassword.first, null, {'label_attr': {'class': 'csa-field__label', 'for': 'csa-pwd-1'}}) }}
