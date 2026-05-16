@@ -149,6 +149,20 @@
                 {% endif %}
             {% endblock %}
         {% endembed %}
+    {% else %}
+        {# No hay WeeklyBasket futura para este socix. Pasa cuando todavía
+         # no se ha generado el listado del próximo viernes o cuando el
+         # socix no tiene cesta asignada para esa fecha (modalidad
+         # quincenal/mensual que no le toca, baja, etc). #}
+        {% embed '_components/csa_card.html.twig' with { title: 'Próxima cesta', accent: 'sky' } %}
+            {% block body %}
+                {% if active_share %}
+                    <p>Aún no se ha publicado el reparto de tu próxima cesta. Vuelve unos días antes del viernes para ver los detalles y, si lo necesitas, marcar que no la recoges o cambiar de nodo puntualmente.</p>
+                {% else %}
+                    <p>No tienes una cesta activa registrada, así que no hay nada que mostrar aquí. Si crees que es un error, escribe a <a href="mailto:info@csavegadejarama.org">info@csavegadejarama.org</a>.</p>
+                {% endif %}
+            {% endblock %}
+        {% endembed %}
     {% endif %}
 
 {% endblock %}
