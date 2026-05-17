@@ -61,7 +61,9 @@
     </div>
 
     <div class="csa-row-between" style="margin-bottom: var(--csa-sp-3);">
-        <div></div>
+        <div>
+            {{ csa.btn('Cambios puntuales de viernes', { variant: 'ghost', href: path('delivery_shifts_index'), icon: 'fa-exchange' }) }}
+        </div>
         <div class="csa-row">
             {{ csa.btn('PDF por ciudad', { variant: 'ghost', href: path('generate_pdf_basket_weekly', { basket_id: basket.id, alternative_order: 0 }), icon: 'fa-file-pdf-o' }) }}
             {{ csa.btn('PDF por grupo de recogida', { variant: 'ghost', href: path('generate_pdf_basket_weekly', { basket_id: basket.id, alternative_order: 1 }), icon: 'fa-file-pdf-o' }) }}
