@@ -1,8 +1,8 @@
 framework:
     mailer:
         dsn: '%env(MAILER_DSN)%'
-        # Remitente por defecto para todos los emails de la app. En local va a
-        # Mailpit (no se envía a nadie real); en producción se ajusta a la
-        # dirección operativa de la asociación.
+        # Remitente por defecto. Default en .env, override por entorno en su
+        # .env.local correspondiente. Permite que staging etiquete el From con
+        # [STAGING] sin que afecte a producción.
         headers:
-            From: 'CSA Vega de Jarama <noreply@csavegadejarama.org>'
+            From: '%env(MAILER_FROM)%'
