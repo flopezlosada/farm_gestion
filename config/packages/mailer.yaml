@@ -1,3 +1,8 @@
 framework:
     mailer:
         dsn: '%env(MAILER_DSN)%'
+        # Remitente por defecto. Default en .env, override por entorno en su
+        # .env.local correspondiente. Permite que staging etiquete el From con
+        # [STAGING] sin que afecte a producción.
+        headers:
+            From: '%env(MAILER_FROM)%'
