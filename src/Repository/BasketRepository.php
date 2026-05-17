@@ -44,4 +44,74 @@ class BasketRepository extends EntityRepository
 
         return $query->getResult();
     }
+
+    /**
+     * Basket inmediatamente posterior a uno dado por fecha (el viernes
+     * siguiente del calendario CSA). Devuelve null si no hay Basket
+     * futuro registrado.
+     */
+    public function findNextAfter(\App\Entity\Basket $basket): ?\App\Entity\Basket
+    {
+        return $this->createQueryBuilder('b')
+            ->where('b.date > :date')
+            ->setParameter('date', $basket->getDate())
+            ->orderBy('b.date', 'ASC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
+
+    /**
+     * Basket inmediatamente anterior a uno dado por fecha. Útil para
+     * calcular el equilibrio de cargas entre viernes consecutivos.
+     */
+    public function findPreviousBefore(\App\Entity\Basket $basket): ?\App\Entity\Basket
+    {
+        return $this->createQueryBuilder('b')
+            ->where('b.date < :date')
+            ->setParameter('date', $basket->getDate())
+            ->orderBy('b.date', 'DESC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
+
+    /**
+     * Todos los Basket del mismo mes/año que el dado, excluyendo él mismo.
+     * Útil para la regla Window de mensuales: el destino válido es
+     * cualquier viernes del mismo mes.
+     *
+     * @return \App\Entity\Basket[]
+     */
+    public function findOtherBasketsInSameMonth(\App\Entity\Basket $basket): array
+    {
+        return $this->createQueryBuilder('b')
+            ->where('YEAR(b.date) = :y')
+            ->andWhere('MONTH(b.date) = :m')
+            ->andWhere('b.id <> :id')
+            ->setParameter('y', $basket->getDate()->format('Y'))
+            ->setParameter('m', $basket->getDate()->format('m'))
+            ->setParameter('id', $basket->getId())
+            ->orderBy('b.date', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Basket cuya fecha cae entre dos fechas (inclusive ambos extremos),
+     * ordenados por fecha ascendente. Útil para iterar viernes
+     * consecutivos en una ventana.
+     *
+     * @return \App\Entity\Basket[]
+     */
+    public function findBetweenDates(\DateTimeInterface $from, \DateTimeInterface $to): array
+    {
+        return $this->createQueryBuilder('b')
+            ->where('b.date BETWEEN :from AND :to')
+            ->setParameter('from', $from->format('Y-m-d'))
+            ->setParameter('to', $to->format('Y-m-d'))
+            ->orderBy('b.date', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
 }

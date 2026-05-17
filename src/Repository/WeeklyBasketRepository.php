@@ -90,4 +90,24 @@ class WeeklyBasketRepository extends ServiceEntityRepository
             ->getQuery()
             ->getOneOrNullResult();
     }
+
+    /**
+     * Número de cestas a repartir en un Basket: cuenta las WeeklyBasket
+     * cuyo status indica que se recogen (status_id = 1). Las marcadas como
+     * "no recoge" (status 2) no se cuentan porque no llegan a salir.
+     *
+     * Métrica usada por la regla de equilibrio (BalanceWithinThresholdRule):
+     * compara el conteo entre viernes consecutivos para evitar picos.
+     */
+    public function countPickedInBasket(\App\Entity\Basket $basket): int
+    {
+        return (int) $this->createQueryBuilder('wb')
+            ->select('COUNT(wb.id)')
+            ->where('wb.basket = :basket')
+            ->andWhere('wb.weekly_basket_status = :status')
+            ->setParameter('basket', $basket)
+            ->setParameter('status', 1)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
 }

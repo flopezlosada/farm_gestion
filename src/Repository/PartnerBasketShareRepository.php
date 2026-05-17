@@ -58,6 +58,28 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
     }
 
     /**
+     * Suscripción "activa hoy" de un socio: la que está en vigor en la fecha
+     * dada (o hoy si se omite) — start_date ≤ fecha, end_date NULL o ≥ fecha.
+     * Si hay varias compatibles (raro pero posible en datos legacy), devuelve
+     * la más reciente por start_date.
+     */
+    public function findActiveForPartner(\App\Entity\Partner $partner, ?\DateTimeInterface $on = null): ?PartnerBasketShare
+    {
+        $on ??= new \DateTimeImmutable('today');
+
+        return $this->createQueryBuilder('s')
+            ->where('s.partner = :partner')
+            ->andWhere('s.start_date <= :on')
+            ->andWhere('s.end_date IS NULL OR s.end_date >= :on')
+            ->setParameter('partner', $partner)
+            ->setParameter('on', $on->format('Y-m-d'))
+            ->orderBy('s.start_date', 'DESC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
+
+    /**
      * @param $basket_share
      * @param $status
      * devuelve la lista de socios con cesta ordenados por pueblo y según el tipo de cesta
