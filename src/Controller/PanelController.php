@@ -101,15 +101,16 @@ class PanelController extends AbstractController
 
     /**
      * Deadline para acciones autoservicio sobre la próxima cesta. El
-     * socix puede saltar la cesta o cambiar de nodo de recogida hasta
-     * esta hora del miércoles previo al viernes de reparto, en hora
-     * local (Europe/Madrid). Pasada esa hora, las acciones se bloquean
-     * y se le pide contactar con la administración.
+     * socix puede saltar la cesta, cambiar de nodo de recogida o pedir
+     * cambio puntual de viernes hasta esta hora del jueves previo al
+     * viernes de reparto, en hora local (Europe/Madrid). Pasada esa
+     * hora, las acciones se bloquean y se le pide contactar con la
+     * administración.
      *
      * Valor temporal hardcoded — pendiente de parametrizar cuando la
      * asociación decida la regla definitiva.
      */
-    private const PICKUP_DEADLINE_WEEKDAY = 3;   // ISO 8601: 3 = miércoles
+    private const PICKUP_DEADLINE_WEEKDAY = 4;   // ISO 8601: 4 = jueves
     private const PICKUP_DEADLINE_HOUR = 23;
     private const PICKUP_DEADLINE_MINUTE = 59;
 
