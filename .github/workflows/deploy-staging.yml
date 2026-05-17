@@ -1,20 +1,19 @@
-name: Deploy a producción
+name: Deploy a staging
 
-# Disparo manual desde la pestaña Actions con "Run workflow".
-# El auto en push a main se retiró: el flujo es probar primero en staging y,
-# cuando esté validado, lanzar este workflow a mano. Se puede reactivar el
-# push automático cuando el flujo esté maduro.
+# Disparo manual desde la pestaña Actions con "Run workflow". Permite elegir
+# cualquier rama del repo: el flujo típico es desplegar una rama de trabajo a
+# staging para que el equipo la pruebe antes de mergear a main.
 on:
   workflow_dispatch:
 
 # Evita que dos pushes seguidos se pisen.
 concurrency:
-  group: deploy-prod
+  group: deploy-staging
   cancel-in-progress: false
 
 jobs:
   deploy:
-    name: Build y subida por FTP
+    name: Build y subida por FTP a staging
     runs-on: ubuntu-latest
 
     steps:
@@ -51,7 +50,7 @@ jobs:
       - name: Instalar lftp
         run: sudo apt-get update && sudo apt-get install -y lftp
 
-      - name: Subir cambios por FTP (solo lo más nuevo)
+      - name: Subir cambios por FTP a staging (solo lo más nuevo)
         env:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
@@ -91,5 +90,5 @@ jobs:
               --exclude-glob 'yarn.lock' \
               --exclude-glob 'webpack.config.js' \
               --exclude-glob 'assets/' \
-              . gestion_csa_4/;
+              . deploy/staging/;
           "
