@@ -5,9 +5,11 @@ namespace App\Service\Delivery;
 use App\Custom\WeekOfMonth;
 use App\Entity\Basket;
 use App\Entity\PartnerBasketShare;
+use App\Entity\PartnerDeliveryShift;
 use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketGroup;
 use App\Entity\WeeklyBasketStatus;
+use App\Repository\PartnerDeliveryShiftRepository;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
@@ -16,9 +18,12 @@ use Doctrine\ORM\EntityManagerInterface;
  * cambiar su comportamiento: se extrae para poder testearse y para que
  * el controller no cargue con la responsabilidad de orquestar BBDD.
  *
- * Lo que NO hace todavía: consumir DeliveryException, balancear A/B vía
- * delivery_group, emitir PartnerEvent. Esos hooks se añaden en bloques
- * posteriores; aquí se preserva el flujo histórico tal cual estaba.
+ * Aplica los cambios puntuales de viernes (PartnerDeliveryShift) cuando
+ * se materializa el listado por primera vez: suprime a quien sale del
+ * Basket y añade a quien entra (con su share activo).
+ *
+ * Lo que NO hace todavía: consumir DeliveryException, balancear A/B
+ * vía PartnerBasketShare.delivery_group, emitir PartnerEvent.
  */
 class WeeklyBasketGenerator
 {
@@ -38,6 +43,7 @@ class WeeklyBasketGenerator
 
     public function __construct(
         private readonly EntityManagerInterface $em,
+        private readonly DeliveryShiftApplier $shiftApplier,
     ) {
     }
 
@@ -153,6 +159,11 @@ class WeeklyBasketGenerator
      * Aún no existen WeeklyBasket para esta cesta: se calculan los candidatos a
      * partir de los PartnerBasketShare activos según modalidad y se persisten.
      *
+     * Antes de persistir aplica los cambios puntuales de viernes registrados
+     * sobre este Basket: excluye a los partners que tienen un shift saliendo
+     * y, al final, materializa una WB extra para los partners que tienen un
+     * shift entrando (cuyo share normal no los habría incluido).
+     *
      * @return array{0:array,1:array,2:array,3:array,4:array} weekly, half, biweekly, monthly, onlyEgg
      */
     private function createWeeklyBasketsFromShares(Basket $basket, int $dayOrder): array
@@ -168,6 +179,25 @@ class WeeklyBasketGenerator
         $onlyEggBiweekly = $shareRepo->findBasketPartnersBiweeklyAndCity($basket, self::SHARE_ONLY_EGG, 1, true);
         $onlyEggMonthly = $shareRepo->findBasketPartnersMonthlyAndCity($basket, self::SHARE_ONLY_EGG, $dayOrder, true);
         $onlyEgg = array_merge($onlyEggWeekly, $onlyEggBiweekly, $onlyEggMonthly);
+
+        /** @var PartnerDeliveryShiftRepository $shiftRepo */
+        $shiftRepo = $this->em->getRepository(PartnerDeliveryShift::class);
+        $outgoing = $shiftRepo->findAllOutgoingFromBasket($basket);
+        $outgoingPartnerIds = array_map(static fn (PartnerDeliveryShift $s) => $s->getPartner()->getId(), $outgoing);
+
+        if (!empty($outgoingPartnerIds)) {
+            $excludeOutgoing = static function (array $shares) use ($outgoingPartnerIds): array {
+                return array_values(array_filter(
+                    $shares,
+                    static fn ($share) => !in_array($share->getPartner()->getId(), $outgoingPartnerIds, true),
+                ));
+            };
+            $weekly = $excludeOutgoing($weekly);
+            $half = $excludeOutgoing($half);
+            $biweekly = $excludeOutgoing($biweekly);
+            $monthly = $excludeOutgoing($monthly);
+            $onlyEgg = $excludeOutgoing($onlyEgg);
+        }
 
         $all = array_merge($weekly, $half, $biweekly, $monthly, $onlyEgg);
         $status = $this->em->getRepository(WeeklyBasketStatus::class)->find(self::STATUS_PICKED);
@@ -186,6 +216,18 @@ class WeeklyBasketGenerator
             $stamped = $this->em->getRepository(WeeklyBasket::class)
                 ->findOneBy(['basket' => $basket->getId(), 'partner' => $share->getPartner()->getId()]);
             $share->getPartner()->setCurrentBasket($stamped);
+        }
+
+        $incoming = $shiftRepo->findAllIncomingToBasket($basket);
+        foreach ($incoming as $shift) {
+            $partner = $shift->getPartner();
+            $existing = $this->em->getRepository(WeeklyBasket::class)
+                ->findOneBy(['basket' => $basket->getId(), 'partner' => $partner->getId()]);
+            if ($existing !== null) {
+                continue;
+            }
+            $this->shiftApplier->createWeeklyBasketForShiftDestination($partner, $basket);
+            $this->em->flush();
         }
 
         return [$weekly, $half, $biweekly, $monthly, $onlyEgg];

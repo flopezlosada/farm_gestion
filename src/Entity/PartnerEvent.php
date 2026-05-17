@@ -83,8 +83,14 @@ class PartnerEvent
     /**
      * Datos contextuales del evento. Forma variable según $type, por ejemplo:
      *   - GROUP_CHANGE_PERMANENT: {"from":"A","to":"B"}
-     *   - WEEK_SWAP:              {"from_date":"2026-05-22","to_date":"2026-05-29"}
-     *   - NODE_CHANGE:            {"from_group_id":3,"to_group_id":5}
+     *   - WEEK_SWAP:              {"from_basket_id":42,"from_date":"2026-05-22",
+     *                              "to_basket_id":43,"to_date":"2026-05-29",
+     *                              "cancelled":false}
+     *     (cuando el socio o admin cancela el cambio, se emite otro WEEK_SWAP
+     *     con `cancelled: true` y mismos from/to; ambos quedan en el feed.)
+     *   - NODE_CHANGE:            {"scope":"one_off","from_group_id":3,"to_group_id":5,
+     *                              "from_group_name":"Vallecas","to_group_name":"Madrid",
+     *                              "basket_id":7}
      *   - BASKET_START / BASKET_END: {"basket_share_id":1,"delivery_group":"A"}
      * @ORM\Column(type="json", nullable=true)
      */
