@@ -134,6 +134,43 @@
                             </form>
                         {% endif %}
 
+                        {# --- Cambiar viernes (quincenales/mensuales) --- #}
+                        {% if shift_existing %}
+                            <div class="csa-alert csa-alert--warning" role="status">
+                                Has pedido cambio puntual:
+                                en lugar de recoger el <strong>{{ shift_existing.fromBasket.date|date('d/m/Y') }}</strong>,
+                                recoges el <strong>{{ shift_existing.toBasket.date|date('d/m/Y') }}</strong>.
+                            </div>
+                            <form action="{{ path('panel_basket_shift_cancel') }}" method="post">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_basket_shift_cancel') }}">
+                                <button type="submit" class="csa-btn csa-btn--secondary csa-btn--block"
+                                        onclick="return confirm('¿Quieres deshacer el cambio y volver a recoger el viernes original?');">
+                                    Deshacer el cambio de viernes
+                                </button>
+                            </form>
+                        {% elseif not next_basket_skipped and shift_candidates|length > 0 %}
+                            <form action="{{ path('panel_basket_shift_request') }}" method="post" class="csa-stack">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_basket_shift') }}">
+                                <div class="csa-field">
+                                    <label for="csa-shift-to" class="csa-field__label">
+                                        Cambiar el viernes de recogida (esta cesta a otro viernes)
+                                    </label>
+                                    <select id="csa-shift-to" name="to_basket_id" class="csa-input" required>
+                                        <option value="">— elige un viernes —</option>
+                                        {% for b in shift_candidates %}
+                                            <option value="{{ b.id }}">{{ b.date|date('d/m/Y') }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <button type="submit" class="csa-btn csa-btn--secondary csa-btn--block">
+                                    Pedir cambio de viernes
+                                </button>
+                                <p class="csa-muted" style="font-size: var(--csa-fs-sm); margin: 0;">
+                                    Si las reglas de equilibrio no lo permiten, el sistema te avisará y tendrás que contactar con la administración.
+                                </p>
+                            </form>
+                        {% endif %}
+
                         <p class="csa-muted" style="font-size: var(--csa-fs-sm); margin: 0;">
                             Plazo para cambiar: hasta el
                             <strong>{{ pickup_deadline|format_datetime('long', 'short', locale='es') }}</strong>.

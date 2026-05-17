@@ -2,17 +2,24 @@
 
 namespace App\Controller;
 
+use App\Entity\Basket;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
+use App\Entity\PartnerDeliveryShift;
 use App\Entity\PartnerEvent;
 use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketGroup;
 use App\Entity\WeeklyBasketStatus;
 use App\Form\ChangePasswordType;
 use App\Form\PartnerProfileType;
+use App\Repository\BasketRepository;
+use App\Repository\PartnerBasketShareRepository;
+use App\Repository\PartnerDeliveryShiftRepository;
 use App\Repository\WeeklyBasketGroupRepository;
 use App\Repository\WeeklyBasketRepository;
 use App\Repository\WeeklyBasketStatusRepository;
+use App\Service\Delivery\DeliveryShiftApplier;
+use App\Service\Delivery\DeliveryShiftValidator;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Form\Extension\Core\Type\PasswordType;
@@ -115,18 +122,38 @@ class PanelController extends AbstractController
     private const PICKUP_DEADLINE_MINUTE = 59;
 
     #[Route('/cesta', name: 'panel_basket', methods: ['GET'])]
-    public function basket(WeeklyBasketRepository $weeklyBasketRepository, WeeklyBasketGroupRepository $weeklyBasketGroupRepository): Response
-    {
+    public function basket(
+        WeeklyBasketRepository $weeklyBasketRepository,
+        WeeklyBasketGroupRepository $weeklyBasketGroupRepository,
+        PartnerBasketShareRepository $partnerBasketShareRepository,
+        PartnerDeliveryShiftRepository $deliveryShiftRepository,
+        BasketRepository $basketRepository,
+    ): Response {
         if (($redirect = $this->ensureReady()) !== null) {
             return $redirect;
         }
 
         $partner = $this->getUser()->getPartner();
         $next = $weeklyBasketRepository->findNextForPartner($partner);
+        $activeShare = $this->activeShare($partner);
+
+        // Para el cambio puntual de viernes el `from_basket` es el Basket del
+        // próximo WeeklyBasket del socix — es donde le tocaba recoger por su
+        // pauta normal. Si el socix ya tiene un shift creado, el next podría
+        // estar en status 2 ("no recoge"); igualmente el from es ése.
+        $fromBasket = $next?->getBasket();
+        $existingShift = ($fromBasket !== null)
+            ? $deliveryShiftRepository->findOutgoing($partner, $fromBasket)
+            : null;
+
+        $shiftCandidates = [];
+        if ($fromBasket !== null && $existingShift === null && $activeShare !== null) {
+            $shiftCandidates = $this->shiftDestinationCandidates($activeShare, $fromBasket, $basketRepository);
+        }
 
         return $this->render('Panel/basket.html.twig', [
             'partner' => $partner,
-            'active_share' => $this->activeShare($partner),
+            'active_share' => $activeShare,
             'group' => $partner->getWeeklyBasketGroup(),
             'next_basket' => $next,
             'next_basket_skipped' => $next?->getWeeklyBasketStatus()?->getId() === 2,
@@ -134,7 +161,37 @@ class PanelController extends AbstractController
             'can_change_next' => $next !== null && $this->isWithinPickupDeadline($next),
             'pickup_deadline' => $next !== null ? $this->pickupDeadlineFor($next) : null,
             'pickup_groups' => $weeklyBasketGroupRepository->findBy([], ['name' => 'ASC']),
+            'shift_existing' => $existingShift,
+            'shift_candidates' => $shiftCandidates,
         ]);
+    }
+
+    /**
+     * Lista de Basket destino disponibles para que un socio pida cambio
+     * puntual de viernes desde su `from_basket`, según la modalidad de
+     * su PartnerBasketShare activo. Coincide con la regla Window del
+     * validator: quincenales solo el inmediato siguiente, mensuales
+     * cualquier viernes del mismo mes. Otras modalidades → lista vacía.
+     *
+     * @return Basket[]
+     */
+    private function shiftDestinationCandidates(
+        PartnerBasketShare $activeShare,
+        Basket $from,
+        BasketRepository $basketRepository,
+    ): array {
+        $shareTypeId = $activeShare->getBasketShare()?->getId();
+        // Ids del catálogo: 2 = quincenal, 3 = mensual. Otros tipos no
+        // aplican (semanales tienen "no recojo esta semana" y los demás
+        // se delegan a admin si surge necesidad).
+        if ($shareTypeId === 2) {
+            $next = $basketRepository->findNextAfter($from);
+            return $next !== null ? [$next] : [];
+        }
+        if ($shareTypeId === 3) {
+            return $basketRepository->findOtherBasketsInSameMonth($from);
+        }
+        return [];
     }
 
     /**
@@ -260,9 +317,117 @@ class PanelController extends AbstractController
     }
 
     /**
-     * El deadline para tocar una WeeklyBasket concreta es el miércoles
+     * Pide cambio puntual del viernes que le tocaba al socix por otro
+     * viernes compatible. Validador centraliza las reglas (Window,
+     * Balance, Deadline); el socix nunca puede saltarse violaciones
+     * bypassables — se le devuelve un mensaje claro y se le invita a
+     * contactar con admin si quiere forzar.
+     */
+    #[Route('/cesta/cambiar-viernes', name: 'panel_basket_shift_request', methods: ['POST'])]
+    public function requestShift(
+        Request $request,
+        WeeklyBasketRepository $weeklyBasketRepository,
+        BasketRepository $basketRepository,
+        DeliveryShiftValidator $validator,
+        DeliveryShiftApplier $applier,
+    ): Response {
+        if (($redirect = $this->ensureReady()) !== null) {
+            return $redirect;
+        }
+
+        if (!$this->isCsrfTokenValid('panel_basket_shift', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
+            return $this->redirectToRoute('panel_basket');
+        }
+
+        $partner = $this->getUser()->getPartner();
+        $next = $weeklyBasketRepository->findNextForPartner($partner);
+        $from = $next?->getBasket();
+        if ($from === null) {
+            $this->addFlash('warning', 'No tienes una próxima cesta sobre la que pedir cambio.');
+            return $this->redirectToRoute('panel_basket');
+        }
+
+        $toBasketId = (int) $request->request->get('to_basket_id', 0);
+        $to = $toBasketId > 0 ? $basketRepository->find($toBasketId) : null;
+        if ($to === null) {
+            $this->addFlash('error', 'Selecciona un viernes destino válido.');
+            return $this->redirectToRoute('panel_basket');
+        }
+
+        $violations = $validator->validate($partner, $from, $to);
+        if (!empty($violations)) {
+            foreach ($violations as $v) {
+                $this->addFlash($v->bypassable ? 'warning' : 'error', $v->message);
+            }
+            return $this->redirectToRoute('panel_basket');
+        }
+
+        try {
+            $applier->apply($partner, $from, $to, actor: 'partner:' . $partner->getId());
+        } catch (\LogicException $e) {
+            $this->addFlash('error', $e->getMessage());
+            return $this->redirectToRoute('panel_basket');
+        }
+
+        $this->addFlash('notice', sprintf(
+            'Listo: en lugar del viernes %s recogerás la cesta el %s.',
+            $from->getDate()->format('d/m/Y'),
+            $to->getDate()->format('d/m/Y'),
+        ));
+        return $this->redirectToRoute('panel_basket');
+    }
+
+    /**
+     * Cancela el cambio puntual de viernes activo del socix. Pasa por
+     * el validator igualmente: el deadline aplica también a la reversión.
+     */
+    #[Route('/cesta/cancelar-cambio-viernes', name: 'panel_basket_shift_cancel', methods: ['POST'])]
+    public function cancelShift(
+        Request $request,
+        WeeklyBasketRepository $weeklyBasketRepository,
+        PartnerDeliveryShiftRepository $deliveryShiftRepository,
+        DeliveryShiftValidator $validator,
+        DeliveryShiftApplier $applier,
+    ): Response {
+        if (($redirect = $this->ensureReady()) !== null) {
+            return $redirect;
+        }
+
+        if (!$this->isCsrfTokenValid('panel_basket_shift_cancel', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
+            return $this->redirectToRoute('panel_basket');
+        }
+
+        $partner = $this->getUser()->getPartner();
+        $next = $weeklyBasketRepository->findNextForPartner($partner);
+        $from = $next?->getBasket();
+        $shift = $from !== null ? $deliveryShiftRepository->findOutgoing($partner, $from) : null;
+
+        if ($shift === null) {
+            $this->addFlash('warning', 'No tienes un cambio puntual de viernes que cancelar.');
+            return $this->redirectToRoute('panel_basket');
+        }
+
+        $violations = $validator->validate($partner, $shift->getFromBasket(), $shift->getToBasket());
+        $blocking = $validator->blocking($violations);
+        if (!empty($blocking)) {
+            foreach ($blocking as $v) {
+                $this->addFlash('error', $v->message);
+            }
+            return $this->redirectToRoute('panel_basket');
+        }
+
+        $applier->cancel($shift, actor: 'partner:' . $partner->getId());
+
+        $this->addFlash('notice', 'Listo: hemos cancelado el cambio. Recogerás la cesta el viernes que te tocaba.');
+        return $this->redirectToRoute('panel_basket');
+    }
+
+    /**
+     * El deadline para tocar una WeeklyBasket concreta es el jueves
      * 23:59 (zona horaria local) anterior al viernes de reparto del
-     * Basket asociado.
+     * Basket asociado, alineado con el cierre operativo del reparto.
      */
     private function pickupDeadlineFor(WeeklyBasket $weeklyBasket): ?\DateTimeImmutable
     {
@@ -275,8 +440,8 @@ class PanelController extends AbstractController
         // operar con seguridad sin pisar el original.
         $pickup = \DateTimeImmutable::createFromMutable($basketDate);
 
-        // ISO weekday del viernes habitual = 5. Para llegar al miércoles
-        // restamos (viernes - miércoles) días = 2. Si por excepción de
+        // ISO weekday del viernes habitual = 5. Para llegar al jueves
+        // restamos (viernes - jueves) días = 1. Si por excepción de
         // calendario el reparto cae en otro día, garantizamos que el
         // deadline siempre se sitúa antes con abs().
         $diffDays = abs((int) $pickup->format('N') - self::PICKUP_DEADLINE_WEEKDAY);
