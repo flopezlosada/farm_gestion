@@ -52,4 +52,28 @@ class PartnerEventRepository extends ServiceEntityRepository
             ->getQuery()
             ->getSingleScalarResult();
     }
+
+    /**
+     * Eventos de cualquiera de los tipos dados ocurridos desde `since`,
+     * más recientes arriba. Pensado para el resumen periódico al admin
+     * (BASKET_SKIP / BASKET_UNSKIP / NODE_CHANGE / WEEK_SWAP).
+     *
+     * @param string[] $types
+     * @return PartnerEvent[]
+     */
+    public function findByTypesSince(array $types, \DateTimeInterface $since): array
+    {
+        if (empty($types)) {
+            return [];
+        }
+
+        return $this->createQueryBuilder('e')
+            ->where('e.type IN (:types)')
+            ->andWhere('e.occurredAt >= :since')
+            ->setParameter('types', $types)
+            ->setParameter('since', $since)
+            ->orderBy('e.occurredAt', 'DESC')
+            ->getQuery()
+            ->getResult();
+    }
 }

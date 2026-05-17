@@ -1,0 +1,12 @@
+Resumen de cambios de socixs · CSA Vega de Jarama
+==================================================
+
+Desde {{ since|format_datetime('long', 'short', locale='es') }} se han registrado {{ rows|length }} cambio(s) autoservicio:
+
+{% for r in rows %}
+- {{ r.when }} · {{ r.partner }} · {{ r.type }}{% if r.detail %} ({{ r.detail }}){% endif %}
+
+{% endfor %}
+
+--
+Resumen automático · CSA Vega de Jarama
