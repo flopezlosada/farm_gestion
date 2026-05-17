@@ -33,6 +33,16 @@ class PartnerBasketShareType extends AbstractType
                     'Tercer viernes' => 3,
                     'Cuarto viernes' => 4,
                 ], 'label'=>"Selecciona el viernes que recoge"])
+            ->add('deliveryGroup', ChoiceType::class, [
+                'label' => 'Grupo de reparto (solo quincenales)',
+                'help' => 'Quincenales se reparten en dos grupos que recogen en viernes alternos. Déjalo vacío si la cesta no es quincenal o si aún no se ha asignado grupo.',
+                'choices' => [
+                    'Sin asignar' => null,
+                    'Grupo A' => PartnerBasketShare::DELIVERY_GROUP_A,
+                    'Grupo B' => PartnerBasketShare::DELIVERY_GROUP_B,
+                ],
+                'required' => false,
+            ])
             ->add('isFreeBasket', CheckboxType::class, array('label'=>'Marca esta casilla si es una cesta gratuita', 'required'=>false))
             ->add('amount',ChoiceType::class,array(
                 'choices'  => [

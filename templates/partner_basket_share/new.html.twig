@@ -55,7 +55,7 @@
                 {% endblock %}
             {% endembed %}
 
-            {% embed '_components/csa_form_section.html.twig' with { num: '3', title: 'Calendario', subtitle: 'Fecha de inicio y día concreto del mes si procede.' } %}
+            {% embed '_components/csa_form_section.html.twig' with { num: '3', title: 'Calendario', subtitle: 'Fecha de inicio, día concreto del mes y grupo de reparto si procede.' } %}
                 {% block body %}
                     {% import '_macros/csa.html.twig' as csa %}
                     <div class="csa-form-grid">
@@ -63,6 +63,7 @@
                         <div id="day_month_order" class="csa-field--full hidden">
                             {{ csa.field(form.dayMonthOrder, 'Día del mes', { full: true }) }}
                         </div>
+                        {{ csa.field(form.deliveryGroup, 'Grupo de reparto', { full: true }) }}
                     </div>
                 {% endblock %}
             {% endembed %}
