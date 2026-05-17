@@ -36,19 +36,27 @@ class UserType extends AbstractType
     {
         $builder
             ->add('username', TextType::class, ['label' => 'Nombre de usuaria'])
-            ->add('email', EmailType::class, ['label' => 'Email'])
-            ->add('plainPassword', RepeatedType::class, [
+            ->add('email', EmailType::class, ['label' => 'Email']);
+
+        // El campo de contraseña solo aparece en alta (require_password=true).
+        // En edición admin NO se expone: el reseteo lo hace el propio usuario
+        // por el flujo de magic-link en /login/forgot, no admin a mano.
+        if ($options['require_password']) {
+            $builder->add('plainPassword', RepeatedType::class, [
                 'type' => PasswordType::class,
                 'mapped' => false,
                 'first_options' => ['label' => 'Contraseña'],
                 'second_options' => ['label' => 'Repetir contraseña'],
                 'invalid_message' => 'Las contraseñas no coinciden.',
-                'required' => $options['require_password'],
-                'constraints' => $options['require_password'] ? [
+                'required' => true,
+                'constraints' => [
                     new NotBlank(),
                     new Length(['min' => 6]),
-                ] : [],
-            ])
+                ],
+            ]);
+        }
+
+        $builder
             ->add('roles', ChoiceType::class, [
                 'label' => 'Roles',
                 'choices' => self::ROLE_CHOICES,

@@ -33,14 +33,12 @@
 
         <div class="csa-stack-lg">
 
-            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Cuenta', subtitle: 'La contraseña queda igual si dejas los campos vacíos.' } %}
+            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Cuenta', subtitle: 'Datos básicos. La contraseña la cambia la propia usuaria con el enlace de recuperación en /login/forgot.' } %}
                 {% block body %}
                     {% import '_macros/csa.html.twig' as csa %}
                     <div class="csa-form-grid">
                         {{ csa.field(edit_form.username, 'Usuaria') }}
                         {{ csa.field(edit_form.email, 'Email') }}
-                        {{ csa.field(edit_form.plainPassword.first, 'Nueva contraseña', { hint: 'opcional' }) }}
-                        {{ csa.field(edit_form.plainPassword.second, 'Repetir contraseña', { hint: 'opcional' }) }}
                     </div>
                 {% endblock %}
             {% endembed %}

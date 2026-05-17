@@ -162,10 +162,10 @@ class UserController extends AbstractAppController
     }
 
     /**
-     * Edits an existing User entity.
-     *
+     * Edits an existing User entity. La contraseña NO se toca desde aquí:
+     * el reseteo lo hace el propio usuario por magic-link en /login/forgot.
      */
-    public function update(Request $request, $id, UserPasswordHasherInterface $hasher)
+    public function update(Request $request, $id)
     {
         $em = $this->getDoctrine()->getManager();
 
@@ -180,10 +180,6 @@ class UserController extends AbstractAppController
         $editForm->handleRequest($request);
 
         if ($editForm->isSubmitted() && $editForm->isValid()) {
-            $plainPassword = $editForm->get('plainPassword')->getData();
-            if ($plainPassword) {
-                $entity->setPassword($hasher->hashPassword($entity, $plainPassword));
-            }
             $em->flush();
 
             return $this->redirect($this->generateUrl('user_show', array('id' => $id)));
