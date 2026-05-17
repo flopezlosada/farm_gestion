@@ -45,8 +45,10 @@ jobs:
           npm install --no-audit --no-fund
           npm run build || npm run dev
 
-      - name: Restaurar symlink legacy de assets
-        run: ln -sfn ../../src/Resources/public public/bundles/app
+      - name: Copiar assets legacy (FTP no transmite symlinks)
+        run: |
+          rm -rf public/bundles/app
+          cp -R src/Resources/public public/bundles/app
 
       - name: Instalar lftp
         run: sudo apt-get update && sudo apt-get install -y lftp
