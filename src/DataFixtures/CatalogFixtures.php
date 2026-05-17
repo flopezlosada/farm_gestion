@@ -9,6 +9,7 @@ use App\Entity\EggPeriod;
 use App\Entity\SharePayment;
 use App\Entity\State;
 use App\Entity\WeeklyBasketGroup;
+use App\Entity\WeeklyBasketStatus;
 use Doctrine\Bundle\FixturesBundle\Fixture;
 use Doctrine\Persistence\ObjectManager;
 
@@ -28,6 +29,7 @@ class CatalogFixtures extends Fixture
     public const REF_WEEKLY_GROUP_PREFIX = 'weekly_group_';
     public const REF_CITY_PREFIX = 'city_';
     public const REF_STATE_PREFIX = 'state_';
+    public const REF_WB_STATUS_PREFIX = 'wb_status_';
 
     /**
      * Carga todos los catálogos y registra referencias para los fixtures dependientes.
@@ -98,6 +100,16 @@ class CatalogFixtures extends Fixture
             $group = (new WeeklyBasketGroup())->setName($name)->setColor($color);
             $manager->persist($group);
             $this->addReference(self::REF_WEEKLY_GROUP_PREFIX . $name, $group);
+        }
+
+        // Catálogo de estados de WeeklyBasket: en producción se persistieron
+        // con ids 1/2/3 a mano hace años. Aquí los recreamos para que dev y
+        // test tengan el mismo catálogo. Los servicios siguen referenciando
+        // los ids 1 (Recoge) y 2 (No la recoge) como constantes.
+        foreach (['Recoge', 'No la recoge', 'No la ha recogido y no ha avisado'] as $statusTitle) {
+            $status = (new WeeklyBasketStatus())->setTitle($statusTitle);
+            $manager->persist($status);
+            $this->addReference(self::REF_WB_STATUS_PREFIX . $statusTitle, $status);
         }
 
         $manager->flush();
