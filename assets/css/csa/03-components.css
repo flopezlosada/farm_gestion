@@ -139,6 +139,14 @@
 .csa-card--accent-green      { border-top: 2px solid var(--csa-green); }
 .csa-card--accent-terracotta { border-top: 2px solid var(--csa-terracotta); }
 
+/* Variante "hero" — para cards que son la acción principal de la página.
+ * Borde superior más grueso, header con fondo de acento suave. Funciona
+ * combinada con .csa-card--accent-X (toma el color del acento). */
+.csa-app .csa-card--hero { border-top-width: 4px; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+.csa-app .csa-card--hero.csa-card--accent-green .csa-card__header { background: var(--csa-green-soft); }
+.csa-app .csa-card--hero.csa-card--accent-sky   .csa-card__header { background: var(--csa-sky-soft); }
+.csa-app .csa-card--hero.csa-card--accent-ochre .csa-card__header { background: var(--csa-ochre-soft); }
+
 .csa-card__header {
   display: flex;
   align-items: flex-start;
@@ -165,6 +173,28 @@
   margin-top: 2px;
 }
 .csa-card__body { padding: var(--csa-sp-5) var(--csa-sp-6); }
+
+.csa-card__header-main {
+  display: flex;
+  align-items: center;
+  gap: var(--csa-sp-3);
+}
+.csa-card__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: var(--csa-surface);
+  color: var(--csa-ink-soft);
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.csa-app .csa-card--accent-green .csa-card__icon      { color: var(--csa-green); }
+.csa-app .csa-card--accent-sky   .csa-card__icon      { color: var(--csa-sky); }
+.csa-app .csa-card--accent-ochre .csa-card__icon      { color: var(--csa-ochre); }
+.csa-app .csa-card--accent-plum  .csa-card__icon      { color: var(--csa-plum); }
+.csa-app .csa-card--hero .csa-card__icon { width: 44px; height: 44px; font-size: 20px; }
 
 
 /* ============================================================
@@ -456,6 +486,8 @@
 }
 .csa-callout--info    { border-left-color: var(--csa-sky); }
 .csa-callout--info    .csa-callout__icon { color: var(--csa-sky); }
+.csa-app .csa-callout--success { border-left-color: var(--csa-green); background: var(--csa-green-soft); color: var(--csa-ink); }
+.csa-app .csa-callout--success .csa-callout__icon { color: var(--csa-green); }
 .csa-callout--warning { border-left-color: var(--csa-ochre); }
 .csa-callout--warning .csa-callout__icon { color: var(--csa-ochre); }
 .csa-callout--danger  { border-left-color: var(--csa-terracotta); }
@@ -2083,4 +2115,136 @@ table.csa-table thead th.sorting_desc::after { content: " ↓"; color: var(--csa
 .csa-auth__back:focus-visible {
   outline: 2px solid var(--csa-green);
   outline-offset: 2px;
+}
+
+
+/* ============================================================
+ * PRÓXIMA CESTA — bloque hero del panel del socix
+ * ============================================================ */
+
+.csa-app .csa-next-basket__date {
+  font-family: var(--csa-serif);
+  font-size: clamp(1.4rem, 2.4vw, 1.9rem);
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--csa-ink);
+}
+/* Solo capitalizamos el primer carácter — el filtro format_date(es)
+ * devuelve "viernes, 22 de mayo de 2026" en minúsculas; queremos
+ * "Viernes, 22 de mayo de 2026", no "Viernes, 22 De Mayo De 2026". */
+.csa-app .csa-next-basket__date::first-letter { text-transform: uppercase; }
+
+.csa-app .csa-next-basket__where {
+  margin-top: var(--csa-sp-2);
+  font-size: var(--csa-fs-md);
+  color: var(--csa-ink-soft);
+}
+.csa-app .csa-next-basket__where .fa { color: var(--csa-green); margin-right: 4px; }
+
+.csa-app .csa-next-basket__actions {
+  margin-top: var(--csa-sp-6);
+  padding-top: var(--csa-sp-5);
+  border-top: 1px solid var(--csa-rule);
+}
+.csa-app .csa-next-basket__actions-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--csa-sp-3);
+  flex-wrap: wrap;
+  margin: 0 0 var(--csa-sp-3);
+}
+.csa-app .csa-next-basket__actions-title {
+  font-family: var(--csa-sans);
+  font-size: var(--csa-fs-sm);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--csa-ink-soft);
+  margin: 0;
+}
+
+/* Pill destacada con el plazo de cambios. Ámbar para que llame la atención
+ * sin gritar — el socix necesita verla pero no debe asustarse. */
+.csa-app .csa-deadline-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--csa-ochre-soft);
+  color: var(--csa-amber, #8a5a13);
+  border-radius: var(--csa-radius-pill);
+  font-size: var(--csa-fs-sm);
+  font-weight: 500;
+  line-height: 1.3;
+}
+.csa-app .csa-deadline-pill .fa { color: var(--csa-ochre); }
+.csa-app .csa-deadline-pill--closed {
+  background: var(--csa-surface-alt);
+  color: var(--csa-ink-soft);
+}
+.csa-app .csa-deadline-pill--closed .fa { color: var(--csa-ink-muted); }
+
+/* Estado deshabilitado del bloque de acciones (plazo cerrado). */
+.csa-app .csa-next-basket__actions--disabled .csa-next-basket__action {
+  opacity: 0.55;
+  pointer-events: none;
+}
+.csa-app .csa-next-basket__actions--disabled .csa-next-basket__action:hover {
+  border-color: var(--csa-rule);
+  background: var(--csa-surface);
+  box-shadow: none;
+}
+
+/* Fila de acción: icono coloreado + texto (título + descripción) + botón a la derecha.
+ * Estructura uniforme para que las acciones de la hero card se lean como una lista. */
+.csa-app .csa-next-basket__action {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  align-items: center;
+  gap: var(--csa-sp-3);
+  padding: var(--csa-sp-3) var(--csa-sp-4);
+  margin: 0 0 var(--csa-sp-2);
+  border: 1px solid var(--csa-rule);
+  border-radius: var(--csa-radius-md);
+  background: var(--csa-surface);
+  transition: border-color var(--csa-t-fast), box-shadow var(--csa-t-fast), background var(--csa-t-fast);
+}
+.csa-app .csa-next-basket__action:hover {
+  border-color: var(--csa-ink-muted);
+  background: var(--csa-surface-alt);
+  box-shadow: 0 1px 3px rgba(0,0,0,.06);
+}
+.csa-app .csa-next-basket__action-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  font-size: 14px;
+  background: var(--csa-surface-alt);
+  color: var(--csa-ink-soft);
+}
+.csa-app .csa-next-basket__action-icon--danger { background: var(--csa-terracotta-soft); color: #b04e22; }
+.csa-app .csa-next-basket__action-icon--info   { background: var(--csa-sky-soft);        color: var(--csa-sky); }
+.csa-app .csa-next-basket__action-icon--green  { background: var(--csa-green-soft);      color: var(--csa-green); }
+.csa-app .csa-next-basket__action-body { min-width: 0; }
+.csa-app .csa-next-basket__action-title { font-weight: 600; color: var(--csa-ink); }
+.csa-app .csa-next-basket__action-desc  { font-size: var(--csa-fs-sm); color: var(--csa-ink-soft); margin-top: 2px; }
+
+/* Variante inline para el caso del select de viernes (mensual). */
+.csa-app .csa-next-basket__action--inline { grid-template-columns: 40px 1fr auto auto; }
+.csa-app .csa-next-basket__action--inline .csa-input--inline { min-width: 140px; max-width: 220px; }
+
+/* En pantallas estrechas la fila se apila y el botón pasa a fondo. */
+@media (max-width: 540px) {
+  .csa-app .csa-next-basket__action,
+  .csa-app .csa-next-basket__action--inline {
+    grid-template-columns: 40px 1fr;
+  }
+  .csa-app .csa-next-basket__action > .csa-btn,
+  .csa-app .csa-next-basket__action--inline > .csa-btn,
+  .csa-app .csa-next-basket__action--inline > .csa-input--inline {
+    grid-column: 1 / -1;
+  }
 }

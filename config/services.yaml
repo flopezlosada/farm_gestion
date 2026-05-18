@@ -4,6 +4,11 @@
 # Put parameters here that don't need to change on each machine where the app is deployed
 # https://symfony.com/doc/current/best_practices/configuration.html#application-related-configuration
 parameters:
+    # Umbral de la regla BalanceWithinThresholdRule: máxima diferencia
+    # permitida de cestas entre dos viernes consecutivos tras aplicar un
+    # shift. Default operativo 3 (en .env). Override en .env.local para
+    # entornos de desarrollo con datasets desbalanceados.
+    app.delivery.balance_threshold: '%env(int:BALANCE_THRESHOLD)%'
 
 services:
     # default configuration for services in *this* file
@@ -48,3 +53,7 @@ services:
 
     ADesigns\CalendarBundle\Controller\CalendarController:
         tags: ['controller.service_arguments']
+
+    App\Service\Delivery\Rule\BalanceWithinThresholdRule:
+        arguments:
+            $threshold: '%app.delivery.balance_threshold%'

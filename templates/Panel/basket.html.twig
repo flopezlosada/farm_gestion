@@ -17,10 +17,155 @@
         'Lo que recibes y dónde lo recoges.'
     ) }}
 
-    <div class="csa-dashboard-pair">
+    {# ===== Próxima cesta (hero — la acción del día) ===== #}
+    {% if next_basket %}
+        {% embed '_components/csa_card.html.twig' with { title: 'Próxima cesta', accent: 'green', icon: 'fa-calendar-check-o', variant: 'hero' } %}
+            {% block body %}
+                {# Stat principal: fecha grande + lugar como subtítulo. #}
+                <div class="csa-next-basket">
+                    <div class="csa-next-basket__date">
+                        {{ next_basket.basket.date|format_date('full', locale='es') }}
+                    </div>
+                    {% if next_basket_group %}
+                        <div class="csa-next-basket__where">
+                            <i class="fa fa-map-marker" aria-hidden="true"></i>
+                            Recoges en <strong>{{ next_basket_group.name }}</strong>
+                        </div>
+                    {% endif %}
+                </div>
+
+                {% if next_basket_skipped %}
+                    <div class="csa-alert csa-alert--warning" role="status" style="margin-top: var(--csa-sp-4);">
+                        Has marcado que <strong>no recogerás</strong> la cesta esta semana.
+                    </div>
+                {% endif %}
+
+                {% if shift_existing %}
+                    <div class="csa-alert csa-alert--warning" role="status" style="margin-top: var(--csa-sp-4);">
+                        Has pedido cambio puntual: en lugar de recoger el
+                        <strong>{{ shift_existing.fromBasket.date|date('d/m/Y') }}</strong>,
+                        recoges el <strong>{{ shift_existing.toBasket.date|date('d/m/Y') }}</strong>.
+                    </div>
+                {% endif %}
+
+                <div class="csa-next-basket__actions{% if not can_change_next %} csa-next-basket__actions--disabled{% endif %}"
+                     {% if not can_change_next %}aria-disabled="true"{% endif %}>
+                    <div class="csa-next-basket__actions-head">
+                        <h4 class="csa-next-basket__actions-title">¿Necesitas hacer un cambio?</h4>
+                        {% if can_change_next %}
+                            <span class="csa-deadline-pill" title="Plazo para hacer cambios desde tu panel">
+                                <i class="fa fa-clock-o" aria-hidden="true"></i>
+                                Hasta el {{ pickup_deadline|format_datetime('medium', 'short', locale='es') }}
+                            </span>
+                        {% else %}
+                            <span class="csa-deadline-pill csa-deadline-pill--closed" title="El plazo para cambios ya pasó">
+                                <i class="fa fa-lock" aria-hidden="true"></i>
+                                Plazo cerrado
+                            </span>
+                        {% endif %}
+                    </div>
+
+                    {# --- Saltar / recuperar --- #}
+                    <form action="{{ path('panel_basket_skip_toggle') }}" method="post" class="csa-next-basket__action">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_basket_skip') }}">
+                        {% if next_basket_skipped %}
+                            <span class="csa-next-basket__action-icon csa-next-basket__action-icon--green"><i class="fa fa-undo" aria-hidden="true"></i></span>
+                            <div class="csa-next-basket__action-body">
+                                <div class="csa-next-basket__action-title">Volver a recoger la cesta</div>
+                                <div class="csa-next-basket__action-desc">Vuelves a la pauta normal de tu reparto.</div>
+                            </div>
+                            <button type="submit" class="csa-btn csa-btn--secondary"{% if not can_change_next %} disabled{% endif %}>Sí recogeré</button>
+                        {% else %}
+                            <span class="csa-next-basket__action-icon csa-next-basket__action-icon--danger"><i class="fa fa-ban" aria-hidden="true"></i></span>
+                            <div class="csa-next-basket__action-body">
+                                <div class="csa-next-basket__action-title">No recoger esta semana</div>
+                                <div class="csa-next-basket__action-desc">Te saltas el reparto de este viernes.</div>
+                            </div>
+                            <button type="submit" class="csa-btn csa-btn--danger"
+                                    {% if not can_change_next %}disabled{% else %}onclick="return confirm('¿Confirmas que NO recoges la cesta de esta semana?');"{% endif %}>
+                                No recoger
+                            </button>
+                        {% endif %}
+                    </form>
+
+                    {# --- Cambiar viernes (quincenales/mensuales) --- #}
+                    {% if shift_existing %}
+                        <form action="{{ path('panel_basket_shift_cancel') }}" method="post" class="csa-next-basket__action">
+                            <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_basket_shift_cancel') }}">
+                            <span class="csa-next-basket__action-icon csa-next-basket__action-icon--info"><i class="fa fa-undo" aria-hidden="true"></i></span>
+                            <div class="csa-next-basket__action-body">
+                                <div class="csa-next-basket__action-title">Deshacer cambio de viernes</div>
+                                <div class="csa-next-basket__action-desc">Vuelves a recoger el viernes original.</div>
+                            </div>
+                            <button type="submit" class="csa-btn csa-btn--secondary"
+                                    {% if not can_change_next %}disabled{% else %}onclick="return confirm('¿Quieres deshacer el cambio y volver a recoger el viernes original?');"{% endif %}>
+                                Deshacer
+                            </button>
+                        </form>
+                    {% elseif not next_basket_skipped and shift_candidates|length == 1 %}
+                        {# Quincenal: solo hay 1 viernes destino (el siguiente). Botón directo. #}
+                        <form action="{{ path('panel_basket_shift_request') }}" method="post" class="csa-next-basket__action">
+                            <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_basket_shift') }}">
+                            <input type="hidden" name="to_basket_id" value="{{ shift_candidates[0].id }}">
+                            <span class="csa-next-basket__action-icon csa-next-basket__action-icon--info"><i class="fa fa-calendar" aria-hidden="true"></i></span>
+                            <div class="csa-next-basket__action-body">
+                                <div class="csa-next-basket__action-title">Cambiar al viernes siguiente</div>
+                                <div class="csa-next-basket__action-desc">Recoges el {{ shift_candidates[0].date|date('d/m/Y') }} en lugar de este viernes.</div>
+                            </div>
+                            <button type="submit" class="csa-btn csa-btn--secondary"{% if not can_change_next %} disabled{% endif %}>Cambiar</button>
+                        </form>
+                    {% elseif not next_basket_skipped and shift_candidates|length > 1 %}
+                        {# Mensual: hay varios viernes del mes. Select. #}
+                        <form action="{{ path('panel_basket_shift_request') }}" method="post" class="csa-next-basket__action csa-next-basket__action--inline">
+                            <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_basket_shift') }}">
+                            <span class="csa-next-basket__action-icon csa-next-basket__action-icon--info"><i class="fa fa-calendar" aria-hidden="true"></i></span>
+                            <div class="csa-next-basket__action-body">
+                                <div class="csa-next-basket__action-title">Cambiar a otro viernes del mes</div>
+                                <div class="csa-next-basket__action-desc">Elige cualquier otro viernes del mismo mes.</div>
+                            </div>
+                            <select id="csa-shift-to" name="to_basket_id" class="csa-input csa-input--inline" required {% if not can_change_next %}disabled{% endif %}>
+                                <option value="">— elige —</option>
+                                {% for b in shift_candidates %}
+                                    <option value="{{ b.id }}">{{ b.date|date('d/m/Y') }}</option>
+                                {% endfor %}
+                            </select>
+                            <button type="submit" class="csa-btn csa-btn--secondary"{% if not can_change_next %} disabled{% endif %}>Cambiar</button>
+                        </form>
+                    {% elseif not next_basket_skipped and shift_blocked %}
+                        {# Hay candidato pero las reglas no lo permiten. No explicamos el motivo. #}
+                        <div class="csa-next-basket__action">
+                            <span class="csa-next-basket__action-icon"><i class="fa fa-info-circle" aria-hidden="true"></i></span>
+                            <div class="csa-next-basket__action-body">
+                                <div class="csa-next-basket__action-title">No es posible cambiar de viernes</div>
+                                <div class="csa-next-basket__action-desc">
+                                    Si lo necesitas, escribe a
+                                    <a href="mailto:info@csavegadejarama.org?subject=Cambio de viernes">la administración</a>.
+                                </div>
+                            </div>
+                            <span></span>
+                        </div>
+                    {% endif %}
+
+                </div>
+            {% endblock %}
+        {% endembed %}
+    {% else %}
+        {# No hay WeeklyBasket futura para este socix. #}
+        {% embed '_components/csa_card.html.twig' with { title: 'Próxima cesta', accent: 'green', icon: 'fa-calendar-check-o', variant: 'hero' } %}
+            {% block body %}
+                {% if active_share %}
+                    <p>Aún no se ha publicado el reparto de tu próxima cesta. Vuelve unos días antes del viernes para ver los detalles y, si lo necesitas, marcar que no la recoges o cambiar de nodo puntualmente.</p>
+                {% else %}
+                    <p>No tienes una cesta activa registrada, así que no hay nada que mostrar aquí. Si crees que es un error, escribe a <a href="mailto:info@csavegadejarama.org">info@csavegadejarama.org</a>.</p>
+                {% endif %}
+            {% endblock %}
+        {% endembed %}
+    {% endif %}
+
+    <div class="csa-dashboard-pair" style="margin-top: var(--csa-sp-6);">
 
         {# ===== Cesta activa ===== #}
-        {% embed '_components/csa_card.html.twig' with { title: 'Mi cesta activa', accent: 'green' } %}
+        {% embed '_components/csa_card.html.twig' with { title: 'Mi cesta activa', icon: 'fa-leaf' } %}
             {% block body %}
                 {% if active_share %}
                     <dl class="csa-defs">
@@ -51,7 +196,7 @@
         {% endembed %}
 
         {# ===== Grupo de recogida ===== #}
-        {% embed '_components/csa_card.html.twig' with { title: 'Mi grupo de recogida', accent: 'ochre' } %}
+        {% embed '_components/csa_card.html.twig' with { title: 'Mi grupo de recogida', icon: 'fa-map-marker' } %}
             {% block body %}
                 {% if group %}
                     <dl class="csa-defs">
@@ -73,133 +218,5 @@
         {% endembed %}
 
     </div>
-
-    {# ===== Acciones puntuales sobre la próxima cesta ===== #}
-    {% if next_basket %}
-        {% embed '_components/csa_card.html.twig' with { title: 'Próxima cesta', accent: 'sky' } %}
-            {% block body %}
-                <p>
-                    Tu próxima cesta es el
-                    <strong>{{ next_basket.basket.date|format_date('full', locale='es') }}</strong>
-                    {% if next_basket_group %}
-                        en <strong>{{ next_basket_group.name }}</strong>
-                    {% endif %}.
-                </p>
-
-                {% if next_basket_skipped %}
-                    <div class="csa-alert csa-alert--warning" role="status" style="margin: var(--csa-sp-3) 0;">
-                        Has marcado que <strong>no recogerás</strong> la cesta esta semana.
-                    </div>
-                {% endif %}
-
-                {% if can_change_next %}
-                    <div class="csa-stack" style="margin-top: var(--csa-sp-4);">
-
-                        {# --- Saltar / recuperar --- #}
-                        <form action="{{ path('panel_basket_skip_toggle') }}" method="post">
-                            <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_basket_skip') }}">
-                            {% if next_basket_skipped %}
-                                <button type="submit" class="csa-btn csa-btn--secondary csa-btn--block">
-                                    Al final sí recogeré la cesta
-                                </button>
-                            {% else %}
-                                <button type="submit" class="csa-btn csa-btn--secondary csa-btn--block"
-                                        onclick="return confirm('¿Confirmas que NO recoges la cesta de esta semana?');">
-                                    No recogeré la cesta esta semana
-                                </button>
-                            {% endif %}
-                        </form>
-
-                        {# --- Cambiar de nodo puntualmente --- #}
-                        {% if not next_basket_skipped and pickup_groups|length > 1 %}
-                            <form action="{{ path('panel_basket_change_group') }}" method="post" class="csa-stack">
-                                <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_basket_change_group') }}">
-                                <div class="csa-field">
-                                    <label for="csa-pickup-group" class="csa-field__label">
-                                        Cambiar nodo de recogida solo para esta semana
-                                    </label>
-                                    <select id="csa-pickup-group" name="group_id" class="csa-input" required>
-                                        <option value="">— selecciona un grupo —</option>
-                                        {% for g in pickup_groups %}
-                                            <option value="{{ g.id }}"
-                                                    {% if next_basket_group and next_basket_group.id == g.id %}selected{% endif %}>
-                                                {{ g.name }}
-                                            </option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                                <button type="submit" class="csa-btn csa-btn--secondary csa-btn--block">
-                                    Cambiar nodo para esta cesta
-                                </button>
-                            </form>
-                        {% endif %}
-
-                        {# --- Cambiar viernes (quincenales/mensuales) --- #}
-                        {% if shift_existing %}
-                            <div class="csa-alert csa-alert--warning" role="status">
-                                Has pedido cambio puntual:
-                                en lugar de recoger el <strong>{{ shift_existing.fromBasket.date|date('d/m/Y') }}</strong>,
-                                recoges el <strong>{{ shift_existing.toBasket.date|date('d/m/Y') }}</strong>.
-                            </div>
-                            <form action="{{ path('panel_basket_shift_cancel') }}" method="post">
-                                <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_basket_shift_cancel') }}">
-                                <button type="submit" class="csa-btn csa-btn--secondary csa-btn--block"
-                                        onclick="return confirm('¿Quieres deshacer el cambio y volver a recoger el viernes original?');">
-                                    Deshacer el cambio de viernes
-                                </button>
-                            </form>
-                        {% elseif not next_basket_skipped and shift_candidates|length > 0 %}
-                            <form action="{{ path('panel_basket_shift_request') }}" method="post" class="csa-stack">
-                                <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_basket_shift') }}">
-                                <div class="csa-field">
-                                    <label for="csa-shift-to" class="csa-field__label">
-                                        Cambiar el viernes de recogida (esta cesta a otro viernes)
-                                    </label>
-                                    <select id="csa-shift-to" name="to_basket_id" class="csa-input" required>
-                                        <option value="">— elige un viernes —</option>
-                                        {% for b in shift_candidates %}
-                                            <option value="{{ b.id }}">{{ b.date|date('d/m/Y') }}</option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                                <button type="submit" class="csa-btn csa-btn--secondary csa-btn--block">
-                                    Pedir cambio de viernes
-                                </button>
-                                <p class="csa-muted" style="font-size: var(--csa-fs-sm); margin: 0;">
-                                    Si las reglas de equilibrio no lo permiten, el sistema te avisará y tendrás que contactar con la administración.
-                                </p>
-                            </form>
-                        {% endif %}
-
-                        <p class="csa-muted" style="font-size: var(--csa-fs-sm); margin: 0;">
-                            Plazo para cambiar: hasta el
-                            <strong>{{ pickup_deadline|format_datetime('long', 'short', locale='es') }}</strong>.
-                            Después tendrás que avisar a la administración.
-                        </p>
-                    </div>
-                {% else %}
-                    <p class="csa-muted" style="margin-top: var(--csa-sp-3);">
-                        Ya no puedes cambiar la cesta de esta semana desde aquí — el plazo terminó.
-                        Si necesitas avisar, escribe a
-                        <a href="mailto:info@csavegadejarama.org">info@csavegadejarama.org</a>.
-                    </p>
-                {% endif %}
-            {% endblock %}
-        {% endembed %}
-    {% else %}
-        {# No hay WeeklyBasket futura para este socix. Pasa cuando todavía
-         # no se ha generado el listado del próximo viernes o cuando el
-         # socix no tiene cesta asignada para esa fecha (modalidad
-         # quincenal/mensual que no le toca, baja, etc). #}
-        {% embed '_components/csa_card.html.twig' with { title: 'Próxima cesta', accent: 'sky' } %}
-            {% block body %}
-                {% if active_share %}
-                    <p>Aún no se ha publicado el reparto de tu próxima cesta. Vuelve unos días antes del viernes para ver los detalles y, si lo necesitas, marcar que no la recoges o cambiar de nodo puntualmente.</p>
-                {% else %}
-                    <p>No tienes una cesta activa registrada, así que no hay nada que mostrar aquí. Si crees que es un error, escribe a <a href="mailto:info@csavegadejarama.org">info@csavegadejarama.org</a>.</p>
-                {% endif %}
-            {% endblock %}
-        {% endembed %}
-    {% endif %}
 
 {% endblock %}

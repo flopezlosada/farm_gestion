@@ -3,10 +3,12 @@
 namespace App\Controller;
 
 use App\Entity\Basket;
+use App\Entity\City;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
 use App\Entity\PartnerDeliveryShift;
 use App\Entity\PartnerEvent;
+use App\Entity\State;
 use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketGroup;
 use App\Entity\WeeklyBasketStatus;
@@ -25,6 +27,7 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Form\Extension\Core\Type\PasswordType;
 use Symfony\Component\Form\Extension\Core\Type\RepeatedType;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -64,14 +67,12 @@ class PanelController extends AbstractController
     public function profile(
         Request $request,
         EntityManagerInterface $em,
-        UserPasswordHasherInterface $hasher
     ): Response {
         if (($redirect = $this->ensureReady()) !== null) {
             return $redirect;
         }
 
-        $user = $this->getUser();
-        $partner = $user->getPartner();
+        $partner = $this->getUser()->getPartner();
 
         $profileForm = $this->createForm(PartnerProfileType::class, $partner);
         $profileForm->handleRequest($request);
@@ -81,6 +82,24 @@ class PanelController extends AbstractController
             $this->addFlash('notice', 'Tus datos se han guardado.');
             return $this->redirectToRoute('panel_profile');
         }
+
+        return $this->render('Panel/profile.html.twig', [
+            'partner' => $partner,
+            'profile_form' => $profileForm->createView(),
+        ]);
+    }
+
+    #[Route('/perfil/contrasena', name: 'panel_password', methods: ['GET', 'POST'])]
+    public function password(
+        Request $request,
+        EntityManagerInterface $em,
+        UserPasswordHasherInterface $hasher,
+    ): Response {
+        if (($redirect = $this->ensureReady()) !== null) {
+            return $redirect;
+        }
+
+        $user = $this->getUser();
 
         $passwordForm = $this->createForm(ChangePasswordType::class);
         $passwordForm->handleRequest($request);
@@ -99,11 +118,27 @@ class PanelController extends AbstractController
             }
         }
 
-        return $this->render('Panel/profile.html.twig', [
-            'partner' => $partner,
-            'profile_form' => $profileForm->createView(),
+        return $this->render('Panel/password.html.twig', [
             'password_form' => $passwordForm->createView(),
         ]);
+    }
+
+    /**
+     * Devuelve los municipios de una provincia. Sirve al select dependiente
+     * del form de perfil: 8112 ciudades es demasiado para inyectar todas en
+     * el HTML, así que el JS pide solo las de la provincia seleccionada.
+     */
+    #[Route('/perfil/municipios/{state}', name: 'panel_cities_by_state', methods: ['GET'])]
+    public function citiesByState(State $state): JsonResponse
+    {
+        $cities = array_map(
+            static fn (City $c) => ['id' => $c->getId(), 'name' => (string) $c],
+            $state->getCities()->toArray()
+        );
+
+        usort($cities, static fn (array $a, array $b) => strcmp($a['name'], $b['name']));
+
+        return new JsonResponse($cities);
     }
 
     /**
@@ -124,10 +159,10 @@ class PanelController extends AbstractController
     #[Route('/cesta', name: 'panel_basket', methods: ['GET'])]
     public function basket(
         WeeklyBasketRepository $weeklyBasketRepository,
-        WeeklyBasketGroupRepository $weeklyBasketGroupRepository,
         PartnerBasketShareRepository $partnerBasketShareRepository,
         PartnerDeliveryShiftRepository $deliveryShiftRepository,
         BasketRepository $basketRepository,
+        DeliveryShiftValidator $validator,
     ): Response {
         if (($redirect = $this->ensureReady()) !== null) {
             return $redirect;
@@ -146,9 +181,21 @@ class PanelController extends AbstractController
             ? $deliveryShiftRepository->findOutgoing($partner, $fromBasket)
             : null;
 
+        // Pasamos al template los candidatos aceptados por el validator y
+        // un flag para indicar si había candidatos pero las reglas los
+        // bloquean. El socix no necesita conocer el motivo concreto: si
+        // no puede, que contacte con admin.
         $shiftCandidates = [];
+        $shiftBlocked = false;
         if ($fromBasket !== null && $existingShift === null && $activeShare !== null) {
-            $shiftCandidates = $this->shiftDestinationCandidates($activeShare, $fromBasket, $basketRepository);
+            foreach ($this->shiftDestinationCandidates($activeShare, $fromBasket, $basketRepository) as $candidate) {
+                $violations = $validator->validate($partner, $fromBasket, $candidate);
+                if (empty($violations)) {
+                    $shiftCandidates[] = $candidate;
+                } else {
+                    $shiftBlocked = true;
+                }
+            }
         }
 
         return $this->render('Panel/basket.html.twig', [
@@ -160,9 +207,9 @@ class PanelController extends AbstractController
             'next_basket_group' => $next?->getWeeklyBasketGroup(),
             'can_change_next' => $next !== null && $this->isWithinPickupDeadline($next),
             'pickup_deadline' => $next !== null ? $this->pickupDeadlineFor($next) : null,
-            'pickup_groups' => $weeklyBasketGroupRepository->findBy([], ['name' => 'ASC']),
             'shift_existing' => $existingShift,
             'shift_candidates' => $shiftCandidates,
+            'shift_blocked' => $shiftBlocked,
         ]);
     }
 
