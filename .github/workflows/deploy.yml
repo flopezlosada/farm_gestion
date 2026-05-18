@@ -29,6 +29,15 @@ jobs:
           tools: composer:2.2
           coverage: none
 
+      # Cachea vendor/ entre runs. Si composer.lock no cambia, actions/cache
+      # restaura el directorio preservando mtimes, así lftp --only-newer no
+      # vuelve a subir miles de archivos en cada deploy.
+      - name: Cache de vendor/
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: vendor-php83-${{ hashFiles('composer.lock') }}
+
       - name: Composer install (solo deps de producción)
         env:
           APP_ENV: prod
