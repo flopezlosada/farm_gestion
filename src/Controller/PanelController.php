@@ -185,11 +185,21 @@ class PanelController extends AbstractController
         // un flag para indicar si había candidatos pero las reglas los
         // bloquean. El socix no necesita conocer el motivo concreto: si
         // no puede, que contacte con admin.
+        //
+        // Las violaciones de deadline NO descalifican al candidato aquí:
+        // el deadline ya viaja al template en `can_change_next` y se
+        // refleja como botón disabled (igual que en el form de skip),
+        // manteniendo la UI coherente. Si lo descalificáramos, el shift
+        // caería en la rama "no es posible cambiar de viernes", con un
+        // tono distinto al del skip y se vería incoherente.
         $shiftCandidates = [];
         $shiftBlocked = false;
         if ($fromBasket !== null && $existingShift === null && $activeShare !== null) {
             foreach ($this->shiftDestinationCandidates($activeShare, $fromBasket, $basketRepository) as $candidate) {
-                $violations = $validator->validate($partner, $fromBasket, $candidate);
+                $violations = array_filter(
+                    $validator->validate($partner, $fromBasket, $candidate),
+                    fn ($v) => $v->rule !== \App\Service\Delivery\Rule\DeadlineRule::ID,
+                );
                 if (empty($violations)) {
                     $shiftCandidates[] = $candidate;
                 } else {
@@ -252,6 +262,7 @@ class PanelController extends AbstractController
         Request $request,
         WeeklyBasketRepository $weeklyBasketRepository,
         WeeklyBasketStatusRepository $weeklyBasketStatusRepository,
+        PartnerDeliveryShiftRepository $deliveryShiftRepository,
         EntityManagerInterface $em,
     ): Response {
         if (($redirect = $this->ensureReady()) !== null) {
@@ -276,19 +287,35 @@ class PanelController extends AbstractController
             return $this->redirectToRoute('panel_basket');
         }
 
+        // Si hay un cambio puntual activo, el estado de la WB origen está
+        // gestionado por el shift (status=2 como cascada). Permitir el
+        // toggle aquí dejaría el shift desincronizado (WB origen volvería
+        // a "recoge" pero el shift y la WB destino seguirían vivos →
+        // doble recogida). Defensa en profundidad por si la UI falla.
+        if ($deliveryShiftRepository->findOutgoing($partner, $next->getBasket()) !== null) {
+            $this->addFlash('warning', 'Tienes un cambio puntual de viernes activo: cancélalo primero si quieres volver a la pauta normal.');
+            return $this->redirectToRoute('panel_basket');
+        }
+
         $currentStatus = $next->getWeeklyBasketStatus();
         $currentId = $currentStatus?->getId();
 
         // Status 1 = "Recoge", 2 = "No la recoge". El toggle solo opera
         // entre estos dos; cualquier otro estado lo deja como está y
         // avisa al socix (caso defensivo, no debería ocurrir en panel).
+        $actor = 'partner:' . $partner->getId();
+
         if ($currentId === 1) {
             $next->setWeeklyBasketStatus($weeklyBasketStatusRepository->find(2));
-            $em->persist(new PartnerEvent($partner, PartnerEvent::TYPE_BASKET_SKIP));
+            $event = new PartnerEvent($partner, PartnerEvent::TYPE_BASKET_SKIP);
+            $event->setActor($actor);
+            $em->persist($event);
             $this->addFlash('notice', 'Listo: hemos marcado que esta semana no recogerás la cesta. Si cambias de opinión, puedes deshacerlo desde aquí antes del plazo.');
         } elseif ($currentId === 2) {
             $next->setWeeklyBasketStatus($weeklyBasketStatusRepository->find(1));
-            $em->persist(new PartnerEvent($partner, PartnerEvent::TYPE_BASKET_UNSKIP));
+            $event = new PartnerEvent($partner, PartnerEvent::TYPE_BASKET_UNSKIP);
+            $event->setActor($actor);
+            $em->persist($event);
             $this->addFlash('notice', 'Listo: al final sí recogerás la cesta esta semana.');
         } else {
             $this->addFlash('warning', 'Tu cesta está en un estado especial y no se puede cambiar desde aquí. Contacta con la administración si necesitas modificarla.');
@@ -348,6 +375,7 @@ class PanelController extends AbstractController
         $next->setWeeklyBasketGroup($group);
 
         $event = new PartnerEvent($partner, PartnerEvent::TYPE_NODE_CHANGE);
+        $event->setActor('partner:' . $partner->getId());
         $event->setPayload([
             'scope' => 'one_off',
             'basket_id' => $next->getBasket()?->getId(),

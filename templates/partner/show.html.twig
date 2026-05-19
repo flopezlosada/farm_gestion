@@ -318,6 +318,8 @@
             'RESUME':                 { label: 'Reanudación',               icon: 'fa-play' },
             'BASKET_START':           { label: 'Empieza cesta',             icon: 'fa-shopping-basket' },
             'BASKET_END':             { label: 'Termina cesta',             icon: 'fa-shopping-basket' },
+            'BASKET_SKIP':            { label: 'No recoge la cesta',        icon: 'fa-ban' },
+            'BASKET_UNSKIP':          { label: 'Vuelve a recoger la cesta', icon: 'fa-undo' },
             'GROUP_CHANGE_PERMANENT': { label: 'Cambio definitivo A/B',     icon: 'fa-exchange' },
             'WEEK_SWAP':              { label: 'Cambio puntual de viernes', icon: 'fa-calendar-times-o' },
             'NODE_CHANGE':            { label: 'Cambio de nodo',            icon: 'fa-map-marker' }
@@ -335,15 +337,50 @@
                     <ul class="csa-timeline" style="list-style: none; margin: 0; padding: 0;">
                         {% for event in events %}
                             {% set meta = event_labels[event.type]|default({ label: event.type, icon: 'fa-circle' }) %}
+                            {% set payload = event.payload|default({}) %}
+
+                            {# Etiqueta específica para WEEK_SWAP cancelado: el feed
+                             # conserva apply y cancel; el verbo cambia. #}
+                            {% set label = meta.label %}
+                            {% if event.type == 'WEEK_SWAP' and payload.cancelled|default(false) %}
+                                {% set label = 'Cambio puntual cancelado' %}
+                            {% endif %}
+
+                            {# Actor legible. `partner:<id>` con id == partner actual
+                             # es redundante (estamos en su ficha): lo traducimos a
+                             # "autoservicio". Para admin u otros, mostramos crudo. #}
+                            {% set actor_label = null %}
+                            {% if event.actor %}
+                                {% if event.actor == 'partner:' ~ partner.id %}
+                                    {% set actor_label = 'autoservicio' %}
+                                {% else %}
+                                    {% set actor_label = event.actor %}
+                                {% endif %}
+                            {% endif %}
+
                             <li style="padding: var(--csa-sp-2) 0; border-bottom: 1px solid var(--csa-line);">
                                 <div class="csa-row" style="gap: var(--csa-sp-3); align-items: baseline;">
                                     <i class="fa {{ meta.icon }} csa-muted"></i>
-                                    <strong>{{ meta.label }}</strong>
+                                    <strong>{{ label }}</strong>
                                     <span class="csa-muted csa-small">{{ event.occurredAt|format_datetime('medium', 'short', locale='es') }}</span>
-                                    {% if event.actor %}
-                                        <span class="csa-muted csa-small">· {{ event.actor }}</span>
+                                    {% if actor_label %}
+                                        <span class="csa-muted csa-small">· {{ actor_label }}</span>
                                     {% endif %}
                                 </div>
+
+                                {# Detalle por tipo de evento: lo que importa al admin
+                                 # cuando ojea el feed (a qué viernes pasó, de qué nodo
+                                 # a qué nodo, etc.). #}
+                                {% if event.type == 'WEEK_SWAP' and payload.from_date and payload.to_date %}
+                                    <div class="csa-muted csa-small" style="margin-top: var(--csa-sp-1); padding-left: var(--csa-sp-5);">
+                                        {{ payload.from_date|date('d/m/Y') }} → {{ payload.to_date|date('d/m/Y') }}
+                                    </div>
+                                {% elseif event.type == 'NODE_CHANGE' and payload.to_group_name %}
+                                    <div class="csa-muted csa-small" style="margin-top: var(--csa-sp-1); padding-left: var(--csa-sp-5);">
+                                        {% if payload.from_group_name %}{{ payload.from_group_name }} → {% endif %}{{ payload.to_group_name }}
+                                    </div>
+                                {% endif %}
+
                                 {% if event.notes %}
                                     <div class="csa-muted csa-small" style="margin-top: var(--csa-sp-1); padding-left: var(--csa-sp-5);">
                                         {{ event.notes }}

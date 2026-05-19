@@ -82,6 +82,37 @@
 }
 .csa-btn--danger:hover { background: #c45c33; }
 
+/* Variantes soft: fondo del tono claro, texto del tono fuerte. Pensadas
+ * para casos donde queremos botones coherentes con el icono soft del
+ * bloque y sin la prominencia del primary verde. */
+.csa-btn--info-soft,
+.csa-btn--info-soft:link,
+.csa-btn--info-soft:visited {
+  background: var(--csa-sky-soft);
+  color: var(--csa-sky);
+  border-color: var(--csa-sky-soft);
+}
+.csa-btn--info-soft:hover,
+.csa-btn--info-soft:focus {
+  background: #bcd6e4;
+  border-color: #bcd6e4;
+  color: var(--csa-sky);
+}
+
+.csa-btn--danger-soft,
+.csa-btn--danger-soft:link,
+.csa-btn--danger-soft:visited {
+  background: var(--csa-terracotta-soft);
+  color: var(--csa-terracotta);
+  border-color: var(--csa-terracotta-soft);
+}
+.csa-btn--danger-soft:hover,
+.csa-btn--danger-soft:focus {
+  background: #f5c6ab;
+  border-color: #f5c6ab;
+  color: var(--csa-terracotta);
+}
+
 .csa-btn--sm { padding: 6px 12px; font-size: var(--csa-fs-sm); }
 .csa-btn--lg { padding: 12px 22px; font-size: var(--csa-fs-md); }
 .csa-btn--block { display: flex; width: 100%; }
@@ -2164,26 +2195,20 @@ table.csa-table thead th.sorting_desc::after { content: " ↓"; color: var(--csa
   margin: 0;
 }
 
-/* Pill destacada con el plazo de cambios. Ámbar para que llame la atención
- * sin gritar — el socix necesita verla pero no debe asustarse. */
-.csa-app .csa-deadline-pill {
+/* Hint textual del plazo de cambios. Sin caja, integrado como info
+ * secundaria del encabezado de acciones — no es advertencia, es contexto. */
+.csa-app .csa-deadline-hint {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px;
-  background: var(--csa-ochre-soft);
-  color: var(--csa-amber, #8a5a13);
-  border-radius: var(--csa-radius-pill);
   font-size: var(--csa-fs-sm);
-  font-weight: 500;
+  font-weight: 400;
   line-height: 1.3;
-}
-.csa-app .csa-deadline-pill .fa { color: var(--csa-ochre); }
-.csa-app .csa-deadline-pill--closed {
-  background: var(--csa-surface-alt);
   color: var(--csa-ink-soft);
 }
-.csa-app .csa-deadline-pill--closed .fa { color: var(--csa-ink-muted); }
+.csa-app .csa-deadline-hint .fa { color: var(--csa-ink-muted); }
+.csa-app .csa-deadline-hint--closed { color: var(--csa-ink-muted); }
+.csa-app .csa-deadline-hint--closed .fa { color: var(--csa-ink-muted); }
 
 /* Estado deshabilitado del bloque de acciones (plazo cerrado). */
 .csa-app .csa-next-basket__actions--disabled .csa-next-basket__action {
