@@ -60,7 +60,7 @@ security:
             provider: app_user_provider
             form_login:
                 login_path: app_login
-                check_path: app_login
+                check_path: /login
                 enable_csrf: true
                 # Dispatcher común: app_post_login decide a dónde mandar al
                 # User según sus roles (gestión → /gestion/dashboard,

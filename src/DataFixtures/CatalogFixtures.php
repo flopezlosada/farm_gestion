@@ -48,20 +48,30 @@ class CatalogFixtures extends Fixture
             $this->addReference(self::REF_CITY_PREFIX . $cityName, $city);
         }
 
+        // BasketShare: ids explícitos por la misma razón que WeeklyBasketStatus
+        // — el código asume 1=Semanal, 2=Quincenal, 3=Mensual, 4=Solo huevos
+        // (constantes SHARE_BIWEEKLY=2 y SHARE_MONTHLY=3 en WindowRule y
+        // WeeklyBasketGenerator).
         $baskets = [
-            'Semanal'     => ['price' => '60.00', 'equivalence' => '1.00'],
-            'Quincenal'   => ['price' => '30.00', 'equivalence' => '0.50'],
-            'Mensual'     => ['price' => '15.00', 'equivalence' => '0.25'],
-            'Solo huevos' => ['price' => '0.00',  'equivalence' => '0.00'],
+            1 => ['name' => 'Semanal',     'price' => '60.00', 'equivalence' => '1.00'],
+            2 => ['name' => 'Quincenal',   'price' => '30.00', 'equivalence' => '0.50'],
+            3 => ['name' => 'Mensual',     'price' => '15.00', 'equivalence' => '0.25'],
+            4 => ['name' => 'Solo huevos', 'price' => '0.00',  'equivalence' => '0.00'],
         ];
 
-        foreach ($baskets as $name => $data) {
+        $basketMetadata = $manager->getClassMetadata(BasketShare::class);
+        $basketMetadata->setIdGeneratorType(\Doctrine\ORM\Mapping\ClassMetadata::GENERATOR_TYPE_NONE);
+        $basketMetadata->setIdGenerator(new \Doctrine\ORM\Id\AssignedGenerator());
+        $basketIdProperty = new \ReflectionProperty(BasketShare::class, 'id');
+
+        foreach ($baskets as $basketId => $data) {
             $basket = new BasketShare();
-            $basket->setName($name);
+            $basket->setName($data['name']);
             $basket->setMonthPrice($data['price']);
             $basket->setCompleteBasketEquivalence($data['equivalence']);
+            $basketIdProperty->setValue($basket, $basketId);
             $manager->persist($basket);
-            $this->addReference(self::REF_BASKET_PREFIX . $name, $basket);
+            $this->addReference(self::REF_BASKET_PREFIX . $data['name'], $basket);
         }
 
         foreach (['Semanal', 'Quincenal'] as $eggPeriodName) {
@@ -103,11 +113,25 @@ class CatalogFixtures extends Fixture
         }
 
         // Catálogo de estados de WeeklyBasket: en producción se persistieron
-        // con ids 1/2/3 a mano hace años. Aquí los recreamos para que dev y
-        // test tengan el mismo catálogo. Los servicios siguen referenciando
-        // los ids 1 (Recoge) y 2 (No la recoge) como constantes.
-        foreach (['Recoge', 'No la recoge', 'No la ha recogido y no ha avisado'] as $statusTitle) {
+        // con ids 1/2/3 a mano hace años. Aquí los recreamos con id
+        // explícito para que dev y test tengan el mismo catálogo. Los
+        // servicios siguen referenciando los ids 1 (Recoge) y 2 (No la
+        // recoge) como constantes.
+        //
+        // Por qué id explícito y no AUTO_INCREMENT: doctrine:fixtures:load
+        // purga con DELETE y MySQL no resetea AUTO_INCREMENT — sin esto,
+        // en cargas sucesivas los ids derivan a 4/5/6, 7/8/9... y rompen
+        // los hardcodeos del código. ALTER TABLE provoca commit implícito
+        // y revienta la transacción del loader, así que cambiamos la
+        // estrategia de generación de id a "ASSIGNED" para esta entidad.
+        $statusMetadata = $manager->getClassMetadata(WeeklyBasketStatus::class);
+        $statusMetadata->setIdGeneratorType(\Doctrine\ORM\Mapping\ClassMetadata::GENERATOR_TYPE_NONE);
+        $statusMetadata->setIdGenerator(new \Doctrine\ORM\Id\AssignedGenerator());
+        $statusIdProperty = new \ReflectionProperty(WeeklyBasketStatus::class, 'id');
+
+        foreach ([1 => 'Recoge', 2 => 'No la recoge', 3 => 'No la ha recogido y no ha avisado'] as $statusId => $statusTitle) {
             $status = (new WeeklyBasketStatus())->setTitle($statusTitle);
+            $statusIdProperty->setValue($status, $statusId);
             $manager->persist($status);
             $this->addReference(self::REF_WB_STATUS_PREFIX . $statusTitle, $status);
         }

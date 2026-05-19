@@ -58,20 +58,20 @@ class PartnerUserFixtures extends Fixture implements DependentFixtureInterface
         $partner->setInscriptionDate(new \DateTime('-1 year'));
 
         /** @var State $state */
-        $state = $this->getReference(CatalogFixtures::REF_STATE_PREFIX . 'Madrid');
+        $state = $this->getReference(CatalogFixtures::REF_STATE_PREFIX . 'Madrid', State::class);
         $partner->setState($state);
         /** @var City $city */
-        $city = $this->getReference(CatalogFixtures::REF_CITY_PREFIX . 'Madrid');
+        $city = $this->getReference(CatalogFixtures::REF_CITY_PREFIX . 'Madrid', City::class);
         $partner->setCity($city);
         /** @var WeeklyBasketGroup $group */
-        $group = $this->getReference(CatalogFixtures::REF_WEEKLY_GROUP_PREFIX . 'Madrid');
+        $group = $this->getReference(CatalogFixtures::REF_WEEKLY_GROUP_PREFIX . 'Madrid', WeeklyBasketGroup::class);
         $partner->setWeeklyBasketGroup($group);
         /** @var SharePayment $payment */
-        $payment = $this->getReference(CatalogFixtures::REF_SHARE_PAYMENT_PREFIX . 'Mensual');
+        $payment = $this->getReference(CatalogFixtures::REF_SHARE_PAYMENT_PREFIX . 'Mensual', SharePayment::class);
         $partner->setSharePayment($payment);
 
         /** @var BasketShare $quincenal */
-        $quincenal = $this->getReference(CatalogFixtures::REF_BASKET_PREFIX . 'Quincenal');
+        $quincenal = $this->getReference(CatalogFixtures::REF_BASKET_PREFIX . 'Quincenal', BasketShare::class);
 
         $share = new PartnerBasketShare();
         $share->setPartner($partner);
@@ -137,7 +137,7 @@ class PartnerUserFixtures extends Fixture implements DependentFixtureInterface
         $followingBasket = $this->createBasket($followingFriday);
 
         /** @var WeeklyBasketStatus $statusPicked */
-        $statusPicked = $this->getReference(CatalogFixtures::REF_WB_STATUS_PREFIX . 'Recoge');
+        $statusPicked = $this->getReference(CatalogFixtures::REF_WB_STATUS_PREFIX . 'Recoge', WeeklyBasketStatus::class);
 
         $wb = (new WeeklyBasket())
             ->setBasket($nextBasket)
