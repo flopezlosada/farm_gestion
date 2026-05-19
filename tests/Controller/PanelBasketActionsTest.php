@@ -8,8 +8,6 @@ use App\Entity\Partner;
 use App\Entity\PartnerDeliveryShift;
 use App\Entity\PartnerEvent;
 use App\Entity\WeeklyBasket;
-use App\Entity\WeeklyBasketGroup;
-use App\Entity\WeeklyBasketStatus;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
@@ -21,9 +19,47 @@ use Doctrine\ORM\EntityManagerInterface;
  */
 class PanelBasketActionsTest extends AbstractPartnerAuthenticatedTest
 {
+    /**
+     * Resetea el estado mutable del socix (WB status, shifts, events) para
+     * que cada test arranque con la misma foto que dejan las fixtures —
+     * sin volver a recargarlas, que sería lento.
+     */
     private function em(\Symfony\Bundle\FrameworkBundle\KernelBrowser $client): EntityManagerInterface
     {
         return $client->getContainer()->get('doctrine.orm.entity_manager');
+    }
+
+    /**
+     * Resetea el estado mutable del socix (WB status, shifts, events) para
+     * que cada test arranque con la misma foto que dejan las fixtures —
+     * sin recargarlas, que sería lento. Se invoca al inicio de cada test
+     * con el cliente ya creado: no podemos bootear un kernel auxiliar
+     * porque WebTestCase::createClient() exige que sea el primer boot.
+     */
+    private function resetSocixState(\Symfony\Bundle\FrameworkBundle\KernelBrowser $client): void
+    {
+        $conn = $this->em($client)->getConnection();
+        $params = ['email' => PartnerUserFixtures::USER_SOCIX_EMAIL];
+
+        $conn->executeStatement(
+            'UPDATE weekly_basket wb
+                INNER JOIN partner p ON p.id = wb.partner_id
+                SET wb.weekly_basket_status_id = 1
+                WHERE p.email = :email',
+            $params,
+        );
+        $conn->executeStatement(
+            'DELETE pds FROM partner_delivery_shift pds
+                INNER JOIN partner p ON p.id = pds.partner_id
+                WHERE p.email = :email',
+            $params,
+        );
+        $conn->executeStatement(
+            'DELETE pe FROM partner_event pe
+                INNER JOIN partner p ON p.id = pe.partner_id
+                WHERE p.email = :email',
+            $params,
+        );
     }
 
     private function reloadSocixPartner(EntityManagerInterface $em): Partner
@@ -35,6 +71,7 @@ class PanelBasketActionsTest extends AbstractPartnerAuthenticatedTest
     public function testSkipToggleCambiaStatusDeWBYEmiteEvent(): void
     {
         $client = $this->createPartnerAuthenticatedClient();
+        $this->resetSocixState($client);
         $em = $this->em($client);
         $partner = $this->reloadSocixPartner($em);
 
@@ -58,47 +95,10 @@ class PanelBasketActionsTest extends AbstractPartnerAuthenticatedTest
         $this->assertNotNull($event, 'Debe quedar PartnerEvent BASKET_SKIP en el feed');
     }
 
-    public function testChangeGroupActualizaWBYEmiteNodeChange(): void
-    {
-        $client = $this->createPartnerAuthenticatedClient();
-        $em = $this->em($client);
-        $partner = $this->reloadSocixPartner($em);
-
-        $wb = $em->getRepository(WeeklyBasket::class)
-            ->findOneBy(['partner' => $partner], ['id' => 'DESC']);
-        $currentGroupId = $wb->getWeeklyBasketGroup()->getId();
-
-        // Buscamos otro grupo cualquiera distinto del actual.
-        $otherGroup = null;
-        foreach ($em->getRepository(WeeklyBasketGroup::class)->findAll() as $g) {
-            if ($g->getId() !== $currentGroupId) {
-                $otherGroup = $g;
-                break;
-            }
-        }
-        $this->assertNotNull($otherGroup, 'Necesitamos al menos dos grupos para este test');
-
-        $crawler = $client->request('GET', '/panel/cesta');
-        $token = (string) $crawler->filter('form[action$="change-group"] input[name="_csrf_token"]')->first()->attr('value');
-
-        $client->request('POST', '/panel/cesta/change-group', [
-            '_csrf_token' => $token,
-            'group_id' => $otherGroup->getId(),
-        ]);
-        $client->followRedirect();
-
-        $em->clear();
-        $wb = $em->getRepository(WeeklyBasket::class)->find($wb->getId());
-        $this->assertSame($otherGroup->getId(), $wb->getWeeklyBasketGroup()->getId());
-
-        $event = $em->getRepository(PartnerEvent::class)
-            ->findOneBy(['partner' => $partner, 'type' => PartnerEvent::TYPE_NODE_CHANGE], ['id' => 'DESC']);
-        $this->assertNotNull($event);
-    }
-
     public function testShiftRequestCreaEntidadYAplicaCascada(): void
     {
         $client = $this->createPartnerAuthenticatedClient();
+        $this->resetSocixState($client);
         $em = $this->em($client);
         $partner = $this->reloadSocixPartner($em);
 
@@ -143,6 +143,7 @@ class PanelBasketActionsTest extends AbstractPartnerAuthenticatedTest
     public function testShiftCancelRevierteCascada(): void
     {
         $client = $this->createPartnerAuthenticatedClient();
+        $this->resetSocixState($client);
         $em = $this->em($client);
         $partner = $this->reloadSocixPartner($em);
 

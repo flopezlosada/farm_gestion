@@ -14,7 +14,11 @@ if (is_array($env = @include dirname(__DIR__).'/.env.local.php')) {
     throw new RuntimeException('Please run "composer require symfony/dotenv" to load the ".env" files configuring the application.');
 } else {
     // load all the .env files
-    (new Dotenv(false))->loadEnv(dirname(__DIR__).'/.env');
+    // Sin argumentos: en Symfony Dotenv 7 el primer parámetro del constructor
+    // es $envKey (string), no $usePutenv (bool). Pasar `false` lo convertía a
+    // ""  y rompía la detección de APP_ENV, por lo que loadEnv cargaba
+    // siempre `.env.local` ignorando `.env.test`/`.env.test.local`.
+    (new Dotenv())->loadEnv(dirname(__DIR__).'/.env');
 }
 
 $_SERVER += $_ENV;
