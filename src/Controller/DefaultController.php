@@ -14,14 +14,6 @@ class DefaultController extends AbstractAppController
         return $this->render('Default/calendar.html.twig');
     }
 
-    #[Route("/event_show/{id}", name: "event_show", methods: ["GET"])]
-    public function eventShow($id): Response
-    {
-        // Endpoint sin template propio — devolvía array() bajo @Template legacy.
-        // No tiene plantilla `templates/Default/eventShow.html.twig`, posiblemente código muerto.
-        return new Response('');
-    }
-
     #[Route("/dashboard", name: "dashboard")]
     public function dashboard(): Response
     {
@@ -134,19 +126,6 @@ class DefaultController extends AbstractAppController
         $production = $em->getRepository(\App\Entity\Production::class)->findByYear($year);
 
         return new Response($production);
-    }
-
-    public function warning()
-    {
-        $em = $this->getDoctrine()->getManager();
-        $purchaser_warnings = $em->getRepository(\App\Entity\Purchaser::class)->findByEggWarning();
-        $recipient_warnings = $em->getRepository(\App\Entity\Recipient::class)->findByEggWarning();
-
-        return $this->render('Default/warnings.html.twig', array(
-            'purchaser_warnings' => $purchaser_warnings,
-            'recipient_warnings' => $recipient_warnings,
-        ));
-
     }
 
 }
