@@ -43,14 +43,30 @@ class BlogController extends AbstractAppController
         ));
     }*/
 
-    public function index()
+    public function index(Request $request)
     {
         $em = $this->getDoctrine()->getManager();
 
-        $entities = $em->getRepository(\App\Entity\Blog::class)->findAll();
+        // Filtro opcional por categoría desde los tabs.
+        $categoryId = $request->query->getInt('category') ?: null;
+        $criteria = $categoryId ? ['category' => $categoryId] : [];
+        $entities = $em->getRepository(\App\Entity\Blog::class)->findBy($criteria, ['created' => 'DESC']);
+
+        // Lista de categorías con conteo para pintar los tabs y el total.
+        $categories = $em->createQuery(
+            'SELECT c.id AS id, c.name AS name, COUNT(b.id) AS n
+             FROM App\Entity\Category c
+             LEFT JOIN App\Entity\Blog b WITH b.category = c
+             GROUP BY c.id
+             ORDER BY n DESC'
+        )->getArrayResult();
+        $totalCount = $em->createQuery('SELECT COUNT(b.id) FROM App\Entity\Blog b')->getSingleScalarResult();
 
         return $this->render('Blog/index.html.twig', array(
             'entities' => $entities,
+            'categories' => $categories,
+            'total_count' => $totalCount,
+            'current_category' => $categoryId,
         ));
     }
 
@@ -197,10 +213,10 @@ class BlogController extends AbstractAppController
         if ($editForm->isSubmitted() && $editForm->isValid()) {
             $em->flush();
 
-            return $this->redirect($this->generateUrl('blog_show', array('slug' => $entity->getSlug())));
-        } else {
-            ladybug_dump($editForm->getErrors());
+            $this->addFlash('success', 'Cambios guardados.');
+            return $this->redirect($this->generateUrl('blog_edit', array('id' => $entity->getId())));
         }
+
         return $this->render('Blog/edit.html.twig', array(
             'entity' => $entity,
             'edit_form' => $editForm->createView(),
@@ -303,9 +319,8 @@ class BlogController extends AbstractAppController
             $entity->setModified(0);
             $em->flush();
 
-            return $this->redirect($this->generateUrl('blog_show', array('slug' => $entity->getSlug())));
-        } else {
-            ladybug_dump($editForm->getErrors());
+            $this->addFlash('success', 'Cambios guardados.');
+            return $this->redirect($this->generateUrl('blog_edit', array('id' => $entity->getId())));
         }
 
         return $this->render('Blog/edit.html.twig', array(

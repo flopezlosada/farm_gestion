@@ -15,53 +15,410 @@
 
 {% block csa_main %}
 
-    {{ csa.page_header(
-        'Comunicación · Blog',
-        'Noticias',
-        'Entradas publicadas en el blog público de la asociación.'
-    ) }}
-
-    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-5);">
-        <div></div>
-        <div class="csa-row">
+    {# ---------- Cabecera de la pantalla ---------- #}
+    <div class="blog-header">
+        <div class="blog-header__main">
+            <div class="csa-kicker">Comunicación · Blog</div>
+            <h1 style="margin: 6px 0 var(--csa-sp-2);">Noticias</h1>
+            <p class="blog-header__lead">
+                Entradas que se publican en el blog público de la asociación.
+                Lo que aquí se publica aparece automáticamente en
+                <a href="https://csavegadejarama.org/blog" target="_blank" rel="noopener">csavegadejarama.org/blog</a>.
+            </p>
+        </div>
+        <div class="blog-header__actions">
             {{ csa.btn('Nueva noticia', { variant: 'primary', href: path('blog_new'), icon: 'fa-plus' }) }}
         </div>
     </div>
 
+    {# ---------- Tabs filtrantes por categoría ----------
+     # Mapeo FIJO de color por id de categoría (no rotación). Así cada
+     # categoría tiene su tono estable entre renders, listado y filtro.
+     # Si se añade una categoría nueva con id > 6, cae a 'neutral'. #}
+    {% set cat_tone_map = { 1: 'sky', 2: 'green', 3: 'ochre', 4: 'plum', 5: 'terracotta', 6: 'amber' } %}
+    <nav class="blog-tabs" aria-label="Filtrar por categoría">
+        <a href="{{ path('blog') }}"
+           class="blog-tab {% if current_category is null %}is-active{% endif %}">
+            Todas <span class="blog-tab__count">{{ total_count }}</span>
+        </a>
+        {% for c in categories %}
+            {% set t = cat_tone_map[c.id]|default('neutral') %}
+            <a href="{{ path('blog', { category: c.id }) }}"
+               class="blog-tab blog-tab--{{ t }} {% if current_category == c.id %}is-active{% endif %}">
+                {{ c.name }} <span class="blog-tab__count">{{ c.n }}</span>
+            </a>
+        {% endfor %}
+    </nav>
+
+    {# ---------- Estilos específicos ---------- #}
+    <style>
+        .blog-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: var(--csa-sp-6);
+            margin-bottom: var(--csa-sp-6);
+            flex-wrap: wrap;
+        }
+        .blog-header__lead {
+            max-width: 60ch;
+            margin: 0;
+            color: var(--csa-ink-soft);
+            line-height: 1.55;
+        }
+        .blog-header__lead a {
+            color: var(--csa-sky);
+            text-decoration: none;
+            border-bottom: 1px solid var(--csa-sky-soft);
+        }
+        .blog-header__lead a:hover { border-bottom-color: var(--csa-sky); }
+        .blog-header__actions { flex-shrink: 0; }
+
+        /* Tabs filtrantes. Tono mapeado por id (mod 5). */
+        .blog-tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--csa-sp-2);
+            margin-bottom: var(--csa-sp-5);
+            padding-bottom: var(--csa-sp-3);
+            border-bottom: 1px solid var(--csa-rule);
+        }
+        .blog-tab {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            border-radius: var(--csa-radius-pill);
+            font-family: var(--csa-sans);
+            font-size: var(--csa-fs-sm);
+            font-weight: 500;
+            color: var(--csa-ink-soft);
+            text-decoration: none;
+            border: 1px solid transparent;
+            background: transparent;
+            transition: all var(--csa-t-fast);
+        }
+        .blog-tab:hover { background: var(--csa-surface-alt); color: var(--csa-ink); }
+        .blog-tab__count {
+            font-family: var(--csa-mono);
+            font-size: var(--csa-fs-xs);
+            color: var(--csa-ink-muted);
+            font-weight: 400;
+        }
+        .blog-tab.is-active {
+            background: var(--csa-ink);
+            color: var(--csa-bg);
+            border-color: var(--csa-ink);
+        }
+        .blog-tab.is-active .blog-tab__count { color: var(--csa-rule); }
+        .blog-tab--sky.is-active        { background: var(--csa-sky);        border-color: var(--csa-sky); }
+        .blog-tab--green.is-active      { background: var(--csa-green);      border-color: var(--csa-green); }
+        .blog-tab--ochre.is-active      { background: var(--csa-ochre);      border-color: var(--csa-ochre); }
+        .blog-tab--plum.is-active       { background: var(--csa-plum);       border-color: var(--csa-plum); }
+        .blog-tab--terracotta.is-active { background: var(--csa-terracotta); border-color: var(--csa-terracotta); }
+        .blog-tab--amber.is-active      { background: var(--csa-amber);      border-color: var(--csa-amber); }
+
+        /* Filas */
+        .blog-table { border: 1px solid var(--csa-rule); border-radius: var(--csa-radius-lg); overflow: hidden; }
+        .blog-table td { padding: var(--csa-sp-5) var(--csa-sp-4) !important; vertical-align: top; }
+
+        .blog-row { display: flex; gap: var(--csa-sp-5); align-items: flex-start; min-width: 0; }
+        .blog-row__thumb {
+            width: 88px; height: 88px;
+            border-radius: var(--csa-radius-md);
+            object-fit: cover;
+            flex-shrink: 0; display: block;
+        }
+        .blog-row__thumb-placeholder {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 88px; height: 88px;
+            border-radius: var(--csa-radius-md);
+            background: var(--csa-surface-alt);
+            color: var(--csa-ink-muted);
+            font-size: 26px;
+            flex-shrink: 0;
+        }
+        /* Tono del placeholder según categoría */
+        .blog-row__thumb-placeholder--sky        { background: var(--csa-sky-soft);        color: var(--csa-sky); }
+        .blog-row__thumb-placeholder--green      { background: var(--csa-green-soft);      color: var(--csa-green); }
+        .blog-row__thumb-placeholder--ochre      { background: var(--csa-ochre-soft);      color: var(--csa-amber); }
+        .blog-row__thumb-placeholder--plum       { background: var(--csa-plum-soft);       color: var(--csa-plum); }
+        .blog-row__thumb-placeholder--terracotta { background: var(--csa-terracotta-soft); color: var(--csa-terracotta); }
+        .blog-row__thumb-placeholder--amber      { background: var(--csa-ochre-soft);      color: var(--csa-amber); }
+        .blog-row__thumb-placeholder--neutral    { background: var(--csa-surface-alt);     color: var(--csa-ink-soft); }
+
+        .blog-row__body { min-width: 0; flex: 1; padding-top: 2px; }
+
+        /* Chip de categoría sobre el título. El wrap es block para que
+         # fuerce salto antes del título; el chip dentro se comporta como
+         # csa-badge (inline-flex) con tonos soft del sistema y un
+         # override uppercase letter-spaced para que actúe de "eyebrow". */
+        .blog-row__category-wrap {
+            margin-bottom: var(--csa-sp-3);
+        }
+        .blog-row__category {
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            font-weight: 600;
+            font-size: 10px;
+        }
+        /* Extiende csa-badge con dos tonos no presentes en components.css */
+        .csa-badge--amber      { background: var(--csa-ochre-soft);  color: var(--csa-amber); }
+        .csa-badge--uncat {
+            background: transparent;
+            color: var(--csa-ink-muted);
+            font-style: italic;
+            text-transform: none;
+            letter-spacing: 0.04em;
+            border: 1px dashed var(--csa-rule);
+        }
+        .blog-row__eyebrow--uncat {
+            color: var(--csa-ink-muted);
+            font-style: italic;
+            letter-spacing: 0.08em;
+            text-transform: none;
+            font-weight: 400;
+        }
+
+        .blog-row__title {
+            font-family: var(--csa-serif);
+            font-variation-settings: "opsz" 18;
+            font-weight: 500;
+            letter-spacing: -0.012em;
+            font-size: 1.4rem;
+            line-height: 1.2;
+            color: var(--csa-ink);
+            text-decoration: none;
+            display: inline;
+            background-image: linear-gradient(transparent calc(100% - 1px), var(--csa-ink) 1px);
+            background-size: 0 100%;
+            background-repeat: no-repeat;
+            transition: background-size var(--csa-t-normal);
+        }
+        .blog-table tbody tr:hover .blog-row__title { background-size: 100% 100%; }
+
+        .blog-row__excerpt {
+            margin: var(--csa-sp-3) 0 0;
+            color: var(--csa-ink-soft);
+            font-size: var(--csa-fs-sm);
+            line-height: 1.55;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            max-width: 62ch;
+        }
+
+        /* Fecha: fecha absoluta normal arriba + "publicada hace X" italic abajo. */
+        .blog-row__date {
+            font-family: var(--csa-sans);
+            color: var(--csa-ink);
+            white-space: nowrap;
+            line-height: 1.4;
+        }
+        .blog-row__date-abs {
+            font-size: var(--csa-fs-sm);
+            font-weight: 500;
+        }
+        .blog-row__date-rel {
+            display: block;
+            margin-top: 4px;
+            font-family: var(--csa-serif);
+            font-style: italic;
+            font-size: var(--csa-fs-xs);
+            color: var(--csa-ink-soft);
+            font-variation-settings: "opsz" 14;
+        }
+        .blog-row__edited {
+            display: block;
+            margin-top: var(--csa-sp-2);
+            font-family: var(--csa-serif);
+            font-style: italic;
+            font-size: var(--csa-fs-xs);
+            color: var(--csa-ink-muted);
+        }
+
+        /* Alcance: dos pares icono+número apilados. Datos PLACEHOLDER
+         # (ver [[blog-stats-deuda]]). Tipográfico, no llamativo. */
+        .blog-row__reach {
+            font-family: var(--csa-sans);
+            font-size: var(--csa-fs-sm);
+            color: var(--csa-ink-soft);
+            line-height: 1.6;
+            white-space: nowrap;
+        }
+        .blog-row__reach-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .blog-row__reach-row i {
+            color: var(--csa-ink-muted);
+            font-size: 12px;
+            width: 14px;
+            text-align: center;
+        }
+        .blog-row__reach-num {
+            font-variant-numeric: tabular-nums;
+            color: var(--csa-ink);
+            font-weight: 500;
+        }
+        .blog-row__reach-label {
+            font-family: var(--csa-serif);
+            font-style: italic;
+            color: var(--csa-ink-muted);
+            font-size: var(--csa-fs-xs);
+        }
+
+        /* Acciones: iconos limpios sin chip. Hover sutil con fondo soft. */
+        .blog-row__actions { display: flex; gap: 2px; justify-content: flex-end; padding-top: 4px; }
+        .blog-row__action {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px; height: 32px;
+            border-radius: var(--csa-radius-md);
+            color: var(--csa-ink-muted);
+            text-decoration: none;
+            font-size: 13px;
+            transition: all var(--csa-t-fast);
+        }
+        .blog-row__action:hover { color: var(--csa-ink); background: var(--csa-surface-alt); }
+        .blog-row__action--view:hover { color: var(--csa-sky); background: var(--csa-sky-soft); }
+        .blog-row__action--edit:hover { color: var(--csa-green); background: var(--csa-green-soft); }
+
+        .blog-footnote {
+            margin-top: var(--csa-sp-5);
+            color: var(--csa-ink-muted);
+            font-size: var(--csa-fs-xs);
+            font-family: var(--csa-serif);
+            font-style: italic;
+            display: flex;
+            align-items: flex-start;
+            gap: var(--csa-sp-2);
+            line-height: 1.5;
+        }
+        .blog-footnote i { margin-top: 2px; flex-shrink: 0; color: var(--csa-ink-muted); }
+
+        @media (max-width: 760px) {
+            .blog-header { flex-direction: column; align-items: stretch; }
+            .blog-row { gap: var(--csa-sp-3); }
+            .blog-row__thumb,
+            .blog-row__thumb-placeholder { width: 64px; height: 64px; }
+            .blog-row__title { font-size: var(--csa-fs-lg); }
+            .blog-row__date { white-space: normal; }
+        }
+    </style>
+
     <div class="csa-table-wrap">
-        <table class="csa-table" data-paginate>
+        <table class="csa-table blog-table" data-paginate>
             <thead>
                 <tr>
-                    <th>Título</th>
-                    <th class="csa-table__col-tight">Creada</th>
-                    <th>Slug</th>
+                    <th>Noticia</th>
+                    <th class="csa-table__col-tight">Publicación</th>
+                    <th class="csa-table__col-tight">Alcance</th>
                     <th class="csa-table__actions">Acciones</th>
                 </tr>
             </thead>
             <tbody>
                 {% for entity in entities %}
+                    {% set tone = entity.category ? cat_tone_map[entity.category.id]|default('neutral') : null %}
+                    {# Stats PLACEHOLDER derivadas del id (consistentes entre
+                     # recargas, NO es dato real). Ver [[blog-stats-deuda]]. #}
+                    {% set fake_views = (entity.id * 137) % 4000 + 80 %}
+                    {% set fake_comments = (entity.id * 23) % 80 %}
                     <tr>
                         <td>
-                            <a class="csa-table__primary" href="{{ path('blog_edit', { id: entity.id }) }}">{{ entity.title }}</a>
+                            <div class="blog-row">
+                                {% if entity.image %}
+                                    <img class="blog-row__thumb"
+                                         src="{{ asset('uploads/blog/images/' ~ entity.image)|imagine_filter('thumb_latest_post') }}"
+                                         alt="{{ entity.title }}">
+                                {% else %}
+                                    <span class="blog-row__thumb-placeholder {% if tone %}blog-row__thumb-placeholder--{{ tone }}{% endif %}">
+                                        <i class="fa fa-newspaper-o"></i>
+                                    </span>
+                                {% endif %}
+                                <div class="blog-row__body">
+                                    <div class="blog-row__category-wrap">
+                                        {% if entity.category %}
+                                            <span class="csa-badge csa-badge--{{ tone }} csa-badge--no-dot blog-row__category">{{ entity.category.name }}</span>
+                                        {% else %}
+                                            <span class="csa-badge csa-badge--no-dot csa-badge--uncat blog-row__category">sin categoría</span>
+                                        {% endif %}
+                                    </div>
+                                    <a class="blog-row__title" href="{{ path('blog_edit', { id: entity.id }) }}">
+                                        {{ entity.title }}
+                                    </a>
+                                    {% set excerpt_text = entity.content|excerpt(180) %}
+                                    {% if excerpt_text %}
+                                        <p class="blog-row__excerpt">{{ excerpt_text }}</p>
+                                    {% endif %}
+                                </div>
+                            </div>
                         </td>
-                        <td class="csa-table__col-tight">
-                            {% if entity.created %}{{ entity.created|format_date('medium', locale='es') }}{% else %}—{% endif %}
+
+                        <td class="csa-table__col-tight" data-order="{{ entity.created ? entity.created|date('Y-m-d H:i:s') : '' }}">
+                            {% if entity.created %}
+                                <div class="blog-row__date">
+                                    <span class="blog-row__date-abs">{{ entity.created|format_date('medium', locale='es') }}</span>
+                                    <span class="blog-row__date-rel">publicada {{ entity.created|time_ago }}</span>
+                                    {% if entity.updated and entity.updated|date('Y-m-d H:i') != entity.created|date('Y-m-d H:i') %}
+                                        <span class="blog-row__edited" title="Última edición: {{ entity.updated|format_datetime('medium', 'short', locale='es') }}">
+                                            editada {{ entity.updated|time_ago }}
+                                        </span>
+                                    {% endif %}
+                                </div>
+                            {% else %}
+                                <span class="csa-muted">—</span>
+                            {% endif %}
                         </td>
-                        <td>{{ entity.slug }}</td>
+
+                        <td class="csa-table__col-tight" data-order="{{ fake_views }}">
+                            <div class="blog-row__reach" title="Datos provisionales — pendiente analytics real">
+                                <div class="blog-row__reach-row">
+                                    <i class="fa fa-eye"></i>
+                                    <span class="blog-row__reach-num">{{ fake_views|number_format(0, ',', '.') }}</span>
+                                    <span class="blog-row__reach-label">vistas</span>
+                                </div>
+                                <div class="blog-row__reach-row">
+                                    <i class="fa fa-comment-o"></i>
+                                    <span class="blog-row__reach-num">{{ fake_comments }}</span>
+                                    <span class="blog-row__reach-label">{{ fake_comments == 1 ? 'comentario' : 'comentarios' }}</span>
+                                </div>
+                            </div>
+                        </td>
+
                         <td class="csa-table__actions">
-                            <a href="{{ path('blog_show', { slug: entity.slug }) }}" title="Ver pública" aria-label="Ver pública" target="_blank" rel="noopener"><i class="fa fa-eye"></i></a>
-                            <a href="{{ path('blog_edit', { id: entity.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>
+                            <div class="blog-row__actions">
+                                <a href="{{ path('blog_show', { slug: entity.slug }) }}"
+                                   class="blog-row__action blog-row__action--view"
+                                   target="_blank" rel="noopener"
+                                   title="Ver en blog público" aria-label="Ver en blog público">
+                                    <i class="fa fa-external-link"></i>
+                                </a>
+                                <a href="{{ path('blog_edit', { id: entity.id }) }}"
+                                   class="blog-row__action blog-row__action--edit"
+                                   title="Editar noticia" aria-label="Editar noticia">
+                                    <i class="fa fa-pencil"></i>
+                                </a>
+                            </div>
                         </td>
                     </tr>
                 {% else %}
                     <tr>
-                        <td colspan="4" class="csa-muted" style="text-align: center; padding: var(--csa-sp-8);">
-                            Aún no hay noticias.
+                        <td colspan="4" class="csa-muted" style="text-align: center; padding: var(--csa-sp-8); font-family: var(--csa-serif); font-style: italic; font-size: var(--csa-fs-lg);">
+                            Aún no hay noticias en esta categoría.
                         </td>
                     </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
+
+    <p class="blog-footnote">
+        <i class="fa fa-info-circle"></i>
+        <span>Las noticias se publican en el blog público automáticamente al guardarlas. Usa “Vista pública” para revisar cómo se ven antes de difundir.</span>
+    </p>
 
 {% endblock %}

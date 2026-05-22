@@ -65,7 +65,18 @@
         </div>
 
         <div class="csa-row-between" style="margin-top: var(--csa-sp-6); padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
-            <div></div>
+            <div>
+                {# Vista pública. Sólo aparece si la noticia ya tiene slug
+                 # (las recién creadas que aún no se hayan guardado no lo
+                 # tienen). target=_blank para no sacar al admin del editor. #}
+                {% if entity.slug %}
+                    <a href="{{ path('blog_show', { slug: entity.slug }) }}"
+                       target="_blank" rel="noopener"
+                       class="csa-btn csa-btn--ghost">
+                        <i class="fa fa-external-link"></i> Ver publicada
+                    </a>
+                {% endif %}
+            </div>
             <div class="csa-row">
                 {{ csa.btn('Cancelar', { variant: 'ghost', href: path('blog') }) }}
                 {{ form_widget(edit_form.submit, {

@@ -42,7 +42,87 @@ class AppExtension extends AbstractExtension
             new TwigFilter('parseContentImageResponsive', array($this, 'parseContentImageResponsive')),
             new TwigFilter('glossary', array($this, 'glossary')),
             new TwigFilter('month_names', array($this, 'month_names')),
+            new TwigFilter('excerpt', array($this, 'excerpt')),
+            new TwigFilter('time_ago', array($this, 'timeAgo')),
         );
+    }
+
+    /**
+     * Fecha humana en español: "hoy" / "ayer" / "hace 3 días" /
+     * "hace 2 semanas" / "hace 4 meses". Para fechas > 1 año vuelve
+     * al formato absoluto ("12 mayo 2024") para no decir "hace 14 meses",
+     * que ya no aporta — a partir de cierta antigüedad lo que importa es
+     * el año concreto.
+     */
+    public function timeAgo(?\DateTimeInterface $date): string
+    {
+        if ($date === null) {
+            return '';
+        }
+        $now = new \DateTimeImmutable();
+        $diff = $now->getTimestamp() - $date->getTimestamp();
+
+        if ($diff < 0) {
+            return $date->format('d/m/Y');
+        }
+        if ($diff < 60) {
+            return 'hace un momento';
+        }
+        $minutes = intdiv($diff, 60);
+        if ($minutes < 60) {
+            return $minutes === 1 ? 'hace 1 minuto' : "hace $minutes minutos";
+        }
+        $hours = intdiv($diff, 3600);
+        if ($hours < 24) {
+            return $hours === 1 ? 'hace 1 hora' : "hace $hours horas";
+        }
+        $days = intdiv($diff, 86400);
+        if ($days === 0) {
+            return 'hoy';
+        }
+        if ($days === 1) {
+            return 'ayer';
+        }
+        if ($days < 7) {
+            return "hace $days días";
+        }
+        if ($days < 30) {
+            $weeks = intdiv($days, 7);
+            return $weeks === 1 ? 'hace 1 semana' : "hace $weeks semanas";
+        }
+        if ($days < 365) {
+            $months = intdiv($days, 30);
+            return $months === 1 ? 'hace 1 mes' : "hace $months meses";
+        }
+        $meses_ES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+        return $date->format('j') . ' ' . $meses_ES[(int)$date->format('n') - 1] . ' ' . $date->format('Y');
+    }
+
+    /**
+     * Genera un excerpt limpio a partir del HTML de un post:
+     *   - retira los shortcodes [[insert_media_*]] que el editor incrusta
+     *   - elimina tags HTML
+     *   - decodifica entidades (&iacute; → í, &iexcl; → ¡)
+     *   - colapsa whitespace
+     *   - trunca a $length caracteres con elipsis si excede
+     *
+     * @param string|null $html    Contenido HTML del post
+     * @param int         $length  Longitud máxima en caracteres
+     * @return string
+     */
+    public function excerpt(?string $html, int $length = 160): string
+    {
+        if ($html === null || $html === '') {
+            return '';
+        }
+        $clean = preg_replace('/\[\[insert_media_\w+\]\]/i', '', $html);
+        $clean = strip_tags($clean);
+        $clean = html_entity_decode($clean, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $clean = trim(preg_replace('/\s+/', ' ', $clean));
+        if (mb_strlen($clean) > $length) {
+            return mb_substr($clean, 0, $length) . '…';
+        }
+        return $clean;
     }
 
     public function getFunctions()
