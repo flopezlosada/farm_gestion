@@ -56,6 +56,7 @@
             accent: 'green'
         } %}
             {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
                 {% if basket.getProductions|length > 0 %}
                     <div class="csa-table-wrap">
                         <table class="csa-table">
@@ -72,9 +73,14 @@
                                     <tr>
                                         <td>
                                             {% if production.cropworking %}
-                                                <a class="csa-table__primary" href="{{ path('cropworking_show', { year: year, id: production.cropworking.getId }) }}">
-                                                    {{ production.cropworking.getName }}
-                                                </a>
+                                                <div class="csa-table__id-cell">
+                                                    {% if production.cropworking.getCrop %}
+                                                        {{ csa.crop_marker(production.cropworking.getCrop, { size: 'sm' }) }}
+                                                    {% endif %}
+                                                    <a class="csa-table__primary" href="{{ path('cropworking_show', { year: year, id: production.cropworking.getId }) }}">
+                                                        {{ production.cropworking.getName }}
+                                                    </a>
+                                                </div>
                                             {% else %}
                                                 <span class="csa-muted">— cultivo eliminado —</span>
                                             {% endif %}

@@ -168,3 +168,133 @@
         {% if lead %}<div class="csa-lead">{{ lead }}</div>{% endif %}
     </div>
 {% endmacro %}
+
+
+{# ---------- CROP MARKER ----------
+ # Cuadrado-marker con un icono botánico y un color rotativo derivado del id.
+ # Sirve para diferenciar visualmente cultivos entre sí en listados, fichas de
+ # producción y composición de cestas. No es semántico (la rotación NO mapea
+ # familia botánica), solo da diferenciación. Si en el futuro se quieren
+ # iconos/colores editables por cultivo, se moverá a Crop.icon / Crop.accent
+ # y este macro se quedará como fallback.
+ #
+ # Uso:
+ #   {{ csa.crop_marker(crop) }}
+ #   {{ csa.crop_marker(crop, { size: 'lg' }) }}  {# 64px, para cabeceras #}
+ #
+ # opts:
+ #   size  sm (32px) | md (default, 40px) | lg (64px)
+ #}
+{% macro crop_marker(crop, opts = {}) %}
+    {%- set size = opts.size|default('md') -%}
+    {%- set accents = ['green', 'ochre', 'sky', 'plum', 'terracotta'] -%}
+    {%- set icons   = ['fa-leaf', 'fa-pagelines', 'fa-tree'] -%}
+    {%- set idx = (crop.id|default(0)) % accents|length -%}
+    {%- set icon_idx = (crop.id|default(0)) % icons|length -%}
+    {%- set accent = accents[idx] -%}
+    {%- set icon = icons[icon_idx] -%}
+    <span class="csa-crop-marker csa-crop-marker--{{ size }} csa-crop-marker--{{ accent }}" aria-hidden="true">
+        <i class="fa {{ icon }}"></i>
+    </span>
+{% endmacro %}
+
+
+{# ---------- CONFIRM DIALOG ----------
+ # Modal de confirmación reutilizable. Sustituye a window.confirm() nativo.
+ # El <dialog> envuelve el <form> de POST; el botón "confirmar" es el submit.
+ # El trigger (botón que abre el dialog) lo pone el call site con:
+ #   onclick="document.getElementById('<id>').showModal()"
+ #
+ # opts:
+ #   variant       danger | warning | info | success (default: info)
+ #   eyebrow       texto kicker corto en mayúsculas (opcional)
+ #   title         título del modal (Fraunces)
+ #   body          párrafo descriptivo
+ #   confirm_label texto del botón confirmar
+ #   cancel_label  texto del botón cancelar (default: 'Cancelar')
+ #   action        URL del POST
+ #   csrf_token    valor del CSRF token (opcional)
+ #   csrf_name     nombre del campo CSRF (default: '_csrf_token')
+ #   extra_fields  array de {name, value} para hidden inputs adicionales
+ #
+ # Ejemplo:
+ #   <button type="button" class="csa-btn csa-btn--danger-soft csa-btn--sm"
+ #           onclick="document.getElementById('confirm-baja-{{ p.id }}').showModal()">
+ #     Dar de baja
+ #   </button>
+ #   {{ csa.confirm_dialog('confirm-baja-' ~ p.id, {
+ #       variant: 'danger',
+ #       eyebrow: 'Acción permanente',
+ #       title: 'Dar de baja a este socix',
+ #       body: 'Dejará de recibir cesta y se conservará el histórico.',
+ #       confirm_label: 'Dar de baja',
+ #       action: path('partner_demote', { id: p.id }),
+ #   }) }}
+ #}
+{% macro confirm_dialog(id, opts = {}) %}
+    {%- set variant = opts.variant|default('info') -%}
+    {%- set csrf_name = opts.csrf_name|default('_csrf_token') -%}
+    {%- set form_id = opts.external_form_id|default(null) -%}
+    {%- set href = opts.confirm_href|default(null) -%}
+    {%- set as_form = not form_id and not href -%}
+    <dialog id="{{ id }}" class="csa-modal csa-modal--{{ variant }}"
+            role="alertdialog" aria-labelledby="{{ id }}-title">
+        {% if as_form %}<form method="post" action="{{ opts.action }}">
+            {% if opts.csrf_token is defined and opts.csrf_token %}
+                <input type="hidden" name="{{ csrf_name }}" value="{{ opts.csrf_token }}">
+            {% endif %}
+            {% for f in opts.extra_fields|default([]) %}
+                <input type="hidden" name="{{ f.name }}" value="{{ f.value }}">
+            {% endfor %}
+        {% endif %}
+
+        <button class="csa-modal__close" type="button" aria-label="Cerrar"
+                onclick="this.closest('dialog').close()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round">
+                <path d="M5 5l14 14M19 5L5 19"/>
+            </svg>
+        </button>
+
+        <header class="csa-modal__header">
+            <span class="csa-modal__icon" aria-hidden="true">{{ _self.csa_modal_icon(variant) }}</span>
+            <div class="csa-modal__heading">
+                {% if opts.eyebrow is defined and opts.eyebrow %}
+                    <span class="csa-modal__eyebrow">{{ opts.eyebrow }}</span>
+                {% endif %}
+                <h2 class="csa-modal__title" id="{{ id }}-title">{{ opts.title }}</h2>
+            </div>
+        </header>
+
+        <div class="csa-modal__body"><p>{{ opts.body }}</p></div>
+
+        <footer class="csa-modal__footer">
+            <button type="button" class="csa-modal__btn csa-modal__btn--ghost"
+                    onclick="this.closest('dialog').close()" autofocus>
+                {{ opts.cancel_label|default('Cancelar') }}
+            </button>
+            {% if as_form %}
+                <button type="submit" class="csa-modal__btn csa-modal__btn--primary">{{ opts.confirm_label }}</button>
+            {% elseif form_id %}
+                <button type="submit" form="{{ form_id }}" class="csa-modal__btn csa-modal__btn--primary">{{ opts.confirm_label }}</button>
+            {% else %}
+                <a href="{{ href }}" class="csa-modal__btn csa-modal__btn--primary">{{ opts.confirm_label }}</a>
+            {% endif %}
+        </footer>
+
+        {% if as_form %}</form>{% endif %}
+    </dialog>
+{% endmacro %}
+
+{# Macro privada: SVG del icono según variante. No se llama desde call sites. #}
+{% macro csa_modal_icon(variant) -%}
+    {%- if variant == 'danger' -%}
+        <svg viewBox="0 0 24 24"><circle cx="10" cy="8" r="4"/><path d="M3 21c0-3.866 3.134-7 7-7s7 3.134 7 7"/><path d="M16 11h6"/></svg>
+    {%- elseif variant == 'warning' -%}
+        <svg viewBox="0 0 24 24"><rect x="6.5" y="4.5" width="3.5" height="15" rx="1"/><rect x="14" y="4.5" width="3.5" height="15" rx="1"/></svg>
+    {%- elseif variant == 'success' -%}
+        <svg viewBox="0 0 24 24"><circle cx="10" cy="8" r="4"/><path d="M3 21c0-3.866 3.134-7 7-7s7 3.134 7 7"/><path d="M15.5 12.5l2 2 4-4"/></svg>
+    {%- else -%}
+        <svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-4"/></svg>
+    {%- endif -%}
+{%- endmacro %}

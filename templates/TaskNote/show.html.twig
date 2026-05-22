@@ -42,10 +42,18 @@
             </div>
         </div>
         <div class="csa-row">
-            <button type="submit" form="tasknote-delete-form" class="csa-btn csa-btn--ghost"
-                    onclick="return confirm('¿Seguro? Esta acción no se puede deshacer.');">
+            <button type="button" class="csa-btn csa-btn--ghost"
+                    onclick="document.getElementById('confirm-tasknote-delete').showModal()">
                 Eliminar
             </button>
+            {{ csa.confirm_dialog('confirm-tasknote-delete', {
+                variant: 'danger',
+                eyebrow: 'Acción permanente',
+                title: 'Eliminar este registro',
+                body: 'Se borrará de forma definitiva y no podrá recuperarse.',
+                confirm_label: 'Eliminar',
+                external_form_id: 'tasknote-delete-form',
+            }) }}
             {{ csa.btn('Editar', { variant: 'secondary', href: path('tasknote_edit', { id: entity.id }), icon: 'fa-pencil' }) }}
             {% if entity.task %}
                 {{ csa.btn('Volver a la tarea', { variant: 'ghost', href: path('task_show', { id: entity.task.id }) }) }}

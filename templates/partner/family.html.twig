@@ -43,11 +43,17 @@
                         <td>{{ people.name }} {{ people.surname }}</td>
                         <td class="csa-table__actions">
                             <a href="{{ path('partner_show', { id: people.id }) }}" title="Ver" aria-label="Ver"><i class="fa fa-eye"></i></a>
-                            <a href="{{ path(type, { partner1_id: partner.id, partner2_id: people.id }) }}"
+                            <button type="button"
                                title="Asociar" aria-label="Asociar"
-                               onclick="return confirm('¿Asociar a {{ people.name }} {{ people.surname }} con {{ partner.name }} {{ partner.surname }}?');">
-                                <i class="fa fa-link"></i>
-                            </a>
+                                onclick="document.getElementById('confirm-family-1').showModal()"><i class="fa fa-link"></i></button>
+{{ csa.confirm_dialog('confirm-family-1', {
+    variant: 'success',
+    eyebrow: 'Confirmar',
+    title: 'Asociar persona al socix',
+    body: '¿Asociar a {{ people.name }} {{ people.surname }} con {{ partner.name }} {{ partner.surname }}?',
+    confirm_label: 'Asociar',
+    confirm_href: path(type, { partner1_id: partner.id, partner2_id: people.id }),
+}) }}
                         </td>
                     </tr>
                 {% else %}

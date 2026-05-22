@@ -19,7 +19,6 @@
 
     <form id="weekly-basket-group-delete-form" method="post"
           action="{{ path('weekly_basket_group_delete', { id: weekly_basket_group.id }) }}"
-          onsubmit="return confirm('¿Seguro? Esta acción no se puede deshacer.');"
           style="display: none;">
         <input type="hidden" name="_method" value="DELETE">
         <input type="hidden" name="_token" value="{{ csrf_token('delete' ~ weekly_basket_group.id) }}">
@@ -36,9 +35,18 @@
             </div>
         </div>
         <div class="csa-row">
-            <button type="submit" form="weekly-basket-group-delete-form" class="csa-btn csa-btn--ghost">
+            <button type="button" class="csa-btn csa-btn--ghost"
+                    onclick="document.getElementById('confirm-wbg-delete').showModal()">
                 Eliminar
             </button>
+            {{ csa.confirm_dialog('confirm-wbg-delete', {
+                variant: 'danger',
+                eyebrow: 'Acción permanente',
+                title: 'Eliminar este registro',
+                body: 'Se borrará de forma definitiva y no podrá recuperarse.',
+                confirm_label: 'Eliminar',
+                external_form_id: 'weekly-basket-group-delete-form',
+            }) }}
             {{ csa.btn('Editar', { variant: 'secondary', href: path('weekly_basket_group_edit', { id: weekly_basket_group.id }), icon: 'fa-pencil' }) }}
             {{ csa.btn('Volver', { variant: 'ghost', href: path('weekly_basket_group_index') }) }}
         </div>

@@ -1,74 +1,297 @@
-<div id="edition_aside_medias">
-    <h5>{{ 'Edition'|trans }}</h5>
-    <ul class="unstyled">
-        <li><a href="{{ path('image_new',{'foreign_key':entity.id,'object_class':object_class,'single':'1'}) }}"
-               rel="modal:open"><i
-                        class="fa fa-plus-circle"></i> {{ "Add single images"|trans }}</a></li>
-        {% for image in single_images %}
-            <ul class="unstyled">
-                <li>
-                    <span class="add-media" data-add="insert_media_image_{{ image.getId }}"><i
-                                class="fa fa-caret-left"></i> {{ image.title }}</span> <a href="{{ path('image_fast_delete', {'id': image.id}) }}">({{ "Eliminar"|trans }})</a>
-                </li>
-            </ul>
-        {% endfor %}
-        <li><a href="{{ path('image_new',{'foreign_key':entity.id,'object_class':object_class,'single':'0'}) }}"
-               rel="modal:open"><i
-                        class="fa fa-plus-circle"></i> {{ "Add grouped images"|trans }}</a></li>
-        {% if grouped_images|length>0 %}
-            <ul class="unstyled">
-                <li>
-                    <span class="add-media" data-add="insert_media_gallery_{{ entity.getId }}"><i
-                                class="fa fa-caret-left"></i> {{ 'Insert Grouped Images'|trans }}</span>
-                </li>
-            </ul>
-            {% for image in grouped_images %}
-                <ul class="unstyled">
-                    <li>
-                        <span> {{ image.title }}</span> <a href="{{ path('image_fast_delete', {'id': image.id}) }}">({{ "Eliminar"|trans }})</a>
+{% import '_macros/csa.html.twig' as csa %}
+{# ============================================================
+ # Aside lateral del editor de posts. Se carga vía AJAX dentro
+ # del edit del Blog y lista la media polimórfica ya asociada al
+ # post (imágenes sueltas, galerías, audios, vídeos, documentos)
+ # más los enlaces para añadir nuevas vía modal.
+ #
+ # NO extiende csa_shell — es un fragment que se inyecta dentro
+ # del layout padre. Mantiene `id="edition_aside_medias"` porque
+ # los ajaxForm de los modales lo usan como target.
+ #
+ # `data-add="insert_media_*"` y `media_snippet.js` se encargan
+ # de inyectar el shortcode en el TinyMCE del post. No tocar.
+ # ============================================================ #}
+
+<style>
+    .csa-media-aside { display: flex; flex-direction: column; gap: var(--csa-sp-6); }
+    .csa-media-aside__section { }
+    .csa-media-aside__head {
+        display: flex; align-items: baseline; justify-content: space-between; gap: var(--csa-sp-3);
+        padding-bottom: var(--csa-sp-2);
+        border-bottom: 1px solid var(--csa-rule);
+        margin-bottom: var(--csa-sp-3);
+    }
+    .csa-media-aside__title {
+        display: flex; align-items: center; gap: var(--csa-sp-2);
+        font-family: var(--csa-serif);
+        font-variation-settings: "opsz" 30;
+        font-variant-numeric: lining-nums tabular-nums;
+        font-weight: 500;
+        letter-spacing: -0.02em;
+        font-size: var(--csa-fs-lg);
+        margin: 0;
+        color: var(--csa-ink);
+    }
+    .csa-media-aside__title .fa { font-size: 0.875em; opacity: 0.85; }
+    .csa-media-aside__add {
+        font-size: var(--csa-fs-sm);
+        color: var(--csa-ink-soft);
+        text-decoration: none;
+        display: inline-flex; align-items: center; gap: 6px;
+        transition: color 120ms ease;
+    }
+    .csa-media-aside__add:hover { color: var(--csa-ink); text-decoration: none; }
+    .csa-media-aside__list { list-style: none; padding: 0; margin: 0; }
+    .csa-media-aside__item {
+        display: flex; align-items: center; justify-content: space-between; gap: var(--csa-sp-2);
+        padding: var(--csa-sp-2) 0;
+        border-bottom: 1px solid var(--csa-rule-soft);
+        transition: background 120ms ease;
+    }
+    .csa-media-aside__item:last-child { border-bottom: none; }
+    .csa-media-aside__item:hover { background: var(--csa-bg); }
+    .csa-media-aside__item-label {
+        display: flex; align-items: center; gap: var(--csa-sp-2);
+        font-size: var(--csa-fs-base);
+        color: var(--csa-ink);
+        flex: 1; min-width: 0;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .csa-media-aside__item-label.is-clickable { cursor: pointer; }
+    .csa-media-aside__item-label.is-clickable .fa-caret-left { color: var(--csa-ink-muted); transition: color 120ms ease; }
+    .csa-media-aside__item-label.is-clickable:hover .fa-caret-left { color: var(--csa-green); }
+    .csa-media-aside__remove {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 24px; height: 24px;
+        border-radius: var(--csa-radius-sm);
+        color: var(--csa-ink-muted);
+        text-decoration: none;
+        transition: color 120ms ease, background 120ms ease;
+        flex-shrink: 0;
+    }
+    .csa-media-aside__remove:hover { color: var(--csa-terracotta); background: var(--csa-terracotta-soft); text-decoration: none; }
+    .csa-media-aside__empty {
+        margin: 0;
+        color: var(--csa-ink-muted);
+        font-size: var(--csa-fs-sm);
+        font-style: italic;
+    }
+    .csa-media-aside__insert-all {
+        display: inline-flex; align-items: center; gap: var(--csa-sp-2);
+        padding: var(--csa-sp-2) var(--csa-sp-3);
+        margin-bottom: var(--csa-sp-3);
+        background: var(--csa-green-soft);
+        color: var(--csa-ink);
+        border-radius: var(--csa-radius-sm);
+        font-size: var(--csa-fs-sm);
+        cursor: pointer;
+        transition: filter 120ms ease;
+    }
+    .csa-media-aside__insert-all:hover { filter: brightness(0.96); }
+
+    /* Acentos por tipo en el icono del título */
+    .csa-media-aside__title--images   .fa { color: var(--csa-sky); }
+    .csa-media-aside__title--gallery  .fa { color: var(--csa-green); }
+    .csa-media-aside__title--audio    .fa { color: var(--csa-ochre); }
+    .csa-media-aside__title--video    .fa { color: var(--csa-terracotta); }
+    .csa-media-aside__title--document .fa { color: var(--csa-plum); }
+</style>
+
+<div id="edition_aside_medias" class="csa-media-aside">
+
+    {# ---------- Imágenes sueltas ---------- #}
+    <section class="csa-media-aside__section">
+        <header class="csa-media-aside__head">
+            <h4 class="csa-media-aside__title csa-media-aside__title--images">
+                <i class="fa fa-image"></i> Imágenes sueltas
+            </h4>
+            <a href="{{ path('image_new', { foreign_key: entity.id, object_class: object_class, single: '1' }) }}"
+               rel="modal:open" class="csa-media-aside__add">
+                <i class="fa fa-plus"></i> Añadir
+            </a>
+        </header>
+        {% if single_images|length > 0 %}
+            <ul class="csa-media-aside__list">
+                {% for image in single_images %}
+                    <li class="csa-media-aside__item">
+                        <span class="csa-media-aside__item-label is-clickable add-media" data-add="insert_media_image_{{ image.getId }}">
+                            <i class="fa fa-caret-left"></i> {{ image.title }}
+                        </span>
+                        <button type="button"
+                           class="csa-media-aside__remove"
+                           
+                           title="Eliminar" onclick="document.getElementById('confirm-edition-1').showModal()"><i class="fa fa-times"></i></button>
+{{ csa.confirm_dialog('confirm-edition-1', {
+    variant: 'danger',
+    eyebrow: 'Acción permanente',
+    title: 'Eliminar imagen',
+    body: 'La imagen se eliminará del post y no podrá recuperarse.',
+    confirm_label: 'Eliminar',
+    confirm_href: path('image_fast_delete', { id: image.id }),
+}) }}
                     </li>
-                </ul>
-            {% endfor %}
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="csa-media-aside__empty">Ninguna añadida.</p>
         {% endif %}
-        <li><a href="{{ path('audio_new',{'foreign_key':entity.id,'object_class':object_class}) }}" rel="modal:open"><i
-                        class="fa fa-plus-circle"></i> {{ "Añadir audio"|trans }}</a></li>
-        {% for audio in audios %}
-            <ul class="unstyled">
-                <li>
-                    <span class="add-media" data-add="insert_media_audio_{{ audio.getId }}"><i
-                                class="fa fa-caret-left"></i> {{ audio }}</span> <a href="{{ path('audio_fast_delete', {'id': audio.id}) }}">({{ "Eliminar"|trans }})</a>
-                </li>
+    </section>
+
+    {# ---------- Galerías (imágenes agrupadas) ---------- #}
+    <section class="csa-media-aside__section">
+        <header class="csa-media-aside__head">
+            <h4 class="csa-media-aside__title csa-media-aside__title--gallery">
+                <i class="fa fa-th"></i> Galerías
+            </h4>
+            <a href="{{ path('image_new', { foreign_key: entity.id, object_class: object_class, single: '0' }) }}"
+               rel="modal:open" class="csa-media-aside__add">
+                <i class="fa fa-plus"></i> Añadir imagen
+            </a>
+        </header>
+        {% if grouped_images|length > 0 %}
+            <span class="csa-media-aside__insert-all add-media" data-add="insert_media_gallery_{{ entity.getId }}">
+                <i class="fa fa-caret-left"></i> Insertar galería completa
+            </span>
+            <ul class="csa-media-aside__list">
+                {% for image in grouped_images %}
+                    <li class="csa-media-aside__item">
+                        <span class="csa-media-aside__item-label">{{ image.title }}</span>
+                        <button type="button"
+                           class="csa-media-aside__remove"
+                           
+                           title="Eliminar" onclick="document.getElementById('confirm-edition-2').showModal()"><i class="fa fa-times"></i></button>
+{{ csa.confirm_dialog('confirm-edition-2', {
+    variant: 'danger',
+    eyebrow: 'Acción permanente',
+    title: 'Eliminar imagen de la galería',
+    body: 'La imagen se quitará de esta galería y no podrá recuperarse.',
+    confirm_label: 'Eliminar',
+    confirm_href: path('image_fast_delete', { id: image.id }),
+}) }}
+                    </li>
+                {% endfor %}
             </ul>
         {% else %}
+            <p class="csa-media-aside__empty">Ninguna añadida.</p>
+        {% endif %}
+    </section>
 
-        {% endfor %}
-
-        <li><a href="{{ path('video_new',{'foreign_key':entity.id,'object_class':object_class}) }}" rel="modal:open"><i
-                        class="fa fa-plus-circle"></i> {{ "Añadir vídeo"|trans }}</a></li>
-        {% for video in videos %}
-            <ul class="unstyled">
-                <li>
-                    <span class="add-media" data-add="insert_media_video_{{ video.getId }}"><i
-                                class="fa fa-caret-left"></i> {{ video }}</span> <a href="{{ path('video_fast_delete', {'id': video.id}) }}">({{ "Eliminar"|trans }})</a>
-                </li>
+    {# ---------- Audios ---------- #}
+    <section class="csa-media-aside__section">
+        <header class="csa-media-aside__head">
+            <h4 class="csa-media-aside__title csa-media-aside__title--audio">
+                <i class="fa fa-music"></i> Audios
+            </h4>
+            <a href="{{ path('audio_new', { foreign_key: entity.id, object_class: object_class }) }}"
+               rel="modal:open" class="csa-media-aside__add">
+                <i class="fa fa-plus"></i> Añadir
+            </a>
+        </header>
+        {% if audios|length > 0 %}
+            <ul class="csa-media-aside__list">
+                {% for audio in audios %}
+                    <li class="csa-media-aside__item">
+                        <span class="csa-media-aside__item-label is-clickable add-media" data-add="insert_media_audio_{{ audio.getId }}">
+                            <i class="fa fa-caret-left"></i> {{ audio }}
+                        </span>
+                        <button type="button"
+                           class="csa-media-aside__remove"
+                           
+                           title="Eliminar" onclick="document.getElementById('confirm-edition-3').showModal()"><i class="fa fa-times"></i></button>
+{{ csa.confirm_dialog('confirm-edition-3', {
+    variant: 'danger',
+    eyebrow: 'Acción permanente',
+    title: 'Eliminar audio',
+    body: 'El audio se eliminará del post y no podrá recuperarse.',
+    confirm_label: 'Eliminar',
+    confirm_href: path('audio_fast_delete', { id: audio.id }),
+}) }}
+                    </li>
+                {% endfor %}
             </ul>
         {% else %}
+            <p class="csa-media-aside__empty">Ninguno añadido.</p>
+        {% endif %}
+    </section>
 
-        {% endfor %}
-
-        <li><a href="{{ path('document_new',{'foreign_key':entity.id,'object_class':object_class}) }}" rel="modal:open"><i
-                        class="fa fa-plus-circle"></i> {{ "Añadir documento"|trans }}</a></li>
-        {% for document in documents %}
-            <ul class="unstyled">
-                <li>
-                    <span class="add-media"
-                          data-add="insert_media_document_{{ document.getId }}"> {{ 'Added document:'|trans }} {{ document }}</span> <a href="{{ path('document_fast_delete', {'id': document.id}) }}">({{ "Eliminar"|trans }})</a>
-                </li>
+    {# ---------- Vídeos ---------- #}
+    <section class="csa-media-aside__section">
+        <header class="csa-media-aside__head">
+            <h4 class="csa-media-aside__title csa-media-aside__title--video">
+                <i class="fa fa-video-camera"></i> Vídeos
+            </h4>
+            <a href="{{ path('video_new', { foreign_key: entity.id, object_class: object_class }) }}"
+               rel="modal:open" class="csa-media-aside__add">
+                <i class="fa fa-plus"></i> Añadir
+            </a>
+        </header>
+        {% if videos|length > 0 %}
+            <ul class="csa-media-aside__list">
+                {% for video in videos %}
+                    <li class="csa-media-aside__item">
+                        <span class="csa-media-aside__item-label is-clickable add-media" data-add="insert_media_video_{{ video.getId }}">
+                            <i class="fa fa-caret-left"></i> {{ video }}
+                        </span>
+                        <button type="button"
+                           class="csa-media-aside__remove"
+                           
+                           title="Eliminar" onclick="document.getElementById('confirm-edition-4').showModal()"><i class="fa fa-times"></i></button>
+{{ csa.confirm_dialog('confirm-edition-4', {
+    variant: 'danger',
+    eyebrow: 'Acción permanente',
+    title: 'Eliminar vídeo',
+    body: 'El vídeo se eliminará del post y no podrá recuperarse.',
+    confirm_label: 'Eliminar',
+    confirm_href: path('video_fast_delete', { id: video.id }),
+}) }}
+                    </li>
+                {% endfor %}
             </ul>
         {% else %}
+            <p class="csa-media-aside__empty">Ninguno añadido.</p>
+        {% endif %}
+    </section>
 
-        {% endfor %}
-    </ul>
+    {# ---------- Documentos ---------- #}
+    <section class="csa-media-aside__section">
+        <header class="csa-media-aside__head">
+            <h4 class="csa-media-aside__title csa-media-aside__title--document">
+                <i class="fa fa-file-text-o"></i> Documentos
+            </h4>
+            <a href="{{ path('document_new', { foreign_key: entity.id, object_class: object_class }) }}"
+               rel="modal:open" class="csa-media-aside__add">
+                <i class="fa fa-plus"></i> Añadir
+            </a>
+        </header>
+        {% if documents|length > 0 %}
+            <ul class="csa-media-aside__list">
+                {% for document in documents %}
+                    <li class="csa-media-aside__item">
+                        <span class="csa-media-aside__item-label is-clickable add-media" data-add="insert_media_document_{{ document.getId }}">
+                            <i class="fa fa-caret-left"></i> {{ document }}
+                        </span>
+                        <button type="button"
+                           class="csa-media-aside__remove"
+                           
+                           title="Eliminar" onclick="document.getElementById('confirm-edition-5').showModal()"><i class="fa fa-times"></i></button>
+{{ csa.confirm_dialog('confirm-edition-5', {
+    variant: 'danger',
+    eyebrow: 'Acción permanente',
+    title: 'Eliminar documento',
+    body: 'El documento se eliminará del post y no podrá recuperarse.',
+    confirm_label: 'Eliminar',
+    confirm_href: path('document_fast_delete', { id: document.id }),
+}) }}
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="csa-media-aside__empty">Ninguno añadido.</p>
+        {% endif %}
+    </section>
+
 </div>
+
 <script src="{{ asset('bundles/app/js/jquery.js') }}"></script>
 <script src="{{ asset('bundles/app/js/scripts/media_snippet.js') }}"></script>

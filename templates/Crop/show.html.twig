@@ -20,9 +20,7 @@
     {# ===== Cabecera ===== #}
     <div class="csa-row-between" style="margin-bottom: var(--csa-sp-6); align-items: flex-start;">
         <div class="csa-row" style="align-items: flex-start; gap: var(--csa-sp-4);">
-            <span class="csa-table__id-marker" style="width: 64px; height: 64px; font-size: 28px; border-radius: var(--csa-radius-lg);">
-                <i class="fa fa-leaf"></i>
-            </span>
+            {{ csa.crop_marker(entity, { size: 'lg' }) }}
             <div>
                 <div class="csa-row" style="gap: var(--csa-sp-3); margin-bottom: var(--csa-sp-2);">
                     {% if entity.isInProduction == 1 %}

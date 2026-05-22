@@ -21,6 +21,7 @@
     {% if next_basket %}
         {% embed '_components/csa_card.html.twig' with { title: 'Próxima cesta', accent: 'green', icon: 'fa-calendar-check-o', variant: 'hero' } %}
             {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
                 {# Stat principal: fecha grande + lugar como subtítulo. #}
                 <div class="csa-next-basket">
                     <div class="csa-next-basket__date">
@@ -69,18 +70,26 @@
                          antes que el skip porque es la acción más frecuente
                          (saltar la cesta es menos habitual). --- #}
                     {% if shift_existing %}
-                        <form action="{{ path('panel_basket_shift_cancel') }}" method="post" class="csa-next-basket__action">
+                        <form id="panel-shift-cancel-form" action="{{ path('panel_basket_shift_cancel') }}" method="post" class="csa-next-basket__action">
                             <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_basket_shift_cancel') }}">
                             <span class="csa-next-basket__action-icon csa-next-basket__action-icon--info"><i class="fa fa-undo" aria-hidden="true"></i></span>
                             <div class="csa-next-basket__action-body">
                                 <div class="csa-next-basket__action-title">Deshacer cambio de viernes</div>
                                 <div class="csa-next-basket__action-desc">Vuelves a recoger el viernes original.</div>
                             </div>
-                            <button type="submit" class="csa-btn csa-btn--secondary"
-                                    {% if not can_change_next %}disabled{% else %}onclick="return confirm('¿Quieres deshacer el cambio y volver a recoger el viernes original?');"{% endif %}>
+                            <button type="button" class="csa-btn csa-btn--secondary"
+                                    {% if not can_change_next %}disabled{% else %}onclick="document.getElementById('confirm-panel-shift-cancel').showModal()"{% endif %}>
                                 Deshacer
                             </button>
                         </form>
+                        {{ csa.confirm_dialog('confirm-panel-shift-cancel', {
+                            variant: 'info',
+                            eyebrow: 'Deshacer',
+                            title: 'Deshacer el cambio de viernes',
+                            body: 'Volverás a recoger la cesta en tu viernes original.',
+                            confirm_label: 'Deshacer',
+                            external_form_id: 'panel-shift-cancel-form',
+                        }) }}
                     {% elseif not next_basket_skipped and shift_candidates|length == 1 %}
                         {# Quincenal: solo hay 1 viernes destino (el siguiente). Botón directo. #}
                         <form action="{{ path('panel_basket_shift_request') }}" method="post" class="csa-next-basket__action">
@@ -143,7 +152,7 @@
                          el shift: no se ofrece como acción separada para evitar
                          desincronizar el shift. --- #}
                     {% if not shift_existing %}
-                        <form action="{{ path('panel_basket_skip_toggle') }}" method="post" class="csa-next-basket__action">
+                        <form id="panel-skip-form" action="{{ path('panel_basket_skip_toggle') }}" method="post" class="csa-next-basket__action">
                             <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_basket_skip') }}">
                             {% if next_basket_skipped %}
                                 <span class="csa-next-basket__action-icon csa-next-basket__action-icon--green"><i class="fa fa-undo" aria-hidden="true"></i></span>
@@ -170,10 +179,18 @@
                                         {% endif %}
                                     </div>
                                 </div>
-                                <button type="submit" class="csa-btn csa-btn--danger-soft"
-                                        {% if not can_change_next %}disabled{% else %}onclick="return confirm('¿Confirmas que NO recoges la cesta de esta semana?');"{% endif %}>
+                                <button type="button" class="csa-btn csa-btn--danger-soft"
+                                        {% if not can_change_next %}disabled{% else %}onclick="document.getElementById('confirm-panel-skip').showModal()"{% endif %}>
                                     No recoger
                                 </button>
+                                {{ csa.confirm_dialog('confirm-panel-skip', {
+                                    variant: 'warning',
+                                    eyebrow: 'No recoger',
+                                    title: '¿No recoges esta semana?',
+                                    body: 'Te saltarás el reparto de este viernes. Podrás revertirlo mientras el plazo siga abierto.',
+                                    confirm_label: 'No recoger',
+                                    external_form_id: 'panel-skip-form',
+                                }) }}
                             {% endif %}
                         </form>
                     {% endif %}

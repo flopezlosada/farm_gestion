@@ -1,3 +1,4 @@
+{% import '_macros/csa.html.twig' as csa %}
 {# ============================================================
  # Sub-tabla del reparto semanal por tipo de cesta — partial.
  # Recibe: entity (lista de basket), accent (color del card),
@@ -14,6 +15,7 @@
 
 {% embed '_components/csa_card.html.twig' with { title: 'Cestas ' ~ type ~ ' · ' ~ count, accent: accent } %}
     {% block body %}
+        {% import '_macros/csa.html.twig' as csa %}
         <div class="csa-table-wrap">
             <table class="csa-table">
                 <thead>
@@ -103,17 +105,29 @@
 
                                 {% if basket_share_id == 2 %}
                                     {% if current and current.getWeeklyBasketStatus.id == 1 %}
-                                        <br><a href="{{ path('partner_basket_monthly_change_week', { weekly_basket_id: basket.partner.getCurrentBasket.id }) }}"
-                                               onclick="return confirm('Esta acción no se puede deshacer. ¿Estás segurx?');">
-                                            Cambiar a otra semana
-                                        </a>
+                                        <br><button type="button"
+                                                onclick="document.getElementById('confirm--table-list-basket-1').showModal()">Cambiar a otra semana</button>
+{{ csa.confirm_dialog('confirm--table-list-basket-1', {
+    variant: 'warning',
+    eyebrow: 'Acción definitiva',
+    title: 'Cambiar a otra semana',
+    body: 'Esta acción no se puede deshacer. El cambio se aplicará al listado.',
+    confirm_label: 'Cambiar de semana',
+    confirm_href: path('partner_basket_monthly_change_week', { weekly_basket_id: basket.partner.getCurrentBasket.id }),
+}) }}
                                     {% endif %}
                                 {% elseif basket_share_id == 3 %}
                                     {% if current and current.getWeeklyBasketStatus.id == 1 %}
-                                        <br><a href="{{ path('partner_basket_monthly_change_week', { weekly_basket_id: basket.partner.getCurrentBasket.id }) }}"
-                                               onclick="return confirm('Esta acción no se puede deshacer. ¿Estás segurx?');">
-                                            La recoge la semana siguiente
-                                        </a>
+                                        <br><button type="button"
+                                                onclick="document.getElementById('confirm--table-list-basket-2').showModal()">La recoge la semana siguiente</button>
+{{ csa.confirm_dialog('confirm--table-list-basket-2', {
+    variant: 'warning',
+    eyebrow: 'Acción definitiva',
+    title: 'Pasar a la semana siguiente',
+    body: 'Esta acción no se puede deshacer. La cesta se moverá a la semana siguiente.',
+    confirm_label: 'Cambiar',
+    confirm_href: path('partner_basket_monthly_change_week', { weekly_basket_id: basket.partner.getCurrentBasket.id }),
+}) }}
                                     {% endif %}
                                 {% endif %}
                             </td>

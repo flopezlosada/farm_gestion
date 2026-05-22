@@ -1,14 +1,21 @@
+{% import '_macros/csa.html.twig' as csa %}
 {# ============================================================
  # Acciones inline de una tarea (partial usado desde index y show).
  # Fila horizontal de botones compactos.
  # ============================================================ #}
 
 <div class="csa-row" style="flex-wrap: wrap; gap: var(--csa-sp-2); margin-top: var(--csa-sp-3);">
-    <a href="{{ path('task_finalize', { id: task.id }) }}"
+    <button type="button"
        class="csa-btn csa-btn--ghost csa-btn--sm"
-       onclick="return confirm('¿Marcar como finalizada y registrar la fecha de hoy?');">
-        <i class="fa fa-check"></i> Finalizar
-    </a>
+        onclick="document.getElementById('confirm-record-actions-1').showModal()"><i class="fa fa-check"></i> Finalizar</button>
+{{ csa.confirm_dialog('confirm-record-actions-1', {
+    variant: 'success',
+    eyebrow: 'Cerrar tarea',
+    title: 'Marcar como finalizada',
+    body: 'Se registrará la fecha de hoy como fin. Podrás reabrirla si te equivocas.',
+    confirm_label: 'Finalizar',
+    confirm_href: path('task_finalize', { id: task.id }),
+}) }}
     <a href="{{ path('task_edit', { id: task.id }) }}" class="csa-btn csa-btn--ghost csa-btn--sm">
         <i class="fa fa-pencil"></i> Editar
     </a>

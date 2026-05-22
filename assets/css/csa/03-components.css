@@ -764,6 +764,62 @@ select.csa-input,
 
 
 /* ============================================================
+ * COMBOBOX (autocomplete propio, sin librerías)
+ * <input> + lista flotante filtrable por substring.
+ * Sustituye al <datalist> nativo, que no es estilable y cada
+ * navegador lo posiciona donde le da la gana.
+ * ============================================================ */
+
+.csa-combobox { position: relative; }
+
+.csa-combobox__menu {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  z-index: 50;
+  max-height: 280px;
+  overflow-y: auto;
+  margin: 0;
+  padding: var(--csa-sp-1) 0;
+  list-style: none;
+  background: var(--csa-surface);
+  border: 1px solid var(--csa-rule-soft);
+  border-radius: var(--csa-radius-md);
+  box-shadow: var(--csa-shadow-sm);
+}
+.csa-combobox__menu[hidden] { display: none; }
+
+.csa-combobox__option {
+  padding: 7px var(--csa-sp-3);
+  font-size: var(--csa-fs-base);
+  line-height: 1.4;
+  color: var(--csa-ink);
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--csa-t-fast), color var(--csa-t-fast);
+}
+.csa-combobox__option:hover,
+.csa-combobox__option--active {
+  background: var(--csa-sage-bg-hover);
+  color: var(--csa-sage-ink);
+}
+.csa-combobox__option mark {
+  background: transparent;
+  color: var(--csa-green);
+  font-weight: 500;
+  padding: 0;
+}
+.csa-combobox__empty {
+  padding: var(--csa-sp-3);
+  font-size: var(--csa-fs-sm);
+  color: var(--csa-ink-muted);
+  font-style: italic;
+  font-family: var(--csa-serif);
+}
+
+
+/* ============================================================
  * SECCIÓN NUMERADA DE FORMULARIO
  * (patrón usado en editar/crear lote)
  * ============================================================ */
@@ -1230,6 +1286,12 @@ a.csa-table__primary:hover {
  * "Ver web" colapsa a solo icono. El nombre desaparece pero el
  * avatar y el botón salir permanecen visibles. */
 @media (max-width: 700px) {
+  /* Crumbs largos (Inicio › Calendario › Cambiar día de reparto) hacían que
+     el topbar — display:flex sin wrap — desbordase el viewport, arrastrando
+     el header entero. En móvil dejamos solo el activo: dice claramente "dónde
+     estoy" sin tirar del layout. */
+  .csa-topbar__crumbs > *:not(.csa-topbar__crumb-active) { display: none; }
+
   .csa-topbar__user { gap: var(--csa-sp-3); }
   .csa-areaswitch__label { display: none; }
   .csa-areaswitch__short {
@@ -2273,3 +2335,376 @@ table.csa-table thead th.sorting_desc::after { content: " ↓"; color: var(--csa
     grid-column: 1 / -1;
   }
 }
+/* ============================================================
+ * CSA MODAL — diálogo de confirmación
+ * ============================================================
+ * HTML5 <dialog> nativo. Sin librerías JS.
+ * Uso:
+ *   <dialog class="csa-modal csa-modal--danger" aria-labelledby="t1">
+ *     <button class="csa-modal__close" type="button" aria-label="Cerrar"
+ *             onclick="this.closest('dialog').close()">…</button>
+ *     <header class="csa-modal__header">
+ *       <span class="csa-modal__icon">…svg…</span>
+ *       <div class="csa-modal__heading">
+ *         <span class="csa-modal__eyebrow">Acción permanente</span>
+ *         <h2 class="csa-modal__title" id="t1">Dar de baja a este socix</h2>
+ *       </div>
+ *     </header>
+ *     <div class="csa-modal__body"><p>Dejará de recibir cesta…</p></div>
+ *     <footer class="csa-modal__footer">
+ *       <button class="csa-modal__btn csa-modal__btn--ghost" autofocus
+ *               onclick="this.closest('dialog').close()">Cancelar</button>
+ *       <button class="csa-modal__btn csa-modal__btn--primary">Dar de baja</button>
+ *     </footer>
+ *   </dialog>
+ *
+ * Abrir con: document.querySelector('dialog.csa-modal').showModal();
+ * Cerrar con: dialog.close();
+ * Modificadores: --danger, --warning, --info, --success.
+ * ============================================================ */
+
+.csa-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;
+  width: calc(100% - 32px);
+  max-width: 440px;
+  padding: 0;
+  background: var(--csa-surface);
+  border: 1px solid var(--csa-rule-soft);
+  border-radius: var(--csa-radius-lg);
+  box-shadow: var(--csa-shadow-lg);
+  color: var(--csa-ink);
+  font-family: var(--csa-sans);
+  overflow: hidden;
+}
+.csa-modal:not([open]) { display: none; }
+/* El <form> envuelve toda la estructura interna del modal — forzamos
+ * box model limpio para que no herede paddings/márgenes de resets legacy. */
+.csa-modal > form {
+  display: block;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+.csa-modal::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--csa-rule);
+  border-top-left-radius: var(--csa-radius-lg);
+  border-bottom-left-radius: var(--csa-radius-lg);
+}
+
+.csa-modal::backdrop {
+  background: rgba(28, 29, 26, 0.36);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  opacity: 0;
+  animation: csa-modal-backdrop-in 180ms ease-out forwards;
+}
+.csa-modal[open] {
+  animation: csa-modal-panel-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes csa-modal-backdrop-in { to { opacity: 1; } }
+@keyframes csa-modal-panel-in {
+  from { opacity: 0; transform: translate(-50%, calc(-50% + 8px)) scale(0.985); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+/* ---------- close ---------- */
+
+.csa-modal__close {
+  position: absolute;
+  top: var(--csa-sp-4);
+  right: var(--csa-sp-4);
+  width: 28px; height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--csa-radius-sm);
+  color: var(--csa-ink-muted);
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+.csa-modal__close:hover {
+  background: var(--csa-surface-alt);
+  color: var(--csa-ink);
+}
+.csa-modal__close svg { width: 14px; height: 14px; }
+
+/* ---------- header ---------- */
+
+.csa-modal__header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--csa-sp-4);
+  padding: var(--csa-sp-6) var(--csa-sp-6) 0;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.csa-modal__icon {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--csa-surface-alt);
+  color: var(--csa-ink);
+}
+.csa-modal__icon svg {
+  width: 22px;
+  height: 22px;
+  stroke-width: 1.6;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.csa-modal__heading {
+  flex: 1 1 0;
+  min-width: 0;
+  padding-top: 6px;
+  padding-right: var(--csa-sp-10);
+}
+.csa-modal__eyebrow {
+  display: block;
+  font-family: var(--csa-sans);
+  font-size: 10.5px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--csa-ink-muted);
+  margin-bottom: var(--csa-sp-2);
+}
+.csa-modal__title {
+  font-family: var(--csa-serif);
+  font-variation-settings: "opsz" 30;
+  font-weight: 500;
+  font-size: var(--csa-fs-xl);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: var(--csa-ink);
+  margin: 0;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  text-wrap: balance;
+}
+
+/* ---------- body ---------- */
+
+.csa-modal__body {
+  padding: var(--csa-sp-4) var(--csa-sp-6) var(--csa-sp-6);
+  /* alineado a la izquierda del título (no del icono) */
+  padding-left: calc(var(--csa-sp-6) + 44px + var(--csa-sp-4));
+}
+.csa-modal__body p {
+  margin: 0;
+  font-family: var(--csa-sans);
+  font-size: var(--csa-fs-base);
+  line-height: 1.55;
+  color: var(--csa-ink-soft);
+  overflow-wrap: break-word;
+}
+.csa-modal__body p + p { margin-top: var(--csa-sp-3); }
+
+/* ---------- footer ---------- */
+
+.csa-modal__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--csa-sp-2);
+  padding: var(--csa-sp-4) var(--csa-sp-6);
+  background: var(--csa-bg);
+  border-top: 1px solid var(--csa-rule-soft);
+}
+.csa-modal__footer .csa-modal__btn { flex: 0 1 auto; }
+
+.csa-modal__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--csa-sans);
+  font-size: var(--csa-fs-base);
+  font-weight: 500;
+  line-height: 1;
+  padding: 10px 18px;
+  border-radius: var(--csa-radius-md);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--csa-ink-soft);
+  cursor: pointer;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+.csa-modal__btn:hover { text-decoration: none; }
+.csa-modal__btn:link,
+.csa-modal__btn:visited { color: var(--csa-ink-soft); }
+.csa-modal__btn:focus-visible {
+  outline: 2px solid var(--csa-ink);
+  outline-offset: 2px;
+}
+
+.csa-modal__btn--ghost {
+  background: transparent;
+  color: var(--csa-ink-soft);
+  border-color: transparent;
+}
+.csa-modal__btn--ghost:hover {
+  background: var(--csa-sage-bg-hover);
+  color: var(--csa-sage-ink);
+}
+
+.csa-modal__btn--primary {
+  background: var(--csa-ink);
+  color: var(--csa-bg);
+  border-color: var(--csa-ink);
+}
+.csa-modal__btn--primary:hover {
+  background: #000;
+  border-color: #000;
+}
+
+/* ============================================================
+ * VARIANTES POR DOMINIO
+ * ============================================================ */
+
+/* Destructivo — terracotta */
+.csa-modal--danger::before { background: var(--csa-terracotta); }
+.csa-modal--danger .csa-modal__icon {
+  background: var(--csa-terracotta-soft);
+  color: var(--csa-terracotta);
+}
+.csa-modal--danger .csa-modal__eyebrow { color: var(--csa-terracotta); }
+.csa-modal--danger .csa-modal__btn--primary {
+  background: var(--csa-terracotta);
+  border-color: var(--csa-terracotta);
+  color: #fff;
+}
+.csa-modal--danger .csa-modal__btn--primary:hover {
+  background: #c45c33;
+  border-color: #c45c33;
+}
+.csa-modal--danger .csa-modal__btn--primary:focus-visible {
+  outline-color: var(--csa-terracotta);
+}
+
+/* Aviso — ochre */
+.csa-modal--warning::before { background: var(--csa-ochre); }
+.csa-modal--warning .csa-modal__icon {
+  background: var(--csa-ochre-soft);
+  color: #a3702a;
+}
+.csa-modal--warning .csa-modal__eyebrow { color: #a3702a; }
+.csa-modal--warning .csa-modal__btn--primary {
+  background: var(--csa-ochre);
+  border-color: var(--csa-ochre);
+  color: #fff;
+}
+.csa-modal--warning .csa-modal__btn--primary:hover {
+  background: #be8230;
+  border-color: #be8230;
+}
+.csa-modal--warning .csa-modal__btn--primary:focus-visible {
+  outline-color: var(--csa-ochre);
+}
+
+/* Informativo — sky */
+.csa-modal--info::before { background: var(--csa-sky); }
+.csa-modal--info .csa-modal__icon {
+  background: var(--csa-sky-soft);
+  color: var(--csa-sky);
+}
+.csa-modal--info .csa-modal__eyebrow { color: var(--csa-sky); }
+.csa-modal--info .csa-modal__btn--primary {
+  background: var(--csa-sky);
+  border-color: var(--csa-sky);
+  color: #fff;
+}
+.csa-modal--info .csa-modal__btn--primary:hover {
+  background: #316787;
+  border-color: #316787;
+}
+.csa-modal--info .csa-modal__btn--primary:focus-visible {
+  outline-color: var(--csa-sky);
+}
+
+/* Positivo — green */
+.csa-modal--success::before { background: var(--csa-green); }
+.csa-modal--success .csa-modal__icon {
+  background: var(--csa-green-soft);
+  color: var(--csa-green);
+}
+.csa-modal--success .csa-modal__eyebrow { color: var(--csa-green); }
+.csa-modal--success .csa-modal__btn--primary {
+  background: var(--csa-green);
+  border-color: var(--csa-green);
+  color: #fff;
+}
+.csa-modal--success .csa-modal__btn--primary:hover {
+  background: #3c6630;
+  border-color: #3c6630;
+}
+.csa-modal--success .csa-modal__btn--primary:focus-visible {
+  outline-color: var(--csa-green);
+}
+
+/* ============================================================
+ * RESPONSIVE
+ * ============================================================ */
+
+@media (max-width: 480px) {
+  .csa-modal__header { padding: var(--csa-sp-5) var(--csa-sp-5) 0; }
+  .csa-modal__body {
+    padding: var(--csa-sp-3) var(--csa-sp-5) var(--csa-sp-5);
+    padding-left: var(--csa-sp-5);
+  }
+  .csa-modal__footer { padding: var(--csa-sp-3) var(--csa-sp-5); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .csa-modal::backdrop,
+  .csa-modal[open] {
+    animation: none;
+  }
+}
+
+
+/* ============================================================
+ * CROP MARKER — icono + color por cultivo (rotativo por id)
+ * Sirve en listados y cabeceras. Tres tamaños: sm/md/lg.
+ * Color de fondo = tinte soft del acento; icono = color del acento.
+ * ============================================================ */
+
+.csa-crop-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--csa-radius-md);
+  flex-shrink: 0;
+}
+.csa-crop-marker--sm { width: 32px; height: 32px; font-size: 14px; }
+.csa-crop-marker--md { width: 40px; height: 40px; font-size: 16px; }
+.csa-crop-marker--lg { width: 64px; height: 64px; font-size: 28px; border-radius: var(--csa-radius-lg); }
+
+.csa-crop-marker--green      { background: var(--csa-green-soft);      color: var(--csa-green); }
+.csa-crop-marker--ochre      { background: var(--csa-ochre-soft);      color: var(--csa-amber, #a3702a); }
+.csa-crop-marker--sky        { background: var(--csa-sky-soft);        color: var(--csa-sky); }
+.csa-crop-marker--plum       { background: var(--csa-plum-soft);       color: var(--csa-plum); }
+.csa-crop-marker--terracotta { background: var(--csa-terracotta-soft); color: var(--csa-terracotta); }

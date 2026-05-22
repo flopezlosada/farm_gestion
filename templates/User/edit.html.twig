@@ -24,7 +24,6 @@
 
     <form id="user-delete-form" method="post"
           action="{{ path('user_delete', { id: entity.id }) }}"
-          onsubmit="return confirm('¿Eliminar usuaria? Esta acción no se puede deshacer.');"
           style="display: none;">
         <input type="hidden" name="_method" value="DELETE">
     </form>
@@ -62,7 +61,16 @@
             {% endembed %}
 
             <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
-                <button type="submit" form="user-delete-form" class="csa-btn csa-btn--ghost">Eliminar</button>
+                <button type="button" class="csa-btn csa-btn--ghost"
+                    onclick="document.getElementById('confirm-user-delete').showModal()">Eliminar</button>
+            {{ csa.confirm_dialog('confirm-user-delete', {
+                variant: 'danger',
+                eyebrow: 'Acción permanente',
+                title: 'Eliminar este registro',
+                body: 'Se borrará de forma definitiva y no podrá recuperarse.',
+                confirm_label: 'Eliminar',
+                external_form_id: 'user-delete-form',
+            }) }}
                 <div class="csa-row">
                     {{ csa.btn('Cancelar', { variant: 'ghost', href: path('user_show', { id: entity.id }) }) }}
                     <button type="submit" class="csa-btn csa-btn--primary">Guardar cambios</button>
