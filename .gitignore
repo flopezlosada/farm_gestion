@@ -56,6 +56,9 @@ yarn-error.log
 # User-uploaded data (binarios fuera de git, se sincronizan aparte)
 /public/uploads/
 
+# Documentación interna / volcados con PII (LOPD/GDPR), nunca a git
+/docs/
+
 ###> phpstan/phpstan ###
 phpstan.neon
 ###< phpstan/phpstan ###
