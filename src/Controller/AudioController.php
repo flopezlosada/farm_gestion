@@ -39,17 +39,35 @@ class AudioController extends AbstractAppController
             $entity->setObjectClass($object_class);
             $em->persist($entity);
             $em->flush();
-
-            if ($request->isXmlHttpRequest()) {
-                return $this->redirect($this->generateUrl($entity->getObjectClass() . "_edition", array('id' => $foreign_key, 'object_class' => $entity->getObjectClass())));
-            }
-            return $this->redirect($this->generateUrl($entity->getObjectClass() . '_show', array('id' => $entity->getForeignKey())));
+        } elseif ($form->isSubmitted()) {
+            $this->addFlash('error', $this->buildUploadError($form));
+        } else {
+            $this->addFlash('error', 'No se recibió el archivo. Asegúrate de que no excede el tamaño máximo permitido.');
         }
 
-        return $this->render('Audio/new.html.twig', array(
-            'entity' => $entity,
-            'form' => $form->createView(),
-        ));
+        // Mismo razonamiento que ImageController: redirigimos siempre
+        // al fragment _edition para que jquery.form (iframe mode)
+        // recomponga el aside con el contenido actualizado y los
+        // mensajes flash.
+        return $this->redirect($this->generateUrl($object_class . '_edition', array(
+            'id' => $foreign_key,
+            'object_class' => $object_class,
+        )));
+    }
+
+    /**
+     * Aplana los errores de validación del form en un único mensaje
+     * legible para mostrar como flash en el aside.
+     */
+    private function buildUploadError($form): string
+    {
+        $errors = [];
+        foreach ($form->getErrors(true) as $error) {
+            $errors[] = $error->getMessage();
+        }
+        return $errors
+            ? 'No se pudo subir el archivo: ' . implode(' ', $errors)
+            : 'No se pudo subir el archivo.';
     }
 
     /**

@@ -100,6 +100,16 @@
 
 <div id="edition_aside_medias" class="csa-media-aside">
 
+    {# Flashes (subidas que rebotaron por validación, p.ej. archivo >6 MB).
+     # Se renderizan dentro del aside porque éste es el fragmento que se
+     # re-inyecta tras cada POST a {image,audio,video,document}_create. #}
+    {% for message in app.flashes('error') %}
+        <p class="csa-callout csa-callout--warning" style="margin-bottom: var(--csa-sp-3);">
+            <i class="csa-callout__icon fa fa-exclamation-triangle"></i>
+            <span>{{ message }}</span>
+        </p>
+    {% endfor %}
+
     {# ---------- Imágenes sueltas ---------- #}
     <section class="csa-media-aside__section">
         <header class="csa-media-aside__head">

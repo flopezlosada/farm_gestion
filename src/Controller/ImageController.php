@@ -42,19 +42,44 @@ class ImageController extends AbstractAppController
             $entity->setSingle($single);
             $em->persist($entity);
             $em->flush();
-
-            if ($request->isXmlHttpRequest()) {
-                return $this->redirect($this->generateUrl($entity->getObjectClass() . "_edition", array('id' => $foreign_key, 'object_class' => $entity->getObjectClass())));
-            }
-            return $this->redirect($this->generateUrl($entity->getObjectClass() . '_show', array('id' => $entity->getForeignKey())));
+        } elseif ($form->isSubmitted()) {
+            // Form enviado pero rebotó por validación (típicamente
+            // Assert\File maxSize=6MB). Acumulamos los mensajes en
+            // una flash y redirigimos al _edition igual que en el
+            // caso de éxito, así el aside se reinjecta limpio con
+            // el callout de error en lugar de quedarse "comido" por
+            // el HTML del form re-renderizado.
+            $this->addFlash('error', $this->buildUploadError($form));
+        } else {
+            // post_max_size excedido u otra causa por la que PHP
+            // descarta el body antes de llegar al form.
+            $this->addFlash('error', 'No se recibió el archivo. Asegúrate de que no excede el tamaño máximo permitido.');
         }
 
-        return $this->render('Image/new.html.twig', array(
-            'entity' => $entity,
-            'form' => $form->createView(),
-            'foreign_key' => $foreign_key,
+        // El único caller de esta acción es el aside AJAX de Blog/edition.
+        // jquery.form usa iframe para uploads con archivo, así que la
+        // petición no lleva X-Requested-With y isXmlHttpRequest() es false;
+        // por eso redirigimos siempre al fragment _edition (no a _show),
+        // que es el que recompone el aside.
+        return $this->redirect($this->generateUrl($object_class . '_edition', array(
+            'id' => $foreign_key,
             'object_class' => $object_class,
-        ));
+        )));
+    }
+
+    /**
+     * Aplana los errores de validación del form en un único mensaje
+     * legible para mostrar como flash en el aside.
+     */
+    private function buildUploadError($form): string
+    {
+        $errors = [];
+        foreach ($form->getErrors(true) as $error) {
+            $errors[] = $error->getMessage();
+        }
+        return $errors
+            ? 'No se pudo subir el archivo: ' . implode(' ', $errors)
+            : 'No se pudo subir el archivo. Asegúrate de que no excede 6 MB.';
     }
 
     /**
