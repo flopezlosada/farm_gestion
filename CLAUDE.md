@@ -125,8 +125,6 @@ contra el snapshot.
 
 **Errores secundarios pendientes** identificados al navegar pero no
 arreglados (no son flujos críticos del día a día):
-- `add audio`, `add video`, `add documento` siguen rompiendo
-  aunque `add grouped images` funcione (residuo de a2lix Fase 4).
 - Plantilla pública `templates/base_front.html.twig:81` referencia
   ruta `booking_calendar` que no existe en routing (deuda preexistente,
   no regresión).

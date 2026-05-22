@@ -161,8 +161,8 @@ class PanelController extends AbstractController
         WeeklyBasketRepository $weeklyBasketRepository,
         PartnerBasketShareRepository $partnerBasketShareRepository,
         PartnerDeliveryShiftRepository $deliveryShiftRepository,
-        BasketRepository $basketRepository,
         DeliveryShiftValidator $validator,
+        \App\Service\Delivery\DeliveryShiftCandidates $shiftCandidatesService,
     ): Response {
         if (($redirect = $this->ensureReady()) !== null) {
             return $redirect;
@@ -195,7 +195,7 @@ class PanelController extends AbstractController
         $shiftCandidates = [];
         $shiftBlocked = false;
         if ($fromBasket !== null && $existingShift === null && $activeShare !== null) {
-            foreach ($this->shiftDestinationCandidates($activeShare, $fromBasket, $basketRepository) as $candidate) {
+            foreach ($shiftCandidatesService->findFor($activeShare, $fromBasket) as $candidate) {
                 $violations = array_filter(
                     $validator->validate($partner, $fromBasket, $candidate),
                     fn ($v) => $v->rule !== \App\Service\Delivery\Rule\DeadlineRule::ID,
@@ -221,34 +221,6 @@ class PanelController extends AbstractController
             'shift_candidates' => $shiftCandidates,
             'shift_blocked' => $shiftBlocked,
         ]);
-    }
-
-    /**
-     * Lista de Basket destino disponibles para que un socio pida cambio
-     * puntual de viernes desde su `from_basket`, según la modalidad de
-     * su PartnerBasketShare activo. Coincide con la regla Window del
-     * validator: quincenales solo el inmediato siguiente, mensuales
-     * cualquier viernes del mismo mes. Otras modalidades → lista vacía.
-     *
-     * @return Basket[]
-     */
-    private function shiftDestinationCandidates(
-        PartnerBasketShare $activeShare,
-        Basket $from,
-        BasketRepository $basketRepository,
-    ): array {
-        $shareTypeId = $activeShare->getBasketShare()?->getId();
-        // Ids del catálogo: 2 = quincenal, 3 = mensual. Otros tipos no
-        // aplican (semanales tienen "no recojo esta semana" y los demás
-        // se delegan a admin si surge necesidad).
-        if ($shareTypeId === 2) {
-            $next = $basketRepository->findNextAfter($from);
-            return $next !== null ? [$next] : [];
-        }
-        if ($shareTypeId === 3) {
-            return $basketRepository->findOtherBasketsInSameMonth($from);
-        }
-        return [];
     }
 
     /**

@@ -80,9 +80,13 @@ class BasketRepository extends ServiceEntityRepository
     }
 
     /**
-     * Todos los Basket del mismo mes/año que el dado, excluyendo él mismo.
-     * Útil para la regla Window de mensuales: el destino válido es
-     * cualquier viernes del mismo mes.
+     * Otros viernes del mismo mes/año que `$basket` cuyo destino aún tiene
+     * sentido: posteriores al `$basket` dado. No se devuelven viernes
+     * anteriores ni el propio `$basket`, porque cambiar la cesta a un
+     * viernes que ya pasó (físicamente recogido o no) no es operativo.
+     *
+     * Usado por la regla Window de mensuales: el destino válido es
+     * cualquier viernes del mismo mes posterior al `$basket`.
      *
      * @return \App\Entity\Basket[]
      */
@@ -91,10 +95,10 @@ class BasketRepository extends ServiceEntityRepository
         return $this->createQueryBuilder('b')
             ->where('YEAR(b.date) = :y')
             ->andWhere('MONTH(b.date) = :m')
-            ->andWhere('b.id <> :id')
+            ->andWhere('b.date > :from_date')
             ->setParameter('y', $basket->getDate()->format('Y'))
             ->setParameter('m', $basket->getDate()->format('m'))
-            ->setParameter('id', $basket->getId())
+            ->setParameter('from_date', $basket->getDate()->format('Y-m-d'))
             ->orderBy('b.date', 'ASC')
             ->getQuery()
             ->getResult();
