@@ -2,26 +2,12 @@
 
 namespace App\Controller;
 
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-
-
-use App\Entity\Basket;
 use App\Controller\AbstractAppController;
-use Symfony\Component\Routing\Annotation\Route;
-use Symfony\Component\HttpFoundation\RedirectResponse;
-use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\Validator\Constraints\DateTime;
+use Symfony\Component\Routing\Annotation\Route;
 
 class DefaultController extends AbstractAppController
 {
-
-
-    public function gestion()
-    {
-        return $this->redirect($this->generateUrl('dashboard'));
-    }
-
     #[Route("/calendar", name: "calendar")]
     public function calendar(): Response
     {
@@ -150,33 +136,6 @@ class DefaultController extends AbstractAppController
         return new Response($production);
     }
 
-    public function collectWeekUser($product_id)
-    {
-        $em = $this->getDoctrine()->getManager();
-        $product = $em->getRepository(\App\Entity\Product::class)->find($product_id);
-        $week_product = $em->getRepository(\App\Entity\Collect::class)->findByUserWeek($this->getUser(), $product, date('W'));
-
-        return new Response($week_product);
-    }
-
-    public function totalSalesAmount()
-    {
-        $em = $this->getDoctrine()->getManager();
-        $amount = $em->getRepository(\App\Entity\Sale::class)->findTotalSalesAmount();
-
-        return new Response($amount);
-    }
-
-    public function lastFeedPurchase()
-    {
-        $em = $this->getDoctrine()->getManager();
-        $product = $em->getRepository(\App\Entity\Product::class)->find(4); //pienso para gallinas
-        $date = $em->getRepository(\App\Entity\Purchase::class)->findLastFeedDate($product);
-
-        return new Response($date);
-    }
-
-
     public function warning()
     {
         $em = $this->getDoctrine()->getManager();
@@ -190,35 +149,4 @@ class DefaultController extends AbstractAppController
 
     }
 
-    public function averageCollectUser($product_id, $year)
-    {
-        $em = $this->getDoctrine()->getManager();
-        $product = $em->getRepository(\App\Entity\Product::class)->find($product_id);
-        $average = $em->getRepository(\App\Entity\Collect::class)->findByUserAverageCollect($this->getUser(), $product, $year);
-
-        return new Response($average);
-    }
-
-
-    #[Route("/user_collect/{product_id}/{year}", name: "user_collect", defaults: ["year" => null])]
-    public function userCollect($product_id, $year): Response
-    {
-        if (!$year) {
-            $year = date("Y");
-        }
-        $em = $this->getDoctrine()->getManager();
-        $product = $em->getRepository(\App\Entity\Product::class)->find($product_id);
-        $collects = $em->getRepository(\App\Entity\Collect::class)->findAllByUserProductYear($this->getUser(), $product, $year);
-
-        return $this->render('Default/userCollect.html.twig', [
-            'year' => $year,
-            'collects' => $collects,
-        ]);
-    }
-
-
-    public function landind_contact()
-    {
-        return $this->render('Default/landing_contact.html.twig', array());
-    }
 }

@@ -237,37 +237,4 @@ class CollectController extends AbstractAppController
             ->getForm();
     }
 
-    public function lucios(Request $request)
-    {
-        $em = $this->getDoctrine()->getManager();
-
-        if ($request->get('selected_dichotomous_key_id')) {
-            $id = $request->get('selected_dichotomous_key_id');
-
-            echo $id;
-            $dichotomous_keys = $em->getRepository(\App\Entity\Unity::class)->find($id);
-
-        } else {
-            echo "cawsdadva";
-            $dichotomous_keys = $em->getRepository(\App\Entity\Unity::class)->findAll();
-        }
-        echo count($dichotomous_keys);
-
-
-        $form = $this->createFormBuilder(null, array('attr' => array('id' => 'fish_species_identify_form')))
-            ->add('dichotomous_key', 'entity', array(
-                'choices' => $dichotomous_keys,
-                'class' => 'App\Entity\Unity',
-
-                'multiple' => false,
-                'expanded' => true))
-            ->add('submit', SubmitType::class, array('label' => 'Continuar'))
-            ->getForm();
-
-
-        return $this->render('Default/identify.html.twig', array(
-            'dichotomous_keys' => $dichotomous_keys,
-            'form' => $form->createView()
-        ));
-    }
 }
