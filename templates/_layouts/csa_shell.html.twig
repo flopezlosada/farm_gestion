@@ -40,6 +40,10 @@
                     // l = length, f = filter, r = processing, t = table, i = info, p = paginate
                     dom: '<"csa-dt-top"lf>rt<"csa-dt-bottom"ip>',
                     lengthMenu: [10, 25, 50, 100],
+                    // Sin orden inicial: respeta el orden que entrega el server
+                    // (cada controller decide su criterio). El usuario puede
+                    // ordenar clicando las cabeceras.
+                    order: [],
                     language: {
                         lengthMenu: 'Muestra _MENU_ por página',
                         search: 'Buscar:',
