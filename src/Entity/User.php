@@ -302,6 +302,12 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface, LegacyP
     {
         $roles = $this->roles;
         $roles[] = 'ROLE_USER';
+        // Un User vinculado a un Partner es, por definición, un socix.
+        // Derivamos ROLE_PARTNER de la relación para evitar que el rol
+        // tenga que duplicarse manualmente en la columna `roles`.
+        if ($this->partner !== null) {
+            $roles[] = 'ROLE_PARTNER';
+        }
         return array_unique($roles);
     }
 
