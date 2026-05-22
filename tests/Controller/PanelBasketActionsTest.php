@@ -81,7 +81,9 @@ class PanelBasketActionsTest extends AbstractPartnerAuthenticatedTest
         $this->assertSame(1, $wb->getWeeklyBasketStatus()->getId(), 'Estado inicial debe ser Recoge');
 
         $crawler = $client->request('GET', '/panel/cesta');
-        $token = (string) $crawler->filter('input[name="_csrf_token"]')->first()->attr('value');
+        // Extraer el token del form específico del skip (id="panel-skip-form")
+        // para evitar coger el token del form de cambio de viernes
+        $token = (string) $crawler->filter('#panel-skip-form input[name="_csrf_token"]')->first()->attr('value');
 
         $client->request('POST', '/panel/cesta/skip-toggle', ['_csrf_token' => $token]);
         $client->followRedirect();

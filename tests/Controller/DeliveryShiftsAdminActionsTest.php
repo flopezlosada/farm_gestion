@@ -34,10 +34,10 @@ class DeliveryShiftsAdminActionsTest extends AbstractAuthenticatedTest
         [$from, $to] = $this->resolveFromTo($em);
 
         $crawler = $client->request('GET', '/gestion/reparto/cambios-viernes');
-        $token = (string) $crawler->filter('form[action$="/cambios-viernes/aplicar"] input[name="_csrf_token"]')->first()->attr('value');
+        $csrfToken = (string) $crawler->filter('#csa-shift-root')->attr('data-csrf-shift');
 
         $client->request('POST', '/gestion/reparto/cambios-viernes/aplicar', [
-            '_csrf_token' => $token,
+            '_csrf_token' => $csrfToken,
             'partner_id' => $partner->getId(),
             'from_basket_id' => $from->getId(),
             'to_basket_id' => $to->getId(),
@@ -71,9 +71,9 @@ class DeliveryShiftsAdminActionsTest extends AbstractAuthenticatedTest
 
         // Aplicamos uno primero.
         $crawler = $client->request('GET', '/gestion/reparto/cambios-viernes');
-        $token = (string) $crawler->filter('form[action$="/cambios-viernes/aplicar"] input[name="_csrf_token"]')->first()->attr('value');
+        $csrfToken = (string) $crawler->filter('#csa-shift-root')->attr('data-csrf-shift');
         $client->request('POST', '/gestion/reparto/cambios-viernes/aplicar', [
-            '_csrf_token' => $token,
+            '_csrf_token' => $csrfToken,
             'partner_id' => $partner->getId(),
             'from_basket_id' => $from->getId(),
             'to_basket_id' => $to->getId(),
@@ -84,9 +84,11 @@ class DeliveryShiftsAdminActionsTest extends AbstractAuthenticatedTest
         $shift = $em->getRepository(PartnerDeliveryShift::class)->findOneBy(['partner' => $partner]);
         $this->assertNotNull($shift);
 
-        // Cancelamos.
+        // Cancelamos. El token se extrae del dialog en la tabla de cambios.
         $crawler = $client->request('GET', '/gestion/reparto/cambios-viernes');
-        $cancelToken = (string) $crawler->filter('form[action$="/cambios-viernes/' . $shift->getId() . '/cancelar"] input[name="_csrf_token"]')->first()->attr('value');
+        $dialogId = 'confirm-shift-cancel-' . $shift->getId();
+        $cancelToken = (string) $crawler->filter(sprintf('#%s input[name="_csrf_token"]', $dialogId))->first()->attr('value');
+
         $client->request('POST', '/gestion/reparto/cambios-viernes/' . $shift->getId() . '/cancelar', [
             '_csrf_token' => $cancelToken,
         ]);
