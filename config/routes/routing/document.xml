@@ -4,14 +4,6 @@
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:schemaLocation="http://symfony.com/schema/routing http://symfony.com/schema/routing/routing-1.0.xsd">
 
-    <route id="document" path="/">
-        <default key="_controller">App\Controller\DocumentController::index</default>
-    </route>
-
-    <route id="document_show" path="/{id}/show">
-        <default key="_controller">App\Controller\DocumentController::show</default>
-    </route>
-
     <route id="document_new" path="/new/{foreign_key}/{object_class}">
         <default key="_controller">App\Controller\DocumentController::new</default>
     </route>
@@ -20,17 +12,6 @@
         <default key="_controller">App\Controller\DocumentController::create</default>
     </route>
 
-    <route id="document_edit" path="/{id}/edit">
-        <default key="_controller">App\Controller\DocumentController::edit</default>
-    </route>
-
-    <route id="document_update" path="/{id}/update" methods="POST|PUT">
-        <default key="_controller">App\Controller\DocumentController::update</default>
-    </route>
-
-    <route id="document_delete" path="/{id}/delete" methods="POST|DELETE">
-        <default key="_controller">App\Controller\DocumentController::delete</default>
-    </route>
     <route id="document_fast_delete" path="/{id}/delete" methods="GET">
         <default key="_controller">App\Controller\DocumentController::fastDelete</default>
     </route>

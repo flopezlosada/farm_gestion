@@ -14,29 +14,20 @@ use App\Form\ImageType;
 /**
  * Image controller.
  *
+ * Sólo flujos vivos: subida desde el aside AJAX de Blog/edition
+ * (con `single` distinguiendo imagen suelta vs. dentro de galería),
+ * borrado rápido desde el mismo aside, y renderizado del snippet
+ * en el frontend público del blog. El CRUD standalone (index/show/
+ * edit/update/delete) y el flujo `image_in_gallery_*` se retiraron
+ * por código muerto.
  */
 #[IsGranted('ROLE_BLOG')]
 class ImageController extends AbstractAppController
 {
-
     /**
-     * Lists all Image entities.
-     *
-     */
-    public function index()
-    {
-        $em = $this->getDoctrine()->getManager();
-
-        $entities = $em->getRepository(\App\Entity\Image::class)->findAll();
-
-        return $this->render('Image/index.html.twig', array(
-            'entities' => $entities,
-        ));
-    }
-
-    /**
-     * Creates a new Image entity.
-     *
+     * Procesa el alta de una Image asociada a una entidad anfitriona
+     * (object_class + foreign_key + single). Disparado desde el modal
+     * AJAX del aside del editor de posts.
      */
     public function create(Request $request, $foreign_key, $object_class, $single)
     {
@@ -67,11 +58,7 @@ class ImageController extends AbstractAppController
     }
 
     /**
-     * Creates a form to create a Image entity.
-     *
-     * @param Image $entity The entity
-     *
-     * @return \Symfony\Component\Form\Form The form
+     * Construye el form de creación de la Image.
      */
     private function createCreateForm(Image $entity, $foreign_key, $object_class, $single)
     {
@@ -86,8 +73,8 @@ class ImageController extends AbstractAppController
     }
 
     /**
-     * Displays a form to create a new Image entity.
-     *
+     * Renderiza el form de alta de Image para el modal AJAX disparado
+     * desde el aside del editor de posts.
      */
     public function new($foreign_key, $object_class, $single)
     {
@@ -103,108 +90,9 @@ class ImageController extends AbstractAppController
         ));
     }
 
-
-    public function newInGallery($foreign_key, $object_class, $single, $gallery_id)
-    {
-        $entity = new Image();
-        $form = $this->createCreateInGalleryForm($entity, $foreign_key, $object_class, $single, $gallery_id);
-
-        return $this->render('Image/new_in_gallery.html.twig', array(
-            'entity' => $entity,
-            'foreign_key' => $foreign_key,
-            'single' => $single,
-            'gallery_id' => $gallery_id,
-            'object_class' => $object_class,
-            'form' => $form->createView(),
-        ));
-    }
-
-    private function createCreateInGalleryForm(Image $entity, $foreign_key, $object_class, $single, $gallery_id)
-    {
-        $form = $this->createForm(ImageType::class, $entity, array(
-            'action' => $this->generateUrl('image_in_gallery_create', array('foreign_key' => $foreign_key, 'object_class' => $object_class, 'single' => $single, 'gallery_id' => $gallery_id)),
-            'method' => 'POST',
-        ));
-
-        $form->add('submit', SubmitType::class, array('label' => 'Create'));
-
-        return $form;
-    }
-
-    public function createInGallery(Request $request, $foreign_key, $object_class, $single, $gallery_id)
-    {
-        $entity = new Image();
-        $form = $this->createCreateForm($entity, $foreign_key, $object_class, $single);
-        $form->handleRequest($request);
-
-        if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
-            $gallery = $em->getRepository(\App\Entity\Gallery::class)->find($gallery_id);
-            $entity->setForeignKey($foreign_key);
-            $entity->setObjectClass($object_class);
-            $entity->setGallery($gallery);
-            $entity->setSingle($single);
-            $em->persist($entity);
-            $em->flush();
-
-            if ($request->isXmlHttpRequest()) {
-                return $this->redirect($this->generateUrl("gallery_image_list", array('id' => $gallery_id)));
-            }
-
-        }
-
-        return $this->render('Image/new.html.twig', array(
-            'entity' => $entity,
-            'form' => $form->createView(),
-        ));
-    }
-
     /**
-     * Finds and displays a Image entity.
-     *
+     * Borrado directo de la Image desde el aside del editor de posts.
      */
-    public function show($id)
-    {
-        $em = $this->getDoctrine()->getManager();
-
-        $entity = $em->getRepository(\App\Entity\Image::class)->find($id);
-
-        if (!$entity) {
-            throw $this->createNotFoundException('Unable to find Image entity.');
-        }
-
-        $deleteForm = $this->createDeleteForm($id);
-
-        return $this->render('Image/show.html.twig', array(
-            'entity' => $entity,
-            'delete_form' => $deleteForm->createView(),
-        ));
-    }
-
-    /**
-     * Displays a form to edit an existing Image entity.
-     *
-     */
-    public function edit($id)
-    {
-        $em = $this->getDoctrine()->getManager();
-
-        $entity = $em->getRepository(\App\Entity\Image::class)->find($id);
-
-        if (!$entity) {
-            throw $this->createNotFoundException('Unable to find Image entity.');
-        }
-
-        $editForm = $this->createEditForm($entity);
-        $deleteForm = $this->createDeleteForm($id);
-
-        return $this->render('Image/edit.html.twig', array(
-            'entity' => $entity,
-            'edit_form' => $editForm->createView(),
-            'delete_form' => $deleteForm->createView(),
-        ));
-    }
-
     public function fastDelete($id)
     {
         $em = $this->getDoctrine()->getManager();
@@ -216,117 +104,20 @@ class ImageController extends AbstractAppController
 
         $url = $this->generateUrl($entity->getObjectClass() . "_edit", array('id' => $entity->getForeignKey()));
 
-
         $em->remove($entity);
-
         $em->flush();
 
         return $this->redirect($url);
     }
 
     /**
-     * Creates a form to edit a Image entity.
-     *
-     * @param Image $entity The entity
-     *
-     * @return \Symfony\Component\Form\Form The form
+     * Snippet inline para el frontend público del blog. Lo invoca
+     * AppExtension al expandir los shortcodes [[insert_media_image_<id>]]
+     * dentro del cuerpo de un post.
      */
-    private function createEditForm(Image $entity)
-    {
-        $form = $this->createForm(ImageType::class, $entity, array(
-            'action' => $this->generateUrl('image_update', array('id' => $entity->getId())),
-            'method' => 'PUT',
-        ));
-
-        $form->add('submit', SubmitType::class, array('label' => 'Update'));
-
-        return $form;
-    }
-
-    /**
-     * Edits an existing Image entity.
-     *
-     */
-    public function update(Request $request, $id)
-    {
-        $em = $this->getDoctrine()->getManager();
-
-        $entity = $em->getRepository(\App\Entity\Image::class)->find($id);
-
-        if (!$entity) {
-            throw $this->createNotFoundException('Unable to find Image entity.');
-        }
-
-        $deleteForm = $this->createDeleteForm($id);
-        $editForm = $this->createEditForm($entity);
-        $editForm->handleRequest($request);
-
-        if ($editForm->isSubmitted() && $editForm->isValid()) {
-            $entity->setModified(1);
-            $em->persist($entity);
-            $entity->setModified(0);
-            $em->flush();
-
-            return $this->redirect($this->generateUrl('gallery_show', array('id' => $entity->getGallery()->getId())));
-        }
-
-        return $this->render('Image/edit.html.twig', array(
-            'entity' => $entity,
-            'edit_form' => $editForm->createView(),
-            'delete_form' => $deleteForm->createView(),
-        ));
-    }
-
-    /**
-     * Deletes a Image entity.
-     *
-     */
-    public function delete(Request $request, $id)
-    {
-        $form = $this->createDeleteForm($id);
-        $form->handleRequest($request);
-
-        if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository(\App\Entity\Image::class)->find($id);
-
-            if (!$entity) {
-                throw $this->createNotFoundException('Unable to find Image entity.');
-            }
-
-            $em->remove($entity);
-            $em->flush();
-        }
-
-        return $this->redirect($this->generateUrl('image'));
-    }
-
-    /**
-     * Creates a form to delete a Image entity by id.
-     *
-     * @param mixed $id The entity id
-     *
-     * @return \Symfony\Component\Form\Form The form
-     */
-    private function createDeleteForm($id)
-    {
-        return $this->createFormBuilder()
-            ->setAction($this->generateUrl('image_delete', array('id' => $id)))
-            ->setMethod('DELETE')
-            ->add('submit', SubmitType::class, array('label' => 'Delete'))
-            ->getForm();
-    }
-
     public function show_snippet($id)
     {
         $em = $this->getDoctrine()->getManager();
-
-        /*
-         * en los testimonios no hay galerías, sino que las imágenes están relacionadas a la entidad testimonio (woman),
-         * o building o catchall.
-         * Entonces hay que coger las imágenes de la entidad (woman) que están agrupadas (single=0)
-         */
-
         $image = $em->getRepository(\App\Entity\Image::class)->find($id);
 
         return $this->render('Image/show_snippet.html.twig', array(

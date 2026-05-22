@@ -165,10 +165,6 @@ app_blog:
     resource: "routing/blog.xml"
     prefix:   /blog
 
-app_galery:
-    resource: "routing/gallery.xml"
-    prefix:   /gallery
-
 app_image:
     resource: "routing/image.xml"
     prefix:   /image

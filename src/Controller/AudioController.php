@@ -4,7 +4,6 @@ namespace App\Controller;
 
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 
-use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use App\Controller\AbstractAppController;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
@@ -15,29 +14,18 @@ use App\Form\AudioType;
 /**
  * Audio controller.
  *
+ * Sólo flujos vivos: subida desde el aside AJAX de Blog/edition,
+ * borrado rápido desde el mismo aside, y renderizado del snippet
+ * en el frontend público del blog. El CRUD standalone (index/show/
+ * edit/update/delete) se retiró por código muerto.
  */
 #[IsGranted('ROLE_BLOG')]
 class AudioController extends AbstractAppController
 {
-
     /**
-     * Lists all Audio entities.
-     *
-     */
-    public function index()
-    {
-        $em = $this->getDoctrine()->getManager();
-
-        $entities = $em->getRepository(\App\Entity\Audio::class)->findAll();
-
-        return $this->render('Audio/index.html.twig', array(
-            'entities' => $entities,
-        ));
-    }
-
-    /**
-     * Creates a new Audio entity.
-     *
+     * Procesa el alta de un Audio asociado a una entidad anfitriona
+     * (object_class + foreign_key). Disparado desde el modal AJAX
+     * del aside del editor de posts.
      */
     public function create(Request $request, $foreign_key, $object_class)
     {
@@ -56,7 +44,6 @@ class AudioController extends AbstractAppController
                 return $this->redirect($this->generateUrl($entity->getObjectClass() . "_edition", array('id' => $foreign_key, 'object_class' => $entity->getObjectClass())));
             }
             return $this->redirect($this->generateUrl($entity->getObjectClass() . '_show', array('id' => $entity->getForeignKey())));
-
         }
 
         return $this->render('Audio/new.html.twig', array(
@@ -66,11 +53,7 @@ class AudioController extends AbstractAppController
     }
 
     /**
-     * Creates a form to create a Audio entity.
-     *
-     * @param Audio $entity The entity
-     *
-     * @return \Symfony\Component\Form\Form The form
+     * Construye el form de creación del Audio.
      */
     private function createCreateForm(Audio $entity, $foreign_key, $object_class)
     {
@@ -85,13 +68,12 @@ class AudioController extends AbstractAppController
     }
 
     /**
-     * Displays a form to create a new Audio entity.
-     *
+     * Renderiza el form de alta de Audio para el modal AJAX disparado
+     * desde el aside del editor de posts.
      */
     public function new($foreign_key, $object_class)
     {
         $entity = new Audio();
-
         $form = $this->createCreateForm($entity, $foreign_key, $object_class);
 
         return $this->render('Audio/new.html.twig', array(
@@ -103,145 +85,13 @@ class AudioController extends AbstractAppController
     }
 
     /**
-     * Finds and displays a Audio entity.
-     *
+     * Snippet inline para el frontend público del blog. Lo invoca
+     * AppExtension al expandir los shortcodes [[insert_media_audio_<id>]]
+     * dentro del cuerpo de un post.
      */
-    public function show($id)
-    {
-        $em = $this->getDoctrine()->getManager();
-
-        $entity = $em->getRepository(\App\Entity\Audio::class)->find($id);
-
-        if (!$entity) {
-            throw $this->createNotFoundException('Unable to find Audio entity.');
-        }
-
-        $deleteForm = $this->createDeleteForm($id);
-
-        return $this->render('Audio/show.html.twig', array(
-            'entity' => $entity,
-            'delete_form' => $deleteForm->createView(),
-        ));
-    }
-
-    /**
-     * Displays a form to edit an existing Audio entity.
-     *
-     */
-    public function edit($id)
-    {
-        $em = $this->getDoctrine()->getManager();
-
-        $entity = $em->getRepository(\App\Entity\Audio::class)->find($id);
-
-        if (!$entity) {
-            throw $this->createNotFoundException('Unable to find Audio entity.');
-        }
-
-        $editForm = $this->createEditForm($entity);
-        $deleteForm = $this->createDeleteForm($id);
-
-        return $this->render('Audio/edit.html.twig', array(
-            'entity' => $entity,
-            'edit_form' => $editForm->createView(),
-            'delete_form' => $deleteForm->createView(),
-        ));
-    }
-
-    /**
-     * Creates a form to edit a Audio entity.
-     *
-     * @param Audio $entity The entity
-     *
-     * @return \Symfony\Component\Form\Form The form
-     */
-    private function createEditForm(Audio $entity)
-    {
-        $form = $this->createForm(AudioType::class, $entity, array(
-            'action' => $this->generateUrl('audio_update', array('id' => $entity->getId())),
-            'method' => 'PUT',
-        ));
-
-        $form->add('submit', SubmitType::class, array('label' => 'Update'));
-
-        return $form;
-    }
-
-    /**
-     * Edits an existing Audio entity.
-     *
-     */
-    public function update(Request $request, $id)
-    {
-        $em = $this->getDoctrine()->getManager();
-
-        $entity = $em->getRepository(\App\Entity\Audio::class)->find($id);
-
-        if (!$entity) {
-            throw $this->createNotFoundException('Unable to find Audio entity.');
-        }
-
-        $deleteForm = $this->createDeleteForm($id);
-        $editForm = $this->createEditForm($entity);
-        $editForm->handleRequest($request);
-
-        if ($editForm->isSubmitted() && $editForm->isValid()) {
-            $em->flush();
-
-            return $this->redirect($this->generateUrl('audio_show', array('id' => $id)));
-        }
-
-        return $this->render('Audio/edit.html.twig', array(
-            'entity' => $entity,
-            'edit_form' => $editForm->createView(),
-            'delete_form' => $deleteForm->createView(),
-        ));
-    }
-
-    /**
-     * Deletes a Audio entity.
-     *
-     */
-    public function delete(Request $request, $id)
-    {
-        $form = $this->createDeleteForm($id);
-        $form->handleRequest($request);
-
-        if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository(\App\Entity\Audio::class)->find($id);
-
-            if (!$entity) {
-                throw $this->createNotFoundException('Unable to find Audio entity.');
-            }
-
-            $em->remove($entity);
-            $em->flush();
-        }
-
-        return $this->redirect($this->generateUrl('audio'));
-    }
-
-    /**
-     * Creates a form to delete a Audio entity by id.
-     *
-     * @param mixed $id The entity id
-     *
-     * @return \Symfony\Component\Form\Form The form
-     */
-    private function createDeleteForm($id)
-    {
-        return $this->createFormBuilder()
-            ->setAction($this->generateUrl('audio_delete', array('id' => $id)))
-            ->setMethod('DELETE')
-            ->add('submit', SubmitType::class, array('label' => 'Delete'))
-            ->getForm();
-    }
-
     public function show_snippet($id)
     {
         $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Audio::class)->find($id);
 
         if (!$entity) {
@@ -250,10 +100,12 @@ class AudioController extends AbstractAppController
 
         return $this->render('Audio/show_snippet.html.twig', array(
             'entity' => $entity,
-
         ));
     }
 
+    /**
+     * Borrado directo del Audio desde el aside del editor de posts.
+     */
     public function fastDelete($id)
     {
         $em = $this->getDoctrine()->getManager();
@@ -265,12 +117,9 @@ class AudioController extends AbstractAppController
 
         $url = $this->generateUrl($entity->getObjectClass() . "_edit", array('id' => $entity->getForeignKey()));
 
-
         $em->remove($entity);
-
         $em->flush();
 
         return $this->redirect($url);
     }
-
 }

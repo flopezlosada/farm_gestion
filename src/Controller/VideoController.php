@@ -14,29 +14,18 @@ use App\Form\VideoType;
 /**
  * Video controller.
  *
+ * Sólo flujos vivos: subida desde el aside AJAX de Blog/edition,
+ * borrado rápido desde el mismo aside, y renderizado del snippet
+ * en el frontend público del blog. El CRUD standalone (index/show/
+ * edit/update/delete) se retiró por código muerto.
  */
 #[IsGranted('ROLE_BLOG')]
 class VideoController extends AbstractAppController
 {
-
     /**
-     * Lists all Video entities.
-     *
-     */
-    public function index()
-    {
-        $em = $this->getDoctrine()->getManager();
-
-        $entities = $em->getRepository(\App\Entity\Video::class)->findAll();
-
-        return $this->render('Video/index.html.twig', array(
-            'entities' => $entities,
-        ));
-    }
-
-    /**
-     * Creates a new Video entity.
-     *
+     * Procesa el alta de un Video asociado a una entidad anfitriona
+     * (object_class + foreign_key). Disparado desde el modal AJAX
+     * del aside del editor de posts.
      */
     public function create(Request $request, $foreign_key, $object_class)
     {
@@ -64,11 +53,7 @@ class VideoController extends AbstractAppController
     }
 
     /**
-     * Creates a form to create a Video entity.
-     *
-     * @param Video $entity The entity
-     *
-     * @return \Symfony\Component\Form\Form The form
+     * Construye el form de creación del Video.
      */
     private function createCreateForm(Video $entity, $foreign_key, $object_class)
     {
@@ -83,8 +68,8 @@ class VideoController extends AbstractAppController
     }
 
     /**
-     * Displays a form to create a new Video entity.
-     *
+     * Renderiza el form de alta de Video para el modal AJAX disparado
+     * desde el aside del editor de posts.
      */
     public function new($foreign_key, $object_class)
     {
@@ -100,146 +85,13 @@ class VideoController extends AbstractAppController
     }
 
     /**
-     * Finds and displays a Video entity.
-     *
+     * Snippet inline para el frontend público del blog. Lo invoca
+     * AppExtension al expandir los shortcodes [[insert_media_video_<id>]]
+     * dentro del cuerpo de un post.
      */
-    public function show($id)
-    {
-        $em = $this->getDoctrine()->getManager();
-
-        $entity = $em->getRepository(\App\Entity\Video::class)->find($id);
-
-        if (!$entity) {
-            throw $this->createNotFoundException('Unable to find Video entity.');
-        }
-
-        $deleteForm = $this->createDeleteForm($id);
-
-        return $this->render('Video/show.html.twig', array(
-            'entity' => $entity,
-            'delete_form' => $deleteForm->createView(),
-        ));
-    }
-
-    /**
-     * Displays a form to edit an existing Video entity.
-     *
-     */
-    public function edit($id)
-    {
-        $em = $this->getDoctrine()->getManager();
-
-        $entity = $em->getRepository(\App\Entity\Video::class)->find($id);
-
-        if (!$entity) {
-            throw $this->createNotFoundException('Unable to find Video entity.');
-        }
-
-        $editForm = $this->createEditForm($entity);
-        $deleteForm = $this->createDeleteForm($id);
-
-        return $this->render('Video/edit.html.twig', array(
-            'entity' => $entity,
-            'edit_form' => $editForm->createView(),
-            'delete_form' => $deleteForm->createView(),
-        ));
-    }
-
-    /**
-     * Creates a form to edit a Video entity.
-     *
-     * @param Video $entity The entity
-     *
-     * @return \Symfony\Component\Form\Form The form
-     */
-    private function createEditForm(Video $entity)
-    {
-        $form = $this->createForm(VideoType::class, $entity, array(
-            'action' => $this->generateUrl('video_update', array('id' => $entity->getId())),
-            'method' => 'PUT',
-        ));
-
-        $form->add('submit', SubmitType::class, array('label' => 'Update'));
-
-        return $form;
-    }
-
-    /**
-     * Edits an existing Video entity.
-     *
-     */
-    public function update(Request $request, $id)
-    {
-        $em = $this->getDoctrine()->getManager();
-
-        $entity = $em->getRepository(\App\Entity\Video::class)->find($id);
-
-        if (!$entity) {
-            throw $this->createNotFoundException('Unable to find Video entity.');
-        }
-
-        $deleteForm = $this->createDeleteForm($id);
-        $editForm = $this->createEditForm($entity);
-        $editForm->handleRequest($request);
-
-        if ($editForm->isSubmitted() && $editForm->isValid()) {
-            $em->flush();
-
-            return $this->redirect($this->generateUrl('video_show', array('id' => $id)));
-        }
-
-        return $this->render('Video/edit.html.twig', array(
-            'entity' => $entity,
-            'edit_form' => $editForm->createView(),
-            'delete_form' => $deleteForm->createView(),
-        ));
-    }
-
-    /**
-     * Deletes a Video entity.
-     *
-     */
-    public function delete(Request $request, $id)
-    {
-        $form = $this->createDeleteForm($id);
-        $form->handleRequest($request);
-
-        if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
-            $entity = $em->getRepository(\App\Entity\Video::class)->find($id);
-
-            if (!$entity) {
-                throw $this->createNotFoundException('Unable to find Video entity.');
-            }
-
-            $em->remove($entity);
-            $em->flush();
-        }
-
-        return $this->redirect($this->generateUrl('video'));
-    }
-
-    /**
-     * Creates a form to delete a Video entity by id.
-     *
-     * @param mixed $id The entity id
-     *
-     * @return \Symfony\Component\Form\Form The form
-     */
-    private function createDeleteForm($id)
-    {
-        return $this->createFormBuilder()
-            ->setAction($this->generateUrl('video_delete', array('id' => $id)))
-            ->setMethod('DELETE')
-            ->add('submit', SubmitType::class, array('label' => 'Delete'))
-            ->getForm();
-    }
-
-
     public function show_snippet($id)
     {
         $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Video::class)->find($id);
 
         if (!$entity) {
@@ -248,10 +100,12 @@ class VideoController extends AbstractAppController
 
         return $this->render('Video/show_snippet.html.twig', array(
             'entity' => $entity,
-
         ));
     }
 
+    /**
+     * Borrado directo del Video desde el aside del editor de posts.
+     */
     public function fastDelete($id)
     {
         $em = $this->getDoctrine()->getManager();
@@ -263,12 +117,9 @@ class VideoController extends AbstractAppController
 
         $url = $this->generateUrl($entity->getObjectClass() . "_edit", array('id' => $entity->getForeignKey()));
 
-
         $em->remove($entity);
-
         $em->flush();
 
         return $this->redirect($url);
     }
-
 }
