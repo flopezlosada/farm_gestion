@@ -106,8 +106,8 @@
                                 {% if basket_share_id == 2 %}
                                     {% if current and current.getWeeklyBasketStatus.id == 1 %}
                                         <br><button type="button"
-                                                onclick="document.getElementById('confirm--table-list-basket-1').showModal()">Cambiar a otra semana</button>
-{{ csa.confirm_dialog('confirm--table-list-basket-1', {
+                                                onclick="document.getElementById('confirm-table-list-basket-biweekly-{{ current.id }}').showModal()">Cambiar a otra semana</button>
+{{ csa.confirm_dialog('confirm-table-list-basket-biweekly-' ~ current.id, {
     variant: 'warning',
     eyebrow: 'Acción definitiva',
     title: 'Cambiar a otra semana',
@@ -119,8 +119,8 @@
                                 {% elseif basket_share_id == 3 %}
                                     {% if current and current.getWeeklyBasketStatus.id == 1 %}
                                         <br><button type="button"
-                                                onclick="document.getElementById('confirm--table-list-basket-2').showModal()">La recoge la semana siguiente</button>
-{{ csa.confirm_dialog('confirm--table-list-basket-2', {
+                                                onclick="document.getElementById('confirm-table-list-basket-monthly-{{ current.id }}').showModal()">La recoge la semana siguiente</button>
+{{ csa.confirm_dialog('confirm-table-list-basket-monthly-' ~ current.id, {
     variant: 'warning',
     eyebrow: 'Acción definitiva',
     title: 'Pasar a la semana siguiente',

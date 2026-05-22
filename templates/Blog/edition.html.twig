@@ -121,8 +121,8 @@
                         <button type="button"
                            class="csa-media-aside__remove"
                            
-                           title="Eliminar" onclick="document.getElementById('confirm-edition-1').showModal()"><i class="fa fa-times"></i></button>
-{{ csa.confirm_dialog('confirm-edition-1', {
+                           title="Eliminar" onclick="document.getElementById('confirm-edition-image-{{ image.id }}').showModal()"><i class="fa fa-times"></i></button>
+{{ csa.confirm_dialog('confirm-edition-image-' ~ image.id, {
     variant: 'danger',
     eyebrow: 'Acción permanente',
     title: 'Eliminar imagen',
@@ -160,8 +160,8 @@
                         <button type="button"
                            class="csa-media-aside__remove"
                            
-                           title="Eliminar" onclick="document.getElementById('confirm-edition-2').showModal()"><i class="fa fa-times"></i></button>
-{{ csa.confirm_dialog('confirm-edition-2', {
+                           title="Eliminar" onclick="document.getElementById('confirm-edition-gallery-{{ image.id }}').showModal()"><i class="fa fa-times"></i></button>
+{{ csa.confirm_dialog('confirm-edition-gallery-' ~ image.id, {
     variant: 'danger',
     eyebrow: 'Acción permanente',
     title: 'Eliminar imagen de la galería',
@@ -198,8 +198,8 @@
                         <button type="button"
                            class="csa-media-aside__remove"
                            
-                           title="Eliminar" onclick="document.getElementById('confirm-edition-3').showModal()"><i class="fa fa-times"></i></button>
-{{ csa.confirm_dialog('confirm-edition-3', {
+                           title="Eliminar" onclick="document.getElementById('confirm-edition-audio-{{ audio.id }}').showModal()"><i class="fa fa-times"></i></button>
+{{ csa.confirm_dialog('confirm-edition-audio-' ~ audio.id, {
     variant: 'danger',
     eyebrow: 'Acción permanente',
     title: 'Eliminar audio',
@@ -236,8 +236,8 @@
                         <button type="button"
                            class="csa-media-aside__remove"
                            
-                           title="Eliminar" onclick="document.getElementById('confirm-edition-4').showModal()"><i class="fa fa-times"></i></button>
-{{ csa.confirm_dialog('confirm-edition-4', {
+                           title="Eliminar" onclick="document.getElementById('confirm-edition-video-{{ video.id }}').showModal()"><i class="fa fa-times"></i></button>
+{{ csa.confirm_dialog('confirm-edition-video-' ~ video.id, {
     variant: 'danger',
     eyebrow: 'Acción permanente',
     title: 'Eliminar vídeo',
@@ -274,8 +274,8 @@
                         <button type="button"
                            class="csa-media-aside__remove"
                            
-                           title="Eliminar" onclick="document.getElementById('confirm-edition-5').showModal()"><i class="fa fa-times"></i></button>
-{{ csa.confirm_dialog('confirm-edition-5', {
+                           title="Eliminar" onclick="document.getElementById('confirm-edition-document-{{ document.id }}').showModal()"><i class="fa fa-times"></i></button>
+{{ csa.confirm_dialog('confirm-edition-document-' ~ document.id, {
     variant: 'danger',
     eyebrow: 'Acción permanente',
     title: 'Eliminar documento',

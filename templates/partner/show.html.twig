@@ -242,8 +242,8 @@
                                         </span>
                                         <button type="button"
                                            class="csa-btn csa-btn--ghost csa-btn--sm"
-                                            onclick="document.getElementById('confirm-partner-show-3').showModal()">Quitar</button>
-{{ csa.confirm_dialog('confirm-partner-show-3', {
+                                            onclick="document.getElementById('confirm-partner-show-relative-{{ relative.id }}').showModal()">Quitar</button>
+{{ csa.confirm_dialog('confirm-partner-show-relative-' ~ relative.id, {
     variant: 'danger',
     eyebrow: 'Acción permanente',
     title: 'Quitar la relación familiar',

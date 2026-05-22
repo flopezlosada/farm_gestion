@@ -59,8 +59,8 @@
                         <td class="csa-table__actions">
                             <a href="{{ path('partner_basket_share_edit', { id: basket.id }) }}" title="Cambiar tipo" aria-label="Cambiar tipo"><i class="fa fa-pencil"></i></a>
                             <button type="button" title="Finalizar" aria-label="Finalizar"
-                                onclick="document.getElementById('confirm-basket-1').showModal()"><i class="fa fa-times"></i></button>
-{{ csa.confirm_dialog('confirm-basket-1', {
+                                onclick="document.getElementById('confirm-basket-{{ basket.id }}').showModal()"><i class="fa fa-times"></i></button>
+{{ csa.confirm_dialog('confirm-basket-' ~ basket.id, {
     variant: 'danger',
     eyebrow: 'Acción permanente',
     title: 'Dar de baja esta cesta',
