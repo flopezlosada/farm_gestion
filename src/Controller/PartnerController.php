@@ -153,9 +153,36 @@ class PartnerController extends AbstractAppController
         Partner $partner,
         \App\Repository\PartnerEventRepository $partnerEventRepository,
     ): Response {
+        $events = $partnerEventRepository->findForPartner($partner);
+
+        // Resuelve los actores "gestor:<id>" a nombres legibles para el histórico.
+        // El campo event.actor es un string crudo (p.ej. "gestor:1", "partner:42",
+        // "sistema") guardado al emitir el evento. Aquí buscamos los users de los
+        // gestores en una sola query y construimos un mapa id -> identifier.
+        $gestorIds = [];
+        foreach ($events as $event) {
+            $actor = method_exists($event, 'getActor') ? $event->getActor() : null;
+            if (is_string($actor) && str_starts_with($actor, 'gestor:')) {
+                $id = (int) substr($actor, strlen('gestor:'));
+                if ($id > 0) {
+                    $gestorIds[$id] = true;
+                }
+            }
+        }
+        $gestorNames = [];
+        if ($gestorIds) {
+            $em = $this->getDoctrine()->getManager();
+            $users = $em->getRepository(\App\Entity\User::class)
+                ->findBy(['id' => array_keys($gestorIds)]);
+            foreach ($users as $user) {
+                $gestorNames[$user->getId()] = $user->getUserIdentifier();
+            }
+        }
+
         return $this->render('partner/show.html.twig', [
             'partner' => $partner,
-            'events' => $partnerEventRepository->findForPartner($partner),
+            'events' => $events,
+            'gestor_names' => $gestorNames,
         ]);
     }
 

@@ -68,6 +68,96 @@
 
     <div class="csa-stack-lg">
 
+        {# Acciones administrativas — arriba para que estén visibles sin
+         # tener que scrollear hasta el fondo de la ficha. #}
+        {% if app.user %}
+            {% embed '_components/csa_card.html.twig' with { title: 'Acciones', accent: 'ochre' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-row" style="flex-wrap: wrap; gap: var(--csa-sp-3);">
+                        <a href="{{ path('partner_edit', { id: partner.id }) }}" class="csa-btn csa-btn--primary csa-btn--sm">
+                            <i class="fa fa-pencil"></i> Editar ficha
+                        </a>
+                        {# Acciones disponibles dependen del status del partner:
+                         #   ACTIVO  → familia, cesta, Pausar, Dar de baja
+                         #   PAUSADO → Reactivar, Dar de baja
+                         #   BAJA    → Reactivar
+                         # Usamos partner.status (string, fuente del Workflow) y NO
+                         # partner.isActive (boolean que en el dump de prod puede estar
+                         # desincronizado para socios antiguos). #}
+                        {% if partner.status == 'ACTIVO' %}
+                            {% if partner.getActiveBasket and partner.getActiveBasket.basketShare.id == 4 and partner.sharePartner is null %}
+                                <a href="{{ path('family', { id: partner.id, type: 'add_share_partner' }) }}" class="csa-btn csa-btn--info-soft csa-btn--sm">
+                                    <i class="fa fa-handshake-o"></i> ¿Comparte con?
+                                </a>
+                            {% endif %}
+                            <a href="{{ path('family', { id: partner.id, type: 'add_family' }) }}" class="csa-btn csa-btn--ghost csa-btn--sm">
+                                <i class="fa fa-users"></i> Añadir familiar
+                            </a>
+                            {% if not partner.hasActiveBasket %}
+                                <a href="{{ path('partner_add_basket', { id: partner.id }) }}" class="csa-btn csa-btn--ghost csa-btn--sm">
+                                    <i class="fa fa-shopping-basket"></i> Añadir cesta
+                                </a>
+                            {% endif %}
+                            <button type="button"
+                                    class="csa-btn csa-btn--ghost csa-btn--sm"
+                                    onclick="document.getElementById('confirm-partner-show-1').showModal()"><i class="fa fa-pause"></i> Pausar</button>
+                            {{ csa.confirm_dialog('confirm-partner-show-1', {
+                                variant: 'warning',
+                                eyebrow: 'Cambio reversible',
+                                title: 'Pausar a este socix',
+                                body: 'Dejará de recibir cesta pero seguirá siendo socix; podrás reactivarle más adelante.',
+                                confirm_label: 'Pausar',
+                                confirm_href: path('partner_pause', { id: partner.id }),
+                            }) }}
+                            <button type="button"
+                                    class="csa-btn csa-btn--ghost csa-btn--sm"
+                                    onclick="document.getElementById('confirm-partner-show-2').showModal()"><i class="fa fa-times"></i> Dar de baja</button>
+                            {{ csa.confirm_dialog('confirm-partner-show-2', {
+                                variant: 'danger',
+                                eyebrow: 'Acción permanente',
+                                title: 'Dar de baja a este socix',
+                                body: 'Dejará de recibir cesta y se conservará el histórico.',
+                                confirm_label: 'Dar de baja',
+                                confirm_href: path('partner_demote', { id: partner.id }),
+                            }) }}
+                        {% elseif partner.status == 'PAUSADO' %}
+                            <a href="{{ path('partner_promote', { id: partner.id }) }}"
+                               class="csa-btn csa-btn--info-soft csa-btn--sm"
+                               title="Salir de la pausa y volver a recibir cesta">
+                                <i class="fa fa-play"></i> Reanudar
+                            </a>
+                            <button type="button"
+                                    class="csa-btn csa-btn--ghost csa-btn--sm"
+                                    onclick="document.getElementById('confirm-partner-show-2').showModal()"><i class="fa fa-times"></i> Dar de baja</button>
+                            {{ csa.confirm_dialog('confirm-partner-show-2', {
+                                variant: 'danger',
+                                eyebrow: 'Acción permanente',
+                                title: 'Dar de baja a este socix',
+                                body: 'Dejará de recibir cesta y se conservará el histórico.',
+                                confirm_label: 'Dar de baja',
+                                confirm_href: path('partner_demote', { id: partner.id }),
+                            }) }}
+                        {% else %}
+                            {# status == 'BAJA' — el socix se reincorpora después de una baja. #}
+                            <a href="{{ path('partner_promote', { id: partner.id }) }}"
+                               class="csa-btn csa-btn--info-soft csa-btn--sm"
+                               title="Volver al alta tras una baja">
+                                <i class="fa fa-undo"></i> Volver al alta
+                            </a>
+                        {% endif %}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+        {% endif %}
+
+        {# Cuerpo en dos columnas: a la izquierda quién es la persona
+         # (datos + familia), a la derecha qué cesta tiene. En móvil
+         # las columnas se apilan automáticamente. #}
+        <div class="csa-dashboard-pair" style="align-items: flex-start;">
+
+            <div class="csa-stack-lg">
+
         {# Datos personales #}
         {% embed '_components/csa_card.html.twig' with { title: 'Datos personales', accent: 'sky' } %}
             {% block body %}
@@ -139,6 +229,7 @@
         {# Familia #}
         {% embed '_components/csa_card.html.twig' with { title: 'Familiares', accent: 'plum' } %}
             {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
                 {% if partner.parent is null %}
                     <p>Es familiar principal{% if partner.relatives|length == 0 %}, sin familiares definidos.{% endif %}</p>
                     {% if partner.relatives|length > 0 %}
@@ -149,11 +240,17 @@
                                         <span class="csa-list__body">
                                             <a class="csa-list__primary" href="{{ path('partner_show', { id: relative.id }) }}">{{ relative.name }} {{ relative.surname }}</a>
                                         </span>
-                                        <a href="{{ path('remove_family', { partner1_id: partner.id, partner2_id: relative.id }) }}"
+                                        <button type="button"
                                            class="csa-btn csa-btn--ghost csa-btn--sm"
-                                           onclick="return confirm('¿Quitar la relación familiar?');">
-                                            Quitar
-                                        </a>
+                                            onclick="document.getElementById('confirm-partner-show-3').showModal()">Quitar</button>
+{{ csa.confirm_dialog('confirm-partner-show-3', {
+    variant: 'danger',
+    eyebrow: 'Acción permanente',
+    title: 'Quitar la relación familiar',
+    body: 'La persona se desvinculará del socix. Podrás volver a añadirla.',
+    confirm_label: 'Quitar',
+    confirm_href: path('remove_family', { partner1_id: partner.id, partner2_id: relative.id }),
+}) }}
                                     </div>
                                 </li>
                             {% endfor %}
@@ -171,10 +268,16 @@
                             <strong>Comparte cesta con:</strong>
                             <a href="{{ path('partner_show', { id: partner.sharePartner.id }) }}">{{ partner.sharePartner }}</a>
                             ·
-                            <a href="{{ path('remove_share_partner', { partner1_id: partner.id, partner2_id: partner.sharePartner.id }) }}"
-                               onclick="return confirm('¿Quitar la relación?');">
-                                quitar
-                            </a>
+                            <button type="button"
+                                onclick="document.getElementById('confirm-partner-show-4').showModal()">quitar</button>
+{{ csa.confirm_dialog('confirm-partner-show-4', {
+    variant: 'danger',
+    eyebrow: 'Acción permanente',
+    title: 'Quitar la relación de cesta compartida',
+    body: 'Ambos socixs dejarán de compartir la cesta. La cesta se mantiene.',
+    confirm_label: 'Quitar',
+    confirm_href: path('remove_share_partner', { partner1_id: partner.id, partner2_id: partner.sharePartner.id }),
+}) }}
                         </p>
                     {% else %}
                         <p class="csa-callout csa-callout--warning" style="margin-top: var(--csa-sp-4);">
@@ -186,10 +289,15 @@
             {% endblock %}
         {% endembed %}
 
+            </div>{# /col izquierda — Datos personales + Familiares #}
+
+            <div class="csa-stack-lg">
+
         {# Cesta activa #}
         {% if partner.hasActiveBasket %}
             {% embed '_components/csa_card.html.twig' with { title: 'Cesta actual', accent: 'green' } %}
                 {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
                     <dl class="csa-defs">
                         <div class="csa-defs__row">
                             <dt class="csa-defs__label">Tipo de cesta</dt>
@@ -253,64 +361,26 @@
                                class="csa-btn csa-btn--secondary csa-btn--sm">
                                 <i class="fa fa-pencil"></i> Cambiar tipo de cesta
                             </a>
-                            <a href="{{ path('partner_basket_share_finalize', { id: partner.getActiveBasket.id }) }}"
+                            <button type="button"
                                class="csa-btn csa-btn--ghost csa-btn--sm"
-                               onclick="return confirm('¿Dar de baja esta cesta?');">
-                                <i class="fa fa-times"></i> Dar de baja la cesta
-                            </a>
+                                onclick="document.getElementById('confirm-partner-show-5').showModal()"><i class="fa fa-times"></i> Dar de baja la cesta</button>
+{{ csa.confirm_dialog('confirm-partner-show-5', {
+    variant: 'danger',
+    eyebrow: 'Acción permanente',
+    title: 'Dar de baja la cesta',
+    body: 'El socix dejará de recibir cesta y se conservará el histórico.',
+    confirm_label: 'Dar de baja la cesta',
+    confirm_href: path('partner_basket_share_finalize', { id: partner.getActiveBasket.id }),
+}) }}
                         </div>
                     {% endif %}
                 {% endblock %}
             {% endembed %}
         {% endif %}
 
-        {# Acciones administrativas #}
-        {% if app.user %}
-            {% embed '_components/csa_card.html.twig' with { title: 'Acciones', accent: 'ochre' } %}
-                {% block body %}
-                    <div class="csa-row" style="flex-wrap: wrap; gap: var(--csa-sp-3);">
-                        <a href="{{ path('partner_edit', { id: partner.id }) }}" class="csa-btn csa-btn--primary csa-btn--sm">
-                            <i class="fa fa-pencil"></i> Editar ficha
-                        </a>
-                        {% if partner.isActive == 1 %}
-                            {% if partner.getActiveBasket and partner.getActiveBasket.basketShare.id == 4 and partner.sharePartner is null %}
-                                <a href="{{ path('family', { id: partner.id, type: 'add_share_partner' }) }}" class="csa-btn csa-btn--secondary csa-btn--sm">
-                                    <i class="fa fa-handshake-o"></i> ¿Comparte con?
-                                </a>
-                            {% endif %}
-                            <a href="{{ path('family', { id: partner.id, type: 'add_family' }) }}" class="csa-btn csa-btn--ghost csa-btn--sm">
-                                <i class="fa fa-users"></i> Añadir familiar
-                            </a>
-                            {% if not partner.hasActiveBasket %}
-                                <a href="{{ path('partner_add_basket', { id: partner.id }) }}" class="csa-btn csa-btn--ghost csa-btn--sm">
-                                    <i class="fa fa-shopping-basket"></i> Añadir cesta
-                                </a>
-                            {% endif %}
-                            {% if partner.status == 'ACTIVO' %}
-                                <a href="{{ path('partner_pause', { id: partner.id }) }}"
-                                   class="csa-btn csa-btn--ghost csa-btn--sm"
-                                   onclick="return confirm('¿Pausar a estx socix? Dejará de recibir cesta pero seguirá siendo socix.');">
-                                    <i class="fa fa-pause"></i> Pausar
-                                </a>
-                            {% endif %}
-                            <a href="{{ path('partner_demote', { id: partner.id }) }}"
-                               class="csa-btn csa-btn--ghost csa-btn--sm"
-                               onclick="return confirm('¿Dar de baja a estx socix?');">
-                                <i class="fa fa-times"></i> Dar de baja
-                            </a>
-                        {% else %}
-                            <a href="{{ path('partner_promote', { id: partner.id }) }}"
-                               class="csa-btn csa-btn--secondary csa-btn--sm">
-                                <i class="fa fa-check"></i> Reactivar
-                            </a>
-                        {% endif %}
-                    </div>
-                {% endblock %}
-            {% endembed %}
-        {% endif %}
-
         {# Histórico de eventos de pertenencia. Siempre visible, aunque esté
-         # vacío, para que se sepa que la sección existe. #}
+         # vacío, para que se sepa que la sección existe. Vive dentro de la
+         # col derecha junto a la cesta — su altura crece con los eventos. #}
         {% set event_labels = {
             'JOIN':                   { label: 'Alta',                      icon: 'fa-user-plus' },
             'LEAVE':                  { label: 'Baja',                      icon: 'fa-user-times' },
@@ -346,13 +416,24 @@
                                 {% set label = 'Cambio puntual cancelado' %}
                             {% endif %}
 
-                            {# Actor legible. `partner:<id>` con id == partner actual
-                             # es redundante (estamos en su ficha): lo traducimos a
-                             # "autoservicio". Para admin u otros, mostramos crudo. #}
+                            {# Actor legible:
+                             #   partner:<id>  con id == partner actual → "autoservicio"
+                             #   partner:<id>  con otro id              → "otro socix" (familiar, etc)
+                             #   gestor:<id>                            → nombre del admin (resuelto en controller)
+                             #   sistema / vacío                        → "sistema"
+                             # Evitamos exponer ids crudos en la UI; identifican poco. #}
                             {% set actor_label = null %}
                             {% if event.actor %}
                                 {% if event.actor == 'partner:' ~ partner.id %}
                                     {% set actor_label = 'autoservicio' %}
+                                {% elseif event.actor starts with 'partner:' %}
+                                    {% set actor_label = 'otro socix' %}
+                                {% elseif event.actor starts with 'gestor:' %}
+                                    {% set gestor_id = event.actor|slice(7) %}
+                                    {% set gestor_name = gestor_names[gestor_id]|default(gestor_names[gestor_id|number_format(0,'','')]|default(null)) %}
+                                    {% set actor_label = gestor_name ? 'responsable: ' ~ gestor_name : 'responsable: gestión' %}
+                                {% elseif event.actor == 'system' or event.actor == 'sistema' %}
+                                    {% set actor_label = 'sistema' %}
                                 {% else %}
                                     {% set actor_label = event.actor %}
                                 {% endif %}
@@ -392,6 +473,10 @@
                 {% endif %}
             {% endblock %}
         {% endembed %}
+
+            </div>{# /col derecha — Cesta actual + Histórico #}
+
+        </div>{# /csa-dashboard-pair #}
 
     </div>
 
