@@ -59,6 +59,7 @@ jobs:
 
       - name: Copiar assets legacy (FTP no transmite symlinks)
         run: |
+          mkdir -p public/bundles
           rm -rf public/bundles/app
           cp -R src/Resources/public public/bundles/app
           # El repo tiene src/Resources/public/ en 0700 y cp -R lo preserva.
