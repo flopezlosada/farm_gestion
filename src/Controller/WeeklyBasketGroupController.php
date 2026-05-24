@@ -5,15 +5,16 @@ namespace App\Controller;
 use App\Entity\WeeklyBasketGroup;
 use App\Form\WeeklyBasketGroupType;
 use App\Repository\WeeklyBasketGroupRepository;
-use App\Controller\AbstractAppController;
-use Symfony\Component\Security\Http\Attribute\IsGranted;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 #[Route("/gestion/weekly/basket/group")]
 #[IsGranted('ROLE_GESTION_SOCIXS')]
-class WeeklyBasketGroupController extends AbstractAppController
+class WeeklyBasketGroupController extends AbstractController
 {
     #[Route("/", name: "weekly_basket_group_index", methods: ["GET"])]
     public function index(WeeklyBasketGroupRepository $weeklyBasketGroupRepository): Response
@@ -24,14 +25,13 @@ class WeeklyBasketGroupController extends AbstractAppController
     }
 
     #[Route("/new", name: "weekly_basket_group_new", methods: ["GET","POST"])]
-    public function new(Request $request): Response
+    public function new(Request $request, EntityManagerInterface $entityManager): Response
     {
         $weeklyBasketGroup = new WeeklyBasketGroup();
         $form = $this->createForm(WeeklyBasketGroupType::class, $weeklyBasketGroup);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $entityManager = $this->getDoctrine()->getManager();
             $entityManager->persist($weeklyBasketGroup);
             $entityManager->flush();
 
@@ -53,13 +53,13 @@ class WeeklyBasketGroupController extends AbstractAppController
     }
 
     #[Route("/{id}/edit", name: "weekly_basket_group_edit", methods: ["GET","POST"])]
-    public function edit(Request $request, WeeklyBasketGroup $weeklyBasketGroup): Response
+    public function edit(Request $request, WeeklyBasketGroup $weeklyBasketGroup, EntityManagerInterface $entityManager): Response
     {
         $form = $this->createForm(WeeklyBasketGroupType::class, $weeklyBasketGroup);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $this->getDoctrine()->getManager()->flush();
+            $entityManager->flush();
 
             return $this->redirectToRoute('weekly_basket_group_index');
         }
@@ -71,10 +71,9 @@ class WeeklyBasketGroupController extends AbstractAppController
     }
 
     #[Route("/{id}", name: "weekly_basket_group_delete", methods: ["DELETE"])]
-    public function delete(Request $request, WeeklyBasketGroup $weeklyBasketGroup): Response
+    public function delete(Request $request, WeeklyBasketGroup $weeklyBasketGroup, EntityManagerInterface $entityManager): Response
     {
         if ($this->isCsrfTokenValid('delete'.$weeklyBasketGroup->getId(), $request->request->get('_token'))) {
-            $entityManager = $this->getDoctrine()->getManager();
             $entityManager->remove($weeklyBasketGroup);
             $entityManager->flush();
         }

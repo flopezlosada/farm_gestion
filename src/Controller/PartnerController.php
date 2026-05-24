@@ -9,18 +9,19 @@ use App\Entity\WeeklyBasket;
 use App\Form\PartnerBasketShareType;
 use App\Form\PartnerType;
 use App\Repository\PartnerRepository;
-use App\Controller\AbstractAppController;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\DependencyInjection\Attribute\Target;
-use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\Session\Session;
 use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\Workflow\WorkflowInterface;
 
 #[Route("/gestion/partner")]
 #[IsGranted('ROLE_GESTION_SOCIXS')]
-class PartnerController extends AbstractAppController
+class PartnerController extends AbstractController
 {
     #[Route("/", name: "partner_index", methods: ["GET"])]
     public function index(Request $request, PartnerRepository $partnerRepository): Response
@@ -65,10 +66,8 @@ class PartnerController extends AbstractAppController
     }
 
     #[Route("/{type}/list/", name: "partner_list", methods: ["GET"])]
-    public function list($type)
+    public function list($type, EntityManagerInterface $entityManager)
     {
-        $entityManager = $this->getDoctrine()->getManager();
-
         if ($type == 1) {
             $partners = $entityManager->getRepository(\App\Entity\Partner::class)->findActiveHasNoBasket();
             $title = 'Listado de socias activas sin cesta';
@@ -121,14 +120,13 @@ class PartnerController extends AbstractAppController
 
 
     #[Route("/new", name: "partner_new", methods: ["GET","POST"])]
-    public function new(Request $request): Response
+    public function new(Request $request, EntityManagerInterface $entityManager): Response
     {
         $partner = new Partner();
         $form = $this->createForm(PartnerType::class, $partner);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $entityManager = $this->getDoctrine()->getManager();
             $partner->setInscriptionDate(new \DateTime($partner->getInscriptionDate()->format('Y-m-d')));
             $partner->setIsActive(1);
 
@@ -152,6 +150,7 @@ class PartnerController extends AbstractAppController
     public function show(
         Partner $partner,
         \App\Repository\PartnerEventRepository $partnerEventRepository,
+        EntityManagerInterface $em,
     ): Response {
         $events = $partnerEventRepository->findForPartner($partner);
 
@@ -171,7 +170,6 @@ class PartnerController extends AbstractAppController
         }
         $gestorNames = [];
         if ($gestorIds) {
-            $em = $this->getDoctrine()->getManager();
             $users = $em->getRepository(\App\Entity\User::class)
                 ->findBy(['id' => array_keys($gestorIds)]);
             foreach ($users as $user) {
@@ -187,7 +185,7 @@ class PartnerController extends AbstractAppController
     }
 
     #[Route("/{id}/edit", name: "partner_edit", methods: ["GET","POST"])]
-    public function edit(Request $request, Partner $partner): Response
+    public function edit(Request $request, Partner $partner, EntityManagerInterface $entityManager): Response
     {
         $form = $this->createForm(PartnerType::class, $partner);
         $partner->setInscriptionDate($partner->getInscriptionDate()->format('Y-m-d'));
@@ -196,8 +194,6 @@ class PartnerController extends AbstractAppController
 
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $entityManager = $this->getDoctrine()->getManager();
-
             /*
              * aquí actualizo el grupo del socio para la última cesta si es que ya ha sido creada
              */
@@ -222,10 +218,9 @@ class PartnerController extends AbstractAppController
     }
 
     #[Route("/{id}", name: "partner_delete", methods: ["DELETE"])]
-    public function delete(Request $request, Partner $partner): Response
+    public function delete(Request $request, Partner $partner, EntityManagerInterface $entityManager): Response
     {
         if ($this->isCsrfTokenValid('delete' . $partner->getId(), $request->request->get('_token'))) {
-            $entityManager = $this->getDoctrine()->getManager();
             $entityManager->remove($partner);
             $entityManager->flush();
         }
@@ -235,9 +230,8 @@ class PartnerController extends AbstractAppController
     }
 
     #[Route("/{id}/{type}/family", name: "family", methods: ["GET"])]
-    public function family(Request $request, Partner $partner, $type): Response
+    public function family(Request $request, Partner $partner, $type, EntityManagerInterface $entityManager): Response
     {
-        $entityManager = $this->getDoctrine()->getManager();
         if ($type == 'add_family') {
             $partners = $entityManager->getRepository(\App\Entity\Partner::class)->findFamiliar($partner);
         } else {
@@ -260,7 +254,7 @@ class PartnerController extends AbstractAppController
     }
 
     #[Route("/{partner1_id}/{partner2_id}/add_family", name: "add_family", methods: ["GET"])]
-    public function addFamily(Request $request, $partner1_id, $partner2_id): Response
+    public function addFamily(Request $request, $partner1_id, $partner2_id, EntityManagerInterface $entityManager): Response
     {
         $session = new Session();
 
@@ -272,7 +266,6 @@ class PartnerController extends AbstractAppController
             );
             return $this->redirectToRoute('partner_show', array('id' => $partner1_id));
         }
-        $entityManager = $this->getDoctrine()->getManager();
         $partner1 = $entityManager->getRepository(\App\Entity\Partner::class)->find($partner1_id);
         $partner2 = $entityManager->getRepository(\App\Entity\Partner::class)->find($partner2_id);
         $partner1->addRelative($partner2);
@@ -295,10 +288,9 @@ class PartnerController extends AbstractAppController
     }
 
     #[Route("/{partner1_id}/{partner2_id}/remove_family", name: "remove_family", methods: ["GET"])]
-    public function removeFamily(Request $request, $partner1_id, $partner2_id): Response
+    public function removeFamily(Request $request, $partner1_id, $partner2_id, EntityManagerInterface $entityManager): Response
     {
         $session = new Session();
-        $entityManager = $this->getDoctrine()->getManager();
         $partner1 = $entityManager->getRepository(\App\Entity\Partner::class)->find($partner1_id);
         $partner2 = $entityManager->getRepository(\App\Entity\Partner::class)->find($partner2_id);
         $partner1->removeRelative($partner2);
@@ -318,9 +310,8 @@ class PartnerController extends AbstractAppController
 
 
     #[Route("/cities", name: "select_city")]
-    public function cities(Request $request): Response
+    public function cities(Request $request, EntityManagerInterface $em): Response
     {
-        $em = $this->getDoctrine()->getManager();
         $state = $em->getRepository(\App\Entity\State::class)->findById($request->get('state_id'));
         $cities = $em->getRepository(\App\Entity\City::class)->findByState($state);
 
@@ -334,9 +325,8 @@ class PartnerController extends AbstractAppController
         Request $request,
         Partner $partner,
         #[Target('partner_lifecycle')] WorkflowInterface $workflow,
+        EntityManagerInterface $entityManager,
     ): Response {
-        $entityManager = $this->getDoctrine()->getManager();
-
         if (!$workflow->can($partner, 'leave')) {
             $this->addFlash('warning', sprintf(
                 '%s %s ya está de baja.',
@@ -368,9 +358,8 @@ class PartnerController extends AbstractAppController
         Request $request,
         Partner $partner,
         #[Target('partner_lifecycle')] WorkflowInterface $workflow,
+        EntityManagerInterface $entityManager,
     ): Response {
-        $entityManager = $this->getDoctrine()->getManager();
-
         $transition = match (true) {
             $workflow->can($partner, 'rejoin') => 'rejoin',
             $workflow->can($partner, 'resume') => 'resume',
@@ -448,6 +437,7 @@ class PartnerController extends AbstractAppController
         Request $request,
         PartnerRepository $partnerRepository,
         #[Target('partner_lifecycle')] WorkflowInterface $workflow,
+        EntityManagerInterface $em,
     ): Response {
         if (!$this->isCsrfTokenValid('partner_bulk_transition_apply', $request->request->get('_token', ''))) {
             $this->addFlash('error', 'Token CSRF inválido. Vuelve a intentarlo.');
@@ -466,7 +456,6 @@ class PartnerController extends AbstractAppController
             return $this->redirectToRoute('partner_index');
         }
 
-        $em = $this->getDoctrine()->getManager();
         $partners = $partnerRepository->findBy(['id' => $ids]);
         $copy = self::BULK_TRANSITIONS[$transition];
 
@@ -502,9 +491,8 @@ class PartnerController extends AbstractAppController
     public function pause(
         Partner $partner,
         #[Target('partner_lifecycle')] WorkflowInterface $workflow,
+        EntityManagerInterface $entityManager,
     ): Response {
-        $entityManager = $this->getDoctrine()->getManager();
-
         if (!$workflow->can($partner, 'pause')) {
             $this->addFlash('warning', 'Solo se puede pausar a un socix activx.');
             return $this->redirectToRoute('partner_show', ['id' => $partner->getId()]);
@@ -518,7 +506,7 @@ class PartnerController extends AbstractAppController
     }
 
     #[Route("/{id}/add_basket", name: "partner_add_basket", methods: ["GET","POST"])]
-    public function addBasket(Request $request, Partner $partner): Response
+    public function addBasket(Request $request, Partner $partner, EntityManagerInterface $entityManager): Response
     {
         $partnerBasketShare = new PartnerBasketShare();
         $partnerBasketShare->setPartner($partner);
@@ -526,7 +514,6 @@ class PartnerController extends AbstractAppController
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $entityManager = $this->getDoctrine()->getManager();
             $partnerBasketShare->setStartDate(new \DateTime($partnerBasketShare->getStartDate()));
             $partnerBasketShare->setIsActive(true);
             $values = $request->get('partner_basket_share');
@@ -584,7 +571,7 @@ class PartnerController extends AbstractAppController
 
 
     #[Route("/{partner1_id}/{partner2_id}/add_share_partner", name: "add_share_partner", methods: ["GET"])]
-    public function addSharePartner(Request $request, $partner1_id, $partner2_id): Response
+    public function addSharePartner(Request $request, $partner1_id, $partner2_id, EntityManagerInterface $entityManager): Response
     {
         $session = new Session();
         if ($partner1_id == $partner2_id) {
@@ -594,7 +581,6 @@ class PartnerController extends AbstractAppController
             );
             return $this->redirectToRoute('partner_show', array('id' => $partner1_id));
         }
-        $entityManager = $this->getDoctrine()->getManager();
         $partner1 = $entityManager->getRepository(\App\Entity\Partner::class)->find($partner1_id);
         $partner2 = $entityManager->getRepository(\App\Entity\Partner::class)->find($partner2_id);
 
@@ -616,11 +602,10 @@ class PartnerController extends AbstractAppController
     }
 
     #[Route("/{partner1_id}/{partner2_id}/remove_share_partner", name: "remove_share_partner", methods: ["GET"])]
-    public function removeSharePartner(Request $request, $partner1_id, $partner2_id): Response
+    public function removeSharePartner(Request $request, $partner1_id, $partner2_id, EntityManagerInterface $entityManager): Response
     {
         $session = new Session();
 
-        $entityManager = $this->getDoctrine()->getManager();
         $partner1 = $entityManager->getRepository(\App\Entity\Partner::class)->find($partner1_id);
         $partner2 = $entityManager->getRepository(\App\Entity\Partner::class)->find($partner2_id);
         $partner1->setSharePartner(null);
@@ -641,9 +626,8 @@ class PartnerController extends AbstractAppController
 
 
     #[Route("/generate_historical", name: "partner_generate_historical", methods: ["GET"])]
-    public function generateHistorical()
+    public function generateHistorical(EntityManagerInterface $entityManager)
     {
-        $entityManager = $this->getDoctrine()->getManager();
        $partners=$entityManager->getRepository(\App\Entity\Partner::class)->findAll();
 
        foreach ($partners as $partner)

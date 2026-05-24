@@ -11,20 +11,21 @@ use App\Entity\WeeklyBasketStatus;
 use App\Form\PartnerBasketShareType;
 use App\Repository\PartnerBasketShareRepository;
 use App\Service\Delivery\WeeklyBasketGenerator;
+use Doctrine\ORM\EntityManagerInterface;
 use Dompdf\Dompdf;
 use Dompdf\Options;
-use App\Controller\AbstractAppController;
-use Symfony\Component\Security\Http\Attribute\IsGranted;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Form\Extension\Core\Type\DateType;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 #[Route("/gestion/partner/basket/share")]
 #[IsGranted('ROLE_GESTION_SOCIXS')]
-class PartnerBasketShareController extends AbstractAppController
+class PartnerBasketShareController extends AbstractController
 {
     #[Route("/", name: "partner_basket_share_index", methods: ["GET"])]
     public function index(PartnerBasketShareRepository $partnerBasketShareRepository): Response
@@ -35,14 +36,13 @@ class PartnerBasketShareController extends AbstractAppController
     }
 
     #[Route("/new", name: "partner_basket_share_new", methods: ["GET","POST"])]
-    public function new(Request $request): Response
+    public function new(Request $request, EntityManagerInterface $entityManager): Response
     {
         $partnerBasketShare = new PartnerBasketShare();
         $form = $this->createForm(PartnerBasketShareType::class, $partnerBasketShare);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $entityManager = $this->getDoctrine()->getManager();
             $partnerBasketShare->setEggMonthPrice($partnerBasketShare->getEggAmount()->getMonthPrice());
 
             $entityManager->persist($partnerBasketShare);
@@ -66,7 +66,7 @@ class PartnerBasketShareController extends AbstractAppController
     }
 
     #[Route("/{id}/edit", name: "partner_basket_share_edit", methods: ["GET","POST"])]
-    public function edit(Request $request, PartnerBasketShare $partnerBasketShare): Response
+    public function edit(Request $request, PartnerBasketShare $partnerBasketShare, EntityManagerInterface $entityManager): Response
     {
         if ($partnerBasketShare->getStartDate()) {
             $partnerBasketShare->setStartDate($partnerBasketShare->getStartDate()->format('Y-m-d'));
@@ -89,7 +89,7 @@ class PartnerBasketShareController extends AbstractAppController
                     $partnerBasketShare->setEggMonthPrice(0);
                 }
             }
-            $this->getDoctrine()->getManager()->flush();
+            $entityManager->flush();
 
             return $this->redirectToRoute('partner_show', array('id' => $partnerBasketShare->getPartner()->getId()));
         }
@@ -102,10 +102,9 @@ class PartnerBasketShareController extends AbstractAppController
     }
 
     #[Route("/{id}", name: "partner_basket_share_delete", methods: ["DELETE"])]
-    public function delete(Request $request, PartnerBasketShare $partnerBasketShare): Response
+    public function delete(Request $request, PartnerBasketShare $partnerBasketShare, EntityManagerInterface $entityManager): Response
     {
         if ($this->isCsrfTokenValid('delete' . $partnerBasketShare->getId(), $request->request->get('_token'))) {
-            $entityManager = $this->getDoctrine()->getManager();
             $entityManager->remove($partnerBasketShare);
             $entityManager->flush();
         }
@@ -115,9 +114,8 @@ class PartnerBasketShareController extends AbstractAppController
 
 
     #[Route("/status/{status}", name: "partner_basket_share_list_status", methods: ["GET"])]
-    public function listStatus($status)
+    public function listStatus($status, EntityManagerInterface $entityManager)
     {
-        $entityManager = $this->getDoctrine()->getManager();
         $baskets = $entityManager->getRepository(\App\Entity\PartnerBasketShare::class)->findAllByStatus($status);//devuelve las activas
 
         $total_basket = 0;
@@ -143,9 +141,8 @@ class PartnerBasketShareController extends AbstractAppController
     }
 
     #[Route("/{id}/finalize", name: "partner_basket_share_finalize", methods: ["GET","POST"])]
-    public function finalize(Request $request, PartnerBasketShare $partnerBasketShare): Response
+    public function finalize(Request $request, PartnerBasketShare $partnerBasketShare, EntityManagerInterface $entityManager): Response
     {
-        $entityManager = $this->getDoctrine()->getManager();
         $form = $this->createFormBuilder()
             ->add('end_date', TextType::class, array('label' => 'Fecha de finalización', 'attr' => array('class' => 'datepicker form-control')))
             ->add('save', SubmitType::class, ['label' => 'Finalizar cesta'])
@@ -185,7 +182,7 @@ class PartnerBasketShareController extends AbstractAppController
             }
 
 
-            $this->getDoctrine()->getManager()->flush();
+            $entityManager->flush();
 
             return $this->redirectToRoute('partner_basket_share_list_status', array('status' => 1));
         }
@@ -203,10 +200,8 @@ class PartnerBasketShareController extends AbstractAppController
      * orquestamos: buscar el Basket de la semana, delegar, renderizar.
      */
     #[Route("/generate/weekly", name: "partner_basket_share_generate_weekly", methods: ["GET"])]
-    public function generateWeekly(WeeklyBasketGenerator $generator): Response
+    public function generateWeekly(WeeklyBasketGenerator $generator, EntityManagerInterface $entityManager): Response
     {
-        $entityManager = $this->getDoctrine()->getManager();
-
         $basket = $entityManager->getRepository(\App\Entity\Basket::class)
             ->findBasketByWeekYear(date('Y-m-d'));
 
@@ -221,9 +216,8 @@ class PartnerBasketShareController extends AbstractAppController
     }
 
     #[Route("/{basket_id}/{alternative_order}/generate_pdf/basket_weekly", name: "generate_pdf_basket_weekly", methods: ["GET"])]
-    public function generatePdf($basket_id, $alternative_order)
+    public function generatePdf($basket_id, $alternative_order, EntityManagerInterface $entityManager)
     {
-        $entityManager = $this->getDoctrine()->getManager();
         $basket = $entityManager->getRepository(\App\Entity\Basket::class)->find($basket_id);
 
 
@@ -333,9 +327,8 @@ class PartnerBasketShareController extends AbstractAppController
      * Cambiar estado de la cesta mensual. Esto es para apuntar si lo recibe o no.
      */
     #[Route("/{weekly_basket_status_id}/{weekly_basket_id}/change/status/basket_weekly", name: "partner_basket_weekly_change_status", methods: ["GET"])]
-    public function changeStatusWeeklyBasket($weekly_basket_id, $weekly_basket_status_id)
+    public function changeStatusWeeklyBasket($weekly_basket_id, $weekly_basket_status_id, EntityManagerInterface $entityManager)
     {
-        $entityManager = $this->getDoctrine()->getManager();
         $weeklyBasket = $entityManager->getRepository(\App\Entity\WeeklyBasket::class)->find($weekly_basket_id);
         $weeklyBasketStatus = $entityManager->getRepository(\App\Entity\WeeklyBasketStatus::class)->find($weekly_basket_status_id);
 
@@ -364,9 +357,8 @@ class PartnerBasketShareController extends AbstractAppController
      */
     #[Route("/{weekly_basket_id}/change/basket_monthly", name: "partner_basket_monthly_change_week", methods: ["GET"])]
 
-    public function nextWeek($weekly_basket_id)
+    public function nextWeek($weekly_basket_id, EntityManagerInterface $entityManager)
     {
-        $entityManager = $this->getDoctrine()->getManager();
         $weeklyBasket = $entityManager->getRepository(\App\Entity\WeeklyBasket::class)->find($weekly_basket_id);
         $entityManager->remove($weeklyBasket);
         $entityManager->flush();
@@ -376,9 +368,8 @@ class PartnerBasketShareController extends AbstractAppController
 
 
     #[Route("/{weekly_basket_id}/regenerate_weekly_list", name: "regenerate_weekly_list", methods: ["GET"])]
-    public function regenerateWeeklyList($weekly_basket_id)
+    public function regenerateWeeklyList($weekly_basket_id, EntityManagerInterface $entityManager)
     {
-        $entityManager = $this->getDoctrine()->getManager();
         $entityManager->getRepository(\App\Entity\PartnerBasketShare::class)->deleteWeeklyBasket($weekly_basket_id);
 
 
