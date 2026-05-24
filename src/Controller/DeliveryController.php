@@ -21,6 +21,7 @@ use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Delivery\WeeklyDeliveryReport;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bridge\Doctrine\Attribute\MapEntity;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -40,7 +41,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  */
 #[Route('/gestion/reparto')]
 #[IsGranted('ROLE_GESTION_SOCIXS')]
-class DeliveryController extends AbstractAppController
+class DeliveryController extends AbstractController
 {
     #[Route('/cambios-viernes', name: 'delivery_shifts_index', methods: ['GET'])]
     public function shiftsIndex(

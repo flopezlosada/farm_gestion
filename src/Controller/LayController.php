@@ -62,8 +62,8 @@ class LayController extends AbstractController
      * Creates a form to create a Lay entity.
      *
      * LayType requiere el EntityManager por la opción 'em' (lo usa para
-     * construir el selector de origen del huevo). El em llega del action,
-     * no de this->getDoctrine() porque el helper no tiene acceso a DI.
+     * construir el selector de origen del huevo). El em llega como
+     * parámetro porque los helpers privados no son autowireados.
      *
      * @param Lay $entity The entity
      *

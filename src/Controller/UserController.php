@@ -2,32 +2,29 @@
 
 namespace App\Controller;
 
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-
-use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
-use App\Controller\AbstractAppController;
-use Symfony\Component\Security\Http\Attribute\IsGranted;
-
 use App\Entity\User;
 use App\Form\UserType;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * User controller.
  *
  */
 #[IsGranted('ROLE_ADMIN')]
-class UserController extends AbstractAppController
+class UserController extends AbstractController
 {
 
     /**
      * Lists all User entities.
      *
      */
-    public function index()
+    public function index(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entities = $em->getRepository(\App\Entity\User::class)->findAll();
 
         return $this->render('User/index.html.twig', array(
@@ -39,7 +36,7 @@ class UserController extends AbstractAppController
      * Creates a new User entity.
      *
      */
-    public function create(Request $request, UserPasswordHasherInterface $hasher)
+    public function create(Request $request, UserPasswordHasherInterface $hasher, EntityManagerInterface $em)
     {
         $entity = new User();
         $form = $this->createCreateForm($entity);
@@ -47,7 +44,6 @@ class UserController extends AbstractAppController
 
         if ($form->isSubmitted() && $form->isValid()) {
             $entity->setPassword($hasher->hashPassword($entity, $form->get('plainPassword')->getData()));
-            $em = $this->getDoctrine()->getManager();
             $em->persist($entity);
             $em->flush();
 
@@ -99,10 +95,8 @@ class UserController extends AbstractAppController
      * Finds and displays a User entity.
      *
      */
-    public function show($id)
+    public function show($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\User::class)->find($id);
 
         if (!$entity) {
@@ -121,10 +115,8 @@ class UserController extends AbstractAppController
      * Displays a form to edit an existing User entity.
      *
      */
-    public function edit($id)
+    public function edit($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\User::class)->find($id);
 
         if (!$entity) {
@@ -165,10 +157,8 @@ class UserController extends AbstractAppController
      * Edits an existing User entity. La contraseña NO se toca desde aquí:
      * el reseteo lo hace el propio usuario por magic-link en /login/forgot.
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, $id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\User::class)->find($id);
 
         if (!$entity) {
@@ -196,13 +186,12 @@ class UserController extends AbstractAppController
      * Deletes a User entity.
      *
      */
-    public function delete(Request $request, $id)
+    public function delete(Request $request, $id, EntityManagerInterface $em)
     {
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\User::class)->find($id);
 
             if (!$entity) {

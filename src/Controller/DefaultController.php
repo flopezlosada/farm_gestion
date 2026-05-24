@@ -2,11 +2,12 @@
 
 namespace App\Controller;
 
-use App\Controller\AbstractAppController;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 
-class DefaultController extends AbstractAppController
+class DefaultController extends AbstractController
 {
     #[Route("/calendar", name: "calendar")]
     public function calendar(): Response
@@ -15,9 +16,8 @@ class DefaultController extends AbstractAppController
     }
 
     #[Route("/dashboard", name: "dashboard")]
-    public function dashboard(): Response
+    public function dashboard(EntityManagerInterface $em): Response
     {
-        $em = $this->getDoctrine()->getManager();
         $week_lay = $em->getRepository(\App\Entity\Lay::class)->findWeekLay(10);
 
         $total_lay_eggs = $em->getRepository(\App\Entity\Lay::class)->findTotalEggs(date('Y'));
@@ -92,34 +92,30 @@ class DefaultController extends AbstractAppController
         ]);
     }
 
-    public function layWeek()
+    public function layWeek(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
         $week_eggs = $em->getRepository(\App\Entity\Lay::class)->findByWeek(date('W'), date('Y'));
 
         return new Response($week_eggs);
     }
 
-    public function totalCropWorking()
+    public function totalCropWorking(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
         $crop_workings = count($em->getRepository(\App\Entity\CropWorking::class)->findActive());
 
         return new Response($crop_workings);
     }
 
 
-    public function totalCompost()
+    public function totalCompost(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
         $collection_amount = $em->getRepository(\App\Entity\CompostCollection::class)->findTotalAmountCollection(date('Y'));
 
         return new Response(number_format($collection_amount / 1000, 1));
     }
 
-    public function totalProductionYear($year = null)
+    public function totalProductionYear(EntityManagerInterface $em, $year = null)
     {
-        $em = $this->getDoctrine()->getManager();
         if (!$year) {
             $year = date('Y');
         }
