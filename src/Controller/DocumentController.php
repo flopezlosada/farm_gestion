@@ -2,14 +2,13 @@
 
 namespace App\Controller;
 
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-
-use Symfony\Component\HttpFoundation\Request;
-use App\Controller\AbstractAppController;
-use Symfony\Component\Security\Http\Attribute\IsGranted;
-
 use App\Entity\Document;
 use App\Form\DocumentType;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * Document controller.
@@ -20,21 +19,20 @@ use App\Form\DocumentType;
  * edit/update/delete) se retiró por código muerto.
  */
 #[IsGranted('ROLE_BLOG')]
-class DocumentController extends AbstractAppController
+class DocumentController extends AbstractController
 {
     /**
      * Procesa el alta de un Document asociado a una entidad anfitriona
      * (object_class + foreign_key). Disparado desde el modal AJAX
      * del aside del editor de posts.
      */
-    public function create(Request $request, $foreign_key, $object_class)
+    public function create(Request $request, $foreign_key, $object_class, EntityManagerInterface $em)
     {
         $entity = new Document();
         $form = $this->createCreateForm($entity, $foreign_key, $object_class);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity->setForeignKey($foreign_key);
             $entity->setObjectClass($object_class);
             $em->persist($entity);
@@ -107,9 +105,8 @@ class DocumentController extends AbstractAppController
      * AppExtension al expandir los shortcodes [[insert_media_document_<id>]]
      * dentro del cuerpo de un post.
      */
-    public function show_snippet($id)
+    public function show_snippet($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
         $entity = $em->getRepository(\App\Entity\Document::class)->find($id);
 
         if (!$entity) {
@@ -124,9 +121,8 @@ class DocumentController extends AbstractAppController
     /**
      * Borrado directo del Document desde el aside del editor de posts.
      */
-    public function fastDelete($id)
+    public function fastDelete($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
         $entity = $em->getRepository(\App\Entity\Document::class)->find($id);
 
         if (!$entity) {

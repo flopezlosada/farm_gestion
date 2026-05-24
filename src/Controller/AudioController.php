@@ -2,14 +2,13 @@
 
 namespace App\Controller;
 
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-
-use Symfony\Component\HttpFoundation\Request;
-use App\Controller\AbstractAppController;
-use Symfony\Component\Security\Http\Attribute\IsGranted;
-
 use App\Entity\Audio;
 use App\Form\AudioType;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * Audio controller.
@@ -20,21 +19,20 @@ use App\Form\AudioType;
  * edit/update/delete) se retiró por código muerto.
  */
 #[IsGranted('ROLE_BLOG')]
-class AudioController extends AbstractAppController
+class AudioController extends AbstractController
 {
     /**
      * Procesa el alta de un Audio asociado a una entidad anfitriona
      * (object_class + foreign_key). Disparado desde el modal AJAX
      * del aside del editor de posts.
      */
-    public function create(Request $request, $foreign_key, $object_class)
+    public function create(Request $request, $foreign_key, $object_class, EntityManagerInterface $em)
     {
         $entity = new Audio();
         $form = $this->createCreateForm($entity, $foreign_key, $object_class);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity->setForeignKey($foreign_key);
             $entity->setObjectClass($object_class);
             $em->persist($entity);
@@ -107,9 +105,8 @@ class AudioController extends AbstractAppController
      * AppExtension al expandir los shortcodes [[insert_media_audio_<id>]]
      * dentro del cuerpo de un post.
      */
-    public function show_snippet($id)
+    public function show_snippet($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
         $entity = $em->getRepository(\App\Entity\Audio::class)->find($id);
 
         if (!$entity) {
@@ -124,9 +121,8 @@ class AudioController extends AbstractAppController
     /**
      * Borrado directo del Audio desde el aside del editor de posts.
      */
-    public function fastDelete($id)
+    public function fastDelete($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
         $entity = $em->getRepository(\App\Entity\Audio::class)->find($id);
 
         if (!$entity) {

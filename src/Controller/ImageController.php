@@ -2,14 +2,13 @@
 
 namespace App\Controller;
 
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-
-use Symfony\Component\HttpFoundation\Request;
-use App\Controller\AbstractAppController;
-use Symfony\Component\Security\Http\Attribute\IsGranted;
-
 use App\Entity\Image;
 use App\Form\ImageType;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * Image controller.
@@ -22,21 +21,20 @@ use App\Form\ImageType;
  * por código muerto.
  */
 #[IsGranted('ROLE_BLOG')]
-class ImageController extends AbstractAppController
+class ImageController extends AbstractController
 {
     /**
      * Procesa el alta de una Image asociada a una entidad anfitriona
      * (object_class + foreign_key + single). Disparado desde el modal
      * AJAX del aside del editor de posts.
      */
-    public function create(Request $request, $foreign_key, $object_class, $single)
+    public function create(Request $request, $foreign_key, $object_class, $single, EntityManagerInterface $em)
     {
         $entity = new Image();
         $form = $this->createCreateForm($entity, $foreign_key, $object_class, $single);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity->setForeignKey($foreign_key);
             $entity->setObjectClass($object_class);
             $entity->setSingle($single);
@@ -118,9 +116,8 @@ class ImageController extends AbstractAppController
     /**
      * Borrado directo de la Image desde el aside del editor de posts.
      */
-    public function fastDelete($id)
+    public function fastDelete($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
         $entity = $em->getRepository(\App\Entity\Image::class)->find($id);
 
         if (!$entity) {
@@ -140,9 +137,8 @@ class ImageController extends AbstractAppController
      * AppExtension al expandir los shortcodes [[insert_media_image_<id>]]
      * dentro del cuerpo de un post.
      */
-    public function show_snippet($id)
+    public function show_snippet($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
         $image = $em->getRepository(\App\Entity\Image::class)->find($id);
 
         return $this->render('Image/show_snippet.html.twig', array(
