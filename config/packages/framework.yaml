@@ -5,10 +5,29 @@ framework:
 
     # Enables session support. Note that the session will ONLY be started if you read or write from it.
     # Remove or comment this section to explicitly disable session support.
+    #
+    # Política:
+    #   cookie_lifetime: 0     - cookie de sesión: muere al cerrar el navegador
+    #                            (sin "remember me", obvio). Los navegadores
+    #                            modernos pueden restaurar pestañas y revivir
+    #                            la cookie; eso lo cubre gc_maxlifetime abajo.
+    #   gc_maxlifetime: 7200   - en el servidor la sesión expira tras 2h de
+    #                            inactividad. Si el usuario vuelve después,
+    #                            el server no encuentra la sesión y exige
+    #                            nuevo login (logout efectivo).
+    #   gc_probability/divisor - PHP default es 1/100. Lo dejamos explícito
+    #                            porque algunas distros lo ponen a 0/0 (GC
+    #                            delegada a cron) y las sesiones sobrevivirían
+    #                            indefinidamente.
     session:
         handler_id: null
         cookie_secure: auto
         cookie_samesite: lax
+        cookie_httponly: true
+        cookie_lifetime: 0
+        gc_maxlifetime: 7200
+        gc_probability: 1
+        gc_divisor: 100
 
     #esi: true
     #fragments: true
