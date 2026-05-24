@@ -2,35 +2,32 @@
 
 namespace App\Controller;
 
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-
+use App\Entity\Task;
 use App\Form\TaskAproxType;
 use App\Form\TaskDateType;
 use App\Form\TaskPeriodicType;
+use App\Form\TaskType;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 use Symfony\Component\Form\FormError;
 use Symfony\Component\HttpFoundation\Request;
-use App\Controller\AbstractAppController;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
-
-use App\Entity\Task;
-use App\Form\TaskType;
 
 /**
  * Task controller.
  *
  */
 #[IsGranted('ROLE_GESTION_GRANJA')]
-class TaskController extends AbstractAppController
+class TaskController extends AbstractController
 {
 
     /**
      * Lists all Task entities.
      *
      */
-    public function index()
+    public function index(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entities = $em->getRepository(\App\Entity\Task::class)->findAll();
         $pending_tasks = $em->getRepository(\App\Entity\Task::class)->findPending(date('n'), date('Y'));
         $aprox_tasks = $em->getRepository(\App\Entity\Task::class)->findPending(date('n'), date('Y'), 3);
@@ -58,14 +55,13 @@ class TaskController extends AbstractAppController
      * Creates a new Task entity.
      *
      */
-    public function create(Request $request, $task_type_id)
+    public function create(Request $request, $task_type_id, EntityManagerInterface $em)
     {
         $entity = new Task();
         $form = $this->createCreateForm($entity, $task_type_id);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $task_type = $em->getRepository(\App\Entity\TaskType::class)->find($task_type_id);
             $entity->setTaskType($task_type);
             $em->persist($entity);
@@ -132,7 +128,7 @@ class TaskController extends AbstractAppController
         ));
     }
 
-    public function createAprox($task_type_id, Request $request)
+    public function createAprox($task_type_id, Request $request, EntityManagerInterface $em)
     {
         $entity = new Task();
         $form = $this->createForm(TaskAproxType::class, $entity, array(
@@ -143,7 +139,6 @@ class TaskController extends AbstractAppController
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $task_type = $em->getRepository(\App\Entity\TaskType::class)->find($task_type_id);
             $entity->setTaskType($task_type);
             if ($entity->getExpectedDate()) {
@@ -183,7 +178,7 @@ class TaskController extends AbstractAppController
         ));
     }
 
-    public function createDate($task_type_id, Request $request)
+    public function createDate($task_type_id, Request $request, EntityManagerInterface $em)
     {
         $entity = new Task();
         $form = $this->createForm(TaskDateType::class, $entity, array(
@@ -195,7 +190,6 @@ class TaskController extends AbstractAppController
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid() && $entity->getExpectedDate()) {
-            $em = $this->getDoctrine()->getManager();
             $task_type = $em->getRepository(\App\Entity\TaskType::class)->find($task_type_id);
             $entity->setTaskType($task_type);
 
@@ -232,7 +226,7 @@ class TaskController extends AbstractAppController
     }
 
 
-    public function createPeriodic($task_type_id, Request $request)
+    public function createPeriodic($task_type_id, Request $request, EntityManagerInterface $em)
     {
         $entity = new Task();
         $form = $this->createForm(TaskPeriodicType::class, $entity, array(
@@ -244,7 +238,6 @@ class TaskController extends AbstractAppController
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid() && $entity->getExpectedDate()) {
-            $em = $this->getDoctrine()->getManager();
             $task_type = $em->getRepository(\App\Entity\TaskType::class)->find($task_type_id);
             $entity->setTaskType($task_type);
 
@@ -268,10 +261,8 @@ class TaskController extends AbstractAppController
      * Finds and displays a Task entity.
      *
      */
-    public function show($id)
+    public function show($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Task::class)->find($id);
 
         if (!$entity) {
@@ -290,10 +281,8 @@ class TaskController extends AbstractAppController
      * Displays a form to edit an existing Task entity.
      *
      */
-    public function edit($id)
+    public function edit($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Task::class)->find($id);
 
         if (!$entity) {
@@ -312,10 +301,8 @@ class TaskController extends AbstractAppController
         ));
     }
 
-    public function finalize($id)
+    public function finalize($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Task::class)->find($id);
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find Task entity.');
@@ -358,10 +345,8 @@ class TaskController extends AbstractAppController
      * Edits an existing Task entity.
      *
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, $id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Task::class)->find($id);
 
         if (!$entity) {
@@ -394,13 +379,12 @@ class TaskController extends AbstractAppController
      * Deletes a Task entity.
      *
      */
-    public function delete(Request $request, $id)
+    public function delete(Request $request, $id, EntityManagerInterface $em)
     {
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\Task::class)->find($id);
 
             if (!$entity) {

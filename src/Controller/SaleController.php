@@ -2,31 +2,28 @@
 
 namespace App\Controller;
 
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-
-use Symfony\Component\HttpFoundation\Request;
-use App\Controller\AbstractAppController;
-use Symfony\Component\Security\Http\Attribute\IsGranted;
-
 use App\Entity\Sale;
 use App\Form\SaleType;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * Sale controller.
  *
  */
 #[IsGranted('ROLE_ADMIN')]
-class SaleController extends AbstractAppController
+class SaleController extends AbstractController
 {
 
     /**
      * Lists all Sale entities.
      *
      */
-    public function index()
+    public function index(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entities = $em->getRepository(\App\Entity\Sale::class)->findAll();
 
         return $this->render('Sale/index.html.twig', array(
@@ -38,15 +35,14 @@ class SaleController extends AbstractAppController
      * Creates a new Sale entity.
      *
      */
-    public function create(Request $request)
+    public function create(Request $request, EntityManagerInterface $em)
     {
         $entity = new Sale();
         $entity->setUser($this->getUser());
-        $form = $this->createCreateForm($entity);
+        $form = $this->createCreateForm($entity, $em);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity->setWeek(date('W', strtotime($entity->getSaleDate())));
             $entity->setSaleDate(new \DateTime($entity->getSaleDate()));
             $entity->setTotalPrice($entity->getSinglePrice() * $entity->getAmount());
@@ -69,12 +65,12 @@ class SaleController extends AbstractAppController
      *
      * @return \Symfony\Component\Form\Form The form
      */
-    private function createCreateForm(Sale $entity)
+    private function createCreateForm(Sale $entity, EntityManagerInterface $em)
     {
         $form = $this->createForm(SaleType::class, $entity, array(
             'action' => $this->generateUrl('sale_create'),
             'method' => 'POST',
-            'em' => $this->getDoctrine()->getManager()
+            'em' => $em
         ));
 
         $form->add('submit', SubmitType::class, array('label' => 'Añadir'));
@@ -86,11 +82,11 @@ class SaleController extends AbstractAppController
      * Displays a form to create a new Sale entity.
      *
      */
-    public function new()
+    public function new(EntityManagerInterface $em)
     {
         $entity = new Sale();
         $entity->setUser($this->getUser());
-        $form = $this->createCreateForm($entity);
+        $form = $this->createCreateForm($entity, $em);
 
         return $this->render('Sale/new.html.twig', array(
             'entity' => $entity,
@@ -102,10 +98,8 @@ class SaleController extends AbstractAppController
      * Finds and displays a Sale entity.
      *
      */
-    public function show($id)
+    public function show($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Sale::class)->find($id);
 
         if (!$entity) {
@@ -124,10 +118,8 @@ class SaleController extends AbstractAppController
      * Displays a form to edit an existing Sale entity.
      *
      */
-    public function edit($id)
+    public function edit($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Sale::class)->find($id);
         $entity->setUser($this->getUser());
         if (!$entity) {
@@ -168,10 +160,8 @@ class SaleController extends AbstractAppController
      * Edits an existing Sale entity.
      *
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, $id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Sale::class)->find($id);
         $entity->setUser($this->getUser());
 
@@ -204,13 +194,12 @@ class SaleController extends AbstractAppController
      * Deletes a Sale entity.
      *
      */
-    public function delete(Request $request, $id)
+    public function delete(Request $request, $id, EntityManagerInterface $em)
     {
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\Sale::class)->find($id);
 
             if (!$entity) {
@@ -240,10 +229,8 @@ class SaleController extends AbstractAppController
             ->getForm();
     }
 
-    public function pay($id)
+    public function pay($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Sale::class)->find($id);
         $entity->setPaid(1);
         $em->persist($entity);

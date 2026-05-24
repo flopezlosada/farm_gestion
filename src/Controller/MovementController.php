@@ -2,31 +2,28 @@
 
 namespace App\Controller;
 
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-
-use Symfony\Component\HttpFoundation\Request;
-use App\Controller\AbstractAppController;
-use Symfony\Component\Security\Http\Attribute\IsGranted;
-
 use App\Entity\Movement;
 use App\Form\MovementType;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * Movement controller.
  *
  */
 #[IsGranted('ROLE_GESTION_GRANJA')]
-class MovementController extends AbstractAppController
+class MovementController extends AbstractController
 {
 
     /**
      * Lists all Movement entities.
      *
      */
-    public function index()
+    public function index(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entities = $em->getRepository(\App\Entity\Movement::class)->findAll();
 
         return $this->render('Movement/index.html.twig', array(
@@ -38,17 +35,15 @@ class MovementController extends AbstractAppController
      * Creates a new Movement entity.
      *
      */
-    public function create($batch_id, Request $request)
+    public function create($batch_id, Request $request, EntityManagerInterface $em)
     {
         $entity = new Movement();
-        $em = $this->getDoctrine()->getManager();
         $batch = $em->getRepository(\App\Entity\Batch::class)->find($batch_id);
         $form = $this->createCreateForm($entity, $batch);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
             $entity->setDate(new \DateTime($entity->getDate()));
-            $em = $this->getDoctrine()->getManager();
             $entity->setBatch($batch);
             $em->persist($entity);
             $last_movement = $em->getRepository(\App\Entity\Movement::class)->findLastMovement($batch_id);
@@ -94,10 +89,9 @@ class MovementController extends AbstractAppController
      * Displays a form to create a new Movement entity.
      *
      */
-    public function new($batch_id)
+    public function new($batch_id, EntityManagerInterface $em)
     {
         $entity = new Movement();
-        $em = $this->getDoctrine()->getManager();
         $batch = $em->getRepository(\App\Entity\Batch::class)->find($batch_id);
         $form = $this->createCreateForm($entity, $batch);
 
@@ -113,10 +107,8 @@ class MovementController extends AbstractAppController
      * Finds and displays a Movement entity.
      *
      */
-    public function show($id)
+    public function show($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Movement::class)->find($id);
 
         if (!$entity) {
@@ -135,10 +127,8 @@ class MovementController extends AbstractAppController
      * Displays a form to edit an existing Movement entity.
      *
      */
-    public function edit($id)
+    public function edit($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Movement::class)->find($id);
 
         if (!$entity) {
@@ -178,10 +168,8 @@ class MovementController extends AbstractAppController
      * Edits an existing Movement entity.
      *
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, $id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Movement::class)->find($id);
 
         if (!$entity) {
@@ -209,13 +197,12 @@ class MovementController extends AbstractAppController
      * Deletes a Movement entity.
      *
      */
-    public function delete(Request $request, $id)
+    public function delete(Request $request, $id, EntityManagerInterface $em)
     {
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\Movement::class)->find($id);
 
             if (!$entity) {

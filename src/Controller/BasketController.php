@@ -2,31 +2,28 @@
 
 namespace App\Controller;
 
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-
-use Symfony\Component\HttpFoundation\Request;
-use App\Controller\AbstractAppController;
-use Symfony\Component\Security\Http\Attribute\IsGranted;
-
 use App\Entity\Basket;
 use App\Form\BasketType;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * Basket controller.
  *
  */
 #[IsGranted('ROLE_GESTION_CESTAS')]
-class BasketController extends AbstractAppController
+class BasketController extends AbstractController
 {
 
     /**
      * Lists all Basket entities.
      *
      */
-    public function index()
+    public function index(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entities = $em->getRepository(\App\Entity\Basket::class)->findAll();
 
         return $this->render('Basket/index.html.twig', array(
@@ -38,14 +35,13 @@ class BasketController extends AbstractAppController
      * Creates a new Basket entity.
      *
      */
-    public function create(Request $request)
+    public function create(Request $request, EntityManagerInterface $em)
     {
         $entity = new Basket();
         $form = $this->createCreateForm($entity);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $em->persist($entity);
             $em->flush();
 
@@ -96,10 +92,8 @@ class BasketController extends AbstractAppController
      * Finds and displays a Basket entity.
      *
      */
-    public function show($id)
+    public function show($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Basket::class)->find($id);
 
         if (!$entity) {
@@ -118,10 +112,8 @@ class BasketController extends AbstractAppController
      * Displays a form to edit an existing Basket entity.
      *
      */
-    public function edit($id)
+    public function edit($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Basket::class)->find($id);
 
         if (!$entity) {
@@ -161,10 +153,8 @@ class BasketController extends AbstractAppController
      * Edits an existing Basket entity.
      *
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, $id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Basket::class)->find($id);
 
         if (!$entity) {
@@ -192,13 +182,12 @@ class BasketController extends AbstractAppController
      * Deletes a Basket entity.
      *
      */
-    public function delete(Request $request, $id)
+    public function delete(Request $request, $id, EntityManagerInterface $em)
     {
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\Basket::class)->find($id);
 
             if (!$entity) {
