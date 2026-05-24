@@ -48,7 +48,7 @@ class StatisticController extends AbstractController
 
         $product = $em->getRepository(\App\Entity\Product::class)->find(1);
 
-        $users = $em->getRepository(\App\Entity\User::class)->findByRole('ROLE_COOP');
+        $users = $em->getRepository(\App\Entity\User::class)->findByRole('ROLE_GESTION_GRANJA');
         $total_product_collect_dates = $em->getRepository(\App\Entity\Collect::class)->findCollectDates($product, $last_hens_feed_purchase->getDate(), $last_but_one_hens_feed_purchase->getDate());
         foreach ($users as $user) {
             $consumed_eggs = $em->getRepository(\App\Entity\Collect::class)->findCollectUserDates($user, $product, $last_hens_feed_purchase->getDate(), $last_but_one_hens_feed_purchase->getDate());
