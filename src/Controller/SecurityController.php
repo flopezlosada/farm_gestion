@@ -9,10 +9,12 @@ use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bridge\Twig\Mime\TemplatedEmail;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
+use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Security\Http\Authentication\AuthenticationUtils;
 use Symfony\Component\Security\Http\LoginLink\LoginLinkHandlerInterface;
@@ -68,12 +70,20 @@ class SecurityController extends AbstractController
         UserPasswordHasherInterface $hasher,
         LoginLinkHandlerInterface $loginLinkHandler,
         MailerInterface $mailer,
+        #[Autowire(service: 'limiter.magic_link')]
+        RateLimiterFactory $magicLinkLimiter,
     ): Response {
         if ($request->isMethod('GET')) {
             return $this->render('Security/first_access.html.twig');
         }
 
         if (!$this->isCsrfTokenValid('login_link_first', (string) $request->request->get('_csrf_token'))) {
+            return $this->redirectToRoute('app_login_link_sent');
+        }
+
+        // Antifuga: si se rebasa el límite seguimos redirigiendo a /login/sent
+        // para no diferenciar el caso "límite excedido" del éxito.
+        if (!$magicLinkLimiter->create($request->getClientIp())->consume(1)->isAccepted()) {
             return $this->redirectToRoute('app_login_link_sent');
         }
 
@@ -141,12 +151,18 @@ class SecurityController extends AbstractController
         UserRepository $userRepository,
         LoginLinkHandlerInterface $loginLinkHandler,
         MailerInterface $mailer,
+        #[Autowire(service: 'limiter.magic_link')]
+        RateLimiterFactory $magicLinkLimiter,
     ): Response {
         if ($request->isMethod('GET')) {
             return $this->render('Security/forgot.html.twig');
         }
 
         if (!$this->isCsrfTokenValid('login_link_forgot', (string) $request->request->get('_csrf_token'))) {
+            return $this->redirectToRoute('app_login_link_sent');
+        }
+
+        if (!$magicLinkLimiter->create($request->getClientIp())->consume(1)->isAccepted()) {
             return $this->redirectToRoute('app_login_link_sent');
         }
 
