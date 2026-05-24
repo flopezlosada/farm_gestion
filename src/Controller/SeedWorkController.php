@@ -2,32 +2,29 @@
 
 namespace App\Controller;
 
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-
 use App\Entity\CropWorking;
-use Symfony\Component\HttpFoundation\Request;
-use App\Controller\AbstractAppController;
-use Symfony\Component\Security\Http\Attribute\IsGranted;
-
 use App\Entity\SeedWork;
 use App\Form\SeedWorkType;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * SeedWork controller.
  *
  */
 #[IsGranted('ROLE_GESTION_GRANJA')]
-class SeedWorkController extends AbstractAppController
+class SeedWorkController extends AbstractController
 {
 
     /**
      * Lists all SeedWork entities.
      *
      */
-    public function index()
+    public function index(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entities = $em->getRepository(\App\Entity\SeedWork::class)->findAll();
 
         return $this->render('SeedWork/index.html.twig', array(
@@ -39,10 +36,9 @@ class SeedWorkController extends AbstractAppController
      * Creates a new SeedWork entity.
      *
      */
-    public function create($crop_working_id, Request $request)
+    public function create($crop_working_id, Request $request, EntityManagerInterface $em)
     {
         $entity = new SeedWork();
-        $em = $this->getDoctrine()->getManager();
         $crop_working = $em->getRepository(\App\Entity\CropWorking::class)->find($crop_working_id);
 
         $form = $this->createCreateForm($entity, $crop_working);
@@ -88,11 +84,10 @@ class SeedWorkController extends AbstractAppController
      * Displays a form to create a new SeedWork entity.
      *
      */
-    public function new($crop_working_id)
+    public function new($crop_working_id, EntityManagerInterface $em)
     {
         $entity = new SeedWork();
         if ($crop_working_id) {
-            $em = $this->getDoctrine()->getManager();
             $crop_working = $em->getRepository(\App\Entity\CropWorking::class)->find($crop_working_id);
             $entity->setCropWorking($crop_working);
         }
@@ -109,10 +104,8 @@ class SeedWorkController extends AbstractAppController
      * Finds and displays a SeedWork entity.
      *
      */
-    public function show($id)
+    public function show($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\SeedWork::class)->find($id);
 
         if (!$entity) {
@@ -132,10 +125,8 @@ class SeedWorkController extends AbstractAppController
      * Displays a form to edit an existing SeedWork entity.
      *
      */
-    public function edit($id)
+    public function edit($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\SeedWork::class)->find($id);
 
         if (!$entity) {
@@ -178,10 +169,8 @@ class SeedWorkController extends AbstractAppController
      * Edits an existing SeedWork entity.
      *
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, $id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\SeedWork::class)->find($id);
 
         if (!$entity) {
@@ -216,13 +205,12 @@ class SeedWorkController extends AbstractAppController
      * Deletes a SeedWork entity.
      *
      */
-    public function delete(Request $request, $id)
+    public function delete(Request $request, $id, EntityManagerInterface $em)
     {
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\SeedWork::class)->find($id);
 
             if (!$entity) {

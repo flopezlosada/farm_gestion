@@ -2,31 +2,28 @@
 
 namespace App\Controller;
 
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-
-use Symfony\Component\HttpFoundation\Request;
-use App\Controller\AbstractAppController;
-use Symfony\Component\Security\Http\Attribute\IsGranted;
-
 use App\Entity\CompostCollection;
 use App\Form\CompostCollectionType;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * CompostCollection controller.
  *
  */
 #[IsGranted('ROLE_GESTION_GRANJA')]
-class CompostCollectionController extends AbstractAppController
+class CompostCollectionController extends AbstractController
 {
 
     /**
      * Lists all CompostCollection entities.
      *
      */
-    public function index()
+    public function index(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $colletion_points = $em->getRepository(\App\Entity\CompostCollectionPoint::class)->findAll();
 
         $current_year = date("Y");
@@ -48,9 +45,8 @@ class CompostCollectionController extends AbstractAppController
         ));
     }
 
-    public function resume()
+    public function resume(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
         $year_collections = array(); //valores por año
         $year_week_collections = array(); // valores por semana
         $year_month_collections = array(); // valores por mes
@@ -74,14 +70,13 @@ class CompostCollectionController extends AbstractAppController
      * Creates a new CompostCollection entity.
      *
      */
-    public function create(Request $request)
+    public function create(Request $request, EntityManagerInterface $em)
     {
         $entity = new CompostCollection();
         $form = $this->createCreateForm($entity);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity->setWeek(date('W', strtotime($entity->getCollectDate())));
             $entity->setCollectDate(new \DateTime($entity->getCollectDate()));
             $entity->setCompostPile($em->getRepository(\App\Entity\CompostPile::class)->findActivePile());
@@ -136,10 +131,8 @@ class CompostCollectionController extends AbstractAppController
      * Finds and displays a CompostCollection entity.
      *
      */
-    public function show($id)
+    public function show($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\CompostCollection::class)->find($id);
 
         if (!$entity) {
@@ -158,10 +151,8 @@ class CompostCollectionController extends AbstractAppController
      * Displays a form to edit an existing CompostCollection entity.
      *
      */
-    public function edit($id)
+    public function edit($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\CompostCollection::class)->find($id);
 
         if (!$entity) {
@@ -204,10 +195,8 @@ class CompostCollectionController extends AbstractAppController
      * Edits an existing CompostCollection entity.
      *
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, $id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\CompostCollection::class)->find($id);
 
         if (!$entity) {
@@ -239,13 +228,12 @@ class CompostCollectionController extends AbstractAppController
      * Deletes a CompostCollection entity.
      *
      */
-    public function delete(Request $request, $id)
+    public function delete(Request $request, $id, EntityManagerInterface $em)
     {
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\CompostCollection::class)->find($id);
 
             if (!$entity) {

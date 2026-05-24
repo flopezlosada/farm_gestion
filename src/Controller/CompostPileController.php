@@ -2,31 +2,28 @@
 
 namespace App\Controller;
 
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-
-use Symfony\Component\HttpFoundation\Request;
-use App\Controller\AbstractAppController;
-use Symfony\Component\Security\Http\Attribute\IsGranted;
-
 use App\Entity\CompostPile;
 use App\Form\CompostPileType;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * CompostPile controller.
  *
  */
 #[IsGranted('ROLE_GESTION_GRANJA')]
-class CompostPileController extends AbstractAppController
+class CompostPileController extends AbstractController
 {
 
     /**
      * Lists all CompostPile entities.
      *
      */
-    public function index()
+    public function index(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $compost_piles = $em->getRepository(\App\Entity\CompostPile::class)->findAll();
 
         return $this->render('CompostPile/index.html.twig', array(
@@ -40,14 +37,13 @@ class CompostPileController extends AbstractAppController
      * Creates a new CompostPile entity.
      *
      */
-    public function create(Request $request)
+    public function create(Request $request, EntityManagerInterface $em)
     {
         $entity = new CompostPile();
         $form = $this->createCreateForm($entity);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $em->persist($entity);
             $em->flush();
 
@@ -83,9 +79,8 @@ class CompostPileController extends AbstractAppController
      * Displays a form to create a new CompostPile entity.
      *
      */
-    public function new()
+    public function new(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
         $last_pile = $em->getRepository(\App\Entity\CompostPile::class)->findActivePile();
 
         if ($last_pile) {
@@ -107,10 +102,8 @@ class CompostPileController extends AbstractAppController
      * Finds and displays a CompostPile entity.
      *
      */
-    public function show($id)
+    public function show($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\CompostPile::class)->find($id);
 
         if (!$entity) {
@@ -129,10 +122,8 @@ class CompostPileController extends AbstractAppController
      * Displays a form to edit an existing CompostPile entity.
      *
      */
-    public function edit($id)
+    public function edit($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\CompostPile::class)->find($id);
 
         if (!$entity) {
@@ -178,10 +169,8 @@ class CompostPileController extends AbstractAppController
      * Edits an existing CompostPile entity.
      *
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, $id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\CompostPile::class)->find($id);
 
         if (!$entity) {
@@ -221,13 +210,12 @@ class CompostPileController extends AbstractAppController
      * Deletes a CompostPile entity.
      *
      */
-    public function delete(Request $request, $id)
+    public function delete(Request $request, $id, EntityManagerInterface $em)
     {
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\CompostPile::class)->find($id);
 
             if (!$entity) {

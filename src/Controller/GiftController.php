@@ -2,31 +2,28 @@
 
 namespace App\Controller;
 
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-
-use Symfony\Component\HttpFoundation\Request;
-use App\Controller\AbstractAppController;
-use Symfony\Component\Security\Http\Attribute\IsGranted;
-
 use App\Entity\Gift;
 use App\Form\GiftType;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * Gift controller.
  *
  */
 #[IsGranted('ROLE_ADMIN')]
-class GiftController extends AbstractAppController
+class GiftController extends AbstractController
 {
 
     /**
      * Lists all Gift entities.
      *
      */
-    public function index()
+    public function index(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entities = $em->getRepository(\App\Entity\Gift::class)->findAll();
 
         return $this->render('Gift/index.html.twig', array(
@@ -38,15 +35,14 @@ class GiftController extends AbstractAppController
      * Creates a new Gift entity.
      *
      */
-    public function create(Request $request)
+    public function create(Request $request, EntityManagerInterface $em)
     {
         $entity = new Gift();
         $entity->setUser($this->getUser());
-        $form = $this->createCreateForm($entity);
+        $form = $this->createCreateForm($entity, $em);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity->setWeek(date('W', strtotime($entity->getGiftDate())));
             $entity->setGiftDate(new \DateTime($entity->getGiftDate()));
             $entity->setTotalPrice($entity->getSinglePrice() * $entity->getAmount());
@@ -69,12 +65,12 @@ class GiftController extends AbstractAppController
      *
      * @return \Symfony\Component\Form\Form The form
      */
-    private function createCreateForm(Gift $entity)
+    private function createCreateForm(Gift $entity, EntityManagerInterface $em)
     {
         $form = $this->createForm(GiftType::class, $entity, array(
             'action' => $this->generateUrl('gift_create'),
             'method' => 'POST',
-            'em' => $this->getDoctrine()->getManager()
+            'em' => $em
         ));
 
         $form->add('submit', SubmitType::class, array('label' => 'Añadir'));
@@ -86,11 +82,11 @@ class GiftController extends AbstractAppController
      * Displays a form to create a new Gift entity.
      *
      */
-    public function new()
+    public function new(EntityManagerInterface $em)
     {
         $entity = new Gift();
         $entity->setUser($this->getUser());
-        $form = $this->createCreateForm($entity);
+        $form = $this->createCreateForm($entity, $em);
 
         return $this->render('Gift/new.html.twig', array(
             'entity' => $entity,
@@ -102,10 +98,8 @@ class GiftController extends AbstractAppController
      * Finds and displays a Gift entity.
      *
      */
-    public function show($id)
+    public function show($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Gift::class)->find($id);
 
         if (!$entity) {
@@ -124,10 +118,8 @@ class GiftController extends AbstractAppController
      * Displays a form to edit an existing Gift entity.
      *
      */
-    public function edit($id)
+    public function edit($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Gift::class)->find($id);
 
         if (!$entity) {
@@ -168,10 +160,8 @@ class GiftController extends AbstractAppController
      * Edits an existing Gift entity.
      *
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, $id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Gift::class)->find($id);
 
         if (!$entity) {
@@ -201,13 +191,12 @@ class GiftController extends AbstractAppController
      * Deletes a Gift entity.
      *
      */
-    public function delete(Request $request, $id)
+    public function delete(Request $request, $id, EntityManagerInterface $em)
     {
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\Gift::class)->find($id);
 
             if (!$entity) {

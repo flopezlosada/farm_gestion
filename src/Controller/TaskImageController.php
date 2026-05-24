@@ -2,31 +2,28 @@
 
 namespace App\Controller;
 
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-
-use Symfony\Component\HttpFoundation\Request;
-use App\Controller\AbstractAppController;
-use Symfony\Component\Security\Http\Attribute\IsGranted;
-
 use App\Entity\TaskImage;
 use App\Form\TaskImageType;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * TaskImage controller.
  *
  */
 #[IsGranted('ROLE_GESTION_GRANJA')]
-class TaskImageController extends AbstractAppController
+class TaskImageController extends AbstractController
 {
 
     /**
      * Lists all TaskImage entities.
      *
      */
-    public function index()
+    public function index(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entities = $em->getRepository(\App\Entity\TaskImage::class)->findAll();
 
         return $this->render('TaskImage/index.html.twig', array(
@@ -38,12 +35,11 @@ class TaskImageController extends AbstractAppController
      * Creates a new TaskImage entity.
      *
      */
-    public function create(Request $request, $task_id)
+    public function create(Request $request, $task_id, EntityManagerInterface $em)
     {
         $entity = new TaskImage();
         $form = $this->createCreateForm($entity, $task_id);
         $form->handleRequest($request);
-        $em = $this->getDoctrine()->getManager();
 
         $task = $em->getRepository(\App\Entity\Task::class)->find($task_id);
         $entity->setTask($task);
@@ -84,11 +80,10 @@ class TaskImageController extends AbstractAppController
      * Displays a form to create a new TaskImage entity.
      *
      */
-    public function new($task_id)
+    public function new($task_id, EntityManagerInterface $em)
     {
         $entity = new TaskImage();
         $form = $this->createCreateForm($entity, $task_id);
-        $em = $this->getDoctrine()->getManager();
 
         $task = $em->getRepository(\App\Entity\Task::class)->find($task_id);
         $entity->setTask($task);
@@ -102,10 +97,8 @@ class TaskImageController extends AbstractAppController
      * Finds and displays a TaskImage entity.
      *
      */
-    public function show($id)
+    public function show($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\TaskImage::class)->find($id);
 
         if (!$entity) {
@@ -124,10 +117,8 @@ class TaskImageController extends AbstractAppController
      * Displays a form to edit an existing TaskImage entity.
      *
      */
-    public function edit($id)
+    public function edit($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\TaskImage::class)->find($id);
 
         if (!$entity) {
@@ -167,10 +158,8 @@ class TaskImageController extends AbstractAppController
      * Edits an existing TaskImage entity.
      *
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, $id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\TaskImage::class)->find($id);
 
         if (!$entity) {
@@ -198,13 +187,12 @@ class TaskImageController extends AbstractAppController
      * Deletes a TaskImage entity.
      *
      */
-    public function delete(Request $request, $id)
+    public function delete(Request $request, $id, EntityManagerInterface $em)
     {
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\TaskImage::class)->find($id);
 
             if (!$entity) {
