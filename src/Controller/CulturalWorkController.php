@@ -2,31 +2,28 @@
 
 namespace App\Controller;
 
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-
-use Symfony\Component\HttpFoundation\Request;
-use App\Controller\AbstractAppController;
-use Symfony\Component\Security\Http\Attribute\IsGranted;
-
 use App\Entity\CulturalWork;
 use App\Form\CulturalWorkType;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * CulturalWork controller.
  *
  */
 #[IsGranted('ROLE_GESTION_GRANJA')]
-class CulturalWorkController extends AbstractAppController
+class CulturalWorkController extends AbstractController
 {
 
     /**
      * Lists all CulturalWork entities.
      *
      */
-    public function index()
+    public function index(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entities = $em->getRepository(\App\Entity\CulturalWork::class)->findAll();
 
         return $this->render('CulturalWork/index.html.twig', array(
@@ -38,14 +35,13 @@ class CulturalWorkController extends AbstractAppController
      * Creates a new CulturalWork entity.
      *
      */
-    public function create(Request $request)
+    public function create(Request $request, EntityManagerInterface $em)
     {
         $entity = new CulturalWork();
         $form = $this->createCreateForm($entity);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity->setDate(new \DateTime($entity->getDate()));
             $em->persist($entity);
             $em->flush();
@@ -97,10 +93,8 @@ class CulturalWorkController extends AbstractAppController
      * Finds and displays a CulturalWork entity.
      *
      */
-    public function show($id)
+    public function show($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\CulturalWork::class)->find($id);
 
         if (!$entity) {
@@ -119,10 +113,8 @@ class CulturalWorkController extends AbstractAppController
      * Displays a form to edit an existing CulturalWork entity.
      *
      */
-    public function edit($id)
+    public function edit($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\CulturalWork::class)->find($id);
 
         if (!$entity) {
@@ -164,10 +156,8 @@ class CulturalWorkController extends AbstractAppController
      * Edits an existing CulturalWork entity.
      *
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, $id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\CulturalWork::class)->find($id);
 
         if (!$entity) {
@@ -196,13 +186,12 @@ class CulturalWorkController extends AbstractAppController
      * Deletes a CulturalWork entity.
      *
      */
-    public function delete(Request $request, $id)
+    public function delete(Request $request, $id, EntityManagerInterface $em)
     {
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\CulturalWork::class)->find($id);
 
             if (!$entity) {
