@@ -2,31 +2,28 @@
 
 namespace App\Controller;
 
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-
-use Symfony\Component\HttpFoundation\Request;
-use App\Controller\AbstractAppController;
-use Symfony\Component\Security\Http\Attribute\IsGranted;
-
 use App\Entity\Harvest;
 use App\Form\HarvestType;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * Harvest controller.
  *
  */
 #[IsGranted('ROLE_GESTION_GRANJA')]
-class HarvestController extends AbstractAppController
+class HarvestController extends AbstractController
 {
 
     /**
      * Lists all Harvest entities.
      *
      */
-    public function index()
+    public function index(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entities = $em->getRepository(\App\Entity\Harvest::class)->findAll();
 
         return $this->render('Harvest/index.html.twig', array(
@@ -38,14 +35,13 @@ class HarvestController extends AbstractAppController
      * Creates a new Harvest entity.
      *
      */
-    public function create(Request $request)
+    public function create(Request $request, EntityManagerInterface $em)
     {
         $entity = new Harvest();
         $form = $this->createCreateForm($entity);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity->setHarvestDate(new \DateTime($entity->getHarvestDate()));
             $em->persist($entity);
             $em->flush();
@@ -97,10 +93,8 @@ class HarvestController extends AbstractAppController
      * Finds and displays a Harvest entity.
      *
      */
-    public function show($id)
+    public function show($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Harvest::class)->find($id);
 
         if (!$entity) {
@@ -119,10 +113,8 @@ class HarvestController extends AbstractAppController
      * Displays a form to edit an existing Harvest entity.
      *
      */
-    public function edit($id)
+    public function edit($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Harvest::class)->find($id);
 
         if (!$entity) {
@@ -165,10 +157,8 @@ class HarvestController extends AbstractAppController
      * Edits an existing Harvest entity.
      *
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, $id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Harvest::class)->find($id);
 
         if (!$entity) {
@@ -200,13 +190,12 @@ class HarvestController extends AbstractAppController
      * Deletes a Harvest entity.
      *
      */
-    public function delete(Request $request, $id)
+    public function delete(Request $request, $id, EntityManagerInterface $em)
     {
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\Harvest::class)->find($id);
 
             if (!$entity) {

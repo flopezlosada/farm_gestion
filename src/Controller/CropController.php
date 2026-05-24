@@ -2,10 +2,10 @@
 
 namespace App\Controller;
 
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-
 use Symfony\Component\HttpFoundation\Request;
-use App\Controller\AbstractAppController;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 use App\Entity\Crop;
@@ -16,17 +16,15 @@ use App\Form\CropType;
  *
  */
 #[IsGranted('ROLE_GESTION_GRANJA')]
-class CropController extends AbstractAppController
+class CropController extends AbstractController
 {
 
     /**
      * Lists all Crop entities.
      *
      */
-    public function index()
+    public function index(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entities = $em->getRepository(\App\Entity\Crop::class)->findAll();
         $year = date('Y');
         foreach ($entities as $entity) {
@@ -44,14 +42,13 @@ class CropController extends AbstractAppController
      * Creates a new Crop entity.
      *
      */
-    public function create(Request $request)
+    public function create(Request $request, EntityManagerInterface $em)
     {
         $entity = new Crop();
         $form = $this->createCreateForm($entity);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity->setIsInProduction(0);
             $em->persist($entity);
             $em->flush();
@@ -99,11 +96,8 @@ class CropController extends AbstractAppController
         ));
     }
 
-    public function resume()
+    public function resume(EntityManagerInterface $em)
     {
-
-
-        $em = $this->getDoctrine()->getManager();
 
         /*$productions=$em->getRepository(\App\Entity\Production::class)->findAll();
         foreach ($productions as $production)
@@ -146,10 +140,8 @@ class CropController extends AbstractAppController
      * Finds and displays a Crop entity.
      *
      */
-    public function show($id)
+    public function show($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Crop::class)->find($id);
 
         if (!$entity) {
@@ -169,10 +161,8 @@ class CropController extends AbstractAppController
      * Displays a form to edit an existing Crop entity.
      *
      */
-    public function edit($id)
+    public function edit($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Crop::class)->find($id);
 
         if (!$entity) {
@@ -212,10 +202,8 @@ class CropController extends AbstractAppController
      * Edits an existing Crop entity.
      *
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, $id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Crop::class)->find($id);
 
         if (!$entity) {
@@ -243,13 +231,12 @@ class CropController extends AbstractAppController
      * Deletes a Crop entity.
      *
      */
-    public function delete(Request $request, $id)
+    public function delete(Request $request, $id, EntityManagerInterface $em)
     {
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\Crop::class)->find($id);
 
             if (!$entity) {

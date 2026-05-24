@@ -2,31 +2,28 @@
 
 namespace App\Controller;
 
-use App\Controller\AbstractAppController;
-use Symfony\Component\Security\Http\Attribute\IsGranted;
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-use Symfony\Component\HttpFoundation\Request;
-
-
 use App\Entity\Lay;
 use App\Form\LayType;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * Lay controller.
  *
  */
 #[IsGranted('ROLE_GESTION_GRANJA')]
-class LayController extends AbstractAppController
+class LayController extends AbstractController
 {
 
     /**
      * Lists all Lay entities.
      *
      */
-    public function index()
+    public function index(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entities = $em->getRepository(\App\Entity\Lay::class)->findAll();
 
         return $this->render('Lay/index.html.twig', array(
@@ -38,16 +35,14 @@ class LayController extends AbstractAppController
      * Creates a new Lay entity.
      *
      */
-    public function create(Request $request)
+    public function create(Request $request, EntityManagerInterface $em)
     {
         $entity = new Lay();
         $entity->setUser($this->getUser());
-        $form = $this->createCreateForm($entity);
+        $form = $this->createCreateForm($entity, $em);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-
-            $em = $this->getDoctrine()->getManager();
             $entity->setWeek(date('W', strtotime($entity->getLayDate())));
             $entity->setLayDate(new \DateTime($entity->getLayDate()));
             $em->persist($entity);
@@ -66,16 +61,20 @@ class LayController extends AbstractAppController
     /**
      * Creates a form to create a Lay entity.
      *
+     * LayType requiere el EntityManager por la opción 'em' (lo usa para
+     * construir el selector de origen del huevo). El em llega del action,
+     * no de this->getDoctrine() porque el helper no tiene acceso a DI.
+     *
      * @param Lay $entity The entity
      *
      * @return \Symfony\Component\Form\Form The form
      */
-    private function createCreateForm(Lay $entity)
+    private function createCreateForm(Lay $entity, EntityManagerInterface $em)
     {
         $form = $this->createForm(LayType::class, $entity, array(
             'action' => $this->generateUrl('lay_create'),
             'method' => 'POST',
-            'em' => $this->getDoctrine()->getManager()
+            'em' => $em
         ));
 
         $form->add('submit', SubmitType::class, array('label' => 'Crear'));
@@ -87,11 +86,11 @@ class LayController extends AbstractAppController
      * Displays a form to create a new Lay entity.
      *
      */
-    public function new()
+    public function new(EntityManagerInterface $em)
     {
         $entity = new Lay();
         $entity->setUser($this->getUser());
-        $form = $this->createCreateForm($entity);
+        $form = $this->createCreateForm($entity, $em);
 
         return $this->render('Lay/new.html.twig', array(
             'entity' => $entity,
@@ -103,10 +102,8 @@ class LayController extends AbstractAppController
      * Finds and displays a Lay entity.
      *
      */
-    public function show($id)
+    public function show($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Lay::class)->find($id);
 
         if (!$entity) {
@@ -125,10 +122,8 @@ class LayController extends AbstractAppController
      * Displays a form to edit an existing Lay entity.
      *
      */
-    public function edit($id)
+    public function edit($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Lay::class)->find($id);
 
         if (!$entity) {
@@ -169,10 +164,8 @@ class LayController extends AbstractAppController
      * Edits an existing Lay entity.
      *
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, $id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Lay::class)->find($id);
 
         if (!$entity) {
@@ -203,13 +196,12 @@ class LayController extends AbstractAppController
      * Deletes a Lay entity.
      *
      */
-    public function delete(Request $request, $id)
+    public function delete(Request $request, $id, EntityManagerInterface $em)
     {
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\Lay::class)->find($id);
 
             if (!$entity) {

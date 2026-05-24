@@ -2,7 +2,8 @@
 
 namespace App\Controller;
 
-use App\Controller\AbstractAppController;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
@@ -17,7 +18,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * invoca `AppExtension` al expandir shortcodes en el blog público.
  */
 #[IsGranted('ROLE_BLOG')]
-class GalleryController extends AbstractAppController
+class GalleryController extends AbstractController
 {
     /**
      * Snippet inline para el frontend público del blog. Lo invoca
@@ -27,10 +28,8 @@ class GalleryController extends AbstractAppController
      * La galería renderiza todas las imágenes del post agrupadas
      * (single=0), no las imágenes de una entidad `Gallery`.
      */
-    public function show_snippet($id, $object_class)
+    public function show_snippet($id, $object_class, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $blog = $em->getRepository(\App\Entity\Blog::class)->find($id);
         $images = $em->getRepository(\App\Entity\Image::class)->findBlogGroupedImages($id, $object_class);
 

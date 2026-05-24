@@ -2,16 +2,15 @@
 
 namespace App\Controller;
 
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-
+use App\Entity\Batch;
 use App\Entity\Fowl;
 use App\Form\BatchEditType;
-use Symfony\Component\HttpFoundation\Request;
-use App\Controller\AbstractAppController;
-use Symfony\Component\Security\Http\Attribute\IsGranted;
-
-use App\Entity\Batch;
 use App\Form\BatchType;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\Validator\Constraints\DateTime;
 
 /**
@@ -19,17 +18,15 @@ use Symfony\Component\Validator\Constraints\DateTime;
  *
  */
 #[IsGranted('ROLE_GESTION_GRANJA')]
-class BatchController extends AbstractAppController
+class BatchController extends AbstractController
 {
 
     /**
      * Lists all Batch entities.
      *
      */
-    public function index()
+    public function index(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entities = $em->getRepository(\App\Entity\Batch::class)->findAll();
 
         return $this->render('Batch/index.html.twig', array(
@@ -41,15 +38,13 @@ class BatchController extends AbstractAppController
      * Creates a new Batch entity.
      *
      */
-    public function create(Request $request)
+    public function create(Request $request, EntityManagerInterface $em)
     {
         $entity = new Batch();
         $form = $this->createCreateForm($entity);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
-
             $entity->setPurchaseDate(new \DateTime($entity->getPurchaseDate()));
             $entity->setReceiptDate(new \DateTime($entity->getReceiptDate()));
             $batch_status = $em->getRepository(\App\Entity\BatchStatus::class)->find(1);
@@ -112,10 +107,8 @@ class BatchController extends AbstractAppController
      * Finds and displays a Batch entity.
      *
      */
-    public function show($id)
+    public function show($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Batch::class)->find($id);
 
         if (!$entity) {
@@ -208,10 +201,8 @@ class BatchController extends AbstractAppController
      * Displays a form to edit an existing Batch entity.
      *
      */
-    public function edit($id)
+    public function edit($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Batch::class)->find($id);
 
         if (!$entity) {
@@ -258,10 +249,8 @@ class BatchController extends AbstractAppController
      * Edits an existing Batch entity.
      *
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, $id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Batch::class)->find($id);
 
         if (!$entity) {
@@ -299,13 +288,12 @@ class BatchController extends AbstractAppController
      * Deletes a Batch entity.
      *
      */
-    public function delete(Request $request, $id)
+    public function delete(Request $request, $id, EntityManagerInterface $em)
     {
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\Batch::class)->find($id);
 
             if (!$entity) {
@@ -335,10 +323,8 @@ class BatchController extends AbstractAppController
             ->getForm();
     }
 
-    public function close($id)
+    public function close($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Batch::class)->find($id);
         $batch_status = $em->getRepository(\App\Entity\BatchStatus::class)->find(2);
 
@@ -362,10 +348,8 @@ class BatchController extends AbstractAppController
         return $this->redirect($this->generateUrl("batch_show", array('id' => $id)));
     }
 
-    public function reactivate($id)
+    public function reactivate($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Batch::class)->find($id);
         $batch_status = $em->getRepository(\App\Entity\BatchStatus::class)->find(1);
 
@@ -387,11 +371,8 @@ class BatchController extends AbstractAppController
     }
 
 
-    public function analysesYear($product_id, $year)
+    public function analysesYear($product_id, $year, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
-
         if (!$year) {
             $year = date('Y');
         }
@@ -428,9 +409,8 @@ class BatchController extends AbstractAppController
         ));
     }
 
-    public function analyses($product_id)
+    public function analyses($product_id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
         $product = $em->getRepository(\App\Entity\Product::class)->find($product_id);//pollos o gallinas
         $years = $em->getRepository(\App\Entity\Batch::class)->findYearsInProduction($product_id);//devuelve los años en que se ha producido según el producto, ya sea gallinas o pollos
 
@@ -440,9 +420,8 @@ class BatchController extends AbstractAppController
         ));
     }
 
-    public function hens_analyses()
+    public function hens_analyses(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
         $hens_batchs = $em->getRepository(\App\Entity\Batch::class)->findBatchs(6, 5);//devuelve lotes del tipo 6 y límite 4 lotes
         $batchs_week_lay = array();
         $batchs_month_lay = array();
