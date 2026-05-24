@@ -52,11 +52,17 @@ class CatalogFixtures extends Fixture
         // — el código asume 1=Semanal, 2=Quincenal, 3=Mensual, 4=Solo huevos
         // (constantes SHARE_BIWEEKLY=2 y SHARE_MONTHLY=3 en WindowRule y
         // WeeklyBasketGenerator).
+        // 5 tipos hardcodeados con id explícito. El código del
+        // WeeklyBasketGenerator y los repositorios usan ESTOS ids como
+        // constantes (SHARE_WEEKLY=1, SHARE_BIWEEKLY=2, SHARE_MONTHLY=3,
+        // SHARE_HALF=4 (semanal compartida, antigua media cesta),
+        // SHARE_ONLY_EGG=5). Cambiar los ids rompe el reparto.
         $baskets = [
-            1 => ['name' => 'Semanal',     'price' => '60.00', 'equivalence' => '1.00'],
-            2 => ['name' => 'Quincenal',   'price' => '30.00', 'equivalence' => '0.50'],
-            3 => ['name' => 'Mensual',     'price' => '15.00', 'equivalence' => '0.25'],
-            4 => ['name' => 'Solo huevos', 'price' => '0.00',  'equivalence' => '0.00'],
+            1 => ['name' => 'Semanal',             'price' => '60.00', 'equivalence' => '1.00'],
+            2 => ['name' => 'Quincenal',           'price' => '30.00', 'equivalence' => '0.50'],
+            3 => ['name' => 'Mensual',             'price' => '15.00', 'equivalence' => '0.25'],
+            4 => ['name' => 'Semanal compartida',  'price' => '30.00', 'equivalence' => '0.50'],
+            5 => ['name' => 'Solo huevos',         'price' => '0.00',  'equivalence' => '0.00'],
         ];
 
         $basketMetadata = $manager->getClassMetadata(BasketShare::class);
@@ -100,13 +106,32 @@ class CatalogFixtures extends Fixture
             $this->addReference(self::REF_SHARE_PAYMENT_PREFIX . $payment, $sharePayment);
         }
 
-        $groups = [
-            'Madrid'                     => '#e74c3c',
-            'Vallecas'                   => '#3498db',
-            'San Sebastián de los Reyes' => '#2ecc71',
+        // Grupos canónicos de reparto: lista derivada de los listados PDF
+        // de reparto reales (4 PDFs mensuales y de sierra) más los 8 grupos
+        // de los que aún no tenemos PDF pero sí socios en COBROS.
+        // El color se asigna algorítmicamente con HSL para tener distinción
+        // estable y reproducible — no es decorativo, se usa en los
+        // listados impresos para identificar visualmente el grupo.
+        $groupNames = [
+            // "Sin grupo" — destino para socixs incompletos / casos
+            // especiales sin grupo de reparto asignado (ej. AMUMI,
+            // Mª José LA BARCA: colaboradores sin grupo).
+            'Sin grupo',
+            // Grupos del nodo Torremocha (con PDF mensual)
+            'Alcobendas/Sanse/Tres Cantos', 'Bustarviejo', 'Cabanillas', 'Caraquiz',
+            'Casas de Uceda', 'El Atazar', 'El Casar', 'El Molar', 'Guadalix',
+            'La Cabrera', 'Madarcos/Manjirón', 'Patones', 'Pedrezuela', 'Puebla',
+            'Redueña', 'San Fernando de Henares', 'Tomillares', 'Torrelaguna',
+            'Torremocha', 'Trabajadores', 'Trabensol', 'Uceda', 'Valdeolmos',
+            'Valdepiélagos', 'Valdetorres',
+            // Grupos sin PDF de reparto conocido (pendiente de admin)
+            'Cascorro', 'Legazpi', 'Midori', 'Chamberí', 'Talamanca',
+            'Manzanares El Real', 'Madrid', 'Navas de Buitrago',
         ];
 
-        foreach ($groups as $name => $color) {
+        foreach ($groupNames as $i => $name) {
+            $hue = (int) round(($i * 360) / count($groupNames));
+            $color = $this->hslToHex($hue, 60, 70);
             $group = (new WeeklyBasketGroup())->setName($name)->setColor($color);
             $manager->persist($group);
             $this->addReference(self::REF_WEEKLY_GROUP_PREFIX . $name, $group);
@@ -153,5 +178,35 @@ class CatalogFixtures extends Fixture
         $manager->persist($state);
 
         return $state;
+    }
+
+    /**
+     * Convierte HSL a un código #rrggbb. Se usa para asignar colores
+     * distinguibles y reproducibles a los grupos de reparto.
+     *
+     * @param int $h hue 0-359
+     * @param int $s saturación 0-100
+     * @param int $l lightness 0-100
+     */
+    private function hslToHex(int $h, int $s, int $l): string
+    {
+        $sN = $s / 100;
+        $lN = $l / 100;
+        $c = (1 - abs(2 * $lN - 1)) * $sN;
+        $x = $c * (1 - abs(fmod($h / 60, 2) - 1));
+        $m = $lN - $c / 2;
+        [$r, $g, $b] = match (intdiv($h, 60) % 6) {
+            0 => [$c, $x, 0.0],
+            1 => [$x, $c, 0.0],
+            2 => [0.0, $c, $x],
+            3 => [0.0, $x, $c],
+            4 => [$x, 0.0, $c],
+            5 => [$c, 0.0, $x],
+        };
+        return sprintf('#%02x%02x%02x',
+            (int) round(($r + $m) * 255),
+            (int) round(($g + $m) * 255),
+            (int) round(($b + $m) * 255),
+        );
     }
 }

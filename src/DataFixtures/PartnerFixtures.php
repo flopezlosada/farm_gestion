@@ -34,10 +34,15 @@ class PartnerFixtures extends Fixture implements DependentFixtureInterface
         'Tres Cantos',
     ];
 
+    /**
+     * Muestra de grupos canónicos para los socixs sintéticos. No es
+     * exhaustiva: cubre nodo Torremocha (varios grupos) y grupos sin PDF
+     * conocido todavía para que los tests cubran ambos casos.
+     */
     private const GROUP_NAMES = [
+        'Torremocha',
+        'La Cabrera',
         'Madrid',
-        'Vallecas',
-        'San Sebastián de los Reyes',
     ];
 
     /**
