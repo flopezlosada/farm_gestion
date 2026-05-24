@@ -2,31 +2,28 @@
 
 namespace App\Controller;
 
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-
-use Symfony\Component\HttpFoundation\Request;
-use App\Controller\AbstractAppController;
-use Symfony\Component\Security\Http\Attribute\IsGranted;
-
 use App\Entity\Zone;
 use App\Form\ZoneType;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * Zone controller.
  *
  */
 #[IsGranted('ROLE_GESTION_GRANJA')]
-class ZoneController extends AbstractAppController
+class ZoneController extends AbstractController
 {
 
     /**
      * Lists all Zone entities.
      *
      */
-    public function index()
+    public function index(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entities = $em->getRepository(\App\Entity\Zone::class)->findAll();
 
         return $this->render('Zone/index.html.twig', array(
@@ -38,14 +35,13 @@ class ZoneController extends AbstractAppController
      * Creates a new Zone entity.
      *
      */
-    public function create(Request $request)
+    public function create(Request $request, EntityManagerInterface $em)
     {
         $entity = new Zone();
         $form = $this->createCreateForm($entity);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $em->persist($entity);
             $em->flush();
 
@@ -96,10 +92,8 @@ class ZoneController extends AbstractAppController
      * Finds and displays a Zone entity.
      *
      */
-    public function show($id)
+    public function show($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Zone::class)->find($id);
 
         if (!$entity) {
@@ -118,10 +112,8 @@ class ZoneController extends AbstractAppController
      * Displays a form to edit an existing Zone entity.
      *
      */
-    public function edit($id)
+    public function edit($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Zone::class)->find($id);
 
         if (!$entity) {
@@ -161,10 +153,8 @@ class ZoneController extends AbstractAppController
      * Edits an existing Zone entity.
      *
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, $id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Zone::class)->find($id);
 
         if (!$entity) {
@@ -192,13 +182,12 @@ class ZoneController extends AbstractAppController
      * Deletes a Zone entity.
      *
      */
-    public function delete(Request $request, $id)
+    public function delete(Request $request, $id, EntityManagerInterface $em)
     {
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\Zone::class)->find($id);
 
             if (!$entity) {

@@ -2,33 +2,30 @@
 
 namespace App\Controller;
 
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-
-use Symfony\Component\HttpFoundation\Request;
-use App\Controller\AbstractAppController;
-use Symfony\Component\Security\Http\Attribute\IsGranted;
-
 use App\Entity\Sector;
 use App\Form\SectorType;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * Sector controller.
  *
  */
 #[IsGranted('ROLE_GESTION_GRANJA')]
-class SectorController extends AbstractAppController
+class SectorController extends AbstractController
 {
 
     /**
      * Lists all Sector entities.
      *
      */
-    public function index()
+    public function index(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entities = $em->getRepository(\App\Entity\Sector::class)->findAll();
 
         return $this->render('Sector/index.html.twig', array(
@@ -40,14 +37,13 @@ class SectorController extends AbstractAppController
      * Creates a new Sector entity.
      *
      */
-    public function create(Request $request)
+    public function create(Request $request, EntityManagerInterface $em)
     {
         $entity = new Sector();
         $form = $this->createCreateForm($entity);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $em->persist($entity);
             $em->flush();
 
@@ -98,10 +94,8 @@ class SectorController extends AbstractAppController
      * Finds and displays a Sector entity.
      *
      */
-    public function show($id)
+    public function show($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Sector::class)->find($id);
 
         if (!$entity) {
@@ -120,10 +114,8 @@ class SectorController extends AbstractAppController
      * Displays a form to edit an existing Sector entity.
      *
      */
-    public function edit($id)
+    public function edit($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Sector::class)->find($id);
 
         if (!$entity) {
@@ -163,10 +155,8 @@ class SectorController extends AbstractAppController
      * Edits an existing Sector entity.
      *
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, $id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Sector::class)->find($id);
 
         if (!$entity) {
@@ -194,13 +184,12 @@ class SectorController extends AbstractAppController
      * Deletes a Sector entity.
      *
      */
-    public function delete(Request $request, $id)
+    public function delete(Request $request, $id, EntityManagerInterface $em)
     {
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\Sector::class)->find($id);
 
             if (!$entity) {
@@ -231,9 +220,8 @@ class SectorController extends AbstractAppController
     }
 
     #[Route("/sectors", name: "select_sector")]
-    public function sectors(Request $request): Response
+    public function sectors(Request $request, EntityManagerInterface $em): Response
     {
-        $em = $this->getDoctrine()->getManager();
         $zone = $em->getRepository(\App\Entity\Zone::class)->findById($request->get('zone_id'));
         $sectors = $em->getRepository(\App\Entity\Sector::class)->findByZone($zone);
 

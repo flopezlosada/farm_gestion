@@ -2,31 +2,28 @@
 
 namespace App\Controller;
 
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-
-use Symfony\Component\HttpFoundation\Request;
-use App\Controller\AbstractAppController;
-use Symfony\Component\Security\Http\Attribute\IsGranted;
-
 use App\Entity\BatchStatus;
 use App\Form\BatchStatusType;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * BatchStatus controller.
  *
  */
 #[IsGranted('ROLE_GESTION_GRANJA')]
-class BatchStatusController extends AbstractAppController
+class BatchStatusController extends AbstractController
 {
 
     /**
      * Lists all BatchStatus entities.
      *
      */
-    public function index()
+    public function index(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entities = $em->getRepository(\App\Entity\BatchStatus::class)->findAll();
 
         return $this->render('BatchStatus/index.html.twig', array(
@@ -38,14 +35,13 @@ class BatchStatusController extends AbstractAppController
      * Creates a new BatchStatus entity.
      *
      */
-    public function create(Request $request)
+    public function create(Request $request, EntityManagerInterface $em)
     {
         $entity = new BatchStatus();
         $form = $this->createCreateForm($entity);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $em->persist($entity);
             $em->flush();
 
@@ -96,10 +92,8 @@ class BatchStatusController extends AbstractAppController
      * Finds and displays a BatchStatus entity.
      *
      */
-    public function show($id)
+    public function show($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\BatchStatus::class)->find($id);
 
         if (!$entity) {
@@ -118,10 +112,8 @@ class BatchStatusController extends AbstractAppController
      * Displays a form to edit an existing BatchStatus entity.
      *
      */
-    public function edit($id)
+    public function edit($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\BatchStatus::class)->find($id);
 
         if (!$entity) {
@@ -161,10 +153,8 @@ class BatchStatusController extends AbstractAppController
      * Edits an existing BatchStatus entity.
      *
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, $id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\BatchStatus::class)->find($id);
 
         if (!$entity) {
@@ -192,13 +182,12 @@ class BatchStatusController extends AbstractAppController
      * Deletes a BatchStatus entity.
      *
      */
-    public function delete(Request $request, $id)
+    public function delete(Request $request, $id, EntityManagerInterface $em)
     {
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\BatchStatus::class)->find($id);
 
             if (!$entity) {
