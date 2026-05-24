@@ -55,6 +55,21 @@ class Partner
     private $address;
 
     /**
+     * IBAN para la remesa SEPA. Pertenece al titular legal del socio.
+     * Nullable mientras la importación inicial no haya cargado todos los IBANs.
+     * @ORM\Column(type="string", length=34, nullable=true)
+     */
+    #[Assert\Length(max: 34)]
+    private ?string $iban = null;
+
+    /**
+     * Observaciones libres sobre el socio (ej. cuotas especiales, acuerdos,
+     * notas de administración). Equivale al campo `observaciones` de COBROS.
+     * @ORM\Column(type="text", nullable=true)
+     */
+    private ?string $notes = null;
+
+    /**
      * @var smallint $state
      * @ORM\ManyToOne(targetEntity="State", inversedBy="partners")
      */
@@ -134,6 +149,16 @@ class Partner
      */
     private $partner_basket_shares;
 
+    /**
+     * Episodios de pertenencia a la asociación. Si un socio se da de alta,
+     * baja, y vuelve a alta meses después, hay 2 PartnerMembershipPeriod.
+     * Permite reconstruir gráficos históricos de socios activos por fecha.
+     *
+     * @ORM\OneToMany(targetEntity="PartnerMembershipPeriod", mappedBy="partner", cascade={"persist","remove"})
+     * @ORM\OrderBy({"start_date"="ASC"})
+     */
+    private $membership_periods;
+
 
     /**
      *
@@ -159,7 +184,7 @@ class Partner
     private $eat_meat;
 
     /**
-     * @ORM\Column(type="string", length=255)
+     * @ORM\Column(type="string", length=255, nullable=true)
      */
     #[Assert\Email]
     private $email;
@@ -244,6 +269,24 @@ class Partner
 
         $this->weekly_baskets = new ArrayCollection();
         $this->relatives = new ArrayCollection();
+        $this->membership_periods = new ArrayCollection();
+    }
+
+    /**
+     * @return Collection|PartnerMembershipPeriod[]
+     */
+    public function getMembershipPeriods(): Collection
+    {
+        return $this->membership_periods;
+    }
+
+    public function addMembershipPeriod(PartnerMembershipPeriod $period): self
+    {
+        if (!$this->membership_periods->contains($period)) {
+            $this->membership_periods[] = $period;
+            $period->setPartner($this);
+        }
+        return $this;
     }
 
 
@@ -285,7 +328,7 @@ class Partner
         return $this->surname;
     }
 
-    public function setSurname(string $surname): self
+    public function setSurname(?string $surname): self
     {
         $this->surname = $surname;
 
@@ -326,6 +369,30 @@ class Partner
     public function setAddress(?string $address): self
     {
         $this->address = $address;
+
+        return $this;
+    }
+
+    public function getIban(): ?string
+    {
+        return $this->iban;
+    }
+
+    public function setIban(?string $iban): self
+    {
+        $this->iban = $iban !== null ? strtoupper(preg_replace('/\s+/', '', $iban)) : null;
+
+        return $this;
+    }
+
+    public function getNotes(): ?string
+    {
+        return $this->notes;
+    }
+
+    public function setNotes(?string $notes): self
+    {
+        $this->notes = $notes;
 
         return $this;
     }

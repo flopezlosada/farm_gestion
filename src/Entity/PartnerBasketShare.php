@@ -120,6 +120,14 @@ class PartnerBasketShare
     private $egg_month_price;
 
     /**
+     * Aporte de transporte al mes. Algunos grupos cobran transporte aparte
+     * (importe_transp_eur en el CSV de COBROS). Nullable: la mayoría de
+     * socios no lo paga.
+     * @ORM\Column(name="transport_price", type="decimal", precision=8, scale=2, nullable=true)
+     */
+    private ?string $transport_price = null;
+
+    /**
      * Período de recogida de huevos. Es para los que sólo tienen huevos
      * @ORM\ManyToOne(targetEntity="EggPeriod", inversedBy="partner_basket_shares")
      */
@@ -397,6 +405,18 @@ class PartnerBasketShare
     public function setEggMonthPrice(string $egg_month_price): self
     {
         $this->egg_month_price = $egg_month_price;
+
+        return $this;
+    }
+
+    public function getTransportPrice(): ?string
+    {
+        return $this->transport_price;
+    }
+
+    public function setTransportPrice(?string $transport_price): self
+    {
+        $this->transport_price = $transport_price;
 
         return $this;
     }
