@@ -30,11 +30,6 @@ security:
     #   ROLE_GESTION_CESTAS     reparto semanal, baskets, shares
     #   ROLE_BLOG               blog público (admin) + categorías + media
     #   ROLE_PARTNER            panel propio del socix
-    #
-    # ROLE_COOP es legacy (FOSUser); se acepta temporalmente en
-    # access_control para no echar a usuarios existentes mientras
-    # migramos. Cuando todos los users tengan los roles nuevos en
-    # BBDD, se elimina.
     # ===========================================================
     role_hierarchy:
         ROLE_ADMIN:
@@ -111,9 +106,10 @@ security:
         # /gestion/dashboard o /panel según roles.
         - { path: ^/post-login$, roles: IS_AUTHENTICATED_FULLY }
         - { path: ^/contact$, roles: PUBLIC_ACCESS }
-        # Cualquier rol de gestión (o el legacy ROLE_COOP, hasta que migremos) permite entrar a /gestion.
-        # Dentro, cada controller filtra con #[IsGranted('ROLE_GESTION_X')] según su sección.
+        # Cualquier rol de gestión permite entrar a /gestion. Dentro,
+        # cada controller filtra con #[IsGranted('ROLE_GESTION_X')] según
+        # su sección.
         - { path: ^/gestion,
-            roles: [ROLE_ADMIN, ROLE_GESTION_GRANJA, ROLE_GESTION_SOCIXS, ROLE_GESTION_CESTAS, ROLE_BLOG, ROLE_COOP] }
+            roles: [ROLE_ADMIN, ROLE_GESTION_GRANJA, ROLE_GESTION_SOCIXS, ROLE_GESTION_CESTAS, ROLE_BLOG] }
         # Panel del socix (lo construiremos en breve).
         - { path: ^/panel, roles: [ROLE_PARTNER, ROLE_ADMIN] }

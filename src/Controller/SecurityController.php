@@ -44,7 +44,7 @@ class SecurityController extends AbstractController
     #[Route('/post-login', name: 'app_post_login')]
     public function postLogin(): Response
     {
-        $managementRoles = ['ROLE_ADMIN', 'ROLE_GESTION_GRANJA', 'ROLE_GESTION_SOCIXS', 'ROLE_GESTION_CESTAS', 'ROLE_BLOG', 'ROLE_COOP'];
+        $managementRoles = ['ROLE_ADMIN', 'ROLE_GESTION_GRANJA', 'ROLE_GESTION_SOCIXS', 'ROLE_GESTION_CESTAS', 'ROLE_BLOG'];
         foreach ($managementRoles as $role) {
             if ($this->isGranted($role)) {
                 return $this->redirectToRoute('dashboard');
