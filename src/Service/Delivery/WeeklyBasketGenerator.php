@@ -158,6 +158,15 @@ class WeeklyBasketGenerator
         $monthly = $weeklyRepo->findBy(['basket_share' => self::SHARE_MONTHLY, 'basket' => $basket]);
         $onlyEgg = $weeklyRepo->findBy(['basket_share' => self::SHARE_ONLY_EGG, 'basket' => $basket]);
 
+        // La sección "compartidas" del PDF agrupa toda media cesta — semanal,
+        // quincenal o lo que sea — bajo el criterio share_partner_id != null,
+        // no por basket_share_id. Se reubican aquí los WBs cuyo Partner tiene
+        // pareja de cesta, vengan de la modalidad que vengan.
+        $this->moveSharedToHalf($weekly, $half);
+        $this->moveSharedToHalf($biweekly, $half);
+        $this->moveSharedToHalf($monthly, $half);
+        $this->moveSharedToHalf($onlyEgg, $half);
+
         $this->stampCurrentBasketOnPartners(
             array_merge($weekly, $biweekly, $monthly, $onlyEgg),
             $basket
@@ -165,6 +174,30 @@ class WeeklyBasketGenerator
         $this->stampHalfBasketPairs($half, $basket);
 
         return [$weekly, $half, $biweekly, $monthly, $onlyEgg];
+    }
+
+    /**
+     * Saca de la colección de modalidad a los items cuyo Partner tiene
+     * share_partner_id != null (= comparte cesta con otra familia) y los
+     * mueve a la colección $half (sección "compartidas" del listado).
+     *
+     * Sirve para WeeklyBasket y PartnerBasketShare indistintamente: ambos
+     * exponen getPartner().
+     *
+     * @param array $source Modificada por referencia: queda sin los compartidos.
+     * @param array $half   Modificada por referencia: recibe los compartidos.
+     */
+    private function moveSharedToHalf(array &$source, array &$half): void
+    {
+        $remaining = [];
+        foreach ($source as $item) {
+            if ($item->getPartner()->getSharePartner() !== null) {
+                $half[] = $item;
+            } else {
+                $remaining[] = $item;
+            }
+        }
+        $source = $remaining;
     }
 
     /**
@@ -191,6 +224,15 @@ class WeeklyBasketGenerator
         $onlyEggBiweekly = $shareRepo->findBasketPartnersBiweeklyAndCity($basket, self::SHARE_ONLY_EGG, 1, true);
         $onlyEggMonthly = $shareRepo->findBasketPartnersMonthlyAndCity($basket, self::SHARE_ONLY_EGG, $dayOrder, true);
         $onlyEgg = array_merge($onlyEggWeekly, $onlyEggBiweekly, $onlyEggMonthly);
+
+        // Misma lógica que en reuseExisting: cualquier compartición (share_partner_id
+        // != null) se reubica a la sección "compartidas", independientemente de la
+        // frecuencia. Una QC/QCH del PDF aparece en COMPARTIDAS porque comparte, no
+        // porque sea semanal.
+        $this->moveSharedToHalf($weekly, $half);
+        $this->moveSharedToHalf($biweekly, $half);
+        $this->moveSharedToHalf($monthly, $half);
+        $this->moveSharedToHalf($onlyEgg, $half);
 
         /** @var PartnerDeliveryShiftRepository $shiftRepo */
         $shiftRepo = $this->em->getRepository(PartnerDeliveryShift::class);
