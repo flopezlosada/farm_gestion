@@ -220,12 +220,56 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
 
 
     /**
+     * Socios mensuales activos cuyo day_month_order coincide con el orden
+     * operativo del viernes recibido. Sustituye la heurística vieja
+     * findBasketPartnersMonthlyAndCity (que dependía de weekly_basket para
+     * excluir a quien ya había recogido, devolviendo 0 cuando esa tabla
+     * estaba vacía).
+     *
+     * El operative_order es 1..N donde N son los viernes hábiles del mes
+     * (excluyendo festivos). Se resuelve fuera vía MonthlyOperativeOrderResolver.
+     *
+     * @return PartnerBasketShare[]
+     */
+    public function findBasketPartnersMonthlyByOperativeOrder(
+        $current_basket,
+        $basket_share_id,
+        int $operative_order,
+        bool $only_eggs = false
+    ) {
+        $em = $this->getEntityManager();
+
+        $dql = "select b from App\\Entity\\PartnerBasketShare b
+                inner join b.partner p
+                where b.basket_share = :basket_share
+                  and b.is_active = 1
+                  and b.day_month_order = :operative_order
+                  and b.start_date <= :date";
+
+        if ($only_eggs) {
+            $dql .= " and b.egg_period = 3 ";
+        }
+
+        $dql .= " ORDER BY p.state, p.city asc";
+
+        $query = $em->createQuery($dql);
+        $query->setParameter("basket_share", $basket_share_id);
+        $query->setParameter("operative_order", $operative_order);
+        $query->setParameter("date", $current_basket->getDate());
+
+        return $query->getResult();
+    }
+
+    /**
      * @param $current_basket_id
      * @param $day_order Primer viernes, segundo viernes, etc del mes
      * devuelve los socios mensuales, que reciben 1 cesta al mes, según el orden de la semana en que reciben. Es decir, si
      *reciben el primer viernes, el segundo, etc...
      * * Ojo, aquí no se pasa el id sino el objeto basket entero
      * Directamente entiendo que se buscan solo los activos
+     *
+     * LEGACY: sustituida por findBasketPartnersMonthlyByOperativeOrder. Se
+     * conserva temporalmente hasta confirmar que no quedan callers.
      */
     public function findBasketPartnersMonthlyAndCity($current_basket,$basket, $day_order, $only_eggs=false)
     {
