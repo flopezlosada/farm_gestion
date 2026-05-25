@@ -106,8 +106,55 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
     }
 
 
+    /**
+     * Socios quincenales activos asignados a una cohorte concreta ('A' o 'B').
+     * Sustituye la heurística vieja de "excluir a quien recogió la semana anterior"
+     * por filtrado directo por PartnerBasketShare.delivery_group. La cohorte
+     * que toca cada Basket la resuelve BiweeklyCohortResolver.
+     *
+     * Los PBS con delivery_group=NULL (patrones de reparto raros como "0,1,1,1")
+     * quedan FUERA de cualquier cohorte y no se devuelven aquí; necesitan
+     * tratamiento manual hasta modelarlos correctamente.
+     *
+     * @param string $cohort 'A' o 'B'.
+     * @return PartnerBasketShare[]
+     */
+    public function findBasketPartnersBiweeklyByCohort(
+        $current_basket,
+        $basket_share_id,
+        $status_id,
+        string $cohort,
+        bool $only_eggs = false
+    ) {
+        $em = $this->getEntityManager();
+
+        $dql = "select b from App\\Entity\\PartnerBasketShare b
+                inner join b.partner p
+                where b.basket_share = :basket_share
+                  and b.is_active = :status
+                  and b.start_date <= :date
+                  and b.delivery_group = :cohort";
+
+        if ($only_eggs) {
+            $dql .= " and b.egg_period = 2 ";
+        }
+
+        $dql .= " ORDER BY p.state, p.city asc";
+
+        $query = $em->createQuery($dql);
+        $query->setParameter("basket_share", $basket_share_id);
+        $query->setParameter("status", $status_id);
+        $query->setParameter("date", $current_basket->getDate());
+        $query->setParameter("cohort", $cohort);
+
+        return $query->getResult();
+    }
+
     /*
-     * Son los socios quincenales. Hay que buscar que no estén en la semana anterior
+     * LEGACY: socios quincenales. Buscaba que no estén en la semana anterior.
+     * Sustituida por findBasketPartnersBiweeklyByCohort. Se mantiene temporalmente
+     * para no romper callers fuera del WeeklyBasketGenerator si los hubiera;
+     * eliminar cuando todas las llamadas hayan migrado.
      */
     public function findBasketPartnersBiweeklyAndCity($current_basket,$basket, $status_id, $only_eggs=false)
     {

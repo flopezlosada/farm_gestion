@@ -47,6 +47,7 @@ class WeeklyBasketGenerator
         private readonly EntityManagerInterface $em,
         private readonly DeliveryShiftApplier $shiftApplier,
         private readonly PartnerShareEventRecorder $shareEventRecorder,
+        private readonly BiweeklyCohortResolver $cohortResolver,
     ) {
     }
 
@@ -215,13 +216,15 @@ class WeeklyBasketGenerator
     {
         $shareRepo = $this->em->getRepository(PartnerBasketShare::class);
 
+        $cohort = $this->cohortResolver->cohortForBasket($basket);
+
         $weekly = $shareRepo->findBasketPartnersByTypeAndCity(self::SHARE_WEEKLY, 1, $basket);
         $half = $shareRepo->findBasketPartnersByTypeAndCity(self::SHARE_HALF, 1, $basket);
-        $biweekly = $shareRepo->findBasketPartnersBiweeklyAndCity($basket, self::SHARE_BIWEEKLY, 1);
+        $biweekly = $shareRepo->findBasketPartnersBiweeklyByCohort($basket, self::SHARE_BIWEEKLY, 1, $cohort);
         $monthly = $shareRepo->findBasketPartnersMonthlyAndCity($basket, self::SHARE_MONTHLY, $dayOrder);
 
         $onlyEggWeekly = $shareRepo->findBasketPartnersByTypeAndCity(self::SHARE_ONLY_EGG, 1, $basket, true);
-        $onlyEggBiweekly = $shareRepo->findBasketPartnersBiweeklyAndCity($basket, self::SHARE_ONLY_EGG, 1, true);
+        $onlyEggBiweekly = $shareRepo->findBasketPartnersBiweeklyByCohort($basket, self::SHARE_ONLY_EGG, 1, $cohort, true);
         $onlyEggMonthly = $shareRepo->findBasketPartnersMonthlyAndCity($basket, self::SHARE_ONLY_EGG, $dayOrder, true);
         $onlyEgg = array_merge($onlyEggWeekly, $onlyEggBiweekly, $onlyEggMonthly);
 
