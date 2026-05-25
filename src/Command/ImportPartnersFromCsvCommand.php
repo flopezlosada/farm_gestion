@@ -6,9 +6,11 @@ use App\Entity\BasketShare;
 use App\Entity\City;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
+use App\Entity\PartnerEvent;
 use App\Entity\PartnerMembershipPeriod;
 use App\Entity\State;
 use App\Entity\WeeklyBasketGroup;
+use App\Service\Partner\PartnerShareEventRecorder;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -63,6 +65,7 @@ class ImportPartnersFromCsvCommand extends Command
 
     public function __construct(
         private readonly EntityManagerInterface $em,
+        private readonly PartnerShareEventRecorder $shareEventRecorder,
     ) {
         parent::__construct();
     }
@@ -436,6 +439,16 @@ class ImportPartnersFromCsvCommand extends Command
 
         $partner->addPartnerBasketShare($share);
         $this->em->persist($share);
+
+        // Histórico inmutable: el alta operativa de la cesta queda registrada
+        // con la fecha real del start_date (puede ser muy anterior a "hoy"
+        // cuando se importan socixs ya activxs hace tiempo). Actor=cli para
+        // distinguir importaciones de eventos generados desde admin web.
+        $this->shareEventRecorder->recordStart(
+            $share,
+            $share->getStartDate(),
+            PartnerEvent::ACTOR_CLI,
+        );
 
         return $partner;
     }

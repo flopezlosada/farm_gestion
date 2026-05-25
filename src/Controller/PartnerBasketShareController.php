@@ -11,6 +11,7 @@ use App\Entity\WeeklyBasketStatus;
 use App\Form\PartnerBasketShareType;
 use App\Repository\PartnerBasketShareRepository;
 use App\Service\Delivery\WeeklyBasketGenerator;
+use App\Service\Partner\PartnerShareEventRecorder;
 use Doctrine\ORM\EntityManagerInterface;
 use Dompdf\Dompdf;
 use Dompdf\Options;
@@ -36,8 +37,11 @@ class PartnerBasketShareController extends AbstractController
     }
 
     #[Route("/new", name: "partner_basket_share_new", methods: ["GET","POST"])]
-    public function new(Request $request, EntityManagerInterface $entityManager): Response
-    {
+    public function new(
+        Request $request,
+        EntityManagerInterface $entityManager,
+        PartnerShareEventRecorder $shareEventRecorder,
+    ): Response {
         $partnerBasketShare = new PartnerBasketShare();
         $form = $this->createForm(PartnerBasketShareType::class, $partnerBasketShare);
         $form->handleRequest($request);
@@ -46,6 +50,7 @@ class PartnerBasketShareController extends AbstractController
             $partnerBasketShare->setEggMonthPrice($partnerBasketShare->getEggAmount()->getMonthPrice());
 
             $entityManager->persist($partnerBasketShare);
+            $shareEventRecorder->recordStart($partnerBasketShare);
             $entityManager->flush();
 
             return $this->redirectToRoute('partner_basket_share_index');
@@ -141,8 +146,12 @@ class PartnerBasketShareController extends AbstractController
     }
 
     #[Route("/{id}/finalize", name: "partner_basket_share_finalize", methods: ["GET","POST"])]
-    public function finalize(Request $request, PartnerBasketShare $partnerBasketShare, EntityManagerInterface $entityManager): Response
-    {
+    public function finalize(
+        Request $request,
+        PartnerBasketShare $partnerBasketShare,
+        EntityManagerInterface $entityManager,
+        PartnerShareEventRecorder $shareEventRecorder,
+    ): Response {
         $form = $this->createFormBuilder()
             ->add('end_date', TextType::class, array('label' => 'Fecha de finalización', 'attr' => array('class' => 'datepicker form-control')))
             ->add('save', SubmitType::class, ['label' => 'Finalizar cesta'])
@@ -160,6 +169,11 @@ class PartnerBasketShareController extends AbstractController
 
             if ($end_date->format('Y-m-d') < date('Y-m-d')) {
                 $partnerBasketShare->setIsActive(0);
+                // Histórico: sólo se emite BASKET_END cuando el share queda
+                // realmente desactivado. Si el cierre se programa a futuro,
+                // el evento lo emitirá WeeklyBasketGenerator::finalizeExpiredShares
+                // cuando llegue la fecha, evitando duplicados.
+                $shareEventRecorder->recordEnd($partnerBasketShare, $end_date);
             }
 
 

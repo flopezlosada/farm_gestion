@@ -9,6 +9,7 @@ use App\Entity\WeeklyBasket;
 use App\Form\PartnerBasketShareType;
 use App\Form\PartnerType;
 use App\Repository\PartnerRepository;
+use App\Service\Partner\PartnerShareEventRecorder;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\DependencyInjection\Attribute\Target;
@@ -506,8 +507,12 @@ class PartnerController extends AbstractController
     }
 
     #[Route("/{id}/add_basket", name: "partner_add_basket", methods: ["GET","POST"])]
-    public function addBasket(Request $request, Partner $partner, EntityManagerInterface $entityManager): Response
-    {
+    public function addBasket(
+        Request $request,
+        Partner $partner,
+        EntityManagerInterface $entityManager,
+        PartnerShareEventRecorder $shareEventRecorder,
+    ): Response {
         $partnerBasketShare = new PartnerBasketShare();
         $partnerBasketShare->setPartner($partner);
         $form = $this->createForm(PartnerBasketShareType::class, $partnerBasketShare);
@@ -537,6 +542,7 @@ class PartnerController extends AbstractController
                 $partnerBasketShare->setDayMonthOrder(null);
             }
             $entityManager->persist($partnerBasketShare);
+            $shareEventRecorder->recordStart($partnerBasketShare);
 
 
             $basket = $entityManager->getRepository(\App\Entity\Basket::class)->findBasketByWeekYear(date('Y-m-d'));//número de cesta actual

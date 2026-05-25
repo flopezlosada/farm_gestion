@@ -6,10 +6,12 @@ use App\Custom\WeekOfMonth;
 use App\Entity\Basket;
 use App\Entity\PartnerBasketShare;
 use App\Entity\PartnerDeliveryShift;
+use App\Entity\PartnerEvent;
 use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketGroup;
 use App\Entity\WeeklyBasketStatus;
 use App\Repository\PartnerDeliveryShiftRepository;
+use App\Service\Partner\PartnerShareEventRecorder;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
@@ -44,6 +46,7 @@ class WeeklyBasketGenerator
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly DeliveryShiftApplier $shiftApplier,
+        private readonly PartnerShareEventRecorder $shareEventRecorder,
     ) {
     }
 
@@ -118,6 +121,15 @@ class WeeklyBasketGenerator
                 $this->em->persist($share->getPartner());
             }
             $this->em->persist($share);
+
+            // Cierre automático por end_date pasada: el evento se atribuye al
+            // sistema (no hay gestor humano detrás) y la fecha real es la
+            // end_date del share, no "ahora".
+            $this->shareEventRecorder->recordEnd(
+                $share,
+                $share->getEndDate(),
+                PartnerEvent::ACTOR_SYSTEM,
+            );
         }
     }
 
