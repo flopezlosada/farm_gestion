@@ -196,6 +196,21 @@ class PartnerBasketShare
     #[Assert\Choice(choices: ['A', 'B'], message: 'Grupo de reparto inválido (solo A o B).')]
     private ?string $delivery_group = null;
 
+    /**
+     * Pagador externo de esta cesta (sub-fase 8.8d, 2026-05-26). Null = el
+     * receptor (this->partner) paga su propia cesta, caso por defecto. Si
+     * apunta a otro Partner, ese partner es quien aparece en cobros como
+     * titular del IBAN de esta PBS.
+     *
+     * Modela la opción que la asociación ofrece de "pagar la cesta de
+     * otra persona" — donaciones nominadas (María Puebla → Nayua), o
+     * relaciones de soporte (Pablo Angulo → Nuria del Río).
+     *
+     * @ORM\ManyToOne(targetEntity="Partner")
+     * @ORM\JoinColumn(name="payer_partner_id", referencedColumnName="id", nullable=true)
+     */
+    private ?Partner $payer_partner = null;
+
 
 
 
@@ -516,5 +531,31 @@ class PartnerBasketShare
         $this->delivery_group = $delivery_group;
 
         return $this;
+    }
+
+    /**
+     * @return Partner|null Pagador externo, o null si el receptor paga su propia cesta.
+     */
+    public function getPayerPartner(): ?Partner
+    {
+        return $this->payer_partner;
+    }
+
+    /**
+     * @param Partner|null $payer_partner Pagador distinto al receptor, o null para revertir al caso normal.
+     * @return self
+     */
+    public function setPayerPartner(?Partner $payer_partner): self
+    {
+        $this->payer_partner = $payer_partner;
+        return $this;
+    }
+
+    /**
+     * @return Partner Pagador efectivo: el externo si está set, si no el propio receptor.
+     */
+    public function getEffectivePayer(): Partner
+    {
+        return $this->payer_partner ?? $this->partner;
     }
 }
