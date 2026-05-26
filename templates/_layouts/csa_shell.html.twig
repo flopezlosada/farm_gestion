@@ -111,6 +111,8 @@
                            route starts with 'delivery_shifts') }}
                         {{ _self.nav_link('Grupos de recogida', path('weekly_basket_group_index'), 'fa-map-marker',
                            route starts with 'weekly_basket_group') }}
+                        {{ _self.nav_link('Nodos de reparto', path('node_index'), 'fa-sitemap',
+                           route starts with 'node_') }}
                         {{ _self.nav_link('Evolución', path('partner_evolution'), 'fa-line-chart',
                            route == 'partner_evolution') }}
                     {% endif %}

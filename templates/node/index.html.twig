@@ -1,0 +1,89 @@
+{# ============================================================
+ # Listado de nodos físicos de reparto.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% set weekday_labels = {
+    1: 'Lunes',
+    2: 'Martes',
+    3: 'Miércoles',
+    4: 'Jueves',
+    5: 'Viernes',
+    6: 'Sábado',
+    7: 'Domingo'
+} %}
+
+{% set cadence_labels = {
+    'weekly': 'Semanal',
+    'biweekly': 'Quincenal'
+} %}
+
+{% block title %}Nodos de reparto{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Nodos de reparto</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Socixs · Reparto',
+        'Nodos de reparto',
+        'Sitios físicos donde se entregan las cestas. Cada nodo tiene su día de la semana y cadencia (semanal o quincenal).'
+    ) }}
+
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-5);">
+        <div></div>
+        <div class="csa-row">
+            {{ csa.btn('Nuevo nodo', { variant: 'primary', href: path('node_new'), icon: 'fa-plus' }) }}
+        </div>
+    </div>
+
+    <div class="csa-table-wrap">
+        <table class="csa-table" data-paginate>
+            <thead>
+                <tr>
+                    <th>Nombre</th>
+                    <th>Día de reparto</th>
+                    <th>Cadencia</th>
+                    <th>Ancla</th>
+                    <th class="csa-table__col-tight">Grupos</th>
+                    <th class="csa-table__actions">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for node in nodes %}
+                    <tr>
+                        <td>
+                            <a class="csa-table__primary" href="{{ path('node_edit', { id: node.id }) }}">{{ node.name }}</a>
+                        </td>
+                        <td>{{ weekday_labels[node.deliveryWeekday] ?? node.deliveryWeekday }}</td>
+                        <td>{{ cadence_labels[node.cadence] ?? node.cadence }}</td>
+                        <td>{{ node.anchorDate ? node.anchorDate|date('d/m/Y') : '—' }}</td>
+                        <td class="csa-table__col-tight">{{ node.weeklyBasketGroups|length }}</td>
+                        <td class="csa-table__actions">
+                            <a href="{{ path('node_edit', { id: node.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>
+                            {% if node.weeklyBasketGroups|length == 0 %}
+                                <form method="post" action="{{ path('node_delete', { id: node.id }) }}" style="display:inline;" onsubmit="return confirm('¿Borrar este nodo?');">
+                                    <input type="hidden" name="_token" value="{{ csrf_token('delete' ~ node.id) }}">
+                                    <button type="submit" class="csa-btn-icon" title="Borrar" aria-label="Borrar"><i class="fa fa-trash"></i></button>
+                                </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="6" class="csa-muted" style="text-align: center; padding: var(--csa-sp-8);">
+                            Aún no hay nodos definidos.
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+{% endblock %}
