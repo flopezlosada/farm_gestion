@@ -29,4 +29,12 @@ class NodeRepository extends ServiceEntityRepository
     {
         return $this->findOneBy(['name' => $name]);
     }
+
+    /**
+     * @return Node[]
+     */
+    public function findByCadence(string $cadence): array
+    {
+        return $this->findBy(['cadence' => $cadence], ['name' => 'ASC']);
+    }
 }

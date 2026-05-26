@@ -150,6 +150,68 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
         return $query->getResult();
     }
 
+    /**
+     * Versión Node-aware de findBasketPartnersBiweeklyByCohort (sub-fase 8.8b2).
+     *
+     * Selecciona partners quincenales activos que recogen en este Basket
+     * considerando dos casos:
+     *  - Partners en nodos `weekly` (Torremocha): filtra por delivery_group
+     *    igual a la cohorte global del Basket.
+     *  - Partners en nodos `biweekly` (Cascorro, Midori): incluye todos
+     *    los del nodo si el nodo reparte en este Basket (lista
+     *    `$activeBiweeklyNodeIds`).
+     *  - Partners sin nodo asignado (datos legacy): se asume Torremocha
+     *    y se filtra por delivery_group como antes.
+     *
+     * @param int[] $activeBiweeklyNodeIds IDs de los Node biweekly que reparten en este Basket.
+     * @return PartnerBasketShare[]
+     */
+    public function findBasketPartnersBiweeklyNodeAware(
+        $current_basket,
+        int $basket_share_id,
+        int $status_id,
+        string $cohort,
+        array $activeBiweeklyNodeIds,
+        bool $only_eggs = false
+    ): array {
+        $em = $this->getEntityManager();
+
+        $dql = "select b from App\\Entity\\PartnerBasketShare b
+                inner join b.partner p
+                left join p.weekly_basket_group wbg
+                left join wbg.node n
+                where b.basket_share = :basket_share
+                  and b.is_active = :status
+                  and b.start_date <= :date
+                  and (
+                        (n.cadence = :cadence_weekly AND b.delivery_group = :cohort)
+                     OR (n.id IS NULL AND b.delivery_group = :cohort)";
+
+        if (!empty($activeBiweeklyNodeIds)) {
+            $dql .= " OR n.id IN (:biweekly_nodes)";
+        }
+
+        $dql .= "      )";
+
+        if ($only_eggs) {
+            $dql .= " and b.egg_period = 2 ";
+        }
+
+        $dql .= " ORDER BY p.state, p.city asc";
+
+        $query = $em->createQuery($dql);
+        $query->setParameter("basket_share", $basket_share_id);
+        $query->setParameter("status", $status_id);
+        $query->setParameter("date", $current_basket->getDate());
+        $query->setParameter("cohort", $cohort);
+        $query->setParameter("cadence_weekly", \App\Entity\Node::CADENCE_WEEKLY);
+        if (!empty($activeBiweeklyNodeIds)) {
+            $query->setParameter("biweekly_nodes", $activeBiweeklyNodeIds);
+        }
+
+        return $query->getResult();
+    }
+
     /*
      * LEGACY: socios quincenales. Buscaba que no estén en la semana anterior.
      * Sustituida por findBasketPartnersBiweeklyByCohort. Se mantiene temporalmente

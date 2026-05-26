@@ -4,12 +4,14 @@ namespace App\Service\Delivery;
 
 use App\Custom\WeekOfMonth;
 use App\Entity\Basket;
+use App\Entity\Node;
 use App\Entity\PartnerBasketShare;
 use App\Entity\PartnerDeliveryShift;
 use App\Entity\PartnerEvent;
 use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketGroup;
 use App\Entity\WeeklyBasketStatus;
+use App\Repository\NodeRepository;
 use App\Repository\PartnerDeliveryShiftRepository;
 use App\Service\Partner\PartnerShareEventRecorder;
 use Doctrine\ORM\EntityManagerInterface;
@@ -50,7 +52,27 @@ class WeeklyBasketGenerator
         private readonly BiweeklyCohortResolver $cohortResolver,
         private readonly MonthlyOperativeOrderResolver $monthlyResolver,
         private readonly NodeDeliveryDate $nodeDeliveryDate,
+        private readonly NodeRepository $nodeRepository,
     ) {
+    }
+
+    /**
+     * Devuelve los IDs de nodos biweekly que reparten en este Basket
+     * (su alternancia anchor coincide).
+     *
+     * @param Basket $basket
+     * @return int[]
+     */
+    private function activeBiweeklyNodeIds(Basket $basket): array
+    {
+        $biweeklyNodes = $this->nodeRepository->findByCadence(Node::CADENCE_BIWEEKLY);
+        $active = [];
+        foreach ($biweeklyNodes as $node) {
+            if ($this->nodeDeliveryDate->deliversInBasket($basket, $node)) {
+                $active[] = $node->getId();
+            }
+        }
+        return $active;
     }
 
     /**
@@ -240,14 +262,15 @@ class WeeklyBasketGenerator
 
         $cohort = $this->cohortResolver->cohortForBasket($basket);
         $monthlyOrder = $this->monthlyResolver->operativeOrderInMonth($basket);
+        $activeBiweeklyNodeIds = $this->activeBiweeklyNodeIds($basket);
 
         $weekly = $shareRepo->findBasketPartnersByTypeAndCity(self::SHARE_WEEKLY, 1, $basket);
         $half = $shareRepo->findBasketPartnersByTypeAndCity(self::SHARE_HALF, 1, $basket);
-        $biweekly = $shareRepo->findBasketPartnersBiweeklyByCohort($basket, self::SHARE_BIWEEKLY, 1, $cohort);
+        $biweekly = $shareRepo->findBasketPartnersBiweeklyNodeAware($basket, self::SHARE_BIWEEKLY, 1, $cohort, $activeBiweeklyNodeIds);
         $monthly = $shareRepo->findBasketPartnersMonthlyByOperativeOrder($basket, self::SHARE_MONTHLY, $monthlyOrder);
 
         $onlyEggWeekly = $shareRepo->findBasketPartnersByTypeAndCity(self::SHARE_ONLY_EGG, 1, $basket, true);
-        $onlyEggBiweekly = $shareRepo->findBasketPartnersBiweeklyByCohort($basket, self::SHARE_ONLY_EGG, 1, $cohort, true);
+        $onlyEggBiweekly = $shareRepo->findBasketPartnersBiweeklyNodeAware($basket, self::SHARE_ONLY_EGG, 1, $cohort, $activeBiweeklyNodeIds, true);
         $onlyEggMonthly = $shareRepo->findBasketPartnersMonthlyByOperativeOrder($basket, self::SHARE_ONLY_EGG, $monthlyOrder, true);
         $onlyEgg = array_merge($onlyEggWeekly, $onlyEggBiweekly, $onlyEggMonthly);
 

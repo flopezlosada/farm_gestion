@@ -3,13 +3,19 @@
 namespace App\Tests\Service\Delivery\Rule;
 
 use App\Entity\Basket;
+use App\Entity\Node;
 use App\Entity\Partner;
+use App\Entity\WeeklyBasketGroup;
+use App\Service\Delivery\NodeDeliveryDate;
 use App\Service\Delivery\Rule\DeadlineRule;
 use PHPUnit\Framework\TestCase;
 
 /**
  * Unit test del DeadlineRule. No toca BBDD — la regla solo necesita la
- * fecha del Basket origen y compara contra "ahora".
+ * fecha del Basket origen, el Node del partner y compara contra "ahora".
+ *
+ * Sub-fase 8.8b2 (2026-05-26): la regla pasa a ser Node-aware. El
+ * deadline se calcula sobre la fecha física del reparto del nodo.
  */
 class DeadlineRuleTest extends TestCase
 {
@@ -19,17 +25,17 @@ class DeadlineRuleTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->rule = new DeadlineRule();
+        $this->rule = new DeadlineRule(new NodeDeliveryDate());
         $this->partner = new Partner();
         // toBasket no influye en esta regla, pero hay que pasar algo.
         $this->toBasket = new Basket();
         $this->toBasket->setDate(new \DateTime('+14 days'));
     }
 
-    public function testPasaSiElViernesEsFuturoYAunNoHaPasadoElJueves(): void
+    public function testPasaSiElViernesEsFuturoYAunNoHaPasadoElDeadline(): void
     {
         $from = new Basket();
-        $from->setDate(new \DateTime('+14 days')); // viernes lejano
+        $from->setDate(new \DateTime('+14 days'));
 
         $this->assertNull($this->rule->check($this->partner, $from, $this->toBasket));
     }
@@ -37,7 +43,7 @@ class DeadlineRuleTest extends TestCase
     public function testFallaConViolationBypassableSiElDeadlineYaPaso(): void
     {
         $from = new Basket();
-        $from->setDate(new \DateTime('-7 days')); // viernes pasado
+        $from->setDate(new \DateTime('-7 days'));
 
         $violation = $this->rule->check($this->partner, $from, $this->toBasket);
 
@@ -46,16 +52,8 @@ class DeadlineRuleTest extends TestCase
         $this->assertTrue($violation->bypassable, 'DeadlineRule debe ser bypassable por admin');
     }
 
-    public function testFallaJustoDespuesDelDeadlineDelJueves(): void
+    public function testFallaJustoDespuesDelDeadline(): void
     {
-        // Construyo un viernes cuyo jueves anterior 23:59 ya pasó hace unos minutos.
-        $now = new \DateTimeImmutable('now');
-        $diasHastaProxJueves = ($now->format('N') < 4) ? 4 - (int) $now->format('N') : 11 - (int) $now->format('N');
-        $proxJueves = $now->modify(sprintf('+%d days', $diasHastaProxJueves));
-
-        // Si el deadline del próximo viernes (jueves 23:59) ya pasó respecto a ahora,
-        // construimos un viernes cuyo jueves haya quedado en el pasado inmediato.
-        // Para simplificar: usamos "el viernes pasado de hace 1 día" — su deadline (jueves 23:59) está garantizadamente en el pasado.
         $from = new Basket();
         $from->setDate(new \DateTime('-1 day'));
 
@@ -63,14 +61,50 @@ class DeadlineRuleTest extends TestCase
 
         $this->assertNotNull($violation);
         $this->assertTrue($violation->bypassable);
-        unset($proxJueves); // silenciar warning sin perder cálculo
     }
 
     public function testPasaSiElBasketNoTieneFecha(): void
     {
-        $from = new Basket(); // sin setDate
+        $from = new Basket();
+        $this->assertNull($this->rule->check($this->partner, $from, $this->toBasket));
+    }
 
-        // Sin fecha no podemos calcular deadline, el chequeo se omite.
+    public function testParaPartnerEnNodoTorremochaUsaElViernesComoFisico(): void
+    {
+        // Torremocha es weekly viernes (=5). Partner asignado.
+        $node = (new Node())
+            ->setName('Torremocha')
+            ->setDeliveryWeekday(5)
+            ->setCadence(Node::CADENCE_WEEKLY);
+        $wbg = (new WeeklyBasketGroup())->setName('Torremocha');
+        $wbg->setNode($node);
+        $this->partner->setWeeklyBasketGroup($wbg);
+
+        // Basket pasado hace 7 días: jueves 23:59 hace ~6 días, deadline pasado.
+        $from = new Basket();
+        $from->setDate(new \DateTime('-7 days'));
+
+        $violation = $this->rule->check($this->partner, $from, $this->toBasket);
+        $this->assertNotNull($violation, 'Torremocha: deadline 1 día antes del viernes debe haber pasado.');
+    }
+
+    public function testParaPartnerEnNodoBiweeklyDevuelveNullSiNoReparte(): void
+    {
+        // Cascorro biweekly miércoles, ancla 2026-05-06.
+        // Basket viernes 2026-05-15 (1 semana después) → impar → no reparte.
+        $node = (new Node())
+            ->setName('Cascorro')
+            ->setDeliveryWeekday(3)
+            ->setCadence(Node::CADENCE_BIWEEKLY)
+            ->setAnchorDate(new \DateTimeImmutable('2026-05-06'));
+        $wbg = (new WeeklyBasketGroup())->setName('Cascorro');
+        $wbg->setNode($node);
+        $this->partner->setWeeklyBasketGroup($wbg);
+
+        $from = new Basket();
+        $from->setDate(new \DateTime('2026-05-15'));
+
+        // El nodo no reparte ese Basket → no hay deadline → check pasa (null).
         $this->assertNull($this->rule->check($this->partner, $from, $this->toBasket));
     }
 }
