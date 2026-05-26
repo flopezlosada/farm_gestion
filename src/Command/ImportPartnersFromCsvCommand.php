@@ -336,6 +336,17 @@ class ImportPartnersFromCsvCommand extends Command
                 }
             }
 
+            // egg_day_month_order para huevos Mensuales (1 entrega/mes). Sólo si
+            // el campo está null, para no pisar valor ajustado manualmente.
+            $periodIdMensual = self::DELIVERIES_TO_EGG_PERIOD_ID[1];
+            if ($period->getId() === $periodIdMensual && $share->getEggDayMonthOrder() === null) {
+                $orden = $this->derivarEggDayMonthOrder($huevosPorViernes);
+                if ($orden !== null) {
+                    $share->setEggDayMonthOrder($orden);
+                    $changed = true;
+                }
+            }
+
             if ($changed) {
                 $stats['actualizados']++;
             } else {
@@ -586,6 +597,18 @@ class ImportPartnersFromCsvCommand extends Command
             [$amount, $period] = $eggAssignment;
             $share->setEggAmount($amount);
             $share->setEggPeriod($period);
+
+            // Para huevos Mensuales, derivar en qué viernes operativo del mes
+            // tocan (1..4). Análogo al day_month_order de la cesta. Cierra el
+            // bug de pintar huevos en cualquier viernes con cesta cuando la
+            // frecuencia de huevos difiere (caso testigo: cesta Quincenal +
+            // huevos Mensuales).
+            if ($period->getId() === self::DELIVERIES_TO_EGG_PERIOD_ID[1]) {
+                $orden = $this->derivarEggDayMonthOrder($row['huevos_por_viernes'] ?? '');
+                if ($orden !== null) {
+                    $share->setEggDayMonthOrder($orden);
+                }
+            }
         }
 
         $share->setTransportPrice(
@@ -816,6 +839,34 @@ class ImportPartnersFromCsvCommand extends Command
         if ($v === [1, 0, 1, 0]) return PartnerBasketShare::DELIVERY_GROUP_A;
         if ($v === [0, 1, 0, 1]) return PartnerBasketShare::DELIVERY_GROUP_B;
         return null;
+    }
+
+    /**
+     * Para socios con huevos Mensuales (1 entrega/mes): devuelve la posición
+     * (1..4) del viernes operativo en que recogen huevos. Análogo al
+     * day_month_order de la cesta, pero para huevos. Se aplica cuando la
+     * frecuencia de huevos difiere de la cesta (ej: cesta Quincenal +
+     * huevos Mensuales, caso MIRIAM).
+     *
+     * Devuelve null si el patrón no tiene exactamente 1 celda no-cero
+     * (no aplica a Semanal/Quincenal y a patrones raros).
+     */
+    private function derivarEggDayMonthOrder(string $huevosPorViernes): ?int
+    {
+        if ($huevosPorViernes === '') {
+            return null;
+        }
+        $celdas = explode(',', $huevosPorViernes);
+        if (count($celdas) !== 4) {
+            return null;
+        }
+        $posiciones = [];
+        foreach ($celdas as $i => $celda) {
+            if (trim($celda) !== '' && trim($celda) !== '0') {
+                $posiciones[] = $i + 1;
+            }
+        }
+        return count($posiciones) === 1 ? $posiciones[0] : null;
     }
 
     /**

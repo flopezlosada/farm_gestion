@@ -74,6 +74,20 @@ class PartnerBasketShare
      */
     protected $day_month_order;
 
+    /**
+     * Análogo a day_month_order pero para huevos. Sólo aplica cuando egg_period
+     * es Mensual y la frecuencia de huevos difiere de la frecuencia de la cesta
+     * (caso testigo: cesta Quincenal + huevos Mensuales). Indica en qué viernes
+     * operativo del mes (1..4) toca entregar huevos.
+     *
+     * Null para Semanal/Quincenal (la cohorte se resuelve por delivery_group) y
+     * para mensuales con patrones no derivables del CSV. Resuelto en runtime por
+     * EggDeliveryResolver.
+     *
+     * @ORM\Column(type="smallint", nullable=true)
+     */
+    protected ?int $egg_day_month_order = null;
+
 
     /**
      *Este valor es por si alguien alguna vez pide dos cestas para el mismo socio.
@@ -381,6 +395,18 @@ class PartnerBasketShare
     public function setDayMonthOrder(?int $day_month_order): self
     {
         $this->day_month_order = $day_month_order;
+
+        return $this;
+    }
+
+    public function getEggDayMonthOrder(): ?int
+    {
+        return $this->egg_day_month_order;
+    }
+
+    public function setEggDayMonthOrder(?int $egg_day_month_order): self
+    {
+        $this->egg_day_month_order = $egg_day_month_order;
 
         return $this;
     }
