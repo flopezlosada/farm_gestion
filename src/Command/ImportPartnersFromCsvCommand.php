@@ -4,6 +4,8 @@ namespace App\Command;
 
 use App\Entity\BasketShare;
 use App\Entity\City;
+use App\Entity\EggAmount;
+use App\Entity\EggPeriod;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
 use App\Entity\PartnerEvent;
@@ -31,10 +33,8 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  * listados de los 8 grupos pendientes.
  *
  * Quedan fuera de V1 y se atacan después:
- *  - Egg amount y egg period (requiere parsear huevos_por_viernes).
  *  - Cestas compartidas (campo `share_partner`, vincular pareja_id).
  *  - Familia con dos miembros (parent_id) — hoy 1 Partner por familia.
- *  - Cohorte A/B quincenal (`delivery_group`) — task #4.
  *
  * Idempotente: si ya existe un Partner con ese DNI, se salta sin tocar.
  * Para reimportar limpio: vaciar partner + partner_basket_share antes.
@@ -63,6 +63,37 @@ class ImportPartnersFromCsvCommand extends Command
         'H'   => 5,
     ];
 
+    /**
+     * Mapeo huevos por entrega → id del catálogo EggAmount.
+     * EggAmount es un catálogo legacy con `month_price` distinto a la
+     * cantidad de huevos. La asociación id↔huevos/entrega es semántica
+     * del nombre ("Una docena" = 12) y se hardcodea aquí porque no hay
+     * un campo numérico en BBDD que la represente.
+     */
+    private const PIECES_TO_EGG_AMOUNT_ID = [
+        6  => 1,  // Media docena
+        12 => 2,  // Una docena
+        18 => 3,  // Docena y media
+        24 => 4,  // Dos docenas
+        30 => 5,  // Dos docenas y media
+        36 => 6,  // Tres docenas
+        42 => 7,  // Tres docenas y media
+        48 => 8,  // Cuatro docenas
+        54 => 9,  // Cuatro docenas y media
+        60 => 10, // Cinco docenas
+    ];
+
+    /**
+     * Mapeo nº de entregas con huevos en el mes → id de EggPeriod.
+     * 3 entregas no se mapea — no es un patrón operativo válido y dejamos
+     * egg_period a null para revisar manual.
+     */
+    private const DELIVERIES_TO_EGG_PERIOD_ID = [
+        4 => 1, // Semanal
+        2 => 2, // Quincenal
+        1 => 3, // Mensual
+    ];
+
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly PartnerShareEventRecorder $shareEventRecorder,
@@ -89,6 +120,15 @@ class ImportPartnersFromCsvCommand extends Command
                 null,
                 InputOption::VALUE_NONE,
                 'No persiste cambios. Sólo reporta lo que haría.'
+            )
+            ->addOption(
+                'only-eggs',
+                null,
+                InputOption::VALUE_NONE,
+                'Modo update parcial: recorre el CSV y sólo actualiza egg_amount / '
+                . 'egg_period en los Partner existentes (cruce por DNI). No crea ni '
+                . 'borra nada. Útil cuando ya hay datos importados con ajustes '
+                . 'manuales que no queremos perder.'
             );
     }
 
@@ -97,6 +137,7 @@ class ImportPartnersFromCsvCommand extends Command
         $io = new SymfonyStyle($input, $output);
         $csvPath = $input->getArgument('csv');
         $dryRun = (bool) $input->getOption('dry-run');
+        $onlyEggs = (bool) $input->getOption('only-eggs');
 
         if (!is_file($csvPath) || !is_readable($csvPath)) {
             $io->error("CSV no legible: $csvPath");
@@ -105,6 +146,10 @@ class ImportPartnersFromCsvCommand extends Command
 
         $rows = $this->readCsv($csvPath);
         $io->note(sprintf('Filas en CSV: %d', count($rows)));
+
+        if ($onlyEggs) {
+            return $this->runOnlyEggs($io, $rows, $dryRun);
+        }
 
         $stats = [
             'cruzados'        => 0,
@@ -117,6 +162,8 @@ class ImportPartnersFromCsvCommand extends Command
         $groupsByName = $this->indexGroupsByCanonicalName();
         $basketsById  = $this->indexBasketsById();
         $citiesByName = $this->indexCitiesByName();
+        $eggAmountsById = $this->indexById(EggAmount::class);
+        $eggPeriodsById = $this->indexById(EggPeriod::class);
         $defaultState = $this->resolveOrCreateState('Madrid');
 
         // Tracking de Partners por DNI ya creados en esta ejecución.
@@ -136,7 +183,7 @@ class ImportPartnersFromCsvCommand extends Command
             }
 
             try {
-                $created = $this->importRow($row, $groupsByName, $basketsById, $citiesByName, $defaultState, $i, $hasReparto, $partnersByDni);
+                $created = $this->importRow($row, $groupsByName, $basketsById, $citiesByName, $eggAmountsById, $eggPeriodsById, $defaultState, $i, $hasReparto, $partnersByDni);
                 if ($created === null) {
                     $stats['saltados_dni']++;
                 } else {
@@ -200,6 +247,112 @@ class ImportPartnersFromCsvCommand extends Command
         );
 
         return $stats['errores'] > 0 ? Command::FAILURE : Command::SUCCESS;
+    }
+
+    /**
+     * Modo --only-eggs: recorre el CSV y actualiza únicamente
+     * egg_amount + egg_period en el PartnerBasketShare activo de cada
+     * socio existente (cruce por DNI). No crea Partners ni toca otros
+     * campos. Útil para arreglar el bug histórico (egg_amount/period a
+     * NULL) sin perder ajustes manuales en BBDD.
+     *
+     * @param array<int,array<string,string>> $rows
+     */
+    private function runOnlyEggs(SymfonyStyle $io, array $rows, bool $dryRun): int
+    {
+        $eggAmountsById = $this->indexById(EggAmount::class);
+        $eggPeriodsById = $this->indexById(EggPeriod::class);
+        $partnerRepo = $this->em->getRepository(Partner::class);
+
+        $stats = [
+            'sin_dni'         => 0,
+            'sin_huevos'      => 0,
+            'partner_no_existe' => 0,
+            'pbs_no_existe'   => 0,
+            'patron_desconocido' => 0,
+            'actualizados'    => 0,
+            'sin_cambios'     => 0,
+        ];
+
+        foreach ($rows as $i => $row) {
+            $dni = $this->sanitizeDni($row['nif'] ?? '');
+            if ($dni === '') {
+                $stats['sin_dni']++;
+                continue;
+            }
+            $huevosPorViernes = $row['huevos_por_viernes'] ?? '';
+            $huevosPorEntrega = $row['huevos_por_entrega'] ?? '';
+            if ((int) $huevosPorEntrega <= 0) {
+                $stats['sin_huevos']++;
+                continue;
+            }
+            $partner = $partnerRepo->findOneBy(['DNI' => $dni]);
+            if (!$partner) {
+                $stats['partner_no_existe']++;
+                $io->writeln(sprintf('<comment>Fila %d (%s): Partner no encontrado por DNI</comment>', $i + 2, $row['titular_legal'] ?? '?'));
+                continue;
+            }
+            $share = null;
+            foreach ($partner->getPartnerBasketShares() as $candidate) {
+                if ($candidate->getIsActive()) {
+                    $share = $candidate;
+                    break;
+                }
+            }
+            if (!$share) {
+                $stats['pbs_no_existe']++;
+                $io->writeln(sprintf('<comment>Fila %d (%s): sin PartnerBasketShare activo</comment>', $i + 2, $row['titular_legal'] ?? '?'));
+                continue;
+            }
+            $assignment = $this->deriveEggAssignment(
+                $huevosPorViernes,
+                $huevosPorEntrega,
+                $eggAmountsById,
+                $eggPeriodsById,
+            );
+            if ($assignment === null) {
+                $stats['patron_desconocido']++;
+                $io->writeln(sprintf(
+                    '<comment>Fila %d (%s): patrón de huevos desconocido (viernes=%s, entrega=%s)</comment>',
+                    $i + 2, $row['titular_legal'] ?? '?', $huevosPorViernes, $huevosPorEntrega
+                ));
+                continue;
+            }
+            [$amount, $period] = $assignment;
+            $changed = ($share->getEggAmount() !== $amount) || ($share->getEggPeriod() !== $period);
+            $share->setEggAmount($amount);
+            $share->setEggPeriod($period);
+
+            // Cohorte A/B para socios "solo huevos" quincenales. Si la cesta
+            // no es quincenal (cestas_por_viernes 0,0,0,0) derivarCohorte()
+            // no asigna nada; aquí derivamos desde huevos_por_viernes. No
+            // pisa un delivery_group ya seteado.
+            $periodIdQuincenal = self::DELIVERIES_TO_EGG_PERIOD_ID[2];
+            if ($period->getId() === $periodIdQuincenal && $share->getDeliveryGroup() === null) {
+                $cohorte = $this->derivarCohorteHuevos($huevosPorViernes);
+                if ($cohorte !== null) {
+                    $share->setDeliveryGroup($cohorte);
+                    $changed = true;
+                }
+            }
+
+            if ($changed) {
+                $stats['actualizados']++;
+            } else {
+                $stats['sin_cambios']++;
+            }
+        }
+
+        if ($dryRun) {
+            $io->note('Dry-run: no se persiste.');
+        } else {
+            $this->em->flush();
+        }
+
+        $io->success('only-eggs terminado');
+        $io->table(['métrica', 'cantidad'], array_map(null, array_keys($stats), array_values($stats)));
+
+        return Command::SUCCESS;
     }
 
     /**
@@ -315,12 +468,16 @@ class ImportPartnersFromCsvCommand extends Command
      * @param array<string,WeeklyBasketGroup>  $groupsByName
      * @param array<int,BasketShare>           $basketsById
      * @param array<string,City>               $citiesByName  pasa por referencia para cachear nuevas cities
+     * @param array<int,EggAmount>             $eggAmountsById
+     * @param array<int,EggPeriod>             $eggPeriodsById
      */
     private function importRow(
         array $row,
         array $groupsByName,
         array $basketsById,
         array &$citiesByName,
+        array $eggAmountsById,
+        array $eggPeriodsById,
         State $defaultState,
         int $rowIndex,
         bool $hasReparto,
@@ -414,6 +571,23 @@ class ImportPartnersFromCsvCommand extends Command
         $share->setBasketShare($basket);
         $share->setMonthPrice($this->decimalOrZero($row['importe_cesta_eur']));
         $share->setEggMonthPrice($this->decimalOrZero($row['importe_huevos_eur']));
+
+        // Egg amount + period a partir del patrón temporal extraído del PDF.
+        // huevos_por_viernes p.ej. "1D,0,0,0" (1 entrega → Mensual) o
+        // "1D+1M,1D+1M,1D+1M,1D+1M" (4 entregas → Semanal). huevos_por_entrega
+        // es la cantidad de huevos en una entrega individual (6, 12, 18, 24…).
+        $eggAssignment = $this->deriveEggAssignment(
+            $row['huevos_por_viernes'] ?? '',
+            $row['huevos_por_entrega'] ?? '',
+            $eggAmountsById,
+            $eggPeriodsById,
+        );
+        if ($eggAssignment !== null) {
+            [$amount, $period] = $eggAssignment;
+            $share->setEggAmount($amount);
+            $share->setEggPeriod($period);
+        }
+
         $share->setTransportPrice(
             $row['importe_transp_eur'] !== '' && (float) $row['importe_transp_eur'] > 0
                 ? number_format((float) $row['importe_transp_eur'], 2, '.', '')
@@ -491,6 +665,23 @@ class ImportPartnersFromCsvCommand extends Command
         $out = [];
         foreach ($this->em->getRepository(BasketShare::class)->findAll() as $b) {
             $out[$b->getId()] = $b;
+        }
+        return $out;
+    }
+
+    /**
+     * Indexa cualquier catálogo por id. Sirve para EggAmount/EggPeriod (y
+     * cualquier otro catálogo con `getId()`).
+     *
+     * @template T of object
+     * @param class-string<T> $fqcn
+     * @return array<int,T>
+     */
+    private function indexById(string $fqcn): array
+    {
+        $out = [];
+        foreach ($this->em->getRepository($fqcn)->findAll() as $entity) {
+            $out[$entity->getId()] = $entity;
         }
         return $out;
     }
@@ -625,6 +816,64 @@ class ImportPartnersFromCsvCommand extends Command
         if ($v === [1, 0, 1, 0]) return PartnerBasketShare::DELIVERY_GROUP_A;
         if ($v === [0, 1, 0, 1]) return PartnerBasketShare::DELIVERY_GROUP_B;
         return null;
+    }
+
+    /**
+     * Igual que derivarCohorte() pero a partir de huevos_por_viernes, que no
+     * es binario ("1D,0,1D,0" o "1M+1D,0,1M+1D,0"). Binariza primero y
+     * delega.
+     */
+    private function derivarCohorteHuevos(string $patron): ?string
+    {
+        if ($patron === '') {
+            return null;
+        }
+        $celdas = explode(',', $patron);
+        if (count($celdas) !== 4) {
+            return null;
+        }
+        $binario = implode(',', array_map(
+            static fn (string $c): string => (trim($c) !== '' && trim($c) !== '0') ? '1' : '0',
+            $celdas,
+        ));
+        return $this->derivarCohorte($binario);
+    }
+
+    /**
+     * Deriva el par (EggAmount, EggPeriod) a partir del patrón temporal de
+     * huevos por viernes y de los huevos por entrega. Devuelve null si el
+     * socio no tiene huevos o el patrón no se reconoce (p.ej. 3 entregas/mes
+     * o cantidad no mapeada).
+     *
+     * @param array<int,EggAmount> $eggAmountsById
+     * @param array<int,EggPeriod> $eggPeriodsById
+     * @return array{0:EggAmount,1:EggPeriod}|null
+     */
+    private function deriveEggAssignment(
+        string $huevosPorViernes,
+        string $huevosPorEntrega,
+        array $eggAmountsById,
+        array $eggPeriodsById,
+    ): ?array {
+        $pieces = (int) $huevosPorEntrega;
+        if ($pieces <= 0 || $huevosPorViernes === '') {
+            return null;
+        }
+        $entregas = 0;
+        foreach (explode(',', $huevosPorViernes) as $cell) {
+            if (trim($cell) !== '' && trim($cell) !== '0') {
+                $entregas++;
+            }
+        }
+        $amountId = self::PIECES_TO_EGG_AMOUNT_ID[$pieces] ?? null;
+        $periodId = self::DELIVERIES_TO_EGG_PERIOD_ID[$entregas] ?? null;
+        if ($amountId === null || $periodId === null) {
+            return null;
+        }
+        if (!isset($eggAmountsById[$amountId], $eggPeriodsById[$periodId])) {
+            return null;
+        }
+        return [$eggAmountsById[$amountId], $eggPeriodsById[$periodId]];
     }
 
     private function decimalOrZero(string $s): string
