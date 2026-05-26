@@ -37,6 +37,7 @@ final class DeliveryShiftApplier
 
     public function __construct(
         private readonly EntityManagerInterface $em,
+        private readonly NodeDeliveryDate $nodeDeliveryDate,
     ) {
     }
 
@@ -143,6 +144,18 @@ final class DeliveryShiftApplier
         $wb->setPartner($partner);
         $wb->setWeeklyBasketStatus($statusRepo->find(self::STATUS_PICKED));
         $wb->setWeeklyBasketGroup($partner->getWeeklyBasketGroup());
+
+        // Congelar la fecha física de entrega usando el nodo del partner.
+        // Si no hay nodo (datos legacy), se asume Torremocha y se copia
+        // basket.date. Para nodos biweekly el shift implica que el admin
+        // confirma el cambio aunque la cadencia del nodo no aplicaría aquí.
+        $node = $partner->getWeeklyBasketGroup()?->getNode();
+        if ($node !== null) {
+            $physical = $this->nodeDeliveryDate->physicalDateFor($to, $node);
+            $wb->setDeliveryDate($physical ?? $to->getDate());
+        } else {
+            $wb->setDeliveryDate($to->getDate());
+        }
 
         /** @var PartnerBasketShareRepository $shareRepo */
         $shareRepo = $this->em->getRepository(PartnerBasketShare::class);

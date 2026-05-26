@@ -556,6 +556,9 @@ class PartnerController extends AbstractController
                     $weekly_basket_status = $entityManager->getRepository(\App\Entity\WeeklyBasketStatus::class)->find(1);
                     $weekly_basket->setWeeklyBasketStatus($weekly_basket_status);
                     $weekly_basket->setBasketShare($partnerBasketShare->getBasketShare());
+                    // Fallback Torremocha (viernes-ciclo). Deuda: en cuanto entren altas en Madrid,
+                    // este controller debe inyectar NodeDeliveryDate y resolver la fecha real del nodo.
+                    $weekly_basket->setDeliveryDate($basket->getDate());
                     $entityManager->persist($weekly_basket);
                 }
             }

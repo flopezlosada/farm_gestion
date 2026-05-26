@@ -49,7 +49,28 @@ class WeeklyBasketGenerator
         private readonly PartnerShareEventRecorder $shareEventRecorder,
         private readonly BiweeklyCohortResolver $cohortResolver,
         private readonly MonthlyOperativeOrderResolver $monthlyResolver,
+        private readonly NodeDeliveryDate $nodeDeliveryDate,
     ) {
+    }
+
+    /**
+     * Calcula la fecha física de reparto para un partner en un Basket.
+     * Si el partner pertenece a un nodo configurado, delega en
+     * NodeDeliveryDate. Si no (datos legacy sin node_id), asume
+     * Torremocha implícito y devuelve la fecha del Basket.
+     *
+     * @param Basket $basket
+     * @param PartnerBasketShare $share
+     * @return \DateTimeInterface|null Null si el nodo no reparte en este Basket (biweekly fuera de fase).
+     */
+    private function resolvePhysicalDeliveryDate(Basket $basket, PartnerBasketShare $share): ?\DateTimeInterface
+    {
+        $node = $share->getPartner()->getWeeklyBasketGroup()?->getNode();
+        if ($node === null) {
+            return $basket->getDate();
+        }
+
+        return $this->nodeDeliveryDate->physicalDateFor($basket, $node);
     }
 
     /**
@@ -262,6 +283,13 @@ class WeeklyBasketGenerator
         $status = $this->em->getRepository(WeeklyBasketStatus::class)->find(self::STATUS_PICKED);
 
         foreach ($all as $share) {
+            $physicalDate = $this->resolvePhysicalDeliveryDate($basket, $share);
+            if ($physicalDate === null) {
+                // El nodo del partner no reparte en este Basket
+                // (caso típico: nodo biweekly fuera de fase con su ancla).
+                continue;
+            }
+
             $wb = new WeeklyBasket();
             $wb->setBasket($basket);
             $wb->setPartner($share->getPartner());
@@ -269,6 +297,7 @@ class WeeklyBasketGenerator
             $wb->setBasketShare($share->getBasketShare());
             $wb->setWeeklyBasketGroup($share->getPartner()->getWeeklyBasketGroup());
             $wb->setAmount($share->getAmount());
+            $wb->setDeliveryDate($physicalDate);
             $this->em->persist($wb);
             $this->em->flush();
 

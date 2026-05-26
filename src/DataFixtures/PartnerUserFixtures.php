@@ -145,7 +145,8 @@ class PartnerUserFixtures extends Fixture implements DependentFixtureInterface
             ->setBasketShare($quincenal)
             ->setWeeklyBasketGroup($group)
             ->setWeeklyBasketStatus($statusPicked)
-            ->setAmount(1);
+            ->setAmount(1)
+            ->setDeliveryDate($nextFriday);
 
         $peerWb = (new WeeklyBasket())
             ->setBasket($nextBasket)
@@ -153,7 +154,8 @@ class PartnerUserFixtures extends Fixture implements DependentFixtureInterface
             ->setBasketShare($quincenal)
             ->setWeeklyBasketGroup($group)
             ->setWeeklyBasketStatus($statusPicked)
-            ->setAmount(1);
+            ->setAmount(1)
+            ->setDeliveryDate($nextFriday);
 
         $manager->persist($partner);
         $manager->persist($share);
