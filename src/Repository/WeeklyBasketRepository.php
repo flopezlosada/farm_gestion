@@ -2,6 +2,8 @@
 
 namespace App\Repository;
 
+use App\Entity\Basket;
+use App\Entity\Node;
 use App\Entity\Partner;
 use App\Entity\WeeklyBasket;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
@@ -89,6 +91,38 @@ class WeeklyBasketRepository extends ServiceEntityRepository
             ->setMaxResults(1)
             ->getQuery()
             ->getOneOrNullResult();
+    }
+
+    /**
+     * Listado para la pantalla de reparto v2 (sub-fase 8.8c): WeeklyBasket
+     * que recoge un Nodo en un Basket dado. Solo cestas con status 1
+     * (activa / "recoge"). Ordenado por WBG.name → basket_share.id →
+     * partner.name para que la agrupación por sección en el render sea
+     * mecánica.
+     *
+     * Devuelve la lista plana; el caller hace el group_by por WBG y por
+     * modalidad. Pequeño volumen (64 max por Nodo en datos reales),
+     * sin paginación.
+     *
+     * @return WeeklyBasket[]
+     */
+    public function findForNodeAndBasket(Node $node, Basket $basket): array
+    {
+        return $this->createQueryBuilder('wb')
+            ->innerJoin('wb.weekly_basket_group', 'wbg')
+            ->innerJoin('wb.partner', 'p')
+            ->innerJoin('wb.basket_share', 'bs')
+            ->where('wbg.node = :node')
+            ->andWhere('wb.basket = :basket')
+            ->andWhere('wb.weekly_basket_status = :status')
+            ->setParameter('node', $node)
+            ->setParameter('basket', $basket)
+            ->setParameter('status', 1)
+            ->orderBy('wbg.name', 'ASC')
+            ->addOrderBy('bs.id', 'ASC')
+            ->addOrderBy('p.name', 'ASC')
+            ->getQuery()
+            ->getResult();
     }
 
     /**

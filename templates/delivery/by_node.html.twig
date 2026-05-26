@@ -1,0 +1,307 @@
+{# ============================================================
+ # Listado de reparto v2 — sub-fase 8.8c.
+ #
+ # Recibe (del DeliveryController::byNode):
+ #   - node                 Node activo (la pestaña seleccionada).
+ #   - basket               Basket del viernes que se está pintando.
+ #   - all_nodes            Node[] (para las tabs).
+ #   - surrounding_baskets  Basket[] (mini-timeline de viernes vecinos).
+ #   - grouped              Listado agrupado por WBG > modalidad.
+ #   - egg_delivery_map     {wb.id: bool} para ocultar huevos cuando no toca.
+ #   - totals               {socios, cestas, huevos}.
+ # ============================================================ #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Reparto · {{ node.name }} · {{ basket.date|date('d/m/Y') }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    Socixs
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Reparto semanal</span>
+{% endblock %}
+
+{% block more_css %}
+{{ parent() }}
+<style>
+/* ============================================================
+ * Estilos locales del listado de reparto v2 (alt-b-tabla-limpia).
+ * Se inyectan inline para mantener la pantalla autocontenida hasta
+ * que estabilicemos los tokens y los movamos al CSS del shell.
+ * ============================================================ */
+.dlv {
+    --dlv-line: #ebe7dd;
+    --dlv-line-2: #d8d2c2;
+    --dlv-ink: #1d1c17;
+    --dlv-ink-soft: #5a564a;
+    --dlv-ink-faint: #8d8773;
+    --dlv-sage: #5b7a4c;
+    --dlv-sage-d: #2f4426;
+    --dlv-sage-l: #eaf0e2;
+    --dlv-ochre: #c89a3a;
+    --dlv-ochre-d: #8c6919;
+    --dlv-ochre-l: #faf1d8;
+    --dlv-terra: #b45d3a;
+    --dlv-terra-d: #7d3a1f;
+    --dlv-terra-l: #fae6dc;
+    --dlv-bg: #fbfaf6;
+    --dlv-surface: #ffffff;
+    font-variant-numeric: tabular-nums;
+}
+
+/* page head con week strip */
+.dlv-head {
+    display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 32px;
+    padding-bottom: 18px; margin-bottom: 18px;
+    border-bottom: 1px solid var(--dlv-line);
+}
+.dlv-head__title { font-family: 'Fraunces', serif; font-weight: 600; font-size: 26px; letter-spacing: -0.02em; margin: 0 0 4px; line-height: 1.1; }
+.dlv-head__sub { font-size: 12px; color: var(--dlv-ink-faint); letter-spacing: 0.04em; }
+.dlv-head__sub b { color: var(--dlv-ink); font-weight: 600; }
+
+.dlv-weeks { display: flex; gap: 4px; border: 1px solid var(--dlv-line); padding: 3px; border-radius: 6px; background: var(--dlv-bg); }
+.dlv-weeks a { text-decoration: none; padding: 8px 14px; min-width: 92px; border-radius: 4px; text-align: center; color: inherit; }
+.dlv-weeks a .dow { display: block; font-size: 10px; color: var(--dlv-ink-faint); letter-spacing: 0.12em; text-transform: uppercase; }
+.dlv-weeks a .num { display: block; font-family: 'Fraunces', serif; font-weight: 600; font-size: 17px; margin-top: 2px; color: var(--dlv-ink); }
+.dlv-weeks a.past { opacity: 0.45; }
+.dlv-weeks a.active { background: var(--dlv-sage-d); }
+.dlv-weeks a.active .dow, .dlv-weeks a.active .num { color: white; }
+.dlv-weeks a:hover { background: var(--dlv-surface); }
+.dlv-weeks a.active:hover { background: var(--dlv-sage-d); }
+
+/* node tabs */
+.dlv-nodes { display: flex; border-bottom: 2px solid var(--dlv-ink); margin-bottom: 18px; }
+.dlv-nodes a { background: transparent; padding: 13px 22px 11px; cursor: pointer; color: var(--dlv-ink-soft); border-radius: 6px 6px 0 0; margin-bottom: -2px; text-align: left; text-decoration: none; transition: 0.15s; }
+.dlv-nodes a:hover { color: var(--dlv-ink); background: var(--dlv-surface); }
+.dlv-nodes a.active { background: var(--dlv-ink); color: white; border-bottom: 2px solid var(--dlv-ink); }
+.dlv-nodes a .ntitle { font-family: 'Fraunces', serif; font-weight: 600; font-size: 17px; letter-spacing: -0.01em; display: block; }
+.dlv-nodes a .nmeta { font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dlv-ink-faint); margin-top: 3px; font-weight: 500; }
+.dlv-nodes a.active .nmeta { color: rgba(255, 255, 255, 0.6); }
+
+/* toolbar filters */
+.dlv-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.dlv-toolbar .search { position: relative; }
+.dlv-toolbar .search input { padding: 7px 12px 7px 32px; border: 1px solid var(--dlv-line); background: var(--dlv-surface); border-radius: 5px; font-size: 12.5px; width: 240px; }
+.dlv-toolbar .search svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--dlv-ink-faint); }
+.dlv-toolbar .filt { display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border: 1px solid var(--dlv-line); background: var(--dlv-surface); border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: 500; color: var(--dlv-ink-soft); }
+.dlv-toolbar .filt:hover { color: var(--dlv-ink); border-color: var(--dlv-line-2); }
+.dlv-toolbar .filt.has { background: var(--dlv-sage-l); color: var(--dlv-ink); border-color: var(--dlv-line-2); }
+.dlv-toolbar .filt .badge { display: inline-grid; place-items: center; min-width: 18px; height: 16px; padding: 0 4px; background: var(--dlv-sage-d); color: white; border-radius: 3px; font-size: 10px; font-weight: 600; }
+.dlv-toolbar .filt .chev { color: var(--dlv-ink-faint); }
+.dlv-toolbar .filt-divider { width: 1px; height: 22px; background: var(--dlv-line); margin: 0 4px; }
+.dlv-toolbar .filt.toggle .sw { width: 22px; height: 12px; background: var(--dlv-line-2); border-radius: 999px; position: relative; }
+.dlv-toolbar .filt.toggle.on .sw { background: var(--dlv-sage); }
+.dlv-toolbar .filt.toggle .sw::after { content: ''; position: absolute; width: 8px; height: 8px; border-radius: 50%; background: white; top: 2px; left: 2px; transition: 0.15s; }
+.dlv-toolbar .filt.toggle.on .sw::after { left: 12px; }
+.dlv-toolbar .counters { margin-left: auto; display: flex; align-items: center; gap: 14px; font-size: 12px; color: var(--dlv-ink-soft); }
+.dlv-toolbar .counters b { color: var(--dlv-ink); font-weight: 600; }
+.dlv-toolbar .counters .sep { width: 1px; height: 13px; background: var(--dlv-line-2); }
+
+/* WBG section */
+.dlv-wbg { background: var(--dlv-surface); border: 1px solid var(--dlv-line); border-radius: 8px; margin-bottom: 10px; overflow: hidden; }
+.dlv-wbg__head { display: grid; grid-template-columns: 16px 1fr auto; align-items: center; gap: 12px; padding: 13px 18px; cursor: pointer; background: linear-gradient(180deg, var(--dlv-bg), var(--dlv-surface)); transition: 0.12s; }
+.dlv-wbg__head:hover { background: linear-gradient(180deg, var(--dlv-sage-l), var(--dlv-bg)); }
+.dlv-wbg__head .chev { color: var(--dlv-ink-faint); transition: 0.15s; }
+.dlv-wbg.collapsed .chev { transform: rotate(-90deg); }
+.dlv-wbg__name { font-family: 'Fraunces', serif; font-weight: 600; font-size: 16px; color: var(--dlv-ink); letter-spacing: -0.01em; }
+.dlv-wbg__name small { display: inline-block; font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 500; color: var(--dlv-ink-faint); margin-left: 10px; }
+.dlv-wbg__meta { display: flex; align-items: center; gap: 22px; }
+.dlv-wbg__meta .m { display: flex; align-items: baseline; gap: 4px; }
+.dlv-wbg__meta .m .n { font-family: 'Fraunces', serif; font-weight: 600; font-size: 17px; color: var(--dlv-ink); letter-spacing: -0.01em; }
+.dlv-wbg__meta .m .l { font-size: 10.5px; color: var(--dlv-ink-faint); letter-spacing: 0.1em; text-transform: uppercase; font-weight: 500; }
+.dlv-wbg__meta .m.eggs .n { color: var(--dlv-ochre-d); }
+.dlv-wbg__body { border-top: 1px solid var(--dlv-line); }
+.dlv-wbg.collapsed .dlv-wbg__body { display: none; }
+
+/* modality subgroup */
+.dlv-mod { padding: 8px 18px 6px; background: var(--dlv-bg); border-bottom: 1px solid var(--dlv-line); font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dlv-ink-faint); font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.dlv-mod .dot { width: 6px; height: 6px; border-radius: 50%; }
+.dlv-mod .count { margin-left: auto; font-size: 10.5px; font-weight: 500; letter-spacing: 0.04em; text-transform: none; }
+.dlv-mod--1 .dot { background: var(--dlv-sage); }   /* Semanal */
+.dlv-mod--2 .dot { background: var(--dlv-ochre); }  /* Quincenal */
+.dlv-mod--3 .dot { background: var(--dlv-terra); }  /* Mensual */
+.dlv-mod--4 .dot { background: transparent; border: 1px dashed var(--dlv-sage); width: 7px; height: 7px; } /* Compartida */
+.dlv-mod--5 .dot { background: var(--dlv-ochre-l); border: 1px solid var(--dlv-ochre); } /* Solo huevos */
+
+/* table */
+.dlv table { width: 100%; border-collapse: collapse; }
+.dlv tbody td { padding: 11px 14px; font-size: 12.5px; color: var(--dlv-ink); border-bottom: 1px solid var(--dlv-line); vertical-align: middle; }
+.dlv tbody tr:last-child td { border-bottom: 0; }
+.dlv tbody tr:hover { background: var(--dlv-sage-l); cursor: pointer; }
+.dlv .partner { font-family: 'Fraunces', serif; font-weight: 500; color: var(--dlv-ink); font-size: 14.5px; letter-spacing: -0.005em; }
+.dlv .partner small { display: block; font-family: 'Inter', sans-serif; color: var(--dlv-ink-faint); font-size: 11px; font-weight: 400; margin-top: 1px; }
+
+.dlv .mod { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 600; padding: 3px 8px; border-radius: 4px; white-space: nowrap; }
+.dlv .mod .dot { width: 5px; height: 5px; border-radius: 50%; }
+.dlv .mod--1 { background: var(--dlv-sage-l); color: var(--dlv-sage-d); }       .dlv .mod--1 .dot { background: var(--dlv-sage); }
+.dlv .mod--2 { background: var(--dlv-ochre-l); color: var(--dlv-ochre-d); }     .dlv .mod--2 .dot { background: var(--dlv-ochre); }
+.dlv .mod--3 { background: var(--dlv-terra-l); color: var(--dlv-terra-d); }     .dlv .mod--3 .dot { background: var(--dlv-terra); }
+.dlv .mod--4 { background: transparent; color: var(--dlv-sage-d); border: 1px dashed var(--dlv-sage); }
+.dlv .mod--5 { background: #fff2d6; color: var(--dlv-ochre-d); }                .dlv .mod--5 .dot { background: var(--dlv-ochre); }
+
+.dlv .num-c { font-family: 'Fraunces', serif; font-weight: 600; font-size: 14px; color: var(--dlv-ink); }
+.dlv .half { color: var(--dlv-ink-soft); font-weight: 500; }
+.dlv .no { color: var(--dlv-ink-faint); font-size: 11px; font-style: italic; }
+
+.dlv .recoge { font-size: 12px; color: var(--dlv-ink-soft); }
+.dlv .recoge b { color: var(--dlv-ink); font-weight: 600; }
+
+.dlv .empty {
+    padding: 36px 18px; text-align: center;
+    color: var(--dlv-ink-faint); font-size: 13px; font-style: italic;
+    background: var(--dlv-surface); border: 1px dashed var(--dlv-line-2); border-radius: 8px;
+}
+</style>
+{% endblock %}
+
+{% block csa_main %}
+{% set _dow_es  = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'] %}
+{% set _dow_abbr = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'] %}
+{% set _month_es = ['', 'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'] %}
+{% set _basket_dow_es = _dow_es[basket.date|date('w')] %}
+{% set _basket_month_es = _month_es[basket.date|date('n')] %}
+<div class="dlv">
+
+    {{ csa.page_header(
+        'Socixs · Reparto',
+        'Reparto del ' ~ _basket_dow_es ~ ' ' ~ basket.date|date('j') ~ ' de ' ~ _basket_month_es,
+        'Listado de socixs que recogen cesta este día.'
+    ) }}
+
+    {# ============ Mini-timeline + page head ============ #}
+    <div class="dlv-head">
+        <div>
+            <h2 class="dlv-head__title">Nodo {{ node.name }} · {{ basket.date|date('d/m/Y') }}</h2>
+            <div class="dlv-head__sub">
+                semana {{ basket.date|date('W') }} ·
+                cadencia <b>{{ node.cadence == 'weekly' ? 'semanal' : 'quincenal' }}</b> ·
+                día de reparto <b>{{ ['', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'][node.deliveryWeekday] }}</b>
+            </div>
+        </div>
+        <div class="dlv-weeks">
+            {% for b in surrounding_baskets %}
+                {% set is_active = b.id == basket.id %}
+                {% set is_past = b.date < basket.date %}
+                <a href="{{ path('delivery_by_node', { nodeId: node.id, basketId: b.id }) }}"
+                   class="{{ is_active ? 'active' : (is_past ? 'past' : '') }}">
+                    <span class="dow">{{ _dow_abbr[b.date|date('w')] }}</span>
+                    <span class="num">{{ b.date|date('j') }} {{ _month_es[b.date|date('n')]|slice(0, 3) }}</span>
+                </a>
+            {% endfor %}
+        </div>
+    </div>
+
+    {# ============ Node tabs ============ #}
+    <nav class="dlv-nodes">
+        {% for n in all_nodes %}
+            <a href="{{ path('delivery_by_node', { nodeId: n.id, basketId: basket.id }) }}"
+               class="{{ n.id == node.id ? 'active' : '' }}">
+                <span class="ntitle">{{ n.name }}</span>
+                <span class="nmeta">{{ n.weeklyBasketGroups|length }} grupo{{ n.weeklyBasketGroups|length == 1 ? '' : 's' }} · {{ n.cadence == 'weekly' ? 'semanal' : 'quincenal' }}</span>
+            </a>
+        {% endfor %}
+    </nav>
+
+    {# ============ Toolbar con filtros y orden ============ #}
+    <div class="dlv-toolbar">
+        <div class="search">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
+            <input placeholder="Buscar socix en este nodo…">
+        </div>
+
+        <button type="button" class="filt"><span>Modalidad</span> <svg class="chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></button>
+        <button type="button" class="filt"><span>Cohorte</span> <svg class="chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></button>
+        <button type="button" class="filt toggle"><span class="sw"></span> Con huevos hoy</button>
+        <button type="button" class="filt toggle"><span class="sw"></span> Incidencias</button>
+
+        <span class="filt-divider"></span>
+        <button type="button" class="filt" title="Cambiar el modo de agrupación del listado">
+            Orden: <b>Grupo → modalidad</b>
+            <svg class="chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+
+        <div class="counters">
+            <span><b>{{ totals.socios }}</b> socios</span>
+            <span class="sep"></span>
+            <span><b>{{ totals.cestas }}</b> cestas</span>
+            <span class="sep"></span>
+            <span><b>{{ totals.huevos }}</b> con huevos</span>
+        </div>
+    </div>
+
+    {# ============ Listado WBG ============ #}
+    {% if grouped is empty %}
+        <div class="empty">
+            Este nodo no tiene reparto el {{ basket.date|date('d/m/Y') }}.
+            {% if node.cadence == 'biweekly' %}
+                Cadencia quincenal · próximo reparto pendiente de generar.
+            {% endif %}
+        </div>
+    {% else %}
+        {% for wbg_id, block in grouped %}
+            {% set is_first = loop.first %}
+            <section class="dlv-wbg {{ is_first ? '' : 'collapsed' }}">
+                <header class="dlv-wbg__head" onclick="this.parentElement.classList.toggle('collapsed')">
+                    <svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+                    <div>
+                        <span class="dlv-wbg__name">{{ block.wbg.name }}</span>
+                    </div>
+                    {% set socios_wbg = 0 %}
+                    {% set cestas_wbg = 0 %}
+                    {% set huevos_wbg = 0 %}
+                    {% for bs_id, sub in block.modalities %}
+                        {% set socios_wbg = socios_wbg + sub.weekly_baskets|length %}
+                        {% for wb in sub.weekly_baskets %}
+                            {% set cestas_wbg = cestas_wbg + wb.amount %}
+                            {% if egg_delivery_map[wb.id] ?? false %}{% set huevos_wbg = huevos_wbg + 1 %}{% endif %}
+                        {% endfor %}
+                    {% endfor %}
+                    <div class="dlv-wbg__meta">
+                        <div class="m"><span class="n">{{ socios_wbg }}</span><span class="l">socios</span></div>
+                        <div class="m"><span class="n">{{ cestas_wbg }}</span><span class="l">cestas</span></div>
+                        <div class="m eggs"><span class="n">{{ huevos_wbg }}</span><span class="l">huevos</span></div>
+                    </div>
+                </header>
+                <div class="dlv-wbg__body">
+                    {% for bs_id, sub in block.modalities %}
+                        <div class="dlv-mod dlv-mod--{{ bs_id }}">
+                            <span class="dot"></span>{{ sub.basket_share.name }}
+                            <span class="count">{{ sub.weekly_baskets|length }}</span>
+                        </div>
+                        <table>
+                            <tbody>
+                            {% for wb in sub.weekly_baskets %}
+                                {% set share = wb.partnerBasketShare %}
+                                <tr>
+                                    <td class="partner">
+                                        {{ wb.partner.name }} {{ wb.partner.surname }}
+                                        {% if share and share.deliveryGroup %}<small>cohorte {{ share.deliveryGroup }}</small>{% endif %}
+                                    </td>
+                                    <td style="width: 130px;">
+                                        <span class="mod mod--{{ bs_id }}"><span class="dot"></span>{{ sub.basket_share.name }}</span>
+                                    </td>
+                                    <td class="num-c" style="width: 70px;">{{ wb.amount }}</td>
+                                    <td style="width: 110px;">
+                                        {% if egg_delivery_map[wb.id] ?? false %}
+                                            <span class="num-c">{{ share.eggAmount ? share.eggAmount.name : '✓' }}</span>
+                                        {% else %}
+                                            <span class="no">— hoy no</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="recoge" style="width: 160px;">
+                                        recoge <b>la propia</b>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    {% endfor %}
+                </div>
+            </section>
+        {% endfor %}
+    {% endif %}
+
+</div>
+{% endblock %}
