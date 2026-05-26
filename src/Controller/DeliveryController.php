@@ -382,9 +382,52 @@ class DeliveryController extends AbstractController
     }
 
     /**
+     * Entry point del menú lateral: calcula el primer Node (por id ASC) y
+     * el próximo Basket (date >= today, o el último pasado si todos han
+     * pasado) y redirige a la pantalla concreta. Permite enlazar desde el
+     * menú sin hardcodear ids que cambian con el tiempo.
+     */
+    #[Route('/v2', name: 'delivery_by_node_default', methods: ['GET'])]
+    public function byNodeDefault(
+        NodeRepository $nodeRepo,
+        BasketRepository $basketRepo,
+    ): Response {
+        $firstNode = $nodeRepo->createQueryBuilder('n')->orderBy('n.id', 'ASC')->setMaxResults(1)->getQuery()->getOneOrNullResult();
+        if ($firstNode === null) {
+            throw $this->createNotFoundException('No hay nodos configurados todavía.');
+        }
+
+        $today = (new \DateTimeImmutable('today'))->format('Y-m-d');
+        $nextBasket = $basketRepo->createQueryBuilder('b')
+            ->where('b.date >= :today')
+            ->setParameter('today', $today)
+            ->orderBy('b.date', 'ASC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+
+        // Fallback: si todos los baskets han pasado, ir al último para no 404.
+        if ($nextBasket === null) {
+            $nextBasket = $basketRepo->createQueryBuilder('b')
+                ->orderBy('b.date', 'DESC')
+                ->setMaxResults(1)
+                ->getQuery()
+                ->getOneOrNullResult();
+        }
+
+        if ($nextBasket === null) {
+            throw $this->createNotFoundException('No hay baskets configurados todavía.');
+        }
+
+        return $this->redirectToRoute('delivery_by_node', [
+            'nodeId' => $firstNode->getId(),
+            'basketId' => $nextBasket->getId(),
+        ]);
+    }
+
+    /**
      * Listado de reparto v2 (sub-fase 8.8c): tabla agrupada Nodo > WBG > Modalidad.
-     * Reemplazará a la pantalla legacy partner_basket_share_generate_weekly cuando
-     * se valide. Sin enchufar al menú todavía — se accede por URL.
+     * Reemplaza la pantalla legacy partner_basket_share_generate_weekly.
      */
     #[Route(
         '/v2/nodo/{nodeId}/{basketId}',
