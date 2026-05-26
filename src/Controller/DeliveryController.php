@@ -398,6 +398,7 @@ class DeliveryController extends AbstractController
         NodeRepository $nodeRepo,
         BasketRepository $basketRepo,
         WeeklyBasketRepository $weeklyBasketRepo,
+        PartnerBasketShareRepository $partnerBasketShareRepo,
         EggDeliveryResolver $eggResolver,
     ): Response {
         $allNodes = $nodeRepo->findBy([], ['name' => 'ASC']);
@@ -411,11 +412,27 @@ class DeliveryController extends AbstractController
         // modalidad. KISS: dos pasadas, sin DTOs, sin colecciones de Doctrine.
         $grouped = $this->groupForRender($weeklyBaskets);
 
+        // pbsByWbId[wb.id] = PartnerBasketShare activo del partner en la fecha
+        // del basket. Reemplaza a $wb->getPartnerBasketShare() (propiedad
+        // transient que no se persiste y devolvería null al recuperar el WB).
+        $pbsByWbId = [];
+        foreach ($weeklyBaskets as $wb) {
+            $partner = $wb->getPartner();
+            if ($partner === null) {
+                $pbsByWbId[$wb->getId()] = null;
+                continue;
+            }
+            $pbsByWbId[$wb->getId()] = $partnerBasketShareRepo->findActiveForPartner(
+                $partner,
+                $basket->getDate(),
+            );
+        }
+
         // eggDeliveryMap[wb.id] = bool. Permite al template ocultar la columna
         // huevos cuando el resolver dice que no toca esta semana.
         $eggDeliveryMap = [];
         foreach ($weeklyBaskets as $wb) {
-            $share = $wb->getPartnerBasketShare();
+            $share = $pbsByWbId[$wb->getId()] ?? null;
             $eggDeliveryMap[$wb->getId()] = $share !== null
                 ? $eggResolver->delivers($share, $basket)
                 : false;
@@ -427,6 +444,7 @@ class DeliveryController extends AbstractController
             'all_nodes' => $allNodes,
             'surrounding_baskets' => $surroundingBaskets,
             'grouped' => $grouped,
+            'pbs_by_wb_id' => $pbsByWbId,
             'egg_delivery_map' => $eggDeliveryMap,
             'totals' => $this->computeTotals($weeklyBaskets, $eggDeliveryMap),
         ]);

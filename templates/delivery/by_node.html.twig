@@ -273,7 +273,7 @@
                         <table>
                             <tbody>
                             {% for wb in sub.weekly_baskets %}
-                                {% set share = wb.partnerBasketShare %}
+                                {% set share = pbs_by_wb_id[wb.id] ?? null %}
                                 <tr>
                                     <td class="partner">
                                         {{ wb.partner.name }} {{ wb.partner.surname }}
@@ -285,7 +285,7 @@
                                     <td class="num-c" style="width: 70px;">{{ wb.amount }}</td>
                                     <td style="width: 110px;">
                                         {% if egg_delivery_map[wb.id] ?? false %}
-                                            <span class="num-c">{{ share.eggAmount ? share.eggAmount.name : '✓' }}</span>
+                                            <span class="num-c">{{ share and share.eggAmount ? share.eggAmount.name : '✓' }}</span>
                                         {% else %}
                                             <span class="no">— hoy no</span>
                                         {% endif %}
