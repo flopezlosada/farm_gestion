@@ -72,6 +72,20 @@ class EggAmount
         return $this->name;
     }
 
+    /**
+     * Número de docenas que representa este importe de huevos. El catálogo es
+     * legacy y no tiene un campo numérico: la cantidad va implícita en el id
+     * (1=media docena, 2=una docena… 10=cinco docenas), es decir docenas =
+     * id × 0,5. Mismo supuesto que el mapeo del comando de import. Cuando se
+     * modele una cantidad explícita en EggAmount, este método se reescribe.
+     *
+     * @return float Docenas (p.ej. 0.5, 1.0, 1.5).
+     */
+    public function getDozens(): float
+    {
+        return $this->id !== null ? $this->id * 0.5 : 0.0;
+    }
+
     public function setName(string $name): self
     {
         $this->name = $name;

@@ -103,6 +103,22 @@ class NodeDeliveryDate
     }
 
     /**
+     * Día de la semana del nodo para este Basket, SIN tener en cuenta la
+     * cadencia ni las excepciones: devuelve siempre la fecha (el miércoles,
+     * viernes…) aunque el nodo sea quincenal y esa semana no reparta. Útil
+     * para pintar la fecha del nodo en una mini-timeline y atenuar aparte las
+     * semanas vacías.
+     *
+     * @param Basket $basket
+     * @param Node $node
+     * @return \DateTimeImmutable
+     */
+    public function weekdayDateFor(Basket $basket, Node $node): \DateTimeImmutable
+    {
+        return $this->naiveDate($basket, $node);
+    }
+
+    /**
      * Fecha física "naif" — sin tener en cuenta la cadencia. Se calcula
      * desplazando el día del Basket hasta el delivery_weekday del nodo.
      *

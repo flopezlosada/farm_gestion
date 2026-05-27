@@ -38,6 +38,19 @@ class MonthlyOperativeOrderResolver
     }
 
     /**
+     * ¿Hubo reparto ese día? Falso para los viernes festivos conocidos
+     * (1-may, 25-dic en 2026): esos días no se reparte —se adelanta al
+     * viernes hábil anterior—, así que su Basket no es operativo.
+     */
+    public function isOperative(Basket $basket): bool
+    {
+        $date = $basket->getDate();
+
+        return $date !== null
+            && !in_array($date->format('Y-m-d'), self::NON_OPERATIVE_FRIDAYS, true);
+    }
+
+    /**
      * @return int 1-based. 1 = primer viernes operativo del mes.
      * @throws \RuntimeException Si el basket no aparece entre los del mes (no debería pasar).
      */

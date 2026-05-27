@@ -7,6 +7,7 @@ use App\Entity\Node;
 use App\Entity\Partner;
 use App\Entity\PartnerDeliveryShift;
 use App\Entity\PartnerEvent;
+use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketStatus;
 use App\Repository\BasketRepository;
 use App\Repository\DeliveryExceptionRepository;
@@ -20,6 +21,8 @@ use App\Service\Delivery\DeliveryShiftApplier;
 use App\Service\Delivery\DeliveryShiftCandidates;
 use App\Service\Delivery\DeliveryShiftValidator;
 use App\Service\Delivery\EggDeliveryResolver;
+use App\Service\Delivery\MonthlyOperativeOrderResolver;
+use App\Service\Delivery\NodeDeliveryDate;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Delivery\WeeklyDeliveryReport;
 use Doctrine\ORM\EntityManagerInterface;
@@ -443,17 +446,76 @@ class DeliveryController extends AbstractController
         WeeklyBasketRepository $weeklyBasketRepo,
         PartnerBasketShareRepository $partnerBasketShareRepo,
         EggDeliveryResolver $eggResolver,
+        NodeDeliveryDate $nodeDeliveryDate,
+        MonthlyOperativeOrderResolver $monthlyOrder,
+        WeeklyBasketGenerator $generator,
+        Request $request,
     ): Response {
+        $orden = $request->query->get('orden', 'grupo');
+        if (!in_array($orden, ['grupo', 'modalidad', 'alfabetico'], true)) {
+            $orden = 'grupo';
+        }
+
         $allNodes = $nodeRepo->findBy([], ['name' => 'ASC']);
-        $weeklyBaskets = $weeklyBasketRepo->findForNodeAndBasket($node, $basket);
 
-        // Listado de viernes vecinos para la mini-timeline del header: 2 pasados,
-        // el actual y 3 futuros.
-        $surroundingBaskets = $this->surroundingBaskets($basketRepo, $basket);
+        // Festivos: un Basket que cae en viernes festivo (1-may, 25-dic) no es
+        // operativo —ese día no se reparte, se adelanta al viernes anterior—.
+        // No generamos ni listamos: el generador petaría al no ubicarlo entre
+        // los viernes operativos del mes. La pantalla muestra un aviso.
+        $isOperative = $monthlyOrder->isOperative($basket);
 
-        // Agrupado plano para el render: por WBG (con resumen) y dentro por
-        // modalidad. KISS: dos pasadas, sin DTOs, sin colecciones de Doctrine.
-        $grouped = $this->groupForRender($weeklyBaskets);
+        // Materialización al vuelo: si este Basket aún no tiene reparto generado
+        // (el cron del lunes lo hace proactivamente, pero una semana futura
+        // puede no estar hecha), lo generamos ahora. El generador es idempotente
+        // —no duplica WeeklyBaskets ya existentes— así que convive con el cron.
+        // Sólo se dispara cuando el Basket no tiene NADA: un nodo quincenal
+        // vacío en su semana de descanso es legítimo y no debe regenerar.
+        if ($isOperative && $weeklyBasketRepo->countPickedInBasket($basket) === 0) {
+            $generator->generateForBasket($basket);
+        }
+
+        $weeklyBaskets = $isOperative
+            ? $weeklyBasketRepo->findForNodeAndBasket($node, $basket)
+            : [];
+
+        // Fecha física de reparto del nodo en este Basket: para Torremocha
+        // (semanal viernes) coincide con basket.date; para Madrid (miércoles)
+        // cae otro día; null si el nodo es quincenal y este Basket no le toca.
+        $physicalDate = $nodeDeliveryDate->physicalDateFor($basket, $node);
+
+        // Mini-timeline del header: 2 ciclos pasados, el actual y 3 futuros.
+        // Cada entrada lleva el día REAL del nodo (miércoles para Madrid,
+        // viernes para Torremocha) y si el nodo reparte esa semana, para
+        // atenuar las semanas vacías de los nodos quincenales.
+        $anchor = $this->resolveTimelineAnchor($basketRepo, $request->query->getInt('ref', 0));
+        $windowBaskets = $anchor !== null ? $this->surroundingBaskets($basketRepo, $anchor) : [];
+        $timeline = array_map(
+            fn (Basket $b): array => [
+                'basket' => $b,
+                'date' => $nodeDeliveryDate->weekdayDateFor($b, $node),
+                'delivers' => $monthlyOrder->isOperative($b) && $nodeDeliveryDate->deliversInBasket($b, $node),
+                'active' => $b->getId() === $basket->getId(),
+            ],
+            $windowBaskets,
+        );
+
+        // Flechas de navegación de la tira: desplazan la ventana usando como
+        // nueva referencia el primer/último viernes visible. has_* indica si
+        // queda calendario más allá, para no pintar flechas muertas.
+        $firstWin = $windowBaskets[0] ?? null;
+        $lastWin = $windowBaskets !== [] ? end($windowBaskets) : null;
+        $timelineNav = [
+            'prev_ref' => $firstWin?->getId(),
+            'next_ref' => $lastWin?->getId(),
+            'has_prev' => $firstWin !== null && $this->basketExistsBeyond($basketRepo, $firstWin, '<'),
+            'has_next' => $lastWin !== null && $this->basketExistsBeyond($basketRepo, $lastWin, '>'),
+        ];
+
+        // Estructura unificada de secciones para el render, según el modo de
+        // orden elegido (por grupo de recogida / por modalidad / lista
+        // alfabética). Formato común: secciones con subgrupos y filas, para
+        // que el template tenga una sola rama de pintado.
+        $sections = $this->buildSections($weeklyBaskets, $orden);
 
         // pbsByWbId[wb.id] = PartnerBasketShare activo del partner en la fecha
         // del basket. Reemplaza a $wb->getPartnerBasketShare() (propiedad
@@ -489,21 +551,49 @@ class DeliveryController extends AbstractController
         return $this->render('delivery/by_node.html.twig', [
             'node' => $node,
             'basket' => $basket,
+            'physical_date' => $physicalDate,
+            'is_operative' => $isOperative,
             'all_nodes' => $allNodes,
             'node_active_counts' => $nodeActiveCounts,
-            'surrounding_baskets' => $surroundingBaskets,
-            'grouped' => $grouped,
+            'timeline' => $timeline,
+            'timeline_nav' => $timelineNav,
+            'ref_id' => $anchor?->getId(),
+            'orden' => $orden,
+            'sections' => $sections,
             'pbs_by_wb_id' => $pbsByWbId,
             'egg_delivery_map' => $eggDeliveryMap,
-            'totals' => $this->computeTotals($weeklyBaskets, $eggDeliveryMap),
+            'totals' => $this->computeTotals($weeklyBaskets, $eggDeliveryMap, $pbsByWbId),
         ]);
     }
 
     /**
+     * Estructura unificada de secciones para el template, según el modo de
+     * orden. Formato común: cada sección tiene un título (o null en lista
+     * plana) y una lista de subgrupos; cada subgrupo tiene filas y, opcional,
+     * un label (la modalidad, cuando se agrupa por grupo). Una sola forma de
+     * pintar para los tres modos.
+     *
      * @param WeeklyBasket[] $weeklyBaskets
-     * @return array<int, array{wbg: \App\Entity\WeeklyBasketGroup, modalities: array<int, array{basket_share: \App\Entity\BasketShare, weekly_baskets: WeeklyBasket[]}>, totals: array{socios:int, cestas:int, huevos:int}}>
+     * @param string $orden grupo|modalidad|alfabetico
+     * @return list<array{title:?string, subgroups: list<array{bs_id:?int, label:?string, rows: WeeklyBasket[]}>}>
      */
-    private function groupForRender(array $weeklyBaskets): array
+    private function buildSections(array $weeklyBaskets, string $orden): array
+    {
+        return match ($orden) {
+            'modalidad'  => $this->sectionsByModality($weeklyBaskets),
+            'alfabetico' => $this->sectionsFlat($weeklyBaskets),
+            default      => $this->sectionsByGroup($weeklyBaskets),
+        };
+    }
+
+    /**
+     * Secciones por grupo de recogida (WBG), con subgrupos por modalidad.
+     * Confía en el orden del query (wbg.name, basket_share.id, partner.name).
+     *
+     * @param WeeklyBasket[] $weeklyBaskets
+     * @return list<array{title:?string, subgroups: list<array{bs_id:?int, label:?string, rows: WeeklyBasket[]}>}>
+     */
+    private function sectionsByGroup(array $weeklyBaskets): array
     {
         $byWbg = [];
         foreach ($weeklyBaskets as $wb) {
@@ -512,62 +602,167 @@ class DeliveryController extends AbstractController
             if ($wbg === null || $bs === null) {
                 continue;
             }
-            $wbgId = $wbg->getId();
-            $bsId = $bs->getId();
-
-            if (!isset($byWbg[$wbgId])) {
-                $byWbg[$wbgId] = [
-                    'wbg' => $wbg,
-                    'modalities' => [],
-                    'totals' => ['socios' => 0, 'cestas' => 0, 'huevos' => 0],
-                ];
-            }
-            if (!isset($byWbg[$wbgId]['modalities'][$bsId])) {
-                $byWbg[$wbgId]['modalities'][$bsId] = [
-                    'basket_share' => $bs,
-                    'weekly_baskets' => [],
-                ];
-            }
-            $byWbg[$wbgId]['modalities'][$bsId]['weekly_baskets'][] = $wb;
+            $byWbg[$wbg->getId()] ??= ['title' => $wbg->getName(), 'subs' => []];
+            $byWbg[$wbg->getId()]['subs'][$bs->getId()] ??= ['bs_id' => $bs->getId(), 'label' => $bs->getName(), 'rows' => []];
+            $byWbg[$wbg->getId()]['subs'][$bs->getId()]['rows'][] = $wb;
         }
-        return $byWbg;
+
+        return array_map(
+            fn (array $g): array => ['title' => $g['title'], 'subgroups' => array_values($g['subs'])],
+            array_values($byWbg),
+        );
     }
 
     /**
+     * Secciones por modalidad de cesta; dentro, subgrupos por grupo de
+     * recogida (segundo orden), y dentro filas por nombre. Útil para preparar
+     * todas las cestas de una modalidad agrupadas por punto de entrega.
+     *
+     * @param WeeklyBasket[] $weeklyBaskets
+     * @return list<array{title:?string, subgroups: list<array{bs_id:?int, label:?string, rows: WeeklyBasket[]}>}>
+     */
+    private function sectionsByModality(array $weeklyBaskets): array
+    {
+        $byMod = [];
+        foreach ($weeklyBaskets as $wb) {
+            $bs = $wb->getBasketShare();
+            if ($bs === null) {
+                continue;
+            }
+            $wbg = $wb->getWeeklyBasketGroup();
+            $groupId = $wbg?->getId() ?? 0;
+            $byMod[$bs->getId()] ??= ['title' => $bs->getName(), 'subs' => []];
+            $byMod[$bs->getId()]['subs'][$groupId] ??= [
+                'bs_id' => null,
+                'label' => $wbg?->getName() ?? 'Sin grupo',
+                'rows' => [],
+            ];
+            $byMod[$bs->getId()]['subs'][$groupId]['rows'][] = $wb;
+        }
+        ksort($byMod);
+
+        return array_map(
+            function (array $m): array {
+                $subs = $m['subs'];
+                uasort($subs, static fn (array $a, array $b): int => strnatcasecmp($a['label'], $b['label']));
+                foreach ($subs as &$sub) {
+                    usort($sub['rows'], $this->compareByDisplayName(...));
+                }
+                unset($sub);
+
+                return ['title' => $m['title'], 'subgroups' => array_values($subs)];
+            },
+            array_values($byMod),
+        );
+    }
+
+    /**
+     * Una sola sección sin título con todas las filas ordenadas por nombre.
+     *
+     * @param WeeklyBasket[] $weeklyBaskets
+     * @return list<array{title:?string, subgroups: list<array{bs_id:?int, label:?string, rows: WeeklyBasket[]}>}>
+     */
+    private function sectionsFlat(array $weeklyBaskets): array
+    {
+        $rows = $weeklyBaskets;
+        usort($rows, $this->compareByDisplayName(...));
+
+        return [['title' => null, 'subgroups' => [['bs_id' => null, 'label' => null, 'rows' => $rows]]]];
+    }
+
+    /**
+     * Comparador de WeeklyBasket por el nombre de reparto del socio (natural,
+     * insensible a mayúsculas).
+     */
+    private function compareByDisplayName(WeeklyBasket $a, WeeklyBasket $b): int
+    {
+        return strnatcasecmp(
+            $a->getPartner()?->getNameForDelivery() ?? '',
+            $b->getPartner()?->getNameForDelivery() ?? '',
+        );
+    }
+
+    /**
+     * Totales del nodo+día para el resumen destacado de la pantalla.
+     *
      * @param WeeklyBasket[] $weeklyBaskets
      * @param array<int,bool> $eggDeliveryMap
-     * @return array{socios:int, cestas:int, huevos:int}
+     * @param array<int,?\App\Entity\PartnerBasketShare> $pbsByWbId
+     * @return array{socios:int, grupos:int, cestas:float, docenas:float, con_huevos:int}
      */
-    private function computeTotals(array $weeklyBaskets, array $eggDeliveryMap): array
+    private function computeTotals(array $weeklyBaskets, array $eggDeliveryMap, array $pbsByWbId): array
     {
-        $cestas = 0;
-        $huevos = 0;
+        $cestas = 0.0;
+        $docenas = 0.0;
+        $conHuevos = 0;
+        $grupos = [];
         foreach ($weeklyBaskets as $wb) {
-            $cestas += (int) $wb->getAmount();
+            $cestas += (float) $wb->getAmount();
+            $wbg = $wb->getWeeklyBasketGroup();
+            if ($wbg !== null) {
+                $grupos[$wbg->getId()] = true;
+            }
             if ($eggDeliveryMap[$wb->getId()] ?? false) {
-                $huevos++;
+                $conHuevos++;
+                $eggAmount = ($pbsByWbId[$wb->getId()] ?? null)?->getEggAmount();
+                if ($eggAmount !== null) {
+                    $docenas += $eggAmount->getDozens();
+                }
             }
         }
-        return ['socios' => count($weeklyBaskets), 'cestas' => $cestas, 'huevos' => $huevos];
+        return [
+            'socios' => count($weeklyBaskets),
+            'grupos' => count($grupos),
+            'cestas' => $cestas,
+            'docenas' => $docenas,
+            'con_huevos' => $conHuevos,
+        ];
     }
 
     /**
-     * Mini-timeline de viernes: 2 anteriores, el actual y 3 posteriores. La
-     * UI los pinta como chips clickables que cambian de viernes sin cambiar
-     * de nodo (mantiene nodeId en la URL).
+     * Basket de referencia para anclar la mini-timeline: el indicado por
+     * `?ref=` si es válido, o el más próximo a hoy (esta semana). Estable: no
+     * depende del Basket seleccionado, así que pinchar un día no desplaza la
+     * tira; para moverse por el calendario están las flechas (que cambian ref).
+     */
+    private function resolveTimelineAnchor(BasketRepository $repo, int $refId): ?Basket
+    {
+        if ($refId > 0 && ($ref = $repo->find($refId)) instanceof Basket) {
+            return $ref;
+        }
+
+        $today = (new \DateTimeImmutable('today'))->format('Y-m-d');
+
+        return $repo->createQueryBuilder('b')
+            ->where('b.date >= :today')
+            ->setParameter('today', $today)
+            ->orderBy('b.date', 'ASC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult()
+            ?? $repo->createQueryBuilder('b')
+                ->orderBy('b.date', 'DESC')
+                ->setMaxResults(1)
+                ->getQuery()
+                ->getOneOrNullResult();
+    }
+
+    /**
+     * Ventana de la mini-timeline alrededor del ancla: 2 viernes anteriores +
+     * ancla + 4 posteriores.
      *
      * @return Basket[]
      */
-    private function surroundingBaskets(BasketRepository $repo, Basket $current): array
+    private function surroundingBaskets(BasketRepository $repo, Basket $anchor): array
     {
-        $date = $current->getDate();
-        if ($date === null) {
-            return [$current];
+        $anchorDate = $anchor->getDate()?->format('Y-m-d');
+        if ($anchorDate === null) {
+            return [$anchor];
         }
 
         $previous = $repo->createQueryBuilder('b')
             ->where('b.date < :date')
-            ->setParameter('date', $date->format('Y-m-d'))
+            ->setParameter('date', $anchorDate)
             ->orderBy('b.date', 'DESC')
             ->setMaxResults(2)
             ->getQuery()
@@ -575,13 +770,33 @@ class DeliveryController extends AbstractController
 
         $next = $repo->createQueryBuilder('b')
             ->where('b.date > :date')
-            ->setParameter('date', $date->format('Y-m-d'))
+            ->setParameter('date', $anchorDate)
             ->orderBy('b.date', 'ASC')
-            ->setMaxResults(3)
+            ->setMaxResults(4)
             ->getQuery()
             ->getResult();
 
-        return [...array_reverse($previous), $current, ...$next];
+        return [...array_reverse($previous), $anchor, ...$next];
+    }
+
+    /**
+     * ¿Hay algún Basket más allá del dado en la dirección indicada?
+     *
+     * @param string $op '<' (anteriores) o '>' (posteriores).
+     */
+    private function basketExistsBeyond(BasketRepository $repo, Basket $basket, string $op): bool
+    {
+        $date = $basket->getDate()?->format('Y-m-d');
+        if ($date === null) {
+            return false;
+        }
+
+        return (int) $repo->createQueryBuilder('b')
+            ->select('COUNT(b.id)')
+            ->where("b.date $op :date")
+            ->setParameter('date', $date)
+            ->getQuery()
+            ->getSingleScalarResult() > 0;
     }
 
     #[Route('/{basketId}', name: 'delivery_show', methods: ['GET'], requirements: ['basketId' => '\d+'])]

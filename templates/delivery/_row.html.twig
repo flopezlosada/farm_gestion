@@ -1,0 +1,48 @@
+{# ============================================================
+ # Una fila de socix del listado de reparto v2.
+ # Espera del contexto heredado: wb (WeeklyBasket), pbs_by_wb_id, egg_delivery_map.
+ # La modalidad se deriva de la propia fila (wb.basketShare) para que la fila
+ # sea válida en los tres modos de orden (grupo / modalidad / alfabético).
+ # ============================================================ #}
+{% set share = pbs_by_wb_id[wb.id] ?? null %}
+{% set row_eggs = egg_delivery_map[wb.id] ?? false %}
+{% set rbs = wb.basketShare %}
+<tr class="dlv-row"
+    data-name="{{ (wb.partner.nameForDelivery ~ ' ' ~ wb.partner.legalName)|lower }}"
+    data-modality="{{ rbs.id }}"
+    data-wbg="{{ wb.weeklyBasketGroup ? wb.weeklyBasketGroup.id : '' }}"
+    data-cohort="{{ share.deliveryGroup ?? '' }}"
+    data-eggs="{{ row_eggs ? '1' : '0' }}"
+    data-amount="{{ wb.amount }}"
+    data-dozens="{{ row_eggs and share and share.eggAmount ? share.eggAmount.dozens : 0 }}">
+    <td class="partner">
+        {{ wb.partner.nameForDelivery }}
+        {% if wb.partner.displayName and wb.partner.displayName != wb.partner.legalName %}
+            <small>{{ wb.partner.legalName }}</small>
+        {% endif %}
+    </td>
+    <td style="width: 130px;">
+        <span class="mod mod--{{ rbs.id }}"><span class="dot"></span>{{ rbs.name }}</span>
+    </td>
+    <td class="num-c" style="width: 70px;">{{ wb.amount }}</td>
+    <td style="width: 110px;">
+        {% if row_eggs %}
+            <span class="num-c">{{ share and share.eggAmount ? share.eggAmount.name : '✓' }}</span>
+        {% else %}
+            <span class="no">— hoy no</span>
+        {% endif %}
+    </td>
+    <td class="recoge" style="width: 160px;">
+        recoge <b>la propia</b>
+    </td>
+    <td class="dlv-actions" style="width: 44px;">
+        <button type="button" class="dlv-kebab" aria-label="Acciones del socix">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg>
+        </button>
+        <div class="dlv-kebab-menu" hidden>
+            <a href="{{ path('partner_show', { id: wb.partner.id }) }}">Ver ficha del socix</a>
+            <a href="{{ path('partner_edit', { id: wb.partner.id }) }}">Editar socix</a>
+            <a href="{{ path('delivery_shifts_index', { partner: wb.partner.id }) }}">Cambiar de viernes / no recoge</a>
+        </div>
+    </td>
+</tr>
