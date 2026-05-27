@@ -113,6 +113,8 @@
                            route starts with 'weekly_basket_group') }}
                         {{ _self.nav_link('Nodos de reparto', path('node_index'), 'fa-sitemap',
                            route starts with 'node_') }}
+                        {{ _self.nav_link('Excepciones de reparto', path('delivery_exception_index'), 'fa-calendar-times-o',
+                           route starts with 'delivery_exception') }}
                         {{ _self.nav_link('Evolución', path('partner_evolution'), 'fa-line-chart',
                            route == 'partner_evolution') }}
                     {% endif %}

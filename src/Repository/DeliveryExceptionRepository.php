@@ -70,6 +70,31 @@ class DeliveryExceptionRepository extends ServiceEntityRepository
     }
 
     /**
+     * Busca la excepción registrada EXACTAMENTE para (basket, node), sin el
+     * fallback a la global que aplica {@see findForBasketAndNode}. Sirve
+     * para impedir duplicados al crear/editar: el UNIQUE(basket, node) no
+     * es fiable en MySQL porque admite varios NULL en node_id.
+     *
+     * @param Basket $basket Ciclo.
+     * @param Node|null $node Nodo concreto, o null para la excepción global.
+     * @return DeliveryException|null La fila exacta, o null si no existe.
+     */
+    public function findOneExact(Basket $basket, ?Node $node): ?DeliveryException
+    {
+        $qb = $this->createQueryBuilder('e')
+            ->where('e.basket = :basket')
+            ->setParameter('basket', $basket);
+
+        if ($node === null) {
+            $qb->andWhere('e.node IS NULL');
+        } else {
+            $qb->andWhere('e.node = :node')->setParameter('node', $node);
+        }
+
+        return $qb->getQuery()->getOneOrNullResult();
+    }
+
+    /**
      * Excepciones cuyo ciclo (o fecha trasladada) cae dentro del rango
      * dado. Útil para pintar el calendario de excepciones.
      *

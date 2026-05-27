@@ -1,0 +1,80 @@
+{# ============================================================
+ # Listado de excepciones de calendario de reparto.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Excepciones de reparto{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Excepciones de reparto</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Socixs · Reparto',
+        'Excepciones de reparto',
+        'Festivos, cierres y traslados de día. Planifícalos por adelantado: cada excepción cancela o mueve el reparto de un ciclo, para un nodo concreto o para todos.'
+    ) }}
+
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-5);">
+        <div></div>
+        <div class="csa-row">
+            {{ csa.btn('Nueva excepción', { variant: 'primary', href: path('delivery_exception_new'), icon: 'fa-plus' }) }}
+        </div>
+    </div>
+
+    <div class="csa-table-wrap">
+        <table class="csa-table" data-paginate>
+            <thead>
+                <tr>
+                    <th>Ciclo</th>
+                    <th>Nodo</th>
+                    <th>Tipo</th>
+                    <th>Trasladado a</th>
+                    <th>Notas</th>
+                    <th class="csa-table__actions">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for exception in exceptions %}
+                    <tr>
+                        <td>
+                            <a class="csa-table__primary" href="{{ path('delivery_exception_edit', { id: exception.id }) }}">
+                                Viernes {{ exception.basket.date|date('d/m/Y') }}
+                            </a>
+                        </td>
+                        <td>{{ exception.isGlobal ? 'Todos los nodos' : exception.node.name }}</td>
+                        <td>
+                            {% if exception.isCancelled %}
+                                <span class="csa-badge csa-badge--danger">Sin reparto</span>
+                            {% else %}
+                                <span class="csa-badge csa-badge--warning">Trasladado</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ exception.shiftedDate ? exception.shiftedDate|date('d/m/Y') : '—' }}</td>
+                        <td class="csa-muted">{{ exception.notes|default('—') }}</td>
+                        <td class="csa-table__actions">
+                            <a href="{{ path('delivery_exception_edit', { id: exception.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>
+                            <form method="post" action="{{ path('delivery_exception_delete', { id: exception.id }) }}" style="display:inline;" onsubmit="return confirm('¿Borrar esta excepción?');">
+                                <input type="hidden" name="_token" value="{{ csrf_token('delete' ~ exception.id) }}">
+                                <button type="submit" class="csa-btn-icon" title="Borrar" aria-label="Borrar"><i class="fa fa-trash"></i></button>
+                            </form>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="6" class="csa-muted" style="text-align: center; padding: var(--csa-sp-8);">
+                            No hay excepciones registradas. El reparto sigue el calendario normal.
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+{% endblock %}
