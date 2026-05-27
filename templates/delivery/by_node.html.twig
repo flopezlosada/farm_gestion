@@ -62,14 +62,15 @@
 .dlv-head__sub b { color: var(--dlv-ink); font-weight: 600; }
 
 .dlv-weeks { display: flex; gap: 4px; border: 1px solid var(--dlv-line); padding: 3px; border-radius: 6px; background: var(--dlv-bg); }
-.dlv-weeks a { text-decoration: none; padding: 8px 14px; min-width: 92px; border-radius: 4px; text-align: center; color: inherit; }
+.dlv-weeks a { text-decoration: none; padding: 8px 12px; min-width: 74px; border-radius: 4px; text-align: center; color: inherit; }
 .dlv-weeks a .dow { display: block; font-size: 10px; color: var(--dlv-ink-faint); letter-spacing: 0.12em; text-transform: uppercase; }
 .dlv-weeks a .num { display: block; font-family: 'Fraunces', serif; font-weight: 600; font-size: 17px; margin-top: 2px; color: var(--dlv-ink); }
 .dlv-weeks a.past { opacity: 0.45; }
 .dlv-weeks a.off { opacity: 0.4; }
 .dlv-weeks a.off .num { text-decoration: line-through; text-decoration-color: var(--dlv-line-2); }
-.dlv-weeks a.dlv-weeks__nav { min-width: 0; padding: 8px 10px; display: flex; align-items: center; font-family: 'Fraunces', serif; font-size: 20px; line-height: 1; color: var(--dlv-ink-soft); }
-.dlv-weeks a.dlv-weeks__nav:hover { background: var(--dlv-surface); color: var(--dlv-ink); }
+.dlv-weeks .dlv-weeks__nav { min-width: 0; padding: 8px 5px; display: flex; align-items: center; background: none; border: 0; border-radius: 4px; cursor: pointer; font-family: 'Fraunces', serif; font-size: 18px; line-height: 1; color: var(--dlv-ink-faint); }
+.dlv-weeks .dlv-weeks__nav:hover { background: var(--dlv-surface); color: var(--dlv-ink); }
+.dlv-weeks.is-loading { opacity: 0.5; pointer-events: none; }
 .dlv-weeks a.active { background: var(--dlv-sage-d); }
 .dlv-weeks a.active .dow, .dlv-weeks a.active .num { color: white; }
 .dlv-weeks a:hover { background: var(--dlv-surface); }
@@ -224,23 +225,7 @@
             </div>
         </div>
         <div class="dlv-weeks">
-            {% if timeline_nav.has_prev %}
-                <a class="dlv-weeks__nav" title="Semanas anteriores"
-                   href="{{ path('delivery_by_node', { nodeId: node.id, basketId: basket.id, ref: timeline_nav.prev_ref, orden: orden }) }}">‹</a>
-            {% endif %}
-            {% for t in timeline %}
-                {% set is_past = t.date < _ref %}
-                <a href="{{ path('delivery_by_node', { nodeId: node.id, basketId: t.basket.id, ref: ref_id, orden: orden }) }}"
-                   class="{{ t.active ? 'active' : (is_past ? 'past' : '') }}{{ not t.delivers ? ' off' : '' }}"
-                   {% if not t.delivers %}title="{{ node.name }} no reparte esta semana"{% endif %}>
-                    <span class="dow">{{ _dow_abbr[t.date|date('w')] }}</span>
-                    <span class="num">{{ t.date|date('j') }} {{ _month_es[t.date|date('n')]|slice(0, 3) }}</span>
-                </a>
-            {% endfor %}
-            {% if timeline_nav.has_next %}
-                <a class="dlv-weeks__nav" title="Semanas siguientes"
-                   href="{{ path('delivery_by_node', { nodeId: node.id, basketId: basket.id, ref: timeline_nav.next_ref, orden: orden }) }}">›</a>
-            {% endif %}
+            {% include 'delivery/_timeline.html.twig' %}
         </div>
     </div>
 
@@ -350,7 +335,7 @@
                         {% for sub in section.subgroups %}
                             {% for wb in sub.rows %}
                                 {% set socios_sec = socios_sec + 1 %}
-                                {% set cestas_sec = cestas_sec + wb.amount %}
+                                {% set cestas_sec = cestas_sec + (wb.basketShare.id == 5 ? 0 : (wb.basketShare.id == 4 ? 0.5 : 1)) %}
                                 {% if egg_delivery_map[wb.id] ?? false %}{% set huevos_sec = huevos_sec + 1 %}{% endif %}
                             {% endfor %}
                         {% endfor %}
@@ -393,6 +378,22 @@
     'use strict';
     const root = document.querySelector('.dlv');
     if (!root) { return; }
+
+    // Navegación de la tira por AJAX: las flechas repintan SOLO .dlv-weeks,
+    // sin recargar la página (el listado no cambia). Delegación en root para
+    // que siga funcionando tras repintar la tira.
+    root.addEventListener('click', (e) => {
+        const nav = e.target.closest('.dlv-weeks__nav');
+        if (!nav || !nav.dataset.url) { return; }
+        e.preventDefault();
+        const weeks = root.querySelector('.dlv-weeks');
+        if (!weeks) { return; }
+        weeks.classList.add('is-loading');
+        fetch(nav.dataset.url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(r => r.text())
+            .then(html => { weeks.innerHTML = html; weeks.classList.remove('is-loading'); })
+            .catch(() => { weeks.classList.remove('is-loading'); });
+    });
 
     const toolbar = document.getElementById('dlv-toolbar');
     if (!toolbar) { return; } // día no operativo: sin toolbar ni listado.
@@ -452,7 +453,7 @@
                 if (mod && mod.classList.contains('dlv-mod')) { mod.style.display = empty ? 'none' : ''; }
                 visibles.forEach(r => {
                     sSoc++;
-                    sCes += parseFloat(r.dataset.amount) || 0;
+                    sCes += parseFloat(r.dataset.cestas) || 0;
                     if (r.dataset.wbg) { gruposVisibles.add(r.dataset.wbg); }
                     if (r.dataset.eggs === '1') { sHue++; gDocenas += parseFloat(r.dataset.dozens) || 0; }
                 });

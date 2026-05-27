@@ -487,29 +487,10 @@ class DeliveryController extends AbstractController
         // Cada entrada lleva el día REAL del nodo (miércoles para Madrid,
         // viernes para Torremocha) y si el nodo reparte esa semana, para
         // atenuar las semanas vacías de los nodos quincenales.
-        $anchor = $this->resolveTimelineAnchor($basketRepo, $request->query->getInt('ref', 0));
-        $windowBaskets = $anchor !== null ? $this->surroundingBaskets($basketRepo, $anchor) : [];
-        $timeline = array_map(
-            fn (Basket $b): array => [
-                'basket' => $b,
-                'date' => $nodeDeliveryDate->weekdayDateFor($b, $node),
-                'delivers' => $monthlyOrder->isOperative($b) && $nodeDeliveryDate->deliversInBasket($b, $node),
-                'active' => $b->getId() === $basket->getId(),
-            ],
-            $windowBaskets,
+        $timelineData = $this->buildTimelineData(
+            $basketRepo, $nodeDeliveryDate, $monthlyOrder, $node, $basket,
+            $request->query->getInt('ref', 0), 'center',
         );
-
-        // Flechas de navegación de la tira: desplazan la ventana usando como
-        // nueva referencia el primer/último viernes visible. has_* indica si
-        // queda calendario más allá, para no pintar flechas muertas.
-        $firstWin = $windowBaskets[0] ?? null;
-        $lastWin = $windowBaskets !== [] ? end($windowBaskets) : null;
-        $timelineNav = [
-            'prev_ref' => $firstWin?->getId(),
-            'next_ref' => $lastWin?->getId(),
-            'has_prev' => $firstWin !== null && $this->basketExistsBeyond($basketRepo, $firstWin, '<'),
-            'has_next' => $lastWin !== null && $this->basketExistsBeyond($basketRepo, $lastWin, '>'),
-        ];
 
         // Estructura unificada de secciones para el render, según el modo de
         // orden elegido (por grupo de recogida / por modalidad / lista
@@ -555,14 +536,57 @@ class DeliveryController extends AbstractController
             'is_operative' => $isOperative,
             'all_nodes' => $allNodes,
             'node_active_counts' => $nodeActiveCounts,
-            'timeline' => $timeline,
-            'timeline_nav' => $timelineNav,
-            'ref_id' => $anchor?->getId(),
+            'timeline' => $timelineData['timeline'],
+            'timeline_nav' => $timelineData['nav'],
+            'ref_id' => $timelineData['ref_id'],
             'orden' => $orden,
             'sections' => $sections,
             'pbs_by_wb_id' => $pbsByWbId,
             'egg_delivery_map' => $eggDeliveryMap,
             'totals' => $this->computeTotals($weeklyBaskets, $eggDeliveryMap, $pbsByWbId),
+        ]);
+    }
+
+    /**
+     * Fragmento HTML de la mini-timeline para repintarla por AJAX al pulsar
+     * las flechas, sin recargar la página entera (el listado no cambia). El
+     * `mode` (back/ahead) desplaza la ventana solapando un solo día.
+     */
+    #[Route(
+        '/v2/nodo/{nodeId}/{basketId}/timeline',
+        name: 'delivery_by_node_timeline',
+        methods: ['GET'],
+        requirements: ['nodeId' => '\d+', 'basketId' => '\d+']
+    )]
+    public function byNodeTimeline(
+        #[MapEntity(id: 'nodeId')] Node $node,
+        #[MapEntity(id: 'basketId')] Basket $basket,
+        BasketRepository $basketRepo,
+        NodeDeliveryDate $nodeDeliveryDate,
+        MonthlyOperativeOrderResolver $monthlyOrder,
+        Request $request,
+    ): Response {
+        $mode = $request->query->get('mode', 'center');
+        if (!in_array($mode, ['center', 'back', 'ahead'], true)) {
+            $mode = 'center';
+        }
+        $orden = $request->query->get('orden', 'grupo');
+        if (!in_array($orden, ['grupo', 'modalidad', 'alfabetico'], true)) {
+            $orden = 'grupo';
+        }
+
+        $data = $this->buildTimelineData(
+            $basketRepo, $nodeDeliveryDate, $monthlyOrder, $node, $basket,
+            $request->query->getInt('ref', 0), $mode,
+        );
+
+        return $this->render('delivery/_timeline.html.twig', [
+            'node' => $node,
+            'basket' => $basket,
+            'timeline' => $data['timeline'],
+            'timeline_nav' => $data['nav'],
+            'ref_id' => $data['ref_id'],
+            'orden' => $orden,
         ]);
     }
 
@@ -697,7 +721,16 @@ class DeliveryController extends AbstractController
         $conHuevos = 0;
         $grupos = [];
         foreach ($weeklyBaskets as $wb) {
-            $cestas += (float) $wb->getAmount();
+            // Cestas físicas según modalidad: solo-huevos (5) no lleva cesta;
+            // compartida (4) es ½ (dos familias, una cesta); el resto, 1. El
+            // campo amount está fijo a 1 en los datos, así que manda la
+            // modalidad. BasketShare ids: 1 semanal, 2 quincenal, 3 mensual,
+            // 4 compartida, 5 solo huevos.
+            $cestas += match ($wb->getBasketShare()?->getId()) {
+                5 => 0.0,
+                4 => 0.5,
+                default => 1.0,
+            };
             $wbg = $wb->getWeeklyBasketGroup();
             if ($wbg !== null) {
                 $grupos[$wbg->getId()] = true;
@@ -747,36 +780,91 @@ class DeliveryController extends AbstractController
                 ->getOneOrNullResult();
     }
 
+    /** Nº de viernes visibles en la mini-timeline. */
+    private const TIMELINE_SIZE = 5;
+
     /**
-     * Ventana de la mini-timeline alrededor del ancla: 2 viernes anteriores +
-     * ancla + 4 posteriores.
+     * Ventana de la mini-timeline (5 viernes) alrededor del ancla, según el
+     * modo de navegación:
+     *  - 'center': 1 anterior + ancla + 3 posteriores (carga inicial / día).
+     *  - 'back'  : 4 anteriores + ancla (ancla en el extremo derecho). Lo usa
+     *              la flecha ‹: el día más antiguo visible pasa a ser el más
+     *              reciente de la nueva ventana (solape de 1).
+     *  - 'ahead' : ancla + 4 posteriores (ancla en el extremo izquierdo). Lo
+     *              usa la flecha ›.
      *
      * @return Basket[]
      */
-    private function surroundingBaskets(BasketRepository $repo, Basket $anchor): array
+    private function surroundingBaskets(BasketRepository $repo, Basket $anchor, string $mode = 'center'): array
     {
         $anchorDate = $anchor->getDate()?->format('Y-m-d');
         if ($anchorDate === null) {
             return [$anchor];
         }
 
-        $previous = $repo->createQueryBuilder('b')
-            ->where('b.date < :date')
-            ->setParameter('date', $anchorDate)
-            ->orderBy('b.date', 'DESC')
-            ->setMaxResults(2)
-            ->getQuery()
-            ->getResult();
+        [$nPrev, $nNext] = match ($mode) {
+            'back'  => [self::TIMELINE_SIZE - 1, 0],
+            'ahead' => [0, self::TIMELINE_SIZE - 1],
+            default => [1, self::TIMELINE_SIZE - 2],
+        };
 
-        $next = $repo->createQueryBuilder('b')
-            ->where('b.date > :date')
-            ->setParameter('date', $anchorDate)
-            ->orderBy('b.date', 'ASC')
-            ->setMaxResults(4)
-            ->getQuery()
-            ->getResult();
+        $previous = $nPrev > 0 ? $repo->createQueryBuilder('b')
+            ->where('b.date < :date')->setParameter('date', $anchorDate)
+            ->orderBy('b.date', 'DESC')->setMaxResults($nPrev)
+            ->getQuery()->getResult() : [];
+
+        $next = $nNext > 0 ? $repo->createQueryBuilder('b')
+            ->where('b.date > :date')->setParameter('date', $anchorDate)
+            ->orderBy('b.date', 'ASC')->setMaxResults($nNext)
+            ->getQuery()->getResult() : [];
 
         return [...array_reverse($previous), $anchor, ...$next];
+    }
+
+    /**
+     * Arma los datos de la mini-timeline (chips + flechas) para un nodo y un
+     * día seleccionado. Compartido por la página completa y por el fragmento
+     * AJAX que repintan las flechas.
+     *
+     * @return array{timeline: list<array{basket:Basket, date:\DateTimeInterface, delivers:bool, active:bool, past:bool}>, nav: array{prev_ref:?int, next_ref:?int, has_prev:bool, has_next:bool}, ref_id:?int}
+     */
+    private function buildTimelineData(
+        BasketRepository $basketRepo,
+        NodeDeliveryDate $nodeDeliveryDate,
+        MonthlyOperativeOrderResolver $monthlyOrder,
+        Node $node,
+        Basket $selected,
+        int $refId,
+        string $mode,
+    ): array {
+        $anchor = $this->resolveTimelineAnchor($basketRepo, $refId);
+        $window = $anchor !== null ? $this->surroundingBaskets($basketRepo, $anchor, $mode) : [];
+        $today = new \DateTimeImmutable('today');
+
+        $timeline = array_map(
+            fn (Basket $b): array => [
+                'basket' => $b,
+                'date' => $nodeDeliveryDate->weekdayDateFor($b, $node),
+                'delivers' => $monthlyOrder->isOperative($b) && $nodeDeliveryDate->deliversInBasket($b, $node),
+                'active' => $b->getId() === $selected->getId(),
+                'past' => $b->getDate() !== null && $b->getDate() < $today,
+            ],
+            $window,
+        );
+
+        $first = $window[0] ?? null;
+        $last = $window !== [] ? end($window) : null;
+
+        return [
+            'timeline' => $timeline,
+            'nav' => [
+                'prev_ref' => $first?->getId(),
+                'next_ref' => $last?->getId(),
+                'has_prev' => $first !== null && $this->basketExistsBeyond($basketRepo, $first, '<'),
+                'has_next' => $last !== null && $this->basketExistsBeyond($basketRepo, $last, '>'),
+            ],
+            'ref_id' => $anchor?->getId(),
+        ];
     }
 
     /**

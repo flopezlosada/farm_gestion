@@ -1,0 +1,25 @@
+{# ============================================================
+ # Contenido de la mini-timeline (.dlv-weeks): flechas + chips de viernes.
+ # Se renderiza embebido en by_node y también solo, como fragmento AJAX
+ # (delivery_by_node_timeline), para repintar la tira al pulsar las flechas
+ # sin recargar la página. Espera: timeline, timeline_nav, node, basket,
+ # ref_id, orden.
+ # ============================================================ #}
+{% set _dow_abbr = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'] %}
+{% set _month_es = ['', 'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'] %}
+{% if timeline_nav.has_prev %}
+    <button type="button" class="dlv-weeks__nav" title="Semanas anteriores"
+            data-url="{{ path('delivery_by_node_timeline', { nodeId: node.id, basketId: basket.id, ref: timeline_nav.prev_ref, mode: 'back', orden: orden }) }}">‹</button>
+{% endif %}
+{% for t in timeline %}
+    <a href="{{ path('delivery_by_node', { nodeId: node.id, basketId: t.basket.id, ref: ref_id, orden: orden }) }}"
+       class="{{ t.active ? 'active' : (t.past ? 'past' : '') }}{{ not t.delivers ? ' off' : '' }}"
+       {% if not t.delivers %}title="{{ node.name }} no reparte esta semana"{% endif %}>
+        <span class="dow">{{ _dow_abbr[t.date|date('w')] }}</span>
+        <span class="num">{{ t.date|date('j') }} {{ _month_es[t.date|date('n')]|slice(0, 3) }}</span>
+    </a>
+{% endfor %}
+{% if timeline_nav.has_next %}
+    <button type="button" class="dlv-weeks__nav" title="Semanas siguientes"
+            data-url="{{ path('delivery_by_node_timeline', { nodeId: node.id, basketId: basket.id, ref: timeline_nav.next_ref, mode: 'ahead', orden: orden }) }}">›</button>
+{% endif %}
