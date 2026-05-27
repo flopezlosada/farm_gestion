@@ -3,15 +3,18 @@
 namespace App\Tests\Service\Delivery;
 
 use App\Entity\Basket;
+use App\Entity\DeliveryException;
 use App\Entity\Node;
+use App\Repository\DeliveryExceptionRepository;
 use App\Service\Delivery\NodeDeliveryDate;
 use PHPUnit\Framework\TestCase;
 
 /**
  * Unit test del NodeDeliveryDate. Verifica el cálculo de fecha física por
- * nodo y la alternancia de semanas operativas en nodos biweekly.
+ * nodo, la alternancia de semanas operativas en nodos biweekly y el
+ * override por excepciones de calendario.
  *
- * Sub-fase 8.8b (2026-05-26).
+ * Sub-fase 8.8b (2026-05-26). Excepciones añadidas en 8.8d (2026-05-27).
  */
 class NodeDeliveryDateTest extends TestCase
 {
@@ -19,7 +22,9 @@ class NodeDeliveryDateTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->resolver = new NodeDeliveryDate();
+        // Por defecto, sin excepciones de calendario: el resolver se
+        // comporta según el calendario teórico (día + cadencia).
+        $this->resolver = $this->makeResolver(null);
     }
 
     public function testTorremochaWeeklyDevuelveMismoViernes(): void
@@ -101,6 +106,53 @@ class NodeDeliveryDateTest extends TestCase
 
         $this->assertNotNull($physical);
         $this->assertSame('2026-05-09', $physical->format('Y-m-d'));
+    }
+
+    public function testExcepcionQueCancelaDevuelveNull(): void
+    {
+        $node = $this->makeNode('Torremocha', 5, Node::CADENCE_WEEKLY);
+        $basket = $this->makeBasket('2026-12-25'); // viernes de Navidad
+
+        $exception = new DeliveryException();
+        $exception->setBasket($basket);
+        $exception->setShiftedDate(null); // sin reparto
+
+        $resolver = $this->makeResolver($exception);
+
+        $this->assertNull($resolver->physicalDateFor($basket, $node));
+        $this->assertFalse($resolver->deliversInBasket($basket, $node));
+    }
+
+    public function testExcepcionQueTrasladaDevuelveLaFechaMovida(): void
+    {
+        $node = $this->makeNode('Torremocha', 5, Node::CADENCE_WEEKLY);
+        $basket = $this->makeBasket('2026-12-25'); // viernes festivo
+
+        $exception = new DeliveryException();
+        $exception->setBasket($basket);
+        $exception->setShiftedDate(new \DateTimeImmutable('2026-12-23')); // se adelanta al miércoles
+
+        $resolver = $this->makeResolver($exception);
+
+        $physical = $resolver->physicalDateFor($basket, $node);
+
+        $this->assertNotNull($physical);
+        $this->assertSame('2026-12-23', $physical->format('Y-m-d'));
+    }
+
+    /**
+     * Construye un NodeDeliveryDate con un repositorio de excepciones
+     * simulado que siempre devuelve la excepción dada (o null si no hay).
+     *
+     * @param DeliveryException|null $exception Excepción a devolver, o null.
+     * @return NodeDeliveryDate
+     */
+    private function makeResolver(?DeliveryException $exception): NodeDeliveryDate
+    {
+        $repo = $this->createMock(DeliveryExceptionRepository::class);
+        $repo->method('findForBasketAndNode')->willReturn($exception);
+
+        return new NodeDeliveryDate($repo);
     }
 
     private function makeNode(string $name, int $weekday, string $cadence, ?string $anchor = null): Node

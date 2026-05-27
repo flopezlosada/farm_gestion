@@ -26,8 +26,13 @@ use Doctrine\ORM\EntityManagerInterface;
  * se materializa el listado por primera vez: suprime a quien sale del
  * Basket y añade a quien entra (con su share activo).
  *
- * Lo que NO hace todavía: consumir DeliveryException, balancear A/B
- * vía PartnerBasketShare.delivery_group, emitir PartnerEvent.
+ * Respeta las excepciones de calendario (DeliveryException) de forma
+ * indirecta: al resolver la fecha física de cada partner vía
+ * NodeDeliveryDate, los ciclos cancelados devuelven null y el partner se
+ * salta; los trasladados congelan la fecha movida en delivery_date.
+ *
+ * Lo que NO hace todavía: balancear A/B vía
+ * PartnerBasketShare.delivery_group, emitir PartnerEvent.
  */
 class WeeklyBasketGenerator
 {
@@ -78,12 +83,18 @@ class WeeklyBasketGenerator
     /**
      * Calcula la fecha física de reparto para un partner en un Basket.
      * Si el partner pertenece a un nodo configurado, delega en
-     * NodeDeliveryDate. Si no (datos legacy sin node_id), asume
-     * Torremocha implícito y devuelve la fecha del Basket.
+     * NodeDeliveryDate (que aplica cadencia y excepciones de calendario).
+     * Si no (datos legacy sin node_id), asume Torremocha implícito y
+     * devuelve la fecha del Basket.
+     *
+     * Límite conocido: el fallback sin nodo NO consulta excepciones, así
+     * que un partner en un WBG sin nodo asignado ignoraría un cierre. En
+     * la práctica todos los WBG operativos tienen nodo; los huérfanos son
+     * deuda de datos a saldar asignándoles nodo (típicamente Torremocha).
      *
      * @param Basket $basket
      * @param PartnerBasketShare $share
-     * @return \DateTimeInterface|null Null si el nodo no reparte en este Basket (biweekly fuera de fase).
+     * @return \DateTimeInterface|null Null si el nodo no reparte en este Basket (biweekly fuera de fase o excepción que cancela).
      */
     private function resolvePhysicalDeliveryDate(Basket $basket, PartnerBasketShare $share): ?\DateTimeInterface
     {

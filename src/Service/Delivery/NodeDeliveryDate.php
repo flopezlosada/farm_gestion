@@ -4,6 +4,7 @@ namespace App\Service\Delivery;
 
 use App\Entity\Basket;
 use App\Entity\Node;
+use App\Repository\DeliveryExceptionRepository;
 
 /**
  * Resuelve la fecha física de reparto para un Basket dado en un Node concreto.
@@ -17,15 +18,30 @@ use App\Entity\Node;
  * operativos: alternan semanas que reparten vs. semanas vacías, anclados
  * en `Node.anchor_date`.
  *
- * Introducido en sub-fase 8.8b (2026-05-26).
+ * Es el punto único de verdad de "¿qué día reparte realmente el nodo X en
+ * el ciclo Y?". Además del calendario teórico (día + cadencia), aplica las
+ * excepciones de calendario (DeliveryException): un festivo o cierre puede
+ * cancelar el reparto de un nodo en un ciclo, o trasladarlo a otro día. Así
+ * todos los consumidores (generador, DeadlineRule) heredan ese override sin
+ * duplicar la consulta.
+ *
+ * Introducido en sub-fase 8.8b (2026-05-26). Excepciones añadidas en 8.8d
+ * (2026-05-27).
  */
 class NodeDeliveryDate
 {
     private const SECONDS_PER_WEEK = 7 * 24 * 60 * 60;
 
+    public function __construct(
+        private readonly DeliveryExceptionRepository $exceptionRepository,
+    ) {
+    }
+
     /**
      * Devuelve la fecha física de reparto del Node en este Basket, o null
-     * si el Node es quincenal y ese Basket no le toca.
+     * si el Node no reparte (quincenal fuera de fase, o excepción que
+     * cancela el reparto). Si una excepción traslada el reparto, devuelve
+     * la fecha trasladada.
      *
      * @param Basket $basket Ciclo semanal global.
      * @param Node $node Nodo donde se entrega.
@@ -42,7 +58,36 @@ class NodeDeliveryDate
             }
         }
 
-        return $physical;
+        return $this->applyException($basket, $node, $physical);
+    }
+
+    /**
+     * Aplica la excepción de calendario que corresponda a (basket, node),
+     * dando prioridad a la específica del nodo sobre la global.
+     *
+     * @param Basket $basket Ciclo semanal global.
+     * @param Node $node Nodo donde se entrega.
+     * @param \DateTimeImmutable $physical Fecha física teórica (sin excepción).
+     * @return \DateTimeImmutable|null La fecha trasladada si la excepción
+     *         mueve el reparto; null si lo cancela; la fecha teórica si no
+     *         hay excepción.
+     */
+    private function applyException(Basket $basket, Node $node, \DateTimeImmutable $physical): ?\DateTimeImmutable
+    {
+        $exception = $this->exceptionRepository->findForBasketAndNode($basket, $node);
+        if ($exception === null) {
+            return $physical;
+        }
+
+        if ($exception->isCancelled()) {
+            return null;
+        }
+
+        $shifted = $exception->getShiftedDate();
+
+        return $shifted instanceof \DateTimeImmutable
+            ? $shifted
+            : \DateTimeImmutable::createFromInterface($shifted);
     }
 
     /**

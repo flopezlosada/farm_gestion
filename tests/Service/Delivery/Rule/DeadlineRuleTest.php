@@ -6,6 +6,7 @@ use App\Entity\Basket;
 use App\Entity\Node;
 use App\Entity\Partner;
 use App\Entity\WeeklyBasketGroup;
+use App\Repository\DeliveryExceptionRepository;
 use App\Service\Delivery\NodeDeliveryDate;
 use App\Service\Delivery\Rule\DeadlineRule;
 use PHPUnit\Framework\TestCase;
@@ -13,6 +14,8 @@ use PHPUnit\Framework\TestCase;
 /**
  * Unit test del DeadlineRule. No toca BBDD — la regla solo necesita la
  * fecha del Basket origen, el Node del partner y compara contra "ahora".
+ * El repositorio de excepciones se simula sin excepciones, para aislar la
+ * regla del calendario teórico.
  *
  * Sub-fase 8.8b2 (2026-05-26): la regla pasa a ser Node-aware. El
  * deadline se calcula sobre la fecha física del reparto del nodo.
@@ -25,7 +28,10 @@ class DeadlineRuleTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->rule = new DeadlineRule(new NodeDeliveryDate());
+        $exceptionRepo = $this->createMock(DeliveryExceptionRepository::class);
+        $exceptionRepo->method('findForBasketAndNode')->willReturn(null);
+
+        $this->rule = new DeadlineRule(new NodeDeliveryDate($exceptionRepo));
         $this->partner = new Partner();
         // toBasket no influye en esta regla, pero hay que pasar algo.
         $this->toBasket = new Basket();
