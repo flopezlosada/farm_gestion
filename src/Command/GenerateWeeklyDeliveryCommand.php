@@ -68,7 +68,7 @@ class GenerateWeeklyDeliveryCommand extends Command
                 ->findOneBy(['basket' => $basket]);
             $alreadyListed = $existing !== null;
 
-            $exception = $this->exceptionRepository->findByFriday($basket->getDate());
+            $exception = $this->exceptionRepository->findGlobalForBasket($basket);
             $cancelled = $exception !== null && $exception->isCancelled();
 
             $status = $cancelled ? 'cancelado (sin reparto)'

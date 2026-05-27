@@ -481,10 +481,16 @@ class DeliveryController extends AbstractController
                 : false;
         }
 
+        // node_active_counts[nodeId] = {wbg, socios}: conteo de reparto de ESE
+        // día por nodo, para que las pestañas no pinten el total de WBG
+        // asignados (engañoso para nodos quincenales que no reparten hoy).
+        $nodeActiveCounts = $weeklyBasketRepo->countActiveByNodeForBasket($basket);
+
         return $this->render('delivery/by_node.html.twig', [
             'node' => $node,
             'basket' => $basket,
             'all_nodes' => $allNodes,
+            'node_active_counts' => $nodeActiveCounts,
             'surrounding_baskets' => $surroundingBaskets,
             'grouped' => $grouped,
             'pbs_by_wb_id' => $pbsByWbId,
@@ -585,7 +591,7 @@ class DeliveryController extends AbstractController
         DeliveryExceptionRepository $exceptions,
     ): Response {
         $report = $generator->generateForBasket($basket);
-        $exception = $exceptions->findByFriday($basket->getDate());
+        $exception = $exceptions->findGlobalForBasket($basket);
 
         return $this->render('delivery/show.html.twig', [
             'basket' => $basket,

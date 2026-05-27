@@ -59,7 +59,7 @@ class SendPickupReminderCommand extends Command
         $io->section(sprintf('Cesta #%d · viernes %s', $basket->getId(), $basket->getDate()->format('Y-m-d')));
 
         // Si hay una excepción de calendario que cancela el viernes, no se manda nada.
-        $exception = $this->exceptionRepository->findByFriday($basket->getDate());
+        $exception = $this->exceptionRepository->findGlobalForBasket($basket);
         if ($exception !== null && $exception->isCancelled()) {
             $io->warning('Ese viernes está marcado como SIN REPARTO. No se envía nada.');
             return Command::SUCCESS;
