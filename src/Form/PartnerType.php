@@ -21,6 +21,11 @@ class PartnerType extends AbstractType
         $builder
             ->add('name', null, array('label'=>'Nombre'))
             ->add('surname', null, array('label'=>'Apellidos'))
+            ->add('displayName', TextType::class, array(
+                'label' => 'Nombre de reparto',
+                'required' => false,
+                'help' => 'Cómo se conoce a la familia en el listado de cestas (apodo, "X y Z"). Si se deja vacío, se usa el nombre y apellidos.',
+            ))
             ->add('DNI', null, array('label'=>'DNI'))
             ->add('celular', null, array('label'=>'Teléfono'))
             ->add('address', null, array('label'=>'Dirección'))

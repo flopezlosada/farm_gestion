@@ -34,8 +34,14 @@ class Partner
     #[Assert\NotBlank]
     private $surname;
 
-  
-  
+    /**
+     * Nombre de reparto: cómo aparece la familia en el PDF de reparto (apodos,
+     * "X y Z", etc.), proveniente de `nombre_pdf` de reparto_definitivo.csv.
+     * Difiere del nombre legal (name + surname, usado para cobros). Nullable:
+     * si está vacío, {@see getNameForDelivery} cae al nombre legal.
+     * @ORM\Column(type="string", length=255, nullable=true)
+     */
+    private ?string $display_name = null;
 
     /**
      * @ORM\Column(type="string", length=20, nullable=true)
@@ -333,6 +339,53 @@ class Partner
         $this->surname = $surname;
 
         return $this;
+    }
+
+    /**
+     * Valor crudo del nombre de reparto (puede ser null). Es el que edita el
+     * formulario; la presentación con fallback va por {@see getNameForDelivery}.
+     */
+    public function getDisplayName(): ?string
+    {
+        return $this->display_name;
+    }
+
+    public function setDisplayName(?string $displayName): self
+    {
+        $this->display_name = $displayName !== null && trim($displayName) !== ''
+            ? trim($displayName)
+            : null;
+
+        return $this;
+    }
+
+    /**
+     * Nombre a mostrar en listados de reparto: el `display_name` (apodo de
+     * reparto) si existe, o el nombre legal en title case como fallback.
+     *
+     * @return string Nunca vacío salvo que name y surname también lo estén.
+     */
+    public function getNameForDelivery(): string
+    {
+        if ($this->display_name !== null && trim($this->display_name) !== '') {
+            return $this->display_name;
+        }
+
+        return $this->getLegalName();
+    }
+
+    /**
+     * Nombre legal completo (name + surname) en title case. Los datos en
+     * BBDD están en mayúsculas (vienen del import); aquí se normalizan para
+     * presentación. No restaura acentos ausentes en origen.
+     *
+     * @return string Cadena vacía si no hay name ni surname.
+     */
+    public function getLegalName(): string
+    {
+        $legal = trim(($this->name ?? '') . ' ' . ($this->surname ?? ''));
+
+        return $legal === '' ? '' : mb_convert_case($legal, MB_CASE_TITLE, 'UTF-8');
     }
 
     public function getDNI(): ?string

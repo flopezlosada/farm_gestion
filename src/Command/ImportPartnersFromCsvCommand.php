@@ -129,6 +129,15 @@ class ImportPartnersFromCsvCommand extends Command
                 . 'egg_period en los Partner existentes (cruce por DNI). No crea ni '
                 . 'borra nada. Útil cuando ya hay datos importados con ajustes '
                 . 'manuales que no queremos perder.'
+            )
+            ->addOption(
+                'only-display-name',
+                null,
+                InputOption::VALUE_NONE,
+                'Modo update parcial: vuelca el nombre de reparto (familia_operativa, '
+                . 'limpiado) a partner.display_name en los Partner existentes (cruce por '
+                . 'DNI). Sólo rellena si display_name está vacío, para no pisar revisiones '
+                . 'manuales. No crea ni borra nada.'
             );
     }
 
@@ -138,6 +147,7 @@ class ImportPartnersFromCsvCommand extends Command
         $csvPath = $input->getArgument('csv');
         $dryRun = (bool) $input->getOption('dry-run');
         $onlyEggs = (bool) $input->getOption('only-eggs');
+        $onlyDisplayName = (bool) $input->getOption('only-display-name');
 
         if (!is_file($csvPath) || !is_readable($csvPath)) {
             $io->error("CSV no legible: $csvPath");
@@ -149,6 +159,10 @@ class ImportPartnersFromCsvCommand extends Command
 
         if ($onlyEggs) {
             return $this->runOnlyEggs($io, $rows, $dryRun);
+        }
+
+        if ($onlyDisplayName) {
+            return $this->runOnlyDisplayName($io, $rows, $dryRun);
         }
 
         $stats = [
@@ -364,6 +378,119 @@ class ImportPartnersFromCsvCommand extends Command
         $io->table(['métrica', 'cantidad'], array_map(null, array_keys($stats), array_values($stats)));
 
         return Command::SUCCESS;
+    }
+
+    /**
+     * Modo --only-display-name: vuelca el nombre de reparto a
+     * partner.display_name. Cruza por DNI, limpia el nombre con
+     * {@see limpiaApodo} y sólo escribe si display_name está vacío (no pisa
+     * revisiones manuales). No crea ni borra Partners.
+     *
+     * Detecta el formato del CSV: `reparto_definitivo.csv` trae el nombre tal
+     * como sale en el PDF de reparto (`nombre_pdf`, DNI en `cobros_nif`), que
+     * es la fuente correcta; `listado_final.csv` trae `familia_operativa`
+     * (nombre legal del cruce COBROS+LISTADO), como fallback.
+     *
+     * @param array<int,array<string,string>> $rows
+     */
+    private function runOnlyDisplayName(SymfonyStyle $io, array $rows, bool $dryRun): int
+    {
+        $partnerRepo = $this->em->getRepository(Partner::class);
+
+        $first = reset($rows) ?: [];
+        $nameCol  = array_key_exists('nombre_pdf', $first) ? 'nombre_pdf' : 'familia_operativa';
+        $dniCol   = array_key_exists('cobros_nif', $first) ? 'cobros_nif' : 'nif';
+        $legalCol = array_key_exists('cobros_titular', $first) ? 'cobros_titular' : 'titular_legal';
+        $io->note(sprintf('Columnas: nombre=%s, dni=%s', $nameCol, $dniCol));
+
+        $stats = [
+            'sin_dni'           => 0,
+            'sin_apodo'         => 0,
+            'partner_no_existe' => 0,
+            'ya_tiene'          => 0,
+            'actualizados'      => 0,
+        ];
+
+        foreach ($rows as $i => $row) {
+            $dni = $this->sanitizeDni($row[$dniCol] ?? '');
+            if ($dni === '') {
+                $stats['sin_dni']++;
+                continue;
+            }
+            $apodo = $this->limpiaApodo($row[$nameCol] ?? '');
+            if ($apodo === '') {
+                $stats['sin_apodo']++;
+                continue;
+            }
+            $partner = $partnerRepo->findOneBy(['DNI' => $dni]);
+            if (!$partner) {
+                $stats['partner_no_existe']++;
+                continue;
+            }
+            if ($partner->getDisplayName() !== null) {
+                $stats['ya_tiene']++;
+                continue;
+            }
+            $partner->setDisplayName($apodo);
+            $stats['actualizados']++;
+            $io->writeln(sprintf('<info>%s</info> → <comment>%s</comment>', $row[$legalCol] ?: '?', $apodo));
+        }
+
+        if ($dryRun) {
+            $io->note('Dry-run: no se persiste.');
+            $this->em->clear();
+        } else {
+            $this->em->flush();
+        }
+
+        $io->success('only-display-name terminado');
+        $io->table(['métrica', 'cantidad'], array_map(null, array_keys($stats), array_values($stats)));
+
+        return Command::SUCCESS;
+    }
+
+    /**
+     * Limpia el texto sucio de `familia_operativa` para usarlo como nombre de
+     * reparto presentable: quita los segmentos entre paréntesis (aclaraciones
+     * legales o el grupo, ej. "(CASCORRO)"), normaliza las barras "/" que
+     * separan a varias personas, colapsa espacios y aplica title case dejando
+     * las partículas ("y", "de", "la"…) en minúscula.
+     *
+     * No restaura acentos ausentes en origen ni separa nombres pegados sin
+     * espacio: esos casos se revisan a mano desde la ficha del socio.
+     *
+     * @param string $raw Texto crudo de familia_operativa.
+     * @return string Nombre limpio, o cadena vacía si no queda nada.
+     */
+    private function limpiaApodo(string $raw): string
+    {
+        // Paréntesis con cierre opcional: cubre también "(CASCORRO" sin cerrar.
+        $s = preg_replace('/\([^)]*\)?/u', ' ', $raw);
+        // Barras como separador de personas, con espacios a ambos lados.
+        $s = preg_replace('#\s*/\s*#u', ' / ', $s);
+        $s = trim((string) preg_replace('/\s+/u', ' ', $s));
+        if ($s === '') {
+            return '';
+        }
+
+        $particulas = ['y', 'e', 'o', 'u', 'de', 'del', 'la', 'las', 'los', 'da', 'van', 'von', 'di', 'le'];
+        $out = [];
+        foreach (explode(' ', mb_strtolower($s, 'UTF-8')) as $i => $palabra) {
+            if ($palabra === '') {
+                continue;
+            }
+            if ($palabra === '/') {
+                $out[] = '/';
+                continue;
+            }
+            if ($i > 0 && in_array($palabra, $particulas, true)) {
+                $out[] = $palabra;
+                continue;
+            }
+            $out[] = mb_strtoupper(mb_substr($palabra, 0, 1, 'UTF-8'), 'UTF-8') . mb_substr($palabra, 1, null, 'UTF-8');
+        }
+
+        return implode(' ', $out);
     }
 
     /**
