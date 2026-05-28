@@ -648,6 +648,12 @@ class DeliveryController extends AbstractController
      * recogida (segundo orden), y dentro filas por nombre. Útil para preparar
      * todas las cestas de una modalidad agrupadas por punto de entrega.
      *
+     * Caso especial modalidad compartida (bs.id=4): el WBG es subdivisión
+     * logística interna, pero el punto de recogida real es el nodo (la
+     * pantalla ya está filtrada por nodo). Por eso no se subdivide por WBG
+     * y se aplica un pase que pega cada pareja con su sharePartner para
+     * que las dos filas salgan seguidas.
+     *
      * @param WeeklyBasket[] $weeklyBaskets
      * @return list<array{title:?string, subgroups: list<array{bs_id:?int, label:?string, rows: WeeklyBasket[]}>}>
      */
@@ -659,31 +665,97 @@ class DeliveryController extends AbstractController
             if ($bs === null) {
                 continue;
             }
-            $wbg = $wb->getWeeklyBasketGroup();
-            $groupId = $wbg?->getId() ?? 0;
-            $byMod[$bs->getId()] ??= ['title' => $bs->getName(), 'subs' => []];
-            $byMod[$bs->getId()]['subs'][$groupId] ??= [
-                'bs_id' => null,
-                'label' => $wbg?->getName() ?? 'Sin grupo',
-                'rows' => [],
-            ];
-            $byMod[$bs->getId()]['subs'][$groupId]['rows'][] = $wb;
+            $byMod[$bs->getId()] ??= ['title' => $bs->getName(), 'wbs' => []];
+            $byMod[$bs->getId()]['wbs'][] = $wb;
         }
         ksort($byMod);
 
-        return array_map(
-            function (array $m): array {
-                $subs = $m['subs'];
-                uasort($subs, static fn (array $a, array $b): int => strnatcasecmp($a['label'], $b['label']));
-                foreach ($subs as &$sub) {
-                    usort($sub['rows'], $this->compareByDisplayName(...));
-                }
-                unset($sub);
+        $result = [];
+        foreach ($byMod as $bsId => $m) {
+            if ($bsId === 4) {
+                $rows = $m['wbs'];
+                usort($rows, $this->compareByDisplayName(...));
+                [$rows, $pairEnds] = $this->pinSharedPairs($rows);
+                $result[] = [
+                    'title' => $m['title'],
+                    'subgroups' => [[
+                        'bs_id' => null,
+                        'label' => null,
+                        'rows' => $rows,
+                        'pair_end_ids' => $pairEnds,
+                    ]],
+                ];
+                continue;
+            }
 
-                return ['title' => $m['title'], 'subgroups' => array_values($subs)];
-            },
-            array_values($byMod),
-        );
+            $subs = [];
+            foreach ($m['wbs'] as $wb) {
+                $wbg = $wb->getWeeklyBasketGroup();
+                $groupId = $wbg?->getId() ?? 0;
+                $subs[$groupId] ??= [
+                    'bs_id' => null,
+                    'label' => $wbg?->getName() ?? 'Sin grupo',
+                    'rows' => [],
+                ];
+                $subs[$groupId]['rows'][] = $wb;
+            }
+            uasort($subs, static fn (array $a, array $b): int => strnatcasecmp($a['label'], $b['label']));
+            foreach ($subs as &$sub) {
+                usort($sub['rows'], $this->compareByDisplayName(...));
+            }
+            unset($sub);
+
+            $result[] = ['title' => $m['title'], 'subgroups' => array_values($subs)];
+        }
+
+        return $result;
+    }
+
+    /**
+     * Pega cada pareja de cesta compartida (Partner.sharePartner) consigo.
+     * Mantiene el orden alfabético del "primero" de cada pareja y coloca
+     * al compañero justo detrás. Si el compañero no está en la lista
+     * (otro nodo, skip, shift fuera), la fila queda suelta en su sitio.
+     *
+     * Devuelve también el set de wb.id que cierran un grupo (la fila del
+     * compañero en parejas de 2, o la propia fila en huérfanos de 1) para
+     * que el template pinte un separador entre grupos.
+     *
+     * @param WeeklyBasket[] $rows ordenados alfabéticamente
+     * @return array{0: WeeklyBasket[], 1: array<int, true>}
+     */
+    private function pinSharedPairs(array $rows): array
+    {
+        $byPartnerId = [];
+        foreach ($rows as $wb) {
+            $partner = $wb->getPartner();
+            if ($partner !== null) {
+                $byPartnerId[$partner->getId()] = $wb;
+            }
+        }
+
+        $result = [];
+        $used = [];
+        $pairEnds = [];
+        foreach ($rows as $wb) {
+            $wbId = $wb->getId();
+            if (isset($used[$wbId])) {
+                continue;
+            }
+            $result[] = $wb;
+            $used[$wbId] = true;
+
+            $mate = $wb->getPartner()?->getSharePartner();
+            $mateWb = $mate !== null ? ($byPartnerId[$mate->getId()] ?? null) : null;
+            if ($mateWb !== null && !isset($used[$mateWb->getId()])) {
+                $result[] = $mateWb;
+                $used[$mateWb->getId()] = true;
+                $pairEnds[$mateWb->getId()] = true;
+            } else {
+                $pairEnds[$wbId] = true;
+            }
+        }
+        return [$result, $pairEnds];
     }
 
     /**

@@ -26,17 +26,17 @@
     </td>
     <td style="width: 130px;">
         <span class="mod mod--{{ rbs.id }}"><span class="dot"></span>{{ rbs.name }}</span>
+        {% if wb.partner.sharePartner %}
+            <div class="mod-pair">con {{ wb.partner.sharePartner.nameForDelivery }}</div>
+        {% endif %}
     </td>
     <td class="num-c" style="width: 70px;">{{ wb.amount }}</td>
     <td style="width: 110px;">
         {% if row_eggs %}
             <span class="num-c">{{ share and share.eggAmount ? share.eggAmount.name : '✓' }}</span>
         {% else %}
-            <span class="no">— hoy no</span>
+            <span class="no">—</span>
         {% endif %}
-    </td>
-    <td class="recoge" style="width: 160px;">
-        recoge <b>la propia</b>
     </td>
     <td class="dlv-actions" style="width: 44px;">
         <button type="button" class="dlv-kebab" aria-label="Acciones del socix">
@@ -49,3 +49,6 @@
         </div>
     </td>
 </tr>
+{% if pair_end ?? false %}
+<tr class="dlv-row-spacer" aria-hidden="true"><td colspan="5"></td></tr>
+{% endif %}

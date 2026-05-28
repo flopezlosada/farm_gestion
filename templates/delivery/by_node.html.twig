@@ -183,13 +183,13 @@
 .dlv .mod--3 { background: var(--dlv-terra-l); color: var(--dlv-terra-d); }     .dlv .mod--3 .dot { background: var(--dlv-terra); }
 .dlv .mod--4 { background: transparent; color: var(--dlv-sage-d); border: 1px dashed var(--dlv-sage); }
 .dlv .mod--5 { background: #fff2d6; color: var(--dlv-ochre-d); }                .dlv .mod--5 .dot { background: var(--dlv-ochre); }
+.dlv .mod-pair { font-size: 10.5px; color: var(--dlv-ink-faint); margin-top: 3px; font-style: italic; }
+.dlv .dlv-row-spacer td { padding: 0; height: 14px; background: var(--dlv-bg); border: 0; }
+.dlv .dlv-row-spacer:last-child { display: none; }
 
 .dlv .num-c { font-family: 'Fraunces', serif; font-weight: 600; font-size: 14px; color: var(--dlv-ink); }
 .dlv .half { color: var(--dlv-ink-soft); font-weight: 500; }
 .dlv .no { color: var(--dlv-ink-faint); font-size: 11px; font-style: italic; }
-
-.dlv .recoge { font-size: 12px; color: var(--dlv-ink-soft); }
-.dlv .recoge b { color: var(--dlv-ink); font-weight: 600; }
 
 .dlv .empty {
     padding: 36px 18px; text-align: center;
@@ -364,7 +364,7 @@
                         <table>
                             <tbody>
                             {% for wb in sub.rows %}
-                                {% include 'delivery/_row.html.twig' with { wb: wb } %}
+                                {% include 'delivery/_row.html.twig' with { wb: wb, pair_end: (sub.pair_end_ids[wb.id] ?? false) } %}
                             {% endfor %}
                             </tbody>
                         </table>
