@@ -1,5 +1,13 @@
 {# ============================================================
- # Ficha de socix (Partner) — shell csa.
+ # Ficha de socix (Partner) — rediseño al estilo del reparto v2.
+ #
+ # Tokens visuales inline (--prt-*), hermanos de los del reparto
+ # (--dlv-*). Cuando estabilicemos 2-3 pantallas con este lenguaje
+ # las promovemos a CSS del shell.
+ #
+ # Funcionalidad conservada al 100%: cabecera con avatar/estado,
+ # acciones administrativas (con confirm_dialog del shell), datos
+ # personales, familiares, cesta activa y histórico de eventos.
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
@@ -15,234 +23,665 @@
     <span class="csa-topbar__crumb-active">{{ partner.name }} {{ partner.surname }}</span>
 {% endblock %}
 
+{% block more_css %}
+{{ parent() }}
+<style>
+/* ============================================================
+ * Ficha de socix — tokens locales (--prt-*).
+ * Paleta hermana del listado de reparto v2 (--dlv-*).
+ * ============================================================ */
+.prt {
+    --prt-line: #ebe7dd;
+    --prt-line-2: #d8d2c2;
+    --prt-ink: #1d1c17;
+    --prt-ink-soft: #5a564a;
+    --prt-ink-faint: #8d8773;
+    --prt-sage: #5b7a4c;
+    --prt-sage-d: #2f4426;
+    --prt-sage-l: #eaf0e2;
+    --prt-ochre: #c89a3a;
+    --prt-ochre-d: #8c6919;
+    --prt-ochre-l: #faf1d8;
+    --prt-terra: #b45d3a;
+    --prt-terra-d: #7d3a1f;
+    --prt-terra-l: #fae6dc;
+    --prt-bg: #fbfaf6;
+    --prt-surface: #ffffff;
+    /* Forzar Inter como base del bloque. El shell del csa-shell la hereda
+     * pero Bootstrap 3 (cargado antes) puede meter Helvetica Neue / Arial
+     * en small/strong/table; declararla aquí blinda toda la cascada. */
+    font-family: 'Inter', sans-serif;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---------- hero ---------- */
+.prt-hero {
+    display: grid; grid-template-columns: auto 1fr auto; align-items: center;
+    gap: 22px; padding-bottom: 22px; margin-bottom: 18px;
+    border-bottom: 1px solid var(--prt-line);
+}
+.prt-avatar {
+    width: 64px; height: 64px; border-radius: 14px;
+    display: grid; place-items: center;
+    font-family: 'Fraunces', serif; font-weight: 600; font-size: 22px;
+    letter-spacing: -0.01em; color: var(--prt-surface);
+    background: var(--prt-sage-d); flex-shrink: 0;
+    box-shadow: inset 0 -2px 0 rgba(0,0,0,0.08);
+}
+.prt-avatar--ochre { background: var(--prt-ochre-d); }
+.prt-avatar--terra { background: var(--prt-terra-d); }
+.prt-avatar--ink   { background: var(--prt-ink); }
+.prt-avatar--muted { background: var(--prt-line-2); color: var(--prt-ink-soft); }
+/* Especificidad doble (.prt .prt-hero__title) para ganar al shell csa,
+ * que fuerza font-weight: 400 en todos los h1/h2/h3/h4 con .csa-app. */
+.prt .prt-hero__title {
+    font-family: 'Fraunces', serif; font-weight: 600; font-size: 26px;
+    letter-spacing: -0.02em; line-height: 1.1; margin: 0 0 6px;
+    color: var(--prt-ink);
+}
+.prt-hero__meta {
+    display: flex; flex-wrap: wrap; align-items: center;
+    gap: 6px 12px; font-size: 12px; color: var(--prt-ink-faint);
+}
+.prt-hero__meta .sep { color: var(--prt-line-2); }
+.prt-hero__actions { display: flex; gap: 8px; }
+
+/* ---------- chip (status / modality / generic) ---------- */
+.prt-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 9px 4px; border-radius: 4px;
+    font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em;
+    text-transform: uppercase; line-height: 1.2; white-space: nowrap;
+}
+.prt-chip .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.prt-chip--activo  { background: var(--prt-sage-l);  color: var(--prt-sage-d); }
+.prt-chip--activo .dot { background: var(--prt-sage); }
+.prt-chip--pausado { background: var(--prt-ochre-l); color: var(--prt-ochre-d); }
+.prt-chip--pausado .dot { background: var(--prt-ochre); }
+.prt-chip--baja    { background: #f0eee7; color: var(--prt-ink-soft); }
+.prt-chip--baja .dot { background: var(--prt-ink-faint); }
+.prt-chip--mod-1   { background: var(--prt-sage-l);  color: var(--prt-sage-d); }
+.prt-chip--mod-1 .dot { background: var(--prt-sage); }
+.prt-chip--mod-2   { background: var(--prt-ochre-l); color: var(--prt-ochre-d); }
+.prt-chip--mod-2 .dot { background: var(--prt-ochre); }
+.prt-chip--mod-3   { background: var(--prt-terra-l); color: var(--prt-terra-d); }
+.prt-chip--mod-3 .dot { background: var(--prt-terra); }
+.prt-chip--mod-4   { background: transparent; color: var(--prt-sage-d); border: 1px dashed var(--prt-sage); }
+.prt-chip--mod-4 .dot { background: var(--prt-sage); }
+.prt-chip--mod-5   { background: #fff2d6; color: var(--prt-ochre-d); }
+.prt-chip--mod-5 .dot { background: var(--prt-ochre); }
+.prt-chip--warn    { background: var(--prt-ochre-l); color: var(--prt-ochre-d); }
+.prt-chip--warn .dot { background: var(--prt-ochre); }
+.prt-chip--mute    { background: var(--prt-bg); color: var(--prt-ink-soft); border: 1px solid var(--prt-line); }
+
+/* ---------- action bar ---------- */
+.prt-actionbar {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    margin-bottom: 22px;
+}
+.prt-btn {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 8px 14px; border-radius: 6px; border: 1px solid var(--prt-line);
+    background: var(--prt-surface); color: var(--prt-ink);
+    font-size: 12.5px; font-weight: 500; letter-spacing: 0.01em;
+    cursor: pointer; text-decoration: none;
+    transition: 0.12s ease;
+}
+.prt-btn:hover { border-color: var(--prt-line-2); background: var(--prt-bg); color: var(--prt-ink); }
+.prt-btn .fa { font-size: 11px; color: var(--prt-ink-faint); }
+.prt-btn:hover .fa { color: var(--prt-ink); }
+.prt-btn--primary {
+    background: var(--prt-sage-d); border-color: var(--prt-sage-d); color: #fff;
+}
+.prt-btn--primary:hover { background: #233619; border-color: #233619; color: #fff; }
+.prt-btn--primary .fa,
+.prt-btn--primary:hover .fa { color: rgba(255,255,255,0.85); }
+.prt-btn--warn .fa { color: var(--prt-ochre-d); }
+.prt-btn--warn:hover { background: var(--prt-ochre-l); border-color: var(--prt-ochre); }
+.prt-btn--danger .fa { color: var(--prt-terra-d); }
+.prt-btn--danger:hover { background: var(--prt-terra-l); border-color: var(--prt-terra); }
+.prt-actionbar__sep {
+    width: 1px; height: 20px; background: var(--prt-line); margin: 0 2px;
+}
+
+/* ---------- pickup card (nodo + grupo de recogida) ---------- */
+.prt-pickup {
+    display: inline-flex; align-items: center; gap: 14px;
+    padding: 10px 18px 10px 12px; border-radius: 10px;
+    border: 1px solid var(--prt-line);
+    background: var(--prt-surface);
+    margin-bottom: 18px;
+    max-width: 100%; flex-wrap: wrap;
+}
+.prt-pickup__icon {
+    width: 38px; height: 38px; border-radius: 9px;
+    display: grid; place-items: center; flex-shrink: 0;
+    background: var(--prt-sage-d); color: #fff;
+    font-size: 16px;
+    box-shadow: inset 0 -2px 0 rgba(0,0,0,0.08);
+}
+.prt-pickup__body { min-width: 0; }
+.prt-pickup__label {
+    font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--prt-ink-faint); font-weight: 600; line-height: 1;
+    margin-bottom: 3px;
+}
+.prt-pickup__node {
+    font-family: 'Fraunces', serif; font-weight: 600; font-size: 16px;
+    letter-spacing: -0.01em; color: var(--prt-ink); line-height: 1.1;
+}
+.prt-pickup__group {
+    font-family: 'Fraunces', serif; font-weight: 500; font-size: 14px;
+    letter-spacing: -0.005em; color: var(--prt-ink); line-height: 1.1;
+}
+.prt-pickup__sep {
+    width: 1px; align-self: stretch;
+    background: var(--prt-line-2); margin: 4px 0;
+}
+
+/* tonos por nodo — el id mapea a un color para que cada nodo
+ * se identifique de un vistazo en cualquier ficha. */
+.prt-pickup--sage  { background: var(--prt-sage-l);  border-color: var(--prt-sage); }
+.prt-pickup--sage  .prt-pickup__icon { background: var(--prt-sage-d); }
+.prt-pickup--ochre { background: var(--prt-ochre-l); border-color: var(--prt-ochre); }
+.prt-pickup--ochre .prt-pickup__icon { background: var(--prt-ochre-d); }
+.prt-pickup--terra { background: var(--prt-terra-l); border-color: var(--prt-terra); }
+.prt-pickup--terra .prt-pickup__icon { background: var(--prt-terra-d); }
+
+/* ---------- card ---------- */
+.prt-card {
+    background: var(--prt-surface); border: 1px solid var(--prt-line);
+    border-radius: 8px; overflow: hidden; margin-bottom: 18px;
+}
+.prt-card__head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 14px; padding: 12px 18px;
+    background: linear-gradient(180deg, var(--prt-bg), var(--prt-surface));
+    border-bottom: 1px solid var(--prt-line);
+}
+/* Especificidad doble (.prt .prt-card__title) por la misma razón que
+ * .prt-hero__title — los <h2> son víctimas del shell csa. */
+.prt .prt-card__title {
+    font-family: 'Fraunces', serif; font-weight: 600; font-size: 16px;
+    letter-spacing: -0.01em; color: var(--prt-ink); margin: 0;
+    display: flex; align-items: center; gap: 10px;
+}
+.prt-card__title .accent {
+    width: 4px; height: 16px; border-radius: 2px; background: var(--prt-sage);
+    display: inline-block;
+}
+.prt-card--ochre .prt-card__title .accent { background: var(--prt-ochre); }
+.prt-card--terra .prt-card__title .accent { background: var(--prt-terra); }
+.prt-card--ink   .prt-card__title .accent { background: var(--prt-ink); }
+.prt-card__head-meta { font-size: 11px; color: var(--prt-ink-faint); letter-spacing: 0.04em; }
+.prt-card__body { padding: 16px 18px; }
+.prt-card__foot {
+    padding: 12px 18px; background: var(--prt-bg);
+    border-top: 1px solid var(--prt-line);
+    display: flex; flex-wrap: wrap; gap: 8px;
+}
+
+/* ---------- datos personales (defs) ---------- */
+.prt-defs {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px 22px; margin: 0;
+}
+.prt-defs__row { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.prt-defs__row--full { grid-column: 1 / -1; }
+.prt-defs__label {
+    font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--prt-ink-faint); font-weight: 500;
+}
+.prt-defs__value {
+    font-family: 'Fraunces', serif; font-weight: 500; font-size: 14px;
+    letter-spacing: -0.005em;
+    color: var(--prt-ink); word-wrap: break-word; min-width: 0;
+    line-height: 1.3;
+}
+.prt-defs__value a { color: var(--prt-sage-d); text-decoration: underline; text-decoration-color: var(--prt-line-2); text-underline-offset: 2px; }
+.prt-defs__value a:hover { text-decoration-color: var(--prt-sage); }
+.prt-defs__value--muted { color: var(--prt-ink-faint); font-weight: 400; font-style: italic; }
+
+/* ---------- familia ---------- */
+.prt-family__intro {
+    font-family: 'Fraunces', serif; font-weight: 500; font-size: 14px;
+    letter-spacing: -0.005em;
+    color: var(--prt-ink-soft); margin: 0 0 12px; line-height: 1.3;
+}
+.prt-family__intro a { color: var(--prt-sage-d); }
+.prt-relatives { list-style: none; margin: 0; padding: 0; }
+.prt-relative {
+    display: flex; align-items: center; gap: 12px;
+    padding: 9px 12px; border: 1px solid var(--prt-line); border-radius: 6px;
+    background: var(--prt-bg); margin-bottom: 6px;
+}
+.prt-relative__dot {
+    width: 28px; height: 28px; border-radius: 7px;
+    display: grid; place-items: center;
+    background: var(--prt-surface); border: 1px solid var(--prt-line-2);
+    color: var(--prt-sage-d); font-size: 12px;
+}
+.prt-relative__name {
+    flex: 1; font-family: 'Fraunces', serif; font-weight: 500; font-size: 14px;
+    color: var(--prt-ink); text-decoration: none; letter-spacing: -0.005em;
+}
+.prt-relative__name:hover { color: var(--prt-sage-d); }
+.prt-share {
+    margin-top: 14px; padding: 12px; background: var(--prt-sage-l);
+    border-radius: 6px; font-size: 13px; color: var(--prt-ink);
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+.prt-share .fa { color: var(--prt-sage-d); }
+.prt-share a { color: var(--prt-sage-d); font-weight: 600; }
+
+/* ---------- cesta (mini stats) ---------- */
+.prt-basket__chips {
+    display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px;
+    padding-bottom: 14px; border-bottom: 1px dashed var(--prt-line);
+}
+.prt-basket__name {
+    font-family: 'Fraunces', serif; font-weight: 600; font-size: 18px;
+    letter-spacing: -0.015em; color: var(--prt-ink);
+    margin-bottom: 2px;
+}
+.prt-basket__sub {
+    font-size: 11.5px; color: var(--prt-ink-faint); letter-spacing: 0.04em;
+}
+.prt-mini {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1px; background: var(--prt-line);
+    border: 1px solid var(--prt-line); border-radius: 6px; overflow: hidden;
+    margin-top: 14px;
+}
+.prt-mini__cell { background: var(--prt-surface); padding: 12px 14px; min-width: 0; }
+.prt-mini__label {
+    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--prt-ink-faint); font-weight: 600; margin-bottom: 4px;
+}
+.prt-mini__value {
+    font-family: 'Fraunces', serif; font-weight: 600; font-size: 18px;
+    letter-spacing: -0.01em; color: var(--prt-ink); line-height: 1.2;
+}
+.prt-mini__value small {
+    display: inline-block; font-family: 'Inter', sans-serif;
+    font-size: 11px; font-weight: 500; color: var(--prt-ink-faint);
+    margin-left: 4px; letter-spacing: 0.02em;
+}
+.prt-mini__value--muted { color: var(--prt-ink-faint); font-style: italic; font-weight: 500; font-size: 13px; font-family: 'Inter', sans-serif; }
+.prt-mini__value--ochre { color: var(--prt-ochre-d); }
+.prt-mini__value--sage  { color: var(--prt-sage-d); }
+
+/* ---------- histórico (timeline) ---------- */
+.prt-timeline { list-style: none; margin: 0; padding: 0; position: relative; }
+.prt-timeline::before {
+    content: ''; position: absolute; left: 11px; top: 8px; bottom: 8px;
+    width: 1px; background: var(--prt-line);
+}
+.prt-timeline__item {
+    position: relative; padding: 10px 4px 10px 32px;
+}
+.prt-timeline__dot {
+    position: absolute; left: 6px; top: 14px;
+    width: 11px; height: 11px; border-radius: 50%;
+    background: var(--prt-surface);
+    border: 2px solid var(--prt-ink-faint);
+    box-sizing: border-box;
+}
+.prt-timeline__dot--join   { border-color: var(--prt-sage); background: var(--prt-sage-l); }
+.prt-timeline__dot--leave  { border-color: var(--prt-terra); background: var(--prt-terra-l); }
+.prt-timeline__dot--pause  { border-color: var(--prt-ochre); background: var(--prt-ochre-l); }
+.prt-timeline__dot--basket { border-color: var(--prt-sage-d); background: var(--prt-surface); }
+.prt-timeline__dot--swap   { border-color: var(--prt-ochre-d); background: var(--prt-surface); }
+.prt-timeline__head {
+    display: flex; flex-wrap: wrap; align-items: baseline;
+    gap: 5px 10px; margin-bottom: 2px;
+}
+.prt-timeline__label {
+    font-family: 'Fraunces', serif; font-weight: 600; font-size: 14px;
+    color: var(--prt-ink); letter-spacing: -0.005em;
+}
+.prt-timeline__time {
+    font-size: 11.5px; color: var(--prt-ink-faint);
+    font-variant-numeric: tabular-nums;
+}
+.prt-timeline__actor {
+    display: inline-block; font-size: 10px; letter-spacing: 0.06em;
+    text-transform: uppercase; padding: 1px 7px; border-radius: 3px;
+    background: var(--prt-bg); color: var(--prt-ink-soft); font-weight: 600;
+    border: 1px solid var(--prt-line);
+}
+.prt-timeline__detail {
+    margin-top: 2px; font-size: 12px; color: var(--prt-ink-soft);
+}
+.prt-timeline__detail b { font-weight: 600; color: var(--prt-ink); }
+.prt-timeline__empty {
+    padding: 28px 12px; text-align: center; color: var(--prt-ink-faint);
+    font-style: italic; font-size: 13px;
+    background: var(--prt-bg); border: 1px dashed var(--prt-line-2);
+    border-radius: 6px;
+}
+
+/* ---------- callout local ---------- */
+.prt-callout {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 11px 14px; border-radius: 6px; font-size: 13px;
+    margin-bottom: 14px;
+}
+.prt-callout .fa { margin-top: 2px; }
+.prt-callout--info    { background: var(--prt-sage-l);  color: var(--prt-sage-d); }
+.prt-callout--warn    { background: var(--prt-ochre-l); color: var(--prt-ochre-d); }
+.prt-callout--info .fa    { color: var(--prt-sage-d); }
+.prt-callout--warn .fa    { color: var(--prt-ochre-d); }
+
+/* ---------- layout 2 columnas ---------- */
+.prt-cols {
+    display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+    gap: 18px; align-items: start;
+}
+@media (max-width: 980px) {
+    .prt-cols { grid-template-columns: 1fr; }
+    .prt-hero { grid-template-columns: auto 1fr; }
+    .prt-hero__actions { grid-column: 1 / -1; justify-content: flex-start; }
+    .prt-defs { grid-template-columns: 1fr; }
+    .prt-mini { grid-template-columns: 1fr; }
+}
+</style>
+{% endblock %}
+
 {% block csa_main %}
 
-    {# Flash messages #}
+{# ============================================================
+ # Pre-cálculos: iniciales para el avatar, color rotativo por id,
+ # etiqueta de modalidad de cesta, etc. Lo dejo arriba para no
+ # ensuciar el render.
+ # ============================================================ #}
+{% set initials = (partner.name|first|upper) ~ (partner.surname|first|default('')|upper) %}
+{% set avatar_palette = ['sage', 'ochre', 'terra', 'ink'] %}
+{% set avatar_tone = partner.status == 'BAJA' ? 'muted' : avatar_palette[(partner.id|default(0)) % 4] %}
+
+{% set status_chip = {
+    'ACTIVO':  { label: 'Activx',  cls: 'activo'  },
+    'PAUSADO': { label: 'Pausadx', cls: 'pausado' },
+    'BAJA':    { label: 'De baja', cls: 'baja'    }
+} %}
+{% set sc = status_chip[partner.status]|default({ label: partner.status, cls: 'baja' }) %}
+
+{% set bs = partner.hasActiveBasket ? partner.getActiveBasket.basketShare : null %}
+{% set bs_id = bs ? bs.id : null %}
+{% set bs_label = bs ? bs|trans|default(bs) : null %}
+
+<div class="prt">
+
+    {# Flash messages (idéntica funcionalidad, estética local). #}
     {% for message in app.flashes('success') %}
-        <div style="margin-bottom: var(--csa-sp-4);">
-            <p class="csa-callout csa-callout--info">
-                <i class="csa-callout__icon fa fa-check-circle"></i>
-                <span>{{ message }}</span>
-            </p>
+        <div class="prt-callout prt-callout--info">
+            <i class="fa fa-check-circle" aria-hidden="true"></i>
+            <span>{{ message }}</span>
         </div>
     {% endfor %}
     {% for message in app.flashes('warning') %}
-        <div style="margin-bottom: var(--csa-sp-4);">
-            <p class="csa-callout csa-callout--warning">
-                <i class="csa-callout__icon fa fa-exclamation-triangle"></i>
-                <span>{{ message }}</span>
-            </p>
+        <div class="prt-callout prt-callout--warn">
+            <i class="fa fa-exclamation-triangle" aria-hidden="true"></i>
+            <span>{{ message }}</span>
         </div>
     {% endfor %}
 
-    {# Cabecera con marker + nombre + status #}
-    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-6); align-items: flex-start;">
-        <div class="csa-row" style="align-items: flex-start; gap: var(--csa-sp-4);">
-            <span class="csa-table__id-marker" style="width: 64px; height: 64px; font-size: 28px; border-radius: var(--csa-radius-lg);">
-                <i class="fa fa-user"></i>
-            </span>
-            <div>
-                <h1>{{ partner.name }} {{ partner.surname }}</h1>
-                <div class="csa-row" style="gap: var(--csa-sp-2); margin-top: var(--csa-sp-2);">
-                    {% set status_badge = {
-                        'ACTIVO':  { label: 'Activx',  tone: 'green' },
-                        'PAUSADO': { label: 'Pausadx', tone: 'ochre' },
-                        'BAJA':    { label: 'De baja', tone: 'neutral' }
-                    } %}
-                    {% set sb = status_badge[partner.status]|default({ label: partner.status, tone: 'neutral' }) %}
-                    <span class="csa-badge csa-badge--{{ sb.tone }}">{{ sb.label }}</span>
-                    {% if partner.status == 'ACTIVO' %}
-                        {% if partner.hasActiveBasket %}
-                            <span class="csa-badge csa-badge--sky">{{ partner.getActiveBasket.basketShare }}</span>
-                        {% else %}
-                            <span class="csa-badge csa-badge--ochre">Sin cesta</span>
-                        {% endif %}
+    {# ============ HERO ============ #}
+    <header class="prt-hero">
+        <span class="prt-avatar prt-avatar--{{ avatar_tone }}" aria-hidden="true">{{ initials }}</span>
+
+        <div>
+            <h1 class="prt-hero__title">{{ partner.name }} {{ partner.surname }}</h1>
+            <div class="prt-hero__meta">
+                <span class="prt-chip prt-chip--{{ sc.cls }}"><span class="dot"></span>{{ sc.label }}</span>
+
+                {% if partner.status == 'ACTIVO' %}
+                    {% if partner.hasActiveBasket %}
+                        <span class="prt-chip prt-chip--mod-{{ bs_id }}">
+                            {% if bs_id != 4 %}<span class="dot"></span>{% endif %}
+                            {{ bs_label }}
+                        </span>
+                    {% else %}
+                        <span class="prt-chip prt-chip--warn"><span class="dot"></span>Sin cesta</span>
                     {% endif %}
-                </div>
+                {% endif %}
+
+                {% if partner.inscriptionDate %}
+                    <span class="sep">·</span>
+                    <span>Alta {{ partner.inscriptionDate|format_date('long', locale='es') }}</span>
+                {% endif %}
+
+                {# Nodo y grupo ya no van aquí: están en su propia
+                 # "pickup card" coloreada justo debajo del hero, para
+                 # darles el destaque que merecen como dato operativo. #}
             </div>
         </div>
-        <div class="csa-row">
-            {{ csa.btn('Volver al listado', { variant: 'ghost', href: path('partner_index') }) }}
+
+        <div class="prt-hero__actions">
+            <a href="{{ path('partner_index') }}" class="prt-btn">
+                <i class="fa fa-arrow-left"></i> Volver
+            </a>
         </div>
-    </div>
+    </header>
 
-    <div class="csa-stack-lg">
+    {# ============ PICKUP CARD ============
+     # Nodo + grupo de recogida. Tonos rotativos por id de nodo: cada
+     # nodo se identifica con un color, igual lenguaje cromático que el
+     # reparto v2 (sage / ochre / terra). #}
+    {% if partner.weeklyBasketGroup %}
+        {% set pickup_palette = ['sage', 'ochre', 'terra'] %}
+        {% set node_id = partner.weeklyBasketGroup.node ? partner.weeklyBasketGroup.node.id : 0 %}
+        {% set pickup_tone = pickup_palette[node_id % 3] %}
+        <div class="prt-pickup prt-pickup--{{ pickup_tone }}">
+            <span class="prt-pickup__icon" aria-hidden="true">
+                <i class="fa fa-map-marker"></i>
+            </span>
+            <div class="prt-pickup__body">
+                <div class="prt-pickup__label">Recoge en</div>
+                <div class="prt-pickup__node">
+                    {% if partner.weeklyBasketGroup.node %}{{ partner.weeklyBasketGroup.node.name }}{% else %}Sin nodo asignado{% endif %}
+                </div>
+            </div>
+            <span class="prt-pickup__sep"></span>
+            <div class="prt-pickup__body">
+                <div class="prt-pickup__label">Grupo</div>
+                <div class="prt-pickup__group">{{ partner.weeklyBasketGroup.name }}</div>
+            </div>
+        </div>
+    {% endif %}
 
-        {# Acciones administrativas — arriba para que estén visibles sin
-         # tener que scrollear hasta el fondo de la ficha. #}
-        {% if app.user %}
-            {% embed '_components/csa_card.html.twig' with { title: 'Acciones', accent: 'ochre' } %}
-                {% block body %}
-                    {% import '_macros/csa.html.twig' as csa %}
-                    <div class="csa-row" style="flex-wrap: wrap; gap: var(--csa-sp-3);">
-                        <a href="{{ path('partner_edit', { id: partner.id }) }}" class="csa-btn csa-btn--primary csa-btn--sm">
-                            <i class="fa fa-pencil"></i> Editar ficha
-                        </a>
-                        {# Acciones disponibles dependen del status del partner:
-                         #   ACTIVO  → familia, cesta, Pausar, Dar de baja
-                         #   PAUSADO → Reactivar, Dar de baja
-                         #   BAJA    → Reactivar
-                         # Usamos partner.status (string, fuente del Workflow) y NO
-                         # partner.isActive (boolean que en el dump de prod puede estar
-                         # desincronizado para socios antiguos). #}
-                        {% if partner.status == 'ACTIVO' %}
-                            {% if partner.getActiveBasket and partner.getActiveBasket.basketShare.id == 4 and partner.sharePartner is null %}
-                                <a href="{{ path('family', { id: partner.id, type: 'add_share_partner' }) }}" class="csa-btn csa-btn--info-soft csa-btn--sm">
-                                    <i class="fa fa-handshake-o"></i> ¿Comparte con?
-                                </a>
-                            {% endif %}
-                            <a href="{{ path('family', { id: partner.id, type: 'add_family' }) }}" class="csa-btn csa-btn--ghost csa-btn--sm">
-                                <i class="fa fa-users"></i> Añadir familiar
-                            </a>
-                            {% if not partner.hasActiveBasket %}
-                                <a href="{{ path('partner_add_basket', { id: partner.id }) }}" class="csa-btn csa-btn--ghost csa-btn--sm">
-                                    <i class="fa fa-shopping-basket"></i> Añadir cesta
-                                </a>
-                            {% endif %}
-                            <button type="button"
-                                    class="csa-btn csa-btn--ghost csa-btn--sm"
-                                    onclick="document.getElementById('confirm-partner-show-1').showModal()"><i class="fa fa-pause"></i> Pausar</button>
-                            {{ csa.confirm_dialog('confirm-partner-show-1', {
-                                variant: 'warning',
-                                eyebrow: 'Cambio reversible',
-                                title: 'Pausar a este socix',
-                                body: 'Dejará de recibir cesta pero seguirá siendo socix; podrás reactivarle más adelante.',
-                                confirm_label: 'Pausar',
-                                confirm_href: path('partner_pause', { id: partner.id }),
-                            }) }}
-                            <button type="button"
-                                    class="csa-btn csa-btn--ghost csa-btn--sm"
-                                    onclick="document.getElementById('confirm-partner-show-2').showModal()"><i class="fa fa-times"></i> Dar de baja</button>
-                            {{ csa.confirm_dialog('confirm-partner-show-2', {
-                                variant: 'danger',
-                                eyebrow: 'Acción permanente',
-                                title: 'Dar de baja a este socix',
-                                body: 'Dejará de recibir cesta y se conservará el histórico.',
-                                confirm_label: 'Dar de baja',
-                                confirm_href: path('partner_demote', { id: partner.id }),
-                            }) }}
-                        {% elseif partner.status == 'PAUSADO' %}
-                            <a href="{{ path('partner_promote', { id: partner.id }) }}"
-                               class="csa-btn csa-btn--info-soft csa-btn--sm"
-                               title="Salir de la pausa y volver a recibir cesta">
-                                <i class="fa fa-play"></i> Reanudar
-                            </a>
-                            <button type="button"
-                                    class="csa-btn csa-btn--ghost csa-btn--sm"
-                                    onclick="document.getElementById('confirm-partner-show-2').showModal()"><i class="fa fa-times"></i> Dar de baja</button>
-                            {{ csa.confirm_dialog('confirm-partner-show-2', {
-                                variant: 'danger',
-                                eyebrow: 'Acción permanente',
-                                title: 'Dar de baja a este socix',
-                                body: 'Dejará de recibir cesta y se conservará el histórico.',
-                                confirm_label: 'Dar de baja',
-                                confirm_href: path('partner_demote', { id: partner.id }),
-                            }) }}
-                        {% else %}
-                            {# status == 'BAJA' — el socix se reincorpora después de una baja. #}
-                            <a href="{{ path('partner_promote', { id: partner.id }) }}"
-                               class="csa-btn csa-btn--info-soft csa-btn--sm"
-                               title="Volver al alta tras una baja">
-                                <i class="fa fa-undo"></i> Volver al alta
-                            </a>
+    {# ============ ACTION BAR ============
+     # Acciones disponibles dependen del status del partner:
+     #   ACTIVO  → editar, ¿comparte con?, familiar, cesta, pausar, baja
+     #   PAUSADO → editar, reanudar, baja
+     #   BAJA    → editar, volver al alta
+     # Usamos partner.status (string del workflow) y no partner.isActive
+     # (boolean que en el dump puede estar desincronizado).
+     # ============================================================ #}
+    {% if app.user %}
+        <div class="prt-actionbar">
+            <a href="{{ path('partner_edit', { id: partner.id }) }}" class="prt-btn prt-btn--primary">
+                <i class="fa fa-pencil"></i> Editar ficha
+            </a>
+
+            {% if partner.status == 'ACTIVO' %}
+                {% if partner.getActiveBasket and partner.getActiveBasket.basketShare.id == 4 and partner.sharePartner is null %}
+                    <a href="{{ path('family', { id: partner.id, type: 'add_share_partner' }) }}" class="prt-btn">
+                        <i class="fa fa-handshake-o"></i> ¿Comparte con?
+                    </a>
+                {% endif %}
+                <a href="{{ path('family', { id: partner.id, type: 'add_family' }) }}" class="prt-btn">
+                    <i class="fa fa-users"></i> Añadir familiar
+                </a>
+                {% if not partner.hasActiveBasket %}
+                    <a href="{{ path('partner_add_basket', { id: partner.id }) }}" class="prt-btn">
+                        <i class="fa fa-shopping-basket"></i> Añadir cesta
+                    </a>
+                {% endif %}
+
+                <span class="prt-actionbar__sep"></span>
+
+                <button type="button" class="prt-btn prt-btn--warn"
+                        onclick="document.getElementById('confirm-partner-show-1').showModal()">
+                    <i class="fa fa-pause"></i> Pausar
+                </button>
+                {{ csa.confirm_dialog('confirm-partner-show-1', {
+                    variant: 'warning',
+                    eyebrow: 'Cambio reversible',
+                    title: 'Pausar a este socix',
+                    body: 'Dejará de recibir cesta pero seguirá siendo socix; podrás reactivarle más adelante.',
+                    confirm_label: 'Pausar',
+                    confirm_href: path('partner_pause', { id: partner.id }),
+                }) }}
+
+                <button type="button" class="prt-btn prt-btn--danger"
+                        onclick="document.getElementById('confirm-partner-show-2').showModal()">
+                    <i class="fa fa-times"></i> Dar de baja
+                </button>
+                {{ csa.confirm_dialog('confirm-partner-show-2', {
+                    variant: 'danger',
+                    eyebrow: 'Acción permanente',
+                    title: 'Dar de baja a este socix',
+                    body: 'Dejará de recibir cesta y se conservará el histórico.',
+                    confirm_label: 'Dar de baja',
+                    confirm_href: path('partner_demote', { id: partner.id }),
+                }) }}
+
+            {% elseif partner.status == 'PAUSADO' %}
+                <a href="{{ path('partner_promote', { id: partner.id }) }}" class="prt-btn"
+                   title="Salir de la pausa y volver a recibir cesta">
+                    <i class="fa fa-play"></i> Reanudar
+                </a>
+                <button type="button" class="prt-btn prt-btn--danger"
+                        onclick="document.getElementById('confirm-partner-show-2').showModal()">
+                    <i class="fa fa-times"></i> Dar de baja
+                </button>
+                {{ csa.confirm_dialog('confirm-partner-show-2', {
+                    variant: 'danger',
+                    eyebrow: 'Acción permanente',
+                    title: 'Dar de baja a este socix',
+                    body: 'Dejará de recibir cesta y se conservará el histórico.',
+                    confirm_label: 'Dar de baja',
+                    confirm_href: path('partner_demote', { id: partner.id }),
+                }) }}
+            {% else %}
+                {# status == 'BAJA' → reincorporación. #}
+                <a href="{{ path('partner_promote', { id: partner.id }) }}" class="prt-btn"
+                   title="Volver al alta tras una baja">
+                    <i class="fa fa-undo"></i> Volver al alta
+                </a>
+            {% endif %}
+        </div>
+    {% endif %}
+
+    {# ============ CUERPO 2 COLUMNAS ============ #}
+    <div class="prt-cols">
+
+        {# ----- COL IZQUIERDA: Datos + Familia ----- #}
+        <div>
+
+            {# Datos personales #}
+            <section class="prt-card">
+                <header class="prt-card__head">
+                    <h2 class="prt-card__title"><span class="accent"></span>Datos personales</h2>
+                </header>
+                <div class="prt-card__body">
+                    <dl class="prt-defs">
+                        <div class="prt-defs__row">
+                            <dt class="prt-defs__label">Nombre completo</dt>
+                            <dd class="prt-defs__value">{{ partner.name }} {{ partner.surname }}</dd>
+                        </div>
+                        <div class="prt-defs__row">
+                            <dt class="prt-defs__label">DNI</dt>
+                            <dd class="prt-defs__value{% if not partner.dNI %} prt-defs__value--muted{% endif %}">
+                                {{ partner.dNI ?: '—' }}
+                            </dd>
+                        </div>
+                        <div class="prt-defs__row">
+                            <dt class="prt-defs__label">Teléfono</dt>
+                            <dd class="prt-defs__value{% if not partner.celular %} prt-defs__value--muted{% endif %}">
+                                {{ partner.celular ?: '—' }}
+                            </dd>
+                        </div>
+                        <div class="prt-defs__row">
+                            <dt class="prt-defs__label">Email</dt>
+                            <dd class="prt-defs__value{% if not partner.email %} prt-defs__value--muted{% endif %}">
+                                {% if partner.email %}
+                                    <a href="mailto:{{ partner.email }}">{{ partner.email }}</a>
+                                {% else %}—{% endif %}
+                            </dd>
+                        </div>
+                        {% if partner.address %}
+                            <div class="prt-defs__row prt-defs__row--full">
+                                <dt class="prt-defs__label">Dirección</dt>
+                                <dd class="prt-defs__value">{{ partner.address }} — {{ partner.city }} ({{ partner.state }})</dd>
+                            </div>
                         {% endif %}
-                    </div>
-                {% endblock %}
-            {% endembed %}
-        {% endif %}
+                        {% if partner.inscriptionDate %}
+                            <div class="prt-defs__row">
+                                <dt class="prt-defs__label">Fecha de inscripción</dt>
+                                <dd class="prt-defs__value">{{ partner.inscriptionDate|format_date('long', locale='es') }}</dd>
+                            </div>
+                        {% endif %}
+                        <div class="prt-defs__row">
+                            <dt class="prt-defs__label">¿Consume cárnicos?</dt>
+                            <dd class="prt-defs__value">{{ partner.eatMeat ? 'Sí' : 'No' }}</dd>
+                        </div>
+                        {% if partner.sharePayment %}
+                            <div class="prt-defs__row">
+                                <dt class="prt-defs__label">Forma de pago</dt>
+                                <dd class="prt-defs__value">{{ partner.sharePayment.name }}</dd>
+                            </div>
+                        {% endif %}
+                        {% if partner.weeklyBasketGroup and partner.weeklyBasketGroup.node %}
+                            <div class="prt-defs__row">
+                                <dt class="prt-defs__label">Nodo de recogida</dt>
+                                <dd class="prt-defs__value">{{ partner.weeklyBasketGroup.node.name }}</dd>
+                            </div>
+                        {% endif %}
+                        {% if partner.weeklyBasketGroup %}
+                            <div class="prt-defs__row">
+                                <dt class="prt-defs__label">Grupo de recogida</dt>
+                                <dd class="prt-defs__value">{{ partner.weeklyBasketGroup }}</dd>
+                            </div>
+                        {% endif %}
+                        <div class="prt-defs__row">
+                            <dt class="prt-defs__label">Ficha rellenada</dt>
+                            <dd class="prt-defs__value{% if not partner.hasFile %} prt-defs__value--muted{% endif %}">
+                                {% if partner.hasFile %}
+                                    Sí · <a href="{{ asset('uploads/partner/images/' ~ partner.registrationFormImage) }}" target="_blank" rel="noopener">Ver imagen</a>
+                                {% else %}No{% endif %}
+                            </dd>
+                        </div>
+                    </dl>
+                </div>
+            </section>
 
-        {# Cuerpo en dos columnas: a la izquierda quién es la persona
-         # (datos + familia), a la derecha qué cesta tiene. En móvil
-         # las columnas se apilan automáticamente. #}
-        <div class="csa-dashboard-pair" style="align-items: flex-start;">
-
-            <div class="csa-stack-lg">
-
-        {# Datos personales #}
-        {% embed '_components/csa_card.html.twig' with { title: 'Datos personales', accent: 'sky' } %}
-            {% block body %}
-                <dl class="csa-defs">
-                    <div class="csa-defs__row">
-                        <dt class="csa-defs__label">Nombre completo</dt>
-                        <dd class="csa-defs__value">{{ partner.name }} {{ partner.surname }}</dd>
-                    </div>
-                    {% if partner.dNI %}
-                        <div class="csa-defs__row">
-                            <dt class="csa-defs__label">DNI</dt>
-                            <dd class="csa-defs__value">{{ partner.dNI }}</dd>
-                        </div>
+            {# Familia #}
+            <section class="prt-card prt-card--ochre">
+                <header class="prt-card__head">
+                    <h2 class="prt-card__title"><span class="accent"></span>Familiares</h2>
+                    {% if partner.parent is null and partner.relatives|length > 0 %}
+                        <span class="prt-card__head-meta">{{ partner.relatives|length }} vinculadx{{ partner.relatives|length == 1 ? '' : 's' }}</span>
                     {% endif %}
-                    {% if partner.celular %}
-                        <div class="csa-defs__row">
-                            <dt class="csa-defs__label">Teléfono</dt>
-                            <dd class="csa-defs__value">{{ partner.celular }}</dd>
-                        </div>
-                    {% endif %}
-                    {% if partner.email %}
-                        <div class="csa-defs__row">
-                            <dt class="csa-defs__label">Email</dt>
-                            <dd class="csa-defs__value"><a href="mailto:{{ partner.email }}">{{ partner.email }}</a></dd>
-                        </div>
-                    {% endif %}
-                    {% if partner.address %}
-                        <div class="csa-defs__row csa-defs__row--full">
-                            <dt class="csa-defs__label">Dirección</dt>
-                            <dd class="csa-defs__value">{{ partner.address }} — {{ partner.city }} ({{ partner.state }})</dd>
-                        </div>
-                    {% endif %}
-                    {% if partner.inscriptionDate %}
-                        <div class="csa-defs__row">
-                            <dt class="csa-defs__label">Fecha de inscripción</dt>
-                            <dd class="csa-defs__value">{{ partner.inscriptionDate|format_date('long', locale='es') }}</dd>
-                        </div>
-                    {% endif %}
-                    <div class="csa-defs__row">
-                        <dt class="csa-defs__label">¿Consume cárnicos?</dt>
-                        <dd class="csa-defs__value">{{ partner.eatMeat ? 'Sí' : 'No' }}</dd>
-                    </div>
-                    {% if partner.sharePayment %}
-                        <div class="csa-defs__row">
-                            <dt class="csa-defs__label">Forma de pago</dt>
-                            <dd class="csa-defs__value">{{ partner.sharePayment.name }}</dd>
-                        </div>
-                    {% endif %}
-                    {% if partner.weeklyBasketGroup %}
-                        <div class="csa-defs__row">
-                            <dt class="csa-defs__label">Grupo de recogida</dt>
-                            <dd class="csa-defs__value">{{ partner.weeklyBasketGroup }}</dd>
-                        </div>
-                    {% endif %}
-                    <div class="csa-defs__row">
-                        <dt class="csa-defs__label">Ficha rellenada</dt>
-                        <dd class="csa-defs__value">
-                            {% if partner.hasFile %}
-                                Sí · <a href="{{ asset('uploads/partner/images/' ~ partner.registrationFormImage) }}" target="_blank" rel="noopener">Ver imagen</a>
-                            {% else %}
-                                No
-                            {% endif %}
-                        </dd>
-                    </div>
-                </dl>
-            {% endblock %}
-        {% endembed %}
-
-        {# Familia #}
-        {% embed '_components/csa_card.html.twig' with { title: 'Familiares', accent: 'plum' } %}
-            {% block body %}
-                {% import '_macros/csa.html.twig' as csa %}
-                {% if partner.parent is null %}
-                    <p>Es familiar principal{% if partner.relatives|length == 0 %}, sin familiares definidos.{% endif %}</p>
-                    {% if partner.relatives|length > 0 %}
-                        <ul class="csa-list">
-                            {% for relative in partner.relatives %}
-                                <li class="csa-list__item">
-                                    <div class="csa-list__row">
-                                        <span class="csa-list__body">
-                                            <a class="csa-list__primary" href="{{ path('partner_show', { id: relative.id }) }}">{{ relative.name }} {{ relative.surname }}</a>
-                                        </span>
-                                        <button type="button"
-                                           class="csa-btn csa-btn--ghost csa-btn--sm"
-                                            onclick="document.getElementById('confirm-partner-show-relative-{{ relative.id }}').showModal()">Quitar</button>
+                </header>
+                <div class="prt-card__body">
+                    {% if partner.parent is null %}
+                        <p class="prt-family__intro">
+                            Es familiar principal{% if partner.relatives|length == 0 %}, sin familiares definidos{% endif %}.
+                        </p>
+                        {% if partner.relatives|length > 0 %}
+                            <ul class="prt-relatives">
+                                {% for relative in partner.relatives %}
+                                    <li class="prt-relative">
+                                        <span class="prt-relative__dot"><i class="fa fa-user"></i></span>
+                                        <a class="prt-relative__name" href="{{ path('partner_show', { id: relative.id }) }}">
+                                            {{ relative.name }} {{ relative.surname }}
+                                        </a>
+                                        <button type="button" class="prt-btn"
+                                            onclick="document.getElementById('confirm-partner-show-relative-{{ relative.id }}').showModal()">
+                                            Quitar
+                                        </button>
 {{ csa.confirm_dialog('confirm-partner-show-relative-' ~ relative.id, {
     variant: 'danger',
     eyebrow: 'Acción permanente',
@@ -251,25 +690,29 @@
     confirm_label: 'Quitar',
     confirm_href: path('remove_family', { partner1_id: partner.id, partner2_id: relative.id }),
 }) }}
-                                    </div>
-                                </li>
-                            {% endfor %}
-                        </ul>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        {% endif %}
+                    {% else %}
+                        <p class="prt-family__intro">
+                            Es familiar relacionado con
+                            <a href="{{ path('partner_show', { id: partner.parent.id }) }}">{{ partner.parent.name }} {{ partner.parent.surname }}</a>.
+                        </p>
                     {% endif %}
-                {% else %}
-                    <p>Es familiar relacionado con
-                        <a href="{{ path('partner_show', { id: partner.parent.id }) }}">{{ partner.parent.name }} {{ partner.parent.surname }}</a>.
-                    </p>
-                {% endif %}
 
-                {% if partner.getActiveBasket and partner.getActiveBasket.basketShare.id == 4 %}
-                    {% if partner.sharePartner %}
-                        <p style="margin-top: var(--csa-sp-4);">
-                            <strong>Comparte cesta con:</strong>
-                            <a href="{{ path('partner_show', { id: partner.sharePartner.id }) }}">{{ partner.sharePartner }}</a>
-                            ·
-                            <button type="button"
-                                onclick="document.getElementById('confirm-partner-show-4').showModal()">quitar</button>
+                    {% if partner.getActiveBasket and partner.getActiveBasket.basketShare.id == 4 %}
+                        {% if partner.sharePartner %}
+                            <div class="prt-share">
+                                <i class="fa fa-handshake-o"></i>
+                                <span>
+                                    <strong>Comparte cesta con</strong>
+                                    <a href="{{ path('partner_show', { id: partner.sharePartner.id }) }}">{{ partner.sharePartner }}</a>
+                                </span>
+                                <button type="button" class="prt-btn" style="margin-left: auto;"
+                                    onclick="document.getElementById('confirm-partner-show-4').showModal()">
+                                    Quitar
+                                </button>
 {{ csa.confirm_dialog('confirm-partner-show-4', {
     variant: 'danger',
     eyebrow: 'Acción permanente',
@@ -278,92 +721,100 @@
     confirm_label: 'Quitar',
     confirm_href: path('remove_share_partner', { partner1_id: partner.id, partner2_id: partner.sharePartner.id }),
 }) }}
-                        </p>
-                    {% else %}
-                        <p class="csa-callout csa-callout--warning" style="margin-top: var(--csa-sp-4);">
-                            <i class="csa-callout__icon fa fa-exclamation-triangle"></i>
-                            <span>Tiene cesta compartida pero no se ha definido con quién la comparte.</span>
-                        </p>
-                    {% endif %}
-                {% endif %}
-            {% endblock %}
-        {% endembed %}
-
-            </div>{# /col izquierda — Datos personales + Familiares #}
-
-            <div class="csa-stack-lg">
-
-        {# Cesta activa #}
-        {% if partner.hasActiveBasket %}
-            {% embed '_components/csa_card.html.twig' with { title: 'Cesta actual', accent: 'green' } %}
-                {% block body %}
-                    {% import '_macros/csa.html.twig' as csa %}
-                    <dl class="csa-defs">
-                        <div class="csa-defs__row">
-                            <dt class="csa-defs__label">Tipo de cesta</dt>
-                            <dd class="csa-defs__value">
-                                {{ partner.getActiveBasket.basketShare }}
-                                {% if partner.getActiveBasket.basketShare.id == 3 %}
-                                    · {{ partner.getActiveBasket.dayMonthOrder }}º viernes
-                                {% endif %}
-                            </dd>
-                        </div>
-                        {% if partner.activeBasket.amount > 1 %}
-                            <div class="csa-defs__row">
-                                <dt class="csa-defs__label">Cestas asociadas</dt>
-                                <dd class="csa-defs__value">{{ partner.activeBasket.amount }}</dd>
-                            </div>
-                        {% endif %}
-                        {% if partner.activeBasket.eggAmount %}
-                            <div class="csa-defs__row">
-                                <dt class="csa-defs__label">Huevos</dt>
-                                <dd class="csa-defs__value">
-                                    {{ partner.activeBasket.eggAmount }}
-                                    {% if partner.activeBasket.basketShare.id == 5 %}
-                                        · {{ partner.activeBasket.eggPeriod }}
-                                        {% if partner.activeBasket.eggPeriod.id is defined and partner.activeBasket.eggPeriod.id == 3 %}
-                                            ({{ partner.getActiveBasket.dayMonthOrder }}º viernes)
-                                        {% endif %}
-                                    {% endif %}
-                                </dd>
                             </div>
                         {% else %}
-                            <div class="csa-defs__row">
-                                <dt class="csa-defs__label">Huevos</dt>
-                                <dd class="csa-defs__value csa-muted">Sin huevos</dd>
+                            <div class="prt-callout prt-callout--warn" style="margin-top: 14px; margin-bottom: 0;">
+                                <i class="fa fa-exclamation-triangle"></i>
+                                <span>Tiene cesta compartida pero no se ha definido con quién la comparte.</span>
                             </div>
                         {% endif %}
-                        <div class="csa-defs__row">
-                            <dt class="csa-defs__label">Inicio</dt>
-                            <dd class="csa-defs__value">{{ partner.getActiveBasket.startDate|format_date('long', locale='es') }}</dd>
+                    {% endif %}
+                </div>
+            </section>
+
+        </div>
+
+        {# ----- COL DERECHA: Cesta + Histórico ----- #}
+        <div>
+
+            {# Cesta activa #}
+            {% if partner.hasActiveBasket %}
+                <section class="prt-card prt-card--terra">
+                    <header class="prt-card__head">
+                        <h2 class="prt-card__title"><span class="accent"></span>Cesta actual</h2>
+                        {% if partner.getActiveBasket.startDate %}
+                            <span class="prt-card__head-meta">
+                                desde {{ partner.getActiveBasket.startDate|date('d/m/Y') }}
+                            </span>
+                        {% endif %}
+                    </header>
+                    <div class="prt-card__body">
+
+                        <div class="prt-basket__chips">
+                            <span class="prt-chip prt-chip--mod-{{ bs_id }}">
+                                {% if bs_id != 4 %}<span class="dot"></span>{% endif %}
+                                {{ bs_label }}
+                            </span>
+                            {% if bs_id == 3 %}
+                                <span class="prt-chip prt-chip--mute">{{ partner.getActiveBasket.dayMonthOrder }}º viernes</span>
+                            {% endif %}
+                            {% if partner.activeBasket.amount > 1 %}
+                                <span class="prt-chip prt-chip--mute">×{{ partner.activeBasket.amount }} cestas</span>
+                            {% endif %}
                         </div>
-                        {% if partner.getActiveBasket.endDate %}
-                            <div class="csa-defs__row">
-                                <dt class="csa-defs__label">Fin</dt>
-                                <dd class="csa-defs__value">{{ partner.getActiveBasket.endDate|format_date('long', locale='es') }}</dd>
-                            </div>
-                        {% endif %}
-                        <div class="csa-defs__row">
-                            <dt class="csa-defs__label">Precio mensual</dt>
-                            <dd class="csa-defs__value">
+
+                        <div class="prt-mini">
+                            <div class="prt-mini__cell">
+                                <div class="prt-mini__label">Huevos</div>
                                 {% if partner.activeBasket.eggAmount %}
-                                    {{ (partner.getActiveBasket.monthPrice + partner.activeBasket.eggMonthPrice)|number_format(2) }} €
+                                    <div class="prt-mini__value prt-mini__value--ochre">
+                                        {{ partner.activeBasket.eggAmount }}
+                                        {% if bs_id == 5 %}
+                                            <small>· {{ partner.activeBasket.eggPeriod }}{% if partner.activeBasket.eggPeriod.id is defined and partner.activeBasket.eggPeriod.id == 3 %} ({{ partner.getActiveBasket.dayMonthOrder }}º viernes){% endif %}</small>
+                                        {% endif %}
+                                    </div>
                                 {% else %}
-                                    {{ partner.getActiveBasket.monthPrice }} €
+                                    <div class="prt-mini__value prt-mini__value--muted">Sin huevos</div>
                                 {% endif %}
-                            </dd>
+                            </div>
+
+                            <div class="prt-mini__cell">
+                                <div class="prt-mini__label">Precio mensual</div>
+                                <div class="prt-mini__value prt-mini__value--sage">
+                                    {% if partner.activeBasket.eggAmount %}
+                                        {{ (partner.getActiveBasket.monthPrice + partner.activeBasket.eggMonthPrice)|number_format(2, ',', '.') }}<small>€</small>
+                                    {% else %}
+                                        {{ partner.getActiveBasket.monthPrice|number_format(2, ',', '.') }}<small>€</small>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <div class="prt-mini__cell">
+                                <div class="prt-mini__label">Inicio</div>
+                                <div class="prt-mini__value">{{ partner.getActiveBasket.startDate|date('d/m/Y') }}</div>
+                            </div>
+
+                            <div class="prt-mini__cell">
+                                <div class="prt-mini__label">Fin</div>
+                                {% if partner.getActiveBasket.endDate %}
+                                    <div class="prt-mini__value">{{ partner.getActiveBasket.endDate|date('d/m/Y') }}</div>
+                                {% else %}
+                                    <div class="prt-mini__value prt-mini__value--muted">Sin fecha</div>
+                                {% endif %}
+                            </div>
                         </div>
-                    </dl>
+
+                    </div>
 
                     {% if app.user %}
-                        <div class="csa-row" style="flex-wrap: wrap; gap: var(--csa-sp-2); margin-top: var(--csa-sp-5); padding-top: var(--csa-sp-4); border-top: 1px solid var(--csa-rule);">
-                            <a href="{{ path('partner_basket_share_edit', { id: partner.getActiveBasket.id }) }}"
-                               class="csa-btn csa-btn--secondary csa-btn--sm">
+                        <footer class="prt-card__foot">
+                            <a href="{{ path('partner_basket_share_edit', { id: partner.getActiveBasket.id }) }}" class="prt-btn">
                                 <i class="fa fa-pencil"></i> Cambiar tipo de cesta
                             </a>
-                            <button type="button"
-                               class="csa-btn csa-btn--ghost csa-btn--sm"
-                                onclick="document.getElementById('confirm-partner-show-5').showModal()"><i class="fa fa-times"></i> Dar de baja la cesta</button>
+                            <button type="button" class="prt-btn prt-btn--danger"
+                                onclick="document.getElementById('confirm-partner-show-5').showModal()">
+                                <i class="fa fa-times"></i> Dar de baja la cesta
+                            </button>
 {{ csa.confirm_dialog('confirm-partner-show-5', {
     variant: 'danger',
     eyebrow: 'Acción permanente',
@@ -372,112 +823,107 @@
     confirm_label: 'Dar de baja la cesta',
     confirm_href: path('partner_basket_share_finalize', { id: partner.getActiveBasket.id }),
 }) }}
-                        </div>
+                        </footer>
                     {% endif %}
-                {% endblock %}
-            {% endembed %}
-        {% endif %}
+                </section>
+            {% endif %}
 
-        {# Histórico de eventos de pertenencia. Siempre visible, aunque esté
-         # vacío, para que se sepa que la sección existe. Vive dentro de la
-         # col derecha junto a la cesta — su altura crece con los eventos. #}
-        {% set event_labels = {
-            'JOIN':                   { label: 'Alta',                      icon: 'fa-user-plus' },
-            'LEAVE':                  { label: 'Baja',                      icon: 'fa-user-times' },
-            'PAUSE':                  { label: 'Pausa',                     icon: 'fa-pause' },
-            'RESUME':                 { label: 'Reanudación',               icon: 'fa-play' },
-            'BASKET_START':           { label: 'Empieza cesta',             icon: 'fa-shopping-basket' },
-            'BASKET_END':             { label: 'Termina cesta',             icon: 'fa-shopping-basket' },
-            'BASKET_SKIP':            { label: 'No recoge la cesta',        icon: 'fa-ban' },
-            'BASKET_UNSKIP':          { label: 'Vuelve a recoger la cesta', icon: 'fa-undo' },
-            'GROUP_CHANGE_PERMANENT': { label: 'Cambio definitivo A/B',     icon: 'fa-exchange' },
-            'WEEK_SWAP':              { label: 'Cambio puntual de viernes', icon: 'fa-calendar-times-o' },
-            'NODE_CHANGE':            { label: 'Cambio de nodo',            icon: 'fa-map-marker' }
-        } %}
+            {# Histórico de eventos de pertenencia. Siempre visible, aunque
+             # esté vacío, para que se sepa que la sección existe. #}
+            {% set event_meta = {
+                'JOIN':                   { label: 'Alta',                      cls: 'join'   },
+                'LEAVE':                  { label: 'Baja',                      cls: 'leave'  },
+                'PAUSE':                  { label: 'Pausa',                     cls: 'pause'  },
+                'RESUME':                 { label: 'Reanudación',               cls: 'join'   },
+                'BASKET_START':           { label: 'Empieza cesta',             cls: 'basket' },
+                'BASKET_END':             { label: 'Termina cesta',             cls: 'basket' },
+                'BASKET_SKIP':            { label: 'No recoge la cesta',        cls: 'pause'  },
+                'BASKET_UNSKIP':          { label: 'Vuelve a recoger la cesta', cls: 'basket' },
+                'BASKET_CHANGE':          { label: 'Cambio en la cesta',        cls: 'basket' },
+                'GROUP_CHANGE_PERMANENT': { label: 'Cambio definitivo A/B',     cls: 'swap'   },
+                'WEEK_SWAP':              { label: 'Cambio puntual de viernes', cls: 'swap'   },
+                'NODE_CHANGE':            { label: 'Cambio de nodo',            cls: 'swap'   }
+            } %}
 
-        {% embed '_components/csa_card.html.twig' with { title: 'Histórico', accent: 'neutral' } %}
-            {% block body %}
-                {% if events|default([])|length == 0 %}
-                    <p class="csa-muted" style="margin: 0;">
-                        Aún no hay eventos registrados para este socix. Las próximas
-                        transiciones (pausa, baja, cambios de cesta, cambios de grupo A/B)
-                        irán dejando rastro aquí.
-                    </p>
-                {% else %}
-                    <ul class="csa-timeline" style="list-style: none; margin: 0; padding: 0;">
-                        {% for event in events %}
-                            {% set meta = event_labels[event.type]|default({ label: event.type, icon: 'fa-circle' }) %}
-                            {% set payload = event.payload|default({}) %}
+            <section class="prt-card prt-card--ink">
+                <header class="prt-card__head">
+                    <h2 class="prt-card__title"><span class="accent"></span>Histórico</h2>
+                    {% if events|default([])|length > 0 %}
+                        <span class="prt-card__head-meta">{{ events|length }} evento{{ events|length == 1 ? '' : 's' }}</span>
+                    {% endif %}
+                </header>
+                <div class="prt-card__body">
+                    {% if events|default([])|length == 0 %}
+                        <div class="prt-timeline__empty">
+                            Aún no hay eventos registrados. Las próximas transiciones
+                            (pausa, baja, cambios de cesta, cambios A/B) irán dejando
+                            rastro aquí.
+                        </div>
+                    {% else %}
+                        <ul class="prt-timeline">
+                            {% for event in events %}
+                                {% set meta = event_meta[event.type]|default({ label: event.type, cls: '' }) %}
+                                {% set payload = event.payload|default({}) %}
 
-                            {# Etiqueta específica para WEEK_SWAP cancelado: el feed
-                             # conserva apply y cancel; el verbo cambia. #}
-                            {% set label = meta.label %}
-                            {% if event.type == 'WEEK_SWAP' and payload.cancelled|default(false) %}
-                                {% set label = 'Cambio puntual cancelado' %}
-                            {% endif %}
-
-                            {# Actor legible:
-                             #   partner:<id>  con id == partner actual → "autoservicio"
-                             #   partner:<id>  con otro id              → "otro socix" (familiar, etc)
-                             #   gestor:<id>                            → nombre del admin (resuelto en controller)
-                             #   sistema / vacío                        → "sistema"
-                             # Evitamos exponer ids crudos en la UI; identifican poco. #}
-                            {% set actor_label = null %}
-                            {% if event.actor %}
-                                {% if event.actor == 'partner:' ~ partner.id %}
-                                    {% set actor_label = 'autoservicio' %}
-                                {% elseif event.actor starts with 'partner:' %}
-                                    {% set actor_label = 'otro socix' %}
-                                {% elseif event.actor starts with 'gestor:' %}
-                                    {% set gestor_id = event.actor|slice(7) %}
-                                    {% set gestor_name = gestor_names[gestor_id]|default(gestor_names[gestor_id|number_format(0,'','')]|default(null)) %}
-                                    {% set actor_label = gestor_name ? 'responsable: ' ~ gestor_name : 'responsable: gestión' %}
-                                {% elseif event.actor == 'system' or event.actor == 'sistema' %}
-                                    {% set actor_label = 'sistema' %}
-                                {% else %}
-                                    {% set actor_label = event.actor %}
+                                {# Etiqueta específica para WEEK_SWAP cancelado:
+                                 # el feed conserva apply y cancel; el verbo cambia. #}
+                                {% set label = meta.label %}
+                                {% if event.type == 'WEEK_SWAP' and payload.cancelled|default(false) %}
+                                    {% set label = 'Cambio puntual cancelado' %}
                                 {% endif %}
-                            {% endif %}
 
-                            <li style="padding: var(--csa-sp-2) 0; border-bottom: 1px solid var(--csa-line);">
-                                <div class="csa-row" style="gap: var(--csa-sp-3); align-items: baseline;">
-                                    <i class="fa {{ meta.icon }} csa-muted"></i>
-                                    <strong>{{ label }}</strong>
-                                    <span class="csa-muted csa-small">{{ event.occurredAt|format_datetime('medium', 'short', locale='es') }}</span>
-                                    {% if actor_label %}
-                                        <span class="csa-muted csa-small">· {{ actor_label }}</span>
+                                {# Actor legible: no exponemos ids crudos en la UI. #}
+                                {% set actor_label = null %}
+                                {% if event.actor %}
+                                    {% if event.actor == 'partner:' ~ partner.id %}
+                                        {% set actor_label = 'autoservicio' %}
+                                    {% elseif event.actor starts with 'partner:' %}
+                                        {% set actor_label = 'otro socix' %}
+                                    {% elseif event.actor starts with 'gestor:' %}
+                                        {% set gestor_id = event.actor|slice(7) %}
+                                        {% set gestor_name = gestor_names[gestor_id]|default(gestor_names[gestor_id|number_format(0,'','')]|default(null)) %}
+                                        {% set actor_label = gestor_name ? gestor_name : 'gestión' %}
+                                    {% elseif event.actor == 'system' or event.actor == 'sistema' %}
+                                        {% set actor_label = 'sistema' %}
+                                    {% else %}
+                                        {% set actor_label = event.actor %}
                                     {% endif %}
-                                </div>
-
-                                {# Detalle por tipo de evento: lo que importa al admin
-                                 # cuando ojea el feed (a qué viernes pasó, de qué nodo
-                                 # a qué nodo, etc.). #}
-                                {% if event.type == 'WEEK_SWAP' and payload.from_date and payload.to_date %}
-                                    <div class="csa-muted csa-small" style="margin-top: var(--csa-sp-1); padding-left: var(--csa-sp-5);">
-                                        {{ payload.from_date|date('d/m/Y') }} → {{ payload.to_date|date('d/m/Y') }}
-                                    </div>
-                                {% elseif event.type == 'NODE_CHANGE' and payload.to_group_name %}
-                                    <div class="csa-muted csa-small" style="margin-top: var(--csa-sp-1); padding-left: var(--csa-sp-5);">
-                                        {% if payload.from_group_name %}{{ payload.from_group_name }} → {% endif %}{{ payload.to_group_name }}
-                                    </div>
                                 {% endif %}
 
-                                {% if event.notes %}
-                                    <div class="csa-muted csa-small" style="margin-top: var(--csa-sp-1); padding-left: var(--csa-sp-5);">
-                                        {{ event.notes }}
+                                <li class="prt-timeline__item">
+                                    <span class="prt-timeline__dot prt-timeline__dot--{{ meta.cls }}"></span>
+                                    <div class="prt-timeline__head">
+                                        <span class="prt-timeline__label">{{ label }}</span>
+                                        <span class="prt-timeline__time">{{ event.occurredAt|format_datetime('medium', 'short', locale='es') }}</span>
+                                        {% if actor_label %}
+                                            <span class="prt-timeline__actor">{{ actor_label }}</span>
+                                        {% endif %}
                                     </div>
-                                {% endif %}
-                            </li>
-                        {% endfor %}
-                    </ul>
-                {% endif %}
-            {% endblock %}
-        {% endembed %}
 
-            </div>{# /col derecha — Cesta actual + Histórico #}
+                                    {% if event.type == 'WEEK_SWAP' and payload.from_date and payload.to_date %}
+                                        <div class="prt-timeline__detail">
+                                            <b>{{ payload.from_date|date('d/m/Y') }}</b> → <b>{{ payload.to_date|date('d/m/Y') }}</b>
+                                        </div>
+                                    {% elseif event.type == 'NODE_CHANGE' and payload.to_group_name %}
+                                        <div class="prt-timeline__detail">
+                                            {% if payload.from_group_name %}<b>{{ payload.from_group_name }}</b> → {% endif %}<b>{{ payload.to_group_name }}</b>
+                                        </div>
+                                    {% endif %}
 
-        </div>{# /csa-dashboard-pair #}
+                                    {% if event.notes %}
+                                        <div class="prt-timeline__detail">{{ event.notes }}</div>
+                                    {% endif %}
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+            </section>
 
-    </div>
+        </div>{# /col derecha #}
+
+    </div>{# /prt-cols #}
+
+</div>{# /.prt #}
 
 {% endblock %}
