@@ -72,6 +72,61 @@ class PartnerShareEventRecorder
         );
     }
 
+    /**
+     * Registra un cambio dentro de una cesta continua: cambia algún atributo
+     * (modalidad, huevos, cohorte, day_month_order…) pero el socix sigue con
+     * cesta. El modelo parte el histórico en dos PBS — la antigua con
+     * end_date, la nueva con start_date — y este evento las une
+     * semánticamente con un BASKET_CHANGE en lugar de END+START sueltos.
+     *
+     * @param PartnerBasketShare $oldShare PBS que se cierra.
+     * @param PartnerBasketShare $newShare PBS nueva que la sustituye.
+     * @param \DateTimeInterface|null $occurredAt Cuándo entró en vigor. Si null, start_date de la nueva.
+     * @param string|null $actor Quién lo hizo. Si null, vía Security.
+     * @return PartnerEvent Evento persistido (no flusheado).
+     */
+    public function recordChange(
+        PartnerBasketShare $oldShare,
+        PartnerBasketShare $newShare,
+        ?\DateTimeInterface $occurredAt = null,
+        ?string $actor = null,
+    ): PartnerEvent {
+        $event = new PartnerEvent(
+            $newShare->getPartner(),
+            PartnerEvent::TYPE_BASKET_CHANGE,
+            $occurredAt ?? $newShare->getStartDate(),
+        );
+        $event->setActor($actor ?? $this->resolveActor());
+        $event->setPayload([
+            'from' => $this->snapshotShare($oldShare),
+            'to'   => $this->snapshotShare($newShare),
+        ]);
+        $this->em->persist($event);
+
+        return $event;
+    }
+
+    /**
+     * Snapshot de los campos relevantes de una PartnerBasketShare para
+     * incluir en el payload de BASKET_CHANGE. Permite reconstruir qué
+     * cambió sin tener que rehidratar la entidad.
+     *
+     * @param PartnerBasketShare $share
+     * @return array<string,mixed>
+     */
+    private function snapshotShare(PartnerBasketShare $share): array
+    {
+        return [
+            'pbs_id'              => $share->getId(),
+            'basket_share_id'     => $share->getBasketShare()?->getId(),
+            'egg_amount_id'       => $share->getEggAmount()?->getId(),
+            'egg_period_id'       => $share->getEggPeriod()?->getId(),
+            'day_month_order'     => $share->getDayMonthOrder(),
+            'egg_day_month_order' => $share->getEggDayMonthOrder(),
+            'delivery_group'      => $share->getDeliveryGroup(),
+        ];
+    }
+
     private function record(
         PartnerBasketShare $share,
         string $type,

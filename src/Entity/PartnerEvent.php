@@ -28,6 +28,16 @@ class PartnerEvent
     public const TYPE_RESUME = 'RESUME';
     public const TYPE_BASKET_START = 'BASKET_START';
     public const TYPE_BASKET_END = 'BASKET_END';
+    /**
+     * El socix mantiene cesta pero cambia algún atributo: modalidad,
+     * cantidad o frecuencia de huevos, delivery_group, day_month_order…
+     * El modelo parte el histórico en dos PartnerBasketShare (la antigua
+     * con end_date y una nueva con start_date), pero el evento que las
+     * une semánticamente es UNO solo: BASKET_CHANGE. El payload lleva
+     * from/to con los IDs de las dos PBS y los atributos relevantes que
+     * cambiaron, para reconstruir el qué sin pelearse con END+START.
+     */
+    public const TYPE_BASKET_CHANGE = 'BASKET_CHANGE';
     public const TYPE_GROUP_CHANGE_PERMANENT = 'GROUP_CHANGE_PERMANENT';
     public const TYPE_WEEK_SWAP = 'WEEK_SWAP';
     public const TYPE_NODE_CHANGE = 'NODE_CHANGE';
@@ -41,6 +51,7 @@ class PartnerEvent
         self::TYPE_RESUME,
         self::TYPE_BASKET_START,
         self::TYPE_BASKET_END,
+        self::TYPE_BASKET_CHANGE,
         self::TYPE_GROUP_CHANGE_PERMANENT,
         self::TYPE_WEEK_SWAP,
         self::TYPE_NODE_CHANGE,
