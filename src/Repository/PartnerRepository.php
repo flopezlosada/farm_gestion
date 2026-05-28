@@ -5,6 +5,7 @@ namespace App\Repository;
 use App\Entity\Basket;
 use App\Entity\Partner;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
+use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
 
 /**
@@ -51,6 +52,75 @@ class PartnerRepository extends ServiceEntityRepository
     $dql_no_evaluated="select t from AppBundle:AssessmentBoardLearningDifficultiesType t where t not in (:ids) and t in (:ids_assessmentBoard) ";
 
     */
+
+    /**
+     * Construye el QueryBuilder del listado de socixs con filtros opcionales.
+     * Devuelve un QB en vez de resultados para que el controller pueda
+     * delegar la paginación al PaginatorInterface de Knp.
+     *
+     * El left-join con partner_basket_shares se restringe a la cesta activa
+     * (end_date IS NULL), de la que sólo hay una por socio principal. Se
+     * añade addSelect de las asociaciones para evitar N+1 al pintar
+     * modalidad y nodo/grupo en cada fila del listado.
+     *
+     * @param array{
+     *     status?: string|null,
+     *     modalities?: int[]|null,
+     *     cesta?: string|null,   "yes" | "no" | null
+     *     node?: int|null,
+     *     wbg?: int|null,
+     *     q?: string|null
+     * } $filters
+     */
+    public function findFilteredQb(array $filters): QueryBuilder
+    {
+        $qb = $this->createQueryBuilder('p')
+            ->leftJoin('p.partner_basket_shares', 'pbs', 'WITH', 'pbs.end_date IS NULL')
+            ->leftJoin('pbs.basket_share', 'bs')
+            ->leftJoin('p.weekly_basket_group', 'wbg')
+            ->leftJoin('wbg.node', 'n')
+            ->addSelect('pbs', 'bs', 'wbg', 'n')
+            ->orderBy('p.surname', 'ASC')
+            ->addOrderBy('p.name', 'ASC');
+
+        if (!empty($filters['status'])) {
+            $qb->andWhere('p.status = :status')->setParameter('status', $filters['status']);
+        }
+
+        if (!empty($filters['modalities'])) {
+            $qb->andWhere('bs.id IN (:modalities)')
+               ->setParameter('modalities', $filters['modalities']);
+        }
+
+        // "Sin cesta": sólo aplica a socios principales (parent IS NULL); los
+        // secundarios figuran sin PBS propio porque la cesta está en el parent
+        // (ver memoria partner_family_share_model). "Con cesta": socios con
+        // PBS activo Y sus secundarios (heredan).
+        if (!empty($filters['cesta'])) {
+            if ($filters['cesta'] === 'no') {
+                $qb->andWhere('p.parent IS NULL')->andWhere('pbs.id IS NULL');
+            } elseif ($filters['cesta'] === 'yes') {
+                $qb->andWhere('pbs.id IS NOT NULL OR p.parent IS NOT NULL');
+            }
+        }
+
+        if (!empty($filters['node'])) {
+            $qb->andWhere('n.id = :node')->setParameter('node', (int) $filters['node']);
+        }
+
+        if (!empty($filters['wbg'])) {
+            $qb->andWhere('wbg.id = :wbg')->setParameter('wbg', (int) $filters['wbg']);
+        }
+
+        if (!empty($filters['q'])) {
+            $qb->andWhere('LOWER(p.name) LIKE :q OR LOWER(p.surname) LIKE :q OR LOWER(p.email) LIKE :q OR p.celular LIKE :qPlain')
+               ->setParameter('q', '%' . mb_strtolower($filters['q']) . '%')
+               ->setParameter('qPlain', '%' . $filters['q'] . '%');
+        }
+
+        return $qb;
+    }
+
 
     public function findFamiliar(Partner $partner)
     {

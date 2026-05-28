@@ -3,14 +3,18 @@
 namespace App\Controller;
 
 use App\Custom\WeekOfMonth;
+use App\Entity\BasketShare;
+use App\Entity\Node;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
 use App\Entity\WeeklyBasket;
+use App\Entity\WeeklyBasketGroup;
 use App\Form\PartnerBasketShareType;
 use App\Form\PartnerType;
 use App\Repository\PartnerRepository;
 use App\Service\Partner\PartnerShareEventRecorder;
 use Doctrine\ORM\EntityManagerInterface;
+use Knp\Component\Pager\PaginatorInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Component\HttpFoundation\Request;
@@ -25,21 +29,43 @@ use Symfony\Component\Workflow\WorkflowInterface;
 class PartnerController extends AbstractController
 {
     #[Route("/", name: "partner_index", methods: ["GET"])]
-    public function index(Request $request, PartnerRepository $partnerRepository): Response
-    {
-        $status = $request->query->get('status');
-        if ($status !== null && in_array($status, Partner::STATUSES, true)) {
-            $partners = $partnerRepository->findBy(['status' => $status], ['surname' => 'ASC', 'name' => 'ASC']);
-            $title = match ($status) {
-                Partner::STATUS_ACTIVO => 'Socias y socios activos',
-                Partner::STATUS_PAUSADO => 'Socias y socios pausados',
-                Partner::STATUS_BAJA => 'Socias y socios de baja',
-            };
-        } else {
-            $partners = $partnerRepository->findBy([], ['surname' => 'ASC', 'name' => 'ASC']);
-            $title = 'Listado completo de socias y socios';
-            $status = null;
-        }
+    public function index(
+        Request $request,
+        PartnerRepository $partnerRepository,
+        EntityManagerInterface $em,
+        PaginatorInterface $paginator
+    ): Response {
+        // Pestaña por defecto: ACTIVO. Para ver el listado completo el call
+        // site tiene que pedir explícitamente ?status=ALL.
+        $rawStatus = $request->query->get('status', Partner::STATUS_ACTIVO);
+        $statusFilter = in_array($rawStatus, Partner::STATUSES, true) ? $rawStatus : null;
+
+        // Cast manual de node/wbg porque $request->query->getInt() lanza
+        // BadRequestException si el valor es "" (string vacío), cosa que el
+        // form GET envía siempre que el radio "Cualquier X" está marcado.
+        $filters = [
+            'status'     => $statusFilter,
+            'modalities' => array_values(array_filter(array_map('intval', (array) $request->query->all('modality')))),
+            'cesta'      => in_array($request->query->get('cesta'), ['yes', 'no'], true) ? $request->query->get('cesta') : null,
+            'node'       => ((int) $request->query->get('node', '')) ?: null,
+            'wbg'        => ((int) $request->query->get('wbg', '')) ?: null,
+            'q'          => trim((string) $request->query->get('q', '')) ?: null,
+        ];
+
+        $qb = $partnerRepository->findFilteredQb($filters);
+
+        $pagination = $paginator->paginate(
+            $qb->getQuery(),
+            $request->query->getInt('page', 1),
+            25
+        );
+
+        $title = match ($statusFilter) {
+            Partner::STATUS_ACTIVO  => 'Socias y socios activos',
+            Partner::STATUS_PAUSADO => 'Socias y socios pausados',
+            Partner::STATUS_BAJA    => 'Socias y socios de baja',
+            default                 => 'Listado completo de socias y socios',
+        };
 
         // Conteos para las pestañas. Una sola query agrupada.
         $rawCounts = $partnerRepository->createQueryBuilder('p')
@@ -56,13 +82,28 @@ class PartnerController extends AbstractController
             $counts['ALL'] += (int) $row['total'];
         }
 
+        // Opciones para los popovers de filtro. Las cargo siempre (no son
+        // costosas: <10 entidades cada una) para que la UI no se quede sin
+        // opciones cuando el listado venga vacío.
+        $modalitiesAll = $em->getRepository(BasketShare::class)->findBy([], ['id' => 'ASC']);
+        $nodesAll      = $em->getRepository(Node::class)->findBy([], ['name' => 'ASC']);
+        // Grupo de recogida depende de nodo: si hay nodo seleccionado, sólo
+        // ofrecemos los WBG de ese nodo. Si no, todos.
+        $wbgsAll = $filters['node']
+            ? $em->getRepository(WeeklyBasketGroup::class)->findBy(['node' => $filters['node']], ['name' => 'ASC'])
+            : $em->getRepository(WeeklyBasketGroup::class)->findBy([], ['name' => 'ASC']);
+
         return $this->render('partner/index.html.twig', [
-            'partners' => $partners,
-            'title' => $title,
-            'type' => null,
-            'status_filter' => $status,
-            'statuses' => Partner::STATUSES,
-            'status_counts' => $counts,
+            'pagination'     => $pagination,
+            'title'          => $title,
+            'type'           => null,
+            'status_filter'  => $statusFilter,
+            'statuses'       => Partner::STATUSES,
+            'status_counts'  => $counts,
+            'filters'        => $filters,
+            'modalities_all' => $modalitiesAll,
+            'nodes_all'      => $nodesAll,
+            'wbgs_all'       => $wbgsAll,
         ]);
     }
 
