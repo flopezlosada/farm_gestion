@@ -44,6 +44,7 @@ class GenerateWeeklyDeliveryCommand extends Command
     {
         $this
             ->addOption('weeks', null, InputOption::VALUE_REQUIRED, 'Cuántos viernes adelante materializar', self::DEFAULT_WEEKS)
+            ->addOption('basket-id', null, InputOption::VALUE_REQUIRED, 'Procesar un Basket concreto (ignora --weeks). Útil para regenerar ciclos pasados tras una corrección.')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Lista los Baskets que tocaría sin persistir nada');
     }
 
@@ -53,10 +54,21 @@ class GenerateWeeklyDeliveryCommand extends Command
 
         $weeks = max(1, (int) $input->getOption('weeks'));
         $dryRun = (bool) $input->getOption('dry-run');
+        $basketId = $input->getOption('basket-id');
 
-        $baskets = $this->upcomingBaskets($weeks);
+        if ($basketId !== null) {
+            $basket = $this->em->getRepository(Basket::class)->find((int) $basketId);
+            if ($basket === null) {
+                $io->error(sprintf('No existe Basket con id=%d.', (int) $basketId));
+                return Command::FAILURE;
+            }
+            $baskets = [$basket];
+        } else {
+            $baskets = $this->upcomingBaskets($weeks);
+        }
+
         if (empty($baskets)) {
-            $io->warning('No hay Baskets futuros registrados. Nada que hacer.');
+            $io->warning('No hay Baskets que procesar. Nada que hacer.');
             return Command::SUCCESS;
         }
 
