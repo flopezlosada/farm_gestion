@@ -77,6 +77,33 @@ class WeeklyBasketGenerator
     }
 
     /**
+     * Orden operativo del Basket entre los viernes del mes del nodo weekly
+     * (Torremocha). Null si Torremocha no entrega en este Basket (excepción
+     * global o de nodo cancela). En tal caso la rama weekly+sin-nodo de la
+     * query mensual node-aware no debe traer partners — el repo lo respeta
+     * ignorando `$weeklyMonthlyOrder` cuando es null.
+     *
+     * Asume un único nodo weekly en el sistema (hoy Torremocha). Si en el
+     * futuro hubiera varios nodos weekly compartiendo día y excepciones,
+     * el orden es el mismo y este método sigue valiendo; si comparten
+     * cadencia pero NO día, habría que rediseñar.
+     *
+     * Sub-fase 8.8e (2026-05-28): sustituye al hardcode NON_OPERATIVE_FRIDAYS.
+     *
+     * @param Basket $basket
+     * @return int|null 1-based, o null si el nodo weekly no entrega esta semana.
+     */
+    private function weeklyMonthlyOrderFor(Basket $basket): ?int
+    {
+        $weeklyNode = $this->nodeRepository->findOneBy(['cadence' => Node::CADENCE_WEEKLY]);
+        if ($weeklyNode === null) {
+            return null;
+        }
+
+        return $this->monthlyResolver->operativeOrderForNode($basket, $weeklyNode);
+    }
+
+    /**
      * Mapa nodeId → orden operativo del Basket dentro del calendario del
      * nodo biweekly, para los nodos biweekly que reparten esta semana.
      * Usado por la query mensual node-aware para emparejar partners cuyo
@@ -308,18 +335,18 @@ class WeeklyBasketGenerator
         $shareRepo = $this->em->getRepository(PartnerBasketShare::class);
 
         $cohort = $this->cohortResolver->cohortForBasket($basket);
-        $monthlyOrder = $this->monthlyResolver->operativeOrderInMonth($basket);
+        $weeklyMonthlyOrder = $this->weeklyMonthlyOrderFor($basket);
         $activeBiweeklyNodeIds = $this->activeBiweeklyNodeIds($basket);
         $biweeklyNodeMonthlyOrders = $this->monthlyOrderByBiweeklyNode($basket);
 
         $weekly = $shareRepo->findBasketPartnersByTypeAndCity(self::SHARE_WEEKLY, 1, $basket);
         $half = $shareRepo->findBasketPartnersByTypeAndCity(self::SHARE_HALF, 1, $basket);
         $biweekly = $shareRepo->findBasketPartnersBiweeklyNodeAware($basket, self::SHARE_BIWEEKLY, 1, $cohort, $activeBiweeklyNodeIds);
-        $monthly = $shareRepo->findBasketPartnersMonthlyNodeAware($basket, self::SHARE_MONTHLY, $monthlyOrder, $biweeklyNodeMonthlyOrders);
+        $monthly = $shareRepo->findBasketPartnersMonthlyNodeAware($basket, self::SHARE_MONTHLY, $weeklyMonthlyOrder, $biweeklyNodeMonthlyOrders);
 
         $onlyEggWeekly = $shareRepo->findBasketPartnersByTypeAndCity(self::SHARE_ONLY_EGG, 1, $basket, true);
         $onlyEggBiweekly = $shareRepo->findBasketPartnersBiweeklyNodeAware($basket, self::SHARE_ONLY_EGG, 1, $cohort, $activeBiweeklyNodeIds, true);
-        $onlyEggMonthly = $shareRepo->findBasketPartnersMonthlyNodeAware($basket, self::SHARE_ONLY_EGG, $monthlyOrder, $biweeklyNodeMonthlyOrders, true);
+        $onlyEggMonthly = $shareRepo->findBasketPartnersMonthlyNodeAware($basket, self::SHARE_ONLY_EGG, $weeklyMonthlyOrder, $biweeklyNodeMonthlyOrders, true);
         $onlyEgg = array_merge($onlyEggWeekly, $onlyEggBiweekly, $onlyEggMonthly);
 
         // Misma lógica que en reuseExisting: cualquier compartición (share_partner_id

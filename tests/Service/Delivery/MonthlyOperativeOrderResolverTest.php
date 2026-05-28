@@ -3,6 +3,7 @@
 namespace App\Tests\Service\Delivery;
 
 use App\Entity\Basket;
+use App\Entity\DeliveryException;
 use App\Entity\Node;
 use App\Repository\DeliveryExceptionRepository;
 use App\Service\Delivery\MonthlyOperativeOrderResolver;
@@ -12,35 +13,14 @@ use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Unit test del MonthlyOperativeOrderResolver. Cubre la posición operativa
- * legacy (Torremocha weekly viernes, con hardcode de festivos) y la nueva
- * variante node-aware introducida en 8.8b3 (Cascorro/Midori biweekly).
+ * Unit test del MonthlyOperativeOrderResolver. Verifica el orden operativo
+ * por nodo apoyándose en NodeDeliveryDate (cadencia + DeliveryException).
+ *
+ * 8.8b3 introdujo operativeOrderForNode; 8.8e retiró el hardcode legacy y
+ * dejó este método como único público.
  */
 class MonthlyOperativeOrderResolverTest extends TestCase
 {
-    /**
-     * Mayo 2026: viernes-Basket [1, 8, 15, 22, 29], 1-may festivo en hardcode.
-     * El Basket del 29-may debe ser el 4º viernes operativo.
-     */
-    public function testOperativeOrderInMonthIgnoraFestivoHardcode(): void
-    {
-        $baskets = $this->mayoBaskets();
-        $resolver = $this->makeResolver($baskets);
-
-        $this->assertSame(1, $resolver->operativeOrderInMonth($baskets[1]));  // 8-may
-        $this->assertSame(2, $resolver->operativeOrderInMonth($baskets[2]));  // 15-may
-        $this->assertSame(3, $resolver->operativeOrderInMonth($baskets[3]));  // 22-may
-        $this->assertSame(4, $resolver->operativeOrderInMonth($baskets[4]));  // 29-may
-    }
-
-    public function testIsOperativeFalsoParaFestivoHardcode(): void
-    {
-        $resolver = $this->makeResolver([]);
-
-        $this->assertFalse($resolver->isOperative($this->makeBasket(1, '2026-05-01')));
-        $this->assertTrue($resolver->isOperative($this->makeBasket(2, '2026-05-08')));
-    }
-
     /**
      * Cascorro: miércoles, biweekly, anchor 6-may. En mayo 2026 entrega
      * los miércoles 6-may (via Basket 8-may) y 20-may (via Basket 22-may).
@@ -74,25 +54,45 @@ class MonthlyOperativeOrderResolverTest extends TestCase
     }
 
     /**
-     * Torremocha weekly: el método node-aware NO conoce el hardcode de
-     * festivos viernes. Sin DeliveryException en BBDD, cuenta los 5
-     * viernes del mes. Esto deja documentado que para Torremocha, mientras
-     * los festivos sigan en hardcode, hay que usar operativeOrderInMonth.
+     * Torremocha weekly sin excepciones cuenta los 5 viernes del mes.
+     * 8.8e retiró el hardcode de festivos: si admin no registra el festivo
+     * como DeliveryException, el resolver asume reparto normal.
      */
-    public function testOperativeOrderForNodeTorremochaIgnoraHardcodeFestivos(): void
+    public function testOperativeOrderForNodeTorremochaSinExcepcionesCuenta5Viernes(): void
     {
         $baskets = $this->mayoBaskets();
         $torremocha = $this->makeNode('Torremocha', 5, Node::CADENCE_WEEKLY);
         $resolver = $this->makeResolver($baskets);
 
-        // Cuenta los 5 viernes naturales — sin saltarse el 1-may.
         $this->assertSame(1, $resolver->operativeOrderForNode($baskets[0], $torremocha));  // 1-may
         $this->assertSame(5, $resolver->operativeOrderForNode($baskets[4], $torremocha));  // 29-may
     }
 
     /**
-     * Devuelve [id => Basket] para los 5 viernes de mayo 2026, indexado
-     * por posición natural 0..4 para acceso conveniente en los tests.
+     * Cuando admin registra una excepción de cancelación pura (global, sin
+     * shifted_date) sobre un Basket, el resolver lo trata como no-operativo
+     * y devuelve null. Cubre el caso "esta semana no hay reparto".
+     */
+    public function testOperativeOrderForNodeRespetaCancelacionGlobal(): void
+    {
+        $baskets = $this->mayoBaskets();
+        $torremocha = $this->makeNode('Torremocha', 5, Node::CADENCE_WEEKLY);
+
+        $cancellation = new DeliveryException();
+        $cancellation->setBasket($baskets[0]);
+        $cancellation->setShiftedDate(null);
+
+        $resolver = $this->makeResolverWithExceptions($baskets, [1 => $cancellation]);
+
+        $this->assertNull($resolver->operativeOrderForNode($baskets[0], $torremocha));
+        // El resto del mes mantiene su orden pero descontado el cancelado.
+        $this->assertSame(1, $resolver->operativeOrderForNode($baskets[1], $torremocha));  // 8-may pasa a 1
+        $this->assertSame(4, $resolver->operativeOrderForNode($baskets[4], $torremocha));  // 29-may pasa a 4
+    }
+
+    /**
+     * Devuelve los 5 viernes de mayo 2026 indexados 0..4 para acceso
+     * conveniente en los tests.
      *
      * @return Basket[]
      */
@@ -108,13 +108,23 @@ class MonthlyOperativeOrderResolverTest extends TestCase
     }
 
     /**
-     * Construye un resolver con EM mock que siempre devuelve los baskets
-     * dados, y un NodeDeliveryDate real con repositorio de excepciones
-     * vacío (sin overrides de calendario).
+     * Resolver con EM mock que siempre devuelve los baskets dados y
+     * NodeDeliveryDate real sin excepciones.
      *
      * @param Basket[] $monthBaskets
      */
     private function makeResolver(array $monthBaskets): MonthlyOperativeOrderResolver
+    {
+        return $this->makeResolverWithExceptions($monthBaskets, []);
+    }
+
+    /**
+     * Variante que permite registrar excepciones por basketId.
+     *
+     * @param Basket[] $monthBaskets
+     * @param array<int,DeliveryException> $exceptionsByBasketId Mapa basketId → excepción.
+     */
+    private function makeResolverWithExceptions(array $monthBaskets, array $exceptionsByBasketId): MonthlyOperativeOrderResolver
     {
         $query = $this->createMock(AbstractQuery::class);
         $query->method('setParameter')->willReturnSelf();
@@ -124,7 +134,9 @@ class MonthlyOperativeOrderResolverTest extends TestCase
         $em->method('createQuery')->willReturn($query);
 
         $exceptionRepo = $this->createMock(DeliveryExceptionRepository::class);
-        $exceptionRepo->method('findForBasketAndNode')->willReturn(null);
+        $exceptionRepo->method('findForBasketAndNode')->willReturnCallback(
+            static fn (Basket $basket, Node $node) => $exceptionsByBasketId[$basket->getId()] ?? null
+        );
 
         return new MonthlyOperativeOrderResolver($em, new NodeDeliveryDate($exceptionRepo));
     }
@@ -134,8 +146,6 @@ class MonthlyOperativeOrderResolverTest extends TestCase
         $basket = new Basket();
         $basket->setDate(new \DateTime($isoDate));
 
-        // setId no existe en la entidad. Inyectamos id vía reflexión para
-        // que getId() devuelva el valor esperado durante el matching.
         $ref = new \ReflectionProperty(Basket::class, 'id');
         $ref->setAccessible(true);
         $ref->setValue($basket, $id);

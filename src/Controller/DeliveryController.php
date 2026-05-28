@@ -21,7 +21,6 @@ use App\Service\Delivery\DeliveryShiftApplier;
 use App\Service\Delivery\DeliveryShiftCandidates;
 use App\Service\Delivery\DeliveryShiftValidator;
 use App\Service\Delivery\EggDeliveryResolver;
-use App\Service\Delivery\MonthlyOperativeOrderResolver;
 use App\Service\Delivery\NodeDeliveryDate;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Delivery\WeeklyDeliveryReport;
@@ -447,7 +446,7 @@ class DeliveryController extends AbstractController
         PartnerBasketShareRepository $partnerBasketShareRepo,
         EggDeliveryResolver $eggResolver,
         NodeDeliveryDate $nodeDeliveryDate,
-        MonthlyOperativeOrderResolver $monthlyOrder,
+        DeliveryExceptionRepository $deliveryExceptionRepo,
         WeeklyBasketGenerator $generator,
         Request $request,
     ): Response {
@@ -458,11 +457,18 @@ class DeliveryController extends AbstractController
 
         $allNodes = $nodeRepo->findBy([], ['name' => 'ASC']);
 
-        // Festivos: un Basket que cae en viernes festivo (1-may, 25-dic) no es
-        // operativo —ese día no se reparte, se adelanta al viernes anterior—.
-        // No generamos ni listamos: el generador petaría al no ubicarlo entre
-        // los viernes operativos del mes. La pantalla muestra un aviso.
-        $isOperative = $monthlyOrder->isOperative($basket);
+        // ¿Este nodo entrega en este Basket? Captura cadencia (un quincenal
+        // fuera de fase devuelve false) y excepciones de calendario por nodo
+        // o global de admin (cancelación o traslado). Sustituye al hardcode
+        // de festivos viernes que existía hasta 8.8e.
+        $nodeDelivers = $nodeDeliveryDate->deliversInBasket($basket, $node);
+
+        // Para decidir si materializamos el ciclo entero: nos basta con que
+        // no haya una excepción global de cancelación. Si admin cancela sólo
+        // un nodo, los demás se materializan; si cancela el ciclo entero
+        // (excepción global sin shifted_date), saltamos toda generación.
+        $globalException = $deliveryExceptionRepo->findGlobalForBasket($basket);
+        $basketGloballyCancelled = $globalException !== null && $globalException->isCancelled();
 
         // Materialización al vuelo: si este Basket aún no tiene reparto generado
         // (el cron del lunes lo hace proactivamente, pero una semana futura
@@ -470,11 +476,11 @@ class DeliveryController extends AbstractController
         // —no duplica WeeklyBaskets ya existentes— así que convive con el cron.
         // Sólo se dispara cuando el Basket no tiene NADA: un nodo quincenal
         // vacío en su semana de descanso es legítimo y no debe regenerar.
-        if ($isOperative && $weeklyBasketRepo->countPickedInBasket($basket) === 0) {
+        if (!$basketGloballyCancelled && $weeklyBasketRepo->countPickedInBasket($basket) === 0) {
             $generator->generateForBasket($basket);
         }
 
-        $weeklyBaskets = $isOperative
+        $weeklyBaskets = $nodeDelivers
             ? $weeklyBasketRepo->findForNodeAndBasket($node, $basket)
             : [];
 
@@ -488,7 +494,7 @@ class DeliveryController extends AbstractController
         // viernes para Torremocha) y si el nodo reparte esa semana, para
         // atenuar las semanas vacías de los nodos quincenales.
         $timelineData = $this->buildTimelineData(
-            $basketRepo, $nodeDeliveryDate, $monthlyOrder, $node, $basket,
+            $basketRepo, $nodeDeliveryDate, $node, $basket,
             $request->query->getInt('ref', 0), 'center',
         );
 
@@ -533,7 +539,8 @@ class DeliveryController extends AbstractController
             'node' => $node,
             'basket' => $basket,
             'physical_date' => $physicalDate,
-            'is_operative' => $isOperative,
+            'node_delivers' => $nodeDelivers,
+            'basket_globally_cancelled' => $basketGloballyCancelled,
             'all_nodes' => $allNodes,
             'node_active_counts' => $nodeActiveCounts,
             'timeline' => $timelineData['timeline'],
@@ -563,7 +570,6 @@ class DeliveryController extends AbstractController
         #[MapEntity(id: 'basketId')] Basket $basket,
         BasketRepository $basketRepo,
         NodeDeliveryDate $nodeDeliveryDate,
-        MonthlyOperativeOrderResolver $monthlyOrder,
         Request $request,
     ): Response {
         $mode = $request->query->get('mode', 'center');
@@ -576,7 +582,7 @@ class DeliveryController extends AbstractController
         }
 
         $data = $this->buildTimelineData(
-            $basketRepo, $nodeDeliveryDate, $monthlyOrder, $node, $basket,
+            $basketRepo, $nodeDeliveryDate, $node, $basket,
             $request->query->getInt('ref', 0), $mode,
         );
 
@@ -831,7 +837,6 @@ class DeliveryController extends AbstractController
     private function buildTimelineData(
         BasketRepository $basketRepo,
         NodeDeliveryDate $nodeDeliveryDate,
-        MonthlyOperativeOrderResolver $monthlyOrder,
         Node $node,
         Basket $selected,
         int $refId,
@@ -845,7 +850,7 @@ class DeliveryController extends AbstractController
             fn (Basket $b): array => [
                 'basket' => $b,
                 'date' => $nodeDeliveryDate->weekdayDateFor($b, $node),
-                'delivers' => $monthlyOrder->isOperative($b) && $nodeDeliveryDate->deliversInBasket($b, $node),
+                'delivers' => $nodeDeliveryDate->deliversInBasket($b, $node),
                 'active' => $b->getId() === $selected->getId(),
                 'past' => $b->getDate() !== null && $b->getDate() < $today,
             ],

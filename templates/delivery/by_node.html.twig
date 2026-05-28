@@ -247,10 +247,17 @@
         {% endfor %}
     </nav>
 
-    {% if not is_operative %}
+    {% if not node_delivers %}
         <div class="empty">
-            El {{ basket.date|date('d/m/Y') }} fue festivo: ese día no hubo reparto
-            (se adelantó al viernes hábil anterior).
+            {% if basket_globally_cancelled %}
+                La semana del {{ basket.date|date('d/m/Y') }} no tuvo reparto
+                (cancelada por administración).
+            {% elseif physical_date is not null %}
+                El reparto de la semana del {{ basket.date|date('d/m/Y') }}
+                se trasladó al {{ physical_date|date('d/m/Y') }}.
+            {% else %}
+                {{ node.name }} no entrega en la semana del {{ basket.date|date('d/m/Y') }}.
+            {% endif %}
         </div>
     {% else %}
     {# ============ Resumen destacado del nodo+día ============ #}
@@ -366,7 +373,7 @@
             </section>
         {% endfor %}
     {% endif %}
-    {% endif %}{# /is_operative #}
+    {% endif %}{# /node_delivers #}
 
 </div>
 {% endblock %}

@@ -3,7 +3,9 @@
 namespace App\Service\Delivery;
 
 use App\Entity\Basket;
+use App\Entity\Node;
 use App\Entity\PartnerBasketShare;
+use App\Repository\NodeRepository;
 
 /**
  * Decide si un PartnerBasketShare recoge huevos en un Basket (viernes) dado.
@@ -12,8 +14,9 @@ use App\Entity\PartnerBasketShare;
  *  - Semanal: siempre toca.
  *  - Quincenal: depende de la cohorte A/B del Basket vía BiweeklyCohortResolver
  *    cf delivery_group del PBS.
- *  - Mensual: depende de la posición operativa del Basket en el mes vía
- *    MonthlyOperativeOrderResolver cf egg_day_month_order del PBS.
+ *  - Mensual: depende de la posición operativa del Basket en el calendario
+ *    del nodo del partner vía MonthlyOperativeOrderResolver cf
+ *    egg_day_month_order del PBS.
  *
  * Si el socio no tiene huevos (egg_amount o egg_period a null) devuelve false.
  * Si la cohorte/orden no se puede resolver (delivery_group o
@@ -30,6 +33,7 @@ class EggDeliveryResolver
     public function __construct(
         private readonly BiweeklyCohortResolver $biweeklyCohort,
         private readonly MonthlyOperativeOrderResolver $monthlyOrder,
+        private readonly NodeRepository $nodeRepository,
     ) {
     }
 
@@ -62,6 +66,13 @@ class EggDeliveryResolver
         if ($order === null) {
             return false;
         }
-        return $order === $this->monthlyOrder->operativeOrderInMonth($basket);
+
+        $node = $share->getPartner()?->getWeeklyBasketGroup()?->getNode()
+            ?? $this->nodeRepository->findOneBy(['cadence' => Node::CADENCE_WEEKLY]);
+        if ($node === null) {
+            return false;
+        }
+
+        return $order === $this->monthlyOrder->operativeOrderForNode($basket, $node);
     }
 }
