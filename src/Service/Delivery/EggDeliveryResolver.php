@@ -6,6 +6,7 @@ use App\Entity\Basket;
 use App\Entity\Node;
 use App\Entity\PartnerBasketShare;
 use App\Repository\NodeRepository;
+use Doctrine\ORM\EntityManagerInterface;
 
 /**
  * Decide si un PartnerBasketShare recoge huevos en un Basket (viernes) dado.
@@ -14,9 +15,11 @@ use App\Repository\NodeRepository;
  *  - Semanal: siempre toca.
  *  - Quincenal: depende de la cohorte A/B del Basket vía BiweeklyCohortResolver
  *    cf delivery_group del PBS.
- *  - Mensual: depende de la posición operativa del Basket en el calendario
- *    del nodo del partner vía MonthlyOperativeOrderResolver cf
- *    egg_day_month_order del PBS.
+ *  - Mensual: el N-ésimo Basket en el mes donde el partner SÍ recoge cesta
+ *    (con su modalidad y cohorte). N = egg_day_month_order. Captura el
+ *    patrón "huevos en la primera cesta del mes" de los quincenales con
+ *    huevos mensuales: 1ª entrega quincenal del partner en el mes, no
+ *    1º viernes operativo genérico.
  *
  * Si el socio no tiene huevos (egg_amount o egg_period a null) devuelve false.
  * Si la cohorte/orden no se puede resolver (delivery_group o
@@ -30,10 +33,19 @@ class EggDeliveryResolver
     private const EGG_PERIOD_ID_BIWEEKLY  = 2;
     private const EGG_PERIOD_ID_MONTHLY   = 3;
 
+    /** Modalidades de basket_share, alineadas con WeeklyBasketGenerator. */
+    private const SHARE_WEEKLY    = 1;
+    private const SHARE_BIWEEKLY  = 2;
+    private const SHARE_MONTHLY   = 3;
+    private const SHARE_HALF      = 4;
+    private const SHARE_ONLY_EGG  = 5;
+
     public function __construct(
         private readonly BiweeklyCohortResolver $biweeklyCohort,
         private readonly MonthlyOperativeOrderResolver $monthlyOrder,
         private readonly NodeRepository $nodeRepository,
+        private readonly NodeDeliveryDate $nodeDeliveryDate,
+        private readonly EntityManagerInterface $em,
     ) {
     }
 
@@ -60,19 +72,78 @@ class EggDeliveryResolver
         return $group === $this->biweeklyCohort->cohortForBasket($basket);
     }
 
+    /**
+     * Huevos mensuales:
+     *  - Si la cesta es mensual: los huevos van con la cesta (1 entrega/mes,
+     *    misma semana). Se ignora egg_day_month_order; basta con verificar
+     *    que es el viernes mensual del partner.
+     *  - Si la cesta es quincenal/semanal: egg_day_month_order indica la
+     *    N-ésima entrega de cesta del partner en el mes que lleva huevos.
+     *    Ej. quincenal B con egg_day_month_order=1 → huevos en su primer
+     *    B-viernes operativo del mes.
+     */
     private function deliversMonthly(PartnerBasketShare $share, Basket $basket): bool
     {
-        $order = $share->getEggDayMonthOrder();
-        if ($order === null) {
-            return false;
-        }
-
         $node = $share->getPartner()?->getWeeklyBasketGroup()?->getNode()
             ?? $this->nodeRepository->findOneBy(['cadence' => Node::CADENCE_WEEKLY]);
         if ($node === null) {
             return false;
         }
 
-        return $order === $this->monthlyOrder->operativeOrderForNode($basket, $node);
+        $shareTypeId = $share->getBasketShare()?->getId();
+
+        if ($shareTypeId === self::SHARE_MONTHLY) {
+            // Cesta mensual: huevos con la cesta. Sólo entrega en el viernes
+            // operativo que coincida con day_month_order y donde el nodo reparte.
+            return $this->nodeDeliveryDate->deliversInBasket($basket, $node)
+                && $this->monthlyOrder->operativeOrderForNode($basket, $node) === $share->getDayMonthOrder();
+        }
+
+        $order = $share->getEggDayMonthOrder();
+        if ($order === null) {
+            return false;
+        }
+
+        $deliveries = $this->shareDeliveriesInMonth($share, $basket, $node);
+        foreach ($deliveries as $i => $b) {
+            if ($b->getId() === $basket->getId()) {
+                return ($i + 1) === $order;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Baskets del mes calendario en los que el partner SÍ recoge cesta,
+     * según su modalidad (basket_share) y cohorte (delivery_group), filtrando
+     * además por cadencia del nodo y excepciones (vía NodeDeliveryDate). El
+     * resultado va ordenado por fecha ascendente.
+     *
+     * @return Basket[]
+     */
+    private function shareDeliveriesInMonth(PartnerBasketShare $share, Basket $basket, Node $node): array
+    {
+        $date = $basket->getDate();
+        $dql = "SELECT b FROM App\\Entity\\Basket b
+                WHERE YEAR(b.date) = :year AND MONTH(b.date) = :month
+                ORDER BY b.date ASC";
+        $monthBaskets = $this->em->createQuery($dql)
+            ->setParameter('year', (int) $date->format('Y'))
+            ->setParameter('month', (int) $date->format('m'))
+            ->getResult();
+
+        $shareTypeId = $share->getBasketShare()?->getId();
+
+        return array_values(array_filter($monthBaskets, function (Basket $b) use ($share, $node, $shareTypeId) {
+            if (!$this->nodeDeliveryDate->deliversInBasket($b, $node)) {
+                return false;
+            }
+            return match ($shareTypeId) {
+                self::SHARE_WEEKLY, self::SHARE_HALF, self::SHARE_ONLY_EGG => true,
+                self::SHARE_BIWEEKLY => $this->biweeklyCohort->cohortForBasket($b) === $share->getDeliveryGroup(),
+                self::SHARE_MONTHLY  => $this->monthlyOrder->operativeOrderForNode($b, $node) === $share->getDayMonthOrder(),
+                default              => false,
+            };
+        }));
     }
 }

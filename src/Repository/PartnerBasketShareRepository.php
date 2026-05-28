@@ -133,6 +133,7 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
                 where b.basket_share = :basket_share
                   and b.is_active = :status
                   and b.start_date <= :date
+                  and (b.end_date IS NULL OR b.end_date >= :date)
                   and b.delivery_group = :cohort";
 
         if ($only_eggs) {
@@ -183,6 +184,7 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
                 where b.basket_share = :basket_share
                   and b.is_active = :status
                   and b.start_date <= :date
+                  and (b.end_date IS NULL OR b.end_date >= :date)
                   and (
                         (n.cadence = :cadence_weekly AND b.delivery_group = :cohort)
                      OR (n.id IS NULL AND b.delivery_group = :cohort)";
@@ -329,6 +331,7 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
                           where b.basket_share = :basket_share
                             and b.is_active = 1
                             and b.start_date <= :date
+                            and (b.end_date IS NULL OR b.end_date >= :date)
                             and b.day_month_order = :weekly_order
                             and (n.cadence = :cadence_weekly OR n.id IS NULL)";
             if ($eggPeriod !== null) {
@@ -356,6 +359,7 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
                       where b.basket_share = :basket_share
                         and b.is_active = 1
                         and b.start_date <= :date
+                        and (b.end_date IS NULL OR b.end_date >= :date)
                         and b.day_month_order = :order_for_node
                         and n.id = :node_id";
             if ($eggPeriod !== null) {
@@ -479,6 +483,34 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
         $query->setParameter("basket",$basket_id);
 
         return $query->execute();
+    }
+
+    /**
+     * PBS activas con huevos asignados (egg_amount + egg_period no null) que
+     * estaban vigentes en la fecha del Basket. No filtra por modalidad de
+     * cesta: incluye semanales, quincenales, mensuales y Only-Egg.
+     *
+     * Usado por WeeklyBasketGenerator para materializar entregas de huevo
+     * sueltas cuando la PBS tiene egg_period más frecuente que la cesta
+     * (ej. mensual+egg semanal): los viernes intermedios donde no toca
+     * cesta pero sí huevo se cubren con un WB Only-Egg adicional.
+     *
+     * @param mixed $basket Basket (firma laxa, sólo se usa basket->getDate()).
+     * @return PartnerBasketShare[]
+     */
+    public function findActiveSharesWithEggsForBasket($basket): array
+    {
+        $em = $this->getEntityManager();
+        $dql = "SELECT b FROM App\\Entity\\PartnerBasketShare b
+                INNER JOIN b.partner p
+                WHERE b.is_active = 1
+                  AND b.start_date <= :date
+                  AND (b.end_date IS NULL OR b.end_date >= :date)
+                  AND b.egg_amount IS NOT NULL
+                  AND b.egg_period IS NOT NULL";
+        return $em->createQuery($dql)
+            ->setParameter('date', $basket->getDate())
+            ->getResult();
     }
 }
 

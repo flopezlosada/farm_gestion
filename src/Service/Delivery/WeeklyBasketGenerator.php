@@ -11,6 +11,7 @@ use App\Entity\PartnerEvent;
 use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketGroup;
 use App\Entity\WeeklyBasketStatus;
+use App\Entity\BasketShare;
 use App\Repository\NodeRepository;
 use App\Repository\PartnerDeliveryShiftRepository;
 use App\Service\Partner\PartnerShareEventRecorder;
@@ -58,6 +59,7 @@ class WeeklyBasketGenerator
         private readonly MonthlyOperativeOrderResolver $monthlyResolver,
         private readonly NodeDeliveryDate $nodeDeliveryDate,
         private readonly NodeRepository $nodeRepository,
+        private readonly EggDeliveryResolver $eggResolver,
     ) {
     }
 
@@ -416,7 +418,67 @@ class WeeklyBasketGenerator
             $this->em->flush();
         }
 
+        $extraEggOnly = $this->materializeExtraEggDeliveries($basket, $status);
+        $onlyEgg = array_merge($onlyEgg, $extraEggOnly);
+
         return [$weekly, $half, $biweekly, $monthly, $onlyEgg];
+    }
+
+    /**
+     * Materializa WB Only-Egg para PBS cuyo egg_period es más frecuente que
+     * su basket_share, en los viernes intermedios donde no toca cesta pero
+     * sí toca huevo.
+     *
+     * Caso real: SANTOS MUÑOZ es mensual con cesta + huevo semanal. La PBS
+     * principal materializa cesta+huevo en el viernes mensual; sin esto,
+     * los otros 3 viernes del mes que recoge sólo huevo no aparecen en el
+     * listado y descuadran contra el PDF.
+     *
+     * Aplica el filtro de nodo (NodeDeliveryDate) para que un partner cuyo
+     * nodo no reparte esa semana no genere un WB de huevo huérfano.
+     *
+     * @param Basket $basket
+     * @param WeeklyBasketStatus $status Estado inicial para los WB nuevos.
+     * @return PartnerBasketShare[] Lista de shares cuyo huevo extra se materializó (para devolverlos al caller).
+     */
+    private function materializeExtraEggDeliveries(Basket $basket, WeeklyBasketStatus $status): array
+    {
+        /** @var \App\Repository\PartnerBasketShareRepository $shareRepo */
+        $shareRepo = $this->em->getRepository(PartnerBasketShare::class);
+        $weeklyBasketRepo = $this->em->getRepository(WeeklyBasket::class);
+        $onlyEggShare = $this->em->getRepository(BasketShare::class)->find(self::SHARE_ONLY_EGG);
+
+        $extras = [];
+        foreach ($shareRepo->findActiveSharesWithEggsForBasket($basket) as $share) {
+            if (!$this->eggResolver->delivers($share, $basket)) {
+                continue;
+            }
+            $partner = $share->getPartner();
+            $alreadyMaterialized = $weeklyBasketRepo->findOneBy([
+                'basket' => $basket->getId(),
+                'partner' => $partner->getId(),
+            ]);
+            if ($alreadyMaterialized !== null) {
+                continue;
+            }
+            $physicalDate = $this->resolvePhysicalDeliveryDate($basket, $share);
+            if ($physicalDate === null) {
+                continue;
+            }
+
+            $wb = new WeeklyBasket();
+            $wb->setBasket($basket);
+            $wb->setPartner($partner);
+            $wb->setWeeklyBasketStatus($status);
+            $wb->setBasketShare($onlyEggShare);
+            $wb->setWeeklyBasketGroup($partner->getWeeklyBasketGroup());
+            $wb->setAmount(0);
+            $wb->setDeliveryDate($physicalDate);
+            $this->em->persist($wb);
+            $this->em->flush();
+            $extras[] = $share;
+        }
+        return $extras;
     }
 
     /**

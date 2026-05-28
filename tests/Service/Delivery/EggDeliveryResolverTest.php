@@ -3,6 +3,7 @@
 namespace App\Tests\Service\Delivery;
 
 use App\Entity\Basket;
+use App\Entity\BasketShare;
 use App\Entity\EggAmount;
 use App\Entity\EggPeriod;
 use App\Entity\Node;
@@ -11,6 +12,8 @@ use App\Repository\NodeRepository;
 use App\Service\Delivery\BiweeklyCohortResolver;
 use App\Service\Delivery\EggDeliveryResolver;
 use App\Service\Delivery\MonthlyOperativeOrderResolver;
+use App\Service\Delivery\NodeDeliveryDate;
+use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
@@ -25,6 +28,8 @@ class EggDeliveryResolverTest extends TestCase
     private BiweeklyCohortResolver&MockObject $biweekly;
     private MonthlyOperativeOrderResolver&MockObject $monthly;
     private NodeRepository&MockObject $nodeRepository;
+    private NodeDeliveryDate&MockObject $nodeDeliveryDate;
+    private EntityManagerInterface&MockObject $em;
     private EggDeliveryResolver $resolver;
     private Basket $basket;
     private Node $weeklyNode;
@@ -34,11 +39,19 @@ class EggDeliveryResolverTest extends TestCase
         $this->biweekly = $this->createMock(BiweeklyCohortResolver::class);
         $this->monthly = $this->createMock(MonthlyOperativeOrderResolver::class);
         $this->nodeRepository = $this->createMock(NodeRepository::class);
+        $this->nodeDeliveryDate = $this->createMock(NodeDeliveryDate::class);
+        $this->em = $this->createMock(EntityManagerInterface::class);
         $this->weeklyNode = new Node();
         $this->weeklyNode->setName('Torremocha')->setDeliveryWeekday(5)->setCadence(Node::CADENCE_WEEKLY);
         $this->nodeRepository->method('findOneBy')->willReturn($this->weeklyNode);
 
-        $this->resolver = new EggDeliveryResolver($this->biweekly, $this->monthly, $this->nodeRepository);
+        $this->resolver = new EggDeliveryResolver(
+            $this->biweekly,
+            $this->monthly,
+            $this->nodeRepository,
+            $this->nodeDeliveryDate,
+            $this->em,
+        );
         $this->basket = new Basket();
         $this->basket->setDate(new \DateTime('2026-05-15'));
     }
@@ -82,28 +95,67 @@ class EggDeliveryResolverTest extends TestCase
         $this->assertFalse($this->resolver->delivers($share, $this->basket));
     }
 
-    public function testMensualEnSuOrdenTrue(): void
+    /**
+     * Cesta mensual + huevos mensuales: huevos van con la cesta. Se compara
+     * operativeOrderForNode con dayMonthOrder de la cesta; egg_day_month_order
+     * se ignora.
+     */
+    public function testMensualConCestaMensualEnSuOrdenTrue(): void
     {
-        $share = $this->shareConPeriodo(3);
-        $share->setEggDayMonthOrder(2);
+        $share = $this->shareMensualConCesta(2);
+        $this->nodeDeliveryDate->method('deliversInBasket')->willReturn(true);
         $this->monthly->method('operativeOrderForNode')->willReturn(2);
         $this->assertTrue($this->resolver->delivers($share, $this->basket));
     }
 
-    public function testMensualEnOrdenDistintoFalse(): void
+    public function testMensualConCestaMensualEnOrdenDistintoFalse(): void
     {
-        $share = $this->shareConPeriodo(3);
-        $share->setEggDayMonthOrder(2);
+        $share = $this->shareMensualConCesta(2);
+        $this->nodeDeliveryDate->method('deliversInBasket')->willReturn(true);
         $this->monthly->method('operativeOrderForNode')->willReturn(3);
         $this->assertFalse($this->resolver->delivers($share, $this->basket));
     }
 
-    public function testMensualSinEggDayMonthOrderFalse(): void
+    public function testMensualConCestaMensualSiNodoNoEntregaFalse(): void
+    {
+        $share = $this->shareMensualConCesta(2);
+        $this->nodeDeliveryDate->method('deliversInBasket')->willReturn(false);
+        $this->assertFalse($this->resolver->delivers($share, $this->basket));
+    }
+
+    /**
+     * Cesta NO mensual con huevos mensuales sin egg_day_month_order:
+     * fuera del listado para revisión manual.
+     */
+    public function testQuincenalConHuevosMensualesSinEggDayMonthOrderFalse(): void
     {
         $share = $this->shareConPeriodo(3);
+        $share->setBasketShare($this->makeBasketShare(2));
+        $share->setDeliveryGroup('B');
         // egg_day_month_order=null
-        $this->monthly->expects($this->never())->method('operativeOrderForNode');
         $this->assertFalse($this->resolver->delivers($share, $this->basket));
+    }
+
+    /**
+     * Helper: PBS mensual con cesta + huevos mensuales y day_month_order dado.
+     * Atajo para los tests de "cesta mensual = huevo con la cesta".
+     */
+    private function shareMensualConCesta(int $dayMonthOrder): PartnerBasketShare
+    {
+        $share = $this->shareConPeriodo(3);
+        $share->setBasketShare($this->makeBasketShare(3));
+        $share->setDayMonthOrder($dayMonthOrder);
+        return $share;
+    }
+
+    /**
+     * Helper: BasketShare mock con id (la entidad no expone setId).
+     */
+    private function makeBasketShare(int $id): BasketShare
+    {
+        $bs = $this->createMock(BasketShare::class);
+        $bs->method('getId')->willReturn($id);
+        return $bs;
     }
 
     /**
