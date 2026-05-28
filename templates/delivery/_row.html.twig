@@ -16,7 +16,8 @@
     data-cohort="{{ share.deliveryGroup ?? '' }}"
     data-eggs="{{ row_eggs ? '1' : '0' }}"
     data-cestas="{{ cesta_factor }}"
-    data-dozens="{{ row_eggs and share and share.eggAmount ? share.eggAmount.dozens : 0 }}">
+    data-dozens="{{ row_eggs and share and share.eggAmount ? share.eggAmount.dozens : 0 }}"
+    data-delivery-date="{{ wb.deliveryDate ? wb.deliveryDate|date('Y-m-d') : '' }}">
     <td class="partner">
         {{ wb.partner.nameForDelivery }}
         {% if wb.partner.displayName and wb.partner.displayName != wb.partner.legalName %}
