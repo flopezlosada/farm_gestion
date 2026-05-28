@@ -291,6 +291,12 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
      * El operative_order es 1..N donde N son los viernes hábiles del mes
      * (excluyendo festivos). Se resuelve fuera vía MonthlyOperativeOrderResolver.
      *
+     * LEGACY desde 8.8b3 (2026-05-28): asume nodo weekly de viernes. Para
+     * incluir partners de nodos biweekly (Cascorro/Midori) con su propio
+     * orden operativo, usar {@see findBasketPartnersMonthlyNodeAware}. Se
+     * conserva temporalmente por si quedara algún caller fuera del
+     * generator; eliminar tras confirmar.
+     *
      * @return PartnerBasketShare[]
      */
     public function findBasketPartnersMonthlyByOperativeOrder(
@@ -320,6 +326,96 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
         $query->setParameter("date", $current_basket->getDate());
 
         return $query->getResult();
+    }
+
+    /**
+     * Socios mensuales activos node-aware. Atiende dos casos:
+     *
+     *  - Partners en nodos `weekly` o sin nodo asignado (datos legacy):
+     *    filtra por `day_month_order = $weeklyMonthlyOrder` — el orden
+     *    operativo entre los viernes hábiles del mes, resuelto fuera con
+     *    {@see MonthlyOperativeOrderResolver::operativeOrderInMonth}.
+     *  - Partners en nodos `biweekly` (Cascorro, Midori): se itera el mapa
+     *    `nodeId => orderEnEseNodo`, donde el orden está resuelto fuera con
+     *    {@see MonthlyOperativeOrderResolver::operativeOrderForNode} y sólo
+     *    aparecen los nodos que sí entregan en este Basket.
+     *
+     * Se ejecutan 1 + N queries (N = número de nodos biweekly activos esta
+     * semana, hoy ≤ 2). KISS: array_merge en PHP frente a un DQL con
+     * pares (nodo, orden) correlacionados, que sería ilegible.
+     *
+     * Introducido en sub-fase 8.8b3 (2026-05-28).
+     *
+     * @param mixed $current_basket Basket (firma laxa por coherencia con el resto del repo).
+     * @param int $basket_share_id ID de BasketShare (3 mensual, 5 sólo huevos…).
+     * @param int $weeklyMonthlyOrder Orden operativo en los viernes del mes (rama weekly + sin nodo).
+     * @param array<int,int> $biweeklyNodeIdToOrder Mapa nodeId → orden operativo en ese nodo.
+     * @param bool $only_eggs Filtrar a egg_period=3 (sólo huevos mensuales).
+     * @return PartnerBasketShare[]
+     */
+    public function findBasketPartnersMonthlyNodeAware(
+        $current_basket,
+        int $basket_share_id,
+        int $weeklyMonthlyOrder,
+        array $biweeklyNodeIdToOrder,
+        bool $only_eggs = false
+    ): array {
+        $em = $this->getEntityManager();
+        $eggPeriod = $only_eggs ? 3 : null;
+
+        $weeklyDql = "select b from App\\Entity\\PartnerBasketShare b
+                      inner join b.partner p
+                      left join p.weekly_basket_group wbg
+                      left join wbg.node n
+                      where b.basket_share = :basket_share
+                        and b.is_active = 1
+                        and b.start_date <= :date
+                        and b.day_month_order = :weekly_order
+                        and (n.cadence = :cadence_weekly OR n.id IS NULL)";
+        if ($eggPeriod !== null) {
+            $weeklyDql .= " and b.egg_period = :egg_period ";
+        }
+        $weeklyDql .= " ORDER BY p.state, p.city asc";
+
+        $weeklyQuery = $em->createQuery($weeklyDql);
+        $weeklyQuery->setParameter("basket_share", $basket_share_id);
+        $weeklyQuery->setParameter("date", $current_basket->getDate());
+        $weeklyQuery->setParameter("weekly_order", $weeklyMonthlyOrder);
+        $weeklyQuery->setParameter("cadence_weekly", \App\Entity\Node::CADENCE_WEEKLY);
+        if ($eggPeriod !== null) {
+            $weeklyQuery->setParameter("egg_period", $eggPeriod);
+        }
+
+        $results = $weeklyQuery->getResult();
+
+        foreach ($biweeklyNodeIdToOrder as $nodeId => $orderForNode) {
+            $biDql = "select b from App\\Entity\\PartnerBasketShare b
+                      inner join b.partner p
+                      inner join p.weekly_basket_group wbg
+                      inner join wbg.node n
+                      where b.basket_share = :basket_share
+                        and b.is_active = 1
+                        and b.start_date <= :date
+                        and b.day_month_order = :order_for_node
+                        and n.id = :node_id";
+            if ($eggPeriod !== null) {
+                $biDql .= " and b.egg_period = :egg_period ";
+            }
+            $biDql .= " ORDER BY p.state, p.city asc";
+
+            $biQuery = $em->createQuery($biDql);
+            $biQuery->setParameter("basket_share", $basket_share_id);
+            $biQuery->setParameter("date", $current_basket->getDate());
+            $biQuery->setParameter("order_for_node", $orderForNode);
+            $biQuery->setParameter("node_id", $nodeId);
+            if ($eggPeriod !== null) {
+                $biQuery->setParameter("egg_period", $eggPeriod);
+            }
+
+            $results = array_merge($results, $biQuery->getResult());
+        }
+
+        return $results;
     }
 
     /**
