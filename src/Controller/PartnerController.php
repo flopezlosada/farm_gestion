@@ -169,7 +169,6 @@ class PartnerController extends AbstractController
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $partner->setInscriptionDate(new \DateTime($partner->getInscriptionDate()->format('Y-m-d')));
             $partner->setIsActive(1);
 
             if ($partner->getRegistrationFormFile()) {
@@ -230,7 +229,6 @@ class PartnerController extends AbstractController
     public function edit(Request $request, Partner $partner, EntityManagerInterface $entityManager): Response
     {
         $form = $this->createForm(PartnerType::class, $partner);
-        $partner->setInscriptionDate($partner->getInscriptionDate()->format('Y-m-d'));
 
         $form->handleRequest($request);
 
