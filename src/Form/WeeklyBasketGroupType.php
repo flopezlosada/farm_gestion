@@ -2,7 +2,9 @@
 
 namespace App\Form;
 
+use App\Entity\Node;
 use App\Entity\WeeklyBasketGroup;
+use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\ColorType;
 use Symfony\Component\Form\FormBuilderInterface;
@@ -15,6 +17,13 @@ class WeeklyBasketGroupType extends AbstractType
         $builder
             ->add('name', null, array('label'=>'Nombre'))
             ->add('color', ColorType::class, array('label'=>'Color'))
+            ->add('node', EntityType::class, [
+                'label' => 'Nodo de reparto',
+                'class' => Node::class,
+                'choice_label' => 'name',
+                'required' => false,
+                'placeholder' => 'Sin nodo asignado',
+            ])
         ;
     }
 

@@ -1,9 +1,21 @@
 {# ============================================================
- # Detalle de grupo de recogida — shell csa.
+ # Ficha de grupo de recogida — estilo del listado de socixs (.prl).
+ # Cabecera con color + nodo, stats, lista de socios con chips de
+ # estado/modalidad y gestión de membresía (añadir / quitar).
+ #
+ # Recibe: weekly_basket_group, members (Partner[]), active_count,
+ #         candidates (Partner[] para el selector de añadir).
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
+
+{% set status_chip = {
+    'ACTIVO':  { label: 'Activx',  cls: 'activo'  },
+    'PAUSADO': { label: 'Pausadx', cls: 'pausado' },
+    'BAJA':    { label: 'De baja', cls: 'baja'    }
+} %}
+{% set mod_labels = { 1: 'Semanal', 2: 'Quincenal', 3: 'Mensual', 4: 'Compartida', 5: 'Solo huevos', 6: 'Quincenal comp.', 7: 'Mensual comp.' } %}
 
 {% block title %}Grupo · {{ weekly_basket_group.name }}{% endblock %}
 
@@ -15,59 +27,234 @@
     <span class="csa-topbar__crumb-active">{{ weekly_basket_group.name }}</span>
 {% endblock %}
 
-{% block csa_main %}
+{% block more_css %}
+{{ parent() }}
+<style>
+.grp {
+    --prl-line: #ebe7dd; --prl-line-2: #d8d2c2;
+    --prl-ink: #1d1c17; --prl-ink-soft: #5a564a; --prl-ink-faint: #8d8773;
+    --prl-sage: #5b7a4c; --prl-sage-d: #2f4426; --prl-sage-l: #eaf0e2;
+    --prl-ochre: #c89a3a; --prl-ochre-d: #8c6919; --prl-ochre-l: #faf1d8;
+    --prl-terra: #b45d3a; --prl-terra-d: #7d3a1f; --prl-terra-l: #fae6dc;
+    --prl-sky-d: #2e6f8e;
+    --prl-bg: #fbfaf6; --prl-surface: #ffffff;
+    font-family: 'Inter', sans-serif; font-variant-numeric: tabular-nums;
+}
 
-    <form id="weekly-basket-group-delete-form" method="post"
-          action="{{ path('weekly_basket_group_delete', { id: weekly_basket_group.id }) }}"
-          style="display: none;">
+/* cabecera */
+.grp-head { display: grid; grid-template-columns: 1fr auto; align-items: start; gap: 24px; padding-bottom: 18px; margin-bottom: 18px; border-bottom: 1px solid var(--prl-line); }
+.grp-head__id { display: flex; align-items: center; gap: 16px; }
+.grp-head__swatch { width: 52px; height: 52px; border-radius: 12px; border: 1px solid var(--prl-line-2); flex-shrink: 0; }
+.grp-head__name { font-family: 'Fraunces', serif; font-weight: 600; font-size: 26px; letter-spacing: -0.02em; line-height: 1.1; color: var(--prl-ink); margin: 0; }
+.grp-head__meta { margin-top: 6px; }
+.grp-head__actions { display: flex; gap: 8px; }
+
+/* chip de nodo */
+.grp-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 4px; border-radius: 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; text-decoration: none; }
+.grp-chip--node { background: #e7eef2; color: var(--prl-sky-d); }
+.grp-chip--node:hover { background: #d8e6ee; }
+.grp-chip--none { background: var(--prl-terra-l); color: var(--prl-terra-d); }
+
+/* stats */
+.grp-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 22px; }
+.grp-stat { background: var(--prl-surface); border: 1px solid var(--prl-line); border-radius: 8px; padding: 14px 18px; }
+.grp-stat .v { font-family: 'Fraunces', serif; font-weight: 600; font-size: 28px; letter-spacing: -0.02em; line-height: 1; color: var(--prl-ink); }
+.grp-stat .v small { font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 500; color: var(--prl-ink-soft); }
+.grp-stat .l { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--prl-ink-faint); margin-top: 7px; font-weight: 500; }
+.grp-stat--active .v { color: var(--prl-sage-d); }
+
+.grp-section__title { font-family: 'Fraunces', serif; font-weight: 600; font-size: 16px; color: var(--prl-ink); margin: 0 0 12px; }
+
+/* tabla socios */
+.grp-table-wrap { background: var(--prl-surface); border: 1px solid var(--prl-line); border-radius: 8px; overflow: hidden; }
+.grp-table { width: 100%; border-collapse: collapse; }
+.grp-table thead th { text-align: left; padding: 10px 14px; font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--prl-ink-faint); font-weight: 600; background: var(--prl-bg); border-bottom: 1px solid var(--prl-line); white-space: nowrap; }
+.grp-table tbody td { padding: 11px 14px; font-size: 12.5px; color: var(--prl-ink); border-bottom: 1px solid var(--prl-line); vertical-align: middle; }
+.grp-table tbody tr:last-child td { border-bottom: 0; }
+.grp-table tbody tr:hover td { background: var(--prl-sage-l); }
+.grp-table .tight { white-space: nowrap; width: 1%; }
+.grp-table .actions { text-align: right; white-space: nowrap; width: 1%; }
+
+.grp-person { display: flex; align-items: center; gap: 10px; }
+.grp-person__avatar { width: 28px; height: 28px; border-radius: 7px; flex-shrink: 0; display: grid; place-items: center; font-family: 'Fraunces', serif; font-weight: 600; font-size: 11.5px; color: #fff; background: var(--prl-sage-d); letter-spacing: -0.01em; }
+.grp-person__avatar--muted { background: var(--prl-line-2); color: var(--prl-ink-soft); }
+.grp-person__name { font-family: 'Fraunces', serif; font-weight: 500; font-size: 14px; color: var(--prl-ink); text-decoration: none; }
+.grp-person__name:hover { color: var(--prl-sage-d); }
+.grp-person__meta { display: block; font-size: 11px; color: var(--prl-ink-faint); margin-top: 1px; }
+
+.grp-chipm { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px 4px; border-radius: 4px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; }
+.grp-chipm .dot { width: 6px; height: 6px; border-radius: 50%; }
+.grp-chipm--activo { background: var(--prl-sage-l); color: var(--prl-sage-d); } .grp-chipm--activo .dot { background: var(--prl-sage); }
+.grp-chipm--pausado { background: var(--prl-ochre-l); color: var(--prl-ochre-d); } .grp-chipm--pausado .dot { background: var(--prl-ochre); }
+.grp-chipm--baja { background: #f0eee7; color: var(--prl-ink-soft); } .grp-chipm--baja .dot { background: var(--prl-ink-faint); }
+.grp-chipm--mod-1 { background: var(--prl-sage-l); color: var(--prl-sage-d); } .grp-chipm--mod-1 .dot { background: var(--prl-sage); }
+.grp-chipm--mod-2 { background: var(--prl-ochre-l); color: var(--prl-ochre-d); } .grp-chipm--mod-2 .dot { background: var(--prl-ochre); }
+.grp-chipm--mod-3 { background: var(--prl-terra-l); color: var(--prl-terra-d); } .grp-chipm--mod-3 .dot { background: var(--prl-terra); }
+.grp-chipm--mod-5 { background: #fff2d6; color: var(--prl-ochre-d); } .grp-chipm--mod-5 .dot { background: var(--prl-ochre); }
+.grp-cell-muted { color: var(--prl-ink-faint); font-style: italic; }
+
+.grp-rm { background: transparent; border: 1px solid var(--prl-line); border-radius: 5px; padding: 5px 12px; font-size: 12px; font-weight: 500; color: var(--prl-ink-soft); cursor: pointer; font-family: inherit; }
+.grp-rm:hover { color: var(--prl-terra-d); border-color: var(--prl-terra); background: var(--prl-terra-l); }
+
+/* añadir socio (solo huérfanos: socios sin grupo) */
+.grp-addbox { margin-top: 26px; }
+.grp-addbox__label { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--prl-ink-faint); font-weight: 600; margin-bottom: 8px; }
+.grp-addbox__chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.grp-addchip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid var(--prl-line-2); background: var(--prl-surface); border-radius: 999px; font-size: 12.5px; color: var(--prl-ink); cursor: pointer; font-family: inherit; }
+.grp-addchip:hover { background: var(--prl-sage-l); border-color: var(--prl-sage); color: var(--prl-sage-d); }
+.grp-addchip .fa { font-size: 10px; color: var(--prl-ink-faint); }
+.grp-addchip:hover .fa { color: var(--prl-sage-d); }
+.grp-addnote { margin-top: 26px; font-size: 12.5px; color: var(--prl-ink-faint); font-style: italic; }
+.grp-addnote strong { color: var(--prl-ink-soft); font-style: normal; }
+
+.grp-empty { padding: 30px 18px; text-align: center; color: var(--prl-ink-faint); font-size: 13px; font-style: italic; background: var(--prl-surface); border: 1px dashed var(--prl-line-2); border-radius: 8px; }
+
+@media (max-width: 760px) { .grp-stats { grid-template-columns: 1fr; } .grp-head { grid-template-columns: 1fr; } }
+</style>
+{% endblock %}
+
+{% block csa_main %}
+<div class="grp">
+
+    <form id="grp-delete-form" method="post"
+          action="{{ path('weekly_basket_group_delete', { id: weekly_basket_group.id }) }}" style="display: none;">
         <input type="hidden" name="_method" value="DELETE">
         <input type="hidden" name="_token" value="{{ csrf_token('delete' ~ weekly_basket_group.id) }}">
     </form>
 
-    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-6); align-items: flex-start;">
-        <div class="csa-row" style="align-items: flex-start; gap: var(--csa-sp-4);">
-            <span style="width: 64px; height: 64px; border-radius: var(--csa-radius-lg); background: {{ weekly_basket_group.color }}; border: 1px solid var(--csa-rule); flex-shrink: 0;"></span>
+    {{ csa.page_header('Socixs · Reparto', weekly_basket_group.name, 'Grupo de recogida.') }}
+
+    <div class="grp-head">
+        <div class="grp-head__id">
+            <span class="grp-head__swatch" style="background: {{ weekly_basket_group.color }};"></span>
             <div>
-                <h1>{{ weekly_basket_group.name }}</h1>
-                <div class="csa-serif csa-italic csa-soft" style="margin-top: var(--csa-sp-2);">
-                    Color: {{ weekly_basket_group.color }}
+                <h2 class="grp-head__name">{{ weekly_basket_group.name }}</h2>
+                <div class="grp-head__meta">
+                    {% if weekly_basket_group.node %}
+                        <a class="grp-chip grp-chip--node" href="{{ path('node_show', { id: weekly_basket_group.node.id }) }}">
+                            <i class="fa fa-sitemap"></i> {{ weekly_basket_group.node.name }}
+                        </a>
+                    {% else %}
+                        <span class="grp-chip grp-chip--none">Sin nodo asignado</span>
+                    {% endif %}
                 </div>
             </div>
         </div>
-        <div class="csa-row">
+        <div class="grp-head__actions">
             <button type="button" class="csa-btn csa-btn--ghost"
-                    onclick="document.getElementById('confirm-wbg-delete').showModal()">
+                    onclick="document.getElementById('confirm-grp-delete').showModal()">
                 Eliminar
             </button>
-            {{ csa.confirm_dialog('confirm-wbg-delete', {
+            {{ csa.confirm_dialog('confirm-grp-delete', {
                 variant: 'danger',
                 eyebrow: 'Acción permanente',
-                title: 'Eliminar este registro',
-                body: 'Se borrará de forma definitiva y no podrá recuperarse.',
+                title: 'Eliminar este grupo',
+                body: 'Se borrará de forma definitiva. Los socios quedarán sin grupo asignado.',
                 confirm_label: 'Eliminar',
-                external_form_id: 'weekly-basket-group-delete-form',
+                external_form_id: 'grp-delete-form',
             }) }}
             {{ csa.btn('Editar', { variant: 'secondary', href: path('weekly_basket_group_edit', { id: weekly_basket_group.id }), icon: 'fa-pencil' }) }}
             {{ csa.btn('Volver', { variant: 'ghost', href: path('weekly_basket_group_index') }) }}
         </div>
     </div>
 
-    {% embed '_components/csa_card.html.twig' with { title: 'Datos del grupo', accent: 'sky' } %}
-        {% block body %}
-            <dl class="csa-defs">
-                <div class="csa-defs__row">
-                    <dt class="csa-defs__label">Nombre</dt>
-                    <dd class="csa-defs__value">{{ weekly_basket_group.name }}</dd>
-                </div>
-                <div class="csa-defs__row">
-                    <dt class="csa-defs__label">Color</dt>
-                    <dd class="csa-defs__value">
-                        <span style="display: inline-block; width: 16px; height: 16px; border-radius: 3px; background: {{ weekly_basket_group.color }}; border: 1px solid var(--csa-rule); vertical-align: middle; margin-right: var(--csa-sp-2);"></span>
-                        {{ weekly_basket_group.color }}
-                    </dd>
-                </div>
-            </dl>
-        {% endblock %}
-    {% endembed %}
+    <div class="grp-stats">
+        <div class="grp-stat grp-stat--active">
+            <div class="v">{{ active_count }}</div>
+            <div class="l">Socios activos</div>
+        </div>
+        <div class="grp-stat">
+            <div class="v">{{ members|length }}</div>
+            <div class="l">Socios en total</div>
+        </div>
+        <div class="grp-stat">
+            <div class="v" style="font-size: 20px;">{{ weekly_basket_group.node ? weekly_basket_group.node.name : '—' }}</div>
+            <div class="l">Nodo de reparto</div>
+        </div>
+    </div>
 
+    <h3 class="grp-section__title">Socios del grupo</h3>
+
+    <div class="grp-table-wrap">
+        {% if members|length == 0 %}
+            <div class="grp-empty">Este grupo aún no tiene socios asignados.</div>
+        {% else %}
+            <table class="grp-table">
+                <thead>
+                    <tr>
+                        <th>Socix</th>
+                        <th class="tight">Estado</th>
+                        <th class="tight">Modalidad</th>
+                        <th class="actions"><span class="sr-only">Quitar</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for partner in members %}
+                        {% set sc = status_chip[partner.status]|default({ label: partner.status, cls: 'baja' }) %}
+                        {% set initials = (partner.name|first|upper) ~ (partner.surname|first|default('')|upper) %}
+                        {% set ab = partner.hasActiveBasket ? partner.getActiveBasket : null %}
+                        {% set bs_id = ab ? ab.basketShare.id : null %}
+                        <tr>
+                            <td>
+                                <div class="grp-person">
+                                    <span class="grp-person__avatar {{ partner.status == 'BAJA' ? 'grp-person__avatar--muted' : '' }}" aria-hidden="true">{{ initials }}</span>
+                                    <div>
+                                        <a class="grp-person__name" href="{{ path('partner_show', { id: partner.id }) }}">{{ partner.nameForDelivery }}</a>
+                                        {% if partner.email %}<span class="grp-person__meta">{{ partner.email }}</span>{% endif %}
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="tight">
+                                <span class="grp-chipm grp-chipm--{{ sc.cls }}"><span class="dot"></span>{{ sc.label }}</span>
+                            </td>
+                            <td class="tight">
+                                {% if ab %}
+                                    <span class="grp-chipm grp-chipm--mod-{{ bs_id }}"><span class="dot"></span>{{ mod_labels[bs_id] ?? ab.basketShare.name }}</span>
+                                {% elseif partner.parent %}
+                                    <span class="grp-cell-muted">vía familiar</span>
+                                {% else %}
+                                    <span class="grp-cell-muted">sin cesta</span>
+                                {% endif %}
+                            </td>
+                            <td class="actions">
+                                <form id="rmform-{{ partner.id }}" method="post" action="{{ path('weekly_basket_group_remove_partner', { id: weekly_basket_group.id, partnerId: partner.id }) }}" style="display:none;">
+                                    <input type="hidden" name="_token" value="{{ csrf_token('remove_partner' ~ partner.id) }}">
+                                </form>
+                                <button type="button" class="grp-rm" onclick="document.getElementById('rmdlg-{{ partner.id }}').showModal()">Quitar</button>
+                                {{ csa.confirm_dialog('rmdlg-' ~ partner.id, {
+                                    variant: 'warning',
+                                    eyebrow: 'Quitar del grupo',
+                                    title: '¿Quitar a ' ~ partner.nameForDelivery ~ ' del grupo?',
+                                    body: 'El socio quedará sin grupo de recogida. Podrás reasignarlo cuando quieras desde su ficha o desde otro grupo.',
+                                    confirm_label: 'Quitar del grupo',
+                                    external_form_id: 'rmform-' ~ partner.id,
+                                }) }}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+
+    {% if candidates|length > 0 %}
+        <div class="grp-addbox">
+            <div class="grp-addbox__label">Socios sin grupo · añadir a este grupo</div>
+            <form method="post" action="{{ path('weekly_basket_group_add_partner', { id: weekly_basket_group.id }) }}" class="grp-addbox__chips">
+                <input type="hidden" name="_token" value="{{ csrf_token('add_partner' ~ weekly_basket_group.id) }}">
+                {% for partner in candidates %}
+                    <button type="submit" name="partner_id" value="{{ partner.id }}" class="grp-addchip">
+                        <i class="fa fa-plus"></i> {{ partner.surname }}, {{ partner.name }}
+                    </button>
+                {% endfor %}
+            </form>
+        </div>
+    {% else %}
+        <p class="grp-addnote">
+            No hay socios sin grupo pendientes de asignar. Para mover un socio entre grupos,
+            hazlo desde <strong>su ficha</strong> (o el socio desde su panel).
+        </p>
+    {% endif %}
+
+</div>
 {% endblock %}

@@ -275,4 +275,53 @@ class PartnerRepository extends ServiceEntityRepository
 
         return $series;
     }
+
+    /**
+     * Nº de socios en estado ACTIVO por grupo de recogida, en una sola query
+     * agregada. Indexado por id de WeeklyBasketGroup. Los grupos sin socios
+     * activos no aparecen (el llamante asume 0).
+     *
+     * @return array<int, int> groupId => nº de socios activos
+     */
+    public function countActiveByGroup(): array
+    {
+        $rows = $this->createQueryBuilder('p')
+            ->select('IDENTITY(p.weekly_basket_group) AS gid', 'COUNT(p.id) AS total')
+            ->where('p.status = :status')
+            ->andWhere('p.weekly_basket_group IS NOT NULL')
+            ->setParameter('status', Partner::STATUS_ACTIVO)
+            ->groupBy('p.weekly_basket_group')
+            ->getQuery()
+            ->getArrayResult();
+
+        $byGroup = [];
+        foreach ($rows as $row) {
+            $byGroup[(int) $row['gid']] = (int) $row['total'];
+        }
+
+        return $byGroup;
+    }
+
+    /**
+     * Socios en estado ACTIVO sin grupo de recogida REAL: o con grupo nulo, o
+     * aparcados en el grupo-centinela "Sin grupo" del catálogo. Son los únicos
+     * candidatos al "añadir" rápido de la ficha de grupo; mover un socio que ya
+     * tiene grupo real a otro se hace desde la ficha del socio (admin) o su
+     * panel (autoservicio).
+     *
+     * @return Partner[]
+     */
+    public function findActiveWithoutGroup(): array
+    {
+        return $this->createQueryBuilder('p')
+            ->leftJoin('p.weekly_basket_group', 'g')
+            ->where('p.status = :status')
+            ->andWhere('p.weekly_basket_group IS NULL OR g.name = :sentinel')
+            ->setParameter('status', Partner::STATUS_ACTIVO)
+            ->setParameter('sentinel', 'Sin grupo')
+            ->orderBy('p.surname', 'ASC')
+            ->addOrderBy('p.name', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
 }

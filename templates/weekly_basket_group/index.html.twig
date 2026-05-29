@@ -1,9 +1,21 @@
 {# ============================================================
- # Listado de grupos de recogida (WeeklyBasketGroup).
+ # Listado de grupos de recogida (WeeklyBasketGroup) — rediseño
+ # al estilo del listado de socixs (.prl): stat strip, buscador,
+ # filtro de nodo en popover, tabla con chips y paginación Knp.
+ #
+ # El controller pasa:
+ #   - pagination       Knp PaginationInterface de WeeklyBasketGroup
+ #   - active_by_group  [groupId => nº socios activos]
+ #   - filters          ['q', 'node']  (node: id | 'none' | null)
+ #   - nodes_all        Node[] para el popover
+ #   - stats            ['groups', 'active', 'without_node']
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
+
+{% set cadence_labels = { 'weekly': 'Semanal', 'biweekly': 'Quincenal' } %}
+{% set weekday_full = { 1: 'lunes', 2: 'martes', 3: 'miércoles', 4: 'jueves', 5: 'viernes', 6: 'sábado', 7: 'domingo' } %}
 
 {% block title %}Grupos de recogida{% endblock %}
 
@@ -13,52 +25,282 @@
     <span class="csa-topbar__crumb-active">Grupos de recogida</span>
 {% endblock %}
 
+{% block more_css %}
+{{ parent() }}
+<style>
+/* Listado de grupos — reusa el lenguaje del listado de socixs (.prl). */
+.grl {
+    --prl-line: #ebe7dd;
+    --prl-line-2: #d8d2c2;
+    --prl-ink: #1d1c17;
+    --prl-ink-soft: #5a564a;
+    --prl-ink-faint: #8d8773;
+    --prl-sage: #5b7a4c;
+    --prl-sage-d: #2f4426;
+    --prl-sage-l: #eaf0e2;
+    --prl-ochre-d: #8c6919;
+    --prl-terra: #b45d3a;
+    --prl-terra-d: #7d3a1f;
+    --prl-terra-l: #fae6dc;
+    --prl-sky-d: #2e6f8e;
+    --prl-bg: #fbfaf6;
+    --prl-surface: #ffffff;
+    font-family: 'Inter', sans-serif;
+    font-variant-numeric: tabular-nums;
+}
+
+/* stat strip */
+.grl-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 18px; }
+.grl-stat { background: var(--prl-surface); border: 1px solid var(--prl-line); border-radius: 8px; padding: 14px 18px; display: flex; flex-direction: column; gap: 5px; text-decoration: none; transition: 0.12s; }
+a.grl-stat:hover { border-color: var(--prl-line-2); background: var(--prl-bg); }
+.grl-stat .v { font-family: 'Fraunces', serif; font-weight: 600; font-size: 28px; letter-spacing: -0.02em; line-height: 1; color: var(--prl-ink); }
+.grl-stat .l { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--prl-ink-faint); font-weight: 500; }
+.grl-stat--active .v { color: var(--prl-sage-d); }
+.grl-stat--nonode .v { color: var(--prl-terra-d); }
+.grl-stat--active--on { border-color: var(--prl-terra); background: var(--prl-terra-l); }
+
+/* toolbar */
+.grl-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+.grl-search { position: relative; flex: 1; min-width: 200px; max-width: 320px; }
+.grl-search input { width: 100%; padding: 8px 12px 8px 34px; border: 1px solid var(--prl-line); background: var(--prl-surface); border-radius: 6px; font-size: 13px; color: var(--prl-ink); font-family: inherit; }
+.grl-search input:focus { outline: none; border-color: var(--prl-sage); box-shadow: 0 0 0 3px var(--prl-sage-l); }
+.grl-search svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--prl-ink-faint); }
+
+.grl-filt-wrap { position: relative; }
+.grl-filt { display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px; border: 1px solid var(--prl-line); background: var(--prl-surface); border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 500; color: var(--prl-ink-soft); font-family: inherit; }
+.grl-filt:hover { color: var(--prl-ink); border-color: var(--prl-line-2); }
+.grl-filt.has { background: var(--prl-sage-l); color: var(--prl-ink); border-color: var(--prl-sage); }
+.grl-filt .badge { display: inline-grid; place-items: center; min-width: 18px; height: 16px; padding: 0 4px; background: var(--prl-sage-d); color: #fff; border-radius: 3px; font-size: 10px; font-weight: 600; }
+.grl-filt .chev { color: var(--prl-ink-faint); }
+.grl-filt--clear { background: var(--prl-terra-l); border-color: var(--prl-terra); color: var(--prl-terra-d); font-weight: 600; text-decoration: none; }
+.grl-filt--clear:hover { background: var(--prl-terra); border-color: var(--prl-terra-d); color: #fff; }
+
+.grl-pop { position: absolute; top: calc(100% + 5px); left: 0; z-index: 30; background: var(--prl-surface); border: 1px solid var(--prl-line-2); border-radius: 7px; padding: 6px; min-width: 220px; max-width: 280px; box-shadow: 0 8px 24px rgba(40,36,24,0.12); display: flex; flex-direction: column; gap: 2px; max-height: 320px; overflow-y: auto; }
+.grl-pop[hidden] { display: none; }
+.grl-pop label { display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 4px; font-size: 12.5px; color: var(--prl-ink); cursor: pointer; }
+.grl-pop label:hover { background: var(--prl-sage-l); }
+.grl-pop input { accent-color: var(--prl-sage-d); }
+.grl-pop hr { border: 0; border-top: 1px solid var(--prl-line); margin: 4px 0; }
+
+.grl-toolbar .spacer { flex: 1; }
+.grl-toolbar .counters { font-size: 12px; color: var(--prl-ink-soft); }
+.grl-toolbar .counters b { color: var(--prl-ink); font-weight: 600; }
+.grl-btn { display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px; border-radius: 6px; border: 1px solid var(--prl-line); background: var(--prl-surface); color: var(--prl-ink); font-size: 12.5px; font-weight: 500; text-decoration: none; cursor: pointer; font-family: inherit; }
+.grl-btn:hover { border-color: var(--prl-line-2); background: var(--prl-bg); }
+.grl-btn .fa { font-size: 11px; color: var(--prl-ink-faint); }
+.grl-btn--primary { background: var(--prl-sage-d); border-color: var(--prl-sage-d); color: #fff; }
+.grl-btn--primary:hover { background: #233619; border-color: #233619; color: #fff; }
+.grl-btn--primary .fa { color: rgba(255,255,255,0.85); }
+
+/* lista tranquila: una fila por grupo. El nodo es un desplegable
+ * editable inline (se ve como texto sobrio hasta hover/focus). */
+.grl-list { background: var(--prl-surface); border: 1px solid var(--prl-line); border-radius: 8px; }
+.grl-listhead, .grl-row { display: grid; grid-template-columns: 34px minmax(150px, 1fr) 252px 78px 34px; align-items: center; gap: 14px; padding: 0 16px; }
+.grl-listhead { height: 38px; background: var(--prl-bg); border-bottom: 1px solid var(--prl-line); border-radius: 8px 8px 0 0; font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--prl-ink-faint); font-weight: 600; }
+.grl-listhead .r { text-align: right; }
+.grl-row { padding-top: 9px; padding-bottom: 9px; border-bottom: 1px solid var(--prl-line); }
+.grl-row:last-child { border-bottom: 0; border-radius: 0 0 8px 8px; }
+.grl-row:hover { background: var(--prl-bg); }
+.grl-grpav { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; font-family: 'Fraunces', serif; font-weight: 600; font-size: 11px; color: var(--prl-ink); border: 1px solid rgba(40,36,24,0.10); letter-spacing: 0.02em; }
+.grl-row__name { font-family: 'Fraunces', serif; font-weight: 500; font-size: 14.5px; color: var(--prl-ink); text-decoration: none; letter-spacing: -0.005em; }
+.grl-row__name:visited { color: var(--prl-ink); }
+.grl-row__name:hover, .grl-row__name:focus, .grl-row__name:active { color: var(--prl-sage-d); }
+.grl-row__name:hover, .grl-row__name:focus, .grl-row__name:active, .grl-row__name:visited { text-decoration: none; border-bottom-color: transparent; outline: none; }
+.grl-row__socios { text-align: right; font-size: 12px; color: var(--prl-ink-faint); white-space: nowrap; }
+.grl-row__socios b { font-family: 'Fraunces', serif; font-weight: 600; font-size: 14px; color: var(--prl-ink); }
+.grl-row__edit { color: var(--prl-ink-faint); text-decoration: none; text-align: center; }
+.grl-row__edit:hover { color: var(--prl-sage-d); }
+
+/* nodo: celda tipo "persona" (avatar de iniciales + nombre + meta),
+ * que abre un popover con estilo propio (no el desplegable nativo). */
+.grl-noderow { display: flex; align-items: center; gap: 9px; width: 100%; background: transparent; border: 1px solid transparent; border-radius: 7px; padding: 4px 8px 4px 5px; cursor: pointer; font-family: inherit; text-align: left; }
+.grl-noderow:hover { border-color: var(--prl-line-2); background: var(--prl-surface); }
+.grl-nodeav { width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0; display: grid; place-items: center; font-family: 'Fraunces', serif; font-weight: 600; font-size: 11px; color: #fff; letter-spacing: 0.02em; }
+.grl-nodeav--n0 { background: #2e6f8e; }
+.grl-nodeav--n1 { background: var(--prl-sage-d); }
+.grl-nodeav--n2 { background: var(--prl-ochre-d); }
+.grl-nodeav--n3 { background: #6b3a73; }
+.grl-nodeav--n4 { background: var(--prl-terra-d); }
+.grl-nodeav--none { background: var(--prl-line-2); color: var(--prl-ink-soft); }
+.grl-nodeinfo { min-width: 0; flex: 1; }
+.grl-nodeinfo__name { display: block; font-family: 'Fraunces', serif; font-weight: 500; font-size: 13px; color: var(--prl-ink); line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.grl-noderow--none .grl-nodeinfo__name { color: var(--prl-terra-d); font-style: italic; }
+.grl-nodeinfo__meta { display: block; font-size: 10px; color: var(--prl-ink-faint); letter-spacing: 0.06em; text-transform: uppercase; margin-top: 1px; }
+.grl-noderow .chev { color: var(--prl-ink-faint); flex-shrink: 0; }
+.grl-pop .opt { display: block; width: 100%; text-align: left; background: transparent; border: 0; padding: 7px 9px; border-radius: 4px; font-size: 12.5px; color: var(--prl-ink); cursor: pointer; font-family: inherit; }
+.grl-pop .opt:hover { background: var(--prl-sage-l); }
+.grl-pop .opt.is-current { font-weight: 600; color: var(--prl-sage-d); }
+.grl-pop .opt.is-none { color: var(--prl-terra-d); font-style: italic; }
+.grl-pop hr { border: 0; border-top: 1px solid var(--prl-line); margin: 4px 0; }
+
+.grl-empty { padding: 56px 18px; text-align: center; color: var(--prl-ink-faint); font-size: 13.5px; font-style: italic; background: var(--prl-bg); }
+
+.grl-pagination { margin-top: 14px; display: flex; justify-content: center; }
+.grl-pagination .pagination { display: inline-flex; gap: 4px; padding: 0; margin: 0; list-style: none; }
+.grl-pagination .pagination li a, .grl-pagination .pagination li span { display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 34px; padding: 0 10px; border: 1px solid var(--prl-line); border-radius: 6px; background: var(--prl-surface); color: var(--prl-ink-soft); font-size: 12.5px; font-weight: 500; text-decoration: none; }
+.grl-pagination .pagination li a:hover { border-color: var(--prl-line-2); background: var(--prl-bg); color: var(--prl-ink); }
+.grl-pagination .pagination li.current span { background: var(--prl-ink); border-color: var(--prl-ink); color: #fff; }
+
+@media (max-width: 900px) { .grl-stats { grid-template-columns: 1fr; } }
+</style>
+{% endblock %}
+
+{% block more_js %}
+{{ parent() }}
+<script>
+(function () {
+    document.querySelectorAll('[data-pop-trigger]').forEach(function (btn) {
+        btn.addEventListener('click', function (ev) {
+            ev.stopPropagation();
+            var pop = document.getElementById(btn.getAttribute('data-pop-trigger'));
+            if (!pop) return;
+            var open = !pop.hidden;
+            document.querySelectorAll('.grl-pop').forEach(function (p) { p.hidden = true; });
+            pop.hidden = open;
+        });
+    });
+    document.addEventListener('click', function (ev) {
+        document.querySelectorAll('.grl-pop').forEach(function (pop) {
+            if (pop.hidden) return;
+            var trigger = document.querySelector('[data-pop-trigger="' + pop.id + '"]');
+            if (pop.contains(ev.target) || (trigger && trigger.contains(ev.target))) return;
+            pop.hidden = true;
+        });
+    });
+    var form = document.getElementById('grl-filter-form');
+    if (form) {
+        form.querySelectorAll('input[type="radio"], select').forEach(function (el) {
+            el.addEventListener('change', function () { form.submit(); });
+        });
+    }
+}());
+</script>
+{% endblock %}
+
 {% block csa_main %}
+<div class="grl">
 
     {{ csa.page_header(
         'Socixs · Reparto',
         'Grupos de recogida',
-        'Agrupaciones de socixs por punto y día de recogida. El color identifica el grupo en el calendario semanal.'
+        'Agrupaciones de socixs por punto y día de recogida. El color identifica el grupo en el calendario; cada grupo cuelga de un nodo de reparto.'
     ) }}
 
-    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-5);">
-        <div></div>
-        <div class="csa-row">
-            {{ csa.btn('Nuevo grupo', { variant: 'primary', href: path('weekly_basket_group_new'), icon: 'fa-plus' }) }}
+    {# ============ STAT STRIP ============ #}
+    <div class="grl-stats">
+        <a class="grl-stat" href="{{ path('weekly_basket_group_index') }}">
+            <div class="v">{{ stats.groups }}</div>
+            <div class="l">grupos</div>
+        </a>
+        <div class="grl-stat grl-stat--active">
+            <div class="v">{{ stats.active }}</div>
+            <div class="l">socios activos</div>
         </div>
+        <a class="grl-stat grl-stat--nonode {{ filters.node == 'none' ? 'grl-stat--active--on' : '' }}" href="{{ path('weekly_basket_group_index', { node: 'none' }) }}">
+            <div class="v">{{ stats.without_node }}</div>
+            <div class="l">sin nodo</div>
+        </a>
     </div>
 
-    <div class="csa-table-wrap">
-        <table class="csa-table" data-paginate>
-            <thead>
-                <tr>
-                    <th class="csa-table__col-tight">Color</th>
-                    <th>Nombre</th>
-                    <th class="csa-table__actions">Acciones</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for group in weekly_basket_groups %}
-                    <tr>
-                        <td class="csa-table__col-tight">
-                            <span style="display: inline-block; width: 24px; height: 24px; border-radius: var(--csa-radius-sm); background: {{ group.color }}; border: 1px solid var(--csa-rule);"></span>
-                        </td>
-                        <td>
-                            <a class="csa-table__primary" href="{{ path('weekly_basket_group_edit', { id: group.id }) }}">{{ group.name }}</a>
-                        </td>
-                        <td class="csa-table__actions">
-                            <a href="{{ path('weekly_basket_group_edit', { id: group.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>
-                        </td>
-                    </tr>
-                {% else %}
-                    <tr>
-                        <td colspan="3" class="csa-muted" style="text-align: center; padding: var(--csa-sp-8);">
-                            Aún no hay grupos de recogida.
-                        </td>
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
+    {# ============ TOOLBAR / FILTROS (GET) ============ #}
+    <form method="get" action="{{ path('weekly_basket_group_index') }}" id="grl-filter-form">
+        <div class="grl-toolbar">
+            <div class="grl-search">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
+                <input type="search" name="q" value="{{ filters.q }}" placeholder="Buscar grupo por nombre…" autocomplete="off">
+            </div>
 
+            {% if nodes_all|length > 0 %}
+                <div class="grl-filt-wrap">
+                    <button type="button" class="grl-filt {{ filters.node ? 'has' : '' }}" data-pop-trigger="pop-node">
+                        Nodo
+                        {% if filters.node %}<span class="badge">1</span>{% endif %}
+                        <svg class="chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+                    </button>
+                    <div class="grl-pop" id="pop-node" hidden>
+                        <label><input type="radio" name="node" value="" {% if not filters.node %}checked{% endif %}> Cualquier nodo</label>
+                        <label><input type="radio" name="node" value="none" {% if filters.node == 'none' %}checked{% endif %}> Sin nodo</label>
+                        <hr>
+                        {% for n in nodes_all %}
+                            <label><input type="radio" name="node" value="{{ n.id }}" {% if filters.node == n.id %}checked{% endif %}> {{ n.name }}</label>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endif %}
+
+            {% if filters.q or filters.node %}
+                <a class="grl-filt grl-filt--clear" href="{{ path('weekly_basket_group_index') }}" title="Limpiar filtros">
+                    <i class="fa fa-times-circle" aria-hidden="true"></i> Limpiar
+                </a>
+            {% endif %}
+
+            <div class="spacer"></div>
+            <div class="counters">
+                <b>{{ pagination.getTotalItemCount }}</b> grupo{{ pagination.getTotalItemCount == 1 ? '' : 's' }}
+            </div>
+            <a href="{{ path('weekly_basket_group_new') }}" class="grl-btn grl-btn--primary">
+                <i class="fa fa-plus"></i> Nuevo grupo
+            </a>
+        </div>
+
+        <noscript>
+            <div style="margin-bottom: 14px;"><button type="submit" class="grl-btn grl-btn--primary">Aplicar</button></div>
+        </noscript>
+    </form>
+
+    {# ============ LISTA ============ #}
+    {% if pagination|length == 0 %}
+        <div class="grl-empty">
+            {% if filters.q or filters.node %}No hay grupos que cumplan los filtros.{% else %}Aún no hay grupos de recogida.{% endif %}
+        </div>
+    {% else %}
+        <div class="grl-list">
+            <div class="grl-listhead">
+                <span></span>
+                <span>Grupo</span>
+                <span>Nodo de reparto</span>
+                <span class="r">Socios</span>
+                <span></span>
+            </div>
+            {% for group in pagination %}
+                <div class="grl-row">
+                    <span class="grl-grpav" style="background: {{ group.color }};">{{ group.name|slice(0, 2)|upper }}</span>
+                    <a class="grl-row__name" href="{{ path('weekly_basket_group_show', { id: group.id }) }}">{{ group.name }}</a>
+                    <div class="grl-filt-wrap">
+                        <button type="button" class="grl-noderow {{ group.node ? '' : 'grl-noderow--none' }}" data-pop-trigger="rn-{{ group.id }}" aria-label="Nodo de {{ group.name }}">
+                            {% if group.node %}
+                                <span class="grl-nodeav grl-nodeav--n{{ group.node.id % 5 }}">{{ group.node.name|slice(0, 2)|upper }}</span>
+                                <span class="grl-nodeinfo">
+                                    <span class="grl-nodeinfo__name">{{ group.node.name }}</span>
+                                    <span class="grl-nodeinfo__meta">{{ cadence_labels[group.node.cadence] ?? group.node.cadence }} · {{ weekday_full[group.node.deliveryWeekday] ?? '' }}</span>
+                                </span>
+                            {% else %}
+                                <span class="grl-nodeav grl-nodeav--none">—</span>
+                                <span class="grl-nodeinfo"><span class="grl-nodeinfo__name">Sin nodo</span></span>
+                            {% endif %}
+                            <svg class="chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+                        </button>
+                        <div class="grl-pop" id="rn-{{ group.id }}" hidden>
+                            <form method="post" action="{{ path('weekly_basket_group_set_node', { id: group.id }) }}">
+                                <input type="hidden" name="_token" value="{{ csrf_token('set_node' ~ group.id) }}">
+                                <button type="submit" name="node_id" value="" class="opt is-none {{ group.node ? '' : 'is-current' }}">Sin nodo</button>
+                                <hr>
+                                {% for n in nodes_all %}
+                                    <button type="submit" name="node_id" value="{{ n.id }}" class="opt {{ group.node and group.node.id == n.id ? 'is-current' : '' }}">{{ n.name }}</button>
+                                {% endfor %}
+                            </form>
+                        </div>
+                    </div>
+                    <span class="grl-row__socios"><b>{{ active_by_group[group.id] ?? 0 }}</b></span>
+                    <a class="grl-row__edit" href="{{ path('weekly_basket_group_edit', { id: group.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    {% if pagination.getPageCount > 1 %}
+        <div class="grl-pagination">{{ knp_pagination_render(pagination) }}</div>
+    {% endif %}
+
+</div>
 {% endblock %}
