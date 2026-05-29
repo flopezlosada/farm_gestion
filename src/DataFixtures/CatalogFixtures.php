@@ -112,6 +112,7 @@ class CatalogFixtures extends Fixture
         // El color se asigna algorítmicamente con HSL para tener distinción
         // estable y reproducible — no es decorativo, se usa en los
         // listados impresos para identificar visualmente el grupo.
+        // IDs explícitos (1-31) para que los tests los localicen por id.
         $groupNames = [
             // "Sin grupo" — destino para socixs incompletos / casos
             // especiales sin grupo de reparto asignado (ej. AMUMI,
@@ -129,10 +130,16 @@ class CatalogFixtures extends Fixture
             'Manzanares El Real', 'Madrid', 'Navas de Buitrago',
         ];
 
+        $groupMetadata = $manager->getClassMetadata(WeeklyBasketGroup::class);
+        $groupMetadata->setIdGeneratorType(\Doctrine\ORM\Mapping\ClassMetadata::GENERATOR_TYPE_NONE);
+        $groupMetadata->setIdGenerator(new \Doctrine\ORM\Id\AssignedGenerator());
+        $groupIdProperty = new \ReflectionProperty(WeeklyBasketGroup::class, 'id');
+
         foreach ($groupNames as $i => $name) {
             $hue = (int) round(($i * 360) / count($groupNames));
             $color = $this->hslToHex($hue, 60, 70);
             $group = (new WeeklyBasketGroup())->setName($name)->setColor($color);
+            $groupIdProperty->setValue($group, $i + 1);
             $manager->persist($group);
             $this->addReference(self::REF_WEEKLY_GROUP_PREFIX . $name, $group);
         }
