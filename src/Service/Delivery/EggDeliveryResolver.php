@@ -63,8 +63,25 @@ class EggDeliveryResolver
         };
     }
 
+    /**
+     * Huevos quincenales. La "quincena" se determina de dos formas según dónde
+     * recoja el socio:
+     *  - Nodo BIWEEKLY (Madrid: Cascorro/Midori): la cadencia la marca el propio
+     *    nodo (anchor). El socio no tiene cohorte A/B interna (delivery_group NULL);
+     *    lleva huevos siempre que el nodo reparte este Basket.
+     *  - Nodo WEEKLY (Torremocha): el nodo reparte todas las semanas, así que la
+     *    quincena la marca la cohorte A/B del socio (delivery_group).
+     *
+     * Deuda: lo ideal sería que la cadencia viviera siempre en el socio (cohorte),
+     * no en el nodo — ver [[madrid-reconciliacion-state]] (decisión arquitectura).
+     */
     private function deliversBiweekly(PartnerBasketShare $share, Basket $basket): bool
     {
+        $node = $share->getPartner()?->getWeeklyBasketGroup()?->getNode();
+        if ($node !== null && $node->getCadence() === Node::CADENCE_BIWEEKLY) {
+            return $this->nodeDeliveryDate->deliversInBasket($basket, $node);
+        }
+
         $group = $share->getDeliveryGroup();
         if ($group === null) {
             return false;

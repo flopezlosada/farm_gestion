@@ -7,7 +7,9 @@ use App\Entity\BasketShare;
 use App\Entity\EggAmount;
 use App\Entity\EggPeriod;
 use App\Entity\Node;
+use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
+use App\Entity\WeeklyBasketGroup;
 use App\Repository\NodeRepository;
 use App\Service\Delivery\BiweeklyCohortResolver;
 use App\Service\Delivery\EggDeliveryResolver;
@@ -96,6 +98,29 @@ class EggDeliveryResolverTest extends TestCase
     }
 
     /**
+     * Quincenal en nodo BIWEEKLY (Madrid: Cascorro/Midori): la quincena la marca
+     * la cadencia del propio nodo (anchor), no la cohorte A/B. Sin delivery_group,
+     * lleva huevos siempre que el nodo reparte este Basket.
+     */
+    public function testQuincenalEnNodoBiweeklyEntregaSiElNodoReparte(): void
+    {
+        $share = $this->shareConPeriodo(2);
+        $share->setPartner($this->partnerEnNodoBiweekly());
+        // sin delivery_group: la cohorte NO debe consultarse en nodo biweekly
+        $this->nodeDeliveryDate->method('deliversInBasket')->willReturn(true);
+        $this->biweekly->expects($this->never())->method('cohortForBasket');
+        $this->assertTrue($this->resolver->delivers($share, $this->basket));
+    }
+
+    public function testQuincenalEnNodoBiweeklyNoEntregaSiElNodoNoReparte(): void
+    {
+        $share = $this->shareConPeriodo(2);
+        $share->setPartner($this->partnerEnNodoBiweekly());
+        $this->nodeDeliveryDate->method('deliversInBasket')->willReturn(false);
+        $this->assertFalse($this->resolver->delivers($share, $this->basket));
+    }
+
+    /**
      * Cesta mensual + huevos mensuales: huevos van con la cesta. Se compara
      * operativeOrderForNode con dayMonthOrder de la cesta; egg_day_month_order
      * se ignora.
@@ -172,5 +197,19 @@ class EggDeliveryResolverTest extends TestCase
         $share->setEggAmount($amount);
         $share->setEggPeriod($period);
         return $share;
+    }
+
+    /**
+     * Helper: Partner cuyo WeeklyBasketGroup cuelga de un nodo biweekly (Madrid).
+     */
+    private function partnerEnNodoBiweekly(): Partner
+    {
+        $node = new Node();
+        $node->setName('Cascorro')->setDeliveryWeekday(3)->setCadence(Node::CADENCE_BIWEEKLY);
+        $wbg = new WeeklyBasketGroup();
+        $wbg->setNode($node);
+        $partner = new Partner();
+        $partner->setWeeklyBasketGroup($wbg);
+        return $partner;
     }
 }
