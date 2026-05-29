@@ -91,6 +91,35 @@ class MonthlyOperativeOrderResolverTest extends TestCase
     }
 
     /**
+     * Cuando admin traslada un reparto a OTRO MES (festivo de fin de mes:
+     * 1-may → 30-abr), esa entrega cuenta en el mes de su fecha FÍSICA (abril),
+     * no en el del Basket (mayo). Así mayo queda con 4 viernes y un mensual
+     * day=4 recoge el 29-may (su último real), no el 22.
+     *
+     * Regresión del bug que descuadraba los meses de 5 viernes con festivo
+     * trasladado al mes anterior: el resolver contaba 5 entregas en mayo y
+     * un day=4 caía en el 4º de 5 (22-may) en vez del 29.
+     */
+    public function testOperativeOrderForNodeTrasladoAMesAnteriorSacaLaEntregaDelMes(): void
+    {
+        $baskets = $this->mayoBaskets();
+        $torremocha = $this->makeNode('Torremocha', 5, Node::CADENCE_WEEKLY);
+
+        $traslado = new DeliveryException();
+        $traslado->setBasket($baskets[0]);                       // 1-may
+        $traslado->setShiftedDate(new \DateTime('2026-04-30'));  // → jueves anterior, en abril
+
+        $resolver = $this->makeResolverWithExceptions($baskets, [1 => $traslado]);
+
+        // El 1-may, trasladado al 30-abr, sale de mayo: el orden de mayo
+        // arranca en el 8 y el 29 es el 4º (último real del mes).
+        $this->assertSame(1, $resolver->operativeOrderForNode($baskets[1], $torremocha));  // 8-may
+        $this->assertSame(2, $resolver->operativeOrderForNode($baskets[2], $torremocha));  // 15-may
+        $this->assertSame(3, $resolver->operativeOrderForNode($baskets[3], $torremocha));  // 22-may
+        $this->assertSame(4, $resolver->operativeOrderForNode($baskets[4], $torremocha));  // 29-may → 4
+    }
+
+    /**
      * Devuelve los 5 viernes de mayo 2026 indexados 0..4 para acceso
      * conveniente en los tests.
      *
