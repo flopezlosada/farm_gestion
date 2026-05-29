@@ -162,6 +162,70 @@ class WeeklyBasketRepository extends ServiceEntityRepository
     }
 
     /**
+     * Historial de repartos ya generados de un nodo, del más reciente al
+     * más antiguo. Por cada Basket en el que el nodo tiene listado, devuelve
+     * el resumen de lo que se estimó repartir: nº de socios y nº de cestas
+     * físicas ponderado por modalidad (solo-huevos 0, compartidas ½, resto 1
+     * — mismo criterio que DeliveryController::computeTotals).
+     *
+     * Cuenta TODOS los WeeklyBasket generados (cualquier status), porque la
+     * estimación es la que se hizo al generar el listado, no lo finalmente
+     * recogido. Una sola query agregada. Solo aparecen semanas ya generadas.
+     *
+     * @param Node $node
+     * @param int $limit Máximo de repartos a devolver.
+     * @return array<int, array{basket: Basket, socios: int, cestas: float}>
+     */
+    public function deliveredHistoryForNode(Node $node, int $limit = 4): array
+    {
+        $rows = $this->createQueryBuilder('wb')
+            ->select(
+                'IDENTITY(wb.basket) AS basket_id',
+                'COUNT(wb.id) AS socios',
+                'SUM(CASE WHEN bs.id = 5 THEN 0 WHEN (bs.id = 4 OR bs.id = 6 OR bs.id = 7) THEN 0.5 ELSE 1 END) AS cestas'
+            )
+            ->innerJoin('wb.weekly_basket_group', 'wbg')
+            ->innerJoin('wb.basket', 'b')
+            ->leftJoin('wb.basket_share', 'bs')
+            ->where('wbg.node = :node')
+            ->andWhere('b.date < :today')
+            ->setParameter('node', $node)
+            ->setParameter('today', (new \DateTimeImmutable('today'))->format('Y-m-d'))
+            ->groupBy('wb.basket')
+            ->orderBy('b.date', 'DESC')
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getArrayResult();
+
+        if ($rows === []) {
+            return [];
+        }
+
+        // Las entidades Basket no se pueden seleccionar en la misma query
+        // agregada (no es el alias raíz); se cargan aparte y se reindexan.
+        $baskets = [];
+        foreach ($this->getEntityManager()->getRepository(Basket::class)
+                     ->findBy(['id' => array_map(static fn (array $r): int => (int) $r['basket_id'], $rows)]) as $basket) {
+            $baskets[$basket->getId()] = $basket;
+        }
+
+        $history = [];
+        foreach ($rows as $row) {
+            $id = (int) $row['basket_id'];
+            if (!isset($baskets[$id])) {
+                continue;
+            }
+            $history[] = [
+                'basket' => $baskets[$id],
+                'socios' => (int) $row['socios'],
+                'cestas' => (float) $row['cestas'],
+            ];
+        }
+
+        return $history;
+    }
+
+    /**
      * Número de cestas a repartir en un Basket: cuenta las WeeklyBasket
      * cuyo status indica que se recogen (status_id = 1). Las marcadas como
      * "no recoge" (status 2) no se cuentan porque no llegan a salir.
