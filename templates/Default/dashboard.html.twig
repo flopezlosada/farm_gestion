@@ -34,6 +34,8 @@
     /* iconos de las listas del dashboard sin caja de fondo, como los KPIs
      * (scopeado al dashboard; csa-list se usa en otras pantallas). */
     .csa-dashboard-grid .csa-list__icon { background: transparent; }
+    .csa-dashboard-grid .csa-list__icon i,
+    .csa-dashboard-grid .csa-list__icon svg { font-size: 24px; opacity: 0.5; }
     </style>
 {% endblock %}
 
@@ -260,7 +262,7 @@
                             <li class="csa-list__item">
                                 <a class="csa-list__link" href="{{ path('statistic_feed') }}">
                                     <span class="csa-list__icon csa-list__icon--ochre">
-                                        <i class="fa fa-wheat-awn" aria-hidden="true"></i>
+                                        <i class="fa fa-bread-slice" aria-hidden="true"></i>
                                     </span>
                                     <div class="csa-list__body">
                                         <div class="csa-list__primary">Kg de trigo</div>
@@ -273,7 +275,7 @@
                             <li class="csa-list__item">
                                 <a class="csa-list__link" href="{{ path('statistic_feed') }}">
                                     <span class="csa-list__icon csa-list__icon--sky">
-                                        <i class="fa fa-bolt" aria-hidden="true"></i>
+                                        <i class="fa fa-seedling" aria-hidden="true"></i>
                                     </span>
                                     <div class="csa-list__body">
                                         <div class="csa-list__primary">Kg pienso pollos</div>
