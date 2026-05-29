@@ -1,9 +1,15 @@
 {# ============================================================
- # Listado de excepciones de calendario de reparto.
+ # Excepciones de calendario de reparto (festivos, cierres,
+ # traslados) — estilo del listado de socixs/grupos (.prl).
+ # Separadas en próximas (planificación) y pasadas (histórico).
+ #
+ # Recibe: upcoming (DeliveryException[]), past (DeliveryException[]),
+ #         total (int).
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
+{% import _self as helper %}
 
 {% block title %}Excepciones de reparto{% endblock %}
 
@@ -13,68 +19,156 @@
     <span class="csa-topbar__crumb-active">Excepciones de reparto</span>
 {% endblock %}
 
+{# ---- macro: lista de excepciones ---- #}
+{% macro dex_list(items, is_past) %}
+    {% import '_macros/csa.html.twig' as csa %}
+    {% set _dow_abbr = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'] %}
+    {% set _month_abbr = ['', 'ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'] %}
+    <div class="dex-list">
+        {% for ex in items %}
+            <div class="dex-row{{ is_past ? ' dex-row--past' : '' }}">
+                <span class="dex-date">
+                    <span class="dow">{{ _dow_abbr[ex.basket.date|date('w')] }}</span>
+                    <span class="num">{{ ex.basket.date|date('d') }}</span>
+                    <span class="mon">{{ _month_abbr[ex.basket.date|date('n')] }} {{ ex.basket.date|date('y') }}</span>
+                </span>
+                <div class="dex-main">
+                    <div class="dex-typeline">
+                        {% if ex.isCancelled %}
+                            <span class="dex-chip dex-chip--cancel"><span class="dot"></span>Sin reparto</span>
+                        {% else %}
+                            <span class="dex-chip dex-chip--shift"><span class="dot"></span>Trasladado</span>
+                            <span class="dex-arrow">→ {{ ex.shiftedDate|date('d/m/Y') }}</span>
+                        {% endif %}
+                    </div>
+                    {% if ex.notes %}<div class="dex-notes">{{ ex.notes }}</div>{% endif %}
+                </div>
+                <div class="dex-scope">
+                    {% if ex.isGlobal %}
+                        <span class="dex-nodechip dex-nodechip--all"><i class="fa fa-globe"></i> Todos los nodos</span>
+                    {% else %}
+                        <span class="dex-nodechip dex-nodechip--n{{ ex.node.id % 5 }}">{{ ex.node.name }}</span>
+                    {% endif %}
+                </div>
+                <div class="dex-actions">
+                    <a class="dex-iconbtn" href="{{ path('delivery_exception_edit', { id: ex.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>
+                    <form id="dexform-{{ ex.id }}" method="post" action="{{ path('delivery_exception_delete', { id: ex.id }) }}" style="display:none;">
+                        <input type="hidden" name="_token" value="{{ csrf_token('delete' ~ ex.id) }}">
+                    </form>
+                    <button type="button" class="dex-iconbtn dex-iconbtn--danger" title="Borrar" aria-label="Borrar"
+                            onclick="document.getElementById('dexdlg-{{ ex.id }}').showModal()"><i class="fa fa-trash"></i></button>
+                    {{ csa.confirm_dialog('dexdlg-' ~ ex.id, {
+                        variant: 'danger',
+                        eyebrow: 'Acción permanente',
+                        title: 'Borrar esta excepción',
+                        body: 'El reparto del viernes ' ~ ex.basket.date|date('d/m/Y') ~ ' volverá a seguir el calendario normal.',
+                        confirm_label: 'Borrar',
+                        external_form_id: 'dexform-' ~ ex.id,
+                    }) }}
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+{% endmacro %}
+
+{% block more_css %}
+{{ parent() }}
+<style>
+.dex {
+    --prl-line: #ebe7dd; --prl-line-2: #d8d2c2;
+    --prl-ink: #1d1c17; --prl-ink-soft: #5a564a; --prl-ink-faint: #8d8773;
+    --prl-sage: #5b7a4c; --prl-sage-d: #2f4426; --prl-sage-l: #eaf0e2;
+    --prl-ochre: #c89a3a; --prl-ochre-d: #8c6919; --prl-ochre-l: #faf1d8;
+    --prl-terra: #b45d3a; --prl-terra-d: #7d3a1f; --prl-terra-l: #fae6dc;
+    --prl-sky-d: #2e6f8e;
+    --prl-bg: #fbfaf6; --prl-surface: #ffffff;
+    font-family: 'Inter', sans-serif; font-variant-numeric: tabular-nums;
+}
+
+.dex-section { margin-bottom: 26px; }
+.dex-section__title { font-family: 'Fraunces', serif; font-weight: 600; font-size: 16px; color: var(--prl-ink); margin: 0 0 4px; }
+.dex-section__hint { font-size: 11.5px; color: var(--prl-ink-faint); margin: 0 0 12px; font-style: italic; }
+
+.dex-list { background: var(--prl-surface); border: 1px solid var(--prl-line); border-radius: 8px; }
+.dex-row { display: grid; grid-template-columns: 60px minmax(180px, 1fr) 184px auto; align-items: center; gap: 16px; padding: 11px 16px; border-bottom: 1px solid var(--prl-line); }
+.dex-row:last-child { border-bottom: 0; }
+.dex-row:hover { background: var(--prl-bg); }
+.dex-row--past { opacity: 0.78; }
+.dex-row--past:hover { opacity: 1; }
+
+.dex-date { text-align: center; border-radius: 7px; padding: 5px 4px 6px; background: #ece5d6; border: 1px solid var(--prl-line-2); line-height: 1.1; }
+.dex-date .dow { display: block; font-size: 9.5px; color: var(--prl-ink-soft); letter-spacing: 0.12em; text-transform: uppercase; font-weight: 600; }
+.dex-date .num { display: block; font-family: 'Fraunces', serif; font-weight: 600; font-size: 18px; color: var(--prl-ink); }
+.dex-date .mon { display: block; font-size: 9.5px; color: var(--prl-ink-soft); letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600; }
+
+.dex-main { min-width: 0; }
+.dex-typeline { display: flex; align-items: center; gap: 8px; }
+.dex-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 4px; border-radius: 4px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; }
+.dex-chip .dot { width: 6px; height: 6px; border-radius: 50%; }
+.dex-chip--cancel { background: var(--prl-terra-l); color: var(--prl-terra-d); } .dex-chip--cancel .dot { background: var(--prl-terra); }
+.dex-chip--shift { background: var(--prl-ochre-l); color: var(--prl-ochre-d); } .dex-chip--shift .dot { background: var(--prl-ochre); }
+.dex-arrow { font-family: 'Fraunces', serif; font-weight: 600; font-size: 13px; color: var(--prl-ink); }
+.dex-notes { font-size: 12px; color: var(--prl-ink-faint); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.dex-nodechip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 4px; border-radius: 4px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; }
+.dex-nodechip .fa { font-size: 9px; }
+.dex-nodechip--all { background: #f0eee7; color: var(--prl-ink-soft); }
+.dex-nodechip--n0 { background: #e7eef2; color: var(--prl-sky-d); }
+.dex-nodechip--n1 { background: var(--prl-sage-l); color: var(--prl-sage-d); }
+.dex-nodechip--n2 { background: var(--prl-ochre-l); color: var(--prl-ochre-d); }
+.dex-nodechip--n3 { background: #efe6f0; color: #6b3a73; }
+.dex-nodechip--n4 { background: var(--prl-terra-l); color: var(--prl-terra-d); }
+
+.dex-actions { display: flex; align-items: center; gap: 4px; justify-content: flex-end; }
+.dex-iconbtn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 6px; border: 1px solid transparent; background: transparent; color: var(--prl-ink-faint); text-decoration: none; cursor: pointer; }
+.dex-iconbtn:hover { border-color: var(--prl-line-2); background: var(--prl-surface); color: var(--prl-ink); }
+.dex-iconbtn--danger:hover { color: var(--prl-terra-d); border-color: var(--prl-terra); background: var(--prl-terra-l); }
+
+.dex-empty { padding: 30px 18px; text-align: center; color: var(--prl-ink-faint); font-size: 13px; font-style: italic; background: var(--prl-surface); border: 1px dashed var(--prl-line-2); border-radius: 8px; }
+
+.dex-toolbar { display: flex; justify-content: flex-end; margin-bottom: 18px; }
+
+@media (max-width: 760px) {
+    .dex-row { grid-template-columns: 52px 1fr; }
+    .dex-scope, .dex-actions { grid-column: 2; justify-content: flex-start; }
+}
+</style>
+{% endblock %}
+
 {% block csa_main %}
+<div class="dex">
 
     {{ csa.page_header(
         'Socixs · Reparto',
         'Excepciones de reparto',
-        'Festivos, cierres y traslados de día. Planifícalos por adelantado: cada excepción cancela o mueve el reparto de un ciclo, para un nodo concreto o para todos.'
+        'Festivos, cierres y traslados de día. Cada excepción cancela o mueve el reparto de un viernes, para un nodo concreto o para todos.'
     ) }}
 
-    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-5);">
-        <div></div>
-        <div class="csa-row">
-            {{ csa.btn('Nueva excepción', { variant: 'primary', href: path('delivery_exception_new'), icon: 'fa-plus' }) }}
+    <div class="dex-toolbar">
+        {{ csa.btn('Nueva excepción', { variant: 'primary', href: path('delivery_exception_new'), icon: 'fa-plus' }) }}
+    </div>
+
+    {% if total == 0 %}
+        <div class="dex-empty">No hay excepciones registradas. El reparto sigue el calendario normal.</div>
+    {% else %}
+        <div class="dex-section">
+            <h3 class="dex-section__title">Próximas</h3>
+            <p class="dex-section__hint">Festivos y traslados planificados para los próximos viernes.</p>
+            {% if upcoming|length > 0 %}
+                {{ helper.dex_list(upcoming, false) }}
+            {% else %}
+                <div class="dex-empty">No hay excepciones planificadas. El reparto sigue el calendario normal.</div>
+            {% endif %}
         </div>
-    </div>
 
-    <div class="csa-table-wrap">
-        <table class="csa-table" data-paginate>
-            <thead>
-                <tr>
-                    <th>Ciclo</th>
-                    <th>Nodo</th>
-                    <th>Tipo</th>
-                    <th>Trasladado a</th>
-                    <th>Notas</th>
-                    <th class="csa-table__actions">Acciones</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for exception in exceptions %}
-                    <tr>
-                        <td>
-                            <a class="csa-table__primary" href="{{ path('delivery_exception_edit', { id: exception.id }) }}">
-                                Viernes {{ exception.basket.date|date('d/m/Y') }}
-                            </a>
-                        </td>
-                        <td>{{ exception.isGlobal ? 'Todos los nodos' : exception.node.name }}</td>
-                        <td>
-                            {% if exception.isCancelled %}
-                                <span class="csa-badge csa-badge--danger">Sin reparto</span>
-                            {% else %}
-                                <span class="csa-badge csa-badge--warning">Trasladado</span>
-                            {% endif %}
-                        </td>
-                        <td>{{ exception.shiftedDate ? exception.shiftedDate|date('d/m/Y') : '—' }}</td>
-                        <td class="csa-muted">{{ exception.notes|default('—') }}</td>
-                        <td class="csa-table__actions">
-                            <a href="{{ path('delivery_exception_edit', { id: exception.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>
-                            <form method="post" action="{{ path('delivery_exception_delete', { id: exception.id }) }}" style="display:inline;" onsubmit="return confirm('¿Borrar esta excepción?');">
-                                <input type="hidden" name="_token" value="{{ csrf_token('delete' ~ exception.id) }}">
-                                <button type="submit" class="csa-btn-icon" title="Borrar" aria-label="Borrar"><i class="fa fa-trash"></i></button>
-                            </form>
-                        </td>
-                    </tr>
-                {% else %}
-                    <tr>
-                        <td colspan="6" class="csa-muted" style="text-align: center; padding: var(--csa-sp-8);">
-                            No hay excepciones registradas. El reparto sigue el calendario normal.
-                        </td>
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
+        {% if past|length > 0 %}
+            <div class="dex-section">
+                <h3 class="dex-section__title">Pasadas</h3>
+                <p class="dex-section__hint">Histórico de excepciones ya aplicadas.</p>
+                {{ helper.dex_list(past, true) }}
+            </div>
+        {% endif %}
+    {% endif %}
 
+</div>
 {% endblock %}

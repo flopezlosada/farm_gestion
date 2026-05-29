@@ -33,12 +33,29 @@ class DeliveryExceptionController extends AbstractController
     #[Route('/', name: 'delivery_exception_index', methods: ['GET'])]
     public function index(DeliveryExceptionRepository $repository): Response
     {
+        $all = $repository->createQueryBuilder('e')
+            ->join('e.basket', 'b')
+            ->orderBy('b.date', 'ASC')
+            ->getQuery()
+            ->getResult();
+
+        // Separa por el viernes-ciclo: las próximas son las planificables;
+        // las pasadas, histórico (más reciente primero).
+        $today = new \DateTimeImmutable('today');
+        $upcoming = [];
+        $past = [];
+        foreach ($all as $exception) {
+            if ($exception->getBasket()->getDate() >= $today) {
+                $upcoming[] = $exception;
+            } else {
+                $past[] = $exception;
+            }
+        }
+
         return $this->render('delivery_exception/index.html.twig', [
-            'exceptions' => $repository->createQueryBuilder('e')
-                ->join('e.basket', 'b')
-                ->orderBy('b.date', 'ASC')
-                ->getQuery()
-                ->getResult(),
+            'upcoming' => $upcoming,
+            'past' => array_reverse($past),
+            'total' => count($all),
         ]);
     }
 
