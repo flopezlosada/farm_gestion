@@ -13,6 +13,28 @@
 {% block more_css %}
     {{ parent() }}
     <link rel="stylesheet" href="{{ asset('bundles/app/css/morris/morris.css') }}"/>
+    <style>
+    /* stat strip del dashboard, en el lenguaje cream/Fraunces de las
+     * pantallas de reparto, conservando los iconos. */
+    .dash { font-variant-numeric: tabular-nums; }
+    .dash-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    .dash-stat { position: relative; background: var(--csa-surface); border: 1px solid var(--csa-rule); border-radius: var(--csa-radius-lg); padding: 18px 20px; }
+    /* icono suelto (sin caja), arriba a la derecha, grande y atenuado:
+     * llena el hueco y suaviza el color sin perder la pista cromática. */
+    .dash-stat__icon { position: absolute; top: 16px; right: 18px; font-size: 32px; line-height: 1; opacity: 0.42; }
+    .dash-stat__icon--ochre { color: #c89a3a; }
+    .dash-stat__icon--green { color: #5b7a4c; }
+    .dash-stat__icon--sky   { color: #2e6f8e; }
+    .dash-stat__icon--terra { color: #b45d3a; }
+    .dash-stat__value { font-family: 'Fraunces', serif; font-weight: 600; font-size: 31px; letter-spacing: -0.02em; line-height: 1; color: #1d1c17; }
+    .dash-stat__value .u { font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 500; color: #5a564a; margin-left: 5px; letter-spacing: 0; }
+    .dash-stat__label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #8d8773; margin-top: 9px; font-weight: 600; }
+    .dash-stat__delta { font-size: 11.5px; color: #8d8773; margin-top: 5px; }
+    @media (max-width: 900px) { .dash-stats { grid-template-columns: repeat(2, 1fr); } }
+    /* iconos de las listas del dashboard sin caja de fondo, como los KPIs
+     * (scopeado al dashboard; csa-list se usa en otras pantallas). */
+    .csa-dashboard-grid .csa-list__icon { background: transparent; }
+    </style>
 {% endblock %}
 
 {% block more_js %}
@@ -64,43 +86,33 @@
         ) }}
 
         {# ===== KPIs ===== #}
-        <div class="csa-kpi-row" style="margin-bottom: var(--csa-sp-10);">
-            {{ csa.kpi(
-                'Puesta semanal',
-                lay_week,
-                'huevos',
-                lay_week == '0' ? 'Aún sin registrar →' : (total_lay_eggs ~ ' acumulado en ' ~ 'now'|date('Y')),
-                null,
-                'ochre',
-                'fa-egg'
-            ) }}
-            {{ csa.kpi(
-                'Producidos · año',
-                production_year|number_format(0, ',', '.'),
-                'kg',
-                'verduras y hortalizas',
-                null,
-                'green',
-                'fa-leaf'
-            ) }}
-            {{ csa.kpi(
-                'Cultivos en producción',
-                render(controller('App\\Controller\\DefaultController::totalCropWorking')),
-                null,
-                'sectores activos ahora',
-                null,
-                'sky',
-                'fa-seedling'
-            ) }}
-            {{ csa.kpi(
-                'Residuo · año',
-                render(controller('App\\Controller\\DefaultController::totalCompost')),
-                't',
-                'compostaje recogido',
-                null,
-                'terracotta',
-                'fa-recycle'
-            ) }}
+        <div class="dash" style="margin-bottom: var(--csa-sp-10);">
+            <div class="dash-stats">
+                <div class="dash-stat">
+                    <div class="dash-stat__icon dash-stat__icon--ochre"><i class="fa fa-egg" aria-hidden="true"></i></div>
+                    <div class="dash-stat__value">{{ lay_week }}<span class="u">huevos</span></div>
+                    <div class="dash-stat__label">Puesta semanal</div>
+                    <div class="dash-stat__delta">{{ lay_week == '0' ? 'Aún sin registrar' : (total_lay_eggs ~ ' acumulado en ' ~ 'now'|date('Y')) }}</div>
+                </div>
+                <div class="dash-stat">
+                    <div class="dash-stat__icon dash-stat__icon--green"><i class="fa fa-leaf" aria-hidden="true"></i></div>
+                    <div class="dash-stat__value">{{ production_year|number_format(0, ',', '.') }}<span class="u">kg</span></div>
+                    <div class="dash-stat__label">Producidos · año</div>
+                    <div class="dash-stat__delta">verduras y hortalizas</div>
+                </div>
+                <div class="dash-stat">
+                    <div class="dash-stat__icon dash-stat__icon--sky"><i class="fa fa-seedling" aria-hidden="true"></i></div>
+                    <div class="dash-stat__value">{{ render(controller('App\\Controller\\DefaultController::totalCropWorking')) }}</div>
+                    <div class="dash-stat__label">Cultivos en producción</div>
+                    <div class="dash-stat__delta">sectores activos ahora</div>
+                </div>
+                <div class="dash-stat">
+                    <div class="dash-stat__icon dash-stat__icon--terra"><i class="fa fa-recycle" aria-hidden="true"></i></div>
+                    <div class="dash-stat__value">{{ render(controller('App\\Controller\\DefaultController::totalCompost')) }}<span class="u">t</span></div>
+                    <div class="dash-stat__label">Residuo · año</div>
+                    <div class="dash-stat__delta">compostaje recogido</div>
+                </div>
+            </div>
         </div>
 
         <div class="csa-dashboard-grid">
