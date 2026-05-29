@@ -334,31 +334,7 @@ class WeeklyBasketGenerator
      */
     private function createWeeklyBasketsFromShares(Basket $basket, int $dayOrder): array
     {
-        $shareRepo = $this->em->getRepository(PartnerBasketShare::class);
-
-        $cohort = $this->cohortResolver->cohortForBasket($basket);
-        $weeklyMonthlyOrder = $this->weeklyMonthlyOrderFor($basket);
-        $activeBiweeklyNodeIds = $this->activeBiweeklyNodeIds($basket);
-        $biweeklyNodeMonthlyOrders = $this->monthlyOrderByBiweeklyNode($basket);
-
-        $weekly = $shareRepo->findBasketPartnersByTypeAndCity(self::SHARE_WEEKLY, 1, $basket);
-        $half = $shareRepo->findBasketPartnersByTypeAndCity(self::SHARE_HALF, 1, $basket);
-        $biweekly = $shareRepo->findBasketPartnersBiweeklyNodeAware($basket, self::SHARE_BIWEEKLY, 1, $cohort, $activeBiweeklyNodeIds);
-        $monthly = $shareRepo->findBasketPartnersMonthlyNodeAware($basket, self::SHARE_MONTHLY, $weeklyMonthlyOrder, $biweeklyNodeMonthlyOrders);
-
-        $onlyEggWeekly = $shareRepo->findBasketPartnersByTypeAndCity(self::SHARE_ONLY_EGG, 1, $basket, true);
-        $onlyEggBiweekly = $shareRepo->findBasketPartnersBiweeklyNodeAware($basket, self::SHARE_ONLY_EGG, 1, $cohort, $activeBiweeklyNodeIds, true);
-        $onlyEggMonthly = $shareRepo->findBasketPartnersMonthlyNodeAware($basket, self::SHARE_ONLY_EGG, $weeklyMonthlyOrder, $biweeklyNodeMonthlyOrders, true);
-        $onlyEgg = array_merge($onlyEggWeekly, $onlyEggBiweekly, $onlyEggMonthly);
-
-        // Misma lógica que en reuseExisting: cualquier compartición (share_partner_id
-        // != null) se reubica a la sección "compartidas", independientemente de la
-        // frecuencia. Una QC/QCH del PDF aparece en COMPARTIDAS porque comparte, no
-        // porque sea semanal.
-        $this->moveSharedToHalf($weekly, $half);
-        $this->moveSharedToHalf($biweekly, $half);
-        $this->moveSharedToHalf($monthly, $half);
-        $this->moveSharedToHalf($onlyEgg, $half);
+        [$weekly, $half, $biweekly, $monthly, $onlyEgg] = $this->gatherCandidateShares($basket);
 
         /** @var PartnerDeliveryShiftRepository $shiftRepo */
         $shiftRepo = $this->em->getRepository(PartnerDeliveryShift::class);
@@ -422,6 +398,75 @@ class WeeklyBasketGenerator
         $onlyEgg = array_merge($onlyEgg, $extraEggOnly);
 
         return [$weekly, $half, $biweekly, $monthly, $onlyEgg];
+    }
+
+    /**
+     * Reúne los PartnerBasketShare candidatos a repartir en un Basket,
+     * agrupados por modalidad y con las comparticiones ya reubicadas a la
+     * sección "compartidas". SOLO LECTURA: ejecuta finders y resolvers,
+     * pero no persiste nada. Es la mitad de proyección que comparten el
+     * camino de generación (que luego materializa WeeklyBasket) y la
+     * estimación de la ficha de nodo (que solo cuenta).
+     *
+     * No aplica los cambios puntuales de viernes (PartnerDeliveryShift):
+     * eso vive en el camino de escritura, porque altera quién entra/sale.
+     *
+     * @param Basket $basket
+     * @return array{0:PartnerBasketShare[],1:PartnerBasketShare[],2:PartnerBasketShare[],3:PartnerBasketShare[],4:PartnerBasketShare[]} weekly, half, biweekly, monthly, onlyEgg
+     */
+    private function gatherCandidateShares(Basket $basket): array
+    {
+        $shareRepo = $this->em->getRepository(PartnerBasketShare::class);
+
+        $cohort = $this->cohortResolver->cohortForBasket($basket);
+        $weeklyMonthlyOrder = $this->weeklyMonthlyOrderFor($basket);
+        $activeBiweeklyNodeIds = $this->activeBiweeklyNodeIds($basket);
+        $biweeklyNodeMonthlyOrders = $this->monthlyOrderByBiweeklyNode($basket);
+
+        $weekly = $shareRepo->findBasketPartnersByTypeAndCity(self::SHARE_WEEKLY, 1, $basket);
+        $half = $shareRepo->findBasketPartnersByTypeAndCity(self::SHARE_HALF, 1, $basket);
+        $biweekly = $shareRepo->findBasketPartnersBiweeklyNodeAware($basket, self::SHARE_BIWEEKLY, 1, $cohort, $activeBiweeklyNodeIds);
+        $monthly = $shareRepo->findBasketPartnersMonthlyNodeAware($basket, self::SHARE_MONTHLY, $weeklyMonthlyOrder, $biweeklyNodeMonthlyOrders);
+
+        $onlyEggWeekly = $shareRepo->findBasketPartnersByTypeAndCity(self::SHARE_ONLY_EGG, 1, $basket, true);
+        $onlyEggBiweekly = $shareRepo->findBasketPartnersBiweeklyNodeAware($basket, self::SHARE_ONLY_EGG, 1, $cohort, $activeBiweeklyNodeIds, true);
+        $onlyEggMonthly = $shareRepo->findBasketPartnersMonthlyNodeAware($basket, self::SHARE_ONLY_EGG, $weeklyMonthlyOrder, $biweeklyNodeMonthlyOrders, true);
+        $onlyEgg = array_merge($onlyEggWeekly, $onlyEggBiweekly, $onlyEggMonthly);
+
+        // Misma lógica que en reuseExisting: cualquier compartición (share_partner_id
+        // != null) se reubica a la sección "compartidas", independientemente de la
+        // frecuencia. Una QC/QCH del PDF aparece en COMPARTIDAS porque comparte, no
+        // porque sea semanal.
+        $this->moveSharedToHalf($weekly, $half);
+        $this->moveSharedToHalf($biweekly, $half);
+        $this->moveSharedToHalf($monthly, $half);
+        $this->moveSharedToHalf($onlyEgg, $half);
+
+        return [$weekly, $half, $biweekly, $monthly, $onlyEgg];
+    }
+
+    /**
+     * Proyección de solo lectura: qué PartnerBasketShare repartirían en un
+     * Basket según modalidad, cadencia y cohorte, SIN materializar ni
+     * persistir nada. Pensado para estimar "cuánto se va a repartir" en una
+     * semana futura, o "cuánto se estimó" en una pasada aún sin generar, sin
+     * el efecto secundario de generateForBasket (que escribe).
+     *
+     * Devuelve la lista plana de shares candidatas (todas las modalidades,
+     * incluidas las compartidas y las de solo-huevo). El llamante decide
+     * cómo filtrar (p. ej. por nodo) y ponderar (cestas por modalidad).
+     *
+     * No incluye los cambios puntuales de viernes: es una estimación, no el
+     * listado definitivo.
+     *
+     * @param Basket $basket
+     * @return PartnerBasketShare[]
+     */
+    public function projectForBasket(Basket $basket): array
+    {
+        [$weekly, $half, $biweekly, $monthly, $onlyEgg] = $this->gatherCandidateShares($basket);
+
+        return array_merge($weekly, $half, $biweekly, $monthly, $onlyEgg);
     }
 
     /**
