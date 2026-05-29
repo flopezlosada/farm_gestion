@@ -7,8 +7,10 @@
 {% set share = pbs_by_wb_id[wb.id] ?? null %}
 {% set row_eggs = egg_delivery_map[wb.id] ?? false %}
 {% set rbs = wb.basketShare %}
-{# Cestas físicas: solo-huevos (5) = 0, compartida (4) = ½, resto = 1. #}
-{% set cesta_factor = rbs.id == 5 ? 0 : (rbs.id == 4 ? 0.5 : 1) %}
+{# Cestas físicas: solo-huevos (5) = 0; compartidas (4 semanal, 6 quincenal,
+   7 mensual) = ½; resto = 1. Multiplicado por wb.amount: un socio puede llevar
+   varias cestas (ej. Mjose, David = 2). #}
+{% set cesta_factor = (rbs.id == 5 ? 0 : (rbs.id in [4, 6, 7] ? 0.5 : 1)) * wb.amount %}
 <tr class="dlv-row"
     data-name="{{ (wb.partner.nameForDelivery ~ ' ' ~ wb.partner.legalName)|lower }}"
     data-modality="{{ rbs.id }}"

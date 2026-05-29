@@ -125,6 +125,8 @@
 .mod-opt--2 .dot { background: var(--dlv-ochre); }  .mod-opt--2 input { accent-color: var(--dlv-ochre); }
 .mod-opt--3 .dot { background: var(--dlv-terra); }  .mod-opt--3 input { accent-color: var(--dlv-terra); }
 .mod-opt--4 .dot { background: transparent; border: 1px dashed var(--dlv-sage); width: 10px; height: 10px; } .mod-opt--4 input { accent-color: var(--dlv-sage); }
+.mod-opt--6 .dot { background: transparent; border: 1px dashed var(--dlv-ochre); width: 10px; height: 10px; } .mod-opt--6 input { accent-color: var(--dlv-ochre); }
+.mod-opt--7 .dot { background: transparent; border: 1px dashed var(--dlv-terra); width: 10px; height: 10px; } .mod-opt--7 input { accent-color: var(--dlv-terra); }
 .mod-opt--5 .dot { background: var(--dlv-ochre-l); border: 1px solid var(--dlv-ochre); } .mod-opt--5 input { accent-color: var(--dlv-ochre); }
 .dlv-wbg--flat .dlv-wbg__body { border-top: 0; }
 .dlv-row.is-hidden { display: none; }
@@ -182,6 +184,8 @@
 .dlv .mod--2 { background: var(--dlv-ochre-l); color: var(--dlv-ochre-d); }     .dlv .mod--2 .dot { background: var(--dlv-ochre); }
 .dlv .mod--3 { background: var(--dlv-terra-l); color: var(--dlv-terra-d); }     .dlv .mod--3 .dot { background: var(--dlv-terra); }
 .dlv .mod--4 { background: transparent; color: var(--dlv-sage-d); border: 1px dashed var(--dlv-sage); }
+.dlv .mod--6 { background: transparent; color: var(--dlv-ochre-d); border: 1px dashed var(--dlv-ochre); }
+.dlv .mod--7 { background: transparent; color: var(--dlv-terra-d); border: 1px dashed var(--dlv-terra); }
 .dlv .mod--5 { background: #fff2d6; color: var(--dlv-ochre-d); }                .dlv .mod--5 .dot { background: var(--dlv-ochre); }
 .dlv .mod-pair { font-size: 10.5px; color: var(--dlv-ink-faint); margin-top: 3px; font-style: italic; }
 .dlv .dlv-row-spacer td { padding: 0; height: 14px; background: var(--dlv-bg); border: 0; }
@@ -296,7 +300,9 @@
                 <label class="mod-opt mod-opt--1"><input type="checkbox" class="f-mod" value="1" checked> <span class="dot"></span> Semanal</label>
                 <label class="mod-opt mod-opt--2"><input type="checkbox" class="f-mod" value="2" checked> <span class="dot"></span> Quincenal</label>
                 <label class="mod-opt mod-opt--3"><input type="checkbox" class="f-mod" value="3" checked> <span class="dot"></span> Mensual</label>
-                <label class="mod-opt mod-opt--4"><input type="checkbox" class="f-mod" value="4" checked> <span class="dot"></span> Compartida</label>
+                <label class="mod-opt mod-opt--4"><input type="checkbox" class="f-mod" value="4" checked> <span class="dot"></span> Semanal compartida</label>
+                <label class="mod-opt mod-opt--6"><input type="checkbox" class="f-mod" value="6" checked> <span class="dot"></span> Quincenal compartida</label>
+                <label class="mod-opt mod-opt--7"><input type="checkbox" class="f-mod" value="7" checked> <span class="dot"></span> Mensual compartida</label>
                 <label class="mod-opt mod-opt--5"><input type="checkbox" class="f-mod" value="5" checked> <span class="dot"></span> Solo huevos</label>
             </div>
         </div>
@@ -342,7 +348,7 @@
                         {% for sub in section.subgroups %}
                             {% for wb in sub.rows %}
                                 {% set socios_sec = socios_sec + 1 %}
-                                {% set cestas_sec = cestas_sec + (wb.basketShare.id == 5 ? 0 : (wb.basketShare.id == 4 ? 0.5 : 1)) %}
+                                {% set cestas_sec = cestas_sec + (wb.basketShare.id == 5 ? 0 : (wb.basketShare.id in [4, 6, 7] ? 0.5 : 1)) * wb.amount %}
                                 {% if egg_delivery_map[wb.id] ?? false %}{% set huevos_sec = huevos_sec + 1 %}{% endif %}
                             {% endfor %}
                         {% endfor %}

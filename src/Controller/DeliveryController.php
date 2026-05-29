@@ -800,13 +800,14 @@ class DeliveryController extends AbstractController
         $grupos = [];
         foreach ($weeklyBaskets as $wb) {
             // Cestas físicas según modalidad: solo-huevos (5) no lleva cesta;
-            // compartida (4) es ½ (dos familias, una cesta); el resto, 1. El
-            // campo amount está fijo a 1 en los datos, así que manda la
-            // modalidad. BasketShare ids: 1 semanal, 2 quincenal, 3 mensual,
-            // 4 compartida, 5 solo huevos.
-            $cestas += match ($wb->getBasketShare()?->getId()) {
+            // compartidas (4 semanal, 6 quincenal, 7 mensual) son ½ (dos
+            // familias, una cesta); el resto, 1. Multiplicado por amount: un
+            // socio puede recibir varias cestas (ej. Mjose, David = 2).
+            // BasketShare ids: 1 semanal, 2 quincenal, 3 mensual, 4 semanal
+            // compartida, 5 solo huevos, 6 quincenal compartida, 7 mensual compartida.
+            $cestas += ($wb->getAmount() ?? 1) * match ($wb->getBasketShare()?->getId()) {
                 5 => 0.0,
-                4 => 0.5,
+                4, 6, 7 => 0.5,
                 default => 1.0,
             };
             $wbg = $wb->getWeeklyBasketGroup();
