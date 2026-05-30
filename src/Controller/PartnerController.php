@@ -218,10 +218,16 @@ class PartnerController extends AbstractController
             }
         }
 
+        // Usuario de acceso vinculado a este socix (si lo tiene). La relación
+        // User->Partner es unidireccional, así que se busca por el lado inverso.
+        $linkedUser = $em->getRepository(\App\Entity\User::class)
+            ->findOneBy(['partner' => $partner]);
+
         return $this->render('partner/show.html.twig', [
             'partner' => $partner,
             'events' => $events,
             'gestor_names' => $gestorNames,
+            'linked_user' => $linkedUser,
         ]);
     }
 

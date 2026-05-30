@@ -589,7 +589,9 @@
                     <dl class="prt-defs">
                         <div class="prt-defs__row">
                             <dt class="prt-defs__label">Nombre completo</dt>
-                            <dd class="prt-defs__value">{{ partner.name }} {{ partner.surname }}</dd>
+                            {# Los datos están en MAYÚSCULAS en BBDD; aquí se muestran con
+                             # inicial por palabra (lower + capitalize CSS) sin tocar el dato. #}
+                            <dd class="prt-defs__value" style="text-transform: capitalize;">{{ (partner.name ~ ' ' ~ partner.surname)|lower }}</dd>
                         </div>
                         <div class="prt-defs__row">
                             <dt class="prt-defs__label">DNI</dt>
@@ -611,6 +613,14 @@
                                 {% else %}—{% endif %}
                             </dd>
                         </div>
+                        {% if linked_user is defined and linked_user and is_granted('ROLE_ADMIN') %}
+                            <div class="prt-defs__row">
+                                <dt class="prt-defs__label">Cuenta de acceso</dt>
+                                <dd class="prt-defs__value">
+                                    <a href="{{ path('user_show', { id: linked_user.id }) }}"><i class="fa fa-user-circle-o" aria-hidden="true"></i> {{ linked_user.username }}</a>
+                                </dd>
+                            </div>
+                        {% endif %}
                         {% if partner.address %}
                             <div class="prt-defs__row prt-defs__row--full">
                                 <dt class="prt-defs__label">Dirección</dt>
