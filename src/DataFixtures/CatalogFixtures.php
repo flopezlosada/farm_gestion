@@ -2,6 +2,7 @@
 
 namespace App\DataFixtures;
 
+use App\Entity\BasketComponent;
 use App\Entity\BasketShare;
 use App\Entity\City;
 use App\Entity\EggAmount;
@@ -30,6 +31,7 @@ class CatalogFixtures extends Fixture
     public const REF_CITY_PREFIX = 'city_';
     public const REF_STATE_PREFIX = 'state_';
     public const REF_WB_STATUS_PREFIX = 'wb_status_';
+    public const REF_COMPONENT_PREFIX = 'component_';
 
     /**
      * Carga todos los catálogos y registra referencias para los fixtures dependientes.
@@ -166,6 +168,22 @@ class CatalogFixtures extends Fixture
             $statusIdProperty->setValue($status, $statusId);
             $manager->persist($status);
             $this->addReference(self::REF_WB_STATUS_PREFIX . $statusTitle, $status);
+        }
+
+        // Componentes de la entrega (rediseño del calendario de recogida).
+        // Ids FIJOS: el generador los referencia por constante
+        // (BasketComponent::ID_VEGETABLES=1, ID_EGGS=2). Mismo motivo y misma
+        // técnica de id explícito que WeeklyBasketStatus / BasketShare.
+        $componentMetadata = $manager->getClassMetadata(BasketComponent::class);
+        $componentMetadata->setIdGeneratorType(\Doctrine\ORM\Mapping\ClassMetadata::GENERATOR_TYPE_NONE);
+        $componentMetadata->setIdGenerator(new \Doctrine\ORM\Id\AssignedGenerator());
+        $componentIdProperty = new \ReflectionProperty(BasketComponent::class, 'id');
+
+        foreach ([BasketComponent::ID_VEGETABLES => 'Verdura', BasketComponent::ID_EGGS => 'Huevos'] as $componentId => $name) {
+            $component = (new BasketComponent())->setName($name);
+            $componentIdProperty->setValue($component, $componentId);
+            $manager->persist($component);
+            $this->addReference(self::REF_COMPONENT_PREFIX . $name, $component);
         }
 
         $manager->flush();

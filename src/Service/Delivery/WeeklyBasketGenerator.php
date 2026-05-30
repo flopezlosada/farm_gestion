@@ -60,6 +60,7 @@ class WeeklyBasketGenerator
         private readonly NodeDeliveryDate $nodeDeliveryDate,
         private readonly NodeRepository $nodeRepository,
         private readonly EggDeliveryResolver $eggResolver,
+        private readonly WeeklyBasketComposer $composer,
     ) {
     }
 
@@ -374,8 +375,12 @@ class WeeklyBasketGenerator
             $wb->setWeeklyBasketGroup($share->getPartner()->getWeeklyBasketGroup());
             $wb->setAmount($share->getAmount());
             $wb->setDeliveryDate($physicalDate);
+            $wb->setPartnerBasketShare($share);
             $this->em->persist($wb);
             $this->em->flush();
+
+            // Etapa 1 calendario: materializar la composición (líneas de componente).
+            $this->composer->compose($wb, $share, $basket);
 
             $stamped = $this->em->getRepository(WeeklyBasket::class)
                 ->findOneBy(['basket' => $basket->getId(), 'partner' => $share->getPartner()->getId()]);
@@ -390,8 +395,15 @@ class WeeklyBasketGenerator
             if ($existing !== null) {
                 continue;
             }
-            $this->shiftApplier->createWeeklyBasketForShiftDestination($partner, $basket);
+            $destWb = $this->shiftApplier->createWeeklyBasketForShiftDestination($partner, $basket);
             $this->em->flush();
+
+            // Etapa 1 calendario: componer la entrega destino del cambio puntual.
+            $destShare = $this->em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner);
+            if ($destShare !== null) {
+                $destWb->setPartnerBasketShare($destShare);
+                $this->composer->compose($destWb, $destShare, $basket);
+            }
         }
 
         $extraEggOnly = $this->materializeExtraEggDeliveries($basket, $status);
@@ -519,8 +531,12 @@ class WeeklyBasketGenerator
             $wb->setWeeklyBasketGroup($partner->getWeeklyBasketGroup());
             $wb->setAmount(0);
             $wb->setDeliveryDate($physicalDate);
+            $wb->setPartnerBasketShare($share);
             $this->em->persist($wb);
             $this->em->flush();
+
+            // Etapa 1 calendario: línea de huevos para la entrega only-egg.
+            $this->composer->compose($wb, $share, $basket);
             $extras[] = $share;
         }
         return $extras;
