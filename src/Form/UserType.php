@@ -63,8 +63,13 @@ class UserType extends AbstractType
                 'multiple' => true,
                 'expanded' => true,
                 'required' => false,
-            ])
-            ->add('partner', EntityType::class, [
+            ]);
+
+        // El vínculo con socix sólo se establece al crear la cuenta. Es 1:1 y
+        // permanente (una cuenta es de una persona concreta), así que en
+        // edición NO se expone: se muestra como solo lectura en la plantilla.
+        if ($options['include_partner']) {
+            $builder->add('partner', EntityType::class, [
                 'label' => 'Socix vinculadx',
                 'class' => Partner::class,
                 'choice_label' => fn (Partner $p) => $p->getName() . ' ' . $p->getSurname(),
@@ -72,6 +77,7 @@ class UserType extends AbstractType
                 'placeholder' => '— sin vínculo —',
                 'help' => 'Solo necesario si esta cuenta corresponde a una persona socia y va a usar el panel /panel.',
             ]);
+        }
     }
 
     public function configureOptions(OptionsResolver $resolver): void
@@ -79,7 +85,9 @@ class UserType extends AbstractType
         $resolver->setDefaults([
             'data_class' => User::class,
             'require_password' => true,
+            'include_partner' => true,
         ]);
         $resolver->setAllowedTypes('require_password', 'bool');
+        $resolver->setAllowedTypes('include_partner', 'bool');
     }
 }

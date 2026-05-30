@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use App\Entity\User;
+use App\Entity\UserEvent;
 use App\Form\UserType;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -103,11 +104,11 @@ class UserController extends AbstractController
             throw $this->createNotFoundException('Unable to find User entity.');
         }
 
-        $deleteForm = $this->createDeleteForm($id);
+        $events = $em->getRepository(\App\Entity\UserEvent::class)->findForUser($entity);
 
         return $this->render('User/show.html.twig', array(
             'entity' => $entity,
-            'delete_form' => $deleteForm->createView(),
+            'events' => $events,
         ));
     }
 
@@ -146,9 +147,11 @@ class UserController extends AbstractController
             'action' => $this->generateUrl('user_update', array('id' => $entity->getId())),
             'method' => 'PUT',
             'require_password' => false,
+            'include_partner' => false,
         ));
 
-        $form->add('submit', SubmitType::class, array('label' => 'Update'));
+        // El botón de envío lo pone la plantilla ("Guardar cambios"); no
+        // añadimos SubmitType aquí para no duplicarlo vía form_rest.
 
         return $form;
     }
@@ -203,6 +206,60 @@ class UserController extends AbstractController
         }
 
         return $this->redirect($this->generateUrl('user'));
+    }
+
+    /**
+     * Bloquea o desbloquea el acceso de una cuenta (invierte `enabled`) y deja
+     * constancia en el histórico (UserEvent). No se borra la cuenta: así se
+     * preserva todo su historial de granja. Una cuenta no puede bloquearse a
+     * sí misma.
+     *
+     * @param Request $request Lleva el _token CSRF y un `reason` opcional.
+     * @param int     $id      Id de la cuenta a bloquear/desbloquear.
+     * @return \Symfony\Component\HttpFoundation\Response Redirección a la ficha.
+     */
+    public function toggleBlock(Request $request, int $id, EntityManagerInterface $em)
+    {
+        $entity = $em->getRepository(\App\Entity\User::class)->find($id);
+
+        if (!$entity) {
+            throw $this->createNotFoundException('Unable to find User entity.');
+        }
+
+        if (!$this->isCsrfTokenValid('user_toggle_block_' . $id, $request->request->get('_token'))) {
+            $this->addFlash('error', 'Token de seguridad inválido. Inténtalo de nuevo.');
+
+            return $this->redirect($this->generateUrl('user_show', array('id' => $id)));
+        }
+
+        $current = $this->getUser();
+        if ($current instanceof User && $current->getId() === $entity->getId()) {
+            $this->addFlash('error', 'No puedes bloquear tu propia cuenta.');
+
+            return $this->redirect($this->generateUrl('user_show', array('id' => $id)));
+        }
+
+        // Estado destino: lo contrario del actual.
+        $willEnable = !$entity->isEnabled();
+        $entity->setEnabled($willEnable);
+
+        $event = new UserEvent(
+            $entity,
+            $willEnable ? UserEvent::TYPE_UNBLOCK : UserEvent::TYPE_BLOCK
+        );
+        $event->setActor($current instanceof User ? 'gestor:' . $current->getId() : UserEvent::ACTOR_SYSTEM);
+        $reason = trim((string) $request->request->get('reason', ''));
+        if ($reason !== '') {
+            $event->setNotes($reason);
+        }
+        $em->persist($event);
+        $em->flush();
+
+        $this->addFlash('success', $willEnable
+            ? 'Cuenta desbloqueada: la usuaria vuelve a tener acceso.'
+            : 'Cuenta bloqueada: la usuaria ya no puede entrar.');
+
+        return $this->redirect($this->generateUrl('user_show', array('id' => $id)));
     }
 
     /**

@@ -14,19 +14,67 @@
     <span class="csa-topbar__crumb-active">Editar</span>
 {% endblock %}
 
+{% block more_css %}
+{{ parent() }}
+<style>
+.usr { font-family: 'Inter', sans-serif; }
+
+/* botones con fuente garantizada (no dependemos del macro) */
+.usr-btn {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 9px 15px; border-radius: 7px; border: 1px solid var(--csa-line);
+    background: var(--csa-surface); color: var(--csa-ink);
+    font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 500;
+    text-decoration: none; cursor: pointer; transition: 0.12s;
+}
+.usr-btn:hover { background: var(--csa-surface-alt); border-color: var(--csa-ink-muted); color: var(--csa-ink); text-decoration: none; }
+.usr-btn .fa { font-size: 12px; color: var(--csa-ink-muted); }
+.usr-btn:hover .fa { color: var(--csa-ink); }
+.usr-btn--primary { background: var(--csa-green); border-color: var(--csa-green); color: #fff; }
+.usr-btn--primary:hover { background: #3d6730; border-color: #3d6730; color: #fff; }
+.usr-btn--primary .fa, .usr-btn--primary:hover .fa { color: rgba(255,255,255,0.85); }
+.usr-btn--danger { color: var(--csa-terracotta); border-color: var(--csa-terracotta); }
+.usr-btn--danger .fa { color: var(--csa-terracotta); }
+.usr-btn--danger:hover { background: var(--csa-terracotta); border-color: var(--csa-terracotta); color: #fff; }
+.usr-btn--danger:hover .fa { color: #fff; }
+
+/* vínculo solo lectura */
+.usr-readonly { font-size: 14px; color: var(--csa-ink); line-height: 1.5; }
+.usr-readonly strong { font-weight: 600; text-transform: capitalize; }
+.usr-readonly .hint { display: block; font-size: 12px; color: var(--csa-ink-muted); margin-top: 4px; }
+
+/* footer del formulario */
+.usr-formfooter {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; flex-wrap: wrap;
+    padding-top: var(--csa-sp-5); margin-top: var(--csa-sp-4);
+    border-top: 1px solid var(--csa-line);
+}
+.usr-formfooter__right { display: flex; gap: 8px; align-items: center; }
+
+.usr a:focus, .usr button:focus { outline: none; }
+.usr a:focus-visible, .usr button:focus-visible { outline: 2px solid var(--csa-green); outline-offset: 2px; border-radius: 7px; }
+</style>
+{% endblock %}
+
 {% block csa_main %}
+
+{% set is_self = app.user and app.user.id == entity.id %}
+
+<div class="usr">
 
     {{ csa.page_header(
         'Administración · Usuarias',
         'Editar ' ~ entity.username,
-        'Identidad, permisos y vínculo con socix.'
+        'Identidad y permisos. El vínculo con socix y la contraseña no se cambian desde aquí.'
     ) }}
 
-    <form id="user-delete-form" method="post"
-          action="{{ path('user_delete', { id: entity.id }) }}"
-          style="display: none;">
-        <input type="hidden" name="_method" value="DELETE">
-    </form>
+    {# Form oculto para el bloqueo/desbloqueo (POST separado del form de edición). #}
+    {% if not is_self %}
+        <form id="user-toggle-form" method="post" action="{{ path('user_toggle_block', { id: entity.id }) }}" style="display: none;">
+            <input type="hidden" name="_token" value="{{ csrf_token('user_toggle_block_' ~ entity.id) }}">
+        </form>
+    {% endif %}
 
     {{ form_start(edit_form, { action: path('user_update', { id: entity.id }), method: 'PUT', attr: { class: 'csa-form-narrow' } }) }}
 
@@ -53,27 +101,48 @@
 
             {% embed '_components/csa_form_section.html.twig' with { num: '3', title: 'Vínculo con socix' } %}
                 {% block body %}
-                    {% import '_macros/csa.html.twig' as csa %}
-                    <div class="csa-form-grid">
-                        {{ csa.field(edit_form.partner, 'Socix vinculadx', { full: true }) }}
+                    <div class="usr-readonly">
+                        {% if entity.partner %}
+                            Vinculada a <strong>{{ (entity.partner.name ~ ' ' ~ entity.partner.surname)|lower }}</strong>.
+                            <span class="hint">El vínculo es permanente y se define al crear la cuenta; no se cambia desde aquí.</span>
+                        {% else %}
+                            <span class="csa-muted">Sin vínculo con ningún socix.</span>
+                        {% endif %}
                     </div>
                 {% endblock %}
             {% endembed %}
 
-            <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
-                <button type="button" class="csa-btn csa-btn--ghost"
-                    onclick="document.getElementById('confirm-user-delete').showModal()">Eliminar</button>
-            {{ csa.confirm_dialog('confirm-user-delete', {
-                variant: 'danger',
-                eyebrow: 'Acción permanente',
-                title: 'Eliminar este registro',
-                body: 'Se borrará de forma definitiva y no podrá recuperarse.',
-                confirm_label: 'Eliminar',
-                external_form_id: 'user-delete-form',
-            }) }}
-                <div class="csa-row">
-                    {{ csa.btn('Cancelar', { variant: 'ghost', href: path('user_show', { id: entity.id }) }) }}
-                    <button type="submit" class="csa-btn csa-btn--primary">Guardar cambios</button>
+            <div class="usr-formfooter">
+                {# Acción de cuenta: bloquear / desbloquear (no se borra). #}
+                <div>
+                    {% if not is_self %}
+                        {% if entity.enabled %}
+                            <button type="button" class="usr-btn usr-btn--danger"
+                                    onclick="document.getElementById('confirm-user-toggle').showModal()">
+                                <i class="fa fa-ban" aria-hidden="true"></i> Bloquear acceso
+                            </button>
+                        {% else %}
+                            <button type="button" class="usr-btn usr-btn--primary"
+                                    onclick="document.getElementById('confirm-user-toggle').showModal()">
+                                <i class="fa fa-check-circle" aria-hidden="true"></i> Desbloquear acceso
+                            </button>
+                        {% endif %}
+                        {{ csa.confirm_dialog('confirm-user-toggle', {
+                            variant: entity.enabled ? 'danger' : 'default',
+                            eyebrow: 'Acceso de la cuenta',
+                            title: entity.enabled ? 'Bloquear acceso' : 'Desbloquear acceso',
+                            body: entity.enabled
+                                ? 'La usuaria no podrá entrar hasta que la desbloquees. Su historial se conserva intacto.'
+                                : 'La usuaria vuelve a poder entrar al sistema.',
+                            confirm_label: entity.enabled ? 'Bloquear' : 'Desbloquear',
+                            external_form_id: 'user-toggle-form',
+                        }) }}
+                    {% endif %}
+                </div>
+
+                <div class="usr-formfooter__right">
+                    <a class="usr-btn" href="{{ path('user_show', { id: entity.id }) }}">Cancelar</a>
+                    <button type="submit" class="usr-btn usr-btn--primary"><i class="fa fa-check" aria-hidden="true"></i> Guardar cambios</button>
                 </div>
             </div>
 
@@ -82,4 +151,5 @@
         {{ form_rest(edit_form) }}
     {{ form_end(edit_form, { render_rest: false }) }}
 
+</div>
 {% endblock %}

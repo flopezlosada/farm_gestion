@@ -53,6 +53,9 @@ security:
             pattern: ^/
             lazy: true
             provider: app_user_provider
+            # Rechaza el login de cuentas bloqueadas (enabled = false). Sin esto
+            # el bloqueo no surtiría efecto: Symfony no mira `enabled` por su cuenta.
+            user_checker: App\Security\UserChecker
             # Bloquea fuerza bruta contra /login. 5 intentos fallidos por
             # minuto desde la misma IP/username; tras eso, Symfony devuelve
             # TooManyLoginAttemptsAuthenticationException hasta que la
