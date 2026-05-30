@@ -931,7 +931,11 @@ class DeliveryController extends AbstractController
         $timeline = array_map(
             fn (Basket $b): array => [
                 'basket' => $b,
-                'date' => $nodeDeliveryDate->weekdayDateFor($b, $node),
+                // Fecha física del nodo aplicando excepciones de calendario
+                // (festivo trasladado: 1-may→30-abr, 15-may→14-may). Si el nodo
+                // no reparte esa semana o está cancelada, physicalDateFor da null
+                // y caemos al día nominal del nodo (la fila se atenúa via 'delivers').
+                'date' => $nodeDeliveryDate->physicalDateFor($b, $node) ?? $nodeDeliveryDate->weekdayDateFor($b, $node),
                 'delivers' => $nodeDeliveryDate->deliversInBasket($b, $node),
                 'active' => $b->getId() === $selected->getId(),
                 'past' => $b->getDate() !== null && $b->getDate() < $today,
