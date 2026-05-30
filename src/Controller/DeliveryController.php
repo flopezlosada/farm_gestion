@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use App\Entity\Basket;
+use App\Entity\BasketComponent;
 use App\Entity\Node;
 use App\Entity\Partner;
 use App\Entity\PartnerDeliveryShift;
@@ -15,12 +16,12 @@ use App\Repository\NodeRepository;
 use App\Repository\PartnerDeliveryShiftRepository;
 use App\Repository\PartnerRepository;
 use App\Repository\PartnerBasketShareRepository;
+use App\Repository\WeeklyBasketItemRepository;
 use App\Repository\WeeklyBasketRepository;
 use App\Repository\WeeklyBasketStatusRepository;
 use App\Service\Delivery\DeliveryShiftApplier;
 use App\Service\Delivery\DeliveryShiftCandidates;
 use App\Service\Delivery\DeliveryShiftValidator;
-use App\Service\Delivery\EggDeliveryResolver;
 use App\Service\Delivery\NodeDeliveryDate;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Delivery\WeeklyDeliveryReport;
@@ -443,8 +444,8 @@ class DeliveryController extends AbstractController
         NodeRepository $nodeRepo,
         BasketRepository $basketRepo,
         WeeklyBasketRepository $weeklyBasketRepo,
+        WeeklyBasketItemRepository $weeklyBasketItemRepo,
         PartnerBasketShareRepository $partnerBasketShareRepo,
-        EggDeliveryResolver $eggResolver,
         NodeDeliveryDate $nodeDeliveryDate,
         DeliveryExceptionRepository $deliveryExceptionRepo,
         WeeklyBasketGenerator $generator,
@@ -489,13 +490,19 @@ class DeliveryController extends AbstractController
         // cae otro día; null si el nodo es quincenal y este Basket no le toca.
         $physicalDate = $nodeDeliveryDate->physicalDateFor($basket, $node);
 
-        // Mini-timeline del header: 2 ciclos pasados, el actual y 3 futuros.
+        // Mini-timeline del header: 1 ciclo pasado, el actual y 3 futuros.
         // Cada entrada lleva el día REAL del nodo (miércoles para Madrid,
         // viernes para Torremocha) y si el nodo reparte esa semana, para
         // atenuar las semanas vacías de los nodos quincenales.
+        //
+        // La tira se ancla SIEMPRE en el día seleccionado ($basket), no en
+        // ?ref=, para que al pinchar un día (incluso tras navegar con las
+        // flechas a una ventana lejana) la tira quede centrada en ese día.
+        // El ?ref= sólo lo usa la navegación AJAX de las flechas, que
+        // desplaza la ventana sin cambiar el día seleccionado.
         $timelineData = $this->buildTimelineData(
             $basketRepo, $nodeDeliveryDate, $node, $basket,
-            $request->query->getInt('ref', 0), 'center',
+            $basket->getId(), 'center',
         );
 
         // Estructura unificada de secciones para el render, según el modo de
@@ -520,14 +527,21 @@ class DeliveryController extends AbstractController
             );
         }
 
-        // eggDeliveryMap[wb.id] = bool. Permite al template ocultar la columna
-        // huevos cuando el resolver dice que no toca esta semana.
+        // Composición materializada por entrega (WeeklyBasketItem): leemos las
+        // líneas en vez de re-derivar del patrón al pintar. Cada entrega trae
+        // sus cestas físicas (verdura) y sus docenas (huevos) ya estampadas; un
+        // cambio puntual movió la entrega con sus líneas, así que esto refleja
+        // la verdad por-entrega, no el patrón ciego al shift.
+        $componentAmounts = $weeklyBasketItemRepo->componentAmountsFor($weeklyBaskets);
+        $cestasByWbId = [];
+        $dozensByWbId = [];
         $eggDeliveryMap = [];
         foreach ($weeklyBaskets as $wb) {
-            $share = $pbsByWbId[$wb->getId()] ?? null;
-            $eggDeliveryMap[$wb->getId()] = $share !== null
-                ? $eggResolver->delivers($share, $basket)
-                : false;
+            $items = $componentAmounts[$wb->getId()] ?? [];
+            $cestasByWbId[$wb->getId()] = $items[BasketComponent::ID_VEGETABLES] ?? 0.0;
+            $dozensByWbId[$wb->getId()] = $items[BasketComponent::ID_EGGS] ?? 0.0;
+            // "Lleva huevos" = existe línea de huevos para esta entrega.
+            $eggDeliveryMap[$wb->getId()] = isset($items[BasketComponent::ID_EGGS]);
         }
 
         // node_active_counts[nodeId] = {wbg, socios}: conteo de reparto de ESE
@@ -550,7 +564,9 @@ class DeliveryController extends AbstractController
             'sections' => $sections,
             'pbs_by_wb_id' => $pbsByWbId,
             'egg_delivery_map' => $eggDeliveryMap,
-            'totals' => $this->computeTotals($weeklyBaskets, $eggDeliveryMap, $pbsByWbId),
+            'cestas_by_wb_id' => $cestasByWbId,
+            'dozens_by_wb_id' => $dozensByWbId,
+            'totals' => $this->computeTotals($weeklyBaskets, $cestasByWbId, $dozensByWbId),
         ]);
     }
 
@@ -788,38 +804,30 @@ class DeliveryController extends AbstractController
      * Totales del nodo+día para el resumen destacado de la pantalla.
      *
      * @param WeeklyBasket[] $weeklyBaskets
-     * @param array<int,bool> $eggDeliveryMap
-     * @param array<int,?\App\Entity\PartnerBasketShare> $pbsByWbId
+     * @param array<int,float> $cestasByWbId Cestas físicas por entrega (ítem verdura).
+     * @param array<int,float> $dozensByWbId Docenas por entrega (ítem huevos).
      * @return array{socios:int, grupos:int, cestas:float, docenas:float, con_huevos:int}
      */
-    private function computeTotals(array $weeklyBaskets, array $eggDeliveryMap, array $pbsByWbId): array
+    private function computeTotals(array $weeklyBaskets, array $cestasByWbId, array $dozensByWbId): array
     {
         $cestas = 0.0;
         $docenas = 0.0;
         $conHuevos = 0;
         $grupos = [];
         foreach ($weeklyBaskets as $wb) {
-            // Cestas físicas según modalidad: solo-huevos (5) no lleva cesta;
-            // compartidas (4 semanal, 6 quincenal, 7 mensual) son ½ (dos
-            // familias, una cesta); el resto, 1. Multiplicado por amount: un
-            // socio puede recibir varias cestas (ej. Mjose, David = 2).
-            // BasketShare ids: 1 semanal, 2 quincenal, 3 mensual, 4 semanal
-            // compartida, 5 solo huevos, 6 quincenal compartida, 7 mensual compartida.
-            $cestas += ($wb->getAmount() ?? 1) * match ($wb->getBasketShare()?->getId()) {
-                5 => 0.0,
-                4, 6, 7 => 0.5,
-                default => 1.0,
-            };
+            // Cestas físicas y docenas salen de la composición materializada: la
+            // ponderación ½ de las compartidas y el 0 de "solo huevos" ya están
+            // estampados en el ítem (el composer aplicó el peso de la modalidad),
+            // así que aquí solo sumamos. Adiós al hack de ids por modalidad.
+            $cestas += $cestasByWbId[$wb->getId()] ?? 0.0;
             $wbg = $wb->getWeeklyBasketGroup();
             if ($wbg !== null) {
                 $grupos[$wbg->getId()] = true;
             }
-            if ($eggDeliveryMap[$wb->getId()] ?? false) {
+            $dozens = $dozensByWbId[$wb->getId()] ?? 0.0;
+            if ($dozens > 0) {
                 $conHuevos++;
-                $eggAmount = ($pbsByWbId[$wb->getId()] ?? null)?->getEggAmount();
-                if ($eggAmount !== null) {
-                    $docenas += $eggAmount->getDozens();
-                }
+                $docenas += $dozens;
             }
         }
         return [
@@ -833,9 +841,10 @@ class DeliveryController extends AbstractController
 
     /**
      * Basket de referencia para anclar la mini-timeline: el indicado por
-     * `?ref=` si es válido, o el más próximo a hoy (esta semana). Estable: no
-     * depende del Basket seleccionado, así que pinchar un día no desplaza la
-     * tira; para moverse por el calendario están las flechas (que cambian ref).
+     * `?ref=` si es válido, o el más próximo a hoy (esta semana) como
+     * fallback. La carga de página pasa el día seleccionado como ref para
+     * centrar la tira en él; la navegación AJAX de las flechas pasa el extremo
+     * de la ventana para desplazarla sin cambiar el día seleccionado.
      */
     private function resolveTimelineAnchor(BasketRepository $repo, int $refId): ?Basket
     {
