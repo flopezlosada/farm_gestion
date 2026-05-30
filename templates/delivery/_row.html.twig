@@ -7,10 +7,10 @@
 {% set share = pbs_by_wb_id[wb.id] ?? null %}
 {% set row_eggs = egg_delivery_map[wb.id] ?? false %}
 {% set rbs = wb.basketShare %}
-{# Cestas físicas: solo-huevos (5) = 0; compartidas (4 semanal, 6 quincenal,
-   7 mensual) = ½; resto = 1. Multiplicado por wb.amount: un socio puede llevar
-   varias cestas (ej. Mjose, David = 2). #}
-{% set cesta_factor = (rbs.id == 5 ? 0 : (rbs.id in [4, 6, 7] ? 0.5 : 1)) * wb.amount %}
+{# Cestas físicas y docenas salen de la composición materializada (los ítems
+   ya llevan la ponderación ½ de compartidas y el 0 de solo-huevos). #}
+{% set cesta_factor = cestas_by_wb_id[wb.id] ?? 0 %}
+{% set row_dozens = dozens_by_wb_id[wb.id] ?? 0 %}
 <tr class="dlv-row"
     data-name="{{ (wb.partner.nameForDelivery ~ ' ' ~ wb.partner.legalName)|lower }}"
     data-modality="{{ rbs.id }}"
@@ -18,7 +18,7 @@
     data-cohort="{{ share.deliveryGroup ?? '' }}"
     data-eggs="{{ row_eggs ? '1' : '0' }}"
     data-cestas="{{ cesta_factor }}"
-    data-dozens="{{ row_eggs and share and share.eggAmount ? share.eggAmount.dozens : 0 }}"
+    data-dozens="{{ row_dozens }}"
     data-delivery-date="{{ wb.deliveryDate ? wb.deliveryDate|date('Y-m-d') : '' }}">
     <td class="partner">
         {{ wb.partner.nameForDelivery }}

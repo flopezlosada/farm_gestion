@@ -4,6 +4,7 @@ namespace App\Service\Delivery;
 
 use App\Entity\Basket;
 use App\Entity\BasketComponent;
+use App\Entity\BasketShare;
 use App\Entity\PartnerBasketShare;
 use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketItem;
@@ -13,16 +14,15 @@ use Doctrine\ORM\EntityManagerInterface;
  * Estampa los WeeklyBasketItem (líneas de componente) de una entrega, reflejando
  * su composición real: verdura si la entrega lleva cesta, huevos si corresponde.
  *
- * Etapa 1 del rediseño del calendario de recogida: MATERIALIZA lo que hoy el
- * sistema deriva al vuelo (EggDeliveryResolver), SIN cambiar comportamiento —
- * todavía no lee estas líneas nadie. La cantidad va en la unidad natural del
- * componente: verdura en cestas, huevos en docenas (EggAmount::getDozens()).
+ * Rediseño del calendario de recogida. La cantidad va en la unidad natural del
+ * componente: verdura en CESTAS FÍSICAS (amount × peso de modalidad: compartida
+ * ½, solo-huevos 0 → sin línea), huevos en docenas (EggAmount::getDozens()).
+ *
+ * La PRESENCIA de huevos por entrega aún se deriva del patrón (EggDeliveryResolver)
+ * al estampar; el reparto v2 ya LEE estas líneas en lugar de re-derivar al pintar.
  */
 final class WeeklyBasketComposer
 {
-    /** BasketShare de "solo huevos": la entrega no lleva verdura. */
-    private const SHARE_ONLY_EGG = 5;
-
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly EggDeliveryResolver $eggResolver,
@@ -57,11 +57,17 @@ final class WeeklyBasketComposer
             return;
         }
 
-        $isOnlyEgg = $weeklyBasket->getBasketShare()?->getId() === self::SHARE_ONLY_EGG;
+        $share2 = $weeklyBasket->getBasketShare();
+        $isOnlyEgg = $share2?->getId() === BasketShare::ID_ONLY_EGG;
 
-        // Verdura: toda entrega que no sea "solo huevos". Amount = nº de cestas.
-        if (!$isOnlyEgg) {
-            $this->addItem($weeklyBasket, $vegetables, number_format((float) $weeklyBasket->getAmount(), 2, '.', ''));
+        // Verdura: cestas FÍSICAS que reparte esta entrega = amount × peso de la
+        // modalidad (compartida = ½, solo-huevos = 0). El peso vive en BasketShare
+        // (getDeliveredBasketWeight) para no replicar la regla. Si da 0, no hay
+        // línea de verdura — el "solo huevos" deja de ser un caso especial.
+        $weight = $share2?->getDeliveredBasketWeight() ?? 1.0;
+        $vegetableCestas = (float) $weeklyBasket->getAmount() * $weight;
+        if ($vegetableCestas > 0) {
+            $this->addItem($weeklyBasket, $vegetables, number_format($vegetableCestas, 2, '.', ''));
         }
 
         // Huevos: las entregas "solo huevos" por definición; las cestas, si el
