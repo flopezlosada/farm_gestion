@@ -172,6 +172,25 @@ a.grl-stat:hover { border-color: var(--prl-line-2); background: var(--prl-bg); }
         form.querySelectorAll('input[type="radio"], select').forEach(function (el) {
             el.addEventListener('change', function () { form.submit(); });
         });
+
+        // Búsqueda por texto: auto-envío con debounce (~350ms) al dejar de
+        // teclear, igual que el listado de socixs. Server-side, por eso
+        // recarga en vez de filtrar en cliente.
+        var searchInput = form.querySelector('input[name="q"]');
+        if (searchInput) {
+            var debounce = null;
+            searchInput.addEventListener('input', function () {
+                clearTimeout(debounce);
+                debounce = setTimeout(function () { form.submit(); }, 350);
+            });
+            // El submit recarga: devolvemos el foco al campo con el cursor
+            // al final si veníamos de una búsqueda.
+            if (searchInput.value) {
+                searchInput.focus();
+                var end = searchInput.value.length;
+                searchInput.setSelectionRange(end, end);
+            }
+        }
     }
 }());
 </script>

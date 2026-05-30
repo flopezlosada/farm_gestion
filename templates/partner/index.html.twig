@@ -465,6 +465,28 @@
                         filterForm.submit();
                     });
                 });
+
+                // Búsqueda por texto: auto-envío con debounce (~350ms) al
+                // dejar de teclear, para no obligar a pulsar Enter. Sigue
+                // siendo server-side (busca en toda la base, no sólo la
+                // página visible), por eso recarga en vez de filtrar en
+                // cliente como el listado de reparto.
+                var searchInput = filterForm.querySelector('input[name="q"]');
+                if (searchInput) {
+                    var debounce = null;
+                    searchInput.addEventListener('input', function () {
+                        clearTimeout(debounce);
+                        debounce = setTimeout(function () { filterForm.submit(); }, 350);
+                    });
+                    // Como el submit recarga la página, el foco se pierde.
+                    // Si veníamos de una búsqueda, devolvemos el foco al
+                    // campo con el cursor al final para seguir escribiendo.
+                    if (searchInput.value) {
+                        searchInput.focus();
+                        var end = searchInput.value.length;
+                        searchInput.setSelectionRange(end, end);
+                    }
+                }
             }
 
             // ---------- bulk bar ----------
