@@ -86,7 +86,9 @@ class CompostCollectionRepository extends EntityRepository
         if ($point) {
             $dql .= " and p.compost_collection_point=:point";
         }
-        $dql .= '  GROUP BY week ORDER by p.collect_date asc';
+        // ORDER BY min(p.collect_date): cronológico determinista. p.collect_date
+        // suelto (no agrupado) incumple ONLY_FULL_GROUP_BY.
+        $dql .= '  GROUP BY week ORDER by min(p.collect_date) asc';
         $query = $em->createQuery($dql);
         $query->setParameter("year", $year);
         if ($point) {

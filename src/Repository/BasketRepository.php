@@ -35,20 +35,6 @@ class BasketRepository extends ServiceEntityRepository
     }
 
     /**
-     * devuelve el listado de cestas anteriores a una fecha dada
-     * @return mixed
-     */
-    public function findMonthlyBasket($date)
-    {
-        $em = $this->getEntityManager();
-        $dql = "SELECT b, YEAR(b.date) as y, MONTH(b.date) as m FROM App\\Entity\\Basket b where b.date <:max_date  GROUP by y,m";
-        $query = $em->createQuery($dql);
-        $query->setParameter("max_date", $date);
-
-        return $query->getResult();
-    }
-
-    /**
      * Basket inmediatamente posterior a uno dado por fecha (el viernes
      * siguiente del calendario CSA). Devuelve null si no hay Basket
      * futuro registrado.

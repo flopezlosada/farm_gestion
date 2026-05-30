@@ -66,7 +66,10 @@ class LayRepository extends EntityRepository
         if ($batch) {
             $dql .= " and l.batch=:batch ";
         }
-        $dql .= " group by l.week order by l.week desc";
+        // year_date es constante (lo fija el WHERE YEAR(lay_date)=:year); se
+        // añade al GROUP BY solo para cumplir ONLY_FULL_GROUP_BY, sin alterar
+        // los grupos.
+        $dql .= " group by l.week, year_date order by l.week desc";
         $query = $em->createQuery($dql);
         $query->setParameter("year", $year);
         if ($batch) {
@@ -122,9 +125,12 @@ class LayRepository extends EntityRepository
 
         $em = $this->getEntityManager();
         $dql = "select sum(l.amount) as total, l.week as week, count(l.amount) as days, YEAR(l.lay_date)
-                  as year_date, l.lay_date from App\\Entity\\Lay l where l.batch=:batch";
+                  as year_date from App\\Entity\\Lay l where l.batch=:batch";
 
-        $dql .= " group by l.week,year_date order by l.lay_date asc";
+        // Se elimina l.lay_date del SELECT (no lo consume ninguna plantilla) y
+        // se ordena por MIN(l.lay_date): cronológico determinista, en vez del
+        // lay_date arbitrario del grupo que devolvía MySQL sin el modo estricto.
+        $dql .= " group by l.week,year_date order by min(l.lay_date) asc";
         $query = $em->createQuery($dql);
 
         $query->setParameter("batch", $batch);
@@ -195,7 +201,10 @@ class LayRepository extends EntityRepository
     public function findAllMonthLay($batch)
     {
         $em = $this->getEntityManager();
-        $dql = "select l, sum(l.amount) as total, MONTH(l.lay_date) as month, YEAR(l.lay_date)
+        // Se elimina la entidad l del SELECT (ninguna plantilla la consume; solo
+        // se usan total/month/year_date) para cumplir ONLY_FULL_GROUP_BY: no se
+        // puede seleccionar la entidad entera agrupando por campos derivados.
+        $dql = "select sum(l.amount) as total, MONTH(l.lay_date) as month, YEAR(l.lay_date)
                   as year_date from App\\Entity\\Lay l where l.batch=:batch";
 
         $dql .= " group by month,year_date order by year_date,month asc";
@@ -210,8 +219,10 @@ class LayRepository extends EntityRepository
     public function findWeeksInProduction()
     {
         $em = $this->getEntityManager();
+        // ORDER BY min(l.lay_date): cronológico determinista. l.lay_date suelto
+        // (no agrupado) incumple ONLY_FULL_GROUP_BY.
         $dql = "select l.week as week, YEAR(l.lay_date)
-                  as year_date from App\\Entity\\Lay l group by l.week,year_date order by l.lay_date asc";
+                  as year_date from App\\Entity\\Lay l group by l.week,year_date order by min(l.lay_date) asc";
 
 
         $query = $em->createQuery($dql);
