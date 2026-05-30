@@ -200,6 +200,23 @@
     color: var(--dlv-ink-faint); font-size: 13px; font-style: italic;
     background: var(--dlv-surface); border: 1px dashed var(--dlv-line-2); border-radius: 8px;
 }
+
+/* ---------- móvil ---------- */
+@media (max-width: 768px) {
+    /* El header deja de ser 2 columnas (título | tira) y apila: la tira
+       pasa debajo del título, a todo el ancho. */
+    .dlv-head { grid-template-columns: 1fr; gap: 14px; align-items: stretch; }
+    /* La tira de 5 chips no cabe en un móvil: en vez de romper el marco la
+       dejamos deslizable en horizontal. min-width:0 permite que el item del
+       grid encoja por debajo del ancho de su contenido y active el scroll. */
+    .dlv-weeks { overflow-x: auto; min-width: 0; -webkit-overflow-scrolling: touch; }
+    .dlv-weeks a { min-width: 58px; padding: 7px 9px; }
+    .dlv-weeks a .num { font-size: 15px; }
+    /* Las 4 tarjetas de resumen no caben en una fila: 2x2. */
+    .dlv-stats { grid-template-columns: repeat(2, 1fr); }
+    .dlv-stat { padding: 12px 14px; }
+    .dlv-stat .v { font-size: 24px; }
+}
 </style>
 {% endblock %}
 
@@ -348,7 +365,7 @@
                         {% for sub in section.subgroups %}
                             {% for wb in sub.rows %}
                                 {% set socios_sec = socios_sec + 1 %}
-                                {% set cestas_sec = cestas_sec + (wb.basketShare.id == 5 ? 0 : (wb.basketShare.id in [4, 6, 7] ? 0.5 : 1)) * wb.amount %}
+                                {% set cestas_sec = cestas_sec + (cestas_by_wb_id[wb.id] ?? 0) %}
                                 {% if egg_delivery_map[wb.id] ?? false %}{% set huevos_sec = huevos_sec + 1 %}{% endif %}
                             {% endfor %}
                         {% endfor %}
