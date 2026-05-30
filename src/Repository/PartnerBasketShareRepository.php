@@ -59,7 +59,9 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
 
     /**
      * Suscripción "activa hoy" de un socio: la que está en vigor en la fecha
-     * dada (o hoy si se omite) — start_date ≤ fecha, end_date NULL o ≥ fecha.
+     * dada (o hoy si se omite) — start_date NULL o ≤ fecha, end_date NULL o ≥ fecha.
+     * start_date NULL = sin fecha de alta conocida = activa desde siempre (no se
+     * excluye: un socio sin fecha no debe desaparecer del reparto).
      * Si hay varias compatibles (raro pero posible en datos legacy), devuelve
      * la más reciente por start_date.
      */
@@ -69,7 +71,7 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
 
         return $this->createQueryBuilder('s')
             ->where('s.partner = :partner')
-            ->andWhere('s.start_date <= :on')
+            ->andWhere('s.start_date IS NULL OR s.start_date <= :on')
             ->andWhere('s.end_date IS NULL OR s.end_date >= :on')
             ->setParameter('partner', $partner)
             ->setParameter('on', $on->format('Y-m-d'))
@@ -89,7 +91,7 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
         $em = $this->getEntityManager();
 
         $dql = "select b from App\\Entity\\PartnerBasketShare b inner join b.partner p where b.basket_share=:basket_share and
-                      b.is_active=:status and b.start_date<=:date ";
+                      b.is_active=:status and (b.start_date IS NULL OR b.start_date<=:date) ";
         if ($only_eggs)
         {
             $dql.=" and b.egg_period=1 ";
@@ -132,7 +134,7 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
                 inner join b.partner p
                 where b.basket_share = :basket_share
                   and b.is_active = :status
-                  and b.start_date <= :date
+                  and (b.start_date IS NULL OR b.start_date <= :date)
                   and (b.end_date IS NULL OR b.end_date >= :date)
                   and b.delivery_group = :cohort";
 
@@ -183,7 +185,7 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
                 left join wbg.node n
                 where b.basket_share = :basket_share
                   and b.is_active = :status
-                  and b.start_date <= :date
+                  and (b.start_date IS NULL OR b.start_date <= :date)
                   and (b.end_date IS NULL OR b.end_date >= :date)
                   and (
                         (n.cadence = :cadence_weekly AND b.delivery_group = :cohort)
@@ -233,7 +235,7 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
         $result = $query->getResult();
         $array_id_partners = array(); //es el array con las ids de los socios que recibieron la semana anterior. Habrá txdo tipo de socios, semanales, mensuales,...
 
-        $dql_partners = "select b from App\\Entity\\PartnerBasketShare b inner join b.partner p where b.basket_share=:basket_share and b.is_active=:status and b.start_date<=:date ";
+        $dql_partners = "select b from App\\Entity\\PartnerBasketShare b inner join b.partner p where b.basket_share=:basket_share and b.is_active=:status and (b.start_date IS NULL OR b.start_date<=:date) ";
         if (count($result) > 0) {
 
             foreach ($result as $weekly_basket) {
@@ -330,7 +332,7 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
                           left join wbg.node n
                           where b.basket_share = :basket_share
                             and b.is_active = 1
-                            and b.start_date <= :date
+                            and (b.start_date IS NULL OR b.start_date <= :date)
                             and (b.end_date IS NULL OR b.end_date >= :date)
                             and b.day_month_order = :weekly_order
                             and (n.cadence = :cadence_weekly OR n.id IS NULL)";
@@ -358,7 +360,7 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
                       inner join wbg.node n
                       where b.basket_share = :basket_share
                         and b.is_active = 1
-                        and b.start_date <= :date
+                        and (b.start_date IS NULL OR b.start_date <= :date)
                         and (b.end_date IS NULL OR b.end_date >= :date)
                         and b.day_month_order = :order_for_node
                         and n.id = :node_id";
@@ -429,7 +431,7 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
         }
 
         $dql_final = "select b from App\\Entity\\PartnerBasketShare b inner join b.partner p where b.basket_share=:basket_share and
-                      b.is_active=1 and b.day_month_order<=:day_order and b.start_date<=:date "; //pongo <= porque si alguien de la semana anterior no ha recogido y quiere recogerla esta, no aparece en el listado anterior (dql_partners) y así puede recogerla
+                      b.is_active=1 and b.day_month_order<=:day_order and (b.start_date IS NULL OR b.start_date<=:date) "; //pongo <= porque si alguien de la semana anterior no ha recogido y quiere recogerla esta, no aparece en el listado anterior (dql_partners) y así puede recogerla
         if (count($array_id_partners)) {
             $dql_final .= " and b.partner not in (:ids)";
         }
@@ -504,7 +506,7 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
         $dql = "SELECT b FROM App\\Entity\\PartnerBasketShare b
                 INNER JOIN b.partner p
                 WHERE b.is_active = 1
-                  AND b.start_date <= :date
+                  AND (b.start_date IS NULL OR b.start_date <= :date)
                   AND (b.end_date IS NULL OR b.end_date >= :date)
                   AND b.egg_amount IS NOT NULL
                   AND b.egg_period IS NOT NULL";
