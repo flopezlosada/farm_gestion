@@ -57,6 +57,50 @@
             });
         });
     </script>
+
+    {# Drawer móvil: el botón hamburguesa abre/cierra el sidebar; el scrim y
+     # la tecla Escape lo cierran. En escritorio el botón está oculto por CSS,
+     # así que nada de esto se dispara. #}
+    <script>
+        (function () {
+            var sidebar = document.getElementById('csa-sidebar');
+            var toggle = document.querySelector('.csa-sidebar-toggle');
+            var overlay = document.getElementById('csa-sidebar-overlay');
+            if (!sidebar || !toggle) { return; }
+
+            function open() {
+                sidebar.classList.add('csa-sidebar--open');
+                if (overlay) { overlay.hidden = false; }
+                toggle.setAttribute('aria-expanded', 'true');
+            }
+            function close() {
+                sidebar.classList.remove('csa-sidebar--open');
+                if (overlay) { overlay.hidden = true; }
+                toggle.setAttribute('aria-expanded', 'false');
+            }
+
+            toggle.addEventListener('click', function () {
+                sidebar.classList.contains('csa-sidebar--open') ? close() : open();
+            });
+            if (overlay) { overlay.addEventListener('click', close); }
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape') { close(); }
+            });
+        }());
+    </script>
+
+    {# Cierre de avisos flash: delegación sobre el botón ×. Anima la salida y
+     # retira la alerta del DOM (con respaldo por si no hay transición). #}
+    <script>
+        document.addEventListener('click', function (e) {
+            var btn = e.target.closest('.csa-alert__close');
+            if (!btn) { return; }
+            var alert = btn.closest('.csa-alert');
+            if (!alert) { return; }
+            alert.classList.add('is-closing');
+            setTimeout(function () { alert.remove(); }, 200);
+        });
+    </script>
 {% endblock %}
 
 {% block body %}
@@ -145,14 +189,17 @@
             </nav>
         </aside>
 
+        {# Scrim del drawer móvil: cubre el contenido cuando el sidebar está
+         # abierto; tocarlo lo cierra. Oculto por defecto y en escritorio. #}
+        <div class="csa-sidebar-overlay" id="csa-sidebar-overlay" hidden></div>
+
         {# ---------- MAIN ---------- #}
         <div class="csa-main">
 
             {# TOPBAR #}
             <header class="csa-topbar">
                 <button type="button" class="csa-btn csa-btn--ghost csa-btn--sm csa-sidebar-toggle"
-                        aria-label="Abrir navegación"
-                        onclick="document.getElementById('csa-sidebar').classList.toggle('csa-sidebar--open')">
+                        aria-label="Abrir navegación" aria-controls="csa-sidebar" aria-expanded="false">
                     <i class="fa fa-bars"></i>
                 </button>
 
@@ -208,19 +255,7 @@
                  # aparecen en la siguiente página que los renderice (que era
                  # la confusión: dabas de baja y veías el mensaje al entrar
                  # luego en una ficha). #}
-                {% for type, messages in app.flashes %}
-                    {% for message in messages %}
-                        {% set flash_class = {
-                            'success': 'csa-alert--success',
-                            'warning': 'csa-alert--warning',
-                            'error':   'csa-alert--error',
-                            'info':    'csa-alert--info'
-                        }[type]|default('csa-alert--info') %}
-                        <div class="csa-alert {{ flash_class }}" style="margin-bottom: var(--csa-sp-4);" role="status">
-                            {{ message }}
-                        </div>
-                    {% endfor %}
-                {% endfor %}
+                {% include '_components/csa_flashes.html.twig' %}
 
                 {% block csa_main %}{% endblock %}
             </main>

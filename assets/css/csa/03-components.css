@@ -1315,6 +1315,18 @@ a.csa-table__primary:hover {
 /* El botón hamburguesa solo se ve cuando el sidebar es colapsable. */
 .csa-sidebar-toggle { display: none; }
 
+/* Scrim del drawer móvil: cubre el contenido bajo el sidebar (z-index 100)
+   para indicar que está en primer plano y capturar el toque que lo cierra.
+   Lo controla el atributo `hidden`; el JS del shell lo muestra al abrir.
+   La regla [hidden] blinda el ocultado frente a la cascada de Bootstrap 3. */
+.csa-sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99;
+  background: rgba(20, 18, 12, 0.45);
+}
+.csa-sidebar-overlay[hidden] { display: none; }
+
 @media (max-width: 900px) {
   .csa-sidebar {
     position: fixed;
@@ -1918,6 +1930,15 @@ table.csa-table thead th.sorting_desc::after { content: " ↓"; color: var(--csa
 /* ---------- ALERTS ----------
  * Usados por los flash messages renderizados en csa_shell. Mismas paletas que badges.
  */
+/* Pila de avisos: agrupa los flashes con separación uniforme en vez de
+   dejar a cada alerta su propio margen suelto. */
+.csa-alerts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--csa-sp-3);
+  margin-bottom: var(--csa-sp-4);
+}
+
 .csa-alert {
   display: flex;
   gap: var(--csa-sp-3);
@@ -1928,11 +1949,46 @@ table.csa-table thead th.sorting_desc::after { content: " ↓"; color: var(--csa
   background: var(--csa-surface-alt);
   color: var(--csa-ink);
   font-size: var(--csa-fs-sm);
+  animation: csa-alert-in var(--csa-t-normal);
 }
 .csa-alert--success { background: var(--csa-green-soft);      color: var(--csa-green);      border-left-color: var(--csa-green); }
 .csa-alert--warning { background: var(--csa-ochre-soft);      color: var(--csa-amber);      border-left-color: var(--csa-amber); }
 .csa-alert--error   { background: var(--csa-terracotta-soft); color: var(--csa-terracotta); border-left-color: var(--csa-terracotta); }
 .csa-alert--info    { background: var(--csa-sky-soft);        color: var(--csa-sky);        border-left-color: var(--csa-sky); }
+
+/* Icono a la izquierda, cuerpo elástico, botón de cierre a la derecha. */
+.csa-alert__icon { flex-shrink: 0; margin-top: 1px; }
+.csa-alert__body { flex: 1; min-width: 0; }
+.csa-alert__close {
+  flex-shrink: 0;
+  background: none;
+  border: 0;
+  padding: 0 2px;
+  margin: -2px -2px 0 0;
+  color: inherit;
+  opacity: 0.5;
+  cursor: pointer;
+  line-height: 1;
+  transition: opacity var(--csa-t-fast);
+}
+.csa-alert__close:hover { opacity: 1; }
+
+/* Entrada (aparece deslizando) y salida (clase añadida por JS al cerrar). */
+@keyframes csa-alert-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.csa-alert.is-closing {
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: opacity var(--csa-t-fast), transform var(--csa-t-fast);
+}
+
+/* Respeta a quien pide menos movimiento. */
+@media (prefers-reduced-motion: reduce) {
+  .csa-alert { animation: none; }
+  .csa-alert.is-closing { transition: opacity var(--csa-t-fast); transform: none; }
+}
 
 
 /* ============================================================

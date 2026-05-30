@@ -1,0 +1,37 @@
+{# ---------- FLASHES ----------
+ # Pila de avisos flash con icono, color por tipo y botón de cierre.
+ # Reutilizable por el shell de gestión y por el panel de socixs:
+ #
+ #   {% include '_components/csa_flashes.html.twig' %}
+ #
+ # Mapea las claves de flash que usa la app (success / notice / warning /
+ # error) a una variante visual + icono. `notice` se trata como éxito (es
+ # la clave que usan varios controllers para confirmaciones). Cualquier
+ # clave desconocida cae en `info`.
+ #
+ # El cierre (animación + retirada del DOM) lo gobierna el JS del shell por
+ # delegación sobre `.csa-alert__close`; aquí sólo va el markup. #}
+{% set flash_meta = {
+    'success': { cls: 'success', icon: 'fa-check-circle' },
+    'notice':  { cls: 'success', icon: 'fa-check-circle' },
+    'warning': { cls: 'warning', icon: 'fa-exclamation-triangle' },
+    'error':   { cls: 'error',   icon: 'fa-times-circle' },
+    'info':    { cls: 'info',    icon: 'fa-info-circle' }
+} %}
+{% set all_flashes = app.flashes %}
+{% if all_flashes is not empty %}
+    <div class="csa-alerts" role="region" aria-label="Avisos">
+        {% for type, messages in all_flashes %}
+            {% set meta = flash_meta[type]|default(flash_meta['info']) %}
+            {% for message in messages %}
+                <div class="csa-alert csa-alert--{{ meta.cls }}" role="status">
+                    <i class="csa-alert__icon fa {{ meta.icon }}" aria-hidden="true"></i>
+                    <div class="csa-alert__body">{{ message }}</div>
+                    <button type="button" class="csa-alert__close" aria-label="Cerrar aviso">
+                        <i class="fa fa-times" aria-hidden="true"></i>
+                    </button>
+                </div>
+            {% endfor %}
+        {% endfor %}
+    </div>
+{% endif %}
