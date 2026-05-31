@@ -33,6 +33,10 @@
   outline: 2px solid var(--csa-green);
   outline-offset: 2px;
 }
+/* Los botones-enlace (<a class="csa-btn">) heredaban el borde-inferior verde de
+   `.csa-app :where(a):hover` (02-base) — el "subrayado verde" en hover que no
+   queremos en un botón. Se neutraliza con más especificidad (0,3,1 > 0,2,0). */
+.csa-app a.csa-btn:hover { border-bottom-color: transparent; }
 .csa-btn:disabled,
 .csa-btn[aria-disabled="true"] {
   opacity: 0.5;
