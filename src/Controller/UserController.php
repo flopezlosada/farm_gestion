@@ -106,9 +106,30 @@ class UserController extends AbstractController
 
         $events = $em->getRepository(\App\Entity\UserEvent::class)->findForUser($entity);
 
+        // Resuelve los actores "gestor:<id>" a su nombre de usuaria para el
+        // historial, en una sola query (mismo patrón que PartnerController::show).
+        $actorIds = [];
+        foreach ($events as $event) {
+            $actor = $event->getActor();
+            if (is_string($actor) && str_starts_with($actor, 'gestor:')) {
+                $aid = (int) substr($actor, strlen('gestor:'));
+                if ($aid > 0) {
+                    $actorIds[$aid] = true;
+                }
+            }
+        }
+        $actorNames = [];
+        if ($actorIds) {
+            $actors = $em->getRepository(\App\Entity\User::class)->findBy(['id' => array_keys($actorIds)]);
+            foreach ($actors as $actor) {
+                $actorNames[$actor->getId()] = $actor->getUserIdentifier();
+            }
+        }
+
         return $this->render('User/show.html.twig', array(
             'entity' => $entity,
             'events' => $events,
+            'actor_names' => $actorNames,
         ));
     }
 

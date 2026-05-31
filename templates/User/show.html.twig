@@ -297,7 +297,10 @@
                                 <div class="usr-log__title">{{ is_block ? 'Cuenta bloqueada' : 'Cuenta desbloqueada' }}</div>
                                 <div class="usr-log__meta">
                                     {{ event.created|date('d/m/Y H:i') }}
-                                    {%- if event.actor starts with 'gestor:' %} · por gestión{% endif %}
+                                    {%- if event.actor starts with 'gestor:' %}
+                                        {% set actor_id = event.actor|split(':')|last %}
+                                        · por {{ actor_names[actor_id]|default(actor_names[actor_id|number_format(0, '', '')]|default('gestión')) }}
+                                    {%- elseif event.actor %} · {{ event.actor }}{% endif %}
                                 </div>
                                 {% if event.notes %}<div class="usr-log__note">{{ event.notes }}</div>{% endif %}
                             </div>
