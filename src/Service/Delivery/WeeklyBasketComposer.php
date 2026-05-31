@@ -21,7 +21,7 @@ use Doctrine\ORM\EntityManagerInterface;
  * La PRESENCIA de huevos por entrega aún se deriva del patrón (EggDeliveryResolver)
  * al estampar; el reparto v2 ya LEE estas líneas en lugar de re-derivar al pintar.
  */
-final class WeeklyBasketComposer
+class WeeklyBasketComposer
 {
     public function __construct(
         private readonly EntityManagerInterface $em,

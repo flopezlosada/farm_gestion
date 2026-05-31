@@ -14,9 +14,11 @@ use App\Entity\WeeklyBasketGroup;
 use App\Form\PartnerBasketShareType;
 use App\Form\PartnerType;
 use App\Entity\Basket;
+use App\Entity\BasketComponent;
 use App\Repository\PartnerDeliveryShiftRepository;
 use App\Repository\PartnerRepository;
 use App\Service\Delivery\DeliveryCalendarProjector;
+use App\Service\Delivery\WeeklyBasketComponentEditor;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Delivery\WeeklyBasketSkipper;
 use App\Service\Partner\PartnerShareEventRecorder;
@@ -336,32 +338,8 @@ class PartnerController extends AbstractController
             return $backToCalendar();
         }
 
-        // R1: las cestas compartidas no eligen su día (lo dicta la alternancia
-        // con el otro hogar), así que no se pueden saltar desde aquí.
-        if ($partner->getSharePartner() !== null) {
-            $this->addFlash('warning', 'Esta cesta es compartida: su día lo marca la alternancia con el otro hogar, no se edita aquí.');
-
-            return $backToCalendar();
-        }
-
-        // Cambio puntual activo esa semana: dejaría el shift desincronizado.
-        if ($shiftRepository->findOutgoing($partner, $basket) !== null) {
-            $this->addFlash('warning', 'Hay un cambio puntual de día activo esa semana: gestiónalo desde los cambios puntuales.');
-
-            return $backToCalendar();
-        }
-
-        $share = $em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner, $basket->getDate());
-        if ($share === null) {
-            $this->addFlash('warning', 'El socio no tiene cesta activa esa semana.');
-
-            return $backToCalendar();
-        }
-
-        $weeklyBasket = $generator->materializeShareDelivery($basket, $share);
+        $weeklyBasket = $this->resolveCalendarDelivery($partner, $basket, $generator, $shiftRepository, $em);
         if ($weeklyBasket === null) {
-            $this->addFlash('warning', 'El nodo del socio no reparte esa semana, no hay entrega que saltar.');
-
             return $backToCalendar();
         }
 
@@ -377,6 +355,127 @@ class PartnerController extends AbstractController
         }
 
         return $backToCalendar();
+    }
+
+    /**
+     * Activar / desactivar un componente (verdura o huevos) de una entrega
+     * concreta del calendario (acción B' "editar por contenido"). Si la entrega
+     * solo estaba prevista la fija primero y luego alterna la línea del
+     * componente vía WeeklyBasketComponentEditor.
+     *
+     * @param Partner                        $partner
+     * @param int                            $basketId    Semana (Basket).
+     * @param int                            $componentId BasketComponent::ID_VEGETABLES | ID_EGGS.
+     * @param Request                        $request
+     * @param WeeklyBasketGenerator          $generator
+     * @param WeeklyBasketComponentEditor    $componentEditor
+     * @param PartnerDeliveryShiftRepository $shiftRepository
+     * @param EntityManagerInterface         $em
+     * @return Response
+     */
+    #[Route("/{id}/calendar/component/{basketId}/{componentId}", name: "partner_delivery_calendar_component", methods: ["POST"], requirements: ["id" => "\\d+", "basketId" => "\\d+", "componentId" => "\\d+"])]
+    public function deliveryCalendarToggleComponent(
+        Partner $partner,
+        int $basketId,
+        int $componentId,
+        Request $request,
+        WeeklyBasketGenerator $generator,
+        WeeklyBasketComponentEditor $componentEditor,
+        PartnerDeliveryShiftRepository $shiftRepository,
+        EntityManagerInterface $em,
+    ): Response {
+        if (!in_array($componentId, [BasketComponent::ID_VEGETABLES, BasketComponent::ID_EGGS], true)) {
+            throw $this->createNotFoundException('Componente no editable.');
+        }
+
+        $basket = $em->getRepository(Basket::class)->find($basketId);
+        if ($basket === null) {
+            throw $this->createNotFoundException('Semana de reparto no encontrada.');
+        }
+
+        $backToCalendar = fn (): Response => $this->redirectToRoute('partner_delivery_calendar', [
+            'id' => $partner->getId(),
+            'year' => $basket->getDate()->format('Y'),
+            'month' => $basket->getDate()->format('n'),
+        ]);
+
+        if (!$this->isCsrfTokenValid('calendar_component_' . $partner->getId(), (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
+
+            return $backToCalendar();
+        }
+
+        $weeklyBasket = $this->resolveCalendarDelivery($partner, $basket, $generator, $shiftRepository, $em);
+        if ($weeklyBasket === null) {
+            return $backToCalendar();
+        }
+
+        $result = $componentEditor->toggle($weeklyBasket, $componentId);
+        $em->flush();
+
+        $label = $componentId === BasketComponent::ID_EGGS ? 'Huevos' : 'Verdura';
+        match ($result) {
+            'added' => $this->addFlash('success', $label . ' añadido a esa entrega.'),
+            'removed' => $this->addFlash('success', $label . ' quitado de esa entrega.'),
+            default => $this->addFlash('warning', 'Esa entrega no contempla ' . strtolower($label) . ' según la cesta del socio.'),
+        };
+
+        return $backToCalendar();
+    }
+
+    /**
+     * Resuelve la entrega editable de un socio en una semana para las acciones
+     * del calendario (saltar, toggle de componente): aplica las guardas comunes
+     * y materializa la entrega si solo estaba prevista. Devuelve null y deja un
+     * flash si alguna guarda lo impide.
+     *
+     * Guardas: R1 (los compartidos no editan su día), cambio puntual activo esa
+     * semana (se desincronizaría), socio con cesta activa y nodo que reparta.
+     *
+     * @param Partner                        $partner
+     * @param Basket                         $basket
+     * @param WeeklyBasketGenerator          $generator
+     * @param PartnerDeliveryShiftRepository $shiftRepository
+     * @param EntityManagerInterface         $em
+     * @return WeeklyBasket|null
+     */
+    private function resolveCalendarDelivery(
+        Partner $partner,
+        Basket $basket,
+        WeeklyBasketGenerator $generator,
+        PartnerDeliveryShiftRepository $shiftRepository,
+        EntityManagerInterface $em,
+    ): ?WeeklyBasket {
+        // R1: las cestas compartidas no eligen su día (lo dicta la alternancia
+        // con el otro hogar).
+        if ($partner->getSharePartner() !== null) {
+            $this->addFlash('warning', 'Esta cesta es compartida: su día lo marca la alternancia con el otro hogar, no se edita aquí.');
+
+            return null;
+        }
+
+        // Cambio puntual activo esa semana: dejaría el shift desincronizado.
+        if ($shiftRepository->findOutgoing($partner, $basket) !== null) {
+            $this->addFlash('warning', 'Hay un cambio puntual de día activo esa semana: gestiónalo desde los cambios puntuales.');
+
+            return null;
+        }
+
+        $share = $em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner, $basket->getDate());
+        if ($share === null) {
+            $this->addFlash('warning', 'El socio no tiene cesta activa esa semana.');
+
+            return null;
+        }
+
+        $weeklyBasket = $generator->materializeShareDelivery($basket, $share);
+        if ($weeklyBasket === null) {
+            $this->addFlash('warning', 'El nodo del socio no reparte esa semana.');
+
+            return null;
+        }
+
+        return $weeklyBasket;
     }
 
     #[Route("/{id}/edit", name: "partner_edit", methods: ["GET","POST"])]
