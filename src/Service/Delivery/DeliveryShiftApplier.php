@@ -38,6 +38,7 @@ final class DeliveryShiftApplier
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly NodeDeliveryDate $nodeDeliveryDate,
+        private readonly WeeklyBasketComposer $composer,
     ) {
     }
 
@@ -125,7 +126,14 @@ final class DeliveryShiftApplier
             return;
         }
 
-        $this->createWeeklyBasketForShiftDestination($partner, $to);
+        // Estampar también los componentes del destino. El generador ya lo hace
+        // al procesar el listado; aquí (aplicación ad-hoc desde el calendario) hay
+        // que hacerlo o la entrega movida sale sin verdura/huevos (vacía → roja).
+        $destWb = $this->createWeeklyBasketForShiftDestination($partner, $to);
+        $share = $this->em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner, $to->getDate());
+        if ($share !== null) {
+            $this->composer->compose($destWb, $share, $to);
+        }
     }
 
     /**

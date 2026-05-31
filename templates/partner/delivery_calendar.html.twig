@@ -92,9 +92,10 @@
   .rcal-sw.on .track{background:var(--csa-green)}
   .rcal-sw.on .thumb{transform:translateX(17px)}
 
-  .rcal-move{display:flex;gap:var(--csa-sp-2)}
-  .rcal-move select{flex:1;appearance:none;border:1px solid var(--csa-border);border-radius:9px;padding:9px 12px;font-family:inherit;font-size:13px;color:var(--csa-ink);background:var(--csa-surface)}
-  .rcal-move button{border:1px solid var(--csa-sky);background:var(--csa-sky-soft);color:var(--csa-sky);border-radius:9px;padding:0 16px;font-family:inherit;font-weight:600;font-size:13px;cursor:pointer}
+  .rcal-move-chips{display:flex;flex-wrap:wrap;gap:var(--csa-sp-2)}
+  .rcal-move-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--csa-sky);background:var(--csa-sky-soft);color:var(--csa-sky);border-radius:9px;padding:8px 13px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;text-transform:capitalize;transition:.12s}
+  .rcal-move-chip:hover{background:#bcdaea}
+  .rcal-move-chip i{font-size:11px}
   .rcal-hint{font-size:11px;color:var(--csa-ink-muted);margin-top:6px}
 
   .rcal-panel__ft{padding:var(--csa-sp-4);border-top:1px solid var(--csa-border);background:var(--csa-surface-alt)}
@@ -189,7 +190,38 @@
                 {# Solo-lectura: compartidas (R1) y entregas pasadas. #}
                 {% set readonly = partner.sharePartner is not null or not selected_editable %}
 
-                {% if selected.skipped %}
+                {% if shift %}
+                    {# Día con un cambio puntual de día activo: la acción es DESHACER
+                       (volver al original), no mover otra vez. #}
+                    <div class="rcal-panel__bd">
+                        {% if shift_role == 'destination' %}
+                            <div class="rcal-sect">Entrega movida a este día</div>
+                            <p class="csa-muted" style="margin-bottom: var(--csa-sp-3);">Viene movida del {{ shift.fromBasket.date|format_date('long', locale='es') }}.</p>
+                            {% for it in selected.items|sort((a, b) => a.component.id - b.component.id) %}
+                                {% set is_egg = it.component.id == EGG %}
+                                <div class="rcal-comp">
+                                    <span class="rcal-comp__ic {{ is_egg ? 'egg' : 'veg' }}"><i class="fa {{ is_egg ? 'fa-egg' : 'fa-leaf' }}"></i></span>
+                                    <span class="rcal-comp__t">
+                                        <span class="rcal-comp__name">{{ is_egg ? 'Huevos' : 'Cesta de verdura' }}</span>
+                                        <span class="rcal-comp__sub">{{ it.amount + 0 }} {{ is_egg ? 'docena' : 'cesta' }}{{ (it.amount + 0) != 1 ? 's' }}</span>
+                                    </span>
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="rcal-sect">Esta semana no recoge</div>
+                            <p class="csa-muted">La entrega de este día se movió al {{ shift.toBasket.date|format_date('long', locale='es') }}.</p>
+                        {% endif %}
+                    </div>
+                    {% if selected_editable %}
+                        <div class="rcal-panel__ft">
+                            <form action="{{ path('partner_delivery_calendar_unmove', { id: partner.id, shiftId: shift.id }) }}" method="post" style="margin: 0;">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token('calendar_unmove_' ~ partner.id) }}">
+                                {{ csa.btn('Deshacer el cambio de día', { type: 'submit', variant: 'secondary', icon: 'fa-undo', block: true }) }}
+                            </form>
+                            <div class="rcal-hint" style="text-align: center;">Vuelve a recoger el {{ shift.fromBasket.date|format_date('long', locale='es') }}.</div>
+                        </div>
+                    {% endif %}
+                {% elseif selected.skipped %}
                     {# Saltada: no lleva nada esa semana; si es editable, se puede restaurar. #}
                     <div class="rcal-panel__bd">
                         <div class="rcal-sect">Esta semana no recoge</div>
@@ -257,17 +289,18 @@
 
                             {% if move_candidates is not empty %}
                                 <div class="rcal-move-wrap">
-                                    <div class="rcal-sect">Cambiar de día</div>
-                                    <form action="{{ path('partner_delivery_calendar_move', { id: partner.id, basketId: bid }) }}" method="post" class="rcal-move" style="margin: 0;">
+                                    <div class="rcal-sect">Mover a otra fecha</div>
+                                    <form action="{{ path('partner_delivery_calendar_move', { id: partner.id, basketId: bid }) }}" method="post" style="margin: 0;">
                                         <input type="hidden" name="_csrf_token" value="{{ csrf_token('calendar_move_' ~ partner.id) }}">
-                                        <select name="to_basket_id" required>
+                                        <div class="rcal-move-chips">
                                             {% for cand in move_candidates %}
-                                                <option value="{{ cand.id }}" style="text-transform: capitalize;">{{ cand.date|format_date('full', locale='es') }}</option>
+                                                <button type="submit" name="to_basket_id" value="{{ cand.id }}" class="rcal-move-chip">
+                                                    <i class="fa fa-arrow-right"></i>{{ cand.date|format_date(pattern='EEE d MMM', locale='es') }}
+                                                </button>
                                             {% endfor %}
-                                        </select>
-                                        <button type="submit">Mover</button>
+                                        </div>
                                     </form>
-                                    <div class="rcal-hint">Se mueve toda la entrega a la fecha elegida. Solo días válidos para su nodo.</div>
+                                    <div class="rcal-hint">Se mueve toda la entrega al día elegido (solo días válidos para su nodo).</div>
                                 </div>
                             {% endif %}
                         {% endif %}
