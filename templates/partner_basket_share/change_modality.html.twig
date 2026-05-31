@@ -1,0 +1,114 @@
+{# ============================================================
+ # Cambio de modalidad de cesta CON histórico — shell csa.
+ # A diferencia de edit (corrección en sitio), parte el histórico:
+ # cierra la cesta vigente y abre una nueva con efecto desde la
+ # fecha efectiva, emitiendo un evento BASKET_CHANGE.
+ # Misma lógica condicional JS que new/edit.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% form_theme form 'form_div_layout.html.twig' %}
+
+{% block title %}Cambiar modalidad · {{ partner_basket_share.partner }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('partner_index') }}">Socixs</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('partner_show', { id: partner_basket_share.partner.id }) }}">{{ partner_basket_share.partner }}</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Cambiar modalidad</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Socixs · Cesta',
+        'Cambiar modalidad de cesta',
+        'Para ' ~ partner_basket_share.partner ~ '. Se conserva el histórico: la cesta actual se cierra la víspera de la fecha efectiva y se abre una nueva.'
+    ) }}
+
+    {{ form_start(form, { attr: { role: 'form', class: 'csa-form-narrow' } }) }}
+
+        <div class="csa-stack-lg">
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Nueva modalidad', subtitle: 'Periodicidad y opciones de la cesta a partir del cambio.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.basket_share, 'Tipo de cesta', { full: true }) }}
+                        {{ csa.field(form.amount, 'Cantidad de cestas', { hint: 'normalmente 1' }) }}
+                        {{ csa.field(form.isFreeBasket, '¿Es cesta gratuita?') }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Huevos', subtitle: 'Cantidad y frecuencia (sólo si la cesta incluye huevos).' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.egg_amount, 'Cantidad de huevos', { full: true }) }}
+                        <div id="egg_period" class="csa-field--full hidden">
+                            {{ csa.field(form.egg_period, 'Frecuencia de huevos', { full: true }) }}
+                        </div>
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '3', title: 'Cuándo entra en vigor', subtitle: 'Fecha efectiva del cambio, día concreto del mes y grupo de reparto si procede.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.start_date, 'Fecha efectiva del cambio', { full: true, hint: 'La cesta actual se cierra el día anterior a esta fecha.', attr: { class: 'csa-input datepicker' } }) }}
+                        <div id="day_month_order" class="csa-field--full hidden">
+                            {{ csa.field(form.dayMonthOrder, 'Día del mes', { full: true }) }}
+                        </div>
+                        {{ csa.field(form.deliveryGroup, 'Grupo de reparto', { full: true }) }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            <div style="display: none;">
+                {{ form_row(form.partner) }}
+            </div>
+
+            <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                <div></div>
+                <div class="csa-row">
+                    {{ csa.btn('Cancelar', { variant: 'ghost', href: path('partner_show', { id: partner_basket_share.partner.id }) }) }}
+                    <button type="submit" class="csa-btn csa-btn--primary">Aplicar cambio de modalidad</button>
+                </div>
+            </div>
+
+        </div>
+
+        {{ form_rest(form) }}
+    {{ form_end(form, { render_rest: false }) }}
+
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    <script>
+        document.querySelectorAll('.datepicker, .datepicker2, .datepicker3')
+            .forEach(function (el) { el.type = 'date'; });
+
+        function syncConditionals() {
+            var basketShare = $('#partner_basket_share_basket_share').val();
+            var eggPeriod = $('#partner_basket_share_egg_period').val();
+            var showDayMonth = (basketShare == 3) || (eggPeriod == 3);
+            var showEggPeriod = (basketShare == 5);
+
+            $('#day_month_order').toggleClass('hidden', !showDayMonth);
+            $('#egg_period').toggleClass('hidden', !showEggPeriod);
+            if (!showDayMonth) $('#partner_basket_share_dayMonthOrder').val(0);
+            if (!showEggPeriod) $('#partner_basket_share_egg_period').val(0);
+        }
+
+        $('#partner_basket_share_basket_share').change(syncConditionals);
+        $('#partner_basket_share_egg_period').change(syncConditionals);
+        syncConditionals();
+    </script>
+{% endblock %}

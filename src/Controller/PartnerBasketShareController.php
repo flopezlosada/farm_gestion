@@ -11,6 +11,7 @@ use App\Entity\WeeklyBasketStatus;
 use App\Form\PartnerBasketShareType;
 use App\Repository\PartnerBasketShareRepository;
 use App\Service\Delivery\WeeklyBasketGenerator;
+use App\Service\Partner\BasketModalityChanger;
 use App\Service\Partner\PartnerShareEventRecorder;
 use Doctrine\ORM\EntityManagerInterface;
 use Dompdf\Dompdf;
@@ -102,6 +103,77 @@ class PartnerBasketShareController extends AbstractController
         return $this->render('partner_basket_share/edit.html.twig', [
             'partner_basket_share' => $partnerBasketShare,
             'entity' => $partnerBasketShare,
+            'form' => $form->createView(),
+        ]);
+    }
+
+    /**
+     * Cambio de modalidad de cesta CON histórico: a diferencia de edit() (que
+     * sobrescribe la PBS en sitio, para corregir datos), este flujo parte el
+     * histórico — cierra la PBS vigente en la víspera de la fecha efectiva y
+     * abre una nueva — y emite un evento BASKET_CHANGE. Es la versión UI del
+     * comando app:change-basket-modality.
+     *
+     * El formulario reusa PartnerBasketShareType sobre una PBS NUEVA precargada
+     * con los valores vigentes; su campo start_date se reinterpreta como la
+     * "fecha efectiva del cambio". Las entregas futuras ya materializadas del
+     * socio se borran (se regeneran con la nueva modalidad al generar cada
+     * listado); ver BasketModalityChanger::dropFutureBaskets para el límite con
+     * meses ya generados.
+     *
+     * @param PartnerBasketShare $partnerBasketShare PBS vigente que se cambia (la del enlace).
+     */
+    #[Route("/{id}/change-modality", name: "partner_basket_share_change_modality", methods: ["GET", "POST"])]
+    public function changeModality(
+        Request $request,
+        PartnerBasketShare $partnerBasketShare,
+        BasketModalityChanger $modalityChanger,
+    ): Response {
+        $new = new PartnerBasketShare();
+        $new->setPartner($partnerBasketShare->getPartner());
+        $new->setBasketShare($partnerBasketShare->getBasketShare());
+        $new->setAmount($partnerBasketShare->getAmount());
+        $new->setEggAmount($partnerBasketShare->getEggAmount());
+        $new->setEggPeriod($partnerBasketShare->getEggPeriod());
+        $new->setDeliveryGroup($partnerBasketShare->getDeliveryGroup());
+        $new->setDayMonthOrder($partnerBasketShare->getDayMonthOrder());
+        $new->setEggDayMonthOrder($partnerBasketShare->getEggDayMonthOrder());
+        // start_date queda vacío: admin introduce la fecha EFECTIVA del cambio.
+
+        $form = $this->createForm(PartnerBasketShareType::class, $new);
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted() && $form->isValid()) {
+            $effective = new \DateTime($new->getStartDate());
+
+            $values = $request->get('partner_basket_share');
+            if (isset($values['isFreeBasket'])) {
+                $new->setMonthPrice(0);
+                $new->setEggMonthPrice(0);
+            } else {
+                $new->setMonthPrice($new->getBasketShare()->getMonthPrice() * $new->getAmount());
+                $new->setEggMonthPrice($new->getEggAmount() ? $new->getEggAmount()->getMonthPrice() * $new->getAmount() : 0);
+            }
+
+            try {
+                $modalityChanger->applyChange($new, $effective);
+            } catch (\DomainException $e) {
+                $this->addFlash('warning', $e->getMessage());
+                return $this->redirectToRoute('partner_show', ['id' => $partnerBasketShare->getPartner()->getId()]);
+            }
+
+            $dropped = $modalityChanger->dropFutureBaskets($new->getPartner(), $effective);
+            $this->addFlash('success', sprintf(
+                'Cambio de modalidad aplicado con histórico (efectivo %s). %d entrega(s) futura(s) regenerable(s).',
+                $effective->format('d/m/Y'),
+                $dropped,
+            ));
+
+            return $this->redirectToRoute('partner_show', ['id' => $new->getPartner()->getId()]);
+        }
+
+        return $this->render('partner_basket_share/change_modality.html.twig', [
+            'partner_basket_share' => $partnerBasketShare,
             'form' => $form->createView(),
         ]);
     }

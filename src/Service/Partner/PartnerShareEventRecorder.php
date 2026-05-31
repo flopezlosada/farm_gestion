@@ -124,6 +124,7 @@ class PartnerShareEventRecorder
             'day_month_order'     => $share->getDayMonthOrder(),
             'egg_day_month_order' => $share->getEggDayMonthOrder(),
             'delivery_group'      => $share->getDeliveryGroup(),
+            'amount'              => $share->getAmount(),
         ];
     }
 

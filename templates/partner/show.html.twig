@@ -818,7 +818,7 @@
 
                     {% if app.user %}
                         <footer class="prt-card__foot">
-                            <a href="{{ path('partner_basket_share_edit', { id: partner.getActiveBasket.id }) }}" class="prt-btn">
+                            <a href="{{ path('partner_basket_share_change_modality', { id: partner.getActiveBasket.id }) }}" class="prt-btn">
                                 <i class="fa fa-pencil"></i> Cambiar tipo de cesta
                             </a>
                             <button type="button" class="prt-btn prt-btn--danger"

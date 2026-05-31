@@ -7,7 +7,7 @@ use App\Entity\PartnerBasketShare;
 use App\Entity\WeeklyBasket;
 use App\Repository\PartnerBasketShareRepository;
 use App\Repository\PartnerRepository;
-use App\Service\Partner\PartnerShareEventRecorder;
+use App\Service\Partner\BasketModalityChanger;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -41,7 +41,7 @@ class ChangeBasketModalityCommand extends Command
         private readonly EntityManagerInterface $em,
         private readonly PartnerRepository $partnerRepository,
         private readonly PartnerBasketShareRepository $shareRepository,
-        private readonly PartnerShareEventRecorder $eventRecorder,
+        private readonly BasketModalityChanger $modalityChanger,
     ) {
         parent::__construct();
     }
@@ -91,9 +91,6 @@ class ChangeBasketModalityCommand extends Command
         $new->setPartner($partner);
         $new->setBasketShare($toShare);
         $new->setAmount($old->getAmount());
-        $new->setStartDate($effective);
-        $new->setEndDate(null);
-        $new->setIsActive(true);
         $new->setEggAmount($old->getEggAmount());
         $new->setEggPeriod($old->getEggPeriod());
         $new->setDeliveryGroup($old->getDeliveryGroup());
@@ -103,9 +100,6 @@ class ChangeBasketModalityCommand extends Command
         // Precios derivados (misma fórmula que el form admin).
         $new->setMonthPrice($toShare->getMonthPrice() * $new->getAmount());
         $new->setEggMonthPrice($old->getEggAmount() ? $old->getEggAmount()->getMonthPrice() * $new->getAmount() : 0);
-
-        $old->setEndDate($dayBefore);
-        $old->setIsActive(false);
 
         $dropIds = $this->csv($input->getOption('drop-baskets'));
         $convertIds = $this->csv($input->getOption('convert-baskets'));
@@ -124,13 +118,9 @@ class ChangeBasketModalityCommand extends Command
             return Command::SUCCESS;
         }
 
-        // Flush previo: asigna id a la nueva PBS (y persiste el cierre de la
-        // antigua) antes de recordChange, que hace snapshot vía getId() (: int
-        // estricto, no tolera null en entidad transitoria).
-        $this->em->persist($new);
-        $this->em->flush();
-
-        $this->eventRecorder->recordChange($old, $new, $effective, 'cli');
+        // Split + cierre del histórico + evento BASKET_CHANGE (incluye el flush
+        // previo que asigna id a la nueva PBS antes del snapshot del evento).
+        $this->modalityChanger->applyChange($new, $effective, 'cli');
 
         // Cascada de WeeklyBaskets.
         $wbRepo = $this->em->getRepository(WeeklyBasket::class);
