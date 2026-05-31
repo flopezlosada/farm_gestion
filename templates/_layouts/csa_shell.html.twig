@@ -88,19 +88,8 @@
             });
         }());
     </script>
-
-    {# Cierre de avisos flash: delegación sobre el botón ×. Anima la salida y
-     # retira la alerta del DOM (con respaldo por si no hay transición). #}
-    <script>
-        document.addEventListener('click', function (e) {
-            var btn = e.target.closest('.csa-alert__close');
-            if (!btn) { return; }
-            var alert = btn.closest('.csa-alert');
-            if (!alert) { return; }
-            alert.classList.add('is-closing');
-            setTimeout(function () { alert.remove(); }, 200);
-        });
-    </script>
+    {# El cierre de los avisos flash lo aporta el propio componente
+     # _components/csa_flashes.html.twig (autónomo), compartido con el panel. #}
 {% endblock %}
 
 {% block body %}

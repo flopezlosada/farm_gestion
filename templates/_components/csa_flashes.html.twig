@@ -9,8 +9,10 @@
  # la clave que usan varios controllers para confirmaciones). Cualquier
  # clave desconocida cae en `info`.
  #
- # El cierre (animación + retirada del DOM) lo gobierna el JS del shell por
- # delegación sobre `.csa-alert__close`; aquí sólo va el markup. #}
+ # El cierre (animación + retirada del DOM) va incluido aquí mismo, por
+ # delegación sobre `.csa-alert__close`, para que el componente sea autónomo:
+ # cualquier layout que lo incluya (shell de gestión, panel de socixs) hereda
+ # el comportamiento sin duplicar el script. #}
 {% set flash_meta = {
     'success': { cls: 'success', icon: 'fa-check-circle' },
     'notice':  { cls: 'success', icon: 'fa-check-circle' },
@@ -34,4 +36,17 @@
             {% endfor %}
         {% endfor %}
     </div>
+    {# Cierre por delegación sobre el botón ×: anima la salida y retira la
+     # alerta del DOM (con respaldo por si no hay transición). Solo se emite
+     # cuando hay avisos, así que en páginas sin flashes no añade nada. #}
+    <script>
+        document.addEventListener('click', function (e) {
+            var btn = e.target.closest('.csa-alert__close');
+            if (!btn) { return; }
+            var alert = btn.closest('.csa-alert');
+            if (!alert) { return; }
+            alert.classList.add('is-closing');
+            setTimeout(function () { alert.remove(); }, 200);
+        });
+    </script>
 {% endif %}

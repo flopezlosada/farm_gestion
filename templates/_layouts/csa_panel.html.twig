@@ -98,12 +98,9 @@
                 {# Flashes del panel renderizados aquí (en el layout) para que
                  # CUALQUIER pantalla los consuma. Si una pantalla concreta
                  # no los pintara, se acumularían en sesión y aparecerían
-                 # todos juntos al cargar la siguiente. #}
-                {% for label, messages in app.flashes(['notice', 'warning', 'error']) %}
-                    {% for message in messages %}
-                        <div class="csa-callout csa-callout--{{ {'notice':'success','warning':'warning','error':'danger'}[label]|default('info') }}" style="margin-bottom: var(--csa-sp-5);" role="status">{{ message }}</div>
-                    {% endfor %}
-                {% endfor %}
+                 # todos juntos al cargar la siguiente. Mismo componente que el
+                 # shell de gestión (icono + cierre + animación). #}
+                {% include '_components/csa_flashes.html.twig' %}
 
                 {% block csa_main %}{% endblock %}
             </main>
