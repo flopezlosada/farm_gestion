@@ -1,5 +1,4 @@
 {% extends '_layouts/csa_panel.html.twig' %}
-{% import '_macros/csa.html.twig' as csa %}
 
 {% block title %}Mi panel{% endblock %}
 
@@ -7,66 +6,280 @@
     <span class="csa-topbar__crumb-active">Inicio</span>
 {% endblock %}
 
+{# Reutiliza el aspecto de la ficha admin (tokens y componentes .prt-*),
+ # extraído a un partial compartido. El panel del socix es la misma ficha en
+ # SOLO LECTURA: sin las acciones de gestión (pausar, baja, cambiar cesta,
+ # quitar familiares). El autoservicio va por sus propios enlaces. #}
+{% block more_css %}
+    {{ parent() }}
+    {% include '_components/partner_card_styles.html.twig' %}
+{% endblock %}
+
 {% block csa_main %}
 
-    {% set hour = 'now'|date('G') %}
-    {% set greeting = hour < 14 ? 'Buenos días' : (hour < 21 ? 'Buenas tardes' : 'Buenas noches') %}
+    {% set initials = (partner.name|first|upper) ~ (partner.surname|first|default('')|upper) %}
+    {% set avatar_palette = ['sage', 'ochre', 'terra', 'ink'] %}
+    {% set avatar_tone = partner.status == 'BAJA' ? 'muted' : avatar_palette[(partner.id|default(0)) % 4] %}
 
-    {{ csa.page_header(
-        'Mi panel',
-        greeting ~ ', ' ~ partner.name ~ '.',
-        'Aquí puedes ver tu cesta, tus datos y tu familia.'
-    ) }}
+    {% set status_chip = {
+        'ACTIVO':  { label: 'Activx',  cls: 'activo'  },
+        'PAUSADO': { label: 'Pausadx', cls: 'pausado' },
+        'BAJA':    { label: 'De baja', cls: 'baja'    }
+    } %}
+    {% set sc = status_chip[partner.status]|default({ label: partner.status, cls: 'baja' }) %}
 
-    <div class="csa-kpi-row" style="margin-bottom: var(--csa-sp-8);">
-        {% if active_share %}
-            {{ csa.kpi('Cesta', active_share.basketShare.name|default('Activa'), null, null, null, 'green', 'fa-shopping-basket') }}
-        {% else %}
-            {{ csa.kpi('Cesta', '—', 'sin cesta activa', null, null, 'neutral', 'fa-shopping-basket') }}
-        {% endif %}
+    {% set bs_id = active_share ? active_share.basketShare.id : null %}
+    {% set bs_label = active_share ? active_share.basketShare.name : null %}
 
-        {% if partner.weeklyBasketGroup %}
-            {{ csa.kpi('Grupo de recogida', partner.weeklyBasketGroup.name, 'punto de entrega', null, null, 'ochre', 'fa-map-marker') }}
-        {% else %}
-            {{ csa.kpi('Grupo de recogida', '—', 'sin grupo asignado', null, null, 'neutral', 'fa-map-marker') }}
-        {% endif %}
-    </div>
+    <div class="prt">
 
-    <div class="csa-dashboard-pair">
-
-        {% embed '_components/csa_card.html.twig' with { title: 'Mis datos', subtitle: 'Identidad y contacto.' } %}
-            {% block body %}
-                <dl class="csa-defs">
-                    <dt>Nombre</dt><dd>{{ partner.name }} {{ partner.surname }}</dd>
-                    <dt>Email</dt><dd>{{ partner.email ?: '—' }}</dd>
-                    <dt>Teléfono</dt><dd>{{ partner.celular ?: '—' }}</dd>
-                </dl>
-                <div style="margin-top: var(--csa-sp-4);">
-                    <a href="{{ path('panel_profile') }}" class="csa-btn csa-btn--ghost csa-btn--sm">
-                        <i class="fa fa-pencil"></i> Editar mis datos
-                    </a>
+        {# ============ HERO ============ #}
+        <header class="prt-hero">
+            <span class="prt-avatar prt-avatar--{{ avatar_tone }}" aria-hidden="true">{{ initials }}</span>
+            <div>
+                <h1 class="prt-hero__title">{{ partner.name }} {{ partner.surname }}</h1>
+                <div class="prt-hero__meta">
+                    <span class="prt-chip prt-chip--{{ sc.cls }}"><span class="dot"></span>{{ sc.label }}</span>
+                    {% if active_share %}
+                        <span class="prt-chip prt-chip--mod-{{ bs_id }}">
+                            {% if bs_id != 4 %}<span class="dot"></span>{% endif %}
+                            {{ bs_label }}
+                        </span>
+                    {% else %}
+                        <span class="prt-chip prt-chip--warn"><span class="dot"></span>Sin cesta</span>
+                    {% endif %}
+                    {% if partner.inscriptionDate %}
+                        <span class="sep">·</span>
+                        <span>Socix desde {{ partner.inscriptionDate|format_date('long', locale='es') }}</span>
+                    {% endif %}
                 </div>
-            {% endblock %}
-        {% endembed %}
+            </div>
+        </header>
 
-        {% embed '_components/csa_card.html.twig' with { title: 'Mi cesta', subtitle: 'Cómo recibes tu reparto.' } %}
-            {% block body %}
+        {# ============ PICKUP CARD (nodo + grupo) ============ #}
+        {% if group %}
+            {% set pickup_palette = ['sage', 'ochre', 'terra'] %}
+            {% set node_id = group.node ? group.node.id : 0 %}
+            {% set pickup_tone = pickup_palette[node_id % 3] %}
+            <div class="prt-pickup prt-pickup--{{ pickup_tone }}">
+                <span class="prt-pickup__icon" aria-hidden="true"><i class="fa fa-map-marker"></i></span>
+                <div class="prt-pickup__body">
+                    <div class="prt-pickup__label">Recoges en</div>
+                    <div class="prt-pickup__node">{% if group.node %}{{ group.node.name }}{% else %}Sin nodo asignado{% endif %}</div>
+                </div>
+                <span class="prt-pickup__sep"></span>
+                <div class="prt-pickup__body">
+                    <div class="prt-pickup__label">Grupo</div>
+                    <div class="prt-pickup__group">{{ group.name }}</div>
+                </div>
+            </div>
+        {% endif %}
+
+        {# ============ ACCIONES DEL SOCIX (no las de gestión) ============ #}
+        <div class="prt-actionbar">
+            <a href="{{ path('panel_profile') }}" class="prt-btn prt-btn--primary">
+                <i class="fa fa-pencil"></i> Editar mis datos
+            </a>
+            <a href="{{ path('panel_basket') }}" class="prt-btn">
+                <i class="fa fa-calendar"></i> Ver y gestionar mi cesta
+            </a>
+        </div>
+
+        {# ============ CUERPO 2 COLUMNAS ============ #}
+        <div class="prt-cols">
+
+            {# ----- COL IZQUIERDA: Datos + Familia ----- #}
+            <div>
+
+                {# Datos personales (solo lectura) #}
+                <section class="prt-card">
+                    <header class="prt-card__head">
+                        <h2 class="prt-card__title"><span class="accent"></span>Mis datos</h2>
+                    </header>
+                    <div class="prt-card__body">
+                        <dl class="prt-defs">
+                            <div class="prt-defs__row">
+                                <dt class="prt-defs__label">Nombre completo</dt>
+                                <dd class="prt-defs__value" style="text-transform: capitalize;">{{ (partner.name ~ ' ' ~ partner.surname)|lower }}</dd>
+                            </div>
+                            <div class="prt-defs__row">
+                                <dt class="prt-defs__label">DNI</dt>
+                                <dd class="prt-defs__value{% if not partner.dNI %} prt-defs__value--muted{% endif %}">{{ partner.dNI ?: '—' }}</dd>
+                            </div>
+                            <div class="prt-defs__row">
+                                <dt class="prt-defs__label">Teléfono</dt>
+                                <dd class="prt-defs__value{% if not partner.celular %} prt-defs__value--muted{% endif %}">{{ partner.celular ?: '—' }}</dd>
+                            </div>
+                            <div class="prt-defs__row">
+                                <dt class="prt-defs__label">Email</dt>
+                                <dd class="prt-defs__value{% if not partner.email %} prt-defs__value--muted{% endif %}">
+                                    {% if partner.email %}<a href="mailto:{{ partner.email }}">{{ partner.email }}</a>{% else %}—{% endif %}
+                                </dd>
+                            </div>
+                            {% if partner.address %}
+                                <div class="prt-defs__row prt-defs__row--full">
+                                    <dt class="prt-defs__label">Dirección</dt>
+                                    <dd class="prt-defs__value">{{ partner.address }}{% if partner.city %} — {{ partner.city }}{% if partner.state %} ({{ partner.state }}){% endif %}{% endif %}</dd>
+                                </div>
+                            {% endif %}
+                            {% if partner.inscriptionDate %}
+                                <div class="prt-defs__row">
+                                    <dt class="prt-defs__label">Fecha de inscripción</dt>
+                                    <dd class="prt-defs__value">{{ partner.inscriptionDate|format_date('long', locale='es') }}</dd>
+                                </div>
+                            {% endif %}
+                            <div class="prt-defs__row">
+                                <dt class="prt-defs__label">¿Consume cárnicos?</dt>
+                                <dd class="prt-defs__value">{{ partner.eatMeat ? 'Sí' : 'No' }}</dd>
+                            </div>
+                            {% if partner.sharePayment %}
+                                <div class="prt-defs__row">
+                                    <dt class="prt-defs__label">Forma de pago</dt>
+                                    <dd class="prt-defs__value">{{ partner.sharePayment.name }}</dd>
+                                </div>
+                            {% endif %}
+                            {% if group and group.node %}
+                                <div class="prt-defs__row">
+                                    <dt class="prt-defs__label">Nodo de recogida</dt>
+                                    <dd class="prt-defs__value">{{ group.node.name }}</dd>
+                                </div>
+                            {% endif %}
+                            {% if group %}
+                                <div class="prt-defs__row">
+                                    <dt class="prt-defs__label">Grupo de recogida</dt>
+                                    <dd class="prt-defs__value">{{ group.name }}</dd>
+                                </div>
+                            {% endif %}
+                        </dl>
+                    </div>
+                </section>
+
+                {# Familia (solo lectura: sin quitar relaciones) #}
+                <section class="prt-card prt-card--ochre">
+                    <header class="prt-card__head">
+                        <h2 class="prt-card__title"><span class="accent"></span>Mi familia</h2>
+                        {% if partner.parent is null and partner.relatives|length > 0 %}
+                            <span class="prt-card__head-meta">{{ partner.relatives|length }} vinculadx{{ partner.relatives|length == 1 ? '' : 's' }}</span>
+                        {% endif %}
+                    </header>
+                    <div class="prt-card__body">
+                        {% if partner.parent is null %}
+                            <p class="prt-family__intro">
+                                Eres familiar principal{% if partner.relatives|length == 0 %}, sin familiares vinculados{% endif %}.
+                            </p>
+                            {% if partner.relatives|length > 0 %}
+                                <ul class="prt-relatives">
+                                    {% for relative in partner.relatives %}
+                                        <li class="prt-relative">
+                                            <span class="prt-relative__dot"><i class="fa fa-user"></i></span>
+                                            <span class="prt-relative__name">{{ relative.name }} {{ relative.surname }}</span>
+                                        </li>
+                                    {% endfor %}
+                                </ul>
+                            {% endif %}
+                        {% else %}
+                            <p class="prt-family__intro">
+                                Estás vinculadx a la familia de <strong>{{ partner.parent.name }} {{ partner.parent.surname }}</strong>.
+                            </p>
+                        {% endif %}
+
+                        {% if active_share and bs_id == 4 and partner.sharePartner %}
+                            <div class="prt-share">
+                                <i class="fa fa-handshake-o"></i>
+                                <span><strong>Compartes cesta con</strong> {{ partner.sharePartner.name }} {{ partner.sharePartner.surname }}</span>
+                            </div>
+                        {% endif %}
+                    </div>
+                </section>
+
+            </div>
+
+            {# ----- COL DERECHA: Cesta ----- #}
+            <div>
+
+                {# Cesta actual (solo lectura; gestionar va a /panel/cesta) #}
                 {% if active_share %}
-                    <dl class="csa-defs">
-                        <dt>Tipo</dt><dd>{{ active_share.basketShare.name|default('—') }}</dd>
-                        <dt>Cantidad</dt><dd>{{ active_share.vegetablesBasketAmount|default(1) }} cesta(s)</dd>
-                        <dt>Desde</dt><dd>{{ active_share.startDate ? active_share.startDate|date('d/m/Y') : '—' }}</dd>
-                    </dl>
+                    <section class="prt-card prt-card--terra">
+                        <header class="prt-card__head">
+                            <h2 class="prt-card__title"><span class="accent"></span>Mi cesta</h2>
+                            {% if active_share.startDate %}
+                                <span class="prt-card__head-meta">desde {{ active_share.startDate|date('d/m/Y') }}</span>
+                            {% endif %}
+                        </header>
+                        <div class="prt-card__body">
+
+                            <div class="prt-basket__chips">
+                                <span class="prt-chip prt-chip--mod-{{ bs_id }}">
+                                    {% if bs_id != 4 %}<span class="dot"></span>{% endif %}
+                                    {{ bs_label }}
+                                </span>
+                                {% if bs_id == 3 and active_share.dayMonthOrder %}
+                                    <span class="prt-chip prt-chip--mute">{{ active_share.dayMonthOrder }}º viernes</span>
+                                {% endif %}
+                                {% if active_share.vegetablesBasketAmount and active_share.vegetablesBasketAmount > 1 %}
+                                    <span class="prt-chip prt-chip--mute">×{{ active_share.vegetablesBasketAmount }} cestas</span>
+                                {% endif %}
+                            </div>
+
+                            <div class="prt-mini">
+                                <div class="prt-mini__cell">
+                                    <div class="prt-mini__label">Huevos</div>
+                                    {% if active_share.eggAmount %}
+                                        <div class="prt-mini__value prt-mini__value--ochre">
+                                            {{ active_share.eggAmount.amount|default(active_share.eggAmount) }}
+                                            {% if active_share.eggPeriod %}<small>· {{ active_share.eggPeriod.name|default(active_share.eggPeriod) }}</small>{% endif %}
+                                        </div>
+                                    {% else %}
+                                        <div class="prt-mini__value prt-mini__value--muted">Sin huevos</div>
+                                    {% endif %}
+                                </div>
+                                <div class="prt-mini__cell">
+                                    <div class="prt-mini__label">Precio mensual</div>
+                                    <div class="prt-mini__value prt-mini__value--sage">
+                                        {% if active_share.eggAmount and active_share.eggMonthPrice %}
+                                            {{ (active_share.monthPrice + active_share.eggMonthPrice)|number_format(2, ',', '.') }}<small>€</small>
+                                        {% elseif active_share.monthPrice %}
+                                            {{ active_share.monthPrice|number_format(2, ',', '.') }}<small>€</small>
+                                        {% else %}
+                                            <span class="prt-mini__value--muted">—</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="prt-mini__cell">
+                                    <div class="prt-mini__label">Inicio</div>
+                                    <div class="prt-mini__value">{{ active_share.startDate ? active_share.startDate|date('d/m/Y') : '—' }}</div>
+                                </div>
+                                <div class="prt-mini__cell">
+                                    <div class="prt-mini__label">Fin</div>
+                                    {% if active_share.endDate %}
+                                        <div class="prt-mini__value">{{ active_share.endDate|date('d/m/Y') }}</div>
+                                    {% else %}
+                                        <div class="prt-mini__value prt-mini__value--muted">Sin fecha</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                        </div>
+                        <footer class="prt-card__foot">
+                            <a href="{{ path('panel_basket') }}" class="prt-btn">
+                                <i class="fa fa-calendar"></i> Ver y gestionar mi cesta
+                            </a>
+                        </footer>
+                    </section>
                 {% else %}
-                    <p class="csa-muted">No tienes una cesta activa registrada. Si crees que es un error, escribe a info@csavegadejarama.org.</p>
+                    <section class="prt-card prt-card--terra">
+                        <header class="prt-card__head">
+                            <h2 class="prt-card__title"><span class="accent"></span>Mi cesta</h2>
+                        </header>
+                        <div class="prt-card__body">
+                            <p class="prt-family__intro">No tienes una cesta activa registrada. Si crees que es un error, escribe a <a href="mailto:info@csavegadejarama.org">info@csavegadejarama.org</a>.</p>
+                        </div>
+                    </section>
                 {% endif %}
-                <div style="margin-top: var(--csa-sp-4);">
-                    <a href="{{ path('panel_basket') }}" class="csa-btn csa-btn--ghost csa-btn--sm">
-                        Ver detalles
-                    </a>
-                </div>
-            {% endblock %}
-        {% endembed %}
+
+            </div>
+
+        </div>
 
     </div>
 

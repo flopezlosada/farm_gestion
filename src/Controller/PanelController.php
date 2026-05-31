@@ -57,9 +57,14 @@ class PanelController extends AbstractController
 
         $partner = $this->getUser()->getPartner();
 
+        // La home replica las secciones de la ficha admin (partner/show) pero en
+        // SOLO LECTURA: el socix ve sus datos, su cesta, su familia y su histórico,
+        // sin las acciones de gestión (cambiar/dar de baja cesta, quitar familiares).
+        // El autoservicio (saltar/cambiar viernes/nodo) vive en /panel/cesta.
         return $this->render('Panel/index.html.twig', [
             'partner' => $partner,
             'active_share' => $this->activeShare($partner),
+            'group' => $partner->getWeeklyBasketGroup(),
         ]);
     }
 
