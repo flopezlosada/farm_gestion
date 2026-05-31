@@ -4,6 +4,8 @@ namespace App\Controller;
 
 use App\Custom\WeekOfMonth;
 use App\Entity\BasketShare;
+use App\Entity\EggAmount;
+use App\Entity\EggPeriod;
 use App\Entity\Node;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
@@ -223,11 +225,27 @@ class PartnerController extends AbstractController
         $linkedUser = $em->getRepository(\App\Entity\User::class)
             ->findOneBy(['partner' => $partner]);
 
+        // Catálogos id -> nombre para que el histórico traduzca el payload de
+        // BASKET_CHANGE (que guarda ids crudos) a texto legible, igual que
+        // gestor_names hace con los actores. Los catálogos de cesta/huevos son
+        // fijos, así que se resuelven por id (no se congela el nombre en el
+        // payload como sí se hace con grupos/nodos, que el admin renombra).
+        $toNameMap = static function (array $rows): array {
+            $map = [];
+            foreach ($rows as $row) {
+                $map[$row->getId()] = $row->getName();
+            }
+            return $map;
+        };
+
         return $this->render('partner/show.html.twig', [
             'partner' => $partner,
             'events' => $events,
             'gestor_names' => $gestorNames,
             'linked_user' => $linkedUser,
+            'basket_share_names' => $toNameMap($em->getRepository(BasketShare::class)->findAll()),
+            'egg_amount_names' => $toNameMap($em->getRepository(EggAmount::class)->findAll()),
+            'egg_period_names' => $toNameMap($em->getRepository(EggPeriod::class)->findAll()),
         ]);
     }
 

@@ -819,7 +819,7 @@
                     {% if app.user %}
                         <footer class="prt-card__foot">
                             <a href="{{ path('partner_basket_share_change_modality', { id: partner.getActiveBasket.id }) }}" class="prt-btn">
-                                <i class="fa fa-pencil"></i> Cambiar tipo de cesta
+                                <i class="fa fa-pencil"></i> Cambiar la cesta
                             </a>
                             <button type="button" class="prt-btn prt-btn--danger"
                                 onclick="document.getElementById('confirm-partner-show-5').showModal()">
@@ -854,6 +854,17 @@
                 'WEEK_SWAP':              { label: 'Cambio puntual de viernes', cls: 'swap'   },
                 'NODE_CHANGE':            { label: 'Cambio de nodo',            cls: 'swap'   }
             } %}
+
+            {# Resumen legible de los huevos de un snapshot del payload
+             # (egg_amount_id + egg_period_id). Compartido por el "antes" y el
+             # "después" del diff de BASKET_CHANGE para no repetir la expresión. #}
+            {% macro egg_summary(snap, amounts, periods) %}
+                {%- if snap.egg_amount_id -%}
+                    {{ amounts[snap.egg_amount_id]|default('huevos') }}{% if snap.egg_period_id %} · {{ periods[snap.egg_period_id]|default('') }}{% endif %}
+                {%- else -%}
+                    Sin huevos
+                {%- endif -%}
+            {% endmacro %}
 
             <section class="prt-card prt-card--ink">
                 <header class="prt-card__head">
@@ -917,6 +928,20 @@
                                     {% elseif event.type == 'NODE_CHANGE' and payload.to_group_name %}
                                         <div class="prt-timeline__detail">
                                             {% if payload.from_group_name %}<b>{{ payload.from_group_name }}</b> → {% endif %}<b>{{ payload.to_group_name }}</b>
+                                        </div>
+                                    {% elseif event.type == 'BASKET_CHANGE' and payload.from and payload.to %}
+                                        {% set f = payload.from %}
+                                        {% set t = payload.to %}
+                                        <div class="prt-timeline__detail">
+                                            {% if f.basket_share_id != t.basket_share_id %}
+                                                <div>Cesta: <b>{{ basket_share_names[f.basket_share_id]|default('—') }}</b> → <b>{{ basket_share_names[t.basket_share_id]|default('—') }}</b></div>
+                                            {% endif %}
+                                            {% if f.egg_amount_id != t.egg_amount_id or f.egg_period_id != t.egg_period_id %}
+                                                <div>Huevos: <b>{{ _self.egg_summary(f, egg_amount_names, egg_period_names) }}</b> → <b>{{ _self.egg_summary(t, egg_amount_names, egg_period_names) }}</b></div>
+                                            {% endif %}
+                                            {% if f.delivery_group != t.delivery_group %}
+                                                <div>Grupo: <b>{{ f.delivery_group|default('—') }}</b> → <b>{{ t.delivery_group|default('—') }}</b></div>
+                                            {% endif %}
                                         </div>
                                     {% endif %}
 
