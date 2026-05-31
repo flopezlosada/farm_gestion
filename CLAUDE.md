@@ -119,9 +119,9 @@ verdes hasta Fase 4 incluida — no re-validados desde Fase 5.
   porque las 74 entidades aún usan `@ORM\` annotations docblock
   (Doctrine ORM 2.x).
 
-`.env.local` con toggle comentado: BBDD `db` (fixtures Faker) y
-`db_prod_snapshot`. Durante Fases 6, 7 y sub-fases 8.x se navegó
-contra el snapshot.
+`.env.local` apunta a `db` (sandbox de trabajo, clon de golden). Ver
+sección "LOPD/GDPR — fronteras reales" para los roles de BBDD. Durante
+Fases 6, 7 y sub-fases 8.x se navegó contra el snapshot.
 
 **Errores secundarios pendientes** identificados al navegar pero no
 arreglados (no son flujos críticos del día a día):
@@ -312,9 +312,19 @@ Cada fase termina con tests en verde y un tag `vX.Y` en git.
 
 - **Dump de producción** en `~/Downloads/` (Mac de Paco). Útil para:
   validar migraciones contra datos reales, preparar la importación a
-  producción (Fase 9), o testing exhaustivo. **Nunca importarlo a la
-  BBDD `db` (dev) ni `db_test`** — contiene datos personales reales
-  (LOPD/GDPR). Si hace falta, crear `db_prod_snapshot` aislada.
+  producción (Fase 9), o testing exhaustivo.
+- **LOPD/GDPR — fronteras reales** (actualizado 2026-05-30): los datos
+  personales reales **pueden** vivir en las BBDD **locales** de DDEV
+  (`db`, `db_prod_snapshot`/golden, db_play) — es la misma máquina y se
+  necesitan reales para reconciliar contra los listados (PDF/ODS) por
+  nombre/DNI. Lo que NUNCA debe pasar:
+  1. **Nada de datos reales al repo** (`.gitignore` cubre dumps y
+     `.env.local`; los backups van a `~/csa-backups/` fuera del repo).
+  2. **Nada de datos reales a staging/producción sin anonimizar** — usar
+     `app:anonymize-staging` (faketea emails de no-testers) antes de subir.
+  Roles de BBDD: `db` = sandbox de trabajo (clon de golden); `db_prod_snapshot`
+  = golden (fuente de verdad, tras tocarla `bin/db-backup`); `db_test` = tests
+  (aislada). `db` ya NO es Faker; si se quiere Faker, regenerar con fixtures.
 - **Mailpit en DDEV**: `http://csa-vega.ddev.site:8025`. Captura
   cualquier email enviado por la app en local. `MAILER_DSN` ya apunta
   ahí.
