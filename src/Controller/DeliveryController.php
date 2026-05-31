@@ -23,8 +23,11 @@ use App\Service\Delivery\DeliveryShiftApplier;
 use App\Service\Delivery\DeliveryShiftCandidates;
 use App\Service\Delivery\DeliveryShiftValidator;
 use App\Service\Delivery\NodeDeliveryDate;
+use App\Service\Delivery\NodeDeliverySheet;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Delivery\WeeklyDeliveryReport;
+use Dompdf\Dompdf;
+use Dompdf\Options;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bridge\Doctrine\Attribute\MapEntity;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -1032,5 +1035,93 @@ class DeliveryController extends AbstractController
         }
 
         return $rows;
+    }
+
+    /**
+     * Selector de nodos para el listado imprimible de un día (Basket): muestra
+     * todos los nodos, premarcando los que reparten ese día, y enlaza a la
+     * generación del PDF con los nodos elegidos.
+     */
+    #[Route('/imprimible/{basketId}', name: 'delivery_printable_select', methods: ['GET'], requirements: ['basketId' => '\d+'])]
+    public function printableSelect(
+        #[MapEntity(id: 'basketId')] Basket $basket,
+        NodeRepository $nodeRepo,
+        NodeDeliveryDate $nodeDeliveryDate,
+    ): Response {
+        $nodes = array_map(
+            static fn (Node $node): array => [
+                'node' => $node,
+                'delivers' => $nodeDeliveryDate->deliversInBasket($basket, $node),
+                'physical_date' => $nodeDeliveryDate->physicalDateFor($basket, $node),
+            ],
+            $nodeRepo->findBy([], ['name' => 'ASC']),
+        );
+
+        return $this->render('delivery/printable_select.html.twig', [
+            'basket' => $basket,
+            'nodes' => $nodes,
+        ]);
+    }
+
+    /**
+     * Listado imprimible (PDF descargable vía dompdf) de un día para los nodos
+     * elegidos (?nodes[]=). Cada nodo va en su(s) hoja(s), aislado por salto de
+     * página. Reutiliza {@see NodeDeliverySheet} (misma fuente que la pantalla
+     * v2) y materializa el reparto al vuelo igual que byNode si aún no existe.
+     */
+    #[Route('/imprimible/{basketId}/pdf', name: 'delivery_printable_pdf', methods: ['GET'], requirements: ['basketId' => '\d+'])]
+    public function printablePdf(
+        #[MapEntity(id: 'basketId')] Basket $basket,
+        Request $request,
+        NodeRepository $nodeRepo,
+        NodeDeliverySheet $sheetBuilder,
+        NodeDeliveryDate $nodeDeliveryDate,
+        WeeklyBasketGenerator $generator,
+        WeeklyBasketRepository $weeklyBasketRepo,
+        DeliveryExceptionRepository $deliveryExceptionRepo,
+    ): Response {
+        $nodeIds = array_values(array_filter(array_map('intval', (array) $request->query->all('nodes'))));
+
+        // Materialización al vuelo idéntica a byNode: si el Basket no tiene
+        // reparto generado y no está cancelado globalmente, se genera (el
+        // generador es idempotente y cubre todos los nodos de una vez).
+        $globalException = $deliveryExceptionRepo->findGlobalForBasket($basket);
+        $basketGloballyCancelled = $globalException !== null && $globalException->isCancelled();
+        if (!$basketGloballyCancelled && $weeklyBasketRepo->countPickedInBasket($basket) === 0) {
+            $generator->generateForBasket($basket);
+        }
+
+        $sheets = [];
+        foreach ($nodeRepo->findBy(['id' => $nodeIds ?: [0]], ['name' => 'ASC']) as $node) {
+            if (!$nodeDeliveryDate->deliversInBasket($basket, $node)) {
+                continue;
+            }
+            $sheets[] = [
+                'node' => $node,
+                'physical_date' => $nodeDeliveryDate->physicalDateFor($basket, $node),
+                'sheet' => $sheetBuilder->build($node, $basket),
+            ];
+        }
+
+        $html = $this->renderView('delivery/printable.html.twig', [
+            'basket' => $basket,
+            'sheets' => $sheets,
+        ]);
+
+        // DejaVu Sans: dompdf necesita una fuente con cobertura latina completa
+        // para acentos y la ñ (la fuente por defecto los rompe).
+        $options = new Options();
+        $options->set('defaultFont', 'DejaVu Sans');
+        $dompdf = new Dompdf($options);
+        $dompdf->loadHtml($html);
+        $dompdf->setPaper('A4', 'portrait');
+        $dompdf->render();
+
+        $filename = sprintf('reparto-%s.pdf', $basket->getDate()->format('Y-m-d'));
+
+        return new Response($dompdf->output(), Response::HTTP_OK, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => sprintf('attachment; filename="%s"', $filename),
+        ]);
     }
 }

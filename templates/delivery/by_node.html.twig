@@ -235,6 +235,13 @@
 
     {{ csa.page_header('Socixs · Reparto', _heading, 'Listado de socixs que recogen cesta este día.') }}
 
+    <p style="margin: -8px 0 16px;">
+        <a href="{{ path('delivery_printable_select', { basketId: basket.id }) }}"
+           style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 16px; border-radius: 6px; background: #5b7a4c; color: #fff; text-decoration: none; font-weight: 600; font-size: 13px;">
+            🖨 Imprimir listado
+        </a>
+    </p>
+
     {# ============ Mini-timeline + page head ============ #}
     <div class="dlv-head">
         <div>

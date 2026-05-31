@@ -1,0 +1,69 @@
+{# ============================================================
+ # Selector de nodos para el listado imprimible de un día.
+ #
+ # Recibe (de DeliveryController::printableSelect):
+ #   - basket   Basket del día a imprimir.
+ #   - nodes    list<{node, delivers:bool, physical_date:?Date}>.
+ #
+ # El form hace GET a delivery_printable_pdf con nodes[] → un único PDF,
+ # cada nodo en su(s) hoja(s).
+ # ============================================================ #}
+{% extends '_layouts/csa_shell.html.twig' %}
+
+{% block title %}Imprimir reparto · {{ basket.date|date('d/m/Y') }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    Socixs
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Imprimir reparto</span>
+{% endblock %}
+
+{% block more_css %}
+{{ parent() }}
+<style>
+.prt-sel { max-width: 640px; }
+.prt-sel__head { font-family: 'Fraunces', serif; font-weight: 600; font-size: 24px; margin: 0 0 4px; letter-spacing: -0.02em; }
+.prt-sel__sub { color: #8d8773; font-size: 13px; margin-bottom: 24px; }
+.prt-sel__list { border: 1px solid #ebe7dd; border-radius: 8px; overflow: hidden; }
+.prt-sel__item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #f2efe7; }
+.prt-sel__item:last-child { border-bottom: 0; }
+.prt-sel__item input { width: 18px; height: 18px; }
+.prt-sel__name { font-weight: 600; color: #1d1c17; }
+.prt-sel__meta { margin-left: auto; font-size: 12px; color: #8d8773; }
+.prt-sel__meta--off { color: #b45d3a; }
+.prt-sel__actions { margin-top: 24px; display: flex; gap: 12px; }
+.prt-btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; border-radius: 6px; border: 0; cursor: pointer; font-weight: 600; font-size: 14px; text-decoration: none; }
+.prt-btn--go { background: #5b7a4c; color: #fff; }
+.prt-btn--ghost { background: #f2efe7; color: #5a564a; }
+</style>
+{% endblock %}
+
+{% block csa_main %}
+<div class="prt-sel">
+    <h1 class="prt-sel__head">Imprimir listado de reparto</h1>
+    <p class="prt-sel__sub">{{ basket.date|date('l d \\d\\e F \\d\\e Y')|capitalize }} · elige los nodos a incluir. Cada nodo sale en su hoja.</p>
+
+    <form method="get" action="{{ path('delivery_printable_pdf', {basketId: basket.id}) }}" target="_blank">
+        <div class="prt-sel__list">
+            {% for row in nodes %}
+                <label class="prt-sel__item">
+                    <input type="checkbox" name="nodes[]" value="{{ row.node.id }}" {{ row.delivers ? 'checked' : '' }}>
+                    <span class="prt-sel__name">{{ row.node.name }}</span>
+                    {% if row.delivers %}
+                        <span class="prt-sel__meta">reparte el {{ row.physical_date ? row.physical_date|date('d/m') : '—' }}</span>
+                    {% else %}
+                        <span class="prt-sel__meta prt-sel__meta--off">no reparte este día</span>
+                    {% endif %}
+                </label>
+            {% endfor %}
+        </div>
+
+        <div class="prt-sel__actions">
+            <button type="submit" class="prt-btn prt-btn--go">Generar PDF</button>
+            <a href="{{ path('delivery_by_node', {nodeId: nodes|first.node.id, basketId: basket.id}) }}" class="prt-btn prt-btn--ghost">Volver al reparto</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,260 @@
+<?php
+
+namespace App\Tests\Service\Delivery;
+
+use App\Entity\Basket;
+use App\Entity\BasketComponent;
+use App\Entity\BasketShare;
+use App\Entity\City;
+use App\Entity\EggAmount;
+use App\Entity\Node;
+use App\Entity\Partner;
+use App\Entity\PartnerBasketShare;
+use App\Entity\WeeklyBasket;
+use App\Entity\WeeklyBasketGroup;
+use App\Repository\PartnerBasketShareRepository;
+use App\Repository\WeeklyBasketItemRepository;
+use App\Repository\WeeklyBasketRepository;
+use App\Service\Delivery\NodeDeliverySheet;
+use PHPUnit\Framework\TestCase;
+
+/**
+ * Unit test del NodeDeliverySheet con repositorios mockeados. Verifica el
+ * volcado al formato papel: grupos alfabéticos con subgrupos por modalidad y
+ * subtotal, bloque de compartidas aparte con las parejas pegadas, notación de
+ * huevos compacta y totales del nodo.
+ */
+class NodeDeliverySheetTest extends TestCase
+{
+    private NodeDeliverySheet $sheet;
+    /** @var array<int,WeeklyBasket> */
+    private array $wbs = [];
+    /** @var array<int,array<int,float>> wb.id => [componentId => amount] */
+    private array $amounts = [];
+    /** @var array<int,?PartnerBasketShare> partner.id => PBS activo */
+    private array $pbsByPartner = [];
+
+    public function testHojaCompletaDeUnNodo(): void
+    {
+        // ---- Grupo Torremocha (orden de modalidad y subtotal) ----
+        $torre = $this->group(20, 'Torremocha', '#85c0e0');
+        $this->delivery(1, 'Cris y Paco', $torre, bsId: 1, bsName: 'Semanal', cestas: 1.0, dozens: 1.0, eggs: true);
+        $this->delivery(2, 'Miguel y Paloma', $torre, bsId: 2, bsName: 'Quincenal', cestas: 1.0, dozens: 0.0, eggs: false);
+        $this->delivery(3, 'Raquel', $torre, bsId: 5, bsName: 'Solo huevos', cestas: 0.0, dozens: 1.5, eggs: false);
+
+        // ---- Grupo Bustarviejo (alfabéticamente antes que Torremocha) ----
+        $busta = $this->group(3, 'Bustarviejo', '#e0a585');
+        $this->delivery(4, 'Victoria y David', $busta, bsId: 2, bsName: 'Quincenal', cestas: 1.0, dozens: 0.5, eggs: true);
+
+        // ---- Compartidas (bloque aparte, parejas pegadas) ----
+        $pilar = $this->delivery(5, 'Pilar y Eduardo', $torre, bsId: 4, bsName: 'Semanal compartida', cestas: 0.5, dozens: 0.0, eggs: false);
+        $eduardo = $this->delivery(6, 'Eduardo y Pilar', $torre, bsId: 4, bsName: 'Semanal compartida', cestas: 0.5, dozens: 0.0, eggs: false);
+        $this->pairUp($pilar, $eduardo);
+        $this->delivery(7, 'Hilde', $busta, bsId: 6, bsName: 'Quincenal compartida', cestas: 0.5, dozens: 0.0, eggs: false);
+
+        $result = $this->buildSheet();
+
+        // --- Grupos: orden alfabético, compartidas excluidas ---
+        $groups = $result['groups'];
+        $this->assertSame(['Bustarviejo', 'Torremocha'], array_column($groups, 'name'));
+
+        $torreGroup = $groups[1];
+        $this->assertSame(2.0, $torreGroup['subtotal_cestas'], 'subtotal = 1 + 1 + 0 (solo huevos)');
+        $this->assertSame('Torremocha', $torreGroup['locality']);
+        $this->assertSame(
+            ['Semanales', 'Quincenales y mensuales', 'Solo huevos'],
+            array_column($torreGroup['modalities'], 'label'),
+            'buckets de modalidad del Excel, en orden',
+        );
+
+        // Fila semanal con huevos: código SH, "1D" / 12.
+        $crisRow = $torreGroup['modalities'][0]['rows'][0];
+        $this->assertSame('SH', $crisRow['code']);
+        $this->assertSame('1D', $crisRow['egg_spec']);
+        $this->assertSame(12, $crisRow['egg_count']);
+
+        // Solo huevos: código H, "1D+1M" / 18.
+        $raquelRow = $torreGroup['modalities'][2]['rows'][0];
+        $this->assertSame('H', $raquelRow['code']);
+        $this->assertSame('1D+1M', $raquelRow['egg_spec']);
+        $this->assertSame(18, $raquelRow['egg_count']);
+
+        // Quincenal sin huevos: código Q, sin spec.
+        $miguelRow = $torreGroup['modalities'][1]['rows'][0];
+        $this->assertSame('Q', $miguelRow['code']);
+        $this->assertNull($miguelRow['egg_spec']);
+
+        // Bustarviejo: quincenal con huevos → QH, "1M" / 6.
+        $bustaGroup = $groups[0];
+        $this->assertSame(1.0, $bustaGroup['subtotal_cestas']);
+        $victoriaRow = $bustaGroup['modalities'][0]['rows'][0];
+        $this->assertSame('QH', $victoriaRow['code']);
+        $this->assertSame('1M', $victoriaRow['egg_spec']);
+        $this->assertSame(6, $victoriaRow['egg_count']);
+
+        // --- Compartidas: pareja pegada (Eduardo, Pilar) + huérfana (Hilde) ---
+        $sharedRows = $result['shared']['rows'];
+        $this->assertSame(['Eduardo y Pilar', 'Pilar y Eduardo', 'Hilde'], array_column($sharedRows, 'name'));
+        $this->assertSame(['SC', 'SC', 'QC'], array_column($sharedRows, 'code'));
+        $this->assertFalse($sharedRows[0]['pair_end'], 'el primero de la pareja no cierra grupo');
+        $this->assertTrue($sharedRows[1]['pair_end'], 'el segundo de la pareja cierra grupo');
+        $this->assertTrue($sharedRows[2]['pair_end'], 'la huérfana cierra su propio grupo');
+        $this->assertSame('Torremocha', $sharedRows[0]['locality'], 'la compartida lleva su localidad');
+        $this->assertSame('#85c0e0', $sharedRows[0]['color'], 'la compartida lleva el color de su grupo');
+
+        // --- Totales del nodo ---
+        $this->assertSame(4.5, $result['totals']['cestas'], '1+1+0 +1 +0,5+0,5+0,5');
+        $this->assertSame(3.0, $result['totals']['docenas'], '1 +1,5 +0,5');
+    }
+
+    public function testOrdenPorCodigoDentroDeModalidad(): void
+    {
+        $g = $this->group(3, 'Bustarviejo', '#e0a585');
+        $this->delivery(1, 'Zoe', $g, bsId: 2, bsName: 'Quincenal', cestas: 1.0, dozens: 1.0, eggs: true);   // QH
+        $this->delivery(2, 'Ana', $g, bsId: 2, bsName: 'Quincenal', cestas: 1.0, dozens: 0.0, eggs: false);  // Q
+        $this->delivery(3, 'Bea', $g, bsId: 2, bsName: 'Quincenal', cestas: 1.0, dozens: 0.0, eggs: false);  // Q
+
+        $rows = $this->buildSheet()['groups'][0]['modalities'][0]['rows'];
+
+        // Q (Ana, Bea) antes que QH (Zoe); dentro del mismo código, alfabético.
+        $this->assertSame(['Ana', 'Bea', 'Zoe'], array_column($rows, 'name'));
+        $this->assertSame(['Q', 'Q', 'QH'], array_column($rows, 'code'));
+    }
+
+    public function testLocalidadQuitaSufijoIndividuales(): void
+    {
+        $g = $this->group(50, 'La Cabrera individuales', '#9ae085');
+        $this->delivery(1, 'Eva', $g, bsId: 2, bsName: 'Quincenal', cestas: 1.0, dozens: 0.0, eggs: false);
+
+        $group = $this->buildSheet()['groups'][0];
+        $this->assertSame('La Cabrera individuales', $group['name'], 'el nombre del grupo se conserva');
+        $this->assertSame('La Cabrera', $group['locality'], 'la celda de localidad quita " individuales"');
+    }
+
+    public function testGrupoCombinadoUsaCiudadDelSocio(): void
+    {
+        // Grupo combinado (nombre con "/"): la celda es el pueblo de cada socio.
+        $g = $this->group(2, 'Alcobendas/Sanse/Tres Cantos', '#e09585');
+        $jorge = $this->delivery(1, 'Jorge Ortega', $g, bsId: 2, bsName: 'Quincenal', cestas: 1.0, dozens: 0.0, eggs: false);
+        $jorge->getPartner()->setCity($this->city('Tres Cantos'));
+        $sinCiudad = $this->delivery(2, 'Sin Ciudad', $g, bsId: 2, bsName: 'Quincenal', cestas: 1.0, dozens: 0.0, eggs: false);
+
+        $rows = $this->buildSheet()['groups'][0]['modalities'][0]['rows'];
+        $byName = array_column($rows, 'locality', 'name');
+
+        $this->assertSame('Tres Cantos', $byName['Jorge Ortega'], 'con city → el pueblo del socio');
+        $this->assertSame('Alcobendas/Sanse/Tres Cantos', $byName['Sin Ciudad'], 'sin city → cae al nombre del grupo');
+    }
+
+    public function testNodoSinRepartoDevuelveHojaVacia(): void
+    {
+        $result = $this->buildSheet();
+
+        $this->assertSame([], $result['groups']);
+        $this->assertSame([], $result['shared']['rows']);
+        $this->assertSame(['cestas' => 0.0, 'docenas' => 0.0], $result['totals']);
+    }
+
+    // --------------------------------------------------------------------- //
+
+    /**
+     * Ejecuta el servicio con los repos mockeados a partir del escenario
+     * montado con {@see delivery()} / {@see group()}.
+     *
+     * @return array<string,mixed>
+     */
+    private function buildSheet(): array
+    {
+        $wbs = array_values($this->wbs);
+        $amounts = $this->amounts;
+        $pbsByPartner = $this->pbsByPartner;
+
+        $wbRepo = $this->createMock(WeeklyBasketRepository::class);
+        $wbRepo->method('findForNodeAndBasket')->willReturn($wbs);
+
+        $itemRepo = $this->createMock(WeeklyBasketItemRepository::class);
+        $itemRepo->method('componentAmountsFor')->willReturn($amounts);
+
+        $pbsRepo = $this->createMock(PartnerBasketShareRepository::class);
+        $pbsRepo->method('findActiveForPartner')->willReturnCallback(
+            static fn (Partner $p): ?PartnerBasketShare => $pbsByPartner[$p->getId()] ?? null,
+        );
+
+        $this->sheet = new NodeDeliverySheet($wbRepo, $itemRepo, $pbsRepo);
+
+        return $this->sheet->build(new Node(), (new Basket())->setDate(new \DateTime('2026-05-15')));
+    }
+
+    private function group(int $id, string $name, string $color): WeeklyBasketGroup
+    {
+        $wbg = (new WeeklyBasketGroup())->setName($name)->setColor($color);
+        $this->setId($wbg, $id);
+
+        return $wbg;
+    }
+
+    /**
+     * Crea una entrega (WeeklyBasket) en el escenario y registra sus cantidades
+     * materializadas y el PBS activo del socio (suscrito o no a huevos).
+     */
+    private function delivery(
+        int $id,
+        string $name,
+        WeeklyBasketGroup $group,
+        int $bsId,
+        string $bsName,
+        float $cestas,
+        float $dozens,
+        bool $eggs,
+    ): WeeklyBasket {
+        $partner = (new Partner())->setDisplayName($name);
+        $this->setId($partner, $id);
+
+        $bs = new BasketShare();
+        $bs->setName($bsName);
+        $bs->setId($bsId);
+
+        $wb = (new WeeklyBasket())
+            ->setPartner($partner)
+            ->setWeeklyBasketGroup($group)
+            ->setBasketShare($bs)
+            ->setAmount((int) $cestas);
+        $this->setId($wb, $id);
+
+        $this->wbs[$id] = $wb;
+        $this->amounts[$id] = [
+            BasketComponent::ID_VEGETABLES => $cestas,
+            BasketComponent::ID_EGGS => $dozens,
+        ];
+
+        $pbs = new PartnerBasketShare();
+        if ($eggs) {
+            $eggAmount = $this->createMock(EggAmount::class);
+            $pbs->setEggAmount($eggAmount);
+        }
+        $this->pbsByPartner[$id] = $pbs;
+
+        return $wb;
+    }
+
+    private function city(string $name): City
+    {
+        $city = $this->createMock(City::class);
+        $city->method('getName')->willReturn($name);
+
+        return $city;
+    }
+
+    private function pairUp(WeeklyBasket $a, WeeklyBasket $b): void
+    {
+        $a->getPartner()->setSharePartner($b->getPartner());
+        $b->getPartner()->setSharePartner($a->getPartner());
+    }
+
+    private function setId(object $entity, int $id): void
+    {
+        $ref = new \ReflectionProperty($entity, 'id');
+        $ref->setAccessible(true);
+        $ref->setValue($entity, $id);
+    }
+}
