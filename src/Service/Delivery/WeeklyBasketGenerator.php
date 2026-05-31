@@ -367,15 +367,7 @@ class WeeklyBasketGenerator
                 continue;
             }
 
-            $wb = new WeeklyBasket();
-            $wb->setBasket($basket);
-            $wb->setPartner($share->getPartner());
-            $wb->setWeeklyBasketStatus($status);
-            $wb->setBasketShare($share->getBasketShare());
-            $wb->setWeeklyBasketGroup($share->getPartner()->getWeeklyBasketGroup());
-            $wb->setAmount($share->getAmount());
-            $wb->setDeliveryDate($physicalDate);
-            $wb->setPartnerBasketShare($share);
+            $wb = $this->newWeeklyBasketForShare($basket, $share, $physicalDate, $status);
             $this->em->persist($wb);
             $this->em->flush();
 
@@ -479,6 +471,67 @@ class WeeklyBasketGenerator
         [$weekly, $half, $biweekly, $monthly, $onlyEgg] = $this->gatherCandidateShares($basket);
 
         return array_merge($weekly, $half, $biweekly, $monthly, $onlyEgg);
+    }
+
+    /**
+     * Construye el WeeklyBasket de un share para un Basket. NO persiste ni hace
+     * flush: solo arma la entidad. Lo comparten el camino de escritura
+     * (createWeeklyBasketsFromShares, que luego persiste + compone) y la
+     * proyección de solo lectura del calendario (projectShareDelivery, modo dry).
+     *
+     * @param Basket                  $basket
+     * @param PartnerBasketShare      $share
+     * @param \DateTimeInterface      $physicalDate Fecha física de entrega ya resuelta por el nodo.
+     * @param WeeklyBasketStatus|null $status       Estado inicial; null en modo dry (entrega transitoria).
+     * @return WeeklyBasket Entidad transitoria, sin persistir.
+     */
+    private function newWeeklyBasketForShare(
+        Basket $basket,
+        PartnerBasketShare $share,
+        \DateTimeInterface $physicalDate,
+        ?WeeklyBasketStatus $status,
+    ): WeeklyBasket {
+        return (new WeeklyBasket())
+            ->setBasket($basket)
+            ->setPartner($share->getPartner())
+            ->setWeeklyBasketStatus($status)
+            ->setBasketShare($share->getBasketShare())
+            ->setWeeklyBasketGroup($share->getPartner()->getWeeklyBasketGroup())
+            ->setAmount($share->getAmount())
+            ->setDeliveryDate($physicalDate)
+            ->setPartnerBasketShare($share);
+    }
+
+    /**
+     * Proyección de solo lectura de la entrega que un share materializaría en un
+     * Basket (modo dry de B', calendario de recogida): arma un WeeklyBasket
+     * TRANSITORIO (no persiste) y calcula sus líneas de componente con el mismo
+     * computeItems que usa el camino de escritura. Una sola fuente de lógica para
+     * "qué hay en una entrega", se muestre o se guarde.
+     *
+     * Devuelve null si el nodo del socio no reparte en este Basket (misma regla
+     * que el camino de escritura). NO aplica cambios puntuales (shifts) ni
+     * huevos-extra de socios con huevo más frecuente que la cesta (SANTOS): eso
+     * lo orquesta el proyector de mes que se monta encima.
+     *
+     * @param Basket             $basket
+     * @param PartnerBasketShare $share
+     * @return null|array{weeklyBasket: WeeklyBasket, items: array<int, array{component: \App\Entity\BasketComponent, amount: string}>, deliveryDate: \DateTimeInterface}
+     */
+    public function projectShareDelivery(Basket $basket, PartnerBasketShare $share): ?array
+    {
+        $physicalDate = $this->resolvePhysicalDeliveryDate($basket, $share);
+        if ($physicalDate === null) {
+            return null;
+        }
+
+        $wb = $this->newWeeklyBasketForShare($basket, $share, $physicalDate, null);
+
+        return [
+            'weeklyBasket' => $wb,
+            'items' => $this->composer->computeItems($wb, $share, $basket),
+            'deliveryDate' => $physicalDate,
+        ];
     }
 
     /**
