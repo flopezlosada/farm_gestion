@@ -159,7 +159,9 @@ class PartnerUserProvisionerTest extends TestCase
     }
 
     /**
-     * Exactamente 1 socix activo: se provisiona (o recupera) su User.
+     * Exactamente 1 socix activo: se provisiona su User, que queda con
+     * passwordSet=true. El SSO de Google ya es una vía de acceso permanente,
+     * así que el panel no debe forzarle la pantalla de configurar contraseña.
      */
     public function testResolveByVerifiedEmailProvisionsWhenExactlyOneMatch(): void
     {
@@ -176,7 +178,7 @@ class PartnerUserProvisionerTest extends TestCase
 
         $em = $this->createMock(EntityManagerInterface::class);
         $em->expects($this->once())->method('persist')->with($this->isInstanceOf(User::class));
-        $em->expects($this->once())->method('flush');
+        $em->expects($this->atLeastOnce())->method('flush');
 
         $provisioner = new PartnerUserProvisioner(
             $em,
@@ -191,5 +193,44 @@ class PartnerUserProvisionerTest extends TestCase
         $this->assertInstanceOf(User::class, $user);
         $this->assertSame('unica@gmail.com', $user->getEmail());
         $this->assertSame($partner, $user->getPartner());
+        $this->assertTrue($user->isPasswordSet());
+    }
+
+    /**
+     * Un User que ya existía con passwordSet=false (p. ej. provisionado pero
+     * que nunca llegó a fijar contraseña) y que ahora entra por SSO: se le
+     * marca passwordSet=true para que el panel no le bloquee con el setup.
+     * Se reutiliza el User existente (no se persiste uno nuevo) y se hace flush
+     * del cambio.
+     */
+    public function testResolveByVerifiedEmailMarksPasswordSetOnExistingUnsetUser(): void
+    {
+        $partner = (new Partner())->setEmail('existente@gmail.com');
+
+        $existing = (new User())->setEmail('existente@gmail.com');
+        $existing->setPasswordSet(false);
+
+        $partnerRepository = $this->createMock(PartnerRepository::class);
+        $partnerRepository->method('findActiveByEmail')->willReturn([$partner]);
+
+        $userRepository = $this->createMock(UserRepository::class);
+        $userRepository->method('loadUserByIdentifier')->willReturn($existing);
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->expects($this->never())->method('persist');
+        $em->expects($this->once())->method('flush');
+
+        $provisioner = new PartnerUserProvisioner(
+            $em,
+            $this->createMock(UserPasswordHasherInterface::class),
+            $userRepository,
+            $partnerRepository,
+            $this->createMock(LoggerInterface::class),
+        );
+
+        $user = $provisioner->resolveByVerifiedEmail('existente@gmail.com');
+
+        $this->assertSame($existing, $user);
+        $this->assertTrue($user->isPasswordSet());
     }
 }

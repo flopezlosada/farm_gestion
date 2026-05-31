@@ -40,6 +40,12 @@ class PartnerUserProvisioner
      * loco). >1 candidatos ⇒ ambiguo (familia que comparte buzón) ⇒ null +
      * warning para resolución manual; nunca se adivina cuál es.
      *
+     * El User resuelto se marca con passwordSet = true: el SSO de Google ya es
+     * una vía de acceso permanente, así que no tiene sentido que el panel le
+     * fuerce la pantalla de "configura tu contraseña" (eso es propio del
+     * magic-link, donde el enlace es de un solo uso). Si la quiere, el socix
+     * puede ponérsela luego desde su perfil.
+     *
      * @param string $verifiedEmail email cuya propiedad garantiza el proveedor
      *
      * @return User|null el User logueable, o null si no hay un único candidato
@@ -64,7 +70,14 @@ class PartnerUserProvisioner
             return null;
         }
 
-        return $this->resolveOrCreate($candidates[0]);
+        $user = $this->resolveOrCreate($candidates[0]);
+
+        if ($user !== null && !$user->isPasswordSet()) {
+            $user->setPasswordSet(true);
+            $this->em->flush();
+        }
+
+        return $user;
     }
 
     /**
