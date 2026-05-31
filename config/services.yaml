@@ -10,6 +10,12 @@ parameters:
     # entornos de desarrollo con datasets desbalanceados.
     app.delivery.balance_threshold: '%env(int:BALANCE_THRESHOLD)%'
 
+    # Inactividad máxima (segundos) antes de cerrar la sesión de un usuario
+    # autenticado. 7200 = 2h. La caduca SessionIdleTimeoutSubscriber a nivel de
+    # aplicación, sin depender del GC de ficheros de PHP (best-effort y muerto
+    # en el contenedor).
+    app.session.max_idle_time: 7200
+
 services:
     # default configuration for services in *this* file
     _defaults:
@@ -57,3 +63,7 @@ services:
     App\Service\Delivery\Rule\BalanceWithinThresholdRule:
         arguments:
             $threshold: '%app.delivery.balance_threshold%'
+
+    App\EventSubscriber\SessionIdleTimeoutSubscriber:
+        arguments:
+            $maxIdleTime: '%app.session.max_idle_time%'
