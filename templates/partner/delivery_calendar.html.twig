@@ -1,0 +1,76 @@
+{# ============================================================
+ # Calendario de recogida del socio (B', solo lectura v0).
+ # Pinta las entregas proyectadas de un mes con sus componentes.
+ # Origen 'materialized' = entrega ya fijada (lo que el listado generó
+ # o lo que se editó); 'projected' = prevista según el patrón, aún sin
+ # materializar. La edición (materializar al tocar) se añade después.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Calendario de recogida · {{ partner }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('partner_index') }}">Socixs</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('partner_show', { id: partner.id }) }}">{{ partner }}</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Calendario de recogida</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Socixs · Recogida',
+        'Calendario de recogida',
+        'Entregas de ' ~ partner ~ ' en el mes. «Prevista» = según su patrón; «Fijada» = ya materializada.'
+    ) }}
+
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-5);">
+        {{ csa.btn('« Mes anterior', { variant: 'ghost', href: path('partner_delivery_calendar', { id: partner.id, year: prev.format('Y'), month: prev.format('n') }) }) }}
+        <strong style="font-size: 1.1em; text-transform: capitalize;">{{ current|format_datetime('none', 'none', pattern='LLLL yyyy', locale='es') }}</strong>
+        {{ csa.btn('Mes siguiente »', { variant: 'ghost', href: path('partner_delivery_calendar', { id: partner.id, year: next.format('Y'), month: next.format('n') }) }) }}
+    </div>
+
+    {% if slots is empty %}
+        {{ csa.callout('Este mes no tiene entregas previstas para el socio.', 'info', 'info-circle') }}
+    {% else %}
+        <div class="csa-stack">
+            {% for slot in slots %}
+                {% embed '_components/csa_card.html.twig' with { accent: slot.source == 'materialized' ? 'green' : false } %}
+                    {% block body %}
+                        <div class="csa-row-between" style="align-items: flex-start;">
+                            <div>
+                                <div style="font-weight: 600; text-transform: capitalize;">
+                                    {{ slot.date|format_date('full', locale='es') }}
+                                </div>
+                                <div style="margin-top: var(--csa-sp-2);">
+                                    {% if slot.items is empty %}
+                                        <span class="csa-muted">Sin componentes</span>
+                                    {% else %}
+                                        {% for item in slot.items %}
+                                            <span class="csa-badge csa-badge--neutral" style="margin-right: var(--csa-sp-2);">
+                                                {{ item.component.name }} · {{ item.amount }}
+                                            </span>
+                                        {% endfor %}
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div>
+                                {% if slot.source == 'materialized' %}
+                                    <span class="csa-badge csa-badge--green">Fijada</span>
+                                {% else %}
+                                    <span class="csa-badge csa-badge--ochre">Prevista</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endblock %}
+                {% endembed %}
+            {% endfor %}
+        </div>
+    {% endif %}
+
+{% endblock %}

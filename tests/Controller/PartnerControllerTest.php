@@ -1,5 +1,7 @@
 <?php
 
+namespace App\Tests\Controller;
+
 use App\Entity\Partner;
 
 /**
@@ -45,5 +47,21 @@ class PartnerControllerTest extends AbstractAuthenticatedTest
         $em = static::getContainer()->get('doctrine')->getManager();
         $em->remove($em->getRepository(Partner::class)->find($partnerId));
         $em->flush();
+    }
+
+    /**
+     * GET del calendario de recogida de un socio devuelve 200 (lectura v0).
+     */
+    public function testDeliveryCalendarReturnsOk(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        $partner = $em->getRepository(Partner::class)->findOneBy([]);
+        $this->assertNotNull($partner, 'Fixtures sin ningún socio.');
+
+        $client->request('GET', sprintf('/gestion/partner/%d/calendar', $partner->getId()));
+
+        $this->assertSame(200, $client->getResponse()->getStatusCode());
     }
 }

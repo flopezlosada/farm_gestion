@@ -14,6 +14,7 @@ use App\Entity\WeeklyBasketGroup;
 use App\Form\PartnerBasketShareType;
 use App\Form\PartnerType;
 use App\Repository\PartnerRepository;
+use App\Service\Delivery\DeliveryCalendarProjector;
 use App\Service\Partner\PartnerShareEventRecorder;
 use Doctrine\ORM\EntityManagerInterface;
 use Knp\Component\Pager\PaginatorInterface;
@@ -246,6 +247,42 @@ class PartnerController extends AbstractController
             'basket_share_names' => $toNameMap($em->getRepository(BasketShare::class)->findAll()),
             'egg_amount_names' => $toNameMap($em->getRepository(EggAmount::class)->findAll()),
             'egg_period_names' => $toNameMap($em->getRepository(EggPeriod::class)->findAll()),
+        ]);
+    }
+
+    /**
+     * Calendario de recogida del socio (B', solo lectura v0): muestra las
+     * entregas proyectadas de un mes con sus componentes (verdura/huevos). El
+     * mes se navega por query (?year=&month=); por defecto, el mes actual. La
+     * edición (materializar al tocar) se monta encima en un paso posterior.
+     *
+     * @param Partner                   $partner
+     * @param Request                   $request
+     * @param DeliveryCalendarProjector $projector
+     * @return Response
+     */
+    #[Route("/{id}/calendar", name: "partner_delivery_calendar", methods: ["GET"], requirements: ["id" => "\\d+"])]
+    public function deliveryCalendar(
+        Partner $partner,
+        Request $request,
+        DeliveryCalendarProjector $projector,
+    ): Response {
+        $default = new \DateTimeImmutable('first day of this month');
+        $year = (int) $request->query->get('year', $default->format('Y'));
+        $month = (int) $request->query->get('month', $default->format('n'));
+        if ($month < 1 || $month > 12) {
+            $year = (int) $default->format('Y');
+            $month = (int) $default->format('n');
+        }
+
+        $current = new \DateTimeImmutable(sprintf('%04d-%02d-01', $year, $month));
+
+        return $this->render('partner/delivery_calendar.html.twig', [
+            'partner' => $partner,
+            'slots' => $projector->projectMonth($partner, $year, $month),
+            'current' => $current,
+            'prev' => $current->modify('-1 month'),
+            'next' => $current->modify('+1 month'),
         ]);
     }
 
