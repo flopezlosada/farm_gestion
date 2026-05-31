@@ -122,6 +122,27 @@ class PartnerRepository extends ServiceEntityRepository
     }
 
 
+    /**
+     * Socixs en estado ACTIVO cuyo email coincide (case-insensitive) con el
+     * dado. Usado por el SSO de Google para enforcar la política "exactamente
+     * 1 candidato" antes de provisionar el login: 0 o >1 resultados ⇒ no se
+     * loguea (ver PartnerUserProvisioner::resolveByVerifiedEmail).
+     *
+     * @param string $email email verificado por el proveedor de identidad
+     *
+     * @return Partner[] socixs activos con ese email (normalmente 0 o 1)
+     */
+    public function findActiveByEmail(string $email): array
+    {
+        return $this->createQueryBuilder('p')
+            ->where('LOWER(p.email) = LOWER(:email)')
+            ->andWhere('p.status = :status')
+            ->setParameter('email', mb_strtolower(trim($email)))
+            ->setParameter('status', Partner::STATUS_ACTIVO)
+            ->getQuery()
+            ->getResult();
+    }
+
     public function findFamiliar(Partner $partner)
     {
 

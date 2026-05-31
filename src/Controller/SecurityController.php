@@ -2,18 +2,16 @@
 
 namespace App\Controller;
 
-use App\Entity\Partner;
 use App\Entity\User;
 use App\Repository\PartnerRepository;
 use App\Repository\UserRepository;
-use Doctrine\ORM\EntityManagerInterface;
+use App\Security\PartnerUserProvisioner;
 use Symfony\Bridge\Twig\Mime\TemplatedEmail;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Mailer\MailerInterface;
-use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Security\Http\Authentication\AuthenticationUtils;
@@ -65,9 +63,7 @@ class SecurityController extends AbstractController
     public function firstAccess(
         Request $request,
         PartnerRepository $partnerRepository,
-        UserRepository $userRepository,
-        EntityManagerInterface $em,
-        UserPasswordHasherInterface $hasher,
+        PartnerUserProvisioner $provisioner,
         LoginLinkHandlerInterface $loginLinkHandler,
         MailerInterface $mailer,
         #[Autowire(service: 'limiter.magic_link')]
@@ -131,7 +127,7 @@ class SecurityController extends AbstractController
             ->getOneOrNullResult();
 
         if ($partner !== null) {
-            $user = $this->resolveOrCreateUserForPartner($partner, $em, $hasher, $userRepository);
+            $user = $provisioner->resolveOrCreate($partner);
             if ($user !== null) {
                 $this->sendMagicLink($user, $loginLinkHandler, $mailer);
             }
@@ -231,53 +227,6 @@ class SecurityController extends AbstractController
             return null;
         }
         return (int) $digits;
-    }
-
-    /**
-     * Devuelve el User vinculado al Partner. Si no existe, crea uno con
-     * username = email, password aleatorio (placeholder) y passwordSet =
-     * false: la primera vez que entre, el panel le forzará a configurar
-     * su contraseña real.
-     *
-     * Edge case: si ya existe un User con ese email pero NO está vinculado
-     * a este Partner (familia que comparte buzón), se reutiliza el User
-     * existente y el link irá a su email. La asociación gestiona estos
-     * casos a mano.
-     */
-    private function resolveOrCreateUserForPartner(
-        Partner $partner,
-        EntityManagerInterface $em,
-        UserPasswordHasherInterface $hasher,
-        UserRepository $userRepository,
-    ): ?User {
-        $rawEmail = $partner->getEmail();
-        if ($rawEmail === null || $rawEmail === '') {
-            return null;
-        }
-
-        // Canonicalizamos a lowercase para no guardar "ADRIANA@x.com" como
-        // username/email del User: los logins son case-insensitive (vía
-        // UserRepository::loadUserByIdentifier) y los identificadores
-        // visibles quedan más limpios.
-        $email = mb_strtolower(trim($rawEmail));
-
-        $existing = $userRepository->loadUserByIdentifier($email);
-        if ($existing !== null) {
-            return $existing;
-        }
-
-        $user = new User();
-        $user->setUsername($email);
-        $user->setEmail($email);
-        $user->setRoles(['ROLE_PARTNER']);
-        $user->setPartner($partner);
-        $user->setPasswordSet(false);
-        $user->setPassword($hasher->hashPassword($user, bin2hex(random_bytes(16))));
-
-        $em->persist($user);
-        $em->flush();
-
-        return $user;
     }
 
     private function sendMagicLink(

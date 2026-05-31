@@ -93,6 +93,10 @@ security:
                 max_uses: 1
                 default_target_path: /post-login
                 always_use_default_target_path: true
+            # SSO con Google (socixs). Lazy provisioning condicionado a que el
+            # email verificado case con exactamente un socix activo.
+            custom_authenticators:
+                - App\Security\GoogleAuthenticator
             remember_me:
                 secret: '%kernel.secret%'
                 lifetime: 604800
@@ -105,6 +109,9 @@ security:
         # ^/login cubre /login, /login/magic (request), /login/magic/check
         # (callback del link) y /login/magic/enviado (pantalla intermedia).
         - { path: ^/login, roles: PUBLIC_ACCESS }
+        # ^/connect cubre el arranque y el callback del SSO de Google. Públicas:
+        # el login lo resuelve GoogleAuthenticator tras volver de Google.
+        - { path: ^/connect, roles: PUBLIC_ACCESS }
         # Dispatcher post-login: solo accesible logueado. Redirige a
         # /gestion/dashboard o /panel según roles.
         - { path: ^/post-login$, roles: IS_AUTHENTICATED_FULLY }

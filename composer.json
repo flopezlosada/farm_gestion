@@ -19,6 +19,8 @@
         "friendsofsymfony/jsrouting-bundle": "^3.0",
         "gedmo/doctrine-extensions": "^3.0",
         "knplabs/knp-paginator-bundle": "^6.0",
+        "knpuniversity/oauth2-client-bundle": "^2.20",
+        "league/oauth2-google": "^5.0",
         "liip/imagine-bundle": "^2.1",
         "mhujer/breadcrumbs-bundle": "^1.5.7",
         "phpdocumentor/reflection-docblock": "^5.2",
