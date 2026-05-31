@@ -3,6 +3,7 @@
 namespace App\Service\Delivery;
 
 use App\Entity\Basket;
+use App\Entity\BasketComponent;
 use App\Entity\Partner;
 use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketItem;
@@ -36,14 +37,27 @@ final class DeliveryCalendarProjector
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly WeeklyBasketGenerator $generator,
+        private readonly WeeklyBasketComposer $composer,
     ) {
     }
 
     /**
+     * Cada slot lleva, además de los HECHOS de la entrega, dos datos que la
+     * pantalla necesita para pintar las acciones de B' (saltar, editar por
+     * contenido) sin re-derivar política:
+     *  - 'skipped': true si la entrega está materializada y marcada como NO
+     *    recogida (estado 2). Las proyectadas nunca están saltadas (son el
+     *    patrón por defecto).
+     *  - 'available': los BasketComponent que el patrón del socio contempla esa
+     *    semana (lo que computeItems estamparía). Es el universo de toggles
+     *    posibles: un componente presente se puede quitar, uno ausente-pero-
+     *    disponible se puede añadir. Un componente que el patrón no da esa
+     *    semana (p. ej. huevos en una semana sin huevo) no aparece.
+     *
      * @param Partner $partner Socio cuyo calendario se proyecta.
      * @param int     $year    Año (p. ej. 2026).
      * @param int     $month   Mes 1-12.
-     * @return list<array{date: \DateTimeInterface, basket: Basket, source: 'materialized'|'projected', weeklyBasket: WeeklyBasket, items: array<int, array{component: \App\Entity\BasketComponent, amount: string}>}>
+     * @return list<array{date: \DateTimeInterface, basket: Basket, source: 'materialized'|'projected', weeklyBasket: WeeklyBasket, items: array<int, array{component: BasketComponent, amount: string}>, skipped: bool, available: list<BasketComponent>}>
      */
     public function projectMonth(Partner $partner, int $year, int $month): array
     {
@@ -71,6 +85,8 @@ final class DeliveryCalendarProjector
                     'source' => 'materialized',
                     'weeklyBasket' => $materialized,
                     'items' => $this->readItems($materialized),
+                    'skipped' => $materialized->getWeeklyBasketStatus()?->getId() === WeeklyBasketSkipper::STATUS_SKIPPED,
+                    'available' => $this->availableComponents($materialized, $basket),
                 ];
                 continue;
             }
@@ -91,10 +107,45 @@ final class DeliveryCalendarProjector
                 'source' => 'projected',
                 'weeklyBasket' => $projection['weeklyBasket'],
                 'items' => $projection['items'],
+                // Proyectada = patrón por defecto: nunca saltada, y lo presente
+                // coincide con lo disponible (nada se ha quitado todavía).
+                'skipped' => false,
+                'available' => array_map(static fn (array $line): BasketComponent => $line['component'], $projection['items']),
             ];
         }
 
         return $slots;
+    }
+
+    /**
+     * Componentes que el patrón del socio contempla en esta entrega
+     * materializada (lo que computeItems estamparía esta semana): el universo de
+     * toggles posibles, ESTABLE e independiente de lo que la entrega lleve ahora
+     * mismo. Es clave que no dependa de los ítems presentes: si al quitar huevos
+     * 'available' encogiera, el interruptor desaparecería y no se podrían volver
+     * a añadir.
+     *
+     * El share se toma del WB; si no lo tiene (datos previos al backfill de Etapa
+     * 1), se busca el share activo del socio en esa fecha. Solo si tampoco existe
+     * se degrada a lo presente — no se inventa un patrón.
+     *
+     * @param WeeklyBasket $weeklyBasket Entrega materializada.
+     * @param Basket       $basket       Ciclo semanal de la entrega.
+     * @return list<BasketComponent>
+     */
+    private function availableComponents(WeeklyBasket $weeklyBasket, Basket $basket): array
+    {
+        $share = $weeklyBasket->getPartnerBasketShare();
+        if ($share === null && $weeklyBasket->getPartner() !== null) {
+            $share = $this->em->getRepository(\App\Entity\PartnerBasketShare::class)
+                ->findActiveForPartner($weeklyBasket->getPartner(), $basket->getDate());
+        }
+
+        $lines = $share !== null
+            ? $this->composer->computeItems($weeklyBasket, $share, $basket)
+            : $this->readItems($weeklyBasket);
+
+        return array_map(static fn (array $line): BasketComponent => $line['component'], $lines);
     }
 
     /**

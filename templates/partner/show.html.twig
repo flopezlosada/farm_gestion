@@ -504,6 +504,12 @@
                 <i class="fa fa-pencil"></i> Editar ficha
             </a>
 
+            {% if partner.hasActiveBasket %}
+                <a href="{{ path('partner_delivery_calendar', { id: partner.id }) }}" class="prt-btn">
+                    <i class="fa fa-calendar"></i> Calendario de recogida
+                </a>
+            {% endif %}
+
             {% if partner.status == 'ACTIVO' %}
                 {% if partner.getActiveBasket and partner.getActiveBasket.basketShare.id == 4 and partner.sharePartner is null %}
                     <a href="{{ path('family', { id: partner.id, type: 'add_share_partner' }) }}" class="prt-btn">

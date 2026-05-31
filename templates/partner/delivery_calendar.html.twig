@@ -1,13 +1,17 @@
 {# ============================================================
- # Calendario de recogida del socio (B', solo lectura v0).
- # Pinta las entregas proyectadas de un mes con sus componentes.
- # Origen 'materialized' = entrega ya fijada (lo que el listado generó
- # o lo que se editó); 'projected' = prevista según el patrón, aún sin
- # materializar. La edición (materializar al tocar) se añade después.
+ # Calendario de recogida del socio (B').
+ # Rejilla mensual (qué días recoge de un vistazo) + panel del día
+ # seleccionado con sus acciones: editar componentes (verdura/huevos),
+ # mover de día (cambio puntual) y no recoger.
+ #
+ # R1: en cestas compartidas el día y el contenido los marca la
+ # alternancia con el otro hogar — no hay acciones.
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
+
+{% set EGG = constant('App\\Entity\\BasketComponent::ID_EGGS') %}
 
 {% block title %}Calendario de recogida · {{ partner }}{% endblock %}
 
@@ -21,56 +25,287 @@
     <span class="csa-topbar__crumb-active">Calendario de recogida</span>
 {% endblock %}
 
+{% block more_css %}
+{{ parent() }}
+<style>
+  .rcal{display:grid;grid-template-columns:1.4fr 1fr;gap:var(--csa-sp-5);align-items:start}
+  @media (max-width:880px){.rcal{grid-template-columns:1fr}}
+
+  /* --- navegación de mes (botones circulares, sin el subrayado verde de :where(a):hover) --- */
+  .rcal-monthnav{display:flex;align-items:center;justify-content:center;gap:var(--csa-sp-4);margin-bottom:var(--csa-sp-5)}
+  .rcal-month{font-family:var(--csa-serif);font-weight:500;font-size:18px;letter-spacing:-.02em;text-transform:capitalize;min-width:150px;text-align:center}
+  .csa-app a.rcal-navbtn{width:36px;height:36px;border-radius:50%;border:1px solid var(--csa-border);background:var(--csa-surface);color:var(--csa-ink-soft);display:inline-grid;place-items:center;text-decoration:none;transition:.15s}
+  .csa-app a.rcal-navbtn:hover{border-color:var(--csa-ink-soft);border-bottom-color:var(--csa-ink-soft);color:var(--csa-ink);background:var(--csa-surface-alt)}
+
+  /* --- rejilla --- */
+  .rcal-grid{background:var(--csa-surface);border:1px solid var(--csa-border);border-top:2px solid var(--csa-green);border-radius:var(--csa-radius,12px);padding:var(--csa-sp-4)}
+  .rcal-dow{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-bottom:5px}
+  .rcal-dow span{text-align:center;font-size:10px;font-weight:600;color:var(--csa-ink-muted);text-transform:uppercase;letter-spacing:.03em}
+  .rcal-weeks{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+  .rcal-cell{height:44px;border-radius:8px;padding:5px 7px;border:1px solid transparent;display:flex;flex-direction:column;justify-content:space-between;text-decoration:none}
+  .rcal-cell .n{font-size:12px;color:var(--csa-ink-soft);font-variant-numeric:tabular-nums;line-height:1}
+  .rcal-cell.out .n{color:#d2d1cc}
+  .rcal-cell.empty{background:var(--csa-surface-alt)}
+  .rcal-cell.wknd.empty{background:#f0efec}
+  .rcal-dots{display:flex;gap:3px;align-self:flex-end}
+  .rcal-dot{width:7px;height:7px;border-radius:50%}
+  .rcal-dot.veg{background:var(--csa-green)} .rcal-dot.egg{background:var(--csa-ochre)}
+  a.rcal-pick{background:var(--csa-green-soft);border-color:#cfe0b4;transition:.12s}
+  a.rcal-pick .n{color:var(--csa-green);font-weight:700}
+  a.rcal-pick:hover{box-shadow:0 2px 6px rgba(74,124,58,.18)}
+  a.rcal-skip{background:var(--csa-terracotta-soft);border-color:#f3c4a8}
+  a.rcal-skip .n{color:var(--csa-terracotta);font-weight:700;text-decoration:line-through}
+  a.rcal-skip .x{align-self:flex-end;font-size:10px;color:#b04e22}
+  .rcal-cell.sel{outline:2px solid var(--csa-green);outline-offset:1px}
+  .rcal-cell.sel.rcal-skip{outline-color:var(--csa-terracotta)}
+  .rcal-legend{display:flex;gap:var(--csa-sp-4);margin-top:var(--csa-sp-4);padding-top:var(--csa-sp-3);border-top:1px solid var(--csa-border);font-size:12px;color:var(--csa-ink-soft);align-items:center;flex-wrap:wrap}
+  .rcal-legend .d{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:5px}
+
+  /* --- panel --- */
+  .rcal-panel{background:var(--csa-surface);border:1px solid var(--csa-border);border-radius:var(--csa-radius,12px);overflow:hidden}
+  .rcal-panel__hd{padding:var(--csa-sp-4) var(--csa-sp-4) var(--csa-sp-3);background:var(--csa-green-soft)}
+  .rcal-panel__hd.is-skip{background:var(--csa-terracotta-soft)}
+  .rcal-panel__day{font-family:var(--csa-serif);font-size:22px;font-weight:500;letter-spacing:-.02em;font-variant-numeric:lining-nums tabular-nums}
+  .rcal-panel__where{font-size:13px;color:var(--csa-green);font-weight:500;margin-top:2px}
+  .rcal-panel__hd.is-skip .rcal-panel__where{color:#b04e22}
+  .rcal-panel__where i{margin-right:5px}
+  .rcal-panel__bd{padding:var(--csa-sp-4)}
+  .rcal-sect{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--csa-ink-muted);font-weight:600;margin-bottom:var(--csa-sp-3)}
+  .rcal-empty-note{display:flex;align-items:center;gap:8px;background:var(--csa-terracotta-soft);color:#b04e22;font-size:12.5px;border-radius:9px;padding:9px 12px;margin-bottom:var(--csa-sp-4)}
+  .rcal-move-wrap{margin-top:var(--csa-sp-5)}
+
+  .rcal-comp{display:flex;align-items:center;gap:var(--csa-sp-3);padding:9px 0}
+  .rcal-comp+.rcal-comp{border-top:1px solid var(--csa-border)}
+  .rcal-comp__ic{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;font-size:14px;flex-shrink:0}
+  .rcal-comp__ic.veg{background:var(--csa-green-soft);color:var(--csa-green)}
+  .rcal-comp__ic.egg{background:var(--csa-ochre-soft);color:var(--csa-ochre)}
+  .rcal-comp.off .rcal-comp__ic{filter:grayscale(.6);opacity:.55}
+  .rcal-comp__t{flex:1}
+  .rcal-comp__name{font-weight:600;font-size:14px;display:block}
+  .rcal-comp__sub{font-size:12px;color:var(--csa-ink-muted);display:block;margin-top:1px}
+  .rcal-comp__sub.off{color:var(--csa-terracotta);font-weight:600}
+
+  /* switch = botón submit del form de toggle */
+  .rcal-sw{position:relative;width:40px;height:23px;flex-shrink:0;border:0;padding:0;background:none;cursor:pointer}
+  .rcal-sw .track{position:absolute;inset:0;background:#d6d5d0;border-radius:12px;transition:.18s}
+  .rcal-sw .thumb{position:absolute;top:2px;left:2px;width:19px;height:19px;background:#fff;border-radius:50%;transition:.18s;box-shadow:0 1px 2px rgba(0,0,0,.25)}
+  .rcal-sw.on .track{background:var(--csa-green)}
+  .rcal-sw.on .thumb{transform:translateX(17px)}
+
+  .rcal-move{display:flex;gap:var(--csa-sp-2)}
+  .rcal-move select{flex:1;appearance:none;border:1px solid var(--csa-border);border-radius:9px;padding:9px 12px;font-family:inherit;font-size:13px;color:var(--csa-ink);background:var(--csa-surface)}
+  .rcal-move button{border:1px solid var(--csa-sky);background:var(--csa-sky-soft);color:var(--csa-sky);border-radius:9px;padding:0 16px;font-family:inherit;font-weight:600;font-size:13px;cursor:pointer}
+  .rcal-hint{font-size:11px;color:var(--csa-ink-muted);margin-top:6px}
+
+  .rcal-panel__ft{padding:var(--csa-sp-4);border-top:1px solid var(--csa-border);background:var(--csa-surface-alt)}
+  .rcal-empty{padding:var(--csa-sp-6) var(--csa-sp-4);text-align:center;color:var(--csa-ink-muted);font-size:14px}
+</style>
+{% endblock %}
+
 {% block csa_main %}
 
     {{ csa.page_header(
         'Socixs · Recogida',
         'Calendario de recogida',
-        'Entregas de ' ~ partner ~ ' en el mes. «Prevista» = según su patrón; «Fijada» = ya materializada.'
+        partner ~ (pickup_place ? ' · recoge en ' ~ pickup_place : '')
     ) }}
 
-    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-5);">
-        {{ csa.btn('« Mes anterior', { variant: 'ghost', href: path('partner_delivery_calendar', { id: partner.id, year: prev.format('Y'), month: prev.format('n') }) }) }}
-        <strong style="font-size: 1.1em; text-transform: capitalize;">{{ current|format_datetime('none', 'none', pattern='LLLL yyyy', locale='es') }}</strong>
-        {{ csa.btn('Mes siguiente »', { variant: 'ghost', href: path('partner_delivery_calendar', { id: partner.id, year: next.format('Y'), month: next.format('n') }) }) }}
+    <div class="rcal-monthnav">
+        <a class="rcal-navbtn" href="{{ path('partner_delivery_calendar', { id: partner.id, year: prev.format('Y'), month: prev.format('n') }) }}"
+           aria-label="Mes anterior" title="Mes anterior"><i class="fa fa-chevron-left"></i></a>
+        <span class="rcal-month">{{ current|format_datetime('none', 'none', pattern='LLLL yyyy', locale='es') }}</span>
+        <a class="rcal-navbtn" href="{{ path('partner_delivery_calendar', { id: partner.id, year: next.format('Y'), month: next.format('n') }) }}"
+           aria-label="Mes siguiente" title="Mes siguiente"><i class="fa fa-chevron-right"></i></a>
     </div>
 
-    {% if slots is empty %}
-        {{ csa.callout('Este mes no tiene entregas previstas para el socio.', 'info', 'info-circle') }}
-    {% else %}
-        <div class="csa-stack">
-            {% for slot in slots %}
-                {% embed '_components/csa_card.html.twig' with { accent: slot.source == 'materialized' ? 'green' : false } %}
-                    {% block body %}
-                        <div class="csa-row-between" style="align-items: flex-start;">
-                            <div>
-                                <div style="font-weight: 600; text-transform: capitalize;">
-                                    {{ slot.date|format_date('full', locale='es') }}
-                                </div>
-                                <div style="margin-top: var(--csa-sp-2);">
-                                    {% if slot.items is empty %}
-                                        <span class="csa-muted">Sin componentes</span>
-                                    {% else %}
-                                        {% for item in slot.items %}
-                                            <span class="csa-badge csa-badge--neutral" style="margin-right: var(--csa-sp-2);">
-                                                {{ item.component.name }} · {{ item.amount }}
-                                            </span>
+    {% if partner.sharePartner %}
+        {{ csa.callout('Esta cesta es compartida: su día y su contenido los marca la alternancia con el otro hogar, no se editan desde aquí.', 'info', 'info-circle') }}
+    {% endif %}
+
+    <div class="rcal">
+
+        {# ===== REJILLA ===== #}
+        <div class="rcal-grid">
+            <div class="rcal-dow"><span>Lun</span><span>Mar</span><span>Mié</span><span>Jue</span><span>Vie</span><span>Sáb</span><span>Dom</span></div>
+            <div class="rcal-weeks">
+                {% for week in weeks %}
+                    {% for day in week %}
+                        {% set slot = day.slot %}
+                        {% set is_sel = slot and selected and slot.basket.id == selected.basket.id %}
+                        {% set wknd = day.date.format('N') in [6, 7] %}
+                        {% if slot %}
+                            {# Rojo si está saltada O si se le han quitado todos los
+                               componentes (no recoge nada esa semana). #}
+                            {% set no_pickup = slot.skipped or slot.items is empty %}
+                            <a href="{{ path('partner_delivery_calendar', { id: partner.id, year: current.format('Y'), month: current.format('n'), sel: slot.basket.id }) }}"
+                               class="rcal-cell {{ no_pickup ? 'rcal-skip' : 'rcal-pick' }}{{ is_sel ? ' sel' }}">
+                                <span class="n">{{ day.date.format('j') }}</span>
+                                {% if no_pickup %}
+                                    <span class="x"><i class="fa fa-ban"></i></span>
+                                {% else %}
+                                    <span class="rcal-dots">
+                                        {# Orden fijo por id de componente (verdura, huevos): si no,
+                                           al quitar y re-añadir los puntitos se desordenan. #}
+                                        {% for item in slot.items|sort((a, b) => a.component.id - b.component.id) %}
+                                            <span class="rcal-dot {{ item.component.id == EGG ? 'egg' : 'veg' }}"></span>
                                         {% endfor %}
+                                    </span>
+                                {% endif %}
+                            </a>
+                        {% else %}
+                            <div class="rcal-cell empty{{ not day.inMonth ? ' out' }}{{ wknd ? ' wknd' }}">
+                                <span class="n">{{ day.date.format('j') }}</span>
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                {% endfor %}
+            </div>
+            <div class="rcal-legend">
+                <span><span class="d" style="background: var(--csa-green);"></span>Verdura</span>
+                <span><span class="d" style="background: var(--csa-ochre);"></span>Huevos</span>
+                <span><span class="d" style="background: var(--csa-terracotta-soft); border: 1px solid #f3c4a8;"></span>No recoge</span>
+            </div>
+        </div>
+
+        {# ===== PANEL DEL DÍA SELECCIONADO ===== #}
+        <div class="rcal-panel">
+            {% if selected %}
+                {% set bid = selected.basket.id %}
+                {# Ids de componentes presentes en la entrega, para decidir on/off.
+                   OJO: lista (no mapa con claves enteras) — Twig `merge` reindexa las
+                   claves enteras como array_merge y rompería el lookup por id. #}
+                {% set present_ids = [] %}
+                {% for it in selected.items %}{% set present_ids = present_ids|merge([it.component.id]) %}{% endfor %}
+                {# Vacío = sin componentes y no saltada explícitamente: no recoge nada. #}
+                {% set is_empty = not selected.skipped and selected.items is empty %}
+
+                <div class="rcal-panel__hd{{ (selected.skipped or is_empty) ? ' is-skip' }}">
+                    <div class="rcal-panel__day">{{ selected.date|format_date('full', locale='es')|capitalize }}</div>
+                    {% if pickup_place %}
+                        <div class="rcal-panel__where"><i class="fa fa-map-marker"></i>Recoge en {{ pickup_place }}</div>
+                    {% endif %}
+                </div>
+
+                {# Solo-lectura: compartidas (R1) y entregas pasadas. #}
+                {% set readonly = partner.sharePartner is not null or not selected_editable %}
+
+                {% if selected.skipped %}
+                    {# Saltada: no lleva nada esa semana; si es editable, se puede restaurar. #}
+                    <div class="rcal-panel__bd">
+                        <div class="rcal-sect">Esta semana no recoge</div>
+                        <p class="csa-muted">La entrega del {{ selected.date|format_date('long', locale='es') }} está marcada como NO recogida y no saldrá en el reparto.</p>
+                    </div>
+                    {% if selected_editable and partner.sharePartner is null %}
+                        <div class="rcal-panel__ft">
+                            <form action="{{ path('partner_delivery_calendar_skip', { id: partner.id, basketId: bid }) }}" method="post" style="margin: 0;">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token('calendar_skip_' ~ partner.id) }}">
+                                {{ csa.btn('Volver a recoger', { type: 'submit', variant: 'secondary', icon: 'fa-undo', block: true }) }}
+                            </form>
+                        </div>
+                    {% endif %}
+                {% else %}
+                    <div class="rcal-panel__bd">
+                        {% if is_empty and not readonly %}
+                            <div class="rcal-empty-note"><i class="fa fa-ban"></i> Ahora mismo no recoge nada esta semana. Activa algún componente o déjalo así.</div>
+                        {% endif %}
+                        <div class="rcal-sect">Qué se lleva ese día</div>
+
+                        {% if readonly %}
+                            {# Sin interruptores: solo lo que lleva (mismo formato de fila). #}
+                            {% for it in selected.items|sort((a, b) => a.component.id - b.component.id) %}
+                                {% set is_egg = it.component.id == EGG %}
+                                <div class="rcal-comp">
+                                    <span class="rcal-comp__ic {{ is_egg ? 'egg' : 'veg' }}"><i class="fa {{ is_egg ? 'fa-egg' : 'fa-leaf' }}"></i></span>
+                                    <span class="rcal-comp__t">
+                                        <span class="rcal-comp__name">{{ is_egg ? 'Huevos' : 'Cesta de verdura' }}</span>
+                                        <span class="rcal-comp__sub">{{ it.amount + 0 }} {{ is_egg ? 'docena' : 'cesta' }}{{ (it.amount + 0) != 1 ? 's' }}</span>
+                                    </span>
+                                </div>
+                            {% else %}
+                                <p class="csa-muted">Sin componentes.</p>
+                            {% endfor %}
+                        {% else %}
+                            {# Editable: una fila por componente que el patrón permite. El
+                               interruptor solo aparece si hay 2+ (con uno solo, quitarlo
+                               equivale a no recoger → se hace desde el botón de abajo). #}
+                            {% set show_switches = selected.available|length >= 2 %}
+                            {% for comp in selected.available %}
+                                {% set on = comp.id in present_ids %}
+                                {% set is_egg = comp.id == EGG %}
+                                {% set amount = 0 %}
+                                {% for it in selected.items|filter(it => it.component.id == comp.id) %}{% set amount = it.amount + 0 %}{% endfor %}
+                                <div class="rcal-comp{{ on ? '' : ' off' }}">
+                                    <span class="rcal-comp__ic {{ is_egg ? 'egg' : 'veg' }}"><i class="fa {{ is_egg ? 'fa-egg' : 'fa-leaf' }}"></i></span>
+                                    <span class="rcal-comp__t">
+                                        <span class="rcal-comp__name">{{ is_egg ? 'Huevos' : 'Cesta de verdura' }}</span>
+                                        {% if on %}
+                                            <span class="rcal-comp__sub">{{ amount }} {{ is_egg ? 'docena' : 'cesta' }}{{ amount != 1 ? 's' }}</span>
+                                        {% else %}
+                                            <span class="rcal-comp__sub off">Esta semana no lo quiere</span>
+                                        {% endif %}
+                                    </span>
+                                    {% if show_switches %}
+                                        <form action="{{ path('partner_delivery_calendar_component', { id: partner.id, basketId: bid, componentId: comp.id }) }}" method="post" style="margin: 0;">
+                                            <input type="hidden" name="_csrf_token" value="{{ csrf_token('calendar_component_' ~ partner.id) }}">
+                                            <button type="submit" class="rcal-sw{{ on ? ' on' }}" aria-label="{{ on ? 'Quitar' : 'Añadir' }} {{ is_egg ? 'huevos' : 'verdura' }}">
+                                                <span class="track"></span><span class="thumb"></span>
+                                            </button>
+                                        </form>
                                     {% endif %}
                                 </div>
-                            </div>
-                            <div>
-                                {% if slot.source == 'materialized' %}
-                                    <span class="csa-badge csa-badge--green">Fijada</span>
-                                {% else %}
-                                    <span class="csa-badge csa-badge--ochre">Prevista</span>
-                                {% endif %}
-                            </div>
+                            {% endfor %}
+
+                            {% if move_candidates is not empty %}
+                                <div class="rcal-move-wrap">
+                                    <div class="rcal-sect">Cambiar de día</div>
+                                    <form action="{{ path('partner_delivery_calendar_move', { id: partner.id, basketId: bid }) }}" method="post" class="rcal-move" style="margin: 0;">
+                                        <input type="hidden" name="_csrf_token" value="{{ csrf_token('calendar_move_' ~ partner.id) }}">
+                                        <select name="to_basket_id" required>
+                                            {% for cand in move_candidates %}
+                                                <option value="{{ cand.id }}" style="text-transform: capitalize;">{{ cand.date|format_date('full', locale='es') }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <button type="submit">Mover</button>
+                                    </form>
+                                    <div class="rcal-hint">Se mueve toda la entrega a la fecha elegida. Solo días válidos para su nodo.</div>
+                                </div>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+
+                    {% if not readonly %}
+                        <div class="rcal-panel__ft">
+                            <form id="rcal-skip-form-{{ bid }}" action="{{ path('partner_delivery_calendar_skip', { id: partner.id, basketId: bid }) }}" method="post" style="margin: 0;">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token('calendar_skip_' ~ partner.id) }}">
+                                <button type="button" class="csa-btn csa-btn--danger-soft csa-btn--block"
+                                        onclick="document.getElementById('rcal-confirm-skip-{{ bid }}').showModal()">
+                                    <i class="fa fa-ban"></i><span>No recoge esta semana</span>
+                                </button>
+                            </form>
+                            <div class="rcal-hint" style="text-align: center;">Queda fuera del reparto. Reversible.</div>
+                            {{ csa.confirm_dialog('rcal-confirm-skip-' ~ bid, {
+                                variant: 'warning',
+                                eyebrow: 'No recoger',
+                                title: '¿Marcar que no recoge esta semana?',
+                                body: 'La entrega de ' ~ (selected.date|format_date('long', locale='es')) ~ ' no saldrá en el reparto. Podrás revertirlo desde aquí.',
+                                confirm_label: 'No recoger',
+                                external_form_id: 'rcal-skip-form-' ~ bid,
+                            }) }}
                         </div>
-                    {% endblock %}
-                {% endembed %}
-            {% endfor %}
+                    {% elseif not partner.sharePartner %}
+                        <div class="rcal-panel__ft">
+                            <div class="rcal-hint" style="text-align: center;"><i class="fa fa-lock"></i> Entrega pasada · solo lectura</div>
+                        </div>
+                    {% endif %}
+                {% endif %}
+            {% else %}
+                <div class="rcal-empty">
+                    <p>Este mes no tiene entregas para el socio.</p>
+                    <p style="margin-top: var(--csa-sp-2); font-size: 12px;">Navega a otro mes con las flechas de arriba.</p>
+                </div>
+            {% endif %}
         </div>
-    {% endif %}
+
+    </div>
 
 {% endblock %}

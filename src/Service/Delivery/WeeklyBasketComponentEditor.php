@@ -49,8 +49,15 @@ final class WeeklyBasketComponentEditor
             return 'removed';
         }
 
-        $share = $weeklyBasket->getPartnerBasketShare();
         $basket = $weeklyBasket->getBasket();
+        // El share lo da el WB; si no lo tiene (datos previos al backfill de Etapa
+        // 1), se busca el share activo del socio en esa fecha — sin él no se puede
+        // calcular la cantidad del patrón. Mismo fallback que DeliveryCalendarProjector.
+        $share = $weeklyBasket->getPartnerBasketShare();
+        if ($share === null && $basket !== null && $weeklyBasket->getPartner() !== null) {
+            $share = $this->em->getRepository(\App\Entity\PartnerBasketShare::class)
+                ->findActiveForPartner($weeklyBasket->getPartner(), $basket->getDate());
+        }
         if ($share === null || $basket === null) {
             return 'unavailable';
         }

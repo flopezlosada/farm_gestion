@@ -15,9 +15,14 @@ use App\Form\PartnerBasketShareType;
 use App\Form\PartnerType;
 use App\Entity\Basket;
 use App\Entity\BasketComponent;
+use App\Repository\BasketRepository;
 use App\Repository\PartnerDeliveryShiftRepository;
 use App\Repository\PartnerRepository;
 use App\Service\Delivery\DeliveryCalendarProjector;
+use App\Service\Delivery\DeliveryShiftApplier;
+use App\Service\Delivery\DeliveryShiftCandidates;
+use App\Service\Delivery\DeliveryShiftValidator;
+use App\Service\Delivery\Rule\DeadlineRule;
 use App\Service\Delivery\WeeklyBasketComponentEditor;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Delivery\WeeklyBasketSkipper;
@@ -272,23 +277,178 @@ class PartnerController extends AbstractController
         Partner $partner,
         Request $request,
         DeliveryCalendarProjector $projector,
+        DeliveryShiftCandidates $shiftCandidates,
+        DeliveryShiftValidator $shiftValidator,
+        EntityManagerInterface $em,
     ): Response {
-        $default = new \DateTimeImmutable('first day of this month');
-        $year = (int) $request->query->get('year', $default->format('Y'));
-        $month = (int) $request->query->get('month', $default->format('n'));
-        if ($month < 1 || $month > 12) {
-            $year = (int) $default->format('Y');
-            $month = (int) $default->format('n');
+        // Sin mes explícito (entrada desde la ficha), abrimos en el mes de la
+        // PRÓXIMA entrega del socio, no en el mes actual: a fin de mes lo de este
+        // mes ya no se puede gestionar. Si navega con las flechas, se respeta el
+        // mes pedido.
+        if ($request->query->has('month')) {
+            $default = new \DateTimeImmutable('first day of this month');
+            $year = (int) $request->query->get('year', $default->format('Y'));
+            $month = (int) $request->query->get('month');
+            if ($month < 1 || $month > 12) {
+                $year = (int) $default->format('Y');
+                $month = (int) $default->format('n');
+            }
+        } else {
+            [$year, $month] = $this->resolveNextDeliveryMonth($partner, $projector);
         }
 
         $current = new \DateTimeImmutable(sprintf('%04d-%02d-01', $year, $month));
+        $slots = $projector->projectMonth($partner, $year, $month);
+
+        // Día seleccionado para el panel lateral: el Basket pedido por query (?sel),
+        // o por defecto la primera entrega del mes. Solo entregas reales son
+        // seleccionables (las celdas vacías no abren panel).
+        $selectedBasketId = (int) $request->query->get('sel', 0);
+        $selected = $this->resolveSelectedSlot($slots, $selectedBasketId, $current->format('Y-m'));
+
+        // Las entregas pasadas no se editan (lo que ya pasó, pasó); solo se ven.
+        $today = new \DateTimeImmutable('today');
+        $selectedEditable = $selected !== null && $selected['date'] >= $today;
+
+        // Candidatos de "mover de día" del slot seleccionado: solo si es editable
+        // (futura), socio no compartido (R1) y con cesta activa esa semana. Mismo
+        // motor que el panel del socio, pero el deadline NO descalifica (gestor).
+        $moveCandidates = [];
+        if ($selectedEditable && $partner->getSharePartner() === null) {
+            $share = $em->getRepository(PartnerBasketShare::class)
+                ->findActiveForPartner($partner, $selected['basket']->getDate());
+            if ($share !== null) {
+                $moveCandidates = $this->calendarMoveCandidates(
+                    $partner, $share, $selected['basket'], $shiftCandidates, $shiftValidator,
+                );
+            }
+        }
+
+        // "Recoge en X": X es el NODO de reparto (Torremocha, Madrid…), no el grupo
+        // de recogida (Pedrezuela…). Fallback al grupo si un dato legacy no tiene nodo.
+        $group = $partner->getWeeklyBasketGroup();
+        $pickupPlace = $group?->getNode()?->getName() ?? $group?->getName();
 
         return $this->render('partner/delivery_calendar.html.twig', [
             'partner' => $partner,
-            'slots' => $projector->projectMonth($partner, $year, $month),
+            'group' => $group,
+            'pickup_place' => $pickupPlace,
+            'slots' => $slots,
+            'weeks' => $this->buildMonthWeeks($year, $month, $slots),
+            'selected' => $selected,
+            'selected_editable' => $selectedEditable,
+            'move_candidates' => $moveCandidates,
             'current' => $current,
             'prev' => $current->modify('-1 month'),
             'next' => $current->modify('+1 month'),
+        ]);
+    }
+
+    /**
+     * Mueve toda la entrega de una semana a otra (cambio puntual de día) desde el
+     * calendario del gestor. Reusa el motor de PartnerDeliveryShift del panel del
+     * socio (candidatos + validador + applier), con dos diferencias de política:
+     * el gestor NO tiene deadline (se descarta DeadlineRule) y SÍ puede saltarse
+     * las violaciones bypassables (p. ej. equilibrio ≤3), que se avisan pero no
+     * bloquean.
+     *
+     * Guarda R1: las cestas compartidas no cambian de día (lo dicta la alternancia
+     * con el otro hogar).
+     *
+     * @param Partner                  $partner
+     * @param int                      $basketId  Semana origen (Basket) de la entrega a mover.
+     * @param Request                  $request
+     * @param BasketRepository         $basketRepository
+     * @param DeliveryShiftValidator   $validator
+     * @param DeliveryShiftApplier     $applier
+     * @return Response
+     */
+    #[Route("/{id}/calendar/move/{basketId}", name: "partner_delivery_calendar_move", methods: ["POST"], requirements: ["id" => "\\d+", "basketId" => "\\d+"])]
+    public function deliveryCalendarMove(
+        Partner $partner,
+        int $basketId,
+        Request $request,
+        BasketRepository $basketRepository,
+        DeliveryShiftValidator $validator,
+        DeliveryShiftApplier $applier,
+    ): Response {
+        $from = $basketRepository->find($basketId);
+        if ($from === null) {
+            throw $this->createNotFoundException('Semana de reparto no encontrada.');
+        }
+
+        $backToCalendar = fn (): Response => $this->redirectToRoute('partner_delivery_calendar', [
+            'id' => $partner->getId(),
+            'year' => $from->getDate()->format('Y'),
+            'month' => $from->getDate()->format('n'),
+            'sel' => $from->getId(),
+        ]);
+
+        if (!$this->isCsrfTokenValid('calendar_move_' . $partner->getId(), (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
+
+            return $backToCalendar();
+        }
+
+        // Las entregas pasadas no se mueven.
+        if ($from->getDate() < new \DateTimeImmutable('today')) {
+            $this->addFlash('warning', 'Esa entrega ya pasó: no se puede mover.');
+
+            return $backToCalendar();
+        }
+
+        // R1: las cestas compartidas no cambian de día.
+        if ($partner->getSharePartner() !== null) {
+            $this->addFlash('warning', 'Esta cesta es compartida: su día lo marca la alternancia con el otro hogar, no se mueve aquí.');
+
+            return $backToCalendar();
+        }
+
+        $to = $basketRepository->find((int) $request->request->get('to_basket_id', 0));
+        if ($to === null) {
+            $this->addFlash('error', 'Selecciona una fecha destino válida.');
+
+            return $backToCalendar();
+        }
+
+        // Política del gestor: el deadline no aplica; solo bloquean las violaciones
+        // no-bypassables (p. ej. que el destino no sea un día válido del nodo).
+        $violations = array_filter(
+            $validator->validate($partner, $from, $to),
+            static fn ($v): bool => $v->rule !== DeadlineRule::ID,
+        );
+        if (!empty($validator->blocking($violations))) {
+            foreach ($validator->blocking($violations) as $v) {
+                $this->addFlash('error', $v->message);
+            }
+
+            return $backToCalendar();
+        }
+
+        foreach ($validator->bypassable($violations) as $v) {
+            $this->addFlash('warning', $v->message);
+        }
+
+        try {
+            $applier->apply($partner, $from, $to, actor: 'gestor:' . $this->getUser()?->getId());
+        } catch (\LogicException $e) {
+            $this->addFlash('error', $e->getMessage());
+
+            return $backToCalendar();
+        }
+
+        $this->addFlash('success', sprintf(
+            'Entrega movida del %s al %s.',
+            $from->getDate()->format('d/m/Y'),
+            $to->getDate()->format('d/m/Y'),
+        ));
+
+        // Tras mover, el día con la entrega pasa a ser el destino: se selecciona ese.
+        return $this->redirectToRoute('partner_delivery_calendar', [
+            'id' => $partner->getId(),
+            'year' => $to->getDate()->format('Y'),
+            'month' => $to->getDate()->format('n'),
+            'sel' => $to->getId(),
         ]);
     }
 
@@ -330,6 +490,7 @@ class PartnerController extends AbstractController
             'id' => $partner->getId(),
             'year' => $basket->getDate()->format('Y'),
             'month' => $basket->getDate()->format('n'),
+            'sel' => $basket->getId(),
         ]);
 
         if (!$this->isCsrfTokenValid('calendar_skip_' . $partner->getId(), (string) $request->request->get('_csrf_token'))) {
@@ -397,6 +558,7 @@ class PartnerController extends AbstractController
             'id' => $partner->getId(),
             'year' => $basket->getDate()->format('Y'),
             'month' => $basket->getDate()->format('n'),
+            'sel' => $basket->getId(),
         ]);
 
         if (!$this->isCsrfTokenValid('calendar_component_' . $partner->getId(), (string) $request->request->get('_csrf_token'))) {
@@ -446,6 +608,13 @@ class PartnerController extends AbstractController
         PartnerDeliveryShiftRepository $shiftRepository,
         EntityManagerInterface $em,
     ): ?WeeklyBasket {
+        // Las entregas pasadas no se editan.
+        if ($basket->getDate() < new \DateTimeImmutable('today')) {
+            $this->addFlash('warning', 'Esa entrega ya pasó: no se puede editar.');
+
+            return null;
+        }
+
         // R1: las cestas compartidas no eligen su día (lo dicta la alternancia
         // con el otro hogar).
         if ($partner->getSharePartner() !== null) {
@@ -476,6 +645,144 @@ class PartnerController extends AbstractController
         }
 
         return $weeklyBasket;
+    }
+
+    /**
+     * Resuelve el mes por defecto del calendario: el de la PRÓXIMA entrega del
+     * socio (fecha física ≥ hoy). Escanea desde el mes actual hacia delante hasta
+     * 6 meses; si no encuentra ninguna entrega futura (socio sin cesta activa o
+     * dada de baja), cae al mes actual.
+     *
+     * @param Partner                   $partner
+     * @param DeliveryCalendarProjector $projector
+     * @return array{0: int, 1: int} [año, mes]
+     */
+    private function resolveNextDeliveryMonth(Partner $partner, DeliveryCalendarProjector $projector): array
+    {
+        $today = new \DateTimeImmutable('today');
+        $base = new \DateTimeImmutable('first day of this month');
+
+        for ($i = 0; $i < 6; $i++) {
+            $cursor = $base->modify(sprintf('+%d months', $i));
+            $year = (int) $cursor->format('Y');
+            $month = (int) $cursor->format('n');
+            foreach ($projector->projectMonth($partner, $year, $month) as $slot) {
+                if ($slot['date'] >= $today) {
+                    return [$year, $month];
+                }
+            }
+        }
+
+        return [(int) $base->format('Y'), (int) $base->format('n')];
+    }
+
+    /**
+     * Elige el slot del calendario que ocupa el panel lateral: el del Basket
+     * pedido (?sel); si no, la primera entrega cuya fecha física cae DENTRO del
+     * mes mostrado (no la que se cuela del mes anterior por la fecha física del
+     * nodo); como último recurso, la primera del listado. Null si no hay entregas.
+     *
+     * @param list<array{date: \DateTimeInterface, basket: Basket, ...}> $slots
+     * @param int                                                        $selectedBasketId 0 = sin preferencia.
+     * @param string                                                     $month            Mes mostrado, formato 'Y-m'.
+     * @return array{basket: Basket, ...}|null
+     */
+    private function resolveSelectedSlot(array $slots, int $selectedBasketId, string $month): ?array
+    {
+        if ($slots === []) {
+            return null;
+        }
+
+        if ($selectedBasketId > 0) {
+            foreach ($slots as $slot) {
+                if ($slot['basket']->getId() === $selectedBasketId) {
+                    return $slot;
+                }
+            }
+        }
+
+        foreach ($slots as $slot) {
+            if ($slot['date']->format('Y-m') === $month) {
+                return $slot;
+            }
+        }
+
+        return $slots[0];
+    }
+
+    /**
+     * Candidatos de "mover de día" para el calendario del gestor: los días destino
+     * que propone DeliveryShiftCandidates filtrando los que tienen alguna violación
+     * bloqueante (no-bypassable). El deadline NO descalifica aquí (lo decide el
+     * gestor), igual que en el panel del socio. Una violación bypassable (equilibrio)
+     * deja pasar al candidato — se avisará al aplicar.
+     *
+     * @param Partner                  $partner
+     * @param PartnerBasketShare       $activeShare
+     * @param Basket                   $from
+     * @param DeliveryShiftCandidates  $shiftCandidates
+     * @param DeliveryShiftValidator   $validator
+     * @return Basket[]
+     */
+    private function calendarMoveCandidates(
+        Partner $partner,
+        PartnerBasketShare $activeShare,
+        Basket $from,
+        DeliveryShiftCandidates $shiftCandidates,
+        DeliveryShiftValidator $validator,
+    ): array {
+        $candidates = [];
+        foreach ($shiftCandidates->findFor($activeShare, $from) as $candidate) {
+            $violations = array_filter(
+                $validator->validate($partner, $from, $candidate),
+                static fn ($v): bool => $v->rule !== DeadlineRule::ID,
+            );
+            if (empty($validator->blocking($violations))) {
+                $candidates[] = $candidate;
+            }
+        }
+
+        return $candidates;
+    }
+
+    /**
+     * Construye la rejilla mensual del calendario (semanas de lunes a domingo) que
+     * pinta la pantalla, colocando cada entrega proyectada en la celda de su fecha
+     * física. Las semanas íntegramente fuera del mes se descartan.
+     *
+     * @param int                                                     $year
+     * @param int                                                     $month
+     * @param list<array{date: \DateTimeInterface, basket: Basket, ...}> $slots
+     * @return list<list<array{date: \DateTimeImmutable, inMonth: bool, slot: array|null}>>
+     */
+    private function buildMonthWeeks(int $year, int $month, array $slots): array
+    {
+        // Mapa fecha física (Y-m-d) → slot, para colocar la entrega en su celda.
+        $byDay = [];
+        foreach ($slots as $slot) {
+            $byDay[$slot['date']->format('Y-m-d')] = $slot;
+        }
+
+        $first = new \DateTimeImmutable(sprintf('%04d-%02d-01', $year, $month));
+        $last = $first->modify('last day of this month');
+        // Lunes en/antes del día 1 (N: 1=lunes .. 7=domingo).
+        $cursor = $first->modify('-' . ((int) $first->format('N') - 1) . ' days');
+
+        $weeks = [];
+        do {
+            $week = [];
+            for ($i = 0; $i < 7; $i++) {
+                $week[] = [
+                    'date' => $cursor,
+                    'inMonth' => $cursor->format('Y-m') === $first->format('Y-m'),
+                    'slot' => $byDay[$cursor->format('Y-m-d')] ?? null,
+                ];
+                $cursor = $cursor->modify('+1 day');
+            }
+            $weeks[] = $week;
+        } while ($cursor <= $last);
+
+        return $weeks;
     }
 
     #[Route("/{id}/edit", name: "partner_edit", methods: ["GET","POST"])]

@@ -5,7 +5,9 @@ namespace App\Tests\Service\Delivery;
 use App\DataFixtures\PartnerUserFixtures;
 use App\Entity\Partner;
 use App\Entity\WeeklyBasket;
+use App\Entity\BasketComponent;
 use App\Service\Delivery\DeliveryCalendarProjector;
+use App\Service\Delivery\WeeklyBasketComposer;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -46,18 +48,29 @@ class DeliveryCalendarProjectorTest extends KernelTestCase
         $projector = new DeliveryCalendarProjector(
             $em,
             static::getContainer()->get(WeeklyBasketGenerator::class),
+            static::getContainer()->get(WeeklyBasketComposer::class),
         );
         $slots = $projector->projectMonth($partner, (int) $date->format('Y'), (int) $date->format('n'));
 
         $this->assertNotEmpty($slots, 'El mes con la entrega materializada no puede salir vacío.');
 
-        $found = false;
+        $materializedSlot = null;
         foreach ($slots as $slot) {
             if ($slot['source'] === 'materialized' && $slot['weeklyBasket']->getId() === $materialized->getId()) {
-                $found = true;
+                $materializedSlot = $slot;
                 break;
             }
         }
-        $this->assertTrue($found, 'La entrega materializada del socix debe aparecer como slot materializado.');
+        $this->assertNotNull($materializedSlot, 'La entrega materializada del socix debe aparecer como slot materializado.');
+
+        // Claves que la pantalla de B' consume para pintar las acciones.
+        $this->assertArrayHasKey('skipped', $materializedSlot);
+        $this->assertIsBool($materializedSlot['skipped']);
+        $this->assertArrayHasKey('available', $materializedSlot);
+        $this->assertContainsOnlyInstancesOf(
+            BasketComponent::class,
+            $materializedSlot['available'],
+            "'available' debe ser una lista de BasketComponent (el universo de toggles).",
+        );
     }
 }
