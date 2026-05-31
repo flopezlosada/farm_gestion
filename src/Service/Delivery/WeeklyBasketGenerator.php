@@ -535,6 +535,48 @@ class WeeklyBasketGenerator
     }
 
     /**
+     * Materializa (persiste) la entrega de un share en un Basket: la contraparte
+     * en modo persist de projectShareDelivery. Es la base de la edición de B':
+     * antes de que un socio toque una entrega "Prevista" hay que fijarla, y el
+     * generador del listado luego la respeta porque ya existe (salta lo
+     * existente).
+     *
+     * Idempotente: si ya hay un WeeklyBasket para (socio, basket) lo devuelve
+     * sin duplicar ni recomponer (compose es a su vez idempotente). Crea el WB
+     * con el mismo estado inicial que la generación normal y estampa sus líneas
+     * de componente, para que una entrega fijada por el calendario sea
+     * indistinguible de una generada por el listado.
+     *
+     * @param Basket             $basket
+     * @param PartnerBasketShare $share
+     * @return WeeklyBasket|null La entrega materializada, o null si el nodo del
+     *                           socio no reparte en este Basket.
+     */
+    public function materializeShareDelivery(Basket $basket, PartnerBasketShare $share): ?WeeklyBasket
+    {
+        $existing = $this->em->getRepository(WeeklyBasket::class)
+            ->findOneBy(['basket' => $basket->getId(), 'partner' => $share->getPartner()->getId()]);
+        if ($existing !== null) {
+            return $existing;
+        }
+
+        $physicalDate = $this->resolvePhysicalDeliveryDate($basket, $share);
+        if ($physicalDate === null) {
+            return null;
+        }
+
+        $status = $this->em->getRepository(WeeklyBasketStatus::class)->find(self::STATUS_PICKED);
+        $wb = $this->newWeeklyBasketForShare($basket, $share, $physicalDate, $status);
+        $this->em->persist($wb);
+        $this->em->flush();
+
+        $this->composer->compose($wb, $share, $basket);
+        $this->em->flush();
+
+        return $wb;
+    }
+
+    /**
      * Materializa WB Only-Egg para PBS cuyo egg_period es más frecuente que
      * su basket_share, en los viernes intermedios donde no toca cesta pero
      * sí toca huevo.
