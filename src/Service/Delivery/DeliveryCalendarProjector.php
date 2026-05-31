@@ -74,19 +74,81 @@ final class DeliveryCalendarProjector
             ->getResult();
 
         $wbRepo = $this->em->getRepository(WeeklyBasket::class);
+        $shiftRepo = $this->em->getRepository(\App\Entity\PartnerDeliveryShift::class);
 
         $slots = [];
         foreach ($baskets as $basket) {
             $materialized = $wbRepo->findOneBy(['basket' => $basket->getId(), 'partner' => $partner->getId()]);
             if ($materialized !== null) {
+                $skipped = $materialized->getWeeklyBasketStatus()?->getId() === WeeklyBasketSkipper::STATUS_SKIPPED;
                 $slots[] = [
                     'date' => $materialized->getDeliveryDate() ?? $basket->getDate(),
                     'basket' => $basket,
                     'source' => 'materialized',
                     'weeklyBasket' => $materialized,
                     'items' => $this->readItems($materialized),
-                    'skipped' => $materialized->getWeeklyBasketStatus()?->getId() === WeeklyBasketSkipper::STATUS_SKIPPED,
+                    'skipped' => $skipped,
+                    // Vaciado por un movimiento (no "no recoge" de verdad): la pantalla
+                    // lo pinta distinto. Es saltado Y tiene un cambio saliendo de aquí.
+                    'moved_away' => $skipped && $shiftRepo->findOutgoing($partner, $basket) !== null,
                     'available' => $this->availableComponents($materialized, $basket),
+                ];
+                continue;
+            }
+
+            // Sin materializar: el patrón puro NO refleja los cambios puntuales, así
+            // que aquí se aplican igual que el generador del reparto, o el calendario
+            // mostraría entregas fantasma en los días vaciados por un movimiento.
+
+            // Cesta MOVIDA aquí desde otra fecha (cambio entrante aún sin materializar):
+            // se proyecta con la modalidad del origen. Su composición es la REAL del
+            // ORIGEN si está materializado (conserva lo quitado a mano); si no, el
+            // patrón con los huevos del origen. Igual que hará el generador al
+            // materializar — si no, la vista previa mostraría componentes que la cesta
+            // ya no lleva.
+            $incoming = $shiftRepo->findIncoming($partner, $basket);
+            if ($incoming !== null) {
+                $origin = $incoming->getFromBasket();
+                $movedShare = $this->candidateShareFor($partner, $origin)
+                    ?? $this->em->getRepository(\App\Entity\PartnerBasketShare::class)->findActiveForPartner($partner, $origin->getDate());
+                $projection = $movedShare !== null
+                    ? $this->generator->projectShareDelivery($basket, $movedShare, $origin)
+                    : null;
+                if ($projection !== null) {
+                    $sourceWb = $wbRepo->findOneBy(['basket' => $origin->getId(), 'partner' => $partner->getId()]);
+                    $items = $sourceWb !== null ? $this->composer->copyLines($sourceWb) : $projection['items'];
+                    $slots[] = [
+                        'date' => $projection['deliveryDate'],
+                        'basket' => $basket,
+                        'source' => 'projected',
+                        'weeklyBasket' => $projection['weeklyBasket'],
+                        'items' => $items,
+                        'skipped' => false,
+                        'moved_away' => false,
+                        'available' => array_map(static fn (array $line): BasketComponent => $line['component'], $items),
+                    ];
+                }
+                continue;
+            }
+
+            // Cesta VACIADA de aquí (cambio saliente): su cesta está en otra fecha.
+            // Día sin entrega → se pinta como "no recoge" (rojo) y sigue siendo
+            // seleccionable para ver a dónde se movió.
+            $outgoing = $shiftRepo->findOutgoing($partner, $basket);
+            if ($outgoing !== null) {
+                $patternShare = $this->candidateShareFor($partner, $basket);
+                $physical = $patternShare !== null
+                    ? ($this->generator->projectShareDelivery($basket, $patternShare)['deliveryDate'] ?? $basket->getDate())
+                    : $basket->getDate();
+                $slots[] = [
+                    'date' => $physical,
+                    'basket' => $basket,
+                    'source' => 'projected',
+                    'weeklyBasket' => (new WeeklyBasket())->setBasket($basket)->setPartner($partner),
+                    'items' => [],
+                    'skipped' => true,
+                    'moved_away' => true,
+                    'available' => [],
                 ];
                 continue;
             }
@@ -110,6 +172,7 @@ final class DeliveryCalendarProjector
                 // Proyectada = patrón por defecto: nunca saltada, y lo presente
                 // coincide con lo disponible (nada se ha quitado todavía).
                 'skipped' => false,
+                'moved_away' => false,
                 'available' => array_map(static fn (array $line): BasketComponent => $line['component'], $projection['items']),
             ];
         }

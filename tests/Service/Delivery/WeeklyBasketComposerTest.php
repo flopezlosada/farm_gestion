@@ -122,6 +122,26 @@ class WeeklyBasketComposerTest extends TestCase
         $this->assertComposicion(['Verdura' => '2.00']);
     }
 
+    public function testHuevoViajaConLaCestaMovida(): void
+    {
+        // Entrega movida (cambio puntual): el destino NO lleva huevo por su cadencia,
+        // pero el ORIGEN sí. Pasando el origen como eggReferenceBasket el huevo viaja
+        // con la cesta movida (bug Etapa 2, caso Franco).
+        $origen = (new Basket())->setDate(new \DateTime('2026-05-08'));
+        $share = $this->shareConHuevos(1.0);
+        $wb = $this->weeklyBasket(modalidad: 1, amount: 1);
+
+        // El resolver SOLO debe consultarse contra el ORIGEN, nunca contra el destino.
+        $this->eggResolver->expects($this->once())
+            ->method('delivers')
+            ->with($share, $origen)
+            ->willReturn(true);
+
+        $this->composer->compose($wb, $share, $this->basket, eggReferenceBasket: $origen);
+
+        $this->assertComposicion(['Verdura' => '1.00', 'Huevos' => '1.00']);
+    }
+
     public function testIdempotenciaNoEstampaSiYaHayItems(): void
     {
         // Repo que YA devuelve un ítem: el composer debe cortar sin persistir.

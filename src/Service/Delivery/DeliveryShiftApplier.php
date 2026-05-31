@@ -50,7 +50,13 @@ final class DeliveryShiftApplier
      * @throws \LogicException Si el partner ya tiene un shift saliendo del `from`
      *                        o entrando al `to`.
      */
-    public function apply(Partner $partner, Basket $from, Basket $to, ?string $actor = null): PartnerDeliveryShift
+    /**
+     * @param array<int, array{component: \App\Entity\BasketComponent, amount: string}>|null $carryItems
+     *        Composición EXACTA a estampar en el destino (la que llevaba la cesta que
+     *        se mueve, con verdura/huevos quitados a mano ya reflejados). Si es null se
+     *        deriva del patrón (caso de una cesta sólo prevista, sin personalizar).
+     */
+    public function apply(Partner $partner, Basket $from, Basket $to, ?string $actor = null, ?array $carryItems = null): PartnerDeliveryShift
     {
         /** @var PartnerDeliveryShiftRepository $shiftRepo */
         $shiftRepo = $this->em->getRepository(PartnerDeliveryShift::class);
@@ -65,12 +71,66 @@ final class DeliveryShiftApplier
         $shift = new PartnerDeliveryShift($partner, $from, $to);
         $this->em->persist($shift);
 
-        $this->cascadeOnApply($partner, $from, $to);
+        $this->cascadeOnApply($partner, $from, $to, $carryItems);
         $this->recordEvent($partner, $from, $to, $actor, cancelled: false);
 
         $this->em->flush();
 
         return $shift;
+    }
+
+    /**
+     * Mueve la cesta que el socio tiene en `$current` a `$target`, sin concepto de
+     * "deshacer": mover de vuelta a su día de patrón es simplemente otro destino.
+     *
+     * Resuelve el día de PATRÓN de la cesta: si `$current` es el destino de un
+     * cambio puntual (la cesta ya venía movida), su patrón es el origen de ese
+     * cambio; si no, el propio `$current`. Entonces:
+     *   - target == patrón  → cancela el cambio: la cesta vuelve a su día natural.
+     *   - target != patrón  → reapunta el cambio (cancela el previo si lo hay y
+     *     crea uno nuevo patrón→target). El huevo viaja con la cesta porque el
+     *     applier compone el destino con el origen de patrón como referencia.
+     *
+     * @param Partner     $partner
+     * @param Basket      $current Día donde la cesta está AHORA (origen del movimiento).
+     * @param Basket      $target  Día al que se mueve la cesta.
+     * @param string|null $actor   Quien origina el movimiento.
+     */
+    public function move(Partner $partner, Basket $current, Basket $target, ?string $actor = null): void
+    {
+        /** @var PartnerDeliveryShiftRepository $shiftRepo */
+        $shiftRepo = $this->em->getRepository(PartnerDeliveryShift::class);
+        /** @var WeeklyBasketRepository $wbRepo */
+        $wbRepo = $this->em->getRepository(WeeklyBasket::class);
+
+        // La composición REAL que la cesta lleva AHORA (con lo que se haya quitado a
+        // mano) debe viajar con ella. Se captura antes de tocar nada; null = cesta sólo
+        // prevista (sin materializar) → el destino se deriva del patrón.
+        $currentWb = $wbRepo->findOneBy(['basket' => $current, 'partner' => $partner]);
+        $carryItems = $currentWb !== null ? $this->composer->copyLines($currentWb) : null;
+
+        $incoming = $shiftRepo->findIncoming($partner, $current);
+        $patternOrigin = $incoming?->getFromBasket() ?? $current;
+
+        if ($incoming !== null) {
+            $this->cancel($incoming, $actor);
+        }
+
+        if ($target->getId() !== $patternOrigin->getId()) {
+            $this->apply($partner, $patternOrigin, $target, $actor, $carryItems);
+
+            return;
+        }
+
+        // Volver al día de patrón: el cancel ya restauró su WB. Si la cesta llevaba una
+        // composición personalizada, reflejarla también ahí (no re-derivar del patrón).
+        if ($carryItems !== null) {
+            $home = $wbRepo->findOneBy(['basket' => $patternOrigin, 'partner' => $partner]);
+            if ($home !== null) {
+                $this->composer->stamp($home, $carryItems);
+                $this->em->flush();
+            }
+        }
     }
 
     /**
@@ -104,7 +164,11 @@ final class DeliveryShiftApplier
      * la rama `reuseExistingWeeklyBaskets` del generator y omitiría a los
      * candidatos normales.
      */
-    private function cascadeOnApply(Partner $partner, Basket $from, Basket $to): void
+    /**
+     * @param array<int, array{component: \App\Entity\BasketComponent, amount: string}>|null $carryItems
+     *        Composición exacta a estampar en el destino (ver apply()).
+     */
+    private function cascadeOnApply(Partner $partner, Basket $from, Basket $to, ?array $carryItems = null): void
     {
         /** @var WeeklyBasketRepository $wbRepo */
         $wbRepo = $this->em->getRepository(WeeklyBasket::class);
@@ -118,6 +182,13 @@ final class DeliveryShiftApplier
 
         $existingTo = $wbRepo->findOneBy(['basket' => $to, 'partner' => $partner]);
         if ($existingTo !== null) {
+            // El destino ya tiene un WB: típicamente el "no recoge" de ORIGEN de otro
+            // cambio puntual (día vaciado porque su cesta se fue a otra fecha, pero
+            // LIBRE para recibir esta). El controller solo deja llegar aquí destinos
+            // libres o vaciados; un "no recoge" de verdad se rechaza antes. Se revive:
+            // se limpian sus líneas viejas, se reconfigura como destino y se recompone.
+            $this->reviveAsShiftDestination($existingTo, $partner, $to, $from, $carryItems);
+
             return;
         }
 
@@ -130,10 +201,46 @@ final class DeliveryShiftApplier
         // al procesar el listado; aquí (aplicación ad-hoc desde el calendario) hay
         // que hacerlo o la entrega movida sale sin verdura/huevos (vacía → roja).
         $destWb = $this->createWeeklyBasketForShiftDestination($partner, $to);
+        $this->stampDestination($destWb, $partner, $to, $from, $carryItems);
+    }
+
+    /**
+     * Estampa la composición del destino de un cambio: si la cesta traía una
+     * composición REAL ($carryItems, con lo quitado a mano), se copia tal cual
+     * (viaja con la cesta). Si no (cesta sólo prevista), se deriva del patrón con
+     * los huevos del ORIGEN como referencia (caso Franco: el huevo viaja igualmente).
+     *
+     * @param array<int, array{component: \App\Entity\BasketComponent, amount: string}>|null $carryItems
+     */
+    private function stampDestination(WeeklyBasket $destWb, Partner $partner, Basket $to, Basket $from, ?array $carryItems): void
+    {
+        if ($carryItems !== null) {
+            $this->composer->stamp($destWb, $carryItems);
+
+            return;
+        }
+
         $share = $this->em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner, $to->getDate());
         if ($share !== null) {
-            $this->composer->compose($destWb, $share, $to);
+            $this->composer->compose($destWb, $share, $to, eggReferenceBasket: $from);
         }
+    }
+
+    /**
+     * Reconfigura un WeeklyBasket ya existente (el "no recoge" de origen de otro
+     * cambio, día vaciado) para que reciba la cesta que se mueve aquí: limpia sus
+     * líneas viejas, lo pone en "recoge" con la fecha/modalidad del destino y estampa
+     * su composición (la que traía la cesta, o el patrón si sólo estaba prevista).
+     *
+     * @param array<int, array{component: \App\Entity\BasketComponent, amount: string}>|null $carryItems
+     */
+    private function reviveAsShiftDestination(WeeklyBasket $wb, Partner $partner, Basket $to, Basket $from, ?array $carryItems = null): void
+    {
+        $this->removeItemsOf($wb);
+        $this->em->flush(); // que la idempotencia de compose() vea el WB sin líneas.
+
+        $this->configureAsShiftDestination($wb, $partner, $to);
+        $this->stampDestination($wb, $partner, $to, $from, $carryItems);
     }
 
     /**
@@ -144,12 +251,26 @@ final class DeliveryShiftApplier
      */
     public function createWeeklyBasketForShiftDestination(Partner $partner, Basket $to): WeeklyBasket
     {
-        /** @var WeeklyBasketStatusRepository $statusRepo */
-        $statusRepo = $this->em->getRepository(WeeklyBasketStatus::class);
-
         $wb = new WeeklyBasket();
         $wb->setBasket($to);
         $wb->setPartner($partner);
+        $this->configureAsShiftDestination($wb, $partner, $to);
+        $this->em->persist($wb);
+
+        return $wb;
+    }
+
+    /**
+     * Configura un WeeklyBasket como entrega destino de un cambio puntual: estado
+     * "recoge", grupo del socio, fecha física según su nodo y modalidad/cantidad de
+     * su share activo. Compartido por la creación (WB nuevo) y la reviviscencia (WB
+     * de un día vaciado que pasa a recibir esta cesta).
+     */
+    private function configureAsShiftDestination(WeeklyBasket $wb, Partner $partner, Basket $to): void
+    {
+        /** @var WeeklyBasketStatusRepository $statusRepo */
+        $statusRepo = $this->em->getRepository(WeeklyBasketStatus::class);
+
         $wb->setWeeklyBasketStatus($statusRepo->find(self::STATUS_PICKED));
         $wb->setWeeklyBasketGroup($partner->getWeeklyBasketGroup());
 
@@ -174,9 +295,6 @@ final class DeliveryShiftApplier
         } else {
             $wb->setAmount(1);
         }
-
-        $this->em->persist($wb);
-        return $wb;
     }
 
     /**
@@ -202,7 +320,23 @@ final class DeliveryShiftApplier
 
         $existingTo = $wbRepo->findOneBy(['basket' => $to, 'partner' => $partner]);
         if ($existingTo !== null) {
+            // Borrar primero sus líneas: WeeklyBasketItem->weeklyBasket no tiene
+            // cascade, así que dejarlas colgando de un WB borrado rompe el siguiente
+            // flush ("new entity found through WeeklyBasketItem#weeklyBasket"). Aflora
+            // al mover una cesta ya movida (cancel + apply en la misma transacción).
+            $this->removeItemsOf($existingTo);
             $this->em->remove($existingTo);
+        }
+    }
+
+    /**
+     * Borra las líneas de componente de un WeeklyBasket. WeeklyBasketItem->weeklyBasket
+     * no cascadea, así que hay que retirarlas a mano antes de borrar/recomponer el WB.
+     */
+    private function removeItemsOf(WeeklyBasket $wb): void
+    {
+        foreach ($this->em->getRepository(\App\Entity\WeeklyBasketItem::class)->findBy(['weeklyBasket' => $wb]) as $item) {
+            $this->em->remove($item);
         }
     }
 

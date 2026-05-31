@@ -302,43 +302,85 @@ class PartnerController extends AbstractController
         $selectedBasketId = (int) $request->query->get('sel', 0);
         $selected = $this->resolveSelectedSlot($slots, $selectedBasketId, $current->format('Y-m'));
 
-        // Las entregas pasadas no se editan (lo que ya pasó, pasó); solo se ven.
+        // Una entrega se gestiona (mover / saltar / editar) hasta el DÍA ANTERIOR a su
+        // recogida: si se recoge hoy o ya pasó, queda en solo lectura. De ahí el `>`
+        // estricto sobre la fecha física de recogida (no `>=`).
         $today = new \DateTimeImmutable('today');
-        $selectedEditable = $selected !== null && $selected['date'] >= $today;
+        $selectedEditable = $selected !== null && $selected['date'] > $today;
 
-        // ¿Hay un cambio puntual (shift) que afecte al día seleccionado? Si lo hay,
-        // la acción no es "mover" sino "deshacer / volver al original".
+        // ¿Hay un cambio puntual (shift) que afecte al día seleccionado? Se usa para
+        // pintar el contexto del día (de dónde viene / a dónde se fue la cesta) y, en
+        // el caso destino, para ofrecer el día ORIGINAL como destino de "mover".
         $shift = null;
         $shiftRole = null;
         if ($selected !== null && $partner->getSharePartner() === null) {
             $shiftRepo = $em->getRepository(\App\Entity\PartnerDeliveryShift::class);
             $selectedBasket = $selected['basket'];
-            if (($outgoing = $shiftRepo->findOutgoing($partner, $selectedBasket)) !== null) {
-                $shift = $outgoing;
-                $shiftRole = 'origin';      // este día se vació porque su cesta se movió a otro
-            } elseif (($incoming = $shiftRepo->findIncoming($partner, $selectedBasket)) !== null) {
+            $outgoing = $shiftRepo->findOutgoing($partner, $selectedBasket);
+            $incoming = $shiftRepo->findIncoming($partner, $selectedBasket);
+            // Un mismo día puede ser ORIGEN de un cambio (su cesta natural se fue) y a
+            // la vez DESTINO de otro (recibió una cesta movida). Manda el estado real
+            // del WB: si la cesta está AQUÍ (no saltada), es destino; si está vacío
+            // (saltado), es origen.
+            if ($incoming !== null && !$selected['skipped']) {
                 $shift = $incoming;
                 $shiftRole = 'destination'; // este día recibe una cesta movida desde otro
+            } elseif ($outgoing !== null) {
+                $shift = $outgoing;
+                $shiftRole = 'origin';      // este día se vació porque su cesta se movió a otro
+            } elseif ($incoming !== null) {
+                $shift = $incoming;
+                $shiftRole = 'destination';
             }
         }
 
-        // Candidatos de "mover de día": semanas FUTURAS del mes visible donde el nodo
+        // Candidatos de "mover de día": semanas FUTURAS del MISMO MES donde el nodo
         // reparte y el socio NO tiene ya entrega (flexibilidad del caso Franco — sin
-        // la ventana estrecha del autoservicio). Solo si es editable, no compartido
-        // (R1) y sin un shift ya activo en ese día (entonces toca deshacer, no mover).
+        // la ventana estrecha del autoservicio, pero acotado al mes por decisión de
+        // negocio). El "mes" es el del Basket ORIGEN (su fecha lógica), NO el mes
+        // visible: si por un festivo la entrega se trasladó a otro mes físico (1-may
+        // → abril), su ciclo sigue siendo mayo y debe poder moverse DENTRO de mayo.
+        //
+        // Se ofrece tanto para una entrega normal como para una que ya viene movida
+        // (destino de un shift): en ese caso el día ORIGINAL de ESTA cesta es un
+        // destino válido (mover de vuelta = quitar el cambio). Cualquier otro día
+        // ocupado bloquea, INCLUIDOS los días vaciados por OTRA cesta: un socio solo
+        // tiene un hueco por día, así que apilar una cesta sobre el día original de
+        // otra perdería una (no se permite). No se ofrece desde el día ORIGEN de un
+        // cambio (ahí no hay cesta que mover) ni en compartidas (R1).
         $moveCandidates = [];
-        if ($selectedEditable && $partner->getSharePartner() === null && $shift === null) {
+        $canMove = $selectedEditable
+            && $partner->getSharePartner() === null
+            && ($shift === null || $shiftRole === 'destination');
+        if ($canMove) {
             $share = $em->getRepository(PartnerBasketShare::class)
                 ->findActiveForPartner($partner, $selected['basket']->getDate());
             if ($share !== null) {
-                $occupied = array_map(static fn (array $s): int => $s['basket']->getId(), $slots);
+                $originDate = $selected['basket']->getDate();
+                $monthStart = new \DateTimeImmutable($originDate->format('Y-m-01'));
+                $monthEnd = $monthStart->modify('last day of this month');
                 $monthBaskets = $em->getRepository(Basket::class)->createQueryBuilder('b')
                     ->where('b.date BETWEEN :start AND :end')
-                    ->setParameter('start', $current->format('Y-m-d'))
-                    ->setParameter('end', $current->modify('last day of this month')->format('Y-m-d'))
+                    ->setParameter('start', $monthStart->format('Y-m-d'))
+                    ->setParameter('end', $monthEnd->format('Y-m-d'))
                     ->orderBy('b.date', 'ASC')
                     ->getQuery()
                     ->getResult();
+
+                // Ocupación del mes del origen (materializadas + previstas por patrón),
+                // reusando la proyección de mes para no replicar la regla. TODOS los
+                // días con entrega del socio bloquean — también los vaciados por otra
+                // cesta (un hueco por día). La única excepción es el día ORIGINAL de la
+                // propia cesta seleccionada: ahí se puede volver (= quitar el cambio).
+                $occupied = array_map(
+                    static fn (array $s): int => $s['basket']->getId(),
+                    $projector->projectMonth($partner, (int) $monthStart->format('Y'), (int) $monthStart->format('n')),
+                );
+                if ($shiftRole === 'destination') {
+                    $ownOriginId = $shift->getFromBasket()->getId();
+                    $occupied = array_values(array_filter($occupied, static fn (int $id): bool => $id !== $ownOriginId));
+                }
+
                 $moveCandidates = $this->calendarMoveCandidates(
                     $share, $selected['basket'], $occupied, $monthBaskets, $generator, $today,
                 );
@@ -368,20 +410,26 @@ class PartnerController extends AbstractController
     }
 
     /**
-     * Mueve toda la entrega de una semana a otra (cambio puntual de día) desde el
-     * calendario del gestor. Reusa el applier de PartnerDeliveryShift, pero NO la
-     * ventana estrecha del autoservicio (WindowRule): el gestor puede determinar
-     * cualquier combinación de repartos (caso Franco). Las únicas guardas son
-     * estructurales: no pasado, no compartido (R1), el nodo reparte el día destino,
-     * y el socio no tiene ya entrega ahí (sin choque).
+     * Mueve toda la entrega de una semana a otra desde el calendario del gestor. No
+     * hay "deshacer": mover una cesta de vuelta a su día de patrón es simplemente
+     * otro destino (lo resuelve DeliveryShiftApplier::move). Reusa el applier de
+     * PartnerDeliveryShift, pero NO la ventana estrecha del autoservicio (WindowRule):
+     * el gestor puede determinar cualquier combinación de repartos (caso Franco).
      *
-     * @param Partner                $partner
-     * @param int                    $basketId  Semana origen (Basket) de la entrega a mover.
-     * @param Request                $request
-     * @param BasketRepository       $basketRepository
-     * @param WeeklyBasketGenerator  $generator Para comprobar que el nodo reparte el destino.
-     * @param DeliveryShiftApplier   $applier
-     * @param EntityManagerInterface $em
+     * Guardas estructurales: no compartido (R1); la cesta se mueve hasta el DÍA
+     * ANTERIOR a su recogida (no el mismo día ni después); el nodo reparte el día
+     * destino y éste es futuro; y el destino está libre, salvo que sea el día de
+     * patrón de la propia cesta (volver atrás), que sí lleva una entrega "saltada"
+     * de origen del cambio.
+     *
+     * @param Partner                   $partner
+     * @param int                       $basketId  Semana (Basket) donde la cesta está ahora.
+     * @param Request                   $request
+     * @param BasketRepository          $basketRepository
+     * @param WeeklyBasketGenerator     $generator Para la fecha física y que el nodo reparta.
+     * @param DeliveryCalendarProjector $projector Para la ocupación del destino (misma regla que los candidatos).
+     * @param DeliveryShiftApplier      $applier
+     * @param EntityManagerInterface    $em
      * @return Response
      */
     #[Route("/{id}/calendar/move/{basketId}", name: "partner_delivery_calendar_move", methods: ["POST"], requirements: ["id" => "\\d+", "basketId" => "\\d+"])]
@@ -391,6 +439,7 @@ class PartnerController extends AbstractController
         Request $request,
         BasketRepository $basketRepository,
         WeeklyBasketGenerator $generator,
+        DeliveryCalendarProjector $projector,
         DeliveryShiftApplier $applier,
         EntityManagerInterface $em,
     ): Response {
@@ -412,30 +461,9 @@ class PartnerController extends AbstractController
             return $backToCalendar();
         }
 
-        // Las entregas pasadas no se mueven.
-        if ($from->getDate() < new \DateTimeImmutable('today')) {
-            $this->addFlash('warning', 'Esa entrega ya pasó: no se puede mover.');
-
-            return $backToCalendar();
-        }
-
         // R1: las cestas compartidas no cambian de día.
         if ($partner->getSharePartner() !== null) {
             $this->addFlash('warning', 'Esta cesta es compartida: su día lo marca la alternancia con el otro hogar, no se mueve aquí.');
-
-            return $backToCalendar();
-        }
-
-        $to = $basketRepository->find((int) $request->request->get('to_basket_id', 0));
-        if ($to === null) {
-            $this->addFlash('error', 'Selecciona una fecha destino válida.');
-
-            return $backToCalendar();
-        }
-
-        // No se puede mover a una fecha ya pasada.
-        if ($to->getDate() < new \DateTimeImmutable('today')) {
-            $this->addFlash('error', 'No puedes mover la entrega a una fecha pasada.');
 
             return $backToCalendar();
         }
@@ -447,98 +475,88 @@ class PartnerController extends AbstractController
             return $backToCalendar();
         }
 
+        $today = new \DateTimeImmutable('today');
+
+        // Deadline: la cesta se mueve hasta el día ANTERIOR a su recogida. Si se
+        // recoge hoy (o ya pasó), no se mueve. Se mide sobre la fecha FÍSICA.
+        $fromPhysical = $generator->projectShareDelivery($from, $share)['deliveryDate'] ?? $from->getDate();
+        if ($fromPhysical <= $today) {
+            $this->addFlash('warning', 'Esa cesta se recoge hoy o ya pasó: ya no se puede mover.');
+
+            return $backToCalendar();
+        }
+
+        $to = $basketRepository->find((int) $request->request->get('to_basket_id', 0));
+        if ($to === null) {
+            $this->addFlash('error', 'Selecciona una fecha destino válida.');
+
+            return $backToCalendar();
+        }
+
         // Invariante estructural (sustituye a WindowRule para el gestor): el nodo del
         // socio debe repartir el día destino.
-        if ($generator->projectShareDelivery($to, $share) === null) {
+        $toProjection = $generator->projectShareDelivery($to, $share);
+        if ($toProjection === null) {
             $this->addFlash('error', 'El nodo del socio no reparte ese día: elige otra fecha.');
 
             return $backToCalendar();
         }
 
-        // Sin choque: el socio no puede tener ya una entrega ese día.
-        if ($em->getRepository(WeeklyBasket::class)->findOneBy(['basket' => $to->getId(), 'partner' => $partner->getId()]) !== null) {
-            $this->addFlash('error', 'El socio ya tiene una entrega ese día.');
+        // El destino también debe ser futuro (mismo deadline del día anterior).
+        $toPhysical = $toProjection['deliveryDate'] ?? $to->getDate();
+        if ($toPhysical <= $today) {
+            $this->addFlash('error', 'No puedes mover la cesta a hoy ni a una fecha pasada.');
 
             return $backToCalendar();
         }
 
+        // Sin choque: el destino no puede tener ya una entrega del socio. Se usa el
+        // MISMO criterio que los candidatos (la proyección de mes, shift-aware): si hay
+        // CUALQUIER entrega del socio en el destino (activa, prevista por patrón o un
+        // día vaciado por OTRA cesta) se bloquea — un hueco por día. La única excepción
+        // es el día ORIGINAL de la propia cesta que se mueve (volver ahí = quitar el
+        // cambio). Mirar solo WBs materializadas no bastaba: una entrega prevista sin
+        // materializar (p. ej. la cesta natural de un biquincenal) se pisaría.
+        $shiftRepo = $em->getRepository(\App\Entity\PartnerDeliveryShift::class);
+        $patternOrigin = $shiftRepo->findIncoming($partner, $from)?->getFromBasket() ?? $from;
+        $toDate = $to->getDate();
+        foreach ($projector->projectMonth($partner, (int) $toDate->format('Y'), (int) $toDate->format('n')) as $s) {
+            if ($s['basket']->getId() !== $to->getId()) {
+                continue;
+            }
+            if ($to->getId() !== $patternOrigin->getId()) {
+                $this->addFlash('error', 'El socio ya tiene una entrega ese día.');
+
+                return $backToCalendar();
+            }
+            break;
+        }
+
         try {
-            $applier->apply($partner, $from, $to, actor: 'gestor:' . $this->getUser()?->getId());
+            $applier->move($partner, $from, $to, actor: 'gestor:' . $this->getUser()?->getId());
         } catch (\LogicException $e) {
             $this->addFlash('error', $e->getMessage());
 
             return $backToCalendar();
         }
 
-        $this->addFlash('success', sprintf(
-            'Entrega movida del %s al %s.',
-            $from->getDate()->format('d/m/Y'),
-            $to->getDate()->format('d/m/Y'),
-        ));
+        if ($to->getId() === $patternOrigin->getId()) {
+            $this->addFlash('success', sprintf('La cesta vuelve a su día: %s.', $to->getDate()->format('d/m/Y')));
+        } else {
+            $this->addFlash('success', sprintf(
+                'Cesta movida del %s al %s.',
+                $from->getDate()->format('d/m/Y'),
+                $to->getDate()->format('d/m/Y'),
+            ));
+        }
 
-        // Tras mover, el día con la entrega pasa a ser el destino: se selecciona ese.
+        // Tras mover, el día con la cesta pasa a ser el destino: se selecciona ese.
         return $this->redirectToRoute('partner_delivery_calendar', [
             'id' => $partner->getId(),
             'year' => $to->getDate()->format('Y'),
             'month' => $to->getDate()->format('n'),
             'sel' => $to->getId(),
         ]);
-    }
-
-    /**
-     * Deshace un cambio puntual de día (cancela el PartnerDeliveryShift): la entrega
-     * vuelve a su semana original. Lo dispara el botón "Deshacer / volver al
-     * original" del calendario, tanto desde el día origen como desde el destino.
-     *
-     * @param Partner                $partner
-     * @param int                    $shiftId El PartnerDeliveryShift a cancelar.
-     * @param Request                $request
-     * @param DeliveryShiftApplier   $applier
-     * @param EntityManagerInterface $em
-     * @return Response
-     */
-    #[Route("/{id}/calendar/unmove/{shiftId}", name: "partner_delivery_calendar_unmove", methods: ["POST"], requirements: ["id" => "\\d+", "shiftId" => "\\d+"])]
-    public function deliveryCalendarUnmove(
-        Partner $partner,
-        int $shiftId,
-        Request $request,
-        DeliveryShiftApplier $applier,
-        EntityManagerInterface $em,
-    ): Response {
-        $shift = $em->getRepository(\App\Entity\PartnerDeliveryShift::class)->find($shiftId);
-        if ($shift === null || $shift->getPartner()?->getId() !== $partner->getId()) {
-            throw $this->createNotFoundException('Cambio puntual no encontrado.');
-        }
-
-        $from = $shift->getFromBasket();
-        $backToCalendar = fn (): Response => $this->redirectToRoute('partner_delivery_calendar', [
-            'id' => $partner->getId(),
-            'year' => $from->getDate()->format('Y'),
-            'month' => $from->getDate()->format('n'),
-            'sel' => $from->getId(),
-        ]);
-
-        if (!$this->isCsrfTokenValid('calendar_unmove_' . $partner->getId(), (string) $request->request->get('_csrf_token'))) {
-            $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
-
-            return $backToCalendar();
-        }
-
-        // No se deshace un cambio cuya semana original ya pasó.
-        if ($from->getDate() < new \DateTimeImmutable('today')) {
-            $this->addFlash('warning', 'Ese cambio afecta a una semana ya pasada: no se puede deshacer.');
-
-            return $backToCalendar();
-        }
-
-        $applier->cancel($shift, actor: 'gestor:' . $this->getUser()?->getId());
-
-        $this->addFlash('success', sprintf(
-            'Cambio deshecho: vuelve a recoger el %s.',
-            $from->getDate()->format('d/m/Y'),
-        ));
-
-        return $backToCalendar();
     }
 
     /**
@@ -790,8 +808,16 @@ class PartnerController extends AbstractController
             }
         }
 
+        // Por defecto se evita seleccionar un día "movido a otra fecha" (azul): ahí no
+        // hay cesta que gestionar y la celda ni siquiera es clicable. Se prefiere una
+        // entrega real del mes; si todas están movidas, cae a la primera que haya.
         foreach ($slots as $slot) {
-            if ($slot['date']->format('Y-m') === $month) {
+            if (!($slot['moved_away'] ?? false) && $slot['date']->format('Y-m') === $month) {
+                return $slot;
+            }
+        }
+        foreach ($slots as $slot) {
+            if (!($slot['moved_away'] ?? false)) {
                 return $slot;
             }
         }
@@ -801,8 +827,8 @@ class PartnerController extends AbstractController
 
     /**
      * Candidatos de "mover de día" para el calendario del GESTOR (caso Franco):
-     * cualquier semana del mes visible donde el nodo del socio reparte, futura (no
-     * pasada) y libre (el socio no tiene ya entrega ahí). NO usa la ventana estrecha
+     * cualquier semana del mes del Basket origen donde el nodo del socio reparte,
+     * futura (no pasada) y libre (el socio no tiene ya entrega ahí). NO usa la ventana estrecha
      * del autoservicio (DeliveryShiftCandidates/WindowRule) — el gestor puede
      * determinar cualquier combinación. El único invariante es estructural: que el
      * nodo reparta ese día (lo decide projectShareDelivery, igual que la proyección).

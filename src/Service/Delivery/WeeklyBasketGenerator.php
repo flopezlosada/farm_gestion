@@ -390,11 +390,21 @@ class WeeklyBasketGenerator
             $destWb = $this->shiftApplier->createWeeklyBasketForShiftDestination($partner, $basket);
             $this->em->flush();
 
-            // Etapa 1 calendario: componer la entrega destino del cambio puntual.
-            $destShare = $this->em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner);
-            if ($destShare !== null) {
-                $destWb->setPartnerBasketShare($destShare);
-                $this->composer->compose($destWb, $destShare, $basket);
+            // Componer la entrega destino del cambio puntual. Si el ORIGEN está
+            // materializado (conserva lo quitado a mano), se COPIAN sus líneas: la
+            // composición real viaja con la cesta. Si no, se deriva del patrón con los
+            // huevos del origen (el huevo viaja igual, caso Franco). Sin esto, mover en
+            // un mes aún sin generar perdería la personalización al materializar aquí.
+            $sourceWb = $this->em->getRepository(WeeklyBasket::class)
+                ->findOneBy(['basket' => $shift->getFromBasket()->getId(), 'partner' => $partner->getId()]);
+            if ($sourceWb !== null) {
+                $this->composer->stamp($destWb, $this->composer->copyLines($sourceWb));
+            } else {
+                $destShare = $this->em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner);
+                if ($destShare !== null) {
+                    $destWb->setPartnerBasketShare($destShare);
+                    $this->composer->compose($destWb, $destShare, $basket, eggReferenceBasket: $shift->getFromBasket());
+                }
             }
         }
 
@@ -516,9 +526,13 @@ class WeeklyBasketGenerator
      *
      * @param Basket             $basket
      * @param PartnerBasketShare $share
+     * @param Basket|null        $eggReferenceBasket Basket contra el que decidir la
+     *        cadencia de huevos (ver WeeklyBasketComposer::compose). Por defecto el
+     *        propio $basket; se pasa el ORIGEN para proyectar una cesta movida (los
+     *        huevos viajan con ella).
      * @return null|array{weeklyBasket: WeeklyBasket, items: array<int, array{component: \App\Entity\BasketComponent, amount: string}>, deliveryDate: \DateTimeInterface}
      */
-    public function projectShareDelivery(Basket $basket, PartnerBasketShare $share): ?array
+    public function projectShareDelivery(Basket $basket, PartnerBasketShare $share, ?Basket $eggReferenceBasket = null): ?array
     {
         $physicalDate = $this->resolvePhysicalDeliveryDate($basket, $share);
         if ($physicalDate === null) {
@@ -529,7 +543,7 @@ class WeeklyBasketGenerator
 
         return [
             'weeklyBasket' => $wb,
-            'items' => $this->composer->computeItems($wb, $share, $basket),
+            'items' => $this->composer->computeItems($wb, $share, $basket, $eggReferenceBasket),
             'deliveryDate' => $physicalDate,
         ];
     }
