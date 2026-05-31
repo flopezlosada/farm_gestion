@@ -164,7 +164,7 @@ class PartnerBasketShareController extends AbstractController
 
             $dropped = $modalityChanger->dropFutureBaskets($new->getPartner(), $effective);
             $this->addFlash('success', sprintf(
-                'Cambio de modalidad aplicado con histórico (efectivo %s). %d entrega(s) futura(s) regenerable(s).',
+                'Cambio de cesta aplicado con histórico (efectivo %s). %d entrega(s) futura(s) regenerable(s).',
                 $effective->format('d/m/Y'),
                 $dropped,
             ));

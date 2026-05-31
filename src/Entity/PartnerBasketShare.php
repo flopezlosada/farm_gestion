@@ -183,13 +183,18 @@ class PartnerBasketShare
     public const DELIVERY_GROUPS = [self::DELIVERY_GROUP_A, self::DELIVERY_GROUP_B];
 
     /**
-     * Grupo de reparto A/B. Sirve para equilibrar la carga de cosecha viernes
-     * a viernes en quincenales y mensuales: la persona que cosecha quiere que
-     * cada semana haya aproximadamente la misma cantidad de cestas.
+     * Cohorte A/B de QUINCENALES. Determina en qué viernes alternos recoge un
+     * socio quincenal: es una alternancia semanal continua anclada a una fecha
+     * global (ver BiweeklyCohortResolver), pensada para equilibrar la carga de
+     * cosecha viernes a viernes.
      *
-     * Null para suscripciones semanales (reciben todos los viernes y por
-     * tanto no participan del balanceo) y para casos puntuales que aún no
-     * tengan grupo asignado.
+     * Solo aplica a quincenales: el generador (WeeklyBasketGenerator) consulta
+     * la cohorte únicamente para SHARE_BIWEEKLY. Los mensuales se resuelven por
+     * day_month_order (qué entrega del mes), NO por A/B; los semanales reciben
+     * todos los viernes. Null para semanales y para casos puntuales sin grupo
+     * asignado. Ojo: como la alternancia es continua, en meses de 5 viernes una
+     * cohorte recoge 3 veces y la otra 2, y la fase se invierte al mes siguiente
+     * — A/B NO mapea a viernes ordinales fijos (1º/3º vs 2º/4º).
      *
      * @ORM\Column(name="delivery_group", type="string", length=1, nullable=true)
      */

@@ -10,7 +10,7 @@
 {% import '_macros/csa.html.twig' as csa %}
 {% form_theme form 'form_div_layout.html.twig' %}
 
-{% block title %}Cambiar modalidad · {{ partner_basket_share.partner }}{% endblock %}
+{% block title %}Cambiar la cesta · {{ partner_basket_share.partner }}{% endblock %}
 
 {% block csa_crumbs %}
     <a href="{{ path('dashboard') }}">Inicio</a>
@@ -19,14 +19,14 @@
     <span class="csa-topbar__crumbs-sep">/</span>
     <a href="{{ path('partner_show', { id: partner_basket_share.partner.id }) }}">{{ partner_basket_share.partner }}</a>
     <span class="csa-topbar__crumbs-sep">/</span>
-    <span class="csa-topbar__crumb-active">Cambiar modalidad</span>
+    <span class="csa-topbar__crumb-active">Cambiar la cesta</span>
 {% endblock %}
 
 {% block csa_main %}
 
     {{ csa.page_header(
         'Socixs · Cesta',
-        'Cambiar modalidad de cesta',
+        'Cambiar la cesta',
         'Para ' ~ partner_basket_share.partner ~ '. Se conserva el histórico: la cesta actual se cierra la víspera de la fecha efectiva y se abre una nueva.'
     ) }}
 
@@ -34,7 +34,7 @@
 
         <div class="csa-stack-lg">
 
-            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Nueva modalidad', subtitle: 'Periodicidad y opciones de la cesta a partir del cambio.' } %}
+            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Nueva cesta', subtitle: 'Periodicidad y opciones de la cesta a partir del cambio.' } %}
                 {% block body %}
                     {% import '_macros/csa.html.twig' as csa %}
                     <div class="csa-form-grid">
@@ -78,7 +78,7 @@
                 <div></div>
                 <div class="csa-row">
                     {{ csa.btn('Cancelar', { variant: 'ghost', href: path('partner_show', { id: partner_basket_share.partner.id }) }) }}
-                    <button type="submit" class="csa-btn csa-btn--primary">Aplicar cambio de modalidad</button>
+                    <button type="submit" class="csa-btn csa-btn--primary">Aplicar cambio de cesta</button>
                 </div>
             </div>
 
