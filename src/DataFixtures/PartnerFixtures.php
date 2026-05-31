@@ -109,7 +109,7 @@ class PartnerFixtures extends Fixture implements DependentFixtureInterface
         $partner->setName($faker->firstName);
         $partner->setSurname($faker->lastName . ' ' . $faker->lastName);
         $partner->setDNI($faker->dni);
-        $partner->setCelular((int) $faker->numerify('6########'));
+        $partner->setCelular($faker->unique()->numerify('6########'));
         $partner->setAddress($faker->streetAddress);
         $partner->setEmail($faker->unique()->safeEmail);
         $partner->setEatMeat((int) $faker->boolean(70));

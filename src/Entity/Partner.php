@@ -6,6 +6,7 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Validator\Constraints as Assert;
+use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Gedmo\Mapping\Annotation as Gedmo;
 
 /**
@@ -13,6 +14,8 @@ use Gedmo\Mapping\Annotation as Gedmo;
  * @ORM\Entity(repositoryClass="App\Repository\PartnerRepository")
  * @ORM\HasLifecycleCallbacks
  */
+#[UniqueEntity(fields: ['celular'], message: 'Ya existe un socio con ese teléfono.')]
+#[UniqueEntity(fields: ['email'], message: 'Ya existe un socio con ese correo electrónico.')]
 class Partner
 {
     /**
@@ -49,10 +52,9 @@ class Partner
     private $DNI;
 
     /**
-     * @ORM\Column(type="integer", nullable=true)
+     * @ORM\Column(type="string", length=20, nullable=true, unique=true)
      */
-    #[Assert\Type(type: 'integer', message: 'El valor {{value}} no es un {{type}} válido.')]
-    #[Assert\GreaterThan(value: 0)]
+    #[Assert\Length(min: 9, minMessage: 'Un número de teléfono debe tener al menos {{ limit }} caracteres.', max: 20, maxMessage: 'Un número de teléfono debe tener como máximo {{ limit }} caracteres.')]
     private $celular;
 
     /**
@@ -190,7 +192,7 @@ class Partner
     private $eat_meat;
 
     /**
-     * @ORM\Column(type="string", length=255, nullable=true)
+     * @ORM\Column(type="string", length=255, nullable=true, unique=true)
      */
     #[Assert\Email]
     private $email;
@@ -400,12 +402,12 @@ class Partner
         return $this;
     }
 
-    public function getcelular(): ?int
+    public function getcelular(): ?string
     {
         return $this->celular;
     }
 
-    public function setcelular(?int $celular): self
+    public function setcelular(?string $celular): self
     {
         $this->celular = $celular;
 

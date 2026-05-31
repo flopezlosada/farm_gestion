@@ -49,7 +49,7 @@ class PartnerUserFixtures extends Fixture implements DependentFixtureInterface
         $partner->setName('Socixa');
         $partner->setSurname('De Prueba');
         $partner->setDNI('00000000T');
-        $partner->setCelular(600000000);
+        $partner->setCelular('600000000');
         $partner->setAddress('Camino Real, 1');
         $partner->setEmail(self::USER_SOCIX_EMAIL);
         $partner->setEatMeat(1);
@@ -100,7 +100,7 @@ class PartnerUserFixtures extends Fixture implements DependentFixtureInterface
         $peer->setName('Compañerx');
         $peer->setSurname('De Prueba');
         $peer->setDNI('00000001R');
-        $peer->setCelular(600000001);
+        $peer->setCelular('600000001');
         $peer->setAddress('Camino Real, 2');
         $peer->setEmail('peer@csavega.local');
         $peer->setEatMeat(1);
