@@ -2,7 +2,9 @@
 
 namespace App\Tests\Controller;
 
+use App\DataFixtures\PartnerUserFixtures;
 use App\Entity\Partner;
+use App\Entity\WeeklyBasket;
 
 /**
  * Smoke test del listado y la edición de socixs.
@@ -63,5 +65,39 @@ class PartnerControllerTest extends AbstractAuthenticatedTest
         $client->request('GET', sprintf('/gestion/partner/%d/calendar', $partner->getId()));
 
         $this->assertSame(200, $client->getResponse()->getStatusCode());
+    }
+
+    /**
+     * POST de saltar sin token CSRF válido redirige y NO altera el estado de la
+     * entrega (guarda de seguridad del endpoint). El toggle en sí está cubierto
+     * por WeeklyBasketSkipperTest (unit) y por el panel; el happy-path funcional
+     * se añadirá al cablear la UI del calendario, que dará el token a scrapear.
+     */
+    public function testDeliveryCalendarSkipRejectsInvalidCsrf(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        $partner = $em->getRepository(Partner::class)
+            ->findOneBy(['email' => PartnerUserFixtures::USER_SOCIX_EMAIL]);
+        $this->assertNotNull($partner);
+
+        $wb = $em->getRepository(WeeklyBasket::class)->findOneBy(['partner' => $partner]);
+        $this->assertNotNull($wb, 'El socix de fixtures debería tener una entrega.');
+        $statusBefore = $wb->getWeeklyBasketStatus()?->getId();
+
+        $client->request('POST', sprintf('/gestion/partner/%d/calendar/skip/%d', $partner->getId(), $wb->getBasket()->getId()), [
+            '_csrf_token' => 'token-invalido',
+        ]);
+
+        $this->assertResponseRedirects();
+
+        $em->clear();
+        $reloaded = $em->getRepository(WeeklyBasket::class)->find($wb->getId());
+        $this->assertSame(
+            $statusBefore,
+            $reloaded->getWeeklyBasketStatus()?->getId(),
+            'Sin token CSRF válido, el estado de la entrega no debe cambiar.',
+        );
     }
 }

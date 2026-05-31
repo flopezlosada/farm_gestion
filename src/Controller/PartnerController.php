@@ -13,8 +13,12 @@ use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketGroup;
 use App\Form\PartnerBasketShareType;
 use App\Form\PartnerType;
+use App\Entity\Basket;
+use App\Repository\PartnerDeliveryShiftRepository;
 use App\Repository\PartnerRepository;
 use App\Service\Delivery\DeliveryCalendarProjector;
+use App\Service\Delivery\WeeklyBasketGenerator;
+use App\Service\Delivery\WeeklyBasketSkipper;
 use App\Service\Partner\PartnerShareEventRecorder;
 use Doctrine\ORM\EntityManagerInterface;
 use Knp\Component\Pager\PaginatorInterface;
@@ -284,6 +288,95 @@ class PartnerController extends AbstractController
             'prev' => $current->modify('-1 month'),
             'next' => $current->modify('+1 month'),
         ]);
+    }
+
+    /**
+     * Saltar / volver a recoger una entrega del calendario (acción de B'). Si la
+     * entrega solo estaba prevista (no materializada), la fija primero
+     * (materializeShareDelivery) y luego alterna su estado vía WeeklyBasketSkipper
+     * — misma semántica que el panel del socio, sin borrar el WeeklyBasket.
+     *
+     * Guardas: R1 (los compartidos no editan su día), cambio puntual activo esa
+     * semana (se desincronizaría) y que el socio tenga cesta activa y su nodo
+     * reparta esa semana. Sin deadline: es el gestor.
+     *
+     * @param Partner                        $partner
+     * @param int                            $basketId Semana (Basket) sobre la que actuar.
+     * @param Request                        $request
+     * @param WeeklyBasketGenerator          $generator
+     * @param WeeklyBasketSkipper            $skipper
+     * @param PartnerDeliveryShiftRepository $shiftRepository
+     * @param EntityManagerInterface         $em
+     * @return Response
+     */
+    #[Route("/{id}/calendar/skip/{basketId}", name: "partner_delivery_calendar_skip", methods: ["POST"], requirements: ["id" => "\\d+", "basketId" => "\\d+"])]
+    public function deliveryCalendarSkip(
+        Partner $partner,
+        int $basketId,
+        Request $request,
+        WeeklyBasketGenerator $generator,
+        WeeklyBasketSkipper $skipper,
+        PartnerDeliveryShiftRepository $shiftRepository,
+        EntityManagerInterface $em,
+    ): Response {
+        $basket = $em->getRepository(Basket::class)->find($basketId);
+        if ($basket === null) {
+            throw $this->createNotFoundException('Semana de reparto no encontrada.');
+        }
+
+        $backToCalendar = fn (): Response => $this->redirectToRoute('partner_delivery_calendar', [
+            'id' => $partner->getId(),
+            'year' => $basket->getDate()->format('Y'),
+            'month' => $basket->getDate()->format('n'),
+        ]);
+
+        if (!$this->isCsrfTokenValid('calendar_skip_' . $partner->getId(), (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
+
+            return $backToCalendar();
+        }
+
+        // R1: las cestas compartidas no eligen su día (lo dicta la alternancia
+        // con el otro hogar), así que no se pueden saltar desde aquí.
+        if ($partner->getSharePartner() !== null) {
+            $this->addFlash('warning', 'Esta cesta es compartida: su día lo marca la alternancia con el otro hogar, no se edita aquí.');
+
+            return $backToCalendar();
+        }
+
+        // Cambio puntual activo esa semana: dejaría el shift desincronizado.
+        if ($shiftRepository->findOutgoing($partner, $basket) !== null) {
+            $this->addFlash('warning', 'Hay un cambio puntual de día activo esa semana: gestiónalo desde los cambios puntuales.');
+
+            return $backToCalendar();
+        }
+
+        $share = $em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner, $basket->getDate());
+        if ($share === null) {
+            $this->addFlash('warning', 'El socio no tiene cesta activa esa semana.');
+
+            return $backToCalendar();
+        }
+
+        $weeklyBasket = $generator->materializeShareDelivery($basket, $share);
+        if ($weeklyBasket === null) {
+            $this->addFlash('warning', 'El nodo del socio no reparte esa semana, no hay entrega que saltar.');
+
+            return $backToCalendar();
+        }
+
+        $skipped = $skipper->toggle($weeklyBasket, 'gestor:' . $this->getUser()?->getId());
+        $em->flush();
+
+        if ($skipped === true) {
+            $this->addFlash('success', 'Marcada como NO recogida esa semana.');
+        } elseif ($skipped === false) {
+            $this->addFlash('success', 'Restaurada: el socio vuelve a recoger esa semana.');
+        } else {
+            $this->addFlash('warning', 'La entrega está en un estado especial y no se puede alternar.');
+        }
+
+        return $backToCalendar();
     }
 
     #[Route("/{id}/edit", name: "partner_edit", methods: ["GET","POST"])]

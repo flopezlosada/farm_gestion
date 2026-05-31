@@ -19,9 +19,9 @@ use App\Repository\PartnerBasketShareRepository;
 use App\Repository\PartnerDeliveryShiftRepository;
 use App\Repository\WeeklyBasketGroupRepository;
 use App\Repository\WeeklyBasketRepository;
-use App\Repository\WeeklyBasketStatusRepository;
 use App\Service\Delivery\DeliveryShiftApplier;
 use App\Service\Delivery\DeliveryShiftValidator;
+use App\Service\Delivery\WeeklyBasketSkipper;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Form\Extension\Core\Type\PasswordType;
@@ -233,7 +233,7 @@ class PanelController extends AbstractController
     public function skipNextBasket(
         Request $request,
         WeeklyBasketRepository $weeklyBasketRepository,
-        WeeklyBasketStatusRepository $weeklyBasketStatusRepository,
+        WeeklyBasketSkipper $skipper,
         PartnerDeliveryShiftRepository $deliveryShiftRepository,
         EntityManagerInterface $em,
     ): Response {
@@ -269,25 +269,15 @@ class PanelController extends AbstractController
             return $this->redirectToRoute('panel_basket');
         }
 
-        $currentStatus = $next->getWeeklyBasketStatus();
-        $currentId = $currentStatus?->getId();
+        // Status 1 = "Recoge", 2 = "No la recoge". El toggle solo opera entre
+        // estos dos; cualquier otro estado lo deja como está y avisa al socix
+        // (caso defensivo, no debería ocurrir en panel). La semántica vive en
+        // WeeklyBasketSkipper, compartida con el calendario de recogida (admin).
+        $skipped = $skipper->toggle($next, 'partner:' . $partner->getId());
 
-        // Status 1 = "Recoge", 2 = "No la recoge". El toggle solo opera
-        // entre estos dos; cualquier otro estado lo deja como está y
-        // avisa al socix (caso defensivo, no debería ocurrir en panel).
-        $actor = 'partner:' . $partner->getId();
-
-        if ($currentId === 1) {
-            $next->setWeeklyBasketStatus($weeklyBasketStatusRepository->find(2));
-            $event = new PartnerEvent($partner, PartnerEvent::TYPE_BASKET_SKIP);
-            $event->setActor($actor);
-            $em->persist($event);
+        if ($skipped === true) {
             $this->addFlash('notice', 'Listo: hemos marcado que esta semana no recogerás la cesta. Si cambias de opinión, puedes deshacerlo desde aquí antes del plazo.');
-        } elseif ($currentId === 2) {
-            $next->setWeeklyBasketStatus($weeklyBasketStatusRepository->find(1));
-            $event = new PartnerEvent($partner, PartnerEvent::TYPE_BASKET_UNSKIP);
-            $event->setActor($actor);
-            $em->persist($event);
+        } elseif ($skipped === false) {
             $this->addFlash('notice', 'Listo: al final sí recogerás la cesta esta semana.');
         } else {
             $this->addFlash('warning', 'Tu cesta está en un estado especial y no se puede cambiar desde aquí. Contacta con la administración si necesitas modificarla.');
