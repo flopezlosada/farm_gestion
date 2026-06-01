@@ -368,6 +368,14 @@ class PartnerController extends AbstractController
         // cambio (ahí no hay cesta que mover) ni en compartidas (R1).
         // No se ofrece mover una cesta que no lleva nada (saltada o con todos los
         // componentes quitados): mover una entrega vacía no tiene sentido.
+        // Componente a mover: 0 = toda la entrega (por defecto); si no, verdura u
+        // huevos (mover SOLO ese componente, caso SANTOS). Cambia qué cuenta como
+        // "ocupado" al calcular los destinos viables.
+        $moveComponentId = (int) $request->query->get('move_component', 0);
+        if (!in_array($moveComponentId, [BasketComponent::ID_VEGETABLES, BasketComponent::ID_EGGS], true)) {
+            $moveComponentId = 0;
+        }
+
         $moveCandidates = [];
         $canMove = $selectedEditable
             && $partner->getSharePartner() === null
@@ -388,18 +396,31 @@ class PartnerController extends AbstractController
                     ->getQuery()
                     ->getResult();
 
-                // Ocupación del mes del origen (materializadas + previstas por patrón),
-                // reusando la proyección de mes para no replicar la regla. TODOS los
-                // días con entrega del socio bloquean — también los vaciados por otra
-                // cesta (un hueco por día). La única excepción es el día ORIGINAL de la
-                // propia cesta seleccionada: ahí se puede volver (= quitar el cambio).
-                $occupied = array_map(
-                    static fn (array $s): int => $s['basket']->getId(),
-                    $projector->projectMonth($partner, (int) $monthStart->format('Y'), (int) $monthStart->format('n')),
-                );
-                if ($shiftRole === 'destination') {
-                    $ownOriginId = $shift->getFromBasket()->getId();
-                    $occupied = array_values(array_filter($occupied, static fn (int $id): bool => $id !== $ownOriginId));
+                $monthSlots = $projector->projectMonth($partner, (int) $monthStart->format('Y'), (int) $monthStart->format('n'));
+
+                if ($moveComponentId !== 0) {
+                    // Mover SOLO un componente: "ocupado" = semanas donde el socio ya
+                    // lleva ESE componente (puede llevar otros). Así la verdura puede ir
+                    // a una semana que ya tiene huevo (SANTOS), pero no a una que ya
+                    // tiene verdura.
+                    $occupied = [];
+                    foreach ($monthSlots as $s) {
+                        foreach ($s['items'] as $line) {
+                            if ($line['component']->getId() === $moveComponentId) {
+                                $occupied[] = $s['basket']->getId();
+                                break;
+                            }
+                        }
+                    }
+                } else {
+                    // Mover toda la entrega: cualquier día con entrega del socio bloquea
+                    // (un hueco por día). Excepción: el día ORIGINAL de la propia cesta
+                    // seleccionada (volver = quitar el cambio).
+                    $occupied = array_map(static fn (array $s): int => $s['basket']->getId(), $monthSlots);
+                    if ($shiftRole === 'destination') {
+                        $ownOriginId = $shift->getFromBasket()->getId();
+                        $occupied = array_values(array_filter($occupied, static fn (int $id): bool => $id !== $ownOriginId));
+                    }
                 }
 
                 $moveCandidates = $this->calendarMoveCandidates(
@@ -422,6 +443,8 @@ class PartnerController extends AbstractController
             'selected' => $selected,
             'selected_editable' => $selectedEditable,
             'move_candidates' => $moveCandidates,
+            'move_component' => $moveComponentId,
+            'can_move' => $canMove,
             'shift' => $shift,
             'shift_role' => $shiftRole,
             'current' => $current,
@@ -529,6 +552,59 @@ class PartnerController extends AbstractController
             $this->addFlash('error', 'No puedes mover la cesta a hoy ni a una fecha pasada.');
 
             return $backToCalendar();
+        }
+
+        // ¿Mover SOLO un componente (verdura u huevos)? Caso SANTOS: la verdura se mueve
+        // a una semana que ya tiene huevo, y el huevo de esa semana se respeta. El choque
+        // es por COMPONENTE (el destino no puede llevar YA ese componente; los demás sí).
+        $componentId = (int) $request->request->get('component_id', 0);
+        if (!in_array($componentId, [BasketComponent::ID_VEGETABLES, BasketComponent::ID_EGGS], true)) {
+            $componentId = 0;
+        }
+        if ($componentId !== 0) {
+            $component = $em->getRepository(BasketComponent::class)->find($componentId);
+            $label = $componentId === BasketComponent::ID_EGGS ? 'huevos' : 'verdura';
+
+            $alreadyHas = false;
+            foreach ($projector->projectMonth($partner, (int) $to->getDate()->format('Y'), (int) $to->getDate()->format('n')) as $s) {
+                if ($s['basket']->getId() !== $to->getId()) {
+                    continue;
+                }
+                foreach ($s['items'] as $line) {
+                    if ($line['component']->getId() === $componentId) {
+                        $alreadyHas = true;
+                        break;
+                    }
+                }
+                break;
+            }
+            if ($alreadyHas) {
+                $this->addFlash('error', sprintf('El socio ya recoge %s ese día.', $label));
+
+                return $backToCalendar();
+            }
+
+            try {
+                $applier->moveComponent($partner, $component, $from, $to, actor: 'gestor:' . $this->getUser()?->getId());
+            } catch (\LogicException $e) {
+                $this->addFlash('error', $e->getMessage());
+
+                return $backToCalendar();
+            }
+
+            $this->addFlash('success', sprintf(
+                'Movida la %s del %s al %s.',
+                $label,
+                $from->getDate()->format('d/m/Y'),
+                $to->getDate()->format('d/m/Y'),
+            ));
+
+            return $this->redirectToRoute('partner_delivery_calendar', [
+                'id' => $partner->getId(),
+                'year' => $to->getDate()->format('Y'),
+                'month' => $to->getDate()->format('n'),
+                'sel' => $to->getId(),
+            ]);
         }
 
         // Sin choque: el destino no puede tener ya una entrega del socio. Se usa el

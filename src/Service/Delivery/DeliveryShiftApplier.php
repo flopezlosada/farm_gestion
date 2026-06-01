@@ -3,6 +3,7 @@
 namespace App\Service\Delivery;
 
 use App\Entity\Basket;
+use App\Entity\BasketComponent;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
 use App\Entity\PartnerDeliveryShift;
@@ -131,6 +132,121 @@ final class DeliveryShiftApplier
                 $this->em->flush();
             }
         }
+    }
+
+    /**
+     * Mueve UN COMPONENTE (verdura u huevos) de la entrega de un socio de `$current`
+     * a `$target`, sin tocar el resto de su entrega ni los demás componentes (caso
+     * SANTOS: mensual de verdura + semanal de huevo, mueve solo la verdura). Misma
+     * filosofía que move(): no hay "deshacer"; volver al día de patrón es otro destino.
+     *
+     * Resuelve el día de PATRÓN del componente: si en `$current` el componente ya
+     * venía movido (intent entrante de ese componente), su patrón es el origen de ese
+     * intent; si no, el propio `$current`. Entonces:
+     *   - target == patrón → cancela el intent (el componente vuelve a su día natural).
+     *   - target != patrón → reapunta (cancela el previo y crea uno nuevo patrón→target).
+     *
+     * La cascada sobre WeeklyBasket solo se aplica si la semana está GENERADA (igual
+     * que move()): en meses sin generar basta el intent, que el generador y el
+     * proyector ya leen.
+     *
+     * @param Partner         $partner
+     * @param BasketComponent $component Componente a mover (verdura | huevos).
+     * @param Basket          $current   Semana donde el componente está ahora.
+     * @param Basket          $target    Semana destino.
+     * @param string|null     $actor
+     */
+    public function moveComponent(Partner $partner, BasketComponent $component, Basket $current, Basket $target, ?string $actor = null): void
+    {
+        /** @var PartnerDeliveryShiftRepository $shiftRepo */
+        $shiftRepo = $this->em->getRepository(PartnerDeliveryShift::class);
+
+        $incoming = $shiftRepo->findComponentIncoming($partner, $current, $component);
+        $patternOrigin = $incoming?->getFromBasket() ?? $current;
+
+        if ($incoming !== null) {
+            $this->cancelComponent($incoming, $actor);
+        }
+
+        if ($target->getId() === $patternOrigin->getId()) {
+            // Volver al día de patrón: el cancel ya restauró el componente allí.
+            return;
+        }
+
+        $shift = new PartnerDeliveryShift($partner, $patternOrigin, $target, $component);
+        $this->em->persist($shift);
+        $this->cascadeComponentOnApply($partner, $component, $patternOrigin, $target);
+        $this->recordEvent($partner, $patternOrigin, $target, $actor, cancelled: false);
+        $this->em->flush();
+    }
+
+    /**
+     * Cascada de WeeklyBasket al crear un intent POR COMPONENTE (solo si la semana
+     * está generada): quita el componente en el origen y lo añade en el destino
+     * (creando la entrega si esa semana no tenía ninguna). Las semanas sin generar
+     * no se tocan — el generador lo aplicará al materializar.
+     */
+    private function cascadeComponentOnApply(Partner $partner, BasketComponent $component, Basket $from, Basket $to): void
+    {
+        /** @var WeeklyBasketRepository $wbRepo */
+        $wbRepo = $this->em->getRepository(WeeklyBasket::class);
+
+        $fromWb = $wbRepo->findOneBy(['basket' => $from, 'partner' => $partner]);
+        if ($fromWb !== null) {
+            $this->composer->removeComponent($fromWb, $component);
+        }
+
+        if ($wbRepo->findOneBy(['basket' => $to]) === null) {
+            return; // listado del destino aún sin generar: solo queda el intent
+        }
+        $share = $this->em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner, $to->getDate());
+        if ($share === null) {
+            return;
+        }
+        $toWb = $wbRepo->findOneBy(['basket' => $to, 'partner' => $partner]);
+        if ($toWb === null) {
+            $toWb = $this->createWeeklyBasketForShiftDestination($partner, $to);
+            $this->em->flush();
+        } elseif ($component->getId() === BasketComponent::ID_VEGETABLES
+            && ($toWb->getBasketShare()?->getDeliveredBasketWeight() ?? 0.0) <= 0.0) {
+            // Verdura aterrizando en una entrega "solo-huevo": realinear modalidad.
+            $toWb->setBasketShare($share->getBasketShare());
+            $toWb->setAmount($share->getAmount());
+            $toWb->setPartnerBasketShare($share);
+        }
+        $this->composer->addComponent($toWb, $share, $component);
+    }
+
+    /**
+     * Cancela un intent POR COMPONENTE y revierte su cascada (si la semana está
+     * generada): quita el componente del destino y lo restaura en el origen.
+     */
+    private function cancelComponent(PartnerDeliveryShift $shift, ?string $actor = null): void
+    {
+        $partner = $shift->getPartner();
+        $component = $shift->getComponent();
+        $from = $shift->getFromBasket();
+        $to = $shift->getToBasket();
+
+        /** @var WeeklyBasketRepository $wbRepo */
+        $wbRepo = $this->em->getRepository(WeeklyBasket::class);
+
+        if ($to !== null) {
+            $toWb = $wbRepo->findOneBy(['basket' => $to, 'partner' => $partner]);
+            if ($toWb !== null) {
+                $this->composer->removeComponent($toWb, $component);
+            }
+        }
+        $fromWb = $wbRepo->findOneBy(['basket' => $from, 'partner' => $partner]);
+        if ($fromWb !== null) {
+            $share = $this->em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner, $from->getDate());
+            if ($share !== null) {
+                $this->composer->addComponent($fromWb, $share, $component);
+            }
+        }
+
+        $this->em->remove($shift);
+        $this->recordEvent($partner, $from, $to ?? $from, $actor, cancelled: true);
     }
 
     /**

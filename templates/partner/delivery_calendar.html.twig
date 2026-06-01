@@ -15,20 +15,43 @@
 
 {# Chips de "mover a otra fecha": un botón por destino. Reusado por la cesta normal
    y por la que ya viene movida (cuyos destinos incluyen su día original = volver). #}
-{% macro move_block(partner, bid, candidates) %}
+{% macro move_block(partner, bid, candidates, selected, move_component, current) %}
+    {% set EGG = constant('App\\Entity\\BasketComponent::ID_EGGS') %}
     <div class="rcal-move-wrap">
         <div class="rcal-sect">Mover a otra fecha</div>
-        <form action="{{ path('partner_delivery_calendar_move', { id: partner.id, basketId: bid }) }}" method="post" style="margin: 0;">
-            <input type="hidden" name="_csrf_token" value="{{ csrf_token('calendar_move_' ~ partner.id) }}">
-            <div class="rcal-move-chips">
-                {% for cand in candidates %}
-                    <button type="submit" name="to_basket_id" value="{{ cand.id }}" class="rcal-move-chip">
-                        <i class="fa fa-arrow-right"></i>{{ cand.date|format_date(pattern='EEE d MMM', locale='es') }}
-                    </button>
+        {# Selector de alcance: solo si la entrega lleva 2+ componentes. Por defecto se
+           mueve TODO; "solo verdura/huevos" recarga con los destinos de ese componente
+           (caso SANTOS). Cada enlace es una navegación GET que recalcula candidatos. #}
+        {% if selected.items|length >= 2 %}
+            <div class="rcal-move-scope">
+                <span class="rcal-move-scope__lbl">Mover:</span>
+                <a href="{{ path('partner_delivery_calendar', { id: partner.id, year: current.format('Y'), month: current.format('n'), sel: bid, move_component: 0 }) }}"
+                   class="rcal-scope-btn{{ move_component == 0 ? ' on' }}">todo</a>
+                {% for it in selected.items|sort((a, b) => a.component.id - b.component.id) %}
+                    <a href="{{ path('partner_delivery_calendar', { id: partner.id, year: current.format('Y'), month: current.format('n'), sel: bid, move_component: it.component.id }) }}"
+                       class="rcal-scope-btn{{ move_component == it.component.id ? ' on' }}">solo {{ it.component.id == EGG ? 'huevos' : 'verdura' }}</a>
                 {% endfor %}
             </div>
-        </form>
-        <div class="rcal-hint">Se mueve toda la cesta al día elegido (solo días válidos para su nodo).</div>
+        {% endif %}
+        {% if candidates is not empty %}
+            <form action="{{ path('partner_delivery_calendar_move', { id: partner.id, basketId: bid }) }}" method="post" style="margin: 0;">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token('calendar_move_' ~ partner.id) }}">
+                {% if move_component != 0 %}<input type="hidden" name="component_id" value="{{ move_component }}">{% endif %}
+                <div class="rcal-move-chips">
+                    {% for cand in candidates %}
+                        <button type="submit" name="to_basket_id" value="{{ cand.id }}" class="rcal-move-chip">
+                            <i class="fa fa-arrow-right"></i>{{ cand.date|format_date(pattern='EEE d MMM', locale='es') }}
+                        </button>
+                    {% endfor %}
+                </div>
+            </form>
+            <div class="rcal-hint">
+                {% if move_component != 0 %}Se mueve solo ese componente al día elegido.
+                {% else %}Se mueve toda la cesta al día elegido (solo días válidos para su nodo).{% endif %}
+            </div>
+        {% else %}
+            <div class="rcal-hint">No hay días disponibles para mover {{ move_component != 0 ? 'ese componente' : 'la cesta' }} este mes.</div>
+        {% endif %}
     </div>
 {% endmacro %}
 
@@ -173,6 +196,12 @@
   .rcal-sw.on .track{background:var(--csa-green)}
   .rcal-sw.on .thumb{transform:translateX(17px)}
 
+  /* selector de alcance del movimiento (mover todo / solo un componente) */
+  .rcal-move-scope{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:var(--csa-sp-3)}
+  .rcal-move-scope__lbl{font-size:12px;color:var(--csa-ink-muted)}
+  .csa-app a.rcal-scope-btn{font-size:12px;padding:3px 10px;border-radius:999px;border:1px solid var(--csa-border);color:var(--csa-ink-soft);background:var(--csa-surface);text-decoration:none;text-transform:capitalize;transition:.12s}
+  .csa-app a.rcal-scope-btn:hover{border-color:var(--csa-ink-soft);border-bottom-color:var(--csa-ink-soft);color:var(--csa-ink)}
+  .csa-app a.rcal-scope-btn.on{background:var(--csa-green-soft);border-color:#cfe0b4;color:var(--csa-green);font-weight:600}
   .rcal-move-chips{display:flex;flex-wrap:wrap;gap:var(--csa-sp-2)}
   .rcal-move-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--csa-sky);background:var(--csa-sky-soft);color:var(--csa-sky);border-radius:9px;padding:8px 13px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;text-transform:capitalize;transition:.12s}
   .rcal-move-chip:hover{background:#bcdaea}
@@ -329,8 +358,8 @@
 
                         {{ _self.components(partner, bid, selected, present_ids, EGG, readonly or content_locked) }}
 
-                        {% if move_candidates is not empty %}
-                            {{ _self.move_block(partner, bid, move_candidates) }}
+                        {% if can_move %}
+                            {{ _self.move_block(partner, bid, move_candidates, selected, move_component, current) }}
                         {% endif %}
                     </div>
 

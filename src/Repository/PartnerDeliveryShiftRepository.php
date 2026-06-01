@@ -3,6 +3,7 @@
 namespace App\Repository;
 
 use App\Entity\Basket;
+use App\Entity\BasketComponent;
 use App\Entity\Partner;
 use App\Entity\PartnerDeliveryShift;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
@@ -80,6 +81,22 @@ class PartnerDeliveryShiftRepository extends ServiceEntityRepository
             ->setParameter('to', $to)
             ->getQuery()
             ->getResult();
+    }
+
+    /**
+     * Intent de un COMPONENTE concreto que entra a un Basket para un socio (si lo
+     * hay). Único por (partner, to, component), así que devuelve uno o null. Se usa
+     * para resolver el origen de patrón al mover un componente que ya venía movido.
+     */
+    public function findComponentIncoming(Partner $partner, Basket $to, BasketComponent $component): ?PartnerDeliveryShift
+    {
+        return $this->createQueryBuilder('s')
+            ->where('s.partner = :partner AND s.toBasket = :to AND s.component = :component')
+            ->setParameter('partner', $partner)
+            ->setParameter('to', $to)
+            ->setParameter('component', $component)
+            ->getQuery()
+            ->getOneOrNullResult();
     }
 
     /**
