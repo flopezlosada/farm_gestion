@@ -7,6 +7,7 @@ use App\Entity\Partner;
 use App\Entity\WeeklyBasket;
 use App\Entity\BasketComponent;
 use App\Service\Delivery\DeliveryCalendarProjector;
+use App\Service\Delivery\EggDeliveryResolver;
 use App\Service\Delivery\WeeklyBasketComposer;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use Doctrine\ORM\EntityManagerInterface;
@@ -49,6 +50,7 @@ class DeliveryCalendarProjectorTest extends KernelTestCase
             $em,
             static::getContainer()->get(WeeklyBasketGenerator::class),
             static::getContainer()->get(WeeklyBasketComposer::class),
+            static::getContainer()->get(EggDeliveryResolver::class),
         );
         $slots = $projector->projectMonth($partner, (int) $date->format('Y'), (int) $date->format('n'));
 

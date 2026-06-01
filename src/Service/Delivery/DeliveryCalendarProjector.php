@@ -38,6 +38,7 @@ final class DeliveryCalendarProjector
         private readonly EntityManagerInterface $em,
         private readonly WeeklyBasketGenerator $generator,
         private readonly WeeklyBasketComposer $composer,
+        private readonly EggDeliveryResolver $eggResolver,
     ) {
     }
 
@@ -163,6 +164,15 @@ final class DeliveryCalendarProjector
 
             $share = $this->candidateShareFor($partner, $basket);
             if ($share === null) {
+                // Sin cesta candidata esta semana: ¿le toca huevo-extra? (cesta mensual/
+                // quincenal con huevo MÁS frecuente que la cesta — SANTOS semanal de huevo,
+                // MIRIAM…). Espeja materializeExtraEggDeliveries del generador en modo dry;
+                // sin esto, las semanas de solo-huevo de esos socios no aparecían en el
+                // calendario de meses aún sin generar.
+                $eggSlot = $this->projectExtraEgg($partner, $basket, $listed);
+                if ($eggSlot !== null) {
+                    $slots[] = $eggSlot;
+                }
                 continue;
             }
 
@@ -184,6 +194,113 @@ final class DeliveryCalendarProjector
                 'listed' => $listed,
                 'available' => array_map(static fn (array $line): BasketComponent => $line['component'], $projection['items']),
             ];
+        }
+
+        // Reflejar los intents POR COMPONENTE (dry): en origen quita el componente de
+        // la entrega de esa semana; en destino lo añade (creando un slot si esa semana
+        // no tenía entrada proyectada). Es lo que muestra el plan de SANTOS antes de
+        // generar. Va al final, cuando ya están todos los slots base (incluido el
+        // huevo-extra). Los intents de entrega ENTERA se reflejan en el bucle de arriba.
+        return $this->applyComponentIntentsToSlots($partner, $baskets, $slots);
+    }
+
+    /**
+     * Aplica los intents POR COMPONENTE sobre los slots ya proyectados.
+     *
+     * @param Basket[]                                                          $baskets
+     * @param list<array{date: \DateTimeInterface, basket: Basket, ...}>        $slots
+     * @return list<array{date: \DateTimeInterface, basket: Basket, ...}>
+     */
+    private function applyComponentIntentsToSlots(Partner $partner, array $baskets, array $slots): array
+    {
+        /** @var \App\Repository\PartnerDeliveryShiftRepository $shiftRepo */
+        $shiftRepo = $this->em->getRepository(\App\Entity\PartnerDeliveryShift::class);
+        $shareRepo = $this->em->getRepository(\App\Entity\PartnerBasketShare::class);
+
+        // Índice slot por basket id (para localizar el slot de cada intent).
+        $idxByBasket = [];
+        foreach ($slots as $i => $slot) {
+            $idxByBasket[$slot['basket']->getId()] = $i;
+        }
+
+        foreach ($baskets as $basket) {
+            $out = $shiftRepo->findComponentIntentsFromBasket($partner, $basket);
+            $in = $shiftRepo->findComponentIntentsToBasket($partner, $basket);
+            if ($out === [] && $in === []) {
+                continue;
+            }
+            $idx = $idxByBasket[$basket->getId()] ?? null;
+
+            // ORIGEN: quitar el componente de la entrega de esa semana.
+            foreach ($out as $intent) {
+                if ($idx === null) {
+                    continue;
+                }
+                $cid = $intent->getComponent()->getId();
+                $slots[$idx]['items'] = array_values(array_filter(
+                    $slots[$idx]['items'],
+                    static fn (array $line): bool => $line['component']->getId() !== $cid,
+                ));
+                $slots[$idx]['available'] = array_values(array_filter(
+                    $slots[$idx]['available'],
+                    static fn (BasketComponent $c): bool => $c->getId() !== $cid,
+                ));
+            }
+
+            // DESTINO: añadir el componente (creando slot si no había entrega esa semana).
+            foreach ($in as $intent) {
+                $component = $intent->getComponent();
+                $share = $shareRepo->findActiveForPartner($partner, $basket->getDate());
+                if ($share === null) {
+                    continue;
+                }
+                $amount = $this->composer->amountForComponent($share, $component);
+                if ($amount === null) {
+                    continue;
+                }
+
+                if ($idx === null) {
+                    $projection = $this->generator->projectShareDelivery($basket, $share);
+                    if ($projection === null) {
+                        continue; // el nodo no reparte esa semana
+                    }
+                    $slots[] = [
+                        'date' => $projection['deliveryDate'],
+                        'basket' => $basket,
+                        'source' => 'projected',
+                        'weeklyBasket' => $projection['weeklyBasket'],
+                        'items' => [['component' => $component, 'amount' => $amount]],
+                        'skipped' => false,
+                        'moved_away' => false,
+                        'listed' => $this->em->getRepository(WeeklyBasket::class)->findOneBy(['basket' => $basket->getId()]) !== null,
+                        'available' => [$component],
+                    ];
+                    $idx = array_key_last($slots);
+                    $idxByBasket[$basket->getId()] = $idx;
+                    continue;
+                }
+
+                $alreadyHas = false;
+                foreach ($slots[$idx]['items'] as $line) {
+                    if ($line['component']->getId() === $component->getId()) {
+                        $alreadyHas = true;
+                        break;
+                    }
+                }
+                if (!$alreadyHas) {
+                    $slots[$idx]['items'][] = ['component' => $component, 'amount' => $amount];
+                }
+                $availHas = false;
+                foreach ($slots[$idx]['available'] as $c) {
+                    if ($c->getId() === $component->getId()) {
+                        $availHas = true;
+                        break;
+                    }
+                }
+                if (!$availHas) {
+                    $slots[$idx]['available'][] = $component;
+                }
+            }
         }
 
         return $slots;
@@ -235,6 +352,48 @@ final class DeliveryCalendarProjector
         }
 
         return null;
+    }
+
+    /**
+     * Proyecta (dry) la entrega de SOLO HUEVO que un socio recibe una semana en la
+     * que no le toca cesta pero sí huevo (huevo más frecuente que la cesta). Espejo
+     * de WeeklyBasketGenerator::materializeExtraEggDeliveries sin persistir. Null si
+     * el socio no tiene huevos, no le toca esa semana, o su nodo no reparte.
+     *
+     * @return array{date: \DateTimeInterface, basket: Basket, source: 'projected', weeklyBasket: WeeklyBasket, items: array<int, array{component: BasketComponent, amount: string}>, skipped: bool, moved_away: bool, listed: bool, available: list<BasketComponent>}|null
+     */
+    private function projectExtraEgg(Partner $partner, Basket $basket, bool $listed): ?array
+    {
+        $share = $this->em->getRepository(\App\Entity\PartnerBasketShare::class)
+            ->findActiveForPartner($partner, $basket->getDate());
+        if ($share === null || $share->getEggAmount() === null) {
+            return null;
+        }
+        if (!$this->eggResolver->delivers($share, $basket)) {
+            return null;
+        }
+        $projection = $this->generator->projectShareDelivery($basket, $share);
+        if ($projection === null) {
+            return null; // el nodo del socio no reparte esa semana
+        }
+
+        $eggs = $this->em->getRepository(BasketComponent::class)->find(BasketComponent::ID_EGGS);
+        $amount = $eggs !== null ? $this->composer->amountForComponent($share, $eggs) : null;
+        if ($eggs === null || $amount === null) {
+            return null;
+        }
+
+        return [
+            'date' => $projection['deliveryDate'],
+            'basket' => $basket,
+            'source' => 'projected',
+            'weeklyBasket' => $projection['weeklyBasket'],
+            'items' => [['component' => $eggs, 'amount' => $amount]],
+            'skipped' => false,
+            'moved_away' => false,
+            'listed' => $listed,
+            'available' => [$eggs],
+        ];
     }
 
     /**
