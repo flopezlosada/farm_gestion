@@ -15,21 +15,20 @@
 
 {# Chips de "mover a otra fecha": un botón por destino. Reusado por la cesta normal
    y por la que ya viene movida (cuyos destinos incluyen su día original = volver). #}
-{% macro move_block(partner, bid, candidates, selected, move_component, current) %}
+{% macro move_block(partner, bid, candidates, move_scopes, move_component, current) %}
     {% set EGG = constant('App\\Entity\\BasketComponent::ID_EGGS') %}
     <div class="rcal-move-wrap">
         <div class="rcal-sect">Mover a otra fecha</div>
-        {# Selector de alcance: solo si la entrega lleva 2+ componentes. Por defecto se
-           mueve TODO; "solo verdura/huevos" recarga con los destinos de ese componente
-           (caso SANTOS). Cada enlace es una navegación GET que recalcula candidatos. #}
-        {% if selected.items|length >= 2 %}
+        {# Selector de alcance: solo si HAY 2+ alcances con destinos. Para un socio con
+           algo cada semana (SANTOS), "Todo" no tiene destino (movería el huevo a un día
+           que ya lo tiene) y no aparece — solo "solo verdura". Cada enlace es una
+           navegación GET que recalcula candidatos. #}
+        {% if move_scopes|length >= 2 %}
             <div class="rcal-move-scope">
                 <span class="rcal-move-scope__lbl">Mover:</span>
-                <a href="{{ path('partner_delivery_calendar', { id: partner.id, year: current.format('Y'), month: current.format('n'), sel: bid, move_component: 0 }) }}"
-                   class="rcal-scope-btn{{ move_component == 0 ? ' on' }}">todo</a>
-                {% for it in selected.items|sort((a, b) => a.component.id - b.component.id) %}
-                    <a href="{{ path('partner_delivery_calendar', { id: partner.id, year: current.format('Y'), month: current.format('n'), sel: bid, move_component: it.component.id }) }}"
-                       class="rcal-scope-btn{{ move_component == it.component.id ? ' on' }}">solo {{ it.component.id == EGG ? 'huevos' : 'verdura' }}</a>
+                {% for sc in move_scopes %}
+                    <a href="{{ path('partner_delivery_calendar', { id: partner.id, year: current.format('Y'), month: current.format('n'), sel: bid, move_component: sc }) }}"
+                       class="rcal-scope-btn{{ move_component == sc ? ' on' }}">{{ sc == 0 ? 'todo' : (sc == EGG ? 'solo huevos' : 'solo verdura') }}</a>
                 {% endfor %}
             </div>
         {% endif %}
@@ -310,13 +309,10 @@
                     {% endif %}
                 </div>
 
-                {# Solo-lectura: compartidas (R1) y entregas pasadas. #}
+                {# Solo-lectura: compartidas (R1) y entregas pasadas. En semanas SIN
+                   generar el contenido SÍ se edita: las acciones (no recoger / quitar
+                   componente) se guardan como intents durables, no materializan nada. #}
                 {% set readonly = partner.sharePartner is not null or not selected_editable %}
-                {# Contenido bloqueado: semana editable pero cuyo listado aún no está
-                   generado. Se puede MOVER (solo guarda el shift), pero no editar
-                   componentes ni "no recoger" (materializaría un WB suelto que
-                   corrompería la generación posterior del listado). #}
-                {% set content_locked = not readonly and not (selected.listed ?? true) %}
 
                 {% if shift_role == 'origin' %}
                     {# Día vacío: su cesta se movió a otra fecha. Informativo — para
@@ -349,21 +345,19 @@
                             <div class="rcal-sect">Cesta movida a este día</div>
                             <p class="csa-muted" style="margin-bottom: var(--csa-sp-3);">Viene movida del {{ shift.fromBasket.date|format_date('long', locale='es') }}.</p>
                         {% endif %}
-                        {% if content_locked %}
-                            <div class="rcal-empty-note" style="background: var(--csa-sky-soft); color: var(--csa-sky);"><i class="fa fa-info-circle"></i> Esta semana aún no está en el listado de reparto: su contenido no se puede editar hasta generarlo. Mover la cesta de día sí está disponible.</div>
-                        {% elseif is_empty and not readonly %}
+                        {% if is_empty and not readonly %}
                             <div class="rcal-empty-note"><i class="fa fa-ban"></i> Ahora mismo no recoge nada esta semana. Activa algún componente o déjalo así.</div>
                         {% endif %}
                         <div class="rcal-sect">Qué se lleva ese día</div>
 
-                        {{ _self.components(partner, bid, selected, present_ids, EGG, readonly or content_locked) }}
+                        {{ _self.components(partner, bid, selected, present_ids, EGG, readonly) }}
 
                         {% if can_move %}
-                            {{ _self.move_block(partner, bid, move_candidates, selected, move_component, current) }}
+                            {{ _self.move_block(partner, bid, move_candidates, move_scopes, move_component, current) }}
                         {% endif %}
                     </div>
 
-                    {% if not readonly and not content_locked %}
+                    {% if not readonly %}
                         <div class="rcal-panel__ft">
                             <form id="rcal-skip-form-{{ bid }}" action="{{ path('partner_delivery_calendar_skip', { id: partner.id, basketId: bid }) }}" method="post" style="margin: 0;">
                                 <input type="hidden" name="_csrf_token" value="{{ csrf_token('calendar_skip_' ~ partner.id) }}">
@@ -382,7 +376,7 @@
                                 external_form_id: 'rcal-skip-form-' ~ bid,
                             }) }}
                         </div>
-                    {% elseif not partner.sharePartner and not content_locked %}
+                    {% elseif not partner.sharePartner %}
                         <div class="rcal-panel__ft">
                             <div class="rcal-hint" style="text-align: center;"><i class="fa fa-lock"></i> Se recoge hoy o ya pasó · solo lectura</div>
                         </div>

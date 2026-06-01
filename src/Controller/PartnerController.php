@@ -343,7 +343,10 @@ class PartnerController extends AbstractController
             if ($incoming !== null && !$selected['skipped']) {
                 $shift = $incoming;
                 $shiftRole = 'destination'; // este día recibe una cesta movida desde otro
-            } elseif ($outgoing !== null) {
+            } elseif ($outgoing !== null && $outgoing->getToBasket() !== null) {
+                // Solo es ORIGEN si la cesta se MOVIÓ a otra fecha (hay destino). Un
+                // intent de "no recoge" (sin destino) NO es origin: cae al bloque normal
+                // de saltada (skipped), evitando además leer shift.toBasket (null).
                 $shift = $outgoing;
                 $shiftRole = 'origin';      // este día se vació porque su cesta se movió a otro
             } elseif ($incoming !== null) {
@@ -368,15 +371,19 @@ class PartnerController extends AbstractController
         // cambio (ahí no hay cesta que mover) ni en compartidas (R1).
         // No se ofrece mover una cesta que no lleva nada (saltada o con todos los
         // componentes quitados): mover una entrega vacía no tiene sentido.
-        // Componente a mover: 0 = toda la entrega (por defecto); si no, verdura u
-        // huevos (mover SOLO ese componente, caso SANTOS). Cambia qué cuenta como
-        // "ocupado" al calcular los destinos viables.
+        // Alcance del movimiento: 0 = toda la entrega; si no, verdura u huevos (mover
+        // SOLO ese componente). Se evalúan TODOS los alcances posibles y se muestran
+        // solo los que tienen destinos: "Todo" (entrega entera) nunca tiene destino para
+        // un socio con algo cada semana (SANTOS) — movería el huevo a un día que ya lo
+        // tiene — así que ahí solo aparece "solo verdura". El pedido (?move_component) se
+        // respeta si tiene destinos; si no, cae al primero que los tenga.
         $moveComponentId = (int) $request->query->get('move_component', 0);
         if (!in_array($moveComponentId, [BasketComponent::ID_VEGETABLES, BasketComponent::ID_EGGS], true)) {
             $moveComponentId = 0;
         }
 
         $moveCandidates = [];
+        $moveScopes = [];
         $canMove = $selectedEditable
             && $partner->getSharePartner() === null
             && ($shift === null || $shiftRole === 'destination')
@@ -398,34 +405,29 @@ class PartnerController extends AbstractController
 
                 $monthSlots = $projector->projectMonth($partner, (int) $monthStart->format('Y'), (int) $monthStart->format('n'));
 
-                if ($moveComponentId !== 0) {
-                    // Mover SOLO un componente: "ocupado" = semanas donde el socio ya
-                    // lleva ESE componente (puede llevar otros). Así la verdura puede ir
-                    // a una semana que ya tiene huevo (SANTOS), pero no a una que ya
-                    // tiene verdura.
-                    $occupied = [];
-                    foreach ($monthSlots as $s) {
-                        foreach ($s['items'] as $line) {
-                            if ($line['component']->getId() === $moveComponentId) {
-                                $occupied[] = $s['basket']->getId();
-                                break;
-                            }
-                        }
-                    }
-                } else {
-                    // Mover toda la entrega: cualquier día con entrega del socio bloquea
-                    // (un hueco por día). Excepción: el día ORIGINAL de la propia cesta
-                    // seleccionada (volver = quitar el cambio).
-                    $occupied = array_map(static fn (array $s): int => $s['basket']->getId(), $monthSlots);
-                    if ($shiftRole === 'destination') {
-                        $ownOriginId = $shift->getFromBasket()->getId();
-                        $occupied = array_values(array_filter($occupied, static fn (int $id): bool => $id !== $ownOriginId));
-                    }
+                // Alcances a evaluar: "Todo" solo si la entrega lleva 2+ componentes
+                // presentes (con uno solo, "Todo" == mover ese componente); más un alcance
+                // por cada componente presente.
+                $scopes = count($selected['items']) >= 2 ? [0] : [];
+                foreach ($selected['items'] as $line) {
+                    $scopes[] = $line['component']->getId();
                 }
 
-                $moveCandidates = $this->calendarMoveCandidates(
-                    $share, $selected['basket'], $occupied, $monthBaskets, $generator, $today,
-                );
+                $candidatesByScope = [];
+                foreach ($scopes as $scope) {
+                    $occupied = $this->moveOccupiedForScope($scope, $monthSlots, $shiftRole === 'destination' ? $shift?->getFromBasket()?->getId() : null);
+                    $candidatesByScope[$scope] = $this->calendarMoveCandidates(
+                        $share, $selected['basket'], $occupied, $monthBaskets, $generator, $today,
+                    );
+                }
+
+                $moveScopes = array_values(array_filter($scopes, static fn (int $sc): bool => $candidatesByScope[$sc] !== []));
+
+                // Alcance efectivo: el pedido si tiene destinos; si no, el primero que sí.
+                if (($candidatesByScope[$moveComponentId] ?? []) === []) {
+                    $moveComponentId = $moveScopes[0] ?? $moveComponentId;
+                }
+                $moveCandidates = $candidatesByScope[$moveComponentId] ?? [];
             }
         }
 
@@ -444,6 +446,7 @@ class PartnerController extends AbstractController
             'selected_editable' => $selectedEditable,
             'move_candidates' => $moveCandidates,
             'move_component' => $moveComponentId,
+            'move_scopes' => $moveScopes,
             'can_move' => $canMove,
             'shift' => $shift,
             'shift_role' => $shiftRole,
@@ -565,6 +568,8 @@ class PartnerController extends AbstractController
             $component = $em->getRepository(BasketComponent::class)->find($componentId);
             $label = $componentId === BasketComponent::ID_EGGS ? 'huevos' : 'verdura';
 
+            // Único choque real: que el socio ya recoja ESE componente ese día (duplicado).
+            // Un día "no recoge"/vacío es destino válido — mover el componente ahí lo revive.
             $alreadyHas = false;
             foreach ($projector->projectMonth($partner, (int) $to->getDate()->format('Y'), (int) $to->getDate()->format('n')) as $s) {
                 if ($s['basket']->getId() !== $to->getId()) {
@@ -607,13 +612,11 @@ class PartnerController extends AbstractController
             ]);
         }
 
-        // Sin choque: el destino no puede tener ya una entrega del socio. Se usa el
-        // MISMO criterio que los candidatos (la proyección de mes, shift-aware): si hay
-        // CUALQUIER entrega del socio en el destino (activa, prevista por patrón o un
-        // día vaciado por OTRA cesta) se bloquea — un hueco por día. La única excepción
-        // es el día ORIGINAL de la propia cesta que se mueve (volver ahí = quitar el
-        // cambio). Mirar solo WBs materializadas no bastaba: una entrega prevista sin
-        // materializar (p. ej. la cesta natural de un biquincenal) se pisaría.
+        // Sin choque: el destino no puede tener ya una entrega REAL del socio (ítems no
+        // vacíos) — un hueco por día. Un día vacío / "no recoge" SÍ vale (mover la cesta
+        // ahí lo revive). Excepción: el día ORIGINAL de la propia cesta (volver = quitar
+        // el cambio). Se usa la proyección de mes (shift-aware) para ver también entregas
+        // previstas sin materializar.
         $shiftRepo = $em->getRepository(\App\Entity\PartnerDeliveryShift::class);
         $patternOrigin = $shiftRepo->findIncoming($partner, $from)?->getFromBasket() ?? $from;
         $toDate = $to->getDate();
@@ -621,7 +624,7 @@ class PartnerController extends AbstractController
             if ($s['basket']->getId() !== $to->getId()) {
                 continue;
             }
-            if ($to->getId() !== $patternOrigin->getId()) {
+            if ($to->getId() !== $patternOrigin->getId() && !empty($s['items'])) {
                 $this->addFlash('error', 'El socio ya tiene una entrega ese día.');
 
                 return $backToCalendar();
@@ -704,20 +707,40 @@ class PartnerController extends AbstractController
             return $backToCalendar();
         }
 
-        $weeklyBasket = $this->resolveCalendarDelivery($partner, $basket, $generator, $shiftRepository, $applier, $em);
-        if ($weeklyBasket === null) {
+        $actor = 'gestor:' . $this->getUser()?->getId();
+
+        // Semana GENERADA: se alterna el estado del WeeklyBasket (camino directo).
+        if ($em->getRepository(WeeklyBasket::class)->findOneBy(['basket' => $basket]) !== null) {
+            $weeklyBasket = $this->resolveCalendarDelivery($partner, $basket, $generator, $shiftRepository, $applier, $em);
+            if ($weeklyBasket === null) {
+                return $backToCalendar();
+            }
+            $skipped = $skipper->toggle($weeklyBasket, $actor);
+            $em->flush();
+            match ($skipped) {
+                true => $this->addFlash('success', 'Marcada como NO recogida esa semana.'),
+                false => $this->addFlash('success', 'Restaurada: el socio vuelve a recoger esa semana.'),
+                default => $this->addFlash('warning', 'La entrega está en un estado especial y no se puede alternar.'),
+            };
+
             return $backToCalendar();
         }
 
-        $skipped = $skipper->toggle($weeklyBasket, 'gestor:' . $this->getUser()?->getId());
-        $em->flush();
-
-        if ($skipped === true) {
-            $this->addFlash('success', 'Marcada como NO recogida esa semana.');
-        } elseif ($skipped === false) {
+        // Semana SIN GENERAR: el "no recoge" se guarda como intent durable (no se
+        // materializa nada — eso corrompería la generación). El generador y el proyector
+        // ya lo leen. Alterna: si ya hay un skip, lo cancela (volver a recoger).
+        if ($this->ungeneratedEditGuard($partner, $basket, $em) === null) {
+            return $backToCalendar();
+        }
+        $outgoing = $shiftRepository->findOutgoing($partner, $basket);
+        if ($outgoing !== null && $outgoing->isSkip()) {
+            $applier->cancelSkipIntent($outgoing, $actor);
             $this->addFlash('success', 'Restaurada: el socio vuelve a recoger esa semana.');
+        } elseif ($outgoing !== null) {
+            $this->addFlash('warning', 'Hay un cambio de día activo esa semana: gestiónalo desde "mover".');
         } else {
-            $this->addFlash('warning', 'La entrega está en un estado especial y no se puede alternar.');
+            $applier->applySkipIntent($partner, $basket, null, $actor);
+            $this->addFlash('success', 'Marcada como NO recogida esa semana.');
         }
 
         return $backToCalendar();
@@ -749,6 +772,7 @@ class PartnerController extends AbstractController
         WeeklyBasketComponentEditor $componentEditor,
         PartnerDeliveryShiftRepository $shiftRepository,
         DeliveryShiftApplier $applier,
+        DeliveryCalendarProjector $projector,
         EntityManagerInterface $em,
     ): Response {
         if (!in_array($componentId, [BasketComponent::ID_VEGETABLES, BasketComponent::ID_EGGS], true)) {
@@ -773,20 +797,71 @@ class PartnerController extends AbstractController
             return $backToCalendar();
         }
 
-        $weeklyBasket = $this->resolveCalendarDelivery($partner, $basket, $generator, $shiftRepository, $applier, $em);
-        if ($weeklyBasket === null) {
+        $actor = 'gestor:' . $this->getUser()?->getId();
+        $label = $componentId === BasketComponent::ID_EGGS ? 'Huevos' : 'Verdura';
+
+        // Semana GENERADA: se alterna la línea de componente del WeeklyBasket (directo).
+        if ($em->getRepository(WeeklyBasket::class)->findOneBy(['basket' => $basket]) !== null) {
+            $weeklyBasket = $this->resolveCalendarDelivery($partner, $basket, $generator, $shiftRepository, $applier, $em);
+            if ($weeklyBasket === null) {
+                return $backToCalendar();
+            }
+            $result = $componentEditor->toggle($weeklyBasket, $componentId);
+            $em->flush();
+            match ($result) {
+                'added' => $this->addFlash('success', $label . ' añadido a esa entrega.'),
+                'removed' => $this->addFlash('success', $label . ' quitado de esa entrega.'),
+                default => $this->addFlash('warning', 'Esa entrega no contempla ' . strtolower($label) . ' según la cesta del socio.'),
+            };
+
             return $backToCalendar();
         }
 
-        $result = $componentEditor->toggle($weeklyBasket, $componentId);
-        $em->flush();
+        // Semana SIN GENERAR: quitar/añadir el componente se guarda como intent durable
+        // (sin destino), no se materializa. Alterna: si ya hay un "quitar" de ese
+        // componente, se cancela (vuelve); si no, se crea — pero solo si el patrón da ese
+        // componente esa semana (no se "quita" algo que no tocaba).
+        if ($this->ungeneratedEditGuard($partner, $basket, $em) === null) {
+            return $backToCalendar();
+        }
 
-        $label = $componentId === BasketComponent::ID_EGGS ? 'Huevos' : 'Verdura';
-        match ($result) {
-            'added' => $this->addFlash('success', $label . ' añadido a esa entrega.'),
-            'removed' => $this->addFlash('success', $label . ' quitado de esa entrega.'),
-            default => $this->addFlash('warning', 'Esa entrega no contempla ' . strtolower($label) . ' según la cesta del socio.'),
-        };
+        $existingDrop = null;
+        foreach ($shiftRepository->findComponentIntentsFromBasket($partner, $basket) as $intent) {
+            if ($intent->isSkip() && $intent->getComponent()?->getId() === $componentId) {
+                $existingDrop = $intent;
+                break;
+            }
+        }
+        if ($existingDrop !== null) {
+            $applier->cancelSkipIntent($existingDrop, $actor);
+            $this->addFlash('success', $label . ' añadido a esa entrega.');
+
+            return $backToCalendar();
+        }
+
+        // ¿El patrón da ese componente esta semana? (slot proyectado, ya con huevo-extra
+        // e intents reflejados). Si no lo da, no hay nada que quitar.
+        $delivers = false;
+        foreach ($projector->projectMonth($partner, (int) $basket->getDate()->format('Y'), (int) $basket->getDate()->format('n')) as $s) {
+            if ($s['basket']->getId() !== $basket->getId()) {
+                continue;
+            }
+            foreach ($s['items'] as $line) {
+                if ($line['component']->getId() === $componentId) {
+                    $delivers = true;
+                    break;
+                }
+            }
+            break;
+        }
+        if (!$delivers) {
+            $this->addFlash('warning', 'Esa entrega no contempla ' . strtolower($label) . ' según la cesta del socio.');
+
+            return $backToCalendar();
+        }
+
+        $applier->applySkipIntent($partner, $basket, $em->getRepository(BasketComponent::class)->find($componentId), $actor);
+        $this->addFlash('success', $label . ' quitado de esa entrega.');
 
         return $backToCalendar();
     }
@@ -831,19 +906,12 @@ class PartnerController extends AbstractController
             return null;
         }
 
-        // Cambio puntual activo esa semana: dejaría el shift desincronizado.
+        // Cambio puntual de ENTREGA ENTERA (mover) activo esa semana: dejaría el shift
+        // desincronizado. (El gate de "semana sin generar" se retiró: ahora editar
+        // contenido en semanas sin generar pasa por intents — ver los endpoints de
+        // saltar / componente, que ramifican generado/sin-generar antes de llamar aquí.)
         if ($shiftRepository->findOutgoing($partner, $basket) !== null) {
             $this->addFlash('warning', 'Hay un cambio puntual de día activo esa semana: gestiónalo desde los cambios puntuales.');
-
-            return null;
-        }
-
-        // El listado de esa semana aún no está generado (ningún socio tiene entrega):
-        // materializar una entrega suelta aquí dispararía la rama reuseExistingWeeklyBaskets
-        // del generador y dejaría fuera al resto de socios cuando se genere. Editar
-        // contenido se bloquea hasta generar; mover sí es seguro (solo guarda el shift).
-        if ($em->getRepository(WeeklyBasket::class)->findOneBy(['basket' => $basket]) === null) {
-            $this->addFlash('warning', 'Esa semana aún no está en el listado de reparto: genera el listado para poder editar su contenido. Mover la cesta de día sí está disponible.');
 
             return null;
         }
@@ -872,6 +940,36 @@ class PartnerController extends AbstractController
         }
 
         return $weeklyBasket;
+    }
+
+    /**
+     * Guardas comunes para EDITAR contenido en una semana SIN GENERAR (vía intent, no
+     * materializa): no pasada, no compartida (R1) y socio con cesta activa. Devuelve el
+     * share, o null + flash si alguna guarda lo impide. No mira el listado (ese branch
+     * lo decide el endpoint) ni los shifts salientes (el skip los gestiona él mismo).
+     *
+     * @return PartnerBasketShare|null
+     */
+    private function ungeneratedEditGuard(Partner $partner, Basket $basket, EntityManagerInterface $em): ?PartnerBasketShare
+    {
+        if ($basket->getDate() < new \DateTimeImmutable('today')) {
+            $this->addFlash('warning', 'Esa entrega ya pasó: no se puede editar.');
+
+            return null;
+        }
+        if ($partner->getSharePartner() !== null) {
+            $this->addFlash('warning', 'Esta cesta es compartida: su día lo marca la alternancia con el otro hogar, no se edita aquí.');
+
+            return null;
+        }
+        $share = $em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner, $basket->getDate());
+        if ($share === null) {
+            $this->addFlash('warning', 'El socio no tiene cesta activa esa semana.');
+
+            return null;
+        }
+
+        return $share;
     }
 
     /**
@@ -943,6 +1041,44 @@ class PartnerController extends AbstractController
         }
 
         return $slots[0];
+    }
+
+    /**
+     * Días "ocupados" (no ofrecibles como destino) según el alcance del movimiento.
+     * Modelo (Paco): un día "no recoge"/vacío deja de ser día de recogida y es destino
+     * VÁLIDO — mover algo ahí lo revive. Así que solo bloquea conflictos reales:
+     *  - "Todo" (scope 0): días con entrega REAL (ítems no vacíos) — un hueco por día;
+     *    los vacíos/"no recoge" quedan libres. Excepción: el día original propio.
+     *  - Un componente: días donde el socio YA recoge ESE componente (duplicado). Un
+     *    día con OTRO componente, o vacío/"no recoge", es destino válido.
+     *
+     * @param int                                                        $scope        0 = entrega entera; si no, id de componente.
+     * @param list<array{basket: Basket, items: array}>                  $monthSlots
+     * @param int|null                                                   $ownOriginId  Día original a NO bloquear (solo en "Todo" desde un destino).
+     * @return int[]
+     */
+    private function moveOccupiedForScope(int $scope, array $monthSlots, ?int $ownOriginId): array
+    {
+        $occupied = [];
+        foreach ($monthSlots as $s) {
+            if ($scope === 0) {
+                // Entrega entera: bloquea solo si ese día tiene una entrega real (algo que
+                // recoger). Vacío / "no recoge" → libre.
+                if (!empty($s['items']) && $s['basket']->getId() !== $ownOriginId) {
+                    $occupied[] = $s['basket']->getId();
+                }
+                continue;
+            }
+            // Un componente: bloquea solo si ya lleva ESE componente (duplicado).
+            foreach ($s['items'] as $line) {
+                if ($line['component']->getId() === $scope) {
+                    $occupied[] = $s['basket']->getId();
+                    break;
+                }
+            }
+        }
+
+        return $occupied;
     }
 
     /**

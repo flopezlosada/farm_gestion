@@ -139,9 +139,9 @@ final class DeliveryCalendarProjector
                 continue;
             }
 
-            // Cesta VACIADA de aquí (cambio saliente): su cesta está en otra fecha.
-            // Día sin entrega → se pinta como "no recoge" (rojo) y sigue siendo
-            // seleccionable para ver a dónde se movió.
+            // Intent saliente de ENTREGA ENTERA: o se MOVIÓ a otra fecha (to != null,
+            // se pinta azul "movida") o es un "no recoge" sin destino (to == null, rojo).
+            // En ambos el día queda sin entrega; sigue seleccionable.
             $outgoing = $shiftRepo->findOutgoing($partner, $basket);
             if ($outgoing !== null) {
                 $patternShare = $this->candidateShareFor($partner, $basket);
@@ -155,7 +155,7 @@ final class DeliveryCalendarProjector
                     'weeklyBasket' => (new WeeklyBasket())->setBasket($basket)->setPartner($partner),
                     'items' => [],
                     'skipped' => true,
-                    'moved_away' => true,
+                    'moved_away' => $outgoing->getToBasket() !== null,
                     'listed' => $listed,
                     'available' => [],
                 ];
@@ -231,7 +231,11 @@ final class DeliveryCalendarProjector
             }
             $idx = $idxByBasket[$basket->getId()] ?? null;
 
-            // ORIGEN: quitar el componente de la entrega de esa semana.
+            // ORIGEN: quitar el componente de la entrega de esa semana. Sale de los
+            // ítems siempre; de 'available' (el universo de interruptores) SOLO si se
+            // MOVIÓ a otra fecha. En un "quitar" (drop, sin destino) se mantiene en
+            // 'available' para que el interruptor siga visible (apagado) y se pueda
+            // volver a activar — si no, desaparecería y no habría forma de re-añadirlo.
             foreach ($out as $intent) {
                 if ($idx === null) {
                     continue;
@@ -241,10 +245,12 @@ final class DeliveryCalendarProjector
                     $slots[$idx]['items'],
                     static fn (array $line): bool => $line['component']->getId() !== $cid,
                 ));
-                $slots[$idx]['available'] = array_values(array_filter(
-                    $slots[$idx]['available'],
-                    static fn (BasketComponent $c): bool => $c->getId() !== $cid,
-                ));
+                if (!$intent->isSkip()) {
+                    $slots[$idx]['available'] = array_values(array_filter(
+                        $slots[$idx]['available'],
+                        static fn (BasketComponent $c): bool => $c->getId() !== $cid,
+                    ));
+                }
             }
 
             // DESTINO: añadir el componente (creando slot si no había entrega esa semana).
@@ -279,6 +285,11 @@ final class DeliveryCalendarProjector
                     $idxByBasket[$basket->getId()] = $idx;
                     continue;
                 }
+
+                // Mover un componente a un día "no recoge"/vaciado lo REVIVE para ese
+                // componente: deja de estar saltado/movido y pasa a entregar lo que llega.
+                $slots[$idx]['skipped'] = false;
+                $slots[$idx]['moved_away'] = false;
 
                 $alreadyHas = false;
                 foreach ($slots[$idx]['items'] as $line) {

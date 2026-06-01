@@ -247,6 +247,48 @@ final class DeliveryShiftApplier
 
         $this->em->remove($shift);
         $this->recordEvent($partner, $from, $to ?? $from, $actor, cancelled: true);
+        // Flush AQUÍ: si moveComponent reapunta el mismo componente (cancela el viejo y
+        // crea uno nuevo desde el mismo origen), el DELETE debe persistir ANTES del
+        // INSERT — si no, ambos comparten (socio, origen, componente) en el mismo flush
+        // y violan uniq_partner_from_basket. Igual que hace cancel() en el mover-entera.
+        $this->em->flush();
+    }
+
+    /**
+     * Crea un intent SIN destino: "no recoge" (component null) o "quitar un
+     * componente" (component != null) una semana. Pensado para semanas aún SIN
+     * generar: el generador y el proyector lo leen y lo aplican al materializar; aquí
+     * no hay WeeklyBasket que tocar. En semanas YA generadas la pantalla usa el camino
+     * directo (estado del WB / WeeklyBasketItem), no este intent.
+     *
+     * @param Partner              $partner
+     * @param Basket               $basket    Semana sobre la que actuar.
+     * @param BasketComponent|null $component null = toda la entrega (no recoge); si no, el componente a quitar.
+     * @param string|null          $actor
+     * @return PartnerDeliveryShift
+     */
+    public function applySkipIntent(Partner $partner, Basket $basket, ?BasketComponent $component, ?string $actor = null): PartnerDeliveryShift
+    {
+        $shift = new PartnerDeliveryShift($partner, $basket, null, $component);
+        $this->em->persist($shift);
+        $this->recordEvent($partner, $basket, $basket, $actor, cancelled: false);
+        $this->em->flush();
+
+        return $shift;
+    }
+
+    /**
+     * Cancela un intent sin destino (skip / quitar componente): el componente —o toda
+     * la entrega— vuelve a su patrón. Solo borra la fila (no hay WeeklyBasket asociado
+     * en semanas sin generar). Contraparte de applySkipIntent.
+     */
+    public function cancelSkipIntent(PartnerDeliveryShift $shift, ?string $actor = null): void
+    {
+        $from = $shift->getFromBasket();
+        $partner = $shift->getPartner();
+        $this->em->remove($shift);
+        $this->recordEvent($partner, $from, $from, $actor, cancelled: true);
+        $this->em->flush();
     }
 
     /**
