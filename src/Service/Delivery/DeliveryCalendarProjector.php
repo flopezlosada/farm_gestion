@@ -57,7 +57,7 @@ final class DeliveryCalendarProjector
      * @param Partner $partner Socio cuyo calendario se proyecta.
      * @param int     $year    Año (p. ej. 2026).
      * @param int     $month   Mes 1-12.
-     * @return list<array{date: \DateTimeInterface, basket: Basket, source: 'materialized'|'projected', weeklyBasket: WeeklyBasket, items: array<int, array{component: BasketComponent, amount: string}>, skipped: bool, available: list<BasketComponent>}>
+     * @return list<array{date: \DateTimeInterface, basket: Basket, source: 'materialized'|'projected', weeklyBasket: WeeklyBasket, items: array<int, array{component: BasketComponent, amount: string}>, skipped: bool, moved_away: bool, listed: bool, available: list<BasketComponent>}>
      */
     public function projectMonth(Partner $partner, int $year, int $month): array
     {
@@ -78,6 +78,11 @@ final class DeliveryCalendarProjector
 
         $slots = [];
         foreach ($baskets as $basket) {
+            // ¿El listado de esta semana ya está generado (hay WB de algún socio)?
+            // La pantalla NO deja editar contenido en semanas sin generar: materializar
+            // un WB suelto dispararía la rama reuseExistingWeeklyBaskets del generador y
+            // dejaría fuera al resto de socios. Mover sí es seguro (solo guarda el shift).
+            $listed = $wbRepo->findOneBy(['basket' => $basket->getId()]) !== null;
             $materialized = $wbRepo->findOneBy(['basket' => $basket->getId(), 'partner' => $partner->getId()]);
             if ($materialized !== null) {
                 $skipped = $materialized->getWeeklyBasketStatus()?->getId() === WeeklyBasketSkipper::STATUS_SKIPPED;
@@ -91,6 +96,7 @@ final class DeliveryCalendarProjector
                     // Vaciado por un movimiento (no "no recoge" de verdad): la pantalla
                     // lo pinta distinto. Es saltado Y tiene un cambio saliendo de aquí.
                     'moved_away' => $skipped && $shiftRepo->findOutgoing($partner, $basket) !== null,
+                    'listed' => $listed,
                     'available' => $this->availableComponents($materialized, $basket),
                 ];
                 continue;
@@ -125,6 +131,7 @@ final class DeliveryCalendarProjector
                         'items' => $items,
                         'skipped' => false,
                         'moved_away' => false,
+                        'listed' => $listed,
                         'available' => array_map(static fn (array $line): BasketComponent => $line['component'], $items),
                     ];
                 }
@@ -148,6 +155,7 @@ final class DeliveryCalendarProjector
                     'items' => [],
                     'skipped' => true,
                     'moved_away' => true,
+                    'listed' => $listed,
                     'available' => [],
                 ];
                 continue;
@@ -173,6 +181,7 @@ final class DeliveryCalendarProjector
                 // coincide con lo disponible (nada se ha quitado todavía).
                 'skipped' => false,
                 'moved_away' => false,
+                'listed' => $listed,
                 'available' => array_map(static fn (array $line): BasketComponent => $line['component'], $projection['items']),
             ];
         }

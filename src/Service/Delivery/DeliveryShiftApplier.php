@@ -244,6 +244,45 @@ final class DeliveryShiftApplier
     }
 
     /**
+     * Materializa (idempotente) la entrega DESTINO de un cambio puntual aún solo
+     * proyectado, llevándose la composición REAL del origen: lo quitado a mano y, sobre
+     * todo, los huevos que viajan con la cesta movida. Es la contraparte de
+     * {@see WeeklyBasketGenerator::materializeShareDelivery()} para un destino de shift,
+     * que NO debe componerse desde el patrón de su propia semana (la perdería los huevos
+     * si esa semana no es de huevo) sino desde el origen. La usa la edición del
+     * calendario antes de saltar o tocar componentes en un día que recibe una cesta movida.
+     *
+     * @param PartnerDeliveryShift $shift Cambio cuyo destino se materializa.
+     * @return WeeklyBasket Entrega destino ya persistida y compuesta.
+     */
+    public function materializeShiftDestination(PartnerDeliveryShift $shift): WeeklyBasket
+    {
+        /** @var WeeklyBasketRepository $wbRepo */
+        $wbRepo = $this->em->getRepository(WeeklyBasket::class);
+
+        $partner = $shift->getPartner();
+        $from = $shift->getFromBasket();
+        $to = $shift->getToBasket();
+
+        $existing = $wbRepo->findOneBy(['basket' => $to, 'partner' => $partner]);
+        if ($existing !== null) {
+            return $existing;
+        }
+
+        // Composición que viaja: la real del origen si está materializado (conserva lo
+        // quitado a mano); si solo estaba previsto, stampDestination la deriva del patrón
+        // con los huevos del origen como referencia.
+        $fromWb = $wbRepo->findOneBy(['basket' => $from, 'partner' => $partner]);
+        $carryItems = $fromWb !== null ? $this->composer->copyLines($fromWb) : null;
+
+        $destWb = $this->createWeeklyBasketForShiftDestination($partner, $to);
+        $this->stampDestination($destWb, $partner, $to, $from, $carryItems);
+        $this->em->flush();
+
+        return $destWb;
+    }
+
+    /**
      * Crea la WeeklyBasket en el Basket destino del shift, configurada con
      * el share activo del socio. Llamada tanto por la cascada del applier
      * (cuando el listado ya estaba generado) como por el WeeklyBasketGenerator

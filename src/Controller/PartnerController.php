@@ -296,6 +296,24 @@ class PartnerController extends AbstractController
         $current = new \DateTimeImmutable(sprintf('%04d-%02d-01', $year, $month));
         $slots = $projector->projectMonth($partner, $year, $month);
 
+        // Para PINTAR la rejilla (no para la lógica) hace falta también las entregas
+        // de los meses lógicos vecinos cuya fecha FÍSICA cae en el mes visible: una
+        // cesta de ciclo 1-oct con recogida física el 30-sep debe verse en septiembre.
+        // Cada Basket vive en un único mes lógico, así que las tres proyecciones cubren
+        // Baskets disjuntos (sin duplicados); buildMonthWeeks descarta los slots cuya
+        // fecha física no cae en ninguna celda visible. La selección del panel y los
+        // candidatos de mover siguen usando $slots (solo el mes actual).
+        // El mes actual va el ÚLTIMO en la fusión: si por un dato sucio dos entregas
+        // cayeran en la misma fecha física, en la rejilla (byDay, último gana) manda
+        // la del mes que se está mirando, no la colada de un vecino.
+        $prevMonth = $current->modify('-1 month');
+        $nextMonth = $current->modify('+1 month');
+        $gridSlots = array_merge(
+            $projector->projectMonth($partner, (int) $prevMonth->format('Y'), (int) $prevMonth->format('n')),
+            $projector->projectMonth($partner, (int) $nextMonth->format('Y'), (int) $nextMonth->format('n')),
+            $slots,
+        );
+
         // Día seleccionado para el panel lateral: el Basket pedido por query (?sel),
         // o por defecto la primera entrega del mes. Solo entregas reales son
         // seleccionables (las celdas vacías no abren panel).
@@ -348,10 +366,13 @@ class PartnerController extends AbstractController
         // tiene un hueco por día, así que apilar una cesta sobre el día original de
         // otra perdería una (no se permite). No se ofrece desde el día ORIGEN de un
         // cambio (ahí no hay cesta que mover) ni en compartidas (R1).
+        // No se ofrece mover una cesta que no lleva nada (saltada o con todos los
+        // componentes quitados): mover una entrega vacía no tiene sentido.
         $moveCandidates = [];
         $canMove = $selectedEditable
             && $partner->getSharePartner() === null
-            && ($shift === null || $shiftRole === 'destination');
+            && ($shift === null || $shiftRole === 'destination')
+            && !empty($selected['items']);
         if ($canMove) {
             $share = $em->getRepository(PartnerBasketShare::class)
                 ->findActiveForPartner($partner, $selected['basket']->getDate());
@@ -397,7 +418,7 @@ class PartnerController extends AbstractController
             'group' => $group,
             'pickup_place' => $pickupPlace,
             'slots' => $slots,
-            'weeks' => $this->buildMonthWeeks($year, $month, $slots),
+            'weeks' => $this->buildMonthWeeks($year, $month, $gridSlots),
             'selected' => $selected,
             'selected_editable' => $selectedEditable,
             'move_candidates' => $moveCandidates,
@@ -586,6 +607,7 @@ class PartnerController extends AbstractController
         WeeklyBasketGenerator $generator,
         WeeklyBasketSkipper $skipper,
         PartnerDeliveryShiftRepository $shiftRepository,
+        DeliveryShiftApplier $applier,
         EntityManagerInterface $em,
     ): Response {
         $basket = $em->getRepository(Basket::class)->find($basketId);
@@ -606,7 +628,7 @@ class PartnerController extends AbstractController
             return $backToCalendar();
         }
 
-        $weeklyBasket = $this->resolveCalendarDelivery($partner, $basket, $generator, $shiftRepository, $em);
+        $weeklyBasket = $this->resolveCalendarDelivery($partner, $basket, $generator, $shiftRepository, $applier, $em);
         if ($weeklyBasket === null) {
             return $backToCalendar();
         }
@@ -650,6 +672,7 @@ class PartnerController extends AbstractController
         WeeklyBasketGenerator $generator,
         WeeklyBasketComponentEditor $componentEditor,
         PartnerDeliveryShiftRepository $shiftRepository,
+        DeliveryShiftApplier $applier,
         EntityManagerInterface $em,
     ): Response {
         if (!in_array($componentId, [BasketComponent::ID_VEGETABLES, BasketComponent::ID_EGGS], true)) {
@@ -674,7 +697,7 @@ class PartnerController extends AbstractController
             return $backToCalendar();
         }
 
-        $weeklyBasket = $this->resolveCalendarDelivery($partner, $basket, $generator, $shiftRepository, $em);
+        $weeklyBasket = $this->resolveCalendarDelivery($partner, $basket, $generator, $shiftRepository, $applier, $em);
         if ($weeklyBasket === null) {
             return $backToCalendar();
         }
@@ -705,6 +728,7 @@ class PartnerController extends AbstractController
      * @param Basket                         $basket
      * @param WeeklyBasketGenerator          $generator
      * @param PartnerDeliveryShiftRepository $shiftRepository
+     * @param DeliveryShiftApplier           $applier
      * @param EntityManagerInterface         $em
      * @return WeeklyBasket|null
      */
@@ -713,6 +737,7 @@ class PartnerController extends AbstractController
         Basket $basket,
         WeeklyBasketGenerator $generator,
         PartnerDeliveryShiftRepository $shiftRepository,
+        DeliveryShiftApplier $applier,
         EntityManagerInterface $em,
     ): ?WeeklyBasket {
         // Las entregas pasadas no se editan.
@@ -737,11 +762,30 @@ class PartnerController extends AbstractController
             return null;
         }
 
+        // El listado de esa semana aún no está generado (ningún socio tiene entrega):
+        // materializar una entrega suelta aquí dispararía la rama reuseExistingWeeklyBaskets
+        // del generador y dejaría fuera al resto de socios cuando se genere. Editar
+        // contenido se bloquea hasta generar; mover sí es seguro (solo guarda el shift).
+        if ($em->getRepository(WeeklyBasket::class)->findOneBy(['basket' => $basket]) === null) {
+            $this->addFlash('warning', 'Esa semana aún no está en el listado de reparto: genera el listado para poder editar su contenido. Mover la cesta de día sí está disponible.');
+
+            return null;
+        }
+
         $share = $em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner, $basket->getDate());
         if ($share === null) {
             $this->addFlash('warning', 'El socio no tiene cesta activa esa semana.');
 
             return null;
+        }
+
+        // Destino de un cambio puntual (la cesta viene movida aquí): se materializa por
+        // el applier para que la composición —y sobre todo los huevos— viaje del origen,
+        // no se recomponga desde el patrón de esta semana (que en una semana sin huevo
+        // los perdería). materializeShareDelivery solo vale para la entrega natural.
+        $incoming = $shiftRepository->findIncoming($partner, $basket);
+        if ($incoming !== null) {
+            return $applier->materializeShiftDestination($incoming);
         }
 
         $weeklyBasket = $generator->materializeShareDelivery($basket, $share);
@@ -839,7 +883,10 @@ class PartnerController extends AbstractController
      * @param Basket[]              $monthBaskets     Baskets del mes visible, ordenados.
      * @param WeeklyBasketGenerator $generator
      * @param \DateTimeInterface    $today
-     * @return Basket[]
+     * @return list<array{id: int, date: \DateTimeInterface}> Cada candidato con la
+     *         fecha FÍSICA de recogida (no la lógica del viernes-ciclo): si el nodo
+     *         reparte otro día (Madrid) o un festivo lo trasladó, el chip muestra el
+     *         día real en que se recogería la cesta.
      */
     private function calendarMoveCandidates(
         PartnerBasketShare $share,
@@ -861,8 +908,12 @@ class PartnerController extends AbstractController
                 continue;
             }
             // El nodo reparte esa semana → es un destino físicamente posible.
-            if ($generator->projectShareDelivery($basket, $share) !== null) {
-                $candidates[] = $basket;
+            $projection = $generator->projectShareDelivery($basket, $share);
+            if ($projection !== null) {
+                $candidates[] = [
+                    'id' => $basket->getId(),
+                    'date' => $projection['deliveryDate'] ?? $basket->getDate(),
+                ];
             }
         }
 
