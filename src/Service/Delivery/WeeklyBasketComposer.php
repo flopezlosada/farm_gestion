@@ -152,6 +152,78 @@ class WeeklyBasketComposer
     }
 
     /**
+     * Cantidad que llevaría un componente concreto según el DERECHO del socio
+     * (PBS), independiente de lo que el WeeklyBasket tenga configurado: verdura =
+     * cestas físicas (amount × peso de la modalidad), huevos = docenas del
+     * egg_amount. Se calcula desde el share —no desde el WB— porque al mover un
+     * componente a una semana que ya tiene un WB de otra modalidad (p. ej. la
+     * verdura de SANTOS cayendo en un WB "solo-huevo", peso 0) el WB daría una
+     * cantidad equivocada. Devuelve null si ese componente no aplica (0 cestas o
+     * sin huevos contratados).
+     *
+     * @param PartnerBasketShare $share     Derecho del socio.
+     * @param BasketComponent    $component Verdura u huevos.
+     * @return string|null Cantidad decimal, o null si no aplica.
+     */
+    public function amountForComponent(PartnerBasketShare $share, BasketComponent $component): ?string
+    {
+        if ($component->getId() === BasketComponent::ID_VEGETABLES) {
+            $weight = $share->getBasketShare()?->getDeliveredBasketWeight() ?? 1.0;
+            $cestas = (float) $share->getAmount() * $weight;
+
+            return $cestas > 0 ? number_format($cestas, 2, '.', '') : null;
+        }
+
+        if ($component->getId() === BasketComponent::ID_EGGS) {
+            return $share->getEggAmount() !== null
+                ? number_format($share->getEggAmount()->getDozens(), 2, '.', '')
+                : null;
+        }
+
+        return null;
+    }
+
+    /**
+     * Fuerza la PRESENCIA de un componente en una entrega (intent por componente:
+     * el componente "viaja" a esta semana). Idempotente: si ya está, no duplica.
+     * A diferencia de compose(), NO mira la cadencia (el componente se mueve aquí
+     * por decisión explícita, no por patrón). La cantidad sale del derecho (share).
+     *
+     * @param WeeklyBasket       $weeklyBasket
+     * @param PartnerBasketShare $share
+     * @param BasketComponent    $component
+     */
+    public function addComponent(WeeklyBasket $weeklyBasket, PartnerBasketShare $share, BasketComponent $component): void
+    {
+        $existing = $this->em->getRepository(WeeklyBasketItem::class)
+            ->findBy(['weeklyBasket' => $weeklyBasket, 'basketComponent' => $component->getId()]);
+        if ($existing !== []) {
+            return;
+        }
+
+        $amount = $this->amountForComponent($share, $component);
+        if ($amount !== null) {
+            $this->addItem($weeklyBasket, $component, $amount);
+        }
+    }
+
+    /**
+     * Quita un componente de una entrega (intent por componente: el componente se
+     * va de esta semana). Los demás componentes siguen su propio calendario. No
+     * hace flush.
+     *
+     * @param WeeklyBasket    $weeklyBasket
+     * @param BasketComponent $component
+     */
+    public function removeComponent(WeeklyBasket $weeklyBasket, BasketComponent $component): void
+    {
+        foreach ($this->em->getRepository(WeeklyBasketItem::class)
+                     ->findBy(['weeklyBasket' => $weeklyBasket, 'basketComponent' => $component->getId()]) as $item) {
+            $this->em->remove($item);
+        }
+    }
+
+    /**
      * @param WeeklyBasket    $weeklyBasket
      * @param BasketComponent $component
      * @param string          $amount Decimal en la unidad natural del componente.

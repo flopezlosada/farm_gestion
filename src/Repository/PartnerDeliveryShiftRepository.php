@@ -19,14 +19,16 @@ class PartnerDeliveryShiftRepository extends ServiceEntityRepository
     }
 
     /**
-     * Localiza el cambio puntual que un socio tiene saliendo de un Basket
-     * concreto (si lo hay). Equivalente a la pregunta "¿se va este socio
-     * de este viernes a otro?".
+     * Localiza el cambio puntual de ENTREGA ENTERA que un socio tiene saliendo de
+     * un Basket (si lo hay). Equivalente a "¿se va este socio de este viernes a
+     * otro?". Acotado a `component IS NULL`: los intents POR COMPONENTE (mover solo
+     * la verdura) no son un cambio de la entrega completa y, además, puede haber
+     * varios desde el mismo Basket — se consultan con findComponentIntentsFromBasket.
      */
     public function findOutgoing(Partner $partner, Basket $from): ?PartnerDeliveryShift
     {
         return $this->createQueryBuilder('s')
-            ->where('s.partner = :partner AND s.fromBasket = :from')
+            ->where('s.partner = :partner AND s.fromBasket = :from AND s.component IS NULL')
             ->setParameter('partner', $partner)
             ->setParameter('from', $from)
             ->getQuery()
@@ -34,18 +36,50 @@ class PartnerDeliveryShiftRepository extends ServiceEntityRepository
     }
 
     /**
-     * Localiza el cambio puntual que un socio tiene entrando a un Basket
-     * concreto (si lo hay). Equivalente a "¿este socio recoge aquí porque
-     * ha pedido cambio desde otro viernes?".
+     * Localiza el cambio puntual de ENTREGA ENTERA que un socio tiene entrando a un
+     * Basket (si lo hay). Acotado a `component IS NULL` (ver findOutgoing).
      */
     public function findIncoming(Partner $partner, Basket $to): ?PartnerDeliveryShift
     {
         return $this->createQueryBuilder('s')
-            ->where('s.partner = :partner AND s.toBasket = :to')
+            ->where('s.partner = :partner AND s.toBasket = :to AND s.component IS NULL')
             ->setParameter('partner', $partner)
             ->setParameter('to', $to)
             ->getQuery()
             ->getOneOrNullResult();
+    }
+
+    /**
+     * Intents POR COMPONENTE (component IS NOT NULL) que SALEN de un Basket para un
+     * socio: ese componente deja de recogerse esa semana (o se mueve a otra). Puede
+     * haber varios (verdura y huevos por separado), de ahí que devuelva lista.
+     *
+     * @return PartnerDeliveryShift[]
+     */
+    public function findComponentIntentsFromBasket(Partner $partner, Basket $from): array
+    {
+        return $this->createQueryBuilder('s')
+            ->where('s.partner = :partner AND s.fromBasket = :from AND s.component IS NOT NULL')
+            ->setParameter('partner', $partner)
+            ->setParameter('from', $from)
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Intents POR COMPONENTE (component IS NOT NULL) que ENTRAN a un Basket para un
+     * socio: ese componente se añade a esa semana (viene movido de otra).
+     *
+     * @return PartnerDeliveryShift[]
+     */
+    public function findComponentIntentsToBasket(Partner $partner, Basket $to): array
+    {
+        return $this->createQueryBuilder('s')
+            ->where('s.partner = :partner AND s.toBasket = :to AND s.component IS NOT NULL')
+            ->setParameter('partner', $partner)
+            ->setParameter('to', $to)
+            ->getQuery()
+            ->getResult();
     }
 
     /**
@@ -86,8 +120,7 @@ class PartnerDeliveryShiftRepository extends ServiceEntityRepository
     public function findAffectingPartnerAtBasket(Partner $partner, Basket $basket): ?PartnerDeliveryShift
     {
         return $this->createQueryBuilder('s')
-            ->where('s.partner = :partner')
-            ->andWhere('s.fromBasket = :basket OR s.toBasket = :basket')
+            ->where('s.partner = :partner AND s.component IS NULL AND (s.fromBasket = :basket OR s.toBasket = :basket)')
             ->setParameter('partner', $partner)
             ->setParameter('basket', $basket)
             ->getQuery()

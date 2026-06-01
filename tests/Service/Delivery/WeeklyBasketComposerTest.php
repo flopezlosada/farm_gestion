@@ -155,6 +155,70 @@ class WeeklyBasketComposerTest extends TestCase
         $composer->compose($this->weeklyBasket(1, 1), new PartnerBasketShare(), $this->basket);
     }
 
+    public function testAmountForComponentVerduraUsaElPesoDeLaModalidadDelShare(): void
+    {
+        $veg = $this->component(BasketComponent::ID_VEGETABLES, 'Verdura');
+
+        // Mensual (peso 1.0) → 1 cesta; compartida (0.5) → media; solo-huevo (0) → nada.
+        $this->assertSame('1.00', $this->composer->amountForComponent($this->pbs(3), $veg));
+        $this->assertSame('0.50', $this->composer->amountForComponent($this->pbs(4), $veg));
+        $this->assertNull($this->composer->amountForComponent($this->pbs(BasketShare::ID_ONLY_EGG), $veg));
+    }
+
+    public function testAmountForComponentHuevosEnDocenas(): void
+    {
+        $eggs = $this->component(BasketComponent::ID_EGGS, 'Huevos');
+
+        $this->assertSame('1.50', $this->composer->amountForComponent($this->pbs(3, 1.5), $eggs));
+        // Sin huevos contratados → no aplica.
+        $this->assertNull($this->composer->amountForComponent($this->pbs(3), $eggs));
+    }
+
+    public function testAddComponentEstampaConCantidadDelShareNoDelWb(): void
+    {
+        // CLAVE del caso SANTOS: la verdura aterriza en un WB "solo-huevo" (peso 0),
+        // pero su cantidad sale del SHARE mensual del socio (peso 1), no del WB.
+        $veg = $this->component(BasketComponent::ID_VEGETABLES, 'Verdura');
+        $wbSoloHuevo = $this->weeklyBasket(modalidad: BasketShare::ID_ONLY_EGG, amount: 0);
+
+        $this->composer->addComponent($wbSoloHuevo, $this->pbs(3), $veg);
+
+        $this->assertComposicion(['Verdura' => '1.00']);
+    }
+
+    public function testAddComponentEsIdempotente(): void
+    {
+        $veg = $this->component(BasketComponent::ID_VEGETABLES, 'Verdura');
+        $itemRepo = $this->createMock(ObjectRepository::class);
+        $itemRepo->method('findBy')->willReturn([new WeeklyBasketItem()]); // ya hay línea
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->method('getRepository')->willReturn($itemRepo);
+        $em->expects($this->never())->method('persist');
+
+        $composer = new WeeklyBasketComposer($em, $this->eggResolver);
+        $composer->addComponent(new WeeklyBasket(), $this->pbs(3), $veg);
+    }
+
+    public function testRemoveComponentQuitaLaLinea(): void
+    {
+        $veg = $this->component(BasketComponent::ID_VEGETABLES, 'Verdura');
+        $item = new WeeklyBasketItem();
+        $itemRepo = $this->createMock(ObjectRepository::class);
+        $itemRepo->method('findBy')->willReturn([$item]);
+
+        $removed = [];
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->method('getRepository')->willReturn($itemRepo);
+        $em->method('remove')->willReturnCallback(function (object $o) use (&$removed): void {
+            $removed[] = $o;
+        });
+
+        $composer = new WeeklyBasketComposer($em, $this->eggResolver);
+        $composer->removeComponent(new WeeklyBasket(), $veg);
+
+        $this->assertSame([$item], $removed);
+    }
+
     /**
      * Comprueba que lo persistido coincide EXACTAMENTE con el mapa esperado de
      * componente => cantidad (string decimal), sin sobrar ni faltar líneas.
@@ -183,5 +247,36 @@ class WeeklyBasketComposerTest extends TestCase
         $eggAmount = $this->createMock(EggAmount::class);
         $eggAmount->method('getDozens')->willReturn($docenas);
         return (new PartnerBasketShare())->setEggAmount($eggAmount);
+    }
+
+    /**
+     * Componente con id real (BasketComponent no expone setId): se mockea para que
+     * amountForComponent/addComponent comparen contra ID_VEGETABLES / ID_EGGS.
+     */
+    private function component(int $id, string $name): BasketComponent
+    {
+        $c = $this->createMock(BasketComponent::class);
+        $c->method('getId')->willReturn($id);
+        $c->method('getName')->willReturn($name);
+        return $c;
+    }
+
+    /**
+     * PartnerBasketShare con una modalidad (para el peso de verdura) y, opcional,
+     * huevos en docenas. setBasketShare/setId devuelven void → sin encadenar.
+     */
+    private function pbs(int $modalidad, ?float $docenas = null): PartnerBasketShare
+    {
+        $bs = new BasketShare();
+        $bs->setId($modalidad);
+        $share = new PartnerBasketShare();
+        $share->setBasketShare($bs);
+        $share->setAmount(1);
+        if ($docenas !== null) {
+            $eggAmount = $this->createMock(EggAmount::class);
+            $eggAmount->method('getDozens')->willReturn($docenas);
+            $share->setEggAmount($eggAmount);
+        }
+        return $share;
     }
 }

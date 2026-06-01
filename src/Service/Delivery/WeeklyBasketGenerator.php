@@ -4,6 +4,7 @@ namespace App\Service\Delivery;
 
 use App\Custom\WeekOfMonth;
 use App\Entity\Basket;
+use App\Entity\BasketComponent;
 use App\Entity\Node;
 use App\Entity\PartnerBasketShare;
 use App\Entity\PartnerDeliveryShift;
@@ -340,13 +341,20 @@ class WeeklyBasketGenerator
         /** @var PartnerDeliveryShiftRepository $shiftRepo */
         $shiftRepo = $this->em->getRepository(PartnerDeliveryShift::class);
         $outgoing = $shiftRepo->findAllOutgoingFromBasket($basket);
-        $outgoingPartnerIds = array_map(static fn (PartnerDeliveryShift $s) => $s->getPartner()->getId(), $outgoing);
+        // Solo los intents de ENTREGA ENTERA (sin componente) sacan al socio de los
+        // candidatos de la semana — tanto mover toda la cesta como "no recoge" (to
+        // null). Un intent POR COMPONENTE (mover solo la verdura) NO excluye al socio:
+        // ajusta su composición en el pase final (applyComponentIntents).
+        $wholeOutgoingPartnerIds = array_map(
+            static fn (PartnerDeliveryShift $s) => $s->getPartner()->getId(),
+            array_filter($outgoing, static fn (PartnerDeliveryShift $s) => $s->isWholeDelivery()),
+        );
 
-        if (!empty($outgoingPartnerIds)) {
-            $excludeOutgoing = static function (array $shares) use ($outgoingPartnerIds): array {
+        if (!empty($wholeOutgoingPartnerIds)) {
+            $excludeOutgoing = static function (array $shares) use ($wholeOutgoingPartnerIds): array {
                 return array_values(array_filter(
                     $shares,
-                    static fn ($share) => !in_array($share->getPartner()->getId(), $outgoingPartnerIds, true),
+                    static fn ($share) => !in_array($share->getPartner()->getId(), $wholeOutgoingPartnerIds, true),
                 ));
             };
             $weekly = $excludeOutgoing($weekly);
@@ -381,6 +389,11 @@ class WeeklyBasketGenerator
 
         $incoming = $shiftRepo->findAllIncomingToBasket($basket);
         foreach ($incoming as $shift) {
+            // Los intents POR COMPONENTE entrantes se aplican en el pase final
+            // (añaden un componente, no materializan una entrega entera).
+            if (!$shift->isWholeDelivery()) {
+                continue;
+            }
             $partner = $shift->getPartner();
             $existing = $this->em->getRepository(WeeklyBasket::class)
                 ->findOneBy(['basket' => $basket->getId(), 'partner' => $partner->getId()]);
@@ -411,7 +424,72 @@ class WeeklyBasketGenerator
         $extraEggOnly = $this->materializeExtraEggDeliveries($basket, $status);
         $onlyEgg = array_merge($onlyEgg, $extraEggOnly);
 
+        $this->applyComponentIntents($basket, $outgoing, $incoming);
+
         return [$weekly, $half, $biweekly, $monthly, $onlyEgg];
+    }
+
+    /**
+     * Aplica los intents POR COMPONENTE que tocan esta semana, DESPUÉS de toda la
+     * materialización normal (candidatos + entrantes enteros + huevo extra) para que
+     * el WeeklyBasket ya exista cuando haya que ajustarlo. Es lo que permite a SANTOS
+     * (mensual verdura + semanal huevo) mover SOLO la verdura sin tocar el huevo:
+     *  - origen (from): quita ese componente de la entrega del socio esa semana; los
+     *    demás componentes siguen su propio calendario.
+     *  - destino (to): añade ese componente, creando la entrega si esa semana no tenía
+     *    ninguna (p. ej. la verdura aterriza en una semana de solo huevo).
+     *
+     * @param Basket                 $basket
+     * @param PartnerDeliveryShift[] $outgoing Intents que SALEN de $basket.
+     * @param PartnerDeliveryShift[] $incoming Intents que ENTRAN a $basket.
+     */
+    private function applyComponentIntents(Basket $basket, array $outgoing, array $incoming): void
+    {
+        $wbRepo = $this->em->getRepository(WeeklyBasket::class);
+        $shareRepo = $this->em->getRepository(PartnerBasketShare::class);
+
+        foreach ($outgoing as $shift) {
+            if ($shift->isWholeDelivery()) {
+                continue;
+            }
+            $wb = $wbRepo->findOneBy(['basket' => $basket->getId(), 'partner' => $shift->getPartner()->getId()]);
+            if ($wb !== null) {
+                $this->composer->removeComponent($wb, $shift->getComponent());
+            }
+        }
+
+        foreach ($incoming as $shift) {
+            if ($shift->isWholeDelivery()) {
+                continue;
+            }
+            $partner = $shift->getPartner();
+            $component = $shift->getComponent();
+            $share = $shareRepo->findActiveForPartner($partner, $basket->getDate());
+            if ($share === null) {
+                continue;
+            }
+
+            $wb = $wbRepo->findOneBy(['basket' => $basket->getId(), 'partner' => $partner->getId()]);
+            if ($wb === null) {
+                // El componente aterriza en una semana sin ninguna entrega del socio:
+                // se crea la entrega configurada con su modalidad/fecha de nodo.
+                $wb = $this->shiftApplier->createWeeklyBasketForShiftDestination($partner, $basket);
+                $this->em->flush();
+            } elseif ($component->getId() === BasketComponent::ID_VEGETABLES
+                && ($wb->getBasketShare()?->getDeliveredBasketWeight() ?? 0.0) <= 0.0) {
+                // La verdura cae en una entrega "solo-huevo" (peso 0): realinear el WB
+                // a la modalidad real del socio para que su agrupación/cantidad sean
+                // coherentes (la cantidad de la línea ya sale del share, pero el WB
+                // seguiría marcado como solo-huevo).
+                $wb->setBasketShare($share->getBasketShare());
+                $wb->setAmount($share->getAmount());
+                $wb->setPartnerBasketShare($share);
+            }
+
+            $this->composer->addComponent($wb, $share, $component);
+        }
+
+        $this->em->flush();
     }
 
     /**
