@@ -3,10 +3,13 @@
 namespace App\Tests\Controller;
 
 use App\DataFixtures\PartnerUserFixtures;
+use App\Entity\Basket;
 use App\Entity\Partner;
+use App\Entity\PartnerBasketShare;
 use App\Entity\PartnerDeliveryShift;
 use App\Entity\WeeklyBasket;
-use App\Entity\WeeklyBasketStatus;
+use App\Service\Delivery\DeliveryShiftApplier;
+use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Delivery\WeeklyBasketSkipper;
 
 /**
@@ -106,11 +109,13 @@ class PartnerControllerTest extends AbstractAuthenticatedTest
 
     /**
      * Happy-path funcional del saltar desde el calendario: se scrapea el token
-     * CSRF real que pinta la pantalla del mes de la entrega y, al postearlo, la
-     * entrega pasa a "No recoge" (estado 2). Cierra el ciclo que el test de CSRF
-     * inválido dejaba abierto ahora que la UI cablea los botones.
+     * CSRF real que pinta la pantalla del mes de la entrega y, al postearlo, el
+     * "no recoge" LIBERA el día — retira el WeeklyBasket y deja un intent durable
+     * sin destino (to=null), no un WB clavado en estado 2. Así el día queda libre y
+     * la entrega aparcada es recuperable. (Reparto/PDF leen status 1: un WB retirado
+     * queda fuera igual que uno saltado — verificado por caracterización.)
      */
-    public function testDeliveryCalendarSkipTogglesStatusWithScrapedToken(): void
+    public function testDeliveryCalendarSkipFreesTheDayAndLeavesIntent(): void
     {
         $client = $this->createAuthenticatedClient();
         $em = static::getContainer()->get('doctrine')->getManager();
@@ -127,6 +132,8 @@ class PartnerControllerTest extends AbstractAuthenticatedTest
             'El socix de fixtures debería partir recogiendo (estado 1).',
         );
 
+        $partnerId = $partner->getId();
+        $wbId = $wb->getId();
         $basketId = $wb->getBasket()->getId();
         $date = $wb->getBasket()->getDate();
 
@@ -134,7 +141,7 @@ class PartnerControllerTest extends AbstractAuthenticatedTest
         // con el formulario de saltar y su token.
         $crawler = $client->request('GET', sprintf(
             '/gestion/partner/%d/calendar?year=%d&month=%d&sel=%d',
-            $partner->getId(),
+            $partnerId,
             (int) $date->format('Y'),
             (int) $date->format('n'),
             $basketId,
@@ -144,28 +151,39 @@ class PartnerControllerTest extends AbstractAuthenticatedTest
         $tokenInput = $crawler->filter(sprintf('#rcal-skip-form-%d input[name="_csrf_token"]', $basketId));
         $this->assertGreaterThan(0, $tokenInput->count(), 'El calendario debería pintar el formulario de saltar con su token.');
 
-        $client->request('POST', sprintf('/gestion/partner/%d/calendar/skip/%d', $partner->getId(), $basketId), [
+        $client->request('POST', sprintf('/gestion/partner/%d/calendar/skip/%d', $partnerId, $basketId), [
             '_csrf_token' => $tokenInput->attr('value'),
         ]);
         $this->assertResponseRedirects();
 
+        // Tras las requests, el EM a usar es el del contenedor del último kernel: así es
+        // el MISMO que inyectan los servicios del cleanup (cancelSkipIntent/generator).
+        // Con el $em capturado antes de las requests, las entidades llegarían DETACHED al
+        // applier y remove() lanzaría.
+        $em = static::getContainer()->get('doctrine')->getManager();
         $em->clear();
-        $reloaded = $em->getRepository(WeeklyBasket::class)->find($wb->getId());
-        $newStatus = $reloaded->getWeeklyBasketStatus()?->getId();
+        $basket = $em->getRepository(Basket::class)->find($basketId);
+        $partner = $em->getRepository(Partner::class)->find($partnerId);
+        $wbAfter = $em->getRepository(WeeklyBasket::class)->find($wbId);
+        $intent = $em->getRepository(PartnerDeliveryShift::class)
+            ->findOneBy(['partner' => $partnerId, 'fromBasket' => $basketId]);
 
-        // db_test no tiene rollback transaccional: dejar la entrega saltada
-        // ensuciaría re-runs y otros tests. Se restaura ANTES de la aserción
-        // (que podría lanzar) para no dejar estado sucio si fallara.
-        $reloaded->setWeeklyBasketStatus(
-            $em->getRepository(WeeklyBasketStatus::class)->find(WeeklyBasketSkipper::STATUS_PICKS),
-        );
-        $em->flush();
+        $dayFreed = $wbAfter === null;
+        $intentIsSkip = $intent !== null && $intent->isSkip();
 
-        $this->assertSame(
-            WeeklyBasketSkipper::STATUS_SKIPPED,
-            $newStatus,
-            'Con token válido, saltar deja la entrega en estado 2 (No recoge).',
-        );
+        // db_test no tiene rollback transaccional: se restaura ANTES de las
+        // aserciones (que podrían lanzar) recorriendo el camino "volver a recoger"
+        // del controller — cancelar el intent y re-materializar la entrega.
+        if ($intent !== null) {
+            static::getContainer()->get(DeliveryShiftApplier::class)->cancelSkipIntent($intent, 'test:cleanup');
+        }
+        $share = $em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner, $basket->getDate());
+        if ($share !== null) {
+            static::getContainer()->get(WeeklyBasketGenerator::class)->materializeShareDelivery($basket, $share);
+        }
+
+        $this->assertTrue($dayFreed, 'Saltar debe LIBERAR el día: el WeeklyBasket se retira, no se deja en estado 2.');
+        $this->assertTrue($intentIsSkip, 'Saltar debe dejar un intent "no recoge" durable (sin destino).');
     }
 
     /**

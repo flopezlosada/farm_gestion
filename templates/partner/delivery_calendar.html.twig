@@ -13,102 +13,22 @@
 
 {% set EGG = constant('App\\Entity\\BasketComponent::ID_EGGS') %}
 
-{# Chips de "mover a otra fecha": un botón por destino. Reusado por la cesta normal
-   y por la que ya viene movida (cuyos destinos incluyen su día original = volver). #}
-{% macro move_block(partner, bid, candidates, move_scopes, move_component, current) %}
-    {% set EGG = constant('App\\Entity\\BasketComponent::ID_EGGS') %}
-    <div class="rcal-move-wrap">
-        <div class="rcal-sect">Mover a otra fecha</div>
-        {# Selector de alcance: solo si HAY 2+ alcances con destinos. Para un socio con
-           algo cada semana (SANTOS), "Todo" no tiene destino (movería el huevo a un día
-           que ya lo tiene) y no aparece — solo "solo verdura". Cada enlace es una
-           navegación GET que recalcula candidatos. #}
-        {% if move_scopes|length >= 2 %}
-            <div class="rcal-move-scope">
-                <span class="rcal-move-scope__lbl">Mover:</span>
-                {% for sc in move_scopes %}
-                    <a href="{{ path('partner_delivery_calendar', { id: partner.id, year: current.format('Y'), month: current.format('n'), sel: bid, move_component: sc }) }}"
-                       class="rcal-scope-btn{{ move_component == sc ? ' on' }}">{{ sc == 0 ? 'todo' : (sc == EGG ? 'solo huevos' : 'solo verdura') }}</a>
-                {% endfor %}
-            </div>
-        {% endif %}
-        {% if candidates is not empty %}
-            <form action="{{ path('partner_delivery_calendar_move', { id: partner.id, basketId: bid }) }}" method="post" style="margin: 0;">
-                <input type="hidden" name="_csrf_token" value="{{ csrf_token('calendar_move_' ~ partner.id) }}">
-                {% if move_component != 0 %}<input type="hidden" name="component_id" value="{{ move_component }}">{% endif %}
-                <div class="rcal-move-chips">
-                    {% for cand in candidates %}
-                        <button type="submit" name="to_basket_id" value="{{ cand.id }}" class="rcal-move-chip">
-                            <i class="fa fa-arrow-right"></i>{{ cand.date|format_date(pattern='EEE d MMM', locale='es') }}
-                        </button>
-                    {% endfor %}
-                </div>
-            </form>
-            <div class="rcal-hint">
-                {% if move_component != 0 %}Se mueve solo ese componente al día elegido.
-                {% else %}Se mueve toda la cesta al día elegido (solo días válidos para su nodo).{% endif %}
-            </div>
-        {% else %}
-            <div class="rcal-hint">No hay días disponibles para mover {{ move_component != 0 ? 'ese componente' : 'la cesta' }} este mes.</div>
-        {% endif %}
-    </div>
-{% endmacro %}
-
-{# Lista de componentes de una entrega. En solo lectura pinta lo que lleva; editable,
-   un interruptor por componente que el patrón permite (el switch solo aparece con 2+:
-   con uno solo, quitarlo equivale a no recoger → se hace desde el botón de abajo).
-   Reusado por la entrega normal y por la que viene movida (destino de un cambio). #}
-{% macro components(partner, bid, selected, present_ids, EGG, readonly) %}
-    {% if readonly %}
-        {% for it in selected.items|sort((a, b) => a.component.id - b.component.id) %}
-            {% set is_egg = it.component.id == EGG %}
-            <div class="rcal-comp">
-                <span class="rcal-comp__ic {{ is_egg ? 'egg' : 'veg' }}"><i class="fa {{ is_egg ? 'fa-egg' : 'fa-leaf' }}"></i></span>
-                <span class="rcal-comp__t">
-                    <span class="rcal-comp__name">{{ is_egg ? 'Huevos' : 'Cesta de verdura' }}</span>
-                    <span class="rcal-comp__sub">{{ it.amount + 0 }} {{ is_egg ? 'docena' : 'cesta' }}{{ (it.amount + 0) != 1 ? 's' }}</span>
-                </span>
-            </div>
-        {% else %}
-            <p class="csa-muted">Sin componentes.</p>
-        {% endfor %}
+{# Lista (solo lectura) de lo que lleva una entrega ese día. El contenido del día ya no
+   se edita por componente: el modelo es "todo junto por día". Para cambiar un día se
+   ARRASTRA en la rejilla (día→papelera = no recoge; día→día libre = mover). #}
+{% macro components(selected, EGG) %}
+    {% for it in selected.items|sort((a, b) => a.component.id - b.component.id) %}
+        {% set is_egg = it.component.id == EGG %}
+        <div class="rcal-comp">
+            <span class="rcal-comp__ic {{ is_egg ? 'egg' : 'veg' }}"><i class="fa {{ is_egg ? 'fa-egg' : 'fa-leaf' }}"></i></span>
+            <span class="rcal-comp__t">
+                <span class="rcal-comp__name">{{ is_egg ? 'Huevos' : 'Cesta de verdura' }}</span>
+                <span class="rcal-comp__sub">{{ it.amount + 0 }} {{ is_egg ? 'docena' : 'cesta' }}{{ (it.amount + 0) != 1 ? 's' }}</span>
+            </span>
+        </div>
     {% else %}
-        {# Universo de interruptores = lo que el patrón permite (available) + lo que la
-           entrega lleva aunque el patrón no lo dé esa semana (p. ej. huevos que viajaron
-           con una cesta movida a una semana sin huevo): así no desaparecen de la vista y
-           se pueden quitar. En la entrega normal `extra` es vacío y `comps == available`. #}
-        {% set avail_ids = [] %}
-        {% for c in selected.available %}{% set avail_ids = avail_ids|merge([c.id]) %}{% endfor %}
-        {% set extra = [] %}
-        {% for it in selected.items|filter(it => it.component.id not in avail_ids) %}{% set extra = extra|merge([it.component]) %}{% endfor %}
-        {% set comps = selected.available|merge(extra) %}
-        {% set show_switches = comps|length >= 2 %}
-        {% for comp in comps %}
-            {% set on = comp.id in present_ids %}
-            {% set is_egg = comp.id == EGG %}
-            {% set amount = 0 %}
-            {% for it in selected.items|filter(it => it.component.id == comp.id) %}{% set amount = it.amount + 0 %}{% endfor %}
-            <div class="rcal-comp{{ on ? '' : ' off' }}">
-                <span class="rcal-comp__ic {{ is_egg ? 'egg' : 'veg' }}"><i class="fa {{ is_egg ? 'fa-egg' : 'fa-leaf' }}"></i></span>
-                <span class="rcal-comp__t">
-                    <span class="rcal-comp__name">{{ is_egg ? 'Huevos' : 'Cesta de verdura' }}</span>
-                    {% if on %}
-                        <span class="rcal-comp__sub">{{ amount }} {{ is_egg ? 'docena' : 'cesta' }}{{ amount != 1 ? 's' }}</span>
-                    {% else %}
-                        <span class="rcal-comp__sub off">Esta semana no lo quiere</span>
-                    {% endif %}
-                </span>
-                {% if show_switches %}
-                    <form action="{{ path('partner_delivery_calendar_component', { id: partner.id, basketId: bid, componentId: comp.id }) }}" method="post" style="margin: 0;">
-                        <input type="hidden" name="_csrf_token" value="{{ csrf_token('calendar_component_' ~ partner.id) }}">
-                        <button type="submit" class="rcal-sw{{ on ? ' on' }}" aria-label="{{ on ? 'Quitar' : 'Añadir' }} {{ is_egg ? 'huevos' : 'verdura' }}">
-                            <span class="track"></span><span class="thumb"></span>
-                        </button>
-                    </form>
-                {% endif %}
-            </div>
-        {% endfor %}
-    {% endif %}
+        <p class="csa-muted">Sin componentes.</p>
+    {% endfor %}
 {% endmacro %}
 
 {% block title %}Calendario de recogida · {{ partner }}{% endblock %}
@@ -209,6 +129,29 @@
 
   .rcal-panel__ft{padding:var(--csa-sp-4);border-top:1px solid var(--csa-border);background:var(--csa-surface-alt)}
   .rcal-empty{padding:var(--csa-sp-6) var(--csa-sp-4);text-align:center;color:var(--csa-ink-muted);font-size:14px}
+
+  /* --- columna izquierda (rejilla + papelera apiladas) --- */
+  .rcal-left{display:flex;flex-direction:column;gap:var(--csa-sp-5)}
+
+  /* --- arrastre --- */
+  .csa-app a.rcal-grab,.rcal-grab{cursor:grab}
+  .rcal-grab:active{cursor:grabbing}
+  .rcal-dragging{opacity:.4}
+  /* destino DISPONIBLE mientras se arrastra (pista suave) */
+  .rcal-dragok{outline:2px dashed #cfe0b4;outline-offset:-2px;background:var(--csa-green-soft)}
+  /* destino que se está SOBREVOLANDO ahora (pista fuerte) */
+  .rcal-dropok{outline:2px solid var(--csa-green);outline-offset:-2px;background:#dcebc4}
+
+  /* --- papelera --- */
+  .rcal-tray{background:var(--csa-surface);border:1px dashed var(--csa-border);border-radius:var(--csa-radius,12px);padding:var(--csa-sp-4);transition:.12s}
+  .rcal-tray__hd{display:flex;flex-direction:column;gap:2px;margin-bottom:var(--csa-sp-3)}
+  .rcal-tray__title{font-size:13px;font-weight:600;color:var(--csa-terracotta)}
+  .rcal-tray__title i{margin-right:6px}
+  .rcal-tray__hint{font-size:11px;color:var(--csa-ink-muted)}
+  .rcal-tray__body{display:flex;flex-wrap:wrap;gap:var(--csa-sp-2);min-height:46px;align-items:center}
+  .rcal-tray__empty{font-size:12px;color:var(--csa-ink-muted);margin:0}
+  .rcal-tray-card{display:inline-flex;align-items:center;gap:7px;background:var(--csa-terracotta-soft);border:1px solid #f3c4a8;border-radius:9px;padding:7px 11px;font-size:13px;color:#b04e22;font-weight:600;text-transform:capitalize}
+  .rcal-tray-card__ic{font-size:11px}
 </style>
 {% endblock %}
 
@@ -234,33 +177,31 @@
 
     <div class="rcal">
 
+        <div class="rcal-left">
+
         {# ===== REJILLA ===== #}
-        <div class="rcal-grid">
+        <div class="rcal-grid" data-rcal-drop="grid">
             <div class="rcal-dow"><span>Lun</span><span>Mar</span><span>Mié</span><span>Jue</span><span>Vie</span><span>Sáb</span><span>Dom</span></div>
             <div class="rcal-weeks">
                 {% for week in weeks %}
                     {% for day in week %}
                         {% set slot = day.slot %}
-                        {% set moved_away = slot and (slot.moved_away ?? false) %}
-                        {% set is_sel = slot and not moved_away and selected and slot.basket.id == selected.basket.id %}
+                        {% set is_sel = slot and selected and slot.basket.id == selected.basket.id %}
                         {% set wknd = day.date.format('N') in [6, 7] %}
-                        {% if slot and moved_away %}
-                            {# Cesta movida a otro día: su cesta está en otra fecha. NO es
-                               clicable (no hay nada que gestionar aquí); el azul + flecha
-                               ya indican que es un día original. #}
-                            <div class="rcal-cell rcal-moved" title="Su cesta está movida a otra fecha">
-                                <span class="n">{{ day.date.format('j') }}</span>
-                                <span class="x"><i class="fa fa-share"></i></span>
-                            </div>
-                        {% elseif slot %}
-                            {# Rojo si está saltada O si se le han quitado todos los
-                               componentes (no recoge nada esa semana). #}
-                            {% set no_pickup = slot.skipped or slot.items is empty %}
+                        {% if slot %}
+                            {# Rojo si se le han quitado todos los componentes (no recoge nada).
+                               Las "no recoge" (saltadas) ya NO llegan aquí: viven en la papelera
+                               y su día sale libre. #}
+                            {% set no_pickup = slot.items is empty %}
+                            {# Arrastrable = entrega real, futura y no compartida (R1). Arrastrarla
+                               a la papelera = no recoger esa semana. #}
+                            {% set day_grab = not no_pickup and partner.sharePartner is null and slot.date > date('today') %}
                             {# Se navega al mes LÓGICO del Basket (su viernes-ciclo), que para las
                                entregas del mes coincide con el visible, pero para una que se cuela
                                por fecha física desde un mes vecino es donde el panel la resuelve. #}
                             <a href="{{ path('partner_delivery_calendar', { id: partner.id, year: slot.basket.date.format('Y'), month: slot.basket.date.format('n'), sel: slot.basket.id }) }}"
-                               class="rcal-cell {{ no_pickup ? 'rcal-skip' : 'rcal-pick' }}{{ is_sel ? ' sel' }}">
+                               class="rcal-cell {{ no_pickup ? 'rcal-skip' : 'rcal-pick' }}{{ is_sel ? ' sel' }}{{ day_grab ? ' rcal-grab' }}"
+                               {% if day_grab %}draggable="true" data-rcal-draggable data-rcal-kind="grid" data-rcal-skip-url="{{ path('partner_delivery_calendar_skip', { id: partner.id, basketId: slot.basket.id }) }}" data-rcal-move-url="{{ path('partner_delivery_calendar_move', { id: partner.id, basketId: slot.basket.id }) }}"{% endif %}>
                                 <span class="n">{{ day.date.format('j') }}</span>
                                 {% if no_pickup %}
                                     <span class="x"><i class="fa fa-ban"></i></span>
@@ -275,7 +216,10 @@
                                 {% endif %}
                             </a>
                         {% else %}
-                            <div class="rcal-cell empty{{ not day.inMonth ? ' out' }}{{ wknd ? ' wknd' }}">
+                            {# Celda libre. Si el nodo reparte ese día (dropBasketId), es
+                               destino válido para soltar una entrega arrastrada (mover). #}
+                            <div class="rcal-cell empty{{ not day.inMonth ? ' out' }}{{ wknd ? ' wknd' }}{{ day.dropBasketId ? ' rcal-droptarget' }}"
+                                 {% if day.dropBasketId %}data-rcal-target data-rcal-to="{{ day.dropBasketId }}"{% endif %}>
                                 <span class="n">{{ day.date.format('j') }}</span>
                             </div>
                         {% endif %}
@@ -285,20 +229,37 @@
             <div class="rcal-legend">
                 <span><span class="d" style="background: var(--csa-green);"></span>Verdura</span>
                 <span><span class="d" style="background: var(--csa-ochre);"></span>Huevos</span>
-                <span><span class="d" style="background: var(--csa-terracotta-soft); border: 1px solid #f3c4a8;"></span>No recoge</span>
-                <span><span class="d" style="background: var(--csa-sky-soft); border: 1px solid var(--csa-sky);"></span>Movida a otro día</span>
             </div>
         </div>
+
+        {# ===== PAPELERA (no recoge, recuperable) ===== #}
+        {% if partner.sharePartner is null %}
+        <div class="rcal-tray" data-rcal-drop="tray">
+            <div class="rcal-tray__hd">
+                <span class="rcal-tray__title"><i class="fa fa-inbox"></i> No recoge</span>
+                <span class="rcal-tray__hint">Arrastra un día aquí para no recogerlo · o saca uno para recuperarlo</span>
+            </div>
+            <div class="rcal-tray__body">
+                {% for t in tray %}
+                    {% set t_grab = t.date > date('today') %}
+                    <div class="rcal-tray-card{{ t_grab ? ' rcal-grab' }}"
+                         {% if t_grab %}draggable="true" data-rcal-draggable data-rcal-kind="tray" data-rcal-skip-url="{{ path('partner_delivery_calendar_skip', { id: partner.id, basketId: t.basket.id }) }}" data-rcal-recover-url="{{ path('partner_delivery_calendar_recover', { id: partner.id, basketId: t.basket.id }) }}"{% endif %}>
+                        <span class="rcal-tray-card__ic"><i class="fa fa-ban"></i></span>
+                        <span class="rcal-tray-card__d">{{ t.date|format_date(pattern='EEE d MMM', locale='es') }}</span>
+                    </div>
+                {% else %}
+                    <p class="rcal-tray__empty">Nada aparcado este mes.</p>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        </div>{# /.rcal-left #}
 
         {# ===== PANEL DEL DÍA SELECCIONADO ===== #}
         <div class="rcal-panel">
             {% if selected %}
                 {% set bid = selected.basket.id %}
-                {# Ids de componentes presentes en la entrega, para decidir on/off.
-                   OJO: lista (no mapa con claves enteras) — Twig `merge` reindexa las
-                   claves enteras como array_merge y rompería el lookup por id. #}
-                {% set present_ids = [] %}
-                {% for it in selected.items %}{% set present_ids = present_ids|merge([it.component.id]) %}{% endfor %}
                 {# Vacío = sin componentes y no saltada explícitamente: no recoge nada. #}
                 {% set is_empty = not selected.skipped and selected.items is empty %}
 
@@ -314,14 +275,7 @@
                    componente) se guardan como intents durables, no materializan nada. #}
                 {% set readonly = partner.sharePartner is not null or not selected_editable %}
 
-                {% if shift_role == 'origin' %}
-                    {# Día vacío: su cesta se movió a otra fecha. Informativo — para
-                       traerla de vuelta se mueve desde el día que la tiene ahora. #}
-                    <div class="rcal-panel__bd">
-                        <div class="rcal-sect">Esta semana no recoge</div>
-                        <p class="csa-muted">La cesta de este día está movida al {{ shift.toBasket.date|format_date('long', locale='es') }}. Para traerla de vuelta, muévela desde ese día.</p>
-                    </div>
-                {% elseif selected.skipped %}
+                {% if selected.skipped %}
                     {# Saltada: no lleva nada esa semana; si es editable, se puede restaurar.
                        Una cesta movida que se marca "no recoge" también cae aquí. #}
                     <div class="rcal-panel__bd">
@@ -332,28 +286,27 @@
                         <div class="rcal-panel__ft">
                             <form action="{{ path('partner_delivery_calendar_skip', { id: partner.id, basketId: bid }) }}" method="post" style="margin: 0;">
                                 <input type="hidden" name="_csrf_token" value="{{ csrf_token('calendar_skip_' ~ partner.id) }}">
+                                <input type="hidden" name="recover" value="1">
                                 {{ csa.btn('Volver a recoger', { type: 'submit', variant: 'secondary', icon: 'fa-undo', block: true }) }}
                             </form>
                         </div>
                     {% endif %}
                 {% else %}
-                    {# Entrega activa: normal o destino de un cambio (viene movida). Ambas se
-                       editan igual (componentes + no recoge); el destino solo añade el aviso
-                       de dónde viene y, entre los destinos de mover, su día original (= volver). #}
+                    {# Entrega activa. El contenido es de solo lectura: para cambiar el día se
+                       ARRASTRA en la rejilla (a la papelera = no recoge; a un día libre = mover).
+                       El botón de abajo es un atajo accesible para "no recoge". #}
                     <div class="rcal-panel__bd">
-                        {% if shift_role == 'destination' %}
-                            <div class="rcal-sect">Cesta movida a este día</div>
-                            <p class="csa-muted" style="margin-bottom: var(--csa-sp-3);">Viene movida del {{ shift.fromBasket.date|format_date('long', locale='es') }}.</p>
-                        {% endif %}
                         {% if is_empty and not readonly %}
-                            <div class="rcal-empty-note"><i class="fa fa-ban"></i> Ahora mismo no recoge nada esta semana. Activa algún componente o déjalo así.</div>
+                            <div class="rcal-empty-note"><i class="fa fa-ban"></i> Esta semana no recoge nada.</div>
                         {% endif %}
                         <div class="rcal-sect">Qué se lleva ese día</div>
 
-                        {{ _self.components(partner, bid, selected, present_ids, EGG, readonly) }}
+                        {{ _self.components(selected, EGG) }}
 
-                        {% if can_move %}
-                            {{ _self.move_block(partner, bid, move_candidates, move_scopes, move_component, current) }}
+                        {% if not readonly %}
+                            <div class="rcal-hint" style="margin-top: var(--csa-sp-4);">
+                                <i class="fa fa-arrows"></i> Arrastra este día en el calendario para moverlo a otra fecha o a "No recoge".
+                            </div>
                         {% endif %}
                     </div>
 
@@ -391,5 +344,106 @@
         </div>
 
     </div>
+
+    {% if partner.sharePartner is null %}
+    <script>
+    (function () {
+        const cal = document.querySelector('.rcal');
+        if (!cal) return;
+        const SKIP_CSRF = {{ csrf_token('calendar_skip_' ~ partner.id)|json_encode|raw }};
+        const MOVE_CSRF = {{ csrf_token('calendar_move_' ~ partner.id)|json_encode|raw }};
+
+        let dragged = null;
+
+        function clearHighlights() {
+            cal.querySelectorAll('.rcal-dropok, .rcal-dragok').forEach(function (el) {
+                el.classList.remove('rcal-dropok', 'rcal-dragok');
+            });
+        }
+
+        cal.addEventListener('dragstart', function (e) {
+            const card = e.target.closest('[data-rcal-draggable]');
+            if (!card) return;
+            dragged = card;
+            e.dataTransfer.effectAllowed = 'move';
+            // setData es obligatorio en Firefox para que arranque el arrastre.
+            e.dataTransfer.setData('text/plain', '');
+            card.classList.add('rcal-dragging');
+            // Resaltar destinos válidos según el tipo de ficha:
+            //  - rejilla (entrega real): días libres del nodo (mover) + papelera (no recoge).
+            //  - papelera: los mismos días libres del nodo (recuperar EN el día elegido).
+            cal.querySelectorAll('[data-rcal-target]').forEach(function (el) { el.classList.add('rcal-dragok'); });
+            if (card.dataset.rcalKind === 'grid') {
+                const tray = cal.querySelector('.rcal-tray');
+                if (tray) tray.classList.add('rcal-dragok');
+            }
+        });
+
+        cal.addEventListener('dragend', function () {
+            if (dragged) dragged.classList.remove('rcal-dragging');
+            dragged = null;
+            clearHighlights();
+        });
+
+        // handlers: { <kind>: fn(card) }. La zona acepta una ficha si hay handler para su
+        // tipo; al soltar, ejecuta el de ese tipo. Permite que una misma celda acepte tanto
+        // MOVER (ficha de rejilla) como RECUPERAR (ficha de papelera).
+        function wireDrop(el, handlers) {
+            el.addEventListener('dragover', function (e) {
+                if (!dragged || !handlers[dragged.dataset.rcalKind]) return;
+                e.preventDefault();
+                el.classList.add('rcal-dropok');
+            });
+            el.addEventListener('dragleave', function (e) {
+                if (e.target === el) el.classList.remove('rcal-dropok');
+            });
+            el.addEventListener('drop', function (e) {
+                if (!dragged || !handlers[dragged.dataset.rcalKind]) return;
+                e.preventDefault();
+                handlers[dragged.dataset.rcalKind](dragged);
+            });
+        }
+
+        // Celda de día LIBRE del nodo: destino tanto de MOVER (ficha de rejilla) como de
+        // RECUPERAR EN ESE DÍA (ficha de papelera). El día elegido viaja en to_basket_id.
+        cal.querySelectorAll('[data-rcal-target]').forEach(function (cell) {
+            wireDrop(cell, {
+                grid: function (card) {
+                    post(card.dataset.rcalMoveUrl, { to_basket_id: cell.dataset.rcalTo, _csrf_token: MOVE_CSRF });
+                },
+                tray: function (card) {
+                    post(card.dataset.rcalRecoverUrl, { to_basket_id: cell.dataset.rcalTo, _csrf_token: MOVE_CSRF });
+                },
+            });
+        });
+
+        // NO RECOGE: ficha de rejilla → papelera.
+        const tray = cal.querySelector('.rcal-tray');
+        if (tray) {
+            wireDrop(tray, {
+                grid: function (card) {
+                    post(card.dataset.rcalSkipUrl, { _csrf_token: SKIP_CSRF });
+                },
+            });
+        }
+
+        function post(url, fields) {
+            if (!url) return;
+            const f = document.createElement('form');
+            f.method = 'post';
+            f.action = url;
+            Object.keys(fields).forEach(function (k) {
+                const i = document.createElement('input');
+                i.type = 'hidden';
+                i.name = k;
+                i.value = fields[k];
+                f.appendChild(i);
+            });
+            document.body.appendChild(f);
+            f.submit();
+        }
+    })();
+    </script>
+    {% endif %}
 
 {% endblock %}

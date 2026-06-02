@@ -58,7 +58,7 @@ final class DeliveryCalendarProjector
      * @param Partner $partner Socio cuyo calendario se proyecta.
      * @param int     $year    Año (p. ej. 2026).
      * @param int     $month   Mes 1-12.
-     * @return list<array{date: \DateTimeInterface, basket: Basket, source: 'materialized'|'projected', weeklyBasket: WeeklyBasket, items: array<int, array{component: BasketComponent, amount: string}>, skipped: bool, moved_away: bool, listed: bool, available: list<BasketComponent>}>
+     * @return list<array{date: \DateTimeInterface, basket: Basket, source: 'materialized'|'projected', weeklyBasket: WeeklyBasket, items: array<int, array{component: BasketComponent, amount: string}>, skipped: bool, listed: bool, available: list<BasketComponent>}>
      */
     public function projectMonth(Partner $partner, int $year, int $month): array
     {
@@ -84,7 +84,50 @@ final class DeliveryCalendarProjector
             // un WB suelto dispararía la rama reuseExistingWeeklyBaskets del generador y
             // dejaría fuera al resto de socios. Mover sí es seguro (solo guarda el shift).
             $listed = $wbRepo->findOneBy(['basket' => $basket->getId()]) !== null;
+
+            $outgoing = $shiftRepo->findOutgoing($partner, $basket);
+            $incoming = $shiftRepo->findIncoming($partner, $basket);
             $materialized = $wbRepo->findOneBy(['basket' => $basket->getId(), 'partner' => $partner->getId()]);
+            $materializedActive = $materialized !== null
+                && $materialized->getWeeklyBasketStatus()?->getId() !== WeeklyBasketSkipper::STATUS_SKIPPED;
+            $isSkip = $outgoing !== null && $outgoing->isSkip();
+
+            // PAPELERA: un "no recoge" (intent sin destino, to == null) aparca la cesta
+            // NATIVA de esta semana. Se emite SIEMPRE su slot de papelera (skipped=true),
+            // AUNQUE el día se haya reutilizado como destino de otra cesta movida — la cesta
+            // aparcada vive en la papelera, NO en el día. Sin esto, al mover una cesta al día
+            // de un "no recoge" el slot materializado tapaba al aparcado y la papelera lo
+            // perdía de vista (acople día↔papelera). NO se hace continue: el mismo día puede
+            // albergar además la cesta movida, cuyo slot de rejilla se emite más abajo. El
+            // controller separa los skipped (papelera) de la rejilla.
+            if ($isSkip) {
+                $patternShare = $this->candidateShareFor($partner, $basket);
+                $physical = $patternShare !== null
+                    ? ($this->generator->projectShareDelivery($basket, $patternShare)['deliveryDate'] ?? $basket->getDate())
+                    : $basket->getDate();
+                $slots[] = [
+                    'date' => $physical,
+                    'basket' => $basket,
+                    'source' => 'projected',
+                    'weeklyBasket' => (new WeeklyBasket())->setBasket($basket)->setPartner($partner),
+                    'items' => [],
+                    'skipped' => true,
+                    'listed' => $listed,
+                    'available' => [],
+                ];
+            }
+
+            // "Olvidar el origen": un día cuya entrega se MOVIÓ a otra fecha (outgoing con
+            // destino) queda LIBRE, sin rastro — SALVO que esté OCUPADO por otra cosa: una
+            // entrega entrante (otro día movido aquí) o un WB activo. Así un mismo día puede
+            // ser a la vez origen de un cambio y destino de otro (12→19 y 26→12) y se pinta
+            // ocupado por lo que recibió, no vacío. El "no recoge" SIN destino (to == null)
+            // tampoco entra aquí: ocupa la papelera (entrega saltada, más abajo).
+            if ($outgoing !== null && $outgoing->getToBasket() !== null
+                && $incoming === null && !$materializedActive) {
+                continue;
+            }
+
             if ($materialized !== null) {
                 $skipped = $materialized->getWeeklyBasketStatus()?->getId() === WeeklyBasketSkipper::STATUS_SKIPPED;
                 $slots[] = [
@@ -94,9 +137,6 @@ final class DeliveryCalendarProjector
                     'weeklyBasket' => $materialized,
                     'items' => $this->readItems($materialized),
                     'skipped' => $skipped,
-                    // Vaciado por un movimiento (no "no recoge" de verdad): la pantalla
-                    // lo pinta distinto. Es saltado Y tiene un cambio saliendo de aquí.
-                    'moved_away' => $skipped && $shiftRepo->findOutgoing($partner, $basket) !== null,
                     'listed' => $listed,
                     'available' => $this->availableComponents($materialized, $basket),
                 ];
@@ -113,7 +153,6 @@ final class DeliveryCalendarProjector
             // patrón con los huevos del origen. Igual que hará el generador al
             // materializar — si no, la vista previa mostraría componentes que la cesta
             // ya no lleva.
-            $incoming = $shiftRepo->findIncoming($partner, $basket);
             if ($incoming !== null) {
                 $origin = $incoming->getFromBasket();
                 $movedShare = $this->candidateShareFor($partner, $origin)
@@ -131,7 +170,6 @@ final class DeliveryCalendarProjector
                         'weeklyBasket' => $projection['weeklyBasket'],
                         'items' => $items,
                         'skipped' => false,
-                        'moved_away' => false,
                         'listed' => $listed,
                         'available' => array_map(static fn (array $line): BasketComponent => $line['component'], $items),
                     ];
@@ -139,26 +177,10 @@ final class DeliveryCalendarProjector
                 continue;
             }
 
-            // Intent saliente de ENTREGA ENTERA: o se MOVIÓ a otra fecha (to != null,
-            // se pinta azul "movida") o es un "no recoge" sin destino (to == null, rojo).
-            // En ambos el día queda sin entrega; sigue seleccionable.
-            $outgoing = $shiftRepo->findOutgoing($partner, $basket);
-            if ($outgoing !== null) {
-                $patternShare = $this->candidateShareFor($partner, $basket);
-                $physical = $patternShare !== null
-                    ? ($this->generator->projectShareDelivery($basket, $patternShare)['deliveryDate'] ?? $basket->getDate())
-                    : $basket->getDate();
-                $slots[] = [
-                    'date' => $physical,
-                    'basket' => $basket,
-                    'source' => 'projected',
-                    'weeklyBasket' => (new WeeklyBasket())->setBasket($basket)->setPartner($partner),
-                    'items' => [],
-                    'skipped' => true,
-                    'moved_away' => $outgoing->getToBasket() !== null,
-                    'listed' => $listed,
-                    'available' => [],
-                ];
+            // "No recoge" SIN destino: su papelera ya se emitió arriba y no llegó cesta
+            // movida (ni materializada ni entrante), así que el día queda LIBRE en la
+            // rejilla — no se pinta la cesta de patrón aquí.
+            if ($isSkip) {
                 continue;
             }
 
@@ -190,7 +212,6 @@ final class DeliveryCalendarProjector
                 // Proyectada = patrón por defecto: nunca saltada, y lo presente
                 // coincide con lo disponible (nada se ha quitado todavía).
                 'skipped' => false,
-                'moved_away' => false,
                 'listed' => $listed,
                 'available' => array_map(static fn (array $line): BasketComponent => $line['component'], $projection['items']),
             ];
@@ -277,7 +298,6 @@ final class DeliveryCalendarProjector
                         'weeklyBasket' => $projection['weeklyBasket'],
                         'items' => [['component' => $component, 'amount' => $amount]],
                         'skipped' => false,
-                        'moved_away' => false,
                         'listed' => $this->em->getRepository(WeeklyBasket::class)->findOneBy(['basket' => $basket->getId()]) !== null,
                         'available' => [$component],
                     ];
@@ -287,9 +307,8 @@ final class DeliveryCalendarProjector
                 }
 
                 // Mover un componente a un día "no recoge"/vaciado lo REVIVE para ese
-                // componente: deja de estar saltado/movido y pasa a entregar lo que llega.
+                // componente: deja de estar saltado y pasa a entregar lo que llega.
                 $slots[$idx]['skipped'] = false;
-                $slots[$idx]['moved_away'] = false;
 
                 $alreadyHas = false;
                 foreach ($slots[$idx]['items'] as $line) {
@@ -371,7 +390,7 @@ final class DeliveryCalendarProjector
      * de WeeklyBasketGenerator::materializeExtraEggDeliveries sin persistir. Null si
      * el socio no tiene huevos, no le toca esa semana, o su nodo no reparte.
      *
-     * @return array{date: \DateTimeInterface, basket: Basket, source: 'projected', weeklyBasket: WeeklyBasket, items: array<int, array{component: BasketComponent, amount: string}>, skipped: bool, moved_away: bool, listed: bool, available: list<BasketComponent>}|null
+     * @return array{date: \DateTimeInterface, basket: Basket, source: 'projected', weeklyBasket: WeeklyBasket, items: array<int, array{component: BasketComponent, amount: string}>, skipped: bool, listed: bool, available: list<BasketComponent>}|null
      */
     private function projectExtraEgg(Partner $partner, Basket $basket, bool $listed): ?array
     {
@@ -401,7 +420,6 @@ final class DeliveryCalendarProjector
             'weeklyBasket' => $projection['weeklyBasket'],
             'items' => [['component' => $eggs, 'amount' => $amount]],
             'skipped' => false,
-            'moved_away' => false,
             'listed' => $listed,
             'available' => [$eggs],
         ];

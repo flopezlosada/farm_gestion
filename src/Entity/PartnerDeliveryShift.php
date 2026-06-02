@@ -141,6 +141,21 @@ class PartnerDeliveryShift
         return $this->toBasket;
     }
 
+    /**
+     * Re-apunta el destino del cambio. Lo usa {@see \App\Service\Delivery\DeliveryShiftApplier::repoint()}
+     * al mover una cesta ya movida a otro día sin pasar por su día de patrón (movimientos
+     * encadenados / en ciclo). null la convertiría en "no recoge", pero el applier solo la
+     * re-apunta a destinos reales.
+     *
+     * @param Basket|null $toBasket Nuevo destino del cambio.
+     * @return self
+     */
+    public function setToBasket(?Basket $toBasket): self
+    {
+        $this->toBasket = $toBasket;
+        return $this;
+    }
+
     public function getComponent(): ?BasketComponent
     {
         return $this->component;

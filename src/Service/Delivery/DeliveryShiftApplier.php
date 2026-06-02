@@ -4,6 +4,7 @@ namespace App\Service\Delivery;
 
 use App\Entity\Basket;
 use App\Entity\BasketComponent;
+use App\Entity\BasketShare;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
 use App\Entity\PartnerDeliveryShift;
@@ -111,27 +112,89 @@ final class DeliveryShiftApplier
         $carryItems = $currentWb !== null ? $this->composer->copyLines($currentWb) : null;
 
         $incoming = $shiftRepo->findIncoming($partner, $current);
-        $patternOrigin = $incoming?->getFromBasket() ?? $current;
 
         if ($incoming !== null) {
-            $this->cancel($incoming, $actor);
-        }
+            // La cesta que está en $current llegó por un cambio ($incoming: patrón→current).
+            // Moverla NO debe pasar por el día de patrón: ese día puede estar OCUPADO por
+            // OTRA cesta movida (ciclo 12→26 + 26→12). Por eso NO se cancela+reaplica
+            // (eso saltaría el WB del patrón y perdería la otra cesta), sino que:
+            $patternOrigin = $incoming->getFromBasket();
+            if ($target->getId() === $patternOrigin->getId()) {
+                // Volver al día de patrón = cancelar el cambio (la cesta vuelve a su sitio).
+                $this->cancel($incoming, $actor);
+                if ($carryItems !== null) {
+                    $home = $wbRepo->findOneBy(['basket' => $patternOrigin, 'partner' => $partner]);
+                    if ($home !== null) {
+                        $this->composer->stamp($home, $carryItems);
+                        $this->em->flush();
+                    }
+                }
 
-        if ($target->getId() !== $patternOrigin->getId()) {
-            $this->apply($partner, $patternOrigin, $target, $actor, $carryItems);
+                return;
+            }
+
+            // Mover a OTRO día = RE-APUNTAR el mismo cambio (patrón→target), sin tocar el
+            // día de patrón.
+            $this->repoint($incoming, $target, $carryItems, $actor);
 
             return;
         }
 
-        // Volver al día de patrón: el cancel ya restauró su WB. Si la cesta llevaba una
-        // composición personalizada, reflejarla también ahí (no re-derivar del patrón).
-        if ($carryItems !== null) {
-            $home = $wbRepo->findOneBy(['basket' => $patternOrigin, 'partner' => $partner]);
-            if ($home !== null) {
-                $this->composer->stamp($home, $carryItems);
-                $this->em->flush();
-            }
+        // $current es día de PATRÓN (su cesta no viene movida): su cesta de patrón se
+        // mueve a $target. Mover al propio día = no-op.
+        if ($target->getId() === $current->getId()) {
+            return;
         }
+
+        $this->apply($partner, $current, $target, $actor, $carryItems);
+    }
+
+    /**
+     * Re-apunta un cambio puntual ya existente a un nuevo destino, SIN tocar su día de
+     * patrón (from). Vacía el destino viejo (la cesta deja ese día) y materializa el
+     * nuevo con la composición que viaja. Es la pieza que hace seguros los movimientos
+     * ENCADENADOS o en CICLO (p. ej. 12→19 y luego 19→26, o el swap 12↔26): cancelar y
+     * reaplicar pasando por el patrón saltaría su WB, que puede pertenecer a otra cesta
+     * movida allí.
+     *
+     * @param PartnerDeliveryShift                                                          $shift      Cambio a re-apuntar (su from se conserva).
+     * @param Basket                                                                        $newTarget  Nuevo destino.
+     * @param array<int, array{component: \App\Entity\BasketComponent, amount: string}>|null $carryItems Composición que viaja.
+     * @param string|null                                                                   $actor
+     */
+    private function repoint(PartnerDeliveryShift $shift, Basket $newTarget, ?array $carryItems, ?string $actor): void
+    {
+        /** @var WeeklyBasketRepository $wbRepo */
+        $wbRepo = $this->em->getRepository(WeeklyBasket::class);
+
+        $partner = $shift->getPartner();
+        $from = $shift->getFromBasket();
+        $oldTarget = $shift->getToBasket();
+
+        // Vaciar el destino VIEJO: la cesta deja ese día (queda libre). Se borran sus
+        // líneas antes del WB (WeeklyBasketItem no cascadea).
+        $oldWb = $wbRepo->findOneBy(['basket' => $oldTarget, 'partner' => $partner]);
+        if ($oldWb !== null) {
+            $this->removeItemsOf($oldWb);
+            $this->em->remove($oldWb);
+        }
+
+        // Re-apuntar el cambio y asentar el borrado/repoint antes de tocar el destino nuevo.
+        $shift->setToBasket($newTarget);
+        $this->em->flush();
+
+        // Materializar el destino NUEVO con la composición que viaja (solo si su listado
+        // ya está generado; si no, basta el shift re-apuntado, que el generador leerá).
+        $existingNew = $wbRepo->findOneBy(['basket' => $newTarget, 'partner' => $partner]);
+        if ($existingNew !== null) {
+            $this->reviveAsShiftDestination($existingNew, $partner, $newTarget, $from, $carryItems);
+        } elseif ($wbRepo->findOneBy(['basket' => $newTarget]) !== null) {
+            $destWb = $this->createWeeklyBasketForShiftDestination($partner, $newTarget);
+            $this->stampDestination($destWb, $partner, $newTarget, $from, $carryItems);
+        }
+
+        $this->recordEvent($partner, $from, $newTarget, $actor, cancelled: false);
+        $this->em->flush();
     }
 
     /**
@@ -271,6 +334,22 @@ final class DeliveryShiftApplier
     {
         $shift = new PartnerDeliveryShift($partner, $basket, null, $component);
         $this->em->persist($shift);
+
+        // "No recoge" de la entrega ENTERA (component null): LIBERA el día. Si la semana
+        // está GENERADA y el socio tiene un WeeklyBasket materializado, se RETIRA (con sus
+        // líneas) en vez de dejarlo clavado en estado "no recoge" (status 2). Así el día
+        // queda LIBRE como destino de otra cesta y la entrega aparcada vive solo en el
+        // intent (recuperable). Reparto y PDF no se ven afectados: leen status 1, y un WB
+        // retirado queda fuera igual que uno saltado. El "quitar un componente"
+        // (component != null) NO retira el WB — eso lo gestiona el editor de componentes.
+        if ($component === null) {
+            $existing = $this->em->getRepository(WeeklyBasket::class)->findOneBy(['basket' => $basket, 'partner' => $partner]);
+            if ($existing !== null) {
+                $this->removeItemsOf($existing);
+                $this->em->remove($existing);
+            }
+        }
+
         $this->recordEvent($partner, $basket, $basket, $actor, cancelled: false);
         $this->em->flush();
 
@@ -278,9 +357,49 @@ final class DeliveryShiftApplier
     }
 
     /**
+     * "No recoge" una entrega que VINO MOVIDA a este día (tiene un cambio entrante O→X).
+     * En vez de crear un skip nuevo, RE-APUNTA ese mismo cambio a "no recoge": O→X pasa a
+     * O→null. La cesta deja de entregarse en X (se libera el WB de X) y queda aparcada,
+     * recuperable desde la papelera — simétrico a recoverSkipToDay. El from se conserva en
+     * el ORIGEN de patrón (O), que es donde el generador la materializaría: así el skip
+     * excluye el candidato correcto y la cesta no reaparece.
+     *
+     * @param PartnerDeliveryShift $incoming Cambio entrante (to != null) a aparcar.
+     * @param string|null          $actor
+     */
+    public function skipMovedDelivery(PartnerDeliveryShift $incoming, ?string $actor = null): void
+    {
+        $partner = $incoming->getPartner();
+        $from = $incoming->getFromBasket();
+        $to = $incoming->getToBasket();
+
+        // Liberar de WeeklyBasket TODO el rastro de la cesta: el destino (donde estaba) y el
+        // origen (que el move dejó en status "no recoge" como marca). Tras aparcarla, la cesta
+        // vive SOLO en el intent (papelera) y ningún día tiene WB suyo — si no, el proyector
+        // pintaría dos veces el "no recoge" (el slot sintético + el WB saltado del origen).
+        $wbRepo = $this->em->getRepository(WeeklyBasket::class);
+        foreach ([$to, $from] as $basket) {
+            if ($basket === null) {
+                continue;
+            }
+            $wb = $wbRepo->findOneBy(['basket' => $basket, 'partner' => $partner]);
+            if ($wb !== null) {
+                $this->removeItemsOf($wb);
+                $this->em->remove($wb);
+            }
+        }
+
+        $incoming->setToBasket(null);
+        $this->recordEvent($partner, $from, $from, $actor, cancelled: false);
+        $this->em->flush();
+    }
+
+    /**
      * Cancela un intent sin destino (skip / quitar componente): el componente —o toda
-     * la entrega— vuelve a su patrón. Solo borra la fila (no hay WeeklyBasket asociado
-     * en semanas sin generar). Contraparte de applySkipIntent.
+     * la entrega— vuelve a su patrón. Solo borra la fila del intent. Contraparte de
+     * applySkipIntent. OJO: en una semana GENERADA, applySkipIntent retiró el
+     * WeeklyBasket para liberar el día, así que recuperar la entrega al listado exige
+     * RE-MATERIALIZARLA — eso lo hace el caller (tiene el generador), no este método.
      */
     public function cancelSkipIntent(PartnerDeliveryShift $shift, ?string $actor = null): void
     {
@@ -288,6 +407,72 @@ final class DeliveryShiftApplier
         $partner = $shift->getPartner();
         $this->em->remove($shift);
         $this->recordEvent($partner, $from, $from, $actor, cancelled: true);
+        $this->em->flush();
+    }
+
+    /**
+     * Recupera una entrega aparcada ("no recoge") COLOCÁNDOLA en un día elegido. Si $target
+     * es OTRO día, re-apunta el propio intent de skip (to=null → to=target): NO toca el WB
+     * del día ORIGEN — que puede pertenecer a OTRA cesta movida allí (p. ej. saltar el 12 y
+     * mover el 26 encima del 12), por eso NO se usa move()/apply(). Si $target ES el origen,
+     * borra el intent (la entrega vuelve a su sitio).
+     *
+     * Conserva la NATURALEZA de la cesta aparcada: $onlyEgg indica si en su semana ORIGEN
+     * era una entrega de SOLO-HUEVO (socio con huevo más frecuente que la cesta — SANTOS).
+     * En ese caso el destino se materializa como solo-huevo, NO como cesta de verdura, aunque
+     * la semana destino sí lleve verdura por patrón. El caller lo decide (sabe, vía los
+     * candidatos del generador, si el origen era semana de cesta), porque este servicio no
+     * puede depender del generador (sería circular).
+     *
+     * @param PartnerDeliveryShift $skip    Intent de "no recoge" (to == null) a recuperar.
+     * @param Basket               $target  Día elegido donde colocar la cesta.
+     * @param bool                 $onlyEgg true si la cesta aparcada era de solo-huevo.
+     * @param string|null          $actor
+     */
+    public function recoverSkipToDay(PartnerDeliveryShift $skip, Basket $target, bool $onlyEgg, ?string $actor = null): void
+    {
+        $partner = $skip->getPartner();
+        $from = $skip->getFromBasket();
+        $backHome = $target->getId() === $from->getId();
+
+        if ($backHome) {
+            $this->em->remove($skip); // vuelve a su día: el "no recoge" desaparece
+        } else {
+            $skip->setToBasket($target); // a otro día: el intent pasa de "no recoge" a "entregar en target"
+        }
+        $this->em->flush();
+
+        /** @var WeeklyBasketRepository $wbRepo */
+        $wbRepo = $this->em->getRepository(WeeklyBasket::class);
+        // Listado del destino sin generar: basta el intent (lo leerá el generador). En
+        // backHome el skip se borró → el generador recreará la entrega de patrón.
+        if ($wbRepo->findOneBy(['basket' => $target]) === null) {
+            $this->recordEvent($partner, $from, $target, $actor, cancelled: $backHome);
+            $this->em->flush();
+
+            return;
+        }
+
+        $wb = $wbRepo->findOneBy(['basket' => $target, 'partner' => $partner]);
+        if ($wb !== null) {
+            $this->removeItemsOf($wb);
+        } else {
+            $wb = (new WeeklyBasket())->setBasket($target)->setPartner($partner);
+            $this->em->persist($wb);
+        }
+        $this->configureAsShiftDestination($wb, $partner, $target);
+        if ($onlyEgg) {
+            $wb->setBasketShare($this->em->getRepository(BasketShare::class)->find(BasketShare::ID_ONLY_EGG));
+            $wb->setAmount(0);
+        }
+        $this->em->flush(); // que compose() vea el WB sin líneas y con su modalidad ya fijada
+
+        $share = $this->em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner, $target->getDate());
+        if ($share !== null) {
+            $this->composer->compose($wb, $share, $target, eggReferenceBasket: $from);
+        }
+
+        $this->recordEvent($partner, $from, $target, $actor, cancelled: $backHome);
         $this->em->flush();
     }
 

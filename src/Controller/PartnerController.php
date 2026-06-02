@@ -22,7 +22,6 @@ use App\Service\Delivery\DeliveryCalendarProjector;
 use App\Service\Delivery\DeliveryShiftApplier;
 use App\Service\Delivery\WeeklyBasketComponentEditor;
 use App\Service\Delivery\WeeklyBasketGenerator;
-use App\Service\Delivery\WeeklyBasketSkipper;
 use App\Service\Partner\PartnerShareEventRecorder;
 use Doctrine\ORM\EntityManagerInterface;
 use Knp\Component\Pager\PaginatorInterface;
@@ -314,6 +313,12 @@ class PartnerController extends AbstractController
             $slots,
         );
 
+        // La PAPELERA: las entregas "no recoge" del mes (saltadas), aparcadas y
+        // recuperables. Salen de la rejilla — su día queda LIBRE — y se muestran aparte.
+        // La rejilla solo pinta lo que SÍ se recoge.
+        $tray = array_values(array_filter($slots, static fn (array $s): bool => $s['skipped']));
+        $gridSlots = array_filter($gridSlots, static fn (array $s): bool => !$s['skipped']);
+
         // Día seleccionado para el panel lateral: el Basket pedido por query (?sel),
         // o por defecto la primera entrega del mes. Solo entregas reales son
         // seleccionables (las celdas vacías no abren panel).
@@ -326,108 +331,42 @@ class PartnerController extends AbstractController
         $today = new \DateTimeImmutable('today');
         $selectedEditable = $selected !== null && $selected['date'] > $today;
 
-        // ¿Hay un cambio puntual (shift) que afecte al día seleccionado? Se usa para
-        // pintar el contexto del día (de dónde viene / a dónde se fue la cesta) y, en
-        // el caso destino, para ofrecer el día ORIGINAL como destino de "mover".
-        $shift = null;
-        $shiftRole = null;
-        if ($selected !== null && $partner->getSharePartner() === null) {
-            $shiftRepo = $em->getRepository(\App\Entity\PartnerDeliveryShift::class);
-            $selectedBasket = $selected['basket'];
-            $outgoing = $shiftRepo->findOutgoing($partner, $selectedBasket);
-            $incoming = $shiftRepo->findIncoming($partner, $selectedBasket);
-            // Un mismo día puede ser ORIGEN de un cambio (su cesta natural se fue) y a
-            // la vez DESTINO de otro (recibió una cesta movida). Manda el estado real
-            // del WB: si la cesta está AQUÍ (no saltada), es destino; si está vacío
-            // (saltado), es origen.
-            if ($incoming !== null && !$selected['skipped']) {
-                $shift = $incoming;
-                $shiftRole = 'destination'; // este día recibe una cesta movida desde otro
-            } elseif ($outgoing !== null && $outgoing->getToBasket() !== null) {
-                // Solo es ORIGEN si la cesta se MOVIÓ a otra fecha (hay destino). Un
-                // intent de "no recoge" (sin destino) NO es origin: cae al bloque normal
-                // de saltada (skipped), evitando además leer shift.toBasket (null).
-                $shift = $outgoing;
-                $shiftRole = 'origin';      // este día se vació porque su cesta se movió a otro
-            } elseif ($incoming !== null) {
-                $shift = $incoming;
-                $shiftRole = 'destination';
+        // Destinos de ARRASTRE (mover una entrega a otro día): días del mes donde el nodo
+        // reparte y el socio NO tiene ya una entrega real — modelo relajado (cualquier día
+        // libre, incluido un "no recoge", vale; mover ahí lo revive). Map fecha física
+        // 'Y-m-d' → basketId, para que la rejilla marque esas celdas como soltables. El
+        // endpoint de mover revalida; esto es solo para resaltar y permitir el drop. No se
+        // ofrece en compartidas (R1).
+        $dropDays = [];
+        $activeShare = $em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner, $current);
+        if ($partner->getSharePartner() === null && $activeShare !== null) {
+            $occupiedReal = [];
+            foreach ($slots as $s) {
+                if (!empty($s['items'])) {
+                    $occupiedReal[$s['basket']->getId()] = true;
+                }
             }
-        }
-
-        // Candidatos de "mover de día": semanas FUTURAS del MISMO MES donde el nodo
-        // reparte y el socio NO tiene ya entrega (flexibilidad del caso Franco — sin
-        // la ventana estrecha del autoservicio, pero acotado al mes por decisión de
-        // negocio). El "mes" es el del Basket ORIGEN (su fecha lógica), NO el mes
-        // visible: si por un festivo la entrega se trasladó a otro mes físico (1-may
-        // → abril), su ciclo sigue siendo mayo y debe poder moverse DENTRO de mayo.
-        //
-        // Se ofrece tanto para una entrega normal como para una que ya viene movida
-        // (destino de un shift): en ese caso el día ORIGINAL de ESTA cesta es un
-        // destino válido (mover de vuelta = quitar el cambio). Cualquier otro día
-        // ocupado bloquea, INCLUIDOS los días vaciados por OTRA cesta: un socio solo
-        // tiene un hueco por día, así que apilar una cesta sobre el día original de
-        // otra perdería una (no se permite). No se ofrece desde el día ORIGEN de un
-        // cambio (ahí no hay cesta que mover) ni en compartidas (R1).
-        // No se ofrece mover una cesta que no lleva nada (saltada o con todos los
-        // componentes quitados): mover una entrega vacía no tiene sentido.
-        // Alcance del movimiento: 0 = toda la entrega; si no, verdura u huevos (mover
-        // SOLO ese componente). Se evalúan TODOS los alcances posibles y se muestran
-        // solo los que tienen destinos: "Todo" (entrega entera) nunca tiene destino para
-        // un socio con algo cada semana (SANTOS) — movería el huevo a un día que ya lo
-        // tiene — así que ahí solo aparece "solo verdura". El pedido (?move_component) se
-        // respeta si tiene destinos; si no, cae al primero que los tenga.
-        $moveComponentId = (int) $request->query->get('move_component', 0);
-        if (!in_array($moveComponentId, [BasketComponent::ID_VEGETABLES, BasketComponent::ID_EGGS], true)) {
-            $moveComponentId = 0;
-        }
-
-        $moveCandidates = [];
-        $moveScopes = [];
-        $canMove = $selectedEditable
-            && $partner->getSharePartner() === null
-            && ($shift === null || $shiftRole === 'destination')
-            && !empty($selected['items']);
-        if ($canMove) {
-            $share = $em->getRepository(PartnerBasketShare::class)
-                ->findActiveForPartner($partner, $selected['basket']->getDate());
-            if ($share !== null) {
-                $originDate = $selected['basket']->getDate();
-                $monthStart = new \DateTimeImmutable($originDate->format('Y-m-01'));
-                $monthEnd = $monthStart->modify('last day of this month');
-                $monthBaskets = $em->getRepository(Basket::class)->createQueryBuilder('b')
-                    ->where('b.date BETWEEN :start AND :end')
-                    ->setParameter('start', $monthStart->format('Y-m-d'))
-                    ->setParameter('end', $monthEnd->format('Y-m-d'))
-                    ->orderBy('b.date', 'ASC')
-                    ->getQuery()
-                    ->getResult();
-
-                $monthSlots = $projector->projectMonth($partner, (int) $monthStart->format('Y'), (int) $monthStart->format('n'));
-
-                // Alcances a evaluar: "Todo" solo si la entrega lleva 2+ componentes
-                // presentes (con uno solo, "Todo" == mover ese componente); más un alcance
-                // por cada componente presente.
-                $scopes = count($selected['items']) >= 2 ? [0] : [];
-                foreach ($selected['items'] as $line) {
-                    $scopes[] = $line['component']->getId();
+            $monthEnd = $current->modify('last day of this month');
+            $monthBaskets = $em->getRepository(Basket::class)->createQueryBuilder('b')
+                ->where('b.date BETWEEN :start AND :end')
+                ->setParameter('start', $current->format('Y-m-d'))
+                ->setParameter('end', $monthEnd->format('Y-m-d'))
+                ->orderBy('b.date', 'ASC')
+                ->getQuery()
+                ->getResult();
+            foreach ($monthBaskets as $b) {
+                if (isset($occupiedReal[$b->getId()])) {
+                    continue; // ya hay entrega real ese día: un hueco por día
                 }
-
-                $candidatesByScope = [];
-                foreach ($scopes as $scope) {
-                    $occupied = $this->moveOccupiedForScope($scope, $monthSlots, $shiftRole === 'destination' ? $shift?->getFromBasket()?->getId() : null);
-                    $candidatesByScope[$scope] = $this->calendarMoveCandidates(
-                        $share, $selected['basket'], $occupied, $monthBaskets, $generator, $today,
-                    );
+                $projection = $generator->projectShareDelivery($b, $activeShare);
+                if ($projection === null) {
+                    continue; // el nodo no reparte esa semana
                 }
-
-                $moveScopes = array_values(array_filter($scopes, static fn (int $sc): bool => $candidatesByScope[$sc] !== []));
-
-                // Alcance efectivo: el pedido si tiene destinos; si no, el primero que sí.
-                if (($candidatesByScope[$moveComponentId] ?? []) === []) {
-                    $moveComponentId = $moveScopes[0] ?? $moveComponentId;
+                $physical = $projection['deliveryDate'] ?? $b->getDate();
+                if ($physical <= $today) {
+                    continue; // mismo deadline: destino futuro
                 }
-                $moveCandidates = $candidatesByScope[$moveComponentId] ?? [];
+                $dropDays[$physical->format('Y-m-d')] = $b->getId();
             }
         }
 
@@ -441,15 +380,10 @@ class PartnerController extends AbstractController
             'group' => $group,
             'pickup_place' => $pickupPlace,
             'slots' => $slots,
-            'weeks' => $this->buildMonthWeeks($year, $month, $gridSlots),
+            'tray' => $tray,
+            'weeks' => $this->buildMonthWeeks($year, $month, $gridSlots, $dropDays),
             'selected' => $selected,
             'selected_editable' => $selectedEditable,
-            'move_candidates' => $moveCandidates,
-            'move_component' => $moveComponentId,
-            'move_scopes' => $moveScopes,
-            'can_move' => $canMove,
-            'shift' => $shift,
-            'shift_role' => $shiftRole,
             'current' => $current,
             'prev' => $current->modify('-1 month'),
             'next' => $current->modify('+1 month'),
@@ -660,21 +594,134 @@ class PartnerController extends AbstractController
     }
 
     /**
-     * Saltar / volver a recoger una entrega del calendario (acción de B'). Si la
-     * entrega solo estaba prevista (no materializada), la fija primero
-     * (materializeShareDelivery) y luego alterna su estado vía WeeklyBasketSkipper
-     * — misma semántica que el panel del socio, sin borrar el WeeklyBasket.
+     * Recuperar una entrega aparcada ("no recoge") COLOCÁNDOLA en un día ELEGIDO. A
+     * diferencia de des-saltar (que la devuelve a su día de patrón), aquí el gestor arrastra
+     * la tarjeta de la papelera a una celda libre concreta y la cesta se coloca AHÍ. Quita
+     * el acople "se recupera siempre sobre el origen": la papelera deja de estar atada al día.
      *
-     * Guardas: R1 (los compartidos no editan su día), cambio puntual activo esa
-     * semana (se desincronizaría) y que el socio tenga cesta activa y su nodo
-     * reparta esa semana. Sin deadline: es el gestor.
+     * Mecánica: cancelar el intent de "no recoge" y, si el destino es OTRO día, mover la
+     * cesta de su día de patrón (origen) al elegido (move = shift patrón→destino, que
+     * materializa la entrega con su composición de patrón). Si el destino ES el origen,
+     * simplemente se re-materializa allí.
+     *
+     * @param Partner                        $partner
+     * @param int                            $basketId  Semana ORIGEN (la del intent "no recoge").
+     * @param Request                        $request
+     * @param BasketRepository               $basketRepository
+     * @param WeeklyBasketGenerator          $generator
+     * @param PartnerDeliveryShiftRepository $shiftRepository
+     * @param DeliveryShiftApplier           $applier
+     * @param EntityManagerInterface         $em
+     * @return Response
+     */
+    #[Route("/{id}/calendar/recover/{basketId}", name: "partner_delivery_calendar_recover", methods: ["POST"], requirements: ["id" => "\\d+", "basketId" => "\\d+"])]
+    public function deliveryCalendarRecover(
+        Partner $partner,
+        int $basketId,
+        Request $request,
+        BasketRepository $basketRepository,
+        WeeklyBasketGenerator $generator,
+        PartnerDeliveryShiftRepository $shiftRepository,
+        DeliveryShiftApplier $applier,
+        EntityManagerInterface $em,
+    ): Response {
+        $origin = $basketRepository->find($basketId);
+        if ($origin === null) {
+            throw $this->createNotFoundException('Semana de reparto no encontrada.');
+        }
+
+        $backToCalendar = fn (Basket $sel): Response => $this->redirectToRoute('partner_delivery_calendar', [
+            'id' => $partner->getId(),
+            'year' => $sel->getDate()->format('Y'),
+            'month' => $sel->getDate()->format('n'),
+            'sel' => $sel->getId(),
+        ]);
+
+        if (!$this->isCsrfTokenValid('calendar_move_' . $partner->getId(), (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
+
+            return $backToCalendar($origin);
+        }
+
+        $skip = $shiftRepository->findOutgoing($partner, $origin);
+        if ($skip === null || !$skip->isSkip()) {
+            $this->addFlash('warning', 'Esa entrega ya no está aparcada.');
+
+            return $backToCalendar($origin);
+        }
+
+        $share = $em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner, $origin->getDate());
+        if ($share === null) {
+            $this->addFlash('error', 'El socio no tiene cesta activa.');
+
+            return $backToCalendar($origin);
+        }
+
+        $to = $basketRepository->find((int) $request->request->get('to_basket_id', 0));
+        if ($to === null) {
+            $this->addFlash('error', 'Selecciona una fecha destino válida.');
+
+            return $backToCalendar($origin);
+        }
+
+        $today = new \DateTimeImmutable('today');
+        $toProjection = $generator->projectShareDelivery($to, $share);
+        if ($toProjection === null) {
+            $this->addFlash('error', 'El nodo del socio no reparte ese día: elige otra fecha.');
+
+            return $backToCalendar($origin);
+        }
+        if (($toProjection['deliveryDate'] ?? $to->getDate()) <= $today) {
+            $this->addFlash('error', 'No puedes recuperar la cesta en hoy ni en una fecha pasada.');
+
+            return $backToCalendar($origin);
+        }
+
+        $actor = 'gestor:' . $this->getUser()?->getId();
+
+        // ¿La cesta aparcada era de SOLO-HUEVO? Lo es si en su semana ORIGEN el socio NO era
+        // candidato a cesta (caso SANTOS: huevo semanal, verdura mensual → sus semanas sin
+        // verdura). Sin esto, recuperarla sobre una semana de cesta le recompondría verdura
+        // de la nada. projectForBasket = candidatos de patrón (cohorte/cadencia/nodo),
+        // agnóstico a shifts; el applier no puede pedirlo (dependería del generador → ciclo).
+        $originIsCestaWeek = false;
+        foreach ($generator->projectForBasket($origin) as $candidate) {
+            if ($candidate->getPartner()->getId() === $partner->getId()) {
+                $originIsCestaWeek = true;
+                break;
+            }
+        }
+
+        // Colocar en el día ELEGIDO re-apuntando el propio intent (no se toca el día origen
+        // ni una posible cesta movida encima de él). recoverSkipToDay cubre también el caso
+        // "de vuelta a su propio día".
+        $applier->recoverSkipToDay($skip, $to, !$originIsCestaWeek, $actor);
+        $this->addFlash('success', $to->getId() === $origin->getId()
+            ? sprintf('Recuperada en su día: %s.', $origin->getDate()->format('d/m/Y'))
+            : sprintf('Recuperada el %s.', $to->getDate()->format('d/m/Y')));
+
+        return $backToCalendar($to);
+    }
+
+    /**
+     * Saltar / volver a recoger ("papelera") una entrega del calendario. El "no recoge"
+     * es un INTENT durable sin destino (PartnerDeliveryShift to=null): LIBERA el día
+     * (applySkipIntent retira el WeeklyBasket si la semana estaba generada) y la entrega
+     * aparcada vive solo en el intent, recuperable. Volver a recoger cancela el intent y,
+     * si la semana está generada, re-materializa la entrega para devolver al socio al
+     * listado. Mismo mecanismo para semanas generadas y sin generar — el día queda libre
+     * en ambos casos, sin WB clavado en estado "no recoge".
+     *
+     * Guardas: R1 (los compartidos no editan su día), socio con cesta activa, no pasada.
+     * Un cambio de DÍA (mover) activo esa semana se gestiona desde "mover", no aquí. Sin
+     * deadline: es el gestor.
      *
      * @param Partner                        $partner
      * @param int                            $basketId Semana (Basket) sobre la que actuar.
      * @param Request                        $request
      * @param WeeklyBasketGenerator          $generator
-     * @param WeeklyBasketSkipper            $skipper
      * @param PartnerDeliveryShiftRepository $shiftRepository
+     * @param DeliveryShiftApplier           $applier
      * @param EntityManagerInterface         $em
      * @return Response
      */
@@ -684,7 +731,6 @@ class PartnerController extends AbstractController
         int $basketId,
         Request $request,
         WeeklyBasketGenerator $generator,
-        WeeklyBasketSkipper $skipper,
         PartnerDeliveryShiftRepository $shiftRepository,
         DeliveryShiftApplier $applier,
         EntityManagerInterface $em,
@@ -709,39 +755,70 @@ class PartnerController extends AbstractController
 
         $actor = 'gestor:' . $this->getUser()?->getId();
 
-        // Semana GENERADA: se alterna el estado del WeeklyBasket (camino directo).
-        if ($em->getRepository(WeeklyBasket::class)->findOneBy(['basket' => $basket]) !== null) {
-            $weeklyBasket = $this->resolveCalendarDelivery($partner, $basket, $generator, $shiftRepository, $applier, $em);
-            if ($weeklyBasket === null) {
-                return $backToCalendar();
+        $generated = $em->getRepository(WeeklyBasket::class)->findOneBy(['basket' => $basket]) !== null;
+        $outgoing = $shiftRepository->findOutgoing($partner, $basket);
+        $incoming = $shiftRepository->findIncoming($partner, $basket);
+
+        // VOLVER A RECOGER: acción EXPLÍCITA (botón "Volver a recoger" del panel sobre una
+        // entrega aparcada), marcada con el flag `recover`. NO se infiere de findOutgoing:
+        // un día puede tener a la vez un "no recoge" saliente y una cesta entrante (tras un
+        // swap), y el arrastre de "no recoge" debe aparcar la entrante, no recuperar la otra.
+        if ($request->request->getBoolean('recover')) {
+            if ($outgoing !== null && $outgoing->isSkip()) {
+                $applier->cancelSkipIntent($outgoing, $actor);
+                if ($generated) {
+                    $share = $em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner, $basket->getDate());
+                    if ($share !== null) {
+                        $generator->materializeShareDelivery($basket, $share);
+                        $em->flush();
+                    }
+                }
+                $this->addFlash('success', 'Restaurada: el socio vuelve a recoger esa semana.');
+            } else {
+                $this->addFlash('warning', 'Esa semana no tiene ninguna entrega aparcada que recuperar.');
             }
-            $skipped = $skipper->toggle($weeklyBasket, $actor);
-            $em->flush();
-            match ($skipped) {
-                true => $this->addFlash('success', 'Marcada como NO recogida esa semana.'),
-                false => $this->addFlash('success', 'Restaurada: el socio vuelve a recoger esa semana.'),
-                default => $this->addFlash('warning', 'La entrega está en un estado especial y no se puede alternar.'),
-            };
 
             return $backToCalendar();
         }
 
-        // Semana SIN GENERAR: el "no recoge" se guarda como intent durable (no se
-        // materializa nada — eso corrompería la generación). El generador y el proyector
-        // ya lo leen. Alterna: si ya hay un skip, lo cancela (volver a recoger).
+        // NO RECOGE: guardas comunes (no pasada, no compartida R1, cesta activa).
         if ($this->ungeneratedEditGuard($partner, $basket, $em) === null) {
             return $backToCalendar();
         }
-        $outgoing = $shiftRepository->findOutgoing($partner, $basket);
-        if ($outgoing !== null && $outgoing->isSkip()) {
-            $applier->cancelSkipIntent($outgoing, $actor);
-            $this->addFlash('success', 'Restaurada: el socio vuelve a recoger esa semana.');
-        } elseif ($outgoing !== null) {
-            $this->addFlash('warning', 'Hay un cambio de día activo esa semana: gestiónalo desde "mover".');
-        } else {
-            $applier->applySkipIntent($partner, $basket, null, $actor);
+
+        // La cesta MOSTRADA en este día puede haber VENIDO movida de otro (cambio entrante).
+        // Eso es lo que el gestor ve y quiere no-recoger, y tiene PRIORIDAD sobre cualquier
+        // shift SALIENTE de este mismo día: tras un swap (p. ej. 1↔15) ambos días son origen
+        // Y destino a la vez, y lo que se recoge ese día es la cesta entrante. "No recoge"
+        // re-apunta ese movimiento entrante a un skip (O→X pasa a O→null), aparcándola.
+        if ($incoming !== null) {
+            $applier->skipMovedDelivery($incoming, $actor);
             $this->addFlash('success', 'Marcada como NO recogida esa semana.');
+
+            return $backToCalendar();
         }
+
+        // Ya hay un "no recoge" saliente de este día (sin entrante): la cesta ya está
+        // aparcada. (Raro de alcanzar desde la UI: un día así sale en la papelera, no en la
+        // rejilla; defensivo.)
+        if ($outgoing !== null && $outgoing->isSkip()) {
+            $this->addFlash('warning', 'Esa semana ya está marcada como NO recoge.');
+
+            return $backToCalendar();
+        }
+
+        // Sin entrante pero con un move saliente: la cesta de este día YA se fue a otra
+        // fecha (este día está vacío). No hay nada que no-recoger aquí; se gestiona desde
+        // el día destino.
+        if ($outgoing !== null) {
+            $this->addFlash('warning', 'La cesta de esta semana ya está movida a otro día: gestiónala desde ahí.');
+
+            return $backToCalendar();
+        }
+
+        // Día normal con su cesta de patrón.
+        $applier->applySkipIntent($partner, $basket, null, $actor);
+        $this->addFlash('success', 'Marcada como NO recogida esa semana.');
 
         return $backToCalendar();
     }
@@ -1019,117 +1096,35 @@ class PartnerController extends AbstractController
         }
 
         if ($selectedBasketId > 0) {
+            // Un día puede tener DOS slots: una cesta movida encima (rejilla) y una cesta
+            // aparcada en la papelera (un "no recoge" cuyo día se reutilizó). El panel
+            // gestiona la entrega REAL, así que se prefiere la NO saltada; la aparcada solo
+            // como fallback (día que es únicamente "no recoge").
+            $fallback = null;
             foreach ($slots as $slot) {
-                if ($slot['basket']->getId() === $selectedBasketId) {
+                if ($slot['basket']->getId() !== $selectedBasketId) {
+                    continue;
+                }
+                if (!$slot['skipped']) {
                     return $slot;
                 }
+                $fallback ??= $slot;
+            }
+            if ($fallback !== null) {
+                return $fallback;
             }
         }
 
-        // Por defecto se evita seleccionar un día "movido a otra fecha" (azul): ahí no
-        // hay cesta que gestionar y la celda ni siquiera es clicable. Se prefiere una
-        // entrega real del mes; si todas están movidas, cae a la primera que haya.
+        // Por defecto, la primera entrega cuya fecha física cae DENTRO del mes mostrado
+        // (no la que se cuela de un mes vecino por la fecha física del nodo); si ninguna,
+        // la primera del listado.
         foreach ($slots as $slot) {
-            if (!($slot['moved_away'] ?? false) && $slot['date']->format('Y-m') === $month) {
-                return $slot;
-            }
-        }
-        foreach ($slots as $slot) {
-            if (!($slot['moved_away'] ?? false)) {
+            if ($slot['date']->format('Y-m') === $month) {
                 return $slot;
             }
         }
 
         return $slots[0];
-    }
-
-    /**
-     * Días "ocupados" (no ofrecibles como destino) según el alcance del movimiento.
-     * Modelo (Paco): un día "no recoge"/vacío deja de ser día de recogida y es destino
-     * VÁLIDO — mover algo ahí lo revive. Así que solo bloquea conflictos reales:
-     *  - "Todo" (scope 0): días con entrega REAL (ítems no vacíos) — un hueco por día;
-     *    los vacíos/"no recoge" quedan libres. Excepción: el día original propio.
-     *  - Un componente: días donde el socio YA recoge ESE componente (duplicado). Un
-     *    día con OTRO componente, o vacío/"no recoge", es destino válido.
-     *
-     * @param int                                                        $scope        0 = entrega entera; si no, id de componente.
-     * @param list<array{basket: Basket, items: array}>                  $monthSlots
-     * @param int|null                                                   $ownOriginId  Día original a NO bloquear (solo en "Todo" desde un destino).
-     * @return int[]
-     */
-    private function moveOccupiedForScope(int $scope, array $monthSlots, ?int $ownOriginId): array
-    {
-        $occupied = [];
-        foreach ($monthSlots as $s) {
-            if ($scope === 0) {
-                // Entrega entera: bloquea solo si ese día tiene una entrega real (algo que
-                // recoger). Vacío / "no recoge" → libre.
-                if (!empty($s['items']) && $s['basket']->getId() !== $ownOriginId) {
-                    $occupied[] = $s['basket']->getId();
-                }
-                continue;
-            }
-            // Un componente: bloquea solo si ya lleva ESE componente (duplicado).
-            foreach ($s['items'] as $line) {
-                if ($line['component']->getId() === $scope) {
-                    $occupied[] = $s['basket']->getId();
-                    break;
-                }
-            }
-        }
-
-        return $occupied;
-    }
-
-    /**
-     * Candidatos de "mover de día" para el calendario del GESTOR (caso Franco):
-     * cualquier semana del mes del Basket origen donde el nodo del socio reparte,
-     * futura (no pasada) y libre (el socio no tiene ya entrega ahí). NO usa la ventana estrecha
-     * del autoservicio (DeliveryShiftCandidates/WindowRule) — el gestor puede
-     * determinar cualquier combinación. El único invariante es estructural: que el
-     * nodo reparta ese día (lo decide projectShareDelivery, igual que la proyección).
-     *
-     * @param PartnerBasketShare    $share            Cesta activa del socio.
-     * @param Basket                $from             Semana origen (se excluye).
-     * @param int[]                 $occupiedBasketIds Baskets donde el socio ya tiene entrega.
-     * @param Basket[]              $monthBaskets     Baskets del mes visible, ordenados.
-     * @param WeeklyBasketGenerator $generator
-     * @param \DateTimeInterface    $today
-     * @return list<array{id: int, date: \DateTimeInterface}> Cada candidato con la
-     *         fecha FÍSICA de recogida (no la lógica del viernes-ciclo): si el nodo
-     *         reparte otro día (Madrid) o un festivo lo trasladó, el chip muestra el
-     *         día real en que se recogería la cesta.
-     */
-    private function calendarMoveCandidates(
-        PartnerBasketShare $share,
-        Basket $from,
-        array $occupiedBasketIds,
-        array $monthBaskets,
-        WeeklyBasketGenerator $generator,
-        \DateTimeInterface $today,
-    ): array {
-        $candidates = [];
-        foreach ($monthBaskets as $basket) {
-            if ($basket->getId() === $from->getId()) {
-                continue;
-            }
-            if (in_array($basket->getId(), $occupiedBasketIds, true)) {
-                continue;
-            }
-            if ($basket->getDate() < $today) {
-                continue;
-            }
-            // El nodo reparte esa semana → es un destino físicamente posible.
-            $projection = $generator->projectShareDelivery($basket, $share);
-            if ($projection !== null) {
-                $candidates[] = [
-                    'id' => $basket->getId(),
-                    'date' => $projection['deliveryDate'] ?? $basket->getDate(),
-                ];
-            }
-        }
-
-        return $candidates;
     }
 
     /**
@@ -1140,9 +1135,10 @@ class PartnerController extends AbstractController
      * @param int                                                     $year
      * @param int                                                     $month
      * @param list<array{date: \DateTimeInterface, basket: Basket, ...}> $slots
-     * @return list<list<array{date: \DateTimeImmutable, inMonth: bool, slot: array|null}>>
+     * @param array<string, int>                                      $dropDays Fecha física 'Y-m-d' → basketId destino de arrastre (día libre del nodo).
+     * @return list<list<array{date: \DateTimeImmutable, inMonth: bool, slot: array|null, dropBasketId: int|null}>>
      */
-    private function buildMonthWeeks(int $year, int $month, array $slots): array
+    private function buildMonthWeeks(int $year, int $month, array $slots, array $dropDays = []): array
     {
         // Mapa fecha física (Y-m-d) → slot, para colocar la entrega en su celda.
         $byDay = [];
@@ -1163,6 +1159,7 @@ class PartnerController extends AbstractController
                     'date' => $cursor,
                     'inMonth' => $cursor->format('Y-m') === $first->format('Y-m'),
                     'slot' => $byDay[$cursor->format('Y-m-d')] ?? null,
+                    'dropBasketId' => $dropDays[$cursor->format('Y-m-d')] ?? null,
                 ];
                 $cursor = $cursor->modify('+1 day');
             }
