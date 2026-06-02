@@ -1057,9 +1057,15 @@ class DeliveryController extends AbstractController
             $nodeRepo->findBy([], ['name' => 'ASC']),
         );
 
+        // Si ningún nodo reparte ese día (festivo global, todos quincenales
+        // fuera de fase…) no hay nada que imprimir: la plantilla deshabilita la
+        // generación y el PDF queda protegido aguas abajo en printablePdf().
+        $anyDelivers = array_filter($nodes, static fn (array $row): bool => $row['delivers']) !== [];
+
         return $this->render('delivery/printable_select.html.twig', [
             'basket' => $basket,
             'nodes' => $nodes,
+            'any_delivers' => $anyDelivers,
         ]);
     }
 
@@ -1101,6 +1107,16 @@ class DeliveryController extends AbstractController
                 'physical_date' => $nodeDeliveryDate->physicalDateFor($basket, $node),
                 'sheet' => $sheetBuilder->build($node, $basket),
             ];
+        }
+
+        // Ninguno de los nodos elegidos reparte ese día: no tiene sentido un PDF
+        // de cero hojas. Volvemos al selector con un aviso. Cubre tanto el caso
+        // de que ningún nodo reparta como el de forzar la URL con nodos que no
+        // reparten.
+        if ($sheets === []) {
+            $this->addFlash('warning', 'Ningún nodo reparte ese día: no hay listado que generar.');
+
+            return $this->redirectToRoute('delivery_printable_select', ['basketId' => $basket->getId()]);
         }
 
         $html = $this->renderView('delivery/printable.html.twig', [

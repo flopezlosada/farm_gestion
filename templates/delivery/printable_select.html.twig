@@ -30,12 +30,16 @@
 .prt-sel__item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #f2efe7; }
 .prt-sel__item:last-child { border-bottom: 0; }
 .prt-sel__item input { width: 18px; height: 18px; }
+.prt-sel__item--off { opacity: .6; }
+.prt-sel__item--off input { cursor: not-allowed; }
 .prt-sel__name { font-weight: 600; color: #1d1c17; }
 .prt-sel__meta { margin-left: auto; font-size: 12px; color: #8d8773; }
 .prt-sel__meta--off { color: #b45d3a; }
+.prt-sel__empty { margin-top: 16px; color: #b45d3a; font-size: 13px; }
 .prt-sel__actions { margin-top: 24px; display: flex; gap: 12px; }
 .prt-btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; border-radius: 6px; border: 0; cursor: pointer; font-weight: 600; font-size: 14px; text-decoration: none; }
 .prt-btn--go { background: #5b7a4c; color: #fff; }
+.prt-btn--go:disabled { background: #c2c2b4; cursor: not-allowed; }
 .prt-btn--ghost { background: #f2efe7; color: #5a564a; }
 </style>
 {% endblock %}
@@ -48,8 +52,8 @@
     <form method="get" action="{{ path('delivery_printable_pdf', {basketId: basket.id}) }}" target="_blank">
         <div class="prt-sel__list">
             {% for row in nodes %}
-                <label class="prt-sel__item">
-                    <input type="checkbox" name="nodes[]" value="{{ row.node.id }}" {{ row.delivers ? 'checked' : '' }}>
+                <label class="prt-sel__item{{ row.delivers ? '' : ' prt-sel__item--off' }}">
+                    <input type="checkbox" name="nodes[]" value="{{ row.node.id }}" {{ row.delivers ? 'checked' : 'disabled' }}>
                     <span class="prt-sel__name">{{ row.node.name }}</span>
                     {% if row.delivers %}
                         <span class="prt-sel__meta">reparte el {{ row.physical_date ? row.physical_date|date('d/m') : '—' }}</span>
@@ -60,8 +64,12 @@
             {% endfor %}
         </div>
 
+        {% if not any_delivers %}
+            <p class="prt-sel__empty">Ningún nodo reparte este día, no hay listado que imprimir.</p>
+        {% endif %}
+
         <div class="prt-sel__actions">
-            <button type="submit" class="prt-btn prt-btn--go">Generar PDF</button>
+            <button type="submit" class="prt-btn prt-btn--go"{{ any_delivers ? '' : ' disabled' }}>Generar PDF</button>
             <a href="{{ path('delivery_by_node', {nodeId: nodes|first.node.id, basketId: basket.id}) }}" class="prt-btn prt-btn--ghost">Volver al reparto</a>
         </div>
     </form>
