@@ -27,11 +27,21 @@
     <div class="dex-list">
         {% for ex in items %}
             <div class="dex-row{{ is_past ? ' dex-row--past' : '' }}">
-                <span class="dex-date">
-                    <span class="dow">{{ _dow_abbr[ex.basket.date|date('w')] }}</span>
-                    <span class="num">{{ ex.basket.date|date('d') }}</span>
-                    <span class="mon">{{ _month_abbr[ex.basket.date|date('n')] }} {{ ex.basket.date|date('y') }}</span>
-                </span>
+                {% if ex.isGlobal and ex.isCancelled %}
+                    {% set _wkstart = ex.basket.date|date_modify('-4 days') %}
+                    {% set _wkend = ex.basket.date|date_modify('+2 days') %}
+                    <span class="dex-date dex-date--week" title="Cierre de toda la semana, todos los nodos">
+                        <span class="dow">semana</span>
+                        <span class="num">{{ _wkstart|date('d') }}–{{ _wkend|date('d') }}</span>
+                        <span class="mon">{{ _month_abbr[_wkstart|date('n')] }}{% if (_wkstart|date('n')) != (_wkend|date('n')) %}–{{ _month_abbr[_wkend|date('n')] }}{% endif %} {{ _wkstart|date('y') }}</span>
+                    </span>
+                {% else %}
+                    <span class="dex-date">
+                        <span class="dow">{{ _dow_abbr[ex.basket.date|date('w')] }}</span>
+                        <span class="num">{{ ex.basket.date|date('d') }}</span>
+                        <span class="mon">{{ _month_abbr[ex.basket.date|date('n')] }} {{ ex.basket.date|date('y') }}</span>
+                    </span>
+                {% endif %}
                 <div class="dex-main">
                     <div class="dex-typeline">
                         {% if ex.isCancelled %}
@@ -61,7 +71,7 @@
                         variant: 'danger',
                         eyebrow: 'Acción permanente',
                         title: 'Borrar esta excepción',
-                        body: 'El reparto del viernes ' ~ ex.basket.date|date('d/m/Y') ~ ' volverá a seguir el calendario normal.',
+                        body: ((ex.isGlobal and ex.isCancelled) ? 'El reparto de la semana del ' : 'El reparto del viernes ') ~ ex.basket.date|date('d/m/Y') ~ ' volverá a seguir el calendario normal.',
                         confirm_label: 'Borrar',
                         external_form_id: 'dexform-' ~ ex.id,
                     }) }}
@@ -99,6 +109,7 @@
 .dex-date { text-align: center; border-radius: 7px; padding: 5px 4px 6px; background: #ece5d6; border: 1px solid var(--prl-line-2); line-height: 1.1; }
 .dex-date .dow { display: block; font-size: 9.5px; color: var(--prl-ink-soft); letter-spacing: 0.12em; text-transform: uppercase; font-weight: 600; }
 .dex-date .num { display: block; font-family: 'Fraunces', serif; font-weight: 600; font-size: 18px; color: var(--prl-ink); }
+.dex-date--week .num { font-size: 14px; }
 .dex-date .mon { display: block; font-size: 9.5px; color: var(--prl-ink-soft); letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600; }
 
 .dex-main { min-width: 0; }
