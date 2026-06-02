@@ -2,9 +2,14 @@
 
 namespace App\Controller;
 
+use App\Entity\Basket;
 use App\Entity\DeliveryException;
+use App\Entity\Node;
 use App\Form\DeliveryExceptionType;
+use App\Repository\BasketRepository;
 use App\Repository\DeliveryExceptionRepository;
+use App\Repository\NodeRepository;
+use App\Service\Delivery\NodeDeliveryDate;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -66,7 +71,7 @@ class DeliveryExceptionController extends AbstractController
      * @return Response
      */
     #[Route('/new', name: 'delivery_exception_new', methods: ['GET', 'POST'])]
-    public function new(Request $request, EntityManagerInterface $entityManager, DeliveryExceptionRepository $repository): Response
+    public function new(Request $request, EntityManagerInterface $entityManager, DeliveryExceptionRepository $repository, NodeRepository $nodeRepository, BasketRepository $basketRepository, NodeDeliveryDate $deliveryDate): Response
     {
         $exception = new DeliveryException();
         $form = $this->createForm(DeliveryExceptionType::class, $exception);
@@ -87,6 +92,7 @@ class DeliveryExceptionController extends AbstractController
         return $this->render('delivery_exception/new.html.twig', [
             'exception' => $exception,
             'form' => $form->createView(),
+            'scopes' => $this->buildScopes($nodeRepository, $basketRepository, $deliveryDate),
         ]);
     }
 
@@ -98,7 +104,7 @@ class DeliveryExceptionController extends AbstractController
      * @return Response
      */
     #[Route('/{id}/edit', name: 'delivery_exception_edit', methods: ['GET', 'POST'])]
-    public function edit(Request $request, DeliveryException $exception, EntityManagerInterface $entityManager, DeliveryExceptionRepository $repository): Response
+    public function edit(Request $request, DeliveryException $exception, EntityManagerInterface $entityManager, DeliveryExceptionRepository $repository, NodeRepository $nodeRepository, BasketRepository $basketRepository, NodeDeliveryDate $deliveryDate): Response
     {
         $form = $this->createForm(DeliveryExceptionType::class, $exception);
         $form->handleRequest($request);
@@ -117,6 +123,7 @@ class DeliveryExceptionController extends AbstractController
         return $this->render('delivery_exception/edit.html.twig', [
             'exception' => $exception,
             'form' => $form->createView(),
+            'scopes' => $this->buildScopes($nodeRepository, $basketRepository, $deliveryDate),
         ]);
     }
 
@@ -153,5 +160,109 @@ class DeliveryExceptionController extends AbstractController
         $existing = $repository->findOneExact($exception->getBasket(), $exception->getNode());
 
         return $existing !== null && $existing->getId() !== $exception->getId();
+    }
+
+    /** Ventana de semanas futuras a inspeccionar para el picker. Holgada para
+     *  que un nodo quincenal tenga suficientes repartos operativos dentro. */
+    private const PICKER_WEEKS = 12;
+
+    /** Cuántas fechas ofrecer por alcance (las más próximas; el resto se deja
+     *  fuera por YAGNI — no hay aún selector de fecha lejana). */
+    private const PICKER_DATES = 4;
+
+    /** Días de la semana en español indexados por número ISO (1 = lunes). */
+    private const WEEKDAYS_ES = [
+        1 => 'lunes', 2 => 'martes', 3 => 'miércoles', 4 => 'jueves',
+        5 => 'viernes', 6 => 'sábado', 7 => 'domingo',
+    ];
+
+    /**
+     * Construye los "alcances" que pinta el formulario como tarjetas: primero
+     * "Todos los nodos" (cierre) con las próximas semanas-ciclo, y luego un
+     * bloque por nodo con sus fechas físicas reales de reparto (el miércoles
+     * de Madrid, el viernes de Torremocha), de modo que el usuario reconozca
+     * el día y no un "viernes" que no le corresponde.
+     *
+     * @param NodeRepository $nodeRepository
+     * @param BasketRepository $basketRepository
+     * @param NodeDeliveryDate $deliveryDate
+     * @return array<int, array{key: string, nodeId: int|null, label: string, sublabel: string, dates: array<int, array{basketId: int, date: \DateTimeImmutable}>}>
+     */
+    private function buildScopes(NodeRepository $nodeRepository, BasketRepository $basketRepository, NodeDeliveryDate $deliveryDate): array
+    {
+        $baskets = $this->futureBaskets($basketRepository);
+
+        // Cierre general: las próximas semanas, ancladas a su viernes-ciclo.
+        $allDates = array_map(
+            static fn (Basket $basket): array => [
+                'basketId' => $basket->getId(),
+                'date' => \DateTimeImmutable::createFromInterface($basket->getDate()),
+            ],
+            array_slice($baskets, 0, self::PICKER_DATES)
+        );
+
+        $scopes = [[
+            'key' => 'all',
+            'nodeId' => null,
+            'label' => 'Todos los nodos',
+            'sublabel' => 'Cierre: no hay reparto',
+            'dates' => $allDates,
+        ]];
+
+        foreach ($nodeRepository->findBy([], ['name' => 'ASC']) as $node) {
+            $dates = [];
+            foreach ($baskets as $basket) {
+                $physical = $deliveryDate->operativeDateFor($basket, $node);
+                if ($physical === null) {
+                    continue; // nodo quincenal: esta semana no reparte.
+                }
+                $dates[] = ['basketId' => $basket->getId(), 'date' => $physical];
+                if (count($dates) >= self::PICKER_DATES) {
+                    break;
+                }
+            }
+
+            $scopes[] = [
+                'key' => 'node-' . $node->getId(),
+                'nodeId' => $node->getId(),
+                'label' => $node->getName(),
+                'sublabel' => $this->nodeSublabel($node),
+                'dates' => $dates,
+            ];
+        }
+
+        return $scopes;
+    }
+
+    /**
+     * Próximos Basket (semanas) a partir de hoy, tope PICKER_WEEKS.
+     *
+     * @param BasketRepository $basketRepository
+     * @return Basket[]
+     */
+    private function futureBaskets(BasketRepository $basketRepository): array
+    {
+        return $basketRepository->createQueryBuilder('b')
+            ->where('b.date >= :today')
+            ->setParameter('today', (new \DateTimeImmutable('today'))->format('Y-m-d'))
+            ->orderBy('b.date', 'ASC')
+            ->setMaxResults(self::PICKER_WEEKS)
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Descripción corta de un nodo para la tarjeta de alcance, p.ej.
+     * "reparto los miércoles" o "reparto los viernes (quincenal)".
+     *
+     * @param Node $node
+     * @return string
+     */
+    private function nodeSublabel(Node $node): string
+    {
+        $weekday = self::WEEKDAYS_ES[$node->getDeliveryWeekday()] ?? '—';
+        $cadence = $node->getCadence() === Node::CADENCE_BIWEEKLY ? ' (quincenal)' : '';
+
+        return sprintf('reparto los %s%s', $weekday, $cadence);
     }
 }

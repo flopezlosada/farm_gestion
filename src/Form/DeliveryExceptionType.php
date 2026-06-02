@@ -11,17 +11,29 @@ use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\DateType;
 use Symfony\Component\Form\Extension\Core\Type\TextareaType;
 use Symfony\Component\Form\FormBuilderInterface;
+use Symfony\Component\Form\FormError;
+use Symfony\Component\Form\FormEvent;
+use Symfony\Component\Form\FormEvents;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 
 /**
  * Form para crear/editar una excepción de calendario de reparto.
  *
- * El ciclo se elige entre los Basket futuros (no los miles pre-sembrados:
- * sólo los próximos, suficientes para planificar el año). El nodo es
- * opcional: vacío = la excepción aplica a todos los nodos (cierre general).
- * shiftedDate vacío = no hay reparto ese ciclo; con fecha = se traslada.
+ * El alcance manda sobre el efecto, según la operativa real del colectivo:
+ *   - sin nodo (todos los nodos) = cierre general (vacaciones del equipo, no
+ *     se recoge para nadie). No hay fecha de traslado.
+ *   - con nodo = traslado del reparto de ESE nodo a otra fecha (un festivo
+ *     que cae en su día). Exige fecha destino.
+ * Un cierre de un solo nodo no se ha dado nunca en la práctica y la UI no lo
+ * ofrece; el modelo lo seguiría soportando si hiciera falta puntualmente.
  *
- * Sub-fase 8.8d (2026-05-27).
+ * Por eso el form no expone un selector de "efecto": lo deriva el listener
+ * POST_SUBMIT a partir del nodo. La selección de ciclo y nodo se presenta en
+ * la plantilla como tarjetas con las fechas físicas reales de cada nodo
+ * (miércoles para Madrid, viernes para Torremocha); aquí `basket` y `node`
+ * son los campos que esas tarjetas rellenan.
+ *
+ * Sub-fase 8.8d (2026-05-27); flujo alcance-primero reescrito 2026-06-02.
  */
 class DeliveryExceptionType extends AbstractType
 {
@@ -31,6 +43,13 @@ class DeliveryExceptionType extends AbstractType
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
         $builder
+            ->add('node', EntityType::class, [
+                'class' => Node::class,
+                'label' => 'Nodo',
+                'choice_label' => 'name',
+                'required' => false,
+                'placeholder' => 'Todos los nodos (cierre general)',
+            ])
             ->add('basket', EntityType::class, [
                 'class' => Basket::class,
                 'label' => 'Ciclo (semana)',
@@ -40,21 +59,11 @@ class DeliveryExceptionType extends AbstractType
                     ->setParameter('today', (new \DateTimeImmutable('today'))->format('Y-m-d'))
                     ->orderBy('b.date', 'ASC')
                     ->setMaxResults(self::FUTURE_CYCLES),
-                'help' => 'El ciclo semanal afectado. Para nodos que reparten otro día (p.ej. miércoles), elige el viernes de esa semana: el sistema deriva el día real.',
-            ])
-            ->add('node', EntityType::class, [
-                'class' => Node::class,
-                'label' => 'Nodo',
-                'choice_label' => 'name',
-                'required' => false,
-                'placeholder' => 'Todos los nodos (cierre general)',
-                'help' => 'Déjalo vacío para un cierre que afecta a todos los nodos (Navidad, agosto…). Elige uno para un festivo que solo afecta a ese nodo.',
             ])
             ->add('shiftedDate', DateType::class, [
-                'label' => 'Trasladar a',
+                'label' => 'Nuevo día de reparto',
                 'widget' => 'single_text',
                 'required' => false,
-                'help' => 'Déjalo vacío si ese ciclo NO hay reparto. Pon una fecha si el reparto se mueve a otro día (típicamente el día hábil anterior).',
             ])
             ->add('notes', TextareaType::class, [
                 'label' => 'Motivo / notas',
@@ -62,6 +71,23 @@ class DeliveryExceptionType extends AbstractType
                 'attr' => ['rows' => 2],
             ])
         ;
+
+        // Deriva el efecto del alcance: sin nodo es un cierre (no hay fecha
+        // destino); con nodo es un traslado, que exige fecha.
+        $builder->addEventListener(FormEvents::POST_SUBMIT, static function (FormEvent $event): void {
+            $exception = $event->getData();
+            if (!$exception instanceof DeliveryException) {
+                return;
+            }
+
+            if ($exception->getNode() === null) {
+                $exception->setShiftedDate(null);
+            } elseif ($exception->getShiftedDate() === null) {
+                $event->getForm()->get('shiftedDate')->addError(
+                    new FormError('Indica el día al que se traslada el reparto.')
+                );
+            }
+        });
     }
 
     public function configureOptions(OptionsResolver $resolver): void

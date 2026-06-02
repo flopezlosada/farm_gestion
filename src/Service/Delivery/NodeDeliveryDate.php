@@ -50,15 +50,40 @@ class NodeDeliveryDate
      */
     public function physicalDateFor(Basket $basket, Node $node): ?\DateTimeImmutable
     {
-        $physical = $this->naiveDate($basket, $node);
-
-        if ($node->getCadence() === Node::CADENCE_BIWEEKLY) {
-            if (!$this->basketAlignsWithAnchor($physical, $node)) {
-                return null;
-            }
+        $physical = $this->operativeDateFor($basket, $node);
+        if ($physical === null) {
+            return null;
         }
 
         return $this->applyException($basket, $node, $physical);
+    }
+
+    /**
+     * Fecha física teórica del nodo en este Basket según SU día de la semana
+     * y su cadencia, SIN aplicar excepciones de calendario. Devuelve null si
+     * el nodo es biweekly y esta semana no le toca repartir.
+     *
+     * A diferencia de {@see physicalDateFor()}, no consulta DeliveryException:
+     * sirve para listar los repartos "normales" candidatos a recibir una
+     * excepción (el picker del CRUD de excepciones), sin que un cierre o
+     * traslado ya registrado oculte o desplace la fecha que el usuario espera
+     * reconocer.
+     *
+     * @param Basket $basket Ciclo semanal global.
+     * @param Node $node Nodo donde se entrega.
+     * @return \DateTimeImmutable|null Fecha física teórica, o null si el nodo
+     *         biweekly no reparte esa semana.
+     * @throws \LogicException Si el nodo es biweekly sin anchor_date.
+     */
+    public function operativeDateFor(Basket $basket, Node $node): ?\DateTimeImmutable
+    {
+        $physical = $this->naiveDate($basket, $node);
+
+        if ($node->getCadence() === Node::CADENCE_BIWEEKLY && !$this->basketAlignsWithAnchor($physical, $node)) {
+            return null;
+        }
+
+        return $physical;
     }
 
     /**

@@ -1,5 +1,7 @@
 {# ============================================================
  # Nueva excepción de calendario de reparto — shell csa.
+ # El cuerpo del formulario vive en _form.html.twig (compartido
+ # con edit).
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
@@ -24,41 +26,6 @@
         'Cancela o traslada el reparto de un ciclo, para un nodo o para todos.'
     ) }}
 
-    {{ form_start(form, { attr: { role: 'form', class: 'csa-form-narrow' } }) }}
-
-        <div class="csa-stack-lg">
-
-            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Alcance', subtitle: 'Qué ciclo y qué nodo afecta.' } %}
-                {% block body %}
-                    {% import '_macros/csa.html.twig' as csa %}
-                    <div class="csa-form-grid">
-                        {{ csa.field(form.basket, 'Ciclo (semana)') }}
-                        {{ csa.field(form.node, 'Nodo') }}
-                    </div>
-                {% endblock %}
-            {% endembed %}
-
-            {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Efecto', subtitle: 'Sin reparto, o traslado a otro día.' } %}
-                {% block body %}
-                    {% import '_macros/csa.html.twig' as csa %}
-                    <div class="csa-form-grid">
-                        {{ csa.field(form.shiftedDate, 'Trasladar a') }}
-                        {{ csa.field(form.notes, 'Motivo / notas', { full: true }) }}
-                    </div>
-                {% endblock %}
-            {% endembed %}
-
-            <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
-                <div></div>
-                <div class="csa-row">
-                    {{ csa.btn('Cancelar', { variant: 'ghost', href: path('delivery_exception_index') }) }}
-                    <button type="submit" class="csa-btn csa-btn--primary">Crear excepción</button>
-                </div>
-            </div>
-
-        </div>
-
-        {{ form_rest(form) }}
-    {{ form_end(form, { render_rest: false }) }}
+    {{ include('delivery_exception/_form.html.twig', { submit_label: 'Crear excepción' }) }}
 
 {% endblock %}
