@@ -20,6 +20,7 @@ use App\Repository\PartnerDeliveryShiftRepository;
 use App\Repository\PartnerRepository;
 use App\Service\Delivery\DeliveryCalendarProjector;
 use App\Service\Delivery\DeliveryShiftApplier;
+use App\Service\Delivery\PartnerMonthResetter;
 use App\Service\Delivery\WeeklyBasketComponentEditor;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Partner\PartnerShareEventRecorder;
@@ -701,6 +702,58 @@ class PartnerController extends AbstractController
             : sprintf('Recuperada el %s.', $to->getDate()->format('d/m/Y')));
 
         return $backToCalendar($to);
+    }
+
+    /**
+     * Resetear a su PATRÓN el calendario de recogida de un socio en un mes: deshace los
+     * cambios puntuales (mover / no recoge / recuperar) y los estados enredados, dejando las
+     * entregas como las generaría el listado. Red de seguridad para cuando algo se rompe.
+     *
+     * Accesible a quien gestiona socixs (la guarda de clase #[IsGranted('ROLE_GESTION_SOCIXS')]
+     * ya lo cubre). R1: en compartidas no aplica (lo rechaza el servicio).
+     *
+     * @param Partner               $partner
+     * @param Request               $request
+     * @param PartnerMonthResetter  $resetter
+     * @return Response
+     */
+    #[Route("/{id}/calendar/reset", name: "partner_delivery_calendar_reset", methods: ["POST"], requirements: ["id" => "\\d+"])]
+    public function deliveryCalendarReset(
+        Partner $partner,
+        Request $request,
+        PartnerMonthResetter $resetter,
+    ): Response {
+        $year = (int) $request->request->get('year');
+        $month = (int) $request->request->get('month');
+
+        $backToCalendar = fn (): Response => $this->redirectToRoute('partner_delivery_calendar', [
+            'id' => $partner->getId(),
+            'year' => $year ?: null,
+            'month' => $month ?: null,
+        ]);
+
+        if (!$this->isCsrfTokenValid('calendar_reset_' . $partner->getId(), (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
+
+            return $backToCalendar();
+        }
+        if ($month < 1 || $month > 12 || $year < 2000) {
+            $this->addFlash('error', 'Mes inválido.');
+
+            return $backToCalendar();
+        }
+
+        try {
+            $resetter->reset($partner, $year, $month);
+        } catch (\LogicException $e) {
+            $this->addFlash('warning', $e->getMessage());
+
+            return $backToCalendar();
+        }
+
+        $this->addFlash('success', 'Calendario del mes restaurado a su patrón.');
+
+        return $backToCalendar();
     }
 
     /**

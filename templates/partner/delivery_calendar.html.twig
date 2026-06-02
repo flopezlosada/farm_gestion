@@ -51,7 +51,8 @@
   @media (max-width:880px){.rcal{grid-template-columns:1fr}}
 
   /* --- navegación de mes (botones circulares, sin el subrayado verde de :where(a):hover) --- */
-  .rcal-monthnav{display:flex;align-items:center;justify-content:center;gap:var(--csa-sp-4);margin-bottom:var(--csa-sp-5)}
+  .rcal-monthnav{position:relative;display:flex;align-items:center;justify-content:center;gap:var(--csa-sp-4);margin-bottom:var(--csa-sp-5)}
+  .rcal-resetform{position:absolute;right:0;margin:0}
   .rcal-month{font-family:var(--csa-serif);font-weight:500;font-size:18px;letter-spacing:-.02em;text-transform:capitalize;min-width:150px;text-align:center}
   .csa-app a.rcal-navbtn{width:36px;height:36px;border-radius:50%;border:1px solid var(--csa-border);background:var(--csa-surface);color:var(--csa-ink-soft);display:inline-grid;place-items:center;text-decoration:none;transition:.15s}
   .csa-app a.rcal-navbtn:hover{border-color:var(--csa-ink-soft);border-bottom-color:var(--csa-ink-soft);color:var(--csa-ink);background:var(--csa-surface-alt)}
@@ -175,6 +176,29 @@
         <span class="rcal-month">{{ current|format_datetime('none', 'none', pattern='LLLL yyyy', locale='es') }}</span>
         <a class="rcal-navbtn" href="{{ path('partner_delivery_calendar', { id: partner.id, year: next.format('Y'), month: next.format('n') }) }}"
            aria-label="Mes siguiente" title="Mes siguiente"><i class="fa fa-chevron-right"></i></a>
+
+        {# Reset del mes a su patrón: red de seguridad para estados enredados. Lo puede usar
+           quien gestiona socixs (la página ya exige ROLE_GESTION_SOCIXS). No en compartidas (R1).
+           Recarga normal (no AJAX): es una acción rara y conviene ver el mes limpio de cero. #}
+        {% if partner.sharePartner is null %}
+            <form id="rcal-reset-form" action="{{ path('partner_delivery_calendar_reset', { id: partner.id }) }}" method="post" class="rcal-resetform">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token('calendar_reset_' ~ partner.id) }}">
+                <input type="hidden" name="year" value="{{ current.format('Y') }}">
+                <input type="hidden" name="month" value="{{ current.format('n') }}">
+                <button type="button" class="csa-btn csa-btn--ghost csa-btn--sm"
+                        onclick="document.getElementById('rcal-confirm-reset').showModal()">
+                    <i class="fa fa-rotate-left"></i><span>Resetear el mes</span>
+                </button>
+            </form>
+            {{ csa.confirm_dialog('rcal-confirm-reset', {
+                variant: 'warning',
+                eyebrow: 'Resetear mes',
+                title: '¿Resetear el calendario de este mes?',
+                body: 'Se deshacen los cambios puntuales (mover, no recoger, recuperar) de ' ~ (current|format_datetime('none', 'none', pattern='LLLL yyyy', locale='es')) ~ ' y las entregas vuelven a su patrón. Úsalo si algo quedó descuadrado.',
+                confirm_label: 'Resetear',
+                external_form_id: 'rcal-reset-form',
+            }) }}
+        {% endif %}
     </div>
 
     {% if partner.sharePartner %}

@@ -6,6 +6,7 @@ use App\Custom\WeekOfMonth;
 use App\Entity\Basket;
 use App\Entity\BasketComponent;
 use App\Entity\Node;
+use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
 use App\Entity\PartnerDeliveryShift;
 use App\Entity\PartnerEvent;
@@ -690,43 +691,90 @@ class WeeklyBasketGenerator
         /** @var \App\Repository\PartnerBasketShareRepository $shareRepo */
         $shareRepo = $this->em->getRepository(PartnerBasketShare::class);
         $weeklyBasketRepo = $this->em->getRepository(WeeklyBasket::class);
-        $onlyEggShare = $this->em->getRepository(BasketShare::class)->find(self::SHARE_ONLY_EGG);
 
         $extras = [];
         foreach ($shareRepo->findActiveSharesWithEggsForBasket($basket) as $share) {
             if (!$this->eggResolver->delivers($share, $basket)) {
                 continue;
             }
-            $partner = $share->getPartner();
             $alreadyMaterialized = $weeklyBasketRepo->findOneBy([
                 'basket' => $basket->getId(),
-                'partner' => $partner->getId(),
+                'partner' => $share->getPartner()->getId(),
             ]);
             if ($alreadyMaterialized !== null) {
                 continue;
             }
-            $physicalDate = $this->resolvePhysicalDeliveryDate($basket, $share);
-            if ($physicalDate === null) {
-                continue;
+            if ($this->materializeOnlyEggForShare($basket, $share, $status) !== null) {
+                $extras[] = $share;
             }
-
-            $wb = new WeeklyBasket();
-            $wb->setBasket($basket);
-            $wb->setPartner($partner);
-            $wb->setWeeklyBasketStatus($status);
-            $wb->setBasketShare($onlyEggShare);
-            $wb->setWeeklyBasketGroup($partner->getWeeklyBasketGroup());
-            $wb->setAmount(0);
-            $wb->setDeliveryDate($physicalDate);
-            $wb->setPartnerBasketShare($share);
-            $this->em->persist($wb);
-            $this->em->flush();
-
-            // Etapa 1 calendario: línea de huevos para la entrega only-egg.
-            $this->composer->compose($wb, $share, $basket);
-            $extras[] = $share;
         }
         return $extras;
+    }
+
+    /**
+     * Materializa (persiste) una entrega de SOLO HUEVO para un share en un Basket: el WB
+     * con basket_share=only-egg, amount 0 y su línea de huevos. Idempotente (si ya hay WB
+     * para (socio, basket) lo devuelve sin duplicar). Es la pieza común de
+     * materializeExtraEggDeliveries y de materializeForPartner (reset del calendario).
+     *
+     * @return WeeklyBasket|null El WB only-egg, o null si el nodo no reparte ese Basket.
+     */
+    private function materializeOnlyEggForShare(Basket $basket, PartnerBasketShare $share, WeeklyBasketStatus $status): ?WeeklyBasket
+    {
+        $partner = $share->getPartner();
+        $existing = $this->em->getRepository(WeeklyBasket::class)
+            ->findOneBy(['basket' => $basket->getId(), 'partner' => $partner->getId()]);
+        if ($existing !== null) {
+            return $existing;
+        }
+        $physicalDate = $this->resolvePhysicalDeliveryDate($basket, $share);
+        if ($physicalDate === null) {
+            return null;
+        }
+
+        $wb = new WeeklyBasket();
+        $wb->setBasket($basket);
+        $wb->setPartner($partner);
+        $wb->setWeeklyBasketStatus($status);
+        $wb->setBasketShare($this->em->getRepository(BasketShare::class)->find(self::SHARE_ONLY_EGG));
+        $wb->setWeeklyBasketGroup($partner->getWeeklyBasketGroup());
+        $wb->setAmount(0);
+        $wb->setDeliveryDate($physicalDate);
+        $wb->setPartnerBasketShare($share);
+        $this->em->persist($wb);
+        $this->em->flush();
+
+        $this->composer->compose($wb, $share, $basket);
+        $this->em->flush(); // asentar las líneas (el generador confiaba en un flush posterior;
+                            // el reset materializa por socio y el último basket no lo tendría).
+
+        return $wb;
+    }
+
+    /**
+     * Materializa la entrega que un socio DEBE recibir en un Basket según su patrón: CESTA
+     * si es candidato (modalidad/cohorte/cadencia/nodo), o SOLO-HUEVO si su huevo es más
+     * frecuente que la cesta y le toca esa semana (SANTOS-like). Idempotente. Pensado para
+     * el RESET del calendario de un socio: recompone lo que el listado generaría para ÉL,
+     * sin tocar a los demás (a diferencia de generateForBasket, que es todo-el-listado).
+     *
+     * @return WeeklyBasket|null La entrega materializada, o null si esa semana no le toca nada.
+     */
+    public function materializeForPartner(Partner $partner, Basket $basket): ?WeeklyBasket
+    {
+        foreach ($this->projectForBasket($basket) as $candidate) {
+            if ($candidate->getPartner()->getId() === $partner->getId()) {
+                return $this->materializeShareDelivery($basket, $candidate);
+            }
+        }
+
+        $share = $this->em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner, $basket->getDate());
+        if ($share === null || !$this->eggResolver->delivers($share, $basket)) {
+            return null;
+        }
+        $status = $this->em->getRepository(WeeklyBasketStatus::class)->find(self::STATUS_PICKED);
+
+        return $this->materializeOnlyEggForShare($basket, $share, $status);
     }
 
     /**
