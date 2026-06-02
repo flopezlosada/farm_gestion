@@ -47,6 +47,7 @@
 {{ parent() }}
 <style>
   .rcal{display:grid;grid-template-columns:1.4fr 1fr;gap:var(--csa-sp-5);align-items:start}
+  .rcal.rcal-busy{opacity:.55;pointer-events:none;transition:opacity .1s}
   @media (max-width:880px){.rcal{grid-template-columns:1fr}}
 
   /* --- navegación de mes (botones circulares, sin el subrayado verde de :where(a):hover) --- */
@@ -74,6 +75,11 @@
   a.rcal-skip{background:var(--csa-terracotta-soft);border-color:#f3c4a8}
   a.rcal-skip .n{color:var(--csa-terracotta);font-weight:700;text-decoration:line-through}
   a.rcal-skip .x{align-self:flex-end;font-size:10px;color:#b04e22}
+  /* semana cerrada (excepción de cancelación): gris, no hay reparto para nadie */
+  a.rcal-closed{background:#eceae6;border-color:#dcdad5;cursor:default}
+  a.rcal-closed .n{color:#9b988f;font-weight:600}
+  a.rcal-closed .x{align-self:flex-end;font-size:10px;color:#9b988f}
+  .rcal-cell.sel.rcal-closed{outline-color:#9b988f}
   /* movida a otro día: su cesta está en otra fecha, no es "no recoge" */
   a.rcal-moved{background:var(--csa-sky-soft);border-color:var(--csa-sky)}
   a.rcal-moved .n{color:var(--csa-sky);font-weight:700}
@@ -188,7 +194,16 @@
                         {% set slot = day.slot %}
                         {% set is_sel = slot and selected and slot.basket.id == selected.basket.id %}
                         {% set wknd = day.date.format('N') in [6, 7] %}
-                        {% if slot %}
+                        {% if slot and slot.closed|default(false) %}
+                            {# Semana CERRADA (excepción de cancelación: festivo/vacaciones). No
+                               hay reparto para nadie. Gris, no arrastrable ni editable; navegable
+                               para que el panel explique el cierre. #}
+                            <a href="{{ path('partner_delivery_calendar', { id: partner.id, year: slot.basket.date.format('Y'), month: slot.basket.date.format('n'), sel: slot.basket.id }) }}"
+                               class="rcal-cell rcal-closed{{ is_sel ? ' sel' }}">
+                                <span class="n">{{ day.date.format('j') }}</span>
+                                <span class="x"><i class="fa fa-lock"></i></span>
+                            </a>
+                        {% elseif slot %}
                             {# Rojo si se le han quitado todos los componentes (no recoge nada).
                                Las "no recoge" (saltadas) ya NO llegan aquí: viven en la papelera
                                y su día sale libre. #}
@@ -275,7 +290,15 @@
                    componente) se guardan como intents durables, no materializan nada. #}
                 {% set readonly = partner.sharePartner is not null or not selected_editable %}
 
-                {% if selected.skipped %}
+                {% if selected.closed|default(false) %}
+                    {# Semana CERRADA por excepción de calendario (festivo/vacaciones): no hay
+                       reparto para nadie. No editable — el cierre se gestiona desde Excepciones
+                       de reparto, no aquí. #}
+                    <div class="rcal-panel__bd">
+                        <div class="rcal-sect"><i class="fa fa-lock"></i> Semana cerrada</div>
+                        <p class="csa-muted">El {{ selected.date|format_date('long', locale='es') }} no hay reparto (excepción de calendario). No se recoge nada esa semana y no sale en el listado.</p>
+                    </div>
+                {% elseif selected.skipped %}
                     {# Saltada: no lleva nada esa semana; si es editable, se puede restaurar.
                        Una cesta movida que se marca "no recoge" también cae aquí. #}
                     <div class="rcal-panel__bd">
@@ -284,7 +307,7 @@
                     </div>
                     {% if selected_editable and partner.sharePartner is null %}
                         <div class="rcal-panel__ft">
-                            <form action="{{ path('partner_delivery_calendar_skip', { id: partner.id, basketId: bid }) }}" method="post" style="margin: 0;">
+                            <form action="{{ path('partner_delivery_calendar_skip', { id: partner.id, basketId: bid }) }}" method="post" style="margin: 0;" data-rcal-ajax>
                                 <input type="hidden" name="_csrf_token" value="{{ csrf_token('calendar_skip_' ~ partner.id) }}">
                                 <input type="hidden" name="recover" value="1">
                                 {{ csa.btn('Volver a recoger', { type: 'submit', variant: 'secondary', icon: 'fa-undo', block: true }) }}
@@ -312,7 +335,7 @@
 
                     {% if not readonly %}
                         <div class="rcal-panel__ft">
-                            <form id="rcal-skip-form-{{ bid }}" action="{{ path('partner_delivery_calendar_skip', { id: partner.id, basketId: bid }) }}" method="post" style="margin: 0;">
+                            <form id="rcal-skip-form-{{ bid }}" action="{{ path('partner_delivery_calendar_skip', { id: partner.id, basketId: bid }) }}" method="post" style="margin: 0;" data-rcal-ajax>
                                 <input type="hidden" name="_csrf_token" value="{{ csrf_token('calendar_skip_' ~ partner.id) }}">
                                 <button type="button" class="csa-btn csa-btn--danger-soft csa-btn--block"
                                         onclick="document.getElementById('rcal-confirm-skip-{{ bid }}').showModal()">
@@ -348,46 +371,20 @@
     {% if partner.sharePartner is null %}
     <script>
     (function () {
-        const cal = document.querySelector('.rcal');
-        if (!cal) return;
         const SKIP_CSRF = {{ csrf_token('calendar_skip_' ~ partner.id)|json_encode|raw }};
         const MOVE_CSRF = {{ csrf_token('calendar_move_' ~ partner.id)|json_encode|raw }};
 
         let dragged = null;
 
         function clearHighlights() {
-            cal.querySelectorAll('.rcal-dropok, .rcal-dragok').forEach(function (el) {
+            document.querySelectorAll('.rcal-dropok, .rcal-dragok').forEach(function (el) {
                 el.classList.remove('rcal-dropok', 'rcal-dragok');
             });
         }
 
-        cal.addEventListener('dragstart', function (e) {
-            const card = e.target.closest('[data-rcal-draggable]');
-            if (!card) return;
-            dragged = card;
-            e.dataTransfer.effectAllowed = 'move';
-            // setData es obligatorio en Firefox para que arranque el arrastre.
-            e.dataTransfer.setData('text/plain', '');
-            card.classList.add('rcal-dragging');
-            // Resaltar destinos válidos según el tipo de ficha:
-            //  - rejilla (entrega real): días libres del nodo (mover) + papelera (no recoge).
-            //  - papelera: los mismos días libres del nodo (recuperar EN el día elegido).
-            cal.querySelectorAll('[data-rcal-target]').forEach(function (el) { el.classList.add('rcal-dragok'); });
-            if (card.dataset.rcalKind === 'grid') {
-                const tray = cal.querySelector('.rcal-tray');
-                if (tray) tray.classList.add('rcal-dragok');
-            }
-        });
-
-        cal.addEventListener('dragend', function () {
-            if (dragged) dragged.classList.remove('rcal-dragging');
-            dragged = null;
-            clearHighlights();
-        });
-
         // handlers: { <kind>: fn(card) }. La zona acepta una ficha si hay handler para su
-        // tipo; al soltar, ejecuta el de ese tipo. Permite que una misma celda acepte tanto
-        // MOVER (ficha de rejilla) como RECUPERAR (ficha de papelera).
+        // tipo; al soltar, ejecuta el de ese tipo. Una misma celda acepta MOVER (ficha de
+        // rejilla) y RECUPERAR (ficha de papelera).
         function wireDrop(el, handlers) {
             el.addEventListener('dragover', function (e) {
                 if (!dragged || !handlers[dragged.dataset.rcalKind]) return;
@@ -404,44 +401,102 @@
             });
         }
 
-        // Celda de día LIBRE del nodo: destino tanto de MOVER (ficha de rejilla) como de
-        // RECUPERAR EN ESE DÍA (ficha de papelera). El día elegido viaja en to_basket_id.
-        cal.querySelectorAll('[data-rcal-target]').forEach(function (cell) {
-            wireDrop(cell, {
-                grid: function (card) {
-                    post(card.dataset.rcalMoveUrl, { to_basket_id: cell.dataset.rcalTo, _csrf_token: MOVE_CSRF });
-                },
-                tray: function (card) {
-                    post(card.dataset.rcalRecoverUrl, { to_basket_id: cell.dataset.rcalTo, _csrf_token: MOVE_CSRF });
-                },
+        // (Re)vincula el DnD y la intercepción de forms sobre un nodo .rcal concreto. Se
+        // llama al cargar y tras cada refresco AJAX (el .rcal se reemplaza entero).
+        function bind(cal) {
+            cal.addEventListener('dragstart', function (e) {
+                const card = e.target.closest('[data-rcal-draggable]');
+                if (!card) return;
+                dragged = card;
+                e.dataTransfer.effectAllowed = 'move';
+                // setData es obligatorio en Firefox para que arranque el arrastre.
+                e.dataTransfer.setData('text/plain', '');
+                card.classList.add('rcal-dragging');
+                // Destinos válidos: días libres del nodo. Para una ficha de rejilla, además
+                // la papelera (no recoge).
+                cal.querySelectorAll('[data-rcal-target]').forEach(function (el) { el.classList.add('rcal-dragok'); });
+                if (card.dataset.rcalKind === 'grid') {
+                    const tray = cal.querySelector('.rcal-tray');
+                    if (tray) tray.classList.add('rcal-dragok');
+                }
             });
+
+            cal.addEventListener('dragend', function () {
+                if (dragged) dragged.classList.remove('rcal-dragging');
+                dragged = null;
+                clearHighlights();
+            });
+
+            cal.querySelectorAll('[data-rcal-target]').forEach(function (cell) {
+                wireDrop(cell, {
+                    grid: function (card) { send(card.dataset.rcalMoveUrl, { to_basket_id: cell.dataset.rcalTo, _csrf_token: MOVE_CSRF }); },
+                    tray: function (card) { send(card.dataset.rcalRecoverUrl, { to_basket_id: cell.dataset.rcalTo, _csrf_token: MOVE_CSRF }); },
+                });
+            });
+
+            const tray = cal.querySelector('.rcal-tray');
+            if (tray) {
+                wireDrop(tray, {
+                    grid: function (card) { send(card.dataset.rcalSkipUrl, { _csrf_token: SKIP_CSRF }); },
+                });
+            }
+
+            // Forms del panel (no recoge / volver a recoger): también por AJAX. El botón del
+            // diálogo de confirmación es un submit nativo (form="..."), así que su submit
+            // burbujea hasta aquí.
+            cal.addEventListener('submit', function (e) {
+                const form = e.target.closest('form[data-rcal-ajax]');
+                if (!form) return;
+                e.preventDefault();
+                const fields = {};
+                new FormData(form).forEach(function (v, k) { fields[k] = v; });
+                send(form.action, fields);
+            });
+        }
+
+        // POST por AJAX y refresco EN SITIO del calendario (sin recargar la página). El
+        // endpoint redirige al GET del calendario; seguimos el redirect, y del HTML resultante
+        // reemplazamos solo .rcal (rejilla + papelera + panel) y los avisos flash. El servidor
+        // sigue siendo la fuente de verdad. Si algo falla, recarga normal como respaldo.
+        async function send(url, fields) {
+            if (!url) return;
+            const cal = document.querySelector('.rcal');
+            if (!cal) return;
+            cal.classList.add('rcal-busy');
+            try {
+                const resp = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    body: new URLSearchParams(fields),
+                });
+                const doc = new DOMParser().parseFromString(await resp.text(), 'text/html');
+                const fresh = doc.querySelector('.rcal');
+                if (!fresh) { window.location.reload(); return; }
+                const imported = document.importNode(fresh, true);
+                cal.replaceWith(imported);
+                bind(imported);
+
+                // Avisos flash del shell (errores/confirmaciones): se refrescan en sitio.
+                const content = document.querySelector('.csa-content');
+                if (content) {
+                    const old = content.querySelector('.csa-alerts');
+                    if (old) old.remove();
+                    const freshAlerts = doc.querySelector('.csa-alerts');
+                    if (freshAlerts) content.insertBefore(document.importNode(freshAlerts, true), content.firstElementChild);
+                }
+            } catch (err) {
+                window.location.reload();
+            }
+        }
+
+        // Cierre de avisos flash inyectados por AJAX (el script del componente no se reejecuta).
+        document.addEventListener('click', function (e) {
+            const btn = e.target.closest('.csa-alert__close');
+            if (btn) { const a = btn.closest('.csa-alert'); if (a) a.remove(); }
         });
 
-        // NO RECOGE: ficha de rejilla → papelera.
-        const tray = cal.querySelector('.rcal-tray');
-        if (tray) {
-            wireDrop(tray, {
-                grid: function (card) {
-                    post(card.dataset.rcalSkipUrl, { _csrf_token: SKIP_CSRF });
-                },
-            });
-        }
-
-        function post(url, fields) {
-            if (!url) return;
-            const f = document.createElement('form');
-            f.method = 'post';
-            f.action = url;
-            Object.keys(fields).forEach(function (k) {
-                const i = document.createElement('input');
-                i.type = 'hidden';
-                i.name = k;
-                i.value = fields[k];
-                f.appendChild(i);
-            });
-            document.body.appendChild(f);
-            f.submit();
-        }
+        const root = document.querySelector('.rcal');
+        if (root) bind(root);
     })();
     </script>
     {% endif %}

@@ -7,6 +7,7 @@ use App\Entity\BasketComponent;
 use App\Entity\Partner;
 use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketItem;
+use App\Repository\DeliveryExceptionRepository;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
@@ -39,6 +40,7 @@ final class DeliveryCalendarProjector
         private readonly WeeklyBasketGenerator $generator,
         private readonly WeeklyBasketComposer $composer,
         private readonly EggDeliveryResolver $eggResolver,
+        private readonly DeliveryExceptionRepository $exceptionRepository,
     ) {
     }
 
@@ -77,6 +79,8 @@ final class DeliveryCalendarProjector
         $wbRepo = $this->em->getRepository(WeeklyBasket::class);
         $shiftRepo = $this->em->getRepository(\App\Entity\PartnerDeliveryShift::class);
 
+        $node = $partner->getWeeklyBasketGroup()?->getNode();
+
         $slots = [];
         foreach ($baskets as $basket) {
             // ¿El listado de esta semana ya está generado (hay WB de algún socio)?
@@ -90,6 +94,31 @@ final class DeliveryCalendarProjector
             $materialized = $wbRepo->findOneBy(['basket' => $basket->getId(), 'partner' => $partner->getId()]);
             $materializedActive = $materialized !== null
                 && $materialized->getWeeklyBasketStatus()?->getId() !== WeeklyBasketSkipper::STATUS_SKIPPED;
+
+            // CIERRE: una DeliveryException de cancelación (del nodo del socio o GLOBAL) deja
+            // la semana SIN reparto para nadie. Manda sobre todo lo demás (skips, moves): el
+            // día se pinta CERRADO (gris, no editable) y no se procesa nada más. El reparto y
+            // el PDF ya lo respetan vía NodeDeliveryDate; aquí se cierra el hueco del
+            // calendario del gestor, que en una semana YA generada leía el WeeklyBasket
+            // materializado sin consultar la excepción y seguía mostrando las cestas.
+            // (deliversInBasket no sirve para detectarlo: también es false en semanas alternas
+            // de un nodo biweekly; hay que mirar la excepción de cancelación en concreto.)
+            if ($node !== null && $this->exceptionRepository->findForBasketAndNode($basket, $node)?->isCancelled()) {
+                $slots[] = [
+                    'date' => $materialized?->getDeliveryDate() ?? $basket->getDate(),
+                    'basket' => $basket,
+                    'source' => 'projected',
+                    'weeklyBasket' => $materialized ?? (new WeeklyBasket())->setBasket($basket)->setPartner($partner),
+                    'items' => [],
+                    'skipped' => false,
+                    'closed' => true,
+                    'listed' => $listed,
+                    'available' => [],
+                ];
+
+                continue;
+            }
+
             $isSkip = $outgoing !== null && $outgoing->isSkip();
 
             // PAPELERA: un "no recoge" (intent sin destino, to == null) aparca la cesta
