@@ -1,0 +1,65 @@
+{# ============================================================
+ # Mi calendario de recogida — vista del SOCIO (/panel/calendar).
+ # Reusa el partial compartido del calendario en SOLO LECTURA (etapa 1).
+ # La edición (mover / no recoger) llega en una etapa posterior, con las
+ # reglas de autoservicio y pensada para móvil.
+ # ============================================================ #}
+{% extends '_layouts/csa_panel.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Mi calendario{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('panel') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Mi calendario</span>
+{% endblock %}
+
+{% block more_css %}
+{{ parent() }}
+{% include 'partner/_calendar_styles.html.twig' %}
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Mi área · Calendario',
+        'Mi calendario de recogida',
+        'Cuándo y dónde recoges tu cesta' ~ (pickup_place ? ' · ' ~ pickup_place : '')
+    ) }}
+
+    {# Ayuda breve: para quien no tiene soltura con apps, explicar de un vistazo
+       cómo se lee y se usa el calendario. Los marcadores son los mismos que en la rejilla. #}
+    {# Mensaje de ayuda distinto según el dispositivo (se muestra uno u otro por CSS):
+       en escritorio se arrastra; en el móvil se toca. #}
+    <div class="rcal-dragonly">
+        {{ csa.callout(
+            'Los días en verde son los que recoges tu cesta (la hoja es verdura y el óvalo, huevos). Arrastra un día a otra fecha para cambiarlo, o a "No recoge" para saltar esa semana.',
+            'info', 'info-circle'
+        ) }}
+    </div>
+    <div class="rcal-tapmove">
+        {{ csa.callout(
+            'Los días en verde son los que recoges tu cesta (la hoja es verdura y el óvalo, huevos). Toca un día para ver el detalle y, si quieres, no recogerlo esa semana o moverlo a otra fecha.',
+            'info', 'info-circle'
+        ) }}
+    </div>
+
+    {# dnd: true → arrastrar en escritorio (igual que el gestor): mover, no-recoger (a la
+       papelera) y recuperar (sacar de la papelera a un día). El flujo por toque para móvil
+       es ADITIVO y se oculta en escritorio por CSS. El socio no tiene reset de mes (es una
+       acción de gestión). #}
+    {% include 'partner/_calendar.html.twig' with {
+        cal: {
+            dnd: true,
+            route_view: 'panel_calendar',
+            route_skip: 'panel_calendar_skip',
+            route_move: 'panel_calendar_move',
+            route_recover: 'panel_calendar_recover',
+            idp: {},
+            csrf_skip: csrf_token('panel_calendar_skip'),
+            csrf_move: csrf_token('panel_calendar_move'),
+        }
+    } %}
+
+{% endblock %}

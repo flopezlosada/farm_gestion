@@ -19,8 +19,11 @@ use App\Repository\PartnerBasketShareRepository;
 use App\Repository\PartnerDeliveryShiftRepository;
 use App\Repository\WeeklyBasketGroupRepository;
 use App\Repository\WeeklyBasketRepository;
+use App\Service\Delivery\DeliveryCalendarProjector;
+use App\Service\Delivery\DeliveryCalendarViewBuilder;
 use App\Service\Delivery\DeliveryShiftApplier;
 use App\Service\Delivery\DeliveryShiftValidator;
+use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Delivery\WeeklyBasketSkipper;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -161,71 +164,19 @@ class PanelController extends AbstractController
     private const PICKUP_DEADLINE_HOUR = 23;
     private const PICKUP_DEADLINE_MINUTE = 59;
 
+    /**
+     * "Mi cesta" antiguo (próxima cesta + cambios de reparto en formato viejo) RETIRADO:
+     * toda la gestión vive ahora en el calendario de recogida (no recoger / mover, con
+     * sus reglas). La ruta se mantiene como redirección para enlaces o marcadores viejos.
+     */
     #[Route('/cesta', name: 'panel_basket', methods: ['GET'])]
-    public function basket(
-        WeeklyBasketRepository $weeklyBasketRepository,
-        PartnerBasketShareRepository $partnerBasketShareRepository,
-        PartnerDeliveryShiftRepository $deliveryShiftRepository,
-        DeliveryShiftValidator $validator,
-        \App\Service\Delivery\DeliveryShiftCandidates $shiftCandidatesService,
-    ): Response {
+    public function basket(): Response
+    {
         if (($redirect = $this->ensureReady()) !== null) {
             return $redirect;
         }
 
-        $partner = $this->getUser()->getPartner();
-        $next = $weeklyBasketRepository->findNextForPartner($partner);
-        $activeShare = $this->activeShare($partner);
-
-        // Para el cambio puntual de viernes el `from_basket` es el Basket del
-        // próximo WeeklyBasket del socix — es donde le tocaba recoger por su
-        // pauta normal. Si el socix ya tiene un shift creado, el next podría
-        // estar en status 2 ("no recoge"); igualmente el from es ése.
-        $fromBasket = $next?->getBasket();
-        $existingShift = ($fromBasket !== null)
-            ? $deliveryShiftRepository->findOutgoing($partner, $fromBasket)
-            : null;
-
-        // Pasamos al template los candidatos aceptados por el validator y
-        // un flag para indicar si había candidatos pero las reglas los
-        // bloquean. El socix no necesita conocer el motivo concreto: si
-        // no puede, que contacte con admin.
-        //
-        // Las violaciones de deadline NO descalifican al candidato aquí:
-        // el deadline ya viaja al template en `can_change_next` y se
-        // refleja como botón disabled (igual que en el form de skip),
-        // manteniendo la UI coherente. Si lo descalificáramos, el shift
-        // caería en la rama "no es posible cambiar de viernes", con un
-        // tono distinto al del skip y se vería incoherente.
-        $shiftCandidates = [];
-        $shiftBlocked = false;
-        if ($fromBasket !== null && $existingShift === null && $activeShare !== null) {
-            foreach ($shiftCandidatesService->findFor($activeShare, $fromBasket) as $candidate) {
-                $violations = array_filter(
-                    $validator->validate($partner, $fromBasket, $candidate),
-                    fn ($v) => $v->rule !== \App\Service\Delivery\Rule\DeadlineRule::ID,
-                );
-                if (empty($violations)) {
-                    $shiftCandidates[] = $candidate;
-                } else {
-                    $shiftBlocked = true;
-                }
-            }
-        }
-
-        return $this->render('Panel/basket.html.twig', [
-            'partner' => $partner,
-            'active_share' => $activeShare,
-            'group' => $partner->getWeeklyBasketGroup(),
-            'next_basket' => $next,
-            'next_basket_skipped' => $next?->getWeeklyBasketStatus()?->getId() === 2,
-            'next_basket_group' => $next?->getWeeklyBasketGroup(),
-            'can_change_next' => $next !== null && $this->isWithinPickupDeadline($next),
-            'pickup_deadline' => $next !== null ? $this->pickupDeadlineFor($next) : null,
-            'shift_existing' => $existingShift,
-            'shift_candidates' => $shiftCandidates,
-            'shift_blocked' => $shiftBlocked,
-        ]);
+        return $this->redirectToRoute('panel_calendar');
     }
 
     /**
@@ -478,14 +429,25 @@ class PanelController extends AbstractController
             return null;
         }
 
-        // Basket.date es \DateTime mutable; clonamos como immutable para
-        // operar con seguridad sin pisar el original.
-        $pickup = \DateTimeImmutable::createFromMutable($basketDate);
+        return $this->pickupDeadlineForDate($basketDate);
+    }
 
-        // ISO weekday del viernes habitual = 5. Para llegar al jueves
-        // restamos (viernes - jueves) días = 1. Si por excepción de
-        // calendario el reparto cae en otro día, garantizamos que el
-        // deadline siempre se sitúa antes con abs().
+    /**
+     * Deadline (jueves 23:59 anterior al reparto) a partir de la fecha del Basket.
+     * Compartido por las acciones que operan sobre un Basket (calendario) o sobre
+     * una WeeklyBasket (cesta).
+     */
+    private function pickupDeadlineForDate(\DateTimeInterface $basketDate): \DateTimeImmutable
+    {
+        // Basket.date suele ser \DateTime mutable; lo pasamos a immutable para
+        // operar con seguridad sin pisar el original.
+        $pickup = $basketDate instanceof \DateTimeImmutable
+            ? $basketDate
+            : \DateTimeImmutable::createFromInterface($basketDate);
+
+        // ISO weekday del viernes habitual = 5. Para llegar al jueves restamos
+        // (viernes - jueves) = 1 día. Si por excepción de calendario el reparto
+        // cae en otro día, abs() garantiza que el deadline queda siempre antes.
         $diffDays = abs((int) $pickup->format('N') - self::PICKUP_DEADLINE_WEEKDAY);
 
         return $pickup
@@ -500,6 +462,426 @@ class PanelController extends AbstractController
             return false;
         }
         return new \DateTimeImmutable('now') < $deadline;
+    }
+
+    private function isWithinPickupDeadlineForBasket(Basket $basket): bool
+    {
+        $basketDate = $basket->getDate();
+        if ($basketDate === null) {
+            return false;
+        }
+        return new \DateTimeImmutable('now') < $this->pickupDeadlineForDate($basketDate);
+    }
+
+    /**
+     * Calendario de recogida del socio — la misma pantalla que usa el gestor, pero
+     * resuelta desde la sesión y por ahora en SOLO LECTURA (withDropTargets: false).
+     * En familias resuelve el dueño de la cesta (el principal: la PBS cuelga de él),
+     * para que un secundario vea el calendario de su familia y no uno vacío.
+     *
+     * @param Request                     $request
+     * @param DeliveryCalendarViewBuilder $viewBuilder
+     * @return Response
+     */
+    #[Route('/calendar', name: 'panel_calendar', methods: ['GET'])]
+    public function calendar(Request $request, DeliveryCalendarViewBuilder $viewBuilder): Response
+    {
+        if (($redirect = $this->ensureReady()) !== null) {
+            return $redirect;
+        }
+
+        $partner = $this->basketOwner($this->getUser()->getPartner());
+
+        $month = $request->query->has('month') ? (int) $request->query->get('month') : null;
+        $year = $request->query->has('year') ? (int) $request->query->get('year') : null;
+        $selectedBasketId = (int) $request->query->get('sel', 0);
+
+        // withDropTargets: true → calcula los días libres a los que el socio puede mover
+        // una entrega (los marca para el flujo de "mover por toque").
+        $view = $viewBuilder->build($partner, $year, $month, $selectedBasketId, withDropTargets: true);
+
+        return $this->render('Panel/calendar.html.twig', $view);
+    }
+
+    /**
+     * Dueño de la cesta del socio: en una familia (parent_id) la PartnerBasketShare
+     * cuelga del principal, así que un secundario sin cesta propia ve la de su familia.
+     * Si el propio socio tiene cesta activa (caso raro de secundario con PBS propia),
+     * se queda con la suya. Sin parent, es él mismo.
+     *
+     * @param Partner $partner
+     * @return Partner
+     */
+    private function basketOwner(Partner $partner): Partner
+    {
+        $parent = $partner->getParent();
+        if ($parent !== null && $this->activeShare($partner) === null) {
+            return $parent;
+        }
+        return $partner;
+    }
+
+    /**
+     * "No recoger" / "volver a recoger" una semana desde el calendario del socio.
+     * Es el mismo modelo de intents que usa el gestor (DeliveryShiftApplier), pero
+     * con DEADLINE de autoservicio (el gestor no lo tiene) y resuelto desde la sesión.
+     * En esta fase el socio aún no MUEVE entregas; las ramas de cesta entrante/saliente
+     * solo se alcanzan si gestión le movió una cesta, y se tratan con tacto.
+     *
+     * @param int                            $basketId
+     * @param Request                        $request
+     * @param WeeklyBasketGenerator          $generator
+     * @param PartnerDeliveryShiftRepository $shiftRepository
+     * @param DeliveryShiftApplier           $applier
+     * @param EntityManagerInterface         $em
+     * @return Response
+     */
+    #[Route('/calendar/skip/{basketId}', name: 'panel_calendar_skip', methods: ['POST'], requirements: ['basketId' => '\\d+'])]
+    public function calendarSkip(
+        int $basketId,
+        Request $request,
+        WeeklyBasketGenerator $generator,
+        PartnerDeliveryShiftRepository $shiftRepository,
+        DeliveryShiftApplier $applier,
+        EntityManagerInterface $em,
+    ): Response {
+        if (($redirect = $this->ensureReady()) !== null) {
+            return $redirect;
+        }
+
+        $partner = $this->basketOwner($this->getUser()->getPartner());
+
+        $basket = $em->getRepository(Basket::class)->find($basketId);
+        if ($basket === null) {
+            throw $this->createNotFoundException('Semana de reparto no encontrada.');
+        }
+
+        $backToCalendar = fn (): Response => $this->redirectToRoute('panel_calendar', [
+            'year' => $basket->getDate()->format('Y'),
+            'month' => $basket->getDate()->format('n'),
+            'sel' => $basket->getId(),
+        ]);
+
+        if (!$this->isCsrfTokenValid('panel_calendar_skip', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
+
+            return $backToCalendar();
+        }
+
+        // R1: la cesta compartida la marca la alternancia con el otro hogar.
+        if ($partner->getSharePartner() !== null) {
+            $this->addFlash('warning', 'Tu cesta es compartida: el día lo marca la alternancia con el otro hogar.');
+
+            return $backToCalendar();
+        }
+
+        // Plazo de autoservicio: hasta el jueves 23:59 anterior al reparto. Defensa
+        // server-side; el calendario ya lo oculta en el cliente cuando ha pasado.
+        if (!$this->isWithinPickupDeadlineForBasket($basket)) {
+            $this->addFlash('error', 'Ya no se puede cambiar esa semana — el plazo terminó. Si necesitas avisar, contacta con la administración.');
+
+            return $backToCalendar();
+        }
+
+        $actor = 'partner:' . $partner->getId();
+        $generated = $em->getRepository(WeeklyBasket::class)->findOneBy(['basket' => $basket]) !== null;
+        $outgoing = $shiftRepository->findOutgoing($partner, $basket);
+        $incoming = $shiftRepository->findIncoming($partner, $basket);
+
+        // VOLVER A RECOGER: acción explícita (botón del panel sobre una semana aparcada).
+        if ($request->request->getBoolean('recover')) {
+            if ($outgoing !== null && $outgoing->isSkip()) {
+                $applier->cancelSkipIntent($outgoing, $actor);
+                if ($generated) {
+                    $share = $em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner, $basket->getDate());
+                    if ($share !== null) {
+                        $generator->materializeShareDelivery($basket, $share);
+                        $em->flush();
+                    }
+                }
+                $this->addFlash('notice', 'Listo: vuelves a recoger esa semana.');
+            } else {
+                $this->addFlash('warning', 'Esa semana no tiene ninguna entrega aparcada que recuperar.');
+            }
+
+            return $backToCalendar();
+        }
+
+        // NO RECOGE. Si la cesta de ese día vino MOVIDA de otro (lo hizo gestión), se
+        // aparca esa entrega entrante (igual que en el calendario del gestor).
+        if ($incoming !== null) {
+            $applier->skipMovedDelivery($incoming, $actor);
+            $this->addFlash('notice', 'Listo: esta semana no la recoges.');
+
+            return $backToCalendar();
+        }
+        if ($outgoing !== null && $outgoing->isSkip()) {
+            $this->addFlash('warning', 'Esa semana ya está marcada como que no la recoges.');
+
+            return $backToCalendar();
+        }
+        if ($outgoing !== null) {
+            $this->addFlash('warning', 'La cesta de esa semana está movida a otro día. Si necesitas cambiarlo, contacta con la administración.');
+
+            return $backToCalendar();
+        }
+
+        // Debe haber una cesta esa semana para poder no-recogerla.
+        if (!$generated && $em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner, $basket->getDate()) === null) {
+            $this->addFlash('warning', 'No tienes una cesta esa semana.');
+
+            return $backToCalendar();
+        }
+
+        $applier->applySkipIntent($partner, $basket, null, $actor);
+        $this->addFlash('notice', 'Listo: esta semana no la recoges.');
+
+        return $backToCalendar();
+    }
+
+    /**
+     * Mover una entrega a otra fecha desde el calendario del socio (cambio puntual de
+     * viernes). Mismas reglas que el gestor (DeliveryShiftApplier::move) salvo el scope:
+     * el socio solo mueve su propia cesta. Las invariantes físicas (cesta activa, deadline
+     * día-anterior, el nodo reparte el destino, un hueco por día) se comprueban inline;
+     * no hay validador de autoservicio extra. Resuelto desde la sesión.
+     *
+     * @param int                       $basketId Semana origen (Basket) donde está la cesta.
+     * @param Request                   $request
+     * @param BasketRepository          $basketRepository
+     * @param WeeklyBasketGenerator     $generator
+     * @param DeliveryCalendarProjector $projector
+     * @param DeliveryShiftApplier      $applier
+     * @param EntityManagerInterface    $em
+     * @return Response
+     */
+    #[Route('/calendar/move/{basketId}', name: 'panel_calendar_move', methods: ['POST'], requirements: ['basketId' => '\\d+'])]
+    public function calendarMove(
+        int $basketId,
+        Request $request,
+        BasketRepository $basketRepository,
+        WeeklyBasketGenerator $generator,
+        DeliveryCalendarProjector $projector,
+        DeliveryShiftApplier $applier,
+        EntityManagerInterface $em,
+    ): Response {
+        if (($redirect = $this->ensureReady()) !== null) {
+            return $redirect;
+        }
+
+        $partner = $this->basketOwner($this->getUser()->getPartner());
+
+        $from = $basketRepository->find($basketId);
+        if ($from === null) {
+            throw $this->createNotFoundException('Semana de reparto no encontrada.');
+        }
+
+        $backToFrom = fn (): Response => $this->redirectToRoute('panel_calendar', [
+            'year' => $from->getDate()->format('Y'),
+            'month' => $from->getDate()->format('n'),
+            'sel' => $from->getId(),
+        ]);
+
+        if (!$this->isCsrfTokenValid('panel_calendar_move', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
+
+            return $backToFrom();
+        }
+
+        // R1: la cesta compartida no cambia de día (lo marca la alternancia).
+        if ($partner->getSharePartner() !== null) {
+            $this->addFlash('warning', 'Tu cesta es compartida: el día lo marca la alternancia con el otro hogar.');
+
+            return $backToFrom();
+        }
+
+        $share = $em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner, $from->getDate());
+        if ($share === null) {
+            $this->addFlash('error', 'No tienes una cesta activa.');
+
+            return $backToFrom();
+        }
+
+        $today = new \DateTimeImmutable('today');
+
+        // Deadline: se mueve hasta el día ANTERIOR a la recogida (fecha física).
+        $fromPhysical = $generator->projectShareDelivery($from, $share)['deliveryDate'] ?? $from->getDate();
+        if ($fromPhysical <= $today) {
+            $this->addFlash('warning', 'Esa cesta se recoge hoy o ya pasó: ya no se puede mover.');
+
+            return $backToFrom();
+        }
+
+        $to = $basketRepository->find((int) $request->request->get('to_basket_id', 0));
+        if ($to === null) {
+            $this->addFlash('error', 'Elige una fecha destino válida.');
+
+            return $backToFrom();
+        }
+
+        // El nodo del socio debe repartir el día destino, y debe ser futuro.
+        $toProjection = $generator->projectShareDelivery($to, $share);
+        if ($toProjection === null) {
+            $this->addFlash('error', 'Tu nodo no reparte ese día: elige otra fecha.');
+
+            return $backToFrom();
+        }
+        $toPhysical = $toProjection['deliveryDate'] ?? $to->getDate();
+        if ($toPhysical <= $today) {
+            $this->addFlash('error', 'No puedes mover la cesta a hoy ni a una fecha pasada.');
+
+            return $backToFrom();
+        }
+
+        // Un hueco por día: el destino no puede tener ya una entrega real, salvo que sea
+        // el día de patrón de la propia cesta (volver atrás = quitar el cambio).
+        $shiftRepo = $em->getRepository(PartnerDeliveryShift::class);
+        $patternOrigin = $shiftRepo->findIncoming($partner, $from)?->getFromBasket() ?? $from;
+        $isReturn = $to->getId() === $patternOrigin->getId();
+        $toDate = $to->getDate();
+        foreach ($projector->projectMonth($partner, (int) $toDate->format('Y'), (int) $toDate->format('n')) as $s) {
+            if ($s['basket']->getId() !== $to->getId()) {
+                continue;
+            }
+            if (!$isReturn && !empty($s['items'])) {
+                $this->addFlash('error', 'Ya tienes una entrega ese día.');
+
+                return $backToFrom();
+            }
+            break;
+        }
+
+        // El socio mueve con las MISMAS reglas que el gestor (paridad de comportamiento;
+        // lo único que cambia es el scope: el gestor mueve a cualquier socio, el socio
+        // solo a sí mismo). Las invariantes físicas ya están comprobadas arriba (cesta
+        // activa, deadline día-anterior, el nodo reparte el destino, un hueco por día);
+        // no hay validador de autoservicio extra. ($isReturn solo cambia el mensaje.)
+        try {
+            $applier->move($partner, $from, $to, actor: 'partner:' . $partner->getId());
+        } catch (\LogicException $e) {
+            $this->addFlash('error', $e->getMessage());
+
+            return $backToFrom();
+        }
+
+        $this->addFlash('notice', $isReturn
+            ? 'Listo: la cesta vuelve a su día habitual.'
+            : 'Listo: cambiada al ' . $to->getDate()->format('d/m/Y') . '.');
+
+        return $this->redirectToRoute('panel_calendar', [
+            'year' => $to->getDate()->format('Y'),
+            'month' => $to->getDate()->format('n'),
+            'sel' => $to->getId(),
+        ]);
+    }
+
+    /**
+     * Recuperar (volver a recoger) una entrega aparcada en un DÍA ELEGIDO desde el
+     * calendario del socio — el destino del arrastre de una tarjeta de la papelera.
+     * Mismo mecanismo que el gestor (DeliveryShiftApplier::recoverSkipToDay), con plazo
+     * de autoservicio y resuelto desde la sesión. Comparte el token CSRF con "mover".
+     *
+     * @param int                            $basketId Semana ORIGEN (aparcada) que se recupera.
+     * @param Request                        $request
+     * @param BasketRepository               $basketRepository
+     * @param WeeklyBasketGenerator          $generator
+     * @param PartnerDeliveryShiftRepository $shiftRepository
+     * @param DeliveryShiftApplier           $applier
+     * @param EntityManagerInterface         $em
+     * @return Response
+     */
+    #[Route('/calendar/recover/{basketId}', name: 'panel_calendar_recover', methods: ['POST'], requirements: ['basketId' => '\\d+'])]
+    public function calendarRecover(
+        int $basketId,
+        Request $request,
+        BasketRepository $basketRepository,
+        WeeklyBasketGenerator $generator,
+        PartnerDeliveryShiftRepository $shiftRepository,
+        DeliveryShiftApplier $applier,
+        EntityManagerInterface $em,
+    ): Response {
+        if (($redirect = $this->ensureReady()) !== null) {
+            return $redirect;
+        }
+
+        $partner = $this->basketOwner($this->getUser()->getPartner());
+
+        $origin = $basketRepository->find($basketId);
+        if ($origin === null) {
+            throw $this->createNotFoundException('Semana de reparto no encontrada.');
+        }
+
+        $backToCalendar = fn (Basket $sel): Response => $this->redirectToRoute('panel_calendar', [
+            'year' => $sel->getDate()->format('Y'),
+            'month' => $sel->getDate()->format('n'),
+            'sel' => $sel->getId(),
+        ]);
+
+        // Comparte token con "mover" (panel_calendar_move): ambos gestos van por MOVE_CSRF.
+        if (!$this->isCsrfTokenValid('panel_calendar_move', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
+
+            return $backToCalendar($origin);
+        }
+
+        if ($partner->getSharePartner() !== null) {
+            $this->addFlash('warning', 'Tu cesta es compartida: el día lo marca la alternancia con el otro hogar.');
+
+            return $backToCalendar($origin);
+        }
+
+        $skip = $shiftRepository->findOutgoing($partner, $origin);
+        if ($skip === null || !$skip->isSkip()) {
+            $this->addFlash('warning', 'Esa entrega ya no está aparcada.');
+
+            return $backToCalendar($origin);
+        }
+
+        $share = $em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner, $origin->getDate());
+        if ($share === null) {
+            $this->addFlash('error', 'No tienes una cesta activa.');
+
+            return $backToCalendar($origin);
+        }
+
+        $to = $basketRepository->find((int) $request->request->get('to_basket_id', 0));
+        if ($to === null) {
+            $this->addFlash('error', 'Elige una fecha destino válida.');
+
+            return $backToCalendar($origin);
+        }
+
+        $today = new \DateTimeImmutable('today');
+        $toProjection = $generator->projectShareDelivery($to, $share);
+        if ($toProjection === null) {
+            $this->addFlash('error', 'Tu nodo no reparte ese día: elige otra fecha.');
+
+            return $backToCalendar($origin);
+        }
+        if (($toProjection['deliveryDate'] ?? $to->getDate()) <= $today) {
+            $this->addFlash('error', 'No puedes recuperar la cesta en hoy ni en una fecha pasada.');
+
+            return $backToCalendar($origin);
+        }
+
+        $actor = 'partner:' . $partner->getId();
+
+        // ¿La cesta aparcada era de SOLO-HUEVO? (semana origen sin verdura por patrón). Si no
+        // se distingue, recuperarla sobre una semana de cesta recompondría verdura de la nada.
+        $originIsCestaWeek = false;
+        foreach ($generator->projectForBasket($origin) as $candidate) {
+            if ($candidate->getPartner()->getId() === $partner->getId()) {
+                $originIsCestaWeek = true;
+                break;
+            }
+        }
+
+        $applier->recoverSkipToDay($skip, $to, !$originIsCestaWeek, $actor);
+        $this->addFlash('notice', $to->getId() === $origin->getId()
+            ? 'Recuperada en su día habitual.'
+            : 'Recuperada el ' . $to->getDate()->format('d/m/Y') . '.');
+
+        return $backToCalendar($to);
     }
 
     #[Route('/familia', name: 'panel_family', methods: ['GET'])]

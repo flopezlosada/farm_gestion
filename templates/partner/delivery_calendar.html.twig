@@ -35,6 +35,7 @@
 
     {% include 'partner/_calendar.html.twig' with {
         cal: {
+            dnd: true,
             route_view:    'partner_delivery_calendar',
             route_skip:    'partner_delivery_calendar_skip',
             route_move:    'partner_delivery_calendar_move',

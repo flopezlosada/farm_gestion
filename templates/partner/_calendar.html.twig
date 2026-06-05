@@ -18,7 +18,10 @@
  # ============================================================ #}
 {% import '_macros/csa.html.twig' as csa %}
 {% set EGG = constant('App\\Entity\\BasketComponent::ID_EGGS') %}
+{# ro = solo lectura total (sin acciones). dnd = capa de arrastrar y soltar (escritorio);
+   el socio (móvil) edita por toques con los botones del panel, sin arrastre. #}
 {% set ro = cal.readonly|default(false) %}
+{% set dnd = cal.dnd|default(false) %}
 
 {# Lista (solo lectura) de lo que lleva una entrega ese día. El contenido del día ya no
    se edita por componente: el modelo es "todo junto por día". #}
@@ -41,6 +44,15 @@
     {{ csa.callout('Esta cesta es compartida: su día y su contenido los marca la alternancia con el otro hogar, no se editan desde aquí.', 'info', 'info-circle') }}
 {% endif %}
 
+{# Banner del modo "mover por toque" (socio, sin arrastre): aparece al pulsar
+   "Mover a otra fecha" y guía a tocar el día destino. #}
+{% if partner.sharePartner is null and not ro and cal.route_move is defined %}
+    <div id="rcal-move-banner" class="rcal-movebanner" hidden>
+        <span><i class="fa fa-hand-o-up"></i> Toca el día (resaltado) al que quieres mover la cesta.</span>
+        <button type="button" id="rcal-move-cancel" class="csa-btn csa-btn--ghost csa-btn--sm">Cancelar</button>
+    </div>
+{% endif %}
+
 <div class="rcal">
 
     <div class="rcal-left">
@@ -61,7 +73,7 @@
             {# Reset del mes a su patrón: red de seguridad para estados enredados. No en
                compartidas (R1) ni en solo lectura. Recarga normal (no AJAX): es una acción
                rara y conviene ver el mes limpio de cero. #}
-            {% if partner.sharePartner is null and not ro %}
+            {% if cal.route_reset is defined and partner.sharePartner is null and not ro %}
                 <form id="rcal-reset-form" action="{{ path(cal.route_reset, cal.idp) }}" method="post" class="rcal-resetform">
                     <input type="hidden" name="_csrf_token" value="{{ cal.csrf_reset }}">
                     <input type="hidden" name="year" value="{{ current.format('Y') }}">
@@ -107,7 +119,7 @@
                         {% set no_pickup = slot.items is empty %}
                         {# Arrastrable = entrega real, futura y no compartida (R1), si no es solo lectura.
                            Arrastrarla a la papelera = no recoger esa semana. #}
-                        {% set day_grab = not no_pickup and partner.sharePartner is null and slot.date > date('today') and not ro %}
+                        {% set day_grab = not no_pickup and partner.sharePartner is null and slot.date > date('today') and not ro and dnd %}
                         {# Se navega al mes LÓGICO del Basket (su viernes-ciclo), que para las
                            entregas del mes coincide con el visible, pero para una que se cuela
                            por fecha física desde un mes vecino es donde el panel la resuelve. #}
@@ -159,17 +171,24 @@
             <span class="rcal-tray__ic"><i class="fa fa-inbox"></i></span>
             <span class="rcal-tray__txt">
                 <span class="rcal-tray__title">No recoge</span>
-                <span class="rcal-tray__hint">Arrastra un día aquí para no recogerlo · o saca uno para recuperarlo</span>
+                <span class="rcal-tray__hint">
+                    <span class="rcal-dragonly">Arrastra un día aquí para no recogerlo · o saca uno (a un día libre) para recuperarlo</span>
+                    <span class="rcal-tapmove">Estas semanas no las recoges. Toca una para volver a recogerla.</span>
+                </span>
             </span>
         </div>
         <div class="rcal-tray__body">
+            {# La tarjeta es SIEMPRE un enlace (tocar = seleccionar ese día → "Volver a recoger",
+               flujo móvil) y ADEMÁS arrastrable si la pantalla permite recuperar a un día elegido
+               (escritorio: arrastrar la ficha a un día libre). #}
             {% for t in tray %}
-                {% set t_grab = t.date > date('today') %}
-                <div class="rcal-tray-card{{ t_grab ? ' rcal-grab' }}"
-                     {% if t_grab %}draggable="true" data-rcal-draggable data-rcal-kind="tray" data-rcal-skip-url="{{ path(cal.route_skip, cal.idp|merge({ basketId: t.basket.id })) }}" data-rcal-recover-url="{{ path(cal.route_recover, cal.idp|merge({ basketId: t.basket.id })) }}"{% endif %}>
+                {% set t_grab = t.date > date('today') and cal.route_recover is defined %}
+                <a class="rcal-tray-card{{ t_grab ? ' rcal-grab' }}"
+                   href="{{ path(cal.route_view, cal.idp|merge({ year: t.basket.date.format('Y'), month: t.basket.date.format('n'), sel: t.basket.id })) }}"
+                   {% if t_grab %}draggable="true" data-rcal-draggable data-rcal-kind="tray" data-rcal-skip-url="{{ path(cal.route_skip, cal.idp|merge({ basketId: t.basket.id })) }}" data-rcal-recover-url="{{ path(cal.route_recover, cal.idp|merge({ basketId: t.basket.id })) }}"{% endif %}>
                     <span class="rcal-tray-card__ic"><i class="fa fa-ban"></i></span>
                     <span class="rcal-tray-card__d">{{ t.date|format_date(pattern='EEE d MMM', locale='es') }}</span>
-                </div>
+                </a>
             {% else %}
                 <p class="rcal-tray__empty">Nada aparcado este mes.</p>
             {% endfor %}
@@ -239,8 +258,8 @@
 
                     {{ _self.components(selected, EGG) }}
 
-                    {% if not readonly %}
-                        <div class="rcal-hint" style="margin-top: var(--csa-sp-4);">
+                    {% if not readonly and dnd %}
+                        <div class="rcal-hint rcal-dragonly" style="margin-top: var(--csa-sp-4);">
                             <i class="fa fa-arrows"></i> Arrastra este día en el calendario para moverlo a otra fecha o a "No recoge".
                         </div>
                     {% endif %}
@@ -248,6 +267,15 @@
 
                 {% if not readonly %}
                     <div class="rcal-panel__ft">
+                        {# Mover por toque (móvil/socio): inicia el modo "elige día destino".
+                           En escritorio (dnd) se mueve arrastrando, así que no se muestra. #}
+                        {% if cal.route_move is defined and has_drop_targets|default(false) %}
+                            <button type="button" class="csa-btn csa-btn--secondary csa-btn--block rcal-tapmove" data-rcal-move-start
+                                    data-rcal-move-url="{{ path(cal.route_move, cal.idp|merge({ basketId: bid })) }}"
+                                    style="margin-bottom: var(--csa-sp-3);">
+                                <i class="fa fa-arrows"></i><span>Mover a otra fecha</span>
+                            </button>
+                        {% endif %}
                         <form id="rcal-skip-form-{{ bid }}" action="{{ path(cal.route_skip, cal.idp|merge({ basketId: bid })) }}" method="post" style="margin: 0;" data-rcal-ajax>
                             <input type="hidden" name="_csrf_token" value="{{ cal.csrf_skip }}">
                             <button type="button" class="csa-btn csa-btn--danger-soft csa-btn--block"
@@ -281,7 +309,7 @@
 
 </div>
 
-{% if partner.sharePartner is null and not ro %}
+{% if partner.sharePartner is null and not ro and dnd %}
 <script>
 (function () {
     const SKIP_CSRF = {{ cal.csrf_skip|json_encode|raw }};
@@ -410,6 +438,71 @@
 
     const root = document.querySelector('.rcal');
     if (root) bind(root);
+})();
+</script>
+{% endif %}
+
+{% if partner.sharePartner is null and not ro and cal.route_move is defined %}
+<script>
+// Mover por TOQUE (socio / móvil): el arrastre HTML5 no funciona con el dedo, así que
+// el cambio de día va por clics, que sí responden al toque. Pulsar "Mover a otra fecha"
+// entra en modo destino (resalta los días libres); tocar uno envía el cambio (POST
+// normal con recarga, sin depender de fetch). El servidor revalida (plazo, validador).
+(function () {
+    const MOVE_CSRF = {{ cal.csrf_move|json_encode|raw }};
+    const cal = document.querySelector('.rcal');
+    if (!cal) return;
+    const banner = document.getElementById('rcal-move-banner');
+    let moveUrl = null;
+
+    function exitMoveMode() {
+        moveUrl = null;
+        cal.classList.remove('rcal-moving');
+        cal.querySelectorAll('.rcal-dragok').forEach(function (el) { el.classList.remove('rcal-dragok'); });
+        if (banner) banner.hidden = true;
+    }
+
+    cal.addEventListener('click', function (e) {
+        // 1) Iniciar el modo mover desde el panel del día seleccionado.
+        const start = e.target.closest('[data-rcal-move-start]');
+        if (start) {
+            moveUrl = start.dataset.rcalMoveUrl;
+            cal.classList.add('rcal-moving');
+            cal.querySelectorAll('[data-rcal-target]').forEach(function (el) { el.classList.add('rcal-dragok'); });
+            if (banner) banner.hidden = false;
+            cal.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            return;
+        }
+        // 2) En modo mover, tocar un día destino resuelto envía el cambio.
+        if (moveUrl) {
+            const target = e.target.closest('[data-rcal-target]');
+            if (!target) return;
+            const f = document.createElement('form');
+            f.method = 'post';
+            f.action = moveUrl;
+            f.innerHTML = '<input type="hidden" name="to_basket_id" value="' + target.dataset.rcalTo + '">'
+                        + '<input type="hidden" name="_csrf_token" value="' + MOVE_CSRF + '">';
+            document.body.appendChild(f);
+            f.submit();
+        }
+    });
+
+    if (banner) {
+        const cancel = document.getElementById('rcal-move-cancel');
+        if (cancel) cancel.addEventListener('click', exitMoveMode);
+    }
+
+    // Móvil: la celda de un día es un enlace que RECARGA la página. En una sola
+    // columna el panel del detalle (con "Mover a otra fecha" y, al pulsarlo, los
+    // huecos) queda al fondo, tras la rejilla y la papelera, y el usuario se queda
+    // arriba sin verlo — "no pasa nada". Si la recarga trae una selección explícita
+    // (?sel), llevamos la vista al panel. Solo en táctil; en escritorio el panel ya
+    // está a la vista (columna derecha).
+    const isTouch = window.matchMedia('(hover: none), (pointer: coarse)').matches;
+    if (isTouch && new URLSearchParams(window.location.search).has('sel')) {
+        const panel = cal.querySelector('.rcal-panel');
+        if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
 })();
 </script>
 {% endif %}

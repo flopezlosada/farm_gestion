@@ -19,6 +19,7 @@ use App\Repository\BasketRepository;
 use App\Repository\PartnerDeliveryShiftRepository;
 use App\Repository\PartnerRepository;
 use App\Service\Delivery\DeliveryCalendarProjector;
+use App\Service\Delivery\DeliveryCalendarViewBuilder;
 use App\Service\Delivery\DeliveryShiftApplier;
 use App\Service\Delivery\PartnerMonthResetter;
 use App\Service\Delivery\WeeklyBasketComponentEditor;
@@ -273,122 +274,17 @@ class PartnerController extends AbstractController
     public function deliveryCalendar(
         Partner $partner,
         Request $request,
-        DeliveryCalendarProjector $projector,
-        WeeklyBasketGenerator $generator,
-        EntityManagerInterface $em,
+        DeliveryCalendarViewBuilder $viewBuilder,
     ): Response {
-        // Sin mes explícito (entrada desde la ficha), abrimos en el mes de la
-        // PRÓXIMA entrega del socio, no en el mes actual: a fin de mes lo de este
-        // mes ya no se puede gestionar. Si navega con las flechas, se respeta el
-        // mes pedido.
-        if ($request->query->has('month')) {
-            $default = new \DateTimeImmutable('first day of this month');
-            $year = (int) $request->query->get('year', $default->format('Y'));
-            $month = (int) $request->query->get('month');
-            if ($month < 1 || $month > 12) {
-                $year = (int) $default->format('Y');
-                $month = (int) $default->format('n');
-            }
-        } else {
-            [$year, $month] = $this->resolveNextDeliveryMonth($partner, $projector);
-        }
-
-        $current = new \DateTimeImmutable(sprintf('%04d-%02d-01', $year, $month));
-        $slots = $projector->projectMonth($partner, $year, $month);
-
-        // Para PINTAR la rejilla (no para la lógica) hace falta también las entregas
-        // de los meses lógicos vecinos cuya fecha FÍSICA cae en el mes visible: una
-        // cesta de ciclo 1-oct con recogida física el 30-sep debe verse en septiembre.
-        // Cada Basket vive en un único mes lógico, así que las tres proyecciones cubren
-        // Baskets disjuntos (sin duplicados); buildMonthWeeks descarta los slots cuya
-        // fecha física no cae en ninguna celda visible. La selección del panel y los
-        // candidatos de mover siguen usando $slots (solo el mes actual).
-        // El mes actual va el ÚLTIMO en la fusión: si por un dato sucio dos entregas
-        // cayeran en la misma fecha física, en la rejilla (byDay, último gana) manda
-        // la del mes que se está mirando, no la colada de un vecino.
-        $prevMonth = $current->modify('-1 month');
-        $nextMonth = $current->modify('+1 month');
-        $gridSlots = array_merge(
-            $projector->projectMonth($partner, (int) $prevMonth->format('Y'), (int) $prevMonth->format('n')),
-            $projector->projectMonth($partner, (int) $nextMonth->format('Y'), (int) $nextMonth->format('n')),
-            $slots,
-        );
-
-        // La PAPELERA: las entregas "no recoge" del mes (saltadas), aparcadas y
-        // recuperables. Salen de la rejilla — su día queda LIBRE — y se muestran aparte.
-        // La rejilla solo pinta lo que SÍ se recoge.
-        $tray = array_values(array_filter($slots, static fn (array $s): bool => $s['skipped']));
-        $gridSlots = array_filter($gridSlots, static fn (array $s): bool => !$s['skipped']);
-
-        // Día seleccionado para el panel lateral: el Basket pedido por query (?sel),
-        // o por defecto la primera entrega del mes. Solo entregas reales son
-        // seleccionables (las celdas vacías no abren panel).
+        // El gestor puede arrastrar (withDropTargets: true). La resolución del mes,
+        // la proyección, la papelera y la rejilla viven en el builder compartido.
+        $month = $request->query->has('month') ? (int) $request->query->get('month') : null;
+        $year = $request->query->has('year') ? (int) $request->query->get('year') : null;
         $selectedBasketId = (int) $request->query->get('sel', 0);
-        $selected = $this->resolveSelectedSlot($slots, $selectedBasketId, $current->format('Y-m'));
 
-        // Una entrega se gestiona (mover / saltar / editar) hasta el DÍA ANTERIOR a su
-        // recogida: si se recoge hoy o ya pasó, queda en solo lectura. De ahí el `>`
-        // estricto sobre la fecha física de recogida (no `>=`).
-        $today = new \DateTimeImmutable('today');
-        $selectedEditable = $selected !== null && $selected['date'] > $today;
+        $view = $viewBuilder->build($partner, $year, $month, $selectedBasketId, withDropTargets: true);
 
-        // Destinos de ARRASTRE (mover una entrega a otro día): días del mes donde el nodo
-        // reparte y el socio NO tiene ya una entrega real — modelo relajado (cualquier día
-        // libre, incluido un "no recoge", vale; mover ahí lo revive). Map fecha física
-        // 'Y-m-d' → basketId, para que la rejilla marque esas celdas como soltables. El
-        // endpoint de mover revalida; esto es solo para resaltar y permitir el drop. No se
-        // ofrece en compartidas (R1).
-        $dropDays = [];
-        $activeShare = $em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner, $current);
-        if ($partner->getSharePartner() === null && $activeShare !== null) {
-            $occupiedReal = [];
-            foreach ($slots as $s) {
-                if (!empty($s['items'])) {
-                    $occupiedReal[$s['basket']->getId()] = true;
-                }
-            }
-            $monthEnd = $current->modify('last day of this month');
-            $monthBaskets = $em->getRepository(Basket::class)->createQueryBuilder('b')
-                ->where('b.date BETWEEN :start AND :end')
-                ->setParameter('start', $current->format('Y-m-d'))
-                ->setParameter('end', $monthEnd->format('Y-m-d'))
-                ->orderBy('b.date', 'ASC')
-                ->getQuery()
-                ->getResult();
-            foreach ($monthBaskets as $b) {
-                if (isset($occupiedReal[$b->getId()])) {
-                    continue; // ya hay entrega real ese día: un hueco por día
-                }
-                $projection = $generator->projectShareDelivery($b, $activeShare);
-                if ($projection === null) {
-                    continue; // el nodo no reparte esa semana
-                }
-                $physical = $projection['deliveryDate'] ?? $b->getDate();
-                if ($physical <= $today) {
-                    continue; // mismo deadline: destino futuro
-                }
-                $dropDays[$physical->format('Y-m-d')] = $b->getId();
-            }
-        }
-
-        // "Recoge en X": X es el NODO de reparto (Torremocha, Madrid…), no el grupo
-        // de recogida (Pedrezuela…). Fallback al grupo si un dato legacy no tiene nodo.
-        $group = $partner->getWeeklyBasketGroup();
-        $pickupPlace = $group?->getNode()?->getName() ?? $group?->getName();
-
-        return $this->render('partner/delivery_calendar.html.twig', [
-            'partner' => $partner,
-            'group' => $group,
-            'pickup_place' => $pickupPlace,
-            'slots' => $slots,
-            'tray' => $tray,
-            'weeks' => $this->buildMonthWeeks($year, $month, $gridSlots, $dropDays),
-            'selected' => $selected,
-            'selected_editable' => $selectedEditable,
-            'current' => $current,
-            'prev' => $current->modify('-1 month'),
-            'next' => $current->modify('+1 month'),
-        ]);
+        return $this->render('partner/delivery_calendar.html.twig', $view);
     }
 
     /**
@@ -1100,126 +996,6 @@ class PartnerController extends AbstractController
         }
 
         return $share;
-    }
-
-    /**
-     * Resuelve el mes por defecto del calendario: el de la PRÓXIMA entrega del
-     * socio (fecha física ≥ hoy). Escanea desde el mes actual hacia delante hasta
-     * 6 meses; si no encuentra ninguna entrega futura (socio sin cesta activa o
-     * dada de baja), cae al mes actual.
-     *
-     * @param Partner                   $partner
-     * @param DeliveryCalendarProjector $projector
-     * @return array{0: int, 1: int} [año, mes]
-     */
-    private function resolveNextDeliveryMonth(Partner $partner, DeliveryCalendarProjector $projector): array
-    {
-        $today = new \DateTimeImmutable('today');
-        $base = new \DateTimeImmutable('first day of this month');
-
-        for ($i = 0; $i < 6; $i++) {
-            $cursor = $base->modify(sprintf('+%d months', $i));
-            $year = (int) $cursor->format('Y');
-            $month = (int) $cursor->format('n');
-            foreach ($projector->projectMonth($partner, $year, $month) as $slot) {
-                if ($slot['date'] >= $today) {
-                    return [$year, $month];
-                }
-            }
-        }
-
-        return [(int) $base->format('Y'), (int) $base->format('n')];
-    }
-
-    /**
-     * Elige el slot del calendario que ocupa el panel lateral: el del Basket
-     * pedido (?sel); si no, la primera entrega cuya fecha física cae DENTRO del
-     * mes mostrado (no la que se cuela del mes anterior por la fecha física del
-     * nodo); como último recurso, la primera del listado. Null si no hay entregas.
-     *
-     * @param list<array{date: \DateTimeInterface, basket: Basket, ...}> $slots
-     * @param int                                                        $selectedBasketId 0 = sin preferencia.
-     * @param string                                                     $month            Mes mostrado, formato 'Y-m'.
-     * @return array{basket: Basket, ...}|null
-     */
-    private function resolveSelectedSlot(array $slots, int $selectedBasketId, string $month): ?array
-    {
-        if ($slots === []) {
-            return null;
-        }
-
-        if ($selectedBasketId > 0) {
-            // Un día puede tener DOS slots: una cesta movida encima (rejilla) y una cesta
-            // aparcada en la papelera (un "no recoge" cuyo día se reutilizó). El panel
-            // gestiona la entrega REAL, así que se prefiere la NO saltada; la aparcada solo
-            // como fallback (día que es únicamente "no recoge").
-            $fallback = null;
-            foreach ($slots as $slot) {
-                if ($slot['basket']->getId() !== $selectedBasketId) {
-                    continue;
-                }
-                if (!$slot['skipped']) {
-                    return $slot;
-                }
-                $fallback ??= $slot;
-            }
-            if ($fallback !== null) {
-                return $fallback;
-            }
-        }
-
-        // Por defecto, la primera entrega cuya fecha física cae DENTRO del mes mostrado
-        // (no la que se cuela de un mes vecino por la fecha física del nodo); si ninguna,
-        // la primera del listado.
-        foreach ($slots as $slot) {
-            if ($slot['date']->format('Y-m') === $month) {
-                return $slot;
-            }
-        }
-
-        return $slots[0];
-    }
-
-    /**
-     * Construye la rejilla mensual del calendario (semanas de lunes a domingo) que
-     * pinta la pantalla, colocando cada entrega proyectada en la celda de su fecha
-     * física. Las semanas íntegramente fuera del mes se descartan.
-     *
-     * @param int                                                     $year
-     * @param int                                                     $month
-     * @param list<array{date: \DateTimeInterface, basket: Basket, ...}> $slots
-     * @param array<string, int>                                      $dropDays Fecha física 'Y-m-d' → basketId destino de arrastre (día libre del nodo).
-     * @return list<list<array{date: \DateTimeImmutable, inMonth: bool, slot: array|null, dropBasketId: int|null}>>
-     */
-    private function buildMonthWeeks(int $year, int $month, array $slots, array $dropDays = []): array
-    {
-        // Mapa fecha física (Y-m-d) → slot, para colocar la entrega en su celda.
-        $byDay = [];
-        foreach ($slots as $slot) {
-            $byDay[$slot['date']->format('Y-m-d')] = $slot;
-        }
-
-        $first = new \DateTimeImmutable(sprintf('%04d-%02d-01', $year, $month));
-        $last = $first->modify('last day of this month');
-        // Lunes en/antes del día 1 (N: 1=lunes .. 7=domingo).
-        $cursor = $first->modify('-' . ((int) $first->format('N') - 1) . ' days');
-
-        $weeks = [];
-        do {
-            $week = [];
-            for ($i = 0; $i < 7; $i++) {
-                $week[] = [
-                    'date' => $cursor,
-                    'inMonth' => $cursor->format('Y-m') === $first->format('Y-m'),
-                    'slot' => $byDay[$cursor->format('Y-m-d')] ?? null,
-                    'dropBasketId' => $dropDays[$cursor->format('Y-m-d')] ?? null,
-                ];
-                $cursor = $cursor->modify('+1 day');
-            }
-            $weeks[] = $week;
-        } while ($cursor <= $last);
-
-        return $weeks;
     }
 
     #[Route("/{id}/edit", name: "partner_edit", methods: ["GET","POST"])]

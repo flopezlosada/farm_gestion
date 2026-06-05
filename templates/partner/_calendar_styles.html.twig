@@ -110,6 +110,20 @@
   /* destino que se está SOBREVOLANDO ahora (pista fuerte) */
   .rcal-dropok{outline:2px solid var(--csa-green);outline-offset:-3px;background:#cfe3a8}
 
+  /* Afordancias por DISPOSITIVO (no por rol): el arrastre es para puntero fino con hover
+     (escritorio); el botón "mover por toque" y demás, para pantallas táctiles. Así el socio
+     en escritorio arrastra igual que el gestor, y en el móvil usa el toque. */
+  @media (hover: hover) and (pointer: fine) { .rcal-tapmove { display: none !important; } }
+  @media (hover: none), (pointer: coarse) { .rcal-dragonly { display: none !important; } }
+
+  /* --- modo "mover por toque" (móvil) --- */
+  .rcal-movebanner{display:flex;align-items:center;justify-content:space-between;gap:var(--csa-sp-4);background:var(--csa-sky-soft);border:1px solid var(--csa-sky);color:var(--csa-sky);border-radius:var(--csa-radius-md);padding:10px 14px;margin-bottom:var(--csa-sp-4);font-size:var(--csa-fs-sm);font-weight:600}
+  /* respeta el atributo `hidden` (si no, .rcal-movebanner{display:flex} lo pisaría y el
+     banner se vería siempre, también en escritorio donde no se usa el modo "mover por toque") */
+  .rcal-movebanner[hidden]{display:none}
+  .rcal-movebanner i{margin-right:6px}
+  .rcal-moving [data-rcal-target]{cursor:pointer}
+
   /* --- papelera (no recoge, recuperable) --- */
   .rcal-tray{background:var(--csa-surface);border:1px solid var(--csa-rule);border-radius:var(--csa-radius-xl);box-shadow:var(--csa-shadow-sm);padding:var(--csa-sp-5);transition:var(--csa-t-fast)}
   .rcal-tray.rcal-dragok{outline:none;border:2px dashed var(--csa-terracotta);background:#fdf3ec}
@@ -123,5 +137,8 @@
   .rcal-tray__empty{font-size:var(--csa-fs-sm);color:var(--csa-ink-muted);margin:0;font-style:italic}
   .rcal-tray-card{display:inline-flex;align-items:center;gap:8px;background:var(--csa-terracotta-soft);border:1px solid #f0bfa3;border-radius:var(--csa-radius-pill);padding:8px 15px;font-size:var(--csa-fs-sm);color:#b04e22;font-weight:600;text-transform:capitalize;transition:var(--csa-t-fast)}
   .rcal-tray-card.rcal-grab:hover{transform:translateY(-1px);box-shadow:var(--csa-shadow-sm)}
+  /* tarjeta-enlace (socio, sin arrastre): tocar para volver a recoger */
+  .csa-app a.rcal-tray-card{text-decoration:none;cursor:pointer}
+  .csa-app a.rcal-tray-card:hover{text-decoration:none;transform:translateY(-1px);box-shadow:var(--csa-shadow-sm)}
   .rcal-tray-card__ic{font-size:11px}
 </style>
