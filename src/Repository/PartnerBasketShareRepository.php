@@ -82,16 +82,26 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
     }
 
     /**
+     * Devuelve la lista de socios con cesta de un tipo (semanal, media, solo-huevo
+     * semanal) ordenados por pueblo, candidatos a repartir en el Basket dado.
+     *
+     * Acota a la ventana de vigencia de la PBS frente a la FECHA del Basket:
+     * start_date <= fecha y (end_date NULL o end_date >= fecha). El filtro de
+     * end_date es imprescindible: un socio con baja programada a futuro sigue
+     * is_active=1 hasta que finalizeExpiredShares la desactive (relativo a la
+     * semana en curso, no al Basket que se genera), así que sin este filtro
+     * recibiría entregas en listados adelantados POSTERIORES a su baja.
+     *
      * @param $basket_share
      * @param $status
-     * devuelve la lista de socios con cesta ordenados por pueblo y según el tipo de cesta
      */
     public function findBasketPartnersByTypeAndCity($basket_share, $status, $current_basket,$only_eggs=false)
     {
         $em = $this->getEntityManager();
 
         $dql = "select b from App\\Entity\\PartnerBasketShare b inner join b.partner p where b.basket_share=:basket_share and
-                      b.is_active=:status and (b.start_date IS NULL OR b.start_date<=:date) ";
+                      b.is_active=:status and (b.start_date IS NULL OR b.start_date<=:date)
+                      and (b.end_date IS NULL OR b.end_date>=:date) ";
         if ($only_eggs)
         {
             $dql.=" and b.egg_period=1 ";
