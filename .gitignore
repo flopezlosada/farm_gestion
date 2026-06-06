@@ -14,6 +14,10 @@
 # Notas internas de seguimiento (no entran al repo)
 /handoff/
 
+# Comandos de depuración temporales (marcados "no commitear" en su docblock)
+/src/Command/DebugRepartoSnapshotCommand.php
+/src/Command/DebugResetPartnerMonthCommand.php
+
 ###> symfony/framework-bundle ###
 /.env.local
 /.env.local.php
