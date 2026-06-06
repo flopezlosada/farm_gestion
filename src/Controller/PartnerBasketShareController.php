@@ -5,11 +5,15 @@ namespace App\Controller;
 use App\Custom\WeekOfMonth;
 use App\Entity\Basket;
 use App\Entity\BasketShare;
+use App\Entity\Node;
 use App\Entity\PartnerBasketShare;
 use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketStatus;
 use App\Form\PartnerBasketShareType;
+use App\Repository\BasketRepository;
 use App\Repository\PartnerBasketShareRepository;
+use App\Service\Delivery\BiweeklyCohortResolver;
+use App\Service\Delivery\NodeDeliveryDate;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Partner\BasketModalityChanger;
 use App\Service\Partner\PartnerShareEventRecorder;
@@ -116,10 +120,10 @@ class PartnerBasketShareController extends AbstractController
      *
      * El formulario reusa PartnerBasketShareType sobre una PBS NUEVA precargada
      * con los valores vigentes; su campo start_date se reinterpreta como la
-     * "fecha efectiva del cambio". Las entregas futuras ya materializadas del
-     * socio se borran (se regeneran con la nueva modalidad al generar cada
-     * listado); ver BasketModalityChanger::dropFutureBaskets para el límite con
-     * meses ya generados.
+     * "fecha efectiva del cambio". Tras partir el histórico, los listados YA
+     * generados (fecha >= efectiva) se reconcilian al patrón nuevo vía
+     * WeeklyBasketGenerator::reconcilePartnerFrom (añade donde ahora reparte,
+     * quita donde ya no); las semanas sin generar las siembra la generación normal.
      *
      * @param PartnerBasketShare $partnerBasketShare PBS vigente que se cambia (la del enlace).
      */
@@ -128,6 +132,10 @@ class PartnerBasketShareController extends AbstractController
         Request $request,
         PartnerBasketShare $partnerBasketShare,
         BasketModalityChanger $modalityChanger,
+        WeeklyBasketGenerator $generator,
+        BasketRepository $basketRepository,
+        BiweeklyCohortResolver $cohortResolver,
+        NodeDeliveryDate $nodeDeliveryDate,
     ): Response {
         $new = new PartnerBasketShare();
         $new->setPartner($partnerBasketShare->getPartner());
@@ -140,10 +148,85 @@ class PartnerBasketShareController extends AbstractController
         $new->setEggDayMonthOrder($partnerBasketShare->getEggDayMonthOrder());
         // start_date queda vacío: admin introduce la fecha EFECTIVA del cambio.
 
-        $form = $this->createForm(PartnerBasketShareType::class, $new);
+        // Turno de viernes traducido a fechas físicas REALES del nodo del socio.
+        // El delivery_group A/B sólo aplica a quincenales en nodos semanales
+        // (Torremocha); en nodos quincenales (Cascorro, Midori) el turno lo fija
+        // el propio punto y no se elige — ahí mostramos sus fechas como info.
+        $node = $partnerBasketShare->getPartner()->getWeeklyBasketGroup()?->getNode();
+        $nodeIsBiweekly = $node !== null && $node->getCadence() === Node::CADENCE_BIWEEKLY;
+
+        $upcoming = $basketRepository->findBetweenDates(
+            new \DateTime(),
+            (new \DateTime())->modify('+12 weeks'),
+        );
+        // Etiqueta legible con el día de la semana real: "Viernes 19/06, 26/06…".
+        $dayNames = [1 => 'Lunes', 2 => 'Martes', 3 => 'Miércoles', 4 => 'Jueves', 5 => 'Viernes', 6 => 'Sábado', 7 => 'Domingo'];
+        $labelFor = static function (array $dates) use ($dayNames): string {
+            $day = $dayNames[(int) $dates[0]->format('N')] ?? '';
+            return trim($day . ' ' . implode(', ', array_map(
+                static fn (\DateTimeInterface $d): string => $d->format('d/m'),
+                $dates,
+            ))) . '…';
+        };
+
+        $nodeDatesLabel = null;
+        $cohortChoices = [];
+        if ($nodeIsBiweekly) {
+            // El turno A/B no aplica a nodos quincenales: el motor lo ignora.
+            $new->setDeliveryGroup(null);
+            $nodeDates = [];
+            foreach ($upcoming as $basket) {
+                $date = $nodeDeliveryDate->operativeDateFor($basket, $node);
+                if ($date !== null && count($nodeDates) < 4) {
+                    $nodeDates[] = $date;
+                }
+            }
+            $nodeDatesLabel = $nodeDates !== [] ? $labelFor($nodeDates) : null;
+        } else {
+            $byCohort = [
+                PartnerBasketShare::DELIVERY_GROUP_A => [],
+                PartnerBasketShare::DELIVERY_GROUP_B => [],
+            ];
+            foreach ($upcoming as $basket) {
+                $cohort = $cohortResolver->cohortForBasket($basket);
+                $date = $node !== null
+                    ? $nodeDeliveryDate->operativeDateFor($basket, $node)
+                    : $basket->getDate();
+                if ($date !== null && count($byCohort[$cohort]) < 3) {
+                    $byCohort[$cohort][] = $date;
+                }
+            }
+            // Sin "Sin asignar": el turno es obligatorio para quincenales.
+            foreach ($byCohort as $cohort => $dates) {
+                if ($dates !== []) {
+                    $cohortChoices[$labelFor($dates)] = $cohort;
+                }
+            }
+        }
+
+        $form = $this->createForm(PartnerBasketShareType::class, $new, [
+            // Si no hay baskets futuros generados aún, deja un único hueco para
+            // que el ChoiceType no reviente con choices vacías.
+            'cohort_choices' => $cohortChoices !== [] ? $cohortChoices : ['Sin asignar' => null],
+            'exclude_weekly_shares' => $nodeIsBiweekly,
+        ]);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
+            // Defensa server: una cesta semanal no cabe en un punto quincenal.
+            if ($nodeIsBiweekly && in_array($new->getBasketShare()?->getId(), BasketShare::IDS_WEEKLY, true)) {
+                $this->addFlash('warning', sprintf(
+                    'No se puede asignar una cesta semanal en %s: ese punto reparte cada dos semanas.',
+                    $node->getName(),
+                ));
+                return $this->redirectToRoute('partner_basket_share_change_modality', ['id' => $partnerBasketShare->getId()]);
+            }
+
+            // El turno A/B sólo se conserva en quincenal sobre nodo semanal.
+            if ($nodeIsBiweekly || $new->getBasketShare()?->getId() !== BasketShare::ID_BIWEEKLY) {
+                $new->setDeliveryGroup(null);
+            }
+
             $effective = new \DateTime($new->getStartDate());
 
             $values = $request->get('partner_basket_share');
@@ -162,11 +245,11 @@ class PartnerBasketShareController extends AbstractController
                 return $this->redirectToRoute('partner_show', ['id' => $partnerBasketShare->getPartner()->getId()]);
             }
 
-            $dropped = $modalityChanger->dropFutureBaskets($new->getPartner(), $effective);
+            $reconciled = $generator->reconcilePartnerFrom($new->getPartner(), $effective);
             $this->addFlash('success', sprintf(
-                'Cambio de cesta aplicado con histórico (efectivo %s). %d entrega(s) futura(s) regenerable(s).',
+                'Cambio de cesta aplicado con histórico (efectivo %s). %d listado(s) ya generado(s) reconciliado(s) al patrón nuevo.',
                 $effective->format('d/m/Y'),
-                $dropped,
+                count($reconciled),
             ));
 
             return $this->redirectToRoute('partner_show', ['id' => $new->getPartner()->getId()]);
@@ -175,6 +258,9 @@ class PartnerBasketShareController extends AbstractController
         return $this->render('partner_basket_share/change_modality.html.twig', [
             'partner_basket_share' => $partnerBasketShare,
             'form' => $form->createView(),
+            'node_is_biweekly' => $nodeIsBiweekly,
+            'node_name' => $node?->getName(),
+            'node_dates_label' => $nodeDatesLabel,
         ]);
     }
 

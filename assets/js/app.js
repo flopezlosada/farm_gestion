@@ -9,7 +9,9 @@
 require('../css/app.css');
 require('../css/csa/index.css');
 
+// Enhancer de <select> nativos → dropdown con estética csa (opt-in por
+// [data-csa-dropdowns]). Ver assets/js/csa-dropdown.js.
+require('./csa-dropdown.js');
+
 // Need jQuery? Install it with "yarn add jquery", then uncomment to require it.
 // const $ = require('jquery');
-
-console.log('Hello Webpack Encore! Edit me in assets/js/app.js');

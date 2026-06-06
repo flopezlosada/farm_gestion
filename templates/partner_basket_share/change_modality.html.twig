@@ -30,7 +30,30 @@
         'Para ' ~ partner_basket_share.partner ~ '. Se conserva el histórico: la cesta actual se cierra la víspera de la fecha efectiva y se abre una nueva.'
     ) }}
 
-    {{ form_start(form, { attr: { role: 'form', class: 'csa-form-narrow' } }) }}
+    {# ---- Contexto: qué cesta tiene HOY la persona (read-only) ---- #}
+    <div class="csa-form-narrow csa-stack-lg" style="margin-bottom: var(--csa-sp-5);">
+        {% embed '_components/csa_card.html.twig' with { title: 'Cesta actual', subtitle: 'Lo que recibe ahora. Se cerrará la víspera de la fecha efectiva.', accent: 'ochre', icon: 'fa-shopping-basket' } %}
+            {% import '_macros/csa.html.twig' as csa %}
+            {% block body %}
+                <div class="csa-row" style="flex-wrap: wrap; gap: var(--csa-sp-2);">
+                    {{ csa.badge(partner_basket_share.basketShare ~ ' ×' ~ partner_basket_share.amount, 'green', { no_dot: true }) }}
+                    {% if partner_basket_share.eggAmount %}
+                        {{ csa.badge('Huevos: ' ~ partner_basket_share.eggAmount ~ (partner_basket_share.eggPeriod ? ' · ' ~ partner_basket_share.eggPeriod : ''), 'sky', { no_dot: true }) }}
+                    {% else %}
+                        {{ csa.badge('Sin huevos', 'neutral', { no_dot: true }) }}
+                    {% endif %}
+                    {% if partner_basket_share.basketShare.id == 2 and partner_basket_share.deliveryGroup %}
+                        {{ csa.badge('Turno ' ~ partner_basket_share.deliveryGroup, 'plum', { no_dot: true }) }}
+                    {% endif %}
+                    {% if partner_basket_share.startDate %}
+                        {{ csa.badge('Desde ' ~ partner_basket_share.startDate|date('d/m/Y'), 'neutral', { no_dot: true }) }}
+                    {% endif %}
+                </div>
+            {% endblock %}
+        {% endembed %}
+    </div>
+
+    {{ form_start(form, { attr: { role: 'form', class: 'csa-form-narrow', 'data-csa-dropdowns': '1' } }) }}
 
         <div class="csa-stack-lg">
 
@@ -40,8 +63,12 @@
                     <div class="csa-form-grid">
                         {{ csa.field(form.basket_share, 'Tipo de cesta', { full: true }) }}
                         {{ csa.field(form.amount, 'Cantidad de cestas', { hint: 'normalmente 1' }) }}
-                        {{ csa.field(form.isFreeBasket, '¿Es cesta gratuita?') }}
                     </div>
+                    <label class="csa-toggle" style="margin-top: var(--csa-sp-4);">
+                        {{ form_widget(form.isFreeBasket, { attr: { class: 'csa-toggle__input' } }) }}
+                        <span class="csa-toggle__track"><span class="csa-toggle__thumb"></span></span>
+                        <span class="csa-toggle__text">Cesta gratuita <small>Donada o solidaria · se factura a 0&nbsp;€</small></span>
+                    </label>
                 {% endblock %}
             {% endembed %}
 
@@ -57,7 +84,7 @@
                 {% endblock %}
             {% endembed %}
 
-            {% embed '_components/csa_form_section.html.twig' with { num: '3', title: 'Cuándo entra en vigor', subtitle: 'Fecha efectiva del cambio, día concreto del mes y grupo de reparto si procede.' } %}
+            {% embed '_components/csa_form_section.html.twig' with { num: '3', title: 'Cuándo entra en vigor', subtitle: 'Fecha efectiva del cambio, día concreto del mes y turno de viernes si procede.' } %}
                 {% block body %}
                     {% import '_macros/csa.html.twig' as csa %}
                     <div class="csa-form-grid">
@@ -65,7 +92,23 @@
                         <div id="day_month_order" class="csa-field--full hidden">
                             {{ csa.field(form.dayMonthOrder, 'Día del mes', { full: true }) }}
                         </div>
-                        {{ csa.field(form.deliveryGroup, 'Grupo de reparto', { full: true }) }}
+                        {% if node_is_biweekly %}
+                            {# El punto reparte quincenalmente por sí mismo: el turno lo fija
+                               el nodo, no se elige. Mostramos sus fechas como información. #}
+                            <div class="csa-field--full">
+                                {{ csa.callout(
+                                    'Recoge en ' ~ node_name ~ (node_dates_label
+                                        ? ' · ' ~ node_dates_label
+                                        : '') ~ ' El turno lo fija el punto de recogida; aquí no se elige.',
+                                    'info', 'map-marker'
+                                ) }}
+                                <div hidden>{{ form_row(form.deliveryGroup) }}</div>
+                            </div>
+                        {% else %}
+                            <div id="delivery_group" class="csa-field--full hidden">
+                                {{ csa.field(form.deliveryGroup, 'Turno de viernes (quincenal)', { full: true }) }}
+                            </div>
+                        {% endif %}
                     </div>
                 {% endblock %}
             {% endembed %}
@@ -73,6 +116,12 @@
             <div style="display: none;">
                 {{ form_row(form.partner) }}
             </div>
+
+            {{ csa.callout(
+                'Al aplicar: la cesta actual se cierra la víspera de la fecha efectiva y se abre la nueva. Las entregas futuras ya generadas a partir de esa fecha se borran y se regeneran con la nueva cesta.',
+                'warning',
+                'exchange'
+            ) }}
 
             <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
                 <div></div>
@@ -95,16 +144,29 @@
         document.querySelectorAll('.datepicker, .datepicker2, .datepicker3')
             .forEach(function (el) { el.type = 'date'; });
 
+        // Cambia el valor de un <select> por código y avisa al dropdown enhanced
+        // (assets/js/csa-dropdown.js escucha 'change' para refrescar su etiqueta).
+        function setSelectValue(selector, value) {
+            var el = document.querySelector(selector);
+            if (el && el.value !== String(value)) {
+                el.value = value;
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        }
+
         function syncConditionals() {
             var basketShare = $('#partner_basket_share_basket_share').val();
             var eggPeriod = $('#partner_basket_share_egg_period').val();
             var showDayMonth = (basketShare == 3) || (eggPeriod == 3);
             var showEggPeriod = (basketShare == 5);
+            var showDeliveryGroup = (basketShare == 2);
 
             $('#day_month_order').toggleClass('hidden', !showDayMonth);
             $('#egg_period').toggleClass('hidden', !showEggPeriod);
-            if (!showDayMonth) $('#partner_basket_share_dayMonthOrder').val(0);
-            if (!showEggPeriod) $('#partner_basket_share_egg_period').val(0);
+            $('#delivery_group').toggleClass('hidden', !showDeliveryGroup);
+            if (!showDayMonth) setSelectValue('#partner_basket_share_dayMonthOrder', '0');
+            if (!showEggPeriod) setSelectValue('#partner_basket_share_egg_period', '0');
+            if (!showDeliveryGroup) setSelectValue('#partner_basket_share_deliveryGroup', '');
         }
 
         $('#partner_basket_share_basket_share').change(syncConditionals);
