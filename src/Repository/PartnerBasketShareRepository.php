@@ -245,7 +245,7 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
         $result = $query->getResult();
         $array_id_partners = array(); //es el array con las ids de los socios que recibieron la semana anterior. Habrá txdo tipo de socios, semanales, mensuales,...
 
-        $dql_partners = "select b from App\\Entity\\PartnerBasketShare b inner join b.partner p where b.basket_share=:basket_share and b.is_active=:status and (b.start_date IS NULL OR b.start_date<=:date) ";
+        $dql_partners = "select b from App\\Entity\\PartnerBasketShare b inner join b.partner p where b.basket_share=:basket_share and b.is_active=:status and (b.start_date IS NULL OR b.start_date<=:date) and (b.end_date IS NULL OR b.end_date>=:date) ";
         if (count($result) > 0) {
 
             foreach ($result as $weekly_basket) {
@@ -441,7 +441,7 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
         }
 
         $dql_final = "select b from App\\Entity\\PartnerBasketShare b inner join b.partner p where b.basket_share=:basket_share and
-                      b.is_active=1 and b.day_month_order<=:day_order and (b.start_date IS NULL OR b.start_date<=:date) "; //pongo <= porque si alguien de la semana anterior no ha recogido y quiere recogerla esta, no aparece en el listado anterior (dql_partners) y así puede recogerla
+                      b.is_active=1 and b.day_month_order<=:day_order and (b.start_date IS NULL OR b.start_date<=:date) and (b.end_date IS NULL OR b.end_date>=:date) "; //pongo <= porque si alguien de la semana anterior no ha recogido y quiere recogerla esta, no aparece en el listado anterior (dql_partners) y así puede recogerla
         if (count($array_id_partners)) {
             $dql_final .= " and b.partner not in (:ids)";
         }
