@@ -54,17 +54,20 @@ class CatalogFixtures extends Fixture
         // — el código asume 1=Semanal, 2=Quincenal, 3=Mensual, 4=Solo huevos
         // (constantes SHARE_BIWEEKLY=2 y SHARE_MONTHLY=3 en WindowRule y
         // WeeklyBasketGenerator).
-        // 5 tipos hardcodeados con id explícito. El código del
+        // 7 tipos hardcodeados con id explícito. El código del
         // WeeklyBasketGenerator y los repositorios usan ESTOS ids como
         // constantes (SHARE_WEEKLY=1, SHARE_BIWEEKLY=2, SHARE_MONTHLY=3,
         // SHARE_HALF=4 (semanal compartida, antigua media cesta),
-        // SHARE_ONLY_EGG=5). Cambiar los ids rompe el reparto.
+        // SHARE_ONLY_EGG=5, y las compartidas quincenal/mensual 6/7, que pesan
+        // ½ cesta — BasketShare::IDS_SHARED=[4,6,7]). Cambiar los ids rompe el reparto.
         $baskets = [
             1 => ['name' => 'Semanal',             'price' => '60.00', 'equivalence' => '1.00'],
             2 => ['name' => 'Quincenal',           'price' => '30.00', 'equivalence' => '0.50'],
             3 => ['name' => 'Mensual',             'price' => '15.00', 'equivalence' => '0.25'],
             4 => ['name' => 'Semanal compartida',  'price' => '30.00', 'equivalence' => '0.50'],
             5 => ['name' => 'Solo huevos',         'price' => '0.00',  'equivalence' => '0.00'],
+            6 => ['name' => 'Quincenal compartida','price' => '15.00', 'equivalence' => '0.25'],
+            7 => ['name' => 'Mensual compartida',  'price' => '7.50',  'equivalence' => '0.13'],
         ];
 
         $basketMetadata = $manager->getClassMetadata(BasketShare::class);

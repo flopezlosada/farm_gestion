@@ -50,6 +50,10 @@ class WeeklyBasketGenerator
     private const SHARE_HALF = 4;
     /** ID de BasketShare de solo huevos. */
     private const SHARE_ONLY_EGG = 5;
+    /** ID de BasketShare quincenal compartida (media cesta, cadencia quincenal). */
+    private const SHARE_BIWEEKLY_SHARED = 6;
+    /** ID de BasketShare mensual compartida (media cesta, cadencia mensual). */
+    private const SHARE_MONTHLY_SHARED = 7;
 
     /** ID de WeeklyBasketStatus "recogida" — estado inicial de cada cesta nueva. */
     private const STATUS_PICKED = 1;
@@ -279,8 +283,10 @@ class WeeklyBasketGenerator
 
         $weekly = $weeklyRepo->findBy(['basket_share' => self::SHARE_WEEKLY, 'basket' => $basket]);
         $half = $weeklyRepo->findBy(['basket_share' => self::SHARE_HALF, 'basket' => $basket]);
-        $biweekly = $weeklyRepo->findBy(['basket_share' => self::SHARE_BIWEEKLY, 'basket' => $basket]);
-        $monthly = $weeklyRepo->findBy(['basket_share' => self::SHARE_MONTHLY, 'basket' => $basket]);
+        // Las compartidas quincenal/mensual (6/7) viajan con sus no-compartidas (2/3):
+        // moveSharedToHalf las reubica luego al bloque de compartidas por share_partner_id.
+        $biweekly = $weeklyRepo->findBy(['basket_share' => [self::SHARE_BIWEEKLY, self::SHARE_BIWEEKLY_SHARED], 'basket' => $basket]);
+        $monthly = $weeklyRepo->findBy(['basket_share' => [self::SHARE_MONTHLY, self::SHARE_MONTHLY_SHARED], 'basket' => $basket]);
         $onlyEgg = $weeklyRepo->findBy(['basket_share' => self::SHARE_ONLY_EGG, 'basket' => $basket]);
 
         // La sección "compartidas" del PDF agrupa toda media cesta — semanal,
@@ -521,6 +527,14 @@ class WeeklyBasketGenerator
         $half = $shareRepo->findBasketPartnersByTypeAndCity(self::SHARE_HALF, 1, $basket);
         $biweekly = $shareRepo->findBasketPartnersBiweeklyNodeAware($basket, self::SHARE_BIWEEKLY, 1, $cohort, $activeBiweeklyNodeIds);
         $monthly = $shareRepo->findBasketPartnersMonthlyNodeAware($basket, self::SHARE_MONTHLY, $weeklyMonthlyOrder, $biweeklyNodeMonthlyOrders);
+
+        // Quincenal/mensual COMPARTIDA (bs 6/7): misma cadencia que su no-compartida
+        // (cohorte quincenal / orden operativo mensual), pero media cesta. Se buscan
+        // con su propio basket_share para que el WB nazca como 6/7; el composer aplica
+        // el peso ½ (getDeliveredBasketWeight) y moveSharedToHalf las reubica al bloque
+        // de compartidas (tienen share_partner_id). Sin esto su cesta no se materializa.
+        $biweekly = array_merge($biweekly, $shareRepo->findBasketPartnersBiweeklyNodeAware($basket, self::SHARE_BIWEEKLY_SHARED, 1, $cohort, $activeBiweeklyNodeIds));
+        $monthly = array_merge($monthly, $shareRepo->findBasketPartnersMonthlyNodeAware($basket, self::SHARE_MONTHLY_SHARED, $weeklyMonthlyOrder, $biweeklyNodeMonthlyOrders));
 
         $onlyEggWeekly = $shareRepo->findBasketPartnersByTypeAndCity(self::SHARE_ONLY_EGG, 1, $basket, true);
         $onlyEggBiweekly = $shareRepo->findBasketPartnersBiweeklyNodeAware($basket, self::SHARE_ONLY_EGG, 1, $cohort, $activeBiweeklyNodeIds, true);

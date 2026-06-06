@@ -4,10 +4,12 @@ namespace App\Tests\Service\Delivery;
 
 use App\DataFixtures\PartnerUserFixtures;
 use App\Entity\Basket;
+use App\Entity\BasketShare;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
 use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketItem;
+use App\Service\Delivery\BiweeklyCohortResolver;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -143,5 +145,71 @@ class WeeklyBasketGeneratorTest extends KernelTestCase
             $wbRepo->findOneBy(['basket' => $ungenerated->getId()]),
             'No debe quedar ningún WeeklyBasket suelto en la semana sin generar.',
         );
+    }
+
+    /**
+     * La cesta QUINCENAL COMPARTIDA (basket_share 6) debe entrar en los candidatos del
+     * Basket en su semana de cohorte. Era un hueco: el generador sólo consultaba bs 1/2/3/4/5,
+     * así que las compartidas quincenal/mensual (6/7) nunca materializaban su media cesta.
+     *
+     * Determinista sin acoplar al ancla del resolver: se crea el Basket, se pregunta al
+     * BiweeklyCohortResolver qué cohorte le toca, y se alinea el socio a ESA cohorte (y otro
+     * a la contraria como control negativo). El socio no tiene nodo → cae en la rama
+     * `n.id IS NULL AND delivery_group = :cohort` del finder node-aware.
+     */
+    public function testBiweeklySharedCestaEsCandidataEnSuSemanaDeCohorte(): void
+    {
+        self::bootKernel();
+        $em = $this->em();
+
+        $basket = new Basket();
+        $basket->setDate(new \DateTime('2099-12-25'));
+        $basket->setWeek(52);
+        $basket->setAmount(1);
+        $em->persist($basket);
+        $em->flush();
+
+        $resolver = static::getContainer()->get(BiweeklyCohortResolver::class);
+        $cohort = $resolver->cohortForBasket($basket);
+        $other = $cohort === PartnerBasketShare::DELIVERY_GROUP_A
+            ? PartnerBasketShare::DELIVERY_GROUP_B
+            : PartnerBasketShare::DELIVERY_GROUP_A;
+
+        $quincenalShared = $em->getRepository(BasketShare::class)->find(6);
+        $this->assertNotNull($quincenalShared, 'El catálogo debe tener la quincenal compartida (id 6).');
+
+        $inCohort = $this->makeSharedQuincenal($em, $quincenalShared, $cohort, 'QC EnCohorte');
+        $offCohort = $this->makeSharedQuincenal($em, $quincenalShared, $other, 'QC FueraCohorte');
+        $em->flush();
+
+        $candidates = $this->generator()->projectForBasket($basket);
+        $ids = array_map(static fn (PartnerBasketShare $s): int => $s->getId(), $candidates);
+
+        $this->assertContains($inCohort->getId(), $ids, 'La quincenal compartida (bs=6) de la cohorte que toca debe ser candidata.');
+        $this->assertNotContains($offCohort->getId(), $ids, 'La quincenal compartida de la otra cohorte NO debe repartir esa semana.');
+    }
+
+    private function makeSharedQuincenal(
+        EntityManagerInterface $em,
+        BasketShare $quincenalShared,
+        string $cohort,
+        string $name,
+    ): PartnerBasketShare {
+        $partner = new Partner();
+        $partner->setName($name);
+        $em->persist($partner);
+
+        $share = new PartnerBasketShare();
+        $share->setPartner($partner);
+        $share->setBasketShare($quincenalShared);
+        $share->setIsActive(true);
+        $share->setAmount(1);
+        $share->setMonthPrice('0.00');
+        $share->setEggMonthPrice('0.00');
+        $share->setStartDate(new \DateTime('2099-01-01'));
+        $share->setDeliveryGroup($cohort);
+        $em->persist($share);
+
+        return $share;
     }
 }
