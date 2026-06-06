@@ -28,11 +28,17 @@
     <div class="csa-row-between" style="margin-bottom: var(--csa-sp-5);">
         <div></div>
         <div class="csa-row">
-            <a href="{{ path('regenerate_weekly_list', { weekly_basket_id: basket.id }) }}"
+            <button type="button"
                class="csa-btn csa-btn--ghost"
-               onclick="return confirm('Esto regenerará el listado y se perderán los cambios manuales. ¿Continuar?');">
-                <i class="fa fa-refresh"></i> Regenerar listado
-            </a>
+                onclick="document.getElementById('confirm-weekly-1').showModal()"><i class="fa fa-refresh"></i> Regenerar listado</button>
+{{ csa.confirm_dialog('confirm-weekly-1', {
+    variant: 'warning',
+    eyebrow: 'Atención',
+    title: 'Regenerar el listado semanal',
+    body: 'Se perderán los cambios manuales hechos sobre el listado actual.',
+    confirm_label: 'Regenerar',
+    confirm_href: path('regenerate_weekly_list', { weekly_basket_id: basket.id }),
+}) }}
             {{ csa.btn('Generar PDF', { variant: 'primary', href: path('generate_pdf_basket_weekly', { basket_id: basket.id, alternative_order: true }), icon: 'fa-file-pdf-o' }) }}
         </div>
     </div>

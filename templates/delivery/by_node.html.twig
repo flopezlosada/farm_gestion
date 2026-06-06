@@ -1,0 +1,583 @@
+{# ============================================================
+ # Listado de reparto v2 — sub-fase 8.8c.
+ #
+ # Recibe (del DeliveryController::byNode):
+ #   - node                 Node activo (la pestaña seleccionada).
+ #   - basket               Basket del viernes que se está pintando.
+ #   - all_nodes            Node[] (para las tabs).
+ #   - surrounding_baskets  Basket[] (mini-timeline de viernes vecinos).
+ #   - grouped              Listado agrupado por WBG > modalidad.
+ #   - egg_delivery_map     {wb.id: bool} para ocultar huevos cuando no toca.
+ #   - totals               {socios, cestas, huevos}.
+ # ============================================================ #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Reparto · {{ node.name }} · {{ basket.date|date('d/m/Y') }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    Socixs
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Reparto semanal</span>
+{% endblock %}
+
+{% block more_css %}
+{{ parent() }}
+<style>
+/* ============================================================
+ * Estilos locales del listado de reparto v2 (alt-b-tabla-limpia).
+ * Se inyectan inline para mantener la pantalla autocontenida hasta
+ * que estabilicemos los tokens y los movamos al CSS del shell.
+ * ============================================================ */
+.dlv {
+    --dlv-line: #ebe7dd;
+    --dlv-line-2: #d8d2c2;
+    --dlv-ink: #1d1c17;
+    --dlv-ink-soft: #5a564a;
+    --dlv-ink-faint: #8d8773;
+    --dlv-sage: #5b7a4c;
+    --dlv-sage-d: #2f4426;
+    --dlv-sage-l: #eaf0e2;
+    --dlv-ochre: #c89a3a;
+    --dlv-ochre-d: #8c6919;
+    --dlv-ochre-l: #faf1d8;
+    --dlv-terra: #b45d3a;
+    --dlv-terra-d: #7d3a1f;
+    --dlv-terra-l: #fae6dc;
+    --dlv-bg: #fbfaf6;
+    --dlv-surface: #ffffff;
+    font-variant-numeric: tabular-nums;
+}
+
+/* page head con week strip */
+.dlv-head {
+    display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 32px;
+    padding-bottom: 18px; margin-bottom: 18px;
+    border-bottom: 1px solid var(--dlv-line);
+}
+.dlv-head__title { font-family: 'Fraunces', serif; font-weight: 600; font-size: 26px; letter-spacing: -0.02em; margin: 0 0 4px; line-height: 1.1; }
+.dlv-head__sub { font-size: 12px; color: var(--dlv-ink-faint); letter-spacing: 0.04em; }
+.dlv-head__sub b { color: var(--dlv-ink); font-weight: 600; }
+
+.dlv-weeks { display: flex; gap: 4px; border: 1px solid var(--dlv-line); padding: 3px; border-radius: 6px; background: var(--dlv-bg); }
+.dlv-weeks a { text-decoration: none; padding: 8px 12px; min-width: 74px; border-radius: 4px; text-align: center; color: inherit; }
+.dlv-weeks a .dow { display: block; font-size: 10px; color: var(--dlv-ink-faint); letter-spacing: 0.12em; text-transform: uppercase; }
+.dlv-weeks a .num { display: block; font-family: 'Fraunces', serif; font-weight: 600; font-size: 17px; margin-top: 2px; color: var(--dlv-ink); }
+.dlv-weeks a.past { opacity: 0.45; }
+.dlv-weeks a.off { opacity: 0.4; }
+.dlv-weeks a.off .num { text-decoration: line-through; text-decoration-color: var(--dlv-line-2); }
+.dlv-weeks .dlv-weeks__nav { min-width: 0; padding: 8px 5px; display: flex; align-items: center; background: none; border: 0; border-radius: 4px; cursor: pointer; font-family: 'Fraunces', serif; font-size: 18px; line-height: 1; color: var(--dlv-ink-faint); }
+.dlv-weeks .dlv-weeks__nav:hover { background: var(--dlv-surface); color: var(--dlv-ink); }
+.dlv-weeks.is-loading { opacity: 0.5; pointer-events: none; }
+.dlv-weeks a.active { background: var(--dlv-sage-d); }
+.dlv-weeks a.active .dow, .dlv-weeks a.active .num { color: white; }
+.dlv-weeks a:hover { background: var(--dlv-surface); }
+.dlv-weeks a.active:hover { background: var(--dlv-sage-d); }
+
+/* node tabs */
+.dlv-nodes { display: flex; border-bottom: 2px solid var(--dlv-ink); margin-bottom: 18px; }
+.dlv-nodes a { background: transparent; padding: 13px 22px 11px; cursor: pointer; color: var(--dlv-ink-soft); border-radius: 6px 6px 0 0; margin-bottom: -2px; text-align: left; text-decoration: none; transition: 0.15s; }
+.dlv-nodes a:hover { color: var(--dlv-ink); background: var(--dlv-surface); }
+.dlv-nodes a.active { background: var(--dlv-ink); color: white; border-bottom: 2px solid var(--dlv-ink); }
+.dlv-nodes a .ntitle { font-family: 'Fraunces', serif; font-weight: 600; font-size: 17px; letter-spacing: -0.01em; display: block; }
+.dlv-nodes a .nmeta { font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dlv-ink-faint); margin-top: 3px; font-weight: 500; }
+.dlv-nodes a.active .nmeta { color: rgba(255, 255, 255, 0.6); }
+
+/* resumen destacado (stat cards) */
+.dlv-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
+.dlv-stat { background: var(--dlv-surface); border: 1px solid var(--dlv-line); border-radius: 8px; padding: 14px 18px; }
+.dlv-stat .v { font-family: 'Fraunces', serif; font-weight: 600; font-size: 28px; letter-spacing: -0.02em; color: var(--dlv-ink); line-height: 1; }
+.dlv-stat .l { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dlv-ink-faint); margin-top: 7px; font-weight: 500; }
+.dlv-stat--cestas .v { color: var(--dlv-sage-d); }
+.dlv-stat--docenas .v { color: var(--dlv-ochre-d); }
+
+/* toolbar filters */
+.dlv-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.dlv-toolbar .search { position: relative; }
+.dlv-toolbar .search input { padding: 7px 12px 7px 32px; border: 1px solid var(--dlv-line); background: var(--dlv-surface); border-radius: 5px; font-size: 12.5px; width: 240px; }
+.dlv-toolbar .search svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--dlv-ink-faint); }
+.dlv-toolbar .filt { display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border: 1px solid var(--dlv-line); background: var(--dlv-surface); border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: 500; color: var(--dlv-ink-soft); }
+.dlv-toolbar .filt:hover { color: var(--dlv-ink); border-color: var(--dlv-line-2); }
+.dlv-toolbar .filt.has { background: var(--dlv-sage-l); color: var(--dlv-ink); border-color: var(--dlv-line-2); }
+.dlv-toolbar .filt .badge { display: inline-grid; place-items: center; min-width: 18px; height: 16px; padding: 0 4px; background: var(--dlv-sage-d); color: white; border-radius: 3px; font-size: 10px; font-weight: 600; }
+.dlv-toolbar .filt .chev { color: var(--dlv-ink-faint); }
+.dlv-toolbar .filt-divider { width: 1px; height: 22px; background: var(--dlv-line); margin: 0 4px; }
+.dlv-toolbar .filt.toggle .sw { width: 22px; height: 12px; background: var(--dlv-line-2); border-radius: 999px; position: relative; }
+.dlv-toolbar .filt.toggle.on .sw { background: var(--dlv-sage); }
+.dlv-toolbar .filt.toggle .sw::after { content: ''; position: absolute; width: 8px; height: 8px; border-radius: 50%; background: white; top: 2px; left: 2px; transition: 0.15s; }
+.dlv-toolbar .filt.toggle.on .sw::after { left: 12px; }
+
+/* popovers de filtro */
+.dlv-toolbar .filt-wrap { position: relative; }
+.dlv-pop { position: absolute; top: calc(100% + 5px); left: 0; z-index: 30; background: var(--dlv-surface); border: 1px solid var(--dlv-line-2); border-radius: 7px; padding: 6px; min-width: 175px; box-shadow: 0 8px 24px rgba(40,36,24,0.12); display: flex; flex-direction: column; gap: 2px; }
+.dlv-pop[hidden] { display: none; }
+.dlv-pop label { display: flex; align-items: center; gap: 8px; padding: 6px 9px; border-radius: 4px; font-size: 12.5px; color: var(--dlv-ink); cursor: pointer; }
+.dlv-pop label:hover { background: var(--dlv-sage-l); }
+.dlv-pop input { accent-color: var(--dlv-sage-d); }
+.dlv-pop a { padding: 7px 10px; border-radius: 4px; font-size: 12.5px; color: var(--dlv-ink); text-decoration: none; white-space: nowrap; }
+.dlv-pop a:hover { background: var(--dlv-sage-l); }
+.dlv-pop a.is-active { background: var(--dlv-sage-d); color: #fff; font-weight: 600; }
+/* opciones de modalidad con su color (coherente con los chips de la tabla) */
+.mod-opt .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.mod-opt--1 .dot { background: var(--dlv-sage); }   .mod-opt--1 input { accent-color: var(--dlv-sage); }
+.mod-opt--2 .dot { background: var(--dlv-ochre); }  .mod-opt--2 input { accent-color: var(--dlv-ochre); }
+.mod-opt--3 .dot { background: var(--dlv-terra); }  .mod-opt--3 input { accent-color: var(--dlv-terra); }
+.mod-opt--4 .dot { background: transparent; border: 1px dashed var(--dlv-sage); width: 10px; height: 10px; } .mod-opt--4 input { accent-color: var(--dlv-sage); }
+.mod-opt--6 .dot { background: transparent; border: 1px dashed var(--dlv-ochre); width: 10px; height: 10px; } .mod-opt--6 input { accent-color: var(--dlv-ochre); }
+.mod-opt--7 .dot { background: transparent; border: 1px dashed var(--dlv-terra); width: 10px; height: 10px; } .mod-opt--7 input { accent-color: var(--dlv-terra); }
+.mod-opt--5 .dot { background: var(--dlv-ochre-l); border: 1px solid var(--dlv-ochre); } .mod-opt--5 input { accent-color: var(--dlv-ochre); }
+.dlv-wbg--flat .dlv-wbg__body { border-top: 0; }
+.dlv-row.is-hidden { display: none; }
+.dlv-empty-filter { padding: 28px 18px; text-align: center; color: var(--dlv-ink-faint); font-style: italic; font-size: 13px; }
+
+/* menú de acciones por fila (kebab) */
+.dlv-actions { position: relative; text-align: right; }
+.dlv-kebab { background: transparent; border: 1px solid transparent; border-radius: 5px; padding: 5px 7px; cursor: pointer; color: var(--dlv-ink-faint); line-height: 0; }
+.dlv-kebab:hover { background: var(--dlv-bg); border-color: var(--dlv-line); color: var(--dlv-ink); }
+.dlv-kebab-menu { z-index: 50; background: var(--dlv-surface); border: 1px solid var(--dlv-line-2); border-radius: 7px; padding: 5px; min-width: 230px; box-shadow: 0 8px 26px rgba(40,36,24,0.16); display: flex; flex-direction: column; gap: 1px; }
+.dlv-kebab-menu[hidden] { display: none; }
+.dlv-kebab-menu a { padding: 8px 11px; border-radius: 4px; font-size: 12.5px; color: var(--dlv-ink); text-decoration: none; white-space: nowrap; }
+.dlv-kebab-menu a:hover { background: var(--dlv-sage-l); color: var(--dlv-ink); }
+.dlv-toolbar .counters { margin-left: auto; display: flex; align-items: center; gap: 14px; font-size: 12px; color: var(--dlv-ink-soft); }
+.dlv-toolbar .counters b { color: var(--dlv-ink); font-weight: 600; }
+.dlv-toolbar .counters .sep { width: 1px; height: 13px; background: var(--dlv-line-2); }
+
+/* WBG section */
+.dlv-wbg { background: var(--dlv-surface); border: 1px solid var(--dlv-line); border-radius: 8px; margin-bottom: 10px; overflow: hidden; }
+.dlv-wbg__head { display: grid; grid-template-columns: 16px 1fr auto; align-items: center; gap: 12px; padding: 13px 18px; cursor: pointer; background: linear-gradient(180deg, var(--dlv-bg), var(--dlv-surface)); transition: 0.12s; }
+.dlv-wbg__head:hover { background: linear-gradient(180deg, var(--dlv-sage-l), var(--dlv-bg)); }
+.dlv-wbg__head .chev { color: var(--dlv-ink-faint); transition: 0.15s; }
+.dlv-wbg.collapsed .chev { transform: rotate(-90deg); }
+.dlv-wbg__name { font-family: 'Fraunces', serif; font-weight: 600; font-size: 16px; color: var(--dlv-ink); letter-spacing: -0.01em; }
+.dlv-wbg__name small { display: inline-block; font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 500; color: var(--dlv-ink-faint); margin-left: 10px; }
+.dlv-wbg__meta { display: flex; align-items: center; gap: 22px; }
+.dlv-wbg__meta .m { display: flex; align-items: baseline; gap: 4px; }
+.dlv-wbg__meta .m .n { font-family: 'Fraunces', serif; font-weight: 600; font-size: 17px; color: var(--dlv-ink); letter-spacing: -0.01em; }
+.dlv-wbg__meta .m .l { font-size: 10.5px; color: var(--dlv-ink-faint); letter-spacing: 0.1em; text-transform: uppercase; font-weight: 500; }
+.dlv-wbg__meta .m.eggs .n { color: var(--dlv-ochre-d); }
+.dlv-wbg__body { border-top: 1px solid var(--dlv-line); }
+.dlv-wbg.collapsed .dlv-wbg__body { display: none; }
+
+/* modality subgroup */
+.dlv-mod { padding: 8px 18px 6px; background: var(--dlv-bg); border-bottom: 1px solid var(--dlv-line); font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dlv-ink-faint); font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.dlv-mod .dot { width: 6px; height: 6px; border-radius: 50%; }
+.dlv-mod .count { margin-left: auto; font-size: 10.5px; font-weight: 500; letter-spacing: 0.04em; text-transform: none; }
+.dlv-mod--1 .dot { background: var(--dlv-sage); }   /* Semanal */
+.dlv-mod--2 .dot { background: var(--dlv-ochre); }  /* Quincenal */
+.dlv-mod--3 .dot { background: var(--dlv-terra); }  /* Mensual */
+.dlv-mod--4 .dot { background: transparent; border: 1px dashed var(--dlv-sage); width: 7px; height: 7px; } /* Compartida */
+.dlv-mod--5 .dot { background: var(--dlv-ochre-l); border: 1px solid var(--dlv-ochre); } /* Solo huevos */
+
+/* table */
+.dlv table { width: 100%; border-collapse: collapse; }
+.dlv tbody td { padding: 11px 14px; font-size: 12.5px; color: var(--dlv-ink); border-bottom: 1px solid var(--dlv-line); vertical-align: middle; }
+.dlv tbody tr:last-child td { border-bottom: 0; }
+.dlv tbody tr:hover { background: var(--dlv-sage-l); cursor: pointer; }
+.dlv .partner { font-family: 'Fraunces', serif; font-weight: 500; color: var(--dlv-ink); font-size: 14.5px; letter-spacing: -0.005em; }
+.dlv .partner small { display: block; font-family: 'Inter', sans-serif; color: var(--dlv-ink-faint); font-size: 11px; font-weight: 400; margin-top: 1px; }
+
+.dlv .mod { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 600; padding: 3px 8px; border-radius: 4px; white-space: nowrap; }
+.dlv .mod .dot { width: 5px; height: 5px; border-radius: 50%; }
+.dlv .mod--1 { background: var(--dlv-sage-l); color: var(--dlv-sage-d); }       .dlv .mod--1 .dot { background: var(--dlv-sage); }
+.dlv .mod--2 { background: var(--dlv-ochre-l); color: var(--dlv-ochre-d); }     .dlv .mod--2 .dot { background: var(--dlv-ochre); }
+.dlv .mod--3 { background: var(--dlv-terra-l); color: var(--dlv-terra-d); }     .dlv .mod--3 .dot { background: var(--dlv-terra); }
+.dlv .mod--4 { background: transparent; color: var(--dlv-sage-d); border: 1px dashed var(--dlv-sage); }
+.dlv .mod--6 { background: transparent; color: var(--dlv-ochre-d); border: 1px dashed var(--dlv-ochre); }
+.dlv .mod--7 { background: transparent; color: var(--dlv-terra-d); border: 1px dashed var(--dlv-terra); }
+.dlv .mod--5 { background: #fff2d6; color: var(--dlv-ochre-d); }                .dlv .mod--5 .dot { background: var(--dlv-ochre); }
+.dlv .mod-pair { font-size: 10.5px; color: var(--dlv-ink-faint); margin-top: 3px; font-style: italic; }
+.dlv .dlv-row-spacer td { padding: 0; height: 14px; background: var(--dlv-bg); border: 0; }
+.dlv .dlv-row-spacer:last-child { display: none; }
+
+.dlv .num-c { font-family: 'Fraunces', serif; font-weight: 600; font-size: 14px; color: var(--dlv-ink); }
+.dlv .half { color: var(--dlv-ink-soft); font-weight: 500; }
+.dlv .no { color: var(--dlv-ink-faint); font-size: 11px; font-style: italic; }
+
+.dlv .empty {
+    padding: 36px 18px; text-align: center;
+    color: var(--dlv-ink-faint); font-size: 13px; font-style: italic;
+    background: var(--dlv-surface); border: 1px dashed var(--dlv-line-2); border-radius: 8px;
+}
+
+/* ---------- móvil ---------- */
+@media (max-width: 768px) {
+    /* El header deja de ser 2 columnas (título | tira) y apila: la tira
+       pasa debajo del título, a todo el ancho. */
+    .dlv-head { grid-template-columns: 1fr; gap: 14px; align-items: stretch; }
+    /* La tira de 5 chips no cabe en un móvil: en vez de romper el marco la
+       dejamos deslizable en horizontal. min-width:0 permite que el item del
+       grid encoja por debajo del ancho de su contenido y active el scroll. */
+    .dlv-weeks { overflow-x: auto; min-width: 0; -webkit-overflow-scrolling: touch; }
+    .dlv-weeks a { min-width: 58px; padding: 7px 9px; }
+    .dlv-weeks a .num { font-size: 15px; }
+    /* Las 4 tarjetas de resumen no caben en una fila: 2x2. */
+    .dlv-stats { grid-template-columns: repeat(2, 1fr); }
+    .dlv-stat { padding: 12px 14px; }
+    .dlv-stat .v { font-size: 24px; }
+}
+</style>
+{% endblock %}
+
+{% block csa_main %}
+{% set _dow_es  = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'] %}
+{% set _dow_abbr = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'] %}
+{% set _month_es = ['', 'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'] %}
+{# Fecha de referencia = día físico del nodo (miércoles para Madrid, viernes
+   para Torremocha). Si el nodo no reparte esta semana (quincenal fuera de
+   fase o excepción), physical_date es null y caemos al viernes-ciclo. #}
+{% set _ref = physical_date ?? basket.date %}
+{% set _heading = physical_date
+    ? 'Reparto del ' ~ _dow_es[_ref|date('w')] ~ ' ' ~ _ref|date('j') ~ ' de ' ~ _month_es[_ref|date('n')]
+    : node.name ~ ' no reparte esta semana' %}
+<div class="dlv">
+
+    {{ csa.page_header('Socixs · Reparto', _heading, 'Listado de socixs que recogen cesta este día.') }}
+
+    <p style="margin: -8px 0 16px;">
+        <a href="{{ path('delivery_printable_select', { basketId: basket.id }) }}"
+           style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 16px; border-radius: 6px; background: #5b7a4c; color: #fff; text-decoration: none; font-weight: 600; font-size: 13px;">
+            🖨 Imprimir listado
+        </a>
+    </p>
+
+    {# ============ Mini-timeline + page head ============ #}
+    <div class="dlv-head">
+        <div>
+            <h2 class="dlv-head__title">Nodo {{ node.name }} · {{ _ref|date('d/m/Y') }}</h2>
+            <div class="dlv-head__sub">
+                semana {{ _ref|date('W') }} ·
+                cadencia <b>{{ node.cadence == 'weekly' ? 'semanal' : 'quincenal' }}</b> ·
+                día de reparto <b>{{ ['', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'][node.deliveryWeekday] }}</b>
+            </div>
+        </div>
+        <div class="dlv-weeks">
+            {% include 'delivery/_timeline.html.twig' %}
+        </div>
+    </div>
+
+    {# ============ Node tabs ============ #}
+    <nav class="dlv-nodes">
+        {% for n in all_nodes %}
+            {% set counts = node_active_counts[n.id] ?? { wbg: 0, socios: 0 } %}
+            <a href="{{ path('delivery_by_node', { nodeId: n.id, basketId: basket.id, ref: ref_id, orden: orden }) }}"
+               class="{{ n.id == node.id ? 'active' : '' }}">
+                <span class="ntitle">{{ n.name }}</span>
+                <span class="nmeta">
+                    {%- if counts.socios > 0 -%}
+                        {{ counts.socios }} socio{{ counts.socios == 1 ? '' : 's' }} · {{ counts.wbg }} grupo{{ counts.wbg == 1 ? '' : 's' }}
+                    {%- else -%}
+                        sin reparto hoy
+                    {%- endif -%}
+                </span>
+            </a>
+        {% endfor %}
+    </nav>
+
+    {% if not node_delivers %}
+        <div class="empty">
+            {% if basket_globally_cancelled %}
+                La semana del {{ basket.date|date('d/m/Y') }} no tuvo reparto
+                (cancelada por administración).
+            {% elseif physical_date is not null %}
+                El reparto de la semana del {{ basket.date|date('d/m/Y') }}
+                se trasladó al {{ physical_date|date('d/m/Y') }}.
+            {% else %}
+                {{ node.name }} no entrega en la semana del {{ basket.date|date('d/m/Y') }}.
+            {% endif %}
+        </div>
+    {% else %}
+    {# ============ Resumen destacado del nodo+día ============ #}
+    {# nº "bonito": entero sin decimales, medias con una cifra y coma. #}
+    {% set fmt_cestas = totals.cestas == totals.cestas|round ? totals.cestas|number_format(0) : totals.cestas|number_format(1, ',', '.') %}
+    {% set fmt_docenas = totals.docenas == totals.docenas|round ? totals.docenas|number_format(0) : totals.docenas|number_format(1, ',', '.') %}
+    <div class="dlv-stats">
+        <div class="dlv-stat dlv-stat--cestas">
+            <div class="v" data-stat="cestas">{{ fmt_cestas }}</div>
+            <div class="l">cestas</div>
+        </div>
+        <div class="dlv-stat dlv-stat--docenas">
+            <div class="v" data-stat="docenas">{{ fmt_docenas }}</div>
+            <div class="l">docenas de huevos</div>
+        </div>
+        <div class="dlv-stat">
+            <div class="v" data-stat="socios">{{ totals.socios }}</div>
+            <div class="l">socios</div>
+        </div>
+        <div class="dlv-stat">
+            <div class="v" data-stat="grupos">{{ totals.grupos }}</div>
+            <div class="l">grupos de recogida</div>
+        </div>
+    </div>
+
+    {# ============ Toolbar con filtros (búsqueda, modalidad, cohorte, huevos) ============ #}
+    <div class="dlv-toolbar" id="dlv-toolbar">
+        <div class="search">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
+            <input type="search" id="dlv-search" placeholder="Buscar socix en este nodo…" autocomplete="off">
+        </div>
+
+        <div class="filt-wrap">
+            <button type="button" class="filt" data-pop="pop-mod"><span>Modalidad</span> <span class="badge">5/5</span> <svg class="chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></button>
+            <div class="dlv-pop" id="pop-mod" hidden>
+                <label class="mod-opt mod-opt--1"><input type="checkbox" class="f-mod" value="1" checked> <span class="dot"></span> Semanal</label>
+                <label class="mod-opt mod-opt--2"><input type="checkbox" class="f-mod" value="2" checked> <span class="dot"></span> Quincenal</label>
+                <label class="mod-opt mod-opt--3"><input type="checkbox" class="f-mod" value="3" checked> <span class="dot"></span> Mensual</label>
+                <label class="mod-opt mod-opt--4"><input type="checkbox" class="f-mod" value="4" checked> <span class="dot"></span> Semanal compartida</label>
+                <label class="mod-opt mod-opt--6"><input type="checkbox" class="f-mod" value="6" checked> <span class="dot"></span> Quincenal compartida</label>
+                <label class="mod-opt mod-opt--7"><input type="checkbox" class="f-mod" value="7" checked> <span class="dot"></span> Mensual compartida</label>
+                <label class="mod-opt mod-opt--5"><input type="checkbox" class="f-mod" value="5" checked> <span class="dot"></span> Solo huevos</label>
+            </div>
+        </div>
+
+        <button type="button" class="filt toggle" id="dlv-eggs-only"><span class="sw"></span> Con huevos hoy</button>
+
+        <span class="filt-divider"></span>
+
+        <div class="filt-wrap">
+            <button type="button" class="filt" data-pop="pop-orden"><span>Orden: <b>{{ {'grupo': 'por grupo', 'modalidad': 'por modalidad', 'alfabetico': 'alfabético'}[orden] }}</b></span> <svg class="chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></button>
+            <div class="dlv-pop" id="pop-orden" hidden>
+                <a href="{{ path('delivery_by_node', { nodeId: node.id, basketId: basket.id, ref: ref_id, orden: 'grupo' }) }}" class="{{ orden == 'grupo' ? 'is-active' : '' }}">Por grupo de recogida</a>
+                <a href="{{ path('delivery_by_node', { nodeId: node.id, basketId: basket.id, ref: ref_id, orden: 'modalidad' }) }}" class="{{ orden == 'modalidad' ? 'is-active' : '' }}">Por modalidad de cesta</a>
+                <a href="{{ path('delivery_by_node', { nodeId: node.id, basketId: basket.id, ref: ref_id, orden: 'alfabetico' }) }}" class="{{ orden == 'alfabetico' ? 'is-active' : '' }}">Lista alfabética</a>
+            </div>
+        </div>
+
+        <button type="button" class="filt" id="dlv-toggle-all">Colapsar todo</button>
+
+        <button type="button" class="filt" id="dlv-reset" hidden>Limpiar filtros</button>
+    </div>
+
+    {# ============ Listado (secciones unificadas según el modo de orden) ============ #}
+    {% if sections is empty %}
+        <div class="empty">
+            Este nodo no tiene reparto el {{ basket.date|date('d/m/Y') }}.
+            {% if node.cadence == 'biweekly' %}
+                Cadencia quincenal · próximo reparto pendiente de generar.
+            {% endif %}
+        </div>
+    {% else %}
+        {% for section in sections %}
+            <section class="dlv-wbg{{ section.title is null ? ' dlv-wbg--flat' : '' }}">
+                {% if section.title %}
+                    <header class="dlv-wbg__head" onclick="this.parentElement.classList.toggle('collapsed')">
+                        <svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+                        <div>
+                            <span class="dlv-wbg__name">{{ section.title }}</span>
+                        </div>
+                        {% set socios_sec = 0 %}
+                        {% set cestas_sec = 0 %}
+                        {% set huevos_sec = 0 %}
+                        {% for sub in section.subgroups %}
+                            {% for wb in sub.rows %}
+                                {% set socios_sec = socios_sec + 1 %}
+                                {% set cestas_sec = cestas_sec + (cestas_by_wb_id[wb.id] ?? 0) %}
+                                {% if egg_delivery_map[wb.id] ?? false %}{% set huevos_sec = huevos_sec + 1 %}{% endif %}
+                            {% endfor %}
+                        {% endfor %}
+                        <div class="dlv-wbg__meta">
+                            <div class="m"><span class="n" data-meta="socios">{{ socios_sec }}</span><span class="l">socios</span></div>
+                            <div class="m"><span class="n" data-meta="cestas">{{ cestas_sec }}</span><span class="l">cestas</span></div>
+                            <div class="m eggs"><span class="n" data-meta="huevos">{{ huevos_sec }}</span><span class="l">huevos</span></div>
+                        </div>
+                    </header>
+                {% endif %}
+                <div class="dlv-wbg__body">
+                    {% for sub in section.subgroups %}
+                        {% if sub.label %}
+                            <div class="dlv-mod dlv-mod--{{ sub.bs_id }}">
+                                {% if sub.bs_id %}<span class="dot"></span>{% endif %}{{ sub.label }}
+                                <span class="count">{{ sub.rows|length }}</span>
+                            </div>
+                        {% endif %}
+                        <table>
+                            <tbody>
+                            {% for wb in sub.rows %}
+                                {% include 'delivery/_row.html.twig' with { wb: wb, pair_end: (sub.pair_end_ids[wb.id] ?? false) } %}
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    {% endfor %}
+                </div>
+            </section>
+        {% endfor %}
+    {% endif %}
+    {% endif %}{# /node_delivers #}
+
+</div>
+{% endblock %}
+
+{% block more_js %}
+{{ parent() }}
+<script>
+(function () {
+    'use strict';
+    const root = document.querySelector('.dlv');
+    if (!root) { return; }
+
+    // Navegación de la tira por AJAX: las flechas repintan SOLO .dlv-weeks,
+    // sin recargar la página (el listado no cambia). Delegación en root para
+    // que siga funcionando tras repintar la tira.
+    root.addEventListener('click', (e) => {
+        const nav = e.target.closest('.dlv-weeks__nav');
+        if (!nav || !nav.dataset.url) { return; }
+        e.preventDefault();
+        const weeks = root.querySelector('.dlv-weeks');
+        if (!weeks) { return; }
+        weeks.classList.add('is-loading');
+        fetch(nav.dataset.url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(r => r.text())
+            .then(html => { weeks.innerHTML = html; weeks.classList.remove('is-loading'); })
+            .catch(() => { weeks.classList.remove('is-loading'); });
+    });
+
+    const toolbar = document.getElementById('dlv-toolbar');
+    if (!toolbar) { return; } // día no operativo: sin toolbar ni listado.
+
+    const search   = document.getElementById('dlv-search');
+    const eggsOnly = document.getElementById('dlv-eggs-only');
+    const resetBtn = document.getElementById('dlv-reset');
+    const modBoxes = Array.from(root.querySelectorAll('.f-mod'));
+    const rows     = Array.from(root.querySelectorAll('.dlv-row'));
+
+    // Mensaje "sin resultados", insertado tras el toolbar y oculto por defecto.
+    const emptyMsg = document.createElement('div');
+    emptyMsg.className = 'dlv-empty-filter';
+    emptyMsg.hidden = true;
+    emptyMsg.textContent = 'Ningún socix coincide con los filtros.';
+    document.getElementById('dlv-toolbar').insertAdjacentElement('afterend', emptyMsg);
+
+    const fmt = (n) => Number.isInteger(n) ? String(n) : n.toFixed(1).replace('.', ',');
+    const checkedValues = (boxes) => new Set(boxes.filter(b => b.checked).map(b => b.value));
+    const setStat = (k, v) => { const el = root.querySelector('[data-stat="' + k + '"]'); if (el) { el.textContent = v; } };
+
+    function updateBadge(btnSelector, boxes, total) {
+        const btn = root.querySelector(btnSelector);
+        if (!btn) { return; }
+        const badge = btn.querySelector('.badge');
+        const sel = boxes.filter(b => b.checked).length;
+        // Muestra siempre el conteo (n/total) y resalta sólo si hay filtro.
+        badge.hidden = false;
+        badge.textContent = sel + '/' + total;
+        btn.classList.toggle('has', sel < total);
+    }
+
+    function apply() {
+        const q       = (search.value || '').trim().toLowerCase();
+        const mods    = checkedValues(modBoxes);
+        const onlyEgg = eggsOnly.classList.contains('on');
+
+        rows.forEach(tr => {
+            const ok = (!q || tr.dataset.name.indexOf(q) !== -1)
+                && mods.has(tr.dataset.modality)
+                && (!onlyEgg || tr.dataset.eggs === '1');
+            tr.classList.toggle('is-hidden', !ok);
+        });
+
+        let gCestas = 0, gDocenas = 0, gSocios = 0;
+        const gruposVisibles = new Set();
+
+        root.querySelectorAll('.dlv-wbg').forEach(section => {
+            let sSoc = 0, sCes = 0, sHue = 0;
+            section.querySelectorAll('table').forEach(table => {
+                const visibles = Array.from(table.querySelectorAll('.dlv-row')).filter(r => !r.classList.contains('is-hidden'));
+                const mod = table.previousElementSibling; // .dlv-mod (puede no existir)
+                const countEl = (mod && mod.classList.contains('dlv-mod')) ? mod.querySelector('.count') : null;
+                if (countEl) { countEl.textContent = visibles.length; }
+                const empty = visibles.length === 0;
+                table.style.display = empty ? 'none' : '';
+                if (mod && mod.classList.contains('dlv-mod')) { mod.style.display = empty ? 'none' : ''; }
+                visibles.forEach(r => {
+                    sSoc++;
+                    sCes += parseFloat(r.dataset.cestas) || 0;
+                    if (r.dataset.wbg) { gruposVisibles.add(r.dataset.wbg); }
+                    if (r.dataset.eggs === '1') { sHue++; gDocenas += parseFloat(r.dataset.dozens) || 0; }
+                });
+            });
+            const setMeta = (k, v) => { const el = section.querySelector('[data-meta="' + k + '"]'); if (el) { el.textContent = v; } };
+            setMeta('socios', sSoc); setMeta('cestas', fmt(sCes)); setMeta('huevos', sHue);
+            section.style.display = sSoc === 0 ? 'none' : '';
+            gSocios += sSoc; gCestas += sCes;
+        });
+
+        setStat('cestas', fmt(gCestas));
+        setStat('docenas', fmt(gDocenas));
+        setStat('socios', gSocios);
+        setStat('grupos', gruposVisibles.size);
+
+        emptyMsg.hidden = gSocios !== 0;
+
+        const dirty = q !== '' || onlyEgg || mods.size < modBoxes.length;
+        resetBtn.hidden = !dirty;
+        updateBadge('[data-pop="pop-mod"]', modBoxes, modBoxes.length);
+    }
+
+    // --- listeners ---
+    search.addEventListener('input', apply);
+    modBoxes.forEach(b => b.addEventListener('change', apply));
+    eggsOnly.addEventListener('click', () => { eggsOnly.classList.toggle('on'); apply(); });
+
+    resetBtn.addEventListener('click', () => {
+        search.value = '';
+        modBoxes.forEach(b => { b.checked = true; });
+        eggsOnly.classList.remove('on');
+        apply();
+    });
+
+    // Colapsar / expandir todas las secciones con cabecera.
+    const toggleAll = document.getElementById('dlv-toggle-all');
+    if (toggleAll) {
+        toggleAll.addEventListener('click', () => {
+            const secs = Array.from(root.querySelectorAll('.dlv-wbg:not(.dlv-wbg--flat)'));
+            const anyOpen = secs.some(s => !s.classList.contains('collapsed'));
+            secs.forEach(s => s.classList.toggle('collapsed', anyOpen));
+            toggleAll.textContent = anyOpen ? 'Expandir todo' : 'Colapsar todo';
+        });
+    }
+
+    // Popovers: abrir/cerrar al pulsar su botón, cerrar al pulsar fuera.
+    root.querySelectorAll('[data-pop]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const pop = document.getElementById(btn.dataset.pop);
+            const willOpen = pop.hidden;
+            root.querySelectorAll('.dlv-pop').forEach(p => { p.hidden = true; });
+            pop.hidden = !willOpen;
+        });
+    });
+    // Menú de acciones por fila (kebab). Las secciones tienen overflow:hidden,
+    // así que el menú se posiciona con position:fixed para no recortarse.
+    let openMenu = null;
+    function closeKebab() {
+        if (openMenu) { openMenu.hidden = true; openMenu.style.position = ''; openMenu = null; }
+    }
+    root.querySelectorAll('.dlv-kebab').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const menu = btn.nextElementSibling;
+            const wasOpen = menu === openMenu;
+            closeKebab();
+            if (wasOpen) { return; }
+            menu.hidden = false;
+            menu.style.position = 'fixed';
+            const r = btn.getBoundingClientRect();
+            menu.style.top = (r.bottom + 4) + 'px';
+            menu.style.left = (r.right - menu.offsetWidth) + 'px';
+            openMenu = menu;
+        });
+    });
+    window.addEventListener('scroll', closeKebab, true);
+    window.addEventListener('resize', closeKebab);
+
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.filt-wrap')) {
+            root.querySelectorAll('.dlv-pop').forEach(p => { p.hidden = true; });
+        }
+        if (!e.target.closest('.dlv-actions')) { closeKebab(); }
+    });
+
+    apply();
+})();
+</script>
+{% endblock %}

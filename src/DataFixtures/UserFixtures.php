@@ -29,8 +29,9 @@ class UserFixtures extends Fixture
         $admin->setUsername(self::ADMIN_USERNAME);
         $admin->setEmail(self::ADMIN_EMAIL);
         $admin->setPassword($this->hasher->hashPassword($admin, self::ADMIN_PASSWORD));
+        $admin->setPasswordSet(true);
         $admin->setEnabled(true);
-        $admin->setRoles(['ROLE_SUPER_ADMIN']);
+        $admin->setRoles(['ROLE_ADMIN']);
 
         $manager->persist($admin);
         $manager->flush();

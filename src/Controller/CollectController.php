@@ -2,29 +2,28 @@
 
 namespace App\Controller;
 
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-
-use Symfony\Component\HttpFoundation\Request;
-use App\Controller\AbstractAppController;
-
 use App\Entity\Collect;
 use App\Form\CollectType;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * Collect controller.
  *
  */
-class CollectController extends AbstractAppController
+#[IsGranted('ROLE_GESTION_GRANJA')]
+class CollectController extends AbstractController
 {
 
     /**
      * Lists all Collect entities.
      *
      */
-    public function index()
+    public function index(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entities = $em->getRepository(\App\Entity\Collect::class)->findAll();
 
         return $this->render('Collect/index.html.twig', array(
@@ -36,15 +35,14 @@ class CollectController extends AbstractAppController
      * Creates a new Collect entity.
      *
      */
-    public function create(Request $request)
+    public function create(Request $request, EntityManagerInterface $em)
     {
         $entity = new Collect();
         $entity->setUser($this->getUser());
-        $form = $this->createCreateForm($entity);
+        $form = $this->createCreateForm($entity, $em);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity->setWeek(date('W', strtotime($entity->getCollectDate())));
             $entity->setCollectDate(new \DateTime($entity->getCollectDate()));
             $em->persist($entity);
@@ -66,12 +64,12 @@ class CollectController extends AbstractAppController
      *
      * @return \Symfony\Component\Form\Form The form
      */
-    private function createCreateForm(Collect $entity)
+    private function createCreateForm(Collect $entity, EntityManagerInterface $em)
     {
         $form = $this->createForm(CollectType::class, $entity, array(
             'action' => $this->generateUrl('collect_create'),
             'method' => 'POST',
-            'em' => $this->getDoctrine()->getManager()
+            'em' => $em
         ));
 
         $form->add('submit', SubmitType::class, array('label' => 'Añadir'));
@@ -83,11 +81,11 @@ class CollectController extends AbstractAppController
      * Displays a form to create a new Collect entity.
      *
      */
-    public function new()
+    public function new(EntityManagerInterface $em)
     {
         $entity = new Collect();
         $entity->setUser($this->getUser());
-        $form = $this->createCreateForm($entity);
+        $form = $this->createCreateForm($entity, $em);
 
         return $this->render('Collect/new.html.twig', array(
             'entity' => $entity,
@@ -99,10 +97,8 @@ class CollectController extends AbstractAppController
      * Finds and displays a Collect entity.
      *
      */
-    public function show($id)
+    public function show($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Collect::class)->find($id);
 
         if (!$entity) {
@@ -121,10 +117,8 @@ class CollectController extends AbstractAppController
      * Displays a form to edit an existing Collect entity.
      *
      */
-    public function edit($id)
+    public function edit($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Collect::class)->find($id);
 
         if (!$entity) {
@@ -165,10 +159,8 @@ class CollectController extends AbstractAppController
      * Edits an existing Collect entity.
      *
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, $id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Collect::class)->find($id);
 
         if (!$entity) {
@@ -199,13 +191,12 @@ class CollectController extends AbstractAppController
      * Deletes a Collect entity.
      *
      */
-    public function delete(Request $request, $id)
+    public function delete(Request $request, $id, EntityManagerInterface $em)
     {
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\Collect::class)->find($id);
 
             if (!$entity) {
@@ -235,37 +226,4 @@ class CollectController extends AbstractAppController
             ->getForm();
     }
 
-    public function lucios(Request $request)
-    {
-        $em = $this->getDoctrine()->getManager();
-
-        if ($request->get('selected_dichotomous_key_id')) {
-            $id = $request->get('selected_dichotomous_key_id');
-
-            echo $id;
-            $dichotomous_keys = $em->getRepository(\App\Entity\Unity::class)->find($id);
-
-        } else {
-            echo "cawsdadva";
-            $dichotomous_keys = $em->getRepository(\App\Entity\Unity::class)->findAll();
-        }
-        echo count($dichotomous_keys);
-
-
-        $form = $this->createFormBuilder(null, array('attr' => array('id' => 'fish_species_identify_form')))
-            ->add('dichotomous_key', 'entity', array(
-                'choices' => $dichotomous_keys,
-                'class' => 'App\Entity\Unity',
-
-                'multiple' => false,
-                'expanded' => true))
-            ->add('submit', SubmitType::class, array('label' => 'Continuar'))
-            ->getForm();
-
-
-        return $this->render('Default/identify.html.twig', array(
-            'dichotomous_keys' => $dichotomous_keys,
-            'form' => $form->createView()
-        ));
-    }
 }

@@ -1,0 +1,26 @@
+framework:
+    # Rate limiters contra abuso de los endpoints que disparan correo. Sin
+    # esto, un bot puede enviar miles de mails desde /contact o pedir
+    # cientos de magic-links para un mismo socix (mail-bombing).
+    #
+    # sliding_window = "no más de N peticiones en cualquier ventana de T".
+    # Más justo que fixed_window (no permite el doble de tráfico en el
+    # borde entre dos ventanas).
+    #
+    # Storage por defecto: cache.app. En hosting compartido sin Redis es
+    # filesystem, lo cual es suficiente para el volumen esperado.
+    rate_limiter:
+        # Form público de contacto. 3 envíos / hora / IP.
+        contact_form:
+            policy: 'sliding_window'
+            limit: 3
+            interval: '1 hour'
+
+        # Solicitud de magic-link (first-access y forgot). 5 / hora / IP.
+        # No filtramos por email pedido para no añadir complejidad antes
+        # de ver abuso real (YAGNI). Si lo vemos, añadimos un segundo
+        # limiter por email.
+        magic_link:
+            policy: 'sliding_window'
+            limit: 5
+            interval: '1 hour'

@@ -2,30 +2,30 @@
 
 namespace App\Controller;
 
+use App\Entity\User;
+use App\Entity\UserEvent;
+use App\Form\UserType;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
-use App\Controller\AbstractAppController;
-
-use App\Entity\User;
-use App\Form\UserType;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * User controller.
  *
  */
-class UserController extends AbstractAppController
+#[IsGranted('ROLE_ADMIN')]
+class UserController extends AbstractController
 {
 
     /**
      * Lists all User entities.
      *
      */
-    public function index()
+    public function index(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entities = $em->getRepository(\App\Entity\User::class)->findAll();
 
         return $this->render('User/index.html.twig', array(
@@ -37,7 +37,7 @@ class UserController extends AbstractAppController
      * Creates a new User entity.
      *
      */
-    public function create(Request $request, UserPasswordHasherInterface $hasher)
+    public function create(Request $request, UserPasswordHasherInterface $hasher, EntityManagerInterface $em)
     {
         $entity = new User();
         $form = $this->createCreateForm($entity);
@@ -45,7 +45,6 @@ class UserController extends AbstractAppController
 
         if ($form->isSubmitted() && $form->isValid()) {
             $entity->setPassword($hasher->hashPassword($entity, $form->get('plainPassword')->getData()));
-            $em = $this->getDoctrine()->getManager();
             $em->persist($entity);
             $em->flush();
 
@@ -97,21 +96,40 @@ class UserController extends AbstractAppController
      * Finds and displays a User entity.
      *
      */
-    public function show($id)
+    public function show($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\User::class)->find($id);
 
         if (!$entity) {
             throw $this->createNotFoundException('Unable to find User entity.');
         }
 
-        $deleteForm = $this->createDeleteForm($id);
+        $events = $em->getRepository(\App\Entity\UserEvent::class)->findForUser($entity);
+
+        // Resuelve los actores "gestor:<id>" a su nombre de usuaria para el
+        // historial, en una sola query (mismo patrón que PartnerController::show).
+        $actorIds = [];
+        foreach ($events as $event) {
+            $actor = $event->getActor();
+            if (is_string($actor) && str_starts_with($actor, 'gestor:')) {
+                $aid = (int) substr($actor, strlen('gestor:'));
+                if ($aid > 0) {
+                    $actorIds[$aid] = true;
+                }
+            }
+        }
+        $actorNames = [];
+        if ($actorIds) {
+            $actors = $em->getRepository(\App\Entity\User::class)->findBy(['id' => array_keys($actorIds)]);
+            foreach ($actors as $actor) {
+                $actorNames[$actor->getId()] = $actor->getUserIdentifier();
+            }
+        }
 
         return $this->render('User/show.html.twig', array(
             'entity' => $entity,
-            'delete_form' => $deleteForm->createView(),
+            'events' => $events,
+            'actor_names' => $actorNames,
         ));
     }
 
@@ -119,10 +137,8 @@ class UserController extends AbstractAppController
      * Displays a form to edit an existing User entity.
      *
      */
-    public function edit($id)
+    public function edit($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\User::class)->find($id);
 
         if (!$entity) {
@@ -152,21 +168,21 @@ class UserController extends AbstractAppController
             'action' => $this->generateUrl('user_update', array('id' => $entity->getId())),
             'method' => 'PUT',
             'require_password' => false,
+            'include_partner' => false,
         ));
 
-        $form->add('submit', SubmitType::class, array('label' => 'Update'));
+        // El botón de envío lo pone la plantilla ("Guardar cambios"); no
+        // añadimos SubmitType aquí para no duplicarlo vía form_rest.
 
         return $form;
     }
 
     /**
-     * Edits an existing User entity.
-     *
+     * Edits an existing User entity. La contraseña NO se toca desde aquí:
+     * el reseteo lo hace el propio usuario por magic-link en /login/forgot.
      */
-    public function update(Request $request, $id, UserPasswordHasherInterface $hasher)
+    public function update(Request $request, $id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\User::class)->find($id);
 
         if (!$entity) {
@@ -178,10 +194,6 @@ class UserController extends AbstractAppController
         $editForm->handleRequest($request);
 
         if ($editForm->isSubmitted() && $editForm->isValid()) {
-            $plainPassword = $editForm->get('plainPassword')->getData();
-            if ($plainPassword) {
-                $entity->setPassword($hasher->hashPassword($entity, $plainPassword));
-            }
             $em->flush();
 
             return $this->redirect($this->generateUrl('user_show', array('id' => $id)));
@@ -198,13 +210,12 @@ class UserController extends AbstractAppController
      * Deletes a User entity.
      *
      */
-    public function delete(Request $request, $id)
+    public function delete(Request $request, $id, EntityManagerInterface $em)
     {
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\User::class)->find($id);
 
             if (!$entity) {
@@ -216,6 +227,60 @@ class UserController extends AbstractAppController
         }
 
         return $this->redirect($this->generateUrl('user'));
+    }
+
+    /**
+     * Bloquea o desbloquea el acceso de una cuenta (invierte `enabled`) y deja
+     * constancia en el histórico (UserEvent). No se borra la cuenta: así se
+     * preserva todo su historial de granja. Una cuenta no puede bloquearse a
+     * sí misma.
+     *
+     * @param Request $request Lleva el _token CSRF y un `reason` opcional.
+     * @param int     $id      Id de la cuenta a bloquear/desbloquear.
+     * @return \Symfony\Component\HttpFoundation\Response Redirección a la ficha.
+     */
+    public function toggleBlock(Request $request, int $id, EntityManagerInterface $em)
+    {
+        $entity = $em->getRepository(\App\Entity\User::class)->find($id);
+
+        if (!$entity) {
+            throw $this->createNotFoundException('Unable to find User entity.');
+        }
+
+        if (!$this->isCsrfTokenValid('user_toggle_block_' . $id, $request->request->get('_token'))) {
+            $this->addFlash('error', 'Token de seguridad inválido. Inténtalo de nuevo.');
+
+            return $this->redirect($this->generateUrl('user_show', array('id' => $id)));
+        }
+
+        $current = $this->getUser();
+        if ($current instanceof User && $current->getId() === $entity->getId()) {
+            $this->addFlash('error', 'No puedes bloquear tu propia cuenta.');
+
+            return $this->redirect($this->generateUrl('user_show', array('id' => $id)));
+        }
+
+        // Estado destino: lo contrario del actual.
+        $willEnable = !$entity->isEnabled();
+        $entity->setEnabled($willEnable);
+
+        $event = new UserEvent(
+            $entity,
+            $willEnable ? UserEvent::TYPE_UNBLOCK : UserEvent::TYPE_BLOCK
+        );
+        $event->setActor($current instanceof User ? 'gestor:' . $current->getId() : UserEvent::ACTOR_SYSTEM);
+        $reason = trim((string) $request->request->get('reason', ''));
+        if ($reason !== '') {
+            $event->setNotes($reason);
+        }
+        $em->persist($event);
+        $em->flush();
+
+        $this->addFlash('success', $willEnable
+            ? 'Cuenta desbloqueada: la usuaria vuelve a tener acceso.'
+            : 'Cuenta bloqueada: la usuaria ya no puede entrar.');
+
+        return $this->redirect($this->generateUrl('user_show', array('id' => $id)));
     }
 
     /**

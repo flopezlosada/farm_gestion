@@ -57,11 +57,17 @@
                         </td>
                         <td class="csa-table__col-tight">{{ basket.startDate|format_date('long', locale='es') }}</td>
                         <td class="csa-table__actions">
-                            <a href="{{ path('partner_basket_share_edit', { id: basket.id }) }}" title="Cambiar tipo" aria-label="Cambiar tipo"><i class="fa fa-pencil"></i></a>
-                            <a href="{{ path('partner_basket_share_finalize', { id: basket.id }) }}" title="Finalizar" aria-label="Finalizar"
-                               onclick="return confirm('¿Dar de baja esta cesta?');">
-                                <i class="fa fa-times"></i>
-                            </a>
+                            <a href="{{ path('partner_basket_share_edit', { id: basket.id }) }}" title="Corregir errata (sin histórico)" aria-label="Corregir errata"><i class="fa fa-pencil"></i></a>
+                            <button type="button" title="Finalizar" aria-label="Finalizar"
+                                onclick="document.getElementById('confirm-basket-{{ basket.id }}').showModal()"><i class="fa fa-times"></i></button>
+{{ csa.confirm_dialog('confirm-basket-' ~ basket.id, {
+    variant: 'danger',
+    eyebrow: 'Acción permanente',
+    title: 'Dar de baja esta cesta',
+    body: 'La cesta se finaliza y deja de aparecer en el listado activo.',
+    confirm_label: 'Dar de baja',
+    confirm_href: path('partner_basket_share_finalize', { id: basket.id }),
+}) }}
                         </td>
                     </tr>
                 {% else %}

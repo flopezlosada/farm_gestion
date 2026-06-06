@@ -2,8 +2,18 @@
 
 namespace App\Tests\Controller;
 
+use App\DataFixtures\PartnerUserFixtures;
+use App\Entity\Basket;
+use App\Entity\Partner;
+use App\Entity\PartnerBasketShare;
+use App\Entity\PartnerDeliveryShift;
+use App\Entity\WeeklyBasket;
+use App\Service\Delivery\DeliveryShiftApplier;
+use App\Service\Delivery\WeeklyBasketGenerator;
+use App\Service\Delivery\WeeklyBasketSkipper;
+
 /**
- * Smoke test del listado de socixs.
+ * Smoke test del listado y la edición de socixs.
  */
 class PartnerControllerTest extends AbstractAuthenticatedTest
 {
@@ -16,5 +26,195 @@ class PartnerControllerTest extends AbstractAuthenticatedTest
         $client->request('GET', '/gestion/partner/');
 
         $this->assertSame(200, $client->getResponse()->getStatusCode());
+    }
+
+    /**
+     * GET del edit de un socio SIN fecha de inscripción devuelve 200.
+     *
+     * Regresión: el edit hacía getInscriptionDate()->format() sin comprobar
+     * null, y además metía un string en el DateType del form, así que petaba
+     * con 500 tanto si la fecha era null como si no. Autocontenido: crea un
+     * socio sin fecha, abre su edit y lo borra.
+     */
+    public function testEditPartnerWithoutInscriptionDateReturnsOk(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        $partner = (new Partner())
+            ->setname('TEST')
+            ->setSurname('Sin Fecha ' . uniqid())
+            ->setStatus(Partner::STATUS_ACTIVO);
+        $em->persist($partner);
+        $em->flush();
+        $partnerId = $partner->getId();
+
+        $client->request('GET', sprintf('/gestion/partner/%d/edit', $partnerId));
+        $this->assertSame(200, $client->getResponse()->getStatusCode());
+
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $em->remove($em->getRepository(Partner::class)->find($partnerId));
+        $em->flush();
+    }
+
+    /**
+     * GET del calendario de recogida de un socio devuelve 200 (lectura v0).
+     */
+    public function testDeliveryCalendarReturnsOk(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        $partner = $em->getRepository(Partner::class)->findOneBy([]);
+        $this->assertNotNull($partner, 'Fixtures sin ningún socio.');
+
+        $client->request('GET', sprintf('/gestion/partner/%d/calendar', $partner->getId()));
+
+        $this->assertSame(200, $client->getResponse()->getStatusCode());
+    }
+
+    /**
+     * POST de saltar sin token CSRF válido redirige y NO altera el estado de la
+     * entrega (guarda de seguridad del endpoint). El toggle en sí está cubierto
+     * por WeeklyBasketSkipperTest (unit) y por el panel; el happy-path funcional
+     * se añadirá al cablear la UI del calendario, que dará el token a scrapear.
+     */
+    public function testDeliveryCalendarSkipRejectsInvalidCsrf(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        $partner = $em->getRepository(Partner::class)
+            ->findOneBy(['email' => PartnerUserFixtures::USER_SOCIX_EMAIL]);
+        $this->assertNotNull($partner);
+
+        $wb = $em->getRepository(WeeklyBasket::class)->findOneBy(['partner' => $partner]);
+        $this->assertNotNull($wb, 'El socix de fixtures debería tener una entrega.');
+        $statusBefore = $wb->getWeeklyBasketStatus()?->getId();
+
+        $client->request('POST', sprintf('/gestion/partner/%d/calendar/skip/%d', $partner->getId(), $wb->getBasket()->getId()), [
+            '_csrf_token' => 'token-invalido',
+        ]);
+
+        $this->assertResponseRedirects();
+
+        $em->clear();
+        $reloaded = $em->getRepository(WeeklyBasket::class)->find($wb->getId());
+        $this->assertSame(
+            $statusBefore,
+            $reloaded->getWeeklyBasketStatus()?->getId(),
+            'Sin token CSRF válido, el estado de la entrega no debe cambiar.',
+        );
+    }
+
+    /**
+     * Happy-path funcional del saltar desde el calendario: se scrapea el token
+     * CSRF real que pinta la pantalla del mes de la entrega y, al postearlo, el
+     * "no recoge" LIBERA el día — retira el WeeklyBasket y deja un intent durable
+     * sin destino (to=null), no un WB clavado en estado 2. Así el día queda libre y
+     * la entrega aparcada es recuperable. (Reparto/PDF leen status 1: un WB retirado
+     * queda fuera igual que uno saltado — verificado por caracterización.)
+     */
+    public function testDeliveryCalendarSkipFreesTheDayAndLeavesIntent(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        $partner = $em->getRepository(Partner::class)
+            ->findOneBy(['email' => PartnerUserFixtures::USER_SOCIX_EMAIL]);
+        $this->assertNotNull($partner);
+
+        $wb = $em->getRepository(WeeklyBasket::class)->findOneBy(['partner' => $partner]);
+        $this->assertNotNull($wb, 'El socix de fixtures debería tener una entrega.');
+        $this->assertSame(
+            WeeklyBasketSkipper::STATUS_PICKS,
+            $wb->getWeeklyBasketStatus()?->getId(),
+            'El socix de fixtures debería partir recogiendo (estado 1).',
+        );
+
+        $partnerId = $partner->getId();
+        $wbId = $wb->getId();
+        $basketId = $wb->getBasket()->getId();
+        $date = $wb->getBasket()->getDate();
+
+        // La pantalla del mes, con esa entrega seleccionada (?sel), pinta el panel
+        // con el formulario de saltar y su token.
+        $crawler = $client->request('GET', sprintf(
+            '/gestion/partner/%d/calendar?year=%d&month=%d&sel=%d',
+            $partnerId,
+            (int) $date->format('Y'),
+            (int) $date->format('n'),
+            $basketId,
+        ));
+        $this->assertSame(200, $client->getResponse()->getStatusCode());
+
+        $tokenInput = $crawler->filter(sprintf('#rcal-skip-form-%d input[name="_csrf_token"]', $basketId));
+        $this->assertGreaterThan(0, $tokenInput->count(), 'El calendario debería pintar el formulario de saltar con su token.');
+
+        $client->request('POST', sprintf('/gestion/partner/%d/calendar/skip/%d', $partnerId, $basketId), [
+            '_csrf_token' => $tokenInput->attr('value'),
+        ]);
+        $this->assertResponseRedirects();
+
+        // Tras las requests, el EM a usar es el del contenedor del último kernel: así es
+        // el MISMO que inyectan los servicios del cleanup (cancelSkipIntent/generator).
+        // Con el $em capturado antes de las requests, las entidades llegarían DETACHED al
+        // applier y remove() lanzaría.
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $em->clear();
+        $basket = $em->getRepository(Basket::class)->find($basketId);
+        $partner = $em->getRepository(Partner::class)->find($partnerId);
+        $wbAfter = $em->getRepository(WeeklyBasket::class)->find($wbId);
+        $intent = $em->getRepository(PartnerDeliveryShift::class)
+            ->findOneBy(['partner' => $partnerId, 'fromBasket' => $basketId]);
+
+        $dayFreed = $wbAfter === null;
+        $intentIsSkip = $intent !== null && $intent->isSkip();
+
+        // db_test no tiene rollback transaccional: se restaura ANTES de las
+        // aserciones (que podrían lanzar) recorriendo el camino "volver a recoger"
+        // del controller — cancelar el intent y re-materializar la entrega.
+        if ($intent !== null) {
+            static::getContainer()->get(DeliveryShiftApplier::class)->cancelSkipIntent($intent, 'test:cleanup');
+        }
+        $share = $em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner, $basket->getDate());
+        if ($share !== null) {
+            static::getContainer()->get(WeeklyBasketGenerator::class)->materializeShareDelivery($basket, $share);
+        }
+
+        $this->assertTrue($dayFreed, 'Saltar debe LIBERAR el día: el WeeklyBasket se retira, no se deja en estado 2.');
+        $this->assertTrue($intentIsSkip, 'Saltar debe dejar un intent "no recoge" durable (sin destino).');
+    }
+
+    /**
+     * POST de mover (cambio puntual de día desde el calendario del gestor) sin
+     * token CSRF válido redirige y NO crea ningún PartnerDeliveryShift. El
+     * happy-path del movimiento descansa en los tests del motor de shift
+     * (DeliveryShiftApplier/Validator/Candidates), que el panel del socio ya
+     * ejercita; aquí solo se cubre la guarda de seguridad del nuevo endpoint.
+     */
+    public function testDeliveryCalendarMoveRejectsInvalidCsrf(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        $partner = $em->getRepository(Partner::class)
+            ->findOneBy(['email' => PartnerUserFixtures::USER_SOCIX_EMAIL]);
+        $this->assertNotNull($partner);
+
+        $wb = $em->getRepository(WeeklyBasket::class)->findOneBy(['partner' => $partner]);
+        $this->assertNotNull($wb, 'El socix de fixtures debería tener una entrega.');
+        $basketId = $wb->getBasket()->getId();
+
+        $client->request('POST', sprintf('/gestion/partner/%d/calendar/move/%d', $partner->getId(), $basketId), [
+            '_csrf_token' => 'token-invalido',
+            'to_basket_id' => $basketId,
+        ]);
+        $this->assertResponseRedirects();
+
+        $em->clear();
+        $shift = $em->getRepository(PartnerDeliveryShift::class)
+            ->findOneBy(['partner' => $partner->getId(), 'fromBasket' => $basketId]);
+        $this->assertNull($shift, 'Sin token CSRF válido no debe crearse ningún cambio puntual.');
     }
 }

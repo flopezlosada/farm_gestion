@@ -1,0 +1,39 @@
+{# ============================================================
+ # /login/enviado — confirmación tras solicitar magic-link
+ # ============================================================
+ # Pantalla estática: confirmamos que el correo se ha enviado (si
+ # existía cuenta), sin filtrar si el email estaba o no registrado.
+ # ============================================================ #}
+{% extends "_layouts/csa_auth.html.twig" %}
+
+{% block title %}Enlace enviado{% endblock %}
+
+{% block csa_main %}
+
+    <section class="csa-auth__card" aria-labelledby="csa-auth-title">
+
+        <div class="csa-auth__confirm">
+
+            <span class="csa-auth__confirm-mark" aria-hidden="true">✓</span>
+
+            <h1 id="csa-auth-title" class="csa-auth__title">Revisa tu correo</h1>
+
+            <p class="csa-auth__lead" style="margin: 0;">
+                Si tu email está registrado, te hemos enviado un enlace para entrar.
+            </p>
+
+        </div>
+
+        <p class="csa-auth__note">
+            Revisa el correo, incluyendo la carpeta de spam. El enlace es válido
+            durante 30 minutos y se puede usar una sola vez. Si no te llega,
+            escríbenos a <a href="mailto:info@csavegadejarama.org">info@csavegadejarama.org</a>.
+        </p>
+
+        <div style="text-align: center;">
+            <a href="{{ path('app_login') }}" class="csa-auth__back">Volver al inicio</a>
+        </div>
+
+    </section>
+
+{% endblock %}

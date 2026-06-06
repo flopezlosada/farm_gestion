@@ -1,0 +1,508 @@
+{# ============================================================
+ # Calendario de recogida — partial compartido gestor / socio.
+ #
+ # Rejilla mensual (qué días recoge de un vistazo) + papelera (no recoge)
+ # + panel del día seleccionado. Para cambiar un día se ARRASTRA en la
+ # rejilla (día→papelera = no recoge; día→día libre = mover).
+ #
+ # Espera en contexto los datos del calendario (partner, slots, tray,
+ # weeks, selected, selected_editable, current, prev, next, pickup_place)
+ # y un objeto `cal` que desacopla las rutas/CSRF de cada pantalla:
+ #   cal.route_view / route_skip / route_move / route_recover / route_reset
+ #   cal.idp        hash de parámetros de id ({id: ...} en gestor, {} en panel)
+ #   cal.csrf_skip / csrf_move / csrf_reset   valores de token ya calculados
+ #   cal.readonly   true = solo lectura (sin arrastre, papelera, reset ni botones)
+ #
+ # R1: en cestas compartidas el día y el contenido los marca la
+ # alternancia con el otro hogar — no hay acciones.
+ # ============================================================ #}
+{% import '_macros/csa.html.twig' as csa %}
+{% set EGG = constant('App\\Entity\\BasketComponent::ID_EGGS') %}
+{# ro = solo lectura total (sin acciones). dnd = capa de arrastrar y soltar (escritorio);
+   el socio (móvil) edita por toques con los botones del panel, sin arrastre. #}
+{% set ro = cal.readonly|default(false) %}
+{% set dnd = cal.dnd|default(false) %}
+
+{# Lista (solo lectura) de lo que lleva una entrega ese día. El contenido del día ya no
+   se edita por componente: el modelo es "todo junto por día". #}
+{% macro components(selected, EGG) %}
+    {% for it in selected.items|sort((a, b) => a.component.id - b.component.id) %}
+        {% set is_egg = it.component.id == EGG %}
+        <div class="rcal-comp">
+            <span class="rcal-comp__ic {{ is_egg ? 'egg' : 'veg' }}">{% if is_egg %}<span class="rcal-egg"></span>{% else %}<i class="fa fa-leaf"></i>{% endif %}</span>
+            <span class="rcal-comp__t">
+                <span class="rcal-comp__name">{{ is_egg ? 'Huevos' : 'Cesta de verdura' }}</span>
+                <span class="rcal-comp__sub">{{ it.amount + 0 }} {{ is_egg ? 'docena' : 'cesta' }}{{ (it.amount + 0) != 1 ? 's' }}</span>
+            </span>
+        </div>
+    {% else %}
+        <p class="csa-muted">Sin componentes.</p>
+    {% endfor %}
+{% endmacro %}
+
+{% if partner.sharePartner %}
+    {{ csa.callout('Esta cesta es compartida: su día y su contenido los marca la alternancia con el otro hogar, no se editan desde aquí.', 'info', 'info-circle') }}
+{% endif %}
+
+{# Banner del modo "mover por toque" (socio, sin arrastre): aparece al pulsar
+   "Mover a otra fecha" y guía a tocar el día destino. #}
+{% if partner.sharePartner is null and not ro and cal.route_move is defined %}
+    <div id="rcal-move-banner" class="rcal-movebanner" hidden>
+        <span><i class="fa fa-hand-o-up"></i> Toca el día (resaltado) al que quieres mover la cesta.</span>
+        <button type="button" id="rcal-move-cancel" class="csa-btn csa-btn--ghost csa-btn--sm">Cancelar</button>
+    </div>
+{% endif %}
+
+<div class="rcal">
+
+    <div class="rcal-left">
+
+    {# ===== REJILLA ===== #}
+    <div class="rcal-grid" data-rcal-drop="grid">
+
+        {# Cabecera: navegación de mes (izquierda) + reset (derecha), dentro de la tarjeta. #}
+        <div class="rcal-cal-hd">
+            <div class="rcal-nav">
+                <a class="rcal-navbtn" href="{{ path(cal.route_view, cal.idp|merge({ year: prev.format('Y'), month: prev.format('n') })) }}"
+                   aria-label="Mes anterior" title="Mes anterior"><i class="fa fa-chevron-left"></i></a>
+                <a class="rcal-navbtn" href="{{ path(cal.route_view, cal.idp|merge({ year: next.format('Y'), month: next.format('n') })) }}"
+                   aria-label="Mes siguiente" title="Mes siguiente"><i class="fa fa-chevron-right"></i></a>
+                <span class="rcal-month">{{ current|format_datetime('none', 'none', pattern='LLLL yyyy', locale='es') }}</span>
+            </div>
+
+            {# Reset del mes a su patrón: red de seguridad para estados enredados. No en
+               compartidas (R1) ni en solo lectura. Recarga normal (no AJAX): es una acción
+               rara y conviene ver el mes limpio de cero. #}
+            {% if cal.route_reset is defined and partner.sharePartner is null and not ro %}
+                <form id="rcal-reset-form" action="{{ path(cal.route_reset, cal.idp) }}" method="post" class="rcal-resetform">
+                    <input type="hidden" name="_csrf_token" value="{{ cal.csrf_reset }}">
+                    <input type="hidden" name="year" value="{{ current.format('Y') }}">
+                    <input type="hidden" name="month" value="{{ current.format('n') }}">
+                    <button type="button" class="csa-btn csa-btn--ghost csa-btn--sm"
+                            onclick="document.getElementById('rcal-confirm-reset').showModal()">
+                        <i class="fa fa-rotate-left"></i><span>Resetear el mes</span>
+                    </button>
+                </form>
+                {{ csa.confirm_dialog('rcal-confirm-reset', {
+                    variant: 'warning',
+                    eyebrow: 'Resetear mes',
+                    title: '¿Resetear el calendario de este mes?',
+                    body: 'Se deshacen los cambios puntuales (mover, no recoger, recuperar) de ' ~ (current|format_datetime('none', 'none', pattern='LLLL yyyy', locale='es')) ~ ' y las entregas vuelven a su patrón. Úsalo si algo quedó descuadrado.',
+                    confirm_label: 'Resetear',
+                    external_form_id: 'rcal-reset-form',
+                }) }}
+            {% endif %}
+        </div>
+
+        <div class="rcal-body">
+        <div class="rcal-dow"><span>Lun</span><span>Mar</span><span>Mié</span><span>Jue</span><span>Vie</span><span>Sáb</span><span>Dom</span></div>
+        <div class="rcal-weeks">
+            {% for week in weeks %}
+                {% for day in week %}
+                    {% set slot = day.slot %}
+                    {% set is_sel = slot and selected and slot.basket.id == selected.basket.id %}
+                    {% set wknd = day.date.format('N') in [6, 7] %}
+                    {% set is_today = day.date.format('Y-m-d') == date('today').format('Y-m-d') %}
+                    {% if slot and slot.closed|default(false) %}
+                        {# Semana CERRADA (excepción de cancelación: festivo/vacaciones). No
+                           hay reparto para nadie. Gris, no arrastrable ni editable; navegable
+                           para que el panel explique el cierre. #}
+                        <a href="{{ path(cal.route_view, cal.idp|merge({ year: slot.basket.date.format('Y'), month: slot.basket.date.format('n'), sel: slot.basket.id })) }}"
+                           class="rcal-cell rcal-closed{{ is_sel ? ' sel' }}">
+                            <span class="n">{{ day.date.format('j') }}</span>
+                            <span class="x"><i class="fa fa-lock"></i></span>
+                        </a>
+                    {% elseif slot %}
+                        {# Rojo si se le han quitado todos los componentes (no recoge nada).
+                           Las "no recoge" (saltadas) ya NO llegan aquí: viven en la papelera
+                           y su día sale libre. #}
+                        {% set no_pickup = slot.items is empty %}
+                        {# Arrastrable = entrega real, futura y no compartida (R1), si no es solo lectura.
+                           Arrastrarla a la papelera = no recoger esa semana. #}
+                        {% set day_grab = not no_pickup and partner.sharePartner is null and slot.date > date('today') and not ro and dnd %}
+                        {# Se navega al mes LÓGICO del Basket (su viernes-ciclo), que para las
+                           entregas del mes coincide con el visible, pero para una que se cuela
+                           por fecha física desde un mes vecino es donde el panel la resuelve. #}
+                        <a href="{{ path(cal.route_view, cal.idp|merge({ year: slot.basket.date.format('Y'), month: slot.basket.date.format('n'), sel: slot.basket.id })) }}"
+                           class="rcal-cell {{ no_pickup ? 'rcal-skip' : 'rcal-pick' }}{{ is_sel ? ' sel' }}{{ is_today ? ' rcal-today' }}{{ day_grab ? ' rcal-grab' }}"
+                           {% if day_grab %}draggable="true" data-rcal-draggable data-rcal-kind="grid" data-rcal-skip-url="{{ path(cal.route_skip, cal.idp|merge({ basketId: slot.basket.id })) }}" data-rcal-move-url="{{ path(cal.route_move, cal.idp|merge({ basketId: slot.basket.id })) }}"{% endif %}>
+                            <span class="n">{{ day.date.format('j') }}</span>
+                            {% if is_today %}<span class="rcal-today-tag">hoy</span>{% endif %}
+                            {% if day_grab %}<span class="rcal-grip" title="Arrastra para mover o no recoger"><i class="fa fa-arrows"></i></span>{% endif %}
+                            {% if no_pickup %}
+                                <span class="x"><i class="fa fa-ban"></i></span>
+                            {% else %}
+                                {# Marcadores de producto. Orden fijo por id de componente (verdura,
+                                   huevos): si no, al quitar y re-añadir se desordenan. #}
+                                <span class="rcal-mk">
+                                    {% for item in slot.items|sort((a, b) => a.component.id - b.component.id) %}
+                                        {% if item.component.id == EGG %}
+                                            <span class="rcal-mk__i egg" title="Huevos"><span class="rcal-egg"></span></span>
+                                        {% else %}
+                                            <span class="rcal-mk__i veg" title="Verdura"><i class="fa fa-leaf"></i></span>
+                                        {% endif %}
+                                    {% endfor %}
+                                </span>
+                            {% endif %}
+                        </a>
+                    {% else %}
+                        {# Celda libre. Si el nodo reparte ese día (dropBasketId) y no es solo
+                           lectura, es destino válido para soltar una entrega arrastrada (mover). #}
+                        <div class="rcal-cell empty{{ not day.inMonth ? ' out' }}{{ wknd ? ' wknd' }}{{ is_today ? ' rcal-today' }}"
+                             {% if day.dropBasketId and not ro %}data-rcal-target data-rcal-to="{{ day.dropBasketId }}"{% endif %}>
+                            <span class="n">{{ day.date.format('j') }}</span>
+                            {% if is_today %}<span class="rcal-today-tag">hoy</span>{% endif %}
+                        </div>
+                    {% endif %}
+                {% endfor %}
+            {% endfor %}
+        </div>
+        <div class="rcal-legend">
+            <span class="lg"><span class="rcal-mk__i veg"><i class="fa fa-leaf"></i></span>Verdura</span>
+            <span class="lg"><span class="rcal-mk__i egg"><span class="rcal-egg"></span></span>Huevos</span>
+        </div>
+        </div>{# /.rcal-body #}
+    </div>{# /.rcal-grid #}
+
+    {# ===== PAPELERA (no recoge, recuperable) ===== #}
+    {% if partner.sharePartner is null and not ro %}
+    <div class="rcal-tray" data-rcal-drop="tray">
+        <div class="rcal-tray__hd">
+            <span class="rcal-tray__ic"><i class="fa fa-inbox"></i></span>
+            <span class="rcal-tray__txt">
+                <span class="rcal-tray__title">No recoge</span>
+                <span class="rcal-tray__hint">
+                    <span class="rcal-dragonly">Arrastra un día aquí para no recogerlo · o saca uno (a un día libre) para recuperarlo</span>
+                    <span class="rcal-tapmove">Estas semanas no las recoges. Toca una para volver a recogerla.</span>
+                </span>
+            </span>
+        </div>
+        <div class="rcal-tray__body">
+            {# La tarjeta es SIEMPRE un enlace (tocar = seleccionar ese día → "Volver a recoger",
+               flujo móvil) y ADEMÁS arrastrable si la pantalla permite recuperar a un día elegido
+               (escritorio: arrastrar la ficha a un día libre). #}
+            {% for t in tray %}
+                {% set t_grab = t.date > date('today') and cal.route_recover is defined %}
+                <a class="rcal-tray-card{{ t_grab ? ' rcal-grab' }}"
+                   href="{{ path(cal.route_view, cal.idp|merge({ year: t.basket.date.format('Y'), month: t.basket.date.format('n'), sel: t.basket.id })) }}"
+                   {% if t_grab %}draggable="true" data-rcal-draggable data-rcal-kind="tray" data-rcal-skip-url="{{ path(cal.route_skip, cal.idp|merge({ basketId: t.basket.id })) }}" data-rcal-recover-url="{{ path(cal.route_recover, cal.idp|merge({ basketId: t.basket.id })) }}"{% endif %}>
+                    <span class="rcal-tray-card__ic"><i class="fa fa-ban"></i></span>
+                    <span class="rcal-tray-card__d">{{ t.date|format_date(pattern='EEE d MMM', locale='es') }}</span>
+                </a>
+            {% else %}
+                <p class="rcal-tray__empty">Nada aparcado este mes.</p>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    </div>{# /.rcal-left #}
+
+    {# ===== PANEL DEL DÍA SELECCIONADO ===== #}
+    <div class="rcal-panel">
+        {% if selected %}
+            {% set bid = selected.basket.id %}
+            {# Vacío = sin componentes y no saltada explícitamente: no recoge nada. #}
+            {% set is_empty = not selected.skipped and selected.items is empty %}
+            {% set is_closed = selected.closed|default(false) %}
+            {% set is_skip = not is_closed and (selected.skipped or is_empty) %}
+            {# Solo-lectura: el flag de pantalla (ro), compartidas (R1) y entregas pasadas. #}
+            {% set readonly = ro or partner.sharePartner is not null or not selected_editable %}
+
+            <div class="rcal-panel__hd{{ is_closed ? ' is-closed' : (is_skip ? ' is-skip') }}">
+                <div class="rcal-panel__eyebrow">
+                    {% if is_closed %}<i class="fa fa-lock"></i> Semana cerrada
+                    {% elseif is_skip %}<i class="fa fa-ban"></i> No recoge
+                    {% else %}<i class="fa fa-leaf"></i> Recoges
+                    {% endif %}
+                </div>
+                <div class="rcal-panel__day">{{ selected.date|format_date('full', locale='es')|capitalize }}</div>
+                {% if pickup_place and not is_skip and not is_closed %}
+                    <div class="rcal-panel__where"><i class="fa fa-map-marker"></i>Recoge en {{ pickup_place }}</div>
+                {% endif %}
+            </div>
+
+            {% if is_closed %}
+                {# Semana CERRADA por excepción de calendario (festivo/vacaciones): no hay
+                   reparto para nadie. No editable — el cierre se gestiona desde Excepciones
+                   de reparto, no aquí. #}
+                <div class="rcal-panel__bd">
+                    <div class="rcal-sect"><i class="fa fa-lock"></i> Semana cerrada</div>
+                    <p class="csa-muted">El {{ selected.date|format_date('long', locale='es') }} no hay reparto (excepción de calendario). No se recoge nada esa semana y no sale en el listado.</p>
+                </div>
+            {% elseif selected.skipped %}
+                {# Saltada: no lleva nada esa semana; si es editable, se puede restaurar.
+                   Una cesta movida que se marca "no recoge" también cae aquí. #}
+                <div class="rcal-panel__bd">
+                    <div class="rcal-sect">Esta semana no recoge</div>
+                    <p class="csa-muted">La entrega del {{ selected.date|format_date('long', locale='es') }} está marcada como NO recogida y no saldrá en el reparto.</p>
+                </div>
+                {% if not readonly %}
+                    <div class="rcal-panel__ft">
+                        <form action="{{ path(cal.route_skip, cal.idp|merge({ basketId: bid })) }}" method="post" style="margin: 0;" data-rcal-ajax>
+                            <input type="hidden" name="_csrf_token" value="{{ cal.csrf_skip }}">
+                            <input type="hidden" name="recover" value="1">
+                            {{ csa.btn('Volver a recoger', { type: 'submit', variant: 'secondary', icon: 'fa-undo', block: true }) }}
+                        </form>
+                    </div>
+                {% endif %}
+            {% else %}
+                {# Entrega activa. El contenido es de solo lectura: para cambiar el día se
+                   ARRASTRA en la rejilla (a la papelera = no recoge; a un día libre = mover).
+                   El botón de abajo es un atajo accesible para "no recoge". #}
+                <div class="rcal-panel__bd">
+                    {% if is_empty and not readonly %}
+                        <div class="rcal-empty-note"><i class="fa fa-ban"></i> Esta semana no recoge nada.</div>
+                    {% endif %}
+                    <div class="rcal-sect">Qué se lleva ese día</div>
+
+                    {{ _self.components(selected, EGG) }}
+
+                    {% if not readonly and dnd %}
+                        <div class="rcal-hint rcal-dragonly" style="margin-top: var(--csa-sp-4);">
+                            <i class="fa fa-arrows"></i> Arrastra este día en el calendario para moverlo a otra fecha o a "No recoge".
+                        </div>
+                    {% endif %}
+                </div>
+
+                {% if not readonly %}
+                    <div class="rcal-panel__ft">
+                        {# Mover por toque (móvil/socio): inicia el modo "elige día destino".
+                           En escritorio (dnd) se mueve arrastrando, así que no se muestra. #}
+                        {% if cal.route_move is defined and has_drop_targets|default(false) %}
+                            <button type="button" class="csa-btn csa-btn--secondary csa-btn--block rcal-tapmove" data-rcal-move-start
+                                    data-rcal-move-url="{{ path(cal.route_move, cal.idp|merge({ basketId: bid })) }}"
+                                    style="margin-bottom: var(--csa-sp-3);">
+                                <i class="fa fa-arrows"></i><span>Mover a otra fecha</span>
+                            </button>
+                        {% endif %}
+                        <form id="rcal-skip-form-{{ bid }}" action="{{ path(cal.route_skip, cal.idp|merge({ basketId: bid })) }}" method="post" style="margin: 0;" data-rcal-ajax>
+                            <input type="hidden" name="_csrf_token" value="{{ cal.csrf_skip }}">
+                            <button type="button" class="csa-btn csa-btn--danger-soft csa-btn--block"
+                                    onclick="document.getElementById('rcal-confirm-skip-{{ bid }}').showModal()">
+                                <i class="fa fa-ban"></i><span>No recoge esta semana</span>
+                            </button>
+                        </form>
+                        <div class="rcal-hint" style="text-align: center;">Queda fuera del reparto. Reversible.</div>
+                        {{ csa.confirm_dialog('rcal-confirm-skip-' ~ bid, {
+                            variant: 'warning',
+                            eyebrow: 'No recoger',
+                            title: '¿Marcar que no recoge esta semana?',
+                            body: 'La entrega de ' ~ (selected.date|format_date('long', locale='es')) ~ ' no saldrá en el reparto. Podrás revertirlo desde aquí.',
+                            confirm_label: 'No recoger',
+                            external_form_id: 'rcal-skip-form-' ~ bid,
+                        }) }}
+                    </div>
+                {% elseif not partner.sharePartner and not ro %}
+                    <div class="rcal-panel__ft">
+                        <div class="rcal-hint" style="text-align: center;"><i class="fa fa-lock"></i> Se recoge hoy o ya pasó · solo lectura</div>
+                    </div>
+                {% endif %}
+            {% endif %}
+        {% else %}
+            <div class="rcal-empty">
+                <p>Este mes no tiene entregas para el socio.</p>
+                <p style="margin-top: var(--csa-sp-2); font-size: 12px;">Navega a otro mes con las flechas de arriba.</p>
+            </div>
+        {% endif %}
+    </div>
+
+</div>
+
+{% if partner.sharePartner is null and not ro and dnd %}
+<script>
+(function () {
+    const SKIP_CSRF = {{ cal.csrf_skip|json_encode|raw }};
+    const MOVE_CSRF = {{ cal.csrf_move|json_encode|raw }};
+
+    let dragged = null;
+
+    function clearHighlights() {
+        document.querySelectorAll('.rcal-dropok, .rcal-dragok').forEach(function (el) {
+            el.classList.remove('rcal-dropok', 'rcal-dragok');
+        });
+    }
+
+    // handlers: { <kind>: fn(card) }. La zona acepta una ficha si hay handler para su
+    // tipo; al soltar, ejecuta el de ese tipo. Una misma celda acepta MOVER (ficha de
+    // rejilla) y RECUPERAR (ficha de papelera).
+    function wireDrop(el, handlers) {
+        el.addEventListener('dragover', function (e) {
+            if (!dragged || !handlers[dragged.dataset.rcalKind]) return;
+            e.preventDefault();
+            el.classList.add('rcal-dropok');
+        });
+        el.addEventListener('dragleave', function (e) {
+            if (e.target === el) el.classList.remove('rcal-dropok');
+        });
+        el.addEventListener('drop', function (e) {
+            if (!dragged || !handlers[dragged.dataset.rcalKind]) return;
+            e.preventDefault();
+            handlers[dragged.dataset.rcalKind](dragged);
+        });
+    }
+
+    // (Re)vincula el DnD y la intercepción de forms sobre un nodo .rcal concreto. Se
+    // llama al cargar y tras cada refresco AJAX (el .rcal se reemplaza entero).
+    function bind(cal) {
+        cal.addEventListener('dragstart', function (e) {
+            const card = e.target.closest('[data-rcal-draggable]');
+            if (!card) return;
+            dragged = card;
+            e.dataTransfer.effectAllowed = 'move';
+            // setData es obligatorio en Firefox para que arranque el arrastre.
+            e.dataTransfer.setData('text/plain', '');
+            card.classList.add('rcal-dragging');
+            // Destinos válidos: días libres del nodo. Para una ficha de rejilla, además
+            // la papelera (no recoge).
+            cal.querySelectorAll('[data-rcal-target]').forEach(function (el) { el.classList.add('rcal-dragok'); });
+            if (card.dataset.rcalKind === 'grid') {
+                const tray = cal.querySelector('.rcal-tray');
+                if (tray) tray.classList.add('rcal-dragok');
+            }
+        });
+
+        cal.addEventListener('dragend', function () {
+            if (dragged) dragged.classList.remove('rcal-dragging');
+            dragged = null;
+            clearHighlights();
+        });
+
+        cal.querySelectorAll('[data-rcal-target]').forEach(function (cell) {
+            wireDrop(cell, {
+                grid: function (card) { send(card.dataset.rcalMoveUrl, { to_basket_id: cell.dataset.rcalTo, _csrf_token: MOVE_CSRF }); },
+                tray: function (card) { send(card.dataset.rcalRecoverUrl, { to_basket_id: cell.dataset.rcalTo, _csrf_token: MOVE_CSRF }); },
+            });
+        });
+
+        const tray = cal.querySelector('.rcal-tray');
+        if (tray) {
+            wireDrop(tray, {
+                grid: function (card) { send(card.dataset.rcalSkipUrl, { _csrf_token: SKIP_CSRF }); },
+            });
+        }
+
+        // Forms del panel (no recoge / volver a recoger): también por AJAX. El botón del
+        // diálogo de confirmación es un submit nativo (form="..."), así que su submit
+        // burbujea hasta aquí.
+        cal.addEventListener('submit', function (e) {
+            const form = e.target.closest('form[data-rcal-ajax]');
+            if (!form) return;
+            e.preventDefault();
+            const fields = {};
+            new FormData(form).forEach(function (v, k) { fields[k] = v; });
+            send(form.action, fields);
+        });
+    }
+
+    // POST por AJAX y refresco EN SITIO del calendario (sin recargar la página). El
+    // endpoint redirige al GET del calendario; seguimos el redirect, y del HTML resultante
+    // reemplazamos solo .rcal (rejilla + papelera + panel) y los avisos flash. El servidor
+    // sigue siendo la fuente de verdad. Si algo falla, recarga normal como respaldo.
+    async function send(url, fields) {
+        if (!url) return;
+        const cal = document.querySelector('.rcal');
+        if (!cal) return;
+        cal.classList.add('rcal-busy');
+        try {
+            const resp = await fetch(url, {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                body: new URLSearchParams(fields),
+            });
+            const doc = new DOMParser().parseFromString(await resp.text(), 'text/html');
+            const fresh = doc.querySelector('.rcal');
+            if (!fresh) { window.location.reload(); return; }
+            const imported = document.importNode(fresh, true);
+            cal.replaceWith(imported);
+            bind(imported);
+
+            // Avisos flash del shell (errores/confirmaciones): se refrescan en sitio.
+            const content = document.querySelector('.csa-content');
+            if (content) {
+                const old = content.querySelector('.csa-alerts');
+                if (old) old.remove();
+                const freshAlerts = doc.querySelector('.csa-alerts');
+                if (freshAlerts) content.insertBefore(document.importNode(freshAlerts, true), content.firstElementChild);
+            }
+        } catch (err) {
+            window.location.reload();
+        }
+    }
+
+    // Cierre de avisos flash inyectados por AJAX (el script del componente no se reejecuta).
+    document.addEventListener('click', function (e) {
+        const btn = e.target.closest('.csa-alert__close');
+        if (btn) { const a = btn.closest('.csa-alert'); if (a) a.remove(); }
+    });
+
+    const root = document.querySelector('.rcal');
+    if (root) bind(root);
+})();
+</script>
+{% endif %}
+
+{% if partner.sharePartner is null and not ro and cal.route_move is defined %}
+<script>
+// Mover por TOQUE (socio / móvil): el arrastre HTML5 no funciona con el dedo, así que
+// el cambio de día va por clics, que sí responden al toque. Pulsar "Mover a otra fecha"
+// entra en modo destino (resalta los días libres); tocar uno envía el cambio (POST
+// normal con recarga, sin depender de fetch). El servidor revalida (plazo, validador).
+(function () {
+    const MOVE_CSRF = {{ cal.csrf_move|json_encode|raw }};
+    const cal = document.querySelector('.rcal');
+    if (!cal) return;
+    const banner = document.getElementById('rcal-move-banner');
+    let moveUrl = null;
+
+    function exitMoveMode() {
+        moveUrl = null;
+        cal.classList.remove('rcal-moving');
+        cal.querySelectorAll('.rcal-dragok').forEach(function (el) { el.classList.remove('rcal-dragok'); });
+        if (banner) banner.hidden = true;
+    }
+
+    cal.addEventListener('click', function (e) {
+        // 1) Iniciar el modo mover desde el panel del día seleccionado.
+        const start = e.target.closest('[data-rcal-move-start]');
+        if (start) {
+            moveUrl = start.dataset.rcalMoveUrl;
+            cal.classList.add('rcal-moving');
+            cal.querySelectorAll('[data-rcal-target]').forEach(function (el) { el.classList.add('rcal-dragok'); });
+            if (banner) banner.hidden = false;
+            cal.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            return;
+        }
+        // 2) En modo mover, tocar un día destino resuelto envía el cambio.
+        if (moveUrl) {
+            const target = e.target.closest('[data-rcal-target]');
+            if (!target) return;
+            const f = document.createElement('form');
+            f.method = 'post';
+            f.action = moveUrl;
+            f.innerHTML = '<input type="hidden" name="to_basket_id" value="' + target.dataset.rcalTo + '">'
+                        + '<input type="hidden" name="_csrf_token" value="' + MOVE_CSRF + '">';
+            document.body.appendChild(f);
+            f.submit();
+        }
+    });
+
+    if (banner) {
+        const cancel = document.getElementById('rcal-move-cancel');
+        if (cancel) cancel.addEventListener('click', exitMoveMode);
+    }
+
+    // Móvil: la celda de un día es un enlace que RECARGA la página. En una sola
+    // columna el panel del detalle (con "Mover a otra fecha" y, al pulsarlo, los
+    // huecos) queda al fondo, tras la rejilla y la papelera, y el usuario se queda
+    // arriba sin verlo — "no pasa nada". Si la recarga trae una selección explícita
+    // (?sel), llevamos la vista al panel. Solo en táctil; en escritorio el panel ya
+    // está a la vista (columna derecha).
+    const isTouch = window.matchMedia('(hover: none), (pointer: coarse)').matches;
+    if (isTouch && new URLSearchParams(window.location.search).has('sel')) {
+        const panel = cal.querySelector('.rcal-panel');
+        if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+})();
+</script>
+{% endif %}

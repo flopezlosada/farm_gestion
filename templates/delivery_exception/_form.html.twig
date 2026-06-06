@@ -1,0 +1,278 @@
+{# ============================================================
+ # Cuerpo del formulario de excepción de reparto — compartido
+ # por new y edit (DRY). Estética alineada con el listado (.dex).
+ #
+ # Parámetros (del contexto del padre):
+ #   form          - FormView de DeliveryExceptionType.
+ #   scopes        - alcances con sus fechas físicas (ver controller):
+ #                   el primero es "Todos los nodos" (cierre), el resto
+ #                   un nodo cada uno.
+ #   exception     - la entidad (para distinguir alta vs edición).
+ #   submit_label  - texto del botón de envío.
+ #
+ # Dos niveles separados: (1) tipo de excepción — cierre general vs
+ # trasladar un nodo — y (2) el detalle: la semana a cerrar, o el nodo +
+ # su día real + la nueva fecha. node/basket son selects ocultos que las
+ # tarjetas rellenan vía JS; el efecto lo deriva el FormType del nodo.
+ # ============================================================ #}
+
+{% import '_macros/csa.html.twig' as csa %}
+
+{% set all_scope = scopes|first %}
+{% set node_scopes = scopes|slice(1) %}
+{% set _dow = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'] %}
+{% set _mon = ['', 'ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'] %}
+
+{{ form_start(form, { attr: { role: 'form', class: 'csa-form-narrow' } }) }}
+
+    {# Campos reales: ocultos, los rellenan las tarjetas de abajo. #}
+    <div hidden aria-hidden="true">
+        {{ form_widget(form.node) }}
+        {{ form_widget(form.basket) }}
+    </div>
+
+    <div class="dxf" data-de-root data-de-edit="{{ exception.id ? '1' : '' }}">
+    <div class="csa-stack-lg">
+
+        {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Tipo de excepción', subtitle: '¿Se cierra para todos, o se cambia el día de un nodo?' } %}
+            {% block body %}
+                <div class="dxf-types" data-de-type-picker>
+                    <button type="button" class="dxf-type" data-type="cancel">
+                        <span class="dxf-chip dxf-chip--cancel"><span class="dot"></span>Cierre general</span>
+                        <span class="dxf-type__txt">Una semana sin reparto para todos los nodos: vacaciones del equipo, agosto, Navidad…</span>
+                    </button>
+                    <button type="button" class="dxf-type" data-type="shift">
+                        <span class="dxf-chip dxf-chip--shift"><span class="dot"></span>Trasladar un día</span>
+                        <span class="dxf-type__txt">Mover el reparto de un nodo a otra fecha, p.ej. un festivo que cae en su día.</span>
+                    </button>
+                </div>
+            {% endblock %}
+        {% endembed %}
+
+        {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Cuándo', subtitle: 'Elige el reparto afectado.' } %}
+            {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
+
+                {# ---- 2a · Cierre general: semana a cerrar ---- #}
+                <div data-de-when="cancel" hidden>
+                    <p class="dxf-steplabel">Semana que se cierra <span class="dxf-steplabel__note">(toda la semana, todos los nodos)</span></p>
+                    <div class="dxf-dates">
+                        {% for d in all_scope.dates %}
+                            {% set wkstart = d.date|date_modify('-4 days') %}
+                            {% set wkend = d.date|date_modify('+2 days') %}
+                            <button type="button" class="dxf-date dxf-date--week" data-basket-id="{{ d.basketId }}">
+                                <span class="top">semana</span>
+                                <span class="num">{{ wkstart|date('d') }}–{{ wkend|date('d') }}</span>
+                                <span class="mon">{{ _mon[wkstart|date('n')] }}{% if (wkstart|date('n')) != (wkend|date('n')) %}–{{ _mon[wkend|date('n')] }}{% endif %} {{ wkstart|date('y') }}</span>
+                            </button>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                {# ---- 2b · Traslado: nodo → día → nueva fecha ---- #}
+                <div data-de-when="shift" hidden>
+                    <p class="dxf-steplabel">¿Qué nodo?</p>
+                    <div class="dxf-nodes" data-de-node-picker>
+                        {% for s in node_scopes %}
+                            <button type="button" class="dxf-nodechip dxf-nodechip--n{{ s.nodeId % 5 }}" data-scope="{{ s.key }}" data-node-id="{{ s.nodeId }}">
+                                <strong>{{ s.label }}</strong>
+                                <span class="sub">{{ s.sublabel }}</span>
+                            </button>
+                        {% endfor %}
+                    </div>
+
+                    {% for s in node_scopes %}
+                        <div data-de-nodedates="{{ s.key }}" hidden>
+                            <p class="dxf-steplabel">Día de reparto afectado</p>
+                            <div class="dxf-dates">
+                                {% for d in s.dates %}
+                                    <button type="button" class="dxf-date" data-basket-id="{{ d.basketId }}">
+                                        <span class="dow">{{ _dow[d.date|date('w')] }}</span>
+                                        <span class="num">{{ d.date|date('d') }}</span>
+                                        <span class="mon">{{ _mon[d.date|date('n')] }} {{ d.date|date('y') }}</span>
+                                    </button>
+                                {% else %}
+                                    <p class="dxf-empty">Este nodo no tiene próximos repartos.</p>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% endfor %}
+
+                    <div data-de-shift-date hidden style="margin-top: var(--csa-sp-5); max-width: 280px;">
+                        {{ csa.field(form.shiftedDate, 'Nuevo día de reparto', { hint: 'Normalmente el día hábil anterior.' }) }}
+                    </div>
+                </div>
+
+                {% if not form.basket.vars.valid %}
+                    <div class="csa-field__error" style="margin-top: var(--csa-sp-3);">{{ form_errors(form.basket) }}</div>
+                {% endif %}
+
+                <div style="margin-top: var(--csa-sp-5); max-width: 480px;">
+                    {{ csa.field(form.notes, 'Motivo / notas', { hint: 'Por qué: festivo, puente, cierre de agosto…' }) }}
+                </div>
+            {% endblock %}
+        {% endembed %}
+
+        <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+            <div></div>
+            <div class="csa-row">
+                {{ csa.btn('Cancelar', { variant: 'ghost', href: path('delivery_exception_index') }) }}
+                <button type="submit" class="csa-btn csa-btn--primary">{{ submit_label }}</button>
+            </div>
+        </div>
+
+    </div>
+    </div>
+
+    {{ form_rest(form) }}
+{{ form_end(form, { render_rest: false }) }}
+
+<style>
+.dxf {
+    --prl-line: #ebe7dd; --prl-line-2: #d8d2c2;
+    --prl-ink: #1d1c17; --prl-ink-soft: #5a564a; --prl-ink-faint: #8d8773;
+    --prl-sage-d: #2f4426; --prl-sage-l: #eaf0e2;
+    --prl-ochre: #c89a3a; --prl-ochre-d: #8c6919; --prl-ochre-l: #faf1d8;
+    --prl-terra: #b45d3a; --prl-terra-d: #7d3a1f; --prl-terra-l: #fae6dc;
+    --prl-sky-d: #2e6f8e;
+    --prl-surface: #ffffff;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---- Tipo de excepción ---- */
+.dxf-types { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.dxf-type {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+    padding: 16px; background: var(--prl-surface); border: 1px solid var(--prl-line-2);
+    border-radius: 8px; cursor: pointer; text-align: left; font: inherit; color: inherit;
+    transition: border-color .12s, background .12s, box-shadow .12s;
+}
+.dxf-type:hover { border-color: var(--prl-ink-faint); }
+.dxf-type--checked { border-color: var(--prl-ochre); background: var(--prl-ochre-l); box-shadow: inset 0 0 0 1px var(--prl-ochre); }
+.dxf-type__txt { font-size: 12.5px; color: var(--prl-ink-soft); line-height: 1.4; }
+
+/* ---- Chips de tipo (igual que el listado) ---- */
+.dxf-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 4px; border-radius: 4px; font-size: 10.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.dxf-chip .dot { width: 6px; height: 6px; border-radius: 50%; }
+.dxf-chip--cancel { background: var(--prl-terra-l); color: var(--prl-terra-d); } .dxf-chip--cancel .dot { background: var(--prl-terra); }
+.dxf-chip--shift { background: var(--prl-ochre-l); color: var(--prl-ochre-d); } .dxf-chip--shift .dot { background: var(--prl-ochre); }
+
+/* ---- Etiquetas de paso ---- */
+.dxf-steplabel { font-family: 'Fraunces', serif; font-weight: 600; font-size: 13.5px; color: var(--prl-ink); margin: 0 0 10px; }
+.dxf-steplabel__note { font-family: 'Inter', sans-serif; font-weight: 400; font-size: 11.5px; color: var(--prl-ink-faint); font-style: italic; }
+[data-de-nodedates] { margin-top: 18px; }
+
+/* ---- Chips de nodo (selección) ---- */
+.dxf-nodes { display: flex; flex-wrap: wrap; gap: 8px; }
+.dxf-nodechip {
+    display: flex; flex-direction: column; gap: 1px; padding: 8px 14px; border-radius: 6px;
+    border: 1px solid transparent; cursor: pointer; font: inherit; text-align: left;
+    transition: box-shadow .12s, transform .05s;
+}
+.dxf-nodechip strong { font-size: 12.5px; font-weight: 600; }
+.dxf-nodechip .sub { font-size: 10.5px; opacity: .8; }
+.dxf-nodechip--checked { box-shadow: inset 0 0 0 2px currentColor; }
+.dxf-nodechip--n0 { background: #e7eef2; color: var(--prl-sky-d); }
+.dxf-nodechip--n1 { background: var(--prl-sage-l); color: var(--prl-sage-d); }
+.dxf-nodechip--n2 { background: var(--prl-ochre-l); color: var(--prl-ochre-d); }
+.dxf-nodechip--n3 { background: #efe6f0; color: #6b3a73; }
+.dxf-nodechip--n4 { background: var(--prl-terra-l); color: var(--prl-terra-d); }
+
+/* ---- Tiles de fecha ---- */
+.dxf-dates { display: flex; flex-wrap: wrap; gap: 8px; }
+.dxf-date {
+    width: 78px; text-align: center; border-radius: 7px; padding: 7px 4px 8px;
+    background: #ece5d6; border: 1px solid var(--prl-line-2); cursor: pointer;
+    line-height: 1.15; font: inherit; color: inherit;
+    transition: border-color .12s, background .12s, box-shadow .12s;
+}
+.dxf-date:hover { border-color: var(--prl-ochre-d); }
+.dxf-date--checked { border-color: var(--prl-ochre); background: var(--prl-ochre-l); box-shadow: inset 0 0 0 1px var(--prl-ochre); }
+.dxf-date .dow, .dxf-date .top { display: block; font-size: 9.5px; color: var(--prl-ink-soft); letter-spacing: .1em; text-transform: uppercase; font-weight: 600; }
+.dxf-date .num { display: block; font-family: 'Fraunces', serif; font-weight: 600; font-size: 17px; color: var(--prl-ink); }
+.dxf-date--week .num { font-size: 15px; }
+.dxf-date .mon { display: block; font-size: 9.5px; color: var(--prl-ink-soft); letter-spacing: .04em; text-transform: uppercase; font-weight: 600; }
+
+.dxf-empty { font-size: 12px; color: var(--prl-ink-faint); font-style: italic; margin: 0; }
+
+@media (max-width: 600px) {
+    .dxf-types { grid-template-columns: 1fr; }
+}
+</style>
+
+<script>
+    (function () {
+        var root = document.querySelector('[data-de-root]');
+        if (!root) { return; }
+
+        var nodeSelect = document.getElementById('{{ form.node.vars.id }}');
+        var basketSelect = document.getElementById('{{ form.basket.vars.id }}');
+        var shiftWrap = root.querySelector('[data-de-shift-date]');
+        var typeCards = root.querySelectorAll('[data-de-type-picker] [data-type]');
+        var whenBlocks = root.querySelectorAll('[data-de-when]');
+        var nodeChips = root.querySelectorAll('[data-de-node-picker] [data-scope]');
+        var nodeDateBlocks = root.querySelectorAll('[data-de-nodedates]');
+        var allTiles = root.querySelectorAll('[data-basket-id]');
+
+        function showType(type) {
+            typeCards.forEach(function (c) { c.classList.toggle('dxf-type--checked', c.dataset.type === type); });
+            whenBlocks.forEach(function (b) { b.hidden = (b.dataset.deWhen !== type); });
+        }
+
+        function showNode(scopeKey, nodeId) {
+            nodeSelect.value = nodeId || '';
+            nodeChips.forEach(function (c) { c.classList.toggle('dxf-nodechip--checked', c.dataset.scope === scopeKey); });
+            nodeDateBlocks.forEach(function (b) { b.hidden = (b.dataset.deNodedates !== scopeKey); });
+            if (shiftWrap) { shiftWrap.hidden = false; }
+        }
+
+        function markBasket(basketId) {
+            basketSelect.value = basketId;
+            allTiles.forEach(function (t) { t.classList.toggle('dxf-date--checked', t.dataset.basketId === String(basketId)); });
+        }
+
+        function resetDownstream() {
+            basketSelect.value = '';
+            allTiles.forEach(function (t) { t.classList.remove('dxf-date--checked'); });
+        }
+
+        function hideNodeBits() {
+            nodeSelect.value = '';
+            nodeChips.forEach(function (c) { c.classList.remove('dxf-nodechip--checked'); });
+            nodeDateBlocks.forEach(function (b) { b.hidden = true; });
+            if (shiftWrap) { shiftWrap.hidden = true; }
+        }
+
+        typeCards.forEach(function (card) {
+            card.addEventListener('click', function () {
+                showType(card.dataset.type);
+                hideNodeBits();
+                resetDownstream();
+            });
+        });
+
+        nodeChips.forEach(function (chip) {
+            chip.addEventListener('click', function () {
+                showNode(chip.dataset.scope, chip.dataset.nodeId);
+                resetDownstream();
+            });
+        });
+
+        allTiles.forEach(function (tile) {
+            tile.addEventListener('click', function () { markBasket(tile.dataset.basketId); });
+        });
+
+        // Estado inicial: en edición reconstruye la selección; en alta nueva
+        // se deja sin tipo elegido para que el usuario decida.
+        if (root.dataset.deEdit === '1') {
+            var initialNode = nodeSelect.value;
+            if (initialNode) {
+                showType('shift');
+                showNode('node-' + initialNode, initialNode);
+            } else {
+                showType('cancel');
+            }
+            if (basketSelect.value) { markBasket(basketSelect.value); }
+        }
+    })();
+</script>

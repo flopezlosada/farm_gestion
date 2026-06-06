@@ -1,0 +1,1063 @@
+<?php
+
+namespace App\Command;
+
+use App\Entity\BasketShare;
+use App\Entity\City;
+use App\Entity\EggAmount;
+use App\Entity\EggPeriod;
+use App\Entity\Partner;
+use App\Entity\PartnerBasketShare;
+use App\Entity\PartnerEvent;
+use App\Entity\PartnerMembershipPeriod;
+use App\Entity\State;
+use App\Entity\WeeklyBasketGroup;
+use App\Service\Partner\PartnerShareEventRecorder;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Input\InputArgument;
+use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
+use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\Console\Style\SymfonyStyle;
+
+/**
+ * Importa socixs desde el CSV consolidado del cruce COBROS + LISTADO +
+ * PDFs de reparto (`docs/socios-import/listado_final.csv`).
+ *
+ * V1 cubre los 111 socixs cruzados (con `codigo_reparto` no vacío). Crea
+ * el Partner y un PartnerBasketShare activo con los importes y la
+ * frecuencia que dicta el cruce. Los 36 huérfanos (sin PDF de reparto)
+ * se quedan fuera de esta tanda — entran cuando admin nos pase los
+ * listados de los 8 grupos pendientes.
+ *
+ * Quedan fuera de V1 y se atacan después:
+ *  - Cestas compartidas (campo `share_partner`, vincular pareja_id).
+ *  - Familia con dos miembros (parent_id) — hoy 1 Partner por familia.
+ *
+ * Idempotente: si ya existe un Partner con ese DNI, se salta sin tocar.
+ * Para reimportar limpio: vaciar partner + partner_basket_share antes.
+ */
+#[AsCommand(
+    name: 'app:import-partners-from-csv',
+    description: 'Importa socixs desde el CSV consolidado del cruce COBROS+LISTADO+PDFs.'
+)]
+class ImportPartnersFromCsvCommand extends Command
+{
+    /**
+     * Mapeo del campo `codigo_reparto` del CSV al id de BasketShare.
+     * El catálogo tiene 5 ids fijos (constantes del WeeklyBasketGenerator):
+     *   1 = Semanal · 2 = Quincenal · 3 = Mensual · 4 = Semanal compartida
+     *   5 = Solo huevos
+     *
+     * Las quincenales compartidas (QC/QCH) van con id=2 (Quincenal) porque
+     * el código no tiene un SHARE_HALF_BIWEEKLY. La condición "compartida"
+     * se modela aparte con Partner.share_partner cuando esté cableado.
+     */
+    private const CODIGO_TO_BASKET_ID = [
+        'S'   => 1, 'SH'  => 1,
+        'SC'  => 4, 'SCH' => 4,
+        'Q'   => 2, 'QH'  => 2, 'QC' => 2, 'QCH' => 2,
+        'M'   => 3, 'MH'  => 3,
+        'H'   => 5,
+    ];
+
+    /**
+     * Mapeo huevos por entrega → id del catálogo EggAmount.
+     * EggAmount es un catálogo legacy con `month_price` distinto a la
+     * cantidad de huevos. La asociación id↔huevos/entrega es semántica
+     * del nombre ("Una docena" = 12) y se hardcodea aquí porque no hay
+     * un campo numérico en BBDD que la represente.
+     */
+    private const PIECES_TO_EGG_AMOUNT_ID = [
+        6  => 1,  // Media docena
+        12 => 2,  // Una docena
+        18 => 3,  // Docena y media
+        24 => 4,  // Dos docenas
+        30 => 5,  // Dos docenas y media
+        36 => 6,  // Tres docenas
+        42 => 7,  // Tres docenas y media
+        48 => 8,  // Cuatro docenas
+        54 => 9,  // Cuatro docenas y media
+        60 => 10, // Cinco docenas
+    ];
+
+    /**
+     * Mapeo nº de entregas con huevos en el mes → id de EggPeriod.
+     * 3 entregas no se mapea — no es un patrón operativo válido y dejamos
+     * egg_period a null para revisar manual.
+     */
+    private const DELIVERIES_TO_EGG_PERIOD_ID = [
+        4 => 1, // Semanal
+        2 => 2, // Quincenal
+        1 => 3, // Mensual
+    ];
+
+    public function __construct(
+        private readonly EntityManagerInterface $em,
+        private readonly PartnerShareEventRecorder $shareEventRecorder,
+    ) {
+        parent::__construct();
+    }
+
+    protected function configure(): void
+    {
+        $this
+            ->addArgument(
+                'csv',
+                InputArgument::REQUIRED,
+                'Ruta al fichero listado_final.csv (relativa al directorio del proyecto).'
+            )
+            ->addOption(
+                'bajas-csv',
+                null,
+                InputOption::VALUE_REQUIRED,
+                'Ruta opcional a bajas.csv. Importa los socios históricos como status=BAJA.'
+            )
+            ->addOption(
+                'dry-run',
+                null,
+                InputOption::VALUE_NONE,
+                'No persiste cambios. Sólo reporta lo que haría.'
+            )
+            ->addOption(
+                'only-eggs',
+                null,
+                InputOption::VALUE_NONE,
+                'Modo update parcial: recorre el CSV y sólo actualiza egg_amount / '
+                . 'egg_period en los Partner existentes (cruce por DNI). No crea ni '
+                . 'borra nada. Útil cuando ya hay datos importados con ajustes '
+                . 'manuales que no queremos perder.'
+            )
+            ->addOption(
+                'only-display-name',
+                null,
+                InputOption::VALUE_NONE,
+                'Modo update parcial: vuelca el nombre de reparto (familia_operativa, '
+                . 'limpiado) a partner.display_name en los Partner existentes (cruce por '
+                . 'DNI). Sólo rellena si display_name está vacío, para no pisar revisiones '
+                . 'manuales. No crea ni borra nada.'
+            );
+    }
+
+    protected function execute(InputInterface $input, OutputInterface $output): int
+    {
+        $io = new SymfonyStyle($input, $output);
+        $csvPath = $input->getArgument('csv');
+        $dryRun = (bool) $input->getOption('dry-run');
+        $onlyEggs = (bool) $input->getOption('only-eggs');
+        $onlyDisplayName = (bool) $input->getOption('only-display-name');
+
+        if (!is_file($csvPath) || !is_readable($csvPath)) {
+            $io->error("CSV no legible: $csvPath");
+            return Command::FAILURE;
+        }
+
+        $rows = $this->readCsv($csvPath);
+        $io->note(sprintf('Filas en CSV: %d', count($rows)));
+
+        if ($onlyEggs) {
+            return $this->runOnlyEggs($io, $rows, $dryRun);
+        }
+
+        if ($onlyDisplayName) {
+            return $this->runOnlyDisplayName($io, $rows, $dryRun);
+        }
+
+        $stats = [
+            'cruzados'        => 0,
+            'huerfanos'       => 0,
+            'creados'         => 0,
+            'saltados_dni'    => 0,
+            'errores'         => 0,
+        ];
+
+        $groupsByName = $this->indexGroupsByCanonicalName();
+        $basketsById  = $this->indexBasketsById();
+        $citiesByName = $this->indexCitiesByName();
+        $eggAmountsById = $this->indexById(EggAmount::class);
+        $eggPeriodsById = $this->indexById(EggPeriod::class);
+        $defaultState = $this->resolveOrCreateState('Madrid');
+
+        // Tracking de Partners por DNI ya creados en esta ejecución.
+        // Necesario porque:
+        //  - en dry-run no se hace flush y findOneBy no encuentra entidades.
+        //  - cuando el mismo DNI aparece en activos+bajas o varias veces en
+        //    bajas (mismo socio con varios episodios alta/baja), queremos
+        //    REUSAR el Partner y añadirle PartnerMembershipPeriod, no saltar.
+        $partnersByDni = [];
+
+        foreach ($rows as $i => $row) {
+            $hasReparto = $row['codigo_reparto'] !== '';
+            if ($hasReparto) {
+                $stats['cruzados']++;
+            } else {
+                $stats['huerfanos']++;
+            }
+
+            try {
+                $created = $this->importRow($row, $groupsByName, $basketsById, $citiesByName, $eggAmountsById, $eggPeriodsById, $defaultState, $i, $hasReparto, $partnersByDni);
+                if ($created === null) {
+                    $stats['saltados_dni']++;
+                } else {
+                    $stats['creados']++;
+                }
+            } catch (\Throwable $e) {
+                $stats['errores']++;
+                $io->warning(sprintf(
+                    'Fila %d (num_socio=%s, titular=%s): %s',
+                    $i + 2,
+                    $row['num_socio'] ?? '?',
+                    $row['titular_legal'] ?: $row['familia_operativa'] ?? '?',
+                    $e->getMessage()
+                ));
+            }
+        }
+
+        $bajasPath = $input->getOption('bajas-csv');
+        if ($bajasPath !== null) {
+            if (!is_file($bajasPath) || !is_readable($bajasPath)) {
+                $io->error("bajas.csv no legible: $bajasPath");
+                return Command::FAILURE;
+            }
+            $bajasRows = $this->readCsv($bajasPath);
+            $io->note(sprintf('Filas en bajas.csv: %d', count($bajasRows)));
+            $stats['bajas_leidas']    = count($bajasRows);
+            $stats['bajas_creadas']   = 0;
+            $stats['bajas_periodos_extra'] = 0;
+
+            foreach ($bajasRows as $i => $row) {
+                try {
+                    $result = $this->importBajaRow($row, $citiesByName, $defaultState, $partnersByDni);
+                    if ($result === 'created') {
+                        $stats['bajas_creadas']++;
+                    } elseif ($result === 'period_added') {
+                        $stats['bajas_periodos_extra']++;
+                    }
+                } catch (\Throwable $e) {
+                    $stats['errores']++;
+                    $io->warning(sprintf(
+                        'Baja fila %d (num_socio=%s): %s',
+                        $i + 2,
+                        $row['num_socio'] ?? '?',
+                        $e->getMessage()
+                    ));
+                }
+            }
+        }
+
+        if ($dryRun) {
+            $io->note('DRY-RUN: no se persisten cambios. Revirtiendo entityManager.');
+            $this->em->clear();
+        } else {
+            $this->em->flush();
+        }
+
+        $io->success('Importación terminada.');
+        $io->table(
+            ['Métrica', 'Valor'],
+            array_map(fn($k, $v) => [$k, $v], array_keys($stats), $stats),
+        );
+
+        return $stats['errores'] > 0 ? Command::FAILURE : Command::SUCCESS;
+    }
+
+    /**
+     * Modo --only-eggs: recorre el CSV y actualiza únicamente
+     * egg_amount + egg_period en el PartnerBasketShare activo de cada
+     * socio existente (cruce por DNI). No crea Partners ni toca otros
+     * campos. Útil para arreglar el bug histórico (egg_amount/period a
+     * NULL) sin perder ajustes manuales en BBDD.
+     *
+     * @param array<int,array<string,string>> $rows
+     */
+    private function runOnlyEggs(SymfonyStyle $io, array $rows, bool $dryRun): int
+    {
+        $eggAmountsById = $this->indexById(EggAmount::class);
+        $eggPeriodsById = $this->indexById(EggPeriod::class);
+        $partnerRepo = $this->em->getRepository(Partner::class);
+
+        $stats = [
+            'sin_dni'         => 0,
+            'sin_huevos'      => 0,
+            'partner_no_existe' => 0,
+            'pbs_no_existe'   => 0,
+            'patron_desconocido' => 0,
+            'actualizados'    => 0,
+            'sin_cambios'     => 0,
+        ];
+
+        foreach ($rows as $i => $row) {
+            $dni = $this->sanitizeDni($row['nif'] ?? '');
+            if ($dni === '') {
+                $stats['sin_dni']++;
+                continue;
+            }
+            $huevosPorViernes = $row['huevos_por_viernes'] ?? '';
+            $huevosPorEntrega = $row['huevos_por_entrega'] ?? '';
+            if ((int) $huevosPorEntrega <= 0) {
+                $stats['sin_huevos']++;
+                continue;
+            }
+            $partner = $partnerRepo->findOneBy(['DNI' => $dni]);
+            if (!$partner) {
+                $stats['partner_no_existe']++;
+                $io->writeln(sprintf('<comment>Fila %d (%s): Partner no encontrado por DNI</comment>', $i + 2, $row['titular_legal'] ?? '?'));
+                continue;
+            }
+            $share = null;
+            foreach ($partner->getPartnerBasketShares() as $candidate) {
+                if ($candidate->getIsActive()) {
+                    $share = $candidate;
+                    break;
+                }
+            }
+            if (!$share) {
+                $stats['pbs_no_existe']++;
+                $io->writeln(sprintf('<comment>Fila %d (%s): sin PartnerBasketShare activo</comment>', $i + 2, $row['titular_legal'] ?? '?'));
+                continue;
+            }
+            $assignment = $this->deriveEggAssignment(
+                $huevosPorViernes,
+                $huevosPorEntrega,
+                $eggAmountsById,
+                $eggPeriodsById,
+            );
+            if ($assignment === null) {
+                $stats['patron_desconocido']++;
+                $io->writeln(sprintf(
+                    '<comment>Fila %d (%s): patrón de huevos desconocido (viernes=%s, entrega=%s)</comment>',
+                    $i + 2, $row['titular_legal'] ?? '?', $huevosPorViernes, $huevosPorEntrega
+                ));
+                continue;
+            }
+            [$amount, $period] = $assignment;
+            $changed = ($share->getEggAmount() !== $amount) || ($share->getEggPeriod() !== $period);
+            $share->setEggAmount($amount);
+            $share->setEggPeriod($period);
+
+            // Cohorte A/B para socios "solo huevos" quincenales. Si la cesta
+            // no es quincenal (cestas_por_viernes 0,0,0,0) derivarCohorte()
+            // no asigna nada; aquí derivamos desde huevos_por_viernes. No
+            // pisa un delivery_group ya seteado.
+            $periodIdQuincenal = self::DELIVERIES_TO_EGG_PERIOD_ID[2];
+            if ($period->getId() === $periodIdQuincenal && $share->getDeliveryGroup() === null) {
+                $cohorte = $this->derivarCohorteHuevos($huevosPorViernes);
+                if ($cohorte !== null) {
+                    $share->setDeliveryGroup($cohorte);
+                    $changed = true;
+                }
+            }
+
+            // egg_day_month_order para huevos Mensuales (1 entrega/mes). Sólo si
+            // el campo está null, para no pisar valor ajustado manualmente.
+            $periodIdMensual = self::DELIVERIES_TO_EGG_PERIOD_ID[1];
+            if ($period->getId() === $periodIdMensual && $share->getEggDayMonthOrder() === null) {
+                $orden = $this->derivarEggDayMonthOrder($huevosPorViernes);
+                if ($orden !== null) {
+                    $share->setEggDayMonthOrder($orden);
+                    $changed = true;
+                }
+            }
+
+            if ($changed) {
+                $stats['actualizados']++;
+            } else {
+                $stats['sin_cambios']++;
+            }
+        }
+
+        if ($dryRun) {
+            $io->note('Dry-run: no se persiste.');
+        } else {
+            $this->em->flush();
+        }
+
+        $io->success('only-eggs terminado');
+        $io->table(['métrica', 'cantidad'], array_map(null, array_keys($stats), array_values($stats)));
+
+        return Command::SUCCESS;
+    }
+
+    /**
+     * Modo --only-display-name: vuelca el nombre de reparto a
+     * partner.display_name. Cruza por DNI, limpia el nombre con
+     * {@see limpiaApodo} y sólo escribe si display_name está vacío (no pisa
+     * revisiones manuales). No crea ni borra Partners.
+     *
+     * Detecta el formato del CSV: `reparto_definitivo.csv` trae el nombre tal
+     * como sale en el PDF de reparto (`nombre_pdf`, DNI en `cobros_nif`), que
+     * es la fuente correcta; `listado_final.csv` trae `familia_operativa`
+     * (nombre legal del cruce COBROS+LISTADO), como fallback.
+     *
+     * @param array<int,array<string,string>> $rows
+     */
+    private function runOnlyDisplayName(SymfonyStyle $io, array $rows, bool $dryRun): int
+    {
+        $partnerRepo = $this->em->getRepository(Partner::class);
+
+        $first = reset($rows) ?: [];
+        $nameCol  = array_key_exists('nombre_pdf', $first) ? 'nombre_pdf' : 'familia_operativa';
+        $dniCol   = array_key_exists('cobros_nif', $first) ? 'cobros_nif' : 'nif';
+        $legalCol = array_key_exists('cobros_titular', $first) ? 'cobros_titular' : 'titular_legal';
+        $io->note(sprintf('Columnas: nombre=%s, dni=%s', $nameCol, $dniCol));
+
+        $stats = [
+            'sin_dni'           => 0,
+            'sin_apodo'         => 0,
+            'partner_no_existe' => 0,
+            'ya_tiene'          => 0,
+            'actualizados'      => 0,
+        ];
+
+        foreach ($rows as $i => $row) {
+            $dni = $this->sanitizeDni($row[$dniCol] ?? '');
+            if ($dni === '') {
+                $stats['sin_dni']++;
+                continue;
+            }
+            $apodo = $this->limpiaApodo($row[$nameCol] ?? '');
+            if ($apodo === '') {
+                $stats['sin_apodo']++;
+                continue;
+            }
+            $partner = $partnerRepo->findOneBy(['DNI' => $dni]);
+            if (!$partner) {
+                $stats['partner_no_existe']++;
+                continue;
+            }
+            if ($partner->getDisplayName() !== null) {
+                $stats['ya_tiene']++;
+                continue;
+            }
+            $partner->setDisplayName($apodo);
+            $stats['actualizados']++;
+            $io->writeln(sprintf('<info>%s</info> → <comment>%s</comment>', $row[$legalCol] ?: '?', $apodo));
+        }
+
+        if ($dryRun) {
+            $io->note('Dry-run: no se persiste.');
+            $this->em->clear();
+        } else {
+            $this->em->flush();
+        }
+
+        $io->success('only-display-name terminado');
+        $io->table(['métrica', 'cantidad'], array_map(null, array_keys($stats), array_values($stats)));
+
+        return Command::SUCCESS;
+    }
+
+    /**
+     * Limpia el texto sucio de `familia_operativa` para usarlo como nombre de
+     * reparto presentable: quita los segmentos entre paréntesis (aclaraciones
+     * legales o el grupo, ej. "(CASCORRO)"), normaliza las barras "/" que
+     * separan a varias personas, colapsa espacios y aplica title case dejando
+     * las partículas ("y", "de", "la"…) en minúscula.
+     *
+     * No restaura acentos ausentes en origen ni separa nombres pegados sin
+     * espacio: esos casos se revisan a mano desde la ficha del socio.
+     *
+     * @param string $raw Texto crudo de familia_operativa.
+     * @return string Nombre limpio, o cadena vacía si no queda nada.
+     */
+    private function limpiaApodo(string $raw): string
+    {
+        // Paréntesis con cierre opcional: cubre también "(CASCORRO" sin cerrar.
+        $s = preg_replace('/\([^)]*\)?/u', ' ', $raw);
+        // Barras como separador de personas, con espacios a ambos lados.
+        $s = preg_replace('#\s*/\s*#u', ' / ', $s);
+        $s = trim((string) preg_replace('/\s+/u', ' ', $s));
+        if ($s === '') {
+            return '';
+        }
+
+        $particulas = ['y', 'e', 'o', 'u', 'de', 'del', 'la', 'las', 'los', 'da', 'van', 'von', 'di', 'le'];
+        $out = [];
+        foreach (explode(' ', mb_strtolower($s, 'UTF-8')) as $i => $palabra) {
+            if ($palabra === '') {
+                continue;
+            }
+            if ($palabra === '/') {
+                $out[] = '/';
+                continue;
+            }
+            if ($i > 0 && in_array($palabra, $particulas, true)) {
+                $out[] = $palabra;
+                continue;
+            }
+            $out[] = mb_strtoupper(mb_substr($palabra, 0, 1, 'UTF-8'), 'UTF-8') . mb_substr($palabra, 1, null, 'UTF-8');
+        }
+
+        return implode(' ', $out);
+    }
+
+    /**
+     * Importa una fila de bajas.csv como Partner con status=BAJA. Sin
+     * PartnerBasketShare (la cesta histórica se considera cerrada al
+     * darse de baja). Si el DNI ya existe (alguien que pasó de baja a
+     * activo: hay 4 casos), salta — predomina el estado activo.
+     *
+     * @param array<string,string> $row
+     * @param array<string,City>   $citiesByName  por referencia
+     */
+    private function importBajaRow(array $row, array &$citiesByName, State $defaultState, array &$partnersByDni): ?string
+    {
+        $dni = $this->sanitizeDni($row['dni'] ?? '');
+        $startDate = $this->parseDateOrNull($row['fecha_alta_iso'] ?? '');
+        $endDate   = $this->parseDateOrNull($row['fecha_baja_iso'] ?? '');
+
+        // DNI ya existe: añadimos un período histórico al Partner existente
+        // en vez de crear uno nuevo. Preserva episodios alta/baja repetidos.
+        if ($dni !== '' && ($existing = $this->findPartnerByDni($dni, $partnersByDni))) {
+            if ($startDate === null) {
+                return null;
+            }
+            $period = new PartnerMembershipPeriod();
+            $period->setPartner($existing);
+            $period->setStartDate($startDate);
+            $period->setEndDate($endDate);
+            $period->setReason($row['observaciones'] ?: null);
+            $existing->addMembershipPeriod($period);
+            $this->em->persist($period);
+            return 'period_added';
+        }
+
+        $nombre    = trim((string) ($row['nombre'] ?? ''));
+        $apellidos = trim((string) ($row['apellidos'] ?? ''));
+        if ($nombre === '' && $apellidos === '') {
+            return null;
+        }
+
+        $partner = (new Partner())
+            ->setName($nombre !== '' ? $nombre : '(sin nombre)')
+            ->setSurname($apellidos !== '' ? $apellidos : null)
+            ->setDNI($dni !== '' ? $dni : null)
+            ->setAddress($row['direccion'] ?: null)
+            ->setNotes($row['observaciones'] ?: null)
+            ->setStatus(Partner::STATUS_BAJA)
+            ->setIsActive(false)
+            ->setState($defaultState)
+            ->setCity($this->resolveOrCreateCity($row['poblacion'] ?: ($row['localidad'] ?: 'Sin población'), $defaultState, $citiesByName));
+
+        if ($row['email']) {
+            $partner->setemail($row['email']);
+        }
+        $partner->setcelular($this->parseTelefono($row['telefono'] ?? ''));
+        if ($startDate) {
+            $partner->setInscriptionDate($startDate);
+        }
+        if ($endDate) {
+            $partner->setDemoteDate($endDate);
+        }
+
+        $this->em->persist($partner);
+
+        if ($dni !== '') {
+            $partnersByDni[strtoupper($dni)] = $partner;
+        }
+
+        if ($startDate !== null) {
+            $period = new PartnerMembershipPeriod();
+            $period->setPartner($partner);
+            $period->setStartDate($startDate);
+            $period->setEndDate($endDate);
+            $period->setReason($row['observaciones'] ?: null);
+            $partner->addMembershipPeriod($period);
+            $this->em->persist($period);
+        }
+
+        return 'created';
+    }
+
+    private function parseDateOrNull(string $iso): ?\DateTime
+    {
+        if ($iso === '') {
+            return null;
+        }
+        try {
+            return new \DateTime($iso);
+        } catch (\Exception) {
+            return null;
+        }
+    }
+
+    /**
+     * Busca un Partner por DNI primero en el cache de memoria (ejecución actual),
+     * y si no, en BBDD persistida. Devuelve null si no existe.
+     *
+     * @param array<string,Partner> $partnersByDni
+     */
+    private function findPartnerByDni(string $dni, array $partnersByDni): ?Partner
+    {
+        $key = strtoupper(trim($dni));
+        if (isset($partnersByDni[$key])) {
+            return $partnersByDni[$key];
+        }
+        return $this->em->getRepository(Partner::class)->findOneBy(['DNI' => $dni]);
+    }
+
+    /**
+     * Crea un Partner y su PartnerBasketShare activo. Devuelve el Partner
+     * creado, o null si ya existía un Partner con ese DNI (caso idempotente).
+     *
+     * @param array<string,string>             $row
+     * @param array<string,WeeklyBasketGroup>  $groupsByName
+     * @param array<int,BasketShare>           $basketsById
+     * @param array<string,City>               $citiesByName  pasa por referencia para cachear nuevas cities
+     * @param array<int,EggAmount>             $eggAmountsById
+     * @param array<int,EggPeriod>             $eggPeriodsById
+     */
+    private function importRow(
+        array $row,
+        array $groupsByName,
+        array $basketsById,
+        array &$citiesByName,
+        array $eggAmountsById,
+        array $eggPeriodsById,
+        State $defaultState,
+        int $rowIndex,
+        bool $hasReparto,
+        array &$partnersByDni,
+    ): ?Partner {
+        $dni = $this->sanitizeDni($row['nif'] ?? '');
+        if ($dni !== '' && $this->findPartnerByDni($dni, $partnersByDni)) {
+            return null;
+        }
+
+        // grupo_canonico viene del cruce de población (COBROS). Cuando esa
+        // celda está vacía pero el PDF de reparto sí tiene localidad
+        // (reparto_localidad), caemos sobre ese fallback antes de fallar.
+        // Si tampoco hay reparto_localidad (huérfano sin grupo), usamos
+        // "Sin grupo" como fallback final.
+        $grupoNombre = $row['grupo_canonico'] ?: $row['reparto_localidad'] ?: 'Sin grupo';
+        $group = $groupsByName[$this->normaliseGroupName($grupoNombre)] ?? null;
+        if ($group === null) {
+            throw new \RuntimeException(sprintf(
+                'grupo canónico no sembrado: %s (reparto_localidad=%s)',
+                $row['grupo_canonico'] ?: '(vacío)',
+                $row['reparto_localidad'] ?: '(vacío)'
+            ));
+        }
+
+        $city = $this->resolveOrCreateCity($row['poblacion'] ?: 'Sin población', $defaultState, $citiesByName);
+
+        // El titular_legal puede estar vacío en huérfanos (ej. Dámaso #127);
+        // caemos sobre familia_operativa que para esos casos sí tiene texto.
+        [$name, $surname] = $this->splitFullName($row['titular_legal'] ?: $row['familia_operativa']);
+
+        $partner = (new Partner())
+            ->setName($name)
+            ->setSurname($surname)
+            ->setDNI($dni !== '' ? $dni : null)
+            ->setAddress($row['direccion'] ?: null)
+            ->setIban($row['iban'] ?: null)
+            ->setNotes($row['observaciones_cobros'] ?: null)
+            ->setStatus(Partner::STATUS_ACTIVO)
+            ->setWeeklyBasketGroup($group)
+            ->setState($defaultState)
+            ->setCity($city);
+
+        $email = trim((string) $row['email']);
+        if ($email !== '') {
+            $partner->setemail($email);
+        }
+        $partner->setcelular($this->parseTelefono($row['telefono'] ?? ''));
+        if ($row['fecha_alta_iso']) {
+            try {
+                $partner->setInscriptionDate(new \DateTime($row['fecha_alta_iso']));
+            } catch (\Exception) {
+                // fecha mal formada — se ignora silenciosamente
+            }
+        }
+
+        $this->em->persist($partner);
+
+        if ($dni !== '') {
+            $partnersByDni[strtoupper($dni)] = $partner;
+        }
+
+        // Período de pertenencia activo (sin fecha de fin): el partner
+        // está dado de alta a fecha de hoy. inscription_date puede estar
+        // vacío para socios viejos sin alta registrada; en ese caso
+        // usamos la fecha de hoy como aproximación.
+        $period = new PartnerMembershipPeriod();
+        $period->setPartner($partner);
+        $period->setStartDate($partner->getInscriptionDate() ?: new \DateTime());
+        $period->setEndDate(null);
+        $partner->addMembershipPeriod($period);
+        $this->em->persist($period);
+
+        // Sólo creamos PartnerBasketShare cuando hay datos de reparto del
+        // PDF (frecuencia + cuota). Los huérfanos (8 grupos sin PDF) entran
+        // como Partner ACTIVO sin cesta; se completarán cuando admin pase
+        // los listados pendientes.
+        if (!$hasReparto) {
+            return $partner;
+        }
+
+        $basketId = self::CODIGO_TO_BASKET_ID[$row['codigo_reparto']] ?? null;
+        if ($basketId === null) {
+            throw new \RuntimeException(sprintf('codigo_reparto desconocido: %s', $row['codigo_reparto']));
+        }
+        $basket = $basketsById[$basketId];
+
+        // PartnerBasketShare mezcla setters void y self; no encadeno.
+        $share = new PartnerBasketShare();
+        $share->setPartner($partner);
+        $share->setBasketShare($basket);
+        $share->setMonthPrice($this->decimalOrZero($row['importe_cesta_eur']));
+        $share->setEggMonthPrice($this->decimalOrZero($row['importe_huevos_eur']));
+
+        // Egg amount + period a partir del patrón temporal extraído del PDF.
+        // huevos_por_viernes p.ej. "1D,0,0,0" (1 entrega → Mensual) o
+        // "1D+1M,1D+1M,1D+1M,1D+1M" (4 entregas → Semanal). huevos_por_entrega
+        // es la cantidad de huevos en una entrega individual (6, 12, 18, 24…).
+        $eggAssignment = $this->deriveEggAssignment(
+            $row['huevos_por_viernes'] ?? '',
+            $row['huevos_por_entrega'] ?? '',
+            $eggAmountsById,
+            $eggPeriodsById,
+        );
+        if ($eggAssignment !== null) {
+            [$amount, $period] = $eggAssignment;
+            $share->setEggAmount($amount);
+            $share->setEggPeriod($period);
+
+            // Para huevos Mensuales, derivar en qué viernes operativo del mes
+            // tocan (1..4). Análogo al day_month_order de la cesta. Cierra el
+            // bug de pintar huevos en cualquier viernes con cesta cuando la
+            // frecuencia de huevos difiere (caso testigo: cesta Quincenal +
+            // huevos Mensuales).
+            if ($period->getId() === self::DELIVERIES_TO_EGG_PERIOD_ID[1]) {
+                $orden = $this->derivarEggDayMonthOrder($row['huevos_por_viernes'] ?? '');
+                if ($orden !== null) {
+                    $share->setEggDayMonthOrder($orden);
+                }
+            }
+        }
+
+        $share->setTransportPrice(
+            $row['importe_transp_eur'] !== '' && (float) $row['importe_transp_eur'] > 0
+                ? number_format((float) $row['importe_transp_eur'], 2, '.', '')
+                : null
+        );
+        // Si no hay fecha de alta conocida, usamos una fecha lejana del
+        // pasado para que el socio aparezca en TODOS los Baskets actuales.
+        // Las queries del WeeklyBasketGenerator filtran con
+        // `start_date <= basket.date`, así que un new \DateTime() (hoy)
+        // excluye al socio del basket de esta misma semana — bug detectado
+        // con 16 socios que se quedaban fuera del reparto del 2026-05-22.
+        $share->setStartDate($partner->getInscriptionDate() ?: new \DateTime('1970-01-01'));
+        $share->setAmount(1);
+        $share->setIsActive(true);
+
+        // Cohorte A/B para quincenales. Se deriva del campo
+        // cestas_por_viernes del CSV (ej. "1,0,1,0" → A, viernes 1+3;
+        // "0,1,0,1" → B, viernes 2+4). Patrones raros (ej. "0,1,1,1")
+        // dejan delivery_group=null para revisión manual.
+        if ($basketId === 2 && $row['cestas_por_viernes']) {
+            $share->setDeliveryGroup($this->derivarCohorte($row['cestas_por_viernes']));
+        }
+
+        $partner->addPartnerBasketShare($share);
+        $this->em->persist($share);
+
+        // Histórico inmutable: el alta operativa de la cesta queda registrada
+        // con la fecha real del start_date (puede ser muy anterior a "hoy"
+        // cuando se importan socixs ya activxs hace tiempo). Actor=cli para
+        // distinguir importaciones de eventos generados desde admin web.
+        $this->shareEventRecorder->recordStart(
+            $share,
+            $share->getStartDate(),
+            PartnerEvent::ACTOR_CLI,
+        );
+
+        return $partner;
+    }
+
+    /**
+     * @return array<int,array<string,string>>
+     */
+    private function readCsv(string $path): array
+    {
+        $handle = fopen($path, 'r');
+        if ($handle === false) {
+            throw new \RuntimeException("No se pudo abrir CSV: $path");
+        }
+        $header = fgetcsv($handle);
+        $rows = [];
+        while (($cells = fgetcsv($handle)) !== false) {
+            $rows[] = array_combine($header, $cells);
+        }
+        fclose($handle);
+        return $rows;
+    }
+
+    /**
+     * @return array<string,WeeklyBasketGroup>
+     */
+    private function indexGroupsByCanonicalName(): array
+    {
+        $out = [];
+        foreach ($this->em->getRepository(WeeklyBasketGroup::class)->findAll() as $g) {
+            $out[$this->normaliseGroupName($g->getName())] = $g;
+        }
+        return $out;
+    }
+
+    /**
+     * @return array<int,BasketShare>
+     */
+    private function indexBasketsById(): array
+    {
+        $out = [];
+        foreach ($this->em->getRepository(BasketShare::class)->findAll() as $b) {
+            $out[$b->getId()] = $b;
+        }
+        return $out;
+    }
+
+    /**
+     * Indexa cualquier catálogo por id. Sirve para EggAmount/EggPeriod (y
+     * cualquier otro catálogo con `getId()`).
+     *
+     * @template T of object
+     * @param class-string<T> $fqcn
+     * @return array<int,T>
+     */
+    private function indexById(string $fqcn): array
+    {
+        $out = [];
+        foreach ($this->em->getRepository($fqcn)->findAll() as $entity) {
+            $out[$entity->getId()] = $entity;
+        }
+        return $out;
+    }
+
+    /**
+     * @return array<string,City>
+     */
+    private function indexCitiesByName(): array
+    {
+        $out = [];
+        foreach ($this->em->getRepository(City::class)->findAll() as $c) {
+            $out[$this->normaliseGroupName($c->getName())] = $c;
+        }
+        return $out;
+    }
+
+    /**
+     * Normaliza un nombre para usar como índice: quita acentos, espacios
+     * sobrantes, mayúsculas. Permite cruzar 'San Agustín de Guadalix' con
+     * 'SAN AGUSTIN DE GUADALIX' sin falsos negativos.
+     */
+    private function normaliseGroupName(string $s): string
+    {
+        $s = trim((string) preg_replace('/\s+/', ' ', $s));
+        $s = mb_strtoupper($s, 'UTF-8');
+        $s = strtr($s, [
+            'Á' => 'A', 'É' => 'E', 'Í' => 'I', 'Ó' => 'O', 'Ú' => 'U', 'Ñ' => 'N',
+        ]);
+        return $s;
+    }
+
+    /**
+     * @param array<string,City> $cache  pasa por referencia
+     */
+    private function resolveOrCreateCity(string $name, State $state, array &$cache): City
+    {
+        $key = $this->normaliseGroupName($name);
+        if (isset($cache[$key])) {
+            return $cache[$key];
+        }
+        $city = (new City())->setName($name)->setState($state);
+        $this->em->persist($city);
+        $cache[$key] = $city;
+        return $city;
+    }
+
+    private function resolveOrCreateState(string $name): State
+    {
+        $existing = $this->em->getRepository(State::class)->findOneBy(['name' => $name]);
+        if ($existing) {
+            return $existing;
+        }
+        $state = (new State())->setName($name);
+        $this->em->persist($state);
+        return $state;
+    }
+
+    /**
+     * Divide 'JUAN PÉREZ GARCÍA' en ['JUAN', 'PÉREZ GARCÍA']. Para los casos
+     * familia tipo 'NELI Y PAOLO' devuelve ['NELI Y PAOLO', null].
+     *
+     * @return array{0:string,1:?string}
+     */
+    private function splitFullName(string $full): array
+    {
+        $full = trim($full);
+        if ($full === '') {
+            return ['(sin nombre)', null];
+        }
+        $parts = preg_split('/\s+/', $full);
+        if (count($parts) === 1) {
+            return [$parts[0], null];
+        }
+        return [$parts[0], implode(' ', array_slice($parts, 1))];
+    }
+
+    /**
+     * Devuelve el DNI si parece plausible. Acepta hasta 20 chars
+     * alfanuméricos (DNIs, NIEs, CIFs de asociaciones). Si contiene
+     * espacios, símbolos raros o se sale del rango, devuelve string vacío
+     * — bajas.csv tiene al menos una fila con la dirección colada en el
+     * campo DNI por desplazamiento de columnas en el Excel original.
+     */
+    private function sanitizeDni(string $raw): string
+    {
+        $s = strtoupper(trim($raw));
+        if ($s === '' || strlen($s) > 20) {
+            return '';
+        }
+        // Sólo aceptamos alfanuméricos + guion (algunos NIEs vienen
+        // con guion). Espacios o puntuación → descartar.
+        if (!preg_match('/^[A-Z0-9\-]+$/', $s)) {
+            return '';
+        }
+        return $s;
+    }
+
+    /**
+     * Normaliza un teléfono al int que cabe en `partner.celular` (INT 32 bits).
+     * Devuelve null si no se puede normalizar (vacío, internacional largo,
+     * caracteres raros). Los teléfonos españoles de 9 dígitos siempre caben.
+     */
+    private function parseTelefono(string $raw): ?int
+    {
+        $digits = preg_replace('/\D+/', '', $raw);
+        if ($digits === '' || !ctype_digit($digits)) {
+            return null;
+        }
+        // INT con signo en MySQL: hasta 2_147_483_647. Un teléfono español
+        // de 9 dígitos como 612345678 cabe. Más de 10 dígitos se descarta
+        // (probable prefijo internacional concatenado).
+        if (strlen($digits) > 10) {
+            return null;
+        }
+        $n = (int) $digits;
+        return $n > 0 && $n <= 2147483647 ? $n : null;
+    }
+
+    /**
+     * Deriva la cohorte A/B de un patrón "x,y,z,w" de cestas por viernes.
+     * A = recibe en viernes 1 y 3 (índices 0 y 2).
+     * B = recibe en viernes 2 y 4 (índices 1 y 3).
+     * Cualquier otro patrón devuelve null (caso compartida o cambio de
+     * cohorte intra-mes — requiere decisión manual).
+     */
+    private function derivarCohorte(string $patron): ?string
+    {
+        $v = array_map('intval', explode(',', $patron));
+        if (count($v) !== 4) {
+            return null;
+        }
+        if ($v === [1, 0, 1, 0]) return PartnerBasketShare::DELIVERY_GROUP_A;
+        if ($v === [0, 1, 0, 1]) return PartnerBasketShare::DELIVERY_GROUP_B;
+        return null;
+    }
+
+    /**
+     * Para socios con huevos Mensuales (1 entrega/mes): devuelve la posición
+     * (1..4) del viernes operativo en que recogen huevos. Análogo al
+     * day_month_order de la cesta, pero para huevos. Se aplica cuando la
+     * frecuencia de huevos difiere de la cesta (ej: cesta Quincenal +
+     * huevos Mensuales, caso MIRIAM).
+     *
+     * Devuelve null si el patrón no tiene exactamente 1 celda no-cero
+     * (no aplica a Semanal/Quincenal y a patrones raros).
+     */
+    private function derivarEggDayMonthOrder(string $huevosPorViernes): ?int
+    {
+        if ($huevosPorViernes === '') {
+            return null;
+        }
+        $celdas = explode(',', $huevosPorViernes);
+        if (count($celdas) !== 4) {
+            return null;
+        }
+        $posiciones = [];
+        foreach ($celdas as $i => $celda) {
+            if (trim($celda) !== '' && trim($celda) !== '0') {
+                $posiciones[] = $i + 1;
+            }
+        }
+        return count($posiciones) === 1 ? $posiciones[0] : null;
+    }
+
+    /**
+     * Igual que derivarCohorte() pero a partir de huevos_por_viernes, que no
+     * es binario ("1D,0,1D,0" o "1M+1D,0,1M+1D,0"). Binariza primero y
+     * delega.
+     */
+    private function derivarCohorteHuevos(string $patron): ?string
+    {
+        if ($patron === '') {
+            return null;
+        }
+        $celdas = explode(',', $patron);
+        if (count($celdas) !== 4) {
+            return null;
+        }
+        $binario = implode(',', array_map(
+            static fn (string $c): string => (trim($c) !== '' && trim($c) !== '0') ? '1' : '0',
+            $celdas,
+        ));
+        return $this->derivarCohorte($binario);
+    }
+
+    /**
+     * Deriva el par (EggAmount, EggPeriod) a partir del patrón temporal de
+     * huevos por viernes y de los huevos por entrega. Devuelve null si el
+     * socio no tiene huevos o el patrón no se reconoce (p.ej. 3 entregas/mes
+     * o cantidad no mapeada).
+     *
+     * @param array<int,EggAmount> $eggAmountsById
+     * @param array<int,EggPeriod> $eggPeriodsById
+     * @return array{0:EggAmount,1:EggPeriod}|null
+     */
+    private function deriveEggAssignment(
+        string $huevosPorViernes,
+        string $huevosPorEntrega,
+        array $eggAmountsById,
+        array $eggPeriodsById,
+    ): ?array {
+        $pieces = (int) $huevosPorEntrega;
+        if ($pieces <= 0 || $huevosPorViernes === '') {
+            return null;
+        }
+        $entregas = 0;
+        foreach (explode(',', $huevosPorViernes) as $cell) {
+            if (trim($cell) !== '' && trim($cell) !== '0') {
+                $entregas++;
+            }
+        }
+        $amountId = self::PIECES_TO_EGG_AMOUNT_ID[$pieces] ?? null;
+        $periodId = self::DELIVERIES_TO_EGG_PERIOD_ID[$entregas] ?? null;
+        if ($amountId === null || $periodId === null) {
+            return null;
+        }
+        if (!isset($eggAmountsById[$amountId], $eggPeriodsById[$periodId])) {
+            return null;
+        }
+        return [$eggAmountsById[$amountId], $eggPeriodsById[$periodId]];
+    }
+
+    private function decimalOrZero(string $s): string
+    {
+        $f = (float) str_replace(',', '.', $s ?: '0');
+        return number_format($f, 2, '.', '');
+    }
+
+}

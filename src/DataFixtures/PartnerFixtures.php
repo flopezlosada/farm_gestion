@@ -34,10 +34,15 @@ class PartnerFixtures extends Fixture implements DependentFixtureInterface
         'Tres Cantos',
     ];
 
+    /**
+     * Muestra de grupos canónicos para los socixs sintéticos. No es
+     * exhaustiva: cubre nodo Torremocha (varios grupos) y grupos sin PDF
+     * conocido todavía para que los tests cubran ambos casos.
+     */
     private const GROUP_NAMES = [
+        'Torremocha',
+        'La Cabrera',
         'Madrid',
-        'Vallecas',
-        'San Sebastián de los Reyes',
     ];
 
     /**
@@ -104,7 +109,7 @@ class PartnerFixtures extends Fixture implements DependentFixtureInterface
         $partner->setName($faker->firstName);
         $partner->setSurname($faker->lastName . ' ' . $faker->lastName);
         $partner->setDNI($faker->dni);
-        $partner->setCelular((int) $faker->numerify('6########'));
+        $partner->setCelular($faker->unique()->numerify('6########'));
         $partner->setAddress($faker->streetAddress);
         $partner->setEmail($faker->unique()->safeEmail);
         $partner->setEatMeat((int) $faker->boolean(70));
@@ -114,21 +119,21 @@ class PartnerFixtures extends Fixture implements DependentFixtureInterface
 
         $cityName = $faker->randomElement(self::CITY_NAMES);
         /** @var City $city */
-        $city = $this->getReference(CatalogFixtures::REF_CITY_PREFIX . $cityName);
+        $city = $this->getReference(CatalogFixtures::REF_CITY_PREFIX . $cityName, City::class);
         $partner->setCity($city);
 
         /** @var State $state */
-        $state = $this->getReference(CatalogFixtures::REF_STATE_PREFIX . 'Madrid');
+        $state = $this->getReference(CatalogFixtures::REF_STATE_PREFIX . 'Madrid', State::class);
         $partner->setState($state);
 
         $groupName = $faker->randomElement(self::GROUP_NAMES);
         /** @var WeeklyBasketGroup $group */
-        $group = $this->getReference(CatalogFixtures::REF_WEEKLY_GROUP_PREFIX . $groupName);
+        $group = $this->getReference(CatalogFixtures::REF_WEEKLY_GROUP_PREFIX . $groupName, WeeklyBasketGroup::class);
         $partner->setWeeklyBasketGroup($group);
 
         $paymentName = $faker->randomElement(['Anual', 'Mensual']);
         /** @var SharePayment $payment */
-        $payment = $this->getReference(CatalogFixtures::REF_SHARE_PAYMENT_PREFIX . $paymentName);
+        $payment = $this->getReference(CatalogFixtures::REF_SHARE_PAYMENT_PREFIX . $paymentName, SharePayment::class);
         $partner->setSharePayment($payment);
 
         return $partner;
@@ -168,13 +173,13 @@ class PartnerFixtures extends Fixture implements DependentFixtureInterface
         if ($hasEggs) {
             $eggAmountName = $faker->randomElement(self::EGG_AMOUNT_NAMES);
             /** @var EggAmount $eggAmount */
-            $eggAmount = $this->getReference(CatalogFixtures::REF_EGG_AMOUNT_PREFIX . $eggAmountName);
+            $eggAmount = $this->getReference(CatalogFixtures::REF_EGG_AMOUNT_PREFIX . $eggAmountName, EggAmount::class);
             $partnerBasketShare->setEggAmount($eggAmount);
             $partnerBasketShare->setEggMonthPrice($eggAmount->getMonthPrice());
 
             $eggPeriodName = $faker->randomElement(self::EGG_PERIOD_NAMES);
             /** @var EggPeriod $eggPeriod */
-            $eggPeriod = $this->getReference(CatalogFixtures::REF_EGG_PERIOD_PREFIX . $eggPeriodName);
+            $eggPeriod = $this->getReference(CatalogFixtures::REF_EGG_PERIOD_PREFIX . $eggPeriodName, EggPeriod::class);
             $partnerBasketShare->setEggPeriod($eggPeriod);
         } else {
             $partnerBasketShare->setEggMonthPrice('0.00');
@@ -204,14 +209,14 @@ class PartnerFixtures extends Fixture implements DependentFixtureInterface
             $cursor += $weight;
             if ($roll <= $cursor) {
                 /** @var BasketShare $basket */
-                $basket = $this->getReference(CatalogFixtures::REF_BASKET_PREFIX . $name);
+                $basket = $this->getReference(CatalogFixtures::REF_BASKET_PREFIX . $name, BasketShare::class);
 
                 return $basket;
             }
         }
 
         /** @var BasketShare $basket */
-        $basket = $this->getReference(CatalogFixtures::REF_BASKET_PREFIX . 'Semanal');
+        $basket = $this->getReference(CatalogFixtures::REF_BASKET_PREFIX . 'Semanal', BasketShare::class);
 
         return $basket;
     }

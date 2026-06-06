@@ -2,21 +2,29 @@
  # Tarjeta con header opcional. Usar con embed:
  #
  #   {% embed '_components/csa_card.html.twig' with {
- #       title: 'Título', subtitle: 'Subtítulo', accent: 'sky' } %}
+ #       title: 'Título', subtitle: 'Subtítulo', accent: 'sky',
+ #       icon: 'fa-leaf', variant: 'hero' } %}
  #       {% block body %}contenido…{% endblock %}
  #   {% endembed %}
  #
  # title y subtitle son opcionales. Si no hay title, no se renderiza el
  # header. accent es opcional; valores: sky, ochre, plum, green, terracotta.
+ # icon es una clase FontAwesome 4 (ej. 'fa-shopping-basket'); opcional.
+ # variant es opcional; 'hero' para resaltar como acción principal.
  #}
-<section class="csa-card csa-card--flush{% if accent is defined and accent %} csa-card--accent-{{ accent }}{% endif %}">
+<section class="csa-card csa-card--flush{% if accent is defined and accent %} csa-card--accent-{{ accent }}{% endif %}{% if variant is defined and variant %} csa-card--{{ variant }}{% endif %}">
     {% if title is defined and title %}
         <header class="csa-card__header">
-            <div>
-                <h3 class="csa-card__title">{{ title }}</h3>
-                {% if subtitle is defined and subtitle %}
-                    <div class="csa-card__subtitle">{{ subtitle }}</div>
+            <div class="csa-card__header-main">
+                {% if icon is defined and icon %}
+                    <span class="csa-card__icon" aria-hidden="true"><i class="fa {{ icon }}"></i></span>
                 {% endif %}
+                <div>
+                    <h3 class="csa-card__title">{{ title }}</h3>
+                    {% if subtitle is defined and subtitle %}
+                        <div class="csa-card__subtitle">{{ subtitle }}</div>
+                    {% endif %}
+                </div>
             </div>
         </header>
     {% endif %}

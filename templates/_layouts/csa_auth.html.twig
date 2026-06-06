@@ -1,0 +1,153 @@
+{# ============================================================
+ # CSA Vega de Jarama — Layout de autenticación
+ # ============================================================
+ # Layout standalone para pantallas públicas (/login, recuperación,
+ # primer acceso, confirmación de magic-link). NO extiende
+ # base.html.twig: queremos evitar Bootstrap 3, SB Admin 2,
+ # metisMenu y jQuery. Solo Encore -> sistema csa.
+ #
+ # Herencia:
+ #   templates/_layouts/csa_auth.html.twig            ← este archivo
+ #     └── templates/Security/login.html.twig
+ #     └── templates/Security/primer_acceso.html.twig
+ #     └── templates/Security/olvide.html.twig
+ #     └── templates/Security/enviado.html.twig
+ #
+ # Convenciones:
+ # - Mobile-first. Centrado vertical y horizontal.
+ # - Sin scripts. Sin shell. Sin sidebar.
+ # - Bloque `csa_main` para el contenido.
+ # ============================================================ #}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#fbfbfa">
+    <meta name="robots" content="noindex, nofollow">
+    <title>{% block title %}Acceso{% endblock %} · CSA Vega de Jarama</title>
+
+    <link rel="icon" type="image/x-icon" href="{{ asset('favicon.ico') }}">
+
+    {# Carga solo el bundle Encore (app.css + sistema csa).
+     # NO cargamos bootstrap.min.css ni sb-admin-2.css aquí. #}
+    {{ encore_entry_link_tags('app') }}
+
+    {% block auth_head_extra %}{% endblock %}
+</head>
+<body class="csa-app">
+
+<div class="csa-auth">
+
+    {# Decoración de fondo: hojas en SVG inline, opacidad baja.
+     # Sin contenido textual, role="presentation". #}
+    <svg class="csa-auth__leaf csa-auth__leaf--tl" viewBox="0 0 100 100" fill="currentColor" aria-hidden="true" role="presentation">
+        <path d="M50 8 C30 18, 18 38, 18 60 C18 78, 30 88, 50 90 C70 88, 82 78, 82 60 C82 38, 70 18, 50 8 Z M50 18 C50 18, 50 80, 50 80"
+              stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+        <path d="M50 30 L36 44 M50 42 L34 56 M50 54 L36 66 M50 30 L64 44 M50 42 L66 56 M50 54 L64 66"
+              stroke="currentColor" stroke-width="1" fill="none" stroke-linecap="round"/>
+    </svg>
+    <svg class="csa-auth__leaf csa-auth__leaf--br" viewBox="0 0 100 100" fill="currentColor" aria-hidden="true" role="presentation">
+        <path d="M50 8 C30 18, 18 38, 18 60 C18 78, 30 88, 50 90 C70 88, 82 78, 82 60 C82 38, 70 18, 50 8 Z M50 18 C50 18, 50 80, 50 80"
+              stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+        <path d="M50 30 L36 44 M50 42 L34 56 M50 54 L36 66 M50 30 L64 44 M50 42 L66 56 M50 54 L64 66"
+              stroke="currentColor" stroke-width="1" fill="none" stroke-linecap="round"/>
+    </svg>
+
+    <div class="csa-auth__shell">
+        <div class="csa-auth__inner">
+
+            {# Brand mark sobrio: serif itálica + nombre en mayúsculas
+             # espaciadas. Reemplazable por logo si se quiere. #}
+            {% block csa_auth_brand %}
+                <a href="{{ path('app_login') }}" class="csa-auth__brand" aria-label="Inicio">
+                    <span class="csa-auth__brand-mark">CSA Vega de Jarama</span>
+                    <span class="csa-auth__brand-rule" aria-hidden="true"></span>
+                    <span class="csa-auth__brand-name">Agricultura Sostenida por la Comunidad</span>
+                </a>
+            {% endblock %}
+
+            {# Flash messages: las pantallas de auth también pueden recibir
+             # mensajes (logout, sesión caducada, link inválido). #}
+            {% for type, messages in app.flashes %}
+                {% for message in messages %}
+                    {% set flash_class = {
+                        'success': 'csa-alert--success',
+                        'warning': 'csa-alert--warning',
+                        'error':   'csa-alert--error',
+                        'info':    'csa-alert--info'
+                    }[type]|default('csa-alert--info') %}
+                    <div class="csa-alert {{ flash_class }}" role="status">{{ message }}</div>
+                {% endfor %}
+            {% endfor %}
+
+            {% block csa_main %}{% endblock %}
+
+        </div>
+    </div>
+
+    <footer class="csa-auth__footer">
+        <span>CSA Vega de Jarama</span>
+        <span aria-hidden="true">·</span>
+        <a href="mailto:info@csavegadejarama.org">info@csavegadejarama.org</a>
+    </footer>
+
+</div>
+
+{# ============================================================
+ # Localización de los mensajes de validación HTML5 al español.
+ # El navegador ignora <html lang> y usa su propio idioma para los
+ # mensajes nativos de required/email/pattern: gente con el Chrome
+ # en inglés veía "Please fill out this field". Con setCustomValidity
+ # forzamos el texto. Se limpia en cada 'input' para que el campo
+ # vuelva a estar válido al corregir.
+ # ============================================================ #}
+<script>
+    (function () {
+        var messages = {
+            valueMissing: 'Este campo es obligatorio.',
+            typeMismatch: {
+                email: 'Introduce un email válido.',
+                url: 'Introduce una dirección válida.',
+                'default': 'El formato no es válido.'
+            },
+            patternMismatch: 'El formato no es válido.',
+            tooShort: 'El valor es demasiado corto.',
+            tooLong: 'El valor es demasiado largo.',
+            rangeUnderflow: 'El valor es demasiado bajo.',
+            rangeOverflow: 'El valor es demasiado alto.',
+            stepMismatch: 'El valor no es válido.',
+            badInput: 'El valor no es válido.'
+        };
+
+        function pickMessage(input) {
+            var v = input.validity;
+            if (v.valueMissing) return messages.valueMissing;
+            if (v.typeMismatch) {
+                return messages.typeMismatch[input.type] || messages.typeMismatch['default'];
+            }
+            if (v.patternMismatch) return messages.patternMismatch;
+            if (v.tooShort) return messages.tooShort;
+            if (v.tooLong) return messages.tooLong;
+            if (v.rangeUnderflow) return messages.rangeUnderflow;
+            if (v.rangeOverflow) return messages.rangeOverflow;
+            if (v.stepMismatch) return messages.stepMismatch;
+            if (v.badInput) return messages.badInput;
+            return '';
+        }
+
+        function attach(input) {
+            input.addEventListener('invalid', function () {
+                input.setCustomValidity(pickMessage(input));
+            });
+            input.addEventListener('input', function () {
+                input.setCustomValidity('');
+            });
+        }
+
+        document.querySelectorAll('input, textarea, select').forEach(attach);
+    })();
+</script>
+
+</body>
+</html>

@@ -2,16 +2,18 @@
 
 namespace App\Controller;
 
-use App\Controller\AbstractAppController;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
-class GraphController extends AbstractAppController
+#[IsGranted('ROLE_GESTION_GRANJA')]
+class GraphController extends AbstractController
 {
     #[Route("/graph_egg_week", name: "graph_egg_week")]
-    public function graphEggWeek(): Response
+    public function graphEggWeek(EntityManagerInterface $em): Response
     {
-        $em = $this->getDoctrine()->getManager();
         $year = date("Y");
         $weeks_lay = $em->getRepository(\App\Entity\Lay::class)->findWeeksYear($year);
         $daily_lay = [];

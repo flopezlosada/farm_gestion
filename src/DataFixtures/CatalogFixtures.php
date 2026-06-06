@@ -2,6 +2,7 @@
 
 namespace App\DataFixtures;
 
+use App\Entity\BasketComponent;
 use App\Entity\BasketShare;
 use App\Entity\City;
 use App\Entity\EggAmount;
@@ -9,6 +10,7 @@ use App\Entity\EggPeriod;
 use App\Entity\SharePayment;
 use App\Entity\State;
 use App\Entity\WeeklyBasketGroup;
+use App\Entity\WeeklyBasketStatus;
 use Doctrine\Bundle\FixturesBundle\Fixture;
 use Doctrine\Persistence\ObjectManager;
 
@@ -28,6 +30,8 @@ class CatalogFixtures extends Fixture
     public const REF_WEEKLY_GROUP_PREFIX = 'weekly_group_';
     public const REF_CITY_PREFIX = 'city_';
     public const REF_STATE_PREFIX = 'state_';
+    public const REF_WB_STATUS_PREFIX = 'wb_status_';
+    public const REF_COMPONENT_PREFIX = 'component_';
 
     /**
      * Carga todos los catálogos y registra referencias para los fixtures dependientes.
@@ -46,20 +50,36 @@ class CatalogFixtures extends Fixture
             $this->addReference(self::REF_CITY_PREFIX . $cityName, $city);
         }
 
+        // BasketShare: ids explícitos por la misma razón que WeeklyBasketStatus
+        // — el código asume 1=Semanal, 2=Quincenal, 3=Mensual, 4=Solo huevos
+        // (constantes SHARE_BIWEEKLY=2 y SHARE_MONTHLY=3 en WindowRule y
+        // WeeklyBasketGenerator).
+        // 5 tipos hardcodeados con id explícito. El código del
+        // WeeklyBasketGenerator y los repositorios usan ESTOS ids como
+        // constantes (SHARE_WEEKLY=1, SHARE_BIWEEKLY=2, SHARE_MONTHLY=3,
+        // SHARE_HALF=4 (semanal compartida, antigua media cesta),
+        // SHARE_ONLY_EGG=5). Cambiar los ids rompe el reparto.
         $baskets = [
-            'Semanal'     => ['price' => '60.00', 'equivalence' => '1.00'],
-            'Quincenal'   => ['price' => '30.00', 'equivalence' => '0.50'],
-            'Mensual'     => ['price' => '15.00', 'equivalence' => '0.25'],
-            'Solo huevos' => ['price' => '0.00',  'equivalence' => '0.00'],
+            1 => ['name' => 'Semanal',             'price' => '60.00', 'equivalence' => '1.00'],
+            2 => ['name' => 'Quincenal',           'price' => '30.00', 'equivalence' => '0.50'],
+            3 => ['name' => 'Mensual',             'price' => '15.00', 'equivalence' => '0.25'],
+            4 => ['name' => 'Semanal compartida',  'price' => '30.00', 'equivalence' => '0.50'],
+            5 => ['name' => 'Solo huevos',         'price' => '0.00',  'equivalence' => '0.00'],
         ];
 
-        foreach ($baskets as $name => $data) {
+        $basketMetadata = $manager->getClassMetadata(BasketShare::class);
+        $basketMetadata->setIdGeneratorType(\Doctrine\ORM\Mapping\ClassMetadata::GENERATOR_TYPE_NONE);
+        $basketMetadata->setIdGenerator(new \Doctrine\ORM\Id\AssignedGenerator());
+        $basketIdProperty = new \ReflectionProperty(BasketShare::class, 'id');
+
+        foreach ($baskets as $basketId => $data) {
             $basket = new BasketShare();
-            $basket->setName($name);
+            $basket->setName($data['name']);
             $basket->setMonthPrice($data['price']);
             $basket->setCompleteBasketEquivalence($data['equivalence']);
+            $basketIdProperty->setValue($basket, $basketId);
             $manager->persist($basket);
-            $this->addReference(self::REF_BASKET_PREFIX . $name, $basket);
+            $this->addReference(self::REF_BASKET_PREFIX . $data['name'], $basket);
         }
 
         foreach (['Semanal', 'Quincenal'] as $eggPeriodName) {
@@ -88,16 +108,82 @@ class CatalogFixtures extends Fixture
             $this->addReference(self::REF_SHARE_PAYMENT_PREFIX . $payment, $sharePayment);
         }
 
-        $groups = [
-            'Madrid'                     => '#e74c3c',
-            'Vallecas'                   => '#3498db',
-            'San Sebastián de los Reyes' => '#2ecc71',
+        // Grupos canónicos de reparto: lista derivada de los listados PDF
+        // de reparto reales (4 PDFs mensuales y de sierra) más los 8 grupos
+        // de los que aún no tenemos PDF pero sí socios en COBROS.
+        // El color se asigna algorítmicamente con HSL para tener distinción
+        // estable y reproducible — no es decorativo, se usa en los
+        // listados impresos para identificar visualmente el grupo.
+        // IDs explícitos (1-31) para que los tests los localicen por id.
+        $groupNames = [
+            // "Sin grupo" — destino para socixs incompletos / casos
+            // especiales sin grupo de reparto asignado (ej. AMUMI,
+            // Mª José LA BARCA: colaboradores sin grupo).
+            'Sin grupo',
+            // Grupos del nodo Torremocha (con PDF mensual)
+            'Alcobendas/Sanse/Tres Cantos', 'Bustarviejo', 'Cabanillas', 'Caraquiz',
+            'Casas de Uceda', 'El Atazar', 'El Casar', 'El Molar', 'Guadalix',
+            'La Cabrera', 'Madarcos/Manjirón', 'Patones', 'Pedrezuela', 'Puebla',
+            'Redueña', 'San Fernando de Henares', 'Tomillares', 'Torrelaguna',
+            'Torremocha', 'Trabajadores', 'Trabensol', 'Uceda', 'Valdeolmos',
+            'Valdepiélagos', 'Valdetorres',
+            // Grupos sin PDF de reparto conocido (pendiente de admin)
+            'Cascorro', 'Legazpi', 'Midori', 'Chamberí', 'Talamanca',
+            'Manzanares El Real', 'Madrid', 'Navas de Buitrago',
         ];
 
-        foreach ($groups as $name => $color) {
+        $groupMetadata = $manager->getClassMetadata(WeeklyBasketGroup::class);
+        $groupMetadata->setIdGeneratorType(\Doctrine\ORM\Mapping\ClassMetadata::GENERATOR_TYPE_NONE);
+        $groupMetadata->setIdGenerator(new \Doctrine\ORM\Id\AssignedGenerator());
+        $groupIdProperty = new \ReflectionProperty(WeeklyBasketGroup::class, 'id');
+
+        foreach ($groupNames as $i => $name) {
+            $hue = (int) round(($i * 360) / count($groupNames));
+            $color = $this->hslToHex($hue, 60, 70);
             $group = (new WeeklyBasketGroup())->setName($name)->setColor($color);
+            $groupIdProperty->setValue($group, $i + 1);
             $manager->persist($group);
             $this->addReference(self::REF_WEEKLY_GROUP_PREFIX . $name, $group);
+        }
+
+        // Catálogo de estados de WeeklyBasket: en producción se persistieron
+        // con ids 1/2/3 a mano hace años. Aquí los recreamos con id
+        // explícito para que dev y test tengan el mismo catálogo. Los
+        // servicios siguen referenciando los ids 1 (Recoge) y 2 (No la
+        // recoge) como constantes.
+        //
+        // Por qué id explícito y no AUTO_INCREMENT: doctrine:fixtures:load
+        // purga con DELETE y MySQL no resetea AUTO_INCREMENT — sin esto,
+        // en cargas sucesivas los ids derivan a 4/5/6, 7/8/9... y rompen
+        // los hardcodeos del código. ALTER TABLE provoca commit implícito
+        // y revienta la transacción del loader, así que cambiamos la
+        // estrategia de generación de id a "ASSIGNED" para esta entidad.
+        $statusMetadata = $manager->getClassMetadata(WeeklyBasketStatus::class);
+        $statusMetadata->setIdGeneratorType(\Doctrine\ORM\Mapping\ClassMetadata::GENERATOR_TYPE_NONE);
+        $statusMetadata->setIdGenerator(new \Doctrine\ORM\Id\AssignedGenerator());
+        $statusIdProperty = new \ReflectionProperty(WeeklyBasketStatus::class, 'id');
+
+        foreach ([1 => 'Recoge', 2 => 'No la recoge', 3 => 'No la ha recogido y no ha avisado'] as $statusId => $statusTitle) {
+            $status = (new WeeklyBasketStatus())->setTitle($statusTitle);
+            $statusIdProperty->setValue($status, $statusId);
+            $manager->persist($status);
+            $this->addReference(self::REF_WB_STATUS_PREFIX . $statusTitle, $status);
+        }
+
+        // Componentes de la entrega (rediseño del calendario de recogida).
+        // Ids FIJOS: el generador los referencia por constante
+        // (BasketComponent::ID_VEGETABLES=1, ID_EGGS=2). Mismo motivo y misma
+        // técnica de id explícito que WeeklyBasketStatus / BasketShare.
+        $componentMetadata = $manager->getClassMetadata(BasketComponent::class);
+        $componentMetadata->setIdGeneratorType(\Doctrine\ORM\Mapping\ClassMetadata::GENERATOR_TYPE_NONE);
+        $componentMetadata->setIdGenerator(new \Doctrine\ORM\Id\AssignedGenerator());
+        $componentIdProperty = new \ReflectionProperty(BasketComponent::class, 'id');
+
+        foreach ([BasketComponent::ID_VEGETABLES => 'Verdura', BasketComponent::ID_EGGS => 'Huevos'] as $componentId => $name) {
+            $component = (new BasketComponent())->setName($name);
+            $componentIdProperty->setValue($component, $componentId);
+            $manager->persist($component);
+            $this->addReference(self::REF_COMPONENT_PREFIX . $name, $component);
         }
 
         $manager->flush();
@@ -117,5 +203,35 @@ class CatalogFixtures extends Fixture
         $manager->persist($state);
 
         return $state;
+    }
+
+    /**
+     * Convierte HSL a un código #rrggbb. Se usa para asignar colores
+     * distinguibles y reproducibles a los grupos de reparto.
+     *
+     * @param int $h hue 0-359
+     * @param int $s saturación 0-100
+     * @param int $l lightness 0-100
+     */
+    private function hslToHex(int $h, int $s, int $l): string
+    {
+        $sN = $s / 100;
+        $lN = $l / 100;
+        $c = (1 - abs(2 * $lN - 1)) * $sN;
+        $x = $c * (1 - abs(fmod($h / 60, 2) - 1));
+        $m = $lN - $c / 2;
+        [$r, $g, $b] = match (intdiv($h, 60) % 6) {
+            0 => [$c, $x, 0.0],
+            1 => [$x, $c, 0.0],
+            2 => [0.0, $c, $x],
+            3 => [0.0, $x, $c],
+            4 => [$x, 0.0, $c],
+            5 => [$c, 0.0, $x],
+        };
+        return sprintf('#%02x%02x%02x',
+            (int) round(($r + $m) * 255),
+            (int) round(($g + $m) * 255),
+            (int) round(($b + $m) * 255),
+        );
     }
 }

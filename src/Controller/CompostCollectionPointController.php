@@ -2,29 +2,28 @@
 
 namespace App\Controller;
 
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-
-use Symfony\Component\HttpFoundation\Request;
-use App\Controller\AbstractAppController;
-
 use App\Entity\CompostCollectionPoint;
 use App\Form\CompostCollectionPointType;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * CompostCollectionPoint controller.
  *
  */
-class CompostCollectionPointController extends AbstractAppController
+#[IsGranted('ROLE_GESTION_GRANJA')]
+class CompostCollectionPointController extends AbstractController
 {
 
     /**
      * Lists all CompostCollectionPoint entities.
      *
      */
-    public function index()
+    public function index(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entities = $em->getRepository(\App\Entity\CompostCollectionPoint::class)->findAll();
 
         return $this->render('CompostCollectionPoint/index.html.twig', array(
@@ -36,14 +35,13 @@ class CompostCollectionPointController extends AbstractAppController
      * Creates a new CompostCollectionPoint entity.
      *
      */
-    public function create(Request $request)
+    public function create(Request $request, EntityManagerInterface $em)
     {
         $entity = new CompostCollectionPoint();
         $form = $this->createCreateForm($entity);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $em->persist($entity);
             $em->flush();
 
@@ -94,10 +92,8 @@ class CompostCollectionPointController extends AbstractAppController
      * Finds and displays a CompostCollectionPoint entity.
      *
      */
-    public function show($id)
+    public function show($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $point = $em->getRepository(\App\Entity\CompostCollectionPoint::class)->find($id);
 
         if (!$point) {
@@ -131,10 +127,8 @@ class CompostCollectionPointController extends AbstractAppController
      * Displays a form to edit an existing CompostCollectionPoint entity.
      *
      */
-    public function edit($id)
+    public function edit($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\CompostCollectionPoint::class)->find($id);
 
         if (!$entity) {
@@ -174,10 +168,8 @@ class CompostCollectionPointController extends AbstractAppController
      * Edits an existing CompostCollectionPoint entity.
      *
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, $id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\CompostCollectionPoint::class)->find($id);
 
         if (!$entity) {
@@ -205,13 +197,12 @@ class CompostCollectionPointController extends AbstractAppController
      * Deletes a CompostCollectionPoint entity.
      *
      */
-    public function delete(Request $request, $id)
+    public function delete(Request $request, $id, EntityManagerInterface $em)
     {
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\CompostCollectionPoint::class)->find($id);
 
             if (!$entity) {

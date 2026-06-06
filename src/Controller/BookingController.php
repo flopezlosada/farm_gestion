@@ -5,13 +5,16 @@ namespace App\Controller;
 use App\Entity\Booking;
 use App\Form\BookingType;
 use App\Repository\BookingRepository;
-use App\Controller\AbstractAppController;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 
 #[Route("/booking")]
-class BookingController extends AbstractAppController
+#[IsGranted('ROLE_BLOG')]
+class BookingController extends AbstractController
 {
 
     #[Route("/calendar", name: "booking_calendar", methods: ["GET"])]
@@ -29,14 +32,13 @@ class BookingController extends AbstractAppController
     }
 
     #[Route("/new", name: "booking_new", methods: ["GET","POST"])]
-    public function new(Request $request): Response
+    public function new(Request $request, EntityManagerInterface $entityManager): Response
     {
         $entity = new Booking();
         $form = $this->createForm(BookingType::class, $entity);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $entityManager = $this->getDoctrine()->getManager();
             $entity->setBeginAt(new \DateTime($entity->getBeginAt()));
             $entity->setEndAt(new \DateTime($entity->getEndAt()));
             $entityManager->persist($entity);
@@ -60,7 +62,7 @@ class BookingController extends AbstractAppController
     }
 
     #[Route("/{id}/edit", name: "booking_edit", methods: ["GET","POST"])]
-    public function edit(Request $request, Booking $booking): Response
+    public function edit(Request $request, Booking $booking, EntityManagerInterface $entityManager): Response
     {
         if ($booking->getBeginAt() instanceof \DateTimeInterface) {
             $booking->setBeginAt($booking->getBeginAt()->format('Y-m-d'));
@@ -78,7 +80,7 @@ class BookingController extends AbstractAppController
             if ($booking->getEndAt()) {
                 $booking->setEndAt(new \DateTime($booking->getEndAt()));
             }
-            $this->getDoctrine()->getManager()->flush();
+            $entityManager->flush();
 
             return $this->redirectToRoute('booking_index');
         }
@@ -90,10 +92,9 @@ class BookingController extends AbstractAppController
     }
 
     #[Route("/{id}", name: "booking_delete", methods: ["DELETE"])]
-    public function delete(Request $request, Booking $booking): Response
+    public function delete(Request $request, Booking $booking, EntityManagerInterface $entityManager): Response
     {
         if ($this->isCsrfTokenValid('delete'.$booking->getId(), $request->request->get('_token'))) {
-            $entityManager = $this->getDoctrine()->getManager();
             $entityManager->remove($booking);
             $entityManager->flush();
         }

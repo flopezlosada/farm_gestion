@@ -4,14 +4,6 @@
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:schemaLocation="http://symfony.com/schema/routing http://symfony.com/schema/routing/routing-1.0.xsd">
 
-    <route id="audio" path="/">
-        <default key="_controller">App\Controller\AudioController::index</default>
-    </route>
-
-    <route id="audio_show" path="/{id}/show">
-        <default key="_controller">App\Controller\AudioController::show</default>
-    </route>
-
     <route id="audio_new" path="/new/{foreign_key}/{object_class}">
         <default key="_controller">App\Controller\AudioController::new</default>
     </route>
@@ -20,17 +12,6 @@
         <default key="_controller">App\Controller\AudioController::create</default>
     </route>
 
-    <route id="audio_edit" path="/{id}/edit">
-        <default key="_controller">App\Controller\AudioController::edit</default>
-    </route>
-
-    <route id="audio_update" path="/{id}/update" methods="POST|PUT">
-        <default key="_controller">App\Controller\AudioController::update</default>
-    </route>
-
-    <route id="audio_delete" path="/{id}/delete" methods="POST|DELETE">
-        <default key="_controller">App\Controller\AudioController::delete</default>
-    </route>
     <route id="audio_fast_delete" path="/{id}/delete" methods="GET">
         <default key="_controller">App\Controller\AudioController::fastDelete</default>
     </route>

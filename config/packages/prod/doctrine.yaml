@@ -1,6 +1,12 @@
 doctrine:
     orm:
-        auto_generate_proxy_classes: false
+        # Hosting sin SSH (solo FTP): no se puede ejecutar cache:warmup en el
+        # servidor, así que los proxies de Doctrine no se pueden pre-generar allí
+        # y subirlos por FTP es frágil (se pierden/corrompen ficheros). FILE_NOT_EXISTS
+        # deja que Doctrine genere al vuelo SOLO el proxy que falte (sin regenerar en
+        # cada request, que es lo que haría `true`/ALWAYS). Requiere var/cache/prod
+        # escribible por el usuario del servidor web.
+        auto_generate_proxy_classes: 'FILE_NOT_EXISTS'
         metadata_cache_driver:
             type: pool
             pool: doctrine.system_cache_pool

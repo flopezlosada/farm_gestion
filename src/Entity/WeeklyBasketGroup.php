@@ -63,10 +63,31 @@ class WeeklyBasketGroup
      */
     private $weekly_baskets;
 
+    /**
+     * Nodo físico de reparto al que pertenece este grupo (Torremocha, Cascorro, Midori).
+     * Introducido en sub-fase 8.8a (2026-05-26). Nullable inicialmente para no romper
+     * fixtures legacy; se sembrarán los WBG existentes durante la migración.
+     *
+     * @ORM\ManyToOne(targetEntity="Node", inversedBy="weeklyBasketGroups")
+     * @ORM\JoinColumn(name="node_id", referencedColumnName="id", nullable=true)
+     */
+    private ?Node $node = null;
+
     public function __construct()
     {
         $this->partners = new ArrayCollection();
         $this->weekly_baskets = new ArrayCollection();
+    }
+
+    public function getNode(): ?Node
+    {
+        return $this->node;
+    }
+
+    public function setNode(?Node $node): self
+    {
+        $this->node = $node;
+        return $this;
     }
 
     public function getId(): ?int

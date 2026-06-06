@@ -4,14 +4,6 @@
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:schemaLocation="http://symfony.com/schema/routing http://symfony.com/schema/routing/routing-1.0.xsd">
 
-    <route id="image" path="/">
-        <default key="_controller">App\Controller\ImageController::index</default>
-    </route>
-
-    <route id="image_show" path="/{id}/show">
-        <default key="_controller">App\Controller\ImageController::show</default>
-    </route>
-
     <route id="image_new" path="/new/{foreign_key}/{object_class}/{single}">
         <default key="_controller">App\Controller\ImageController::new</default>
     </route>
@@ -20,24 +12,7 @@
         <default key="_controller">App\Controller\ImageController::create</default>
     </route>
 
-    <route id="image_edit" path="/{id}/edit">
-        <default key="_controller">App\Controller\ImageController::edit</default>
-    </route>
-
-    <route id="image_update" path="/{id}/update" methods="POST|PUT">
-        <default key="_controller">App\Controller\ImageController::update</default>
-    </route>
-
-    <route id="image_delete" path="/{id}/delete" methods="POST|DELETE">
-        <default key="_controller">App\Controller\ImageController::delete</default>
-    </route>
     <route id="image_fast_delete" path="/{id}/delete" methods="GET">
         <default key="_controller">App\Controller\ImageController::fastDelete</default>
-    </route>
-     <route id="image_in_gallery_new" path="/new/{foreign_key}/{object_class}/{single}/{gallery_id}">
-        <default key="_controller">App\Controller\ImageController::newInGallery</default>
-    </route>
-    <route id="image_in_gallery_create" path="/create/{foreign_key}/{object_class}/{single}/{gallery_id}" methods="POST">
-        <default key="_controller">App\Controller\ImageController::createInGallery</default>
     </route>
 </routes>

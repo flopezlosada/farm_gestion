@@ -33,6 +33,10 @@
   outline: 2px solid var(--csa-green);
   outline-offset: 2px;
 }
+/* Los botones-enlace (<a class="csa-btn">) heredaban el borde-inferior verde de
+   `.csa-app :where(a):hover` (02-base) — el "subrayado verde" en hover que no
+   queremos en un botón. Se neutraliza con más especificidad (0,3,1 > 0,2,0). */
+.csa-app a.csa-btn:hover { border-bottom-color: transparent; }
 .csa-btn:disabled,
 .csa-btn[aria-disabled="true"] {
   opacity: 0.5;
@@ -81,6 +85,37 @@
   border-color: var(--csa-terracotta);
 }
 .csa-btn--danger:hover { background: #c45c33; }
+
+/* Variantes soft: fondo del tono claro, texto del tono fuerte. Pensadas
+ * para casos donde queremos botones coherentes con el icono soft del
+ * bloque y sin la prominencia del primary verde. */
+.csa-btn--info-soft,
+.csa-btn--info-soft:link,
+.csa-btn--info-soft:visited {
+  background: var(--csa-sky-soft);
+  color: var(--csa-sky);
+  border-color: var(--csa-sky-soft);
+}
+.csa-btn--info-soft:hover,
+.csa-btn--info-soft:focus {
+  background: #bcd6e4;
+  border-color: #bcd6e4;
+  color: var(--csa-sky);
+}
+
+.csa-btn--danger-soft,
+.csa-btn--danger-soft:link,
+.csa-btn--danger-soft:visited {
+  background: var(--csa-terracotta-soft);
+  color: var(--csa-terracotta);
+  border-color: var(--csa-terracotta-soft);
+}
+.csa-btn--danger-soft:hover,
+.csa-btn--danger-soft:focus {
+  background: #f5c6ab;
+  border-color: #f5c6ab;
+  color: var(--csa-terracotta);
+}
 
 .csa-btn--sm { padding: 6px 12px; font-size: var(--csa-fs-sm); }
 .csa-btn--lg { padding: 12px 22px; font-size: var(--csa-fs-md); }
@@ -139,6 +174,14 @@
 .csa-card--accent-green      { border-top: 2px solid var(--csa-green); }
 .csa-card--accent-terracotta { border-top: 2px solid var(--csa-terracotta); }
 
+/* Variante "hero" — para cards que son la acción principal de la página.
+ * Borde superior más grueso, header con fondo de acento suave. Funciona
+ * combinada con .csa-card--accent-X (toma el color del acento). */
+.csa-app .csa-card--hero { border-top-width: 4px; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+.csa-app .csa-card--hero.csa-card--accent-green .csa-card__header { background: var(--csa-green-soft); }
+.csa-app .csa-card--hero.csa-card--accent-sky   .csa-card__header { background: var(--csa-sky-soft); }
+.csa-app .csa-card--hero.csa-card--accent-ochre .csa-card__header { background: var(--csa-ochre-soft); }
+
 .csa-card__header {
   display: flex;
   align-items: flex-start;
@@ -165,6 +208,28 @@
   margin-top: 2px;
 }
 .csa-card__body { padding: var(--csa-sp-5) var(--csa-sp-6); }
+
+.csa-card__header-main {
+  display: flex;
+  align-items: center;
+  gap: var(--csa-sp-3);
+}
+.csa-card__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: var(--csa-surface);
+  color: var(--csa-ink-soft);
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.csa-app .csa-card--accent-green .csa-card__icon      { color: var(--csa-green); }
+.csa-app .csa-card--accent-sky   .csa-card__icon      { color: var(--csa-sky); }
+.csa-app .csa-card--accent-ochre .csa-card__icon      { color: var(--csa-ochre); }
+.csa-app .csa-card--accent-plum  .csa-card__icon      { color: var(--csa-plum); }
+.csa-app .csa-card--hero .csa-card__icon { width: 44px; height: 44px; font-size: 20px; }
 
 
 /* ============================================================
@@ -456,6 +521,8 @@
 }
 .csa-callout--info    { border-left-color: var(--csa-sky); }
 .csa-callout--info    .csa-callout__icon { color: var(--csa-sky); }
+.csa-app .csa-callout--success { border-left-color: var(--csa-green); background: var(--csa-green-soft); color: var(--csa-ink); }
+.csa-app .csa-callout--success .csa-callout__icon { color: var(--csa-green); }
 .csa-callout--warning { border-left-color: var(--csa-ochre); }
 .csa-callout--warning .csa-callout__icon { color: var(--csa-ochre); }
 .csa-callout--danger  { border-left-color: var(--csa-terracotta); }
@@ -697,6 +764,62 @@ select.csa-input,
 .csa-field--full { grid-column: 1 / -1; }
 @media (max-width: 768px) {
   .csa-form-grid { grid-template-columns: 1fr; }
+}
+
+
+/* ============================================================
+ * COMBOBOX (autocomplete propio, sin librerías)
+ * <input> + lista flotante filtrable por substring.
+ * Sustituye al <datalist> nativo, que no es estilable y cada
+ * navegador lo posiciona donde le da la gana.
+ * ============================================================ */
+
+.csa-combobox { position: relative; }
+
+.csa-combobox__menu {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  z-index: 50;
+  max-height: 280px;
+  overflow-y: auto;
+  margin: 0;
+  padding: var(--csa-sp-1) 0;
+  list-style: none;
+  background: var(--csa-surface);
+  border: 1px solid var(--csa-rule-soft);
+  border-radius: var(--csa-radius-md);
+  box-shadow: var(--csa-shadow-sm);
+}
+.csa-combobox__menu[hidden] { display: none; }
+
+.csa-combobox__option {
+  padding: 7px var(--csa-sp-3);
+  font-size: var(--csa-fs-base);
+  line-height: 1.4;
+  color: var(--csa-ink);
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--csa-t-fast), color var(--csa-t-fast);
+}
+.csa-combobox__option:hover,
+.csa-combobox__option--active {
+  background: var(--csa-sage-bg-hover);
+  color: var(--csa-sage-ink);
+}
+.csa-combobox__option mark {
+  background: transparent;
+  color: var(--csa-green);
+  font-weight: 500;
+  padding: 0;
+}
+.csa-combobox__empty {
+  padding: var(--csa-sp-3);
+  font-size: var(--csa-fs-sm);
+  color: var(--csa-ink-muted);
+  font-style: italic;
+  font-family: var(--csa-serif);
 }
 
 
@@ -1034,12 +1157,124 @@ a.csa-table__primary:hover {
 .csa-topbar__crumbs-sep { color: var(--csa-ink-muted); }
 .csa-topbar__crumb-active { color: var(--csa-ink); font-weight: 500; }
 
+/* Zona derecha del topbar — gap mayor para separar los tres bloques. */
 .csa-topbar__user {
-  display: flex; align-items: center; gap: var(--csa-sp-3);
-  font-size: var(--csa-fs-sm); color: var(--csa-ink-soft);
+  display: flex;
+  align-items: center;
+  gap: var(--csa-sp-5);
+  font-size: var(--csa-fs-sm);
+  color: var(--csa-ink-soft);
 }
+
+/* ---------- Switch de área (Gestión / Mi panel) ----------
+ * Pill segmentada: la parte activa con fondo blanco e ink saturado,
+ * la otra link discreto. Comunica "elige un modo" mejor que dos
+ * enlaces sueltos uno al lado del otro. */
+.csa-areaswitch {
+  display: inline-flex;
+  align-items: stretch;
+  padding: 3px;
+  background: var(--csa-surface-alt);
+  border: 1px solid var(--csa-rule);
+  border-radius: var(--csa-radius-pill, 999px);
+  gap: 2px;
+}
+.csa-areaswitch__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: var(--csa-radius-pill, 999px);
+  font-size: var(--csa-fs-sm);
+  color: var(--csa-ink-soft);
+  text-decoration: none;
+  white-space: nowrap;
+  border-bottom: 0; /* anula el subrayado global de a:hover */
+  transition: background var(--csa-t-fast), color var(--csa-t-fast);
+}
+.csa-areaswitch__item:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--csa-ink);
+  border-bottom-color: transparent;
+  text-decoration: none;
+}
+.csa-areaswitch__item--active {
+  background: var(--csa-surface);
+  color: var(--csa-ink);
+  font-weight: 600;
+  box-shadow: var(--csa-shadow-sm, 0 1px 2px rgba(0,0,0,0.06));
+  cursor: default;
+}
+.csa-areaswitch__item--active:hover { background: var(--csa-surface); }
+.csa-areaswitch__item i { font-size: 0.9em; color: var(--csa-green); }
+.csa-areaswitch__short { display: none; }
+
+/* ---------- Util link (Ver web) — terciario, sin caja. ---------- */
+.csa-topbar__util {
+  display: inline-flex; align-items: center; gap: 6px;
+  color: var(--csa-ink-muted);
+  text-decoration: none;
+  padding: 6px 8px;
+  border-radius: var(--csa-radius-sm, 4px);
+  border-bottom: 0;
+  font-size: var(--csa-fs-sm);
+  transition: color var(--csa-t-fast), background var(--csa-t-fast);
+}
+.csa-topbar__util:hover {
+  color: var(--csa-ink);
+  background: var(--csa-surface-alt);
+  border-bottom-color: transparent;
+  text-decoration: none;
+}
+.csa-topbar__util i { font-size: 0.95em; }
+
+/* ---------- Bloque "yo" — pill cerrado avatar+nombre+salir ----------
+ * Lee como una unidad personal. Salir queda DENTRO porque
+ * "cerrar mi sesión" es mi acción, no una utilidad de la app. */
+.csa-me {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--csa-rule);
+  border-radius: var(--csa-radius-pill, 999px);
+  background: var(--csa-surface);
+  padding: 3px;
+  gap: 2px;
+}
+.csa-me__id {
+  display: inline-flex; align-items: center; gap: var(--csa-sp-2);
+  text-decoration: none;
+  padding: 1px 10px 1px 1px;
+  border-radius: var(--csa-radius-pill, 999px);
+  border-bottom: 0;
+  color: var(--csa-ink);
+  transition: background var(--csa-t-fast);
+}
+.csa-me__id:hover { background: rgba(0,0,0,0.05); border-bottom-color: transparent; text-decoration: none; }
+.csa-me__id--static { cursor: default; }
+.csa-me__id--static:hover { background: transparent; }
+.csa-me__name {
+  font-weight: 500;
+  font-size: var(--csa-fs-sm);
+  color: var(--csa-ink);
+}
+.csa-me__logout {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  border-bottom: 0;
+  color: var(--csa-ink-muted);
+  text-decoration: none;
+  transition: background var(--csa-t-fast), color var(--csa-t-fast);
+}
+.csa-me__logout:hover {
+  background: var(--csa-terracotta-soft, rgba(208, 89, 60, 0.12));
+  color: var(--csa-terracotta);
+  border-bottom-color: transparent;
+  text-decoration: none;
+}
+
 .csa-avatar {
-  width: 32px; height: 32px;
+  width: 30px; height: 30px;
   border-radius: 50%;
   background: var(--csa-green-soft);
   color: var(--csa-green);
@@ -1047,6 +1282,33 @@ a.csa-table__primary:hover {
   font-size: var(--csa-fs-sm);
   font-weight: 600;
   font-family: var(--csa-sans);
+  flex-shrink: 0;
+}
+
+/* ---------- Responsive <700px ----------
+ * El switch mantiene caja pero usa iniciales G/P (señal mínima).
+ * "Ver web" colapsa a solo icono. El nombre desaparece pero el
+ * avatar y el botón salir permanecen visibles. */
+@media (max-width: 700px) {
+  /* Crumbs largos (Inicio › Calendario › Cambiar día de reparto) hacían que
+     el topbar — display:flex sin wrap — desbordase el viewport, arrastrando
+     el header entero. En móvil dejamos solo el activo: dice claramente "dónde
+     estoy" sin tirar del layout. */
+  .csa-topbar__crumbs > *:not(.csa-topbar__crumb-active) { display: none; }
+
+  .csa-topbar__user { gap: var(--csa-sp-3); }
+  .csa-areaswitch__label { display: none; }
+  .csa-areaswitch__short {
+    display: inline;
+    font-weight: 600;
+    min-width: 14px;
+    text-align: center;
+  }
+  .csa-areaswitch__item { padding: 5px 10px; }
+  .csa-topbar__util-label { display: none; }
+  .csa-topbar__util i { font-size: 16px; }
+  .csa-me__name { display: none; }
+  .csa-me__id { padding: 1px; }
 }
 
 
@@ -1056,6 +1318,18 @@ a.csa-table__primary:hover {
 
 /* El botón hamburguesa solo se ve cuando el sidebar es colapsable. */
 .csa-sidebar-toggle { display: none; }
+
+/* Scrim del drawer móvil: cubre el contenido bajo el sidebar (z-index 100)
+   para indicar que está en primer plano y capturar el toque que lo cierra.
+   Lo controla el atributo `hidden`; el JS del shell lo muestra al abrir.
+   La regla [hidden] blinda el ocultado frente a la cascada de Bootstrap 3. */
+.csa-sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99;
+  background: rgba(20, 18, 12, 0.45);
+}
+.csa-sidebar-overlay[hidden] { display: none; }
 
 @media (max-width: 900px) {
   .csa-sidebar {
@@ -1656,3 +1930,841 @@ table.csa-table thead th.sorting_desc::after { content: " ↓"; color: var(--csa
 }
 .csa-task-card__body p { margin: 0 0 var(--csa-sp-2) 0; }
 .csa-task-card__body p:last-child { margin-bottom: 0; }
+
+/* ---------- ALERTS ----------
+ * Usados por los flash messages renderizados en csa_shell. Mismas paletas que badges.
+ */
+/* Pila de avisos: agrupa los flashes con separación uniforme en vez de
+   dejar a cada alerta su propio margen suelto. */
+.csa-alerts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--csa-sp-3);
+  margin-bottom: var(--csa-sp-4);
+}
+
+.csa-alert {
+  display: flex;
+  gap: var(--csa-sp-3);
+  align-items: flex-start;
+  padding: var(--csa-sp-3) var(--csa-sp-4);
+  border-radius: var(--csa-radius-md);
+  border-left: 3px solid var(--csa-line);
+  background: var(--csa-surface-alt);
+  color: var(--csa-ink);
+  font-size: var(--csa-fs-sm);
+  animation: csa-alert-in var(--csa-t-normal);
+}
+.csa-alert--success { background: var(--csa-green-soft);      color: var(--csa-green);      border-left-color: var(--csa-green); }
+.csa-alert--warning { background: var(--csa-ochre-soft);      color: var(--csa-amber);      border-left-color: var(--csa-amber); }
+.csa-alert--error   { background: var(--csa-terracotta-soft); color: var(--csa-terracotta); border-left-color: var(--csa-terracotta); }
+.csa-alert--info    { background: var(--csa-sky-soft);        color: var(--csa-sky);        border-left-color: var(--csa-sky); }
+
+/* Icono a la izquierda, cuerpo elástico, botón de cierre a la derecha. */
+.csa-alert__icon { flex-shrink: 0; margin-top: 1px; }
+.csa-alert__body { flex: 1; min-width: 0; }
+.csa-alert__close {
+  flex-shrink: 0;
+  background: none;
+  border: 0;
+  padding: 0 2px;
+  margin: -2px -2px 0 0;
+  color: inherit;
+  opacity: 0.5;
+  cursor: pointer;
+  line-height: 1;
+  transition: opacity var(--csa-t-fast);
+}
+.csa-alert__close:hover { opacity: 1; }
+
+/* Entrada (aparece deslizando) y salida (clase añadida por JS al cerrar). */
+@keyframes csa-alert-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.csa-alert.is-closing {
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: opacity var(--csa-t-fast), transform var(--csa-t-fast);
+}
+
+/* Respeta a quien pide menos movimiento. */
+@media (prefers-reduced-motion: reduce) {
+  .csa-alert { animation: none; }
+  .csa-alert.is-closing { transition: opacity var(--csa-t-fast); transform: none; }
+}
+
+
+/* ============================================================
+ * AUTH · pantallas públicas (login, magic-link, recuperación)
+ * ============================================================
+ * Layout standalone, sin shell ni sidebar. Mobile-first, una
+ * sola columna centrada vertical y horizontalmente. Pensado
+ * para socixs con baja familiaridad digital: jerarquía clara,
+ * pocas decisiones por pantalla, sin ruido.
+ * Se carga con templates/_layouts/csa_auth.html.twig.
+ * ============================================================ */
+
+.csa-auth {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--csa-bg);
+  /* textura muy sutil de papel: dos gradientes radiales y un velo verde
+     en la esquina superior izquierda. No introduce imágenes externas. */
+  background-image:
+    radial-gradient(900px 600px at -10% -10%, rgba(74, 124, 58, 0.06), transparent 60%),
+    radial-gradient(700px 500px at 110% 110%, rgba(212, 148, 58, 0.05), transparent 60%);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Hoja decorativa contenida en el fondo, sin interferir con el contenido.
+   El SVG va inline en la plantilla; aquí solo posición y opacidad. */
+.csa-auth__leaf {
+  position: absolute;
+  pointer-events: none;
+  user-select: none;
+  color: var(--csa-green);
+  opacity: 0.08;
+}
+.csa-auth__leaf--tl { top: -40px; left: -30px; width: 220px; transform: rotate(-18deg); }
+.csa-auth__leaf--br { bottom: -60px; right: -50px; width: 280px; transform: rotate(155deg); opacity: 0.06; }
+
+.csa-auth__shell {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: var(--csa-sp-6) var(--csa-sp-4);
+  position: relative;
+  z-index: 1;
+}
+
+.csa-auth__inner {
+  width: 100%;
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--csa-sp-6);
+}
+
+/* ---------- Brand mark ---------- */
+
+.csa-auth__brand {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--csa-sp-2);
+}
+.csa-auth__brand-mark {
+  font-family: var(--csa-serif);
+  font-style: italic;
+  font-size: 2.5rem;
+  line-height: 1;
+  color: var(--csa-green);
+  letter-spacing: -0.02em;
+}
+.csa-auth__brand-name {
+  font-family: var(--csa-sans);
+  font-size: var(--csa-fs-xs);
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--csa-ink-soft);
+}
+.csa-auth__brand-rule {
+  width: 32px;
+  height: 1px;
+  background: var(--csa-rule);
+  margin-top: var(--csa-sp-1);
+}
+
+/* ---------- Card ---------- */
+
+.csa-auth__card {
+  background: var(--csa-surface);
+  border: 1px solid var(--csa-rule-soft);
+  border-radius: var(--csa-radius-lg);
+  box-shadow: var(--csa-shadow-md);
+  padding: var(--csa-sp-8) var(--csa-sp-6);
+}
+@media (min-width: 480px) {
+  .csa-auth__card { padding: var(--csa-sp-10) var(--csa-sp-8); }
+}
+
+.csa-auth__title {
+  font-family: var(--csa-serif);
+  font-size: var(--csa-fs-2xl);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: var(--csa-lh-tight);
+  color: var(--csa-ink);
+  margin: 0 0 var(--csa-sp-2) 0;
+}
+.csa-auth__lead {
+  font-family: var(--csa-sans);
+  font-size: var(--csa-fs-base);
+  color: var(--csa-ink-soft);
+  line-height: var(--csa-lh-snug);
+  margin: 0 0 var(--csa-sp-6) 0;
+  text-wrap: pretty;
+}
+
+.csa-auth__form { display: flex; flex-direction: column; gap: var(--csa-sp-4); }
+
+/* Inputs más altos en auth: dedos en móvil. */
+.csa-auth .csa-input { height: 46px; font-size: var(--csa-fs-md); }
+
+/* Checkbox "recuérdame" con tipografía cómoda. */
+.csa-auth__check {
+  display: flex;
+  align-items: center;
+  gap: var(--csa-sp-2);
+  font-size: var(--csa-fs-sm);
+  color: var(--csa-ink-soft);
+  user-select: none;
+  cursor: pointer;
+}
+.csa-auth__check input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--csa-green);
+  margin: 0;
+  cursor: pointer;
+}
+
+/* Botón primario a ancho completo, alto cómodo para móvil. */
+.csa-auth__submit {
+  height: 48px;
+  font-size: var(--csa-fs-md);
+  margin-top: var(--csa-sp-2);
+}
+
+/* Divisor con título tipo "o" centrado entre dos líneas. Usado para
+   separar el form principal de las acciones secundarias. */
+.csa-auth__sep {
+  display: flex;
+  align-items: center;
+  gap: var(--csa-sp-3);
+  margin: var(--csa-sp-6) 0 var(--csa-sp-4);
+  color: var(--csa-ink-muted);
+  font-size: var(--csa-fs-xs);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.csa-auth__sep::before,
+.csa-auth__sep::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--csa-rule-soft);
+}
+
+/* Sección de acciones secundarias: lista de enlaces tipo "menú breve". */
+.csa-auth__links {
+  display: flex;
+  flex-direction: column;
+  gap: var(--csa-sp-1);
+}
+.csa-auth .csa-auth__link {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--csa-sp-3);
+  padding: var(--csa-sp-3) 0;
+  border-bottom: 1px solid var(--csa-rule-soft);
+  color: var(--csa-ink);
+  font-size: var(--csa-fs-md);
+  text-decoration: none;
+  transition: color var(--csa-t-fast);
+}
+.csa-auth .csa-auth__link:last-child { border-bottom: none; }
+.csa-auth .csa-auth__link:hover { color: var(--csa-green); border-bottom-color: var(--csa-rule-soft); }
+.csa-auth .csa-auth__link:hover .csa-auth__link-arrow { transform: translateX(3px); color: var(--csa-green); }
+.csa-auth__link-arrow {
+  flex-shrink: 0;
+  color: var(--csa-ink-muted);
+  font-family: var(--csa-serif);
+  font-size: var(--csa-fs-lg);
+  line-height: 1;
+  transition: transform var(--csa-t-fast), color var(--csa-t-fast);
+}
+.csa-auth__link-sub {
+  display: block;
+  font-size: var(--csa-fs-xs);
+  color: var(--csa-ink-muted);
+  margin-top: 2px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* "Volver" como link discreto centrado bajo formularios secundarios. */
+.csa-auth__back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--csa-sp-1);
+  margin-top: var(--csa-sp-5);
+  font-size: var(--csa-fs-sm);
+  color: var(--csa-ink-soft);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: color var(--csa-t-fast), border-color var(--csa-t-fast);
+}
+.csa-auth__back:hover { color: var(--csa-ink); border-bottom-color: var(--csa-ink); }
+.csa-auth__back::before { content: "←"; font-family: var(--csa-serif); }
+
+/* Pie del card: notas pequeñas (caducidad del enlace, etc). */
+.csa-auth__note {
+  margin-top: var(--csa-sp-5);
+  padding-top: var(--csa-sp-4);
+  border-top: 1px dashed var(--csa-rule-soft);
+  font-size: var(--csa-fs-xs);
+  color: var(--csa-ink-muted);
+  line-height: var(--csa-lh-snug);
+  text-wrap: pretty;
+}
+
+/* Confirmación: bloque de icono + mensaje en pantalla "enviado". */
+.csa-auth__confirm {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--csa-sp-4);
+}
+.csa-auth__confirm-mark {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--csa-green-soft);
+  color: var(--csa-green);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--csa-serif);
+  font-size: 2rem;
+  line-height: 1;
+}
+
+/* Footer minimalista al pie de la pantalla. */
+.csa-auth__footer {
+  padding: var(--csa-sp-5) var(--csa-sp-4);
+  text-align: center;
+  font-size: var(--csa-fs-xs);
+  color: var(--csa-ink-muted);
+  letter-spacing: 0.04em;
+  position: relative;
+  z-index: 1;
+}
+.csa-auth__footer a { color: var(--csa-ink-soft); }
+
+/* Estado focus visible reforzado para teclado (accesibilidad). */
+.csa-auth .csa-input:focus-visible,
+.csa-auth .csa-btn:focus-visible,
+.csa-auth__link:focus-visible,
+.csa-auth__back:focus-visible {
+  outline: 2px solid var(--csa-green);
+  outline-offset: 2px;
+}
+
+
+/* ============================================================
+ * PRÓXIMA CESTA — bloque hero del panel del socix
+ * ============================================================ */
+
+.csa-app .csa-next-basket__date {
+  font-family: var(--csa-serif);
+  font-size: clamp(1.4rem, 2.4vw, 1.9rem);
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--csa-ink);
+}
+/* Solo capitalizamos el primer carácter — el filtro format_date(es)
+ * devuelve "viernes, 22 de mayo de 2026" en minúsculas; queremos
+ * "Viernes, 22 de mayo de 2026", no "Viernes, 22 De Mayo De 2026". */
+.csa-app .csa-next-basket__date::first-letter { text-transform: uppercase; }
+
+.csa-app .csa-next-basket__where {
+  margin-top: var(--csa-sp-2);
+  font-size: var(--csa-fs-md);
+  color: var(--csa-ink-soft);
+}
+.csa-app .csa-next-basket__where .fa { color: var(--csa-green); margin-right: 4px; }
+
+.csa-app .csa-next-basket__actions {
+  margin-top: var(--csa-sp-6);
+  padding-top: var(--csa-sp-5);
+  border-top: 1px solid var(--csa-rule);
+}
+.csa-app .csa-next-basket__actions-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--csa-sp-3);
+  flex-wrap: wrap;
+  margin: 0 0 var(--csa-sp-3);
+}
+.csa-app .csa-next-basket__actions-title {
+  font-family: var(--csa-sans);
+  font-size: var(--csa-fs-sm);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--csa-ink-soft);
+  margin: 0;
+}
+
+/* Hint textual del plazo de cambios. Sin caja, integrado como info
+ * secundaria del encabezado de acciones — no es advertencia, es contexto. */
+.csa-app .csa-deadline-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--csa-fs-sm);
+  font-weight: 400;
+  line-height: 1.3;
+  color: var(--csa-ink-soft);
+}
+.csa-app .csa-deadline-hint .fa { color: var(--csa-ink-muted); }
+.csa-app .csa-deadline-hint--closed { color: var(--csa-ink-muted); }
+.csa-app .csa-deadline-hint--closed .fa { color: var(--csa-ink-muted); }
+
+/* Estado deshabilitado del bloque de acciones (plazo cerrado). */
+.csa-app .csa-next-basket__actions--disabled .csa-next-basket__action {
+  opacity: 0.55;
+  pointer-events: none;
+}
+.csa-app .csa-next-basket__actions--disabled .csa-next-basket__action:hover {
+  border-color: var(--csa-rule);
+  background: var(--csa-surface);
+  box-shadow: none;
+}
+
+/* Fila de acción: icono coloreado + texto (título + descripción) + botón a la derecha.
+ * Estructura uniforme para que las acciones de la hero card se lean como una lista. */
+.csa-app .csa-next-basket__action {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  align-items: center;
+  gap: var(--csa-sp-3);
+  padding: var(--csa-sp-3) var(--csa-sp-4);
+  margin: 0 0 var(--csa-sp-2);
+  border: 1px solid var(--csa-rule);
+  border-radius: var(--csa-radius-md);
+  background: var(--csa-surface);
+  transition: border-color var(--csa-t-fast), box-shadow var(--csa-t-fast), background var(--csa-t-fast);
+}
+.csa-app .csa-next-basket__action:hover {
+  border-color: var(--csa-ink-muted);
+  background: var(--csa-surface-alt);
+  box-shadow: 0 1px 3px rgba(0,0,0,.06);
+}
+.csa-app .csa-next-basket__action-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  font-size: 14px;
+  background: var(--csa-surface-alt);
+  color: var(--csa-ink-soft);
+}
+.csa-app .csa-next-basket__action-icon--danger { background: var(--csa-terracotta-soft); color: #b04e22; }
+.csa-app .csa-next-basket__action-icon--info   { background: var(--csa-sky-soft);        color: var(--csa-sky); }
+.csa-app .csa-next-basket__action-icon--green  { background: var(--csa-green-soft);      color: var(--csa-green); }
+.csa-app .csa-next-basket__action-body { min-width: 0; }
+.csa-app .csa-next-basket__action-title { font-weight: 600; color: var(--csa-ink); }
+.csa-app .csa-next-basket__action-desc  { font-size: var(--csa-fs-sm); color: var(--csa-ink-soft); margin-top: 2px; }
+
+/* Variante inline para el caso del select de viernes (mensual). */
+.csa-app .csa-next-basket__action--inline { grid-template-columns: 40px 1fr auto auto; }
+.csa-app .csa-next-basket__action--inline .csa-input--inline { min-width: 140px; max-width: 220px; }
+
+/* En pantallas estrechas la fila se apila y el botón pasa a fondo. */
+@media (max-width: 540px) {
+  .csa-app .csa-next-basket__action,
+  .csa-app .csa-next-basket__action--inline {
+    grid-template-columns: 40px 1fr;
+  }
+  .csa-app .csa-next-basket__action > .csa-btn,
+  .csa-app .csa-next-basket__action--inline > .csa-btn,
+  .csa-app .csa-next-basket__action--inline > .csa-input--inline {
+    grid-column: 1 / -1;
+  }
+}
+/* ============================================================
+ * CSA MODAL — diálogo de confirmación
+ * ============================================================
+ * HTML5 <dialog> nativo. Sin librerías JS.
+ * Uso:
+ *   <dialog class="csa-modal csa-modal--danger" aria-labelledby="t1">
+ *     <button class="csa-modal__close" type="button" aria-label="Cerrar"
+ *             onclick="this.closest('dialog').close()">…</button>
+ *     <header class="csa-modal__header">
+ *       <span class="csa-modal__icon">…svg…</span>
+ *       <div class="csa-modal__heading">
+ *         <span class="csa-modal__eyebrow">Acción permanente</span>
+ *         <h2 class="csa-modal__title" id="t1">Dar de baja a este socix</h2>
+ *       </div>
+ *     </header>
+ *     <div class="csa-modal__body"><p>Dejará de recibir cesta…</p></div>
+ *     <footer class="csa-modal__footer">
+ *       <button class="csa-modal__btn csa-modal__btn--ghost" autofocus
+ *               onclick="this.closest('dialog').close()">Cancelar</button>
+ *       <button class="csa-modal__btn csa-modal__btn--primary">Dar de baja</button>
+ *     </footer>
+ *   </dialog>
+ *
+ * Abrir con: document.querySelector('dialog.csa-modal').showModal();
+ * Cerrar con: dialog.close();
+ * Modificadores: --danger, --warning, --info, --success.
+ * ============================================================ */
+
+.csa-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;
+  width: calc(100% - 32px);
+  max-width: 440px;
+  padding: 0;
+  background: var(--csa-surface);
+  border: 1px solid var(--csa-rule-soft);
+  border-radius: var(--csa-radius-lg);
+  box-shadow: var(--csa-shadow-lg);
+  color: var(--csa-ink);
+  font-family: var(--csa-sans);
+  overflow: hidden;
+}
+.csa-modal:not([open]) { display: none; }
+/* El <form> envuelve toda la estructura interna del modal — forzamos
+ * box model limpio para que no herede paddings/márgenes de resets legacy. */
+.csa-modal > form {
+  display: block;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+.csa-modal::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--csa-rule);
+  border-top-left-radius: var(--csa-radius-lg);
+  border-bottom-left-radius: var(--csa-radius-lg);
+}
+
+.csa-modal::backdrop {
+  background: rgba(28, 29, 26, 0.36);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  opacity: 0;
+  animation: csa-modal-backdrop-in 180ms ease-out forwards;
+}
+.csa-modal[open] {
+  animation: csa-modal-panel-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes csa-modal-backdrop-in { to { opacity: 1; } }
+@keyframes csa-modal-panel-in {
+  from { opacity: 0; transform: translate(-50%, calc(-50% + 8px)) scale(0.985); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+/* ---------- close ---------- */
+
+.csa-modal__close {
+  position: absolute;
+  top: var(--csa-sp-4);
+  right: var(--csa-sp-4);
+  width: 28px; height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--csa-radius-sm);
+  color: var(--csa-ink-muted);
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+.csa-modal__close:hover {
+  background: var(--csa-surface-alt);
+  color: var(--csa-ink);
+}
+.csa-modal__close svg { width: 14px; height: 14px; }
+
+/* ---------- header ---------- */
+
+.csa-modal__header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--csa-sp-4);
+  padding: var(--csa-sp-6) var(--csa-sp-6) 0;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.csa-modal__icon {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--csa-surface-alt);
+  color: var(--csa-ink);
+}
+.csa-modal__icon svg {
+  width: 22px;
+  height: 22px;
+  stroke-width: 1.6;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.csa-modal__heading {
+  flex: 1 1 0;
+  min-width: 0;
+  padding-top: 6px;
+  padding-right: var(--csa-sp-10);
+}
+.csa-modal__eyebrow {
+  display: block;
+  font-family: var(--csa-sans);
+  font-size: 10.5px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--csa-ink-muted);
+  margin-bottom: var(--csa-sp-2);
+}
+.csa-modal__title {
+  font-family: var(--csa-serif);
+  font-variation-settings: "opsz" 30;
+  font-weight: 500;
+  font-size: var(--csa-fs-xl);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: var(--csa-ink);
+  margin: 0;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  text-wrap: balance;
+}
+
+/* ---------- body ---------- */
+
+.csa-modal__body {
+  padding: var(--csa-sp-4) var(--csa-sp-6) var(--csa-sp-6);
+  /* alineado a la izquierda del título (no del icono) */
+  padding-left: calc(var(--csa-sp-6) + 44px + var(--csa-sp-4));
+}
+.csa-modal__body p {
+  margin: 0;
+  font-family: var(--csa-sans);
+  font-size: var(--csa-fs-base);
+  line-height: 1.55;
+  color: var(--csa-ink-soft);
+  overflow-wrap: break-word;
+}
+.csa-modal__body p + p { margin-top: var(--csa-sp-3); }
+
+/* ---------- footer ---------- */
+
+.csa-modal__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--csa-sp-2);
+  padding: var(--csa-sp-4) var(--csa-sp-6);
+  background: var(--csa-bg);
+  border-top: 1px solid var(--csa-rule-soft);
+}
+.csa-modal__footer .csa-modal__btn { flex: 0 1 auto; }
+
+.csa-modal__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--csa-sans);
+  font-size: var(--csa-fs-base);
+  font-weight: 500;
+  line-height: 1;
+  padding: 10px 18px;
+  border-radius: var(--csa-radius-md);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--csa-ink-soft);
+  cursor: pointer;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+.csa-modal__btn:hover { text-decoration: none; }
+.csa-modal__btn:link,
+.csa-modal__btn:visited { color: var(--csa-ink-soft); }
+.csa-modal__btn:focus-visible {
+  outline: 2px solid var(--csa-ink);
+  outline-offset: 2px;
+}
+
+.csa-modal__btn--ghost {
+  background: transparent;
+  color: var(--csa-ink-soft);
+  border-color: transparent;
+}
+.csa-modal__btn--ghost:hover {
+  background: var(--csa-sage-bg-hover);
+  color: var(--csa-sage-ink);
+}
+
+.csa-modal__btn--primary {
+  background: var(--csa-ink);
+  color: var(--csa-bg);
+  border-color: var(--csa-ink);
+}
+.csa-modal__btn--primary:hover {
+  background: #000;
+  border-color: #000;
+}
+
+/* ============================================================
+ * VARIANTES POR DOMINIO
+ * ============================================================ */
+
+/* Destructivo — terracotta */
+.csa-modal--danger::before { background: var(--csa-terracotta); }
+.csa-modal--danger .csa-modal__icon {
+  background: var(--csa-terracotta-soft);
+  color: var(--csa-terracotta);
+}
+.csa-modal--danger .csa-modal__eyebrow { color: var(--csa-terracotta); }
+.csa-modal--danger .csa-modal__btn--primary {
+  background: var(--csa-terracotta);
+  border-color: var(--csa-terracotta);
+  color: #fff;
+}
+.csa-modal--danger .csa-modal__btn--primary:hover {
+  background: #c45c33;
+  border-color: #c45c33;
+}
+.csa-modal--danger .csa-modal__btn--primary:focus-visible {
+  outline-color: var(--csa-terracotta);
+}
+
+/* Aviso — ochre */
+.csa-modal--warning::before { background: var(--csa-ochre); }
+.csa-modal--warning .csa-modal__icon {
+  background: var(--csa-ochre-soft);
+  color: #a3702a;
+}
+.csa-modal--warning .csa-modal__eyebrow { color: #a3702a; }
+.csa-modal--warning .csa-modal__btn--primary {
+  background: var(--csa-ochre);
+  border-color: var(--csa-ochre);
+  color: #fff;
+}
+.csa-modal--warning .csa-modal__btn--primary:hover {
+  background: #be8230;
+  border-color: #be8230;
+}
+.csa-modal--warning .csa-modal__btn--primary:focus-visible {
+  outline-color: var(--csa-ochre);
+}
+
+/* Informativo — sky */
+.csa-modal--info::before { background: var(--csa-sky); }
+.csa-modal--info .csa-modal__icon {
+  background: var(--csa-sky-soft);
+  color: var(--csa-sky);
+}
+.csa-modal--info .csa-modal__eyebrow { color: var(--csa-sky); }
+.csa-modal--info .csa-modal__btn--primary {
+  background: var(--csa-sky);
+  border-color: var(--csa-sky);
+  color: #fff;
+}
+.csa-modal--info .csa-modal__btn--primary:hover {
+  background: #316787;
+  border-color: #316787;
+}
+.csa-modal--info .csa-modal__btn--primary:focus-visible {
+  outline-color: var(--csa-sky);
+}
+
+/* Positivo — green */
+.csa-modal--success::before { background: var(--csa-green); }
+.csa-modal--success .csa-modal__icon {
+  background: var(--csa-green-soft);
+  color: var(--csa-green);
+}
+.csa-modal--success .csa-modal__eyebrow { color: var(--csa-green); }
+.csa-modal--success .csa-modal__btn--primary {
+  background: var(--csa-green);
+  border-color: var(--csa-green);
+  color: #fff;
+}
+.csa-modal--success .csa-modal__btn--primary:hover {
+  background: #3c6630;
+  border-color: #3c6630;
+}
+.csa-modal--success .csa-modal__btn--primary:focus-visible {
+  outline-color: var(--csa-green);
+}
+
+/* ============================================================
+ * RESPONSIVE
+ * ============================================================ */
+
+@media (max-width: 480px) {
+  .csa-modal__header { padding: var(--csa-sp-5) var(--csa-sp-5) 0; }
+  .csa-modal__body {
+    padding: var(--csa-sp-3) var(--csa-sp-5) var(--csa-sp-5);
+    padding-left: var(--csa-sp-5);
+  }
+  .csa-modal__footer { padding: var(--csa-sp-3) var(--csa-sp-5); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .csa-modal::backdrop,
+  .csa-modal[open] {
+    animation: none;
+  }
+}
+
+
+/* ============================================================
+ * CROP MARKER — icono + color por cultivo (rotativo por id)
+ * Sirve en listados y cabeceras. Tres tamaños: sm/md/lg.
+ * Color de fondo = tinte soft del acento; icono = color del acento.
+ * ============================================================ */
+
+.csa-crop-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--csa-radius-md);
+  flex-shrink: 0;
+}
+.csa-crop-marker--sm { width: 32px; height: 32px; font-size: 14px; }
+.csa-crop-marker--md { width: 40px; height: 40px; font-size: 16px; }
+.csa-crop-marker--lg { width: 64px; height: 64px; font-size: 28px; border-radius: var(--csa-radius-lg); }
+
+.csa-crop-marker--green      { background: var(--csa-green-soft);      color: var(--csa-green); }
+.csa-crop-marker--ochre      { background: var(--csa-ochre-soft);      color: var(--csa-amber, #a3702a); }
+.csa-crop-marker--sky        { background: var(--csa-sky-soft);        color: var(--csa-sky); }
+.csa-crop-marker--plum       { background: var(--csa-plum-soft);       color: var(--csa-plum); }
+.csa-crop-marker--terracotta { background: var(--csa-terracotta-soft); color: var(--csa-terracotta); }

@@ -16,26 +16,29 @@
 
             {% if not basket.partner.isListed %}
                 {{ basket.partner.setIsListed(1) }}
+                {% set active = basket.partner.getActiveBasket %}
+                {% set share = basket.partner.sharePartner %}
                 {% set color=randColor(true) %}
                 <tr>
-                    <td style="background-color: {{ color }}">{{ basket.partner.weeklyBasketGroup.name }}</td>
+                    <td style="background-color: {{ color }}">{{ basket.partner.weeklyBasketGroup.name ?? '—' }}</td>
                     <td style="background-color: {{ color }}">
                         {{ basket.partner }}
                     </td>
                     <td rowspan="2">Entera compartida</td>
-                    <td>{{ basket.partner.getActiveBasket.eggAmount }}</td>
+                    <td>{{ active.eggAmount ?? '' }}</td>
                     <td></td>
                 </tr>
-                <tr >
-                    {{ basket.partner.sharePartner.setIsListed(1) }}
-                    <td style="background-color: {{ color }}">{{ basket.partner.sharePartner.weeklyBasketGroup.name }}</td>
-                    <td style="background-color: {{ color }}">
-                       {{ basket.partner.sharePartner }}
-                    </td>
-                    <td></td>
-                    <td></td>
-
-                </tr>
+                {% if share %}
+                    <tr>
+                        {{ share.setIsListed(1) }}
+                        <td style="background-color: {{ color }}">{{ share.weeklyBasketGroup.name ?? '—' }}</td>
+                        <td style="background-color: {{ color }}">
+                           {{ share }}
+                        </td>
+                        <td></td>
+                        <td></td>
+                    </tr>
+                {% endif %}
 
             {% endif %}
         {% endfor %}

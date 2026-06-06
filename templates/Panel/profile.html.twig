@@ -1,0 +1,93 @@
+{% extends '_layouts/csa_panel.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% form_theme profile_form 'form_div_layout.html.twig' %}
+
+{% block title %}Mi perfil{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('panel') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Mi perfil</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Mi área · Perfil',
+        'Mis datos',
+        'Mantén tu información al día.'
+    ) }}
+
+<div class="csa-stack-lg">
+
+        {{ form_start(profile_form, { attr: { class: 'csa-form-narrow' } }) }}
+            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Identidad y contacto', subtitle: 'Tus datos personales.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(profile_form.name, 'Nombre') }}
+                        {{ csa.field(profile_form.surname, 'Apellidos') }}
+                        {{ csa.field(profile_form.DNI, 'DNI') }}
+                        {{ csa.field(profile_form.address, 'Dirección', { full: true }) }}
+                        {{ csa.field(profile_form.state, 'Provincia') }}
+                        {{ csa.field(profile_form.city, 'Municipio') }}
+                    </div>
+
+                    <div class="csa-form-grid" style="margin-top: var(--csa-sp-5); padding-top: var(--csa-sp-4); border-top: 1px dashed var(--csa-rule);">
+                        <div class="csa-field">
+                            <div class="csa-field__label-row">
+                                <label class="csa-field__label">Email</label>
+                            </div>
+                            <p style="margin: 0;">{{ app.user.email }}</p>
+                        </div>
+                        <div class="csa-field">
+                            <div class="csa-field__label-row">
+                                <label class="csa-field__label">Teléfono</label>
+                            </div>
+                            <p style="margin: 0;">{{ partner.celular ?: '—' }}</p>
+                        </div>
+                    </div>
+                    <p class="csa-muted" style="margin-top: var(--csa-sp-3); font-size: var(--csa-fs-sm);">
+                        Para cambiar email o teléfono, escríbenos a
+                        <a href="mailto:info@csavegadejarama.org?subject=Cambio de email o teléfono">info@csavegadejarama.org</a>.
+                    </p>
+                {% endblock %}
+            {% endembed %}
+
+            <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                <a href="{{ path('panel_password') }}" class="csa-btn csa-btn--secondary">Cambiar contraseña</a>
+                <button type="submit" class="csa-btn csa-btn--primary">Guardar mis datos</button>
+            </div>
+            {{ form_rest(profile_form) }}
+        {{ form_end(profile_form, { render_rest: false }) }}
+
+    </div>
+
+    <script>
+        (function () {
+            const stateSelect = document.getElementById('{{ profile_form.state.vars.id }}');
+            const citySelect = document.getElementById('{{ profile_form.city.vars.id }}');
+            if (!stateSelect || !citySelect) return;
+
+            const urlTemplate = '{{ path('panel_cities_by_state', { state: '__STATE__' }) }}';
+
+            stateSelect.addEventListener('change', async () => {
+                const stateId = stateSelect.value;
+                citySelect.innerHTML = '<option value="">— Cargando… —</option>';
+                if (!stateId) {
+                    citySelect.innerHTML = '<option value="">— Selecciona primero una provincia —</option>';
+                    return;
+                }
+                try {
+                    const res = await fetch(urlTemplate.replace('__STATE__', stateId), { headers: { 'Accept': 'application/json' } });
+                    const cities = await res.json();
+                    citySelect.innerHTML = '<option value="">— Selecciona —</option>'
+                        + cities.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+                } catch (e) {
+                    citySelect.innerHTML = '<option value="">— Error al cargar municipios —</option>';
+                }
+            });
+        })();
+    </script>
+
+{% endblock %}

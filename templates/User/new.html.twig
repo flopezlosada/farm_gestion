@@ -1,24 +1,67 @@
-    {% extends 'layout_crud.html.twig' %}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% form_theme form 'form_div_layout.html.twig' %}
 
-    {% block title_wrapper %}Añadir {% endblock %}
-    {% block main -%}
-    <div class="panel panel-default">
+{% block title %}Nueva usuaria{% endblock %}
 
-        <div class="panel-body">
-            {{ form_start(form, {'action': path('user_create'),'method': 'post','attr': {'role': 'form' }}) }}
-            <div class='row'>
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('user') }}">Usuarias</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Nueva</span>
+{% endblock %}
 
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Administración · Usuarias',
+        'Nueva usuaria',
+        'Crear una cuenta nueva y elegir qué puede hacer.'
+    ) }}
+
+    {{ form_start(form, { action: path('user_create'), attr: { class: 'csa-form-narrow' } }) }}
+
+        <div class="csa-stack-lg">
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Cuenta', subtitle: 'Identidad y contraseña.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.username, 'Usuaria') }}
+                        {{ csa.field(form.email, 'Email') }}
+                        {{ csa.field(form.plainPassword.first, 'Contraseña') }}
+                        {{ csa.field(form.plainPassword.second, 'Repetir contraseña') }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Permisos', subtitle: 'Marca solo lo que esta persona necesita hacer. Admin incluye todo lo demás.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.roles, 'Roles', { full: true }) }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '3', title: 'Vínculo con socix', subtitle: 'Solo si esta cuenta corresponde a una persona socia.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.partner, 'Socix vinculadx', { full: true }) }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                {{ csa.btn('Cancelar', { variant: 'ghost', href: path('user') }) }}
+                <button type="submit" class="csa-btn csa-btn--primary">Crear usuaria</button>
             </div>
-            {{ form_widget(form.submit,{'attr':{'class':'btn btn-default'}}) }}
-            {{ form_rest(form) }}
-            {{ form_end(form, {'render_rest': false}) }}
-                        <ul class="record_actions">
-    <li>
-        <a href="{{ path('user') }}">
-            Back to the list
-        </a>
-    </li>
-</ul>
+
         </div>
-    </div>
-    {% endblock %}
+
+        {{ form_rest(form) }}
+    {{ form_end(form, { render_rest: false }) }}
+
+{% endblock %}

@@ -6,6 +6,7 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Validator\Constraints as Assert;
+use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Gedmo\Mapping\Annotation as Gedmo;
 
 /**
@@ -13,6 +14,8 @@ use Gedmo\Mapping\Annotation as Gedmo;
  * @ORM\Entity(repositoryClass="App\Repository\PartnerRepository")
  * @ORM\HasLifecycleCallbacks
  */
+#[UniqueEntity(fields: ['celular'], message: 'Ya existe un socio con ese teléfono.')]
+#[UniqueEntity(fields: ['email'], message: 'Ya existe un socio con ese correo electrónico.')]
 class Partner
 {
     /**
@@ -34,8 +37,14 @@ class Partner
     #[Assert\NotBlank]
     private $surname;
 
-  
-  
+    /**
+     * Nombre de reparto: cómo aparece la familia en el PDF de reparto (apodos,
+     * "X y Z", etc.), proveniente de `nombre_pdf` de reparto_definitivo.csv.
+     * Difiere del nombre legal (name + surname, usado para cobros). Nullable:
+     * si está vacío, {@see getNameForDelivery} cae al nombre legal.
+     * @ORM\Column(type="string", length=255, nullable=true)
+     */
+    private ?string $display_name = null;
 
     /**
      * @ORM\Column(type="string", length=20, nullable=true)
@@ -43,16 +52,30 @@ class Partner
     private $DNI;
 
     /**
-     * @ORM\Column(type="integer", nullable=true)
+     * @ORM\Column(type="string", length=20, nullable=true, unique=true)
      */
-    #[Assert\Type(type: 'integer', message: 'El valor {{value}} no es un {{type}} válido.')]
-    #[Assert\GreaterThan(value: 0)]
+    #[Assert\Length(min: 9, minMessage: 'Un número de teléfono debe tener al menos {{ limit }} caracteres.', max: 20, maxMessage: 'Un número de teléfono debe tener como máximo {{ limit }} caracteres.')]
     private $celular;
 
     /**
      * @ORM\Column(type="string", length=255, nullable=true)
      */
     private $address;
+
+    /**
+     * IBAN para la remesa SEPA. Pertenece al titular legal del socio.
+     * Nullable mientras la importación inicial no haya cargado todos los IBANs.
+     * @ORM\Column(type="string", length=34, nullable=true)
+     */
+    #[Assert\Length(max: 34)]
+    private ?string $iban = null;
+
+    /**
+     * Observaciones libres sobre el socio (ej. cuotas especiales, acuerdos,
+     * notas de administración). Equivale al campo `observaciones` de COBROS.
+     * @ORM\Column(type="text", nullable=true)
+     */
+    private ?string $notes = null;
 
     /**
      * @var smallint $state
@@ -134,6 +157,16 @@ class Partner
      */
     private $partner_basket_shares;
 
+    /**
+     * Episodios de pertenencia a la asociación. Si un socio se da de alta,
+     * baja, y vuelve a alta meses después, hay 2 PartnerMembershipPeriod.
+     * Permite reconstruir gráficos históricos de socios activos por fecha.
+     *
+     * @ORM\OneToMany(targetEntity="PartnerMembershipPeriod", mappedBy="partner", cascade={"persist","remove"})
+     * @ORM\OrderBy({"start_date"="ASC"})
+     */
+    private $membership_periods;
+
 
     /**
      *
@@ -159,7 +192,7 @@ class Partner
     private $eat_meat;
 
     /**
-     * @ORM\Column(type="string", length=255)
+     * @ORM\Column(type="string", length=255, nullable=true, unique=true)
      */
     #[Assert\Email]
     private $email;
@@ -175,6 +208,24 @@ class Partner
      * @ORM\Column(type="boolean", nullable=true)
      */
     private $is_active;
+
+    public const STATUS_ACTIVO = 'ACTIVO';
+    public const STATUS_PAUSADO = 'PAUSADO';
+    public const STATUS_BAJA = 'BAJA';
+    public const STATUSES = [self::STATUS_ACTIVO, self::STATUS_PAUSADO, self::STATUS_BAJA];
+
+    /**
+     * Estado actual del socio en el workflow de pertenencia. Sustituye
+     * progresivamente a is_active (que se mantiene como mirror temporal
+     * hasta migrar todas las consultas).
+     *
+     *   ACTIVO   - recibe cesta y aparece en listados de reparto
+     *   PAUSADO  - vínculo activo pero no recibe cesta (vacaciones, baja médica)
+     *   BAJA     - dejó la asociación; el histórico se conserva pero no genera reparto
+     *
+     * @ORM\Column(type="string", length=20, options={"default": "ACTIVO"})
+     */
+    private string $status = self::STATUS_ACTIVO;
 
     /**
      * parientes
@@ -226,6 +277,24 @@ class Partner
 
         $this->weekly_baskets = new ArrayCollection();
         $this->relatives = new ArrayCollection();
+        $this->membership_periods = new ArrayCollection();
+    }
+
+    /**
+     * @return Collection|PartnerMembershipPeriod[]
+     */
+    public function getMembershipPeriods(): Collection
+    {
+        return $this->membership_periods;
+    }
+
+    public function addMembershipPeriod(PartnerMembershipPeriod $period): self
+    {
+        if (!$this->membership_periods->contains($period)) {
+            $this->membership_periods[] = $period;
+            $period->setPartner($this);
+        }
+        return $this;
     }
 
 
@@ -267,11 +336,58 @@ class Partner
         return $this->surname;
     }
 
-    public function setSurname(string $surname): self
+    public function setSurname(?string $surname): self
     {
         $this->surname = $surname;
 
         return $this;
+    }
+
+    /**
+     * Valor crudo del nombre de reparto (puede ser null). Es el que edita el
+     * formulario; la presentación con fallback va por {@see getNameForDelivery}.
+     */
+    public function getDisplayName(): ?string
+    {
+        return $this->display_name;
+    }
+
+    public function setDisplayName(?string $displayName): self
+    {
+        $this->display_name = $displayName !== null && trim($displayName) !== ''
+            ? trim($displayName)
+            : null;
+
+        return $this;
+    }
+
+    /**
+     * Nombre a mostrar en listados de reparto: el `display_name` (apodo de
+     * reparto) si existe, o el nombre legal en title case como fallback.
+     *
+     * @return string Nunca vacío salvo que name y surname también lo estén.
+     */
+    public function getNameForDelivery(): string
+    {
+        if ($this->display_name !== null && trim($this->display_name) !== '') {
+            return $this->display_name;
+        }
+
+        return $this->getLegalName();
+    }
+
+    /**
+     * Nombre legal completo (name + surname) en title case. Los datos en
+     * BBDD están en mayúsculas (vienen del import); aquí se normalizan para
+     * presentación. No restaura acentos ausentes en origen.
+     *
+     * @return string Cadena vacía si no hay name ni surname.
+     */
+    public function getLegalName(): string
+    {
+        $legal = trim(($this->name ?? '') . ' ' . ($this->surname ?? ''));
+
+        return $legal === '' ? '' : mb_convert_case($legal, MB_CASE_TITLE, 'UTF-8');
     }
 
     public function getDNI(): ?string
@@ -286,12 +402,12 @@ class Partner
         return $this;
     }
 
-    public function getcelular(): ?int
+    public function getcelular(): ?string
     {
         return $this->celular;
     }
 
-    public function setcelular(?int $celular): self
+    public function setcelular(?string $celular): self
     {
         $this->celular = $celular;
 
@@ -308,6 +424,30 @@ class Partner
     public function setAddress(?string $address): self
     {
         $this->address = $address;
+
+        return $this;
+    }
+
+    public function getIban(): ?string
+    {
+        return $this->iban;
+    }
+
+    public function setIban(?string $iban): self
+    {
+        $this->iban = $iban !== null ? strtoupper(preg_replace('/\s+/', '', $iban)) : null;
+
+        return $this;
+    }
+
+    public function getNotes(): ?string
+    {
+        return $this->notes;
+    }
+
+    public function setNotes(?string $notes): self
+    {
+        $this->notes = $notes;
 
         return $this;
     }
@@ -643,6 +783,26 @@ class Partner
     {
         $this->has_file = $has_file;
 
+        return $this;
+    }
+
+    public function getStatus(): string
+    {
+        return $this->status;
+    }
+
+    /**
+     * @param string $status Uno de Partner::STATUS_*.
+     * @throws \InvalidArgumentException Si el valor no está en STATUSES.
+     */
+    public function setStatus(string $status): self
+    {
+        if (!in_array($status, self::STATUSES, true)) {
+            throw new \InvalidArgumentException(sprintf('Estado desconocido: %s', $status));
+        }
+        $this->status = $status;
+        // Mirror temporal: is_active sigue alimentando las consultas legacy.
+        $this->is_active = ($status === self::STATUS_ACTIVO);
         return $this;
     }
 

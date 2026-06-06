@@ -1,0 +1,64 @@
+{# ============================================================
+ # Confirmación de transición masiva (leave, resume, rejoin).
+ # Recibe:
+ #   - partners    entidades resueltas a partir de los IDs marcados
+ #   - transition  string corto: leave | resume | rejoin
+ #   - copy        { verb, past, icon } para la UI
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% set verb_caps = copy.verb|capitalize %}
+
+{% block title %}{{ verb_caps }} en grupo{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('partner_index') }}">Socixs</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ verb_caps }} en grupo</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {% set effect_copy = {
+        'leave':  'Sus cestas futuras se eliminarán y se registrará un evento LEAVE en cada histórico.',
+        'pause':  'Dejarán de recibir cesta pero seguirán siendo socixs. La pausa es reversible.',
+        'resume': 'Volverán a recibir cesta. Se registra un evento RESUME en cada histórico.',
+        'rejoin': 'Volverán al estado activo. Se registra un evento JOIN en cada histórico.'
+    } %}
+
+    {{ csa.page_header(
+        'Socixs · Acción masiva',
+        'Vas a ' ~ copy.verb ~ ' a ' ~ partners|length ~ ' socix' ~ (partners|length == 1 ? '' : 's'),
+        effect_copy[transition]|default('Se registrará el evento correspondiente en cada histórico.')
+    ) }}
+
+    {% if partners|length > 0 %}
+        <div class="csa-card" style="margin-bottom: var(--csa-sp-5);">
+            <ul style="margin: 0; padding-left: var(--csa-sp-5);">
+                {% for partner in partners %}
+                    <li style="padding: var(--csa-sp-1) 0;">
+                        <strong>{{ partner.name }} {{ partner.surname }}</strong>
+                        {%- if partner.celular %} · <span class="csa-muted">{{ partner.celular }}</span>{% endif -%}
+                        · <span class="csa-muted">estado actual: {{ partner.status|lower }}</span>
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
+
+    <form method="post" action="{{ path('partner_bulk_transition_apply') }}" class="csa-row" style="gap: var(--csa-sp-3);">
+        <input type="hidden" name="_token" value="{{ csrf_token('partner_bulk_transition_apply') }}">
+        <input type="hidden" name="transition" value="{{ transition }}">
+        {% for partner in partners %}
+            <input type="hidden" name="partner_ids[]" value="{{ partner.id }}">
+        {% endfor %}
+
+        {{ csa.btn('Confirmar ' ~ copy.verb, { variant: 'primary', type: 'submit', icon: copy.icon }) }}
+        {{ csa.btn('Cancelar', { variant: 'ghost', href: path('partner_index'), icon: 'fa-times' }) }}
+    </form>
+
+{% endblock %}

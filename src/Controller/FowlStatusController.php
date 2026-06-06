@@ -2,29 +2,28 @@
 
 namespace App\Controller;
 
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-
-use Symfony\Component\HttpFoundation\Request;
-use App\Controller\AbstractAppController;
-
 use App\Entity\FowlStatus;
 use App\Form\FowlStatusType;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * FowlStatus controller.
  *
  */
-class FowlStatusController extends AbstractAppController
+#[IsGranted('ROLE_GESTION_GRANJA')]
+class FowlStatusController extends AbstractController
 {
 
     /**
      * Lists all FowlStatus entities.
      *
      */
-    public function index()
+    public function index(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entities = $em->getRepository(\App\Entity\FowlStatus::class)->findAll();
 
         return $this->render('FowlStatus/index.html.twig', array(
@@ -36,14 +35,13 @@ class FowlStatusController extends AbstractAppController
      * Creates a new FowlStatus entity.
      *
      */
-    public function create(Request $request)
+    public function create(Request $request, EntityManagerInterface $em)
     {
         $entity = new FowlStatus();
         $form = $this->createCreateForm($entity);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $em->persist($entity);
             $em->flush();
 
@@ -94,10 +92,8 @@ class FowlStatusController extends AbstractAppController
      * Finds and displays a FowlStatus entity.
      *
      */
-    public function show($id)
+    public function show($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\FowlStatus::class)->find($id);
 
         if (!$entity) {
@@ -116,10 +112,8 @@ class FowlStatusController extends AbstractAppController
      * Displays a form to edit an existing FowlStatus entity.
      *
      */
-    public function edit($id)
+    public function edit($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\FowlStatus::class)->find($id);
 
         if (!$entity) {
@@ -159,10 +153,8 @@ class FowlStatusController extends AbstractAppController
      * Edits an existing FowlStatus entity.
      *
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, $id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\FowlStatus::class)->find($id);
 
         if (!$entity) {
@@ -190,13 +182,12 @@ class FowlStatusController extends AbstractAppController
      * Deletes a FowlStatus entity.
      *
      */
-    public function delete(Request $request, $id)
+    public function delete(Request $request, $id, EntityManagerInterface $em)
     {
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\FowlStatus::class)->find($id);
 
             if (!$entity) {

@@ -1,0 +1,52 @@
+{# ---------- FLASHES ----------
+ # Pila de avisos flash con icono, color por tipo y botón de cierre.
+ # Reutilizable por el shell de gestión y por el panel de socixs:
+ #
+ #   {% include '_components/csa_flashes.html.twig' %}
+ #
+ # Mapea las claves de flash que usa la app (success / notice / warning /
+ # error) a una variante visual + icono. `notice` se trata como éxito (es
+ # la clave que usan varios controllers para confirmaciones). Cualquier
+ # clave desconocida cae en `info`.
+ #
+ # El cierre (animación + retirada del DOM) va incluido aquí mismo, por
+ # delegación sobre `.csa-alert__close`, para que el componente sea autónomo:
+ # cualquier layout que lo incluya (shell de gestión, panel de socixs) hereda
+ # el comportamiento sin duplicar el script. #}
+{% set flash_meta = {
+    'success': { cls: 'success', icon: 'fa-check-circle' },
+    'notice':  { cls: 'success', icon: 'fa-check-circle' },
+    'warning': { cls: 'warning', icon: 'fa-exclamation-triangle' },
+    'error':   { cls: 'error',   icon: 'fa-times-circle' },
+    'info':    { cls: 'info',    icon: 'fa-info-circle' }
+} %}
+{% set all_flashes = app.flashes %}
+{% if all_flashes is not empty %}
+    <div class="csa-alerts" role="region" aria-label="Avisos">
+        {% for type, messages in all_flashes %}
+            {% set meta = flash_meta[type]|default(flash_meta['info']) %}
+            {% for message in messages %}
+                <div class="csa-alert csa-alert--{{ meta.cls }}" role="status">
+                    <i class="csa-alert__icon fa {{ meta.icon }}" aria-hidden="true"></i>
+                    <div class="csa-alert__body">{{ message }}</div>
+                    <button type="button" class="csa-alert__close" aria-label="Cerrar aviso">
+                        <i class="fa fa-times" aria-hidden="true"></i>
+                    </button>
+                </div>
+            {% endfor %}
+        {% endfor %}
+    </div>
+    {# Cierre por delegación sobre el botón ×: anima la salida y retira la
+     # alerta del DOM (con respaldo por si no hay transición). Solo se emite
+     # cuando hay avisos, así que en páginas sin flashes no añade nada. #}
+    <script>
+        document.addEventListener('click', function (e) {
+            var btn = e.target.closest('.csa-alert__close');
+            if (!btn) { return; }
+            var alert = btn.closest('.csa-alert');
+            if (!alert) { return; }
+            alert.classList.add('is-closing');
+            setTimeout(function () { alert.remove(); }, 200);
+        });
+    </script>
+{% endif %}

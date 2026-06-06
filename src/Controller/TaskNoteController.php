@@ -2,29 +2,28 @@
 
 namespace App\Controller;
 
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-
-use Symfony\Component\HttpFoundation\Request;
-use App\Controller\AbstractAppController;
-
 use App\Entity\TaskNote;
 use App\Form\TaskNoteType;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * TaskNote controller.
  *
  */
-class TaskNoteController extends AbstractAppController
+#[IsGranted('ROLE_GESTION_GRANJA')]
+class TaskNoteController extends AbstractController
 {
 
     /**
      * Lists all TaskNote entities.
      *
      */
-    public function index()
+    public function index(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entities = $em->getRepository(\App\Entity\TaskNote::class)->findAll();
 
         return $this->render('TaskNote/index.html.twig', array(
@@ -36,12 +35,11 @@ class TaskNoteController extends AbstractAppController
      * Creates a new TaskNote entity.
      *
      */
-    public function create(Request $request, $task_id)
+    public function create(Request $request, $task_id, EntityManagerInterface $em)
     {
         $entity = new TaskNote();
         $form = $this->createCreateForm($entity, $task_id);
         $form->handleRequest($request);
-        $em = $this->getDoctrine()->getManager();
 
         $task = $em->getRepository(\App\Entity\Task::class)->find($task_id);
         $entity->setTask($task);
@@ -81,11 +79,10 @@ class TaskNoteController extends AbstractAppController
      * Displays a form to create a new TaskNote entity.
      *
      */
-    public function new($task_id)
+    public function new($task_id, EntityManagerInterface $em)
     {
         $entity = new TaskNote();
         $form = $this->createCreateForm($entity, $task_id);
-        $em = $this->getDoctrine()->getManager();
 
         $task = $em->getRepository(\App\Entity\Task::class)->find($task_id);
         $entity->setTask($task);
@@ -100,10 +97,8 @@ class TaskNoteController extends AbstractAppController
      * Finds and displays a TaskNote entity.
      *
      */
-    public function show($id)
+    public function show($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\TaskNote::class)->find($id);
 
         if (!$entity) {
@@ -122,10 +117,8 @@ class TaskNoteController extends AbstractAppController
      * Displays a form to edit an existing TaskNote entity.
      *
      */
-    public function edit($id)
+    public function edit($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\TaskNote::class)->find($id);
 
         if (!$entity) {
@@ -165,10 +158,8 @@ class TaskNoteController extends AbstractAppController
      * Edits an existing TaskNote entity.
      *
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, $id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\TaskNote::class)->find($id);
 
         if (!$entity) {
@@ -196,13 +187,12 @@ class TaskNoteController extends AbstractAppController
      * Deletes a TaskNote entity.
      *
      */
-    public function delete(Request $request, $id)
+    public function delete(Request $request, $id, EntityManagerInterface $em)
     {
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\TaskNote::class)->find($id);
 
             if (!$entity) {

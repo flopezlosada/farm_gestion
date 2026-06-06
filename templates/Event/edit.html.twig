@@ -63,10 +63,18 @@
 
             <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
                 <div>
-                    <button type="submit" form="event-delete-form" class="csa-btn csa-btn--ghost"
-                            onclick="return confirm('¿Seguro? Esta acción no se puede deshacer.');">
+                    <button type="button" class="csa-btn csa-btn--ghost"
+                    onclick="document.getElementById('confirm-event-delete').showModal()">
                         Eliminar evento
                     </button>
+            {{ csa.confirm_dialog('confirm-event-delete', {
+                variant: 'danger',
+                eyebrow: 'Acción permanente',
+                title: 'Eliminar este registro',
+                body: 'Se borrará de forma definitiva y no podrá recuperarse.',
+                confirm_label: 'Eliminar',
+                external_form_id: 'event-delete-form',
+            }) }}
                 </div>
                 <div class="csa-row">
                     {{ csa.btn('Cancelar', { variant: 'ghost', href: path('event_show', { id: entity.id }) }) }}

@@ -2,29 +2,28 @@
 
 namespace App\Controller;
 
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-
-use Symfony\Component\HttpFoundation\Request;
-use App\Controller\AbstractAppController;
-
 use App\Entity\Event;
 use App\Form\EventType;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * Event controller.
  *
  */
-class EventController extends AbstractAppController
+#[IsGranted('ROLE_BLOG')]
+class EventController extends AbstractController
 {
 
     /**
      * Lists all Event entities.
      *
      */
-    public function index()
+    public function index(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entities = $em->getRepository(\App\Entity\Event::class)->findAll();
 
         return $this->render('Event/index.html.twig', array(
@@ -36,14 +35,13 @@ class EventController extends AbstractAppController
      * Creates a new Event entity.
      *
      */
-    public function create(Request $request)
+    public function create(Request $request, EntityManagerInterface $em)
     {
         $entity = new Event();
         $form = $this->createCreateForm($entity);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity->setStartDate(new \DateTime($entity->getStartDate()));
             if ($entity->getEndDate()) {
                 $entity->setEndDate(new \DateTime($entity->getEndDate()));
@@ -98,10 +96,8 @@ class EventController extends AbstractAppController
      * Finds and displays a Event entity.
      *
      */
-    public function show($id)
+    public function show($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Event::class)->find($id);
 
         if (!$entity) {
@@ -120,10 +116,8 @@ class EventController extends AbstractAppController
      * Displays a form to edit an existing Event entity.
      *
      */
-    public function edit($id)
+    public function edit($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Event::class)->find($id);
 
         if (!$entity) {
@@ -169,10 +163,8 @@ class EventController extends AbstractAppController
      * Edits an existing Event entity.
      *
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, $id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Event::class)->find($id);
 
         if (!$entity) {
@@ -213,13 +205,12 @@ class EventController extends AbstractAppController
      * Deletes a Event entity.
      *
      */
-    public function delete(Request $request, $id)
+    public function delete(Request $request, $id, EntityManagerInterface $em)
     {
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\Event::class)->find($id);
 
             if (!$entity) {

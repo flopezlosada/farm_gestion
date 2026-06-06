@@ -1,0 +1,120 @@
+{# ============================================================
+ # Layout del panel de socix (vista propia).
+ # Separado del shell admin: el sidebar es minimal y el contenido
+ # gira en torno a "lo mío" (mis datos, mi cesta, mi familia).
+ # ============================================================ #}
+
+{% extends 'base.html.twig' %}
+
+{% block more_css %}
+    {{ parent() }}
+    {{ encore_entry_link_tags('app') }}
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    {{ encore_entry_script_tags('app') }}
+{% endblock %}
+
+{% block body %}
+<div class="csa-app">
+    <div class="csa-shell">
+
+        {% set route = app.request.attributes.get('_route') %}
+
+        {# ---------- SIDEBAR ---------- #}
+        <aside class="csa-sidebar" id="csa-sidebar">
+            <div class="csa-sidebar__brand">
+                <div class="csa-sidebar__brand-name">CSA Vega de Jarama</div>
+                <div class="csa-sidebar__brand-sub">Mi panel</div>
+            </div>
+
+            <nav class="csa-sidebar__nav">
+                <div class="csa-sidebar__group">Mi área</div>
+                {{ _self.nav_link('Inicio', path('panel'), 'fa-home', route == 'panel') }}
+                {{ _self.nav_link('Mi perfil', path('panel_profile'), 'fa-user', route starts with 'panel_profile') }}
+                {{ _self.nav_link('Mi calendario', path('panel_calendar'), 'fa-calendar', route starts with 'panel_calendar') }}
+                {{ _self.nav_link('Mi familia', path('panel_family'), 'fa-users', route starts with 'panel_family') }}
+            </nav>
+        </aside>
+
+        {# ---------- MAIN ---------- #}
+        <div class="csa-main">
+            <header class="csa-topbar">
+                <button type="button" class="csa-btn csa-btn--ghost csa-btn--sm csa-sidebar-toggle"
+                        aria-label="Abrir navegación"
+                        onclick="document.getElementById('csa-sidebar').classList.toggle('csa-sidebar--open')">
+                    <i class="fa fa-bars"></i>
+                </button>
+
+                <nav class="csa-topbar__crumbs" aria-label="Migas de pan">
+                    {% block csa_crumbs %}
+                        <a href="{{ path('panel') }}">Inicio</a>
+                    {% endblock %}
+                </nav>
+
+                {% set has_gestion = is_granted('ROLE_ADMIN') or is_granted('ROLE_GESTION_GRANJA') or is_granted('ROLE_GESTION_SOCIXS') or is_granted('ROLE_GESTION_CESTAS') or is_granted('ROLE_BLOG') %}
+                <div class="csa-topbar__user">
+                    {% if has_gestion %}
+                        <div class="csa-areaswitch" role="group" aria-label="Cambiar de área">
+                            <a href="{{ path('dashboard') }}" class="csa-areaswitch__item" title="Ir al back-office de gestión">
+                                <i class="fa fa-cog" aria-hidden="true"></i>
+                                <span class="csa-areaswitch__label">Gestión</span>
+                                <span class="csa-areaswitch__short" aria-hidden="true">G</span>
+                            </a>
+                            <span class="csa-areaswitch__item csa-areaswitch__item--active" aria-current="page">
+                                <i class="fa fa-user" aria-hidden="true"></i>
+                                <span class="csa-areaswitch__label">Mi panel</span>
+                                <span class="csa-areaswitch__short" aria-hidden="true">P</span>
+                            </span>
+                        </div>
+                    {% endif %}
+
+                    <a href="{{ path('homepage') }}" class="csa-topbar__util" target="_blank" rel="noopener" title="Abrir la web pública">
+                        <i class="fa fa-globe" aria-hidden="true"></i>
+                        <span class="csa-topbar__util-label">Ver web</span>
+                    </a>
+
+                    {% if app.user %}
+                        {# En el panel del socix mostramos el nombre del Partner
+                         # cuando existe. Caer al userIdentifier solo si el User
+                         # no tiene Partner vinculado (caso de fallback). #}
+                        {% set me_partner = app.user.partner %}
+                        {% set me_name = me_partner ? me_partner.name|capitalize : app.user.userIdentifier %}
+                        <div class="csa-me">
+                            <a href="{{ path('panel_profile') }}" class="csa-me__id" title="Editar mis datos">
+                                <span class="csa-avatar">{{- me_name|first|upper -}}</span>
+                                <span class="csa-me__name">{{ me_name }}</span>
+                            </a>
+                            <a href="{{ path('app_logout') }}" class="csa-me__logout" title="Cerrar sesión" aria-label="Cerrar sesión">
+                                <i class="fa fa-sign-out" aria-hidden="true"></i>
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </header>
+
+            <main class="csa-content">
+                {# Flashes del panel renderizados aquí (en el layout) para que
+                 # CUALQUIER pantalla los consuma. Si una pantalla concreta
+                 # no los pintara, se acumularían en sesión y aparecerían
+                 # todos juntos al cargar la siguiente. Mismo componente que el
+                 # shell de gestión (icono + cierre + animación). #}
+                {% include '_components/csa_flashes.html.twig' %}
+
+                {% block csa_main %}{% endblock %}
+            </main>
+        </div>
+
+    </div>
+</div>
+{% endblock %}
+
+
+{# Helper idéntico al del shell admin. Se duplica porque cada layout es self-contained. #}
+{% macro nav_link(label, href, icon, active) %}
+    <a href="{{ href }}" class="csa-sidebar__link{% if active %} csa-sidebar__link--active{% endif %}">
+        {% if icon %}<i class="csa-sidebar__icon fa {{ icon }}"></i>{% endif %}
+        <span>{{ label }}</span>
+    </a>
+{% endmacro %}

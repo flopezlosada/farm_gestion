@@ -2,31 +2,30 @@
 
 namespace App\Controller;
 
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-
 use App\Entity\Basket;
-use Proxies\__CG__\App\Entity\CropWorking;
-use Symfony\Component\HttpFoundation\Request;
-use App\Controller\AbstractAppController;
-
 use App\Entity\Production;
 use App\Form\ProductionType;
+use Doctrine\ORM\EntityManagerInterface;
+use Proxies\__CG__\App\Entity\CropWorking;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * Production controller.
  *
  */
-class ProductionController extends AbstractAppController
+#[IsGranted('ROLE_GESTION_GRANJA')]
+class ProductionController extends AbstractController
 {
 
     /**
      * Lists all Production entities.
      *
      */
-    public function index()
+    public function index(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entities = $em->getRepository(\App\Entity\Production::class)->findAll();
         /*$crops=$em->getRepository(\App\Entity\Crop::class)->findAll();
         foreach ($crops as $crop)
@@ -53,14 +52,13 @@ class ProductionController extends AbstractAppController
      * Creates a new Production entity.
      *
      */
-    public function create(Request $request)
+    public function create(Request $request, EntityManagerInterface $em)
     {
         $entity = new Production();
         $form = $this->createCreateForm($entity);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity->setWeek(date('W', strtotime($entity->getProductionDate())));
             $basket = $em->getRepository(\App\Entity\Basket::class)->findBasketByWeekYear($entity->getProductionDate());
             if (!$basket) {
@@ -113,11 +111,10 @@ class ProductionController extends AbstractAppController
      * Displays a form to create a new Production entity.
      *
      */
-    public function new($crop_working_id = null)
+    public function new(EntityManagerInterface $em, $crop_working_id = null)
     {
         $entity = new Production();
         if ($crop_working_id) {
-            $em = $this->getDoctrine()->getManager();
             $crop_working = $em->getRepository(\App\Entity\CropWorking::class)->find($crop_working_id);
             $entity->setCropWorking($crop_working);
         }
@@ -133,10 +130,8 @@ class ProductionController extends AbstractAppController
      * Finds and displays a Production entity.
      *
      */
-    public function show($id)
+    public function show($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Production::class)->find($id);
 
         if (!$entity) {
@@ -155,10 +150,8 @@ class ProductionController extends AbstractAppController
      * Displays a form to edit an existing Production entity.
      *
      */
-    public function edit($id)
+    public function edit($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Production::class)->find($id);
 
         if (!$entity) {
@@ -199,10 +192,8 @@ class ProductionController extends AbstractAppController
      * Edits an existing Production entity.
      *
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, $id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Production::class)->find($id);
 
         if (!$entity) {
@@ -234,13 +225,12 @@ class ProductionController extends AbstractAppController
      * Deletes a Production entity.
      *
      */
-    public function delete(Request $request, $id)
+    public function delete(Request $request, $id, EntityManagerInterface $em)
     {
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\Production::class)->find($id);
 
             if (!$entity) {
@@ -270,12 +260,11 @@ class ProductionController extends AbstractAppController
             ->getForm();
     }
 
-    public function basket($year)
+    public function basket($year, EntityManagerInterface $em)
     {
         if (!$year) {
             $year = date('Y');
         }
-        $em = $this->getDoctrine()->getManager();
         $repo = $em->getRepository(\App\Entity\Production::class);
         $weeks = $repo->findWeeks($year);//semanas en las que hay producción declarada. Equivale a semanas en las que se entrega cesta.
         $baskets = array();
@@ -295,10 +284,8 @@ class ProductionController extends AbstractAppController
         ));
     }
 
-    public function basketDetail($id)
+    public function basketDetail($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $basket = $em->getRepository(\App\Entity\Basket::class)->find($id);
         $amount = 0;
         foreach ($basket->getProductions() as $production) {

@@ -1,0 +1,32 @@
+{% extends '_layouts/csa_panel.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Mi familia{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('panel') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Mi familia</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Mi área · Familia',
+        'Mi familia',
+        'Personas con las que compartes cesta.'
+    ) }}
+
+    {% embed '_components/csa_card.html.twig' with { title: 'En construcción', accent: 'plum' } %}
+        {% block body %}
+            <p>
+                Estamos terminando esta sección. Por ahora la vinculación familiar la gestiona la administración:
+                si vivís juntas y compartís una sola cesta, escribid a <a href="mailto:info@csavegadejarama.org?subject=Vínculo familiar">info@csavegadejarama.org</a> y te enlazamos con tu familia.
+            </p>
+            <p class="csa-muted" style="margin-top: var(--csa-sp-3);">
+                Cuando esté listo verás aquí a las personas con las que compartes cesta y podrás avisar a admin de cambios.
+            </p>
+        {% endblock %}
+    {% endembed %}
+
+{% endblock %}

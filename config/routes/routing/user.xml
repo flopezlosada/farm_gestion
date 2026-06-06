@@ -32,4 +32,8 @@
         <default key="_controller">App\Controller\UserController::delete</default>
     </route>
 
+    <route id="user_toggle_block" path="/{id}/toggle-block" methods="POST">
+        <default key="_controller">App\Controller\UserController::toggleBlock</default>
+    </route>
+
 </routes>

@@ -2,33 +2,32 @@
 
 namespace App\Controller;
 
-use Symfony\Bridge\Doctrine\Form\Type\EntityType;
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-
-use Doctrine\ORM\EntityRepository;
+use App\Entity\CropWorking;
 use App\Entity\Sector;
 use App\Form\CropWorkingEditType;
-use Symfony\Component\HttpFoundation\Request;
-use App\Controller\AbstractAppController;
-
-use App\Entity\CropWorking;
 use App\Form\CropWorkingType;
+use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\EntityRepository;
+use Symfony\Bridge\Doctrine\Form\Type\EntityType;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * CropWorking controller.
  *
  */
-class CropWorkingController extends AbstractAppController
+#[IsGranted('ROLE_GESTION_GRANJA')]
+class CropWorkingController extends AbstractController
 {
 
     /**
      * Lists all CropWorking entities.
      *
      */
-    public function index()
+    public function index(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entities = $em->getRepository(\App\Entity\CropWorking::class)->findActive();
 
         foreach ($entities as $entity) {
@@ -45,14 +44,13 @@ class CropWorkingController extends AbstractAppController
      * Creates a new CropWorking entity.
      *
      */
-    public function create(Request $request)
+    public function create(Request $request, EntityManagerInterface $em)
     {
         $entity = new CropWorking();
         $form = $this->createCreateForm($entity);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $em->persist($entity);
 
             $crop = $entity->getCrop();
@@ -92,11 +90,10 @@ class CropWorkingController extends AbstractAppController
      * Displays a form to create a new CropWorking entity.
      *
      */
-    public function new($crop_id = null)
+    public function new(EntityManagerInterface $em, $crop_id = null)
     {
         $entity = new CropWorking();
         if ($crop_id) {
-            $em = $this->getDoctrine()->getManager();
             $crop = $em->getRepository(\App\Entity\Crop::class)->find($crop_id);
             $entity->setCrop($crop);
         }
@@ -113,10 +110,8 @@ class CropWorkingController extends AbstractAppController
      * Finds and displays a CropWorking entity.
      *
      */
-    public function show($id)
+    public function show($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\CropWorking::class)->find($id);
 
         if (!$entity) {
@@ -144,10 +139,8 @@ class CropWorkingController extends AbstractAppController
      * Displays a form to edit an existing CropWorking entity.
      *
      */
-    public function edit($id)
+    public function edit($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\CropWorking::class)->find($id);
 
         if (!$entity) {
@@ -164,9 +157,8 @@ class CropWorkingController extends AbstractAppController
         ));
     }
 
-    public function finish($id, $finish)
+    public function finish($id, $finish, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
 
         $entity = $em->getRepository(\App\Entity\CropWorking::class)->find($id);
 
@@ -209,10 +201,8 @@ class CropWorkingController extends AbstractAppController
      * Edits an existing CropWorking entity.
      *
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, $id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\CropWorking::class)->find($id);
 
         if (!$entity) {
@@ -240,13 +230,12 @@ class CropWorkingController extends AbstractAppController
      * Deletes a CropWorking entity.
      *
      */
-    public function delete(Request $request, $id)
+    public function delete(Request $request, $id, EntityManagerInterface $em)
     {
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\CropWorking::class)->find($id);
 
             if (!$entity) {
@@ -277,9 +266,8 @@ class CropWorkingController extends AbstractAppController
             ->getForm();
     }
 
-    public function addSector($id)
+    public function addSector($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
 
         $crop_working = $em->getRepository(\App\Entity\CropWorking::class)->find($id);
 
@@ -308,9 +296,8 @@ class CropWorkingController extends AbstractAppController
         ));
     }
 
-    public function addedSector($id, Request $request)
+    public function addedSector($id, Request $request, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
 
         $crop_working = $em->getRepository(\App\Entity\CropWorking::class)->find($id);
 
@@ -327,9 +314,8 @@ class CropWorkingController extends AbstractAppController
 
     }
 
-    public function deleteSector($sector_id, $crop_working_id)
+    public function deleteSector($sector_id, $crop_working_id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
 
         $em->getRepository(\App\Entity\Sector::class)->deleteSector($sector_id, $crop_working_id);
 

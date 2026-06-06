@@ -1,38 +1,113 @@
-{% extends "base.html.twig" %}
+{# ============================================================
+ # /login — entrada principal
+ # ============================================================
+ # Form de usuario+contraseña (auth nativa Symfony, ruta app_login).
+ # Bajo el form, acciones secundarias para primer acceso, olvido y
+ # contacto, como enlaces discretos (no como CTAs alternativos).
+ # ============================================================ #}
+{% extends "_layouts/csa_auth.html.twig" %}
 
-{% block body %}
-{% if error %}
-    <div>{{ error.messageKey|trans(error.messageData, 'security') }}</div>
-{% endif %}
-    <div class="container">
-        <div class="row">
-            <div class="col-md-4 col-md-offset-4">
-                <div class="login-panel panel panel-default">
-                    <div class="panel-heading">
-                        <h3 class="panel-title">Acceso</h3>
-                    </div>
-                    <div class="panel-body">
-                        <form action="{{ path('app_login') }}" method="post" role="form">
-                            <fieldset>
-                                <input type="hidden" name="_csrf_token" value="{{ csrf_token('authenticate') }}" />
-                                <div class="form-group">
-                                    <input class="form-control" placeholder="Nombre de usuaria" type="text" id="username" name="_username" value="{{ last_username }}" required="required" autofocus />
-                                </div>
-                                <div class="form-group">
-                                    <input class="form-control" placeholder="Contraseña" value="" type="password" id="password" name="_password" required="required" />
-                                </div>
-                                <div class="checkbox">
-                                    <label>
-                                        <input type="checkbox" id="remember_me" name="_remember_me" value="1" />
-                                        <label for="remember_me">Recuérdame</label>
-                                    </label>
-                                </div>
-                                <input type="submit" id="_submit" name="_submit" class="btn btn-lg btn-success btn-block" value="Entrar" />
-                            </fieldset>
-                        </form>
-                    </div>
-                </div>
+{% block title %}Acceso{% endblock %}
+
+{% block csa_main %}
+
+    <section class="csa-auth__card" aria-labelledby="csa-auth-title">
+
+        <h1 id="csa-auth-title" class="csa-auth__title">Área de socixs</h1>
+        <p class="csa-auth__lead">Accede con tu usuaria y contraseña.</p>
+
+        {% if error %}
+            <div class="csa-alert csa-alert--error" role="alert" style="margin-bottom: var(--csa-sp-4);">
+                {{ error.messageKey|trans(error.messageData, 'security') }}
             </div>
-        </div>
-    </div>
+        {% endif %}
+
+        <form action="{{ path('app_login') }}" method="post" class="csa-auth__form">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token('authenticate') }}">
+
+            <div class="csa-field">
+                <div class="csa-field__label-row">
+                    <label for="csa-username" class="csa-field__label">Nombre de usuaria</label>
+                </div>
+                <input
+                    id="csa-username"
+                    name="_username"
+                    type="text"
+                    class="csa-input"
+                    value="{{ last_username|default('') }}"
+                    autocomplete="username"
+                    autocapitalize="none"
+                    autocorrect="off"
+                    spellcheck="false"
+                    required
+                    autofocus
+                >
+            </div>
+
+            <div class="csa-field">
+                <div class="csa-field__label-row">
+                    <label for="csa-password" class="csa-field__label">Contraseña</label>
+                </div>
+                <input
+                    id="csa-password"
+                    name="_password"
+                    type="password"
+                    class="csa-input"
+                    autocomplete="current-password"
+                    required
+                >
+            </div>
+
+            <label class="csa-auth__check" for="csa-remember">
+                <input type="checkbox" id="csa-remember" name="_remember_me" value="1">
+                <span>Recuérdame en este dispositivo</span>
+            </label>
+
+            <button type="submit" class="csa-btn csa-btn--primary csa-btn--block csa-auth__submit">
+                Entrar
+            </button>
+        </form>
+
+        <div class="csa-auth__sep" aria-hidden="true"><span>o</span></div>
+
+        <a href="{{ path('connect_google_start') }}"
+           class="csa-btn csa-btn--secondary csa-btn--block"
+           style="margin-bottom: var(--csa-sp-4);">
+            <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true" focusable="false">
+                <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.91c1.7-1.57 2.69-3.88 2.69-6.62z"/>
+                <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.91-2.26c-.8.54-1.84.86-3.05.86-2.34 0-4.33-1.58-5.04-3.71H.96v2.33A9 9 0 0 0 9 18z"/>
+                <path fill="#FBBC05" d="M3.96 10.71A5.41 5.41 0 0 1 3.68 9c0-.59.1-1.17.28-1.71V4.96H.96A9 9 0 0 0 0 9c0 1.45.35 2.82.96 4.04l3-2.33z"/>
+                <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.59C13.46.89 11.43 0 9 0A9 9 0 0 0 .96 4.96l3 2.33C4.67 5.16 6.66 3.58 9 3.58z"/>
+            </svg>
+            Continuar con Google
+        </a>
+
+        <nav class="csa-auth__links" aria-label="Otras opciones de acceso">
+            <a href="{{ path('app_login_link_first') }}" class="csa-auth__link">
+                <span>
+                    Primera vez que entro
+                    <span class="csa-auth__link-sub">Te enviamos un enlace por correo</span>
+                </span>
+                <span class="csa-auth__link-arrow" aria-hidden="true">›</span>
+            </a>
+
+            <a href="{{ path('app_login_link_forgot') }}" class="csa-auth__link">
+                <span>
+                    He olvidado mi contraseña
+                    <span class="csa-auth__link-sub">Recibirás un enlace para entrar</span>
+                </span>
+                <span class="csa-auth__link-arrow" aria-hidden="true">›</span>
+            </a>
+
+            <a href="mailto:info@csavegadejarama.org" class="csa-auth__link">
+                <span>
+                    Necesito ayuda
+                    <span class="csa-auth__link-sub">Escríbenos a info@csavegadejarama.org</span>
+                </span>
+                <span class="csa-auth__link-arrow" aria-hidden="true">›</span>
+            </a>
+        </nav>
+
+    </section>
+
 {% endblock %}

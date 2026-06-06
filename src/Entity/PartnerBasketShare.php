@@ -74,6 +74,20 @@ class PartnerBasketShare
      */
     protected $day_month_order;
 
+    /**
+     * Análogo a day_month_order pero para huevos. Sólo aplica cuando egg_period
+     * es Mensual y la frecuencia de huevos difiere de la frecuencia de la cesta
+     * (caso testigo: cesta Quincenal + huevos Mensuales). Indica en qué viernes
+     * operativo del mes (1..4) toca entregar huevos.
+     *
+     * Null para Semanal/Quincenal (la cohorte se resuelve por delivery_group) y
+     * para mensuales con patrones no derivables del CSV. Resuelto en runtime por
+     * EggDeliveryResolver.
+     *
+     * @ORM\Column(type="smallint", nullable=true)
+     */
+    protected ?int $egg_day_month_order = null;
+
 
     /**
      *Este valor es por si alguien alguna vez pide dos cestas para el mismo socio.
@@ -120,6 +134,14 @@ class PartnerBasketShare
     private $egg_month_price;
 
     /**
+     * Aporte de transporte al mes. Algunos grupos cobran transporte aparte
+     * (importe_transp_eur en el CSV de COBROS). Nullable: la mayoría de
+     * socios no lo paga.
+     * @ORM\Column(name="transport_price", type="decimal", precision=8, scale=2, nullable=true)
+     */
+    private ?string $transport_price = null;
+
+    /**
      * Período de recogida de huevos. Es para los que sólo tienen huevos
      * @ORM\ManyToOne(targetEntity="EggPeriod", inversedBy="partner_basket_shares")
      */
@@ -155,6 +177,44 @@ class PartnerBasketShare
     #[Assert\Type(type: 'numeric', message: 'El valor {{value}} no es un {{type}} válido.')]
     #[Assert\GreaterThan(value: 0)]
     private $amount;
+
+    public const DELIVERY_GROUP_A = 'A';
+    public const DELIVERY_GROUP_B = 'B';
+    public const DELIVERY_GROUPS = [self::DELIVERY_GROUP_A, self::DELIVERY_GROUP_B];
+
+    /**
+     * Cohorte A/B de QUINCENALES. Determina en qué viernes alternos recoge un
+     * socio quincenal: es una alternancia semanal continua anclada a una fecha
+     * global (ver BiweeklyCohortResolver), pensada para equilibrar la carga de
+     * cosecha viernes a viernes.
+     *
+     * Solo aplica a quincenales: el generador (WeeklyBasketGenerator) consulta
+     * la cohorte únicamente para SHARE_BIWEEKLY. Los mensuales se resuelven por
+     * day_month_order (qué entrega del mes), NO por A/B; los semanales reciben
+     * todos los viernes. Null para semanales y para casos puntuales sin grupo
+     * asignado. Ojo: como la alternancia es continua, en meses de 5 viernes una
+     * cohorte recoge 3 veces y la otra 2, y la fase se invierte al mes siguiente
+     * — A/B NO mapea a viernes ordinales fijos (1º/3º vs 2º/4º).
+     *
+     * @ORM\Column(name="delivery_group", type="string", length=1, nullable=true)
+     */
+    #[Assert\Choice(choices: ['A', 'B'], message: 'Grupo de reparto inválido (solo A o B).')]
+    private ?string $delivery_group = null;
+
+    /**
+     * Pagador externo de esta cesta (sub-fase 8.8d, 2026-05-26). Null = el
+     * receptor (this->partner) paga su propia cesta, caso por defecto. Si
+     * apunta a otro Partner, ese partner es quien aparece en cobros como
+     * titular del IBAN de esta PBS.
+     *
+     * Modela la opción que la asociación ofrece de "pagar la cesta de
+     * otra persona" — donaciones nominadas (María Puebla → Nayua), o
+     * relaciones de soporte (Pablo Angulo → Nuria del Río).
+     *
+     * @ORM\ManyToOne(targetEntity="Partner")
+     * @ORM\JoinColumn(name="payer_partner_id", referencedColumnName="id", nullable=true)
+     */
+    private ?Partner $payer_partner = null;
 
 
 
@@ -359,6 +419,18 @@ class PartnerBasketShare
         return $this;
     }
 
+    public function getEggDayMonthOrder(): ?int
+    {
+        return $this->egg_day_month_order;
+    }
+
+    public function setEggDayMonthOrder(?int $egg_day_month_order): self
+    {
+        $this->egg_day_month_order = $egg_day_month_order;
+
+        return $this;
+    }
+
     public function getVegetablesBasketAmount(): ?int
     {
         return $this->vegetables_basket_amount;
@@ -379,6 +451,18 @@ class PartnerBasketShare
     public function setEggMonthPrice(string $egg_month_price): self
     {
         $this->egg_month_price = $egg_month_price;
+
+        return $this;
+    }
+
+    public function getTransportPrice(): ?string
+    {
+        return $this->transport_price;
+    }
+
+    public function setTransportPrice(?string $transport_price): self
+    {
+        $this->transport_price = $transport_price;
 
         return $this;
     }
@@ -435,5 +519,48 @@ class PartnerBasketShare
         return $this;
     }
 
+    public function getDeliveryGroup(): ?string
+    {
+        return $this->delivery_group;
+    }
 
+    /**
+     * @param string|null $delivery_group Uno de PartnerBasketShare::DELIVERY_GROUP_* o null.
+     * @throws \InvalidArgumentException Si el valor no es A, B o null.
+     */
+    public function setDeliveryGroup(?string $delivery_group): self
+    {
+        if ($delivery_group !== null && !in_array($delivery_group, self::DELIVERY_GROUPS, true)) {
+            throw new \InvalidArgumentException(sprintf('Grupo de reparto inválido: %s', $delivery_group));
+        }
+        $this->delivery_group = $delivery_group;
+
+        return $this;
+    }
+
+    /**
+     * @return Partner|null Pagador externo, o null si el receptor paga su propia cesta.
+     */
+    public function getPayerPartner(): ?Partner
+    {
+        return $this->payer_partner;
+    }
+
+    /**
+     * @param Partner|null $payer_partner Pagador distinto al receptor, o null para revertir al caso normal.
+     * @return self
+     */
+    public function setPayerPartner(?Partner $payer_partner): self
+    {
+        $this->payer_partner = $payer_partner;
+        return $this;
+    }
+
+    /**
+     * @return Partner Pagador efectivo: el externo si está set, si no el propio receptor.
+     */
+    public function getEffectivePayer(): Partner
+    {
+        return $this->payer_partner ?? $this->partner;
+    }
 }

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Acceso a la CSA Vega de Jarama</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #333; max-width: 580px; margin: 0 auto; padding: 24px;">
+
+    <h2 style="color: #5a8f3d; margin-top: 0;">Tu enlace de acceso</h2>
+
+    <p>Has solicitado un enlace para entrar al panel de la CSA Vega de Jarama.</p>
+
+    <p style="margin: 28px 0;">
+        <a href="{{ link }}"
+           style="display: inline-block; padding: 12px 24px; background: #5a8f3d; color: #fff; text-decoration: none; border-radius: 4px;">
+            Entrar al panel
+        </a>
+    </p>
+
+    <p style="color: #777; font-size: 13px;">
+        El enlace caduca el <strong>{{ expires_at|format_datetime('long', 'short', locale='es') }}</strong>
+        y solo se puede usar una vez. Si no has pedido este correo, ignóralo: nadie podrá
+        acceder a tu cuenta sin el enlace.
+    </p>
+
+    <p style="margin-top: 32px; color: #777; font-size: 12px;">
+        CSA Vega de Jarama<br>
+        <a href="https://csavegadejarama.org">csavegadejarama.org</a>
+    </p>
+
+</body>
+</html>

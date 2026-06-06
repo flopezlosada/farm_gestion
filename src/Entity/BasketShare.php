@@ -241,6 +241,31 @@ class BasketShare
         return $this;
     }
 
+    /** Modalidad "solo huevos": la entrega no reparte cesta de verdura. */
+    public const ID_ONLY_EGG = 5;
+    /** Modalidades compartidas (dos familias parten una cesta física). */
+    public const IDS_SHARED = [4, 6, 7];
+
+    /**
+     * Peso en cestas FÍSICAS que esta modalidad reparte el día de la entrega:
+     * solo-huevos (5) = 0 (no lleva verdura); compartidas (4/6/7) = ½ (dos
+     * familias, una cesta); el resto = 1.
+     *
+     * OJO: NO confundir con complete_basket_equivalence, que amortiza el VALOR
+     * de la cesta a lo largo del mes (quincenal 0,5, mensual 0,25). Aquí no
+     * amortizamos nada: una quincenal, el día que reparte, es 1 cesta entera.
+     * Este peso es lo que cuenta el reparto; aquél, lo que cuenta el cobro.
+     *
+     * @return float Cestas físicas por unidad de WeeklyBasket::amount.
+     */
+    public function getDeliveredBasketWeight(): float
+    {
+        if ($this->id === self::ID_ONLY_EGG) {
+            return 0.0;
+        }
+        return in_array($this->id, self::IDS_SHARED, true) ? 0.5 : 1.0;
+    }
+
     public function getCompleteBasketEquivalence(): ?int
     {
         return $this->complete_basket_equivalence;

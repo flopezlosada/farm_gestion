@@ -30,7 +30,7 @@ class TaskPeriodicType extends AbstractType
                     $qb = $repository->createQueryBuilder('u')
 
                         ->where('u.roles LIKE :roles')
-                        ->setParameter('roles', '%"ROLE_COOP"%');
+                        ->setParameter('roles', '%"ROLE_GESTION_GRANJA"%');
                     return $qb;
                 }));
     }

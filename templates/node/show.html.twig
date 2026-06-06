@@ -1,0 +1,287 @@
+{# ============================================================
+ # Ficha de un nodo físico de reparto. Lenguaje visual de reparto
+ # v2 (.dlv): head con metadatos, stat cards Fraunces, repartos
+ # (próximos estimados + anteriores) enlazados a su listado semanal,
+ # y gestión de los grupos de recogida que cuelgan del nodo.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% import _self as helper %}
+
+{% set _dow_full = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'] %}
+{% set _month_abbr = ['', 'ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'] %}
+{% set cadence_labels = { 'weekly': 'Semanal', 'biweekly': 'Quincenal' } %}
+
+{# ---- macro: lista de repartos (chip de fecha + estimado + enlace) ---- #}
+{% macro delivery_list(rows, node_id, upcoming) %}
+    {% set _dow_abbr = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'] %}
+    {% set _dow_full = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'] %}
+    {% set _month_abbr = ['', 'ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'] %}
+    <div class="nod-next{{ upcoming ? ' nod-next--upcoming' : ' nod-next--scroll' }}">
+        {% for item in rows %}
+            {% set c = item.cestas %}
+            <a class="nod-next__row" href="{{ path('delivery_by_node', { nodeId: node_id, basketId: item.basket.id }) }}">
+                <span class="nod-next__date">
+                    <span class="dow">{{ _dow_abbr[item.date|date('w')] }}</span>
+                    <span class="num">{{ item.date|date('d') }}</span>
+                </span>
+                <span class="nod-next__body">
+                    <span class="nod-next__primary">
+                        {{ c == c|round ? c|number_format(0) : c|number_format(1, ',', '.') }} {{ c == 1 ? 'cesta' : 'cestas' }}
+                        <span class="nod-next__socios">· {{ item.socios }} {{ item.socios == 1 ? 'socio' : 'socios' }}{% if upcoming and item.docenas is defined and item.docenas > 0 %} · {{ item.docenas == item.docenas|round ? item.docenas|number_format(0) : item.docenas|number_format(1, ',', '.') }} doc. huevos{% endif %}</span>
+                    </span>
+                    <span class="nod-next__meta">{{ _dow_full[item.date|date('w')] }} {{ item.date|date('j') }} de {{ _month_abbr[item.date|date('n')] }} {{ item.date|date('Y') }}</span>
+                </span>
+                <span class="nod-next__go">Ver reparto →</span>
+            </a>
+        {% endfor %}
+    </div>
+{% endmacro %}
+
+{% block title %}Nodo · {{ node.name }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('node_index') }}">Nodos de reparto</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ node.name }}</span>
+{% endblock %}
+
+{% block more_css %}
+{{ parent() }}
+<style>
+/* ============================================================
+ * Estilos locales de la ficha de nodo, en el lenguaje de reparto
+ * v2 (.dlv). Inline y autocontenido hasta que estabilicemos los
+ * tokens y los movamos al CSS del shell (mismo criterio que
+ * delivery/by_node.html.twig).
+ * ============================================================ */
+.nod {
+    --dlv-line: #ebe7dd;
+    --dlv-line-2: #d8d2c2;
+    --dlv-ink: #1d1c17;
+    --dlv-ink-soft: #5a564a;
+    --dlv-ink-faint: #8d8773;
+    --dlv-sage: #5b7a4c;
+    --dlv-sage-d: #2f4426;
+    --dlv-sage-l: #eaf0e2;
+    --dlv-ochre-d: #8c6919;
+    --dlv-bg: #fbfaf6;
+    --dlv-surface: #ffffff;
+    font-family: 'Inter', sans-serif;
+    font-variant-numeric: tabular-nums;
+}
+
+.nod-head {
+    display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 28px;
+    padding-bottom: 18px; margin-bottom: 18px;
+    border-bottom: 1px solid var(--dlv-line);
+}
+.nod-head__sub { font-size: 12px; color: var(--dlv-ink-faint); letter-spacing: 0.04em; }
+.nod-head__sub b { color: var(--dlv-ink); font-weight: 600; }
+.nod-head__actions { display: flex; gap: 8px; }
+
+/* stat cards (idénticas a .dlv-stat de reparto) */
+.nod-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+.nod-stat { background: var(--dlv-surface); border: 1px solid var(--dlv-line); border-radius: 8px; padding: 14px 18px; }
+.nod-stat .v { font-family: 'Fraunces', serif; font-weight: 600; font-size: 28px; letter-spacing: -0.02em; color: var(--dlv-ink); line-height: 1; }
+.nod-stat .v small { font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 500; color: var(--dlv-ink-soft); letter-spacing: 0; }
+.nod-stat .l { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dlv-ink-faint); margin-top: 7px; font-weight: 500; }
+.nod-stat--socios .v { color: var(--dlv-sage-d); }
+.nod-stat--next .v { color: var(--dlv-ochre-d); }
+
+/* secciones */
+.nod-section { margin-bottom: 26px; }
+.nod-section__title { font-family: 'Fraunces', serif; font-weight: 600; font-size: 16px; color: var(--dlv-ink); letter-spacing: -0.01em; margin: 0 0 4px; }
+.nod-section__hint { font-size: 11.5px; color: var(--dlv-ink-faint); margin: 0 0 12px; font-style: italic; }
+
+/* repartos: filas enlazadas al listado semanal */
+.nod-next { background: var(--dlv-surface); border: 1px solid var(--dlv-line); border-radius: 8px; overflow: hidden; }
+.nod-next--scroll { max-height: 326px; overflow-y: auto; }
+.nod-next__row { display: grid; grid-template-columns: 54px 1fr auto; gap: 16px; align-items: center; padding: 12px 18px; border-bottom: 1px solid var(--dlv-line); text-decoration: none; color: inherit; transition: 0.12s; }
+.nod-next__row:last-child { border-bottom: 0; }
+.nod-next__row:hover { background: var(--dlv-sage-l); }
+.nod-next__date { text-align: center; border-radius: 6px; padding: 6px 0; background: var(--dlv-bg); border: 1px solid var(--dlv-line); }
+.nod-next--upcoming .nod-next__row:first-child .nod-next__date { background: var(--dlv-sage-d); border-color: var(--dlv-sage-d); }
+.nod-next__date .dow { display: block; font-size: 10px; color: var(--dlv-ink-faint); letter-spacing: 0.12em; text-transform: uppercase; }
+.nod-next__date .num { display: block; font-family: 'Fraunces', serif; font-weight: 600; font-size: 18px; color: var(--dlv-ink); line-height: 1.1; }
+.nod-next--upcoming .nod-next__row:first-child .nod-next__date .dow,
+.nod-next--upcoming .nod-next__row:first-child .nod-next__date .num { color: #fff; }
+.nod-next__body { min-width: 0; }
+.nod-next__primary { font-family: 'Fraunces', serif; font-weight: 600; font-size: 16px; color: var(--dlv-ink); letter-spacing: -0.01em; }
+.nod-next__socios { font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 500; color: var(--dlv-ink-faint); letter-spacing: 0; }
+.nod-next__meta { display: block; font-family: 'Inter', sans-serif; font-size: 11.5px; color: var(--dlv-ink-faint); margin-top: 2px; letter-spacing: 0.02em; }
+.nod-next__go { font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600; color: var(--dlv-sage-d); white-space: nowrap; }
+
+/* tabla de grupos, en estilo .dlv */
+.nod-groups { width: 100%; border-collapse: collapse; background: var(--dlv-surface); border: 1px solid var(--dlv-line); border-radius: 8px; overflow: hidden; }
+.nod-groups thead th { text-align: left; font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dlv-ink-faint); font-weight: 600; padding: 10px 16px; border-bottom: 1px solid var(--dlv-line); background: var(--dlv-bg); }
+.nod-groups tbody td { padding: 11px 16px; font-size: 13px; color: var(--dlv-ink); border-bottom: 1px solid var(--dlv-line); vertical-align: middle; }
+.nod-groups tbody tr:last-child td { border-bottom: 0; }
+.nod-groups tbody tr:hover { background: var(--dlv-sage-l); }
+.nod-groups__name { font-family: 'Fraunces', serif; font-weight: 500; font-size: 14px; color: var(--dlv-ink); text-decoration: none; }
+.nod-groups__name:hover { text-decoration: underline; }
+.nod-groups__swatch { display: inline-block; width: 16px; height: 16px; border-radius: 4px; border: 1px solid var(--dlv-line-2); vertical-align: middle; }
+.nod-groups__num { font-family: 'Fraunces', serif; font-weight: 600; font-size: 14px; }
+.nod-groups__num small { color: var(--dlv-ink-faint); font-family: 'Inter', sans-serif; font-weight: 400; }
+.nod-detach { background: transparent; border: 1px solid var(--dlv-line); border-radius: 5px; padding: 5px 8px; cursor: pointer; color: var(--dlv-ink-faint); }
+.nod-detach:hover { color: var(--dlv-ochre-d); border-color: var(--dlv-line-2); background: var(--dlv-bg); }
+
+.nod-attach { display: flex; align-items: flex-end; gap: 10px; margin-top: 14px; }
+.nod-attach select { padding: 8px 12px; border: 1px solid var(--dlv-line-2); background: var(--dlv-surface); border-radius: 5px; font-size: 13px; min-width: 260px; }
+.nod-attach label { display: block; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dlv-ink-faint); font-weight: 600; margin-bottom: 6px; }
+
+.nod-empty { padding: 26px 18px; text-align: center; color: var(--dlv-ink-faint); font-size: 13px; font-style: italic; background: var(--dlv-surface); border: 1px dashed var(--dlv-line-2); border-radius: 8px; }
+
+/* dos columnas para próximos / anteriores en pantallas anchas */
+.nod-repartos { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+@media (max-width: 900px) { .nod-repartos { grid-template-columns: 1fr; } .nod-stats { grid-template-columns: repeat(2, 1fr); } }
+</style>
+{% endblock %}
+
+{% block csa_main %}
+<div class="nod">
+
+    {% if node.weeklyBasketGroups|length == 0 %}
+        <form id="node-delete-form" method="post" action="{{ path('node_delete', { id: node.id }) }}" style="display: none;">
+            <input type="hidden" name="_token" value="{{ csrf_token('delete' ~ node.id) }}">
+        </form>
+    {% endif %}
+
+    {{ csa.page_header('Socixs · Reparto', node.name, 'Sitio físico donde se entregan las cestas.') }}
+
+    <div class="nod-head">
+        <div class="nod-head__sub">
+            día de reparto <b>{{ _dow_full[node.deliveryWeekday % 7] }}</b> ·
+            cadencia <b>{{ node.cadence == 'weekly' ? 'semanal' : 'quincenal' }}</b>
+            {% if node.anchorDate %} · ancla <b>{{ node.anchorDate|date('d/m/Y') }}</b>{% endif %}
+        </div>
+        <div class="nod-head__actions">
+            {% if node.weeklyBasketGroups|length == 0 %}
+                <button type="button" class="csa-btn csa-btn--ghost"
+                        onclick="document.getElementById('confirm-node-delete').showModal()">
+                    Eliminar
+                </button>
+                {{ csa.confirm_dialog('confirm-node-delete', {
+                    variant: 'danger',
+                    eyebrow: 'Acción permanente',
+                    title: 'Eliminar este nodo',
+                    body: 'Se borrará de forma definitiva. No tiene grupos asociados.',
+                    confirm_label: 'Eliminar',
+                    external_form_id: 'node-delete-form',
+                }) }}
+            {% endif %}
+            {{ csa.btn('Editar', { variant: 'secondary', href: path('node_edit', { id: node.id }), icon: 'fa-pencil' }) }}
+            {{ csa.btn('Volver', { variant: 'ghost', href: path('node_index') }) }}
+        </div>
+    </div>
+
+    <div class="nod-stats">
+        <div class="nod-stat">
+            <div class="v">{{ group_stats|length }}</div>
+            <div class="l">Grupos de recogida</div>
+        </div>
+        <div class="nod-stat nod-stat--socios">
+            <div class="v">{{ active_partners }}</div>
+            <div class="l">Socios activos</div>
+        </div>
+        <div class="nod-stat nod-stat--next">
+            {% if upcoming|length > 0 %}
+                <div class="v">{{ upcoming[0].date|date('d') }} <small>{{ _month_abbr[upcoming[0].date|date('n')] }}</small></div>
+                <div class="l">Próximo reparto</div>
+            {% else %}
+                <div class="v">—</div>
+                <div class="l">Próximo reparto</div>
+            {% endif %}
+        </div>
+        <div class="nod-stat">
+            <div class="v" style="font-size: 20px;">{{ cadence_labels[node.cadence] ?? node.cadence }}</div>
+            <div class="l">Cadencia</div>
+        </div>
+    </div>
+
+    <div class="nod-repartos">
+        <div class="nod-section" style="margin-bottom: 0;">
+            <h3 class="nod-section__title">Próximos repartos</h3>
+            <p class="nod-section__hint">Estimación de cuánto se repartirá, según las suscripciones de hoy.</p>
+            {% if upcoming|length > 0 %}
+                {{ helper.delivery_list(upcoming, node.id, true) }}
+            {% else %}
+                <div class="nod-empty">
+                    Este nodo no tiene repartos en las próximas semanas
+                    {% if node.cadence == 'biweekly' and not node.anchorDate %}(cadencia quincenal sin fecha ancla definida){% endif %}.
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="nod-section" style="margin-bottom: 0;">
+            <h3 class="nod-section__title">Repartos anteriores</h3>
+            <p class="nod-section__hint">Lo que se estimó repartir en las semanas ya generadas.</p>
+            {% if past|length > 0 %}
+                {{ helper.delivery_list(past, node.id, false) }}
+            {% else %}
+                <div class="nod-empty">Aún no se ha generado ningún reparto de este nodo.</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="nod-section" style="margin-top: 30px;">
+        <h3 class="nod-section__title">Grupos de recogida</h3>
+        {% if group_stats|length > 0 %}
+            <table class="nod-groups">
+                <thead>
+                    <tr>
+                        <th style="width: 28px;"></th>
+                        <th>Grupo</th>
+                        <th style="width: 110px;">Socios activos</th>
+                        <th style="width: 60px;"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in group_stats %}
+                        <tr>
+                            <td><span class="nod-groups__swatch" style="background: {{ row.group.color }};"></span></td>
+                            <td>
+                                <a class="nod-groups__name" href="{{ path('weekly_basket_group_show', { id: row.group.id }) }}">{{ row.group.name }}</a>
+                            </td>
+                            <td>
+                                <span class="nod-groups__num">{{ row.active }}{% if row.total != row.active %} <small>/ {{ row.total }}</small>{% endif %}</span>
+                            </td>
+                            <td style="text-align: right;">
+                                <form method="post" action="{{ path('node_detach_group', { id: node.id, groupId: row.group.id }) }}" style="display:inline;">
+                                    <input type="hidden" name="_token" value="{{ csrf_token('detach_group' ~ row.group.id) }}">
+                                    <button type="submit" class="nod-detach" title="Desvincular del nodo" aria-label="Desvincular">
+                                        <i class="fa fa-unlink"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <div class="nod-empty">Este nodo aún no tiene grupos de recogida asignados.</div>
+        {% endif %}
+
+        {% if unassigned_groups|length > 0 %}
+            <form method="post" action="{{ path('node_attach_group', { id: node.id }) }}" class="nod-attach">
+                <input type="hidden" name="_token" value="{{ csrf_token('attach_group' ~ node.id) }}">
+                <div>
+                    <label for="attach-group-select">Añadir un grupo a este nodo</label>
+                    <select id="attach-group-select" name="group_id" required>
+                        {% for group in unassigned_groups %}
+                            <option value="{{ group.id }}">{{ group.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {{ csa.btn('Asignar', { variant: 'primary', type: 'submit', icon: 'fa-link' }) }}
+            </form>
+        {% elseif group_stats|length > 0 %}
+            <p class="nod-head__sub" style="margin-top: 14px;">No hay grupos sin nodo disponibles para asignar.</p>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

@@ -1,6 +1,10 @@
 {# ============================================================
- # Evolución del número de socixs — shell csa.
- # Gráfico Highcharts con datos por mes.
+ # Evolución de socixs.
+ #
+ # Recibe:
+ #   - current  conteo actual por estado (ACTIVO, PAUSADO, BAJA, TOTAL).
+ #   - monthly  serie de los últimos N meses con joins, leaves, net,
+ #              active_at_end (proyectado hacia atrás desde hoy).
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
@@ -20,13 +24,68 @@
 
     {{ csa.page_header(
         'Socixs · Estadísticas',
-        'Evolución del número de socixs',
-        'Variación mensual del total de socias y socios.'
+        'Evolución',
+        'Conteo actual por estado y movimiento mensual (altas, bajas y socixs activxs a cierre de mes).'
     ) }}
 
-    {% embed '_components/csa_card.html.twig' with { title: 'Gráfico', accent: 'green' } %}
+    {# Tarjetas con el conteo de HOY #}
+    <div class="csa-row" style="gap: var(--csa-sp-3); flex-wrap: wrap; margin-bottom: var(--csa-sp-5);">
+        {% set tiles = [
+            { label: 'Total',     value: current.TOTAL,    tone: 'sky' },
+            { label: 'Activxs',   value: current.ACTIVO,   tone: 'green' },
+            { label: 'Pausadxs',  value: current.PAUSADO,  tone: 'ochre' },
+            { label: 'De baja',   value: current.BAJA,     tone: 'neutral' }
+        ] %}
+        {% for t in tiles %}
+            <div class="csa-card csa-card--accent-{{ t.tone }}" style="flex: 1; min-width: 140px; text-align: center; padding: var(--csa-sp-3);">
+                <div class="csa-muted csa-small">{{ t.label }}</div>
+                <div style="font-size: 1.8em; font-weight: 600;">{{ t.value }}</div>
+            </div>
+        {% endfor %}
+    </div>
+
+    {# Gráfico de evolución mensual #}
+    {% embed '_components/csa_card.html.twig' with { title: 'Movimiento mensual', accent: 'green' } %}
         {% block body %}
-            <div id="container" style="width: 100%; height: 400px;"></div>
+            <div id="evolution-chart" style="width: 100%; height: 380px;"></div>
+        {% endblock %}
+    {% endembed %}
+
+    {# Tabla con los datos exactos por mes #}
+    {% embed '_components/csa_card.html.twig' with { title: 'Detalle por mes', accent: 'neutral' } %}
+        {% block body %}
+            <div class="csa-table-wrap">
+                <table class="csa-table">
+                    <thead>
+                        <tr>
+                            <th>Mes</th>
+                            <th class="csa-table__col-tight" style="text-align: right;">Altas</th>
+                            <th class="csa-table__col-tight" style="text-align: right;">Bajas</th>
+                            <th class="csa-table__col-tight" style="text-align: right;">Neto</th>
+                            <th class="csa-table__col-tight" style="text-align: right;">Activxs al cierre</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in monthly %}
+                            <tr>
+                                <td>{{ row.label }}</td>
+                                <td class="csa-table__col-tight" style="text-align: right;">{{ row.joins }}</td>
+                                <td class="csa-table__col-tight" style="text-align: right;">{{ row.leaves }}</td>
+                                <td class="csa-table__col-tight" style="text-align: right;">
+                                    {% if row.net > 0 %}<span style="color: var(--csa-green);">+{{ row.net }}</span>
+                                    {% elseif row.net < 0 %}<span style="color: var(--csa-terracotta);">{{ row.net }}</span>
+                                    {% else %}{{ row.net }}{% endif %}
+                                </td>
+                                <td class="csa-table__col-tight" style="text-align: right;">{{ row.active_at_end ?? '—' }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <p class="csa-muted csa-small" style="margin: var(--csa-sp-3) 0 0 0;">
+                Altas calculadas por fecha de inscripción. Bajas por fecha de baja en la ficha.
+                Activxs al cierre se proyecta hacia atrás desde el total actual de hoy.
+            </p>
         {% endblock %}
     {% endembed %}
 
@@ -37,30 +96,35 @@
     <script src="https://code.highcharts.com/highcharts.js"></script>
     <script>
         (function () {
-            Highcharts.chart('container', {
-                chart: { type: 'spline', zoomType: 'x' },
-                title: { text: 'Evolución número de socixs' },
-                yAxis: { title: { text: 'Número de socixs' } },
+            const categories = [
+                {% for row in monthly %}'{{ row.label }}',{% endfor %}
+            ];
+            const joins = [
+                {% for row in monthly %}{{ row.joins }},{% endfor %}
+            ];
+            const leaves = [
+                {% for row in monthly %}{{ row.leaves }},{% endfor %}
+            ];
+            const active = [
+                {% for row in monthly %}{{ row.active_at_end ?? 'null' }},{% endfor %}
+            ];
+
+            Highcharts.chart('evolution-chart', {
+                chart: { zoomType: 'x' },
+                title: { text: null },
+                xAxis: { categories: categories },
+                yAxis: [
+                    { title: { text: 'Altas / Bajas' }, allowDecimals: false },
+                    { title: { text: 'Activxs al cierre' }, opposite: true, allowDecimals: false }
+                ],
                 tooltip: { shared: true },
-                legend: { layout: 'vertical', align: 'right', verticalAlign: 'middle' },
-                xAxis: {
-                    title: { text: 'meses' },
-                    categories: [
-                        {% for amount in amount_partners %}
-                            '{{ amount[0][0].date|date("m/d/Y") }}',
-                        {% endfor %}
-                    ]
-                },
-                plotOptions: { series: { label: { connectorAllowed: false } } },
-                series: [{
-                    name: 'Nº de socixs',
-                    color: Highcharts.getOptions().colors[5],
-                    data: [
-                        {% for amount in amount_partners %}
-                            {{ amount[1] }},
-                        {% endfor %}
-                    ]
-                }]
+                legend: { align: 'center', verticalAlign: 'bottom' },
+                plotOptions: { series: { marker: { enabled: true } } },
+                series: [
+                    { name: 'Altas',  type: 'column', data: joins,  color: '#5a8f3d', yAxis: 0 },
+                    { name: 'Bajas',  type: 'column', data: leaves, color: '#b04e22', yAxis: 0 },
+                    { name: 'Activxs al cierre', type: 'spline', data: active, color: '#3b6fa6', yAxis: 1 }
+                ]
             });
         })();
     </script>

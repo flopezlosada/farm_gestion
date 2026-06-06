@@ -29,9 +29,11 @@
     {# ===== Cabecera ===== #}
     <div class="csa-row-between" style="margin-bottom: var(--csa-sp-6); align-items: flex-start;">
         <div class="csa-row" style="align-items: flex-start; gap: var(--csa-sp-4);">
-            <span class="csa-table__id-marker" style="width: 64px; height: 64px; font-size: 28px; border-radius: var(--csa-radius-lg);">
-                <i class="fa fa-leaf"></i>
-            </span>
+            {% if entity.getCrop %}
+                {{ csa.crop_marker(entity.getCrop, { size: 'lg' }) }}
+            {% else %}
+                <span class="csa-crop-marker csa-crop-marker--lg csa-crop-marker--green" aria-hidden="true"><i class="fa fa-leaf"></i></span>
+            {% endif %}
             <div>
                 <div class="csa-row" style="gap: var(--csa-sp-3); margin-bottom: var(--csa-sp-2);">
                     {% if entity.finish == 0 %}
@@ -60,7 +62,8 @@
     </div>
 
     {# ===== Fila 1: Datos del cultivo + Acciones ===== #}
-    <div class="col-lg-8">
+    <div class="csa-content-aside">
+    <div>
         {% embed '_components/csa_card.html.twig' with { title: 'Datos del cultivo', accent: 'sky' } %}
             {% block body %}
                 <section class="csa-defs-section">
@@ -148,7 +151,7 @@
         {% endembed %}
     </div>
 
-    <div class="col-lg-4">
+    <div>
         {% embed '_components/csa_card.html.twig' with { title: 'Acciones', accent: 'green' } %}
             {% block body %}
                 {% import '_macros/csa.html.twig' as csa %}
@@ -231,9 +234,10 @@
             {% endblock %}
         {% endembed %}
     </div>
+    </div>{# /csa-content-aside #}
 
     {# ===== Fila 2: Fechas siembra + Producción ===== #}
-    <div style="clear: both; margin-top: var(--csa-sp-8);">
+    <div style="margin-top: var(--csa-sp-8);">
         <div class="csa-dashboard-pair">
 
             <div style="min-width: 0;">
@@ -344,7 +348,7 @@
     </div>
 
     {# ===== Fila 3: Trabajos realizados ===== #}
-    <div class="col-lg-12" style="margin-top: var(--csa-sp-6);">
+    <div style="margin-top: var(--csa-sp-6);">
         {% embed '_components/csa_card.html.twig' with {
             title: 'Trabajos realizados',
             subtitle: 'Histórico de trabajos culturales aplicados al cultivo.',

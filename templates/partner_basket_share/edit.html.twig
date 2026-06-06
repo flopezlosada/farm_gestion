@@ -1,5 +1,10 @@
 {# ============================================================
- # Cambiar tipo de cesta de una socix — shell csa.
+ # CORREGIR ERRATA de una cesta — shell csa.
+ # Edición EN SITIO: machaca los datos de la PBS sin partir el
+ # histórico ni emitir evento BASKET_CHANGE. SÓLO para arreglar
+ # datos mal tecleados. Para un cambio real de la cesta (el socio
+ # pasa a otra modalidad/huevos/etc.) usar change_modality, que
+ # conserva histórico y avisará a contabilidad.
  # Misma lógica condicional JS que new.html.twig.
  # ============================================================ #}
 
@@ -7,7 +12,7 @@
 {% import '_macros/csa.html.twig' as csa %}
 {% form_theme form 'form_div_layout.html.twig' %}
 
-{% block title %}Cambiar cesta · {{ partner_basket_share.partner }}{% endblock %}
+{% block title %}Corregir errata · {{ partner_basket_share.partner }}{% endblock %}
 
 {% block csa_crumbs %}
     <a href="{{ path('dashboard') }}">Inicio</a>
@@ -16,18 +21,24 @@
     <span class="csa-topbar__crumbs-sep">/</span>
     <a href="{{ path('partner_show', { id: partner_basket_share.partner.id }) }}">{{ partner_basket_share.partner }}</a>
     <span class="csa-topbar__crumbs-sep">/</span>
-    <span class="csa-topbar__crumb-active">Cambiar cesta</span>
+    <span class="csa-topbar__crumb-active">Corregir errata</span>
 {% endblock %}
 
 {% block csa_main %}
 
     {{ csa.page_header(
         'Socixs · Cesta',
-        'Cambiar tipo de cesta',
-        'Para ' ~ partner_basket_share.partner ~ '.'
+        'Corregir errata (sin histórico)',
+        'Para ' ~ partner_basket_share.partner ~ '. Sólo para arreglar datos mal introducidos.'
     ) }}
 
-    {{ form_start(form, { attr: { role: 'form', class: 'csa-form-narrow' } }) }}
+    {{ csa.callout(
+        'Esto corrige datos en sitio: NO deja histórico y NO avisa a contabilidad. Si el socio realmente cambia de cesta (modalidad, huevos, cantidad, grupo) usa «Cambiar la cesta», que conserva el histórico.',
+        'warning',
+        'exclamation-triangle'
+    ) }}
+
+    {{ form_start(form, { attr: { id: 'pbs-errata-form', role: 'form', class: 'csa-form-narrow' } }) }}
 
         <div class="csa-stack-lg">
 
@@ -54,7 +65,7 @@
                 {% endblock %}
             {% endembed %}
 
-            {% embed '_components/csa_form_section.html.twig' with { num: '3', title: 'Calendario', subtitle: 'Fecha de inicio y día concreto del mes si procede.' } %}
+            {% embed '_components/csa_form_section.html.twig' with { num: '3', title: 'Calendario', subtitle: 'Fecha de inicio, día concreto del mes y grupo de reparto si procede.' } %}
                 {% block body %}
                     {% import '_macros/csa.html.twig' as csa %}
                     <div class="csa-form-grid">
@@ -62,6 +73,7 @@
                         <div id="day_month_order" class="csa-field--full hidden">
                             {{ csa.field(form.dayMonthOrder, 'Día del mes', { full: true }) }}
                         </div>
+                        {{ csa.field(form.deliveryGroup, 'Grupo de reparto', { full: true }) }}
                     </div>
                 {% endblock %}
             {% endembed %}
@@ -74,7 +86,16 @@
                 <div></div>
                 <div class="csa-row">
                     {{ csa.btn('Cancelar', { variant: 'ghost', href: path('partner_show', { id: partner_basket_share.partner.id }) }) }}
-                    <button type="submit" class="csa-btn csa-btn--primary">Guardar cambios</button>
+                    <button type="button" class="csa-btn csa-btn--primary"
+                            onclick="document.getElementById('confirm-pbs-errata').showModal()">Corregir errata</button>
+                    {{ csa.confirm_dialog('confirm-pbs-errata', {
+                        variant: 'warning',
+                        eyebrow: 'Corrección sin histórico',
+                        title: '¿Corregir la cesta en sitio?',
+                        body: 'Se machacan los datos sin dejar histórico ni avisar a contabilidad. Hazlo solo si es una errata. Si el socio cambia de cesta de verdad, cancela y usa «Cambiar la cesta».',
+                        confirm_label: 'Sí, corregir errata',
+                        external_form_id: 'pbs-errata-form',
+                    }) }}
                 </div>
             </div>
 

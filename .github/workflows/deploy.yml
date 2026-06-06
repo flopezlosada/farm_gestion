@@ -29,7 +29,20 @@ jobs:
           tools: composer:2.2
           coverage: none
 
+      # Cachea vendor/ entre runs. Si composer.lock no cambia, actions/cache
+      # restaura el directorio preservando mtimes y nos saltamos composer
+      # install entero — necesario porque incluso un install "sin cambios"
+      # toca mtimes (autoloader, vendor/composer/*) y lftp --only-newer
+      # reuploadea esos ficheros.
+      - name: Cache de vendor/
+        id: vendor-cache
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: vendor-php83-${{ hashFiles('composer.lock') }}
+
       - name: Composer install (solo deps de producción)
+        if: steps.vendor-cache.outputs.cache-hit != 'true'
         env:
           APP_ENV: prod
           APP_DEBUG: '0'
@@ -47,6 +60,7 @@ jobs:
 
       - name: Copiar assets legacy (FTP no transmite symlinks)
         run: |
+          mkdir -p public/bundles
           rm -rf public/bundles/app
           cp -R src/Resources/public public/bundles/app
           # El repo tiene src/Resources/public/ en 0700 y cp -R lo preserva.

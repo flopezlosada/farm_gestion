@@ -59,6 +59,17 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface, LegacyP
     private $password;
 
     /**
+     * Marca si el User ha elegido su contraseña permanente. Los Users
+     * creados por la vía de "primer acceso" (magic-link) arrancan con
+     * un password aleatorio que nadie va a usar y passwordSet = false;
+     * la primera vez que entran por el link, el panel les redirige a
+     * /panel/setup antes de dejarles seguir.
+     *
+     * @ORM\Column(name="password_set", type="boolean", options={"default": false})
+     */
+    private bool $passwordSet = false;
+
+    /**
      * @ORM\Column(name="last_login", type="datetime", nullable=true)
      */
     private $lastLogin;
@@ -77,6 +88,16 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface, LegacyP
      * @ORM\Column(type="array")
      */
     private $roles = [];
+
+    /**
+     * Vínculo opcional con un socix. Un User puede no tener Partner (admin,
+     * trabajadora no socia, etc.). Si se elimina el Partner, este campo
+     * queda a NULL en lugar de borrar el User.
+     *
+     * @ORM\OneToOne(targetEntity="App\Entity\Partner")
+     * @ORM\JoinColumn(name="partner_id", referencedColumnName="id", nullable=true, onDelete="SET NULL")
+     */
+    private ?Partner $partner = null;
 
     /**
      * @var \DateTime $created
@@ -281,12 +302,29 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface, LegacyP
     {
         $roles = $this->roles;
         $roles[] = 'ROLE_USER';
+        // Un User vinculado a un Partner es, por definición, un socix.
+        // Derivamos ROLE_PARTNER de la relación para evitar que el rol
+        // tenga que duplicarse manualmente en la columna `roles`.
+        if ($this->partner !== null) {
+            $roles[] = 'ROLE_PARTNER';
+        }
         return array_unique($roles);
     }
 
     public function setRoles(array $roles): self
     {
         $this->roles = $roles;
+        return $this;
+    }
+
+    public function getPartner(): ?Partner
+    {
+        return $this->partner;
+    }
+
+    public function setPartner(?Partner $partner): self
+    {
+        $this->partner = $partner;
         return $this;
     }
 
@@ -453,5 +491,16 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface, LegacyP
     public function getTasks(): Collection
     {
         return $this->tasks;
+    }
+
+    public function isPasswordSet(): bool
+    {
+        return $this->passwordSet;
+    }
+
+    public function setPasswordSet(bool $passwordSet): self
+    {
+        $this->passwordSet = $passwordSet;
+        return $this;
     }
 }

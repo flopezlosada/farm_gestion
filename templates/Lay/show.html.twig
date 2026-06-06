@@ -38,10 +38,18 @@
             </div>
         </div>
         <div class="csa-row">
-            <button type="submit" form="lay-delete-form" class="csa-btn csa-btn--ghost"
-                    onclick="return confirm('¿Seguro? Esta acción no se puede deshacer.');">
+            <button type="button" class="csa-btn csa-btn--ghost"
+                    onclick="document.getElementById('confirm-lay-delete').showModal()">
                 Eliminar
             </button>
+            {{ csa.confirm_dialog('confirm-lay-delete', {
+                variant: 'danger',
+                eyebrow: 'Acción permanente',
+                title: 'Eliminar este registro',
+                body: 'Se borrará de forma definitiva y no podrá recuperarse.',
+                confirm_label: 'Eliminar',
+                external_form_id: 'lay-delete-form',
+            }) }}
             {{ csa.btn('Editar', { variant: 'secondary', href: path('lay_edit', { id: entity.id }), icon: 'fa-pencil' }) }}
             {{ csa.btn('Volver', { variant: 'ghost', href: path('lay') }) }}
         </div>

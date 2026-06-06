@@ -2,29 +2,28 @@
 
 namespace App\Controller;
 
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-
-use Symfony\Component\HttpFoundation\Request;
-use App\Controller\AbstractAppController;
-
 use App\Entity\Product;
 use App\Form\ProductType;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * Product controller.
  *
  */
-class ProductController extends AbstractAppController
+#[IsGranted('ROLE_GESTION_GRANJA')]
+class ProductController extends AbstractController
 {
 
     /**
      * Lists all Product entities.
      *
      */
-    public function index()
+    public function index(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entities = $em->getRepository(\App\Entity\Product::class)->findAll();
 
         return $this->render('Product/index.html.twig', array(
@@ -36,14 +35,13 @@ class ProductController extends AbstractAppController
      * Creates a new Product entity.
      *
      */
-    public function create(Request $request)
+    public function create(Request $request, EntityManagerInterface $em)
     {
         $entity = new Product();
         $form = $this->createCreateForm($entity);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $em->persist($entity);
             $em->flush();
 
@@ -94,10 +92,8 @@ class ProductController extends AbstractAppController
      * Finds and displays a Product entity.
      *
      */
-    public function show($id)
+    public function show($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Product::class)->find($id);
 
         if (!$entity) {
@@ -116,10 +112,8 @@ class ProductController extends AbstractAppController
      * Displays a form to edit an existing Product entity.
      *
      */
-    public function edit($id)
+    public function edit($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Product::class)->find($id);
 
         if (!$entity) {
@@ -159,10 +153,8 @@ class ProductController extends AbstractAppController
      * Edits an existing Product entity.
      *
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, $id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Product::class)->find($id);
 
         if (!$entity) {
@@ -190,13 +182,12 @@ class ProductController extends AbstractAppController
      * Deletes a Product entity.
      *
      */
-    public function delete(Request $request, $id)
+    public function delete(Request $request, $id, EntityManagerInterface $em)
     {
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\Product::class)->find($id);
 
             if (!$entity) {

@@ -28,7 +28,6 @@
 
     <form id="partner-delete-form" method="post"
           action="{{ path('partner_delete', { id: partner.id }) }}"
-          onsubmit="return confirm('¿Estás segurx? Esta acción no se puede deshacer.');"
           style="display: none;">
         <input type="hidden" name="_method" value="DELETE">
         <input type="hidden" name="_token" value="{{ csrf_token('delete' ~ partner.id) }}">
@@ -44,6 +43,7 @@
                     <div class="csa-form-grid">
                         {{ csa.field(form.name, 'Nombre') }}
                         {{ csa.field(form.surname, 'Apellidos') }}
+                        {{ csa.field(form.displayName, 'Nombre de reparto', { full: true, hint: 'cómo se conoce a la familia en el listado de cestas · vacío = nombre y apellidos' }) }}
                         {{ csa.field(form.DNI, 'DNI') }}
                         {{ csa.field(form.inscription_date, 'Fecha de inscripción', { attr: { class: 'csa-input datepicker' } }) }}
                     </div>
@@ -85,9 +85,18 @@
 
             <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
                 <div>
-                    <button type="submit" form="partner-delete-form" class="csa-btn csa-btn--ghost">
+                    <button type="button" class="csa-btn csa-btn--ghost"
+                    onclick="document.getElementById('confirm-partner-delete').showModal()">
                         Eliminar
                     </button>
+            {{ csa.confirm_dialog('confirm-partner-delete', {
+                variant: 'danger',
+                eyebrow: 'Acción permanente',
+                title: 'Eliminar este registro',
+                body: 'Se borrará de forma definitiva y no podrá recuperarse.',
+                confirm_label: 'Eliminar',
+                external_form_id: 'partner-delete-form',
+            }) }}
                 </div>
                 <div class="csa-row">
                     {{ csa.btn('Cancelar', { variant: 'ghost', href: path('partner_show', { id: partner.id }) }) }}

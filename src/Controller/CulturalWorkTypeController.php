@@ -2,29 +2,28 @@
 
 namespace App\Controller;
 
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-
-use Symfony\Component\HttpFoundation\Request;
-use App\Controller\AbstractAppController;
-
 use App\Entity\CulturalWorkType;
 use App\Form\CulturalWorkTypeType;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * CulturalWorkType controller.
  *
  */
-class CulturalWorkTypeController extends AbstractAppController
+#[IsGranted('ROLE_GESTION_GRANJA')]
+class CulturalWorkTypeController extends AbstractController
 {
 
     /**
      * Lists all CulturalWorkType entities.
      *
      */
-    public function index()
+    public function index(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entities = $em->getRepository(\App\Entity\CulturalWorkType::class)->findAll();
 
         return $this->render('CulturalWorkType/index.html.twig', array(
@@ -36,14 +35,13 @@ class CulturalWorkTypeController extends AbstractAppController
      * Creates a new CulturalWorkType entity.
      *
      */
-    public function create(Request $request)
+    public function create(Request $request, EntityManagerInterface $em)
     {
         $entity = new CulturalWorkType();
         $form = $this->createCreateForm($entity);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $em->persist($entity);
             $em->flush();
 
@@ -94,10 +92,8 @@ class CulturalWorkTypeController extends AbstractAppController
      * Finds and displays a CulturalWorkType entity.
      *
      */
-    public function show($id)
+    public function show($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\CulturalWorkType::class)->find($id);
 
         if (!$entity) {
@@ -116,10 +112,8 @@ class CulturalWorkTypeController extends AbstractAppController
      * Displays a form to edit an existing CulturalWorkType entity.
      *
      */
-    public function edit($id)
+    public function edit($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\CulturalWorkType::class)->find($id);
 
         if (!$entity) {
@@ -159,10 +153,8 @@ class CulturalWorkTypeController extends AbstractAppController
      * Edits an existing CulturalWorkType entity.
      *
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, $id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\CulturalWorkType::class)->find($id);
 
         if (!$entity) {
@@ -190,13 +182,12 @@ class CulturalWorkTypeController extends AbstractAppController
      * Deletes a CulturalWorkType entity.
      *
      */
-    public function delete(Request $request, $id)
+    public function delete(Request $request, $id, EntityManagerInterface $em)
     {
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\CulturalWorkType::class)->find($id);
 
             if (!$entity) {

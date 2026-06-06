@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Recordatorio de cesta · CSA Vega de Jarama</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #333; max-width: 580px; margin: 0 auto; padding: 24px;">
+
+    <h2 style="color: #5a8f3d; margin-top: 0;">Hola {{ partner.name }},</h2>
+
+    <p>Te recordamos que <strong>este viernes {{ pickup_date|format_date('full', locale='es') }}</strong>
+       te toca recoger tu cesta {{ modality }} en la CSA Vega de Jarama.</p>
+
+    {% if was_shifted %}
+        <p style="background: #fdf3e0; border-left: 3px solid #d99820; padding: 10px 14px;">
+            <strong>Atención:</strong> el reparto se ha desplazado a esta fecha (no es el viernes habitual).
+        </p>
+    {% endif %}
+
+    <p>Si por cualquier motivo no puedes recoger tu cesta esta semana o quieres cambiar tu turno A↔B
+       puntualmente, dínoslo antes del <strong>miércoles a las 23:59</strong>.</p>
+
+    <p style="margin-top: 32px; color: #777; font-size: 13px;">
+        Un abrazo,<br>
+        CSA Vega de Jarama<br>
+        <a href="https://csavegadejarama.org">csavegadejarama.org</a>
+    </p>
+
+</body>
+</html>

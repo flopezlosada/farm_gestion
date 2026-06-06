@@ -77,10 +77,6 @@ app_tasknote:
     resource: "routing/tasknote.xml"
     prefix:   /tasknote
 
-app_note:
-    resource: "routing/note.xml"
-    prefix:   /note
-
 app_crop:
     resource: "routing/crop.xml"
     prefix:   /crop
@@ -164,10 +160,6 @@ app_statistic:
 app_blog:
     resource: "routing/blog.xml"
     prefix:   /blog
-
-app_galery:
-    resource: "routing/gallery.xml"
-    prefix:   /gallery
 
 app_image:
     resource: "routing/image.xml"

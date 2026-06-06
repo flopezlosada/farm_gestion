@@ -34,6 +34,7 @@
                     <div class="csa-form-grid">
                         {{ csa.field(form.name, 'Nombre') }}
                         {{ csa.field(form.surname, 'Apellidos') }}
+                        {{ csa.field(form.displayName, 'Nombre de reparto', { full: true, hint: 'cómo se conoce a la familia en el listado de cestas · vacío = nombre y apellidos' }) }}
                         {{ csa.field(form.DNI, 'DNI') }}
                         {{ csa.field(form.inscription_date, 'Fecha de inscripción', { attr: { class: 'csa-input datepicker' } }) }}
                     </div>

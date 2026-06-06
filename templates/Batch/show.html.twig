@@ -230,7 +230,7 @@
                                     {% endblock %}
                                 {% endembed %}
                             </div>
-                            {% if is_granted('ROLE_COOP') %}
+                            {% if app.user %}
                                 <div class="col-lg-4">
                                     {% embed '_components/csa_card.html.twig' with { title: 'Acciones' } %}
                                         {% block body %}
@@ -411,7 +411,7 @@
                                                         <th>Producto</th>
                                                         <th>Peso</th>
                                                         <th>Precio</th>
-                                                        {% if is_granted('ROLE_COOP') %}
+                                                        {% if app.user %}
                                                             <th class="csa-table__actions">Acciones</th>
                                                         {% endif %}
                                                     </tr>
@@ -423,7 +423,7 @@
                                                             <td>{{ sack.getProduct }}</td>
                                                             <td>{{ sack.getWeight }} kg</td>
                                                             <td>{{ sack.getTotalPrice }} €</td>
-                                                            {% if is_granted('ROLE_COOP') %}
+                                                            {% if app.user %}
                                                                 <td class="csa-table__actions">
                                                                     <a href="{{ path('sack_fast_delete', {'id': sack.getId}) }}" class="csa-table__action--danger" title="Quitar saco" aria-label="Quitar saco"><i class="fa fa-trash"></i></a>
                                                                 </td>

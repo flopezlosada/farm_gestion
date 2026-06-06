@@ -2,44 +2,22 @@
 
 namespace App\Controller;
 
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-
-
-use App\Entity\Basket;
-use App\Controller\AbstractAppController;
-use Symfony\Component\Routing\Annotation\Route;
-use Symfony\Component\HttpFoundation\RedirectResponse;
-use Symfony\Component\HttpFoundation\Request;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\Validator\Constraints\DateTime;
+use Symfony\Component\Routing\Annotation\Route;
 
-class DefaultController extends AbstractAppController
+class DefaultController extends AbstractController
 {
-
-
-    public function gestion()
-    {
-        return $this->redirect($this->generateUrl('dashboard'));
-    }
-
     #[Route("/calendar", name: "calendar")]
     public function calendar(): Response
     {
         return $this->render('Default/calendar.html.twig');
     }
 
-    #[Route("/event_show/{id}", name: "event_show", methods: ["GET"])]
-    public function eventShow($id): Response
-    {
-        // Endpoint sin template propio — devolvía array() bajo @Template legacy.
-        // No tiene plantilla `templates/Default/eventShow.html.twig`, posiblemente código muerto.
-        return new Response('');
-    }
-
     #[Route("/dashboard", name: "dashboard")]
-    public function dashboard(): Response
+    public function dashboard(EntityManagerInterface $em): Response
     {
-        $em = $this->getDoctrine()->getManager();
         $week_lay = $em->getRepository(\App\Entity\Lay::class)->findWeekLay(10);
 
         $total_lay_eggs = $em->getRepository(\App\Entity\Lay::class)->findTotalEggs(date('Y'));
@@ -114,34 +92,30 @@ class DefaultController extends AbstractAppController
         ]);
     }
 
-    public function layWeek()
+    public function layWeek(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
         $week_eggs = $em->getRepository(\App\Entity\Lay::class)->findByWeek(date('W'), date('Y'));
 
         return new Response($week_eggs);
     }
 
-    public function totalCropWorking()
+    public function totalCropWorking(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
         $crop_workings = count($em->getRepository(\App\Entity\CropWorking::class)->findActive());
 
         return new Response($crop_workings);
     }
 
 
-    public function totalCompost()
+    public function totalCompost(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
         $collection_amount = $em->getRepository(\App\Entity\CompostCollection::class)->findTotalAmountCollection(date('Y'));
 
         return new Response(number_format($collection_amount / 1000, 1));
     }
 
-    public function totalProductionYear($year = null)
+    public function totalProductionYear(EntityManagerInterface $em, $year = null)
     {
-        $em = $this->getDoctrine()->getManager();
         if (!$year) {
             $year = date('Y');
         }
@@ -150,75 +124,4 @@ class DefaultController extends AbstractAppController
         return new Response($production);
     }
 
-    public function collectWeekUser($product_id)
-    {
-        $em = $this->getDoctrine()->getManager();
-        $product = $em->getRepository(\App\Entity\Product::class)->find($product_id);
-        $week_product = $em->getRepository(\App\Entity\Collect::class)->findByUserWeek($this->getUser(), $product, date('W'));
-
-        return new Response($week_product);
-    }
-
-    public function totalSalesAmount()
-    {
-        $em = $this->getDoctrine()->getManager();
-        $amount = $em->getRepository(\App\Entity\Sale::class)->findTotalSalesAmount();
-
-        return new Response($amount);
-    }
-
-    public function lastFeedPurchase()
-    {
-        $em = $this->getDoctrine()->getManager();
-        $product = $em->getRepository(\App\Entity\Product::class)->find(4); //pienso para gallinas
-        $date = $em->getRepository(\App\Entity\Purchase::class)->findLastFeedDate($product);
-
-        return new Response($date);
-    }
-
-
-    public function warning()
-    {
-        $em = $this->getDoctrine()->getManager();
-        $purchaser_warnings = $em->getRepository(\App\Entity\Purchaser::class)->findByEggWarning();
-        $recipient_warnings = $em->getRepository(\App\Entity\Recipient::class)->findByEggWarning();
-
-        return $this->render('Default/warnings.html.twig', array(
-            'purchaser_warnings' => $purchaser_warnings,
-            'recipient_warnings' => $recipient_warnings,
-        ));
-
-    }
-
-    public function averageCollectUser($product_id, $year)
-    {
-        $em = $this->getDoctrine()->getManager();
-        $product = $em->getRepository(\App\Entity\Product::class)->find($product_id);
-        $average = $em->getRepository(\App\Entity\Collect::class)->findByUserAverageCollect($this->getUser(), $product, $year);
-
-        return new Response($average);
-    }
-
-
-    #[Route("/user_collect/{product_id}/{year}", name: "user_collect", defaults: ["year" => null])]
-    public function userCollect($product_id, $year): Response
-    {
-        if (!$year) {
-            $year = date("Y");
-        }
-        $em = $this->getDoctrine()->getManager();
-        $product = $em->getRepository(\App\Entity\Product::class)->find($product_id);
-        $collects = $em->getRepository(\App\Entity\Collect::class)->findAllByUserProductYear($this->getUser(), $product, $year);
-
-        return $this->render('Default/userCollect.html.twig', [
-            'year' => $year,
-            'collects' => $collects,
-        ]);
-    }
-
-
-    public function landind_contact()
-    {
-        return $this->render('Default/landing_contact.html.twig', array());
-    }
 }

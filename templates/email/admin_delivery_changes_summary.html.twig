@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Cambios de socixs · CSA Vega de Jarama</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #333; max-width: 720px; margin: 0 auto; padding: 24px;">
+
+    <h2 style="color: #5a8f3d; margin-top: 0;">Resumen de cambios de socixs</h2>
+
+    <p>
+        Desde <strong>{{ since|format_datetime('long', 'short', locale='es') }}</strong>
+        se han registrado <strong>{{ rows|length }}</strong> cambio(s) autoservicio:
+    </p>
+
+    <table style="border-collapse: collapse; width: 100%; margin-top: 12px;">
+        <thead>
+            <tr style="background: #f3f0e8;">
+                <th style="text-align: left; padding: 8px; border-bottom: 1px solid #ddd;">Cuándo</th>
+                <th style="text-align: left; padding: 8px; border-bottom: 1px solid #ddd;">Socix</th>
+                <th style="text-align: left; padding: 8px; border-bottom: 1px solid #ddd;">Tipo</th>
+                <th style="text-align: left; padding: 8px; border-bottom: 1px solid #ddd;">Detalle</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in rows %}
+                <tr>
+                    <td style="padding: 8px; border-bottom: 1px solid #eee; white-space: nowrap;">{{ r.when }}</td>
+                    <td style="padding: 8px; border-bottom: 1px solid #eee;">{{ r.partner }}</td>
+                    <td style="padding: 8px; border-bottom: 1px solid #eee;">{{ r.type }}</td>
+                    <td style="padding: 8px; border-bottom: 1px solid #eee; color: #555;">{{ r.detail }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <p style="margin-top: 32px; color: #777; font-size: 13px;">
+        Resumen automático.<br>
+        CSA Vega de Jarama · <a href="https://csavegadejarama.org">csavegadejarama.org</a>
+    </p>
+
+</body>
+</html>

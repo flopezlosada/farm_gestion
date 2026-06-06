@@ -1,36 +1,315 @@
-{% extends 'base.html.twig' %}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
 
-{% block body -%}
-    <h1>User</h1>
+{% block title %}{{ entity.username }}{% endblock %}
 
-    <table class="record_properties">
-        <tbody>
-            <tr>
-                <th>Id</th>
-                <td>{{ entity.id }}</td>
-            </tr>
-            <tr>
-                <th>Created</th>
-                <td>{{ entity.created|date('Y-m-d H:i:s') }}</td>
-            </tr>
-            <tr>
-                <th>Updated</th>
-                <td>{{ entity.updated|date('Y-m-d H:i:s') }}</td>
-            </tr>
-        </tbody>
-    </table>
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('user') }}">Usuarias</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ entity.username }}</span>
+{% endblock %}
 
-        <ul class="record_actions">
-    <li>
-        <a href="{{ path('user') }}">
-            Back to the list
-        </a>
-    </li>
-    <li>
-        <a href="{{ path('user_edit', { 'id': entity.id }) }}">
-            Edit
-        </a>
-    </li>
-    <li>{{ form(delete_form) }}</li>
-</ul>
+{% block more_css %}
+{{ parent() }}
+<style>
+/* ============================================================
+ * Ficha de usuaria — hero con avatar + datos en card.
+ * Mismo lenguaje que la ficha de socio. Forzamos Inter/Fraunces para
+ * blindar la cascada frente a Bootstrap 3.
+ * Nota DRY: chips y mapa de roles duplicados del listado a propósito;
+ * consolidar en componente común al tocar user/edit y user/new.
+ * ============================================================ */
+.usr { font-family: 'Inter', sans-serif; }
+
+/* ---------- hero ---------- */
+.usr-hero {
+    display: flex; align-items: flex-start; gap: 20px;
+    padding-bottom: 22px; margin-bottom: 22px;
+    border-bottom: 1px solid var(--csa-line); flex-wrap: wrap;
+}
+.usr-hero__avatar {
+    width: 64px; height: 64px; border-radius: 14px; flex-shrink: 0;
+    display: grid; place-items: center;
+    font-family: 'Fraunces', serif; font-weight: 600; font-size: 22px;
+    color: #fff; text-transform: uppercase; letter-spacing: -0.01em;
+    box-shadow: inset 0 -2px 0 rgba(0,0,0,0.08);
+}
+.usr-hero__avatar--sage  { background: var(--csa-green); }
+.usr-hero__avatar--ochre { background: var(--csa-amber); }
+.usr-hero__avatar--terra { background: var(--csa-terracotta); }
+.usr-hero__avatar--ink   { background: var(--csa-ink); }
+.usr-hero__body { flex: 1; min-width: 200px; }
+.usr-hero__eyebrow {
+    font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--csa-ink-muted); font-weight: 600; margin-bottom: 4px;
+}
+/* doble especificidad para ganar al shell csa (font-weight:400 en h1-h4) */
+.usr .usr-hero__title {
+    font-family: 'Fraunces', serif; font-weight: 600; font-size: 26px;
+    letter-spacing: -0.02em; line-height: 1.1; margin: 0 0 10px; color: var(--csa-ink);
+}
+.usr-hero__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.usr-hero__sep { width: 1px; height: 16px; background: var(--csa-line); }
+.usr-hero__actions { display: flex; gap: 8px; flex-shrink: 0; align-items: center; }
+
+/* ---------- layout de página: dos columnas (como la ficha de socia) ---------- */
+.usr-cols {
+    display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+    gap: 18px; align-items: start; margin-bottom: 18px;
+}
+@media (max-width: 900px) { .usr-cols { grid-template-columns: 1fr; } }
+
+/* ---------- botones (fuente garantizada, sin depender del macro) ---------- */
+.usr-btn {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 9px 15px; border-radius: 7px; border: 1px solid var(--csa-line);
+    background: var(--csa-surface); color: var(--csa-ink);
+    font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 500;
+    text-decoration: none; cursor: pointer; transition: 0.12s;
+}
+.usr-btn:hover { background: var(--csa-surface-alt); border-color: var(--csa-ink-muted); color: var(--csa-ink); text-decoration: none; }
+.usr-btn .fa { font-size: 12px; color: var(--csa-ink-muted); }
+.usr-btn:hover .fa { color: var(--csa-ink); }
+.usr-btn--primary { background: var(--csa-green); border-color: var(--csa-green); color: #fff; }
+.usr-btn--primary:hover { background: #3d6730; border-color: #3d6730; color: #fff; }
+.usr-btn--primary .fa, .usr-btn--primary:hover .fa { color: rgba(255,255,255,0.85); }
+.usr-btn--danger { color: var(--csa-terracotta); border-color: var(--csa-terracotta); }
+.usr-btn--danger .fa { color: var(--csa-terracotta); }
+.usr-btn--danger:hover { background: var(--csa-terracotta); border-color: var(--csa-terracotta); color: #fff; }
+.usr-btn--danger:hover .fa { color: #fff; }
+
+/* ---------- estado de la cuenta ---------- */
+.usr-state { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; }
+.usr-state .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.usr-state--on  { color: var(--csa-green); }       .usr-state--on .dot  { background: var(--csa-green); }
+.usr-state--off { color: var(--csa-terracotta); }  .usr-state--off .dot { background: var(--csa-terracotta); }
+
+/* ---------- chips de rol ---------- */
+.usr-roles { display: flex; flex-wrap: wrap; gap: 6px; }
+.usr-rolechip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 10px 4px; border-radius: 6px;
+    font-size: 11.5px; font-weight: 600; letter-spacing: 0.01em; line-height: 1.2; white-space: nowrap;
+}
+.usr-rolechip .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.usr-rolechip--ink   { background: #ece9e1; color: var(--csa-ink); }
+.usr-rolechip--ink .dot   { background: var(--csa-ink); }
+.usr-rolechip--sage  { background: var(--csa-green-soft); color: var(--csa-green); }
+.usr-rolechip--sage .dot  { background: var(--csa-green); }
+.usr-rolechip--ochre { background: var(--csa-ochre-soft); color: var(--csa-amber); }
+.usr-rolechip--ochre .dot { background: var(--csa-amber); }
+.usr-rolechip--terra { background: var(--csa-terracotta-soft); color: var(--csa-terracotta); }
+.usr-rolechip--terra .dot { background: var(--csa-terracotta); }
+.usr-rolechip--muted { background: #f0eee7; color: var(--csa-ink-muted); }
+.usr-rolechip--muted .dot { background: var(--csa-ink-muted); }
+
+/* ---------- datos de la cuenta: rejilla label encima de valor ---------- */
+.usr-defs {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px 28px; margin: 0;
+}
+.usr-defs__item { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.usr-defs__label {
+    font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--csa-ink-muted); font-weight: 600;
+}
+.usr-defs__value {
+    font-family: 'Fraunces', serif; font-weight: 500; font-size: 15px;
+    color: var(--csa-ink); line-height: 1.3; word-wrap: break-word; min-width: 0;
+}
+@media (max-width: 700px) { .usr-defs { grid-template-columns: 1fr; } }
+
+/* socix vinculadx: inicial por palabra, sin subrayado de hover */
+.usr-linked-inline { display: inline-flex; align-items: center; gap: 7px; color: var(--csa-ink); text-decoration: none; }
+.usr-linked-inline span { text-transform: capitalize; }
+.csa-app .usr-linked-inline:hover, .csa-app .usr-linked-inline:hover span { color: var(--csa-green); border-bottom-color: transparent; }
+.usr-linked-inline .fa { color: var(--csa-ink-muted); font-size: 12px; }
+.usr-linked-inline:hover .fa { color: var(--csa-green); }
+
+/* foco accesible sin recuadro azul al clicar */
+.usr a:focus, .usr button:focus { outline: none; }
+.usr a:focus-visible, .usr button:focus-visible { outline: 2px solid var(--csa-green); outline-offset: 2px; border-radius: 6px; }
+
+/* ---------- historial de acceso (eventos de bloqueo/desbloqueo) ---------- */
+.usr-log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.usr-log__item { display: flex; align-items: flex-start; gap: 12px; padding: 10px 4px; }
+.usr-log__item + .usr-log__item { border-top: 1px solid var(--csa-line); }
+.usr-log__icon {
+    width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0;
+    display: grid; place-items: center; font-size: 12px;
+}
+.usr-log__icon--block   { background: var(--csa-terracotta-soft); color: var(--csa-terracotta); }
+.usr-log__icon--unblock { background: var(--csa-green-soft); color: var(--csa-green); }
+.usr-log__body { min-width: 0; }
+.usr-log__title { font-family: 'Fraunces', serif; font-weight: 500; font-size: 14px; color: var(--csa-ink); line-height: 1.3; }
+.usr-log__meta { font-size: 12px; color: var(--csa-ink-muted); margin-top: 1px; }
+.usr-log__note { font-size: 12.5px; color: var(--csa-ink-soft); margin-top: 3px; font-style: italic; }
+</style>
+{% endblock %}
+
+{% block csa_main %}
+
+{# Mapa de rol → etiqueta humana + tono (ver nota DRY en more_css). #}
+{% set role_meta = {
+    'ROLE_SUPER_ADMIN':    { label: 'Super admin', tone: 'ink' },
+    'ROLE_ADMIN':          { label: 'Admin',       tone: 'ink' },
+    'ROLE_GESTION_GRANJA': { label: 'Granja',      tone: 'sage' },
+    'ROLE_GESTION_SOCIXS': { label: 'Socixs',      tone: 'sage' },
+    'ROLE_GESTION_CESTAS': { label: 'Cestas',      tone: 'sage' },
+    'ROLE_BLOG':           { label: 'Blog',        tone: 'ochre' },
+    'ROLE_COMPOST':        { label: 'Compost',     tone: 'ochre' },
+    'ROLE_PARTNER':        { label: 'Socix',       tone: 'terra' },
+    'ROLE_GUEST':          { label: 'Invitada',    tone: 'muted' }
+} %}
+{% set avatar_palette = ['sage', 'ochre', 'terra', 'ink'] %}
+{% set tone = avatar_palette[(entity.id|default(0)) % 4] %}
+{% set assigned_roles = entity.roles|filter(r => r != 'ROLE_USER') %}
+{% set is_self = app.user and app.user.id == entity.id %}
+
+<div class="usr">
+
+    {# Form oculto para bloquear/desbloquear desde esta ficha. #}
+    {% if not is_self %}
+        <form id="user-toggle-form" method="post" action="{{ path('user_toggle_block', { id: entity.id }) }}" style="display: none;">
+            <input type="hidden" name="_token" value="{{ csrf_token('user_toggle_block_' ~ entity.id) }}">
+        </form>
+    {% endif %}
+
+    {# ============ HERO ============ #}
+    <header class="usr-hero">
+        <span class="usr-hero__avatar usr-hero__avatar--{{ tone }}" aria-hidden="true">{{ entity.username|slice(0, 2) }}</span>
+
+        <div class="usr-hero__body">
+            <div class="usr-hero__eyebrow">Administración · Usuarias</div>
+            <h1 class="usr-hero__title">{{ entity.username }}</h1>
+            <div class="usr-hero__meta">
+                {% if entity.enabled %}
+                    <span class="usr-state usr-state--on"><span class="dot"></span>Activa</span>
+                {% else %}
+                    <span class="usr-state usr-state--off"><span class="dot"></span>Deshabilitada</span>
+                {% endif %}
+                {% if entity.partner %}
+                    <span class="usr-hero__sep"></span>
+                    <span style="font-size: 12px; color: var(--csa-ink-muted);">Vinculada a socix</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="usr-hero__actions">
+            {% if not is_self %}
+                {% if entity.enabled %}
+                    <button type="button" class="usr-btn usr-btn--danger" onclick="document.getElementById('confirm-user-toggle').showModal()">
+                        <i class="fa fa-ban" aria-hidden="true"></i> Bloquear
+                    </button>
+                {% else %}
+                    <button type="button" class="usr-btn usr-btn--primary" onclick="document.getElementById('confirm-user-toggle').showModal()">
+                        <i class="fa fa-check-circle" aria-hidden="true"></i> Desbloquear
+                    </button>
+                {% endif %}
+            {% endif %}
+            <a class="usr-btn" href="{{ path('user_edit', { id: entity.id }) }}"><i class="fa fa-pencil" aria-hidden="true"></i> Editar</a>
+            <a class="usr-btn" href="{{ path('user') }}"><i class="fa fa-arrow-left" aria-hidden="true"></i> Volver</a>
+        </div>
+        {% if not is_self %}
+            {{ csa.confirm_dialog('confirm-user-toggle', {
+                variant: entity.enabled ? 'danger' : 'default',
+                eyebrow: 'Acceso de la cuenta',
+                title: entity.enabled ? 'Bloquear acceso' : 'Desbloquear acceso',
+                body: entity.enabled
+                    ? 'La usuaria no podrá entrar hasta que la desbloquees. Su historial se conserva intacto.'
+                    : 'La usuaria vuelve a poder entrar al sistema.',
+                confirm_label: entity.enabled ? 'Bloquear' : 'Desbloquear',
+                external_form_id: 'user-toggle-form',
+            }) }}
+        {% endif %}
+    </header>
+
+    {# ============ DOS COLUMNAS: datos + permisos ============ #}
+    <div class="usr-cols">
+
+    {% embed '_components/csa_card.html.twig' with { title: 'Datos de la cuenta' } %}
+        {% block body %}
+            <div class="usr-defs">
+                <div class="usr-defs__item">
+                    <span class="usr-defs__label">Email</span>
+                    <span class="usr-defs__value">{{ entity.email ?: '—' }}</span>
+                </div>
+                <div class="usr-defs__item">
+                    <span class="usr-defs__label">Socix vinculadx</span>
+                    <span class="usr-defs__value">
+                        {% if entity.partner %}
+                            <a class="usr-linked-inline" href="{{ path('partner_show', { id: entity.partner.id }) }}" title="Ver ficha de socix">
+                                <i class="fa fa-user-o" aria-hidden="true"></i>
+                                <span>{{ (entity.partner.name ~ ' ' ~ entity.partner.surname)|lower }}</span>
+                            </a>
+                        {% else %}
+                            <span class="csa-muted">— sin vínculo —</span>
+                        {% endif %}
+                    </span>
+                </div>
+                <div class="usr-defs__item">
+                    <span class="usr-defs__label">Creada</span>
+                    <span class="usr-defs__value">{{ entity.created ? entity.created|date('d/m/Y H:i') : '—' }}</span>
+                </div>
+                <div class="usr-defs__item">
+                    <span class="usr-defs__label">Última actualización</span>
+                    <span class="usr-defs__value">{{ entity.updated ? entity.updated|date('d/m/Y H:i') : '—' }}</span>
+                </div>
+                <div class="usr-defs__item">
+                    <span class="usr-defs__label">Último acceso</span>
+                    <span class="usr-defs__value">{{ entity.lastLogin ? entity.lastLogin|date('d/m/Y H:i') : '— nunca —' }}</span>
+                </div>
+            </div>
+        {% endblock %}
+    {% endembed %}
+
+    {% embed '_components/csa_card.html.twig' with { title: 'Permisos' } %}
+        {% block body %}
+            {% if assigned_roles is empty %}
+                <p class="csa-muted">Sin roles asignados. No podrá entrar a ninguna sección.</p>
+            {% else %}
+                <div class="usr-roles">
+                    {% for role in assigned_roles %}
+                        {% set meta = role_meta[role]|default({ label: role|replace({'ROLE_': ''})|replace({'_': ' '})|lower|capitalize, tone: 'muted' }) %}
+                        <span class="usr-rolechip usr-rolechip--{{ meta.tone }}"><span class="dot"></span>{{ meta.label }}</span>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endblock %}
+    {% endembed %}
+
+    </div>{# /usr-cols #}
+
+    {# ============ HISTORIAL DE ACCESO ============ #}
+    {% if events is defined and events|length > 0 %}
+        {% embed '_components/csa_card.html.twig' with { title: 'Historial de acceso' } %}
+            {% block body %}
+                <ul class="usr-log">
+                    {% for event in events %}
+                        {% set is_block = event.type == 'BLOCK' %}
+                        <li class="usr-log__item">
+                            <span class="usr-log__icon usr-log__icon--{{ is_block ? 'block' : 'unblock' }}">
+                                <i class="fa fa-{{ is_block ? 'ban' : 'check' }}" aria-hidden="true"></i>
+                            </span>
+                            <div class="usr-log__body">
+                                <div class="usr-log__title">{{ is_block ? 'Cuenta bloqueada' : 'Cuenta desbloqueada' }}</div>
+                                <div class="usr-log__meta">
+                                    {{ event.created|date('d/m/Y H:i') }}
+                                    {%- if event.actor starts with 'gestor:' %}
+                                        {% set actor_id = event.actor|split(':')|last %}
+                                        · por {{ actor_names[actor_id]|default(actor_names[actor_id|number_format(0, '', '')]|default('gestión')) }}
+                                    {%- elseif event.actor %} · {{ event.actor }}{% endif %}
+                                </div>
+                                {% if event.notes %}<div class="usr-log__note">{{ event.notes }}</div>{% endif %}
+                            </div>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% endblock %}
+        {% endembed %}
+    {% endif %}
+
+</div>
 {% endblock %}

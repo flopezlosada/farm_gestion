@@ -1,0 +1,144 @@
+{# ============================================================
+ # Estilos del calendario de recogida. Partial compartido por la
+ # pantalla del gestor (PartnerController) y la del socio (PanelController).
+ # Se incluye dentro de {% block more_css %} para que caiga en el <head>.
+ # ============================================================ #}
+<style>
+  .rcal{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:var(--csa-sp-6);align-items:start}
+  .rcal.rcal-busy{opacity:.55;pointer-events:none;transition:opacity .1s}
+  @media (max-width:880px){.rcal{grid-template-columns:1fr}}
+
+  /* --- tarjeta calendario --- */
+  .rcal-grid{background:var(--csa-surface);border:1px solid var(--csa-rule);border-radius:var(--csa-radius-xl);box-shadow:var(--csa-shadow-md);overflow:hidden}
+
+  /* cabecera: navegación de mes + acción de reset, integradas en la tarjeta */
+  .rcal-cal-hd{display:flex;align-items:center;gap:var(--csa-sp-3);padding:var(--csa-sp-4) var(--csa-sp-5);background:linear-gradient(180deg,#f1f5e9,var(--csa-surface));border-bottom:1px solid var(--csa-rule)}
+  .rcal-nav{display:flex;align-items:center;gap:var(--csa-sp-3);flex:1;min-width:0}
+  .rcal-month{font-family:var(--csa-serif);font-weight:500;font-size:var(--csa-fs-xl);letter-spacing:-.01em;text-transform:capitalize;color:var(--csa-ink)}
+  .csa-app a.rcal-navbtn{width:38px;height:38px;border-radius:50%;border:1px solid var(--csa-rule);background:var(--csa-surface);color:var(--csa-ink-soft);display:inline-grid;place-items:center;text-decoration:none;transition:var(--csa-t-fast);flex-shrink:0}
+  .csa-app a.rcal-navbtn:hover{border-color:var(--csa-green);border-bottom-color:var(--csa-green);color:var(--csa-green);box-shadow:var(--csa-shadow-sm)}
+  .rcal-resetform{margin:0;flex-shrink:0}
+
+  /* --- rejilla --- */
+  .rcal-body{padding:var(--csa-sp-5)}
+  .rcal-dow{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-bottom:10px}
+  .rcal-dow span{text-align:center;font-size:var(--csa-fs-xs);font-weight:600;color:var(--csa-ink-muted);text-transform:uppercase;letter-spacing:.06em}
+  .rcal-weeks{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
+  .rcal-cell{position:relative;min-height:80px;border-radius:var(--csa-radius-md);padding:9px 10px;border:1px solid transparent;display:flex;flex-direction:column;justify-content:space-between;text-decoration:none;transition:var(--csa-t-fast)}
+  .rcal-cell .n{font-size:var(--csa-fs-md);font-weight:600;color:var(--csa-ink-soft);font-variant-numeric:tabular-nums;line-height:1}
+  .rcal-cell.out{opacity:.5}
+  .rcal-cell.out .n{font-weight:400}
+  .rcal-cell.empty{background:var(--csa-surface-alt);border-color:var(--csa-rule-soft)}
+  .rcal-cell.wknd.empty{background:#f0efe9}
+
+  /* hoy: aro fino azul + etiqueta */
+  .rcal-cell.rcal-today{box-shadow:inset 0 0 0 1.5px var(--csa-sky)}
+  .rcal-today-tag{position:absolute;top:8px;right:9px;font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--csa-sky)}
+
+  /* día con recogida: lleno verde, número fuerte, marcadores de producto */
+  a.rcal-pick{background:var(--csa-green-soft);border-color:#c4dba6;box-shadow:var(--csa-shadow-sm)}
+  a.rcal-pick .n{color:var(--csa-green);font-weight:700}
+  a.rcal-pick:hover{transform:translateY(-2px);box-shadow:var(--csa-shadow-md);border-color:var(--csa-green)}
+
+  /* marcadores: hoja = verdura, óvalo = huevos (FA4 no tiene icono de huevo) */
+  .rcal-mk{display:flex;gap:5px;align-self:flex-end}
+  .rcal-mk__i{width:22px;height:22px;border-radius:7px;background:#fff;display:grid;place-items:center;font-size:11px}
+  .rcal-mk__i.veg{color:var(--csa-green);box-shadow:inset 0 0 0 1px #c4dba6}
+  .rcal-mk__i.egg{box-shadow:inset 0 0 0 1px #eccf94}
+  .rcal-egg{width:10px;height:13px;border-radius:50% 50% 50% 50%/60% 60% 42% 42%;background:var(--csa-ochre);display:block}
+
+  /* no recoge nada (vaciado por edición; raro: las saltadas viven en la papelera) */
+  a.rcal-skip{background:var(--csa-terracotta-soft);border-color:#f0bfa3}
+  a.rcal-skip .n{color:var(--csa-terracotta);font-weight:700;text-decoration:line-through}
+  a.rcal-skip .x{align-self:flex-end;font-size:12px;color:#b04e22}
+
+  /* semana cerrada (excepción de cancelación): tramado gris, no hay reparto para nadie */
+  a.rcal-closed{background:repeating-linear-gradient(45deg,#ecebe7,#ecebe7 5px,#e6e5e0 5px,#e6e5e0 10px);border-color:#dcdad5;cursor:default}
+  a.rcal-closed .n{color:#9b988f;font-weight:600}
+  a.rcal-closed .x{align-self:flex-end;font-size:12px;color:#9b988f}
+
+  /* día seleccionado: aro sólido (gana sobre el aro de "hoy") */
+  .rcal-cell.sel{box-shadow:0 0 0 2px var(--csa-green),var(--csa-shadow-md)}
+  .rcal-cell.sel.rcal-skip{box-shadow:0 0 0 2px var(--csa-terracotta),var(--csa-shadow-md)}
+  .rcal-cell.sel.rcal-closed{box-shadow:0 0 0 2px #9b988f}
+
+  .rcal-legend{display:flex;gap:var(--csa-sp-5);margin-top:var(--csa-sp-5);padding-top:var(--csa-sp-4);border-top:1px solid var(--csa-rule);font-size:var(--csa-fs-sm);color:var(--csa-ink-soft);align-items:center;flex-wrap:wrap}
+  .rcal-legend .lg{display:inline-flex;align-items:center;gap:7px}
+
+  /* --- panel del día (estilo "ficha de recogida") --- */
+  .rcal-panel{background:var(--csa-surface);border:1px solid var(--csa-rule);border-radius:var(--csa-radius-xl);overflow:hidden;box-shadow:var(--csa-shadow-md)}
+  .rcal-panel__hd{position:relative;padding:var(--csa-sp-6) var(--csa-sp-5) var(--csa-sp-5);background:linear-gradient(180deg,var(--csa-green-soft),#eef4e2)}
+  .rcal-panel__hd.is-skip{background:linear-gradient(180deg,var(--csa-terracotta-soft),#fbe6da)}
+  .rcal-panel__hd.is-closed{background:linear-gradient(180deg,#e9e8e4,#f2f1ed)}
+  .rcal-panel__eyebrow{font-size:var(--csa-fs-xs);text-transform:uppercase;letter-spacing:.08em;font-weight:700;color:var(--csa-green);margin-bottom:6px;display:flex;align-items:center;gap:7px}
+  .rcal-panel__hd.is-skip .rcal-panel__eyebrow{color:#b04e22}
+  .rcal-panel__hd.is-closed .rcal-panel__eyebrow{color:var(--csa-ink-muted)}
+  .rcal-panel__day{font-family:var(--csa-serif);font-size:var(--csa-fs-2xl);font-weight:500;letter-spacing:-.01em;line-height:1.1;color:var(--csa-ink)}
+  .rcal-panel__where{font-size:var(--csa-fs-sm);color:var(--csa-green);font-weight:600;margin-top:10px;display:inline-flex;align-items:center;gap:6px}
+  .rcal-panel__hd.is-skip .rcal-panel__where{color:#b04e22}
+  .rcal-panel__bd{padding:var(--csa-sp-5)}
+  .rcal-sect{font-size:var(--csa-fs-xs);letter-spacing:.08em;text-transform:uppercase;color:var(--csa-ink-muted);font-weight:600;margin-bottom:var(--csa-sp-3)}
+  .rcal-empty-note{display:flex;align-items:center;gap:8px;background:var(--csa-terracotta-soft);color:#b04e22;font-size:var(--csa-fs-sm);border-radius:var(--csa-radius-md);padding:10px 13px;margin-bottom:var(--csa-sp-4)}
+
+  .rcal-comp{display:flex;align-items:center;gap:var(--csa-sp-4);padding:12px 0}
+  .rcal-comp+.rcal-comp{border-top:1px solid var(--csa-rule)}
+  .rcal-comp__ic{width:44px;height:44px;border-radius:var(--csa-radius-md);display:grid;place-items:center;font-size:17px;flex-shrink:0}
+  .rcal-comp__ic.veg{background:var(--csa-green-soft);color:var(--csa-green)}
+  .rcal-comp__ic.egg{background:var(--csa-ochre-soft)}
+  .rcal-comp__ic.egg .rcal-egg{width:15px;height:19px}
+  .rcal-comp__t{flex:1}
+  .rcal-comp__name{font-weight:600;font-size:var(--csa-fs-md);display:block;color:var(--csa-ink)}
+  .rcal-comp__sub{font-size:var(--csa-fs-sm);color:var(--csa-ink-muted);display:block;margin-top:2px}
+  .rcal-hint{font-size:var(--csa-fs-xs);color:var(--csa-ink-muted);margin-top:6px;display:flex;gap:8px;align-items:flex-start;line-height:1.45}
+  .rcal-hint i{margin-top:2px;color:var(--csa-green)}
+
+  .rcal-panel__ft{padding:var(--csa-sp-5);border-top:1px solid var(--csa-rule);background:var(--csa-surface-alt)}
+  .rcal-empty{padding:var(--csa-sp-12) var(--csa-sp-5);text-align:center;color:var(--csa-ink-muted);font-size:var(--csa-fs-base)}
+
+  /* --- columna izquierda (rejilla + papelera apiladas) --- */
+  .rcal-left{display:flex;flex-direction:column;gap:var(--csa-sp-5)}
+
+  /* --- arrastre --- */
+  .csa-app a.rcal-grab,.rcal-grab{cursor:grab}
+  .rcal-grab:active{cursor:grabbing}
+  .rcal-dragging{opacity:.4}
+  /* asa de arrastre: aparece al pasar el ratón sobre un día movible */
+  .rcal-grip{position:absolute;top:8px;right:9px;color:var(--csa-green);opacity:0;font-size:11px;transition:var(--csa-t-fast)}
+  .rcal-grab:hover .rcal-grip{opacity:.6}
+  /* destino DISPONIBLE mientras se arrastra (pista suave) */
+  .rcal-dragok{outline:2px dashed #9cc274;outline-offset:-3px;background:var(--csa-green-soft)}
+  /* destino que se está SOBREVOLANDO ahora (pista fuerte) */
+  .rcal-dropok{outline:2px solid var(--csa-green);outline-offset:-3px;background:#cfe3a8}
+
+  /* Afordancias por DISPOSITIVO (no por rol): el arrastre es para puntero fino con hover
+     (escritorio); el botón "mover por toque" y demás, para pantallas táctiles. Así el socio
+     en escritorio arrastra igual que el gestor, y en el móvil usa el toque. */
+  @media (hover: hover) and (pointer: fine) { .rcal-tapmove { display: none !important; } }
+  @media (hover: none), (pointer: coarse) { .rcal-dragonly { display: none !important; } }
+
+  /* --- modo "mover por toque" (móvil) --- */
+  .rcal-movebanner{display:flex;align-items:center;justify-content:space-between;gap:var(--csa-sp-4);background:var(--csa-sky-soft);border:1px solid var(--csa-sky);color:var(--csa-sky);border-radius:var(--csa-radius-md);padding:10px 14px;margin-bottom:var(--csa-sp-4);font-size:var(--csa-fs-sm);font-weight:600}
+  /* respeta el atributo `hidden` (si no, .rcal-movebanner{display:flex} lo pisaría y el
+     banner se vería siempre, también en escritorio donde no se usa el modo "mover por toque") */
+  .rcal-movebanner[hidden]{display:none}
+  .rcal-movebanner i{margin-right:6px}
+  .rcal-moving [data-rcal-target]{cursor:pointer}
+
+  /* --- papelera (no recoge, recuperable) --- */
+  .rcal-tray{background:var(--csa-surface);border:1px solid var(--csa-rule);border-radius:var(--csa-radius-xl);box-shadow:var(--csa-shadow-sm);padding:var(--csa-sp-5);transition:var(--csa-t-fast)}
+  .rcal-tray.rcal-dragok{outline:none;border:2px dashed var(--csa-terracotta);background:#fdf3ec}
+  .rcal-tray.rcal-dropok{outline:none;border:2px solid var(--csa-terracotta);background:#f9dfce}
+  .rcal-tray__hd{display:flex;align-items:center;gap:var(--csa-sp-3);margin-bottom:var(--csa-sp-4)}
+  .rcal-tray__ic{width:42px;height:42px;border-radius:var(--csa-radius-md);background:var(--csa-terracotta-soft);color:#b04e22;display:grid;place-items:center;font-size:16px;flex-shrink:0}
+  .rcal-tray__txt{display:flex;flex-direction:column;gap:2px;min-width:0}
+  .rcal-tray__title{font-size:var(--csa-fs-md);font-weight:600;color:var(--csa-ink)}
+  .rcal-tray__hint{font-size:var(--csa-fs-xs);color:var(--csa-ink-muted)}
+  .rcal-tray__body{display:flex;flex-wrap:wrap;gap:var(--csa-sp-2);min-height:44px;align-items:center}
+  .rcal-tray__empty{font-size:var(--csa-fs-sm);color:var(--csa-ink-muted);margin:0;font-style:italic}
+  .rcal-tray-card{display:inline-flex;align-items:center;gap:8px;background:var(--csa-terracotta-soft);border:1px solid #f0bfa3;border-radius:var(--csa-radius-pill);padding:8px 15px;font-size:var(--csa-fs-sm);color:#b04e22;font-weight:600;text-transform:capitalize;transition:var(--csa-t-fast)}
+  .rcal-tray-card.rcal-grab:hover{transform:translateY(-1px);box-shadow:var(--csa-shadow-sm)}
+  /* tarjeta-enlace (socio, sin arrastre): tocar para volver a recoger */
+  .csa-app a.rcal-tray-card{text-decoration:none;cursor:pointer}
+  .csa-app a.rcal-tray-card:hover{text-decoration:none;transform:translateY(-1px);box-shadow:var(--csa-shadow-sm)}
+  .rcal-tray-card__ic{font-size:11px}
+</style>

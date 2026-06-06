@@ -2,53 +2,48 @@
 
 namespace App\Controller;
 
-use Doctrine\ORM\EntityManagerInterface;
-use Knp\Component\Pager\PaginatorInterface;
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-
+use App\Entity\Blog;
 use App\Form\BlogEditType;
 use App\Form\BlogSecondType;
-use Symfony\Component\HttpFoundation\Request;
-use App\Controller\AbstractAppController;
-
-use App\Entity\Blog;
 use App\Form\BlogType;
+use Doctrine\ORM\EntityManagerInterface;
+use Knp\Component\Pager\PaginatorInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 use WhiteOctober\BreadcrumbsBundle\Model\Breadcrumbs;
 
 /**
  * Blog controller.
  *
  */
-class BlogController extends AbstractAppController
+#[IsGranted('ROLE_BLOG')]
+class BlogController extends AbstractController
 {
 
-    /**
-     * Lists all Blog entities.
-     * @param category_id
-     *
-     * @return \Symfony\Component\HttpFoundation\Response
-     */
-    /*public function index($category_id)
+    public function index(Request $request, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
+        // Filtro opcional por categoría desde los tabs.
+        $categoryId = $request->query->getInt('category') ?: null;
+        $criteria = $categoryId ? ['category' => $categoryId] : [];
+        $entities = $em->getRepository(\App\Entity\Blog::class)->findBy($criteria, ['created' => 'DESC']);
 
-        $category = $em->getRepository(\App\Entity\Category::class)->find($category_id);
-        $entities = $em->getRepository(\App\Entity\Blog::class)->findByCategory($category);
+        // Lista de categorías con conteo para pintar los tabs y el total.
+        $categories = $em->createQuery(
+            'SELECT c.id AS id, c.name AS name, COUNT(b.id) AS n
+             FROM App\Entity\Category c
+             LEFT JOIN App\Entity\Blog b WITH b.category = c
+             GROUP BY c.id
+             ORDER BY n DESC'
+        )->getArrayResult();
+        $totalCount = $em->createQuery('SELECT COUNT(b.id) FROM App\Entity\Blog b')->getSingleScalarResult();
 
         return $this->render('Blog/index.html.twig', array(
             'entities' => $entities,
-            'category' => $category
-        ));
-    }*/
-
-    public function index()
-    {
-        $em = $this->getDoctrine()->getManager();
-
-        $entities = $em->getRepository(\App\Entity\Blog::class)->findAll();
-
-        return $this->render('Blog/index.html.twig', array(
-            'entities' => $entities,
+            'categories' => $categories,
+            'total_count' => $totalCount,
+            'current_category' => $categoryId,
         ));
     }
 
@@ -82,10 +77,9 @@ class BlogController extends AbstractAppController
      * Creates a new Blog entity.
      *
      */
-    public function create(Request $request)
+    public function create(Request $request, EntityManagerInterface $em)
     {
         $entity = new Blog();
-        $em = $this->getDoctrine()->getManager();
 
         $form = $this->createCreateForm($entity);
         $form->handleRequest($request);
@@ -131,8 +125,6 @@ class BlogController extends AbstractAppController
     public function new()
     {
         $entity = new Blog();
-        $em = $this->getDoctrine()->getManager();
-
 
         $form = $this->createCreateForm($entity);
 
@@ -144,10 +136,8 @@ class BlogController extends AbstractAppController
     }
 
 
-    public function second($id)
+    public function second($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Blog::class)->find($id);
         $galleries = $em->getRepository(\App\Entity\Blog::class)->findMedia("Gallery", $id, "blog");
         $audios = $em->getRepository(\App\Entity\Blog::class)->findMedia("Audio", $id, "blog");
@@ -178,10 +168,8 @@ class BlogController extends AbstractAppController
         return $form;
     }
 
-    public function updateSecond(Request $request, $id)
+    public function updateSecond(Request $request, $id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Blog::class)->find($id);
 
         if (!$entity) {
@@ -195,10 +183,10 @@ class BlogController extends AbstractAppController
         if ($editForm->isSubmitted() && $editForm->isValid()) {
             $em->flush();
 
-            return $this->redirect($this->generateUrl('blog_show', array('slug' => $entity->getSlug())));
-        } else {
-            ladybug_dump($editForm->getErrors());
+            $this->addFlash('success', 'Cambios guardados.');
+            return $this->redirect($this->generateUrl('blog_edit', array('id' => $entity->getId())));
         }
+
         return $this->render('Blog/edit.html.twig', array(
             'entity' => $entity,
             'edit_form' => $editForm->createView(),
@@ -211,10 +199,8 @@ class BlogController extends AbstractAppController
      * Finds and displays a Blog entity.
      *
      */
-    public function show($slug, Breadcrumbs $breadcrumbs)
+    public function show($slug, Breadcrumbs $breadcrumbs, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Blog::class)->findPostsBySlug($slug);
 
 
@@ -238,10 +224,8 @@ class BlogController extends AbstractAppController
      * Displays a form to edit an existing Blog entity.
      *
      */
-    public function edit($id)
+    public function edit($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Blog::class)->find($id);
 
         if (!$entity) {
@@ -281,10 +265,8 @@ class BlogController extends AbstractAppController
      * Edits an existing Blog entity.
      *
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, $id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Blog::class)->find($id);
 
         if (!$entity) {
@@ -301,9 +283,8 @@ class BlogController extends AbstractAppController
             $entity->setModified(0);
             $em->flush();
 
-            return $this->redirect($this->generateUrl('blog_show', array('slug' => $entity->getSlug())));
-        } else {
-            ladybug_dump($editForm->getErrors());
+            $this->addFlash('success', 'Cambios guardados.');
+            return $this->redirect($this->generateUrl('blog_edit', array('id' => $entity->getId())));
         }
 
         return $this->render('Blog/edit.html.twig', array(
@@ -317,13 +298,12 @@ class BlogController extends AbstractAppController
      * Deletes a Blog entity.
      *
      */
-    public function delete(Request $request, $id)
+    public function delete(Request $request, $id, EntityManagerInterface $em)
     {
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\Blog::class)->find($id);
 
             if (!$entity) {
@@ -354,10 +334,8 @@ class BlogController extends AbstractAppController
     }
 
 
-    public function edition($id, $object_class)
+    public function edition($id, $object_class, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository('App\Entity\\' . ucfirst($object_class))->find($id);
         $single_images = $em->getRepository(\App\Entity\Blog::class)->findMedia("Image", $id, $object_class, 1);
         $grouped_images = $em->getRepository(\App\Entity\Blog::class)->findMedia("Image", $id, $object_class, 0);
@@ -382,14 +360,10 @@ class BlogController extends AbstractAppController
     {
     }
 
-    public function show_category($id,Request $request, PaginatorInterface $paginator, Breadcrumbs $breadcrumbs)
+    public function show_category($id, Request $request, PaginatorInterface $paginator, Breadcrumbs $breadcrumbs, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $category = $em->getRepository(\App\Entity\Category::class)->find($id);
 
-
-        $em = $this->getDoctrine()->getManager();
         $dql = "select b from App\\Entity\\Blog b  where b.category=:category order by b.created desc";
         $query = $em->createQuery($dql);
         $query->setParameter("category", $category);
@@ -413,9 +387,8 @@ class BlogController extends AbstractAppController
 
     }
 
-    public function latest_post()
+    public function latest_post(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
         $entities = $em->getRepository(\App\Entity\Blog::class)->findLatest(3, 1);
 
         return $this->render("Blog/latest_post.html.twig", array(

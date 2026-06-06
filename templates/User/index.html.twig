@@ -1,46 +1,401 @@
-    {% extends 'layout_list.html.twig' %}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
 
-    {% block title_wrapper %}Listado {% endblock %}
-    {% block main -%}
-    <h1>User list</h1>
+{% block title %}Usuarias{% endblock %}
 
-    <table class="records_list">
-        <thead>
-        <tr>
-                <th>Id</th>
-                <th>Created</th>
-                <th>Updated</th>
-            <th>Actions</th>
-        </tr>
-        </thead>
-        <tbody>
-        {% for entity in entities %}
-        <tr>
-                    <td>
-                        <a href="{{ path('user_show', { 'id': entity.id }) }}">{{ entity.id }}</a>
-                    </td>
-                    <td>{% if entity.created %}{{ entity.created|date('Y-m-d H:i:s') }}{% endif %}</td>
-                    <td>{% if entity.updated %}{{ entity.updated|date('Y-m-d H:i:s') }}{% endif %}</td>
-                    <td>
-                <ul>
-                    <li>
-                        <a href="{{ path('user_show', { 'id': entity.id }) }}">show</a>
-                    </li>
-                    <li>
-                        <a href="{{ path('user_edit', { 'id': entity.id }) }}">edit</a>
-                    </li>
-                </ul>
-                    </td>
-        </tr>
-        {% endfor %}
-        </tbody>
-    </table>
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Usuarias</span>
+{% endblock %}
 
-            <ul>
-            <li>
-                <a href="{{ path('user_new') }}">
-                    Create a new entry
-                </a>
-            </li>
-        </ul>
-        {% endblock %}
+{% block more_css %}
+{{ parent() }}
+<style>
+/* ============================================================
+ * Listado de usuarias — toques locales sobre la csa-table.
+ * Avatar + persona + chips de color (mismo lenguaje que socixs),
+ * filtros client-side (hoy son pocas cuentas). Forzamos Inter/Fraunces
+ * para blindar la cascada frente a Bootstrap 3.
+ * ============================================================ */
+.usr { font-family: 'Inter', sans-serif; }
+
+/* Foco: sin recuadro azul del navegador al clicar con ratón, pero foco
+   verde accesible al navegar con teclado (Tab). */
+.usr a:focus, .usr button:focus { outline: none; }
+.usr a:focus-visible, .usr button:focus-visible {
+    outline: 2px solid var(--csa-green); outline-offset: 2px; border-radius: 4px;
+}
+
+/* ---------- toolbar (buscador + contador + cta) ---------- */
+.usr-toolbar {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: var(--csa-sp-4); flex-wrap: wrap;
+}
+.usr-search { position: relative; flex: 1; min-width: 200px; max-width: 340px; }
+.usr-search input {
+    width: 100%; padding: 8px 12px 8px 34px;
+    border: 1px solid var(--csa-line); background: var(--csa-surface);
+    border-radius: 6px; font-size: 13px; color: var(--csa-ink); font-family: inherit;
+}
+.usr-search input:focus {
+    outline: none; border-color: var(--csa-green);
+    box-shadow: 0 0 0 3px var(--csa-green-soft);
+}
+.usr-search svg {
+    position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
+    color: var(--csa-ink-muted);
+}
+.usr-toolbar .spacer { flex: 1; }
+.usr-toolbar .counter { font-size: 12px; color: var(--csa-ink-soft); }
+.usr-toolbar .counter b { color: var(--csa-ink); font-weight: 600; }
+
+/* ---------- filtro de rol: chips clicables ---------- */
+.usr-rolefilter {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+    margin-bottom: var(--csa-sp-5);
+}
+.usr-rolefilter__lbl {
+    font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--csa-ink-muted); font-weight: 600; margin-right: 4px;
+}
+.usr-rolepill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 12px; border-radius: 999px; cursor: pointer;
+    font-size: 11.5px; font-weight: 600; line-height: 1.2; font-family: inherit;
+    border: 1px solid var(--csa-line); background: var(--csa-surface);
+    color: var(--csa-ink-soft); transition: 0.12s;
+}
+.usr-rolepill:hover { transform: translateY(-1px); }
+/* Hover (sólo si no está activo): el chip se tiñe con su color en versión
+   suave, como anticipo del estado activo. */
+.usr-rolepill--all:not(.is-active):hover   { background: #ece9e1; color: var(--csa-ink); border-color: var(--csa-ink); }
+.usr-rolepill--ink:not(.is-active):hover   { background: #ece9e1; color: var(--csa-ink); border-color: var(--csa-ink); }
+.usr-rolepill--sage:not(.is-active):hover  { background: var(--csa-green-soft); color: var(--csa-green); border-color: var(--csa-green); }
+.usr-rolepill--ochre:not(.is-active):hover { background: var(--csa-ochre-soft); color: var(--csa-amber); border-color: var(--csa-amber); }
+.usr-rolepill--terra:not(.is-active):hover { background: var(--csa-terracotta-soft); color: var(--csa-terracotta); border-color: var(--csa-terracotta); }
+.usr-rolepill--muted:not(.is-active):hover { background: #f0eee7; color: var(--csa-ink-muted); border-color: var(--csa-ink-muted); }
+.usr-rolepill .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.usr-rolepill--ink .dot   { background: var(--csa-ink); }
+.usr-rolepill--sage .dot  { background: var(--csa-green); }
+.usr-rolepill--ochre .dot { background: var(--csa-amber); }
+.usr-rolepill--terra .dot { background: var(--csa-terracotta); }
+.usr-rolepill--muted .dot { background: var(--csa-ink-muted); }
+.usr-rolepill.is-active { color: #fff; border-color: transparent; }
+.usr-rolepill.is-active .dot { background: rgba(255,255,255,0.9); }
+.usr-rolepill--ink.is-active   { background: var(--csa-ink); }
+.usr-rolepill--sage.is-active  { background: var(--csa-green); }
+.usr-rolepill--ochre.is-active { background: var(--csa-amber); }
+.usr-rolepill--terra.is-active { background: var(--csa-terracotta); }
+.usr-rolepill--muted.is-active { background: var(--csa-ink-muted); }
+/* "Todas": neutra cuando no hay filtro activo */
+.usr-rolepill--all.is-active { background: var(--csa-ink); color: #fff; border-color: transparent; }
+
+/* ---------- persona: avatar + usuaria + email ---------- */
+.usr-person { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.usr-person__avatar {
+    width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
+    display: grid; place-items: center;
+    font-family: 'Fraunces', serif; font-weight: 600; font-size: 13px;
+    color: #fff; letter-spacing: -0.01em; text-transform: uppercase;
+}
+.usr-person__avatar--sage  { background: var(--csa-green); }
+.usr-person__avatar--ochre { background: var(--csa-amber); }
+.usr-person__avatar--terra { background: var(--csa-terracotta); }
+.usr-person__avatar--ink   { background: var(--csa-ink); }
+.usr-person__body { min-width: 0; }
+.usr-person__name {
+    font-family: 'Fraunces', serif; font-weight: 500; font-size: 15px;
+    color: var(--csa-ink); text-decoration: none; letter-spacing: -0.005em;
+    display: block; line-height: 1.2;
+}
+.usr .usr-person__name:hover { color: var(--csa-green); text-decoration: none; border-bottom-color: transparent; }
+.usr-person__meta {
+    display: block; font-size: 11.5px; color: var(--csa-ink-muted);
+    margin-top: 1px; line-height: 1.2;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px;
+}
+
+/* ---------- chips de rol con color por familia ---------- */
+.usr-roles { display: flex; flex-wrap: wrap; gap: 5px; }
+.usr-rolechip {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 9px 4px; border-radius: 5px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.01em; line-height: 1.2;
+    white-space: nowrap;
+}
+.usr-rolechip .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.usr-rolechip--ink   { background: #ece9e1; color: var(--csa-ink); }
+.usr-rolechip--ink .dot   { background: var(--csa-ink); }
+.usr-rolechip--sage  { background: var(--csa-green-soft); color: var(--csa-green); }
+.usr-rolechip--sage .dot  { background: var(--csa-green); }
+.usr-rolechip--ochre { background: var(--csa-ochre-soft); color: var(--csa-amber); }
+.usr-rolechip--ochre .dot { background: var(--csa-amber); }
+.usr-rolechip--terra { background: var(--csa-terracotta-soft); color: var(--csa-terracotta); }
+.usr-rolechip--terra .dot { background: var(--csa-terracotta); }
+.usr-rolechip--muted { background: #f0eee7; color: var(--csa-ink-muted); }
+.usr-rolechip--muted .dot { background: var(--csa-ink-muted); }
+
+/* ---------- socix vinculadx: enlace con flecha al pasar ----------
+   El subrayado de hover del diseño csa es un border-bottom verde
+   (.csa-app :where(a):hover en 02-base.css); lo anulamos aquí y damos
+   en su lugar un hover propio: texto/icono en verde + flecha que entra
+   deslizando. Subimos especificidad con `.usr` para ganarle a la base. */
+.usr-linked {
+    display: inline-flex; align-items: center; gap: 7px;
+    color: var(--csa-ink); text-decoration: none; font-size: 13px;
+}
+.usr .usr-linked:hover { color: var(--csa-green); border-bottom-color: transparent; }
+.usr .usr-linked:hover span { color: var(--csa-green); }
+.usr-linked .fa { color: var(--csa-ink-muted); font-size: 12px; transition: color var(--csa-t-fast); }
+.usr-linked:hover .fa { color: var(--csa-green); }
+.usr-linked span { text-transform: capitalize; }
+.usr-linked__go {
+    opacity: 0; transform: translateX(-4px); margin-left: -3px;
+    transition: opacity var(--csa-t-fast), transform var(--csa-t-fast);
+}
+.usr-linked:hover .usr-linked__go { opacity: 1; transform: translateX(0); }
+
+/* ---------- acciones: menú kebab (tres puntos) ---------- */
+.usr-actions { position: relative; text-align: right; }
+.usr-kebab {
+    background: transparent; border: 1px solid transparent; border-radius: 5px;
+    padding: 5px 7px; cursor: pointer; color: var(--csa-ink-muted); line-height: 0;
+}
+.usr-kebab:hover { background: var(--csa-surface-alt); border-color: var(--csa-line); color: var(--csa-ink); }
+.usr-kebab-menu {
+    z-index: 50; background: var(--csa-surface); border: 1px solid var(--csa-line);
+    border-radius: 7px; padding: 5px; min-width: 170px;
+    box-shadow: 0 8px 26px rgba(40,36,24,0.16);
+    display: flex; flex-direction: column; gap: 1px;
+}
+.usr-kebab-menu[hidden] { display: none; }
+.usr-kebab-menu a {
+    display: flex; align-items: center; gap: 9px;
+    padding: 8px 11px; border-radius: 4px; font-size: 12.5px;
+    color: var(--csa-ink); text-decoration: none; white-space: nowrap;
+}
+.usr-kebab-menu a:hover { background: var(--csa-green-soft); color: var(--csa-ink); text-decoration: none; }
+.usr-kebab-menu a .fa { color: var(--csa-ink-muted); width: 14px; text-align: center; }
+
+/* fila de "sin resultados" del filtro client-side */
+.usr-empty td { text-align: center; padding: var(--csa-sp-6); color: var(--csa-ink-muted); font-style: italic; }
+</style>
+{% endblock %}
+
+{% block more_js %}
+{{ parent() }}
+<script>
+// Listado de usuarias — filtrado client-side (pocas cuentas, sin paginar).
+//   1. Buscador instantáneo por usuaria / email / socix vinculadx.
+//   2. Chips de rol clicables (OR; ninguno activo = todas).
+//   3. Menú kebab de acciones por fila.
+(function () {
+    var root = document.querySelector('.usr');
+    if (!root) { return; }
+
+    var search   = document.getElementById('usr-search');
+    var pills    = Array.prototype.slice.call(root.querySelectorAll('.usr-rolepill[data-role]'));
+    var allPill  = root.querySelector('.usr-rolepill[data-all]');
+    var rows     = Array.prototype.slice.call(root.querySelectorAll('tr[data-search]'));
+    var counter  = document.getElementById('usr-count');
+    var emptyRow = document.getElementById('usr-empty-filter');
+
+    function activeRoles() {
+        return pills.filter(function (p) { return p.classList.contains('is-active'); })
+                    .map(function (p) { return p.getAttribute('data-role'); });
+    }
+    function apply() {
+        var q = (search ? search.value : '').trim().toLowerCase();
+        var active = activeRoles();
+        var visible = 0;
+        rows.forEach(function (row) {
+            var matchText = q === '' || (row.getAttribute('data-search') || '').indexOf(q) >= 0;
+            var rowRoles = (row.getAttribute('data-roles') || '').split(' ').filter(Boolean);
+            var matchRole = active.length === 0 || rowRoles.some(function (r) { return active.indexOf(r) >= 0; });
+            var show = matchText && matchRole;
+            row.hidden = !show;
+            if (show) { visible += 1; }
+        });
+        if (counter) { counter.textContent = visible; }
+        if (emptyRow) { emptyRow.hidden = visible !== 0; }
+        if (allPill) { allPill.classList.toggle('is-active', active.length === 0); }
+    }
+
+    pills.forEach(function (p) {
+        p.addEventListener('click', function () { p.classList.toggle('is-active'); apply(); });
+    });
+    if (allPill) {
+        allPill.addEventListener('click', function () {
+            pills.forEach(function (p) { p.classList.remove('is-active'); });
+            apply();
+        });
+    }
+    if (search) { search.addEventListener('input', apply); }
+
+    // Menú kebab. position:fixed para no recortarse por el overflow del wrap.
+    var openMenu = null;
+    function closeKebab() {
+        if (openMenu) { openMenu.hidden = true; openMenu.style.position = ''; openMenu = null; }
+    }
+    root.querySelectorAll('.usr-kebab').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var menu = btn.nextElementSibling;
+            var wasOpen = menu === openMenu;
+            closeKebab();
+            if (wasOpen) { return; }
+            menu.hidden = false;
+            menu.style.position = 'fixed';
+            var r = btn.getBoundingClientRect();
+            menu.style.top = (r.bottom + 4) + 'px';
+            menu.style.left = (r.right - menu.offsetWidth) + 'px';
+            openMenu = menu;
+        });
+    });
+    window.addEventListener('scroll', closeKebab, true);
+    window.addEventListener('resize', closeKebab);
+    document.addEventListener('click', function (e) {
+        if (!e.target.closest('.usr-actions')) { closeKebab(); }
+    });
+
+    apply();
+}());
+</script>
+{% endblock %}
+
+{% block csa_main %}
+
+{# Mapa de rol → etiqueta humana + tono del chip. Los roles desconocidos
+ # caen en un fallback que sólo quita el prefijo ROLE_ y usa tono neutro. #}
+{% set role_meta = {
+    'ROLE_SUPER_ADMIN':    { label: 'Super admin', tone: 'ink' },
+    'ROLE_ADMIN':          { label: 'Admin',       tone: 'ink' },
+    'ROLE_GESTION_GRANJA': { label: 'Granja',      tone: 'sage' },
+    'ROLE_GESTION_SOCIXS': { label: 'Socixs',      tone: 'sage' },
+    'ROLE_GESTION_CESTAS': { label: 'Cestas',      tone: 'sage' },
+    'ROLE_BLOG':           { label: 'Blog',        tone: 'ochre' },
+    'ROLE_COMPOST':        { label: 'Compost',     tone: 'ochre' },
+    'ROLE_PARTNER':        { label: 'Socix',       tone: 'terra' },
+    'ROLE_GUEST':          { label: 'Invitada',    tone: 'muted' }
+} %}
+{% set avatar_palette = ['sage', 'ochre', 'terra', 'ink'] %}
+
+{# Roles realmente presentes en el listado, para los chips de filtro.
+ # Con reduce (funcional) para no depender del scope de set dentro de for;
+ # el `r not in carry` deduplica durante la acumulación. #}
+{% set present_roles = entities|reduce((carry, u) =>
+    carry|merge(u.roles|filter(r => r != 'ROLE_USER' and r not in carry)), []) %}
+
+<div class="usr">
+
+    {{ csa.page_header(
+        'Administración · Usuarias',
+        'Cuentas y permisos',
+        'Quién puede entrar al sistema y qué puede hacer.'
+    ) }}
+
+    {# ============ TOOLBAR ============ #}
+    <div class="usr-toolbar">
+        <div class="usr-search">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
+            <input type="search" id="usr-search" placeholder="Buscar por usuaria, email o socix…" autocomplete="off">
+        </div>
+        <span class="spacer"></span>
+        <div class="counter"><b id="usr-count">{{ entities|length }}</b> de {{ entities|length }} cuenta{{ entities|length == 1 ? '' : 's' }}</div>
+        {{ csa.btn('Nueva usuaria', { variant: 'primary', href: path('user_new'), icon: 'fa-plus' }) }}
+    </div>
+
+    {# ============ FILTRO POR ROL (chips clicables) ============ #}
+    {% if present_roles|length > 0 %}
+        <div class="usr-rolefilter">
+            <span class="usr-rolefilter__lbl">Rol</span>
+            <button type="button" class="usr-rolepill usr-rolepill--all is-active" data-all>Todas</button>
+            {% for r in present_roles %}
+                {% set meta = role_meta[r]|default({ label: r|replace({'ROLE_': ''})|replace({'_': ' '})|lower|capitalize, tone: 'muted' }) %}
+                <button type="button" class="usr-rolepill usr-rolepill--{{ meta.tone }}" data-role="{{ r }}">
+                    <span class="dot"></span>{{ meta.label }}
+                </button>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <div class="csa-table-wrap">
+        <table class="csa-table">
+            <thead>
+                <tr>
+                    <th>Usuaria</th>
+                    <th>Roles</th>
+                    <th>Socix vinculadx</th>
+                    <th class="csa-table__actions">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in entities %}
+                    {% set initials = user.username|slice(0, 2) %}
+                    {% set tone = avatar_palette[(user.id|default(0)) % 4] %}
+                    {% set assigned_roles = user.roles|filter(r => r != 'ROLE_USER') %}
+                    {% set partner_name = user.partner ? (user.partner.name ~ ' ' ~ user.partner.surname) : '' %}
+                    <tr data-search="{{ (user.username ~ ' ' ~ user.email ~ ' ' ~ partner_name)|lower }}"
+                        data-roles="{{ assigned_roles|join(' ') }}">
+                        <td>
+                            <div class="usr-person">
+                                <span class="usr-person__avatar usr-person__avatar--{{ tone }}" aria-hidden="true">{{ initials }}</span>
+                                <div class="usr-person__body">
+                                    <a class="usr-person__name" href="{{ path('user_show', { id: user.id }) }}">{{ user.username }}</a>
+                                    {% if user.email %}<span class="usr-person__meta">{{ user.email }}</span>{% endif %}
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            {% if assigned_roles is empty %}
+                                <span class="csa-muted">— sin roles —</span>
+                            {% else %}
+                                <div class="usr-roles">
+                                    {% for role in assigned_roles %}
+                                        {% set meta = role_meta[role]|default({ label: role|replace({'ROLE_': ''})|replace({'_': ' '})|lower|capitalize, tone: 'muted' }) %}
+                                        <span class="usr-rolechip usr-rolechip--{{ meta.tone }}"><span class="dot"></span>{{ meta.label }}</span>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if user.partner %}
+                                <a class="usr-linked" href="{{ path('partner_show', { id: user.partner.id }) }}" title="Ver ficha de socix">
+                                    <i class="fa fa-user-o" aria-hidden="true"></i>
+                                    <span>{{ partner_name|lower }}</span>
+                                    <i class="fa fa-angle-right usr-linked__go" aria-hidden="true"></i>
+                                </a>
+                            {% else %}
+                                <span class="csa-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="csa-table__actions usr-actions">
+                            <button type="button" class="usr-kebab" aria-label="Acciones de {{ user.username }}">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg>
+                            </button>
+                            <div class="usr-kebab-menu" hidden>
+                                <a href="{{ path('user_show', { id: user.id }) }}"><i class="fa fa-eye" aria-hidden="true"></i> Ver usuaria</a>
+                                <a href="{{ path('user_edit', { id: user.id }) }}"><i class="fa fa-pencil" aria-hidden="true"></i> Editar</a>
+                                {% if user.partner %}
+                                    <a href="{{ path('partner_show', { id: user.partner.id }) }}"><i class="fa fa-user-o" aria-hidden="true"></i> Ver socix vinculadx</a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="4" class="csa-muted" style="text-align: center; padding: var(--csa-sp-6);">
+                            No hay usuarias registradas.
+                        </td>
+                    </tr>
+                {% endfor %}
+                <tr class="usr-empty" id="usr-empty-filter" hidden>
+                    <td colspan="4">No hay usuarias que cumplan el filtro.</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+</div>
+{% endblock %}

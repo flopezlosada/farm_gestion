@@ -2,20 +2,20 @@
 
 namespace App\Controller;
 
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-
-
 use App\Entity\Purchase;
-use App\Controller\AbstractAppController;
-use Symfony\Component\Routing\Annotation\Route;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
-class StatisticController extends AbstractAppController
+#[IsGranted('ROLE_GESTION_GRANJA')]
+class StatisticController extends AbstractController
 {
-    public function hensFeedTotal()
+    public function hensFeedTotal(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
         $hens_feed = $em->getRepository(\App\Entity\Product::class)->find(4); //pienso de gallinas
 
         $feed_purchases = $em->getRepository(\App\Entity\Purchase::class)->findByProduct($hens_feed);
@@ -40,16 +40,15 @@ class StatisticController extends AbstractAppController
         ));
     }
 
-    public function hensFeed($last_hens_feed_purchase, $last_but_one_hens_feed_purchase)
+    public function hensFeed($last_hens_feed_purchase, $last_but_one_hens_feed_purchase, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
         $hens_feed = $em->getRepository(\App\Entity\Product::class)->find(4);
         /*$last_hens_feed_purchase = $em->getRepository(\App\Entity\Purchase::class)->findLastFeedPurchase($hens_feed, 0);
         $last_but_one_hens_feed_purchase = $em->getRepository(\App\Entity\Purchase::class)->findLastFeedPurchase($hens_feed, 1);*/
 
         $product = $em->getRepository(\App\Entity\Product::class)->find(1);
 
-        $users = $em->getRepository(\App\Entity\User::class)->findByRole('ROLE_COOP');
+        $users = $em->getRepository(\App\Entity\User::class)->findByRole('ROLE_GESTION_GRANJA');
         $total_product_collect_dates = $em->getRepository(\App\Entity\Collect::class)->findCollectDates($product, $last_hens_feed_purchase->getDate(), $last_but_one_hens_feed_purchase->getDate());
         foreach ($users as $user) {
             $consumed_eggs = $em->getRepository(\App\Entity\Collect::class)->findCollectUserDates($user, $product, $last_hens_feed_purchase->getDate(), $last_but_one_hens_feed_purchase->getDate());
@@ -73,10 +72,8 @@ class StatisticController extends AbstractAppController
         return $this->render('Statistic\eggs_sale.html.twig', array());
     }
 
-    public function eggsSaleYear($year)
+    public function eggsSaleYear($year, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $lay_eggs_year = array(); //array que guarda las puestas por mes de cada año
 
         $months = array(1 => 'Enero', 2 => 'Febrero', 3 => 'Marzo', 4 => 'Abril',

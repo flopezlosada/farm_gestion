@@ -28,7 +28,20 @@ jobs:
           tools: composer:2.2
           coverage: none
 
+      # Cachea vendor/ entre runs. Si composer.lock no cambia, actions/cache
+      # restaura el directorio preservando mtimes y nos saltamos composer
+      # install entero — necesario porque incluso un install "sin cambios"
+      # toca mtimes (autoloader, vendor/composer/*) y el mirror, que compara
+      # fecha/tamaño, reuploadearía esos ficheros sin necesidad.
+      - name: Cache de vendor/
+        id: vendor-cache
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: vendor-php83-${{ hashFiles('composer.lock') }}
+
       - name: Composer install (solo deps de producción)
+        if: steps.vendor-cache.outputs.cache-hit != 'true'
         env:
           APP_ENV: prod
           APP_DEBUG: '0'
@@ -46,6 +59,7 @@ jobs:
 
       - name: Copiar assets legacy (FTP no transmite symlinks)
         run: |
+          mkdir -p public/bundles
           rm -rf public/bundles/app
           cp -R src/Resources/public public/bundles/app
           # El repo tiene src/Resources/public/ en 0700 y cp -R lo preserva.
@@ -55,7 +69,7 @@ jobs:
       - name: Instalar lftp
         run: sudo apt-get update && sudo apt-get install -y lftp
 
-      - name: Subir cambios por FTP a staging (solo lo más nuevo)
+      - name: Subir cambios por FTP a staging (mirror completo, compara por tamaño)
         env:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
@@ -68,8 +82,14 @@ jobs:
             set net:reconnect-interval-base 10;
             set cmd:show-status yes;
             set xfer:log yes;
+            # Sin REST/reanudación: ante un reintento, lftp re-sube el fichero
+            # ENTERO en vez de hacer append sobre la transferencia parcial. El
+            # append corrompía .twig/.php duplicando su contenido (pantalla
+            # blanca con el source repetido). clobber on fuerza sobreescritura.
+            set ftp:use-rest no;
+            set xfer:clobber on;
             open -u $FTP_USERNAME,$FTP_PASSWORD $FTP_SERVER;
-            mirror -R --only-newer --parallel=4 --verbose=2 \
+            mirror -R --parallel=2 --verbose=2 \
               --exclude-glob '.git*' \
               --exclude-glob '.github/' \
               --exclude-glob '.idea/' \
@@ -96,4 +116,11 @@ jobs:
               --exclude-glob 'webpack.config.js' \
               --exclude-glob 'assets/' \
               . deploy/staging/;
+            # Invalida el cache compilado de prod. En prod Symfony NO recompila
+            # plantillas/config al cambiar el fuente: sirve lo que tenga en
+            # var/cache/prod (que se excluye del FTP). Sin esto, un deploy de
+            # código nuevo seguiría sirviendo plantillas viejas o una
+            # compilación corrupta. Symfony lo regenera on-demand en el primer
+            # request (más lento esa vez). -f: no falla si el dir no existe.
+            rm -rf deploy/staging/var/cache/prod;
           "

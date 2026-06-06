@@ -42,10 +42,18 @@
             </div>
         </div>
         <div class="csa-row">
-            <button type="submit" form="fowl-delete-form" class="csa-btn csa-btn--ghost"
-                    onclick="return confirm('¿Seguro? Esta acción no se puede deshacer.');">
+            <button type="button" class="csa-btn csa-btn--ghost"
+                    onclick="document.getElementById('confirm-fowl-delete').showModal()">
                 Eliminar
             </button>
+            {{ csa.confirm_dialog('confirm-fowl-delete', {
+                variant: 'danger',
+                eyebrow: 'Acción permanente',
+                title: 'Eliminar este registro',
+                body: 'Se borrará de forma definitiva y no podrá recuperarse.',
+                confirm_label: 'Eliminar',
+                external_form_id: 'fowl-delete-form',
+            }) }}
             {{ csa.btn('Editar', { variant: 'secondary', href: path('fowl_edit', { id: entity.id }), icon: 'fa-pencil' }) }}
             {% if entity.batch %}
                 {{ csa.btn('Volver al lote', { variant: 'ghost', href: path('batch_show', { id: entity.batch.id }) }) }}

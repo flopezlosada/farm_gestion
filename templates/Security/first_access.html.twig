@@ -1,0 +1,86 @@
+{# ============================================================
+ # /login/primer-acceso — alta de socix sin User
+ # ============================================================
+ # Socixs que aún no han entrado nunca: nos dan email + teléfono
+ # (los que tienen registrados con la asociación) y enviamos un
+ # magic-link para crear el acceso. Ruta destino: app_login_link_first.
+ # ============================================================ #}
+{% extends "_layouts/csa_auth.html.twig" %}
+
+{% block title %}Primer acceso{% endblock %}
+
+{% block csa_main %}
+
+    <section class="csa-auth__card" aria-labelledby="csa-auth-title">
+
+        <h1 id="csa-auth-title" class="csa-auth__title">Primer acceso</h1>
+        <p class="csa-auth__lead">
+            Si todavía no has entrado nunca, escribe tu email y tu teléfono — son
+            los que tienes registrados con la asociación. Te enviaremos un enlace
+            al correo para entrar.
+        </p>
+
+        <form action="{{ path('app_login_link_first') }}" method="post" class="csa-auth__form">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token('login_link_first') }}">
+
+            <div class="csa-field">
+                <div class="csa-field__label-row">
+                    <label for="csa-email" class="csa-field__label">Email</label>
+                </div>
+                <input
+                    id="csa-email"
+                    name="email"
+                    type="email"
+                    class="csa-input"
+                    value="{{ last_email|default('') }}"
+                    autocomplete="email"
+                    inputmode="email"
+                    autocapitalize="none"
+                    autocorrect="off"
+                    spellcheck="false"
+                    required
+                    autofocus
+                >
+                {% if errors.email is defined %}
+                    <div class="csa-field__error" role="alert">{{ errors.email }}</div>
+                {% endif %}
+            </div>
+
+            <div class="csa-field">
+                <div class="csa-field__label-row">
+                    <label for="csa-phone" class="csa-field__label">Teléfono</label>
+                </div>
+                <input
+                    id="csa-phone"
+                    name="phone"
+                    type="tel"
+                    class="csa-input"
+                    value="{{ last_phone|default('') }}"
+                    autocomplete="tel"
+                    inputmode="tel"
+                    pattern="[0-9 +\-()]{9,}"
+                    required
+                >
+                {% if errors.phone is defined %}
+                    <div class="csa-field__error" role="alert">{{ errors.phone }}</div>
+                {% endif %}
+            </div>
+
+            <button type="submit" class="csa-btn csa-btn--primary csa-btn--block csa-auth__submit">
+                Enviarme el enlace
+            </button>
+        </form>
+
+        <p class="csa-auth__note">
+            El enlace que recibirás por correo caduca a los 30 minutos y solo
+            puede usarse una vez. Si no llega, revisa la carpeta de spam o
+            escríbenos a <a href="mailto:info@csavegadejarama.org">info@csavegadejarama.org</a>.
+        </p>
+
+        <div style="text-align: center;">
+            <a href="{{ path('app_login') }}" class="csa-auth__back">Volver</a>
+        </div>
+
+    </section>
+
+{% endblock %}

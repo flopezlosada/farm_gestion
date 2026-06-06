@@ -1,0 +1,197 @@
+{# ============================================================
+ # Listado de reparto imprimible (dompdf). Standalone: NO extiende el shell.
+ # Recibe (de DeliveryController::printablePdf):
+ #   - basket   Basket del día.
+ #   - sheets   list<{node, physical_date:?Date, sheet}> donde sheet es la
+ #              estructura de NodeDeliverySheet (groups, shared, totals).
+ #
+ # Replica el Excel que usan hoy (docs/Listado Sierra 2026_04_30.pdf): rejilla
+ # densa con líneas, localidad con color en cada fila, "CESTAS" + cantidad,
+ # huevos (solo la especificación, sin el total — eso es para el cálculo del
+ # xls), subtotal amarillo por grupo, compartidas en bloque aparte con su color,
+ # totales al final y el trozo recortable de Trabensol. Un nodo por hoja.
+ # ============================================================ #}
+{% macro qty(c) %}
+    {%- if c == 0 -%}*{%- elseif c == 0.5 -%}½{%- elseif c == c|round -%}{{ c|number_format(0) }}{%- else -%}{{ c|number_format(1, ',', '.') }}{%- endif -%}
+{% endmacro %}
+
+{% macro num(n) %}
+    {%- if n == n|round -%}{{ n|number_format(0) }}{%- else -%}{{ n|number_format(1, ',', '.') }}{%- endif -%}
+{% endmacro %}
+
+{% macro datarow(row, color) %}
+    {% import _self as m %}
+    <tr>
+        <td class="t-loc" style="background: {{ color }};">{{ row.locality }}</td>
+        <td class="t-name">{{ row.name }}</td>
+        <td class="t-code">{{ row.code }}</td>
+        <td class="t-cl">{{ row.cestas > 0 ? 'CESTAS' : '' }}</td>
+        <td class="t-q">{{ m.qty(row.cestas) }}</td>
+        <td class="t-es">{{ row.egg_spec }}</td>
+    </tr>
+{% endmacro %}
+
+{% import _self as m %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<style>
+    @page { margin: 0.8cm 0.7cm; }
+    * { font-family: 'DejaVu Sans', sans-serif; }
+    body { color: #000; font-size: 8.5px; }
+
+    .node, .cut { page-break-after: always; }
+    .cut:last-child { page-break-after: auto; }
+
+    .title { text-align: center; font-size: 9px; letter-spacing: .1em; color: #333; margin-bottom: 3px; }
+
+    table { width: 100%; border-collapse: collapse; }
+    td { border: 0.5px solid #b7b7b7; padding: 1.5px 5px; vertical-align: middle; }
+
+    /* Cabecera */
+    .hd-mail { font-weight: bold; font-size: 9px; border: 0; }
+    .hd-day  { background: #d9d9d9; font-weight: bold; font-size: 11px; text-align: center; letter-spacing: .03em; }
+    .hd-c, .hd-h { background: #9bbb59; color: #fff; font-weight: bold; text-align: center; font-size: 8px; letter-spacing: .04em; }
+    .hd-star { background: #9bbb59; text-align: center; border-color: #9bbb59; }
+
+    /* Cabecera de grupo (sección) */
+    .grp td { border: 0; padding-top: 5px; padding-bottom: 1px; }
+    .grp .g-name { font-weight: bold; font-size: 9.5px; }
+
+    /* Subtítulo de modalidad dentro de un grupo (SEMANALES / QUINCENALES Y MENSUALES / SOLO HUEVOS) */
+    .modsub td { border: 0; padding: 3px 5px 1px; font-weight: bold; font-size: 7.5px; letter-spacing: .1em; text-transform: uppercase; color: #555; }
+
+    /* Filas */
+    .t-loc  { width: 15%; font-weight: bold; font-size: 7.5px; text-transform: uppercase; letter-spacing: .02em; }
+    .t-name { width: 36%; }
+    .t-code { width: 9%;  text-align: center; font-weight: bold; }
+    .t-cl   { width: 13%; text-align: center; font-size: 7px; color: #555; }
+    .t-q    { width: 8%;  text-align: center; font-weight: bold; }
+    .t-es   { width: 19%; text-align: center; font-weight: bold; }
+
+    /* Subtotal (amarillo) */
+    .sub td { border: 0.5px solid #b7b7b7; }
+    .sub .s-cell { background: #ffe14d; text-align: center; font-weight: bold; font-size: 9.5px; }
+    .sub .s-blank { border: 0; }
+
+    /* Compartidas */
+    .shared-hd td { background: #e26b0a; color: #fff; font-weight: bold; font-size: 9px; letter-spacing: .1em; text-transform: uppercase; padding: 3px 5px; }
+    .pair-end td { border-bottom: 1.2px solid #555; }
+
+    /* Totales */
+    .totals { margin-top: 8px; width: auto; }
+    .totals td { border: 0.5px solid #b7b7b7; padding: 3px 10px; font-weight: bold; }
+    .totals .lbl { background: #9bbb59; color: #fff; font-size: 8px; letter-spacing: .06em; }
+    .totals .val { background: #eaf1dd; text-align: center; font-size: 13px; min-width: 44px; }
+
+    /* Trozo recortable */
+    .cut-title { font-weight: bold; font-size: 10px; letter-spacing: .04em; margin: 4px 0 6px; text-transform: uppercase; }
+    .cut-box { border: 1.5px dashed #777; padding: 8px; }
+</style>
+</head>
+<body>
+{% set _dow_es = ['DOMINGO', 'LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO'] %}
+{% set _month_es = ['', 'ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'] %}
+{% for s in sheets %}
+    {% set sheet = s.sheet %}
+    {% set day = s.physical_date ?? basket.date %}
+    <div class="node">
+        <div class="title">{{ _month_es[basket.date|date('n')] }}_{{ basket.date|date('Y') }}</div>
+
+        <table>
+            <tr>
+                <td class="hd-mail" colspan="3">csa@csavegadejarama.org</td>
+                <td class="hd-day" colspan="3">{{ _dow_es[day|date('w')] }} {{ day|date('j') }} DE {{ _month_es[day|date('n')] }}</td>
+            </tr>
+            <tr>
+                <td style="border:0;" colspan="3"></td>
+                <td class="hd-c">CESTA</td>
+                <td class="hd-star">*</td>
+                <td class="hd-h">HUEVOS</td>
+            </tr>
+
+            {% for group in sheet.groups %}
+                <tr class="grp">
+                    <td class="g-name" colspan="6">{{ group.name }}</td>
+                </tr>
+                {% for mod in group.modalities %}
+                    {% if group.modalities|length > 1 %}
+                        <tr class="modsub"><td colspan="6">{{ mod.label }}</td></tr>
+                    {% endif %}
+                    {% for row in mod.rows %}
+                        {{ m.datarow(row, group.color) }}
+                    {% endfor %}
+                {% endfor %}
+                <tr class="sub">
+                    <td class="s-blank" colspan="4"></td>
+                    <td class="s-cell">{{ m.qty(group.subtotal_cestas) }}</td>
+                    <td class="s-blank"></td>
+                </tr>
+            {% endfor %}
+
+            {% if sheet.shared.rows is not empty %}
+                <tr class="shared-hd"><td colspan="6">Compartidas</td></tr>
+                {% for row in sheet.shared.rows %}
+                    <tr class="{{ row.pair_end ? 'pair-end' : '' }}">
+                        <td class="t-loc" style="background: {{ row.color }};">{{ row.locality }}</td>
+                        <td class="t-name">{{ row.name }}</td>
+                        <td class="t-code">{{ row.code }}</td>
+                        <td class="t-cl">{{ row.cestas > 0 ? 'CESTAS' : '' }}</td>
+                        <td class="t-q">{{ m.qty(row.cestas) }}</td>
+                        <td class="t-es">{{ row.egg_spec }}</td>
+                    </tr>
+                {% endfor %}
+                {% set shared_cestas = 0 %}
+                {% for row in sheet.shared.rows %}{% set shared_cestas = shared_cestas + row.cestas %}{% endfor %}
+                <tr class="sub">
+                    <td class="s-blank" colspan="4"></td>
+                    <td class="s-cell">{{ m.qty(shared_cestas) }}</td>
+                    <td class="s-blank"></td>
+                </tr>
+            {% endif %}
+        </table>
+
+        <table class="totals">
+            <tr>
+                <td class="lbl">CESTAS TOTALES</td>
+                <td class="val">{{ m.num(sheet.totals.cestas) }}</td>
+                <td class="lbl">DOCENAS</td>
+                <td class="val">{{ m.num(sheet.totals.docenas) }}</td>
+            </tr>
+        </table>
+    </div>
+
+    {# Trozo recortable de Trabensol: solo-huevos (código H) del grupo Trabensol.
+       Excepción heredada del Excel (Paco la considera mala práctica); se entrega
+       a quien recoge los huevos de Trabensol. #}
+    {% set trab = [] %}
+    {% for group in sheet.groups|filter(g => g.name == 'Trabensol') %}
+        {% for mod in group.modalities %}
+            {% for row in mod.rows|filter(r => r.code == 'H') %}
+                {% set trab = trab|merge([{ name: row.name, spec: row.egg_spec, color: group.color }]) %}
+            {% endfor %}
+        {% endfor %}
+    {% endfor %}
+    {% if trab is not empty %}
+        <div class="cut">
+            <div class="cut-title">Trozo para dar a quien recoja de Trabensol</div>
+            <div class="cut-box">
+                <table>
+                    {% for r in trab %}
+                        <tr>
+                            <td class="t-loc" style="background: {{ r.color }};">TRABENSOL</td>
+                            <td class="t-name">{{ r.name }}</td>
+                            <td class="t-code">H</td>
+                            <td class="t-es">{{ r.spec }}</td>
+                        </tr>
+                    {% endfor %}
+                </table>
+            </div>
+        </div>
+    {% endif %}
+{% else %}
+    <p>No hay nodos con reparto para este día.</p>
+{% endfor %}
+</body>
+</html>

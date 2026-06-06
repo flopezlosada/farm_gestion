@@ -2,29 +2,28 @@
 
 namespace App\Controller;
 
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-
-use Symfony\Component\HttpFoundation\Request;
-use App\Controller\AbstractAppController;
-
 use App\Entity\Purchase;
 use App\Form\PurchaseType;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * Purchase controller.
  *
  */
-class PurchaseController extends AbstractAppController
+#[IsGranted('ROLE_ADMIN')]
+class PurchaseController extends AbstractController
 {
 
     /**
      * Lists all Purchase entities.
      *
      */
-    public function index()
+    public function index(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entities = $em->getRepository(\App\Entity\Purchase::class)->findAll();
 
         return $this->render('Purchase/index.html.twig', array(
@@ -36,15 +35,14 @@ class PurchaseController extends AbstractAppController
      * Creates a new Purchase entity.
      *
      */
-    public function create(Request $request)
+    public function create(Request $request, EntityManagerInterface $em)
     {
         $entity = new Purchase();
         $entity->setUser($this->getUser());
-        $form = $this->createCreateForm($entity);
+        $form = $this->createCreateForm($entity, $em);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity->setPurchaseDate(new \DateTime($entity->getPurchaseDate()));
             $entity->setTotalPrice($entity->getSinglePrice() * $entity->getAmount());
             $em->persist($entity);
@@ -66,12 +64,12 @@ class PurchaseController extends AbstractAppController
      *
      * @return \Symfony\Component\Form\Form The form
      */
-    private function createCreateForm(Purchase $entity)
+    private function createCreateForm(Purchase $entity, EntityManagerInterface $em)
     {
         $form = $this->createForm(PurchaseType::class, $entity, array(
             'action' => $this->generateUrl('purchase_create'),
             'method' => 'POST',
-            'em' => $this->getDoctrine()->getManager()
+            'em' => $em
         ));
 
         $form->add('submit', SubmitType::class, array('label' => 'Añadir'));
@@ -83,11 +81,11 @@ class PurchaseController extends AbstractAppController
      * Displays a form to create a new Purchase entity.
      *
      */
-    public function new()
+    public function new(EntityManagerInterface $em)
     {
         $entity = new Purchase();
         $entity->setUser($this->getUser());
-        $form = $this->createCreateForm($entity);
+        $form = $this->createCreateForm($entity, $em);
 
         return $this->render('Purchase/new.html.twig', array(
             'entity' => $entity,
@@ -99,10 +97,8 @@ class PurchaseController extends AbstractAppController
      * Finds and displays a Purchase entity.
      *
      */
-    public function show($id)
+    public function show($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Purchase::class)->find($id);
 
         if (!$entity) {
@@ -121,10 +117,8 @@ class PurchaseController extends AbstractAppController
      * Displays a form to edit an existing Purchase entity.
      *
      */
-    public function edit($id)
+    public function edit($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Purchase::class)->find($id);
 
         if (!$entity) {
@@ -166,10 +160,8 @@ class PurchaseController extends AbstractAppController
      * Edits an existing Purchase entity.
      *
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, $id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Purchase::class)->find($id);
 
         if (!$entity) {
@@ -201,13 +193,12 @@ class PurchaseController extends AbstractAppController
      * Deletes a Purchase entity.
      *
      */
-    public function delete(Request $request, $id)
+    public function delete(Request $request, $id, EntityManagerInterface $em)
     {
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\Purchase::class)->find($id);
 
             if (!$entity) {

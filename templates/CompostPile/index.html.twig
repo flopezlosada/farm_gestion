@@ -3,7 +3,7 @@
  #
  # El botón "Nueva pila" llama directamente a compostpile_new, que
  # cierra la pila activa y abre una nueva con fecha actual SIN
- # pasar por formulario. Es destructivo, va con confirm().
+ # pasar por formulario. Es destructivo, va con confirmación modal.
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
@@ -30,11 +30,17 @@
     <div class="csa-row-between" style="margin-bottom: var(--csa-sp-5);">
         <div></div>
         <div class="csa-row">
-            <a href="{{ path('compostpile_new') }}"
+            <button type="button"
                class="csa-btn csa-btn--primary"
-               onclick="return confirm('Esto cerrará la pila activa con la fecha de hoy y abrirá una nueva. ¿Continuar?');">
-                <i class="fa fa-plus"></i> Nueva pila
-            </a>
+                onclick="document.getElementById('confirm-index-1').showModal()"><i class="fa fa-plus"></i> Nueva pila</button>
+{{ csa.confirm_dialog('confirm-index-1', {
+    variant: 'warning',
+    eyebrow: 'Cambio operativo',
+    title: 'Abrir una pila nueva',
+    body: 'Se cerrará la pila activa con la fecha de hoy y se abrirá una nueva.',
+    confirm_label: 'Continuar',
+    confirm_href: path('compostpile_new'),
+}) }}
         </div>
     </div>
 

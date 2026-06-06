@@ -2,29 +2,28 @@
 
 namespace App\Controller;
 
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-
-use Symfony\Component\HttpFoundation\Request;
-use App\Controller\AbstractAppController;
-
 use App\Entity\TaskType;
 use App\Form\TaskTypeType;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * TaskType controller.
  *
  */
-class TaskTypeController extends AbstractAppController
+#[IsGranted('ROLE_GESTION_GRANJA')]
+class TaskTypeController extends AbstractController
 {
 
     /**
      * Lists all TaskType entities.
      *
      */
-    public function index()
+    public function index(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entities = $em->getRepository(\App\Entity\TaskType::class)->findAll();
 
         return $this->render('TaskType/index.html.twig', array(
@@ -36,14 +35,13 @@ class TaskTypeController extends AbstractAppController
      * Creates a new TaskType entity.
      *
      */
-    public function create(Request $request)
+    public function create(Request $request, EntityManagerInterface $em)
     {
         $entity = new TaskType();
         $form = $this->createCreateForm($entity);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $em->persist($entity);
             $em->flush();
 
@@ -94,10 +92,8 @@ class TaskTypeController extends AbstractAppController
      * Finds and displays a TaskType entity.
      *
      */
-    public function show($id)
+    public function show($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\TaskType::class)->find($id);
 
         if (!$entity) {
@@ -116,10 +112,8 @@ class TaskTypeController extends AbstractAppController
      * Displays a form to edit an existing TaskType entity.
      *
      */
-    public function edit($id)
+    public function edit($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\TaskType::class)->find($id);
 
         if (!$entity) {
@@ -159,10 +153,8 @@ class TaskTypeController extends AbstractAppController
      * Edits an existing TaskType entity.
      *
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, $id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\TaskType::class)->find($id);
 
         if (!$entity) {
@@ -190,13 +182,12 @@ class TaskTypeController extends AbstractAppController
      * Deletes a TaskType entity.
      *
      */
-    public function delete(Request $request, $id)
+    public function delete(Request $request, $id, EntityManagerInterface $em)
     {
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\TaskType::class)->find($id);
 
             if (!$entity) {

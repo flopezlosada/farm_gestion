@@ -60,6 +60,15 @@ class WeeklyBasket
     protected $basket_share;
 
     /**
+     * Suscripción concreta del socio que originó este WeeklyBasket.
+     * Propiedad transitoria, sin mapping Doctrine ni columna en BBDD:
+     * el generador puede rellenarla para que la vista muestre el grupo
+     * A/B. Declarada explícitamente para evitar el deprecation de
+     * propiedades dinámicas en PHP 8.2+.
+     */
+    private ?PartnerBasketShare $partner_basket_share = null;
+
+    /**
      * @var smallint $weekly_basket_status
      * @ORM\ManyToOne(targetEntity="WeeklyBasketStatus", inversedBy="weekly_baskets")
      * según si ha sido recogida, rechazada, atrasada...
@@ -74,6 +83,23 @@ class WeeklyBasket
      * @ORM\Column(name="amount", type="integer", options={"default" : 1})
      */
     private $amount;
+
+    /**
+     * Fecha física en la que se entregó (o se entregará) esta cesta. Se
+     * congela al generar el WeeklyBasket usando el día semanal y la cadencia
+     * del Node al que pertenece el WBG del partner. Inmuta la historia ante
+     * cambios futuros de configuración del nodo.
+     *
+     * Para Torremocha (viernes-ciclo == fecha física) coincide con
+     * basket.date. Para Madrid (miércoles físico) es el miércoles previo
+     * al viernes-ciclo.
+     *
+     * Introducido en sub-fase 8.8b (2026-05-26). Nullable de momento; en
+     * cuanto el generator la rellene en todos los caminos pasará a NOT NULL.
+     *
+     * @ORM\Column(name="delivery_date", type="date", nullable=true)
+     */
+    private ?\DateTimeInterface $delivery_date = null;
 
 
     public function getId(): ?int
@@ -165,7 +191,14 @@ class WeeklyBasket
         return $this;
     }
 
+    public function getDeliveryDate(): ?\DateTimeInterface
+    {
+        return $this->delivery_date;
+    }
 
-
-
+    public function setDeliveryDate(?\DateTimeInterface $delivery_date): self
+    {
+        $this->delivery_date = $delivery_date;
+        return $this;
+    }
 }

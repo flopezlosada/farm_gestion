@@ -1,0 +1,51 @@
+{# ============================================================
+ # Calendario de recogida del socio — vista del GESTOR (/gestion).
+ # Wrapper fino: la rejilla, la papelera, el panel y el arrastre viven
+ # en el partial compartido `partner/_calendar.html.twig`, reutilizado
+ # por el panel del socio. Aquí solo se fijan crumbs, cabecera y el
+ # objeto `cal` con las rutas/CSRF de esta pantalla.
+ # ============================================================ #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Calendario de recogida · {{ partner }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('partner_index') }}">Socixs</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('partner_show', { id: partner.id }) }}">{{ partner }}</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Calendario de recogida</span>
+{% endblock %}
+
+{% block more_css %}
+{{ parent() }}
+{% include 'partner/_calendar_styles.html.twig' %}
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Socixs · Recogida',
+        'Calendario de recogida',
+        partner ~ (pickup_place ? ' · recoge en ' ~ pickup_place : '')
+    ) }}
+
+    {% include 'partner/_calendar.html.twig' with {
+        cal: {
+            dnd: true,
+            route_view:    'partner_delivery_calendar',
+            route_skip:    'partner_delivery_calendar_skip',
+            route_move:    'partner_delivery_calendar_move',
+            route_recover: 'partner_delivery_calendar_recover',
+            route_reset:   'partner_delivery_calendar_reset',
+            idp: { id: partner.id },
+            csrf_skip:  csrf_token('calendar_skip_'  ~ partner.id),
+            csrf_move:  csrf_token('calendar_move_'  ~ partner.id),
+            csrf_reset: csrf_token('calendar_reset_' ~ partner.id),
+        }
+    } %}
+
+{% endblock %}

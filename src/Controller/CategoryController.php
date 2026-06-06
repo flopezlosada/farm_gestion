@@ -2,29 +2,28 @@
 
 namespace App\Controller;
 
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-
-use Symfony\Component\HttpFoundation\Request;
-use App\Controller\AbstractAppController;
-
 use App\Entity\Category;
 use App\Form\CategoryType;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * Category controller.
  *
  */
-class CategoryController extends AbstractAppController
+#[IsGranted('ROLE_BLOG')]
+class CategoryController extends AbstractController
 {
 
     /**
      * Lists all Category entities.
      *
      */
-    public function index()
+    public function index(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entities = $em->getRepository(\App\Entity\Category::class)->findAll();
 
         return $this->render('Category/index.html.twig', array(
@@ -36,14 +35,13 @@ class CategoryController extends AbstractAppController
      * Creates a new Category entity.
      *
      */
-    public function create(Request $request)
+    public function create(Request $request, EntityManagerInterface $em)
     {
         $entity = new Category();
         $form = $this->createCreateForm($entity);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $em->persist($entity);
             $em->flush();
 
@@ -94,10 +92,8 @@ class CategoryController extends AbstractAppController
      * Finds and displays a Category entity.
      *
      */
-    public function show($id)
+    public function show($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Category::class)->find($id);
 
         if (!$entity) {
@@ -116,10 +112,8 @@ class CategoryController extends AbstractAppController
      * Displays a form to edit an existing Category entity.
      *
      */
-    public function edit($id)
+    public function edit($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Category::class)->find($id);
 
         if (!$entity) {
@@ -159,10 +153,8 @@ class CategoryController extends AbstractAppController
      * Edits an existing Category entity.
      *
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, $id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Category::class)->find($id);
 
         if (!$entity) {
@@ -190,13 +182,12 @@ class CategoryController extends AbstractAppController
      * Deletes a Category entity.
      *
      */
-    public function delete(Request $request, $id)
+    public function delete(Request $request, $id, EntityManagerInterface $em)
     {
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\Category::class)->find($id);
 
             if (!$entity) {
@@ -226,9 +217,8 @@ class CategoryController extends AbstractAppController
             ->getForm();
     }
 
-    public function list_aside()
+    public function list_aside(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
         $entities = $em->getRepository(\App\Entity\Category::class)->findAll();
 
         return $this->render("Category/list_aside.html.twig", array(

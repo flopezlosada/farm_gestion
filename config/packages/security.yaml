@@ -12,31 +12,91 @@ security:
             migrate_from:
                 - legacy_fos_sha512
 
+    # ===========================================================
+    # ROLES DEL PROYECTO
+    # ===========================================================
+    # Los roles son flags independientes — un User puede tener una
+    # combinación cualquiera. NO hay jerarquía entre los roles de
+    # gestión (tener ROLE_GESTION_GRANJA no implica tener ROLE_BLOG).
+    #
+    # El único atajo es ROLE_ADMIN, que se interpreta como "alias"
+    # que incluye todos los demás. Es por conveniencia: crear un
+    # admin = darle ROLE_ADMIN sin tener que listar 5 roles.
+    #
+    # Roles activos:
+    #   ROLE_ADMIN              acceso a todo (alias de todos los demás)
+    #   ROLE_GESTION_GRANJA     lotes, gallinas, cosechas, gastos granja
+    #   ROLE_GESTION_SOCIXS     alta/baja/edición de Partner
+    #   ROLE_GESTION_CESTAS     reparto semanal, baskets, shares
+    #   ROLE_BLOG               blog público (admin) + categorías + media
+    #   ROLE_PARTNER            panel propio del socix
+    # ===========================================================
     role_hierarchy:
-        # Rama operativa
-        ROLE_GUEST:       [ROLE_USER, ROLE_COMPOST]
-        ROLE_COOP:        [ROLE_COMPOST, ROLE_GUEST]
-        # Rama de admin: cuelga de COOP, así heredan todo lo operativo.
-        # Esto se reescribirá cuando rehagamos el dominio de roles.
-        ROLE_ADMIN:       [ROLE_USER, ROLE_COOP]
-        ROLE_SUPER_ADMIN: [ROLE_ADMIN]
+        ROLE_ADMIN:
+            - ROLE_GESTION_GRANJA
+            - ROLE_GESTION_SOCIXS
+            - ROLE_GESTION_CESTAS
+            - ROLE_BLOG
+            - ROLE_PARTNER
 
     providers:
+        # Sin "property": Symfony delega en UserRepository::loadUserByIdentifier
+        # (UserLoaderInterface), que busca contra usernameCanonical OR
+        # emailCanonical, ambos lowercased. Así el login es case-insensitive
+        # y el socix puede entrar tanto con su username como con su email.
         app_user_provider:
             entity:
                 class: App\Entity\User
-                property: username
 
     firewalls:
         main:
             pattern: ^/
             lazy: true
             provider: app_user_provider
+            # Rechaza el login de cuentas bloqueadas (enabled = false). Sin esto
+            # el bloqueo no surtiría efecto: Symfony no mira `enabled` por su cuenta.
+            user_checker: App\Security\UserChecker
+            # Bloquea fuerza bruta contra /login. 5 intentos fallidos por
+            # minuto desde la misma IP/username; tras eso, Symfony devuelve
+            # TooManyLoginAttemptsAuthenticationException hasta que la
+            # ventana se vacía. Failed attempts trackeados en cache.app.
+            # Los logins con éxito resetean el contador.
+            login_throttling:
+                max_attempts: 5
+                interval: '1 minute'
             form_login:
                 login_path: app_login
-                check_path: app_login
+                check_path: /login
                 enable_csrf: true
-                default_target_path: /gestion/dashboard
+                # Dispatcher común: app_post_login decide a dónde mandar al
+                # User según sus roles (gestión → /gestion/dashboard,
+                # socix → /panel). Evita 403 al loguear un socix con
+                # password.
+                default_target_path: /post-login
+            # Magic-link sin contraseña pensado para la brecha digital del
+            # colectivo: socixs que no recuerdan password reciben un link en
+            # su correo y entran al panel. Coexiste con form_login.
+            #
+            #   lifetime  - el link expira a los 30 min de generarse (es más
+            #               generoso que el default de 10 min para gente que
+            #               no abre el correo al instante).
+            #   max_uses  - un solo uso por link (si se reenvía o se hace
+            #               click dos veces, el segundo falla).
+            #   signature_properties: id solo. Lo firmamos por id porque
+            #               cambiar username/email no debería invalidar un
+            #               link válido en vuelo (no es información segura
+            #               como password, que sí firmaría).
+            login_link:
+                check_route: app_login_link_check
+                signature_properties: [id]
+                lifetime: 1800
+                max_uses: 1
+                default_target_path: /post-login
+                always_use_default_target_path: true
+            # SSO con Google (socixs). Lazy provisioning condicionado a que el
+            # email verificado case con exactamente un socix activo.
+            custom_authenticators:
+                - App\Security\GoogleAuthenticator
             remember_me:
                 secret: '%kernel.secret%'
                 lifetime: 604800
@@ -46,23 +106,20 @@ security:
                 target: /
 
     access_control:
-        - { path: ^/login$, role: PUBLIC_ACCESS }
-        - { path: ^/gestion/compost/[a-z]\w+/new, role: ROLE_COMPOST}
-        - { path: ^/gestion/compost/[a-z]\w+/create, role: ROLE_COMPOST}
-        - { path: ^/gestion/compost/[a-z]\w+/[0-9]([0-9])?([0-9])?/edit, role: ROLE_COMPOST}
-        - { path: ^/gestion/compost/[a-z]\w+/[0-9]([0-9])?([0-9])?/update, role: ROLE_COMPOST}
-        - { path: ^/gestion/compost/[a-z]\w+/[0-9]([0-9])?([0-9])?/delete, role: ROLE_COMPOST}
-        - { path: ^/gestion/compost, role: ROLE_COMPOST}
-        - { path: ^/gestion/dashboard, role: [ROLE_COMPOST] }
-        - { path: ^/gestion/[a-z]\w+/new, role: ROLE_COOP}
-        - { path: ^/gestion/[a-z]\w+/create, role: ROLE_COOP}
-        - { path: ^/gestion/[a-z]\w+/[0-9]([0-9])?([0-9])?/show, role: ROLE_GUEST}
-        - { path: ^/gestion/[a-z]\w+/[0-9]([0-9])?([0-9])?/edit, role: ROLE_COOP}
-        - { path: ^/gestion/[a-z]\w+/[0-9]([0-9])?([0-9])?/update, role: ROLE_COOP}
-        - { path: ^/gestion/[a-z]\w+/[0-9]([0-9])?([0-9])?/delete, role: ROLE_COOP}
-        - { path: ^/gestion/[a-z]\w+/[0-9]([0-9])?([0-9])?/reactivate, role: ROLE_COOP}
-        - { path: ^/gestion/[a-z]\w+/[0-9]([0-9])?([0-9])?/close, role: ROLE_COOP}
-        - { path: ^/gestion/[a-z]\w+/[0-9]([0-9])?([0-9])?/add_sector, role: ROLE_COOP}
-        - { path: ^/gestion/[a-z]\w+/[0-9]([0-9])?([0-9])?/fast_delete, role: ROLE_COOP}
-        - { path: ^/gestion, role: [ROLE_GUEST] }
-        - { path: ^/admin/, role: ROLE_ADMIN }
+        # ^/login cubre /login, /login/magic (request), /login/magic/check
+        # (callback del link) y /login/magic/enviado (pantalla intermedia).
+        - { path: ^/login, roles: PUBLIC_ACCESS }
+        # ^/connect cubre el arranque y el callback del SSO de Google. Públicas:
+        # el login lo resuelve GoogleAuthenticator tras volver de Google.
+        - { path: ^/connect, roles: PUBLIC_ACCESS }
+        # Dispatcher post-login: solo accesible logueado. Redirige a
+        # /gestion/dashboard o /panel según roles.
+        - { path: ^/post-login$, roles: IS_AUTHENTICATED_FULLY }
+        - { path: ^/contact$, roles: PUBLIC_ACCESS }
+        # Cualquier rol de gestión permite entrar a /gestion. Dentro,
+        # cada controller filtra con #[IsGranted('ROLE_GESTION_X')] según
+        # su sección.
+        - { path: ^/gestion,
+            roles: [ROLE_ADMIN, ROLE_GESTION_GRANJA, ROLE_GESTION_SOCIXS, ROLE_GESTION_CESTAS, ROLE_BLOG] }
+        # Panel del socix (lo construiremos en breve).
+        - { path: ^/panel, roles: [ROLE_PARTNER, ROLE_ADMIN] }

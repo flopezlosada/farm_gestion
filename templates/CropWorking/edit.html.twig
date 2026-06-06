@@ -83,12 +83,17 @@
             {# ---- Footer de acciones ---- #}
             <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
                 <div>
-                    <button
-                        type="submit"
-                        form="cropworking-delete-form"
+                    <button type="button"
                         class="csa-btn csa-btn--ghost"
-                        onclick="return confirm('¿Seguro? Esta acción no se puede deshacer.');"
-                    >Eliminar cultivo</button>
+                    onclick="document.getElementById('confirm-cropworking-delete').showModal()">Eliminar cultivo</button>
+            {{ csa.confirm_dialog('confirm-cropworking-delete', {
+                variant: 'danger',
+                eyebrow: 'Acción permanente',
+                title: 'Eliminar este registro',
+                body: 'Se borrará de forma definitiva y no podrá recuperarse.',
+                confirm_label: 'Eliminar',
+                external_form_id: 'cropworking-delete-form',
+            }) }}
                 </div>
                 <div class="csa-row">
                     {{ csa.btn('Cancelar', { variant: 'ghost', href: path('cropworking_show', { id: entity.id }) }) }}

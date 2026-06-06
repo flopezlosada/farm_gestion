@@ -2,29 +2,28 @@
 
 namespace App\Controller;
 
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
-
-use Symfony\Component\HttpFoundation\Request;
-use App\Controller\AbstractAppController;
-
 use App\Entity\Sack;
 use App\Form\SackType;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * Sack controller.
  *
  */
-class SackController extends AbstractAppController
+#[IsGranted('ROLE_GESTION_GRANJA')]
+class SackController extends AbstractController
 {
 
     /**
      * Lists all Sack entities.
      *
      */
-    public function index()
+    public function index(EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entities = $em->getRepository(\App\Entity\Sack::class)->findAll();
 
         return $this->render('Sack/index.html.twig', array(
@@ -36,10 +35,9 @@ class SackController extends AbstractAppController
      * Creates a new Sack entity.
      *
      */
-    public function create($batch_id, Request $request)
+    public function create($batch_id, Request $request, EntityManagerInterface $em)
     {
         $entity = new Sack();
-        $em = $this->getDoctrine()->getManager();
         $batch = $em->getRepository(\App\Entity\Batch::class)->find($batch_id);
         $form = $this->createCreateForm($entity, $batch);
 
@@ -100,12 +98,10 @@ class SackController extends AbstractAppController
      * Displays a form to create a new Sack entity.
      *
      */
-    public function new($batch_id)
+    public function new($batch_id, EntityManagerInterface $em)
     {
         $entity = new Sack();
 
-
-        $em = $this->getDoctrine()->getManager();
         $batch = $em->getRepository(\App\Entity\Batch::class)->find($batch_id);
         $form = $this->createCreateForm($entity, $batch);
         $sack_product = $em->getRepository(\App\Entity\Product::class)->find($batch->getSackProductId());
@@ -129,10 +125,8 @@ class SackController extends AbstractAppController
      * Finds and displays a Sack entity.
      *
      */
-    public function show($id)
+    public function show($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Sack::class)->find($id);
 
         if (!$entity) {
@@ -151,10 +145,8 @@ class SackController extends AbstractAppController
      * Displays a form to edit an existing Sack entity.
      *
      */
-    public function edit($id)
+    public function edit($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Sack::class)->find($id);
 
         if (!$entity) {
@@ -194,10 +186,8 @@ class SackController extends AbstractAppController
      * Edits an existing Sack entity.
      *
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, $id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Sack::class)->find($id);
 
         if (!$entity) {
@@ -225,13 +215,12 @@ class SackController extends AbstractAppController
      * Deletes a Sack entity.
      *
      */
-    public function delete(Request $request, $id)
+    public function delete(Request $request, $id, EntityManagerInterface $em)
     {
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em = $this->getDoctrine()->getManager();
             $entity = $em->getRepository(\App\Entity\Sack::class)->find($id);
 
             if (!$entity) {
@@ -261,10 +250,8 @@ class SackController extends AbstractAppController
             ->getForm();
     }
 
-    public function fastDelete($id)
+    public function fastDelete($id, EntityManagerInterface $em)
     {
-        $em = $this->getDoctrine()->getManager();
-
         $entity = $em->getRepository(\App\Entity\Sack::class)->find($id);
         $batch = $entity->getBatch();
 

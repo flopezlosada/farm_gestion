@@ -1,0 +1,587 @@
+{# ============================================================
+ # Gestión de cambios puntuales de viernes (DeliveryShift).
+ # Recibe:
+ #   - shifts            Lista de PartnerDeliveryShift activos.
+ #   - partners          Lista de Partner para el selector (datalist).
+ #   - upcoming_baskets  Baskets futuros para los selectores from/to.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Cambiar día de reparto{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('calendar') }}">Calendario</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Cambiar día de reparto</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Socixs · Reparto',
+        'Cambiar día de reparto',
+        'Cambios puntuales del día que le toca recoger a un socix.'
+    ) }}
+
+    {# ===== Nuevo cambio ===== #}
+    {% embed '_components/csa_card.html.twig' with { title: 'Registrar nuevo cambio', accent: 'sky' } %}
+        {% block body %}
+            {# Selector de socix (fuera de los forms para que ambos forms lo
+             # compartan via JS). El endpoint candidates requiere partnerId
+             # numérico, así que usamos 0 como placeholder y lo reemplazamos
+             # en JS por el id real. #}
+            {# El endpoint cancel es /cambios-viernes/{id}/cancelar. Usamos 0
+             # como placeholder y el JS reemplaza /0/ por el shift id real. #}
+            <div class="csa-stack-lg"
+                 data-candidates-endpoint="{{ path('delivery_shifts_candidates', { partnerId: 0 }) }}"
+                 data-shift-apply-action="{{ path('delivery_shifts_apply') }}"
+                 data-shift-skip-action="{{ path('delivery_shifts_skip_toggle') }}"
+                 data-shift-cancel-action="{{ path('delivery_shifts_cancel', { id: 0 }) }}"
+                 data-csrf-shift="{{ csrf_token('delivery_shift_apply') }}"
+                 data-csrf-skip="{{ csrf_token('delivery_shift_skip') }}"
+                 data-csrf-cancel-prefix="delivery_shift_cancel_"
+                 id="csa-shift-root">
+
+                <div class="csa-field">
+                    <label for="csa-shift-partner-name" class="csa-field__label">Socix</label>
+                    <div class="csa-combobox" id="csa-shift-combobox">
+                        <input type="text" id="csa-shift-partner-name"
+                               class="csa-input"
+                               placeholder="Empieza a escribir nombre o apellido…"
+                               autocomplete="off"
+                               role="combobox" aria-autocomplete="list"
+                               aria-expanded="false" aria-controls="csa-shift-partner-menu"
+                               value="{{ preselected_partner ? preselected_partner.surname ~ ', ' ~ preselected_partner.name : '' }}">
+                        <ul class="csa-combobox__menu" id="csa-shift-partner-menu" role="listbox" hidden></ul>
+                    </div>
+                    <input type="hidden" id="csa-shift-partner"
+                           value="{{ preselected_partner ? preselected_partner.id : '' }}">
+                    <script type="application/json" id="csa-shift-partner-data">
+                        {{ partners|map(p => { id: p.id, label: [p.surname, p.name]|filter(s => s)|join(', ') })|json_encode|raw }}
+                    </script>
+                </div>
+
+                {# Acciones dinámicas. El JS las rellena con el mismo patrón visual
+                 # del panel del socix (csa-next-basket__action). Cada acción es
+                 # un form independiente con su CSRF. #}
+                <div id="csa-shift-actions" hidden></div>
+            </div>
+
+            <script>
+                (function () {
+                    var root = document.getElementById('csa-shift-root');
+                    var combobox = document.getElementById('csa-shift-combobox');
+                    var nameInput = document.getElementById('csa-shift-partner-name');
+                    var partnerIdInput = document.getElementById('csa-shift-partner');
+                    var menu = document.getElementById('csa-shift-partner-menu');
+                    var dataNode = document.getElementById('csa-shift-partner-data');
+                    var actionsBlock = document.getElementById('csa-shift-actions');
+                    if (!root || !nameInput || !partnerIdInput || !menu || !dataNode) return;
+
+                    var partners = [];
+                    try { partners = JSON.parse(dataNode.textContent); } catch (e) { partners = []; }
+                    var MAX_RESULTS = 12;
+                    var activeIdx = -1;
+                    var currentOptions = [];
+
+                    function normalize(s) {
+                        return (s || '').toString()
+                            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                            .toLowerCase().trim();
+                    }
+                    function escapeHtml(s) {
+                        return s.replace(/[&<>"']/g, function (c) {
+                            return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+                        });
+                    }
+                    function highlight(label, q) {
+                        if (!q) return escapeHtml(label);
+                        var nLabel = normalize(label);
+                        var nQ = normalize(q);
+                        var i = nLabel.indexOf(nQ);
+                        if (i < 0) return escapeHtml(label);
+                        return escapeHtml(label.slice(0, i)) +
+                            '<mark>' + escapeHtml(label.slice(i, i + nQ.length)) + '</mark>' +
+                            escapeHtml(label.slice(i + nQ.length));
+                    }
+
+                    function closeMenu() {
+                        menu.hidden = true;
+                        menu.innerHTML = '';
+                        nameInput.setAttribute('aria-expanded', 'false');
+                        activeIdx = -1;
+                        currentOptions = [];
+                    }
+
+                    function openMenu(query) {
+                        var nQ = normalize(query);
+                        currentOptions = nQ
+                            ? partners.filter(function (p) { return normalize(p.label).indexOf(nQ) >= 0; })
+                            : partners.slice();
+                        currentOptions = currentOptions.slice(0, MAX_RESULTS);
+
+                        if (currentOptions.length === 0) {
+                            menu.innerHTML = '<li class="csa-combobox__empty">Sin resultados</li>';
+                        } else {
+                            menu.innerHTML = currentOptions.map(function (p, idx) {
+                                return '<li class="csa-combobox__option" role="option" data-idx="' + idx + '" data-id="' + p.id + '">' +
+                                    highlight(p.label, query) + '</li>';
+                            }).join('');
+                        }
+                        menu.hidden = false;
+                        nameInput.setAttribute('aria-expanded', 'true');
+                        activeIdx = -1;
+                    }
+
+                    function setActive(idx) {
+                        var items = menu.querySelectorAll('.csa-combobox__option');
+                        if (items.length === 0) return;
+                        if (idx < 0) idx = items.length - 1;
+                        if (idx >= items.length) idx = 0;
+                        items.forEach(function (li) { li.classList.remove('csa-combobox__option--active'); });
+                        items[idx].classList.add('csa-combobox__option--active');
+                        items[idx].scrollIntoView({ block: 'nearest' });
+                        activeIdx = idx;
+                    }
+
+                    function selectByIdx(idx) {
+                        if (idx < 0 || idx >= currentOptions.length) return;
+                        var p = currentOptions[idx];
+                        nameInput.value = p.label;
+                        partnerIdInput.value = p.id;
+                        closeMenu();
+                        loadFor(p.id);
+                    }
+
+                    var endpointTpl = root.getAttribute('data-candidates-endpoint');
+                    var applyAction = root.getAttribute('data-shift-apply-action');
+                    var skipAction = root.getAttribute('data-shift-skip-action');
+                    var cancelActionTpl = root.getAttribute('data-shift-cancel-action');
+                    var csrfShift = root.getAttribute('data-csrf-shift');
+                    var csrfSkip = root.getAttribute('data-csrf-skip');
+
+                    function fmtDate(iso) {
+                        var p = iso.split('-');
+                        return p[2] + '/' + p[1] + '/' + p[0];
+                    }
+
+                    function reset() {
+                        actionsBlock.hidden = true;
+                        actionsBlock.innerHTML = '';
+                    }
+
+                    function makeInfoCard(title, desc) {
+                        return ''+
+                            '<div class="csa-next-basket__action">' +
+                            '  <span class="csa-next-basket__action-icon"><i class="fa fa-info-circle" aria-hidden="true"></i></span>' +
+                            '  <div class="csa-next-basket__action-body">' +
+                            '    <div class="csa-next-basket__action-title">' + title + '</div>' +
+                            '    <div class="csa-next-basket__action-desc">' + desc + '</div>' +
+                            '  </div>' +
+                            '  <span></span>' +
+                            '</div>';
+                    }
+
+                    function makeShiftSingleForm(partnerId, fromId, candidate, fromTxt) {
+                        var desc = 'Recogerá el <strong>' + fmtDate(candidate.date) + '</strong> en lugar del ' + fromTxt + '.';
+                        return ''+
+                            '<form action="' + applyAction + '" method="post" class="csa-next-basket__action js-shift-form">' +
+                            '  <input type="hidden" name="_csrf_token" value="' + csrfShift + '">' +
+                            '  <input type="hidden" name="partner_id" value="' + partnerId + '">' +
+                            '  <input type="hidden" name="from_basket_id" value="' + fromId + '">' +
+                            '  <input type="hidden" name="to_basket_id" value="' + candidate.id + '">' +
+                            '  <span class="csa-next-basket__action-icon csa-next-basket__action-icon--info"><i class="fa fa-calendar" aria-hidden="true"></i></span>' +
+                            '  <div class="csa-next-basket__action-body">' +
+                            '    <div class="csa-next-basket__action-title">Cambiar al viernes siguiente</div>' +
+                            '    <div class="csa-next-basket__action-desc">' + desc + '</div>' +
+                            '  </div>' +
+                            '  <button type="submit" class="csa-btn csa-btn--info-soft">Registrar cambio</button>' +
+                            '</form>';
+                    }
+
+                    function makeShiftMultiForm(partnerId, fromId, candidates) {
+                        // En vez de un <select> nativo (feo en dark mode del SO),
+                        // pintamos una pill por cada candidato. Cada pill es un
+                        // <button type="submit" name="to_basket_id" value="...">,
+                        // así el navegador envía el value del botón pulsado y
+                        // no hace falta JS para mover el valor a un hidden.
+                        var pills = candidates.map(function (c) {
+                            return '<button type="submit" name="to_basket_id" value="' + c.id + '" class="csa-pill-btn">' +
+                                fmtDate(c.date) +
+                                '</button>';
+                        }).join('');
+                        return ''+
+                            '<form action="' + applyAction + '" method="post" class="csa-next-basket__action js-shift-form">' +
+                            '  <input type="hidden" name="_csrf_token" value="' + csrfShift + '">' +
+                            '  <input type="hidden" name="partner_id" value="' + partnerId + '">' +
+                            '  <input type="hidden" name="from_basket_id" value="' + fromId + '">' +
+                            '  <span class="csa-next-basket__action-icon csa-next-basket__action-icon--info"><i class="fa fa-calendar" aria-hidden="true"></i></span>' +
+                            '  <div class="csa-next-basket__action-body">' +
+                            '    <div class="csa-next-basket__action-title">Cambiar a otro viernes del mes</div>' +
+                            '    <div class="csa-next-basket__action-desc">Pincha el viernes en el que recogerá:</div>' +
+                            '    <div class="csa-pill-group">' + pills + '</div>' +
+                            '  </div>' +
+                            '</form>';
+                    }
+
+                    function makeCancelShiftForm(shift, fromTxt) {
+                        var desc = 'Vuelve a recoger el ' + fromTxt + ' (cancela el cambio al ' + fmtDate(shift.to_date) + ').';
+                        var action = cancelActionTpl.replace(/\/0\/cancelar$/, '/' + shift.id + '/cancelar');
+                        return ''+
+                            '<form action="' + action + '" method="post" class="csa-next-basket__action js-cancel-form">' +
+                            '  <input type="hidden" name="_csrf_token" value="' + shift.csrf + '">' +
+                            '  <span class="csa-next-basket__action-icon csa-next-basket__action-icon--info"><i class="fa fa-undo" aria-hidden="true"></i></span>' +
+                            '  <div class="csa-next-basket__action-body">' +
+                            '    <div class="csa-next-basket__action-title">Deshacer cambio de viernes</div>' +
+                            '    <div class="csa-next-basket__action-desc">' + desc + '</div>' +
+                            '  </div>' +
+                            '  <button type="submit" class="csa-btn csa-btn--info-soft">Deshacer</button>' +
+                            '</form>';
+                    }
+
+                    function makeSkipForm(partnerId, fromTxt, currentStatusId) {
+                        var skipping = currentStatusId === 1;
+                        var title = skipping ? 'No recoger esta semana' : 'Volver a recoger la cesta';
+                        var desc = skipping
+                            ? 'Marca que ' + (nameInput.value || 'este socix') + ' no recoge el ' + fromTxt + '.'
+                            : 'Restituye la recogida del ' + fromTxt + '.';
+                        var iconCls = skipping
+                            ? 'csa-next-basket__action-icon csa-next-basket__action-icon--danger'
+                            : 'csa-next-basket__action-icon csa-next-basket__action-icon--green';
+                        var iconFa = skipping ? 'fa-ban' : 'fa-undo';
+                        var btnCls = skipping ? 'csa-btn csa-btn--danger-soft' : 'csa-btn csa-btn--info-soft';
+                        var btnLabel = skipping ? 'No recoger' : 'Sí recoge';
+                        return ''+
+                            '<form action="' + skipAction + '" method="post" class="csa-next-basket__action js-skip-form">' +
+                            '  <input type="hidden" name="_csrf_token" value="' + csrfSkip + '">' +
+                            '  <input type="hidden" name="partner_id" value="' + partnerId + '">' +
+                            '  <span class="' + iconCls + '"><i class="fa ' + iconFa + '" aria-hidden="true"></i></span>' +
+                            '  <div class="csa-next-basket__action-body">' +
+                            '    <div class="csa-next-basket__action-title">' + title + '</div>' +
+                            '    <div class="csa-next-basket__action-desc">' + desc + '</div>' +
+                            '  </div>' +
+                            '  <button type="submit" class="' + btnCls + '">' + btnLabel + '</button>' +
+                            '</form>';
+                    }
+
+                    function render(html) {
+                        actionsBlock.innerHTML = html;
+                        actionsBlock.hidden = false;
+                    }
+
+                    function loadFor(partnerId) {
+                        reset();
+                        if (!partnerId) return;
+                        fetch(endpointTpl.replace(/\/0$/, '/' + partnerId), { credentials: 'same-origin' })
+                            .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
+                            .then(function (data) {
+                                if (!data.from_basket) {
+                                    render(makeInfoCard('Sin próxima cesta', 'Este socix no tiene una próxima cesta sobre la que actuar.'));
+                                    return;
+                                }
+                                var fromId = data.from_basket.id;
+                                var fromTxt = fmtDate(data.from_basket.date);
+                                var statusId = data.from_basket.status_id;
+
+                                // Plazo cerrado para la próxima cesta: no se puede
+                                // registrar nada (deadline jueves 23:59 es duro
+                                // también para admin: el viernes ya se está cosechando).
+                                if (data.deadline_passed) {
+                                    render(makeInfoCard('Plazo cerrado',
+                                        'El plazo para cambios sobre el viernes ' + fromTxt + ' ya pasó (cierre jueves 23:59). ' +
+                                        'No se pueden registrar movimientos sobre esta cesta.'));
+                                    return;
+                                }
+
+                                // Si hay shift activo, el shift manda: sólo se
+                                // ofrece "Deshacer cambio". Mismo patrón que el panel.
+                                if (data.existing_shift) {
+                                    render(makeCancelShiftForm(data.existing_shift, fromTxt));
+                                    return;
+                                }
+
+                                // Si la próxima cesta ya está marcada como "no recoge"
+                                // (status=2), las acciones de cambio quedan enmascaradas:
+                                // sólo ofrecemos el toggle inverso ("volver a recoger").
+                                // Mismo patrón que el panel del socix.
+                                if (statusId === 2) {
+                                    render(makeSkipForm(partnerId, fromTxt, statusId));
+                                    return;
+                                }
+
+                                var html = '';
+                                if (data.to_candidates.length > 0) {
+                                    html += data.to_candidates.length === 1
+                                        ? makeShiftSingleForm(partnerId, fromId, data.to_candidates[0], fromTxt)
+                                        : makeShiftMultiForm(partnerId, fromId, data.to_candidates);
+                                } else if (data.blocked) {
+                                    html += makeInfoCard(data.modality_label + ' · le toca el ' + fromTxt,
+                                                         'Las reglas no permiten cambiar de viernes ahora.');
+                                } else {
+                                    html += makeInfoCard(data.modality_label + ' · le toca el ' + fromTxt,
+                                                         'Esta modalidad no admite cambio puntual de día de reparto.');
+                                }
+
+                                // "No recoger" disponible si la cesta aún se va a recoger
+                                // (status=1). El backend tiene además su propia guarda
+                                // anti-shift por defensa.
+                                html += makeSkipForm(partnerId, fromTxt, statusId);
+
+                                render(html);
+                            })
+                            .catch(function () {
+                                render(makeInfoCard('Error', 'No se pudieron cargar las opciones para este socix.'));
+                            });
+                    }
+
+                    nameInput.addEventListener('input', function () {
+                        // Si el texto deja de coincidir con el seleccionado, invalida el id.
+                        if (partnerIdInput.value) {
+                            partnerIdInput.value = '';
+                            reset();
+                        }
+                        openMenu(nameInput.value);
+                    });
+
+                    nameInput.addEventListener('focus', function () {
+                        openMenu(nameInput.value);
+                    });
+
+                    nameInput.addEventListener('keydown', function (e) {
+                        if (menu.hidden && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+                            openMenu(nameInput.value);
+                            e.preventDefault();
+                            return;
+                        }
+                        if (e.key === 'ArrowDown') { e.preventDefault(); setActive(activeIdx + 1); }
+                        else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(activeIdx - 1); }
+                        else if (e.key === 'Enter') {
+                            if (!menu.hidden && activeIdx >= 0) { e.preventDefault(); selectByIdx(activeIdx); }
+                        }
+                        else if (e.key === 'Escape') { closeMenu(); }
+                    });
+
+                    menu.addEventListener('mousedown', function (e) {
+                        // mousedown en vez de click para ganar al blur del input.
+                        var li = e.target.closest('.csa-combobox__option');
+                        if (!li) return;
+                        e.preventDefault();
+                        selectByIdx(parseInt(li.getAttribute('data-idx'), 10));
+                    });
+
+                    document.addEventListener('mousedown', function (e) {
+                        if (!combobox.contains(e.target)) closeMenu();
+                    });
+
+                    // Carga inicial si el server preseleccionó un socix
+                    // (típico tras redirect post-acción).
+                    if (partnerIdInput.value) {
+                        loadFor(partnerIdInput.value);
+                    }
+                }());
+            </script>
+        {% endblock %}
+    {% endembed %}
+
+    {# ===== Cambios activos: una sub-sección por tipo ===== #}
+    {% set _have_any = shifts is not empty or skips is not empty %}
+
+    <div style="margin-top: var(--csa-sp-6); display: flex; flex-direction: column; gap: var(--csa-sp-5);">
+
+        {% if shifts is not empty %}
+            {% embed '_components/csa_card.html.twig' with {
+                title: 'Cambios de viernes',
+                subtitle: 'Socixs que recogen otro día distinto al que les tocaba.',
+                accent: 'sky',
+                icon: 'fa-exchange',
+            } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-table-wrap">
+                        <table class="csa-table csa-table--stack-on-mobile">
+                            <thead>
+                                <tr>
+                                    <th>Socix</th>
+                                    <th class="csa-table__col-tight">Le tocaba</th>
+                                    <th class="csa-table__col-tight">Recoge</th>
+                                    <th class="csa-table__col-tight">Registrado</th>
+                                    <th class="csa-table__col-tight"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for shift in shifts %}
+                                    <tr>
+                                        <td data-label="Socix">{{ shift.partner.surname }}{% if shift.partner.name %}, {{ shift.partner.name }}{% endif %}</td>
+                                        <td class="csa-table__col-tight" data-label="Le tocaba">{{ shift.fromBasket.date|date('d/m/Y') }}</td>
+                                        <td class="csa-table__col-tight" data-label="Recoge">
+                                            <i class="fa fa-arrow-right csa-muted" aria-hidden="true" style="margin-right: 4px;"></i>
+                                            <strong>{{ shift.toBasket.date|date('d/m/Y') }}</strong>
+                                        </td>
+                                        <td class="csa-table__col-tight" data-label="Registrado">{{ shift.created|date('d/m/Y H:i') }}</td>
+                                        <td class="csa-table__col-tight">
+                                            <button type="button" class="csa-btn csa-btn--info-soft csa-btn--sm csa-btn--undo"
+                                                    onclick="document.getElementById('confirm-shift-cancel-{{ shift.id }}').showModal()">
+                                                <span class="csa-btn__icon-chip" aria-hidden="true"><i class="fa fa-undo"></i></span>
+                                                Deshacer
+                                            </button>
+                                            {{ csa.confirm_dialog('confirm-shift-cancel-' ~ shift.id, {
+                                                variant: 'info',
+                                                eyebrow: 'Deshacer',
+                                                title: 'Deshacer el cambio de viernes',
+                                                body: 'Antes de deshacer un cambio, asegúrate de haberlo hablado con el socix. Volverá a recoger en su viernes original.',
+                                                confirm_label: 'Deshacer',
+                                                action: path('delivery_shifts_cancel', { id: shift.id }),
+                                                csrf_token: csrf_token('delivery_shift_cancel_' ~ shift.id),
+                                            }) }}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% endblock %}
+            {% endembed %}
+        {% endif %}
+
+        {% if skips is not empty %}
+            {% embed '_components/csa_card.html.twig' with {
+                title: 'No recogen esta semana',
+                subtitle: 'Socixs que han marcado que se saltan la cesta sin cambiar de viernes.',
+                accent: 'terracotta',
+                icon: 'fa-ban',
+            } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-table-wrap">
+                        <table class="csa-table csa-table--stack-on-mobile">
+                            <thead>
+                                <tr>
+                                    <th>Socix</th>
+                                    <th class="csa-table__col-tight">Viernes que se salta</th>
+                                    <th class="csa-table__col-tight"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for wb in skips %}
+                                    <tr>
+                                        <td data-label="Socix">{{ wb.partner.surname }}{% if wb.partner.name %}, {{ wb.partner.name }}{% endif %}</td>
+                                        <td class="csa-table__col-tight" data-label="Viernes que se salta">{{ wb.basket.date|date('d/m/Y') }}</td>
+                                        <td class="csa-table__col-tight">
+                                            <button type="button" class="csa-btn csa-btn--info-soft csa-btn--sm csa-btn--undo"
+                                                    onclick="document.getElementById('confirm-skip-undo-{{ wb.partner.id }}-{{ wb.basket.id }}').showModal()">
+                                                <span class="csa-btn__icon-chip" aria-hidden="true"><i class="fa fa-undo"></i></span>
+                                                Deshacer
+                                            </button>
+                                            {{ csa.confirm_dialog('confirm-skip-undo-' ~ wb.partner.id ~ '-' ~ wb.basket.id, {
+                                                variant: 'info',
+                                                eyebrow: 'Deshacer',
+                                                title: 'Deshacer el salto de cesta',
+                                                body: 'Antes de deshacer, asegúrate de haberlo hablado con el socix. Volverá a recoger esta semana.',
+                                                confirm_label: 'Deshacer',
+                                                action: path('delivery_shifts_skip_toggle'),
+                                                csrf_token: csrf_token('delivery_shift_skip'),
+                                                extra_fields: [{ name: 'partner_id', value: wb.partner.id }],
+                                            }) }}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% endblock %}
+            {% endembed %}
+        {% endif %}
+
+        {% if not _have_any %}
+            {% embed '_components/csa_card.html.twig' with { title: 'Cambios activos', accent: 'plum' } %}
+                {% block body %}
+                    <p class="csa-muted">No hay cambios puntuales registrados.</p>
+                {% endblock %}
+            {% endembed %}
+        {% endif %}
+
+    </div>
+
+    {# Estilos locales que no son del modal — se mantienen porque siguen
+     # en uso en esta pantalla (botón "Deshacer" con icono-chip + pills
+     # para el form dinámico). #}
+    <style>
+        .csa-btn--undo { display: inline-flex; align-items: center; gap: 8px; padding-left: 6px; }
+        .csa-btn__icon-chip {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 22px; height: 22px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.85);
+            color: inherit;
+            font-size: 11px;
+        }
+        .csa-pill-group { display: flex; flex-wrap: wrap; gap: 8px; margin-top: var(--csa-sp-2); }
+        .csa-pill-btn {
+            display: inline-flex; align-items: center; justify-content: center;
+            padding: 6px 14px;
+            font-family: inherit; font-size: var(--csa-fs-sm);
+            background: var(--csa-sky-soft); color: var(--csa-sky);
+            border: 1px solid var(--csa-sky-soft);
+            border-radius: 999px;
+            cursor: pointer;
+            transition: background 120ms ease, transform 80ms ease;
+        }
+        .csa-pill-btn:hover { background: #bcd6e4; }
+        .csa-pill-btn:active { transform: translateY(1px); }
+
+        /* En móvil las tablas se apilan: cada <tr> es una mini-card y cada
+           <td> muestra su data-label a la izquierda. Evita scroll horizontal
+           en pantallas estrechas. Subimos especificidad con doble clase
+           (.csa-table.csa-table--stack-on-mobile) porque la base
+           `.csa-table tbody td` pisa el padding y bordes si no. */
+        @media (max-width: 640px) {
+            /* Sin esto los ancestros (card, body) se expanden al ancho del
+               hijo más grande y empujan el header del layout fuera del
+               viewport. min-width:0 corta esa propagación; max-width:100%
+               garantiza que ningún elemento sobresalga del viewport. */
+            .csa-card,
+            .csa-card__body,
+            .csa-table-wrap { min-width: 0; max-width: 100%; }
+
+            .csa-table-wrap:has(.csa-table--stack-on-mobile) {
+                overflow-x: visible;
+                background: transparent;
+                border: none;
+                border-radius: 0;
+                padding: 0;
+            }
+            .csa-table.csa-table--stack-on-mobile thead { display: none; }
+            .csa-table.csa-table--stack-on-mobile,
+            .csa-table.csa-table--stack-on-mobile tbody,
+            .csa-table.csa-table--stack-on-mobile tr,
+            .csa-table.csa-table--stack-on-mobile tbody td { display: block; width: 100%; }
+            .csa-table.csa-table--stack-on-mobile tbody tr {
+                padding: var(--csa-sp-3) var(--csa-sp-4);
+                margin-bottom: var(--csa-sp-3);
+                border: 1px solid var(--csa-rule, #e7e2d8);
+                border-radius: var(--csa-radius-md);
+                background: var(--csa-surface, #fff);
+            }
+            .csa-table.csa-table--stack-on-mobile tbody tr:last-child { margin-bottom: 0; }
+            .csa-table.csa-table--stack-on-mobile tbody tr:hover td { background: transparent; }
+            .csa-table.csa-table--stack-on-mobile tbody td {
+                padding: 4px 0;
+                border: none;
+            }
+            .csa-table.csa-table--stack-on-mobile tbody td[data-label]::before {
+                content: attr(data-label) ": ";
+                color: var(--csa-ink-soft);
+                font-size: var(--csa-fs-sm);
+                margin-right: 6px;
+            }
+            .csa-table.csa-table--stack-on-mobile tbody td:not([data-label]) {
+                padding-top: var(--csa-sp-2);
+            }
+        }
+    </style>
+
+{% endblock %}

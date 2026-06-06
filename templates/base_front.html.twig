@@ -21,6 +21,7 @@
         <link href="{{ asset('bundles/app/frontend/lib/flaticon/font/flaticon.css') }}" rel="stylesheet">
         <link href="{{ asset('bundles/app/frontend/lib/owlcarousel/assets/owl.carousel.min.css') }}" rel="stylesheet">
         <link href="{{ asset('bundles/app/frontend/lib/tempusdominus/css/tempusdominus-bootstrap-4.min.css') }}" rel="stylesheet">
+        <link href="https://cdn.jsdelivr.net/npm/lightgallery@2.7.2/css/lightgallery.css" rel="stylesheet">
         <link href="{{ asset('bundles/app/frontend/css/style.css') }}" rel="stylesheet">
     {% endblock %}
 </head>
@@ -32,7 +33,17 @@
             <div class="row bg-secondary py-2 px-lg-5">
                 <div class="col-lg-6 text-center text-lg-left mb-2 mb-lg-0">
                     {% if is_granted('IS_AUTHENTICATED_FULLY') %}
-                        <a class="text-white px-2" href="{{ path('dashboard') }}"><i class="fa fa-user-circle mr-1"></i>Mi panel</a>
+                        {# ROLE_ADMIN incluye ROLE_PARTNER por jerarquía, así que no
+                         # podemos usar el rol para distinguir; chequeamos si user
+                         # tiene un Partner vinculado realmente. #}
+                        {% set has_gestion = is_granted('ROLE_ADMIN') or is_granted('ROLE_GESTION_GRANJA') or is_granted('ROLE_GESTION_SOCIXS') or is_granted('ROLE_GESTION_CESTAS') or is_granted('ROLE_BLOG') %}
+                        {% set is_partner = app.user.partner is defined and app.user.partner %}
+                        {% if is_partner %}
+                            <a class="text-white px-2" href="{{ path('panel') }}"><i class="fa fa-user-circle mr-1"></i>Mi panel</a>
+                        {% endif %}
+                        {% if has_gestion %}
+                            <a class="text-white px-2" href="{{ path('dashboard') }}"><i class="fa fa-cog mr-1"></i>Gestión</a>
+                        {% endif %}
                         <a class="text-white px-2" href="{{ path('app_logout') }}"><i class="fa fa-sign-out-alt mr-1"></i>Salir</a>
                     {% else %}
                         <a class="text-white px-2" href="{{ path('app_login') }}"><i class="fa fa-user mr-1"></i>Acceso socixs</a>
@@ -152,6 +163,7 @@
         <script src="{{ asset('bundles/app/frontend/lib/tempusdominus/js/moment.min.js') }}"></script>
         <script src="{{ asset('bundles/app/frontend/lib/tempusdominus/js/moment-timezone.min.js') }}"></script>
         <script src="{{ asset('bundles/app/frontend/lib/tempusdominus/js/tempusdominus-bootstrap-4.min.js') }}"></script>
+        <script src="https://cdn.jsdelivr.net/npm/lightgallery@2.7.2/lightgallery.umd.min.js"></script>
         <script src="{{ asset('bundles/app/frontend/js/main.js') }}"></script>
     {% endblock %}
 
