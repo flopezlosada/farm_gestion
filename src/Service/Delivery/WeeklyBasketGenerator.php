@@ -12,6 +12,7 @@ use App\Entity\PartnerDeliveryShift;
 use App\Entity\PartnerEvent;
 use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketGroup;
+use App\Entity\WeeklyBasketItem;
 use App\Entity\WeeklyBasketStatus;
 use App\Entity\BasketShare;
 use App\Repository\NodeRepository;
@@ -775,6 +776,87 @@ class WeeklyBasketGenerator
         $status = $this->em->getRepository(WeeklyBasketStatus::class)->find(self::STATUS_PICKED);
 
         return $this->materializeOnlyEggForShare($basket, $share, $status);
+    }
+
+    /**
+     * Re-materializa la entrega de UN socio en un Basket para alinearla con su patrón
+     * VIGENTE, sin tocar a los demás: borra su WeeklyBasket previo (con sus ítems) y, SOLO
+     * si la semana sigue GENERADA (quedan WB de otros socios), vuelve a materializar su
+     * patrón actual con {@see materializeForPartner} (cubre cesta Y solo-huevo SANTOS-like).
+     * En una semana SIN generar no materializa: un WB suelto dispararía la rama
+     * {@see reuseExistingWeeklyBaskets} y dejaría fuera al resto del listado.
+     *
+     * Resuelve el hueco de {@see generateForBasket}, que NO re-añade socios a un basket ya
+     * generado (rama reuse): un cambio de modalidad que ENSANCHA la frecuencia (mensual→
+     * semanal, etc.) perdería las entregas de las semanas donde antes no repartía. Es la
+     * pieza por-socio de la cascada de {@see \App\Service\Partner\BasketModalityChanger}.
+     *
+     * El estado se determina mirando si quedan WB de OTROS socios tras borrar el del socio,
+     * de modo que un único WB suelto del propio socio (mes por lo demás sin generar) NO
+     * cuente como semana generada.
+     *
+     * Idempotente respecto al patrón; descarta las ediciones manuales previas de ESE socio
+     * en la semana (el cambio de modalidad reinicia su patrón). No toca los PartnerDeliveryShift.
+     *
+     * @param Partner $partner
+     * @param Basket  $basket
+     * @return WeeklyBasket|null La entrega re-materializada, o null si su patrón nuevo no
+     *                           reparte esa semana (o la semana no está generada).
+     */
+    public function rematerializeForPartner(Partner $partner, Basket $basket): ?WeeklyBasket
+    {
+        $wbRepo = $this->em->getRepository(WeeklyBasket::class);
+
+        $existing = $wbRepo->findOneBy(['basket' => $basket->getId(), 'partner' => $partner->getId()]);
+        if ($existing !== null) {
+            foreach ($this->em->getRepository(WeeklyBasketItem::class)->findBy(['weeklyBasket' => $existing]) as $item) {
+                $this->em->remove($item);
+            }
+            $this->em->remove($existing);
+            $this->em->flush();
+        }
+
+        // ¿Queda listado de OTROS socios esa semana? Si no, está sin generar y no se
+        // materializa nada (lo hará la generación normal cuando toque, ya con el patrón nuevo).
+        if ($wbRepo->findOneBy(['basket' => $basket->getId()]) === null) {
+            return null;
+        }
+
+        return $this->materializeForPartner($partner, $basket);
+    }
+
+    /**
+     * Reconcilia las entregas YA materializadas de un socio desde una fecha: por cada Basket
+     * GENERADO con fecha >= $from, re-materializa la entrega del socio a su patrón VIGENTE
+     * ({@see rematerializeForPartner}) — añade donde ahora reparte, quita donde ya no, y
+     * re-etiqueta la modalidad. Es la cascada correcta de un cambio de modalidad: el listado
+     * ya generado (típicamente las ~4 semanas que el cron adelanta) no se arregla solo porque
+     * {@see generateForBasket} no re-añade socios a un basket existente. Las semanas aún SIN
+     * generar no necesitan nada: la generación normal las sembrará con el patrón nuevo.
+     *
+     * Debe llamarse DESPUÉS de que la PBS nueva esté vigente (p. ej. tras
+     * {@see \App\Service\Partner\BasketModalityChanger::applyChange}), porque lee el patrón
+     * actual del socio.
+     *
+     * @param Partner            $partner
+     * @param \DateTimeInterface $from Fecha (inclusive) desde la que reconciliar.
+     * @return array<int,bool> basketId => si el socio quedó CON entrega esa semana (true) o no (false).
+     */
+    public function reconcilePartnerFrom(Partner $partner, \DateTimeInterface $from): array
+    {
+        $baskets = $this->em->createQuery(
+            'SELECT DISTINCT b FROM ' . Basket::class . ' b
+             JOIN ' . WeeklyBasket::class . ' wb WITH wb.basket = b
+             WHERE b.date >= :from
+             ORDER BY b.date ASC'
+        )->setParameter('from', $from->format('Y-m-d'))->getResult();
+
+        $result = [];
+        foreach ($baskets as $basket) {
+            $result[$basket->getId()] = $this->rematerializeForPartner($partner, $basket) !== null;
+        }
+
+        return $result;
     }
 
     /**

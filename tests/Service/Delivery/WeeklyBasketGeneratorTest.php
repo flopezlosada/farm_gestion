@@ -102,4 +102,46 @@ class WeeklyBasketGeneratorTest extends KernelTestCase
         $wb2 = $this->generator()->materializeShareDelivery($free, $share);
         $this->assertSame($wb->getId(), $wb2->getId(), 'Una segunda llamada no debe duplicar.');
     }
+
+    /**
+     * Guarda clave de la cascada de cambio de modalidad ({@see WeeklyBasketGenerator::rematerializeForPartner}):
+     * sobre una semana SIN generar (ningún WeeklyBasket de ningún socio) NO se materializa nada.
+     * Un WB suelto en una semana sin generar dispararía la rama reuseExistingWeeklyBaskets y
+     * dejaría fuera al resto del listado al generarlo. Determinista: no depende de cohorte ni
+     * cadencia (la guarda corta antes de proyectar), solo de que exista un Basket vacío.
+     */
+    public function testRematerializeDoesNotMaterializeOnUngeneratedWeek(): void
+    {
+        self::bootKernel();
+        $em = $this->em();
+
+        $partner = $em->getRepository(Partner::class)
+            ->findOneBy(['email' => PartnerUserFixtures::USER_SOCIX_EMAIL]);
+        $this->assertNotNull($partner);
+
+        $wbRepo = $em->getRepository(WeeklyBasket::class);
+
+        // Basket dedicado sin ninguna entrega: autocontenido para no depender del
+        // estado de db_test (que no hace rollback entre tests y puede dejar todos
+        // los Baskets de fixtures ya generados). Fecha imposible de colisionar.
+        $ungenerated = new Basket();
+        $ungenerated->setDate(new \DateTime('2099-12-25'));
+        $ungenerated->setWeek(52);
+        $ungenerated->setAmount(1);
+        $em->persist($ungenerated);
+        $em->flush();
+
+        $this->assertNull(
+            $wbRepo->findOneBy(['basket' => $ungenerated->getId()]),
+            'El Basket recién creado no debe tener ninguna entrega.',
+        );
+
+        $result = $this->generator()->rematerializeForPartner($partner, $ungenerated);
+
+        $this->assertNull($result, 'No debe materializar en una semana sin generar.');
+        $this->assertNull(
+            $wbRepo->findOneBy(['basket' => $ungenerated->getId()]),
+            'No debe quedar ningún WeeklyBasket suelto en la semana sin generar.',
+        );
+    }
 }
