@@ -167,4 +167,23 @@ class DeliveryExceptionRepository extends ServiceEntityRepository
             ->getQuery()
             ->getResult();
     }
+
+    /**
+     * Excepciones cuyo ciclo cae en $from o después. Sirve al picker del
+     * formulario para no ofrecer fechas que ya tienen excepción (el candado
+     * de {@see findOneExact()} sigue protegiendo el guardado por si acaso).
+     *
+     * @param \DateTimeInterface $from Fecha de ciclo (inclusive) desde la que mirar.
+     * @return DeliveryException[]
+     */
+    public function findFromDate(\DateTimeInterface $from): array
+    {
+        return $this->createQueryBuilder('e')
+            ->join('e.basket', 'b')
+            ->where('b.date >= :from')
+            ->setParameter('from', $from->format('Y-m-d'))
+            ->orderBy('b.date', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
 }

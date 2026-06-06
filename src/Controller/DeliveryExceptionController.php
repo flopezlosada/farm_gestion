@@ -92,7 +92,7 @@ class DeliveryExceptionController extends AbstractController
         return $this->render('delivery_exception/new.html.twig', [
             'exception' => $exception,
             'form' => $form->createView(),
-            'scopes' => $this->buildScopes($nodeRepository, $basketRepository, $deliveryDate),
+            'scopes' => $this->buildScopes($nodeRepository, $basketRepository, $deliveryDate, $repository, null),
         ]);
     }
 
@@ -123,7 +123,7 @@ class DeliveryExceptionController extends AbstractController
         return $this->render('delivery_exception/edit.html.twig', [
             'exception' => $exception,
             'form' => $form->createView(),
-            'scopes' => $this->buildScopes($nodeRepository, $basketRepository, $deliveryDate),
+            'scopes' => $this->buildScopes($nodeRepository, $basketRepository, $deliveryDate, $repository, $exception),
         ]);
     }
 
@@ -186,20 +186,32 @@ class DeliveryExceptionController extends AbstractController
      * @param NodeRepository $nodeRepository
      * @param BasketRepository $basketRepository
      * @param NodeDeliveryDate $deliveryDate
+     * @param DeliveryExceptionRepository $exceptionRepository
+     * @param DeliveryException|null $current Excepción que se edita (su propia
+     *        fecha sí se sigue ofreciendo); null al crear una nueva.
      * @return array<int, array{key: string, nodeId: int|null, label: string, sublabel: string, dates: array<int, array{basketId: int, date: \DateTimeImmutable}>}>
      */
-    private function buildScopes(NodeRepository $nodeRepository, BasketRepository $basketRepository, NodeDeliveryDate $deliveryDate): array
+    private function buildScopes(NodeRepository $nodeRepository, BasketRepository $basketRepository, NodeDeliveryDate $deliveryDate, DeliveryExceptionRepository $exceptionRepository, ?DeliveryException $current): array
     {
         $baskets = $this->futureBaskets($basketRepository);
+        $occupied = $this->occupiedKeys($exceptionRepository, $current);
 
-        // Cierre general: las próximas semanas, ancladas a su viernes-ciclo.
-        $allDates = array_map(
-            static fn (Basket $basket): array => [
+        // Cierre general: las próximas semanas SIN excepción global, ancladas a
+        // su viernes-ciclo. Se sigue rellenando hasta PICKER_DATES saltando las
+        // ya ocupadas, no recortando a las 4 primeras.
+        $allDates = [];
+        foreach ($baskets as $basket) {
+            if (isset($occupied[self::scopeKey($basket->getId(), null)])) {
+                continue; // esa semana ya tiene un cierre general.
+            }
+            $allDates[] = [
                 'basketId' => $basket->getId(),
                 'date' => \DateTimeImmutable::createFromInterface($basket->getDate()),
-            ],
-            array_slice($baskets, 0, self::PICKER_DATES)
-        );
+            ];
+            if (count($allDates) >= self::PICKER_DATES) {
+                break;
+            }
+        }
 
         $scopes = [[
             'key' => 'all',
@@ -215,6 +227,9 @@ class DeliveryExceptionController extends AbstractController
                 $physical = $deliveryDate->operativeDateFor($basket, $node);
                 if ($physical === null) {
                     continue; // nodo quincenal: esta semana no reparte.
+                }
+                if (isset($occupied[self::scopeKey($basket->getId(), $node->getId())])) {
+                    continue; // ese nodo ya tiene excepción ese ciclo.
                 }
                 $dates[] = ['basketId' => $basket->getId(), 'date' => $physical];
                 if (count($dates) >= self::PICKER_DATES) {
@@ -232,6 +247,59 @@ class DeliveryExceptionController extends AbstractController
         }
 
         return $scopes;
+    }
+
+    /**
+     * Clave que identifica un alcance (ciclo, nodo) para cruzar las fechas del
+     * picker con las excepciones ya existentes. nodeId null = cierre global.
+     *
+     * @param int $basketId Id del ciclo.
+     * @param int|null $nodeId Id del nodo, o null para el alcance global.
+     * @return string Clave estable "basketId|nodeId".
+     */
+    public static function scopeKey(int $basketId, ?int $nodeId): string
+    {
+        return $basketId . '|' . ($nodeId ?? '');
+    }
+
+    /**
+     * Conjunto de claves (ciclo, nodo) que YA tienen excepción registrada, para
+     * que el picker no vuelva a ofrecerlas. Capa fina sobre la query; la lógica
+     * de claves vive en {@see occupiedKeysFrom()} (pura, testeable).
+     *
+     * @param DeliveryExceptionRepository $exceptionRepository
+     * @param DeliveryException|null $current Excepción editada, o null al crear.
+     * @return array<string, true> Mapa clave => true (lookup O(1) con isset).
+     */
+    private function occupiedKeys(DeliveryExceptionRepository $exceptionRepository, ?DeliveryException $current): array
+    {
+        return self::occupiedKeysFrom(
+            $exceptionRepository->findFromDate(new \DateTimeImmutable('today')),
+            $current,
+        );
+    }
+
+    /**
+     * Deriva el set de claves ocupadas a partir de las excepciones existentes.
+     * En edición se excluye la propia excepción que se está editando (por id):
+     * su fecha debe seguir disponible para que la tarjeta seleccionada se pinte.
+     * Lógica pura (sin BBDD) para poder testearla aislada.
+     *
+     * @param DeliveryException[] $existing Excepciones ya registradas.
+     * @param DeliveryException|null $current Excepción editada, o null al crear.
+     * @return array<string, true> Mapa clave => true (lookup O(1) con isset).
+     */
+    public static function occupiedKeysFrom(array $existing, ?DeliveryException $current): array
+    {
+        $occupied = [];
+        foreach ($existing as $exception) {
+            if ($current !== null && $exception->getId() === $current->getId()) {
+                continue;
+            }
+            $occupied[self::scopeKey($exception->getBasket()->getId(), $exception->getNode()?->getId())] = true;
+        }
+
+        return $occupied;
     }
 
     /**
