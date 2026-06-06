@@ -33,14 +33,14 @@
     {{- (a ~ b)|upper -}}
 {% endmacro %}
 
-{% block title %}Cambios de reparto{% endblock %}
+{% block title %}Histórico de cambios{% endblock %}
 
 {% block csa_crumbs %}
     <a href="{{ path('dashboard') }}">Inicio</a>
     <span class="csa-topbar__crumbs-sep">/</span>
     <a href="{{ path('calendar') }}">Calendario</a>
     <span class="csa-topbar__crumbs-sep">/</span>
-    <span class="csa-topbar__crumb-active">Cambios de reparto</span>
+    <span class="csa-topbar__crumb-active">Histórico de cambios</span>
 {% endblock %}
 
 {% block csa_main %}
@@ -48,8 +48,8 @@
 
     {{ csa.page_header(
         'Socixs · Reparto',
-        'Cambios de reparto',
-        'Registro de cambios de día y de no-recoge, semana a semana. Para registrar un cambio nuevo, usa el calendario de recogida de la ficha del socix.'
+        'Histórico de cambios',
+        'Consulta de cambios de día y de no-recoge, semana a semana. Aquí no se registran cambios: para hacer uno, usa el calendario de recogida de la ficha del socix.'
     ) }}
 
     {# ===== Tira selectora de semana (morada, distinta de la de reparto) ===== #}

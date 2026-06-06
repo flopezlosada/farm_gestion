@@ -14,7 +14,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 
 /**
- * Tests del registro de cambios de reparto (/gestion/reparto/cambios-viernes).
+ * Tests del registro de cambios de reparto (/gestion/reparto/historial-cambios).
  * El alta de cambios ya NO vive aquí (es el calendario de recogida de la
  * ficha del socix); esta pantalla es de consulta, así que se prueba lo que
  * es suyo: listar los cambios de una semana, cancelar un cambio de día y
@@ -48,7 +48,7 @@ class DeliveryShiftsAdminActionsTest extends AbstractAuthenticatedTest
         $this->assertNotNull($shift, 'El cambio debe existir tras aplicarlo con el servicio');
 
         // El registro de la semana ORIGEN lo lista y ofrece el "Deshacer".
-        $crawler = $client->request('GET', '/gestion/reparto/cambios-viernes?basket=' . $from->getId());
+        $crawler = $client->request('GET', '/gestion/reparto/historial-cambios?basket=' . $from->getId());
         $this->assertSame(200, $client->getResponse()->getStatusCode());
 
         $dialogId = 'confirm-shift-cancel-' . $shift->getId();
@@ -57,7 +57,7 @@ class DeliveryShiftsAdminActionsTest extends AbstractAuthenticatedTest
             ->first()->attr('value');
         $this->assertNotEmpty($cancelToken, 'La semana futura debe ofrecer el botón Deshacer');
 
-        $client->request('POST', '/gestion/reparto/cambios-viernes/' . $shift->getId() . '/cancelar', [
+        $client->request('POST', '/gestion/reparto/historial-cambios/' . $shift->getId() . '/cancelar', [
             '_csrf_token' => $cancelToken,
         ]);
         $client->followRedirect();
@@ -94,7 +94,7 @@ class DeliveryShiftsAdminActionsTest extends AbstractAuthenticatedTest
         $em->clear();
 
         // El registro lo muestra en "No recogen" con el botón Deshacer.
-        $crawler = $client->request('GET', '/gestion/reparto/cambios-viernes?basket=' . $from->getId());
+        $crawler = $client->request('GET', '/gestion/reparto/historial-cambios?basket=' . $from->getId());
         $this->assertSame(200, $client->getResponse()->getStatusCode());
         $dialogId = 'confirm-skip-undo-' . $partner->getId() . '-' . $from->getId();
         $token = (string) $crawler
@@ -102,7 +102,7 @@ class DeliveryShiftsAdminActionsTest extends AbstractAuthenticatedTest
             ->first()->attr('value');
         $this->assertNotEmpty($token);
 
-        $client->request('POST', '/gestion/reparto/cambios-viernes/skip', [
+        $client->request('POST', '/gestion/reparto/historial-cambios/skip', [
             '_csrf_token' => $token,
             'partner_id' => $partner->getId(),
             'basket_id' => $from->getId(),

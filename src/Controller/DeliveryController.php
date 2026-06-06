@@ -65,7 +65,7 @@ class DeliveryController extends AbstractController
      * 5-jun→26-jun aparece en la semana del 5. El "Deshacer" solo se ofrece
      * en semanas futuras (un viernes pasado ya no se deshace).
      */
-    #[Route('/cambios-viernes', name: 'delivery_shifts_index', methods: ['GET'])]
+    #[Route('/historial-cambios', name: 'delivery_shifts_index', methods: ['GET'])]
     public function shiftsIndex(
         Request $request,
         PartnerDeliveryShiftRepository $shiftRepo,
@@ -219,7 +219,7 @@ class DeliveryController extends AbstractController
      * se está cosechando). Desde el registro sólo se usa para deshacer un
      * salto (2→1), pero el toggle se mantiene genérico.
      */
-    #[Route('/cambios-viernes/skip', name: 'delivery_shifts_skip_toggle', methods: ['POST'])]
+    #[Route('/historial-cambios/skip', name: 'delivery_shifts_skip_toggle', methods: ['POST'])]
     public function shiftsSkipToggle(
         Request $request,
         PartnerRepository $partnerRepo,
@@ -302,7 +302,7 @@ class DeliveryController extends AbstractController
         return new \DateTimeImmutable('now') < $deadline;
     }
 
-    #[Route('/cambios-viernes/{id}/cancelar', name: 'delivery_shifts_cancel', methods: ['POST'])]
+    #[Route('/historial-cambios/{id}/cancelar', name: 'delivery_shifts_cancel', methods: ['POST'])]
     public function shiftsCancel(
         Request $request,
         PartnerDeliveryShift $shift,
