@@ -95,6 +95,35 @@ class DeliveryExceptionRepository extends ServiceEntityRepository
     }
 
     /**
+     * Cuenta los cierres GLOBALES que CANCELAN el reparto en un rango de
+     * ciclos, estrictamente entre dos fechas (extremos excluidos).
+     *
+     * "Global" = sin nodo (`node IS NULL`): afecta a todos los puntos de
+     * reparto (festivo, puente, agosto). "Cancela" = `shiftedDate IS NULL`:
+     * ese ciclo no hay entrega (un traslado a otro día NO cuenta, porque sí
+     * hay reparto). Cada uno de estos cierres desplaza una semana la
+     * alternancia quincenal A/B; lo consume {@see \App\Service\Delivery\BiweeklyCohortResolver}.
+     *
+     * @param \DateTimeInterface $after Extremo inferior excluido (típicamente el ancla).
+     * @param \DateTimeInterface $before Extremo superior excluido (el ciclo objetivo).
+     * @return int Número de cierres globales cancelados en (after, before).
+     */
+    public function countGlobalCancellationsBetween(\DateTimeInterface $after, \DateTimeInterface $before): int
+    {
+        return (int) $this->createQueryBuilder('e')
+            ->select('COUNT(e.id)')
+            ->join('e.basket', 'b')
+            ->where('e.node IS NULL')
+            ->andWhere('e.shiftedDate IS NULL')
+            ->andWhere('b.date > :after')
+            ->andWhere('b.date < :before')
+            ->setParameter('after', $after->format('Y-m-d'))
+            ->setParameter('before', $before->format('Y-m-d'))
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
+    /**
      * Excepciones cuyo ciclo (o fecha trasladada) cae dentro del rango
      * dado. Útil para pintar el calendario de excepciones.
      *
