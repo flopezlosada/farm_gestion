@@ -39,13 +39,13 @@ class DeliveryExceptionRepository extends ServiceEntityRepository
     }
 
     /**
-     * Resuelve la excepción que aplica a un nodo en un ciclo, dando
-     * prioridad a la específica del nodo sobre la global.
+     * Resuelve la excepción que aplica a un nodo en un ciclo, aplicando la
+     * regla de precedencia de {@see resolvePrecedence()}: una cancelación
+     * global es absoluta; en lo demás, la específica del nodo manda.
      *
      * @param Basket $basket Ciclo a comprobar.
      * @param Node $node Nodo cuyo reparto se está resolviendo.
-     * @return DeliveryException|null La específica del nodo si existe; si
-     *                                no, la global; null si ninguna.
+     * @return DeliveryException|null La excepción que aplica, o null si ninguna.
      */
     public function findForBasketAndNode(Basket $basket, Node $node): ?DeliveryException
     {
@@ -58,15 +58,39 @@ class DeliveryExceptionRepository extends ServiceEntityRepository
             ->getResult();
 
         $global = null;
+        $nodeSpecific = null;
         foreach ($matches as $match) {
             if ($match->getNode() === null) {
                 $global = $match;
-                continue;
+            } else {
+                $nodeSpecific = $match;
             }
-            return $match;
         }
 
-        return $global;
+        return self::resolvePrecedence($global, $nodeSpecific);
+    }
+
+    /**
+     * Regla de precedencia entre la excepción global (sin nodo) y la
+     * específica de nodo para un mismo ciclo.
+     *
+     * Una CANCELACIÓN global (`shiftedDate` null) es absoluta: el cierre se
+     * pone cuando no hay trabajadores (Semana Santa, Navidad, agosto) y por
+     * tanto no hay verdura que repartir — no reparte nadie, ni un nodo con
+     * override. En cambio un TRASLADO global ("todos reparten otro día") sí
+     * lo puede pisar un override de nodo que prefiera una fecha distinta.
+     *
+     * @param DeliveryException|null $global Excepción global, o null.
+     * @param DeliveryException|null $nodeSpecific Excepción del nodo, o null.
+     * @return DeliveryException|null La que aplica.
+     */
+    public static function resolvePrecedence(?DeliveryException $global, ?DeliveryException $nodeSpecific): ?DeliveryException
+    {
+        if ($global !== null && $global->isCancelled()) {
+            return $global;
+        }
+
+        return $nodeSpecific ?? $global;
     }
 
     /**
