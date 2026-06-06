@@ -113,7 +113,7 @@ class PartnerRepository extends ServiceEntityRepository
         }
 
         if (!empty($filters['q'])) {
-            $qb->andWhere('LOWER(p.name) LIKE :q OR LOWER(p.surname) LIKE :q OR LOWER(p.email) LIKE :q OR p.celular LIKE :qPlain')
+            $qb->andWhere('LOWER(p.name) LIKE :q OR LOWER(p.surname) LIKE :q OR LOWER(p.display_name) LIKE :q OR LOWER(p.email) LIKE :q OR p.celular LIKE :qPlain')
                ->setParameter('q', '%' . mb_strtolower($filters['q']) . '%')
                ->setParameter('qPlain', '%' . $filters['q'] . '%');
         }

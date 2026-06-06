@@ -337,6 +337,7 @@
     line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     max-width: 260px;
 }
+.prl-person__meta--alias { color: var(--prl-sage-d); font-weight: 500; }
 
 /* recogida: WBG arriba, Nodo abajo */
 .prl-pickup__name {
@@ -780,6 +781,9 @@
                                             <a class="prl-person__name" href="{{ path('partner_show', { id: partner.id }) }}">
                                                 {{ partner.name }} {{ partner.surname }}
                                             </a>
+                                            {% if partner.displayName %}
+                                                <span class="prl-person__meta prl-person__meta--alias" title="Nombre en el listado de reparto">↳ {{ partner.displayName }}</span>
+                                            {% endif %}
                                             {% if partner.email %}
                                                 <span class="prl-person__meta">{{ partner.email }}</span>
                                             {% endif %}
