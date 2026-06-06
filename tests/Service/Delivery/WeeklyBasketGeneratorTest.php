@@ -189,6 +189,69 @@ class WeeklyBasketGeneratorTest extends KernelTestCase
         $this->assertNotContains($offCohort->getId(), $ids, 'La quincenal compartida de la otra cohorte NO debe repartir esa semana.');
     }
 
+    /**
+     * Al finalizar una media cesta (bs=4) con baja ya vencida, la generación del listado
+     * NO debe crashear y debe romper el vínculo share_partner en AMBOS sentidos. Regresión
+     * de un bug severo: finalizeExpiredShares llamaba a Partner::getBasketShare() (método
+     * inexistente) → fatal que tumbaba TODO el listado del Basket al vencer una compartida.
+     * Determinista: end_date 2020-01-01 (siempre pasada) → siempre la coge findFinalized.
+     */
+    public function testFinalizarMediaCestaRompeElVinculoSinCrashear(): void
+    {
+        self::bootKernel();
+        $em = $this->em();
+
+        $half = $em->getRepository(BasketShare::class)->find(4);
+        $this->assertNotNull($half, 'El catálogo debe tener la semanal compartida (id 4).');
+
+        $leaving = new Partner();
+        $leaving->setName('Media Baja');
+        $staying = new Partner();
+        $staying->setName('Media Sigue');
+        $em->persist($leaving);
+        $em->persist($staying);
+        $leaving->setSharePartner($staying);
+        $staying->setSharePartner($leaving);
+
+        $leavingShare = $this->makeHalfShare($em, $leaving, $half, new \DateTime('2020-01-01')); // baja vencida, is_active sigue 1
+        $this->makeHalfShare($em, $staying, $half, null);
+        $em->flush();
+
+        $basket = new Basket();
+        $basket->setDate(new \DateTime('2099-11-27'));
+        $basket->setWeek(48);
+        $basket->setAmount(1);
+        $em->persist($basket);
+        $em->flush();
+
+        // No debe lanzar (antes: fatal "undefined method getBasketShare").
+        $this->generator()->generateForBasket($basket);
+
+        $this->assertFalse($leavingShare->getIsActive(), 'La media cesta con baja vencida queda inactiva.');
+        $this->assertNull($leaving->getSharePartner(), 'Se rompe el vínculo en quien causa baja.');
+        $this->assertNull($staying->getSharePartner(), 'Y en su pareja (back-link).');
+    }
+
+    private function makeHalfShare(
+        EntityManagerInterface $em,
+        Partner $partner,
+        BasketShare $half,
+        ?\DateTimeInterface $endDate,
+    ): PartnerBasketShare {
+        $share = new PartnerBasketShare();
+        $share->setPartner($partner);
+        $share->setBasketShare($half);
+        $share->setIsActive(true);
+        $share->setAmount(1);
+        $share->setMonthPrice('0.00');
+        $share->setEggMonthPrice('0.00');
+        $share->setStartDate(new \DateTime('2019-01-01'));
+        $share->setEndDate($endDate);
+        $em->persist($share);
+
+        return $share;
+    }
+
     private function makeSharedQuincenal(
         EntityManagerInterface $em,
         BasketShare $quincenalShared,

@@ -241,13 +241,18 @@ class WeeklyBasketGenerator
         foreach ($shares as $share) {
             $share->setIsActive(0);
             if ($share->getBasketShare()->getId() === self::SHARE_HALF) {
-                // Comportamiento legacy preservado: las cestas compartidas dejan
-                // de tener pareja cuando una de las dos se finaliza.
-                $partnerShare = $share->getPartner()->getBasketShare();
+                // Comportamiento legacy preservado: las cestas compartidas dejan de
+                // tener pareja cuando una de las dos se finaliza → se rompe el vínculo
+                // share_partner en AMBOS sentidos. (Era getBasketShare(), método que NO
+                // existe en Partner: la rama nunca se había ejercitado y tumbaba toda la
+                // generación del listado al finalizar una compartida.)
+                $pairPartner = $share->getPartner()->getSharePartner();
                 $share->getPartner()->setSharePartner(null);
-                $partnerShare->setSharePartner(null);
-                $this->em->persist($partnerShare);
                 $this->em->persist($share->getPartner());
+                if ($pairPartner !== null) {
+                    $pairPartner->setSharePartner(null);
+                    $this->em->persist($pairPartner);
+                }
             }
             $this->em->persist($share);
 
