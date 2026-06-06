@@ -50,8 +50,13 @@ class NodeDeliveryDate
      */
     public function physicalDateFor(Basket $basket, Node $node): ?\DateTimeImmutable
     {
-        $physical = $this->operativeDateFor($basket, $node);
-        if ($physical === null) {
+        $physical = $this->naiveDate($basket, $node);
+
+        // A diferencia de operativeDateFor() (que usa semanas crudas para el
+        // picker del CRUD), aquí la alineación biweekly es OPERATIVA: descuenta
+        // los cierres globales para que un festivo desplace la cadencia del
+        // nodo una semana, igual que la cohorte A/B (cf BiweeklyCohortResolver).
+        if ($node->getCadence() === Node::CADENCE_BIWEEKLY && !$this->alignsOperatively($physical, $node)) {
             return null;
         }
 
@@ -170,14 +175,65 @@ class NodeDeliveryDate
     }
 
     /**
-     * Para nodos biweekly: ¿alinea esta fecha física con el ancla del nodo?
-     * (= mismas semanas pares respecto al ancla).
+     * Para nodos biweekly: ¿alinea esta fecha física con el ancla del nodo
+     * según el calendario TEÓRICO (semanas crudas, sin descontar cierres)?
+     * La usa {@see operativeDateFor()} / el picker del CRUD de excepciones,
+     * que debe ver las fechas tal cual, sin desplazamientos.
      *
      * @param \DateTimeImmutable $physical
      * @param Node $node
      * @return bool
      */
     private function basketAlignsWithAnchor(\DateTimeImmutable $physical, Node $node): bool
+    {
+        return $this->weeksFromAnchor($physical, $node) % 2 === 0;
+    }
+
+    /**
+     * Para nodos biweekly: ¿alinea esta fecha física con el ancla DESCONTANDO
+     * los cierres globales intermedios? Un cierre (festivo/puente: sin
+     * trabajadores no hay verdura, no reparte nadie ni este nodo) desplaza la
+     * cadencia del nodo una semana, igual que la cohorte A/B
+     * (cf {@see BiweeklyCohortResolver}). La usa {@see physicalDateFor()}.
+     *
+     * @param \DateTimeImmutable $physical
+     * @param Node $node
+     * @return bool
+     */
+    private function alignsOperatively(\DateTimeImmutable $physical, Node $node): bool
+    {
+        $anchor = $this->anchorOf($node);
+
+        [$after, $before] = $physical >= $anchor ? [$anchor, $physical] : [$physical, $anchor];
+        $closures = $this->exceptionRepository->countGlobalCancellationsBetween($after, $before);
+
+        // Normaliza el módulo: $closures no debería superar las semanas crudas,
+        // pero si lo hiciera el operador % de PHP daría negativo.
+        return (((($this->weeksFromAnchor($physical, $node) - $closures) % 2) + 2) % 2) === 0;
+    }
+
+    /**
+     * Número absoluto de semanas entre el ancla del nodo y una fecha física.
+     *
+     * @param \DateTimeImmutable $physical
+     * @param Node $node
+     * @return int
+     */
+    private function weeksFromAnchor(\DateTimeImmutable $physical, Node $node): int
+    {
+        $secondsDiff = $physical->getTimestamp() - $this->anchorOf($node)->getTimestamp();
+
+        return abs((int) round($secondsDiff / self::SECONDS_PER_WEEK));
+    }
+
+    /**
+     * Ancla del nodo biweekly como inmutable.
+     *
+     * @param Node $node
+     * @return \DateTimeImmutable
+     * @throws \LogicException Si el nodo es biweekly sin anchor_date.
+     */
+    private function anchorOf(Node $node): \DateTimeImmutable
     {
         $anchor = $node->getAnchorDate();
         if ($anchor === null) {
@@ -187,13 +243,8 @@ class NodeDeliveryDate
             ));
         }
 
-        $anchorImmutable = $anchor instanceof \DateTimeImmutable
+        return $anchor instanceof \DateTimeImmutable
             ? $anchor
             : \DateTimeImmutable::createFromInterface($anchor);
-
-        $secondsDiff = $physical->getTimestamp() - $anchorImmutable->getTimestamp();
-        $weeksDiff = (int) round($secondsDiff / self::SECONDS_PER_WEEK);
-
-        return abs($weeksDiff) % 2 === 0;
     }
 }
