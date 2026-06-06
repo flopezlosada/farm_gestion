@@ -6,23 +6,28 @@ use App\DataFixtures\PartnerUserFixtures;
 use App\Entity\Basket;
 use App\Entity\Partner;
 use App\Entity\PartnerDeliveryShift;
-use App\Entity\PartnerEvent;
+use App\Entity\WeeklyBasket;
+use App\Entity\WeeklyBasketStatus;
+use App\Service\Delivery\DeliveryShiftApplier;
+use App\Service\Delivery\WeeklyBasketGenerator;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 
 /**
- * Tests de las acciones POST del admin sobre cambios puntuales de
- * viernes (/gestion/reparto/cambios-viernes). Cubren aplicar y
- * cancelar usando los mismos servicios que el panel del socix,
- * pero con el flag de "forzar reglas bypassables" disponible.
+ * Tests del registro de cambios de reparto (/gestion/reparto/cambios-viernes).
+ * El alta de cambios ya NO vive aquí (es el calendario de recogida de la
+ * ficha del socix); esta pantalla es de consulta, así que se prueba lo que
+ * es suyo: listar los cambios de una semana, cancelar un cambio de día y
+ * deshacer un "no recoge".
  */
 class DeliveryShiftsAdminActionsTest extends AbstractAuthenticatedTest
 {
-    private function em(\Symfony\Bundle\FrameworkBundle\KernelBrowser $client): EntityManagerInterface
+    private function em(KernelBrowser $client): EntityManagerInterface
     {
         return $client->getContainer()->get('doctrine.orm.entity_manager');
     }
 
-    public function testAdminAplicaShiftYRegistraEvento(): void
+    public function testRegistroListaElCambioDeLaSemanaYPermiteCancelar(): void
     {
         $client = $this->createAuthenticatedClient();
         $em = $this->em($client);
@@ -33,61 +38,24 @@ class DeliveryShiftsAdminActionsTest extends AbstractAuthenticatedTest
 
         [$from, $to] = $this->resolveFromTo($em);
 
-        $crawler = $client->request('GET', '/gestion/reparto/cambios-viernes');
-        $csrfToken = (string) $crawler->filter('#csa-shift-root')->attr('data-csrf-shift');
-
-        $client->request('POST', '/gestion/reparto/cambios-viernes/aplicar', [
-            '_csrf_token' => $csrfToken,
-            'partner_id' => $partner->getId(),
-            'from_basket_id' => $from->getId(),
-            'to_basket_id' => $to->getId(),
-        ]);
-        $client->followRedirect();
-
+        // El cambio se crea con el servicio (el alta ya no es de esta pantalla).
+        $client->getContainer()->get(DeliveryShiftApplier::class)
+            ->apply($partner, $from, $to, actor: 'gestor:test');
+        $em->flush();
         $em->clear();
-        $shift = $em->getRepository(PartnerDeliveryShift::class)
-            ->findOneBy(['partner' => $partner]);
-        $this->assertNotNull($shift, 'Admin debe poder crear el shift');
 
-        $event = $em->getRepository(PartnerEvent::class)->createQueryBuilder('e')
-            ->where('e.partner = :p AND e.type = :t')
-            ->orderBy('e.id', 'DESC')
-            ->setMaxResults(1)
-            ->setParameter('p', $partner)
-            ->setParameter('t', PartnerEvent::TYPE_WEEK_SWAP)
-            ->getQuery()->getOneOrNullResult();
-        $this->assertNotNull($event);
-        $this->assertStringStartsWith('gestor:', (string) $event->getActor(), 'Actor debe identificar al gestor');
-    }
-
-    public function testAdminCancelaShiftRevierte(): void
-    {
-        $client = $this->createAuthenticatedClient();
-        $em = $this->em($client);
-
-        $partner = $em->getRepository(Partner::class)
-            ->findOneBy(['email' => PartnerUserFixtures::USER_SOCIX_EMAIL]);
-        [$from, $to] = $this->resolveFromTo($em);
-
-        // Aplicamos uno primero.
-        $crawler = $client->request('GET', '/gestion/reparto/cambios-viernes');
-        $csrfToken = (string) $crawler->filter('#csa-shift-root')->attr('data-csrf-shift');
-        $client->request('POST', '/gestion/reparto/cambios-viernes/aplicar', [
-            '_csrf_token' => $csrfToken,
-            'partner_id' => $partner->getId(),
-            'from_basket_id' => $from->getId(),
-            'to_basket_id' => $to->getId(),
-        ]);
-        $client->followRedirect();
-
-        $em->clear();
         $shift = $em->getRepository(PartnerDeliveryShift::class)->findOneBy(['partner' => $partner]);
-        $this->assertNotNull($shift);
+        $this->assertNotNull($shift, 'El cambio debe existir tras aplicarlo con el servicio');
 
-        // Cancelamos. El token se extrae del dialog en la tabla de cambios.
-        $crawler = $client->request('GET', '/gestion/reparto/cambios-viernes');
+        // El registro de la semana ORIGEN lo lista y ofrece el "Deshacer".
+        $crawler = $client->request('GET', '/gestion/reparto/cambios-viernes?basket=' . $from->getId());
+        $this->assertSame(200, $client->getResponse()->getStatusCode());
+
         $dialogId = 'confirm-shift-cancel-' . $shift->getId();
-        $cancelToken = (string) $crawler->filter(sprintf('#%s input[name="_csrf_token"]', $dialogId))->first()->attr('value');
+        $cancelToken = (string) $crawler
+            ->filter(sprintf('#%s input[name="_csrf_token"]', $dialogId))
+            ->first()->attr('value');
+        $this->assertNotEmpty($cancelToken, 'La semana futura debe ofrecer el botón Deshacer');
 
         $client->request('POST', '/gestion/reparto/cambios-viernes/' . $shift->getId() . '/cancelar', [
             '_csrf_token' => $cancelToken,
@@ -99,13 +67,56 @@ class DeliveryShiftsAdminActionsTest extends AbstractAuthenticatedTest
             ->findOneBy(['email' => PartnerUserFixtures::USER_SOCIX_EMAIL]);
         $this->assertNull(
             $em->getRepository(PartnerDeliveryShift::class)->findOneBy(['partner' => $partner]),
-            'El shift debe quedar borrado tras cancelar'
+            'El cambio debe quedar borrado tras cancelar'
         );
     }
 
+    public function testDeshacerNoRecogeDeUnaSemanaConcreta(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $em = $this->em($client);
+
+        $partner = $em->getRepository(Partner::class)
+            ->findOneBy(['email' => PartnerUserFixtures::USER_SOCIX_EMAIL]);
+        [$from] = $this->resolveFromTo($em);
+
+        // Materializamos la semana y marcamos al socix como "no recoge" (status 2)
+        // directamente, para tener un salto que deshacer.
+        $client->getContainer()->get(WeeklyBasketGenerator::class)->generateForBasket($from);
+        $em->flush();
+
+        $wb = $em->getRepository(WeeklyBasket::class)->findOneBy(['partner' => $partner, 'basket' => $from]);
+        if ($wb === null) {
+            $this->markTestSkipped('Las fixtures no materializan cesta del socix esa semana.');
+        }
+        $wb->setWeeklyBasketStatus($em->getRepository(WeeklyBasketStatus::class)->find(2));
+        $em->flush();
+        $em->clear();
+
+        // El registro lo muestra en "No recogen" con el botón Deshacer.
+        $crawler = $client->request('GET', '/gestion/reparto/cambios-viernes?basket=' . $from->getId());
+        $this->assertSame(200, $client->getResponse()->getStatusCode());
+        $dialogId = 'confirm-skip-undo-' . $partner->getId() . '-' . $from->getId();
+        $token = (string) $crawler
+            ->filter(sprintf('#%s input[name="_csrf_token"]', $dialogId))
+            ->first()->attr('value');
+        $this->assertNotEmpty($token);
+
+        $client->request('POST', '/gestion/reparto/cambios-viernes/skip', [
+            '_csrf_token' => $token,
+            'partner_id' => $partner->getId(),
+            'basket_id' => $from->getId(),
+        ]);
+        $client->followRedirect();
+
+        $em->clear();
+        $wb = $em->getRepository(WeeklyBasket::class)->findOneBy(['partner' => $partner, 'basket' => $from]);
+        $this->assertSame(1, $wb->getWeeklyBasketStatus()?->getId(), 'Tras deshacer, vuelve a recoger (status 1)');
+    }
+
     /**
-     * Encuentra los dos primeros Baskets futuros (asumimos que las
-     * fixtures crean ambos como un par consecutivo para el socix).
+     * Encuentra los dos primeros Baskets futuros (asumimos que las fixtures
+     * crean ambos como un par consecutivo para el socix).
      *
      * @return array{0:Basket,1:Basket}
      */

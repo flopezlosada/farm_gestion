@@ -20,7 +20,6 @@ use App\Repository\WeeklyBasketItemRepository;
 use App\Repository\WeeklyBasketRepository;
 use App\Repository\WeeklyBasketStatusRepository;
 use App\Service\Delivery\DeliveryShiftApplier;
-use App\Service\Delivery\DeliveryShiftCandidates;
 use App\Service\Delivery\DeliveryShiftValidator;
 use App\Service\Delivery\NodeDeliveryDate;
 use App\Service\Delivery\NodeDeliverySheet;
@@ -31,7 +30,6 @@ use Dompdf\Options;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bridge\Doctrine\Attribute\MapEntity;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
@@ -43,297 +41,246 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * ver el listado completo con búsqueda, orden por nombre/nodo/grupo y la
  * marca de excepción de calendario si la hay.
  *
- * Bajo el mismo prefijo se cuelga la gestión de cambios puntuales de
- * viernes (DeliveryShift): un admin puede registrar el cambio que pide
- * un socio por canal externo y/o cancelar uno en curso, con opción de
- * forzar reglas bypassables del validator.
+ * Bajo el mismo prefijo se cuelga el registro de cambios de reparto
+ * (DeliveryShift): una pantalla de CONSULTA por semana que lista los
+ * cambios de día y los "no recoge" y permite deshacerlos. El ALTA de
+ * cambios ya no vive aquí —se hace en el calendario de recogida de la
+ * ficha del socix (partner_delivery_calendar)—.
  */
 #[Route('/gestion/reparto')]
 #[IsGranted('ROLE_GESTION_SOCIXS')]
 class DeliveryController extends AbstractController
 {
+    /** Nº de semanas (Baskets) visibles en la tira selectora del registro. */
+    private const WEEK_STRIP_SIZE = 7;
+
+    /**
+     * Registro de cambios de reparto de una semana concreta (Basket): los
+     * cambios de día (DeliveryShift) y los "no recoge" sin cambio de día.
+     * NO registra cambios nuevos —eso vive en el calendario de recogida de
+     * la ficha del socix (partner_delivery_calendar)—; es una pantalla de
+     * consulta. La semana se elige con la tira de chips superior (?basket).
+     *
+     * El filtro es por el viernes-ciclo ORIGEN ("le tocaba"): un cambio
+     * 5-jun→26-jun aparece en la semana del 5. El "Deshacer" solo se ofrece
+     * en semanas futuras (un viernes pasado ya no se deshace).
+     */
     #[Route('/cambios-viernes', name: 'delivery_shifts_index', methods: ['GET'])]
     public function shiftsIndex(
         Request $request,
         PartnerDeliveryShiftRepository $shiftRepo,
-        PartnerRepository $partnerRepo,
         BasketRepository $basketRepo,
         WeeklyBasketRepository $weeklyBasketRepo,
+        DeliveryExceptionRepository $exceptionRepo,
     ): Response {
-        $today = (new \DateTimeImmutable('today'))->format('Y-m-d');
+        $today = new \DateTimeImmutable('today');
 
-        // Shifts (cambios de viernes) cuyo viernes destino aún no ha pasado.
+        // Semana seleccionada: ?basket=ID, o la próxima (date >= hoy), o la
+        // última pasada si todas pasaron, para no quedarnos sin nada que pintar.
+        $selected = $basketRepo->find($request->query->getInt('basket', 0))
+            ?? $basketRepo->createQueryBuilder('b')
+                ->where('b.date >= :today')->setParameter('today', $today->format('Y-m-d'))
+                ->orderBy('b.date', 'ASC')->setMaxResults(1)->getQuery()->getOneOrNullResult()
+            ?? $basketRepo->createQueryBuilder('b')
+                ->orderBy('b.date', 'DESC')->setMaxResults(1)->getQuery()->getOneOrNullResult();
+
+        if (!$selected instanceof Basket) {
+            throw $this->createNotFoundException('No hay semanas de reparto configuradas.');
+        }
+
+        // Cambios de día cuyo ORIGEN es la semana seleccionada.
         $shifts = $shiftRepo->createQueryBuilder('s')
-            ->innerJoin('s.fromBasket', 'fb')
-            ->innerJoin('s.toBasket', 'tb')
-            ->where('tb.date >= :today')
-            ->setParameter('today', $today)
-            ->orderBy('fb.date', 'ASC')
+            ->innerJoin('s.partner', 'p')
+            ->where('s.fromBasket = :basket')
+            ->setParameter('basket', $selected)
+            ->orderBy('p.surname', 'ASC')->addOrderBy('p.name', 'ASC')
             ->getQuery()
             ->getResult();
 
-        // "No recoge esta semana" (WeeklyBasket en status=2) que no son
-        // cascada de un shift: si la WeeklyBasket está en status 2 porque hay
-        // un PartnerDeliveryShift que la origina, el shift ya aparece en la
-        // tabla y meter la WB sería duplicar.
+        // "No recoge esta semana" (WeeklyBasket en status=2) que no son cascada
+        // de un shift: si la WB está en status 2 porque la origina un
+        // PartnerDeliveryShift, el shift ya aparece arriba y meter la WB
+        // duplicaría.
         $skips = $weeklyBasketRepo->createQueryBuilder('wb')
-            ->innerJoin('wb.basket', 'b')
-            ->where('wb.weekly_basket_status = :statusNoRecoge')
-            ->andWhere('b.date >= :today')
+            ->innerJoin('wb.partner', 'p')
+            ->where('wb.basket = :basket')
+            ->andWhere('wb.weekly_basket_status = :statusNoRecoge')
             ->andWhere('NOT EXISTS (
                 SELECT 1 FROM \App\Entity\PartnerDeliveryShift s2
                 WHERE s2.partner = wb.partner AND s2.fromBasket = wb.basket
             )')
+            ->setParameter('basket', $selected)
             ->setParameter('statusNoRecoge', 2)
-            ->setParameter('today', $today)
-            ->orderBy('b.date', 'ASC')
+            ->orderBy('p.surname', 'ASC')->addOrderBy('p.name', 'ASC')
             ->getQuery()
             ->getResult();
 
-        $upcomingBaskets = $basketRepo->createQueryBuilder('b')
-            ->where('b.date >= :today')
-            ->setParameter('today', $today)
-            ->orderBy('b.date', 'ASC')
-            ->setMaxResults(16)
-            ->getQuery()
-            ->getResult();
-
-        // Preseleccionar un socix tras una acción (redirect ?partner=ID) para
-        // que el form se recargue ya cargado con su estado actual y el admin
-        // no tenga que volver a buscarlo en el datalist.
-        $preselectedId = $request->query->getInt('partner', 0);
-        $preselected = $preselectedId > 0 ? $partnerRepo->find($preselectedId) : null;
+        // Cierre de la semana: excepción global (todos los nodos) sin fecha de
+        // traslado. Da contexto al registro —los cambios de esa semana suelen
+        // ser consecuencia del cierre—.
+        $globalException = $exceptionRepo->findGlobalForBasket($selected);
+        $closure = ($globalException !== null && $globalException->isCancelled()) ? $globalException : null;
 
         return $this->render('delivery/shifts_index.html.twig', [
+            'selected' => $selected,
+            'is_future' => $selected->getDate() !== null && $selected->getDate() >= $today,
+            'closure' => $closure,
+            'week_strip' => $this->buildWeekStrip($basketRepo, $shiftRepo, $weeklyBasketRepo, $exceptionRepo, $selected, $today),
             'shifts' => $shifts,
             'skips' => $skips,
-            'partners' => $partnerRepo->findBy([], ['surname' => 'ASC', 'name' => 'ASC']),
-            'upcoming_baskets' => $upcomingBaskets,
-            'preselected_partner' => $preselected instanceof Partner ? $preselected : null,
         ]);
     }
 
     /**
-     * Endpoint para el form dinámico: dado un partner, devuelve qué
-     * cambio puede hacerse sobre su próxima cesta. Permite al JS de la
-     * pantalla rellenar los selectores de origen y destino según la
-     * modalidad del socio sin repintar la página.
+     * Tira de chips de semanas (Baskets) centrada en la seleccionada, con un
+     * marcador en las que tienen algún cambio o salto registrado, para que el
+     * registro se escanee de un vistazo. A diferencia de la mini-timeline de
+     * reparto (por nodo, con fecha física), esta es global por viernes-ciclo.
      *
-     * Respuesta:
-     *   - modality          1=semanal, 2=quincenal, 3=mensual, 4=semanal compartida, 5=sólo huevos
-     *   - modality_label    Texto legible de la modalidad.
-     *   - from_basket       { id, date } del próximo viernes que le toca, o null.
-     *   - to_candidates     Lista [{ id, date }] de viernes destino aceptados por
-     *                       las reglas (excluyendo violaciones de deadline para
-     *                       no descartar al candidato cuando el plazo expiró —
-     *                       el front debe marcar el bloqueo aparte).
-     *   - blocked           true si hay candidatos pero las reglas no los permiten.
-     *   - deadline_passed   true si el deadline para cambios sobre el próximo
-     *                       viernes ya pasó.
+     * @return array{weeks: list<array{basket:Basket, active:bool, past:bool, has_activity:bool, closed:bool}>, prev_id:?int, next_id:?int}
      */
-    #[Route('/cambios-viernes/candidates/{partnerId}', name: 'delivery_shifts_candidates', methods: ['GET'], requirements: ['partnerId' => '\d+'])]
-    public function shiftsCandidates(
-        int $partnerId,
-        PartnerRepository $partnerRepo,
-        WeeklyBasketRepository $weeklyBasketRepo,
-        PartnerBasketShareRepository $shareRepo,
-        PartnerDeliveryShiftRepository $shiftRepo,
-        DeliveryShiftCandidates $candidatesService,
-        DeliveryShiftValidator $validator,
-    ): JsonResponse {
-        $partner = $partnerRepo->find($partnerId);
-        if (!$partner instanceof Partner) {
-            return new JsonResponse(['error' => 'Partner no encontrado.'], 404);
-        }
-
-        $share = $shareRepo->findActiveForPartner($partner);
-        $modality = $share?->getBasketShare()?->getId();
-        $modalityLabel = $share?->getBasketShare()?->getName() ?? 'Sin cesta activa';
-
-        $next = $weeklyBasketRepo->findNextForPartner($partner);
-        $from = $next?->getBasket();
-
-        $fromPayload = $from !== null
-            ? [
-                'id' => $from->getId(),
-                'date' => $from->getDate()->format('Y-m-d'),
-                'status_id' => $next?->getWeeklyBasketStatus()?->getId(),
-            ]
-            : null;
-
-        $existingShift = ($from !== null) ? $shiftRepo->findOutgoing($partner, $from) : null;
-        $existingShiftPayload = $existingShift !== null
-            ? [
-                'id' => $existingShift->getId(),
-                'to_date' => $existingShift->getToBasket()->getDate()->format('Y-m-d'),
-                // CSRF dependiente del id, ya pre-calculado para que el front
-                // pueda enviarlo sin tener que ir a otro endpoint.
-                'csrf' => $this->container->get('security.csrf.token_manager')
-                    ->getToken('delivery_shift_cancel_' . $existingShift->getId())->getValue(),
-            ]
-            : null;
-
-        $toCandidates = [];
-        $blocked = false;
-        // El deadline jueves 23:59 es ahora bloqueante también para admin: si
-        // la próxima cesta lo ha pasado, el front pintará el InfoCard "Plazo
-        // cerrado" y no se ofrecerán acciones (apply/cancel/skip ya bloquean
-        // en backend coherentemente).
-        $deadlinePassed = ($from !== null) && !$this->isWithinPickupDeadline($from);
-
-        // Si ya hay shift activo, no calculamos candidatos: el shift manda y
-        // la UI sólo debe ofrecer "deshacer".
-        if (!$deadlinePassed && $existingShift === null && $from !== null && $share !== null) {
-            foreach ($candidatesService->findFor($share, $from) as $candidate) {
-                $violations = $validator->validate($partner, $from, $candidate);
-                if (empty($violations)) {
-                    $toCandidates[] = ['id' => $candidate->getId(), 'date' => $candidate->getDate()->format('Y-m-d')];
-                } else {
-                    $blocked = true;
-                }
-            }
-        }
-
-        return new JsonResponse([
-            'modality' => $modality,
-            'modality_label' => $modalityLabel,
-            'from_basket' => $fromPayload,
-            'existing_shift' => $existingShiftPayload,
-            'to_candidates' => $toCandidates,
-            'blocked' => $blocked,
-            'deadline_passed' => $deadlinePassed,
-        ]);
-    }
-
-    #[Route('/cambios-viernes/aplicar', name: 'delivery_shifts_apply', methods: ['POST'])]
-    public function shiftsApply(
-        Request $request,
-        PartnerRepository $partnerRepo,
+    private function buildWeekStrip(
         BasketRepository $basketRepo,
+        PartnerDeliveryShiftRepository $shiftRepo,
         WeeklyBasketRepository $weeklyBasketRepo,
-        DeliveryShiftValidator $validator,
-        DeliveryShiftApplier $applier,
-    ): Response {
-        $partner = $partnerRepo->find((int) $request->request->get('partner_id'));
+        DeliveryExceptionRepository $exceptionRepo,
+        Basket $selected,
+        \DateTimeImmutable $today,
+    ): array {
+        $selectedDate = $selected->getDate()->format('Y-m-d');
+        $half = intdiv(self::WEEK_STRIP_SIZE - 1, 2);
 
-        if (!$this->isCsrfTokenValid('delivery_shift_apply', (string) $request->request->get('_csrf_token'))) {
-            $this->addFlash('error', 'Token de seguridad inválido.');
-            return $this->redirectToRoute('delivery_shifts_index', $partner instanceof Partner ? ['partner' => $partner->getId()] : []);
-        }
+        $previous = $basketRepo->createQueryBuilder('b')
+            ->where('b.date < :date')->setParameter('date', $selectedDate)
+            ->orderBy('b.date', 'DESC')->setMaxResults($half)
+            ->getQuery()->getResult();
+        $next = $basketRepo->createQueryBuilder('b')
+            ->where('b.date > :date')->setParameter('date', $selectedDate)
+            ->orderBy('b.date', 'ASC')->setMaxResults(self::WEEK_STRIP_SIZE - 1 - count($previous))
+            ->getQuery()->getResult();
 
-        $from = $basketRepo->find((int) $request->request->get('from_basket_id'));
-        $to = $basketRepo->find((int) $request->request->get('to_basket_id'));
+        /** @var Basket[] $window */
+        $window = [...array_reverse($previous), $selected, ...$next];
+        $ids = array_map(static fn (Basket $b): int => $b->getId(), $window);
 
-        if (!$partner instanceof Partner || !$from instanceof Basket || !$to instanceof Basket) {
-            $this->addFlash('error', 'Faltan datos del cambio: socio, viernes origen o viernes destino.');
-            return $this->redirectToRoute('delivery_shifts_index', $partner instanceof Partner ? ['partner' => $partner->getId()] : []);
-        }
+        // Semanas con actividad: origen de algún shift o algún "no recoge".
+        $withShift = array_column($shiftRepo->createQueryBuilder('s')
+            ->select('DISTINCT IDENTITY(s.fromBasket) AS bid')
+            ->where('s.fromBasket IN (:ids)')->setParameter('ids', $ids)
+            ->getQuery()->getScalarResult(), 'bid');
+        $withSkip = array_column($weeklyBasketRepo->createQueryBuilder('wb')
+            ->select('DISTINCT IDENTITY(wb.basket) AS bid')
+            ->where('wb.basket IN (:ids)')
+            ->andWhere('wb.weekly_basket_status = :s2')->setParameter('s2', 2)
+            ->setParameter('ids', $ids)
+            ->getQuery()->getScalarResult(), 'bid');
+        $active = array_flip(array_map('intval', [...$withShift, ...$withSkip]));
 
-        // Guarda defensiva: si la WeeklyBasket origen está marcada como "no
-        // recoge" (status=2), no se puede registrar un shift sobre ella —
-        // habría que volver a recoger primero. La UI ya enmascara esta
-        // acción pero el endpoint también la rechaza.
-        $existingWb = $weeklyBasketRepo->findOneBy(['basket' => $from, 'partner' => $partner]);
-        if ($existingWb !== null && $existingWb->getWeeklyBasketStatus()?->getId() === 2) {
-            $this->addFlash('warning', 'Este socix ya tiene marcado que no recoge esta semana. Si quieres registrar el cambio, primero restituye la recogida.');
-            return $this->redirectToRoute('delivery_shifts_index', $partner instanceof Partner ? ['partner' => $partner->getId()] : []);
-        }
+        // Semanas cerradas: excepción global (node IS NULL) de cierre (sin
+        // fecha de traslado) — para pintarlas distintas en la tira.
+        $closedIds = array_column($exceptionRepo->createQueryBuilder('e')
+            ->select('DISTINCT IDENTITY(e.basket) AS bid')
+            ->where('e.basket IN (:ids)')
+            ->andWhere('e.node IS NULL')
+            ->andWhere('e.shiftedDate IS NULL')
+            ->setParameter('ids', $ids)
+            ->getQuery()->getScalarResult(), 'bid');
+        $closed = array_flip(array_map('intval', $closedIds));
 
-        // Todas las violaciones bloquean para admin: deadline (jueves 23:59,
-        // el viernes ya se está cosechando) y equilibrio (pendiente de cierre
-        // por administración). Si admin decide más adelante poder saltárselas,
-        // se reactiva un canal explícito.
-        $violations = $validator->validate($partner, $from, $to);
-        if (!empty($violations)) {
-            foreach ($violations as $v) {
-                $this->addFlash('error', $v->message);
-            }
-            return $this->redirectToRoute('delivery_shifts_index', $partner instanceof Partner ? ['partner' => $partner->getId()] : []);
-        }
+        $weeks = array_map(
+            static fn (Basket $b): array => [
+                'basket' => $b,
+                'active' => $b->getId() === $selected->getId(),
+                'past' => $b->getDate() !== null && $b->getDate() < $today,
+                'has_activity' => isset($active[$b->getId()]),
+                'closed' => isset($closed[$b->getId()]),
+            ],
+            $window,
+        );
 
-        try {
-            $applier->apply($partner, $from, $to, actor: 'gestor:' . $this->getUser()->getId());
-        } catch (\LogicException $e) {
-            $this->addFlash('error', $e->getMessage());
-            return $this->redirectToRoute('delivery_shifts_index', $partner instanceof Partner ? ['partner' => $partner->getId()] : []);
-        }
+        $prevId = $basketRepo->createQueryBuilder('b')
+            ->where('b.date < :date')->setParameter('date', $window[0]->getDate()->format('Y-m-d'))
+            ->orderBy('b.date', 'DESC')->setMaxResults(1)
+            ->getQuery()->getOneOrNullResult()?->getId();
+        $lastDate = end($window)->getDate()->format('Y-m-d');
+        $nextId = $basketRepo->createQueryBuilder('b')
+            ->where('b.date > :date')->setParameter('date', $lastDate)
+            ->orderBy('b.date', 'ASC')->setMaxResults(1)
+            ->getQuery()->getOneOrNullResult()?->getId();
 
-        $this->addFlash('notice', sprintf(
-            'Cambio aplicado: %s recoge el %s en lugar del %s.',
-            trim(($partner->getName() ?? '') . ' ' . ($partner->getSurname() ?? '')),
-            $to->getDate()->format('d/m/Y'),
-            $from->getDate()->format('d/m/Y'),
-        ));
-        return $this->redirectToRoute('delivery_shifts_index', ['partner' => $partner->getId()]);
+        return ['weeks' => $weeks, 'prev_id' => $prevId, 'next_id' => $nextId];
     }
 
     /**
-     * Toggle de "no recoge esta semana" desde admin para un socix concreto.
-     * Es el equivalente admin del `panel_basket_skip_toggle`: cambia el
-     * status de la próxima WeeklyBasket entre 1 (recoge) y 2 (no recoge),
+     * Toggle de "no recoge" sobre la WeeklyBasket de un socix en una semana
+     * (Basket) concreta: cambia el status entre 1 (recoge) y 2 (no recoge),
      * con guarda anti-shift (si hay shift activo, no se permite el toggle:
-     * desincronizaría la cascada). Bloquea fuera del deadline jueves 23:59:
-     * el viernes ya se está cosechando, ningún cambio tiene sentido.
+     * desincronizaría la cascada) y de deadline (jueves 23:59: el viernes ya
+     * se está cosechando). Desde el registro sólo se usa para deshacer un
+     * salto (2→1), pero el toggle se mantiene genérico.
      */
     #[Route('/cambios-viernes/skip', name: 'delivery_shifts_skip_toggle', methods: ['POST'])]
     public function shiftsSkipToggle(
         Request $request,
         PartnerRepository $partnerRepo,
+        BasketRepository $basketRepo,
         WeeklyBasketRepository $weeklyBasketRepo,
         WeeklyBasketStatusRepository $statusRepo,
         PartnerDeliveryShiftRepository $shiftRepo,
         EntityManagerInterface $em,
     ): Response {
         $partner = $partnerRepo->find((int) $request->request->get('partner_id'));
+        $basket = $basketRepo->find((int) $request->request->get('basket_id'));
+        $backToWeek = static fn (): array => $basket instanceof Basket ? ['basket' => $basket->getId()] : [];
 
         if (!$this->isCsrfTokenValid('delivery_shift_skip', (string) $request->request->get('_csrf_token'))) {
             $this->addFlash('error', 'Token de seguridad inválido.');
-            return $this->redirectToRoute('delivery_shifts_index', $partner instanceof Partner ? ['partner' => $partner->getId()] : []);
+            return $this->redirectToRoute('delivery_shifts_index', $backToWeek());
         }
 
-        if (!$partner instanceof Partner) {
-            $this->addFlash('error', 'Falta el socix sobre el que actuar.');
-            return $this->redirectToRoute('delivery_shifts_index', $partner instanceof Partner ? ['partner' => $partner->getId()] : []);
+        if (!$partner instanceof Partner || !$basket instanceof Basket) {
+            $this->addFlash('error', 'Faltan datos: socix o semana sobre la que actuar.');
+            return $this->redirectToRoute('delivery_shifts_index', $backToWeek());
         }
 
-        $next = $weeklyBasketRepo->findNextForPartner($partner);
-        if ($next === null) {
-            $this->addFlash('warning', 'Este socix no tiene una próxima cesta sobre la que actuar.');
-            return $this->redirectToRoute('delivery_shifts_index', $partner instanceof Partner ? ['partner' => $partner->getId()] : []);
+        $wb = $weeklyBasketRepo->findOneBy(['partner' => $partner, 'basket' => $basket]);
+        if ($wb === null) {
+            $this->addFlash('warning', 'Este socix no tiene cesta esa semana sobre la que actuar.');
+            return $this->redirectToRoute('delivery_shifts_index', $backToWeek());
         }
 
-        if ($shiftRepo->findOutgoing($partner, $next->getBasket()) !== null) {
-            $this->addFlash('warning', 'Este socix tiene un cambio puntual activo: cancélalo primero si quieres alterar la próxima cesta.');
-            return $this->redirectToRoute('delivery_shifts_index', $partner instanceof Partner ? ['partner' => $partner->getId()] : []);
+        if ($shiftRepo->findOutgoing($partner, $basket) !== null) {
+            $this->addFlash('warning', 'Este socix tiene un cambio de día activo esa semana: cancélalo primero.');
+            return $this->redirectToRoute('delivery_shifts_index', $backToWeek());
         }
 
-        if (!$this->isWithinPickupDeadline($next->getBasket())) {
-            $this->addFlash('error', 'El plazo para esta semana ya terminó (jueves 23:59). No se puede registrar el cambio.');
-            return $this->redirectToRoute('delivery_shifts_index', ['partner' => $partner->getId()]);
+        if (!$this->isWithinPickupDeadline($basket)) {
+            $this->addFlash('error', 'El plazo para esa semana ya terminó (jueves 23:59). No se puede deshacer.');
+            return $this->redirectToRoute('delivery_shifts_index', $backToWeek());
         }
 
-        $currentId = $next->getWeeklyBasketStatus()?->getId();
+        $currentId = $wb->getWeeklyBasketStatus()?->getId();
         $partnerName = trim(($partner->getName() ?? '') . ' ' . ($partner->getSurname() ?? ''));
         $actor = 'gestor:' . $this->getUser()->getId();
 
         if ($currentId === 1) {
-            $next->setWeeklyBasketStatus($statusRepo->find(2));
+            $wb->setWeeklyBasketStatus($statusRepo->find(2));
             $event = new PartnerEvent($partner, PartnerEvent::TYPE_BASKET_SKIP);
             $event->setActor($actor);
             $em->persist($event);
-            $this->addFlash('notice', sprintf('%s no recoge la cesta de esta semana.', $partnerName));
+            $this->addFlash('notice', sprintf('%s no recoge la cesta de esa semana.', $partnerName));
         } elseif ($currentId === 2) {
-            $next->setWeeklyBasketStatus($statusRepo->find(1));
+            $wb->setWeeklyBasketStatus($statusRepo->find(1));
             $event = new PartnerEvent($partner, PartnerEvent::TYPE_BASKET_UNSKIP);
             $event->setActor($actor);
             $em->persist($event);
-            $this->addFlash('notice', sprintf('%s vuelve a recoger la cesta de esta semana.', $partnerName));
+            $this->addFlash('notice', sprintf('%s vuelve a recoger la cesta de esa semana.', $partnerName));
         } else {
             $this->addFlash('warning', 'Estado de la cesta inesperado, no se puede alternar desde aquí.');
         }
 
         $em->flush();
-        return $this->redirectToRoute('delivery_shifts_index', ['partner' => $partner->getId()]);
+        return $this->redirectToRoute('delivery_shifts_index', $backToWeek());
     }
 
     /**
@@ -362,11 +309,12 @@ class DeliveryController extends AbstractController
         DeliveryShiftValidator $validator,
         DeliveryShiftApplier $applier,
     ): Response {
-        $partnerId = $shift->getPartner()->getId();
+        // Volvemos a la semana origen del cambio (donde estaba la fila).
+        $weekId = $shift->getFromBasket()->getId();
 
         if (!$this->isCsrfTokenValid('delivery_shift_cancel_' . $shift->getId(), (string) $request->request->get('_csrf_token'))) {
             $this->addFlash('error', 'Token de seguridad inválido.');
-            return $this->redirectToRoute('delivery_shifts_index', ['partner' => $partnerId]);
+            return $this->redirectToRoute('delivery_shifts_index', ['basket' => $weekId]);
         }
 
         // Las reglas bloquean igual que en apply: deadline y equilibrio.
@@ -378,13 +326,13 @@ class DeliveryController extends AbstractController
             foreach ($violations as $v) {
                 $this->addFlash('error', $v->message);
             }
-            return $this->redirectToRoute('delivery_shifts_index', ['partner' => $partnerId]);
+            return $this->redirectToRoute('delivery_shifts_index', ['basket' => $weekId]);
         }
 
         $applier->cancel($shift, actor: 'gestor:' . $this->getUser()->getId());
 
         $this->addFlash('notice', 'Cambio cancelado.');
-        return $this->redirectToRoute('delivery_shifts_index', ['partner' => $partnerId]);
+        return $this->redirectToRoute('delivery_shifts_index', ['basket' => $weekId]);
     }
 
     /**
