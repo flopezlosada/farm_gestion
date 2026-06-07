@@ -76,14 +76,6 @@ jobs:
           npm install --no-audit --no-fund
           npm run dev || npm run build
 
-      # El código viejo tiene queries con GROUP BY incompletos; DDEV desactiva el
-      # modo estricto vía .ddev/mysql/no_strict_group_by.cnf. Lo replicamos a nivel
-      # global del servidor (afecta a las conexiones nuevas que abren los tests).
-      - name: Desactivar ONLY_FULL_GROUP_BY en MySQL
-        run: |
-          sudo apt-get update && sudo apt-get install -y mysql-client
-          mysql -h 127.0.0.1 -uroot -proot -e "SET GLOBAL sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''));"
-
       # Esquema desde las entidades (no usamos migrations como fuente de verdad).
       - name: Crear esquema de db_test
         run: php bin/console doctrine:schema:create --no-interaction
@@ -93,5 +85,6 @@ jobs:
       - name: Cargar fixtures en db_test
         run: php bin/console doctrine:fixtures:load --no-interaction
 
+      # --testdox: el log lista cada test por nombre conforme corre.
       - name: PHPUnit
-        run: php bin/phpunit
+        run: php bin/phpunit --testdox
