@@ -13,6 +13,7 @@ use App\Entity\WeeklyBasketItem;
 use App\Repository\NodeRepository;
 use App\Repository\PartnerBasketShareRepository;
 use App\Service\Delivery\BiweeklyCohortResolver;
+use App\Service\Delivery\NodeDeliveryDate;
 use App\Service\Delivery\NodeDeliverySheet;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Partner\BasketModalityChanger;
@@ -67,6 +68,7 @@ class VerifyDeliveryBatteryCommand extends Command
         private readonly BasketModalityChanger $modalityChanger,
         private readonly WeeklyBasketGenerator $generator,
         private readonly NodeDeliverySheet $sheet,
+        private readonly NodeDeliveryDate $nodeDeliveryDate,
         private readonly BiweeklyCohortResolver $cohortResolver,
         private readonly PartnerBasketShareRepository $shareRepo,
         private readonly NodeRepository $nodeRepo,
@@ -103,6 +105,9 @@ class VerifyDeliveryBatteryCommand extends Command
         // Cambio puntual de día: mover y no-recoge.
         $this->shiftMoveScenario();
         $this->shiftSkipScenario();
+
+        // Nodo biweekly (Madrid, miércoles): reparte solo en sus ciclos activos.
+        $this->biweeklyNodeScenario();
 
         // Cesta compartida quincenal (bs=6): media cesta en el bloque compartidas.
         $this->sharedQuincenalScenario();
@@ -269,6 +274,42 @@ class VerifyDeliveryBatteryCommand extends Command
         $this->record('Quincenal compartida', $okInternal && $listadoOk, sprintf(
             'socio %d · esperados [%s] · bs/verdura ok=%s · listado=%s',
             $partner->getId(), implode(',', $expected), $okInternal ? 'sí' : 'NO', $listadoOk ? 'ok' : 'MAL',
+        ));
+    }
+
+    /**
+     * Nodo biweekly (Madrid: Cascorro/Midori, miércoles): el socio recoge SÓLO en los
+     * ciclos donde el nodo reparte. En un nodo biweekly manda la cadencia del NODO, no
+     * la cohorte A/B del socio (de hecho sus PBS tienen delivery_group NULL). El día
+     * físico es miércoles, pero el WeeklyBasket se cuelga del Basket-ciclo, así que
+     * aseveramos sobre ciclos; el oráculo de "qué ciclos reparte" lo da NodeDeliveryDate
+     * (que ya resuelve día del nodo + ancla + cierres), nunca lo derivamos aquí.
+     */
+    private function biweeklyNodeScenario(): void
+    {
+        $partner = $this->pickPartner(self::QUINCENAL, null, Node::CADENCE_BIWEEKLY);
+        if ($partner === null) { $this->skip('Nodo biweekly (Madrid)', 'sin quincenal activo en nodo biweekly'); return; }
+        $node = $partner->getWeeklyBasketGroup()?->getNode();
+        if ($node === null) { $this->skip('Nodo biweekly (Madrid)', 'el socio elegido no tiene nodo'); return; }
+        $month = $this->nextMonth();
+        if ($month === null) { $this->skip('Nodo biweekly (Madrid)', 'sin mes futuro sin generar'); return; }
+
+        // Ciclos del mes donde el nodo reparte de verdad (descontando cadencia/excepciones).
+        $expected = array_values(array_map(
+            static fn (Basket $b) => $b->getId(),
+            array_filter($month['baskets'], fn (Basket $b) => $this->nodeDeliveryDate->deliversInBasket($b, $node)),
+        ));
+
+        foreach ($month['baskets'] as $b) { $this->generator->generateForBasket($b); }
+
+        $got = $this->partnerDeliveryBasketIds($partner, $month['baskets']);
+        $internalOk = $got === $expected;
+        $listadoOk = $this->listadoMatches($partner, $month, $expected, self::QUINCENAL, null);
+        $this->record('Nodo biweekly (Madrid)', $internalOk && $listadoOk, sprintf(
+            'socio %d · nodo %d (miércoles, ancla %s) · reparte ciclos [%s] · obtenidos [%s] · listado=%s',
+            $partner->getId(), $node->getId(),
+            $node->getAnchorDate()?->format('Y-m-d') ?? '?',
+            implode(',', $expected), implode(',', $got), $listadoOk ? 'ok' : 'MAL',
         ));
     }
 
@@ -468,10 +509,11 @@ class VerifyDeliveryBatteryCommand extends Command
     }
 
     /**
-     * Elige un socio activo de Torremocha con la modalidad pedida y (si se indica) con/sin
+     * Elige un socio activo con la modalidad pedida, en un nodo de la cadencia indicada
+     * (weekly = Torremocha por defecto; biweekly = Madrid) y (si se indica) con/sin
      * huevos, que no se haya usado ya. $hasEggs null = indiferente.
      */
-    private function pickPartner(int $share, ?bool $hasEggs): ?Partner
+    private function pickPartner(int $share, ?bool $hasEggs, string $nodeCadence = Node::CADENCE_WEEKLY): ?Partner
     {
         $qb = $this->em->createQueryBuilder()
             ->select('p')
@@ -481,10 +523,10 @@ class VerifyDeliveryBatteryCommand extends Command
             ->join(PartnerBasketShare::class, 'pbs', 'WITH', 'pbs.partner = p AND pbs.is_active = 1 AND pbs.end_date IS NULL AND pbs.basket_share = :share')
             ->where('p.status = :activo')
             ->andWhere('p.parent IS NULL')
-            ->andWhere('n.cadence = :weekly')
+            ->andWhere('n.cadence = :cadence')
             ->setParameter('share', $share)
             ->setParameter('activo', 'ACTIVO')
-            ->setParameter('weekly', Node::CADENCE_WEEKLY)
+            ->setParameter('cadence', $nodeCadence)
             ->orderBy('p.id', 'ASC');
         if ($hasEggs === true) {
             $qb->andWhere('pbs.egg_amount IS NOT NULL');
