@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+#
+# Regenera el dump de STAGING a partir de GOLDEN (db_prod_snapshot).
+#
+# Staging = datos de golden enteros (correcciones, composición, grupos…)
+#           + los logins de staging preservados (fos_user)
+#           + la granja reapuntada a admin (id 1), porque sus dueños
+#             (loreto/dámaso/…) no están entre los logins de staging.
+#
+# NO anonimiza (decisión de Paco 2026-06-06): staging lleva emails reales.
+# El único envío de correo posible es el del login (no hay cron ni SSH en
+# staging que dispare los comandos de recordatorio).
+#
+# Uso:   bin/staging-rebuild
+# Salida: ~/csa-backups/staging_rebuild_<DDMMYYYY>.sql(.gz)
+#         Importar en phpMyAdmin sobre la BBDD csastaging (trae DROP TABLE).
+#
+# Requisitos: DDEV arriba, con db_prod_snapshot (golden) al día y el fichero
+# de logins ~/csa-backups/staging_fos_user.sql (snapshot de los fos_user a
+# preservar; regéneralo si cambian los testers).
+set -euo pipefail
+
+GOLDEN="db_prod_snapshot"
+BUILD="db_staging_new"
+FOS_FILE="${1:-$HOME/csa-backups/staging_fos_user.sql}"
+OUT="$HOME/csa-backups/staging_rebuild_$(date +%d%m%Y).sql"
+
+[ -f "$FOS_FILE" ] || { echo "ERROR: no existe el fichero de logins $FOS_FILE"; exit 1; }
+
+echo "1/4 · clono golden ($GOLDEN) en $BUILD"
+ddev mysql -uroot -proot -e "DROP DATABASE IF EXISTS $BUILD; CREATE DATABASE $BUILD CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+ddev exec "mysqldump --single-transaction --no-tablespaces $GOLDEN" | ddev exec "mysql $BUILD"
+
+echo "2/4 · reapunto la granja a admin (1) y vacío los fos_user de golden"
+ddev mysql "$BUILD" -e "
+SET FOREIGN_KEY_CHECKS=0;
+UPDATE collect           SET user_id=1;
+UPDATE egg_registry_user SET user_id=1 WHERE user_id IS NOT NULL;
+UPDATE fowl              SET fowl_user_id=1 WHERE fowl_user_id IS NOT NULL;
+UPDATE gift              SET user_id=1;
+UPDATE lay               SET user_id=1;
+UPDATE purchase          SET user_id=1;
+UPDATE sale              SET user_id=1;
+UPDATE user_event        SET user_id=1;
+DELETE FROM user_task;     -- asignaciones de tareas de la granja: irrelevantes en staging
+DELETE FROM fos_user;
+SET FOREIGN_KEY_CHECKS=1;"
+
+echo "3/4 · inyecto los logins de staging ($FOS_FILE)"
+ddev mysql "$BUILD" -e "SET FOREIGN_KEY_CHECKS=0; $(cat "$FOS_FILE") SET FOREIGN_KEY_CHECKS=1;"
+
+echo "4/4 · verifico integridad y genero el dump"
+ORPH=$(ddev mysql "$BUILD" -N -e "
+SELECT
+ (SELECT COUNT(*) FROM lay l LEFT JOIN fos_user u ON u.id=l.user_id WHERE u.id IS NULL)
++(SELECT COUNT(*) FROM fos_user f LEFT JOIN partner p ON p.id=f.partner_id WHERE f.partner_id IS NOT NULL AND p.id IS NULL);")
+[ "$ORPH" = "0" ] || { echo "ERROR: integridad referencial rota (huérfanos=$ORPH). Abortado."; exit 1; }
+
+ddev exec "mysqldump --single-transaction --no-tablespaces --add-drop-table $BUILD" > "$OUT"
+gzip -kf "$OUT"
+echo "OK · $OUT ($(du -h "$OUT" | cut -f1)) · gz $(du -h "$OUT.gz" | cut -f1)"
+echo "Importa el .sql (o .gz) en phpMyAdmin sobre la BBDD csastaging."
