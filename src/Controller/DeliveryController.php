@@ -24,7 +24,6 @@ use App\Service\Delivery\DeliveryShiftValidator;
 use App\Service\Delivery\NodeDeliveryDate;
 use App\Service\Delivery\NodeDeliverySheet;
 use App\Service\Delivery\WeeklyBasketGenerator;
-use App\Service\Delivery\WeeklyDeliveryReport;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use Doctrine\ORM\EntityManagerInterface;
@@ -302,6 +301,58 @@ class DeliveryController extends AbstractController
         return new \DateTimeImmutable('now') < $deadline;
     }
 
+    /**
+     * ¿El día de reparto ya pasó? Un Basket pasado sin reparto materializado se
+     * deja vacío: nunca se proyecta hacia atrás (no tiene sentido dibujar un
+     * reparto que ya debió ocurrir y del que no quedó constancia en piedra).
+     */
+    private function isPastBasket(Basket $basket): bool
+    {
+        $date = $basket->getDate();
+        if ($date === null) {
+            return false;
+        }
+
+        return \DateTimeImmutable::createFromMutable($date)->setTime(0, 0)
+            < new \DateTimeImmutable('today');
+    }
+
+    /**
+     * Contadores socios/grupos por nodo cuando la semana se DIBUJA (no
+     * materializada): proyecta cada nodo que reparte ese día y cuenta, en el
+     * mismo formato que {@see WeeklyBasketRepository::countActiveByNodeForBasket}
+     * (la fuente del camino de piedra), para que las pestañas enseñen lo mismo en
+     * una semana futura que en una pasada. Los nodos que no reparten ese día se
+     * omiten (la pestaña cae a "sin reparto hoy"), igual que la query agregada.
+     *
+     * @param Node[] $nodes
+     * @return array<int, array{wbg:int, socios:int}>
+     */
+    private function projectedCountsByNode(
+        array $nodes,
+        Basket $basket,
+        WeeklyBasketGenerator $generator,
+        NodeDeliveryDate $nodeDeliveryDate,
+    ): array {
+        $counts = [];
+        foreach ($nodes as $n) {
+            if (!$nodeDeliveryDate->deliversInBasket($basket, $n)) {
+                continue;
+            }
+            $deliveries = $generator->projectDeliveriesForNode($n, $basket);
+            $wbgIds = [];
+            foreach ($deliveries as $delivery) {
+                $wbg = $delivery['weeklyBasket']->getWeeklyBasketGroup();
+                if ($wbg !== null) {
+                    $wbgIds[$wbg->getId()] = true;
+                }
+            }
+            $counts[$n->getId()] = ['socios' => count($deliveries), 'wbg' => count($wbgIds)];
+        }
+
+        return $counts;
+    }
+
     #[Route('/historial-cambios/{id}/cancelar', name: 'delivery_shifts_cancel', methods: ['POST'])]
     public function shiftsCancel(
         Request $request,
@@ -415,26 +466,58 @@ class DeliveryController extends AbstractController
         // de festivos viernes que existía hasta 8.8e.
         $nodeDelivers = $nodeDeliveryDate->deliversInBasket($basket, $node);
 
-        // Para decidir si materializamos el ciclo entero: nos basta con que
-        // no haya una excepción global de cancelación. Si admin cancela sólo
-        // un nodo, los demás se materializan; si cancela el ciclo entero
-        // (excepción global sin shifted_date), saltamos toda generación.
+        // Excepción global de cancelación del ciclo entero: si admin cancela
+        // todo el viernes (excepción global sin shifted_date), no hay reparto
+        // que dibujar para ningún nodo.
         $globalException = $deliveryExceptionRepo->findGlobalForBasket($basket);
         $basketGloballyCancelled = $globalException !== null && $globalException->isCancelled();
 
-        // Materialización al vuelo: si este Basket aún no tiene reparto generado
-        // (el cron del lunes lo hace proactivamente, pero una semana futura
-        // puede no estar hecha), lo generamos ahora. El generador es idempotente
-        // —no duplica WeeklyBaskets ya existentes— así que convive con el cron.
-        // Sólo se dispara cuando el Basket no tiene NADA: un nodo quincenal
-        // vacío en su semana de descanso es legítimo y no debe regenerar.
-        if (!$basketGloballyCancelled && $weeklyBasketRepo->countPickedInBasket($basket) === 0) {
-            $generator->generateForBasket($basket);
-        }
+        // Piedra vs dibujo (rework de materialización tardía): si el día YA tiene
+        // reparto materializado en BBDD, lo leemos tal cual (PIEDRA). Si no lo
+        // tiene y el nodo reparte, el día no está cancelado y no es pasado, lo
+        // DIBUJAMOS al vuelo desde la proyección SIN materializar: así abrir una
+        // semana futura no la congela y un festivo o cambio metido después se
+        // refleja solo. El pasado sin materializar queda vacío (nunca se proyecta
+        // hacia atrás). La semana se congela sola al entrar en operación (cron) o
+        // al editarse a mano.
+        $isMaterialized = $weeklyBasketRepo->countPickedInBasket($basket) > 0;
 
-        $weeklyBaskets = $nodeDelivers
-            ? $weeklyBasketRepo->findForNodeAndBasket($node, $basket)
-            : [];
+        // amountsByPartner[partner.id] = [componentId => cantidad]: cestas físicas
+        // (verdura) y docenas (huevos) por entrega. Vienen de los WeeklyBasketItem
+        // materializados (piedra) o de la composición proyectada al vuelo (dibujo).
+        // Clave por partner.id, no wb.id: el WeeklyBasket dibujado es transitorio y
+        // no tiene id, y un socio tiene una sola entrega por nodo+día.
+        $amountsByPartner = [];
+
+        if ($isMaterialized) {
+            $weeklyBaskets = $nodeDelivers
+                ? $weeklyBasketRepo->findForNodeAndBasket($node, $basket)
+                : [];
+            $byWbId = $weeklyBasketItemRepo->componentAmountsFor($weeklyBaskets);
+            foreach ($weeklyBaskets as $wb) {
+                $pid = $wb->getPartner()?->getId();
+                if ($pid !== null) {
+                    $amountsByPartner[$pid] = $byWbId[$wb->getId()] ?? [];
+                }
+            }
+        } elseif ($nodeDelivers && !$basketGloballyCancelled && !$this->isPastBasket($basket)) {
+            $weeklyBaskets = [];
+            foreach ($generator->projectDeliveriesForNode($node, $basket) as $delivery) {
+                $wb = $delivery['weeklyBasket'];
+                $weeklyBaskets[] = $wb;
+                $pid = $wb->getPartner()?->getId();
+                if ($pid === null) {
+                    continue;
+                }
+                $amounts = [];
+                foreach ($delivery['items'] as $item) {
+                    $amounts[$item['component']->getId()] = (float) $item['amount'];
+                }
+                $amountsByPartner[$pid] = $amounts;
+            }
+        } else {
+            $weeklyBaskets = [];
+        }
 
         // Fecha física de reparto del nodo en este Basket: para Torremocha
         // (semanal viernes) coincide con basket.date; para Madrid (miércoles)
@@ -462,43 +545,43 @@ class DeliveryController extends AbstractController
         // que el template tenga una sola rama de pintado.
         $sections = $this->buildSections($weeklyBaskets, $orden);
 
-        // pbsByWbId[wb.id] = PartnerBasketShare activo del partner en la fecha
-        // del basket. Reemplaza a $wb->getPartnerBasketShare() (propiedad
-        // transient que no se persiste y devolvería null al recuperar el WB).
-        $pbsByWbId = [];
+        // Mapas por partner.id para el render (clave común a piedra y dibujo):
+        //  - pbs: PartnerBasketShare activo en la fecha (para cohorte y huevos).
+        //    En el dibujo el WB transitorio ya trae su PBS; en piedra la propiedad
+        //    transient es null al recuperar, así que se consulta.
+        //  - cestas/docenas/lleva-huevos: de la composición ya calculada
+        //    ($amountsByPartner), materializada o proyectada según el camino.
+        $pbsByPartnerId = [];
+        $cestasByPartnerId = [];
+        $dozensByPartnerId = [];
+        $eggDeliveryMap = [];
         foreach ($weeklyBaskets as $wb) {
             $partner = $wb->getPartner();
             if ($partner === null) {
-                $pbsByWbId[$wb->getId()] = null;
                 continue;
             }
-            $pbsByWbId[$wb->getId()] = $partnerBasketShareRepo->findActiveForPartner(
-                $partner,
-                $basket->getDate(),
-            );
-        }
-
-        // Composición materializada por entrega (WeeklyBasketItem): leemos las
-        // líneas en vez de re-derivar del patrón al pintar. Cada entrega trae
-        // sus cestas físicas (verdura) y sus docenas (huevos) ya estampadas; un
-        // cambio puntual movió la entrega con sus líneas, así que esto refleja
-        // la verdad por-entrega, no el patrón ciego al shift.
-        $componentAmounts = $weeklyBasketItemRepo->componentAmountsFor($weeklyBaskets);
-        $cestasByWbId = [];
-        $dozensByWbId = [];
-        $eggDeliveryMap = [];
-        foreach ($weeklyBaskets as $wb) {
-            $items = $componentAmounts[$wb->getId()] ?? [];
-            $cestasByWbId[$wb->getId()] = $items[BasketComponent::ID_VEGETABLES] ?? 0.0;
-            $dozensByWbId[$wb->getId()] = $items[BasketComponent::ID_EGGS] ?? 0.0;
+            $pid = $partner->getId();
+            $pbsByPartnerId[$pid] = $wb->getPartnerBasketShare()
+                ?? $partnerBasketShareRepo->findActiveForPartner($partner, $basket->getDate());
+            $amounts = $amountsByPartner[$pid] ?? [];
+            $cestasByPartnerId[$pid] = $amounts[BasketComponent::ID_VEGETABLES] ?? 0.0;
+            $dozensByPartnerId[$pid] = $amounts[BasketComponent::ID_EGGS] ?? 0.0;
             // "Lleva huevos" = existe línea de huevos para esta entrega.
-            $eggDeliveryMap[$wb->getId()] = isset($items[BasketComponent::ID_EGGS]);
+            $eggDeliveryMap[$pid] = isset($amounts[BasketComponent::ID_EGGS]);
         }
 
         // node_active_counts[nodeId] = {wbg, socios}: conteo de reparto de ESE
-        // día por nodo, para que las pestañas no pinten el total de WBG
-        // asignados (engañoso para nodos quincenales que no reparten hoy).
-        $nodeActiveCounts = $weeklyBasketRepo->countActiveByNodeForBasket($basket);
+        // día por nodo, para las pestañas. En piedra sale de una query agregada
+        // sobre lo materializado; cuando la semana se DIBUJA esa query daría 0 en
+        // todos los nodos (no hay nada en BBDD) y las pestañas mentirían un "sin
+        // reparto hoy" contradiciendo la tabla, así que se proyecta cada nodo.
+        if ($isMaterialized) {
+            $nodeActiveCounts = $weeklyBasketRepo->countActiveByNodeForBasket($basket);
+        } elseif (!$basketGloballyCancelled && !$this->isPastBasket($basket)) {
+            $nodeActiveCounts = $this->projectedCountsByNode($allNodes, $basket, $generator, $nodeDeliveryDate);
+        } else {
+            $nodeActiveCounts = [];
+        }
 
         return $this->render('delivery/by_node.html.twig', [
             'node' => $node,
@@ -513,11 +596,11 @@ class DeliveryController extends AbstractController
             'ref_id' => $timelineData['ref_id'],
             'orden' => $orden,
             'sections' => $sections,
-            'pbs_by_wb_id' => $pbsByWbId,
+            'pbs_by_partner_id' => $pbsByPartnerId,
             'egg_delivery_map' => $eggDeliveryMap,
-            'cestas_by_wb_id' => $cestasByWbId,
-            'dozens_by_wb_id' => $dozensByWbId,
-            'totals' => $this->computeTotals($weeklyBaskets, $cestasByWbId, $dozensByWbId),
+            'cestas_by_partner_id' => $cestasByPartnerId,
+            'dozens_by_partner_id' => $dozensByPartnerId,
+            'totals' => $this->computeTotals($weeklyBaskets, $cestasByPartnerId, $dozensByPartnerId),
         ]);
     }
 
@@ -684,9 +767,10 @@ class DeliveryController extends AbstractController
      * al compañero justo detrás. Si el compañero no está en la lista
      * (otro nodo, skip, shift fuera), la fila queda suelta en su sitio.
      *
-     * Devuelve también el set de wb.id que cierran un grupo (la fila del
+     * Devuelve también el set de partner.id que cierran un grupo (la fila del
      * compañero en parejas de 2, o la propia fila en huérfanos de 1) para
-     * que el template pinte un separador entre grupos.
+     * que el template pinte un separador entre grupos. Clave por partner.id
+     * (no wb.id): vale igual para WeeklyBasket de piedra y transitorios de dibujo.
      *
      * @param WeeklyBasket[] $rows ordenados alfabéticamente
      * @return array{0: WeeklyBasket[], 1: array<int, true>}
@@ -705,21 +789,23 @@ class DeliveryController extends AbstractController
         $used = [];
         $pairEnds = [];
         foreach ($rows as $wb) {
-            $wbId = $wb->getId();
-            if (isset($used[$wbId])) {
+            $partnerId = $wb->getPartner()?->getId();
+            if ($partnerId !== null && isset($used[$partnerId])) {
                 continue;
             }
             $result[] = $wb;
-            $used[$wbId] = true;
+            if ($partnerId !== null) {
+                $used[$partnerId] = true;
+            }
 
             $mate = $wb->getPartner()?->getSharePartner();
             $mateWb = $mate !== null ? ($byPartnerId[$mate->getId()] ?? null) : null;
-            if ($mateWb !== null && !isset($used[$mateWb->getId()])) {
+            if ($mateWb !== null && !isset($used[$mate->getId()])) {
                 $result[] = $mateWb;
-                $used[$mateWb->getId()] = true;
-                $pairEnds[$mateWb->getId()] = true;
-            } else {
-                $pairEnds[$wbId] = true;
+                $used[$mate->getId()] = true;
+                $pairEnds[$mate->getId()] = true;
+            } elseif ($partnerId !== null) {
+                $pairEnds[$partnerId] = true;
             }
         }
         return [$result, $pairEnds];
@@ -755,27 +841,28 @@ class DeliveryController extends AbstractController
      * Totales del nodo+día para el resumen destacado de la pantalla.
      *
      * @param WeeklyBasket[] $weeklyBaskets
-     * @param array<int,float> $cestasByWbId Cestas físicas por entrega (ítem verdura).
-     * @param array<int,float> $dozensByWbId Docenas por entrega (ítem huevos).
+     * @param array<int,float> $cestasByPartnerId Cestas físicas por entrega (ítem verdura), clave partner.id.
+     * @param array<int,float> $dozensByPartnerId Docenas por entrega (ítem huevos), clave partner.id.
      * @return array{socios:int, grupos:int, cestas:float, docenas:float, con_huevos:int}
      */
-    private function computeTotals(array $weeklyBaskets, array $cestasByWbId, array $dozensByWbId): array
+    private function computeTotals(array $weeklyBaskets, array $cestasByPartnerId, array $dozensByPartnerId): array
     {
         $cestas = 0.0;
         $docenas = 0.0;
         $conHuevos = 0;
         $grupos = [];
         foreach ($weeklyBaskets as $wb) {
-            // Cestas físicas y docenas salen de la composición materializada: la
-            // ponderación ½ de las compartidas y el 0 de "solo huevos" ya están
-            // estampados en el ítem (el composer aplicó el peso de la modalidad),
-            // así que aquí solo sumamos. Adiós al hack de ids por modalidad.
-            $cestas += $cestasByWbId[$wb->getId()] ?? 0.0;
+            $pid = $wb->getPartner()?->getId();
+            // Cestas físicas y docenas salen de la composición materializada o
+            // proyectada: la ponderación ½ de las compartidas y el 0 de "solo
+            // huevos" ya están estampados en el ítem (el composer aplicó el peso
+            // de la modalidad), así que aquí solo sumamos.
+            $cestas += $cestasByPartnerId[$pid] ?? 0.0;
             $wbg = $wb->getWeeklyBasketGroup();
             if ($wbg !== null) {
                 $grupos[$wbg->getId()] = true;
             }
-            $dozens = $dozensByWbId[$wb->getId()] ?? 0.0;
+            $dozens = $dozensByPartnerId[$pid] ?? 0.0;
             if ($dozens > 0) {
                 $conHuevos++;
                 $docenas += $dozens;
@@ -929,60 +1016,31 @@ class DeliveryController extends AbstractController
             ->getSingleScalarResult() > 0;
     }
 
-    #[Route('/{basketId}', name: 'delivery_show', methods: ['GET'], requirements: ['basketId' => '\d+'])]
-    public function show(
-        #[MapEntity(id: 'basketId')] Basket $basket,
-        WeeklyBasketGenerator $generator,
-        DeliveryExceptionRepository $exceptions,
-    ): Response {
-        $report = $generator->generateForBasket($basket);
-        $exception = $exceptions->findGlobalForBasket($basket);
-
-        return $this->render('delivery/show.html.twig', [
-            'basket' => $basket,
-            'report' => $report,
-            'exception' => $exception,
-            'rows' => $this->flattenForTable($report),
-        ]);
-    }
-
     /**
-     * Aplana las cinco colecciones del report en una sola lista plana para
-     * la tabla con DataTables. Cada fila trae todo lo necesario para que
-     * la plantilla no haga lógica.
-     *
-     * @return array<int, array{name:string, surname:string, modality:string, node:?string, group:?string, amount:int}>
+     * Puente por día: redirige al reparto v2 de ese Basket en el primer nodo.
+     * Lo usa el evento del calendario (y cualquier enlace que solo conozca el
+     * día). Unifica el reparto en una sola pantalla —la v2, que redibuja las
+     * semanas futuras sin congelarlas— y reemplaza a la antigua delivery_show,
+     * que materializaba al abrir y se ha retirado.
      */
-    private function flattenForTable(WeeklyDeliveryReport $report): array
-    {
-        $rows = [];
-        $modalities = [
-            ['weekly_partners', 'Semanal'],
-            ['biweekly_partners', 'Quincenal'],
-            ['monthly_partners', 'Mensual'],
-            ['old_half_basket_partners', 'Media cesta'],
-            ['only_egg_partners', 'Solo huevos'],
-        ];
-
-        foreach ($modalities as [$prop, $label]) {
-            foreach ($report->$prop as $item) {
-                $partner = $item->getPartner();
-                $node = $partner->getWeeklyBasketGroup();
-                $share = method_exists($item, 'getPartnerBasketShare') ? $item->getPartnerBasketShare() : null;
-                $group = $share?->getDeliveryGroup();
-
-                $rows[] = [
-                    'name' => $partner->getName() ?? '',
-                    'surname' => $partner->getSurname() ?? '',
-                    'modality' => $label,
-                    'node' => $node?->getName(),
-                    'group' => $group,
-                    'amount' => (int) $item->getAmount(),
-                ];
-            }
+    #[Route('/dia/{basketId}', name: 'delivery_for_basket', methods: ['GET'], requirements: ['basketId' => '\d+'])]
+    public function forBasket(
+        #[MapEntity(id: 'basketId')] Basket $basket,
+        NodeRepository $nodeRepo,
+    ): Response {
+        $firstNode = $nodeRepo->createQueryBuilder('n')
+            ->orderBy('n.id', 'ASC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+        if ($firstNode === null) {
+            throw $this->createNotFoundException('No hay nodos configurados todavía.');
         }
 
-        return $rows;
+        return $this->redirectToRoute('delivery_by_node', [
+            'nodeId' => $firstNode->getId(),
+            'basketId' => $basket->getId(),
+        ]);
     }
 
     /**
@@ -1020,8 +1078,11 @@ class DeliveryController extends AbstractController
     /**
      * Listado imprimible (PDF descargable vía dompdf) de un día para los nodos
      * elegidos (?nodes[]=). Cada nodo va en su(s) hoja(s), aislado por salto de
-     * página. Reutiliza {@see NodeDeliverySheet} (misma fuente que la pantalla
-     * v2) y materializa el reparto al vuelo igual que byNode si aún no existe.
+     * página. Reutiliza {@see NodeDeliverySheet}: si la semana está materializada
+     * la lee de piedra ({@see NodeDeliverySheet::build}); si no, la DIBUJA al vuelo
+     * desde la proyección ({@see NodeDeliverySheet::shape} sobre
+     * {@see WeeklyBasketGenerator::projectLinesForNode}) sin congelarla, igual que
+     * la pantalla v2.
      */
     #[Route('/imprimible/{basketId}/pdf', name: 'delivery_printable_pdf', methods: ['GET'], requirements: ['basketId' => '\d+'])]
     public function printablePdf(
@@ -1036,24 +1097,29 @@ class DeliveryController extends AbstractController
     ): Response {
         $nodeIds = array_values(array_filter(array_map('intval', (array) $request->query->all('nodes'))));
 
-        // Materialización al vuelo idéntica a byNode: si el Basket no tiene
-        // reparto generado y no está cancelado globalmente, se genera (el
-        // generador es idempotente y cubre todos los nodos de una vez).
+        // Piedra vs dibujo idéntico a byNode: si la semana ya está materializada
+        // se lee de piedra; si no (y no está cancelada ni es pasada) se dibuja al
+        // vuelo desde la proyección, sin congelarla.
         $globalException = $deliveryExceptionRepo->findGlobalForBasket($basket);
         $basketGloballyCancelled = $globalException !== null && $globalException->isCancelled();
-        if (!$basketGloballyCancelled && $weeklyBasketRepo->countPickedInBasket($basket) === 0) {
-            $generator->generateForBasket($basket);
-        }
+        $isMaterialized = $weeklyBasketRepo->countPickedInBasket($basket) > 0;
+        $canDraw = !$isMaterialized && !$basketGloballyCancelled && !$this->isPastBasket($basket);
 
         $sheets = [];
         foreach ($nodeRepo->findBy(['id' => $nodeIds ?: [0]], ['name' => 'ASC']) as $node) {
             if (!$nodeDeliveryDate->deliversInBasket($basket, $node)) {
                 continue;
             }
+            $sheet = $isMaterialized
+                ? $sheetBuilder->build($node, $basket)
+                : ($canDraw ? $sheetBuilder->shape($generator->projectLinesForNode($node, $basket)) : null);
+            if ($sheet === null) {
+                continue; // pasada sin materializar o cancelada: nada que imprimir
+            }
             $sheets[] = [
                 'node' => $node,
                 'physical_date' => $nodeDeliveryDate->physicalDateFor($basket, $node),
-                'sheet' => $sheetBuilder->build($node, $basket),
+                'sheet' => $sheet,
             ];
         }
 

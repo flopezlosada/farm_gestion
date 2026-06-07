@@ -1,16 +1,18 @@
 {# ============================================================
  # Una fila de socix del listado de reparto v2.
- # Espera del contexto heredado: wb (WeeklyBasket), pbs_by_wb_id, egg_delivery_map.
+ # Espera del contexto heredado: wb (WeeklyBasket, de piedra o transitorio de
+ # dibujo), pbs_by_partner_id, egg_delivery_map, cestas/dozens_by_partner_id.
+ # Las claves van por wb.partner.id (no wb.id): el WB dibujado no tiene id.
  # La modalidad se deriva de la propia fila (wb.basketShare) para que la fila
  # sea válida en los tres modos de orden (grupo / modalidad / alfabético).
  # ============================================================ #}
-{% set share = pbs_by_wb_id[wb.id] ?? null %}
-{% set row_eggs = egg_delivery_map[wb.id] ?? false %}
+{% set share = pbs_by_partner_id[wb.partner.id] ?? null %}
+{% set row_eggs = egg_delivery_map[wb.partner.id] ?? false %}
 {% set rbs = wb.basketShare %}
-{# Cestas físicas y docenas salen de la composición materializada (los ítems
-   ya llevan la ponderación ½ de compartidas y el 0 de solo-huevos). #}
-{% set cesta_factor = cestas_by_wb_id[wb.id] ?? 0 %}
-{% set row_dozens = dozens_by_wb_id[wb.id] ?? 0 %}
+{# Cestas físicas y docenas salen de la composición materializada o proyectada
+   (los ítems ya llevan la ponderación ½ de compartidas y el 0 de solo-huevos). #}
+{% set cesta_factor = cestas_by_partner_id[wb.partner.id] ?? 0 %}
+{% set row_dozens = dozens_by_partner_id[wb.partner.id] ?? 0 %}
 <tr class="dlv-row"
     data-name="{{ (wb.partner.nameForDelivery ~ ' ' ~ wb.partner.legalName)|lower }}"
     data-modality="{{ rbs.id }}"

@@ -657,6 +657,35 @@ class WeeklyBasketGenerator
      * que una semana futura aún sin generar refleja al instante un festivo o un
      * cambio metido tarde (cierra el agujero de la materialización temprana).
      *
+     * Mapeo fino sobre {@see projectDeliveriesForNode}, que es la orquestación
+     * común: el listado en papel consume estas {@see DeliveryLine}; la pantalla v2
+     * consume los WeeklyBasket transitorios directamente.
+     *
+     * @param Node   $node
+     * @param Basket $basket
+     * @return DeliveryLine[]
+     */
+    public function projectLinesForNode(Node $node, Basket $basket): array
+    {
+        return array_map(
+            fn (array $delivery): DeliveryLine => $this->lineFromProjection(
+                $delivery['weeklyBasket'],
+                $delivery['items'],
+            ),
+            $this->projectDeliveriesForNode($node, $basket),
+        );
+    }
+
+    /**
+     * Orquestación de la PROYECCIÓN de un nodo+día: produce los WeeklyBasket
+     * TRANSITORIOS (no persistidos) con sus líneas de componente ya calculadas,
+     * aplicando patrón base + cohorte/cadencia/festivos, los cambios puntuales de
+     * ENTREGA ENTERA (mover de día y "no recoge", in/out) y el huevo extra tipo
+     * SANTOS. Es el alimentador común de dos consumidores: {@see projectLinesForNode}
+     * (listado en papel vía DeliveryLine) y la pantalla v2
+     * ({@see \App\Controller\DeliveryController::byNode}), que recibe los WB
+     * transitorios y reusa su mismo shaping/plantilla SIN congelar la semana.
+     *
      * Deuda DRY (memoria proyeccion-orquestacion-dry-debt): duplica la
      * orquestación de {@see createWeeklyBasketsFromShares}. NO cubre todavía los
      * intents POR COMPONENTE (SANTOS mueve solo la verdura) ni la fidelidad fina
@@ -668,9 +697,9 @@ class WeeklyBasketGenerator
      *
      * @param Node   $node
      * @param Basket $basket
-     * @return DeliveryLine[]
+     * @return list<array{weeklyBasket: WeeklyBasket, items: array<int, array{component: BasketComponent, amount: string}>}>
      */
-    public function projectLinesForNode(Node $node, Basket $basket): array
+    public function projectDeliveriesForNode(Node $node, Basket $basket): array
     {
         $shareRepo = $this->em->getRepository(PartnerBasketShare::class);
         /** @var PartnerDeliveryShiftRepository $shiftRepo */
@@ -686,7 +715,7 @@ class WeeklyBasketGenerator
             ),
         );
 
-        $lines = [];
+        $deliveries = [];
         $seenPartnerIds = [];
         foreach ($this->projectForBasket($basket) as $share) {
             $partner = $share->getPartner();
@@ -700,7 +729,7 @@ class WeeklyBasketGenerator
             if ($projection === null) {
                 continue; // el nodo del socio no reparte esta semana (cadencia/festivo)
             }
-            $lines[] = $this->lineFromProjection($projection['weeklyBasket'], $projection['items']);
+            $deliveries[] = ['weeklyBasket' => $projection['weeklyBasket'], 'items' => $projection['items']];
             $seenPartnerIds[$partner->getId()] = true;
         }
 
@@ -728,7 +757,7 @@ class WeeklyBasketGenerator
             // La composición se deriva del patrón con los huevos del ORIGEN como
             // referencia (mismo criterio que stampDestination del applier).
             $items = $this->composer->computeItems($wb, $share, $basket, $shift->getFromBasket());
-            $lines[] = $this->lineFromProjection($wb, $items);
+            $deliveries[] = ['weeklyBasket' => $wb, 'items' => $items];
             $seenPartnerIds[$partner->getId()] = true;
         }
 
@@ -761,11 +790,11 @@ class WeeklyBasketGenerator
                 ->setAmount(0)
                 ->setDeliveryDate($physicalDate)
                 ->setPartnerBasketShare($share);
-            $lines[] = $this->lineFromProjection($wb, $this->composer->computeItems($wb, $share, $basket));
+            $deliveries[] = ['weeklyBasket' => $wb, 'items' => $this->composer->computeItems($wb, $share, $basket)];
             $seenPartnerIds[$partner->getId()] = true;
         }
 
-        return $lines;
+        return $deliveries;
     }
 
     /**

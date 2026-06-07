@@ -7,7 +7,8 @@ use Symfony\Bundle\FrameworkBundle\Routing\Router;
 
 /**
  * Adapter para mostrar una cesta semanal (Basket) como evento en el calendario.
- * Al pinchar en el evento se va a la pantalla de reparto detallado del viernes.
+ * Al pinchar en el evento se va a la pantalla de reparto v2 de ese día (vía la
+ * ruta puente delivery_for_basket, que aterriza en el primer nodo).
  *
  * Marrón terracota para diferenciarlo del resto de eventos de granja.
  */
@@ -19,6 +20,6 @@ class BasketDeliveryEntity extends CalendarEventEntity
     {
         parent::__construct($title, $startDatetime, null, true);
         $this->setId($id);
-        $this->url = $router->generate('delivery_show', ['basketId' => $id]);
+        $this->url = $router->generate('delivery_for_basket', ['basketId' => $id]);
     }
 }

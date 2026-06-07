@@ -23,8 +23,8 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * traslados de día). Permite planificarlas por adelantado apuntando a un
  * ciclo futuro y, opcionalmente, a un nodo concreto.
  *
- * Vive bajo /gestion/reparto/excepciones; no choca con delivery_show
- * (/gestion/reparto/{basketId} exige \d+).
+ * Vive bajo /gestion/reparto/excepciones; rutas hermanas más específicas que
+ * los puentes por día (/gestion/reparto/dia/{basketId}).
  *
  * Sub-fase 8.8d (2026-05-27).
  */

@@ -7,7 +7,7 @@
  #   - all_nodes            Node[] (para las tabs).
  #   - surrounding_baskets  Basket[] (mini-timeline de viernes vecinos).
  #   - grouped              Listado agrupado por WBG > modalidad.
- #   - egg_delivery_map     {wb.id: bool} para ocultar huevos cuando no toca.
+ #   - egg_delivery_map     {partner.id: bool} para ocultar huevos cuando no toca.
  #   - totals               {socios, cestas, huevos}.
  # ============================================================ #}
 {% extends '_layouts/csa_shell.html.twig' %}
@@ -372,8 +372,8 @@
                         {% for sub in section.subgroups %}
                             {% for wb in sub.rows %}
                                 {% set socios_sec = socios_sec + 1 %}
-                                {% set cestas_sec = cestas_sec + (cestas_by_wb_id[wb.id] ?? 0) %}
-                                {% if egg_delivery_map[wb.id] ?? false %}{% set huevos_sec = huevos_sec + 1 %}{% endif %}
+                                {% set cestas_sec = cestas_sec + (cestas_by_partner_id[wb.partner.id] ?? 0) %}
+                                {% if egg_delivery_map[wb.partner.id] ?? false %}{% set huevos_sec = huevos_sec + 1 %}{% endif %}
                             {% endfor %}
                         {% endfor %}
                         <div class="dlv-wbg__meta">
@@ -394,7 +394,7 @@
                         <table>
                             <tbody>
                             {% for wb in sub.rows %}
-                                {% include 'delivery/_row.html.twig' with { wb: wb, pair_end: (sub.pair_end_ids[wb.id] ?? false) } %}
+                                {% include 'delivery/_row.html.twig' with { wb: wb, pair_end: (sub.pair_end_ids[wb.partner.id] ?? false) } %}
                             {% endfor %}
                             </tbody>
                         </table>
