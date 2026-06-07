@@ -254,21 +254,74 @@
                             </footer>
                         </form>
                     </dialog>
-                    <script>
-                    (function () {
-                        var root = document.querySelector('[data-xtb-root]');
-                        if (!root) { return; }
+                {% endif %}
+
+                {% if relocate_weeks is not empty and relocate_groups is not empty %}
+                    <button type="button" class="prt-btn"
+                            onclick="document.getElementById('relocate-pickup-dialog').showModal()">
+                        <i class="fa fa-exchange"></i> Recoger en otro nodo
+                    </button>
+                    <dialog id="relocate-pickup-dialog" class="csa-modal csa-modal--info" aria-labelledby="relocate-pickup-title">
+                        <form method="post" action="{{ path('partner_relocate_pickup', { id: partner.id }) }}" data-csa-dropdowns="1">
+                            <input type="hidden" name="_csrf_token" value="{{ csrf_token('partner_relocate_pickup') }}">
+                            <button class="csa-modal__close" type="button" aria-label="Cerrar" onclick="this.closest('dialog').close()">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l14 14M19 5L5 19"/></svg>
+                            </button>
+                            <header class="csa-modal__header">
+                                <div class="csa-modal__heading">
+                                    <span class="csa-modal__eyebrow">Puntual, solo esa semana</span>
+                                    <h2 class="csa-modal__title" id="relocate-pickup-title">Recoger en otro nodo</h2>
+                                </div>
+                            </header>
+                            <div class="csa-modal__body">
+                                <p>{{ partner.name }} recogerá su cesta de esa semana en otro nodo. Solo afecta a ese reparto.</p>
+                                {% set _rdow = ['dom','lun','mar','mié','jue','vie','sáb'] %}
+                                {% set _rmon = ['','ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'] %}
+                                <div class="xtb-form" data-xtb-root>
+                                    <input type="hidden" name="basket_id" data-xtb-basket>
+                                    <p class="xtb-label">Semana</p>
+                                    <div class="xtb-dates">
+                                        {% for w in relocate_weeks %}
+                                            <button type="button" class="xtb-date{{ loop.first ? ' xtb-date--checked' : '' }}" data-basket-id="{{ w.basketId }}">
+                                                <span class="dow">{{ _rdow[w.date|date('w')] }}</span>
+                                                <span class="num">{{ w.date|date('d') }}</span>
+                                                <span class="mon">{{ _rmon[w.date|date('n')] }}</span>
+                                            </button>
+                                        {% endfor %}
+                                    </div>
+                                    <label class="xtb-note">Recoger en
+                                        <select name="group_id" required>
+                                            {% for g in relocate_groups %}
+                                                <option value="{{ g.id }}">{{ g.label }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </label>
+                                </div>
+                            </div>
+                            <footer class="csa-modal__footer">
+                                <button type="button" class="csa-modal__btn csa-modal__btn--ghost" onclick="this.closest('dialog').close()">Cancelar</button>
+                                <button type="submit" class="csa-modal__btn csa-modal__btn--primary">Trasladar</button>
+                            </footer>
+                        </form>
+                    </dialog>
+                {% endif %}
+
+                {# Selector de semana por chips (compartido por los modales de cesta extra
+                   y de traslado de nodo): marca la chip y rellena el basket_id oculto. #}
+                <script>
+                (function () {
+                    document.querySelectorAll('[data-xtb-root]').forEach(function (root) {
                         var hidden = root.querySelector('[data-xtb-basket]');
                         var chips = root.querySelectorAll('.xtb-date');
                         function pick(chip) {
                             chips.forEach(function (c) { c.classList.toggle('xtb-date--checked', c === chip); });
-                            hidden.value = chip.dataset.basketId;
+                            if (hidden) { hidden.value = chip.dataset.basketId; }
                         }
                         chips.forEach(function (c) { c.addEventListener('click', function () { pick(c); }); });
                         if (chips.length) { pick(chips[0]); }
-                    })();
-                    </script>
-                {% endif %}
+                    });
+                })();
+                </script>
 
                 <span class="prt-actionbar__sep"></span>
 
@@ -493,6 +546,27 @@
                 </div>
             </section>
 
+            {# Cestas que esta persona paga (dona) a otrxs socixs. Sólo lectura:
+             # el origen de la verdad (asignar/quitar pagador) vive en la ficha
+             # del receptor de cada cesta. #}
+            {% if donated_baskets is not empty %}
+                <section class="prt-card" style="margin-top: 18px;">
+                    <header class="prt-card__head">
+                        <h2 class="prt-card__title"><span class="accent"></span>Cestas que dona</h2>
+                    </header>
+                    <div class="prt-card__body">
+                        {% for d in donated_baskets %}
+                            <div class="prt-share"{% if not loop.first %} style="margin-top: 10px;"{% endif %}>
+                                <i class="fa fa-gift"></i>
+                                <span>Paga la cesta de
+                                    <a href="{{ path('partner_show', { id: d.partner.id }) }}">{{ d.partner.name }} {{ d.partner.surname }}</a>
+                                </span>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </section>
+            {% endif %}
+
         </div>
 
         {# ----- COL DERECHA: Cesta + Histórico ----- #}
@@ -563,6 +637,43 @@
                                     <div class="prt-mini__value prt-mini__value--muted">Sin fecha</div>
                                 {% endif %}
                             </div>
+                        </div>
+
+                        {# Pagador de la cesta. Por defecto la paga la propia socix;
+                         # si payerPartner está set, la cesta es donada por otrx socix.
+                         # El receptor sigue siendo quien la recibe en el reparto. #}
+                        {% set payer = partner.getActiveBasket.payerPartner %}
+                        <div class="prt-share" style="margin-top: 14px;">
+                            <i class="fa fa-gift"></i>
+                            <span>
+                                <strong>Quién la paga:</strong>
+                                {% if payer %}
+                                    la dona <a href="{{ path('partner_show', { id: payer.id }) }}">{{ payer.name }} {{ payer.surname }}</a>
+                                {% else %}
+                                    la propia socix
+                                {% endif %}
+                            </span>
+                            {% if app.user %}
+                                <span style="margin-left: auto; display: inline-flex; gap: 8px;">
+                                    <a href="{{ path('family', { id: partner.id, type: 'set_payer' }) }}" class="prt-btn">
+                                        {{ payer ? 'Cambiar' : 'La paga otrx socix' }}
+                                    </a>
+                                    {% if payer %}
+                                        <button type="button" class="prt-btn"
+                                            onclick="document.getElementById('confirm-clear-payer').showModal()">
+                                            Que la pague ella
+                                        </button>
+{{ csa.confirm_dialog('confirm-clear-payer', {
+    variant: 'info',
+    eyebrow: 'Confirmar',
+    title: 'Quitar el pagador externo',
+    body: 'La cesta volverá a pagarla la propia socix.',
+    confirm_label: 'Que la pague ella misma',
+    confirm_href: path('clear_payer', { id: partner.id }),
+}) }}
+                                    {% endif %}
+                                </span>
+                            {% endif %}
                         </div>
 
                     </div>

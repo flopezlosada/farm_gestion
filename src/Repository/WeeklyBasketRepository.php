@@ -94,6 +94,29 @@ class WeeklyBasketRepository extends ServiceEntityRepository
     }
 
     /**
+     * Entregas FUTURAS (basket.date >= hoy) que un socio tiene materializadas, en orden
+     * de fecha. Para el selector de "recoger esta semana en otro nodo" de la ficha: solo
+     * se puede trasladar una semana en la que el socio YA tiene cesta.
+     *
+     * @param Partner $partner Socio.
+     * @return WeeklyBasket[] Entregas futuras del socio, ordenadas por fecha del ciclo.
+     */
+    public function findFutureForPartner(Partner $partner): array
+    {
+        return $this->createQueryBuilder('wb')
+            ->innerJoin('wb.basket', 'b')
+            ->where('wb.partner = :partner')
+            ->andWhere('b.date >= :today')
+            ->andWhere('wb.weekly_basket_status = :status')
+            ->setParameter('partner', $partner)
+            ->setParameter('today', (new \DateTimeImmutable('today'))->format('Y-m-d'))
+            ->setParameter('status', 1)
+            ->orderBy('b.date', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
      * Listado para la pantalla de reparto v2 (sub-fase 8.8c): WeeklyBasket
      * que recoge un Nodo en un Basket dado. Solo cestas con status 1
      * (activa / "recoge"). Ordenado por WBG.name → basket_share.id →

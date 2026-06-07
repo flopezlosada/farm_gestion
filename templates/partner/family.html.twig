@@ -8,10 +8,41 @@
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
 
-{% set is_family = type == 'add_family' %}
 {% set avatar_palette = ['sage', 'ochre', 'terra', 'ink'] %}
 
-{% block title %}{{ is_family ? 'Selección de familiares' : 'Selección de cesta compartida' }}{% endblock %}
+{# Textos por modo del picker. add_family / add_share_partner / set_payer
+ # comparten tabla, buscador y confirm_dialog; sólo cambian las etiquetas. #}
+{% set mode = {
+    'add_family': {
+        title: 'Selección de familiares',
+        crumb: 'Añadir familiar',
+        header_title: 'Familiares de ' ~ partner.name ~ ' ' ~ partner.surname,
+        header_sub: 'Elige a la persona que pasa a ser familiar de la socix actual. La principal es la actual; la seleccionada queda vinculada a ella. Sólo aparecen socixs activos sin familia ni cesta propia.',
+        empty: 'No hay socixs disponibles para añadir como familiar. Sólo se ofrecen personas activas sin familia previa ni cesta propia.',
+        dlg_title: 'Añadir familiar',
+        dlg_confirm: 'Añadir familiar'
+    },
+    'add_share_partner': {
+        title: 'Selección de cesta compartida',
+        crumb: 'Cesta compartida',
+        header_title: 'Cesta compartida de ' ~ partner.name ~ ' ' ~ partner.surname,
+        header_sub: 'Elige con quién comparte la cesta semanal la socix actual.',
+        empty: 'No hay socixs disponibles para compartir cesta.',
+        dlg_title: 'Compartir cesta',
+        dlg_confirm: 'Compartir'
+    },
+    'set_payer': {
+        title: 'Selección de pagador',
+        crumb: 'Pagador de la cesta',
+        header_title: 'Quién paga la cesta de ' ~ partner.name ~ ' ' ~ partner.surname,
+        header_sub: 'Elige al socix que paga (dona) la cesta. La cesta la sigue recibiendo ' ~ partner.name ~ '; sólo cambia quién figura como pagador.',
+        empty: 'No hay socixs activos disponibles como pagadores.',
+        dlg_title: 'Asignar pagador',
+        dlg_confirm: 'Asignar pagador'
+    }
+}[type] %}
+
+{% block title %}{{ mode.title }}{% endblock %}
 
 {% block csa_crumbs %}
     <a href="{{ path('dashboard') }}">Inicio</a>
@@ -20,7 +51,7 @@
     <span class="csa-topbar__crumbs-sep">/</span>
     <a href="{{ path('partner_show', { id: partner.id }) }}">{{ partner.name }} {{ partner.surname }}</a>
     <span class="csa-topbar__crumbs-sep">/</span>
-    <span class="csa-topbar__crumb-active">{{ is_family ? 'Añadir familiar' : 'Cesta compartida' }}</span>
+    <span class="csa-topbar__crumb-active">{{ mode.crumb }}</span>
 {% endblock %}
 
 {% block more_css %}
@@ -64,10 +95,8 @@
 
     {{ csa.page_header(
         'Socixs · Vínculos',
-        is_family ? ('Familiares de ' ~ partner.name ~ ' ' ~ partner.surname) : ('Cesta compartida de ' ~ partner.name ~ ' ' ~ partner.surname),
-        is_family
-            ? 'Elige a la persona que pasa a ser familiar de la socix actual. La principal es la actual; la seleccionada queda vinculada a ella. Sólo aparecen socixs activos sin familia ni cesta propia.'
-            : 'Elige con quién comparte la cesta semanal la socix actual.'
+        mode.header_title,
+        mode.header_sub
     ) }}
 
     {# ============ toolbar: buscador + contador ============ #}
@@ -89,14 +118,7 @@
     {# ============ tabla de candidatos ============ #}
     <div class="prl-table-wrap">
         {% if partners|length == 0 %}
-            <div class="prl-empty">
-                {% if is_family %}
-                    No hay socixs disponibles para añadir como familiar. Sólo se ofrecen
-                    personas activas sin familia previa ni cesta propia.
-                {% else %}
-                    No hay socixs disponibles para compartir cesta.
-                {% endif %}
-            </div>
+            <div class="prl-empty">{{ mode.empty }}</div>
         {% else %}
             <table class="prl-table">
                 <thead>
@@ -129,16 +151,6 @@
                                         onclick="document.getElementById('confirm-family-{{ people.id }}').showModal()">
                                     <i class="fa fa-link"></i> Asociar
                                 </button>
-{{ csa.confirm_dialog('confirm-family-' ~ people.id, {
-    variant: 'success',
-    eyebrow: 'Confirmar',
-    title: is_family ? 'Añadir familiar' : 'Compartir cesta',
-    body: is_family
-        ? ('¿Añadir a ' ~ people.name ~ ' ' ~ people.surname ~ ' como familiar de ' ~ partner.name ~ ' ' ~ partner.surname ~ '?')
-        : ('¿' ~ people.name ~ ' ' ~ people.surname ~ ' compartirá la cesta con ' ~ partner.name ~ ' ' ~ partner.surname ~ '?'),
-    confirm_label: is_family ? 'Añadir familiar' : 'Compartir',
-    confirm_href: path(type, { partner1_id: partner.id, partner2_id: people.id }),
-}) }}
                             </td>
                         </tr>
                     {% endfor %}
@@ -149,6 +161,26 @@
                     </tr>
                 </tbody>
             </table>
+
+            {# Los confirm_dialog se emiten FUERA de la tabla: dentro de
+             # <td class="actions"> el CSS del listado (.prl-table .actions a {
+             # width:28px }) aplastaba el botón de confirmar (un <a>) a tamaño
+             # icono. El <dialog> se pinta en el top layer, así que su posición
+             # en el DOM no afecta. #}
+            {% for people in partners %}
+{{ csa.confirm_dialog('confirm-family-' ~ people.id, {
+    variant: 'success',
+    eyebrow: 'Confirmar',
+    title: mode.dlg_title,
+    body: type == 'add_family'
+        ? ('¿Añadir a ' ~ people.name ~ ' ' ~ people.surname ~ ' como familiar de ' ~ partner.name ~ ' ' ~ partner.surname ~ '?')
+        : (type == 'set_payer'
+            ? ('¿' ~ people.name ~ ' ' ~ people.surname ~ ' pasará a pagar (donar) la cesta de ' ~ partner.name ~ ' ' ~ partner.surname ~ '?')
+            : ('¿' ~ people.name ~ ' ' ~ people.surname ~ ' compartirá la cesta con ' ~ partner.name ~ ' ' ~ partner.surname ~ '?')),
+    confirm_label: mode.dlg_confirm,
+    confirm_href: path(type, { partner1_id: partner.id, partner2_id: people.id }),
+}) }}
+            {% endfor %}
         {% endif %}
     </div>
 

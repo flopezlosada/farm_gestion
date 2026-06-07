@@ -11,6 +11,7 @@ use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
 use App\Entity\PartnerDeliveryShift;
 use App\Entity\WeeklyBasket;
+use App\Entity\WeeklyBasketGroup;
 use App\Entity\WeeklyBasketItem;
 use App\Repository\NodeRepository;
 use App\Repository\PartnerBasketShareRepository;
@@ -18,6 +19,7 @@ use App\Service\Delivery\BiweeklyCohortResolver;
 use App\Service\Delivery\ExtraBasketEditor;
 use App\Service\Delivery\NodeDeliveryDate;
 use App\Service\Delivery\NodeDeliverySheet;
+use App\Service\Delivery\PickupRelocator;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Partner\BasketModalityChanger;
 use Doctrine\ORM\EntityManagerInterface;
@@ -76,6 +78,7 @@ class VerifyDeliveryBatteryCommand extends Command
         private readonly PartnerBasketShareRepository $shareRepo,
         private readonly NodeRepository $nodeRepo,
         private readonly ExtraBasketEditor $extraBasketEditor,
+        private readonly PickupRelocator $relocator,
     ) {
         parent::__construct();
     }
@@ -137,6 +140,9 @@ class VerifyDeliveryBatteryCommand extends Command
         // quien no le tocaba. Ambas sobre una única entrega; sobrevive a un regenerado.
         $this->extraBasketSumScenario();
         $this->extraBasketNewScenario();
+
+        // Traslado puntual de lugar: un socio recoge esa semana en otro nodo.
+        $this->relocateNodeScenario();
 
         $this->report();
 
@@ -544,6 +550,62 @@ class VerifyDeliveryBatteryCommand extends Command
             'socio %d · basket %d · antes=%d (0) · tras fijar=%d (1) · verdura=%s · en listado=%s · tras regenerar=%d (1)',
             $partner->getId(), $target->getId(), $before, $wbCount, $verdura ?? 'null',
             $node === null ? 'n/a' : ($inSheet ? 'sí' : 'NO'), $after,
+        ));
+    }
+
+    /**
+     * Traslado puntual de LUGAR — un socio de un nodo biweekly (Madrid/Cascorro) recoge
+     * en su semana activa la cesta en Torremocha (semanal). Comprueba: aparece en el
+     * listado de Torremocha, ya NO en el de su nodo, su delivery_date pasa al día físico
+     * del destino (viernes, no miércoles), y un regenerado no lo revierte.
+     */
+    private function relocateNodeScenario(): void
+    {
+        $label = 'Recoger en otro nodo';
+        $partner = $this->pickPartner(self::QUINCENAL, null, Node::CADENCE_BIWEEKLY);
+        if ($partner === null) { $this->skip($label, 'sin quincenal en nodo biweekly'); return; }
+        $originNode = $partner->getWeeklyBasketGroup()?->getNode();
+        if ($originNode === null) { $this->skip($label, 'el socio elegido no tiene nodo'); return; }
+        $month = $this->nextMonth();
+        if ($month === null) { $this->skip($label, 'sin mes futuro sin generar'); return; }
+
+        $destNode = $this->nodeRepo->findOneBy(['cadence' => Node::CADENCE_WEEKLY]);
+        if ($destNode === null) { $this->skip($label, 'sin nodo semanal destino'); return; }
+        $destGroup = $this->em->getRepository(WeeklyBasketGroup::class)->findOneBy(['node' => $destNode]);
+        if ($destGroup === null) { $this->skip($label, 'el nodo destino no tiene grupos'); return; }
+
+        // Una semana del mes donde reparten AMBOS (el origen para que el socio tenga cesta).
+        $target = null;
+        foreach ($month['baskets'] as $b) {
+            if ($this->nodeDeliveryDate->deliversInBasket($b, $originNode) && $this->nodeDeliveryDate->deliversInBasket($b, $destNode)) {
+                $target = $b;
+                break;
+            }
+        }
+        if ($target === null) { $this->skip($label, 'sin semana común origen/destino'); return; }
+
+        foreach ($month['baskets'] as $b) { $this->generator->generateForBasket($b); }
+
+        $this->relocator->relocate($partner, $target, $destGroup, 'verif');
+
+        $inDest = $this->sheetContainsPartner($destNode, $target, $partner);
+        $inOrigin = $this->sheetContainsPartner($originNode, $target, $partner);
+        $wb = $this->em->getRepository(WeeklyBasket::class)->findOneBy(['partner' => $partner, 'basket' => $target]);
+        $expectedDate = $this->nodeDeliveryDate->physicalDateFor($target, $destNode);
+        $dateOk = $wb !== null && $expectedDate !== null
+            && $wb->getDeliveryDate()?->format('Y-m-d') === $expectedDate->format('Y-m-d');
+
+        // Regenerar NO debe revertir el traslado (la semana ya generada entra por reuse).
+        $this->generator->generateForBasket($target);
+        $stillDest = $this->sheetContainsPartner($destNode, $target, $partner);
+
+        $ok = $inDest && !$inOrigin && $dateOk && $stillDest;
+        $this->record($label, $ok, sprintf(
+            'socio %d · basket %d · en %s=%s · fuera de %s=%s · fecha destino=%s · tras regenerar en destino=%s',
+            $partner->getId(), $target->getId(),
+            $destNode->getName(), $inDest ? 'sí' : 'NO',
+            $originNode->getName(), $inOrigin ? 'NO (sigue)' : 'sí',
+            $dateOk ? 'ok' : 'MAL', $stillDest ? 'sí' : 'NO',
         ));
     }
 

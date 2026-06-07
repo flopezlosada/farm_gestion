@@ -9,6 +9,7 @@ use App\Entity\Partner;
 use App\Entity\PartnerDeliveryShift;
 use App\Entity\PartnerEvent;
 use App\Entity\WeeklyBasket;
+use App\Entity\WeeklyBasketGroup;
 use App\Entity\WeeklyBasketStatus;
 use App\Repository\BasketRepository;
 use App\Repository\DeliveryExceptionRepository;
@@ -16,6 +17,7 @@ use App\Repository\NodeRepository;
 use App\Repository\PartnerDeliveryShiftRepository;
 use App\Repository\PartnerRepository;
 use App\Repository\PartnerBasketShareRepository;
+use App\Repository\WeeklyBasketGroupRepository;
 use App\Repository\WeeklyBasketItemRepository;
 use App\Repository\WeeklyBasketRepository;
 use App\Repository\WeeklyBasketStatusRepository;
@@ -23,6 +25,7 @@ use App\Service\Delivery\DeliveryShiftApplier;
 use App\Service\Delivery\DeliveryShiftValidator;
 use App\Service\Delivery\ExtraBasketEditor;
 use App\Service\Delivery\NodeDeliveryDate;
+use App\Service\Delivery\PickupRelocator;
 use App\Service\Delivery\NodeDeliverySheet;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use Dompdf\Dompdf;
@@ -462,6 +465,80 @@ class DeliveryController extends AbstractController
     }
 
     /**
+     * Traslado puntual de lugar: un socio del listado recoge la cesta de ESA semana en
+     * otro nodo/grupo. Delega en PickupRelocator (cambia el grupo del WeeklyBasket de la
+     * semana y recalcula su fecha física); el listado del destino lo absorbe y el de este
+     * nodo lo excluye automáticamente. Solo mueve una cesta que ya existe esa semana.
+     *
+     * @param Node    $node    Nodo de la pantalla (origen, para volver).
+     * @param Basket  $basket  Semana sobre la que se actúa.
+     * @param Request $request Lleva partner_id, group_id y el token CSRF.
+     */
+    #[Route(
+        '/v2/nodo/{nodeId}/{basketId}/recoger-en-otro-nodo',
+        name: 'delivery_relocate',
+        methods: ['POST'],
+        requirements: ['nodeId' => '\d+', 'basketId' => '\d+']
+    )]
+    public function relocatePickup(
+        #[MapEntity(id: 'nodeId')] Node $node,
+        #[MapEntity(id: 'basketId')] Basket $basket,
+        Request $request,
+        PartnerRepository $partnerRepo,
+        WeeklyBasketGroupRepository $groupRepo,
+        PickupRelocator $relocator,
+    ): Response {
+        $back = ['nodeId' => $node->getId(), 'basketId' => $basket->getId()];
+
+        if (!$this->isCsrfTokenValid('delivery_relocate', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('error', 'Token de seguridad inválido.');
+            return $this->redirectToRoute('delivery_by_node', $back);
+        }
+
+        $partner = $partnerRepo->find((int) $request->request->get('partner_id'));
+        $group = $groupRepo->find((int) $request->request->get('group_id'));
+        if (!$partner instanceof Partner || !$group instanceof WeeklyBasketGroup) {
+            $this->addFlash('error', 'Faltan datos: el socix o el grupo de destino.');
+            return $this->redirectToRoute('delivery_by_node', $back);
+        }
+
+        $partnerName = trim(($partner->getName() ?? '') . ' ' . ($partner->getSurname() ?? ''));
+
+        try {
+            $relocator->relocate($partner, $basket, $group, 'gestor:' . $this->getUser()->getId());
+        } catch (\LogicException $e) {
+            $this->addFlash('warning', $e->getMessage());
+            return $this->redirectToRoute('delivery_by_node', $back);
+        }
+
+        $this->addFlash('notice', sprintf('%s recogerá esa semana en "%s".', $partnerName, $group->getName()));
+        return $this->redirectToRoute('delivery_by_node', $back);
+    }
+
+    /**
+     * Grupos a los que el listado de este nodo puede trasladar un socio: los de OTROS
+     * nodos (la acción es "recoger en otro nodo"). Etiqueta "Nodo · Grupo".
+     *
+     * @param Node                        $node      Nodo actual de la pantalla.
+     * @param WeeklyBasketGroupRepository $groupRepo
+     * @return list<array{id:int, label:string}> Ordenados por etiqueta.
+     */
+    private function relocateTargetGroups(Node $node, WeeklyBasketGroupRepository $groupRepo): array
+    {
+        $groups = [];
+        foreach ($groupRepo->findAll() as $group) {
+            $groupNode = $group->getNode();
+            if ($groupNode === null || $groupNode->getId() === $node->getId()) {
+                continue;
+            }
+            $groups[] = ['id' => $group->getId(), 'label' => $groupNode->getName() . ' · ' . $group->getName()];
+        }
+        usort($groups, static fn (array $a, array $b) => strcmp($a['label'], $b['label']));
+
+        return $groups;
+    }
+
+    /**
      * Entry point del menú lateral: calcula el primer Node (por id ASC) y
      * el próximo Basket (date >= today, o el último pasado si todos han
      * pasado) y redirige a la pantalla concreta. Permite enlazar desde el
@@ -523,6 +600,7 @@ class DeliveryController extends AbstractController
         WeeklyBasketRepository $weeklyBasketRepo,
         WeeklyBasketItemRepository $weeklyBasketItemRepo,
         PartnerBasketShareRepository $partnerBasketShareRepo,
+        WeeklyBasketGroupRepository $weeklyBasketGroupRepo,
         NodeDeliveryDate $nodeDeliveryDate,
         DeliveryExceptionRepository $deliveryExceptionRepo,
         WeeklyBasketGenerator $generator,
@@ -675,6 +753,7 @@ class DeliveryController extends AbstractController
             'egg_delivery_map' => $eggDeliveryMap,
             'cestas_by_partner_id' => $cestasByPartnerId,
             'dozens_by_partner_id' => $dozensByPartnerId,
+            'relocate_groups' => $this->relocateTargetGroups($node, $weeklyBasketGroupRepo),
             'totals' => $this->computeTotals($weeklyBaskets, $cestasByPartnerId, $dozensByPartnerId),
         ]);
     }

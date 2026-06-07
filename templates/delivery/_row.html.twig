@@ -53,6 +53,11 @@
             <a href="#" class="js-dlv-extra"
                data-partner-id="{{ wb.partner.id }}"
                data-partner-name="{{ wb.partner.nameForDelivery }}">Añadir cesta extra</a>
+            {% if can_relocate ?? false %}
+            <a href="#" class="js-dlv-relocate"
+               data-partner-id="{{ wb.partner.id }}"
+               data-partner-name="{{ wb.partner.nameForDelivery }}">Recoger en otro nodo</a>
+            {% endif %}
         </div>
     </td>
 </tr>
