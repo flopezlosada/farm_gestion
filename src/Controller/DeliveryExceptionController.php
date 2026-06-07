@@ -9,6 +9,7 @@ use App\Form\DeliveryExceptionType;
 use App\Repository\BasketRepository;
 use App\Repository\DeliveryExceptionRepository;
 use App\Repository\NodeRepository;
+use App\Service\Delivery\ClosureShiftReconciler;
 use App\Service\Delivery\NodeDeliveryDate;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -71,7 +72,7 @@ class DeliveryExceptionController extends AbstractController
      * @return Response
      */
     #[Route('/new', name: 'delivery_exception_new', methods: ['GET', 'POST'])]
-    public function new(Request $request, EntityManagerInterface $entityManager, DeliveryExceptionRepository $repository, NodeRepository $nodeRepository, BasketRepository $basketRepository, NodeDeliveryDate $deliveryDate): Response
+    public function new(Request $request, EntityManagerInterface $entityManager, DeliveryExceptionRepository $repository, NodeRepository $nodeRepository, BasketRepository $basketRepository, NodeDeliveryDate $deliveryDate, ClosureShiftReconciler $reconciler): Response
     {
         $exception = new DeliveryException();
         $form = $this->createForm(DeliveryExceptionType::class, $exception);
@@ -84,6 +85,7 @@ class DeliveryExceptionController extends AbstractController
                 $entityManager->persist($exception);
                 $entityManager->flush();
                 $this->addFlash('success', 'Excepción de reparto creada.');
+                $this->reconcileClosure($exception, $reconciler);
 
                 return $this->redirectToRoute('delivery_exception_index');
             }
@@ -104,7 +106,7 @@ class DeliveryExceptionController extends AbstractController
      * @return Response
      */
     #[Route('/{id}/edit', name: 'delivery_exception_edit', methods: ['GET', 'POST'])]
-    public function edit(Request $request, DeliveryException $exception, EntityManagerInterface $entityManager, DeliveryExceptionRepository $repository, NodeRepository $nodeRepository, BasketRepository $basketRepository, NodeDeliveryDate $deliveryDate): Response
+    public function edit(Request $request, DeliveryException $exception, EntityManagerInterface $entityManager, DeliveryExceptionRepository $repository, NodeRepository $nodeRepository, BasketRepository $basketRepository, NodeDeliveryDate $deliveryDate, ClosureShiftReconciler $reconciler): Response
     {
         $form = $this->createForm(DeliveryExceptionType::class, $exception);
         $form->handleRequest($request);
@@ -115,6 +117,7 @@ class DeliveryExceptionController extends AbstractController
             } else {
                 $entityManager->flush();
                 $this->addFlash('success', 'Excepción de reparto actualizada.');
+                $this->reconcileClosure($exception, $reconciler);
 
                 return $this->redirectToRoute('delivery_exception_index');
             }
@@ -145,6 +148,31 @@ class DeliveryExceptionController extends AbstractController
         $this->addFlash('success', 'Excepción de reparto borrada.');
 
         return $this->redirectToRoute('delivery_exception_index');
+    }
+
+    /**
+     * Reconcilia los cambios puntuales que tocan la semana recién guardada, si es
+     * un cierre global. Delega en {@see ClosureShiftReconciler} (que no-opera si no
+     * lo es) y resume el resultado en un flash para el admin.
+     *
+     * @param DeliveryException      $exception  Excepción recién guardada.
+     * @param ClosureShiftReconciler $reconciler
+     */
+    private function reconcileClosure(DeliveryException $exception, ClosureShiftReconciler $reconciler): void
+    {
+        $r = $reconciler->reconcile($exception);
+        if ($r['cancelled'] === 0 && $r['repointed'] === 0 && $r['kept'] === 0) {
+            return; // no era cierre global, o no había cambios que tocar
+        }
+
+        $msg = sprintf(
+            'Cierre de semana: %d cambio(s) anulado(s), %d re-apuntado(s) a la siguiente semana, %d sin tocar (ya repartidos).',
+            $r['cancelled'], $r['repointed'], $r['kept'],
+        );
+        if ($r['notify'] !== []) {
+            $msg .= sprintf(' Avisar a %d socio(s) para que rehagan su cambio (pendiente de mail).', count($r['notify']));
+        }
+        $this->addFlash('warning', $msg);
     }
 
     /**
