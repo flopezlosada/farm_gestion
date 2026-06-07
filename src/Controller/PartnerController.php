@@ -1081,11 +1081,28 @@ class PartnerController extends AbstractController
         }
         $partner1 = $entityManager->getRepository(\App\Entity\Partner::class)->find($partner1_id);
         $partner2 = $entityManager->getRepository(\App\Entity\Partner::class)->find($partner2_id);
-        $partner1->addRelative($partner2);
-        foreach ($partner2->getPartnerBasketShares() as $share) {
-            $entityManager->remove($share);
+
+        // Un familiar es secundario y NO tiene cesta propia (vive en el principal).
+        // findFamiliar ya no ofrece a quien tenga cesta activa, así que esto es una
+        // red defensiva: si llega igualmente (URL a mano, dato heredado), rechazamos
+        // en vez de destruir su PartnerBasketShare en silencio.
+        $hasActiveBasket = $partner2->getPartnerBasketShares()->exists(
+            fn ($i, PartnerBasketShare $share) => $share->getIsActive()
+        );
+        if ($hasActiveBasket) {
+            $session->getFlashBag()->add(
+                'warning',
+                sprintf(
+                    'No se puede asociar a %s %s como familiar: tiene una cesta propia activa. '
+                    . 'Dale de baja la cesta antes de vincularla a una familia.',
+                    $partner2->getName(),
+                    $partner2->getSurname()
+                )
+            );
+            return $this->redirectToRoute('partner_show', array('id' => $partner1_id));
         }
 
+        $partner1->addRelative($partner2);
 
         $entityManager->persist($partner1);
         $entityManager->persist($partner2);

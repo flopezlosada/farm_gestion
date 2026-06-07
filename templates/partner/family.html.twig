@@ -1,11 +1,15 @@
 {# ============================================================
  # Selector de familiar o socix con quien comparte cesta.
+ # Reusa el lenguaje visual --prl-* del listado de socixs
+ # (templates/partner/_listing_styles.html.twig) para un aspecto
+ # consistente: avatar + nombre, tabla limpia y buscador instantáneo.
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
 
 {% set is_family = type == 'add_family' %}
+{% set avatar_palette = ['sage', 'ochre', 'terra', 'ink'] %}
 
 {% block title %}{{ is_family ? 'Selección de familiares' : 'Selección de cesta compartida' }}{% endblock %}
 
@@ -19,52 +23,134 @@
     <span class="csa-topbar__crumb-active">{{ is_family ? 'Añadir familiar' : 'Cesta compartida' }}</span>
 {% endblock %}
 
+{% block more_css %}
+{{ parent() }}
+{% include 'partner/_listing_styles.html.twig' %}
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    <script>
+        // Selector de familiar — buscador instantáneo (client-side).
+        // La lista de candidatos elegibles es corta (sólo socixs activos sin
+        // familia ni cesta propia), así que filtramos en cliente en vez de
+        // recargar como hace el listado completo.
+        (function () {
+            var search = document.getElementById('fam-search');
+            if (!search) { return; }
+            var rows  = Array.prototype.slice.call(document.querySelectorAll('.prl-table tbody tr[data-search]'));
+            var empty = document.getElementById('fam-empty-filter');
+            var count = document.getElementById('fam-count');
+
+            function apply() {
+                var q = search.value.trim().toLowerCase();
+                var visible = 0;
+                rows.forEach(function (row) {
+                    var show = q === '' || (row.getAttribute('data-search') || '').indexOf(q) >= 0;
+                    row.hidden = !show;
+                    if (show) { visible += 1; }
+                });
+                if (count) { count.textContent = visible; }
+                if (empty) { empty.hidden = visible !== 0; }
+            }
+
+            search.addEventListener('input', apply);
+        }());
+    </script>
+{% endblock %}
+
 {% block csa_main %}
+<div class="prl">
 
     {{ csa.page_header(
         'Socixs · Vínculos',
         is_family ? ('Familiares de ' ~ partner.name ~ ' ' ~ partner.surname) : ('Cesta compartida de ' ~ partner.name ~ ' ' ~ partner.surname),
         is_family
-            ? 'Al pinchar en una socix se le añade como familiar de la socix actual. La familiar principal es la actual; la seleccionada queda relacionada con ella pero no es la principal.'
-            : 'Al pinchar en una socix se establece con quién comparte la cesta semanal.'
+            ? 'Elige a la persona que pasa a ser familiar de la socix actual. La principal es la actual; la seleccionada queda vinculada a ella. Sólo aparecen socixs activos sin familia ni cesta propia.'
+            : 'Elige con quién comparte la cesta semanal la socix actual.'
     ) }}
 
-    <div class="csa-table-wrap">
-        <table class="csa-table" data-paginate>
-            <thead>
-                <tr>
-                    <th>Nombre</th>
-                    <th class="csa-table__actions">Acciones</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for people in partners %}
+    {# ============ toolbar: buscador + contador ============ #}
+    <div class="prl-toolbar">
+        <div class="prl-search">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
+            <input type="search" id="fam-search" placeholder="Buscar por nombre o apellidos…" autocomplete="off">
+        </div>
+        <span class="prl-filt-divider"></span>
+        <div class="counters">
+            <b id="fam-count">{{ partners|length }}</b> candidat{{ partners|length == 1 ? 'x' : 'xs' }}
+        </div>
+        <div class="spacer"></div>
+        <a href="{{ path('partner_show', { id: partner.id }) }}" class="prl-btn">
+            <i class="fa fa-arrow-left"></i> Volver a la ficha
+        </a>
+    </div>
+
+    {# ============ tabla de candidatos ============ #}
+    <div class="prl-table-wrap">
+        {% if partners|length == 0 %}
+            <div class="prl-empty">
+                {% if is_family %}
+                    No hay socixs disponibles para añadir como familiar. Sólo se ofrecen
+                    personas activas sin familia previa ni cesta propia.
+                {% else %}
+                    No hay socixs disponibles para compartir cesta.
+                {% endif %}
+            </div>
+        {% else %}
+            <table class="prl-table">
+                <thead>
                     <tr>
-                        <td>{{ people.name }} {{ people.surname }}</td>
-                        <td class="csa-table__actions">
-                            <a href="{{ path('partner_show', { id: people.id }) }}" title="Ver" aria-label="Ver"><i class="fa fa-eye"></i></a>
-                            <button type="button"
-                               title="Asociar" aria-label="Asociar"
-                                onclick="document.getElementById('confirm-family-{{ people.id }}').showModal()"><i class="fa fa-link"></i></button>
+                        <th>Socix</th>
+                        <th class="actions"><span class="sr-only">Acciones</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for people in partners %}
+                        {% set initials = (people.name|first|upper) ~ (people.surname|first|default('')|upper) %}
+                        {% set avatar_tone = avatar_palette[(people.id|default(0)) % 4] %}
+                        <tr data-search="{{ (people.name ~ ' ' ~ people.surname)|lower }}">
+                            <td>
+                                <div class="prl-person">
+                                    <span class="prl-person__avatar prl-person__avatar--{{ avatar_tone }}" aria-hidden="true">{{ initials }}</span>
+                                    <div class="prl-person__body">
+                                        <a class="prl-person__name" href="{{ path('partner_show', { id: people.id }) }}">
+                                            {{ people.name }} {{ people.surname }}
+                                        </a>
+                                        {% if people.email %}
+                                            <span class="prl-person__meta">{{ people.email }}</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="actions">
+                                <a href="{{ path('partner_show', { id: people.id }) }}" title="Ver ficha" aria-label="Ver ficha"><i class="fa fa-eye"></i></a>
+                                <button type="button" class="prl-btn prl-btn--primary prl-btn--sm"
+                                        onclick="document.getElementById('confirm-family-{{ people.id }}').showModal()">
+                                    <i class="fa fa-link"></i> Asociar
+                                </button>
 {{ csa.confirm_dialog('confirm-family-' ~ people.id, {
     variant: 'success',
     eyebrow: 'Confirmar',
-    title: 'Asociar persona al socix',
-    body: '¿Asociar a ' ~ people.name ~ ' ' ~ people.surname ~ ' con ' ~ partner.name ~ ' ' ~ partner.surname ~ '?',
-    confirm_label: 'Asociar',
+    title: is_family ? 'Añadir familiar' : 'Compartir cesta',
+    body: is_family
+        ? ('¿Añadir a ' ~ people.name ~ ' ' ~ people.surname ~ ' como familiar de ' ~ partner.name ~ ' ' ~ partner.surname ~ '?')
+        : ('¿' ~ people.name ~ ' ' ~ people.surname ~ ' compartirá la cesta con ' ~ partner.name ~ ' ' ~ partner.surname ~ '?'),
+    confirm_label: is_family ? 'Añadir familiar' : 'Compartir',
     confirm_href: path(type, { partner1_id: partner.id, partner2_id: people.id }),
 }) }}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    <tr id="fam-empty-filter" hidden>
+                        <td colspan="2" class="prl-empty" style="padding: 32px 18px;">
+                            Ninguna socix coincide con la búsqueda.
                         </td>
                     </tr>
-                {% else %}
-                    <tr>
-                        <td colspan="2" class="csa-muted" style="text-align: center; padding: var(--csa-sp-8);">
-                            No hay socixs disponibles para asociar.
-                        </td>
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+                </tbody>
+            </table>
+        {% endif %}
     </div>
 
+</div>
 {% endblock %}
