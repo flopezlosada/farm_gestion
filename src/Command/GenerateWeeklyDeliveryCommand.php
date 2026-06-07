@@ -15,22 +15,32 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
 /**
- * Materializa el listado de los próximos N viernes (default 4) usando
- * WeeklyBasketGenerator. Pensado para correr por cron los lunes 06:00,
- * de forma que las acciones autoservicio del panel (saltar cesta,
- * cambiar nodo, cambio puntual de viernes) tengan los WeeklyBasket
- * disponibles sin necesidad de que admin haya entrado a la pantalla
- * de reparto.
+ * CONGELA (materializa) el listado de la semana que ENTRA EN OPERACIÓN: por
+ * defecto solo el viernes más próximo (1 semana). Pensado para correr por cron
+ * los lunes 06:00, de modo que cada lunes blinda la semana de esa misma semana
+ * y solo esa, para que no se mueva bajo quien reparte.
  *
- * Como WeeklyBasketGenerator es idempotente para Baskets ya generados
- * (entra en la rama reuseExistingWeeklyBaskets), correrlo a diario o
- * varias veces no rompe nada — solo añade listados nuevos cuando hay
- * Baskets que aún no se procesaron.
+ * Es la pieza "congelado al entrar en operación" del rework de MATERIALIZACIÓN
+ * TARDÍA: las semanas futuras NO se materializan por adelantado (antes se hacían
+ * 4); se dibujan al vuelo desde las reglas ({@see WeeklyBasketGenerator::projectLinesForNode}),
+ * de forma que un festivo o un cambio metido después siga surtiendo efecto. Las
+ * acciones autoservicio del panel sobre semanas futuras NO necesitan WeeklyBasket
+ * pre-materializados: se guardan como intents (PartnerDeliveryShift) y la
+ * proyección los aplica; al congelar la semana, el generador los materializa.
+ *
+ * --weeks sigue disponible para forzar más semanas (p. ej. un backfill puntual).
+ * Como WeeklyBasketGenerator es idempotente para Baskets ya generados (rama
+ * reuseExistingWeeklyBaskets), correrlo a diario o varias veces no rompe nada.
+ *
+ * NOTA: mientras las vistas (byNode/show/PDF) sigan materializando al ver, ver
+ * una semana futura aún la congela; ese fallback se retira cuando esas vistas
+ * pasen a dibujar desde la proyección (frente pendiente del rework).
  */
-#[AsCommand(name: 'app:generate-weekly-delivery', description: 'Materializa el listado de los próximos N viernes (cron lunes).')]
+#[AsCommand(name: 'app:generate-weekly-delivery', description: 'Congela el listado de la semana que entra en operación (cron lunes).')]
 class GenerateWeeklyDeliveryCommand extends Command
 {
-    private const DEFAULT_WEEKS = 4;
+    /** Por defecto solo la semana que entra en operación (materialización tardía). */
+    private const DEFAULT_WEEKS = 1;
 
     public function __construct(
         private readonly EntityManagerInterface $em,
@@ -43,7 +53,7 @@ class GenerateWeeklyDeliveryCommand extends Command
     protected function configure(): void
     {
         $this
-            ->addOption('weeks', null, InputOption::VALUE_REQUIRED, 'Cuántos viernes adelante materializar', self::DEFAULT_WEEKS)
+            ->addOption('weeks', null, InputOption::VALUE_REQUIRED, 'Cuántos viernes congelar desde hoy (default 1: solo el que entra en operación)', self::DEFAULT_WEEKS)
             ->addOption('basket-id', null, InputOption::VALUE_REQUIRED, 'Procesar un Basket concreto (ignora --weeks). Útil para regenerar ciclos pasados tras una corrección.')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Lista los Baskets que tocaría sin persistir nada');
     }
