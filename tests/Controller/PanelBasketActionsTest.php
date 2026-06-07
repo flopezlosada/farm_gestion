@@ -5,26 +5,29 @@ namespace App\Tests\Controller;
 use App\DataFixtures\PartnerUserFixtures;
 use App\Entity\Basket;
 use App\Entity\Partner;
+use App\Entity\PartnerBasketShare;
 use App\Entity\PartnerDeliveryShift;
-use App\Entity\PartnerEvent;
 use App\Entity\WeeklyBasket;
+use App\Service\Delivery\DeliveryShiftApplier;
+use App\Service\Delivery\WeeklyBasketGenerator;
+use App\Service\Delivery\WeeklyBasketSkipper;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 
 /**
- * Tests de las acciones POST del panel del socix sobre su próxima cesta:
- * saltar/recuperar, cambiar de nodo, pedir y cancelar cambio puntual de
- * viernes. Verifican que cada acción persiste el estado correcto
- * (WeeklyBasket, PartnerDeliveryShift) y deja el PartnerEvent esperado
- * en el feed.
+ * Tests del autoservicio del socix sobre su calendario de recogida
+ * (/panel/calendar). El socix puede saltar ("no recoge") y mover una entrega;
+ * son las rutas VIVAS panel_calendar_skip / panel_calendar_move, que comparten
+ * el partial partner/_calendar.html.twig con el calendario del gestor.
+ *
+ * Reescrito desde la versión que probaba los endpoints /cesta/skip-toggle,
+ * /cesta/cambiar-viernes y /cesta/cancelar-cambio-viernes: aquéllos quedaron
+ * huérfanos al migrar el panel al calendario y los tests fallaban porque
+ * /panel/cesta hoy solo redirige al calendario.
  */
 class PanelBasketActionsTest extends AbstractPartnerAuthenticatedTest
 {
-    /**
-     * Resetea el estado mutable del socix (WB status, shifts, events) para
-     * que cada test arranque con la misma foto que dejan las fixtures —
-     * sin volver a recargarlas, que sería lento.
-     */
-    private function em(\Symfony\Bundle\FrameworkBundle\KernelBrowser $client): EntityManagerInterface
+    private function em(KernelBrowser $client): EntityManagerInterface
     {
         return $client->getContainer()->get('doctrine.orm.entity_manager');
     }
@@ -33,10 +36,9 @@ class PanelBasketActionsTest extends AbstractPartnerAuthenticatedTest
      * Resetea el estado mutable del socix (WB status, shifts, events) para
      * que cada test arranque con la misma foto que dejan las fixtures —
      * sin recargarlas, que sería lento. Se invoca al inicio de cada test
-     * con el cliente ya creado: no podemos bootear un kernel auxiliar
-     * porque WebTestCase::createClient() exige que sea el primer boot.
+     * con el cliente ya creado.
      */
-    private function resetSocixState(\Symfony\Bundle\FrameworkBundle\KernelBrowser $client): void
+    private function resetSocixState(KernelBrowser $client): void
     {
         $conn = $this->em($client)->getConnection();
         $params = ['email' => PartnerUserFixtures::USER_SOCIX_EMAIL];
@@ -68,129 +70,151 @@ class PanelBasketActionsTest extends AbstractPartnerAuthenticatedTest
             ->findOneBy(['email' => PartnerUserFixtures::USER_SOCIX_EMAIL]);
     }
 
-    public function testSkipToggleCambiaStatusDeWBYEmiteEvent(): void
+    /**
+     * Entrega del socix más adelantada en el tiempo: la candidata con más
+     * margen para caer dentro del plazo de autoservicio (jueves previo).
+     */
+    private function farthestSocixWeeklyBasket(EntityManagerInterface $em, Partner $partner): ?WeeklyBasket
     {
-        $client = $this->createPartnerAuthenticatedClient();
-        $this->resetSocixState($client);
-        $em = $this->em($client);
-        $partner = $this->reloadSocixPartner($em);
-
-        $wb = $em->getRepository(WeeklyBasket::class)
-            ->findOneBy(['partner' => $partner], ['id' => 'DESC']);
-        $this->assertNotNull($wb);
-        $this->assertSame(1, $wb->getWeeklyBasketStatus()->getId(), 'Estado inicial debe ser Recoge');
-
-        $crawler = $client->request('GET', '/panel/cesta');
-        // Extraer el token del form específico del skip (id="panel-skip-form")
-        // para evitar coger el token del form de cambio de viernes
-        $token = (string) $crawler->filter('#panel-skip-form input[name="_csrf_token"]')->first()->attr('value');
-
-        $client->request('POST', '/panel/cesta/skip-toggle', ['_csrf_token' => $token]);
-        $client->followRedirect();
-
-        $em->clear();
-        $wb = $em->getRepository(WeeklyBasket::class)->find($wb->getId());
-        $this->assertSame(2, $wb->getWeeklyBasketStatus()->getId(), 'Tras skip toggle, status debe ser 2');
-
-        $event = $em->getRepository(PartnerEvent::class)
-            ->findOneBy(['partner' => $partner, 'type' => PartnerEvent::TYPE_BASKET_SKIP], ['id' => 'DESC']);
-        $this->assertNotNull($event, 'Debe quedar PartnerEvent BASKET_SKIP en el feed');
-    }
-
-    public function testShiftRequestCreaEntidadYAplicaCascada(): void
-    {
-        $client = $this->createPartnerAuthenticatedClient();
-        $this->resetSocixState($client);
-        $em = $this->em($client);
-        $partner = $this->reloadSocixPartner($em);
-
-        // Encontramos el `from` (próxima WB) y el `to` (siguiente Basket).
-        $nextWb = $em->getRepository(WeeklyBasket::class)
-            ->findOneBy(['partner' => $partner], ['id' => 'DESC']);
-        $from = $nextWb->getBasket();
-
-        $to = $em->getRepository(Basket::class)->createQueryBuilder('b')
-            ->where('b.date > :d')
-            ->setParameter('d', $from->getDate())
-            ->orderBy('b.date', 'ASC')
+        return $em->getRepository(WeeklyBasket::class)->createQueryBuilder('wb')
+            ->innerJoin('wb.basket', 'b')
+            ->where('wb.partner = :p')
+            ->setParameter('p', $partner)
+            ->orderBy('b.date', 'DESC')
             ->setMaxResults(1)
             ->getQuery()->getOneOrNullResult();
-        $this->assertNotNull($to, 'Necesitamos un Basket siguiente al actual en fixtures');
+    }
 
-        $crawler = $client->request('GET', '/panel/cesta');
-        $token = (string) $crawler->filter('form[action$="cambiar-viernes"] input[name="_csrf_token"]')->first()->attr('value');
+    /**
+     * Saltar desde el calendario del socix LIBERA el día: el WeeklyBasket se
+     * retira (no queda clavado en estado 2) y deja un intent "no recoge" durable
+     * sin destino, recuperable. Mismo contrato que el calendario del gestor
+     * (testDeliveryCalendarSkipFreesTheDayAndLeavesIntent), aquí por el socix.
+     */
+    public function testCalendarSkipLiberaElDiaYDejaIntent(): void
+    {
+        $client = $this->createPartnerAuthenticatedClient();
+        $this->resetSocixState($client);
+        $em = $this->em($client);
+        $partner = $this->reloadSocixPartner($em);
 
-        $client->request('POST', '/panel/cesta/cambiar-viernes', [
-            '_csrf_token' => $token,
-            'to_basket_id' => $to->getId(),
+        $wb = $this->farthestSocixWeeklyBasket($em, $partner);
+        $this->assertNotNull($wb, 'El socix de fixtures debería tener al menos una entrega.');
+        $this->assertSame(
+            WeeklyBasketSkipper::STATUS_PICKS,
+            $wb->getWeeklyBasketStatus()?->getId(),
+            'Tras el reset el socix parte recogiendo (estado 1).',
+        );
+
+        $wbId = $wb->getId();
+        $basketId = $wb->getBasket()->getId();
+        $date = $wb->getBasket()->getDate();
+
+        // La pantalla del mes, con la entrega seleccionada (?sel), pinta el panel
+        // con el formulario de saltar y su token — pero SOLO si está dentro del
+        // plazo de autoservicio. Si no, el socix no puede actuar: lo saltamos.
+        $crawler = $client->request('GET', sprintf(
+            '/panel/calendar?year=%d&month=%d&sel=%d',
+            (int) $date->format('Y'),
+            (int) $date->format('n'),
+            $basketId,
+        ));
+        $this->assertSame(200, $client->getResponse()->getStatusCode());
+
+        $tokenInput = $crawler->filter(sprintf('#rcal-skip-form-%d input[name="_csrf_token"]', $basketId));
+        if ($tokenInput->count() === 0) {
+            $this->markTestSkipped('Ninguna entrega del socix cae dentro del plazo de autoservicio en la fecha actual.');
+        }
+
+        $client->request('POST', sprintf('/panel/calendar/skip/%d', $basketId), [
+            '_csrf_token' => $tokenInput->attr('value'),
         ]);
-        $client->followRedirect();
+        $this->assertResponseRedirects();
+
+        // El EM a usar es el del contenedor del último kernel (el mismo que
+        // inyectan los servicios del cleanup); con el capturado antes, las
+        // entidades llegarían DETACHED al applier.
+        $em = $client->getContainer()->get('doctrine.orm.entity_manager');
+        $em->clear();
+        $basket = $em->getRepository(Basket::class)->find($basketId);
+        $partner = $this->reloadSocixPartner($em);
+        $wbAfter = $em->getRepository(WeeklyBasket::class)->find($wbId);
+        $intent = $em->getRepository(PartnerDeliveryShift::class)
+            ->findOneBy(['partner' => $partner->getId(), 'fromBasket' => $basketId]);
+
+        $dayFreed = $wbAfter === null;
+        $intentIsSkip = $intent !== null && $intent->isSkip();
+
+        // db_test no tiene rollback transaccional: restauramos ANTES de las
+        // aserciones (que podrían lanzar) recorriendo "volver a recoger".
+        if ($intent !== null) {
+            $client->getContainer()->get(DeliveryShiftApplier::class)->cancelSkipIntent($intent, 'test:cleanup');
+        }
+        $share = $em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner, $basket->getDate());
+        if ($share !== null) {
+            $client->getContainer()->get(WeeklyBasketGenerator::class)->materializeShareDelivery($basket, $share);
+        }
+
+        $this->assertTrue($dayFreed, 'Saltar debe LIBERAR el día: el WeeklyBasket se retira, no se queda en estado 2.');
+        $this->assertTrue($intentIsSkip, 'Saltar debe dejar un intent "no recoge" durable (sin destino).');
+    }
+
+    /**
+     * POST de saltar sin token CSRF válido redirige y NO altera el estado de la
+     * entrega. La guarda CSRF se evalúa antes que el plazo, así que es
+     * determinista (no depende de la fecha).
+     */
+    public function testCalendarSkipRechazaCsrfInvalido(): void
+    {
+        $client = $this->createPartnerAuthenticatedClient();
+        $this->resetSocixState($client);
+        $em = $this->em($client);
+        $partner = $this->reloadSocixPartner($em);
+
+        $wb = $this->farthestSocixWeeklyBasket($em, $partner);
+        $this->assertNotNull($wb);
+        $wbId = $wb->getId();
+        $statusBefore = $wb->getWeeklyBasketStatus()?->getId();
+
+        $client->request('POST', sprintf('/panel/calendar/skip/%d', $wb->getBasket()->getId()), [
+            '_csrf_token' => 'token-invalido',
+        ]);
+        $this->assertResponseRedirects();
+
+        $em->clear();
+        $reloaded = $em->getRepository(WeeklyBasket::class)->find($wbId);
+        $this->assertNotNull($reloaded, 'Sin token CSRF válido la entrega no debe retirarse.');
+        $this->assertSame(
+            $statusBefore,
+            $reloaded->getWeeklyBasketStatus()?->getId(),
+            'Sin token CSRF válido, el estado de la entrega no debe cambiar.',
+        );
+    }
+
+    /**
+     * POST de mover sin token CSRF válido redirige y NO crea ningún
+     * PartnerDeliveryShift. Guarda de seguridad del endpoint del socix.
+     */
+    public function testCalendarMoveRechazaCsrfInvalido(): void
+    {
+        $client = $this->createPartnerAuthenticatedClient();
+        $this->resetSocixState($client);
+        $em = $this->em($client);
+        $partner = $this->reloadSocixPartner($em);
+
+        $wb = $this->farthestSocixWeeklyBasket($em, $partner);
+        $this->assertNotNull($wb);
+        $basketId = $wb->getBasket()->getId();
+
+        $client->request('POST', sprintf('/panel/calendar/move/%d', $basketId), [
+            '_csrf_token' => 'token-invalido',
+            'to_basket_id' => $basketId,
+        ]);
+        $this->assertResponseRedirects();
 
         $em->clear();
         $shift = $em->getRepository(PartnerDeliveryShift::class)
-            ->findOneBy(['partner' => $partner]);
-        $this->assertNotNull($shift, 'Debe haberse creado un PartnerDeliveryShift');
-
-        $partner = $this->reloadSocixPartner($em);
-        $wbFrom = $em->getRepository(WeeklyBasket::class)
-            ->findOneBy(['partner' => $partner, 'basket' => $shift->getFromBasket()]);
-        $this->assertSame(2, $wbFrom->getWeeklyBasketStatus()->getId(), 'WB(from) debe quedar en status 2');
-
-        $event = $em->getRepository(PartnerEvent::class)
-            ->findOneBy(['partner' => $partner, 'type' => PartnerEvent::TYPE_WEEK_SWAP], ['id' => 'DESC']);
-        $this->assertNotNull($event);
-        $this->assertFalse($event->getPayload()['cancelled'] ?? true);
-    }
-
-    public function testShiftCancelRevierteCascada(): void
-    {
-        $client = $this->createPartnerAuthenticatedClient();
-        $this->resetSocixState($client);
-        $em = $this->em($client);
-        $partner = $this->reloadSocixPartner($em);
-
-        // Replicamos el setup del test anterior: creamos un shift.
-        $nextWb = $em->getRepository(WeeklyBasket::class)
-            ->findOneBy(['partner' => $partner], ['id' => 'DESC']);
-        $from = $nextWb->getBasket();
-        $to = $em->getRepository(Basket::class)->createQueryBuilder('b')
-            ->where('b.date > :d')
-            ->setParameter('d', $from->getDate())
-            ->orderBy('b.date', 'ASC')
-            ->setMaxResults(1)
-            ->getQuery()->getOneOrNullResult();
-
-        $crawler = $client->request('GET', '/panel/cesta');
-        $token = (string) $crawler->filter('form[action$="cambiar-viernes"] input[name="_csrf_token"]')->first()->attr('value');
-        $client->request('POST', '/panel/cesta/cambiar-viernes', [
-            '_csrf_token' => $token,
-            'to_basket_id' => $to->getId(),
-        ]);
-        $client->followRedirect();
-
-        // Cancelamos.
-        $crawler = $client->request('GET', '/panel/cesta');
-        $token = (string) $crawler->filter('form[action$="cancelar-cambio-viernes"] input[name="_csrf_token"]')->first()->attr('value');
-        $client->request('POST', '/panel/cesta/cancelar-cambio-viernes', ['_csrf_token' => $token]);
-        $client->followRedirect();
-
-        $em->clear();
-        $partner = $this->reloadSocixPartner($em);
-        $shift = $em->getRepository(PartnerDeliveryShift::class)->findOneBy(['partner' => $partner]);
-        $this->assertNull($shift, 'El shift debe borrarse al cancelar');
-
-        $wbFrom = $em->getRepository(WeeklyBasket::class)
-            ->findOneBy(['partner' => $partner, 'basket' => $from]);
-        $this->assertSame(1, $wbFrom->getWeeklyBasketStatus()->getId(), 'WB(from) debe volver a status 1');
-
-        $cancelEvent = $em->getRepository(PartnerEvent::class)->createQueryBuilder('e')
-            ->where('e.partner = :p AND e.type = :t')
-            ->orderBy('e.id', 'DESC')
-            ->setMaxResults(1)
-            ->setParameter('p', $partner)
-            ->setParameter('t', PartnerEvent::TYPE_WEEK_SWAP)
-            ->getQuery()->getOneOrNullResult();
-        $this->assertNotNull($cancelEvent);
-        $this->assertTrue($cancelEvent->getPayload()['cancelled'] ?? false, 'Último WEEK_SWAP debe tener cancelled=true');
+            ->findOneBy(['partner' => $partner->getId(), 'fromBasket' => $basketId]);
+        $this->assertNull($shift, 'Sin token CSRF válido no debe crearse ningún cambio puntual.');
     }
 }
