@@ -27,6 +27,28 @@ class DeliveryShiftsAdminActionsTest extends AbstractAuthenticatedTest
         return $client->getContainer()->get('doctrine.orm.entity_manager');
     }
 
+    /**
+     * Deja al socix en estado limpio: sin cambios de día y con todas sus
+     * cestas en "recoge". Los tests funcionales corren sobre db_test sin
+     * reset transaccional entre ejecuciones, así que sin esto un segundo run
+     * (o el orden de otros tests) arrastra shifts residuales y rompe el apply.
+     */
+    private function resetPartnerState(KernelBrowser $client, Partner $partner): void
+    {
+        $em = $this->em($client);
+        $applier = $client->getContainer()->get(DeliveryShiftApplier::class);
+        foreach ($em->getRepository(PartnerDeliveryShift::class)->findBy(['partner' => $partner]) as $shift) {
+            $applier->cancel($shift, actor: 'gestor:test-reset');
+        }
+        $picked = $em->getRepository(WeeklyBasketStatus::class)->find(1);
+        foreach ($em->getRepository(WeeklyBasket::class)->findBy(['partner' => $partner]) as $wb) {
+            if ($wb->getWeeklyBasketStatus()?->getId() !== 1) {
+                $wb->setWeeklyBasketStatus($picked);
+            }
+        }
+        $em->flush();
+    }
+
     public function testRegistroListaElCambioDeLaSemanaYPermiteCancelar(): void
     {
         $client = $this->createAuthenticatedClient();
@@ -35,6 +57,7 @@ class DeliveryShiftsAdminActionsTest extends AbstractAuthenticatedTest
         $partner = $em->getRepository(Partner::class)
             ->findOneBy(['email' => PartnerUserFixtures::USER_SOCIX_EMAIL]);
         $this->assertNotNull($partner);
+        $this->resetPartnerState($client, $partner);
 
         [$from, $to] = $this->resolveFromTo($em);
 
@@ -78,6 +101,7 @@ class DeliveryShiftsAdminActionsTest extends AbstractAuthenticatedTest
 
         $partner = $em->getRepository(Partner::class)
             ->findOneBy(['email' => PartnerUserFixtures::USER_SOCIX_EMAIL]);
+        $this->resetPartnerState($client, $partner);
         [$from] = $this->resolveFromTo($em);
 
         // Materializamos la semana y marcamos al socix como "no recoge" (status 2)
