@@ -36,21 +36,7 @@ class NodeDeliverySheetTest extends TestCase
 
     public function testHojaCompletaDeUnNodo(): void
     {
-        // ---- Grupo Torremocha (orden de modalidad y subtotal) ----
-        $torre = $this->group(20, 'Torremocha', '#85c0e0');
-        $this->delivery(1, 'Cris y Paco', $torre, bsId: 1, bsName: 'Semanal', cestas: 1.0, dozens: 1.0, eggs: true);
-        $this->delivery(2, 'Miguel y Paloma', $torre, bsId: 2, bsName: 'Quincenal', cestas: 1.0, dozens: 0.0, eggs: false);
-        $this->delivery(3, 'Raquel', $torre, bsId: 5, bsName: 'Solo huevos', cestas: 0.0, dozens: 1.5, eggs: false);
-
-        // ---- Grupo Bustarviejo (alfabéticamente antes que Torremocha) ----
-        $busta = $this->group(3, 'Bustarviejo', '#e0a585');
-        $this->delivery(4, 'Victoria y David', $busta, bsId: 2, bsName: 'Quincenal', cestas: 1.0, dozens: 0.5, eggs: true);
-
-        // ---- Compartidas (bloque aparte, parejas pegadas) ----
-        $pilar = $this->delivery(5, 'Pilar y Eduardo', $torre, bsId: 4, bsName: 'Semanal compartida', cestas: 0.5, dozens: 0.0, eggs: false);
-        $eduardo = $this->delivery(6, 'Eduardo y Pilar', $torre, bsId: 4, bsName: 'Semanal compartida', cestas: 0.5, dozens: 0.0, eggs: false);
-        $this->pairUp($pilar, $eduardo);
-        $this->delivery(7, 'Hilde', $busta, bsId: 6, bsName: 'Quincenal compartida', cestas: 0.5, dozens: 0.0, eggs: false);
+        $this->populateFullNodeScenario();
 
         $result = $this->buildSheet();
 
@@ -105,6 +91,80 @@ class NodeDeliverySheetTest extends TestCase
         // --- Totales del nodo ---
         $this->assertSame(4.5, $result['totals']['cestas'], '1+1+0 +1 +0,5+0,5+0,5');
         $this->assertSame(3.0, $result['totals']['docenas'], '1 +1,5 +0,5');
+    }
+
+    /**
+     * GOLDEN: congela la salida ENTERA de build() para el escenario rico. A
+     * diferencia de {@see testHojaCompletaDeUnNodo} (que comprueba campos
+     * sueltos), aquí se aserta el array completo, así que cualquier cambio en el
+     * shaping —orden, claves, valores, campos nuevos— rompe el test. Es la red
+     * que blinda el refactor de NodeDeliverySheet a DTO de líneas: reordenar la
+     * fuente de datos NO debe alterar ni un byte del listado.
+     *
+     * Si este test se vuelve rojo a propósito (cambio real del formato), hay que
+     * regenerar el esperado de abajo CONSCIENTEMENTE, no a la ligera.
+     */
+    public function testGoldenSnapshotHojaCompleta(): void
+    {
+        $this->populateFullNodeScenario();
+
+        $result = $this->buildSheet();
+
+        $this->assertEquals(
+            [
+                'groups' => [
+                    [
+                        'name' => 'Bustarviejo',
+                        'color' => '#e0a585',
+                        'locality' => 'Bustarviejo',
+                        'subtotal_cestas' => 1.0,
+                        'modalities' => [
+                            [
+                                'label' => 'Quincenales y mensuales',
+                                'rows' => [
+                                    ['name' => 'Victoria y David', 'code' => 'QH', 'cestas' => 1.0, 'egg_spec' => '1M', 'egg_count' => 6, 'locality' => 'Bustarviejo'],
+                                ],
+                            ],
+                        ],
+                    ],
+                    [
+                        'name' => 'Torremocha',
+                        'color' => '#85c0e0',
+                        'locality' => 'Torremocha',
+                        'subtotal_cestas' => 2.0,
+                        'modalities' => [
+                            [
+                                'label' => 'Semanales',
+                                'rows' => [
+                                    ['name' => 'Cris y Paco', 'code' => 'SH', 'cestas' => 1.0, 'egg_spec' => '1D', 'egg_count' => 12, 'locality' => 'Torremocha'],
+                                ],
+                            ],
+                            [
+                                'label' => 'Quincenales y mensuales',
+                                'rows' => [
+                                    ['name' => 'Miguel y Paloma', 'code' => 'Q', 'cestas' => 1.0, 'egg_spec' => null, 'egg_count' => 0, 'locality' => 'Torremocha'],
+                                ],
+                            ],
+                            [
+                                'label' => 'Solo huevos',
+                                'rows' => [
+                                    ['name' => 'Raquel', 'code' => 'H', 'cestas' => 0.0, 'egg_spec' => '1D+1M', 'egg_count' => 18, 'locality' => 'Torremocha'],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+                'shared' => [
+                    'rows' => [
+                        ['name' => 'Eduardo y Pilar', 'code' => 'SC', 'cestas' => 0.5, 'egg_spec' => null, 'egg_count' => 0, 'locality' => 'Torremocha', 'color' => '#85c0e0', 'pair_end' => false],
+                        ['name' => 'Pilar y Eduardo', 'code' => 'SC', 'cestas' => 0.5, 'egg_spec' => null, 'egg_count' => 0, 'locality' => 'Torremocha', 'color' => '#85c0e0', 'pair_end' => true],
+                        ['name' => 'Hilde', 'code' => 'QC', 'cestas' => 0.5, 'egg_spec' => null, 'egg_count' => 0, 'locality' => 'Bustarviejo', 'color' => '#e0a585', 'pair_end' => true],
+                    ],
+                ],
+                'totals' => ['cestas' => 4.5, 'docenas' => 3.0],
+            ],
+            $result,
+        );
     }
 
     public function testOrdenPorCodigoDentroDeModalidad(): void
@@ -183,6 +243,31 @@ class NodeDeliverySheetTest extends TestCase
         $this->sheet = new NodeDeliverySheet($wbRepo, $itemRepo, $pbsRepo);
 
         return $this->sheet->build(new Node(), (new Basket())->setDate(new \DateTime('2026-05-15')));
+    }
+
+    /**
+     * Escenario rico compartido por {@see testHojaCompletaDeUnNodo} y el golden:
+     * dos grupos regulares (Torremocha, Bustarviejo) con las tres modalidades y
+     * el bloque de compartidas con una pareja pegada (Pilar↔Eduardo) y una
+     * huérfana (Hilde).
+     */
+    private function populateFullNodeScenario(): void
+    {
+        // ---- Grupo Torremocha (orden de modalidad y subtotal) ----
+        $torre = $this->group(20, 'Torremocha', '#85c0e0');
+        $this->delivery(1, 'Cris y Paco', $torre, bsId: 1, bsName: 'Semanal', cestas: 1.0, dozens: 1.0, eggs: true);
+        $this->delivery(2, 'Miguel y Paloma', $torre, bsId: 2, bsName: 'Quincenal', cestas: 1.0, dozens: 0.0, eggs: false);
+        $this->delivery(3, 'Raquel', $torre, bsId: 5, bsName: 'Solo huevos', cestas: 0.0, dozens: 1.5, eggs: false);
+
+        // ---- Grupo Bustarviejo (alfabéticamente antes que Torremocha) ----
+        $busta = $this->group(3, 'Bustarviejo', '#e0a585');
+        $this->delivery(4, 'Victoria y David', $busta, bsId: 2, bsName: 'Quincenal', cestas: 1.0, dozens: 0.5, eggs: true);
+
+        // ---- Compartidas (bloque aparte, parejas pegadas) ----
+        $pilar = $this->delivery(5, 'Pilar y Eduardo', $torre, bsId: 4, bsName: 'Semanal compartida', cestas: 0.5, dozens: 0.0, eggs: false);
+        $eduardo = $this->delivery(6, 'Eduardo y Pilar', $torre, bsId: 4, bsName: 'Semanal compartida', cestas: 0.5, dozens: 0.0, eggs: false);
+        $this->pairUp($pilar, $eduardo);
+        $this->delivery(7, 'Hilde', $busta, bsId: 6, bsName: 'Quincenal compartida', cestas: 0.5, dozens: 0.0, eggs: false);
     }
 
     private function group(int $id, string $name, string $color): WeeklyBasketGroup

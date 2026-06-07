@@ -118,6 +118,10 @@ class VerifyDeliveryBatteryCommand extends Command
         // SANTOS: cesta mensual + huevo semanal → cesta+huevo el día mensual, solo-huevo el resto.
         $this->santosScenario();
 
+        // Materialización tardía: el listado DIBUJADO al vuelo (proyección, sin
+        // persistir) debe ser idéntico al MATERIALIZADO para la misma semana.
+        $this->projectionEquivalenceScenario();
+
         $this->report();
 
         return array_reduce($this->results, fn (int $c, array $r) => $c + ($r['ok'] ? 0 : 1), 0) === 0
@@ -378,6 +382,82 @@ class VerifyDeliveryBatteryCommand extends Command
     }
 
     // ---------------------------------------------------------------- helpers
+
+    /**
+     * Equivalencia proyección↔materializado: para cada viernes de un mes futuro
+     * limpio, el listado DIBUJADO (proyección read-only, antes de generar) debe
+     * salir idéntico al MATERIALIZADO (tras generar). Es la red que blinda la
+     * fidelidad de {@see WeeklyBasketGenerator::projectLinesForNode}: si divergen,
+     * la proyección no es fiel y el rework de materialización tardía mostraría una
+     * semana futura distinta de la que acabará repartiéndose.
+     *
+     * Corre sobre el nodo SEMANAL (Torremocha): reparte todos los viernes, así que
+     * cubre patrón semanal, quincenal (cohorte), mensual y huevo-extra SANTOS. No
+     * inserta shifts: valida la fidelidad del patrón base (los shifts ya los cubren
+     * los escenarios de mover/no-recoge contra el plano interno).
+     */
+    private function projectionEquivalenceScenario(): void
+    {
+        $label = 'Equivalencia proyección↔materializado';
+        $node = $this->nodeRepo->findOneBy(['cadence' => Node::CADENCE_WEEKLY]);
+        if ($node === null) {
+            $this->skip($label, 'sin nodo semanal');
+            return;
+        }
+        $month = $this->nextMonth();
+        if ($month === null) {
+            $this->skip($label, 'sin mes futuro sin generar');
+            return;
+        }
+
+        $mismatch = null;
+        foreach ($month['baskets'] as $b) {
+            // Dibujar ANTES de generar (la proyección no debe depender de que exista
+            // listado), luego materializar y comparar.
+            $drawn = $this->sheet->shape($this->generator->projectLinesForNode($node, $b));
+            $this->generator->generateForBasket($b);
+            $stone = $this->sheet->build($node, $b);
+
+            if ($drawn != $stone) {
+                $mismatch = sprintf(
+                    'basket %d (%s)%sdibujo:  [%s]%spiedra: [%s]',
+                    $b->getId(), $b->getDate()->format('Y-m-d'), \PHP_EOL . '      ',
+                    $this->sheetSignature($drawn), \PHP_EOL . '      ',
+                    $this->sheetSignature($stone),
+                );
+                break;
+            }
+        }
+
+        $this->record($label, $mismatch === null, $mismatch ?? sprintf(
+            'nodo %s · mes %s · %d viernes: dibujo === piedra',
+            $node->getName(), $month['first']->getDate()->format('Y-m'), count($month['baskets']),
+        ));
+    }
+
+    /**
+     * Firma compacta y ordenada de las filas de un listado (grupos + compartidas)
+     * para pinpointear una divergencia: "nombre:código:cestas:Nh" por fila.
+     *
+     * @param array<string,mixed> $sheet
+     */
+    private function sheetSignature(array $sheet): string
+    {
+        $rows = [];
+        foreach ($sheet['groups'] as $g) {
+            foreach ($g['modalities'] as $m) {
+                foreach ($m['rows'] as $r) {
+                    $rows[] = sprintf('%s:%s:%s:%dh', $r['name'], $r['code'], $r['cestas'], $r['egg_count']);
+                }
+            }
+        }
+        foreach ($sheet['shared']['rows'] as $r) {
+            $rows[] = sprintf('%s:%s:%s:%dh*', $r['name'], $r['code'], $r['cestas'], $r['egg_count']);
+        }
+        sort($rows);
+
+        return implode(' | ', $rows);
+    }
 
     private function buildTargetShare(PartnerBasketShare $old, int $toShare, array $month): PartnerBasketShare
     {

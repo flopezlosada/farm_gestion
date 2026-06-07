@@ -648,6 +648,177 @@ class WeeklyBasketGenerator
     }
 
     /**
+     * Proyección de SOLO LECTURA del listado de un NODO en un día: las líneas de
+     * entrega ({@see DeliveryLine}) dibujadas al vuelo desde las reglas (patrón,
+     * cohorte, cadencia, festivos) MÁS los cambios puntuales de ENTREGA ENTERA
+     * (mover de día y "no recoge"), SIN materializar ni persistir nada. Es la
+     * contraparte de DIBUJO del camino de PIEDRA {@see NodeDeliverySheet::build}:
+     * ambas producen DeliveryLine[] que el mismo shaper convierte en listado, así
+     * que una semana futura aún sin generar refleja al instante un festivo o un
+     * cambio metido tarde (cierra el agujero de la materialización temprana).
+     *
+     * Deuda DRY (memoria proyeccion-orquestacion-dry-debt): duplica la
+     * orquestación de {@see createWeeklyBasketsFromShares}. NO cubre todavía los
+     * intents POR COMPONENTE (SANTOS mueve solo la verdura) ni la fidelidad fina
+     * de composición copiada del origen en entrantes con cesta editada a mano: el
+     * check de equivalencia proyección-vs-materializado de
+     * {@see \App\Command\VerifyDeliveryBatteryCommand} es la red que delata las
+     * divergencias para irlas cerrando, antes de converger a orquestación
+     * compartida (opción A).
+     *
+     * @param Node   $node
+     * @param Basket $basket
+     * @return DeliveryLine[]
+     */
+    public function projectLinesForNode(Node $node, Basket $basket): array
+    {
+        $shareRepo = $this->em->getRepository(PartnerBasketShare::class);
+        /** @var PartnerDeliveryShiftRepository $shiftRepo */
+        $shiftRepo = $this->em->getRepository(PartnerDeliveryShift::class);
+
+        // Cambios de ENTREGA ENTERA que SALEN de esta semana (mover a otro día o
+        // "no recoge"): sacan al socio del dibujo, igual que en el camino de escritura.
+        $wholeOutgoingPartnerIds = array_map(
+            static fn (PartnerDeliveryShift $s) => $s->getPartner()->getId(),
+            array_filter(
+                $shiftRepo->findAllOutgoingFromBasket($basket),
+                static fn (PartnerDeliveryShift $s) => $s->isWholeDelivery(),
+            ),
+        );
+
+        $lines = [];
+        $seenPartnerIds = [];
+        foreach ($this->projectForBasket($basket) as $share) {
+            $partner = $share->getPartner();
+            if (!$this->partnerBelongsToNode($partner, $node)) {
+                continue;
+            }
+            if (in_array($partner->getId(), $wholeOutgoingPartnerIds, true)) {
+                continue;
+            }
+            $projection = $this->projectShareDelivery($basket, $share);
+            if ($projection === null) {
+                continue; // el nodo del socio no reparte esta semana (cadencia/festivo)
+            }
+            $lines[] = $this->lineFromProjection($projection['weeklyBasket'], $projection['items']);
+            $seenPartnerIds[$partner->getId()] = true;
+        }
+
+        // Cambios de ENTREGA ENTERA que ENTRAN a esta semana: el socio recoge aquí
+        // por un cambio, aunque su patrón no lo trajera (incluso en un día donde su
+        // nodo no repartiría: el shift fuerza la fecha física, como en el applier).
+        foreach ($shiftRepo->findAllIncomingToBasket($basket) as $shift) {
+            if (!$shift->isWholeDelivery()) {
+                continue;
+            }
+            $partner = $shift->getPartner();
+            if (!$this->partnerBelongsToNode($partner, $node) || isset($seenPartnerIds[$partner->getId()])) {
+                continue;
+            }
+            $share = $shareRepo->findActiveForPartner($partner, $basket->getDate());
+            if ($share === null) {
+                continue;
+            }
+            $node_ = $partner->getWeeklyBasketGroup()?->getNode();
+            $date = $node_ !== null
+                ? ($this->nodeDeliveryDate->physicalDateFor($basket, $node_) ?? $basket->getDate())
+                : $basket->getDate();
+
+            $wb = $this->newWeeklyBasketForShare($basket, $share, $date, null);
+            // La composición se deriva del patrón con los huevos del ORIGEN como
+            // referencia (mismo criterio que stampDestination del applier).
+            $items = $this->composer->computeItems($wb, $share, $basket, $shift->getFromBasket());
+            $lines[] = $this->lineFromProjection($wb, $items);
+            $seenPartnerIds[$partner->getId()] = true;
+        }
+
+        // Huevo extra (SANTOS-like): socios cuyo huevo es más frecuente que la cesta
+        // recogen SOLO huevo en los viernes intermedios. Es patrón base (lo hace
+        // materializeExtraEggDeliveries en el camino de piedra), no un shift, así que
+        // la proyección lo incluye para ser fiel. Se omite a quien ya tiene línea esta
+        // semana (su entrega cesta+huevo del día mensual) o sale por un shift.
+        foreach ($shareRepo->findActiveSharesWithEggsForBasket($basket) as $share) {
+            $partner = $share->getPartner();
+            if (!$this->partnerBelongsToNode($partner, $node)
+                || isset($seenPartnerIds[$partner->getId()])
+                || in_array($partner->getId(), $wholeOutgoingPartnerIds, true)
+            ) {
+                continue;
+            }
+            if (!$this->eggResolver->delivers($share, $basket)) {
+                continue;
+            }
+            $physicalDate = $this->resolvePhysicalDeliveryDate($basket, $share);
+            if ($physicalDate === null) {
+                continue;
+            }
+            $wb = (new WeeklyBasket())
+                ->setBasket($basket)
+                ->setPartner($partner)
+                ->setWeeklyBasketStatus(null)
+                ->setBasketShare($this->em->getRepository(BasketShare::class)->find(self::SHARE_ONLY_EGG))
+                ->setWeeklyBasketGroup($partner->getWeeklyBasketGroup())
+                ->setAmount(0)
+                ->setDeliveryDate($physicalDate)
+                ->setPartnerBasketShare($share);
+            $lines[] = $this->lineFromProjection($wb, $this->composer->computeItems($wb, $share, $basket));
+            $seenPartnerIds[$partner->getId()] = true;
+        }
+
+        return $lines;
+    }
+
+    /**
+     * ¿El grupo de recogida del socio cuelga del nodo dado? Filtro de pertenencia
+     * al nodo para la proyección (el equivalente read-only de
+     * WeeklyBasketRepository::findForNodeAndBasket del camino de piedra).
+     */
+    private function partnerBelongsToNode(Partner $partner, Node $node): bool
+    {
+        return $partner->getWeeklyBasketGroup()?->getNode()?->getId() === $node->getId();
+    }
+
+    /**
+     * Convierte una entrega PROYECTADA (WeeklyBasket transitorio + sus líneas de
+     * componente calculadas, sin persistir) en una {@see DeliveryLine} para el
+     * shaper. Las cantidades salen de los items proyectados (con la ponderación ½
+     * de compartidas y el 0 de solo-huevo ya aplicada por el composer), no de la BBDD.
+     *
+     * @param array<int, array{component: BasketComponent, amount: string}> $items
+     */
+    private function lineFromProjection(WeeklyBasket $wb, array $items): DeliveryLine
+    {
+        $cestas = 0.0;
+        $dozens = 0.0;
+        foreach ($items as $item) {
+            $cid = $item['component']->getId();
+            if ($cid === BasketComponent::ID_VEGETABLES) {
+                $cestas += (float) $item['amount'];
+            } elseif ($cid === BasketComponent::ID_EGGS) {
+                $dozens += (float) $item['amount'];
+            }
+        }
+
+        $partner = $wb->getPartner();
+        $wbg = $wb->getWeeklyBasketGroup();
+        $pbs = $wb->getPartnerBasketShare();
+
+        return new DeliveryLine(
+            nameForDelivery: $partner?->getNameForDelivery() ?? '',
+            basketShareId: $wb->getBasketShare()?->getId(),
+            subscribedToEggs: $pbs?->getEggAmount() !== null,
+            cestas: $cestas,
+            dozens: $dozens,
+            groupId: $wbg?->getId(),
+            groupName: $wbg?->getName(),
+            groupColor: $wbg?->getColor(),
+            city: $partner?->getCity()?->getName(),
+            partnerId: $partner?->getId(),
+            sharePartnerId: $partner?->getSharePartner()?->getId(),
+        );
+    }
+
+    /**
      * Materializa (persiste) la entrega de un share en un Basket: la contraparte
      * en modo persist de projectShareDelivery. Es la base de la edición de B':
      * antes de que un socio toque una entrega "Prevista" hay que fijarla, y el
