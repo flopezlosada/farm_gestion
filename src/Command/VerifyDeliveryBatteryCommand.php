@@ -4,6 +4,7 @@ namespace App\Command;
 
 use App\Entity\Basket;
 use App\Entity\BasketShare;
+use App\Entity\DeliveryException;
 use App\Entity\Node;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
@@ -108,6 +109,9 @@ class VerifyDeliveryBatteryCommand extends Command
 
         // Nodo biweekly (Madrid, miércoles): reparte solo en sus ciclos activos.
         $this->biweeklyNodeScenario();
+
+        // Festivo (cancelación global): ese ciclo no reparte nadie.
+        $this->festivoScenario();
 
         // Cesta compartida quincenal (bs=6): media cesta en el bloque compartidas.
         $this->sharedQuincenalScenario();
@@ -314,6 +318,51 @@ class VerifyDeliveryBatteryCommand extends Command
             $partner->getId(), $node->getId(),
             $node->getAnchorDate()?->format('Y-m-d') ?? '?',
             implode(',', $expected), implode(',', $got), $listadoOk ? 'ok' : 'MAL',
+        ));
+    }
+
+    /**
+     * Festivo / cierre general (DeliveryException global: node=null, shiftedDate=null):
+     * ese ciclo no reparte NADIE. Es la garantía operativa de "festivo = sin reparto":
+     * al generar el ciclo cancelado no se materializa ninguna cesta y el listado del
+     * nodo sale vacío, mientras el viernes adyacente queda normal (control). El
+     * generador hereda el cierre vía NodeDeliveryDate (physicalDateFor → null).
+     *
+     * No comprueba el DESPLAZAMIENTO de la cadencia biweekly por el cierre: esa
+     * matemática ya la cubre NodeDeliveryDateTest (testCierreGlobalDesplazaLaCadenciaBiweekly).
+     */
+    private function festivoScenario(): void
+    {
+        $label = 'Festivo (cancelación global)';
+        $month = $this->nextMonth();
+        if ($month === null || count($month['baskets']) < 2) { $this->skip($label, 'mes futuro insuficiente'); return; }
+
+        $festivo = $month['baskets'][0];
+        $control = $month['baskets'][1];
+
+        $exception = new DeliveryException();
+        $exception->setBasket($festivo);
+        $exception->setNode(null);          // global: aplica a todos los nodos
+        $exception->setShiftedDate(null);   // sin fecha destino: cancelado, no trasladado
+        $exception->setNotes('verif: festivo');
+        $this->em->persist($exception);
+        $this->em->flush();
+
+        foreach ($month['baskets'] as $b) { $this->generator->generateForBasket($b); }
+
+        $wbRepo = $this->em->getRepository(WeeklyBasket::class);
+        $festivoWb = $wbRepo->count(['basket' => $festivo]);
+        $controlWb = $wbRepo->count(['basket' => $control]);
+
+        // Plano listado: el nodo semanal (Torremocha) debe salir vacío el festivo.
+        $weeklyNode = $this->nodeRepo->findOneBy(['cadence' => Node::CADENCE_WEEKLY]);
+        $sheetEmpty = $weeklyNode === null || $this->sheetSignature($this->sheet->build($weeklyNode, $festivo)) === '';
+
+        $ok = $festivoWb === 0 && $controlWb > 0 && $sheetEmpty;
+        $this->record($label, $ok, sprintf(
+            'festivo basket %d (%s): %d cestas (debe 0) · control basket %d: %d cestas (>0) · listado festivo vacío=%s',
+            $festivo->getId(), $festivo->getDate()->format('Y-m-d'), $festivoWb,
+            $control->getId(), $controlWb, $sheetEmpty ? 'sí' : 'NO',
         ));
     }
 
