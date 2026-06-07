@@ -358,10 +358,7 @@ class WeeklyBasketGenerator
         // candidatos de la semana — tanto mover toda la cesta como "no recoge" (to
         // null). Un intent POR COMPONENTE (mover solo la verdura) NO excluye al socio:
         // ajusta su composición en el pase final (applyComponentIntents).
-        $wholeOutgoingPartnerIds = array_map(
-            static fn (PartnerDeliveryShift $s) => $s->getPartner()->getId(),
-            array_filter($outgoing, static fn (PartnerDeliveryShift $s) => $s->isWholeDelivery()),
-        );
+        $wholeOutgoingPartnerIds = $this->wholeOutgoingPartnerIds($outgoing);
 
         if (!empty($wholeOutgoingPartnerIds)) {
             $excludeOutgoing = static function (array $shares) use ($wholeOutgoingPartnerIds): array {
@@ -677,6 +674,26 @@ class WeeklyBasketGenerator
     }
 
     /**
+     * Ids de socio cuyos intents de ENTREGA ENTERA (mover toda la cesta o "no
+     * recoge", `component` null) SALEN de un Basket: se excluyen del reparto de esa
+     * semana. Los intents POR COMPONENTE (mover solo la verdura) NO sacan al socio,
+     * solo ajustan su composición. Criterio compartido por el camino de ESCRITURA
+     * ({@see createWeeklyBasketsFromShares}) y el de PROYECCIÓN
+     * ({@see projectDeliveriesForNode}) para no duplicarlo (deuda DRY proyeccion-
+     * orquestacion-dry-debt, pieza 1).
+     *
+     * @param PartnerDeliveryShift[] $outgoing Intents que salen del Basket.
+     * @return int[]
+     */
+    private function wholeOutgoingPartnerIds(array $outgoing): array
+    {
+        return array_map(
+            static fn (PartnerDeliveryShift $s) => $s->getPartner()->getId(),
+            array_filter($outgoing, static fn (PartnerDeliveryShift $s) => $s->isWholeDelivery()),
+        );
+    }
+
+    /**
      * Orquestación de la PROYECCIÓN de un nodo+día: produce los WeeklyBasket
      * TRANSITORIOS (no persistidos) con sus líneas de componente ya calculadas,
      * aplicando patrón base + cohorte/cadencia/festivos, los cambios puntuales de
@@ -687,12 +704,13 @@ class WeeklyBasketGenerator
      * transitorios y reusa su mismo shaping/plantilla SIN congelar la semana.
      *
      * Deuda DRY (memoria proyeccion-orquestacion-dry-debt): duplica la
-     * orquestación de {@see createWeeklyBasketsFromShares}. NO cubre todavía los
-     * intents POR COMPONENTE (SANTOS mueve solo la verdura) ni la fidelidad fina
-     * de composición copiada del origen en entrantes con cesta editada a mano: el
-     * check de equivalencia proyección-vs-materializado de
-     * {@see \App\Command\VerifyDeliveryBatteryCommand} es la red que delata las
-     * divergencias para irlas cerrando, antes de converger a orquestación
+     * orquestación de {@see createWeeklyBasketsFromShares}. Ya cubre los intents POR
+     * COMPONENTE (SANTOS mueve solo la verdura, vía
+     * {@see applyComponentIntentsToProjection}); queda pendiente la fidelidad fina de
+     * composición copiada del origen en entrantes con cesta editada a mano (que el
+     * materializado sí copia con copyLines). El check de equivalencia
+     * proyección-vs-materializado de {@see \App\Command\VerifyDeliveryBatteryCommand}
+     * es la red que delata las divergencias, antes de converger a orquestación
      * compartida (opción A).
      *
      * @param Node   $node
@@ -707,13 +725,8 @@ class WeeklyBasketGenerator
 
         // Cambios de ENTREGA ENTERA que SALEN de esta semana (mover a otro día o
         // "no recoge"): sacan al socio del dibujo, igual que en el camino de escritura.
-        $wholeOutgoingPartnerIds = array_map(
-            static fn (PartnerDeliveryShift $s) => $s->getPartner()->getId(),
-            array_filter(
-                $shiftRepo->findAllOutgoingFromBasket($basket),
-                static fn (PartnerDeliveryShift $s) => $s->isWholeDelivery(),
-            ),
-        );
+        $outgoing = $shiftRepo->findAllOutgoingFromBasket($basket);
+        $wholeOutgoingPartnerIds = $this->wholeOutgoingPartnerIds($outgoing);
 
         $deliveries = [];
         $seenPartnerIds = [];
@@ -736,7 +749,8 @@ class WeeklyBasketGenerator
         // Cambios de ENTREGA ENTERA que ENTRAN a esta semana: el socio recoge aquí
         // por un cambio, aunque su patrón no lo trajera (incluso en un día donde su
         // nodo no repartiría: el shift fuerza la fecha física, como en el applier).
-        foreach ($shiftRepo->findAllIncomingToBasket($basket) as $shift) {
+        $incoming = $shiftRepo->findAllIncomingToBasket($basket);
+        foreach ($incoming as $shift) {
             if (!$shift->isWholeDelivery()) {
                 continue;
             }
@@ -792,6 +806,117 @@ class WeeklyBasketGenerator
                 ->setPartnerBasketShare($share);
             $deliveries[] = ['weeklyBasket' => $wb, 'items' => $this->composer->computeItems($wb, $share, $basket)];
             $seenPartnerIds[$partner->getId()] = true;
+        }
+
+        // Intents POR COMPONENTE (SANTOS mueve solo la verdura): ajustan la
+        // composición sin sacar al socio. Pase final, como applyComponentIntents en
+        // el camino de escritura, para que el dibujo refleje el "muevo solo la
+        // verdura" igual que lo hará el materializado al congelarse.
+        return $this->applyComponentIntentsToProjection($node, $basket, $outgoing, $incoming, $deliveries);
+    }
+
+    /**
+     * Aplica a la PROYECCIÓN los intents POR COMPONENTE de los socios del nodo, en
+     * paralelo a {@see applyComponentIntents} del camino de escritura pero sobre las
+     * líneas proyectadas (arrays {component, amount}) en vez de WeeklyBasketItem
+     * persistidos. Reusa la MISMA fuente de cantidades
+     * ({@see WeeklyBasketComposer::amountForComponent}) y la MISMA regla de
+     * realineado verdura-sobre-solo-huevo, así que dibujo y piedra coinciden (lo
+     * blinda el escenario de equivalencia con mover-componente de la batería).
+     *
+     * Deuda DRY (proyeccion-orquestacion-dry-debt, pieza 2): la estructura del
+     * pase está duplicada porque el modelo de datos difiere (array vs entidad); la
+     * lógica sutil (qué cantidad, qué realineado) sí es compartida.
+     *
+     * @param PartnerDeliveryShift[] $outgoing
+     * @param PartnerDeliveryShift[] $incoming
+     * @param list<array{weeklyBasket: WeeklyBasket, items: array<int, array{component: BasketComponent, amount: string}>}> $deliveries
+     * @return list<array{weeklyBasket: WeeklyBasket, items: array<int, array{component: BasketComponent, amount: string}>}>
+     */
+    private function applyComponentIntentsToProjection(
+        Node $node,
+        Basket $basket,
+        array $outgoing,
+        array $incoming,
+        array $deliveries,
+    ): array {
+        $shareRepo = $this->em->getRepository(PartnerBasketShare::class);
+
+        // partnerId => posición en $deliveries, para localizar la entrega a ajustar.
+        $indexByPartner = [];
+        foreach ($deliveries as $i => $delivery) {
+            $pid = $delivery['weeklyBasket']->getPartner()?->getId();
+            if ($pid !== null) {
+                $indexByPartner[$pid] = $i;
+            }
+        }
+
+        // SALIENTES por componente: quitar ese componente de la entrega del socio.
+        foreach ($outgoing as $shift) {
+            if ($shift->isWholeDelivery() || !$this->partnerBelongsToNode($shift->getPartner(), $node)) {
+                continue;
+            }
+            $i = $indexByPartner[$shift->getPartner()->getId()] ?? null;
+            if ($i === null) {
+                continue;
+            }
+            $componentId = $shift->getComponent()->getId();
+            $deliveries[$i]['items'] = array_values(array_filter(
+                $deliveries[$i]['items'],
+                static fn (array $item): bool => $item['component']->getId() !== $componentId,
+            ));
+        }
+
+        // ENTRANTES por componente: añadir ese componente (creando la entrega si el
+        // socio no recogía esta semana), con la cantidad de su share activo.
+        foreach ($incoming as $shift) {
+            if ($shift->isWholeDelivery() || !$this->partnerBelongsToNode($shift->getPartner(), $node)) {
+                continue;
+            }
+            $partner = $shift->getPartner();
+            $share = $shareRepo->findActiveForPartner($partner, $basket->getDate());
+            if ($share === null) {
+                continue;
+            }
+            $component = $shift->getComponent();
+            $amount = $this->composer->amountForComponent($share, $component);
+            if ($amount === null) {
+                continue;
+            }
+
+            $i = $indexByPartner[$partner->getId()] ?? null;
+            if ($i === null) {
+                // El componente aterriza en una semana sin entrega del socio: crear
+                // la entrega con su modalidad y la fecha física de su nodo (igual que
+                // createWeeklyBasketForShiftDestination en escritura).
+                $node_ = $partner->getWeeklyBasketGroup()?->getNode();
+                $date = $node_ !== null
+                    ? ($this->nodeDeliveryDate->physicalDateFor($basket, $node_) ?? $basket->getDate())
+                    : $basket->getDate();
+                $deliveries[] = [
+                    'weeklyBasket' => $this->newWeeklyBasketForShare($basket, $share, $date, null),
+                    'items' => [],
+                ];
+                $i = array_key_last($deliveries);
+                $indexByPartner[$partner->getId()] = $i;
+            } elseif ($component->getId() === BasketComponent::ID_VEGETABLES
+                && ($deliveries[$i]['weeklyBasket']->getBasketShare()?->getDeliveredBasketWeight() ?? 0.0) <= 0.0
+            ) {
+                // Verdura aterrizando en una entrega "solo-huevo": realinear la
+                // modalidad del WB a la real del socio (mismo criterio que escritura).
+                $deliveries[$i]['weeklyBasket']
+                    ->setBasketShare($share->getBasketShare())
+                    ->setAmount($share->getAmount())
+                    ->setPartnerBasketShare($share);
+            }
+
+            // Reemplazar o añadir la línea del componente entrante.
+            $items = array_values(array_filter(
+                $deliveries[$i]['items'],
+                static fn (array $item): bool => $item['component']->getId() !== $component->getId(),
+            ));
+            $items[] = ['component' => $component, 'amount' => $amount];
+            $deliveries[$i]['items'] = $items;
         }
 
         return $deliveries;
