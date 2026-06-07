@@ -201,6 +201,28 @@
     background: var(--dlv-surface); border: 1px dashed var(--dlv-line-2); border-radius: 8px;
 }
 
+/* modal de cesta extra */
+.dlv-extra-ov { position: fixed; inset: 0; z-index: 80; background: rgba(29,28,23,0.42); display: flex; align-items: center; justify-content: center; padding: 20px; }
+.dlv-extra-ov[hidden] { display: none; }
+.dlv-extra { background: var(--dlv-surface); border: 1px solid var(--dlv-line-2); border-radius: 10px; padding: 22px 24px; width: 100%; max-width: 380px; box-shadow: 0 18px 50px rgba(40,36,24,0.22); }
+.dlv-extra__title { font-family: 'Fraunces', serif; font-weight: 600; font-size: 20px; letter-spacing: -0.01em; margin: 0 0 4px; color: var(--dlv-ink); }
+.dlv-extra__who { font-size: 12.5px; color: var(--dlv-ink-soft); margin: 0 0 16px; }
+.dlv-extra__who b { color: var(--dlv-ink); }
+.dlv-extra__field { display: block; margin-bottom: 12px; }
+.dlv-extra__field span { display: block; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dlv-ink-faint); font-weight: 600; margin-bottom: 4px; }
+.dlv-extra__field input, .dlv-extra__field select { width: 100%; padding: 8px 11px; border: 1px solid var(--dlv-line-2); border-radius: 6px; font-size: 13px; color: var(--dlv-ink); background-color: var(--dlv-bg); }
+/* Fallback si el enhancer csa-dropdown no actúa: control nativo fuera + flecha propia. */
+.dlv-extra__field select { appearance: none; -webkit-appearance: none; padding-right: 28px; cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238d8773' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 9px center; background-size: 11px; }
+.dlv-extra__field input:focus, .dlv-extra__field select:focus { outline: none; border-color: var(--dlv-sage); background-color: var(--dlv-surface); }
+.dlv-extra__hint { font-size: 11.5px; color: var(--dlv-ink-faint); font-style: italic; margin: 4px 0 16px; line-height: 1.45; }
+.dlv-extra__actions { display: flex; justify-content: flex-end; gap: 8px; }
+.dlv-extra__cancel { padding: 8px 16px; border: 1px solid var(--dlv-line-2); background: var(--dlv-surface); border-radius: 6px; cursor: pointer; font-size: 12.5px; font-weight: 500; color: var(--dlv-ink-soft); }
+.dlv-extra__cancel:hover { color: var(--dlv-ink); }
+.dlv-extra__save { padding: 8px 18px; border: 0; background: var(--dlv-sage-d); color: #fff; border-radius: 6px; cursor: pointer; font-size: 12.5px; font-weight: 600; }
+.dlv-extra__save:hover { background: var(--dlv-sage); }
+
 /* ---------- móvil ---------- */
 @media (max-width: 768px) {
     /* El header deja de ser 2 columnas (título | tira) y apila: la tira
@@ -403,6 +425,48 @@
             </section>
         {% endfor %}
     {% endif %}
+
+    {# ============ Modal de cesta extra puntual ============ #}
+    <div class="dlv-extra-ov" id="dlv-extra-modal" hidden>
+        <div class="dlv-extra" role="dialog" aria-modal="true" aria-labelledby="dlv-extra-title">
+            <h3 class="dlv-extra__title" id="dlv-extra-title">Cestas extra</h3>
+            <p class="dlv-extra__who" id="dlv-extra-who">Para <b id="dlv-extra-name">—</b>, semana del {{ _ref|date('d/m/Y') }}.</p>
+            <form method="post" action="{{ path('delivery_set_extra', { nodeId: node.id, basketId: basket.id }) }}" data-csa-dropdowns="1">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token('delivery_set_extra') }}">
+                <input type="hidden" name="partner_id" id="dlv-extra-partner">
+                <label class="dlv-extra__field">
+                    <span>Cestas de verdura a añadir</span>
+                    <select name="cestas" id="dlv-extra-cestas">
+                        <option value="0">—</option>
+                        <option value="1" selected>+1</option>
+                        <option value="2">+2</option>
+                        <option value="3">+3</option>
+                        <option value="4">+4</option>
+                        <option value="5">+5</option>
+                    </select>
+                </label>
+                <label class="dlv-extra__field">
+                    <span>Docenas de huevos a añadir</span>
+                    <select name="docenas" id="dlv-extra-docenas">
+                        <option value="0" selected>—</option>
+                        <option value="0.5">+½</option>
+                        <option value="1">+1</option>
+                        <option value="1.5">+1½</option>
+                        <option value="2">+2</option>
+                    </select>
+                </label>
+                <label class="dlv-extra__field">
+                    <span>Nota (opcional)</span>
+                    <input type="text" name="nota" maxlength="255" placeholder="Motivo de la cesta extra">
+                </label>
+                <p class="dlv-extra__hint">Se SUMA a lo que ya recoge esa semana.</p>
+                <div class="dlv-extra__actions">
+                    <button type="button" class="dlv-extra__cancel" id="dlv-extra-cancel">Cancelar</button>
+                    <button type="submit" class="dlv-extra__save">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
     {% endif %}{# /node_delivers #}
 
 </div>
@@ -576,6 +640,36 @@
         }
         if (!e.target.closest('.dlv-actions')) { closeKebab(); }
     });
+
+    // Modal de cesta extra: el kebab de cada fila precarga el socix y la
+    // composición ACTUAL (cestas/docenas) para editarla como total final.
+    const extraModal = document.getElementById('dlv-extra-modal');
+    if (extraModal) {
+        const fName     = document.getElementById('dlv-extra-name');
+        const fPartner  = document.getElementById('dlv-extra-partner');
+        const fCestas   = document.getElementById('dlv-extra-cestas');
+        const fDocenas  = document.getElementById('dlv-extra-docenas');
+        const closeExtra = () => { extraModal.hidden = true; };
+
+        // El kebab es contextual de UN socix: se precarga su nombre. Lo que se teclee
+        // se AÑADE a lo que ya recoge esa semana (no es el total), así que los selects
+        // arrancan en su valor por defecto (+1 cesta, sin huevos).
+        root.querySelectorAll('.js-dlv-extra').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                closeKebab();
+                fName.textContent = link.dataset.partnerName || '—';
+                fPartner.value = link.dataset.partnerId || '';
+                fCestas.value  = '1';
+                fDocenas.value = '0';
+                extraModal.hidden = false;
+            });
+        });
+
+        document.getElementById('dlv-extra-cancel').addEventListener('click', closeExtra);
+        extraModal.addEventListener('click', (e) => { if (e.target === extraModal) { closeExtra(); } });
+        window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !extraModal.hidden) { closeExtra(); } });
+    }
 
     apply();
 })();

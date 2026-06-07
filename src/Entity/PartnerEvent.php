@@ -43,6 +43,13 @@ class PartnerEvent
     public const TYPE_NODE_CHANGE = 'NODE_CHANGE';
     public const TYPE_BASKET_SKIP = 'BASKET_SKIP';
     public const TYPE_BASKET_UNSKIP = 'BASKET_UNSKIP';
+    /**
+     * Cesta extra puntual: el gestor fija a mano la composición de la entrega
+     * del socio en una semana (sube la cantidad de cestas, añade un componente, o
+     * crea la entrega de una semana que no le tocaba). El payload lleva el basket
+     * afectado y las cantidades por componente. Ver App\Service\Delivery\ExtraBasketEditor.
+     */
+    public const TYPE_BASKET_EXTRA = 'BASKET_EXTRA';
 
     public const TYPES = [
         self::TYPE_JOIN,
@@ -57,6 +64,7 @@ class PartnerEvent
         self::TYPE_NODE_CHANGE,
         self::TYPE_BASKET_SKIP,
         self::TYPE_BASKET_UNSKIP,
+        self::TYPE_BASKET_EXTRA,
     ];
 
     public const ACTOR_SYSTEM = 'system';

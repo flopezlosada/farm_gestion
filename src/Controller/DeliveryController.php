@@ -21,6 +21,7 @@ use App\Repository\WeeklyBasketRepository;
 use App\Repository\WeeklyBasketStatusRepository;
 use App\Service\Delivery\DeliveryShiftApplier;
 use App\Service\Delivery\DeliveryShiftValidator;
+use App\Service\Delivery\ExtraBasketEditor;
 use App\Service\Delivery\NodeDeliveryDate;
 use App\Service\Delivery\NodeDeliverySheet;
 use App\Service\Delivery\WeeklyBasketGenerator;
@@ -384,6 +385,80 @@ class DeliveryController extends AbstractController
 
         $this->addFlash('notice', 'Cambio cancelado.');
         return $this->redirectToRoute('delivery_shifts_index', ['basket' => $weekId]);
+    }
+
+    /**
+     * Cesta extra puntual: fija a mano la composición de la entrega de un socio en la
+     * semana que se está viendo. Cubre los dos casos reales —subir la cantidad de
+     * cestas de quien ya recoge, o dar cesta(s) a quien no le tocaba—, ambos sobre una
+     * única entrega (ver App\Service\Delivery\ExtraBasketEditor). Solo sobre semanas ya
+     * generadas (es una operación sobre el reparto en marcha).
+     *
+     * @param Node    $node    Nodo cuya pantalla de reparto se está viendo (para volver).
+     * @param Basket  $basket  Semana sobre la que se actúa.
+     * @param Request $request Lleva partner_id, cestas, docenas, nota y el token CSRF.
+     */
+    #[Route(
+        '/v2/nodo/{nodeId}/{basketId}/extra',
+        name: 'delivery_set_extra',
+        methods: ['POST'],
+        requirements: ['nodeId' => '\d+', 'basketId' => '\d+']
+    )]
+    public function setExtra(
+        #[MapEntity(id: 'nodeId')] Node $node,
+        #[MapEntity(id: 'basketId')] Basket $basket,
+        Request $request,
+        PartnerRepository $partnerRepo,
+        WeeklyBasketRepository $weeklyBasketRepo,
+        ExtraBasketEditor $extraBasketEditor,
+    ): Response {
+        $back = ['nodeId' => $node->getId(), 'basketId' => $basket->getId()];
+
+        if (!$this->isCsrfTokenValid('delivery_set_extra', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('error', 'Token de seguridad inválido.');
+            return $this->redirectToRoute('delivery_by_node', $back);
+        }
+
+        $partner = $partnerRepo->find((int) $request->request->get('partner_id'));
+        if (!$partner instanceof Partner) {
+            $this->addFlash('error', 'Falta el socix sobre el que actuar.');
+            return $this->redirectToRoute('delivery_by_node', $back);
+        }
+
+        if ($weeklyBasketRepo->countPickedInBasket($basket) === 0) {
+            $this->addFlash('error', 'Esa semana aún no está generada: genera primero el listado para poder añadir cestas extra.');
+            return $this->redirectToRoute('delivery_by_node', $back);
+        }
+
+        // Incremento que añade el gestor: cestas de verdura y/o docenas de huevos.
+        $addAmounts = [
+            BasketComponent::ID_VEGETABLES => (string) $request->request->get('cestas', '0'),
+            BasketComponent::ID_EGGS => (string) $request->request->get('docenas', '0'),
+        ];
+        if ((float) $addAmounts[BasketComponent::ID_VEGETABLES] <= 0
+            && (float) $addAmounts[BasketComponent::ID_EGGS] <= 0) {
+            $this->addFlash('warning', 'Indica al menos una cantidad de cestas o de huevos a añadir.');
+            return $this->redirectToRoute('delivery_by_node', $back);
+        }
+
+        $note = trim((string) $request->request->get('nota', '')) ?: null;
+        $partnerName = trim(($partner->getName() ?? '') . ' ' . ($partner->getSurname() ?? ''));
+
+        try {
+            $extraBasketEditor->addToDelivery(
+                $partner,
+                $basket,
+                $addAmounts,
+                $note,
+                'gestor:' . $this->getUser()->getId(),
+            );
+        } catch (\LogicException $e) {
+            $this->addFlash('error', $e->getMessage());
+            return $this->redirectToRoute('delivery_by_node', $back);
+        }
+
+        $this->addFlash('notice', sprintf('Entrega de %s actualizada para esa semana.', $partnerName));
+        return $this->redirectToRoute('delivery_by_node', $back);
     }
 
     /**

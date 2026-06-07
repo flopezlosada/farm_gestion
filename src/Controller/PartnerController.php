@@ -22,6 +22,9 @@ use App\Service\Delivery\DeliveryCalendarProjector;
 use App\Service\Delivery\DeliveryCalendarViewBuilder;
 use App\Service\Delivery\DeliveryShiftApplier;
 use App\Service\Delivery\PartnerMonthResetter;
+use App\Repository\WeeklyBasketRepository;
+use App\Service\Delivery\ExtraBasketEditor;
+use App\Service\Delivery\NodeDeliveryDate;
 use App\Service\Delivery\WeeklyBasketComponentEditor;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Partner\PartnerShareEventRecorder;
@@ -203,6 +206,9 @@ class PartnerController extends AbstractController
     public function show(
         Partner $partner,
         \App\Repository\PartnerEventRepository $partnerEventRepository,
+        BasketRepository $basketRepo,
+        WeeklyBasketRepository $weeklyBasketRepo,
+        NodeDeliveryDate $nodeDeliveryDate,
         EntityManagerInterface $em,
     ): Response {
         $events = $partnerEventRepository->findForPartner($partner);
@@ -256,7 +262,103 @@ class PartnerController extends AbstractController
             'basket_share_names' => $toNameMap($em->getRepository(BasketShare::class)->findAll()),
             'egg_amount_names' => $toNameMap($em->getRepository(EggAmount::class)->findAll()),
             'egg_period_names' => $toNameMap($em->getRepository(EggPeriod::class)->findAll()),
+            'extra_weeks' => $this->extraBasketWeeks($partner, $basketRepo, $weeklyBasketRepo, $nodeDeliveryDate),
         ]);
+    }
+
+    /**
+     * Semanas (Basket) a las que se puede añadir una cesta extra a este socix desde
+     * su ficha: las próximas YA GENERADAS (con reparto materializado). Se limita a
+     * generadas porque la cesta extra se fija sobre una entrega existente; las semanas
+     * más tardías sin generar quedan como deuda (aviso diferido). La etiqueta usa la
+     * fecha física del nodo del socix cuando aplica, si no el viernes-ciclo.
+     *
+     * @param Partner                $partner
+     * @param BasketRepository       $basketRepo
+     * @param WeeklyBasketRepository $weeklyBasketRepo
+     * @param NodeDeliveryDate       $nodeDeliveryDate
+     * @return list<array{id:int, date:\DateTimeInterface}> Semanas ofrecibles, en orden.
+     */
+    private function extraBasketWeeks(
+        Partner $partner,
+        BasketRepository $basketRepo,
+        WeeklyBasketRepository $weeklyBasketRepo,
+        NodeDeliveryDate $nodeDeliveryDate,
+    ): array {
+        $node = $partner->getWeeklyBasketGroup()?->getNode();
+        $from = new \DateTime('today');
+        $to = (clone $from)->modify('+10 weeks');
+
+        $weeks = [];
+        foreach ($basketRepo->findBetweenDates($from, $to) as $basket) {
+            if ($weeklyBasketRepo->countPickedInBasket($basket) === 0) {
+                continue; // semana aún no generada: fuera (ver deuda del aviso diferido)
+            }
+            $physical = $node !== null ? $nodeDeliveryDate->physicalDateFor($basket, $node) : null;
+            $weeks[] = ['id' => $basket->getId(), 'date' => $physical ?? $basket->getDate()];
+        }
+
+        return $weeks;
+    }
+
+    /**
+     * Añade (o ajusta) la cesta extra puntual de un socix en una semana concreta,
+     * desde su ficha. El socix viene fijado por la ruta; el gestor elige la semana
+     * (entre las generadas) y la composición final (cestas de verdura + docenas de
+     * huevos). Delega en ExtraBasketEditor.
+     *
+     * @param Request           $request Lleva basket_id, cestas, docenas, nota y CSRF.
+     * @param Partner           $partner Socix (de la ruta).
+     * @param BasketRepository  $basketRepo
+     * @param ExtraBasketEditor $extraBasketEditor
+     */
+    #[Route("/{id}/extra-basket", name: "partner_add_extra_basket", methods: ["POST"])]
+    public function addExtraBasket(
+        Request $request,
+        Partner $partner,
+        BasketRepository $basketRepo,
+        ExtraBasketEditor $extraBasketEditor,
+    ): Response {
+        $back = ['id' => $partner->getId()];
+
+        if (!$this->isCsrfTokenValid('partner_extra_basket', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+            return $this->redirectToRoute('partner_show', $back);
+        }
+
+        $basket = $basketRepo->find((int) $request->request->get('basket_id'));
+        if (!$basket instanceof Basket) {
+            $this->addFlash('warning', 'Falta la semana sobre la que añadir la cesta extra.');
+            return $this->redirectToRoute('partner_show', $back);
+        }
+
+        $addAmounts = [
+            BasketComponent::ID_VEGETABLES => (string) $request->request->get('cestas', '0'),
+            BasketComponent::ID_EGGS => (string) $request->request->get('docenas', '0'),
+        ];
+        if ((float) $addAmounts[BasketComponent::ID_VEGETABLES] <= 0
+            && (float) $addAmounts[BasketComponent::ID_EGGS] <= 0) {
+            $this->addFlash('warning', 'Indica al menos una cantidad de cestas o de huevos a añadir.');
+            return $this->redirectToRoute('partner_show', $back);
+        }
+
+        $note = trim((string) $request->request->get('nota', '')) ?: null;
+
+        try {
+            $extraBasketEditor->addToDelivery(
+                $partner,
+                $basket,
+                $addAmounts,
+                $note,
+                'gestor:' . $this->getUser()->getId(),
+            );
+        } catch (\LogicException $e) {
+            $this->addFlash('warning', $e->getMessage());
+            return $this->redirectToRoute('partner_show', $back);
+        }
+
+        $this->addFlash('success', sprintf('Cesta extra registrada para la semana del %s.', $basket->getDate()?->format('d/m/Y')));
+        return $this->redirectToRoute('partner_show', $back);
     }
 
     /**

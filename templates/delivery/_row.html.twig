@@ -50,6 +50,9 @@
             <a href="{{ path('partner_show', { id: wb.partner.id }) }}">Ver ficha del socix</a>
             <a href="{{ path('partner_edit', { id: wb.partner.id }) }}">Editar socix</a>
             <a href="{{ path('delivery_shifts_index', { partner: wb.partner.id }) }}">Cambiar de viernes / no recoge</a>
+            <a href="#" class="js-dlv-extra"
+               data-partner-id="{{ wb.partner.id }}"
+               data-partner-name="{{ wb.partner.nameForDelivery }}">Añadir cesta extra</a>
         </div>
     </td>
 </tr>

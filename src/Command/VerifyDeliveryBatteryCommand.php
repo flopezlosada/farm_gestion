@@ -3,6 +3,7 @@
 namespace App\Command;
 
 use App\Entity\Basket;
+use App\Entity\BasketComponent;
 use App\Entity\BasketShare;
 use App\Entity\DeliveryException;
 use App\Entity\Node;
@@ -14,6 +15,7 @@ use App\Entity\WeeklyBasketItem;
 use App\Repository\NodeRepository;
 use App\Repository\PartnerBasketShareRepository;
 use App\Service\Delivery\BiweeklyCohortResolver;
+use App\Service\Delivery\ExtraBasketEditor;
 use App\Service\Delivery\NodeDeliveryDate;
 use App\Service\Delivery\NodeDeliverySheet;
 use App\Service\Delivery\WeeklyBasketGenerator;
@@ -73,6 +75,7 @@ class VerifyDeliveryBatteryCommand extends Command
         private readonly BiweeklyCohortResolver $cohortResolver,
         private readonly PartnerBasketShareRepository $shareRepo,
         private readonly NodeRepository $nodeRepo,
+        private readonly ExtraBasketEditor $extraBasketEditor,
     ) {
         parent::__construct();
     }
@@ -125,6 +128,15 @@ class VerifyDeliveryBatteryCommand extends Command
         // Materialización tardía: el listado DIBUJADO al vuelo (proyección, sin
         // persistir) debe ser idéntico al MATERIALIZADO para la misma semana.
         $this->projectionEquivalenceScenario();
+
+        // Igual, pero CON un intent por componente (mover solo la verdura): blinda
+        // que la proyección aplique el mover-componente como el materializado.
+        $this->projectionEquivalenceComponentMoveScenario();
+
+        // Cesta extra puntual: subir la cantidad de quien ya recoge, y dar cesta a
+        // quien no le tocaba. Ambas sobre una única entrega; sobrevive a un regenerado.
+        $this->extraBasketSumScenario();
+        $this->extraBasketNewScenario();
 
         $this->report();
 
@@ -430,7 +442,159 @@ class VerifyDeliveryBatteryCommand extends Command
         ));
     }
 
+    /**
+     * Cesta extra puntual — SUBIR la cantidad de quien ya recoge. Sobre un socio
+     * semanal de un mes ya generado, AÑADE 2 cestas a su entrega y comprueba: sigue
+     * habiendo UNA sola entrega (no se duplica el WeeklyBasket), la verdura sube
+     * exactamente en 2 (sea cual sea su cantidad de partida), el amount queda coherente,
+     * el listado lo refleja, y —clave— un regenerado de esa semana NO pisa el cambio
+     * (la rama reuse solo lee).
+     */
+    private function extraBasketSumScenario(): void
+    {
+        $label = 'Cesta extra (subir cantidad)';
+        $partner = $this->pickPartner(self::SEMANAL, false);
+        if ($partner === null) { $this->skip($label, 'sin semanal libre sin huevos'); return; }
+        $month = $this->nextMonth();
+        if ($month === null) { $this->skip($label, 'sin mes futuro sin generar'); return; }
+
+        foreach ($month['baskets'] as $b) { $this->generator->generateForBasket($b); }
+        $target = $month['baskets'][0];
+
+        $wbRepo = $this->em->getRepository(WeeklyBasket::class);
+        $before = (float) ($this->wbVegetable($wbRepo->findOneBy(['partner' => $partner, 'basket' => $target])) ?? '0');
+        $expected = number_format($before + 2, 2, '.', '');
+
+        $this->extraBasketEditor->addToDelivery(
+            $partner, $target, [BasketComponent::ID_VEGETABLES => '2'], 'verif: +2 cestas', 'verif',
+        );
+
+        $wbCount = $wbRepo->count(['partner' => $partner, 'basket' => $target]);
+        $wb = $wbRepo->findOneBy(['partner' => $partner, 'basket' => $target]);
+        $afterSet = $wb !== null ? $this->wbVegetable($wb) : null;
+        $amount = $wb?->getAmount() ?? -1;
+
+        // Regenerar NO debe pisar el cambio (la semana ya generada entra por reuse).
+        $this->generator->generateForBasket($target);
+        $wb = $wbRepo->findOneBy(['partner' => $partner, 'basket' => $target]);
+        $afterRegen = $wb !== null ? $this->wbVegetable($wb) : null;
+
+        $node = $partner->getWeeklyBasketGroup()?->getNode();
+        $sheetCestas = $node !== null ? $this->sheetPartnerCestas($node, $target, $partner) : null;
+
+        $ok = $wbCount === 1
+            && $afterSet === $expected
+            && $amount === (int) round($before + 2)
+            && $afterRegen === $expected
+            && ($node === null || $sheetCestas === ($before + 2));
+        $this->record($label, $ok, sprintf(
+            'socio %d · basket %d · 1 WB=%s · verdura %s→%s (esperado %s) · amount=%d · tras regenerar=%s · listado=%s',
+            $partner->getId(), $target->getId(), $wbCount === 1 ? 'sí' : 'NO',
+            number_format($before, 2, '.', ''), $afterSet ?? 'null', $expected, $amount, $afterRegen ?? 'null',
+            $sheetCestas === null ? 'n/a' : (string) $sheetCestas,
+        ));
+    }
+
+    /**
+     * Cesta extra puntual — DAR cesta a quien NO le tocaba. Sobre un socio quincenal,
+     * en un viernes del mes donde su cohorte no reparte (pero el nodo semanal sí), le
+     * crea una entrega de 1 cesta y comprueba: antes no tenía entrega, después tiene
+     * UNA, con su verdura, sale en el listado, y un regenerado no la borra.
+     */
+    private function extraBasketNewScenario(): void
+    {
+        $label = 'Cesta extra (no le tocaba)';
+        $partner = $this->pickPartner(self::QUINCENAL, false);
+        if ($partner === null) { $this->skip($label, 'sin quincenal libre'); return; }
+        $month = $this->nextMonth();
+        if ($month === null) { $this->skip($label, 'sin mes futuro sin generar'); return; }
+
+        foreach ($month['baskets'] as $b) { $this->generator->generateForBasket($b); }
+
+        // Un viernes del mes donde el socio NO reparte (cohorte contraria) pero el nodo SÍ.
+        $deliveryDays = $this->expectedDeliveryDates(self::QUINCENAL, $month, $this->cohortOfPartner($partner));
+        $freeDays = array_values(array_diff(
+            array_map(static fn (Basket $b) => $b->getId(), $month['baskets']),
+            $deliveryDays,
+        ));
+        if ($freeDays === []) { $this->skip($label, 'sin viernes libre del socio'); return; }
+        $target = $this->basketById($freeDays[0]);
+
+        $wbRepo = $this->em->getRepository(WeeklyBasket::class);
+        $before = $wbRepo->count(['partner' => $partner, 'basket' => $target]);
+
+        $this->extraBasketEditor->addToDelivery(
+            $partner, $target, [BasketComponent::ID_VEGETABLES => '1'], 'verif: cesta a quien no le tocaba', 'verif',
+        );
+
+        $wbCount = $wbRepo->count(['partner' => $partner, 'basket' => $target]);
+        $wb = $wbRepo->findOneBy(['partner' => $partner, 'basket' => $target]);
+        $verdura = $wb !== null ? $this->wbVegetable($wb) : null;
+
+        $node = $partner->getWeeklyBasketGroup()?->getNode();
+        $inSheet = $node !== null && $this->sheetContainsPartner($node, $target, $partner);
+
+        // Regenerar NO debe borrarla.
+        $this->generator->generateForBasket($target);
+        $after = $wbRepo->count(['partner' => $partner, 'basket' => $target]);
+
+        $ok = $before === 0 && $wbCount === 1 && $verdura === '1.00'
+            && ($node === null || $inSheet) && $after === 1;
+        $this->record($label, $ok, sprintf(
+            'socio %d · basket %d · antes=%d (0) · tras fijar=%d (1) · verdura=%s · en listado=%s · tras regenerar=%d (1)',
+            $partner->getId(), $target->getId(), $before, $wbCount, $verdura ?? 'null',
+            $node === null ? 'n/a' : ($inSheet ? 'sí' : 'NO'), $after,
+        ));
+    }
+
     // ---------------------------------------------------------------- helpers
+
+    /**
+     * Cantidad de verdura (cestas) materializada en una entrega, o null si no lleva
+     * verdura. Lee la línea WeeklyBasketItem del componente verdura.
+     *
+     * @param WeeklyBasket $wb Entrega a inspeccionar.
+     * @return string|null Cantidad decimal de la línea de verdura, o null.
+     */
+    private function wbVegetable(WeeklyBasket $wb): ?string
+    {
+        foreach ($this->em->getRepository(WeeklyBasketItem::class)->findBy(['weeklyBasket' => $wb]) as $item) {
+            if ($item->getBasketComponent()?->getId() === BasketComponent::ID_VEGETABLES) {
+                return $item->getAmount();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Cestas (verdura) con que un socio aparece en el listado de un nodo+semana, o null
+     * si no aparece. Para comprobar que la cesta extra llega al plano del listado/PDF.
+     *
+     * @param Node    $node    Nodo del listado.
+     * @param Basket  $basket  Semana.
+     * @param Partner $partner Socio buscado.
+     * @return float|null Cestas de verdura en su fila del listado, o null si no está.
+     */
+    private function sheetPartnerCestas(Node $node, Basket $basket, Partner $partner): ?float
+    {
+        $data = $this->sheet->build($node, $basket);
+        $name = $partner->getNameForDelivery();
+        foreach ($data['groups'] as $g) {
+            foreach ($g['modalities'] as $m) {
+                foreach ($m['rows'] as $r) {
+                    if (($r['name'] ?? '') === $name) {
+                        return (float) $r['cestas'];
+                    }
+                }
+            }
+        }
+        foreach ($data['shared']['rows'] as $r) {
+            if (($r['name'] ?? '') === $name) {
+                return (float) $r['cestas'];
+            }
+        }
+        return null;
+    }
 
     /**
      * Equivalencia proyección↔materializado: para cada viernes de un mes futuro
@@ -481,6 +645,81 @@ class VerifyDeliveryBatteryCommand extends Command
         $this->record($label, $mismatch === null, $mismatch ?? sprintf(
             'nodo %s · mes %s · %d viernes: dibujo === piedra',
             $node->getName(), $month['first']->getDate()->format('Y-m'), count($month['baskets']),
+        ));
+    }
+
+    /**
+     * Equivalencia proyección↔materializado CON un intent POR COMPONENTE (mover solo
+     * la verdura). Un socio mensual mueve su verdura de su viernes de cesta a otro
+     * viernes del mes: el dibujo debe salir idéntico al materializado en TODO el mes
+     * —el origen pierde la verdura, el destino la gana—. Blinda
+     * {@see WeeklyBasketGenerator::projectDeliveriesForNode} aplicando el
+     * mover-componente (antes la proyección lo ignoraba: vistas-reparto-dibujar punto 3).
+     *
+     * Cubre crear-entrega-destino y quitar-componente-origen. El realineado de
+     * verdura-sobre-solo-huevo (caso SANTOS, cuando la verdura cae en una entrega de
+     * solo huevo ya existente) NO lo ejercita este escenario; queda como ampliación.
+     */
+    private function projectionEquivalenceComponentMoveScenario(): void
+    {
+        $label = 'Equivalencia proyección↔materializado (mover componente)';
+        $partner = $this->pickPartner(self::MENSUAL, false);
+        if ($partner === null) {
+            $this->skip($label, 'sin mensual libre sin huevos');
+            return;
+        }
+        $node = $partner->getWeeklyBasketGroup()?->getNode();
+        if ($node === null) {
+            $this->skip($label, 'socio sin nodo');
+            return;
+        }
+        $month = $this->nextMonth();
+        if ($month === null || count($month['baskets']) < 3) {
+            $this->skip($label, 'mes futuro insuficiente');
+            return;
+        }
+
+        // Día de cesta del mensual (2º viernes) → mover la verdura a un viernes libre.
+        $deliveryDays = $this->expectedDeliveryDates(self::MENSUAL, $month, $this->cohortOfPartner($partner));
+        $freeDays = array_values(array_diff(
+            array_map(static fn (Basket $b) => $b->getId(), $month['baskets']),
+            $deliveryDays,
+        ));
+        if ($deliveryDays === [] || $freeDays === []) {
+            $this->skip($label, 'sin par origen/destino');
+            return;
+        }
+
+        $verdura = $this->em->find(BasketComponent::class, BasketComponent::ID_VEGETABLES);
+        $this->insertComponentShift(
+            $partner,
+            $this->basketById($deliveryDays[0]),
+            $this->basketById($freeDays[0]),
+            $verdura,
+        );
+
+        $mismatch = null;
+        foreach ($month['baskets'] as $b) {
+            // Dibujar ANTES de generar, luego materializar y comparar (igual que la
+            // equivalencia base, pero con el intent por componente ya insertado).
+            $drawn = $this->sheet->shape($this->generator->projectLinesForNode($node, $b));
+            $this->generator->generateForBasket($b);
+            $stone = $this->sheet->build($node, $b);
+
+            if ($drawn != $stone) {
+                $mismatch = sprintf(
+                    'basket %d (%s)%sdibujo:  [%s]%spiedra: [%s]',
+                    $b->getId(), $b->getDate()->format('Y-m-d'), \PHP_EOL . '      ',
+                    $this->sheetSignature($drawn), \PHP_EOL . '      ',
+                    $this->sheetSignature($stone),
+                );
+                break;
+            }
+        }
+
+        $this->record($label, $mismatch === null, $mismatch ?? sprintf(
+            'socio %d · verdura %d→%d · %d viernes: dibujo === piedra',
+            $partner->getId(), $deliveryDays[0], $freeDays[0], count($month['baskets']),
         ));
     }
 
@@ -633,6 +872,13 @@ class VerifyDeliveryBatteryCommand extends Command
     private function insertShift(Partner $partner, Basket $from, ?Basket $to): void
     {
         $shift = new PartnerDeliveryShift($partner, $from, $to);
+        $this->em->persist($shift);
+        $this->em->flush();
+    }
+
+    private function insertComponentShift(Partner $partner, Basket $from, Basket $to, BasketComponent $component): void
+    {
+        $shift = new PartnerDeliveryShift($partner, $from, $to, $component);
         $this->em->persist($shift);
         $this->em->flush();
     }

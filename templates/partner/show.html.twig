@@ -26,6 +26,30 @@
 {% block more_css %}
 {{ parent() }}
 {% include '_components/partner_card_styles.html.twig' %}
+<style>
+/* Cesta extra dentro del modal csa-modal de la ficha: chips de semana (como las
+   tarjetas de fecha de excepciones) + selects cerrados de cuánto se añade. */
+.xtb-form { text-align: left; margin-top: 14px; font-variant-numeric: tabular-nums; }
+.xtb-label { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #8d8773; font-weight: 600; margin: 0 0 8px; }
+.xtb-dates { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+.xtb-date { width: 64px; text-align: center; border-radius: 7px; padding: 7px 4px 8px; background: #ece5d6; border: 1px solid #d8d2c2; cursor: pointer; line-height: 1.15; font: inherit; color: inherit; transition: border-color .12s, background .12s, box-shadow .12s; }
+.xtb-date:hover { border-color: #8c6919; }
+.xtb-date--checked { border-color: #c89a3a; background: #faf1d8; box-shadow: inset 0 0 0 1px #c89a3a; }
+.xtb-date .dow { display: block; font-size: 9.5px; color: #5a564a; letter-spacing: .1em; text-transform: uppercase; font-weight: 600; }
+.xtb-date .num { display: block; font-family: 'Fraunces', serif; font-weight: 600; font-size: 17px; color: #1d1c17; }
+.xtb-date .mon { display: block; font-size: 9.5px; color: #5a564a; letter-spacing: .04em; text-transform: uppercase; font-weight: 600; }
+.xtb-row { display: flex; gap: 12px; margin-bottom: 12px; }
+.xtb-row label, .xtb-note { display: flex; flex-direction: column; gap: 4px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: #8d8773; font-weight: 600; }
+.xtb-row label { flex: 1; }
+.xtb-note { margin-top: 0; }
+.xtb-form select, .xtb-form input { padding: 8px 11px; border: 1px solid #d8d2c2; border-radius: 6px; font-size: 13px; color: #1d1c17; background-color: #fbfaf6; text-transform: none; letter-spacing: normal; font-weight: 400; }
+/* Fallback si el enhancer csa-dropdown no actúa: quitamos el control nativo y
+   ponemos flecha propia, para que el <select> no salga con la estética del SO. */
+.xtb-form select { appearance: none; -webkit-appearance: none; padding-right: 28px; cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238d8773' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 9px center; background-size: 11px; }
+.xtb-form select:focus, .xtb-form input:focus { outline: none; border-color: #5b7a4c; background-color: #fff; }
+</style>
 {% endblock %}
 
 {% block csa_main %}
@@ -163,6 +187,87 @@
                     <a href="{{ path('partner_add_basket', { id: partner.id }) }}" class="prt-btn">
                         <i class="fa fa-shopping-basket"></i> Añadir cesta
                     </a>
+                {% endif %}
+
+                {% if extra_weeks is not empty %}
+                    <button type="button" class="prt-btn"
+                            onclick="document.getElementById('extra-basket-dialog').showModal()">
+                        <i class="fa fa-plus-circle"></i> Añadir cesta extra
+                    </button>
+                    <dialog id="extra-basket-dialog" class="csa-modal csa-modal--info" aria-labelledby="extra-basket-title">
+                        <form method="post" action="{{ path('partner_add_extra_basket', { id: partner.id }) }}">
+                            <input type="hidden" name="_csrf_token" value="{{ csrf_token('partner_extra_basket') }}">
+                            <button class="csa-modal__close" type="button" aria-label="Cerrar" onclick="this.closest('dialog').close()">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l14 14M19 5L5 19"/></svg>
+                            </button>
+                            <header class="csa-modal__header">
+                                <div class="csa-modal__heading">
+                                    <span class="csa-modal__eyebrow">Puntual, solo esa semana</span>
+                                    <h2 class="csa-modal__title" id="extra-basket-title">Añadir cesta extra</h2>
+                                </div>
+                            </header>
+                            <div class="csa-modal__body">
+                                <p>Lo que se indique se <b>suma</b> a lo que {{ partner.name }} ya tenga esa semana.</p>
+                                {% set _xdow = ['dom','lun','mar','mié','jue','vie','sáb'] %}
+                                {% set _xmon = ['','ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'] %}
+                                <div class="xtb-form" data-xtb-root data-csa-dropdowns="1">
+                                    <input type="hidden" name="basket_id" data-xtb-basket>
+                                    <p class="xtb-label">Semana</p>
+                                    <div class="xtb-dates">
+                                        {% for w in extra_weeks %}
+                                            <button type="button" class="xtb-date{{ loop.first ? ' xtb-date--checked' : '' }}" data-basket-id="{{ w.id }}">
+                                                <span class="dow">{{ _xdow[w.date|date('w')] }}</span>
+                                                <span class="num">{{ w.date|date('d') }}</span>
+                                                <span class="mon">{{ _xmon[w.date|date('n')] }}</span>
+                                            </button>
+                                        {% endfor %}
+                                    </div>
+                                    <div class="xtb-row">
+                                        <label>Cestas de verdura
+                                            <select name="cestas">
+                                                <option value="0">—</option>
+                                                <option value="1" selected>+1</option>
+                                                <option value="2">+2</option>
+                                                <option value="3">+3</option>
+                                                <option value="4">+4</option>
+                                                <option value="5">+5</option>
+                                            </select>
+                                        </label>
+                                        <label>Docenas de huevos
+                                            <select name="docenas">
+                                                <option value="0" selected>—</option>
+                                                <option value="0.5">+½</option>
+                                                <option value="1">+1</option>
+                                                <option value="1.5">+1½</option>
+                                                <option value="2">+2</option>
+                                            </select>
+                                        </label>
+                                    </div>
+                                    <label class="xtb-note">Nota (opcional)
+                                        <input type="text" name="nota" maxlength="255" placeholder="Motivo de la cesta extra">
+                                    </label>
+                                </div>
+                            </div>
+                            <footer class="csa-modal__footer">
+                                <button type="button" class="csa-modal__btn csa-modal__btn--ghost" onclick="this.closest('dialog').close()">Cancelar</button>
+                                <button type="submit" class="csa-modal__btn csa-modal__btn--primary">Añadir</button>
+                            </footer>
+                        </form>
+                    </dialog>
+                    <script>
+                    (function () {
+                        var root = document.querySelector('[data-xtb-root]');
+                        if (!root) { return; }
+                        var hidden = root.querySelector('[data-xtb-basket]');
+                        var chips = root.querySelectorAll('.xtb-date');
+                        function pick(chip) {
+                            chips.forEach(function (c) { c.classList.toggle('xtb-date--checked', c === chip); });
+                            hidden.value = chip.dataset.basketId;
+                        }
+                        chips.forEach(function (c) { c.addEventListener('click', function () { pick(c); }); });
+                        if (chips.length) { pick(chips[0]); }
+                    })();
+                    </script>
                 {% endif %}
 
                 <span class="prt-actionbar__sep"></span>
