@@ -48,7 +48,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * ficha del socix (partner_delivery_calendar)—.
  */
 #[Route('/gestion/reparto')]
-#[IsGranted('ROLE_GESTION_SOCIXS')]
+#[IsGranted('ROLE_GESTION_REPARTO')]
 class DeliveryController extends AbstractController
 {
     /** Nº de semanas (Baskets) visibles en la tira selectora del registro. */

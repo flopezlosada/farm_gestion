@@ -25,9 +25,11 @@ security:
     #
     # Roles activos:
     #   ROLE_ADMIN              acceso a todo (alias de todos los demás)
-    #   ROLE_GESTION_GRANJA     lotes, gallinas, cosechas, gastos granja
-    #   ROLE_GESTION_SOCIXS     alta/baja/edición de Partner
-    #   ROLE_GESTION_CESTAS     reparto semanal, baskets, shares
+    #   ROLE_GESTION_GRANJA     lotes, gallinas, cosechas, gastos granja,
+    #                           composición de las cestas cosechadas (Basket)
+    #   ROLE_GESTION_SOCIXS     alta/baja/edición de Partner + su cesta (PartnerBasketShare)
+    #   ROLE_GESTION_REPARTO    logística de entrega: reparto semanal, nodos,
+    #                           grupos de recogida, excepciones, histórico de cambios
     #   ROLE_BLOG               blog público (admin) + categorías + media
     #   ROLE_PARTNER            panel propio del socix
     # ===========================================================
@@ -35,7 +37,7 @@ security:
         ROLE_ADMIN:
             - ROLE_GESTION_GRANJA
             - ROLE_GESTION_SOCIXS
-            - ROLE_GESTION_CESTAS
+            - ROLE_GESTION_REPARTO
             - ROLE_BLOG
             - ROLE_PARTNER
 
@@ -120,6 +122,6 @@ security:
         # cada controller filtra con #[IsGranted('ROLE_GESTION_X')] según
         # su sección.
         - { path: ^/gestion,
-            roles: [ROLE_ADMIN, ROLE_GESTION_GRANJA, ROLE_GESTION_SOCIXS, ROLE_GESTION_CESTAS, ROLE_BLOG] }
+            roles: [ROLE_ADMIN, ROLE_GESTION_GRANJA, ROLE_GESTION_SOCIXS, ROLE_GESTION_REPARTO, ROLE_BLOG] }
         # Panel del socix (lo construiremos en breve).
         - { path: ^/panel, roles: [ROLE_PARTNER, ROLE_ADMIN] }

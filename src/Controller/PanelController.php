@@ -971,7 +971,7 @@ class PanelController extends AbstractController
 
         $this->addFlash('error', 'Tu usuaria no está vinculada a un socix; pide a admin que te vincule para usar el panel.');
 
-        foreach (['ROLE_ADMIN', 'ROLE_GESTION_GRANJA', 'ROLE_GESTION_SOCIXS', 'ROLE_GESTION_CESTAS', 'ROLE_BLOG'] as $role) {
+        foreach (['ROLE_ADMIN', 'ROLE_GESTION_GRANJA', 'ROLE_GESTION_SOCIXS', 'ROLE_GESTION_REPARTO', 'ROLE_BLOG'] as $role) {
             if ($this->isGranted($role)) {
                 return $this->redirectToRoute('dashboard');
             }

@@ -27,7 +27,7 @@ class UserType extends AbstractType
         'Administradorx (acceso a todo)' => 'ROLE_ADMIN',
         'Gestión de granja' => 'ROLE_GESTION_GRANJA',
         'Gestión de socixs' => 'ROLE_GESTION_SOCIXS',
-        'Gestión de cestas' => 'ROLE_GESTION_CESTAS',
+        'Gestión de reparto' => 'ROLE_GESTION_REPARTO',
         'Blog y comunicación' => 'ROLE_BLOG',
         'Socix (panel propio)' => 'ROLE_PARTNER',
     ];

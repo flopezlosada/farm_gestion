@@ -14,7 +14,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * Basket controller.
  *
  */
-#[IsGranted('ROLE_GESTION_CESTAS')]
+#[IsGranted('ROLE_GESTION_GRANJA')]
 class BasketController extends AbstractController
 {
 

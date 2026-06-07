@@ -36,7 +36,7 @@
                         {# ROLE_ADMIN incluye ROLE_PARTNER por jerarquía, así que no
                          # podemos usar el rol para distinguir; chequeamos si user
                          # tiene un Partner vinculado realmente. #}
-                        {% set has_gestion = is_granted('ROLE_ADMIN') or is_granted('ROLE_GESTION_GRANJA') or is_granted('ROLE_GESTION_SOCIXS') or is_granted('ROLE_GESTION_CESTAS') or is_granted('ROLE_BLOG') %}
+                        {% set has_gestion = is_granted('ROLE_ADMIN') or is_granted('ROLE_GESTION_GRANJA') or is_granted('ROLE_GESTION_SOCIXS') or is_granted('ROLE_GESTION_REPARTO') or is_granted('ROLE_BLOG') %}
                         {% set is_partner = app.user.partner is defined and app.user.partner %}
                         {% if is_partner %}
                             <a class="text-white px-2" href="{{ path('panel') }}"><i class="fa fa-user-circle mr-1"></i>Mi panel</a>

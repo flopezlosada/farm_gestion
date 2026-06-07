@@ -28,7 +28,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * Sub-fase 8.8d (2026-05-27).
  */
 #[Route('/gestion/reparto/excepciones')]
-#[IsGranted('ROLE_GESTION_SOCIXS')]
+#[IsGranted('ROLE_GESTION_REPARTO')]
 class DeliveryExceptionController extends AbstractController
 {
     /**

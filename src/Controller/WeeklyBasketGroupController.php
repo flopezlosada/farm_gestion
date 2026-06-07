@@ -16,7 +16,7 @@ use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 #[Route("/gestion/weekly/basket/group")]
-#[IsGranted('ROLE_GESTION_SOCIXS')]
+#[IsGranted('ROLE_GESTION_REPARTO')]
 class WeeklyBasketGroupController extends AbstractController
 {
     #[Route("/", name: "weekly_basket_group_index", methods: ["GET"])]
