@@ -62,16 +62,24 @@ class BlogController extends AbstractController
     public function frontend_index(EntityManagerInterface $em, Request $request, PaginatorInterface $paginator, Breadcrumbs $breadcrumbs)
     {
 
+        $q = trim((string) $request->query->get('q', ''));
+
         // El listado general del blog excluye las recetas: tienen su propia
         // sección. Antes se mezclaban por fecha y aparecían al paginar, dando
         // la sensación de que la página 2 del blog "llevaba a recetas".
         // Se conservan las entradas sin categoría (category IS NULL).
         $dql = "select b from App\\Entity\\Blog b
-                where b.category is null or b.category != :recetasId
-                order by b.created desc";
+                where (b.category is null or b.category != :recetasId)";
+        if ($q !== '') {
+            $dql .= " and (b.title like :q or b.content like :q)";
+        }
+        $dql .= " order by b.created desc";
 
         $query = $em->createQuery($dql)
             ->setParameter('recetasId', self::RECETAS_CATEGORY_ID);
+        if ($q !== '') {
+            $query->setParameter('q', '%' . $q . '%');
+        }
 
         $pagination = $paginator->paginate(
             $query,
@@ -85,8 +93,28 @@ class BlogController extends AbstractController
 
         return $this->render('Blog/frontend_index.html.twig', array(
             'entities' => $pagination,
+            'categories' => $this->categoriesWithCount($em),
+            'q' => $q,
         ));
 
+    }
+
+    /**
+     * Devuelve las categorías del blog con el número de entradas de cada una,
+     * para pintar el menú lateral del frontend público. Ordenadas por nombre.
+     *
+     * @param EntityManagerInterface $em
+     * @return array<int, array{id:int, name:string, n:int}>
+     */
+    private function categoriesWithCount(EntityManagerInterface $em): array
+    {
+        return $em->createQuery(
+            'SELECT c.id AS id, c.name AS name, COUNT(b.id) AS n
+             FROM App\Entity\Category c
+             LEFT JOIN App\Entity\Blog b WITH b.category = c
+             GROUP BY c.id
+             ORDER BY c.name ASC'
+        )->getArrayResult();
     }
 
     /**
@@ -389,9 +417,18 @@ class BlogController extends AbstractController
     {
         $category = $em->getRepository(\App\Entity\Category::class)->find($id);
 
-        $dql = "select b from App\\Entity\\Blog b  where b.category=:category order by b.created desc";
-        $query = $em->createQuery($dql);
-        $query->setParameter("category", $category);
+        $q = trim((string) $request->query->get('q', ''));
+
+        $dql = "select b from App\\Entity\\Blog b where b.category = :category";
+        if ($q !== '') {
+            $dql .= " and (b.title like :q or b.content like :q)";
+        }
+        $dql .= " order by b.created desc";
+
+        $query = $em->createQuery($dql)->setParameter('category', $category);
+        if ($q !== '') {
+            $query->setParameter('q', '%' . $q . '%');
+        }
 
         $pagination = $paginator->paginate(
             $query,
@@ -408,6 +445,8 @@ class BlogController extends AbstractController
         return $this->render("Blog/frontend_index.html.twig", array(
             'category' => $category,
             'entities' => $pagination,
+            'categories' => $this->categoriesWithCount($em),
+            'q' => $q,
         ));
 
     }

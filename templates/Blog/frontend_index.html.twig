@@ -3,7 +3,10 @@
 {% block container %}
 
     <div class="row p-3">
-        <div class="col-lg-11">
+        {# El sidebar (buscador + categorías) solo se pinta en los listados,
+         # que pasan `categories` desde el controlador. En la vista de un post
+         # individual no se pasa, y el contenido ocupa el ancho completo. #}
+        <div class="{{ categories is defined ? 'col-lg-8' : 'col-lg-11' }}">
 
             {% block listing_header %}
                 {% set effective_category = (category is defined and category) ? category : (post is defined and post and post.category ? post.category : null) %}
@@ -48,6 +51,10 @@
                 {% endif %}
             {% endblock %}
 
+            {% if q is defined and q %}
+                <p class="text-muted">Resultados de búsqueda para «<strong>{{ q }}</strong>».</p>
+            {% endif %}
+
             <div class="card border-1 bg-light">
                 <div class="card-body p-3">
                     {% block post_main %}
@@ -55,6 +62,10 @@
                             <div class="blog-item">
                                 {% include 'Blog/post_main.html.twig' with { extend: 0 } %}
                             </div>
+                        {% else %}
+                            <p class="text-muted mb-0">
+                                No se han encontrado entradas{% if q is defined and q %} para «{{ q }}»{% endif %}.
+                            </p>
                         {% endfor %}
                     {% endblock %}
 
@@ -67,6 +78,41 @@
             </div>
 
         </div>
+
+        {% if categories is defined %}
+            <aside class="col-lg-4 mt-4 mt-lg-0">
+                {# Buscador: GET a la ruta actual (blog o una categoría),
+                 # preservando el id de categoría cuando estamos en una sección. #}
+                <form method="get"
+                      action="{{ path(app.request.attributes.get('_route'), app.request.attributes.get('_route_params')) }}"
+                      class="mb-4">
+                    <div class="input-group">
+                        <input type="text" name="q" class="form-control" placeholder="Buscar entradas…" value="{{ q|default('') }}">
+                        <div class="input-group-append">
+                            <button class="btn btn-primary" type="submit"><i class="fa fa-search"></i></button>
+                        </div>
+                    </div>
+                </form>
+
+                <h5 class="mb-3">Categorías</h5>
+                <ul class="list-unstyled">
+                    <li class="mb-2">
+                        <a href="{{ path('frontend_blog') }}"
+                           class="{{ category is not defined or not category ? 'font-weight-bold text-success' : 'text-dark' }}">
+                            Todas las noticias
+                        </a>
+                    </li>
+                    {% for c in categories %}
+                        <li class="mb-2">
+                            <a href="{{ path('blog_category_show', { id: c.id }) }}"
+                               class="{{ category is defined and category and category.id == c.id ? 'font-weight-bold text-success' : 'text-dark' }}">
+                                {{ c.name }} <span class="text-muted">({{ c.n }})</span>
+                            </a>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </aside>
+        {% endif %}
     </div>
 
 {% endblock %}
