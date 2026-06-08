@@ -26,6 +26,12 @@ use WhiteOctober\BreadcrumbsBundle\Model\Breadcrumbs;
  */
 class BlogController extends AbstractController
 {
+    /**
+     * Id de la categoría "Recetas". Las recetas tienen su propia sección
+     * (/blog/category/4) y NO deben aparecer mezcladas en el listado general
+     * del blog. Mismo id hardcodeado que en el menú (base_front.html.twig).
+     */
+    private const RECETAS_CATEGORY_ID = 4;
 
     #[IsGranted('ROLE_BLOG')]
     public function index(Request $request, EntityManagerInterface $em)
@@ -56,12 +62,16 @@ class BlogController extends AbstractController
     public function frontend_index(EntityManagerInterface $em, Request $request, PaginatorInterface $paginator, Breadcrumbs $breadcrumbs)
     {
 
-        $blogs_repository = $em->getRepository(Blog::class);
+        // El listado general del blog excluye las recetas: tienen su propia
+        // sección. Antes se mezclaban por fecha y aparecían al paginar, dando
+        // la sensación de que la página 2 del blog "llevaba a recetas".
+        // Se conservan las entradas sin categoría (category IS NULL).
+        $dql = "select b from App\\Entity\\Blog b
+                where b.category is null or b.category != :recetasId
+                order by b.created desc";
 
-
-        $dql = "select b from App\\Entity\\Blog b order by b.created desc";
-
-        $query = $em->createQuery($dql);
+        $query = $em->createQuery($dql)
+            ->setParameter('recetasId', self::RECETAS_CATEGORY_ID);
 
         $pagination = $paginator->paginate(
             $query,
