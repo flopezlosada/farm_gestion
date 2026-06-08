@@ -2,7 +2,131 @@
 
 {% block container %}
 
-    <div class="row p-3">
+    <style>
+        :root {
+            --csa-green: #138504;
+            --csa-green-soft: rgb(151, 181, 57);
+            --csa-amber: rgb(248, 177, 51);
+        }
+        /* Fondo blanco, como el resto de la web. Las tarjetas no destacan por
+           el color del fondo sino por su sombra/elevación. */
+        .blog-bg { background: #fff; }
+        .blog-listing { padding-top: 1rem; padding-bottom: 2rem; }
+
+        /* Tarjeta de post en el listado */
+        .csa-post {
+            background: #fff;
+            border: 1px solid #e4ddcd;
+            border-radius: 14px;
+            overflow: hidden;
+            margin-bottom: 1.75rem;
+            box-shadow: 0 6px 22px rgba(60, 50, 30, .14);
+            transition: transform .25s ease, box-shadow .25s ease;
+        }
+        .csa-post:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 18px 38px rgba(60, 50, 30, .20);
+        }
+        .csa-post__media { display: block; overflow: hidden; max-height: 340px; }
+        .csa-post__media img {
+            width: 100%;
+            object-fit: cover;
+            transition: transform .45s ease;
+        }
+        .csa-post:hover .csa-post__media img { transform: scale(1.045); }
+        .csa-post__body { padding: 1.4rem 1.6rem 1.6rem; }
+        .csa-post__meta {
+            font-size: .8rem;
+            color: #a89c87;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            margin-bottom: .55rem;
+        }
+        .csa-post__cat {
+            display: inline-block;
+            margin-left: .5rem;
+            padding: .12rem .6rem;
+            background: var(--csa-amber);
+            color: #fff;
+            border-radius: 20px;
+            font-size: .72rem;
+            letter-spacing: .02em;
+        }
+        .csa-post__title {
+            font-family: 'Nunito', sans-serif;
+            font-weight: 800;
+            font-size: 1.6rem;
+            line-height: 1.2;
+            margin: 0 0 .6rem;
+        }
+        .csa-post__title a { color: var(--csa-green); }
+        .csa-post__title a:hover { color: var(--csa-green-soft); text-decoration: none; }
+        .csa-post__excerpt { color: #5b5347; margin-bottom: 1rem; }
+        .csa-post__more { font-weight: 700; color: var(--csa-amber); }
+        .csa-post__more:hover { color: var(--csa-green); text-decoration: none; }
+        .csa-post__more i { transition: transform .2s ease; }
+        .csa-post__more:hover i { transform: translateX(4px); }
+
+        /* Post individual: ancho de lectura cómodo y tarjeta blanca propia */
+        .csa-post-full {
+            max-width: 900px;
+            margin: 0 auto;
+            background: #fff;
+            border: 1px solid #e4ddcd;
+            border-radius: 16px;
+            padding: 2.4rem 3rem 2.8rem;
+            box-shadow: 0 6px 22px rgba(60, 50, 30, .12);
+        }
+        .csa-post-full__title {
+            font-family: 'Nunito', sans-serif;
+            font-weight: 800;
+            color: var(--csa-green);
+            font-size: 2.1rem;
+            line-height: 1.18;
+            margin: .3rem 0 1.4rem;
+            padding-bottom: 1.2rem;
+            border-bottom: 3px solid var(--csa-amber);
+        }
+        .csa-post-full__media { margin-bottom: 1.8rem; border-radius: 14px; overflow: hidden; }
+        .csa-post-full__media img { width: 100%; }
+        .csa-post-full__content { color: #4a443b; font-size: 1.2rem; line-height: 1.85; }
+        .csa-post-full__content img {
+            display: block;
+            max-width: 100%;
+            height: auto;
+            margin: 1.6rem auto;
+            border-radius: 10px;
+        }
+        .csa-back-link { display: inline-block; margin: 0 auto 1.4rem; font-weight: 700; color: var(--csa-green); }
+        .csa-back-link:hover { color: var(--csa-green-soft); text-decoration: none; }
+
+        /* Sidebar: blanco para contrastar sobre el fondo cálido */
+        .blog-sidebar { background: #fff; border: 1px solid #e4ddcd; border-radius: 14px; padding: 1.5rem; box-shadow: 0 6px 22px rgba(60, 50, 30, .11); }
+        .blog-sidebar h5 { font-family: 'Nunito', sans-serif; font-weight: 800; color: var(--csa-green); }
+        .blog-sidebar ul a { color: #4a443b; }
+        .blog-sidebar ul a:hover { color: var(--csa-green); text-decoration: none; }
+        .blog-sidebar ul a.is-active { font-weight: 800; color: var(--csa-green); }
+
+        /* Paginación del blog */
+        .csa-pagination .page-link {
+            color: var(--csa-green);
+            border: 1px solid #e4ddcd;
+            margin: 0 3px;
+            border-radius: 8px;
+            min-width: 42px;
+            text-align: center;
+            font-weight: 700;
+        }
+        .csa-pagination .page-link:hover { background: #f1ece0; color: var(--csa-green); }
+        .csa-pagination .page-item.active .page-link {
+            background: var(--csa-green);
+            border-color: var(--csa-green);
+            color: #fff;
+        }
+        .csa-pagination .page-item.disabled .page-link { color: #c9c0ad; background: transparent; }
+    </style>
+
+    <div class="row p-3 blog-listing">
         {# El sidebar (buscador + categorías) solo se pinta en los listados,
          # que pasan `categories` desde el controlador. En la vista de un post
          # individual no se pasa, y el contenido ocupa el ancho completo. #}
@@ -55,62 +179,58 @@
                 <p class="text-muted">Resultados de búsqueda para «<strong>{{ q }}</strong>».</p>
             {% endif %}
 
-            <div class="card border-1 bg-light">
-                <div class="card-body p-3">
-                    {% block post_main %}
-                        {% for post in entities %}
-                            <div class="blog-item">
-                                {% include 'Blog/post_main.html.twig' with { extend: 0 } %}
-                            </div>
-                        {% else %}
-                            <p class="text-muted mb-0">
-                                No se han encontrado entradas{% if q is defined and q %} para «{{ q }}»{% endif %}.
-                            </p>
-                        {% endfor %}
-                    {% endblock %}
+            {% block post_main %}
+                {% for post in entities %}
+                    {% include 'Blog/post_main.html.twig' with { extend: 0 } %}
+                {% else %}
+                    <p class="text-muted">
+                        No se han encontrado entradas{% if q is defined and q %} para «{{ q }}»{% endif %}.
+                    </p>
+                {% endfor %}
+            {% endblock %}
 
-                    {% if entities is defined %}
-                        <div class="pagination justify-content-center mb-4">
-                            {{ knp_pagination_render(entities) }}
-                        </div>
-                    {% endif %}
+            {% if entities is defined %}
+                <div class="my-4">
+                    {{ knp_pagination_render(entities, 'Blog/_pagination.html.twig') }}
                 </div>
-            </div>
+            {% endif %}
 
         </div>
 
         {% if categories is defined %}
             <aside class="col-lg-4 mt-4 mt-lg-0">
-                {# Buscador: GET a la ruta actual (blog o una categoría),
-                 # preservando el id de categoría cuando estamos en una sección. #}
-                <form method="get"
-                      action="{{ path(app.request.attributes.get('_route'), app.request.attributes.get('_route_params')) }}"
-                      class="mb-4">
-                    <div class="input-group">
-                        <input type="text" name="q" class="form-control" placeholder="Buscar entradas…" value="{{ q|default('') }}">
-                        <div class="input-group-append">
-                            <button class="btn btn-primary" type="submit"><i class="fa fa-search"></i></button>
+                <div class="blog-sidebar">
+                    {# Buscador: GET a la ruta actual (blog o una categoría),
+                     # preservando el id de categoría cuando estamos en una sección. #}
+                    <form method="get"
+                          action="{{ path(app.request.attributes.get('_route'), app.request.attributes.get('_route_params')) }}"
+                          class="mb-4">
+                        <div class="input-group">
+                            <input type="text" name="q" class="form-control" placeholder="Buscar entradas…" value="{{ q|default('') }}">
+                            <div class="input-group-append">
+                                <button class="btn btn-primary" type="submit"><i class="fa fa-search"></i></button>
+                            </div>
                         </div>
-                    </div>
-                </form>
+                    </form>
 
-                <h5 class="mb-3">Categorías</h5>
-                <ul class="list-unstyled">
-                    <li class="mb-2">
-                        <a href="{{ path('frontend_blog') }}"
-                           class="{{ category is not defined or not category ? 'font-weight-bold text-success' : 'text-dark' }}">
-                            Todas las noticias
-                        </a>
-                    </li>
-                    {% for c in categories %}
+                    <h5 class="mb-3">Categorías</h5>
+                    <ul class="list-unstyled mb-0">
                         <li class="mb-2">
-                            <a href="{{ path('blog_category_show', { id: c.id }) }}"
-                               class="{{ category is defined and category and category.id == c.id ? 'font-weight-bold text-success' : 'text-dark' }}">
-                                {{ c.name }} <span class="text-muted">({{ c.n }})</span>
+                            <a href="{{ path('frontend_blog') }}"
+                               class="{{ category is not defined or not category ? 'is-active' : '' }}">
+                                Todas las noticias
                             </a>
                         </li>
-                    {% endfor %}
-                </ul>
+                        {% for c in categories %}
+                            <li class="mb-2">
+                                <a href="{{ path('blog_category_show', { id: c.id }) }}"
+                                   class="{{ category is defined and category and category.id == c.id ? 'is-active' : '' }}">
+                                    {{ c.name }} <span class="text-muted">({{ c.n }})</span>
+                                </a>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
             </aside>
         {% endif %}
     </div>

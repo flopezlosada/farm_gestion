@@ -1,49 +1,66 @@
-<div class="row">
-    <div class="col-lg-2 col-sm-2 py-2">
-        <div class="date-wrap">
-            <p style="margin-bottom: 0;">Creado el día:</p>
-            <strong>{{ post.created|date('d/m/Y') }}</strong>
-        </div>
-        <div class="author mt-2">Administrador</div>
-    </div>
-    <div class="col-lg-10 col-sm-10 py-3">
+{% if extend == 0 %}
+
+    {# Tarjeta de post para el listado del blog / recetas. #}
+    <article class="csa-post">
         {% if post.image %}
-            <div class="blog-img gs">
+            <a href="{{ path('blog_show', { slug: post.slug }) }}" class="csa-post__media">
+                <img class="img-fluid" src="{{ asset('uploads/blog/images/' ~ post.image) | imagine_filter('thumb_blog_article_main') }}" alt="{{ post.title }}"/>
+            </a>
+        {% endif %}
+        <div class="csa-post__body">
+            <div class="csa-post__meta">
+                <i class="fa fa-calendar-alt mr-1"></i>{{ post.created|date('d/m/Y') }}
+                {% if post.category %}
+                    <span class="csa-post__cat">{{ post.category.name }}</span>
+                {% endif %}
+            </div>
+            <h2 class="csa-post__title">
+                <a href="{{ path('blog_show', { slug: post.slug }) }}">{{ post.title }}</a>
+            </h2>
+            <p class="csa-post__excerpt">{{ post.content|excerpt(220) }}</p>
+            <a class="csa-post__more" href="{{ path('blog_show', { slug: post.slug }) }}">
+                Leer más <i class="fa fa-arrow-right ml-1"></i>
+            </a>
+        </div>
+    </article>
+
+{% else %}
+
+    {# Vista del post individual: cabecera, imagen destacada y contenido
+       con la media embebida ([[insert_media_*]]) resuelta por snippets. #}
+    <article class="csa-post-full">
+        <header class="csa-post-full__header">
+            <div class="csa-post__meta">
+                <i class="fa fa-calendar-alt mr-1"></i>{{ post.created|date('d/m/Y') }}
+                {% if post.category %}
+                    <span class="csa-post__cat">{{ post.category.name }}</span>
+                {% endif %}
+            </div>
+            <h1 class="csa-post-full__title">{{ post.title }}</h1>
+        </header>
+
+        {% if post.image %}
+            <div class="csa-post-full__media">
                 <img class="img-fluid" src="{{ asset('uploads/blog/images/' ~ post.image) | imagine_filter('thumb_blog_article_main') }}" alt="{{ post.title }}"/>
             </div>
         {% endif %}
-    </div>
-</div>
 
-<div class="row">
-    <div class="col-lg-2 col-sm-2"></div>
-    <div class="col-lg-10 col-sm-10">
-        <h1>
-            <a style="color: #138504" href="{{ path('blog_show', { slug: post.slug }) }}">
-                {{ post.title }}
-            </a>
-        </h1>
-        {% if extend == 0 %}
-            <p>{{ post.content|striptags|u.truncate(400, '...', false) }}</p>
-            <div class="clearfix"></div>
-            <a class="btn btn-primary px-5" href="{{ path('blog_show', { slug: post.slug }) }}">Leer más</a>
-        {% else %}
-            <div class="intro">
-                {% autoescape false %}
-                    {% set snippets = insert_snippets(post, post.content|raw) %}
-                    {% for snippet in snippets %}
-                        {% if snippet is not iterable %}
-                            {{ snippet }}
+        <div class="csa-post-full__content intro">
+            {% autoescape false %}
+                {% set snippets = insert_snippets(post, post.content|raw) %}
+                {% for snippet in snippets %}
+                    {% if snippet is not iterable %}
+                        {{ snippet }}
+                    {% else %}
+                        {% if snippet[0] == 'gallery' %}
+                            {{ render(controller('App\\Controller\\' ~ snippet[0]|capitalize ~ 'Controller::show_snippet', { id: snippet[1], object_class: 'blog' })) }}
                         {% else %}
-                            {% if snippet[0] == 'gallery' %}
-                                {{ render(controller('App\\Controller\\' ~ snippet[0]|capitalize ~ 'Controller::show_snippet', { id: snippet[1], object_class: 'blog' })) }}
-                            {% else %}
-                                {{ render(controller('App\\Controller\\' ~ snippet[0]|capitalize ~ 'Controller::show_snippet', { id: snippet[1] })) }}
-                            {% endif %}
+                            {{ render(controller('App\\Controller\\' ~ snippet[0]|capitalize ~ 'Controller::show_snippet', { id: snippet[1] })) }}
                         {% endif %}
-                    {% endfor %}
-                {% endautoescape %}
-            </div>
-        {% endif %}
-    </div>
-</div>
+                    {% endif %}
+                {% endfor %}
+            {% endautoescape %}
+        </div>
+    </article>
+
+{% endif %}
