@@ -90,6 +90,9 @@
                 </button>
                 <div class="collapse navbar-collapse justify-content-between px-3" id="navbarCollapse">
                     <div class="navbar-nav mr-auto py-0">
+                        {# CTA principal destacado al inicio del menú: color amarillo CSA
+                         # sobre el navbar oscuro para que resalte sobre el resto de secciones. #}
+                        <a href="{{ path('socios') }}" class="nav-item nav-link" style="color: rgb(248, 177, 51);"><strong>Hazte socix</strong></a>
                         <div class="nav-item dropdown">
                             <a href="#" class="nav-link dropdown-toggle" data-toggle="dropdown">Huerta</a>
                             <div class="dropdown-menu rounded-0 m-0">
@@ -107,7 +110,6 @@
                         <a href="{{ path('somos') }}" class="nav-item nav-link">Quiénes somos</a>
                         <a href="{{ path('frontend_blog') }}" class="nav-item nav-link">Blog</a>
                         <a href="{{ path('blog_category_show', { id: 4 }) }}" class="nav-item nav-link">Recetas</a>
-                        <a href="{{ path('socios') }}" class="nav-item nav-link"><strong>Hazte socix</strong></a>
                     </div>
                 </div>
             </nav>
