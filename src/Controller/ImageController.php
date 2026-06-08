@@ -8,6 +8,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
@@ -142,6 +143,13 @@ class ImageController extends AbstractController
     public function show_snippet($id, EntityManagerInterface $em)
     {
         $image = $em->getRepository(\App\Entity\Image::class)->find($id);
+
+        // La imagen referenciada en el cuerpo de un post puede haber sido
+        // borrada (referencia rota). En ese caso no renderizamos el snippet
+        // en vez de tumbar el post entero con un error 500.
+        if (!$image) {
+            return new Response('');
+        }
 
         return $this->render('Image/show_snippet.html.twig', array(
             'image' => $image,
