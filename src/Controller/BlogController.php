@@ -17,11 +17,17 @@ use WhiteOctober\BreadcrumbsBundle\Model\Breadcrumbs;
 /**
  * Blog controller.
  *
+ * Las acciones públicas (frontend_index, show, show_category, latest_post)
+ * NO llevan restricción de rol: sirven el blog y las recetas a visitantes
+ * anónimos de csavegadejarama.org. Las acciones de administración (CRUD +
+ * media) exigen ROLE_BLOG de forma explícita en cada método, porque el
+ * IsGranted a nivel de clase también bloqueaba las públicas y mandaba al
+ * login al entrar en /blog o /blog/category/4 (Recetas).
  */
-#[IsGranted('ROLE_BLOG')]
 class BlogController extends AbstractController
 {
 
+    #[IsGranted('ROLE_BLOG')]
     public function index(Request $request, EntityManagerInterface $em)
     {
         // Filtro opcional por categoría desde los tabs.
@@ -77,6 +83,7 @@ class BlogController extends AbstractController
      * Creates a new Blog entity.
      *
      */
+    #[IsGranted('ROLE_BLOG')]
     public function create(Request $request, EntityManagerInterface $em)
     {
         $entity = new Blog();
@@ -122,6 +129,7 @@ class BlogController extends AbstractController
      * Displays a form to create a new Blog entity.
      *
      */
+    #[IsGranted('ROLE_BLOG')]
     public function new()
     {
         $entity = new Blog();
@@ -136,6 +144,7 @@ class BlogController extends AbstractController
     }
 
 
+    #[IsGranted('ROLE_BLOG')]
     public function second($id, EntityManagerInterface $em)
     {
         $entity = $em->getRepository(\App\Entity\Blog::class)->find($id);
@@ -168,6 +177,7 @@ class BlogController extends AbstractController
         return $form;
     }
 
+    #[IsGranted('ROLE_BLOG')]
     public function updateSecond(Request $request, $id, EntityManagerInterface $em)
     {
         $entity = $em->getRepository(\App\Entity\Blog::class)->find($id);
@@ -224,6 +234,7 @@ class BlogController extends AbstractController
      * Displays a form to edit an existing Blog entity.
      *
      */
+    #[IsGranted('ROLE_BLOG')]
     public function edit($id, EntityManagerInterface $em)
     {
         $entity = $em->getRepository(\App\Entity\Blog::class)->find($id);
@@ -265,6 +276,7 @@ class BlogController extends AbstractController
      * Edits an existing Blog entity.
      *
      */
+    #[IsGranted('ROLE_BLOG')]
     public function update(Request $request, $id, EntityManagerInterface $em)
     {
         $entity = $em->getRepository(\App\Entity\Blog::class)->find($id);
@@ -298,6 +310,7 @@ class BlogController extends AbstractController
      * Deletes a Blog entity.
      *
      */
+    #[IsGranted('ROLE_BLOG')]
     public function delete(Request $request, $id, EntityManagerInterface $em)
     {
         $form = $this->createDeleteForm($id);
@@ -334,6 +347,7 @@ class BlogController extends AbstractController
     }
 
 
+    #[IsGranted('ROLE_BLOG')]
     public function edition($id, $object_class, EntityManagerInterface $em)
     {
         $entity = $em->getRepository('App\Entity\\' . ucfirst($object_class))->find($id);
@@ -356,6 +370,7 @@ class BlogController extends AbstractController
     }
 
 
+    #[IsGranted('ROLE_BLOG')]
     public function categories()
     {
     }
