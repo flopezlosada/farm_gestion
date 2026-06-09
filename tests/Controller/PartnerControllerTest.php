@@ -58,6 +58,25 @@ class PartnerControllerTest extends AbstractAuthenticatedTest
     }
 
     /**
+     * GET de la ficha de un socio devuelve 200. Cubre en runtime la ficha tras
+     * extraer los builders de "recoger en otro nodo" (semanas + nodos destino) al
+     * servicio compartido PickupRelocationOptions: la ficha los consume vía el
+     * servicio, así que un 500 en ese camino lo delata aquí.
+     */
+    public function testPartnerShowReturnsOk(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        $partner = $em->getRepository(Partner::class)
+            ->findOneBy(['email' => PartnerUserFixtures::USER_SOCIX_EMAIL]);
+        $this->assertNotNull($partner, 'Fixtures sin socix de prueba (PartnerUserFixtures).');
+
+        $client->request('GET', sprintf('/gestion/partner/%d', $partner->getId()));
+        $this->assertSame(200, $client->getResponse()->getStatusCode());
+    }
+
+    /**
      * GET del calendario de recogida de un socio devuelve 200 (lectura v0).
      */
     public function testDeliveryCalendarReturnsOk(): void
