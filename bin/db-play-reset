@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Recrea db_play como copia exacta del golden (db_prod_snapshot).
+# Úsalo cuando quieras una pizarra limpia con datos reales, o tras
+# aplicar un cambio al golden y querer que play se ponga al día.
+# db_play es DESECHABLE: nunca pongas aquí nada que quieras conservar.
+set -euo pipefail
+
+# El usuario 'db' no puede crear bases; se hace como root de DDEV.
+ddev mysql -uroot -proot -e "
+  DROP DATABASE IF EXISTS db_play;
+  CREATE DATABASE db_play CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+  GRANT ALL ON db_play.* TO 'db'@'%';
+  FLUSH PRIVILEGES;"
+
+ddev exec 'mysqldump -udb -pdb --single-transaction --no-tablespaces db_prod_snapshot | mysql -udb -pdb db_play'
+
+echo "db_play recreada desde golden."
+ddev exec 'mysql -udb -pdb -e "SELECT (SELECT COUNT(*) FROM db_prod_snapshot.partner) AS golden, (SELECT COUNT(*) FROM db_play.partner) AS play"' 2>/dev/null

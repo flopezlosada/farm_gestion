@@ -32,7 +32,7 @@ use Doctrine\ORM\EntityManagerInterface;
  * DeliveryShiftValidator y decidir si bloquea o sigue. El applier asume
  * que la decisión está ya tomada.
  */
-final class DeliveryShiftApplier
+final class DeliveryShiftApplier implements ShiftReconciliationActions
 {
     private const STATUS_PICKED = 1;
     private const STATUS_SKIPPED = 2;
@@ -474,6 +474,21 @@ final class DeliveryShiftApplier
 
         $this->recordEvent($partner, $from, $target, $actor, cancelled: $backHome);
         $this->em->flush();
+    }
+
+    /**
+     * Re-apunta el destino de un cambio puntual a otra semana, conservando su
+     * origen. Entrada PÚBLICA de {@see repoint} para la reconciliación al cerrar
+     * una semana: cuando se cierra la semana DESTINO de un cambio, la cesta se
+     * arrastra a la siguiente operativa (como si esa semana le hubiera tocado
+     * naturalmente). La composición se deriva del patrón con los huevos del
+     * origen como referencia (carryItems=null → stampDestination la deriva).
+     *
+     * @param string|null $actor Quien origina el re-apuntado.
+     */
+    public function repointTarget(PartnerDeliveryShift $shift, Basket $newTarget, ?string $actor = null): void
+    {
+        $this->repoint($shift, $newTarget, null, $actor);
     }
 
     /**

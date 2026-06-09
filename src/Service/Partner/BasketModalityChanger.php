@@ -2,9 +2,7 @@
 
 namespace App\Service\Partner;
 
-use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
-use App\Entity\WeeklyBasket;
 use App\Repository\PartnerBasketShareRepository;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -22,11 +20,12 @@ use Doctrine\ORM\EntityManagerInterface;
  *    llama a getId(): int sobre la PBS nueva, que ha de estar ya persistida),
  *  - partir el histórico en dos sin solapar fechas.
  *
- * NO decide la cascada de WeeklyBasket: la expone como operación aparte
- * (dropFutureBaskets), porque cada caller la orquesta distinto — el form
- * borra las entregas futuras ya materializadas (se regeneran con la nueva
- * modalidad al generar cada listado), mientras que el comando ofrece además
- * convertir en sitio las de meses ya generados.
+ * NO decide la cascada de WeeklyBasket: tras aplicar el cambio, el caller debe
+ * reconciliar las entregas ya materializadas con el patrón nuevo llamando a
+ * {@see \App\Service\Delivery\WeeklyBasketGenerator::reconcilePartnerFrom}. Esa
+ * pieza vive en el generador porque es quien sabe materializar la entrega de un
+ * socio (añade donde ahora reparte, quita donde ya no), cosa que la generación
+ * normal no hace sobre un listado ya generado.
  */
 class BasketModalityChanger
 {
@@ -81,39 +80,5 @@ class BasketModalityChanger
         $this->em->flush();
 
         return $old;
-    }
-
-    /**
-     * Borra los WeeklyBasket del socio cuyas entregas caen en $from o después.
-     * Las entregas futuras se vuelven a materializar con la nueva modalidad
-     * cuando se genere cada listado semanal (el generador siembra desde la PBS
-     * vigente). ON DELETE CASCADE limpia los WeeklyBasketItem asociados.
-     *
-     * Límite conocido: si un mes futuro YA tenía listado generado, sus entregas
-     * no se regeneran solas (el generador reusa lo existente y no re-añade al
-     * socio); para ese caso usa el comando app:change-basket-modality con
-     * --convert-baskets.
-     *
-     * @param Partner $partner
-     * @param \DateTimeInterface $from Fecha (inclusive) desde la que se borran entregas.
-     * @return int Número de WeeklyBasket borrados.
-     */
-    public function dropFutureBaskets(Partner $partner, \DateTimeInterface $from): int
-    {
-        $future = $this->em->createQuery(
-            'SELECT wb FROM ' . WeeklyBasket::class . ' wb
-             JOIN wb.basket b
-             WHERE wb.partner = :partner AND b.date >= :from'
-        )
-            ->setParameter('partner', $partner)
-            ->setParameter('from', $from->format('Y-m-d'))
-            ->getResult();
-
-        foreach ($future as $wb) {
-            $this->em->remove($wb);
-        }
-        $this->em->flush();
-
-        return count($future);
     }
 }

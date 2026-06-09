@@ -8,6 +8,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
@@ -20,7 +21,6 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * edit/update/delete) y el flujo `image_in_gallery_*` se retiraron
  * por código muerto.
  */
-#[IsGranted('ROLE_BLOG')]
 class ImageController extends AbstractController
 {
     /**
@@ -28,6 +28,7 @@ class ImageController extends AbstractController
      * (object_class + foreign_key + single). Disparado desde el modal
      * AJAX del aside del editor de posts.
      */
+    #[IsGranted('ROLE_BLOG')]
     public function create(Request $request, $foreign_key, $object_class, $single, EntityManagerInterface $em)
     {
         $entity = new Image();
@@ -99,6 +100,7 @@ class ImageController extends AbstractController
      * Renderiza el form de alta de Image para el modal AJAX disparado
      * desde el aside del editor de posts.
      */
+    #[IsGranted('ROLE_BLOG')]
     public function new($foreign_key, $object_class, $single)
     {
         $entity = new Image();
@@ -116,6 +118,7 @@ class ImageController extends AbstractController
     /**
      * Borrado directo de la Image desde el aside del editor de posts.
      */
+    #[IsGranted('ROLE_BLOG')]
     public function fastDelete($id, EntityManagerInterface $em)
     {
         $entity = $em->getRepository(\App\Entity\Image::class)->find($id);
@@ -140,6 +143,13 @@ class ImageController extends AbstractController
     public function show_snippet($id, EntityManagerInterface $em)
     {
         $image = $em->getRepository(\App\Entity\Image::class)->find($id);
+
+        // La imagen referenciada en el cuerpo de un post puede haber sido
+        // borrada (referencia rota). En ese caso no renderizamos el snippet
+        // en vez de tumbar el post entero con un error 500.
+        if (!$image) {
+            return new Response('');
+        }
 
         return $this->render('Image/show_snippet.html.twig', array(
             'image' => $image,

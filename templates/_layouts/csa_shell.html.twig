@@ -135,12 +135,18 @@
                     {% endif %}
 
                     {% if is_granted('ROLE_GESTION_SOCIXS') %}
-                        <div class="csa-sidebar__group">Socixs</div>
+                        <div class="csa-sidebar__group">Socios</div>
                         {{ _self.nav_link('Listado', path('partner_index'), 'fa-people-carry',
                            (route starts with 'partner_' and not (route starts with 'partner_basket_share')) and route != 'partner_evolution') }}
+                        {{ _self.nav_link('Evolución', path('partner_evolution'), 'fa-line-chart',
+                           route == 'partner_evolution') }}
+                    {% endif %}
+
+                    {% if is_granted('ROLE_GESTION_REPARTO') %}
+                        <div class="csa-sidebar__group">Reparto</div>
                         {{ _self.nav_link('Reparto semanal', path('delivery_by_node_default'), 'fa-cart-arrow-down',
                            route starts with 'delivery_by_node') }}
-                        {{ _self.nav_link('Cambiar día de reparto', path('delivery_shifts_index'), 'fa-exchange',
+                        {{ _self.nav_link('Histórico de cambios', path('delivery_shifts_index'), 'fa-exchange',
                            route starts with 'delivery_shifts') }}
                         {{ _self.nav_link('Grupos de recogida', path('weekly_basket_group_index'), 'fa-map-marker',
                            route starts with 'weekly_basket_group') }}
@@ -148,18 +154,11 @@
                            route starts with 'node_') }}
                         {{ _self.nav_link('Excepciones de reparto', path('delivery_exception_index'), 'fa-calendar-times-o',
                            route starts with 'delivery_exception') }}
-                        {{ _self.nav_link('Evolución', path('partner_evolution'), 'fa-line-chart',
-                           route == 'partner_evolution') }}
                     {% endif %}
 
-                    {# Comercio: ya no incluye Cestas (eso es composición de cosecha, está en Granja). #}
-                    {% if is_granted('ROLE_ADMIN') %}
-                        <div class="csa-sidebar__group">Comercio</div>
-                        {{ _self.nav_link('Ventas', path('sale'), 'fa-money',
-                           route starts with 'sale') }}
-                        {{ _self.nav_link('Compras', path('purchase'), 'fa-eur',
-                           route starts with 'purchase') }}
-                    {% endif %}
+                    {# Comercio (Ventas/Compras) retirado del menú 2026-06-07 — pendiente
+                     # decidir si se usa en el futuro. Rutas y controllers siguen vivos.
+                     # Ver deuda comercio-menu-retirado-debt. #}
 
                     {% if is_granted('ROLE_BLOG') %}
                         <div class="csa-sidebar__group">Comunicación</div>

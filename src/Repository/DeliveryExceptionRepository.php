@@ -39,13 +39,13 @@ class DeliveryExceptionRepository extends ServiceEntityRepository
     }
 
     /**
-     * Resuelve la excepción que aplica a un nodo en un ciclo, dando
-     * prioridad a la específica del nodo sobre la global.
+     * Resuelve la excepción que aplica a un nodo en un ciclo, aplicando la
+     * regla de precedencia de {@see resolvePrecedence()}: una cancelación
+     * global es absoluta; en lo demás, la específica del nodo manda.
      *
      * @param Basket $basket Ciclo a comprobar.
      * @param Node $node Nodo cuyo reparto se está resolviendo.
-     * @return DeliveryException|null La específica del nodo si existe; si
-     *                                no, la global; null si ninguna.
+     * @return DeliveryException|null La excepción que aplica, o null si ninguna.
      */
     public function findForBasketAndNode(Basket $basket, Node $node): ?DeliveryException
     {
@@ -58,15 +58,39 @@ class DeliveryExceptionRepository extends ServiceEntityRepository
             ->getResult();
 
         $global = null;
+        $nodeSpecific = null;
         foreach ($matches as $match) {
             if ($match->getNode() === null) {
                 $global = $match;
-                continue;
+            } else {
+                $nodeSpecific = $match;
             }
-            return $match;
         }
 
-        return $global;
+        return self::resolvePrecedence($global, $nodeSpecific);
+    }
+
+    /**
+     * Regla de precedencia entre la excepción global (sin nodo) y la
+     * específica de nodo para un mismo ciclo.
+     *
+     * Una CANCELACIÓN global (`shiftedDate` null) es absoluta: el cierre se
+     * pone cuando no hay trabajadores (Semana Santa, Navidad, agosto) y por
+     * tanto no hay verdura que repartir — no reparte nadie, ni un nodo con
+     * override. En cambio un TRASLADO global ("todos reparten otro día") sí
+     * lo puede pisar un override de nodo que prefiera una fecha distinta.
+     *
+     * @param DeliveryException|null $global Excepción global, o null.
+     * @param DeliveryException|null $nodeSpecific Excepción del nodo, o null.
+     * @return DeliveryException|null La que aplica.
+     */
+    public static function resolvePrecedence(?DeliveryException $global, ?DeliveryException $nodeSpecific): ?DeliveryException
+    {
+        if ($global !== null && $global->isCancelled()) {
+            return $global;
+        }
+
+        return $nodeSpecific ?? $global;
     }
 
     /**
@@ -95,6 +119,35 @@ class DeliveryExceptionRepository extends ServiceEntityRepository
     }
 
     /**
+     * Cuenta los cierres GLOBALES que CANCELAN el reparto en un rango de
+     * ciclos, estrictamente entre dos fechas (extremos excluidos).
+     *
+     * "Global" = sin nodo (`node IS NULL`): afecta a todos los puntos de
+     * reparto (festivo, puente, agosto). "Cancela" = `shiftedDate IS NULL`:
+     * ese ciclo no hay entrega (un traslado a otro día NO cuenta, porque sí
+     * hay reparto). Cada uno de estos cierres desplaza una semana la
+     * alternancia quincenal A/B; lo consume {@see \App\Service\Delivery\BiweeklyCohortResolver}.
+     *
+     * @param \DateTimeInterface $after Extremo inferior excluido (típicamente el ancla).
+     * @param \DateTimeInterface $before Extremo superior excluido (el ciclo objetivo).
+     * @return int Número de cierres globales cancelados en (after, before).
+     */
+    public function countGlobalCancellationsBetween(\DateTimeInterface $after, \DateTimeInterface $before): int
+    {
+        return (int) $this->createQueryBuilder('e')
+            ->select('COUNT(e.id)')
+            ->join('e.basket', 'b')
+            ->where('e.node IS NULL')
+            ->andWhere('e.shiftedDate IS NULL')
+            ->andWhere('b.date > :after')
+            ->andWhere('b.date < :before')
+            ->setParameter('after', $after->format('Y-m-d'))
+            ->setParameter('before', $before->format('Y-m-d'))
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
+    /**
      * Excepciones cuyo ciclo (o fecha trasladada) cae dentro del rango
      * dado. Útil para pintar el calendario de excepciones.
      *
@@ -110,6 +163,25 @@ class DeliveryExceptionRepository extends ServiceEntityRepository
             ->orWhere('e.shiftedDate BETWEEN :from AND :to')
             ->setParameter('from', $from->format('Y-m-d'))
             ->setParameter('to', $to->format('Y-m-d'))
+            ->orderBy('b.date', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Excepciones cuyo ciclo cae en $from o después. Sirve al picker del
+     * formulario para no ofrecer fechas que ya tienen excepción (el candado
+     * de {@see findOneExact()} sigue protegiendo el guardado por si acaso).
+     *
+     * @param \DateTimeInterface $from Fecha de ciclo (inclusive) desde la que mirar.
+     * @return DeliveryException[]
+     */
+    public function findFromDate(\DateTimeInterface $from): array
+    {
+        return $this->createQueryBuilder('e')
+            ->join('e.basket', 'b')
+            ->where('b.date >= :from')
+            ->setParameter('from', $from->format('Y-m-d'))
             ->orderBy('b.date', 'ASC')
             ->getQuery()
             ->getResult();

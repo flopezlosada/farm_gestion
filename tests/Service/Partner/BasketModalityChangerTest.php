@@ -6,12 +6,10 @@ use App\Entity\BasketShare;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
 use App\Entity\PartnerEvent;
-use App\Entity\WeeklyBasket;
 use App\Repository\PartnerBasketShareRepository;
 use App\Service\Partner\BasketModalityChanger;
 use App\Service\Partner\PartnerShareEventRecorder;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Query;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
@@ -103,26 +101,6 @@ class BasketModalityChangerTest extends TestCase
 
         $this->expectException(\DomainException::class);
         $this->changer->applyChange($new, new \DateTime('2026-06-01'));
-    }
-
-    public function testDropFutureBasketsBorraCadaEntregaYDevuelveLaCuenta(): void
-    {
-        $partner = $this->partner(7);
-        $wb1 = new WeeklyBasket();
-        $wb2 = new WeeklyBasket();
-
-        $query = $this->createMock(Query::class);
-        $query->method('setParameter')->willReturnSelf();
-        $query->method('getResult')->willReturn([$wb1, $wb2]);
-        $this->em->method('createQuery')->willReturn($query);
-
-        $removed = [];
-        $this->em->method('remove')->willReturnCallback(function ($wb) use (&$removed) { $removed[] = $wb; });
-
-        $count = $this->changer->dropFutureBaskets($partner, new \DateTime('2026-06-01'));
-
-        $this->assertSame(2, $count);
-        $this->assertSame([$wb1, $wb2], $removed);
     }
 
     private function partner(int $id): Partner

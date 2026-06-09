@@ -245,6 +245,14 @@ class BasketShare
     public const ID_ONLY_EGG = 5;
     /** Modalidades compartidas (dos familias parten una cesta física). */
     public const IDS_SHARED = [4, 6, 7];
+    /** Modalidad quincenal: única que usa la cohorte A/B (delivery_group). */
+    public const ID_BIWEEKLY = 2;
+    /**
+     * Modalidades de reparto SEMANAL (cada semana): Semanal (1) y Semanal
+     * compartida (4). No caben en un punto de cadencia quincenal, que sólo
+     * reparte cada dos semanas.
+     */
+    public const IDS_WEEKLY = [1, 4];
 
     /**
      * Peso en cestas FÍSICAS que esta modalidad reparte el día de la entrega:

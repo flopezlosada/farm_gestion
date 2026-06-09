@@ -28,7 +28,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * añadidas en el rediseño de reparto.
  */
 #[Route('/gestion/node')]
-#[IsGranted('ROLE_GESTION_SOCIXS')]
+#[IsGranted('ROLE_GESTION_REPARTO')]
 class NodeController extends AbstractController
 {
     /** Horizonte (en semanas) que se mira hacia adelante al calcular próximos repartos. */

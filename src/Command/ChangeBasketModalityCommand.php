@@ -4,9 +4,9 @@ namespace App\Command;
 
 use App\Entity\BasketShare;
 use App\Entity\PartnerBasketShare;
-use App\Entity\WeeklyBasket;
 use App\Repository\PartnerBasketShareRepository;
 use App\Repository\PartnerRepository;
+use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Partner\BasketModalityChanger;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -24,9 +24,11 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  * form admin de PBS NO hace esto (sobrescribe en sitio sin histórico ni evento,
  * deuda pbs-form-debt), de ahí este comando-puente hasta que exista la UI.
  *
- * La cascada de WeeklyBaskets se indica explícitamente: --drop-baskets (entregas
- * que dejan de tocar en la nueva modalidad) y --convert-baskets (entregas que se
- * mantienen y se re-etiquetan a la nueva modalidad).
+ * La cascada de WeeklyBaskets es automática: tras partir el histórico, reconcilia
+ * cada listado YA generado con fecha >= efectiva al patrón nuevo vía
+ * {@see WeeklyBasketGenerator::reconcilePartnerFrom} (añade donde ahora reparte,
+ * quita donde ya no, re-etiqueta la modalidad). Las semanas aún sin generar las
+ * siembra la generación normal. Ya no hay que adivinar qué baskets borrar o convertir.
  *
  * NO toca mayo si la fecha efectiva es 1-jun: las entregas previas siguen
  * colgando del PBS antiguo. Idempotencia mínima: refuerza con --dry-run.
@@ -42,6 +44,7 @@ class ChangeBasketModalityCommand extends Command
         private readonly PartnerRepository $partnerRepository,
         private readonly PartnerBasketShareRepository $shareRepository,
         private readonly BasketModalityChanger $modalityChanger,
+        private readonly WeeklyBasketGenerator $generator,
     ) {
         parent::__construct();
     }
@@ -54,8 +57,6 @@ class ChangeBasketModalityCommand extends Command
             ->addOption('from', null, InputOption::VALUE_REQUIRED, 'Fecha efectiva del cambio (YYYY-MM-DD).')
             ->addOption('day-order', null, InputOption::VALUE_REQUIRED, 'day_month_order de la nueva PBS (N-ésima entrega del mes), o vacío.')
             ->addOption('egg-day-order', null, InputOption::VALUE_REQUIRED, 'egg_day_month_order de la nueva PBS (vacío = huevo va con la cesta).')
-            ->addOption('drop-baskets', null, InputOption::VALUE_REQUIRED, 'IDs de basket (csv) cuyas entregas del socio se BORRAN.')
-            ->addOption('convert-baskets', null, InputOption::VALUE_REQUIRED, 'IDs de basket (csv) cuyas entregas del socio se re-etiquetan a la nueva modalidad.')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'No escribe; informa de lo que haría.');
     }
 
@@ -101,16 +102,11 @@ class ChangeBasketModalityCommand extends Command
         $new->setMonthPrice($toShare->getMonthPrice() * $new->getAmount());
         $new->setEggMonthPrice($old->getEggAmount() ? $old->getEggAmount()->getMonthPrice() * $new->getAmount() : 0);
 
-        $dropIds = $this->csv($input->getOption('drop-baskets'));
-        $convertIds = $this->csv($input->getOption('convert-baskets'));
-
         $io->title(sprintf('Cambio de modalidad — socio %d (%s)', $partner->getId(), $partner->getName()));
         $io->definitionList(
             ['Desde' => sprintf('PBS %d bs=%d', $old->getId(), $old->getBasketShare()?->getId())],
             ['Hacia' => sprintf('bs=%d day_order=%s, efectivo %s', $toShare->getId(), $dayOrder ?: '—', $effective->format('Y-m-d'))],
             ['Old end_date' => $dayBefore->format('Y-m-d')],
-            ['Drop WB en baskets' => implode(',', $dropIds) ?: '—'],
-            ['Convert WB en baskets' => implode(',', $convertIds) ?: '—'],
         );
 
         if ($dryRun) {
@@ -122,33 +118,20 @@ class ChangeBasketModalityCommand extends Command
         // previo que asigna id a la nueva PBS antes del snapshot del evento).
         $this->modalityChanger->applyChange($new, $effective, 'cli');
 
-        // Cascada de WeeklyBaskets.
-        $wbRepo = $this->em->getRepository(WeeklyBasket::class);
-        foreach ($dropIds as $bid) {
-            foreach ($wbRepo->findBy(['partner' => $partner, 'basket' => $bid]) as $wb) {
-                $this->em->remove($wb); // ON DELETE CASCADE limpia sus items
-            }
-        }
-        foreach ($convertIds as $bid) {
-            foreach ($wbRepo->findBy(['partner' => $partner, 'basket' => $bid]) as $wb) {
-                $wb->setBasketShare($toShare);
-            }
-        }
+        // Cascada automática: reconcilia cada listado ya generado (fecha >= efectiva)
+        // al patrón nuevo. Las semanas sin generar las siembra la generación normal.
+        $reconciled = $this->generator->reconcilePartnerFrom($partner, $effective);
 
-        $this->em->flush();
-        $io->success('Cambio aplicado: PBS partida, BASKET_CHANGE emitido, WBs cascadeados.');
+        $withDelivery = array_keys(array_filter($reconciled));
+        $withoutDelivery = array_keys(array_filter($reconciled, static fn (bool $v) => !$v));
+        $io->writeln(sprintf(
+            'Listados generados reconciliados: %d (con entrega: [%s]; sin entrega: [%s]).',
+            count($reconciled),
+            implode(',', $withDelivery) ?: '—',
+            implode(',', $withoutDelivery) ?: '—',
+        ));
+        $io->success('Cambio aplicado: PBS partida, BASKET_CHANGE emitido, listado reconciliado.');
 
         return Command::SUCCESS;
-    }
-
-    /**
-     * @return int[]
-     */
-    private function csv(?string $value): array
-    {
-        if ($value === null || trim($value) === '') {
-            return [];
-        }
-        return array_map('intval', array_filter(array_map('trim', explode(',', $value)), 'strlen'));
     }
 }

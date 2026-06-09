@@ -5,7 +5,6 @@ namespace App\Service\Delivery;
 use App\Entity\Basket;
 use App\Entity\BasketComponent;
 use App\Entity\Node;
-use App\Entity\PartnerBasketShare;
 use App\Entity\WeeklyBasket;
 use App\Repository\PartnerBasketShareRepository;
 use App\Repository\WeeklyBasketItemRepository;
@@ -19,9 +18,12 @@ use App\Repository\WeeklyBasketRepository;
  * con subtotal de cestas por grupo; las cestas compartidas en un bloque aparte
  * con las parejas pegadas; y los totales del nodo.
  *
- * Es un shaper puro: lee de los repositorios y no muta nada. NO dispara la
- * generación de WeeklyBasket (eso es del cron / de la pantalla v2); si el día
- * no está materializado, la hoja sale vacía.
+ * El shaper ({@see shape}) es PURO: opera sobre una lista de {@see DeliveryLine}
+ * y no toca la BBDD. Hay dos alimentadores que producen esas líneas:
+ *  - {@see build}: camino MATERIALIZADO — mapea los WeeklyBasket persistidos de
+ *    una semana ya en piedra. Si el día no está materializado, la hoja sale vacía.
+ *  - la PROYECCIÓN (semana futura dibujada al vuelo) alimenta {@see shape}
+ *    directamente con líneas calculadas desde las reglas, sin persistir.
  *
  * TODO(DRY): {@see DeliveryController} tiene su propia versión de pinSharedPairs,
  * compareByDisplayName y el cálculo de totales. Convergerlas en un follow-up
@@ -53,7 +55,8 @@ class NodeDeliverySheet
     }
 
     /**
-     * Estructura imprimible del nodo en el día dado.
+     * Estructura imprimible del nodo en el día dado, a partir de los
+     * WeeklyBasket YA materializados (camino de piedra).
      *
      * @return array{
      *   groups: list<array{name:string, color:?string, locality:string, subtotal_cestas:float, modalities: list<array{label:string, rows: list<array<string,mixed>>}>}>,
@@ -63,75 +66,143 @@ class NodeDeliverySheet
      */
     public function build(Node $node, Basket $basket): array
     {
+        return $this->shape($this->linesFromMaterialized($node, $basket));
+    }
+
+    /**
+     * Da forma al listado a partir de una lista de líneas de entrega, vengan de
+     * piedra (materializadas) o de dibujo (proyección). Shaper PURO.
+     *
+     * @param DeliveryLine[] $lines
+     * @return array{
+     *   groups: list<array{name:string, color:?string, locality:string, subtotal_cestas:float, modalities: list<array{label:string, rows: list<array<string,mixed>>}>}>,
+     *   shared: array{rows: list<array<string,mixed>>},
+     *   totals: array{cestas:float, docenas:float}
+     * }
+     */
+    public function shape(array $lines): array
+    {
+        // Partición: compartidas (bloque aparte), cestas extra de no-suscriptores (sin
+        // modalidad → sección propia al final) y resto (por grupo).
+        $shared = [];
+        $extra = [];
+        $regular = [];
+        foreach ($lines as $line) {
+            if ($line->basketShareId === null) {
+                $extra[] = $line; // entrega "solo extra" sin modalidad
+                continue;
+            }
+            if (in_array($line->basketShareId, self::SHARED_BASKET_SHARE_IDS, true)) {
+                $shared[] = $line;
+            } else {
+                $regular[] = $line;
+            }
+        }
+
+        $groups = $this->buildGroups($regular);
+        if ($extra !== []) {
+            $groups[] = $this->buildExtraGroup($extra);
+        }
+
+        return [
+            'groups' => $groups,
+            'shared' => $this->buildShared($shared),
+            'totals' => $this->computeTotals($lines),
+        ];
+    }
+
+    /**
+     * Mapea los WeeklyBasket materializados de un nodo+día a líneas de entrega.
+     * Es el adaptador del camino de piedra: lee de los repositorios las
+     * cantidades y el PBS activo de cada entrega y los vuelca a {@see DeliveryLine}.
+     *
+     * @return DeliveryLine[]
+     */
+    private function linesFromMaterialized(Node $node, Basket $basket): array
+    {
         $weeklyBaskets = $this->weeklyBasketRepo->findForNodeAndBasket($node, $basket);
 
         // Cestas físicas (verdura) y docenas (huevos) ya materializadas por
         // entrega: la ponderación ½ de las compartidas y el 0 de "solo huevos"
-        // están estampados en el ítem, así que aquí solo se leen y suman.
+        // están estampados en el ítem, así que aquí solo se leen.
         $componentAmounts = $this->weeklyBasketItemRepo->componentAmountsFor($weeklyBaskets);
 
-        // PartnerBasketShare activo por entrega: hace falta para el código de
-        // modalidad (saber si el hogar está suscrito a huevos → sufijo "H").
-        $pbsByWbId = [];
+        $lines = [];
         foreach ($weeklyBaskets as $wb) {
-            $partner = $wb->getPartner();
-            $pbsByWbId[$wb->getId()] = $partner !== null
-                ? $this->partnerBasketShareRepo->findActiveForPartner($partner, $basket->getDate())
-                : null;
+            $lines[] = $this->lineFromWeeklyBasket($wb, $componentAmounts, $basket);
         }
 
-        // Partición: compartidas (bloque aparte) vs resto (por grupo).
-        $shared = [];
-        $regular = [];
-        foreach ($weeklyBaskets as $wb) {
-            $bs = $wb->getBasketShare();
-            if ($bs === null) {
-                continue;
-            }
-            if (in_array($bs->getId(), self::SHARED_BASKET_SHARE_IDS, true)) {
-                $shared[] = $wb;
-            } else {
-                $regular[] = $wb;
-            }
-        }
+        return $lines;
+    }
 
-        return [
-            'groups' => $this->buildGroups($regular, $componentAmounts, $pbsByWbId),
-            'shared' => $this->buildShared($shared, $componentAmounts, $pbsByWbId),
-            'totals' => $this->computeTotals($weeklyBaskets, $componentAmounts),
-        ];
+    /**
+     * @param array<int,array<int,float>> $componentAmounts wb.id => [componentId => amount]
+     */
+    private function lineFromWeeklyBasket(WeeklyBasket $wb, array $componentAmounts, Basket $basket): DeliveryLine
+    {
+        $partner = $wb->getPartner();
+        $wbg = $wb->getWeeklyBasketGroup();
+
+        // PBS activo: hace falta para el código de modalidad (saber si el hogar
+        // está suscrito a huevos → sufijo "H").
+        $pbs = $partner !== null
+            ? $this->partnerBasketShareRepo->findActiveForPartner($partner, $basket->getDate())
+            : null;
+
+        $amounts = $componentAmounts[$wb->getId()] ?? [];
+
+        return new DeliveryLine(
+            nameForDelivery: $partner?->getNameForDelivery() ?? '',
+            basketShareId: $wb->getBasketShare()?->getId(),
+            subscribedToEggs: $pbs?->getEggAmount() !== null,
+            cestas: $amounts[BasketComponent::ID_VEGETABLES] ?? 0.0,
+            dozens: $amounts[BasketComponent::ID_EGGS] ?? 0.0,
+            groupId: $wbg?->getId(),
+            groupName: $wbg?->getName(),
+            groupColor: $wbg?->getColor(),
+            city: $partner?->getCity()?->getName(),
+            partnerId: $partner?->getId(),
+            sharePartnerId: $partner?->getSharePartner()?->getId(),
+            relocatedFromLabel: $wb->getRelocatedFromLabel(),
+        );
     }
 
     /**
      * Grupos de recogida (WBG) en orden alfabético; dentro, subgrupos por
      * modalidad (bs.id ascendente: S, Q, M, H) con su subtotal de cestas.
      *
-     * @param WeeklyBasket[]                 $weeklyBaskets
-     * @param array<int,array<int,float>>    $componentAmounts
-     * @param array<int,?PartnerBasketShare> $pbsByWbId
-     * @return list<array{name:string, color:?string, subtotal_cestas:float, modalities: list<array{label:string, rows: list<array<string,mixed>>}>}>
+     * @param DeliveryLine[] $lines
+     * @return list<array{name:string, color:?string, locality:string, subtotal_cestas:float, modalities: list<array{label:string, rows: list<array<string,mixed>>}>}>
      */
-    private function buildGroups(array $weeklyBaskets, array $componentAmounts, array $pbsByWbId): array
+    private function buildGroups(array $lines): array
     {
         $byWbg = [];
-        foreach ($weeklyBaskets as $wb) {
-            $wbg = $wb->getWeeklyBasketGroup();
-            $bs = $wb->getBasketShare();
-            if ($wbg === null || $bs === null) {
+        $relocated = [];
+        foreach ($lines as $line) {
+            if ($line->basketShareId === null) {
                 continue;
             }
-            $gid = $wbg->getId();
-            $bucket = $this->bucketFor($bs->getId());
+            // Trasladados (override de nodo): a su propia sección al final, no al grupo
+            // destino (vienen de otro nodo, son visitantes puntuales de esta semana).
+            if ($line->relocatedFromLabel !== null) {
+                $relocated[] = $line;
+                continue;
+            }
+            if ($line->groupId === null) {
+                continue;
+            }
+            $gid = $line->groupId;
+            $bucket = $this->bucketFor($line->basketShareId);
             $byWbg[$gid] ??= [
-                'name' => $wbg->getName(),
-                'color' => $wbg->getColor(),
-                'locality' => $this->localityFor($wbg->getName()),
+                'name' => $line->groupName ?? '',
+                'color' => $line->groupColor,
+                'locality' => $this->localityFor($line->groupName ?? ''),
                 'mods' => [],
                 'subtotal_cestas' => 0.0,
             ];
             $byWbg[$gid]['mods'][$bucket['order']] ??= ['label' => $bucket['label'], 'rows' => []];
-            $byWbg[$gid]['mods'][$bucket['order']]['rows'][] = $this->row($wb, $componentAmounts, $pbsByWbId);
-            $byWbg[$gid]['subtotal_cestas'] += $this->cestasOf($wb, $componentAmounts);
+            $byWbg[$gid]['mods'][$bucket['order']]['rows'][] = $this->row($line);
+            $byWbg[$gid]['subtotal_cestas'] += $line->cestas;
         }
 
         uasort($byWbg, static fn (array $a, array $b): int => strnatcasecmp($a['name'], $b['name']));
@@ -155,7 +226,73 @@ class NodeDeliverySheet
             ];
         }
 
+        // Sección "Trasladados" al final (si hay): los que recogen aquí viniendo de otro nodo.
+        if ($relocated !== []) {
+            $groups[] = $this->buildRelocatedGroup($relocated);
+        }
+
         return $groups;
+    }
+
+    /**
+     * Sección "Trasladados" del nodo: socios que esta semana recogen aquí viniendo de
+     * OTRO nodo (override de nodo). Va al final, con cada fila marcada "de {grupo de
+     * casa}" (row['relocated_from']). Mismas subdivisiones por modalidad que un grupo normal.
+     *
+     * @param DeliveryLine[] $lines
+     * @return array{name:string, color:?string, locality:string, subtotal_cestas:float, modalities: list<array{label:string, rows: list<array<string,mixed>>}>}
+     */
+    private function buildRelocatedGroup(array $lines): array
+    {
+        $mods = [];
+        $subtotal = 0.0;
+        foreach ($lines as $line) {
+            $bucket = $this->bucketFor($line->basketShareId);
+            $mods[$bucket['order']] ??= ['label' => $bucket['label'], 'rows' => []];
+            $mods[$bucket['order']]['rows'][] = $this->row($line);
+            $subtotal += $line->cestas;
+        }
+        ksort($mods);
+        foreach ($mods as &$mod) {
+            usort($mod['rows'], $this->compareRowsByCodeThenName(...));
+        }
+        unset($mod);
+
+        return [
+            'name' => 'Trasladados',
+            'color' => null,
+            'locality' => '',
+            'subtotal_cestas' => $subtotal,
+            'modalities' => array_values($mods),
+        ];
+    }
+
+    /**
+     * Sección "Cestas extra" del nodo: entregas "solo extra" de socios SIN suscripción (sin
+     * modalidad, basketShareId null). Va al final, una sola lista ordenada por nombre (sin
+     * subdividir por modalidad porque no tienen). Ver {@see \App\Entity\PartnerBasketExtra}.
+     *
+     * @param DeliveryLine[] $lines
+     * @return array{name:string, color:?string, locality:string, subtotal_cestas:float, modalities: list<array{label:?string, rows: list<array<string,mixed>>}>}
+     */
+    private function buildExtraGroup(array $lines): array
+    {
+        usort($lines, $this->compareByDisplayName(...));
+
+        $rows = [];
+        $subtotal = 0.0;
+        foreach ($lines as $line) {
+            $rows[] = $this->row($line);
+            $subtotal += $line->cestas;
+        }
+
+        return [
+            'name' => 'Cestas extra',
+            'color' => null,
+            'locality' => '',
+            'subtotal_cestas' => $subtotal,
+            'modalities' => [['label' => null, 'rows' => $rows]],
+        ];
     }
 
     /**
@@ -191,21 +328,19 @@ class NodeDeliverySheet
      * (Partner.sharePartner) pegada. Cada fila lleva su localidad (nombre del
      * WBG) porque en este bloque no se agrupa por grupo de recogida.
      *
-     * @param WeeklyBasket[]                 $weeklyBaskets
-     * @param array<int,array<int,float>>    $componentAmounts
-     * @param array<int,?PartnerBasketShare> $pbsByWbId
+     * @param DeliveryLine[] $lines
      * @return array{rows: list<array<string,mixed>>}
      */
-    private function buildShared(array $weeklyBaskets, array $componentAmounts, array $pbsByWbId): array
+    private function buildShared(array $lines): array
     {
-        usort($weeklyBaskets, $this->compareByDisplayName(...));
-        [$ordered, $pairEnds] = $this->pinSharedPairs($weeklyBaskets);
+        usort($lines, $this->compareByDisplayName(...));
+        [$ordered, $pairEnds] = $this->pinSharedPairs($lines);
 
         $rows = [];
-        foreach ($ordered as $wb) {
-            $row = $this->row($wb, $componentAmounts, $pbsByWbId);
-            $row['color'] = $wb->getWeeklyBasketGroup()?->getColor();
-            $row['pair_end'] = isset($pairEnds[$wb->getId()]);
+        foreach ($ordered as $line) {
+            $row = $this->row($line);
+            $row['color'] = $line->groupColor;
+            $row['pair_end'] = isset($pairEnds[spl_object_id($line)]);
             $rows[] = $row;
         }
 
@@ -216,22 +351,20 @@ class NodeDeliverySheet
      * Fila imprimible de una entrega: nombre de reparto, código de modalidad,
      * cestas físicas y especificación de huevos.
      *
-     * @param array<int,array<int,float>>    $componentAmounts
-     * @param array<int,?PartnerBasketShare> $pbsByWbId
      * @return array{name:string, code:string, cestas:float, egg_spec:?string, egg_count:int, locality:string}
      */
-    private function row(WeeklyBasket $wb, array $componentAmounts, array $pbsByWbId): array
+    private function row(DeliveryLine $line): array
     {
-        $dozens = $componentAmounts[$wb->getId()][BasketComponent::ID_EGGS] ?? 0.0;
-        $eggs = $this->formatEggs($dozens);
+        $eggs = $this->formatEggs($line->dozens);
 
         return [
-            'name' => $wb->getPartner()?->getNameForDelivery() ?? '',
-            'code' => $this->deriveCode($wb, $pbsByWbId[$wb->getId()] ?? null),
-            'cestas' => $this->cestasOf($wb, $componentAmounts),
+            'name' => $line->nameForDelivery,
+            'code' => $this->deriveCode($line),
+            'cestas' => $line->cestas,
             'egg_spec' => $eggs['spec'],
             'egg_count' => $eggs['count'],
-            'locality' => $this->localityForRow($wb),
+            'locality' => $this->localityForRow($line),
+            'relocated_from' => $line->relocatedFromLabel,
         ];
     }
 
@@ -243,13 +376,12 @@ class NodeDeliverySheet
      * por la que `city` entra en el listado, así que la suciedad de `city` en
      * los demás grupos no afecta.
      */
-    private function localityForRow(WeeklyBasket $wb): string
+    private function localityForRow(DeliveryLine $line): string
     {
-        $wbg = $wb->getWeeklyBasketGroup();
-        $groupName = $wbg?->getName() ?? 'Sin grupo';
+        $groupName = $line->groupName ?? 'Sin grupo';
 
         if (str_contains($groupName, '/')) {
-            $city = $wb->getPartner()?->getCity()?->getName();
+            $city = $line->city;
             if ($city !== null && trim($city) !== '') {
                 return $city;
             }
@@ -259,27 +391,18 @@ class NodeDeliverySheet
     }
 
     /**
-     * @param array<int,array<int,float>> $componentAmounts
-     */
-    private function cestasOf(WeeklyBasket $wb, array $componentAmounts): float
-    {
-        return $componentAmounts[$wb->getId()][BasketComponent::ID_VEGETABLES] ?? 0.0;
-    }
-
-    /**
      * Código de modalidad del listado (S/Q/M/SC/QC/MC), con sufijo "H" si el
      * hogar está suscrito a huevos. "Solo huevos" (bs.id=5) es "H" a secas.
      */
-    private function deriveCode(WeeklyBasket $wb, ?PartnerBasketShare $pbs): string
+    private function deriveCode(DeliveryLine $line): string
     {
-        $bsId = $wb->getBasketShare()?->getId();
+        $bsId = $line->basketShareId;
         $base = self::CODE_BY_BASKET_SHARE[$bsId] ?? '';
         if ($bsId === 5) {
             return $base; // "H": el sufijo de huevos no aplica, ya es solo huevos.
         }
-        $subscribedToEggs = $pbs?->getEggAmount() !== null;
 
-        return $subscribedToEggs ? $base . 'H' : $base;
+        return $line->subscribedToEggs ? $base . 'H' : $base;
     }
 
     /**
@@ -314,17 +437,16 @@ class NodeDeliverySheet
     /**
      * Totales del nodo+día: cestas físicas y docenas de huevos.
      *
-     * @param WeeklyBasket[]              $weeklyBaskets
-     * @param array<int,array<int,float>> $componentAmounts
+     * @param DeliveryLine[] $lines
      * @return array{cestas:float, docenas:float}
      */
-    private function computeTotals(array $weeklyBaskets, array $componentAmounts): array
+    private function computeTotals(array $lines): array
     {
         $cestas = 0.0;
         $docenas = 0.0;
-        foreach ($weeklyBaskets as $wb) {
-            $cestas += $componentAmounts[$wb->getId()][BasketComponent::ID_VEGETABLES] ?? 0.0;
-            $docenas += $componentAmounts[$wb->getId()][BasketComponent::ID_EGGS] ?? 0.0;
+        foreach ($lines as $line) {
+            $cestas += $line->cestas;
+            $docenas += $line->dozens;
         }
 
         return ['cestas' => $cestas, 'docenas' => $docenas];
@@ -333,52 +455,48 @@ class NodeDeliverySheet
     /**
      * Pega cada pareja de cesta compartida (Partner.sharePartner) consigo,
      * manteniendo el orden alfabético del primero. Devuelve la lista reordenada
-     * y el set de wb.id que cierran grupo (para pintar separador).
+     * y el set (por spl_object_id) de líneas que cierran grupo (separador).
      *
-     * @param WeeklyBasket[] $rows ordenados alfabéticamente
-     * @return array{0: WeeklyBasket[], 1: array<int,true>}
+     * @param DeliveryLine[] $lines ordenadas alfabéticamente
+     * @return array{0: DeliveryLine[], 1: array<int,true>}
      */
-    private function pinSharedPairs(array $rows): array
+    private function pinSharedPairs(array $lines): array
     {
         $byPartnerId = [];
-        foreach ($rows as $wb) {
-            $partner = $wb->getPartner();
-            if ($partner !== null) {
-                $byPartnerId[$partner->getId()] = $wb;
+        foreach ($lines as $line) {
+            if ($line->partnerId !== null) {
+                $byPartnerId[$line->partnerId] = $line;
             }
         }
 
         $result = [];
         $used = [];
         $pairEnds = [];
-        foreach ($rows as $wb) {
-            $wbId = $wb->getId();
-            if (isset($used[$wbId])) {
+        foreach ($lines as $line) {
+            $oid = spl_object_id($line);
+            if (isset($used[$oid])) {
                 continue;
             }
-            $result[] = $wb;
-            $used[$wbId] = true;
+            $result[] = $line;
+            $used[$oid] = true;
 
-            $mate = $wb->getPartner()?->getSharePartner();
-            $mateWb = $mate !== null ? ($byPartnerId[$mate->getId()] ?? null) : null;
-            if ($mateWb !== null && !isset($used[$mateWb->getId()])) {
-                $result[] = $mateWb;
-                $used[$mateWb->getId()] = true;
-                $pairEnds[$mateWb->getId()] = true;
+            $mateId = $line->sharePartnerId;
+            $mateLine = $mateId !== null ? ($byPartnerId[$mateId] ?? null) : null;
+            if ($mateLine !== null && !isset($used[spl_object_id($mateLine)])) {
+                $result[] = $mateLine;
+                $used[spl_object_id($mateLine)] = true;
+                $pairEnds[spl_object_id($mateLine)] = true;
             } else {
-                $pairEnds[$wbId] = true;
+                $pairEnds[$oid] = true;
             }
         }
 
         return [$result, $pairEnds];
     }
 
-    private function compareByDisplayName(WeeklyBasket $a, WeeklyBasket $b): int
+    private function compareByDisplayName(DeliveryLine $a, DeliveryLine $b): int
     {
-        return strnatcasecmp(
-            $a->getPartner()?->getNameForDelivery() ?? '',
-            $b->getPartner()?->getNameForDelivery() ?? '',
-        );
+        return strnatcasecmp($a->nameForDelivery, $b->nameForDelivery);
     }
 
     /** Orden de los códigos dentro de un grupo: semanales, quincenales, mensuales, solo huevos. */

@@ -2,7 +2,10 @@
 
 namespace App\Form;
 
+use App\Entity\BasketShare;
 use App\Entity\PartnerBasketShare;
+use Doctrine\ORM\EntityRepository;
+use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
@@ -22,7 +25,21 @@ class PartnerBasketShareType extends AbstractType
 
             ->add('start_date', TextType::class, array('label' => 'Fecha de inicio', 'help'=>"Si la cesta es mensual o sólo tiene huevos una vez al mes, debes indicar la fecha del primer día del mes en que empieza a recibir", 'attr' => array('class' => 'datepicker form-control')))
             ->add('partner')
-            ->add('basket_share', null, array('label'=>'Tipo de cesta', 'required'=>true))
+            ->add('basket_share', EntityType::class, [
+                'class' => BasketShare::class,
+                'label' => 'Tipo de cesta',
+                'required' => true,
+                // En puntos de reparto quincenal (Cascorro, Midori) no caben las
+                // cestas de reparto semanal: el nodo sólo reparte cada 2 semanas.
+                'query_builder' => static function (EntityRepository $repo) use ($options) {
+                    $qb = $repo->createQueryBuilder('bs')->orderBy('bs.id', 'ASC');
+                    if ($options['exclude_weekly_shares']) {
+                        $qb->where('bs.id NOT IN (:weekly)')
+                            ->setParameter('weekly', BasketShare::IDS_WEEKLY);
+                    }
+                    return $qb;
+                },
+            ])
             ->add('egg_amount',null,array('label'=>'Cantidad de huevos', 'placeholder'=>'No quiere huevos'))
             ->add('egg_period',null,array('label'=>'Frecuencia de recogida de huevos'))
             ->add('dayMonthOrder', ChoiceType::class,[
@@ -34,13 +51,12 @@ class PartnerBasketShareType extends AbstractType
                     'Cuarto viernes' => 4,
                 ], 'label'=>"Selecciona el viernes que recoge"])
             ->add('deliveryGroup', ChoiceType::class, [
-                'label' => 'Grupo de reparto (solo quincenales)',
-                'help' => 'Quincenales se reparten en dos grupos que recogen en viernes alternos. Déjalo vacío si la cesta no es quincenal o si aún no se ha asignado grupo.',
-                'choices' => [
-                    'Sin asignar' => null,
-                    'Grupo A' => PartnerBasketShare::DELIVERY_GROUP_A,
-                    'Grupo B' => PartnerBasketShare::DELIVERY_GROUP_B,
-                ],
+                'label' => 'Turno de viernes (quincenal)',
+                'help' => 'Sólo para quincenales en puntos de reparto semanales. Cada opción muestra los viernes reales en que recoge.',
+                'choices' => $options['cohort_choices'],
+                // Sin opción vacía: el turno es obligatorio cuando aplica
+                // (quincenal en nodo semanal). Para el resto se anula en server.
+                'placeholder' => false,
                 'required' => false,
             ])
             ->add('isFreeBasket', CheckboxType::class, array('label'=>'Marca esta casilla si es una cesta gratuita', 'required'=>false))
@@ -59,6 +75,17 @@ class PartnerBasketShareType extends AbstractType
     {
         $resolver->setDefaults([
             'data_class' => PartnerBasketShare::class,
+            // Choices del turno A/B. El controlador las sobrescribe con las
+            // fechas reales del nodo del socio; este default cubre new/edit.
+            'cohort_choices' => [
+                'Sin asignar' => null,
+                'Grupo A' => PartnerBasketShare::DELIVERY_GROUP_A,
+                'Grupo B' => PartnerBasketShare::DELIVERY_GROUP_B,
+            ],
+            // Excluye las modalidades de reparto semanal del select de tipo.
+            'exclude_weekly_shares' => false,
         ]);
+        $resolver->setAllowedTypes('cohort_choices', 'array');
+        $resolver->setAllowedTypes('exclude_weekly_shares', 'bool');
     }
 }

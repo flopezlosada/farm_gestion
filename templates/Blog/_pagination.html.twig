@@ -1,0 +1,38 @@
+{# Paginación del blog público. Aislada del template global de KnpPaginator
+   (que usa también la gestión) para poder darle estilo Bootstrap 4 + CSA sin
+   afectar al resto de la app. #}
+{% if pageCount > 1 %}
+    <nav aria-label="Paginación del blog">
+        <ul class="pagination csa-pagination justify-content-center">
+            {% if previous is defined %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ path(route, query|merge({(pageParameterName): previous})) }}" aria-label="Anterior">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+                </li>
+            {% else %}
+                <li class="page-item disabled"><span class="page-link"><i class="fa fa-angle-left"></i></span></li>
+            {% endif %}
+
+            {% for page in pagesInRange %}
+                {% if page != current %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ path(route, query|merge({(pageParameterName): page})) }}">{{ page }}</a>
+                    </li>
+                {% else %}
+                    <li class="page-item active" aria-current="page"><span class="page-link">{{ page }}</span></li>
+                {% endif %}
+            {% endfor %}
+
+            {% if next is defined %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ path(route, query|merge({(pageParameterName): next})) }}" aria-label="Siguiente">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+                </li>
+            {% else %}
+                <li class="page-item disabled"><span class="page-link"><i class="fa fa-angle-right"></i></span></li>
+            {% endif %}
+        </ul>
+    </nav>
+{% endif %}

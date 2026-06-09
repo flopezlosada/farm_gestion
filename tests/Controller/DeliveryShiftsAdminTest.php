@@ -11,7 +11,7 @@ class DeliveryShiftsAdminTest extends AbstractAuthenticatedTest
     public function testDeliveryShiftsIndexReturnsOk(): void
     {
         $client = $this->createAuthenticatedClient();
-        $client->request('GET', '/gestion/reparto/cambios-viernes');
+        $client->request('GET', '/gestion/reparto/historial-cambios');
 
         $this->assertSame(200, $client->getResponse()->getStatusCode());
     }

@@ -241,10 +241,11 @@ Cada fase termina con tests en verde y un tag `vX.Y` en git.
   `ln -s ../../src/Resources/public public/bundles/app`.
   Si en algún momento ves la web sin estilos: comprueba que el
   symlink existe.
-- **`ONLY_FULL_GROUP_BY` desactivado en MySQL** vía
-  `.ddev/mysql/no_strict_group_by.cnf`. El código viejo tiene queries
-  con `GROUP BY` incompletos. Cuando se modernicen los repositorios,
-  reescribir queries y reactivar el modo estricto.
+- **`ONLY_FULL_GROUP_BY` ACTIVADO** (modo estricto de MySQL, el por
+  defecto). El código viejo tenía queries con `GROUP BY` incompletos y se
+  desactivaba vía `.ddev/mysql/no_strict_group_by.cnf`; las queries se
+  arreglaron (#16, commit `471326c`), se retiró el `.cnf` y se reactivó el
+  modo estricto. DDEV y el CI corren con strict ON y la suite pasa.
 - **`ROLE_ADMIN` incluye `ROLE_COOP`** en `security.yaml`. La jerarquía
   original tenía dos ramas inconexas: super admin no podía entrar en
   `/gestion/`. Esto se rediseña al rehacer la auth con roles propios.
@@ -260,9 +261,10 @@ Cada fase termina con tests en verde y un tag `vX.Y` en git.
   `git filter-repo --replace-text` antes del primer push a remoto. Todos
   los hashes del repo cambiaron en esa operación; el baseline pasó de
   `acc543c` a `0c3313d`. La cadena ya no aparece en `git log -p --all`.
-- **#16**: queries con `GROUP BY` incompletos (al menos en
-  `LayRepository`, probablemente más). Hay que arreglarlas y reactivar
-  `ONLY_FULL_GROUP_BY` cuando se modernicen los repositorios.
+- **#16 (resuelta)**: queries con `GROUP BY` incompletos (granja:
+  `LayRepository` y otros). Arregladas en commit `471326c`; se reactivó
+  `ONLY_FULL_GROUP_BY` (strict ON) y se retiró el `.cnf` de DDEV. La suite
+  pasa con el modo estricto.
 - **#17**: en producción las credenciales de BBDD viven en archivo
   plano legible. Mitigaciones para Fase 11 (despliegue): permisos
   restrictivos (`chmod 600`, owner = user del web server), variables
@@ -291,8 +293,8 @@ Cada fase termina con tests en verde y un tag `vX.Y` en git.
 - `src/Entity/` — 74 entidades Doctrine. La granja (Crop, Fowl, Lay,
   Harvest, Batch…) y socios (Partner, BasketShare, WeeklyBasket…).
 - `src/Controller/` — 53 controladores, todos bajo `/gestion/...`.
-- `src/Repository/` — repositorios Doctrine. Aquí viven las queries
-  raras con `GROUP BY` incompletos.
+- `src/Repository/` — repositorios Doctrine. Tienen queries DQL crudas
+  (granja sobre todo); los `GROUP BY` incompletos se sanearon en #16.
 - `src/Migrations/` — sólo 1 migración, parcial. No es fuente de verdad.
 - `templates/` — 325 plantillas Twig. Plantillas legacy de la era
   Symfony 2/3 con un theme tipo SB Admin 2.

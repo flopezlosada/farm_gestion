@@ -17,11 +17,23 @@ use WhiteOctober\BreadcrumbsBundle\Model\Breadcrumbs;
 /**
  * Blog controller.
  *
+ * Las acciones públicas (frontend_index, show, show_category, latest_post)
+ * NO llevan restricción de rol: sirven el blog y las recetas a visitantes
+ * anónimos de csavegadejarama.org. Las acciones de administración (CRUD +
+ * media) exigen ROLE_BLOG de forma explícita en cada método, porque el
+ * IsGranted a nivel de clase también bloqueaba las públicas y mandaba al
+ * login al entrar en /blog o /blog/category/4 (Recetas).
  */
-#[IsGranted('ROLE_BLOG')]
 class BlogController extends AbstractController
 {
+    /**
+     * Id de la categoría "Recetas". Las recetas tienen su propia sección
+     * (/blog/category/4) y NO deben aparecer mezcladas en el listado general
+     * del blog. Mismo id hardcodeado que en el menú (base_front.html.twig).
+     */
+    private const RECETAS_CATEGORY_ID = 4;
 
+    #[IsGranted('ROLE_BLOG')]
     public function index(Request $request, EntityManagerInterface $em)
     {
         // Filtro opcional por categoría desde los tabs.
@@ -50,12 +62,24 @@ class BlogController extends AbstractController
     public function frontend_index(EntityManagerInterface $em, Request $request, PaginatorInterface $paginator, Breadcrumbs $breadcrumbs)
     {
 
-        $blogs_repository = $em->getRepository(Blog::class);
+        $q = trim((string) $request->query->get('q', ''));
 
+        // El listado general del blog excluye las recetas: tienen su propia
+        // sección. Antes se mezclaban por fecha y aparecían al paginar, dando
+        // la sensación de que la página 2 del blog "llevaba a recetas".
+        // Se conservan las entradas sin categoría (category IS NULL).
+        $dql = "select b from App\\Entity\\Blog b
+                where (b.category is null or b.category != :recetasId)";
+        if ($q !== '') {
+            $dql .= " and (b.title like :q or b.content like :q)";
+        }
+        $dql .= " order by b.created desc";
 
-        $dql = "select b from App\\Entity\\Blog b order by b.created desc";
-
-        $query = $em->createQuery($dql);
+        $query = $em->createQuery($dql)
+            ->setParameter('recetasId', self::RECETAS_CATEGORY_ID);
+        if ($q !== '') {
+            $query->setParameter('q', '%' . $q . '%');
+        }
 
         $pagination = $paginator->paginate(
             $query,
@@ -69,14 +93,35 @@ class BlogController extends AbstractController
 
         return $this->render('Blog/frontend_index.html.twig', array(
             'entities' => $pagination,
+            'categories' => $this->categoriesWithCount($em),
+            'q' => $q,
         ));
 
+    }
+
+    /**
+     * Devuelve las categorías del blog con el número de entradas de cada una,
+     * para pintar el menú lateral del frontend público. Ordenadas por nombre.
+     *
+     * @param EntityManagerInterface $em
+     * @return array<int, array{id:int, name:string, n:int}>
+     */
+    private function categoriesWithCount(EntityManagerInterface $em): array
+    {
+        return $em->createQuery(
+            'SELECT c.id AS id, c.name AS name, COUNT(b.id) AS n
+             FROM App\Entity\Category c
+             LEFT JOIN App\Entity\Blog b WITH b.category = c
+             GROUP BY c.id
+             ORDER BY c.name ASC'
+        )->getArrayResult();
     }
 
     /**
      * Creates a new Blog entity.
      *
      */
+    #[IsGranted('ROLE_BLOG')]
     public function create(Request $request, EntityManagerInterface $em)
     {
         $entity = new Blog();
@@ -122,6 +167,7 @@ class BlogController extends AbstractController
      * Displays a form to create a new Blog entity.
      *
      */
+    #[IsGranted('ROLE_BLOG')]
     public function new()
     {
         $entity = new Blog();
@@ -136,6 +182,7 @@ class BlogController extends AbstractController
     }
 
 
+    #[IsGranted('ROLE_BLOG')]
     public function second($id, EntityManagerInterface $em)
     {
         $entity = $em->getRepository(\App\Entity\Blog::class)->find($id);
@@ -168,6 +215,7 @@ class BlogController extends AbstractController
         return $form;
     }
 
+    #[IsGranted('ROLE_BLOG')]
     public function updateSecond(Request $request, $id, EntityManagerInterface $em)
     {
         $entity = $em->getRepository(\App\Entity\Blog::class)->find($id);
@@ -224,6 +272,7 @@ class BlogController extends AbstractController
      * Displays a form to edit an existing Blog entity.
      *
      */
+    #[IsGranted('ROLE_BLOG')]
     public function edit($id, EntityManagerInterface $em)
     {
         $entity = $em->getRepository(\App\Entity\Blog::class)->find($id);
@@ -265,6 +314,7 @@ class BlogController extends AbstractController
      * Edits an existing Blog entity.
      *
      */
+    #[IsGranted('ROLE_BLOG')]
     public function update(Request $request, $id, EntityManagerInterface $em)
     {
         $entity = $em->getRepository(\App\Entity\Blog::class)->find($id);
@@ -298,6 +348,7 @@ class BlogController extends AbstractController
      * Deletes a Blog entity.
      *
      */
+    #[IsGranted('ROLE_BLOG')]
     public function delete(Request $request, $id, EntityManagerInterface $em)
     {
         $form = $this->createDeleteForm($id);
@@ -334,6 +385,7 @@ class BlogController extends AbstractController
     }
 
 
+    #[IsGranted('ROLE_BLOG')]
     public function edition($id, $object_class, EntityManagerInterface $em)
     {
         $entity = $em->getRepository('App\Entity\\' . ucfirst($object_class))->find($id);
@@ -356,6 +408,7 @@ class BlogController extends AbstractController
     }
 
 
+    #[IsGranted('ROLE_BLOG')]
     public function categories()
     {
     }
@@ -364,9 +417,18 @@ class BlogController extends AbstractController
     {
         $category = $em->getRepository(\App\Entity\Category::class)->find($id);
 
-        $dql = "select b from App\\Entity\\Blog b  where b.category=:category order by b.created desc";
-        $query = $em->createQuery($dql);
-        $query->setParameter("category", $category);
+        $q = trim((string) $request->query->get('q', ''));
+
+        $dql = "select b from App\\Entity\\Blog b where b.category = :category";
+        if ($q !== '') {
+            $dql .= " and (b.title like :q or b.content like :q)";
+        }
+        $dql .= " order by b.created desc";
+
+        $query = $em->createQuery($dql)->setParameter('category', $category);
+        if ($q !== '') {
+            $query->setParameter('q', '%' . $q . '%');
+        }
 
         $pagination = $paginator->paginate(
             $query,
@@ -383,6 +445,8 @@ class BlogController extends AbstractController
         return $this->render("Blog/frontend_index.html.twig", array(
             'category' => $category,
             'entities' => $pagination,
+            'categories' => $this->categoriesWithCount($em),
+            'q' => $q,
         ));
 
     }

@@ -143,21 +143,40 @@ class PartnerRepository extends ServiceEntityRepository
             ->getResult();
     }
 
+    /**
+     * Candidatos elegibles para añadirse como familiar de $partner.
+     *
+     * Al asociar un familiar, éste pasa a ser secundario (su parent apunta al
+     * principal) y la cesta vive siempre en el principal. Por eso sólo se ofrecen
+     * socixs que:
+     *   - están activos,
+     *   - no son el propio $partner ni un familiar ya suyo,
+     *   - no pertenecen aún a otra familia (parent nulo): asociarlos los robaría
+     *     de su familia actual,
+     *   - no tienen cesta propia activa: asociar a alguien con cesta la destruiría,
+     *     así que ni se ofrece (se ataja en origen, no se avisa del borrado).
+     *
+     * @param Partner $partner socix principal que va a recibir el familiar
+     * @return Partner[] candidatos ordenados por nombre
+     */
     public function findFamiliar(Partner $partner)
     {
-
-        $partners_selected = array($partner->getId());
+        $excluded = array($partner->getId());
         foreach ($partner->getRelatives() as $relative) {
-            $partners_selected[] = $relative->getId();
+            $excluded[] = $relative->getId();
         }
 
         return $this->createQueryBuilder('p')
-            ->where("p.id not in (:ids)")
-            ->orderBy("p.name", "asc")
-            ->setParameter("ids", $partners_selected)
+            ->where('p.is_active = 1')
+            ->andWhere('p.id not in (:ids)')
+            ->andWhere('p.parent is null')
+            ->andWhere('p.id not in (
+                select identity(pbs.partner) from App\Entity\PartnerBasketShare pbs where pbs.is_active = 1
+            )')
+            ->orderBy('p.name', 'asc')
+            ->setParameter('ids', $excluded)
             ->getQuery()
             ->getResult();
-
     }
 
 

@@ -20,7 +20,9 @@ use Gedmo\Mapping\Annotation as Gedmo;
 /**
  * App\Entity\PartnerBasketShare
  *
- * @ORM\Table(name="partner_basket_share")
+ * @ORM\Table(name="partner_basket_share", indexes={
+ *     @ORM\Index(name="IDX_pbs_payer_partner", columns={"payer_partner_id"})
+ * })
  * @ORM\Entity(repositoryClass="App\Repository\PartnerBasketShareRepository").
  */
 class PartnerBasketShare

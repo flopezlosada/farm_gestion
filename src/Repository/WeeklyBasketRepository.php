@@ -94,6 +94,29 @@ class WeeklyBasketRepository extends ServiceEntityRepository
     }
 
     /**
+     * Entregas FUTURAS (basket.date >= hoy) que un socio tiene materializadas, en orden
+     * de fecha. Para el selector de "recoger esta semana en otro nodo" de la ficha: solo
+     * se puede trasladar una semana en la que el socio YA tiene cesta.
+     *
+     * @param Partner $partner Socio.
+     * @return WeeklyBasket[] Entregas futuras del socio, ordenadas por fecha del ciclo.
+     */
+    public function findFutureForPartner(Partner $partner): array
+    {
+        return $this->createQueryBuilder('wb')
+            ->innerJoin('wb.basket', 'b')
+            ->where('wb.partner = :partner')
+            ->andWhere('b.date >= :today')
+            ->andWhere('wb.weekly_basket_status = :status')
+            ->setParameter('partner', $partner)
+            ->setParameter('today', (new \DateTimeImmutable('today'))->format('Y-m-d'))
+            ->setParameter('status', 1)
+            ->orderBy('b.date', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
      * Listado para la pantalla de reparto v2 (sub-fase 8.8c): WeeklyBasket
      * que recoge un Nodo en un Basket dado. Solo cestas con status 1
      * (activa / "recoge"). Ordenado por WBG.name → basket_share.id →
@@ -111,7 +134,9 @@ class WeeklyBasketRepository extends ServiceEntityRepository
         return $this->createQueryBuilder('wb')
             ->innerJoin('wb.weekly_basket_group', 'wbg')
             ->innerJoin('wb.partner', 'p')
-            ->innerJoin('wb.basket_share', 'bs')
+            // LEFT (no INNER): las entregas "solo extra" de no-suscriptores no tienen modalidad
+            // (basket_share null) y deben aparecer igual — saldrán en la sección "Cestas extra".
+            ->leftJoin('wb.basket_share', 'bs')
             ->where('wbg.node = :node')
             ->andWhere('wb.basket = :basket')
             ->andWhere('wb.weekly_basket_status = :status')
@@ -123,42 +148,6 @@ class WeeklyBasketRepository extends ServiceEntityRepository
             ->addOrderBy('p.name', 'ASC')
             ->getQuery()
             ->getResult();
-    }
-
-    /**
-     * Conteo de reparto por nodo para un Basket concreto, con el mismo
-     * criterio que {@see findForNodeAndBasket} (status_id = 1). Sirve para
-     * que las pestañas de nodo de la pantalla v2 muestren cuántos grupos y
-     * socios reparten ESE día, en vez del total de WBG asignados al nodo
-     * (que es engañoso: un nodo quincenal puede tener 0 reparto ese día).
-     *
-     * Una sola query agregada para todos los nodos. Los nodos sin reparto
-     * ese día no aparecen en el resultado: el llamante debe asumir 0.
-     *
-     * @return array<int, array{wbg:int, socios:int}> indexado por node_id
-     */
-    public function countActiveByNodeForBasket(Basket $basket): array
-    {
-        $rows = $this->createQueryBuilder('wb')
-            ->select('IDENTITY(wbg.node) AS node_id', 'COUNT(DISTINCT wbg.id) AS wbg_count', 'COUNT(wb.id) AS socios')
-            ->innerJoin('wb.weekly_basket_group', 'wbg')
-            ->where('wb.basket = :basket')
-            ->andWhere('wb.weekly_basket_status = :status')
-            ->andWhere('wbg.node IS NOT NULL')
-            ->setParameter('basket', $basket)
-            ->setParameter('status', 1)
-            ->groupBy('wbg.node')
-            ->getQuery()
-            ->getArrayResult();
-
-        $byNode = [];
-        foreach ($rows as $row) {
-            $byNode[(int) $row['node_id']] = [
-                'wbg' => (int) $row['wbg_count'],
-                'socios' => (int) $row['socios'],
-            ];
-        }
-        return $byNode;
     }
 
     /**

@@ -48,16 +48,22 @@ class DeliveryControllerTest extends AbstractAuthenticatedTest
     }
 
     /**
-     * GET /gestion/reparto/{basketId} (ficha del día) devuelve 200.
+     * GET /gestion/reparto/dia/{basketId} (puente por día, lo usa el calendario)
+     * resuelve el primer nodo y redirige a la pantalla v2 de ese día. Reemplaza
+     * al antiguo delivery_show, retirado al unificar el reparto en la v2.
      */
-    public function testShowReturnsOk(): void
+    public function testForBasketRedirectsToV2(): void
     {
         $client = $this->createAuthenticatedClient();
         $basketId = $this->firstBasketId();
 
-        $client->request('GET', sprintf('/gestion/reparto/%d', $basketId));
+        $client->request('GET', sprintf('/gestion/reparto/dia/%d', $basketId));
 
-        $this->assertSame(200, $client->getResponse()->getStatusCode());
+        $this->assertResponseRedirects();
+        $this->assertStringContainsString(
+            '/v2/nodo/',
+            (string) $client->getResponse()->headers->get('Location'),
+        );
     }
 
     /**

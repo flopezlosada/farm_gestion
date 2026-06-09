@@ -1,9 +1,15 @@
 {% extends 'Blog/frontend_index.html.twig' %}
 
-{% block post_main -%}
-    <div class="blog-item">
-        {% include 'Blog/post_main.html.twig' with { extend: 1 } %}
+{# En el detalle no tiene sentido el encabezado genérico del listado;
+   lo sustituimos por un enlace de vuelta al blog. #}
+{% block listing_header %}
+    <div style="max-width: 820px; margin: 0 auto;">
+        <a href="{{ path('frontend_blog') }}" class="csa-back-link"><i class="fa fa-angle-left mr-1"></i>Volver al blog</a>
     </div>
+{% endblock %}
+
+{% block post_main -%}
+    {% include 'Blog/post_main.html.twig' with { extend: 1 } %}
 {% endblock %}
 
 {% block more_js %}

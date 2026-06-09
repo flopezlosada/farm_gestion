@@ -17,7 +17,6 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * se retiró por código muerto. Sólo queda el snippet, que sí lo
  * invoca `AppExtension` al expandir shortcodes en el blog público.
  */
-#[IsGranted('ROLE_BLOG')]
 class GalleryController extends AbstractController
 {
     /**

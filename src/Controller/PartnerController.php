@@ -8,6 +8,7 @@ use App\Entity\EggAmount;
 use App\Entity\EggPeriod;
 use App\Entity\Node;
 use App\Entity\Partner;
+use App\Entity\PartnerBasketExtra;
 use App\Entity\PartnerBasketShare;
 use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketGroup;
@@ -22,6 +23,11 @@ use App\Service\Delivery\DeliveryCalendarProjector;
 use App\Service\Delivery\DeliveryCalendarViewBuilder;
 use App\Service\Delivery\DeliveryShiftApplier;
 use App\Service\Delivery\PartnerMonthResetter;
+use App\Repository\WeeklyBasketGroupRepository;
+use App\Repository\WeeklyBasketRepository;
+use App\Service\Delivery\ExtraBasketEditor;
+use App\Service\Delivery\NodeDeliveryDate;
+use App\Service\Delivery\PickupRelocator;
 use App\Service\Delivery\WeeklyBasketComponentEditor;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Partner\PartnerShareEventRecorder;
@@ -203,6 +209,10 @@ class PartnerController extends AbstractController
     public function show(
         Partner $partner,
         \App\Repository\PartnerEventRepository $partnerEventRepository,
+        BasketRepository $basketRepo,
+        WeeklyBasketRepository $weeklyBasketRepo,
+        WeeklyBasketGroupRepository $weeklyBasketGroupRepo,
+        NodeDeliveryDate $nodeDeliveryDate,
         EntityManagerInterface $em,
     ): Response {
         $events = $partnerEventRepository->findForPartner($partner);
@@ -235,6 +245,13 @@ class PartnerController extends AbstractController
         $linkedUser = $em->getRepository(\App\Entity\User::class)
             ->findOneBy(['partner' => $partner]);
 
+        // Cestas que este socix paga (dona) a otrxs: PBS activas cuyo
+        // payer_partner es él. Se muestra como bloque de sólo lectura en su
+        // ficha; el origen de la verdad (asignar/quitar pagador) vive en la
+        // ficha del receptor.
+        $donatedBaskets = $em->getRepository(PartnerBasketShare::class)
+            ->findBy(['payer_partner' => $partner, 'is_active' => 1]);
+
         // Catálogos id -> nombre para que el histórico traduzca el payload de
         // BASKET_CHANGE (que guarda ids crudos) a texto legible, igual que
         // gestor_names hace con los actores. Los catálogos de cesta/huevos son
@@ -256,7 +273,206 @@ class PartnerController extends AbstractController
             'basket_share_names' => $toNameMap($em->getRepository(BasketShare::class)->findAll()),
             'egg_amount_names' => $toNameMap($em->getRepository(EggAmount::class)->findAll()),
             'egg_period_names' => $toNameMap($em->getRepository(EggPeriod::class)->findAll()),
+            'extra_weeks' => $this->extraBasketWeeks($partner, $basketRepo, $nodeDeliveryDate),
+            'relocate_weeks' => $this->relocatePickupWeeks($partner, $weeklyBasketRepo),
+            'relocate_groups' => $this->relocatePickupGroups($partner, $weeklyBasketGroupRepo),
+            'donated_baskets' => $donatedBaskets,
         ]);
+    }
+
+    /**
+     * Semanas (Basket) a las que el socix puede trasladar su recogida a otro nodo: las
+     * FUTURAS en las que YA tiene entrega (solo se traslada lo que existe). La etiqueta
+     * usa la fecha física actual de su entrega.
+     *
+     * @param Partner                $partner
+     * @param WeeklyBasketRepository $weeklyBasketRepo
+     * @return list<array{basketId:int, date:\DateTimeInterface}>
+     */
+    private function relocatePickupWeeks(Partner $partner, WeeklyBasketRepository $weeklyBasketRepo): array
+    {
+        $weeks = [];
+        foreach ($weeklyBasketRepo->findFutureForPartner($partner) as $wb) {
+            $basket = $wb->getBasket();
+            if ($basket === null) {
+                continue;
+            }
+            $weeks[] = ['basketId' => $basket->getId(), 'date' => $wb->getDeliveryDate() ?? $basket->getDate()];
+        }
+
+        return $weeks;
+    }
+
+    /**
+     * NODOS a los que el socix puede trasladar su recogida: una opción por nodo distinto al
+     * suyo, etiqueta = nombre del nodo. El `id` es un grupo REPRESENTATIVO del nodo destino
+     * (el relocado sale en la sección "Trasladados", así que el grupo concreto es invisible;
+     * basta uno para anclar el WeeklyBasket). No se filtra por "reparte esa semana" porque
+     * la semana se elige aparte (chips); si el par semana/nodo no encaja, PickupRelocator lo
+     * rechaza con aviso. Ver docs/redesign/modelo-overrides-reparto.md.
+     *
+     * @param Partner                     $partner
+     * @param WeeklyBasketGroupRepository $groupRepo
+     * @return list<array{id:int, label:string}> Ordenados por nombre de nodo.
+     */
+    private function relocatePickupGroups(Partner $partner, WeeklyBasketGroupRepository $groupRepo): array
+    {
+        $currentNodeId = $partner->getWeeklyBasketGroup()?->getNode()?->getId();
+
+        // Un grupo representativo por nodo (el primero por nombre), excluyendo el nodo de casa.
+        $byNode = [];
+        foreach ($groupRepo->findBy([], ['name' => 'ASC']) as $group) {
+            $node = $group->getNode();
+            if ($node === null || $node->getId() === $currentNodeId) {
+                continue;
+            }
+            $byNode[$node->getId()] ??= ['id' => $group->getId(), 'label' => $node->getName()];
+        }
+        $options = array_values($byNode);
+        usort($options, static fn (array $a, array $b) => strcmp($a['label'], $b['label']));
+
+        return $options;
+    }
+
+    /**
+     * Traslada puntualmente la recogida de un socix a otro nodo/grupo en una semana
+     * concreta (la cesta que ya tiene esa semana). El socix viene de la ruta; el gestor
+     * elige semana y grupo destino. Delega en PickupRelocator.
+     *
+     * @param Request           $request   Lleva basket_id, group_id y el token CSRF.
+     * @param Partner           $partner   Socix (de la ruta).
+     * @param BasketRepository  $basketRepo
+     * @param WeeklyBasketGroupRepository $groupRepo
+     * @param PickupRelocator   $relocator
+     */
+    #[Route("/{id}/relocate-pickup", name: "partner_relocate_pickup", methods: ["POST"])]
+    public function relocatePickup(
+        Request $request,
+        Partner $partner,
+        BasketRepository $basketRepo,
+        WeeklyBasketGroupRepository $groupRepo,
+        PickupRelocator $relocator,
+    ): Response {
+        $back = ['id' => $partner->getId()];
+
+        if (!$this->isCsrfTokenValid('partner_relocate_pickup', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+            return $this->redirectToRoute('partner_show', $back);
+        }
+
+        $basket = $basketRepo->find((int) $request->request->get('basket_id'));
+        $group = $groupRepo->find((int) $request->request->get('group_id'));
+        if (!$basket instanceof Basket || !$group instanceof WeeklyBasketGroup) {
+            $this->addFlash('warning', 'Faltan datos: la semana o el grupo de destino.');
+            return $this->redirectToRoute('partner_show', $back);
+        }
+
+        try {
+            $relocator->relocate($partner, $basket, $group, 'gestor:' . $this->getUser()->getId());
+        } catch (\LogicException $e) {
+            $this->addFlash('warning', $e->getMessage());
+            return $this->redirectToRoute('partner_show', $back);
+        }
+
+        $this->addFlash('success', sprintf('Traslado hecho: esa semana recogerá en "%s".', $group->getName()));
+        return $this->redirectToRoute('partner_show', $back);
+    }
+
+    /**
+     * Semanas (Basket) a las que se puede añadir una cesta extra a este socix desde su
+     * ficha: las próximas en las que su NODO REPARTE (dibujadas o generadas). La cesta extra
+     * es un override ({@see \App\Entity\PartnerBasketExtra}), así que se puede planificar a
+     * futuro: la proyección la suma al dibujar y la materialización al congelar, sin piedra
+     * parcial. La etiqueta usa la fecha física del nodo (null = el nodo no reparte esa semana,
+     * p. ej. quincenal fuera de fase → se omite).
+     *
+     * @param Partner          $partner
+     * @param BasketRepository $basketRepo
+     * @param NodeDeliveryDate $nodeDeliveryDate
+     * @return list<array{id:int, date:\DateTimeInterface}> Semanas ofrecibles, en orden.
+     */
+    private function extraBasketWeeks(
+        Partner $partner,
+        BasketRepository $basketRepo,
+        NodeDeliveryDate $nodeDeliveryDate,
+    ): array {
+        $node = $partner->getWeeklyBasketGroup()?->getNode();
+        $from = new \DateTime('today');
+        $to = (clone $from)->modify('+10 weeks');
+
+        $weeks = [];
+        foreach ($basketRepo->findBetweenDates($from, $to) as $basket) {
+            // Semanas en las que el nodo del socio REPARTE (físicamente): physicalDateFor da
+            // null si esa semana no le toca (cadencia/excepción), y entonces se omite. No se
+            // exige que esté generada: el override funciona también sobre el dibujo.
+            $physical = $node !== null ? $nodeDeliveryDate->physicalDateFor($basket, $node) : null;
+            if ($physical === null) {
+                continue;
+            }
+            $weeks[] = ['id' => $basket->getId(), 'date' => $physical];
+        }
+
+        return $weeks;
+    }
+
+    /**
+     * Añade (o ajusta) la cesta extra puntual de un socix en una semana concreta,
+     * desde su ficha. El socix viene fijado por la ruta; el gestor elige la semana
+     * (entre las generadas) y la composición final (cestas de verdura + docenas de
+     * huevos). Delega en ExtraBasketEditor.
+     *
+     * @param Request           $request Lleva basket_id, cestas, docenas, nota y CSRF.
+     * @param Partner           $partner Socix (de la ruta).
+     * @param BasketRepository  $basketRepo
+     * @param ExtraBasketEditor $extraBasketEditor
+     */
+    #[Route("/{id}/extra-basket", name: "partner_add_extra_basket", methods: ["POST"])]
+    public function addExtraBasket(
+        Request $request,
+        Partner $partner,
+        BasketRepository $basketRepo,
+        ExtraBasketEditor $extraBasketEditor,
+    ): Response {
+        $back = ['id' => $partner->getId()];
+
+        if (!$this->isCsrfTokenValid('partner_extra_basket', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+            return $this->redirectToRoute('partner_show', $back);
+        }
+
+        $basket = $basketRepo->find((int) $request->request->get('basket_id'));
+        if (!$basket instanceof Basket) {
+            $this->addFlash('warning', 'Falta la semana sobre la que añadir la cesta extra.');
+            return $this->redirectToRoute('partner_show', $back);
+        }
+
+        $addAmounts = [
+            BasketComponent::ID_VEGETABLES => (string) $request->request->get('cestas', '0'),
+            BasketComponent::ID_EGGS => (string) $request->request->get('docenas', '0'),
+        ];
+        if ((float) $addAmounts[BasketComponent::ID_VEGETABLES] <= 0
+            && (float) $addAmounts[BasketComponent::ID_EGGS] <= 0) {
+            $this->addFlash('warning', 'Indica al menos una cantidad de cestas o de huevos a añadir.');
+            return $this->redirectToRoute('partner_show', $back);
+        }
+
+        $note = trim((string) $request->request->get('nota', '')) ?: null;
+
+        try {
+            $extraBasketEditor->addToDelivery(
+                $partner,
+                $basket,
+                $addAmounts,
+                $note,
+                'gestor:' . $this->getUser()->getId(),
+            );
+        } catch (\LogicException $e) {
+            $this->addFlash('warning', $e->getMessage());
+            return $this->redirectToRoute('partner_show', $back);
+        }
+
+        $this->addFlash('success', sprintf('Cesta extra registrada para la semana del %s.', $basket->getDate()?->format('d/m/Y')));
+        return $this->redirectToRoute('partner_show', $back);
     }
 
     /**
@@ -682,6 +898,7 @@ class PartnerController extends AbstractController
         WeeklyBasketGenerator $generator,
         PartnerDeliveryShiftRepository $shiftRepository,
         DeliveryShiftApplier $applier,
+        ExtraBasketEditor $extraBasketEditor,
         EntityManagerInterface $em,
     ): Response {
         $basket = $em->getRepository(Basket::class)->find($basketId);
@@ -703,6 +920,21 @@ class PartnerController extends AbstractController
         }
 
         $actor = 'gestor:' . $this->getUser()?->getId();
+
+        // CESTA EXTRA: si el día existe SOLO por una cesta extra (el patrón del socio no le da
+        // entrega esa semana), "no recoge" = QUITAR la extra (cancelarla), no un skip de patrón
+        // (que no tendría cesta que aparcar). Se comprueba antes de las guardas porque un
+        // no-suscriptor (sin cesta activa) no las pasaría, y su extra hay que poder quitarla.
+        // Si el patrón SÍ le da cesta esa semana (la extra va encima), sigue el flujo normal.
+        if (!$request->request->getBoolean('recover')
+            && $extraBasketEditor->hasExtra($partner, $basket)
+            && !$this->patternDelivers($partner, $basket, $generator, $em)
+        ) {
+            $extraBasketEditor->removeExtra($partner, $basket, $actor);
+            $this->addFlash('success', 'Cesta extra quitada: esa semana no recoge.');
+
+            return $backToCalendar();
+        }
 
         $generated = $em->getRepository(WeeklyBasket::class)->findOneBy(['basket' => $basket]) !== null;
         $outgoing = $shiftRepository->findOutgoing($partner, $basket);
@@ -770,6 +1002,24 @@ class PartnerController extends AbstractController
         $this->addFlash('success', 'Marcada como NO recogida esa semana.');
 
         return $backToCalendar();
+    }
+
+    /**
+     * ¿El PATRÓN del socio le da una entrega esa semana (independiente de extras)? Sirve para
+     * decidir si un "no recoge" sobre un día que tiene cesta extra debe quitar la extra (día
+     * que solo existe por ella) o saltar la entrega de patrón (la extra iba encima).
+     *
+     * @param Partner               $partner
+     * @param Basket                $basket
+     * @param WeeklyBasketGenerator $generator
+     * @param EntityManagerInterface $em
+     * @return bool
+     */
+    private function patternDelivers(Partner $partner, Basket $basket, WeeklyBasketGenerator $generator, EntityManagerInterface $em): bool
+    {
+        $share = $em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner, $basket->getDate());
+
+        return $share !== null && $generator->projectShareDelivery($basket, $share) !== null;
     }
 
     /**
@@ -1047,6 +1297,15 @@ class PartnerController extends AbstractController
     {
         if ($type == 'add_family') {
             $partners = $entityManager->getRepository(\App\Entity\Partner::class)->findFamiliar($partner);
+        } elseif ($type == 'set_payer') {
+            // Pagador (donante) de la cesta: cualquier socix activx distintx del
+            // receptor. La cesta la sigue recibiendo $partner; sólo cambia quién
+            // figura como pagador (payer_partner) de su PartnerBasketShare.
+            $partners = array_values(array_filter(
+                $entityManager->getRepository(Partner::class)
+                    ->findBy(['status' => Partner::STATUS_ACTIVO], ['name' => 'ASC']),
+                static fn (Partner $p) => $p->getId() !== $partner->getId()
+            ));
         } else {
             $baskets = $entityManager->getRepository(\App\Entity\PartnerBasketShare::class)->findBy(array('is_active' => 1, 'basket_share' => 4));
             foreach ($baskets as $basket) {
@@ -1081,11 +1340,28 @@ class PartnerController extends AbstractController
         }
         $partner1 = $entityManager->getRepository(\App\Entity\Partner::class)->find($partner1_id);
         $partner2 = $entityManager->getRepository(\App\Entity\Partner::class)->find($partner2_id);
-        $partner1->addRelative($partner2);
-        foreach ($partner2->getPartnerBasketShares() as $share) {
-            $entityManager->remove($share);
+
+        // Un familiar es secundario y NO tiene cesta propia (vive en el principal).
+        // findFamiliar ya no ofrece a quien tenga cesta activa, así que esto es una
+        // red defensiva: si llega igualmente (URL a mano, dato heredado), rechazamos
+        // en vez de destruir su PartnerBasketShare en silencio.
+        $hasActiveBasket = $partner2->getPartnerBasketShares()->exists(
+            fn ($i, PartnerBasketShare $share) => $share->getIsActive()
+        );
+        if ($hasActiveBasket) {
+            $session->getFlashBag()->add(
+                'warning',
+                sprintf(
+                    'No se puede asociar a %s %s como familiar: tiene una cesta propia activa. '
+                    . 'Dale de baja la cesta antes de vincularla a una familia.',
+                    $partner2->getName(),
+                    $partner2->getSurname()
+                )
+            );
+            return $this->redirectToRoute('partner_show', array('id' => $partner1_id));
         }
 
+        $partner1->addRelative($partner2);
 
         $entityManager->persist($partner1);
         $entityManager->persist($partner2);
@@ -1444,7 +1720,72 @@ class PartnerController extends AbstractController
         return $this->redirectToRoute('partner_show', array('id' => $partner1_id));
     }
 
+    /**
+     * Asigna un pagador externo (donante) a la cesta activa del receptor. El
+     * receptor ($partner1) sigue recibiendo físicamente la cesta; el donante
+     * ($partner2) queda como payer_partner de su PartnerBasketShare y será quien
+     * figure en cobros cuando exista esa fase. Modela la donación nominada de
+     * cuota de cesta entre socixs.
+     *
+     * @param int                    $partner1_id Receptor de la cesta (de la ruta).
+     * @param int                    $partner2_id Donante/pagador elegido en el picker.
+     * @param EntityManagerInterface $entityManager
+     * @return Response Redirige a la ficha del receptor.
+     */
+    #[Route("/{partner1_id}/{partner2_id}/set_payer", name: "set_payer", methods: ["GET"])]
+    public function setPayer($partner1_id, $partner2_id, EntityManagerInterface $entityManager): Response
+    {
+        if ($partner1_id == $partner2_id) {
+            $this->addFlash('warning', 'El pagador debe ser otrx socix distintx del receptor.');
+            return $this->redirectToRoute('partner_show', ['id' => $partner1_id]);
+        }
 
+        $receptor = $entityManager->getRepository(Partner::class)->find($partner1_id);
+        $payer = $entityManager->getRepository(Partner::class)->find($partner2_id);
+        if (!$receptor instanceof Partner || !$payer instanceof Partner) {
+            $this->addFlash('warning', 'Socix no encontradx.');
+            return $this->redirectToRoute('partner_show', ['id' => $partner1_id]);
+        }
+
+        $basket = $receptor->getActiveBasket();
+        if (!$basket instanceof PartnerBasketShare) {
+            $this->addFlash('warning', 'El receptor no tiene una cesta activa a la que asignar pagador.');
+            return $this->redirectToRoute('partner_show', ['id' => $partner1_id]);
+        }
+
+        $basket->setPayerPartner($payer);
+        $entityManager->flush();
+
+        $this->addFlash('success', sprintf(
+            'La cesta de %s %s la paga ahora %s %s.',
+            $receptor->getName(), $receptor->getSurname(), $payer->getName(), $payer->getSurname()
+        ));
+        return $this->redirectToRoute('partner_show', ['id' => $partner1_id]);
+    }
+
+    /**
+     * Revierte la cesta del receptor a "la paga ella misma": limpia el
+     * payer_partner de su PartnerBasketShare activa.
+     *
+     * @param Partner                $partner Receptor (de la ruta).
+     * @param EntityManagerInterface $entityManager
+     * @return Response Redirige a la ficha del receptor.
+     */
+    #[Route("/{id}/clear_payer", name: "clear_payer", methods: ["GET"], requirements: ["id" => "\\d+"])]
+    public function clearPayer(Partner $partner, EntityManagerInterface $entityManager): Response
+    {
+        $basket = $partner->getActiveBasket();
+        if (!$basket instanceof PartnerBasketShare) {
+            $this->addFlash('warning', 'El socix no tiene una cesta activa.');
+            return $this->redirectToRoute('partner_show', ['id' => $partner->getId()]);
+        }
+
+        $basket->setPayerPartner(null);
+        $entityManager->flush();
+
+        $this->addFlash('success', 'La cesta vuelve a pagarla la propia socix.');
+        return $this->redirectToRoute('partner_show', ['id' => $partner->getId()]);
+    }
 
     #[Route("/generate_historical", name: "partner_generate_historical", methods: ["GET"])]
     public function generateHistorical(EntityManagerInterface $entityManager)

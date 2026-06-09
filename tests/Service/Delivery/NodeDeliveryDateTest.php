@@ -140,6 +140,38 @@ class NodeDeliveryDateTest extends TestCase
         $this->assertSame('2026-12-23', $physical->format('Y-m-d'));
     }
 
+    public function testCierreGlobalDesplazaLaCadenciaBiweekly(): void
+    {
+        // Cascorro (anchor 6-may) sin cierres repartiría 6, 20, 3-jun. Con un
+        // cierre global intermedio (festivo: no reparte nadie), la cadencia se
+        // corre una semana: pasa a repartir 13-may, 27-may...
+        $node = $this->makeNode('Cascorro', 3, Node::CADENCE_BIWEEKLY, '2026-05-06');
+        $resolver = $this->makeResolverWithClosures(1);
+
+        // 15-may (físico 13-may): sin cierre no repartía; con un cierre, sí.
+        $physical = $resolver->physicalDateFor($this->makeBasket('2026-05-15'), $node);
+        $this->assertNotNull($physical, 'Con un cierre intermedio la cadencia se corre y sí reparte.');
+        $this->assertSame('2026-05-13', $physical->format('Y-m-d'));
+
+        // 22-may (físico 20-may): sin cierre repartía; con un cierre, ya no.
+        $this->assertNull($resolver->physicalDateFor($this->makeBasket('2026-05-22'), $node));
+    }
+
+    public function testOperativeDateForIgnoraLosCierres(): void
+    {
+        // El picker del CRUD usa operativeDateFor (semanas crudas): aunque haya
+        // un cierre, NO desplaza la cadencia teórica, a diferencia de
+        // physicalDateFor. Es la garantía que justifica separar ambos caminos.
+        $node = $this->makeNode('Cascorro', 3, Node::CADENCE_BIWEEKLY, '2026-05-06');
+        $resolver = $this->makeResolverWithClosures(1);
+
+        $this->assertNull($resolver->operativeDateFor($this->makeBasket('2026-05-15'), $node));
+
+        $physical = $resolver->operativeDateFor($this->makeBasket('2026-05-22'), $node);
+        $this->assertNotNull($physical);
+        $this->assertSame('2026-05-20', $physical->format('Y-m-d'));
+    }
+
     /**
      * Construye un NodeDeliveryDate con un repositorio de excepciones
      * simulado que siempre devuelve la excepción dada (o null si no hay).
@@ -151,6 +183,22 @@ class NodeDeliveryDateTest extends TestCase
     {
         $repo = $this->createMock(DeliveryExceptionRepository::class);
         $repo->method('findForBasketAndNode')->willReturn($exception);
+
+        return new NodeDeliveryDate($repo);
+    }
+
+    /**
+     * Resolver cuyo repositorio simula un número fijo de cierres globales
+     * cancelados en cualquier rango, y ninguna excepción concreta de nodo.
+     *
+     * @param int $closures Cierres globales a devolver en countGlobalCancellationsBetween.
+     * @return NodeDeliveryDate
+     */
+    private function makeResolverWithClosures(int $closures): NodeDeliveryDate
+    {
+        $repo = $this->createMock(DeliveryExceptionRepository::class);
+        $repo->method('findForBasketAndNode')->willReturn(null);
+        $repo->method('countGlobalCancellationsBetween')->willReturn($closures);
 
         return new NodeDeliveryDate($repo);
     }

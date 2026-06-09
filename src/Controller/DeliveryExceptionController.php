@@ -9,6 +9,7 @@ use App\Form\DeliveryExceptionType;
 use App\Repository\BasketRepository;
 use App\Repository\DeliveryExceptionRepository;
 use App\Repository\NodeRepository;
+use App\Service\Delivery\ClosureShiftReconciler;
 use App\Service\Delivery\NodeDeliveryDate;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -22,13 +23,13 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * traslados de día). Permite planificarlas por adelantado apuntando a un
  * ciclo futuro y, opcionalmente, a un nodo concreto.
  *
- * Vive bajo /gestion/reparto/excepciones; no choca con delivery_show
- * (/gestion/reparto/{basketId} exige \d+).
+ * Vive bajo /gestion/reparto/excepciones; rutas hermanas más específicas que
+ * los puentes por día (/gestion/reparto/dia/{basketId}).
  *
  * Sub-fase 8.8d (2026-05-27).
  */
 #[Route('/gestion/reparto/excepciones')]
-#[IsGranted('ROLE_GESTION_SOCIXS')]
+#[IsGranted('ROLE_GESTION_REPARTO')]
 class DeliveryExceptionController extends AbstractController
 {
     /**
@@ -71,7 +72,7 @@ class DeliveryExceptionController extends AbstractController
      * @return Response
      */
     #[Route('/new', name: 'delivery_exception_new', methods: ['GET', 'POST'])]
-    public function new(Request $request, EntityManagerInterface $entityManager, DeliveryExceptionRepository $repository, NodeRepository $nodeRepository, BasketRepository $basketRepository, NodeDeliveryDate $deliveryDate): Response
+    public function new(Request $request, EntityManagerInterface $entityManager, DeliveryExceptionRepository $repository, NodeRepository $nodeRepository, BasketRepository $basketRepository, NodeDeliveryDate $deliveryDate, ClosureShiftReconciler $reconciler): Response
     {
         $exception = new DeliveryException();
         $form = $this->createForm(DeliveryExceptionType::class, $exception);
@@ -84,6 +85,7 @@ class DeliveryExceptionController extends AbstractController
                 $entityManager->persist($exception);
                 $entityManager->flush();
                 $this->addFlash('success', 'Excepción de reparto creada.');
+                $this->reconcileClosure($exception, $reconciler);
 
                 return $this->redirectToRoute('delivery_exception_index');
             }
@@ -92,7 +94,7 @@ class DeliveryExceptionController extends AbstractController
         return $this->render('delivery_exception/new.html.twig', [
             'exception' => $exception,
             'form' => $form->createView(),
-            'scopes' => $this->buildScopes($nodeRepository, $basketRepository, $deliveryDate),
+            'scopes' => $this->buildScopes($nodeRepository, $basketRepository, $deliveryDate, $repository, null),
         ]);
     }
 
@@ -104,7 +106,7 @@ class DeliveryExceptionController extends AbstractController
      * @return Response
      */
     #[Route('/{id}/edit', name: 'delivery_exception_edit', methods: ['GET', 'POST'])]
-    public function edit(Request $request, DeliveryException $exception, EntityManagerInterface $entityManager, DeliveryExceptionRepository $repository, NodeRepository $nodeRepository, BasketRepository $basketRepository, NodeDeliveryDate $deliveryDate): Response
+    public function edit(Request $request, DeliveryException $exception, EntityManagerInterface $entityManager, DeliveryExceptionRepository $repository, NodeRepository $nodeRepository, BasketRepository $basketRepository, NodeDeliveryDate $deliveryDate, ClosureShiftReconciler $reconciler): Response
     {
         $form = $this->createForm(DeliveryExceptionType::class, $exception);
         $form->handleRequest($request);
@@ -115,6 +117,7 @@ class DeliveryExceptionController extends AbstractController
             } else {
                 $entityManager->flush();
                 $this->addFlash('success', 'Excepción de reparto actualizada.');
+                $this->reconcileClosure($exception, $reconciler);
 
                 return $this->redirectToRoute('delivery_exception_index');
             }
@@ -123,7 +126,7 @@ class DeliveryExceptionController extends AbstractController
         return $this->render('delivery_exception/edit.html.twig', [
             'exception' => $exception,
             'form' => $form->createView(),
-            'scopes' => $this->buildScopes($nodeRepository, $basketRepository, $deliveryDate),
+            'scopes' => $this->buildScopes($nodeRepository, $basketRepository, $deliveryDate, $repository, $exception),
         ]);
     }
 
@@ -145,6 +148,31 @@ class DeliveryExceptionController extends AbstractController
         $this->addFlash('success', 'Excepción de reparto borrada.');
 
         return $this->redirectToRoute('delivery_exception_index');
+    }
+
+    /**
+     * Reconcilia los cambios puntuales que tocan la semana recién guardada, si es
+     * un cierre global. Delega en {@see ClosureShiftReconciler} (que no-opera si no
+     * lo es) y resume el resultado en un flash para el admin.
+     *
+     * @param DeliveryException      $exception  Excepción recién guardada.
+     * @param ClosureShiftReconciler $reconciler
+     */
+    private function reconcileClosure(DeliveryException $exception, ClosureShiftReconciler $reconciler): void
+    {
+        $r = $reconciler->reconcile($exception);
+        if ($r['cancelled'] === 0 && $r['repointed'] === 0 && $r['kept'] === 0) {
+            return; // no era cierre global, o no había cambios que tocar
+        }
+
+        $msg = sprintf(
+            'Cierre de semana: %d cambio(s) anulado(s), %d re-apuntado(s) a la siguiente semana, %d sin tocar (ya repartidos).',
+            $r['cancelled'], $r['repointed'], $r['kept'],
+        );
+        if ($r['notify'] !== []) {
+            $msg .= sprintf(' Avisar a %d socio(s) para que rehagan su cambio (pendiente de mail).', count($r['notify']));
+        }
+        $this->addFlash('warning', $msg);
     }
 
     /**
@@ -186,20 +214,32 @@ class DeliveryExceptionController extends AbstractController
      * @param NodeRepository $nodeRepository
      * @param BasketRepository $basketRepository
      * @param NodeDeliveryDate $deliveryDate
+     * @param DeliveryExceptionRepository $exceptionRepository
+     * @param DeliveryException|null $current Excepción que se edita (su propia
+     *        fecha sí se sigue ofreciendo); null al crear una nueva.
      * @return array<int, array{key: string, nodeId: int|null, label: string, sublabel: string, dates: array<int, array{basketId: int, date: \DateTimeImmutable}>}>
      */
-    private function buildScopes(NodeRepository $nodeRepository, BasketRepository $basketRepository, NodeDeliveryDate $deliveryDate): array
+    private function buildScopes(NodeRepository $nodeRepository, BasketRepository $basketRepository, NodeDeliveryDate $deliveryDate, DeliveryExceptionRepository $exceptionRepository, ?DeliveryException $current): array
     {
         $baskets = $this->futureBaskets($basketRepository);
+        $occupied = $this->occupiedKeys($exceptionRepository, $current);
 
-        // Cierre general: las próximas semanas, ancladas a su viernes-ciclo.
-        $allDates = array_map(
-            static fn (Basket $basket): array => [
+        // Cierre general: las próximas semanas SIN excepción global, ancladas a
+        // su viernes-ciclo. Se sigue rellenando hasta PICKER_DATES saltando las
+        // ya ocupadas, no recortando a las 4 primeras.
+        $allDates = [];
+        foreach ($baskets as $basket) {
+            if (isset($occupied[self::scopeKey($basket->getId(), null)])) {
+                continue; // esa semana ya tiene un cierre general.
+            }
+            $allDates[] = [
                 'basketId' => $basket->getId(),
                 'date' => \DateTimeImmutable::createFromInterface($basket->getDate()),
-            ],
-            array_slice($baskets, 0, self::PICKER_DATES)
-        );
+            ];
+            if (count($allDates) >= self::PICKER_DATES) {
+                break;
+            }
+        }
 
         $scopes = [[
             'key' => 'all',
@@ -215,6 +255,9 @@ class DeliveryExceptionController extends AbstractController
                 $physical = $deliveryDate->operativeDateFor($basket, $node);
                 if ($physical === null) {
                     continue; // nodo quincenal: esta semana no reparte.
+                }
+                if (isset($occupied[self::scopeKey($basket->getId(), $node->getId())])) {
+                    continue; // ese nodo ya tiene excepción ese ciclo.
                 }
                 $dates[] = ['basketId' => $basket->getId(), 'date' => $physical];
                 if (count($dates) >= self::PICKER_DATES) {
@@ -232,6 +275,59 @@ class DeliveryExceptionController extends AbstractController
         }
 
         return $scopes;
+    }
+
+    /**
+     * Clave que identifica un alcance (ciclo, nodo) para cruzar las fechas del
+     * picker con las excepciones ya existentes. nodeId null = cierre global.
+     *
+     * @param int $basketId Id del ciclo.
+     * @param int|null $nodeId Id del nodo, o null para el alcance global.
+     * @return string Clave estable "basketId|nodeId".
+     */
+    public static function scopeKey(int $basketId, ?int $nodeId): string
+    {
+        return $basketId . '|' . ($nodeId ?? '');
+    }
+
+    /**
+     * Conjunto de claves (ciclo, nodo) que YA tienen excepción registrada, para
+     * que el picker no vuelva a ofrecerlas. Capa fina sobre la query; la lógica
+     * de claves vive en {@see occupiedKeysFrom()} (pura, testeable).
+     *
+     * @param DeliveryExceptionRepository $exceptionRepository
+     * @param DeliveryException|null $current Excepción editada, o null al crear.
+     * @return array<string, true> Mapa clave => true (lookup O(1) con isset).
+     */
+    private function occupiedKeys(DeliveryExceptionRepository $exceptionRepository, ?DeliveryException $current): array
+    {
+        return self::occupiedKeysFrom(
+            $exceptionRepository->findFromDate(new \DateTimeImmutable('today')),
+            $current,
+        );
+    }
+
+    /**
+     * Deriva el set de claves ocupadas a partir de las excepciones existentes.
+     * En edición se excluye la propia excepción que se está editando (por id):
+     * su fecha debe seguir disponible para que la tarjeta seleccionada se pinte.
+     * Lógica pura (sin BBDD) para poder testearla aislada.
+     *
+     * @param DeliveryException[] $existing Excepciones ya registradas.
+     * @param DeliveryException|null $current Excepción editada, o null al crear.
+     * @return array<string, true> Mapa clave => true (lookup O(1) con isset).
+     */
+    public static function occupiedKeysFrom(array $existing, ?DeliveryException $current): array
+    {
+        $occupied = [];
+        foreach ($existing as $exception) {
+            if ($current !== null && $exception->getId() === $current->getId()) {
+                continue;
+            }
+            $occupied[self::scopeKey($exception->getBasket()->getId(), $exception->getNode()?->getId())] = true;
+        }
+
+        return $occupied;
     }
 
     /**

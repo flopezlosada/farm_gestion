@@ -3,7 +3,11 @@
 {% block title %}Blog · CSA Vega de Jarama{% endblock %}
 
 {% block content %}
-    <section class="container py-5">
-        {% block container %}{% endblock %}
-    </section>
+    <div class="blog-bg">
+        {# Contenedor más ancho que el `container` estándar (1140) para que el
+           listado + sidebar aprovechen mejor las pantallas grandes. #}
+        <section class="container-fluid py-5 px-md-5" style="max-width: 1320px; margin: 0 auto;">
+            {% block container %}{% endblock %}
+        </section>
+    </div>
 {% endblock %}

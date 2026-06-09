@@ -52,6 +52,7 @@ class DeliveryCalendarProjectorTest extends KernelTestCase
             static::getContainer()->get(WeeklyBasketComposer::class),
             static::getContainer()->get(EggDeliveryResolver::class),
             static::getContainer()->get(\App\Repository\DeliveryExceptionRepository::class),
+            static::getContainer()->get(\App\Service\Delivery\NodeDeliveryDate::class),
         );
         $slots = $projector->projectMonth($partner, (int) $date->format('Y'), (int) $date->format('n'));
 

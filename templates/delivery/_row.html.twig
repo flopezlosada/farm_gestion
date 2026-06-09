@@ -1,33 +1,41 @@
 {# ============================================================
  # Una fila de socix del listado de reparto v2.
- # Espera del contexto heredado: wb (WeeklyBasket), pbs_by_wb_id, egg_delivery_map.
+ # Espera del contexto heredado: wb (WeeklyBasket, de piedra o transitorio de
+ # dibujo), pbs_by_partner_id, egg_delivery_map, cestas/dozens_by_partner_id.
+ # Las claves van por wb.partner.id (no wb.id): el WB dibujado no tiene id.
  # La modalidad se deriva de la propia fila (wb.basketShare) para que la fila
  # sea válida en los tres modos de orden (grupo / modalidad / alfabético).
  # ============================================================ #}
-{% set share = pbs_by_wb_id[wb.id] ?? null %}
-{% set row_eggs = egg_delivery_map[wb.id] ?? false %}
+{% set share = pbs_by_partner_id[wb.partner.id] ?? null %}
+{% set row_eggs = egg_delivery_map[wb.partner.id] ?? false %}
 {% set rbs = wb.basketShare %}
-{# Cestas físicas y docenas salen de la composición materializada (los ítems
-   ya llevan la ponderación ½ de compartidas y el 0 de solo-huevos). #}
-{% set cesta_factor = cestas_by_wb_id[wb.id] ?? 0 %}
-{% set row_dozens = dozens_by_wb_id[wb.id] ?? 0 %}
+{# Cestas físicas y docenas salen de la composición materializada o proyectada
+   (los ítems ya llevan la ponderación ½ de compartidas y el 0 de solo-huevos). #}
+{% set cesta_factor = cestas_by_partner_id[wb.partner.id] ?? 0 %}
+{% set row_dozens = dozens_by_partner_id[wb.partner.id] ?? 0 %}
 <tr class="dlv-row"
     data-name="{{ (wb.partner.nameForDelivery ~ ' ' ~ wb.partner.legalName)|lower }}"
-    data-modality="{{ rbs.id }}"
+    data-modality="{{ rbs ? rbs.id : 'extra' }}"
     data-wbg="{{ wb.weeklyBasketGroup ? wb.weeklyBasketGroup.id : '' }}"
     data-cohort="{{ share.deliveryGroup ?? '' }}"
     data-eggs="{{ row_eggs ? '1' : '0' }}"
     data-cestas="{{ cesta_factor }}"
     data-dozens="{{ row_dozens }}"
     data-delivery-date="{{ wb.deliveryDate ? wb.deliveryDate|date('Y-m-d') : '' }}">
+    {% set reloc = wb.relocatedFromLabel %}
     <td class="partner">
         {{ wb.partner.nameForDelivery }}
         {% if wb.partner.displayName and wb.partner.displayName != wb.partner.legalName %}
             <small>{{ wb.partner.legalName }}</small>
         {% endif %}
+        {% if reloc %}<span class="reloc">de {{ reloc }}</span>{% endif %}
     </td>
     <td style="width: 130px;">
-        <span class="mod mod--{{ rbs.id }}"><span class="dot"></span>{{ rbs.name }}</span>
+        {% if rbs %}
+            <span class="mod mod--{{ rbs.id }}"><span class="dot"></span>{{ rbs.name }}</span>
+        {% else %}
+            <span class="mod mod--extra"><span class="dot"></span>Extra</span>
+        {% endif %}
         {% if wb.partner.sharePartner %}
             <div class="mod-pair">con {{ wb.partner.sharePartner.nameForDelivery }}</div>
         {% endif %}
@@ -47,7 +55,22 @@
         <div class="dlv-kebab-menu" hidden>
             <a href="{{ path('partner_show', { id: wb.partner.id }) }}">Ver ficha del socix</a>
             <a href="{{ path('partner_edit', { id: wb.partner.id }) }}">Editar socix</a>
-            <a href="{{ path('delivery_shifts_index', { partner: wb.partner.id }) }}">Cambiar de viernes / no recoge</a>
+            <a href="{{ path('partner_delivery_calendar', { id: wb.partner.id, sel: basket.id, month: basket.date|date('n'), year: basket.date|date('Y') }) }}">Cambiar de viernes / no recoge</a>
+            <a href="#" class="js-dlv-extra"
+               data-partner-id="{{ wb.partner.id }}"
+               data-partner-name="{{ wb.partner.nameForDelivery }}">Añadir cesta extra</a>
+            {% if wb.partner.id in (partner_ids_with_extra ?? []) %}
+            <form method="post" action="{{ path('delivery_remove_extra', { nodeId: node.id, basketId: basket.id }) }}">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token('delivery_remove_extra') }}">
+                <input type="hidden" name="partner_id" value="{{ wb.partner.id }}">
+                <button type="submit">Quitar cesta extra</button>
+            </form>
+            {% endif %}
+            {% if can_relocate ?? false %}
+            <a href="#" class="js-dlv-relocate"
+               data-partner-id="{{ wb.partner.id }}"
+               data-partner-name="{{ wb.partner.nameForDelivery }}">Recoger en otro nodo</a>
+            {% endif %}
         </div>
     </td>
 </tr>

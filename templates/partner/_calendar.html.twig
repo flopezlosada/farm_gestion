@@ -242,7 +242,13 @@
                         <form action="{{ path(cal.route_skip, cal.idp|merge({ basketId: bid })) }}" method="post" style="margin: 0;" data-rcal-ajax>
                             <input type="hidden" name="_csrf_token" value="{{ cal.csrf_skip }}">
                             <input type="hidden" name="recover" value="1">
-                            {{ csa.btn('Volver a recoger', { type: 'submit', variant: 'secondary', icon: 'fa-undo', block: true }) }}
+                            <button type="submit" class="rcal-switch" aria-pressed="false">
+                                <span class="rcal-switch__track"><span class="rcal-switch__knob"></span></span>
+                                <span class="rcal-switch__txt">
+                                    <span class="rcal-switch__label">No recoge esta semana</span>
+                                    <span class="rcal-switch__sub">Enciéndelo para volver a recoger</span>
+                                </span>
+                            </button>
                         </form>
                     </div>
                 {% endif %}
@@ -276,22 +282,19 @@
                                 <i class="fa fa-arrows"></i><span>Mover a otra fecha</span>
                             </button>
                         {% endif %}
+                        {# Interruptor on/off de la semana. Apagarlo = no recoge (route_skip).
+                           Reversible y sin confirmación: el propio interruptor invita a
+                           volver a encenderlo. #}
                         <form id="rcal-skip-form-{{ bid }}" action="{{ path(cal.route_skip, cal.idp|merge({ basketId: bid })) }}" method="post" style="margin: 0;" data-rcal-ajax>
                             <input type="hidden" name="_csrf_token" value="{{ cal.csrf_skip }}">
-                            <button type="button" class="csa-btn csa-btn--danger-soft csa-btn--block"
-                                    onclick="document.getElementById('rcal-confirm-skip-{{ bid }}').showModal()">
-                                <i class="fa fa-ban"></i><span>No recoge esta semana</span>
+                            <button type="submit" class="rcal-switch" aria-pressed="true">
+                                <span class="rcal-switch__track"><span class="rcal-switch__knob"></span></span>
+                                <span class="rcal-switch__txt">
+                                    <span class="rcal-switch__label">Recoge esta semana</span>
+                                    <span class="rcal-switch__sub">Apágalo para no recoger · reversible</span>
+                                </span>
                             </button>
                         </form>
-                        <div class="rcal-hint" style="text-align: center;">Queda fuera del reparto. Reversible.</div>
-                        {{ csa.confirm_dialog('rcal-confirm-skip-' ~ bid, {
-                            variant: 'warning',
-                            eyebrow: 'No recoger',
-                            title: '¿Marcar que no recoge esta semana?',
-                            body: 'La entrega de ' ~ (selected.date|format_date('long', locale='es')) ~ ' no saldrá en el reparto. Podrás revertirlo desde aquí.',
-                            confirm_label: 'No recoger',
-                            external_form_id: 'rcal-skip-form-' ~ bid,
-                        }) }}
                     </div>
                 {% elseif not partner.sharePartner and not ro %}
                     <div class="rcal-panel__ft">

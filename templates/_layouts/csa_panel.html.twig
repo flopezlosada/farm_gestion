@@ -53,7 +53,7 @@
                     {% endblock %}
                 </nav>
 
-                {% set has_gestion = is_granted('ROLE_ADMIN') or is_granted('ROLE_GESTION_GRANJA') or is_granted('ROLE_GESTION_SOCIXS') or is_granted('ROLE_GESTION_CESTAS') or is_granted('ROLE_BLOG') %}
+                {% set has_gestion = is_granted('ROLE_ADMIN') or is_granted('ROLE_GESTION_GRANJA') or is_granted('ROLE_GESTION_SOCIXS') or is_granted('ROLE_GESTION_REPARTO') or is_granted('ROLE_BLOG') %}
                 <div class="csa-topbar__user">
                     {% if has_gestion %}
                         <div class="csa-areaswitch" role="group" aria-label="Cambiar de área">

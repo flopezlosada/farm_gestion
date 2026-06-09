@@ -217,4 +217,70 @@ class PartnerControllerTest extends AbstractAuthenticatedTest
             ->findOneBy(['partner' => $partner->getId(), 'fromBasket' => $basketId]);
         $this->assertNull($shift, 'Sin token CSRF válido no debe crearse ningún cambio puntual.');
     }
+
+    /**
+     * Donación de cesta: asignar un pagador externo (set_payer) deja al donante
+     * como payer_partner de la PBS activa del receptor, y quitarlo (clear_payer)
+     * la revierte a "la paga ella misma". El receptor (PBS.partner) no cambia.
+     */
+    public function testSetAndClearPayerOnActiveBasket(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        $share = $em->getRepository(PartnerBasketShare::class)->findOneBy(['is_active' => 1]);
+        $this->assertNotNull($share, 'Fixtures sin ninguna cesta activa.');
+        $receptor = $share->getPartner();
+
+        $payer = null;
+        foreach ($em->getRepository(Partner::class)->findBy(['status' => Partner::STATUS_ACTIVO]) as $candidate) {
+            if ($candidate->getId() !== $receptor->getId()) {
+                $payer = $candidate;
+                break;
+            }
+        }
+        $this->assertNotNull($payer, 'Fixtures sin un segundo socix activo para donar.');
+
+        $shareId = $share->getId();
+        $originalPayerId = $share->getPayerPartner()?->getId();
+
+        // Asignar pagador (donación).
+        $client->request('GET', sprintf('/gestion/partner/%d/%d/set_payer', $receptor->getId(), $payer->getId()));
+        $this->assertResponseRedirects();
+
+        $em->clear();
+        $reloaded = $em->getRepository(PartnerBasketShare::class)->find($shareId);
+        $this->assertSame($payer->getId(), $reloaded->getPayerPartner()?->getId(), 'set_payer debe fijar el pagador externo.');
+        $this->assertSame($receptor->getId(), $reloaded->getPartner()->getId(), 'El receptor de la cesta no debe cambiar.');
+
+        // Quitar pagador (vuelve a pagarla ella misma).
+        $client->request('GET', sprintf('/gestion/partner/%d/clear_payer', $receptor->getId()));
+        $this->assertResponseRedirects();
+
+        $em->clear();
+        $reloaded = $em->getRepository(PartnerBasketShare::class)->find($shareId);
+        $this->assertNull($reloaded->getPayerPartner(), 'clear_payer debe revertir a la propia socix.');
+
+        // db_test no hace rollback: restaura el pagador original si lo había.
+        if ($originalPayerId !== null) {
+            $reloaded->setPayerPartner($em->getRepository(Partner::class)->find($originalPayerId));
+            $em->flush();
+        }
+    }
+
+    /**
+     * El picker de pagador (family?type=set_payer) renderiza 200 y ofrece
+     * candidatos para donar la cesta de un socix.
+     */
+    public function testSetPayerPickerReturnsOk(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        $partner = $em->getRepository(Partner::class)->findOneBy(['status' => Partner::STATUS_ACTIVO]);
+        $this->assertNotNull($partner, 'Fixtures sin ningún socix activo.');
+
+        $client->request('GET', sprintf('/gestion/partner/%d/set_payer/family', $partner->getId()));
+        $this->assertSame(200, $client->getResponse()->getStatusCode());
+    }
 }

@@ -82,16 +82,26 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
     }
 
     /**
+     * Devuelve la lista de socios con cesta de un tipo (semanal, media, solo-huevo
+     * semanal) ordenados por pueblo, candidatos a repartir en el Basket dado.
+     *
+     * Acota a la ventana de vigencia de la PBS frente a la FECHA del Basket:
+     * start_date <= fecha y (end_date NULL o end_date >= fecha). El filtro de
+     * end_date es imprescindible: un socio con baja programada a futuro sigue
+     * is_active=1 hasta que finalizeExpiredShares la desactive (relativo a la
+     * semana en curso, no al Basket que se genera), así que sin este filtro
+     * recibiría entregas en listados adelantados POSTERIORES a su baja.
+     *
      * @param $basket_share
      * @param $status
-     * devuelve la lista de socios con cesta ordenados por pueblo y según el tipo de cesta
      */
     public function findBasketPartnersByTypeAndCity($basket_share, $status, $current_basket,$only_eggs=false)
     {
         $em = $this->getEntityManager();
 
         $dql = "select b from App\\Entity\\PartnerBasketShare b inner join b.partner p where b.basket_share=:basket_share and
-                      b.is_active=:status and (b.start_date IS NULL OR b.start_date<=:date) ";
+                      b.is_active=:status and (b.start_date IS NULL OR b.start_date<=:date)
+                      and (b.end_date IS NULL OR b.end_date>=:date) ";
         if ($only_eggs)
         {
             $dql.=" and b.egg_period=1 ";
@@ -235,7 +245,7 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
         $result = $query->getResult();
         $array_id_partners = array(); //es el array con las ids de los socios que recibieron la semana anterior. Habrá txdo tipo de socios, semanales, mensuales,...
 
-        $dql_partners = "select b from App\\Entity\\PartnerBasketShare b inner join b.partner p where b.basket_share=:basket_share and b.is_active=:status and (b.start_date IS NULL OR b.start_date<=:date) ";
+        $dql_partners = "select b from App\\Entity\\PartnerBasketShare b inner join b.partner p where b.basket_share=:basket_share and b.is_active=:status and (b.start_date IS NULL OR b.start_date<=:date) and (b.end_date IS NULL OR b.end_date>=:date) ";
         if (count($result) > 0) {
 
             foreach ($result as $weekly_basket) {
@@ -431,7 +441,7 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
         }
 
         $dql_final = "select b from App\\Entity\\PartnerBasketShare b inner join b.partner p where b.basket_share=:basket_share and
-                      b.is_active=1 and b.day_month_order<=:day_order and (b.start_date IS NULL OR b.start_date<=:date) "; //pongo <= porque si alguien de la semana anterior no ha recogido y quiere recogerla esta, no aparece en el listado anterior (dql_partners) y así puede recogerla
+                      b.is_active=1 and b.day_month_order<=:day_order and (b.start_date IS NULL OR b.start_date<=:date) and (b.end_date IS NULL OR b.end_date>=:date) "; //pongo <= porque si alguien de la semana anterior no ha recogido y quiere recogerla esta, no aparece en el listado anterior (dql_partners) y así puede recogerla
         if (count($array_id_partners)) {
             $dql_final .= " and b.partner not in (:ids)";
         }

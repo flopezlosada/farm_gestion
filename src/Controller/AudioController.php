@@ -18,7 +18,6 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * en el frontend público del blog. El CRUD standalone (index/show/
  * edit/update/delete) se retiró por código muerto.
  */
-#[IsGranted('ROLE_BLOG')]
 class AudioController extends AbstractController
 {
     /**
@@ -26,6 +25,7 @@ class AudioController extends AbstractController
      * (object_class + foreign_key). Disparado desde el modal AJAX
      * del aside del editor de posts.
      */
+    #[IsGranted('ROLE_BLOG')]
     public function create(Request $request, $foreign_key, $object_class, EntityManagerInterface $em)
     {
         $entity = new Audio();
@@ -87,6 +87,7 @@ class AudioController extends AbstractController
      * Renderiza el form de alta de Audio para el modal AJAX disparado
      * desde el aside del editor de posts.
      */
+    #[IsGranted('ROLE_BLOG')]
     public function new($foreign_key, $object_class)
     {
         $entity = new Audio();
@@ -121,6 +122,7 @@ class AudioController extends AbstractController
     /**
      * Borrado directo del Audio desde el aside del editor de posts.
      */
+    #[IsGranted('ROLE_BLOG')]
     public function fastDelete($id, EntityManagerInterface $em)
     {
         $entity = $em->getRepository(\App\Entity\Audio::class)->find($id);

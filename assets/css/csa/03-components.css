@@ -937,6 +937,138 @@ select.csa-input,
 .csa-toggle--on .csa-toggle__track { background: var(--csa-green); }
 .csa-toggle--on .csa-toggle__thumb { left: 18px; }
 
+/* Variante controlada por un <input type="checkbox"> real (sin JS): el input
+ * va oculto y el estado se deriva de :checked. Accesible y posteable. */
+.csa-toggle__input {
+  position: absolute;
+  opacity: 0;
+  width: 1px; height: 1px;
+  margin: 0;
+}
+.csa-toggle__input:checked ~ .csa-toggle__track { background: var(--csa-green); }
+.csa-toggle__input:checked ~ .csa-toggle__track .csa-toggle__thumb { left: 18px; }
+.csa-toggle__input:focus-visible ~ .csa-toggle__track {
+  outline: 2px solid var(--csa-green);
+  outline-offset: 2px;
+}
+.csa-toggle__text { font-size: var(--csa-fs-base); color: var(--csa-ink); }
+.csa-toggle__text small { display: block; color: var(--csa-ink-muted); font-size: var(--csa-fs-xs); }
+
+
+/* ============================================================
+ * DROPDOWN — <select> "enhanced" (ver assets/js/csa-dropdown.js)
+ * ============================================================
+ * Sustituye visualmente al <select> nativo manteniéndolo oculto y
+ * funcional. El trigger replica el control .csa-select; el menú reusa
+ * el lenguaje del combobox. */
+.csa-dropdown { position: relative; }
+
+.csa-dropdown__native {
+  position: absolute;
+  opacity: 0;
+  width: 1px; height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  pointer-events: none;
+}
+
+.csa-dropdown__trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--csa-sp-2);
+  width: 100%;
+  box-sizing: border-box;
+  height: 40px;
+  padding: 8px 14px 8px 12px;
+  background: var(--csa-surface);
+  border: 1px solid var(--csa-rule);
+  border-radius: var(--csa-radius-md);
+  font-family: var(--csa-sans);
+  font-size: var(--csa-fs-base);
+  line-height: 1.4;
+  color: var(--csa-ink);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--csa-t-fast), background var(--csa-t-fast);
+}
+.csa-dropdown__trigger:hover { border-color: var(--csa-ink-muted); }
+.csa-dropdown__trigger:focus-visible {
+  outline: none;
+  border-color: var(--csa-ink);
+}
+.csa-dropdown--open .csa-dropdown__trigger {
+  border-color: var(--csa-ink);
+  background: white;
+}
+.csa-dropdown__trigger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.csa-dropdown__value {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.csa-dropdown__value--placeholder { color: var(--csa-ink-muted); }
+
+/* Chevron csa, gira al abrir. */
+.csa-dropdown__trigger::after {
+  content: '';
+  flex-shrink: 0;
+  width: 12px; height: 8px;
+  background: no-repeat center / contain
+    url("data:image/svg+xml;charset=US-ASCII,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none' stroke='%235a5b56' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='1 1.5 6 6.5 11 1.5'/%3E%3C/svg%3E");
+  transition: transform var(--csa-t-fast);
+}
+.csa-dropdown--open .csa-dropdown__trigger::after { transform: rotate(180deg); }
+
+.csa-dropdown__menu {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0; right: 0;
+  z-index: 50;
+  max-height: 280px;
+  overflow-y: auto;
+  margin: 0;
+  padding: var(--csa-sp-1) 0;
+  list-style: none;
+  background: var(--csa-surface);
+  border: 1px solid var(--csa-rule-soft);
+  border-radius: var(--csa-radius-md);
+  box-shadow: var(--csa-shadow-lg);
+}
+.csa-dropdown__menu[hidden] { display: none; }
+
+.csa-dropdown__option {
+  padding: 8px var(--csa-sp-3);
+  font-size: var(--csa-fs-base);
+  line-height: 1.4;
+  color: var(--csa-ink);
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--csa-t-fast), color var(--csa-t-fast);
+}
+.csa-dropdown__option:hover,
+.csa-dropdown__option--active {
+  background: var(--csa-sage-bg-hover);
+  color: var(--csa-sage-ink);
+}
+.csa-dropdown__option[aria-selected="true"] {
+  font-weight: 500;
+  color: var(--csa-green);
+}
+.csa-dropdown__option--disabled {
+  color: var(--csa-ink-muted);
+  cursor: default;
+}
+.csa-dropdown__option--disabled:hover { background: transparent; }
+
 
 /* ============================================================
  * TABLA

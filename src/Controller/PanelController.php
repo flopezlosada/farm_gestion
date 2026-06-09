@@ -23,6 +23,7 @@ use App\Service\Delivery\DeliveryCalendarProjector;
 use App\Service\Delivery\DeliveryCalendarViewBuilder;
 use App\Service\Delivery\DeliveryShiftApplier;
 use App\Service\Delivery\DeliveryShiftValidator;
+use App\Service\Delivery\PickupRelocator;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Delivery\WeeklyBasketSkipper;
 use Doctrine\ORM\EntityManagerInterface;
@@ -253,7 +254,7 @@ class PanelController extends AbstractController
         Request $request,
         WeeklyBasketRepository $weeklyBasketRepository,
         WeeklyBasketGroupRepository $weeklyBasketGroupRepository,
-        EntityManagerInterface $em,
+        PickupRelocator $relocator,
     ): Response {
         if (($redirect = $this->ensureReady()) !== null) {
             return $redirect;
@@ -284,26 +285,16 @@ class PanelController extends AbstractController
             return $this->redirectToRoute('panel_basket');
         }
 
-        $previousGroup = $next->getWeeklyBasketGroup();
-        if ($previousGroup !== null && $previousGroup->getId() === $group->getId()) {
-            $this->addFlash('warning', 'Ya recoges la cesta en ese grupo esta semana.');
+        // El traslado (cambiar el grupo del WB de la semana, recalcular su fecha física
+        // según el nodo destino y registrar el evento) vive en PickupRelocator, que
+        // comparten panel y admin. Valida que el destino reparta esa semana y que no sea
+        // el mismo grupo.
+        try {
+            $relocator->relocate($partner, $next->getBasket(), $group, 'partner:' . $partner->getId());
+        } catch (\LogicException $e) {
+            $this->addFlash('warning', $e->getMessage());
             return $this->redirectToRoute('panel_basket');
         }
-
-        $next->setWeeklyBasketGroup($group);
-
-        $event = new PartnerEvent($partner, PartnerEvent::TYPE_NODE_CHANGE);
-        $event->setActor('partner:' . $partner->getId());
-        $event->setPayload([
-            'scope' => 'one_off',
-            'basket_id' => $next->getBasket()?->getId(),
-            'from_group_id' => $previousGroup?->getId(),
-            'from_group_name' => $previousGroup?->getName(),
-            'to_group_id' => $group->getId(),
-            'to_group_name' => $group->getName(),
-        ]);
-        $em->persist($event);
-        $em->flush();
 
         $this->addFlash('notice', sprintf('Listo: esta semana recogerás la cesta en "%s". El cambio aplica solo a este reparto.', $group->getName()));
         return $this->redirectToRoute('panel_basket');
@@ -971,7 +962,7 @@ class PanelController extends AbstractController
 
         $this->addFlash('error', 'Tu usuaria no está vinculada a un socix; pide a admin que te vincule para usar el panel.');
 
-        foreach (['ROLE_ADMIN', 'ROLE_GESTION_GRANJA', 'ROLE_GESTION_SOCIXS', 'ROLE_GESTION_CESTAS', 'ROLE_BLOG'] as $role) {
+        foreach (['ROLE_ADMIN', 'ROLE_GESTION_GRANJA', 'ROLE_GESTION_SOCIXS', 'ROLE_GESTION_REPARTO', 'ROLE_BLOG'] as $role) {
             if ($this->isGranted($role)) {
                 return $this->redirectToRoute('dashboard');
             }

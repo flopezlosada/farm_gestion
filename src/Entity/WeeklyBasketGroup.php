@@ -20,7 +20,9 @@ use Gedmo\Mapping\Annotation as Gedmo;
 /**
  * App\Entity\WeeklyBasketGroup
  *
- * @ORM\Table(name="weekly_basket_group")
+ * @ORM\Table(name="weekly_basket_group", indexes={
+ *     @ORM\Index(name="IDX_wbg_node", columns={"node_id"})
+ * })
  * @ORM\Entity(repositoryClass="App\Repository\WeeklyBasketGroupRepository").
  */
 
