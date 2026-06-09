@@ -42,6 +42,23 @@ class PartnerBasketShareType extends AbstractType
             ])
             ->add('egg_amount',null,array('label'=>'Cantidad de huevos', 'placeholder'=>'No quiere huevos'))
             ->add('egg_period',null,array('label'=>'Frecuencia de recogida de huevos'))
+            // Sólo para huevos mensuales: en cuál de las ENTREGAS DE CESTA del
+            // socio en el mes viajan los huevos (no el viernes del calendario).
+            // Caso Miriam: quincenal que recoge 1er y 3er viernes; "2ª entrega"
+            // = los huevos van en su 3er viernes (su segunda cesta). El resolver
+            // cuenta sobre las cestas del socio, así que los huevos nunca caen en
+            // un día sin cesta. Ver EggDeliveryResolver::shareDeliveriesInMonth.
+            ->add('eggDayMonthOrder', ChoiceType::class, [
+                'choices'  => [
+                    'No corresponde' => null,
+                    'En su 1ª cesta del mes' => 1,
+                    'En su 2ª cesta del mes' => 2,
+                    'En su 3ª cesta del mes' => 3,
+                    'En su 4ª cesta del mes' => 4,
+                ],
+                'label' => 'En qué cesta del mes recibe los huevos',
+                'help' => 'Los huevos viajan dentro de una de las cestas del socio (nunca en un día sin cesta). Una quincenal que recoge el 1er y 3er viernes y elige «2ª cesta» recibe los huevos en su segunda cesta.',
+            ])
             ->add('dayMonthOrder', ChoiceType::class,[
                 'choices'  => [
                     'No corresponde' => null,
@@ -49,7 +66,7 @@ class PartnerBasketShareType extends AbstractType
                     'Segundo viernes' => 2,
                     'Tercer viernes' => 3,
                     'Cuarto viernes' => 4,
-                ], 'label'=>"Selecciona el viernes que recoge"])
+                ], 'label'=>"Qué viernes del mes recoge la cesta"])
             ->add('deliveryGroup', ChoiceType::class, [
                 'label' => 'Turno de viernes (quincenal)',
                 'help' => 'Sólo para quincenales en puntos de reparto semanales. Cada opción muestra los viernes reales en que recoge.',

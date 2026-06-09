@@ -80,6 +80,9 @@
                         <div id="egg_period" class="csa-field--full hidden">
                             {{ csa.field(form.egg_period, 'Frecuencia de huevos', { full: true }) }}
                         </div>
+                        <div id="egg_day_month_order" class="csa-field--full hidden">
+                            {{ csa.field(form.eggDayMonthOrder, 'En qué cesta del mes recibe los huevos', { full: true }) }}
+                        </div>
                     </div>
                 {% endblock %}
             {% endembed %}
@@ -144,32 +147,54 @@
         document.querySelectorAll('.datepicker, .datepicker2, .datepicker3')
             .forEach(function (el) { el.type = 'date'; });
 
-        // Cambia el valor de un <select> por código y avisa al dropdown enhanced
-        // (assets/js/csa-dropdown.js escucha 'change' para refrescar su etiqueta).
-        function setSelectValue(selector, value) {
-            var el = document.querySelector(selector);
-            if (el && el.value !== String(value)) {
-                el.value = value;
-                el.dispatchEvent(new Event('change', { bubbles: true }));
-            }
+        // Mismo patrón condicional que el alta/errata (new/edit):
+        //  - day_month_order  = qué entrega del mes lleva la CESTA (sólo cesta mensual).
+        //  - egg_period       = frecuencia de los HUEVOS (sólo si recibe huevos).
+        //  - eggDayMonthOrder = en cuál de las cestas del socio van los huevos (sólo
+        //                       huevos mensuales y cesta NO mensual; caso Miriam).
+        var eggOrderSelect = document.getElementById('partner_basket_share_eggDayMonthOrder');
+        var eggOrderOptions = eggOrderSelect ? Array.prototype.slice.call(eggOrderSelect.options) : [];
+
+        function maxCestasForModality(basketShare) {
+            return (basketShare == 2) ? 2 : 4;
+        }
+
+        function limitEggOptions(max) {
+            if (!eggOrderSelect) return;
+            var current = eggOrderSelect.value;
+            eggOrderSelect.innerHTML = '';
+            eggOrderOptions.forEach(function (opt) {
+                if (opt.value === '' || parseInt(opt.value, 10) <= max) {
+                    eggOrderSelect.appendChild(opt);
+                }
+            });
+            var stillThere = Array.prototype.some.call(eggOrderSelect.options, function (o) { return o.value === current; });
+            eggOrderSelect.value = stillThere ? current : '';
+            eggOrderSelect.dispatchEvent(new Event('change', { bubbles: true }));
         }
 
         function syncConditionals() {
             var basketShare = $('#partner_basket_share_basket_share').val();
+            var hasEggs = $('#partner_basket_share_egg_amount').val() !== '';
             var eggPeriod = $('#partner_basket_share_egg_period').val();
-            var showDayMonth = (basketShare == 3) || (eggPeriod == 3);
-            var showEggPeriod = (basketShare == 5);
-            var showDeliveryGroup = (basketShare == 2);
 
-            $('#day_month_order').toggleClass('hidden', !showDayMonth);
+            var showCestaDayMonth = (basketShare == 3);
+            var showEggPeriod = hasEggs;
+            var showEggDayMonth = hasEggs && (eggPeriod == 3) && (basketShare != 3);
+            var showDeliveryGroup = (basketShare == 2 || basketShare == 6);
+
+            $('#day_month_order').toggleClass('hidden', !showCestaDayMonth);
             $('#egg_period').toggleClass('hidden', !showEggPeriod);
+            $('#egg_day_month_order').toggleClass('hidden', !showEggDayMonth);
             $('#delivery_group').toggleClass('hidden', !showDeliveryGroup);
-            if (!showDayMonth) setSelectValue('#partner_basket_share_dayMonthOrder', '0');
-            if (!showEggPeriod) setSelectValue('#partner_basket_share_egg_period', '0');
-            if (!showDeliveryGroup) setSelectValue('#partner_basket_share_deliveryGroup', '');
+
+            if (showEggDayMonth) {
+                limitEggOptions(maxCestasForModality(basketShare));
+            }
         }
 
         $('#partner_basket_share_basket_share').change(syncConditionals);
+        $('#partner_basket_share_egg_amount').change(syncConditionals);
         $('#partner_basket_share_egg_period').change(syncConditionals);
         syncConditionals();
     </script>
