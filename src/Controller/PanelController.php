@@ -23,6 +23,7 @@ use App\Service\Delivery\DeliveryCalendarProjector;
 use App\Service\Delivery\DeliveryCalendarViewBuilder;
 use App\Service\Delivery\DeliveryShiftApplier;
 use App\Service\Delivery\DeliveryShiftValidator;
+use App\Service\Delivery\PickupRelocationOptions;
 use App\Service\Delivery\PickupRelocator;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Delivery\WeeklyBasketSkipper;
@@ -53,7 +54,7 @@ use Symfony\Component\Validator\Constraints\NotBlank;
 class PanelController extends AbstractController
 {
     #[Route('', name: 'panel', methods: ['GET'])]
-    public function index(): Response
+    public function index(PickupRelocationOptions $relocationOptions): Response
     {
         if (($redirect = $this->ensureReady()) !== null) {
             return $redirect;
@@ -61,14 +62,26 @@ class PanelController extends AbstractController
 
         $partner = $this->getUser()->getPartner();
 
+        // El traslado de nodo opera sobre la cesta de la FAMILIA (el principal), igual que
+        // el calendario: un secundario tramita el traslado de la cesta de su hogar.
+        $owner = $this->basketOwner($partner);
+
+        // Las cestas COMPARTIDAS (alternancia entre dos hogares) no se trasladan de nodo de
+        // momento (lo bloquea PickupRelocator): no ofrecer el atajo. Vacío → modal sin pintar.
+        $canRelocate = $owner->getSharePartner() === null;
+
         // La home replica las secciones de la ficha admin (partner/show) pero en
         // SOLO LECTURA: el socix ve sus datos, su cesta, su familia y su histórico,
         // sin las acciones de gestión (cambiar/dar de baja cesta, quitar familiares).
-        // El autoservicio (saltar/cambiar viernes/nodo) vive en /panel/cesta.
+        // Único autoservicio embebido aquí: "recoger en otro nodo" (traslado puntual),
+        // un atajo del que también vive en el calendario. El resto (saltar/mover) va al
+        // calendario de recogida.
         return $this->render('Panel/index.html.twig', [
             'partner' => $partner,
             'active_share' => $this->activeShare($partner),
             'group' => $partner->getWeeklyBasketGroup(),
+            'relocate_weeks' => $canRelocate ? $relocationOptions->weeksForPartner($owner) : [],
+            'relocate_groups' => $canRelocate ? $relocationOptions->groupsForPartner($owner) : [],
         ]);
     }
 
@@ -245,14 +258,25 @@ class PanelController extends AbstractController
     }
 
     /**
-     * Cambio puntual de nodo de recogida para la próxima cesta. Toca
-     * solo WeeklyBasket.weekly_basket_group (que es histórico por
-     * diseño), NO Partner.weekly_basket_group (que es el por defecto).
+     * Cambio puntual de nodo de recogida para una semana concreta (la elige el socix
+     * entre sus entregas futuras). El traslado vive en {@see PickupRelocator}, compartido
+     * con el admin: crea/re-apunta el PartnerNodeOverride de esa semana, cascadea a piedra
+     * si está materializada y registra el evento. NO toca Partner.weeklyBasketGroup (el
+     * nodo de casa permanente): el cambio es solo de ese reparto.
+     *
+     * En familias resuelve el dueño de la cesta (el principal, vía {@see basketOwner}),
+     * como el resto del autoservicio del calendario.
+     *
+     * @param Request                     $request   Lleva basket_id, group_id y el token CSRF.
+     * @param BasketRepository            $basketRepository
+     * @param WeeklyBasketGroupRepository $weeklyBasketGroupRepository
+     * @param PickupRelocator             $relocator
+     * @return Response
      */
     #[Route('/cesta/change-group', name: 'panel_basket_change_group', methods: ['POST'])]
     public function changePickupGroup(
         Request $request,
-        WeeklyBasketRepository $weeklyBasketRepository,
+        BasketRepository $basketRepository,
         WeeklyBasketGroupRepository $weeklyBasketGroupRepository,
         PickupRelocator $relocator,
     ): Response {
@@ -262,42 +286,46 @@ class PanelController extends AbstractController
 
         if (!$this->isCsrfTokenValid('panel_basket_change_group', (string) $request->request->get('_csrf_token'))) {
             $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
-            return $this->redirectToRoute('panel_basket');
+            return $this->redirectToRoute('panel');
         }
 
-        $partner = $this->getUser()->getPartner();
-        $next = $weeklyBasketRepository->findNextForPartner($partner);
+        $partner = $this->basketOwner($this->getUser()->getPartner());
 
-        if ($next === null) {
-            $this->addFlash('warning', 'No tienes una próxima cesta sobre la que actuar.');
-            return $this->redirectToRoute('panel_basket');
+        $basketId = (int) $request->request->get('basket_id', 0);
+        $basket = $basketId > 0 ? $basketRepository->find($basketId) : null;
+        if ($basket === null) {
+            $this->addFlash('error', 'Selecciona una semana válida.');
+            return $this->redirectToRoute('panel');
         }
 
-        if (!$this->isWithinPickupDeadline($next)) {
-            $this->addFlash('error', 'Ya no se puede cambiar de nodo para esta semana — el plazo terminó. Contacta con la administración si necesitas avisar.');
-            return $this->redirectToRoute('panel_basket');
+        if (!$this->isWithinPickupDeadlineForBasket($basket)) {
+            $this->addFlash('error', 'Ya no se puede cambiar de nodo para esa semana — el plazo terminó. Contacta con la administración si necesitas avisar.');
+            return $this->redirectToRoute('panel');
         }
 
         $groupId = (int) $request->request->get('group_id', 0);
         $group = $groupId > 0 ? $weeklyBasketGroupRepository->find($groupId) : null;
         if ($group === null) {
-            $this->addFlash('error', 'Selecciona un grupo de recogida válido.');
-            return $this->redirectToRoute('panel_basket');
+            $this->addFlash('error', 'Selecciona un nodo de recogida válido.');
+            return $this->redirectToRoute('panel');
         }
 
-        // El traslado (cambiar el grupo del WB de la semana, recalcular su fecha física
-        // según el nodo destino y registrar el evento) vive en PickupRelocator, que
-        // comparten panel y admin. Valida que el destino reparta esa semana y que no sea
-        // el mismo grupo.
+        // El traslado (crear/re-apuntar el override, cascadear a piedra si la semana ya está
+        // materializada, recalcular la fecha física y registrar el evento) vive en
+        // PickupRelocator, compartido con el admin. Valida que el destino reparta esa semana.
         try {
-            $relocator->relocate($partner, $next->getBasket(), $group, 'partner:' . $partner->getId());
+            $relocator->relocate($partner, $basket, $group, 'partner:' . $partner->getId());
         } catch (\LogicException $e) {
             $this->addFlash('warning', $e->getMessage());
-            return $this->redirectToRoute('panel_basket');
+            return $this->redirectToRoute('panel');
         }
 
-        $this->addFlash('notice', sprintf('Listo: esta semana recogerás la cesta en "%s". El cambio aplica solo a este reparto.', $group->getName()));
-        return $this->redirectToRoute('panel_basket');
+        $this->addFlash('notice', sprintf(
+            'Listo: la semana del %s recogerás la cesta en "%s". El cambio aplica solo a ese reparto.',
+            $basket->getDate()->format('d/m/Y'),
+            $group->getName(),
+        ));
+        return $this->redirectToRoute('panel');
     }
 
     /**

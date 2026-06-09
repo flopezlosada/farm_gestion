@@ -80,10 +80,60 @@
             <a href="{{ path('panel_calendar') }}" class="prt-btn prt-btn--primary">
                 <i class="fa fa-calendar"></i> Mi calendario de recogida
             </a>
+            {# Atajo del traslado puntual de nodo: solo si tiene cesta activa, semanas
+               futuras con entrega y existe algún otro nodo al que ir. El mismo cambio se
+               puede hacer también desde el calendario. #}
+            {% if active_share and relocate_weeks is not empty and relocate_groups is not empty %}
+                <button type="button" class="prt-btn"
+                        onclick="document.getElementById('panel-relocate-dialog').showModal()">
+                    <i class="fa fa-exchange"></i> Recoger en otro nodo
+                </button>
+            {% endif %}
             <a href="{{ path('panel_profile') }}" class="prt-btn">
                 <i class="fa fa-pencil"></i> Editar mis datos
             </a>
         </div>
+
+        {# ============ MODAL: RECOGER EN OTRO NODO (traslado puntual) ============ #}
+        {% if active_share and relocate_weeks is not empty and relocate_groups is not empty %}
+            <dialog id="panel-relocate-dialog" class="csa-modal csa-modal--info" aria-labelledby="panel-relocate-title">
+                <form method="post" action="{{ path('panel_basket_change_group') }}" data-csa-dropdowns="1">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_basket_change_group') }}">
+                    <button class="csa-modal__close" type="button" aria-label="Cerrar" onclick="this.closest('dialog').close()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l14 14M19 5L5 19"/></svg>
+                    </button>
+                    <header class="csa-modal__header">
+                        <div class="csa-modal__heading">
+                            <span class="csa-modal__eyebrow">Solo esa semana</span>
+                            <h2 class="csa-modal__title" id="panel-relocate-title">Recoger en otro nodo</h2>
+                        </div>
+                    </header>
+                    <div class="csa-modal__body">
+                        <p>Tu punto de recogida habitual es <strong>{% if group and group.node %}{{ group.node.name }}{% else %}el de siempre{% endif %}</strong>. Si una semana concreta te viene mejor recogerla en otro sitio, elígelo aquí. Solo cambia esa semana.</p>
+                        <label class="csa-field">
+                            <span class="csa-field__label">¿Qué semana?</span>
+                            <select name="basket_id" required>
+                                {% for w in relocate_weeks %}
+                                    <option value="{{ w.basketId }}">{{ w.date|format_date('full', locale='es')|capitalize }}</option>
+                                {% endfor %}
+                            </select>
+                        </label>
+                        <label class="csa-field">
+                            <span class="csa-field__label">¿Dónde la recoges?</span>
+                            <select name="group_id" required>
+                                {% for g in relocate_groups %}
+                                    <option value="{{ g.id }}">{{ g.label }}</option>
+                                {% endfor %}
+                            </select>
+                        </label>
+                    </div>
+                    <footer class="csa-modal__footer">
+                        <button type="button" class="csa-modal__btn csa-modal__btn--ghost" onclick="this.closest('dialog').close()">Cancelar</button>
+                        <button type="submit" class="csa-modal__btn csa-modal__btn--primary">Trasladar</button>
+                    </footer>
+                </form>
+            </dialog>
+        {% endif %}
 
         {# ============ CUERPO 2 COLUMNAS ============ #}
         <div class="prt-cols">
