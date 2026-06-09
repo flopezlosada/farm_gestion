@@ -302,4 +302,41 @@ class PartnerControllerTest extends AbstractAuthenticatedTest
         $client->request('GET', sprintf('/gestion/partner/%d/set_payer/family', $partner->getId()));
         $this->assertSame(200, $client->getResponse()->getStatusCode());
     }
+
+    /**
+     * GET del formulario de añadir cesta devuelve 200. Cubre en runtime el render
+     * del form (campos condicionales de huevos, dropdowns csa, toggle gratuita) y
+     * el cálculo del turno con fechas reales vía CohortChoiceBuilder: un 500 en ese
+     * camino (campo huérfano, opción inexistente, etc.) lo delata aquí.
+     */
+    public function testAddBasketFormReturnsOk(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        $partner = $em->getRepository(Partner::class)
+            ->findOneBy(['email' => PartnerUserFixtures::USER_SOCIX_EMAIL]);
+        $this->assertNotNull($partner, 'Fixtures sin socix de prueba (PartnerUserFixtures).');
+
+        $client->request('GET', sprintf('/gestion/partner/%d/add_basket', $partner->getId()));
+        $this->assertSame(200, $client->getResponse()->getStatusCode());
+    }
+
+    /**
+     * GET del formulario de cambiar la cesta (cambio de modalidad con histórico)
+     * devuelve 200. Regresión: al exponer egg_day_month_order en el form compartido,
+     * change_modality colocaba mal el campo y CohortChoiceBuilder alimenta su turno;
+     * este smoke caza un 500 de render en ese camino.
+     */
+    public function testChangeModalityFormReturnsOk(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        $share = $em->getRepository(PartnerBasketShare::class)->findOneBy(['is_active' => 1]);
+        $this->assertNotNull($share, 'Fixtures sin ninguna cesta activa.');
+
+        $client->request('GET', sprintf('/gestion/partner/basket/share/%d/change-modality', $share->getId()));
+        $this->assertSame(200, $client->getResponse()->getStatusCode());
+    }
 }
