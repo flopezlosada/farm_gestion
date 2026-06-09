@@ -19,14 +19,15 @@ use App\Entity\BasketComponent;
 use App\Repository\BasketRepository;
 use App\Repository\PartnerDeliveryShiftRepository;
 use App\Repository\PartnerRepository;
+use App\Service\Delivery\CohortChoiceBuilder;
 use App\Service\Delivery\DeliveryCalendarProjector;
 use App\Service\Delivery\DeliveryCalendarViewBuilder;
 use App\Service\Delivery\DeliveryShiftApplier;
 use App\Service\Delivery\PartnerMonthResetter;
 use App\Repository\WeeklyBasketGroupRepository;
-use App\Repository\WeeklyBasketRepository;
 use App\Service\Delivery\ExtraBasketEditor;
 use App\Service\Delivery\NodeDeliveryDate;
+use App\Service\Delivery\PickupRelocationOptions;
 use App\Service\Delivery\PickupRelocator;
 use App\Service\Delivery\WeeklyBasketComponentEditor;
 use App\Service\Delivery\WeeklyBasketGenerator;
@@ -210,9 +211,8 @@ class PartnerController extends AbstractController
         Partner $partner,
         \App\Repository\PartnerEventRepository $partnerEventRepository,
         BasketRepository $basketRepo,
-        WeeklyBasketRepository $weeklyBasketRepo,
-        WeeklyBasketGroupRepository $weeklyBasketGroupRepo,
         NodeDeliveryDate $nodeDeliveryDate,
+        PickupRelocationOptions $relocationOptions,
         EntityManagerInterface $em,
     ): Response {
         $events = $partnerEventRepository->findForPartner($partner);
@@ -274,64 +274,10 @@ class PartnerController extends AbstractController
             'egg_amount_names' => $toNameMap($em->getRepository(EggAmount::class)->findAll()),
             'egg_period_names' => $toNameMap($em->getRepository(EggPeriod::class)->findAll()),
             'extra_weeks' => $this->extraBasketWeeks($partner, $basketRepo, $nodeDeliveryDate),
-            'relocate_weeks' => $this->relocatePickupWeeks($partner, $weeklyBasketRepo),
-            'relocate_groups' => $this->relocatePickupGroups($partner, $weeklyBasketGroupRepo),
+            'relocate_weeks' => $relocationOptions->weeksForPartner($partner),
+            'relocate_groups' => $relocationOptions->groupsForPartner($partner),
             'donated_baskets' => $donatedBaskets,
         ]);
-    }
-
-    /**
-     * Semanas (Basket) a las que el socix puede trasladar su recogida a otro nodo: las
-     * FUTURAS en las que YA tiene entrega (solo se traslada lo que existe). La etiqueta
-     * usa la fecha física actual de su entrega.
-     *
-     * @param Partner                $partner
-     * @param WeeklyBasketRepository $weeklyBasketRepo
-     * @return list<array{basketId:int, date:\DateTimeInterface}>
-     */
-    private function relocatePickupWeeks(Partner $partner, WeeklyBasketRepository $weeklyBasketRepo): array
-    {
-        $weeks = [];
-        foreach ($weeklyBasketRepo->findFutureForPartner($partner) as $wb) {
-            $basket = $wb->getBasket();
-            if ($basket === null) {
-                continue;
-            }
-            $weeks[] = ['basketId' => $basket->getId(), 'date' => $wb->getDeliveryDate() ?? $basket->getDate()];
-        }
-
-        return $weeks;
-    }
-
-    /**
-     * NODOS a los que el socix puede trasladar su recogida: una opción por nodo distinto al
-     * suyo, etiqueta = nombre del nodo. El `id` es un grupo REPRESENTATIVO del nodo destino
-     * (el relocado sale en la sección "Trasladados", así que el grupo concreto es invisible;
-     * basta uno para anclar el WeeklyBasket). No se filtra por "reparte esa semana" porque
-     * la semana se elige aparte (chips); si el par semana/nodo no encaja, PickupRelocator lo
-     * rechaza con aviso. Ver docs/redesign/modelo-overrides-reparto.md.
-     *
-     * @param Partner                     $partner
-     * @param WeeklyBasketGroupRepository $groupRepo
-     * @return list<array{id:int, label:string}> Ordenados por nombre de nodo.
-     */
-    private function relocatePickupGroups(Partner $partner, WeeklyBasketGroupRepository $groupRepo): array
-    {
-        $currentNodeId = $partner->getWeeklyBasketGroup()?->getNode()?->getId();
-
-        // Un grupo representativo por nodo (el primero por nombre), excluyendo el nodo de casa.
-        $byNode = [];
-        foreach ($groupRepo->findBy([], ['name' => 'ASC']) as $group) {
-            $node = $group->getNode();
-            if ($node === null || $node->getId() === $currentNodeId) {
-                continue;
-            }
-            $byNode[$node->getId()] ??= ['id' => $group->getId(), 'label' => $node->getName()];
-        }
-        $options = array_values($byNode);
-        usort($options, static fn (array $a, array $b) => strcmp($a['label'], $b['label']));
-
-        return $options;
     }
 
     /**
@@ -1307,11 +1253,21 @@ class PartnerController extends AbstractController
                 static fn (Partner $p) => $p->getId() !== $partner->getId()
             ));
         } else {
-            $baskets = $entityManager->getRepository(\App\Entity\PartnerBasketShare::class)->findBy(array('is_active' => 1, 'basket_share' => 4));
-            foreach ($baskets as $basket) {
-                if (!$basket->getPartner()->getSharePartner()) //solo muestra los que no están ya relacionados
-                {
-                    $partners[] = $basket->getPartner();
+            // add_share_partner: la pareja de una compartida es OTRA compartida de la
+            // MISMA modalidad (4/6/7) sin pareja todavía — comparten una sola cesta
+            // alternándose. Antes se ofrecía sólo basket_share=4 (semanal compartida),
+            // así que las quincenales/mensuales compartidas no encontraban con quién
+            // emparejar.
+            $shareTypeId = $partner->getActiveBasket()?->getBasketShare()?->getId();
+            $partners = [];
+            if ($shareTypeId !== null) {
+                $baskets = $entityManager->getRepository(\App\Entity\PartnerBasketShare::class)
+                    ->findBy(['is_active' => 1, 'basket_share' => $shareTypeId]);
+                foreach ($baskets as $basket) {
+                    $candidate = $basket->getPartner();
+                    if ($candidate->getId() !== $partner->getId() && !$candidate->getSharePartner()) {
+                        $partners[] = $candidate;
+                    }
                 }
             }
         }
@@ -1600,10 +1556,16 @@ class PartnerController extends AbstractController
         Partner $partner,
         EntityManagerInterface $entityManager,
         PartnerShareEventRecorder $shareEventRecorder,
+        CohortChoiceBuilder $cohortChoiceBuilder,
+        WeeklyBasketGenerator $generator,
     ): Response {
         $partnerBasketShare = new PartnerBasketShare();
         $partnerBasketShare->setPartner($partner);
-        $form = $this->createForm(PartnerBasketShareType::class, $partnerBasketShare);
+        $cohort = $cohortChoiceBuilder->forPartner($partner);
+        $form = $this->createForm(PartnerBasketShareType::class, $partnerBasketShare, [
+            'cohort_choices' => $cohort['cohortChoices'],
+            'exclude_weekly_shares' => $cohort['excludeWeeklyShares'],
+        ]);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
@@ -1631,27 +1593,14 @@ class PartnerController extends AbstractController
             }
             $entityManager->persist($partnerBasketShare);
             $shareEventRecorder->recordStart($partnerBasketShare);
-
-
-            $basket = $entityManager->getRepository(\App\Entity\Basket::class)->findBasketByWeekYear(date('Y-m-d'));//número de cesta actual
-            if ($partnerBasketShare->getStartDate() <= $basket->getDate()) {
-                $control_weekly_basket = $entityManager->getRepository(\App\Entity\WeeklyBasket::class)->findBy(array("basket" => $basket->getId()));//para ver si ya la he creado, si está en la tabla weekly_basket la cesta actual
-                if ($control_weekly_basket) {//si ya está creada la lista de esta semana, hay que añadir un registro más con el nuevo socio que empieza esta semana
-                    $weekly_basket = new WeeklyBasket();
-                    $weekly_basket->setBasket($basket);
-                    $weekly_basket->setPartner($partner);
-                    $weekly_basket->setAmount($partnerBasketShare->getAmount());
-                    $weekly_basket_status = $entityManager->getRepository(\App\Entity\WeeklyBasketStatus::class)->find(1);
-                    $weekly_basket->setWeeklyBasketStatus($weekly_basket_status);
-                    $weekly_basket->setBasketShare($partnerBasketShare->getBasketShare());
-                    // Fallback Torremocha (viernes-ciclo). Deuda: en cuanto entren altas en Madrid,
-                    // este controller debe inyectar NodeDeliveryDate y resolver la fecha real del nodo.
-                    $weekly_basket->setDeliveryDate($basket->getDate());
-                    $entityManager->persist($weekly_basket);
-                }
-            }
-
             $entityManager->flush();
+
+            // En las semanas YA generadas desde su alta, materializa al socio SÓLO
+            // donde su patrón (modalidad + cohorte + nodo) lo coloca, componiendo sus
+            // items; las semanas aún sin generar se dibujan al vuelo (proyección). Antes
+            // se creaba aquí un WeeklyBasket a mano que ignoraba la cohorte y nacía vacío
+            // —el "no recoge" fantasma de las altas a mitad de mes—.
+            $generator->reconcilePartnerFrom($partner, $partnerBasketShare->getStartDate());
 
             return $this->redirectToRoute('partner_show', array('id' => $partner->getId()));
         }
@@ -1660,7 +1609,10 @@ class PartnerController extends AbstractController
             'partner_basket_share' => $partnerBasketShare,
             'entity' => $partnerBasketShare,
             'form' => $form->createView(),
-            'partner' => $partner
+            'partner' => $partner,
+            'node_is_biweekly' => $cohort['nodeIsBiweekly'],
+            'node_name' => $cohort['nodeName'],
+            'node_dates_label' => $cohort['nodeDatesLabel'],
         ]);
 
 
@@ -1680,6 +1632,20 @@ class PartnerController extends AbstractController
         }
         $partner1 = $entityManager->getRepository(\App\Entity\Partner::class)->find($partner1_id);
         $partner2 = $entityManager->getRepository(\App\Entity\Partner::class)->find($partner2_id);
+
+        // Defensa: sólo se emparejan dos compartidas de la MISMA modalidad (4/6/7)
+        // que aún no tengan pareja. Comparten una única cesta alternándose; emparejar
+        // modalidades distintas o sobre una ya emparejada deja datos incoherentes.
+        $bs1 = $partner1->getActiveBasket()?->getBasketShare()?->getId();
+        $bs2 = $partner2->getActiveBasket()?->getBasketShare()?->getId();
+        if ($bs1 === null || !in_array($bs1, BasketShare::IDS_SHARED, true) || $bs1 !== $bs2
+            || $partner1->getSharePartner() !== null || $partner2->getSharePartner() !== null) {
+            $session->getFlashBag()->add(
+                'warning',
+                'Sólo se pueden emparejar dos cestas compartidas de la misma modalidad que aún no tengan pareja.'
+            );
+            return $this->redirectToRoute('partner_show', array('id' => $partner1_id));
+        }
 
         $partner1->setSharePartner($partner2);
         $partner2->setSharePartner($partner1);
