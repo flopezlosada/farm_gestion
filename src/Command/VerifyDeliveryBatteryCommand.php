@@ -4,6 +4,7 @@ namespace App\Command;
 
 use App\Entity\Basket;
 use App\Entity\BasketComponent;
+use App\Entity\EggPeriod;
 use App\Entity\BasketShare;
 use App\Entity\DeliveryException;
 use App\Entity\Node;
@@ -21,6 +22,7 @@ use App\Service\Delivery\DeliveryModeResolver;
 use App\Service\Delivery\ExtraBasketEditor;
 use App\Service\Delivery\NodeDeliveryDate;
 use App\Service\Delivery\NodeDeliverySheet;
+use App\Service\Delivery\DeliveryCalendarProjector;
 use App\Service\Delivery\PickupRelocator;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Partner\BasketModalityChanger;
@@ -61,6 +63,8 @@ class VerifyDeliveryBatteryCommand extends Command
     private const COMP_SEMANAL = 4;
     private const ONLY_EGG = 5;
     private const COMP_QUINCENAL = 6;
+    /** egg_period: huevo mensual (cf EggDeliveryResolver). */
+    private const EGG_PERIOD_MENSUAL = 3;
 
     private SymfonyStyle $io;
     /** @var int[] partners ya usados por algún escenario (no reutilizar). */
@@ -82,8 +86,27 @@ class VerifyDeliveryBatteryCommand extends Command
         private readonly ExtraBasketEditor $extraBasketEditor,
         private readonly PickupRelocator $relocator,
         private readonly DeliveryModeResolver $modeResolver,
+        private readonly DeliveryCalendarProjector $calendarProjector,
     ) {
         parent::__construct();
+    }
+
+    /**
+     * Fecha física en la que el CALENDARIO del socio coloca su entrega de $basket (la del slot
+     * no saltado de ese ciclo), o null si ese mes no le proyecta entrega ahí. Sirve para
+     * comprobar que el calendario y el listado concuerdan tras un traslado de nodo — el hueco
+     * que produjo el bug listado↔calendario (el proyector no aplicaba PartnerNodeOverride).
+     */
+    private function calendarSlotDateFor(Partner $partner, Basket $basket): ?\DateTimeInterface
+    {
+        $date = $basket->getDate();
+        foreach ($this->calendarProjector->projectMonth($partner, (int) $date->format('Y'), (int) $date->format('n')) as $slot) {
+            if ($slot['basket']->getId() === $basket->getId() && !$slot['skipped']) {
+                return $slot['date'];
+            }
+        }
+
+        return null;
     }
 
     protected function configure(): void
@@ -135,6 +158,7 @@ class VerifyDeliveryBatteryCommand extends Command
 
         // SANTOS: cesta mensual + huevo semanal → cesta+huevo el día mensual, solo-huevo el resto.
         $this->santosScenario();
+        $this->miriamScenario();
 
         // Materialización tardía: el listado DIBUJADO al vuelo (proyección, sin
         // persistir) debe ser idéntico al MATERIALIZADO para la misma semana.
@@ -551,6 +575,60 @@ class VerifyDeliveryBatteryCommand extends Command
     }
 
     /**
+     * MIRIAM (inverso de SANTOS): cesta QUINCENAL con huevo MENSUAL que viaja en su
+     * N-ésima cesta del mes (egg_day_month_order=2). Verifica en el listado que el
+     * huevo cae SOLO en su 2ª cesta y la verdura en todas. Es el caso que desde hoy
+     * se configura en el formulario (antes había que tocarlo por SQL).
+     */
+    private function miriamScenario(): void
+    {
+        $label = 'MIRIAM (huevo mensual en la 2ª cesta de una quincenal)';
+        $partner = $this->pickPartner(self::QUINCENAL, true);
+        if ($partner === null) { $this->skip($label, 'sin quincenal con huevo'); return; }
+        $month = $this->nextMonth();
+        if ($month === null) { $this->skip($label, 'sin mes futuro sin generar'); return; }
+
+        $share = $this->shareRepo->findActiveForPartner($partner);
+        if ($share === null) { $this->skip($label, 'socio sin cesta activa'); return; }
+        $cohort = $share->getDeliveryGroup();
+        $expectedIds = $this->expectedDeliveryDates(self::QUINCENAL, $month, $cohort);
+        if (count($expectedIds) < 2) { $this->skip($label, 'el mes no le da 2 cestas a su cohorte'); return; }
+
+        // Forzar el patrón de huevo: MENSUAL, en su 2ª cesta del mes.
+        $share->setEggPeriod($this->em->getRepository(EggPeriod::class)->find(self::EGG_PERIOD_MENSUAL));
+        $share->setEggDayMonthOrder(2);
+        $this->em->flush();
+
+        foreach ($month['baskets'] as $b) { $this->generator->generateForBasket($b); }
+
+        $eggBasket = $expectedIds[1]; // su 2ª cesta del mes lleva los huevos
+        $verduraOk = true;
+        $eggOk = true;
+        $detail = [];
+        foreach ($expectedIds as $bid) {
+            $wb = $this->em->getRepository(WeeklyBasket::class)->findOneBy(['partner' => $partner, 'basket' => $bid]);
+            $verdura = null;
+            $huevo = null;
+            if ($wb !== null) {
+                foreach ($this->em->getRepository(WeeklyBasketItem::class)->findBy(['weeklyBasket' => $wb]) as $item) {
+                    $cid = $item->getBasketComponent()?->getId();
+                    if ($cid === BasketComponent::ID_VEGETABLES) { $verdura = $item->getAmount(); }
+                    if ($cid === BasketComponent::ID_EGGS) { $huevo = $item->getAmount(); }
+                }
+            }
+            if ($verdura === null) { $verduraOk = false; }
+            if (($bid === $eggBasket) !== ($huevo !== null)) { $eggOk = false; }
+            $detail[] = sprintf('%d:v=%s/h=%s', $bid, $verdura ?? '-', $huevo ?? '-');
+        }
+
+        $this->record($label, $verduraOk && $eggOk, sprintf(
+            'socio %d · cohorte %s · cestas [%s] · huevo solo en %d · verdura en todas=%s · huevo correcto=%s',
+            $partner->getId(), $cohort ?? '-', implode(' ', $detail), $eggBasket,
+            $verduraOk ? 'sí' : 'NO', $eggOk ? 'sí' : 'NO',
+        ));
+    }
+
+    /**
      * Cesta extra puntual — SUBIR la cantidad de quien ya recoge. Sobre un socio
      * semanal de un mes ya generado, AÑADE 2 cestas a su entrega y comprueba: sigue
      * habiendo UNA sola entrega (no se duplica el WeeklyBasket), la verdura sube
@@ -697,17 +775,23 @@ class VerifyDeliveryBatteryCommand extends Command
         $dateOk = $wb !== null && $expectedDate !== null
             && $wb->getDeliveryDate()?->format('Y-m-d') === $expectedDate->format('Y-m-d');
 
+        // El CALENDARIO del socio debe colocar la entrega en la fecha del nodo destino, igual
+        // que el listado (hueco listado↔calendario que cazó el bug de Franco).
+        $calDate = $this->calendarSlotDateFor($partner, $target);
+        $calOk = $calDate !== null && $expectedDate !== null
+            && $calDate->format('Y-m-d') === $expectedDate->format('Y-m-d');
+
         // Regenerar NO debe revertir el traslado (la semana ya generada entra por reuse).
         $this->generator->generateForBasket($target);
         $stillDest = $this->sheetContainsPartner($destNode, $target, $partner);
 
-        $ok = $inDest && !$inOrigin && $dateOk && $stillDest;
+        $ok = $inDest && !$inOrigin && $dateOk && $calOk && $stillDest;
         $this->record($label, $ok, sprintf(
-            'socio %d · basket %d · en %s=%s · fuera de %s=%s · fecha destino=%s · tras regenerar en destino=%s',
+            'socio %d · basket %d · en %s=%s · fuera de %s=%s · fecha destino=%s · calendario=%s · tras regenerar en destino=%s',
             $partner->getId(), $target->getId(),
             $destNode->getName(), $inDest ? 'sí' : 'NO',
             $originNode->getName(), $inOrigin ? 'NO (sigue)' : 'sí',
-            $dateOk ? 'ok' : 'MAL', $stillDest ? 'sí' : 'NO',
+            $dateOk ? 'ok' : 'MAL', $calOk ? 'ok' : 'MAL', $stillDest ? 'sí' : 'NO',
         ));
     }
 
@@ -756,17 +840,26 @@ class VerifyDeliveryBatteryCommand extends Command
         $inDest = $this->sheetDataContainsPartner($destDrawn, $partner);
         $inOrigin = $this->sheetDataContainsPartner($originDrawn, $partner);
 
+        // 1b) CALENDARIO del socio sobre la semana DIBUJADA: debe colocar la entrega en la fecha
+        // física del nodo DESTINO, no en la de casa. Es el hueco exacto que tenía el bug de
+        // Franco (el proyector del calendario no aplicaba el override en semanas sin generar).
+        $calDateDrawn = $this->calendarSlotDateFor($partner, $target);
+        $expectedDestDate = $this->nodeDeliveryDate->physicalDateFor($target, $destNode);
+        $calDrawnOk = $calDateDrawn !== null && $expectedDestDate !== null
+            && $calDateDrawn->format('Y-m-d') === $expectedDestDate->format('Y-m-d');
+
         // 2) CONGELAR la semana: la materialización debe respetar el override igual que el
         // dibujo (piedra == dibujo). Es la red del paso 4 (createWeeklyBasketsFromShares).
         $this->generator->generateForBasket($target);
         $inDestStone = $this->sheetDataContainsPartner($this->sheet->build($destNode, $target), $partner);
         $inOriginStone = $this->sheetDataContainsPartner($this->sheet->build($originNode, $target), $partner);
 
-        $ok = $inDest && !$inOrigin && $inDestStone && !$inOriginStone;
+        $ok = $inDest && !$inOrigin && $calDrawnOk && $inDestStone && !$inOriginStone;
         $this->record($label, $ok, sprintf(
-            'socio %d · semana %d · dibujo: en %s=%s/fuera %s=%s · piedra (tras congelar): en %s=%s/fuera %s=%s',
+            'socio %d · semana %d · dibujo: en %s=%s/fuera %s=%s · calendario dibujo=%s · piedra (tras congelar): en %s=%s/fuera %s=%s',
             $partner->getId(), $target->getId(),
             $destNode->getName(), $inDest ? 'sí' : 'NO', $originNode->getName(), $inOrigin ? 'NO' : 'sí',
+            $calDrawnOk ? 'ok' : 'MAL',
             $destNode->getName(), $inDestStone ? 'sí' : 'NO', $originNode->getName(), $inOriginStone ? 'NO' : 'sí',
         ));
     }
