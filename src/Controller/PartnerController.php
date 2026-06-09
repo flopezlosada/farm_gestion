@@ -1602,6 +1602,15 @@ class PartnerController extends AbstractController
             // —el "no recoge" fantasma de las altas a mitad de mes—.
             $generator->reconcilePartnerFrom($partner, $partnerBasketShare->getStartDate());
 
+            // Una cesta compartida alterna entre DOS hogares: si nace sin pareja, lleva
+            // directo a elegir con quién comparte en vez de a la ficha, para que no se
+            // quede huérfana (sin pareja no materializa bien la verdura).
+            if (in_array($partnerBasketShare->getBasketShare()->getId(), BasketShare::IDS_SHARED, true)
+                && $partner->getSharePartner() === null) {
+                $this->addFlash('info', 'Es una cesta compartida: indica con quién la comparte.');
+                return $this->redirectToRoute('family', ['id' => $partner->getId(), 'type' => 'add_share_partner']);
+            }
+
             return $this->redirectToRoute('partner_show', array('id' => $partner->getId()));
         }
 
