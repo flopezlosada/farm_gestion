@@ -303,28 +303,34 @@ class PartnerController extends AbstractController
     }
 
     /**
-     * Grupos de recogida a los que se puede trasladar (cualquier nodo distinto al grupo
-     * actual del socix). Etiqueta "Nodo · Grupo" para que el gestor vea a qué nodo va.
+     * NODOS a los que el socix puede trasladar su recogida: una opción por nodo distinto al
+     * suyo, etiqueta = nombre del nodo. El `id` es un grupo REPRESENTATIVO del nodo destino
+     * (el relocado sale en la sección "Trasladados", así que el grupo concreto es invisible;
+     * basta uno para anclar el WeeklyBasket). No se filtra por "reparte esa semana" porque
+     * la semana se elige aparte (chips); si el par semana/nodo no encaja, PickupRelocator lo
+     * rechaza con aviso. Ver docs/redesign/modelo-overrides-reparto.md.
      *
      * @param Partner                     $partner
      * @param WeeklyBasketGroupRepository $groupRepo
-     * @return list<array{id:int, label:string}> Ordenados por etiqueta.
+     * @return list<array{id:int, label:string}> Ordenados por nombre de nodo.
      */
     private function relocatePickupGroups(Partner $partner, WeeklyBasketGroupRepository $groupRepo): array
     {
-        $currentId = $partner->getWeeklyBasketGroup()?->getId();
+        $currentNodeId = $partner->getWeeklyBasketGroup()?->getNode()?->getId();
 
-        $groups = [];
-        foreach ($groupRepo->findAll() as $group) {
+        // Un grupo representativo por nodo (el primero por nombre), excluyendo el nodo de casa.
+        $byNode = [];
+        foreach ($groupRepo->findBy([], ['name' => 'ASC']) as $group) {
             $node = $group->getNode();
-            if ($node === null || $group->getId() === $currentId) {
+            if ($node === null || $node->getId() === $currentNodeId) {
                 continue;
             }
-            $groups[] = ['id' => $group->getId(), 'label' => $node->getName() . ' · ' . $group->getName()];
+            $byNode[$node->getId()] ??= ['id' => $group->getId(), 'label' => $node->getName()];
         }
-        usort($groups, static fn (array $a, array $b) => strcmp($a['label'], $b['label']));
+        $options = array_values($byNode);
+        usort($options, static fn (array $a, array $b) => strcmp($a['label'], $b['label']));
 
-        return $groups;
+        return $options;
     }
 
     /**
@@ -396,10 +402,13 @@ class PartnerController extends AbstractController
 
         $weeks = [];
         foreach ($basketRepo->findBetweenDates($from, $to) as $basket) {
-            if ($weeklyBasketRepo->countPickedInBasket($basket) === 0) {
-                continue; // semana aún no generada: fuera (ver deuda del aviso diferido)
+            // Solo semanas con el reparto del NODO del socio YA generado: en una semana
+            // que aún se dibuja, una cesta extra suelta dejaría piedra parcial (ver
+            // relocate-semanas-futuras-dibujadas-debt). Per-node, no global del basket.
+            if ($node === null || $weeklyBasketRepo->findForNodeAndBasket($node, $basket) === []) {
+                continue;
             }
-            $physical = $node !== null ? $nodeDeliveryDate->physicalDateFor($basket, $node) : null;
+            $physical = $nodeDeliveryDate->physicalDateFor($basket, $node);
             $weeks[] = ['id' => $basket->getId(), 'date' => $physical ?? $basket->getDate()];
         }
 

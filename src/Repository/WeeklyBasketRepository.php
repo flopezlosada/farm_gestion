@@ -149,42 +149,6 @@ class WeeklyBasketRepository extends ServiceEntityRepository
     }
 
     /**
-     * Conteo de reparto por nodo para un Basket concreto, con el mismo
-     * criterio que {@see findForNodeAndBasket} (status_id = 1). Sirve para
-     * que las pestañas de nodo de la pantalla v2 muestren cuántos grupos y
-     * socios reparten ESE día, en vez del total de WBG asignados al nodo
-     * (que es engañoso: un nodo quincenal puede tener 0 reparto ese día).
-     *
-     * Una sola query agregada para todos los nodos. Los nodos sin reparto
-     * ese día no aparecen en el resultado: el llamante debe asumir 0.
-     *
-     * @return array<int, array{wbg:int, socios:int}> indexado por node_id
-     */
-    public function countActiveByNodeForBasket(Basket $basket): array
-    {
-        $rows = $this->createQueryBuilder('wb')
-            ->select('IDENTITY(wbg.node) AS node_id', 'COUNT(DISTINCT wbg.id) AS wbg_count', 'COUNT(wb.id) AS socios')
-            ->innerJoin('wb.weekly_basket_group', 'wbg')
-            ->where('wb.basket = :basket')
-            ->andWhere('wb.weekly_basket_status = :status')
-            ->andWhere('wbg.node IS NOT NULL')
-            ->setParameter('basket', $basket)
-            ->setParameter('status', 1)
-            ->groupBy('wbg.node')
-            ->getQuery()
-            ->getArrayResult();
-
-        $byNode = [];
-        foreach ($rows as $row) {
-            $byNode[(int) $row['node_id']] = [
-                'wbg' => (int) $row['wbg_count'],
-                'socios' => (int) $row['socios'],
-            ];
-        }
-        return $byNode;
-    }
-
-    /**
      * Historial de repartos ya generados de un nodo, del más reciente al
      * más antiguo. Por cada Basket en el que el nodo tiene listado, devuelve
      * el resumen de lo que se estimó repartir: nº de socios y nº de cestas

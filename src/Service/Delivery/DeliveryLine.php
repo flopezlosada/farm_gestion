@@ -28,6 +28,10 @@ final class DeliveryLine
      * @param string|null $city             Ciudad del socio (solo se usa en grupos combinados "/").
      * @param int|null    $partnerId        Partner id (identidad para emparejar compartidas).
      * @param int|null    $sharePartnerId   Partner id de la pareja de cesta compartida, o null.
+     * @param string|null $relocatedFromLabel Si el socio recoge esta semana en un nodo
+     *        distinto al suyo (override de nodo), la etiqueta de su origen de CASA
+     *        ("Nodo · Grupo", deduplicada cuando coinciden), para marcarlo "de X" en la
+     *        sección Trasladados del nodo destino. null = recoge en su nodo (normal).
      */
     public function __construct(
         public readonly string $nameForDelivery,
@@ -41,6 +45,7 @@ final class DeliveryLine
         public readonly ?string $city,
         public readonly ?int $partnerId,
         public readonly ?int $sharePartnerId,
+        public readonly ?string $relocatedFromLabel = null,
     ) {
     }
 }

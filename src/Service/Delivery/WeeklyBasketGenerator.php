@@ -9,6 +9,7 @@ use App\Entity\Node;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
 use App\Entity\PartnerDeliveryShift;
+use App\Entity\PartnerNodeOverride;
 use App\Entity\PartnerEvent;
 use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketGroup;
@@ -360,18 +361,28 @@ class WeeklyBasketGenerator
         // ajusta su composición en el pase final (applyComponentIntents).
         $wholeOutgoingPartnerIds = $this->wholeOutgoingPartnerIds($outgoing);
 
-        if (!empty($wholeOutgoingPartnerIds)) {
-            $excludeOutgoing = static function (array $shares) use ($wholeOutgoingPartnerIds): array {
+        // Node-overrides de esta semana: el socio recoge en OTRO nodo. Se EXCLUYE de los
+        // candidatos de su nodo de casa (igual que un saliente de entrega entera) y más
+        // abajo se materializa en su grupo destino. Ver docs/redesign/modelo-overrides-reparto.md.
+        $nodeOverrides = $this->em->getRepository(PartnerNodeOverride::class)->findAllForBasket($basket);
+        $nodeOverridePartnerIds = array_map(
+            static fn (PartnerNodeOverride $o): int => $o->getPartner()->getId(),
+            $nodeOverrides,
+        );
+
+        $excludedPartnerIds = array_merge($wholeOutgoingPartnerIds, $nodeOverridePartnerIds);
+        if (!empty($excludedPartnerIds)) {
+            $excludeShares = static function (array $shares) use ($excludedPartnerIds): array {
                 return array_values(array_filter(
                     $shares,
-                    static fn ($share) => !in_array($share->getPartner()->getId(), $wholeOutgoingPartnerIds, true),
+                    static fn ($share) => !in_array($share->getPartner()->getId(), $excludedPartnerIds, true),
                 ));
             };
-            $weekly = $excludeOutgoing($weekly);
-            $half = $excludeOutgoing($half);
-            $biweekly = $excludeOutgoing($biweekly);
-            $monthly = $excludeOutgoing($monthly);
-            $onlyEgg = $excludeOutgoing($onlyEgg);
+            $weekly = $excludeShares($weekly);
+            $half = $excludeShares($half);
+            $biweekly = $excludeShares($biweekly);
+            $monthly = $excludeShares($monthly);
+            $onlyEgg = $excludeShares($onlyEgg);
         }
 
         $all = array_merge($weekly, $half, $biweekly, $monthly, $onlyEgg);
@@ -429,6 +440,29 @@ class WeeklyBasketGenerator
                     $this->composer->compose($destWb, $destShare, $basket, eggReferenceBasket: $shift->getFromBasket());
                 }
             }
+        }
+
+        // Node-overrides: materializar la entrega del socio en su GRUPO DESTINO esta semana
+        // (no en su nodo de casa, de donde se le excluyó arriba), si su patrón le da cesta.
+        // Compuesta desde su patrón, con la fecha física del nodo destino. El listado del
+        // destino la verá como "trasladado" (wb.grupo.node != nodo de casa del socio).
+        foreach ($nodeOverrides as $override) {
+            $partner = $override->getPartner();
+            if ($this->em->getRepository(WeeklyBasket::class)->findOneBy(['basket' => $basket->getId(), 'partner' => $partner->getId()]) !== null) {
+                continue; // ya materializado (p. ej. un shift entrante)
+            }
+            $share = $this->em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner, $basket->getDate());
+            if ($share === null || $this->resolvePhysicalDeliveryDate($basket, $share) === null) {
+                continue; // su patrón no le da cesta esta semana: nada que trasladar
+            }
+            $targetGroup = $override->getTargetGroup();
+            $destNode = $targetGroup->getNode();
+            $physical = $destNode !== null ? $this->nodeDeliveryDate->physicalDateFor($basket, $destNode) : null;
+            $wb = $this->newWeeklyBasketForShare($basket, $share, $physical ?? $basket->getDate(), $status);
+            $wb->setWeeklyBasketGroup($targetGroup);
+            $this->em->persist($wb);
+            $this->em->flush();
+            $this->composer->compose($wb, $share, $basket);
         }
 
         $extraEggOnly = $this->materializeExtraEggDeliveries($basket, $status);
@@ -728,6 +762,18 @@ class WeeklyBasketGenerator
         $outgoing = $shiftRepo->findAllOutgoingFromBasket($basket);
         $wholeOutgoingPartnerIds = $this->wholeOutgoingPartnerIds($outgoing);
 
+        // Cambios de NODO (PartnerNodeOverride) de esta semana: el override mueve dónde
+        // recoge el socio, no si recoge. relocatedOutPartnerIds = socios de ESTE nodo que
+        // esa semana recogen en OTRO nodo (salen del dibujo de su nodo de casa). Más abajo
+        // se añaden los que ENTRAN a este nodo. Ver docs/redesign/modelo-overrides-reparto.md.
+        $nodeOverrides = $this->em->getRepository(PartnerNodeOverride::class)->findAllForBasket($basket);
+        $relocatedOutPartnerIds = [];
+        foreach ($nodeOverrides as $override) {
+            if ($override->getTargetNode()?->getId() !== $node->getId()) {
+                $relocatedOutPartnerIds[$override->getPartner()->getId()] = true;
+            }
+        }
+
         $deliveries = [];
         $seenPartnerIds = [];
         foreach ($this->projectForBasket($basket) as $share) {
@@ -737,6 +783,9 @@ class WeeklyBasketGenerator
             }
             if (in_array($partner->getId(), $wholeOutgoingPartnerIds, true)) {
                 continue;
+            }
+            if (isset($relocatedOutPartnerIds[$partner->getId()])) {
+                continue; // esta semana recoge en otro nodo (override de nodo)
             }
             $projection = $this->projectShareDelivery($basket, $share);
             if ($projection === null) {
@@ -775,6 +824,37 @@ class WeeklyBasketGenerator
             $seenPartnerIds[$partner->getId()] = true;
         }
 
+        // Cambios de NODO que ENTRAN a este nodo (PartnerNodeOverride → este nodo): el
+        // socio recoge aquí esta semana en vez de en su nodo de casa, SI su patrón le da
+        // cesta (projectShareDelivery null = no le toca → nada que trasladar). Se compone
+        // desde su patrón y se reapunta al grupo destino con la fecha física del destino.
+        // El listado lo marca "trasladado" porque wb.grupo.node != nodo de casa del socio.
+        foreach ($nodeOverrides as $override) {
+            if ($override->getTargetNode()?->getId() !== $node->getId()) {
+                continue;
+            }
+            $partner = $override->getPartner();
+            if (isset($seenPartnerIds[$partner->getId()])) {
+                continue;
+            }
+            $share = $shareRepo->findActiveForPartner($partner, $basket->getDate());
+            if ($share === null) {
+                continue;
+            }
+            $projection = $this->projectShareDelivery($basket, $share);
+            if ($projection === null) {
+                continue; // su patrón no le da cesta esta semana: nada que trasladar
+            }
+            $targetGroup = $override->getTargetGroup();
+            $destNode = $targetGroup->getNode();
+            $wb = $projection['weeklyBasket'];
+            $wb->setWeeklyBasketGroup($targetGroup);
+            $physical = $destNode !== null ? $this->nodeDeliveryDate->physicalDateFor($basket, $destNode) : null;
+            $wb->setDeliveryDate($physical ?? $wb->getDeliveryDate());
+            $deliveries[] = ['weeklyBasket' => $wb, 'items' => $projection['items']];
+            $seenPartnerIds[$partner->getId()] = true;
+        }
+
         // Huevo extra (SANTOS-like): socios cuyo huevo es más frecuente que la cesta
         // recogen SOLO huevo en los viernes intermedios. Es patrón base (lo hace
         // materializeExtraEggDeliveries en el camino de piedra), no un shift, así que
@@ -785,6 +865,7 @@ class WeeklyBasketGenerator
             if (!$this->partnerBelongsToNode($partner, $node)
                 || isset($seenPartnerIds[$partner->getId()])
                 || in_array($partner->getId(), $wholeOutgoingPartnerIds, true)
+                || isset($relocatedOutPartnerIds[$partner->getId()])
             ) {
                 continue;
             }
@@ -969,6 +1050,8 @@ class WeeklyBasketGenerator
             city: $partner?->getCity()?->getName(),
             partnerId: $partner?->getId(),
             sharePartnerId: $partner?->getSharePartner()?->getId(),
+            // Trasladado (override de nodo): etiqueta "Nodo · Grupo" de casa, null si no.
+            relocatedFromLabel: $wb->getRelocatedFromLabel(),
         );
     }
 

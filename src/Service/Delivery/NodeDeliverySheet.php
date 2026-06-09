@@ -156,6 +156,7 @@ class NodeDeliverySheet
             city: $partner?->getCity()?->getName(),
             partnerId: $partner?->getId(),
             sharePartnerId: $partner?->getSharePartner()?->getId(),
+            relocatedFromLabel: $wb->getRelocatedFromLabel(),
         );
     }
 
@@ -169,8 +170,18 @@ class NodeDeliverySheet
     private function buildGroups(array $lines): array
     {
         $byWbg = [];
+        $relocated = [];
         foreach ($lines as $line) {
-            if ($line->groupId === null || $line->basketShareId === null) {
+            if ($line->basketShareId === null) {
+                continue;
+            }
+            // Trasladados (override de nodo): a su propia sección al final, no al grupo
+            // destino (vienen de otro nodo, son visitantes puntuales de esta semana).
+            if ($line->relocatedFromLabel !== null) {
+                $relocated[] = $line;
+                continue;
+            }
+            if ($line->groupId === null) {
                 continue;
             }
             $gid = $line->groupId;
@@ -208,7 +219,45 @@ class NodeDeliverySheet
             ];
         }
 
+        // Sección "Trasladados" al final (si hay): los que recogen aquí viniendo de otro nodo.
+        if ($relocated !== []) {
+            $groups[] = $this->buildRelocatedGroup($relocated);
+        }
+
         return $groups;
+    }
+
+    /**
+     * Sección "Trasladados" del nodo: socios que esta semana recogen aquí viniendo de
+     * OTRO nodo (override de nodo). Va al final, con cada fila marcada "de {grupo de
+     * casa}" (row['relocated_from']). Mismas subdivisiones por modalidad que un grupo normal.
+     *
+     * @param DeliveryLine[] $lines
+     * @return array{name:string, color:?string, locality:string, subtotal_cestas:float, modalities: list<array{label:string, rows: list<array<string,mixed>>}>}
+     */
+    private function buildRelocatedGroup(array $lines): array
+    {
+        $mods = [];
+        $subtotal = 0.0;
+        foreach ($lines as $line) {
+            $bucket = $this->bucketFor($line->basketShareId);
+            $mods[$bucket['order']] ??= ['label' => $bucket['label'], 'rows' => []];
+            $mods[$bucket['order']]['rows'][] = $this->row($line);
+            $subtotal += $line->cestas;
+        }
+        ksort($mods);
+        foreach ($mods as &$mod) {
+            usort($mod['rows'], $this->compareRowsByCodeThenName(...));
+        }
+        unset($mod);
+
+        return [
+            'name' => 'Trasladados',
+            'color' => null,
+            'locality' => '',
+            'subtotal_cestas' => $subtotal,
+            'modalities' => array_values($mods),
+        ];
     }
 
     /**
@@ -280,6 +329,7 @@ class NodeDeliverySheet
             'egg_spec' => $eggs['spec'],
             'egg_count' => $eggs['count'],
             'locality' => $this->localityForRow($line),
+            'relocated_from' => $line->relocatedFromLabel,
         ];
     }
 

@@ -122,7 +122,7 @@ class NodeDeliverySheetTest extends TestCase
                             [
                                 'label' => 'Quincenales y mensuales',
                                 'rows' => [
-                                    ['name' => 'Victoria y David', 'code' => 'QH', 'cestas' => 1.0, 'egg_spec' => '1M', 'egg_count' => 6, 'locality' => 'Bustarviejo'],
+                                    ['name' => 'Victoria y David', 'code' => 'QH', 'cestas' => 1.0, 'egg_spec' => '1M', 'egg_count' => 6, 'locality' => 'Bustarviejo', 'relocated_from' => null],
                                 ],
                             ],
                         ],
@@ -136,19 +136,19 @@ class NodeDeliverySheetTest extends TestCase
                             [
                                 'label' => 'Semanales',
                                 'rows' => [
-                                    ['name' => 'Cris y Paco', 'code' => 'SH', 'cestas' => 1.0, 'egg_spec' => '1D', 'egg_count' => 12, 'locality' => 'Torremocha'],
+                                    ['name' => 'Cris y Paco', 'code' => 'SH', 'cestas' => 1.0, 'egg_spec' => '1D', 'egg_count' => 12, 'locality' => 'Torremocha', 'relocated_from' => null],
                                 ],
                             ],
                             [
                                 'label' => 'Quincenales y mensuales',
                                 'rows' => [
-                                    ['name' => 'Miguel y Paloma', 'code' => 'Q', 'cestas' => 1.0, 'egg_spec' => null, 'egg_count' => 0, 'locality' => 'Torremocha'],
+                                    ['name' => 'Miguel y Paloma', 'code' => 'Q', 'cestas' => 1.0, 'egg_spec' => null, 'egg_count' => 0, 'locality' => 'Torremocha', 'relocated_from' => null],
                                 ],
                             ],
                             [
                                 'label' => 'Solo huevos',
                                 'rows' => [
-                                    ['name' => 'Raquel', 'code' => 'H', 'cestas' => 0.0, 'egg_spec' => '1D+1M', 'egg_count' => 18, 'locality' => 'Torremocha'],
+                                    ['name' => 'Raquel', 'code' => 'H', 'cestas' => 0.0, 'egg_spec' => '1D+1M', 'egg_count' => 18, 'locality' => 'Torremocha', 'relocated_from' => null],
                                 ],
                             ],
                         ],
@@ -156,9 +156,9 @@ class NodeDeliverySheetTest extends TestCase
                 ],
                 'shared' => [
                     'rows' => [
-                        ['name' => 'Eduardo y Pilar', 'code' => 'SC', 'cestas' => 0.5, 'egg_spec' => null, 'egg_count' => 0, 'locality' => 'Torremocha', 'color' => '#85c0e0', 'pair_end' => false],
-                        ['name' => 'Pilar y Eduardo', 'code' => 'SC', 'cestas' => 0.5, 'egg_spec' => null, 'egg_count' => 0, 'locality' => 'Torremocha', 'color' => '#85c0e0', 'pair_end' => true],
-                        ['name' => 'Hilde', 'code' => 'QC', 'cestas' => 0.5, 'egg_spec' => null, 'egg_count' => 0, 'locality' => 'Bustarviejo', 'color' => '#e0a585', 'pair_end' => true],
+                        ['name' => 'Eduardo y Pilar', 'code' => 'SC', 'cestas' => 0.5, 'egg_spec' => null, 'egg_count' => 0, 'locality' => 'Torremocha', 'relocated_from' => null, 'color' => '#85c0e0', 'pair_end' => false],
+                        ['name' => 'Pilar y Eduardo', 'code' => 'SC', 'cestas' => 0.5, 'egg_spec' => null, 'egg_count' => 0, 'locality' => 'Torremocha', 'relocated_from' => null, 'color' => '#85c0e0', 'pair_end' => true],
+                        ['name' => 'Hilde', 'code' => 'QC', 'cestas' => 0.5, 'egg_spec' => null, 'egg_count' => 0, 'locality' => 'Bustarviejo', 'relocated_from' => null, 'color' => '#e0a585', 'pair_end' => true],
                     ],
                 ],
                 'totals' => ['cestas' => 4.5, 'docenas' => 3.0],

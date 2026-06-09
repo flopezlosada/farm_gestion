@@ -188,6 +188,8 @@
 .dlv .mod--7 { background: transparent; color: var(--dlv-terra-d); border: 1px dashed var(--dlv-terra); }
 .dlv .mod--5 { background: #fff2d6; color: var(--dlv-ochre-d); }                .dlv .mod--5 .dot { background: var(--dlv-ochre); }
 .dlv .mod-pair { font-size: 10.5px; color: var(--dlv-ink-faint); margin-top: 3px; font-style: italic; }
+/* etiqueta de socio TRASLADADO (override de nodo): "de {grupo de casa}". */
+.dlv .reloc { display: inline-block; margin-top: 3px; font-size: 10px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--dlv-terra-d); background: var(--dlv-terra-l); padding: 1px 7px; border-radius: 3px; }
 .dlv .dlv-row-spacer td { padding: 0; height: 14px; background: var(--dlv-bg); border: 0; }
 .dlv .dlv-row-spacer:last-child { display: none; }
 
@@ -653,7 +655,13 @@
             menu.hidden = false;
             menu.style.position = 'fixed';
             const r = btn.getBoundingClientRect();
-            menu.style.top = (r.bottom + 4) + 'px';
+            // El menú abre hacia abajo por defecto; si no cabe (últimas filas cerca
+            // del borde inferior del viewport) abre hacia ARRIBA para no recortarse.
+            const mh = menu.offsetHeight;
+            const top = (r.bottom + 4 + mh > window.innerHeight)
+                ? Math.max(4, r.top - mh - 4)
+                : (r.bottom + 4);
+            menu.style.top = top + 'px';
             menu.style.left = (r.right - menu.offsetWidth) + 'px';
             openMenu = menu;
         });

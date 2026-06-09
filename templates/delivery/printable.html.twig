@@ -23,7 +23,7 @@
     {% import _self as m %}
     <tr>
         <td class="t-loc" style="background: {{ color }};">{{ row.locality }}</td>
-        <td class="t-name">{{ row.name }}</td>
+        <td class="t-name">{{ row.name }}{% if row.relocated_from is defined and row.relocated_from %} <small>(de {{ row.relocated_from }})</small>{% endif %}</td>
         <td class="t-code">{{ row.code }}</td>
         <td class="t-cl">{{ row.cestas > 0 ? 'CESTAS' : '' }}</td>
         <td class="t-q">{{ m.qty(row.cestas) }}</td>

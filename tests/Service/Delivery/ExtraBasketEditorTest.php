@@ -4,10 +4,13 @@ namespace App\Tests\Service\Delivery;
 
 use App\Entity\Basket;
 use App\Entity\BasketComponent;
+use App\Entity\Node;
 use App\Entity\Partner;
 use App\Entity\PartnerEvent;
 use App\Entity\WeeklyBasket;
+use App\Entity\WeeklyBasketGroup;
 use App\Entity\WeeklyBasketStatus;
+use App\Repository\WeeklyBasketRepository;
 use App\Service\Delivery\ExtraBasketEditor;
 use App\Service\Delivery\NodeDeliveryDate;
 use App\Service\Delivery\WeeklyBasketComposer;
@@ -47,14 +50,29 @@ class ExtraBasketEditorTest extends TestCase
     }
 
     /**
+     * Socio con nodo (vía su grupo de recogida), para ejercitar el guard per-node de
+     * "semana generada para ese nodo".
+     */
+    private function partnerWithNode(): Partner
+    {
+        $node = $this->createMock(Node::class);
+        $group = $this->createMock(WeeklyBasketGroup::class);
+        $group->method('getNode')->willReturn($node);
+        $partner = $this->createMock(Partner::class);
+        $partner->method('getWeeklyBasketGroup')->willReturn($group);
+
+        return $partner;
+    }
+
+    /**
      * Monta el editor con un EntityManager que enruta cada repo por su entidad y
      * recoge lo persistido / el flush.
      *
-     * @param EntityRepository    $wbRepo     Repo de WeeklyBasket (controla findOneBy).
-     * @param array<int, object>  &$persisted Recoge lo persistido.
-     * @param bool                &$flushed   Se pone a true al hacer flush.
+     * @param WeeklyBasketRepository $wbRepo     Repo de WeeklyBasket (findOneBy + findForNodeAndBasket).
+     * @param array<int, object>     &$persisted Recoge lo persistido.
+     * @param bool                   &$flushed   Se pone a true al hacer flush.
      */
-    private function buildEditor(EntityRepository $wbRepo, WeeklyBasketComposer $composer, array &$persisted, bool &$flushed): ExtraBasketEditor
+    private function buildEditor(WeeklyBasketRepository $wbRepo, WeeklyBasketComposer $composer, array &$persisted, bool &$flushed): ExtraBasketEditor
     {
         $componentRepo = $this->createMock(EntityRepository::class);
         $componentRepo->method('find')->willReturnCallback(fn ($id) => $this->component((int) $id));
@@ -87,7 +105,7 @@ class ExtraBasketEditorTest extends TestCase
     public function testAddsToExistingDeliverySumsAndRecordsEvent(): void
     {
         $wb = (new WeeklyBasket())->setPartner(new Partner());
-        $wbRepo = $this->createMock(EntityRepository::class);
+        $wbRepo = $this->createMock(WeeklyBasketRepository::class);
         $wbRepo->method('findOneBy')->willReturn($wb);
 
         $stamped = null;
@@ -126,7 +144,7 @@ class ExtraBasketEditorTest extends TestCase
     public function testAddingEggsKeepsExistingVegetables(): void
     {
         $wb = (new WeeklyBasket())->setPartner(new Partner());
-        $wbRepo = $this->createMock(EntityRepository::class);
+        $wbRepo = $this->createMock(WeeklyBasketRepository::class);
         $wbRepo->method('findOneBy')->willReturn($wb);
 
         $stamped = null;
@@ -153,12 +171,11 @@ class ExtraBasketEditorTest extends TestCase
 
     public function testCreatesDeliveryWhenWeekGeneratedAndPartnerHadNone(): void
     {
-        $wbRepo = $this->createMock(EntityRepository::class);
-        // findOneBy(['basket','partner']) → null (no le tocaba); findOneBy(['basket']) → algo
-        // (la semana SÍ está generada). Se discrimina por la presencia de 'partner'.
-        $wbRepo->method('findOneBy')->willReturnCallback(
-            fn (array $criteria) => isset($criteria['partner']) ? null : new WeeklyBasket(),
-        );
+        $wbRepo = $this->createMock(WeeklyBasketRepository::class);
+        // El socio no tiene entrega (no le tocaba), pero su NODO sí tiene reparto generado
+        // esa semana (findForNodeAndBasket no vacío) → es seguro crear su entrega.
+        $wbRepo->method('findOneBy')->willReturn(null);
+        $wbRepo->method('findForNodeAndBasket')->willReturn([new WeeklyBasket()]);
 
         $stamped = null;
         $composer = $this->createMock(WeeklyBasketComposer::class);
@@ -173,7 +190,7 @@ class ExtraBasketEditorTest extends TestCase
         $editor = $this->buildEditor($wbRepo, $composer, $persisted, $flushed);
 
         $result = $editor->addToDelivery(
-            new Partner(),
+            $this->partnerWithNode(),
             new Basket(),
             [BasketComponent::ID_VEGETABLES => '1'],
             null,
@@ -187,11 +204,13 @@ class ExtraBasketEditorTest extends TestCase
         $this->assertTrue($flushed);
     }
 
-    public function testThrowsWhenWeekNotGenerated(): void
+    public function testThrowsWhenNodeWeekNotGenerated(): void
     {
-        $wbRepo = $this->createMock(EntityRepository::class);
-        // Ni la entrega del socio ni ninguna otra: la semana no está generada.
+        $wbRepo = $this->createMock(WeeklyBasketRepository::class);
+        // El socio no tiene entrega y el reparto del NODO de ese socio NO está generado esa
+        // semana (findForNodeAndBasket vacío): crear aquí dejaría piedra parcial → rechaza.
         $wbRepo->method('findOneBy')->willReturn(null);
+        $wbRepo->method('findForNodeAndBasket')->willReturn([]);
 
         $composer = $this->createMock(WeeklyBasketComposer::class);
         $composer->expects($this->never())->method('stamp');
@@ -201,6 +220,6 @@ class ExtraBasketEditorTest extends TestCase
         $editor = $this->buildEditor($wbRepo, $composer, $persisted, $flushed);
 
         $this->expectException(\LogicException::class);
-        $editor->addToDelivery(new Partner(), new Basket(), [BasketComponent::ID_VEGETABLES => '1'], null, 'gestor:1');
+        $editor->addToDelivery($this->partnerWithNode(), new Basket(), [BasketComponent::ID_VEGETABLES => '1'], null, 'gestor:1');
     }
 }

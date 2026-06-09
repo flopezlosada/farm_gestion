@@ -10,12 +10,14 @@ use App\Entity\Node;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
 use App\Entity\PartnerDeliveryShift;
+use App\Entity\PartnerNodeOverride;
 use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketGroup;
 use App\Entity\WeeklyBasketItem;
 use App\Repository\NodeRepository;
 use App\Repository\PartnerBasketShareRepository;
 use App\Service\Delivery\BiweeklyCohortResolver;
+use App\Service\Delivery\DeliveryModeResolver;
 use App\Service\Delivery\ExtraBasketEditor;
 use App\Service\Delivery\NodeDeliveryDate;
 use App\Service\Delivery\NodeDeliverySheet;
@@ -79,6 +81,7 @@ class VerifyDeliveryBatteryCommand extends Command
         private readonly NodeRepository $nodeRepo,
         private readonly ExtraBasketEditor $extraBasketEditor,
         private readonly PickupRelocator $relocator,
+        private readonly DeliveryModeResolver $modeResolver,
     ) {
         parent::__construct();
     }
@@ -119,6 +122,11 @@ class VerifyDeliveryBatteryCommand extends Command
         // Festivo (cancelación global): ese ciclo no reparte nadie.
         $this->festivoScenario();
 
+        // Cierre que DESPLAZA la cadencia de un nodo biweekly: la semana nueva (sin
+        // piedra propia pero con el basket materializado por otro nodo) debe DIBUJARSE,
+        // no salir vacía. Es el hueco que dejó pasar la decisión piedra-vs-dibujo global.
+        $this->biweeklyCierreShiftScenario();
+
         // Cesta compartida quincenal (bs=6): media cesta en el bloque compartidas.
         $this->sharedQuincenalScenario();
 
@@ -143,6 +151,12 @@ class VerifyDeliveryBatteryCommand extends Command
 
         // Traslado puntual de lugar: un socio recoge esa semana en otro nodo.
         $this->relocateNodeScenario();
+
+        // Cambio de nodo como OVERRIDE sobre una semana DIBUJADA (futura, sin generar):
+        // el override mueve dónde recoge en la proyección, sin piedra. Blinda el modelo de
+        // overrides (docs/redesign/modelo-overrides-reparto.md): el socio sale del dibujo de
+        // su nodo de casa y aparece en el destino, en una semana que NO está generada.
+        $this->nodeOverrideDrawnScenario();
 
         $this->report();
 
@@ -384,6 +398,85 @@ class VerifyDeliveryBatteryCommand extends Command
         ));
     }
 
+    /**
+     * Cierre global que DESPLAZA la cadencia de un nodo biweekly. Con el mes YA generado
+     * (el nodo materializado en su fase vieja; el nodo semanal materializado en todas las
+     * semanas), se mete un cierre en una semana de reparto del nodo. La cadencia se
+     * desplaza: una semana donde el nodo antes NO repartía pasa a repartir, pero NO tiene
+     * piedra propia —aunque el basket SÍ está materializado por el nodo semanal—. Esa
+     * semana debe DIBUJARSE (DRAW), no leerse de piedra vacía.
+     *
+     * Es el hueco que dejó pasar la decisión piedra-vs-dibujo GLOBAL: el basket contaba
+     * como materializado y el nodo biweekly salía vacío ("no reparte nunca tras el
+     * cierre"). La batería no lo cazaba porque asevera vía NodeDeliverySheet::build, que
+     * siempre lee piedra; aquí ejercitamos la decisión real (DeliveryModeResolver) y el
+     * listado DIBUJADO.
+     */
+    private function biweeklyCierreShiftScenario(): void
+    {
+        $label = 'Cierre desplaza biweekly (dibuja la semana nueva)';
+        $partner = $this->pickPartner(self::QUINCENAL, null, Node::CADENCE_BIWEEKLY);
+        if ($partner === null) { $this->skip($label, 'sin quincenal en nodo biweekly'); return; }
+        $node = $partner->getWeeklyBasketGroup()?->getNode();
+        if ($node === null) { $this->skip($label, 'el socio elegido no tiene nodo'); return; }
+        $month = $this->nextMonth();
+        if ($month === null || count($month['baskets']) < 2) { $this->skip($label, 'mes futuro insuficiente'); return; }
+
+        // Semanas del mes donde el nodo reparte ANTES del cierre.
+        $beforeIds = array_values(array_map(
+            static fn (Basket $b) => $b->getId(),
+            array_filter($month['baskets'], fn (Basket $b) => $this->nodeDeliveryDate->deliversInBasket($b, $node)),
+        ));
+        if ($beforeIds === []) { $this->skip($label, 'el nodo no reparte ningún ciclo del mes'); return; }
+
+        // Generar el mes: el nodo se materializa en su fase vieja; el nodo semanal, en todas.
+        foreach ($month['baskets'] as $b) { $this->generator->generateForBasket($b); }
+
+        // Cerrar (global) la PRIMERA semana de reparto del nodo → desplaza la cadencia.
+        $cierre = $this->basketById($beforeIds[0]);
+        $exception = new DeliveryException();
+        $exception->setBasket($cierre);
+        $exception->setNode(null);
+        $exception->setShiftedDate(null);
+        $exception->setNotes('verif: cierre desplaza biweekly');
+        $this->em->persist($exception);
+        $this->em->flush();
+
+        // Semana NUEVA: el nodo reparte tras el cierre pero NO repartía antes (sin piedra).
+        $shiftedIn = null;
+        foreach ($month['baskets'] as $b) {
+            if ($this->nodeDeliveryDate->deliversInBasket($b, $node) && !in_array($b->getId(), $beforeIds, true)) {
+                $shiftedIn = $b;
+                break;
+            }
+        }
+        if ($shiftedIn === null) { $this->skip($label, 'el cierre no desplazó ninguna semana dentro del mes'); return; }
+
+        $wbRepo = $this->em->getRepository(WeeklyBasket::class);
+        $nodeStone = count($wbRepo->findForNodeAndBasket($node, $shiftedIn));
+        $globalMaterialized = $wbRepo->countPickedInBasket($shiftedIn) > 0;
+        // Sin materialización global de la semana nueva no se reproduce el caso (la regla
+        // vieja sólo fallaba porque OTRO nodo dejaba el basket como "materializado").
+        if (!$globalMaterialized) { $this->skip($label, 'la semana nueva no quedó materializada por otro nodo'); return; }
+
+        $mode = $this->modeResolver->mode($node, $shiftedIn);
+        // El listado DIBUJADO (shape de la proyección) de la semana nueva contiene al socio.
+        $drawn = $this->sheet->shape($this->generator->projectLinesForNode($node, $shiftedIn));
+        $drawnContains = $this->sheetDataContainsPartner($drawn, $partner);
+        // La semana del cierre no reparte (cancelada).
+        $cierreMode = $this->modeResolver->mode($node, $cierre);
+
+        $ok = $mode === DeliveryModeResolver::DRAW
+            && $nodeStone === 0
+            && $drawnContains
+            && $cierreMode === DeliveryModeResolver::EMPTY;
+        $this->record($label, $ok, sprintf(
+            'socio %d · nodo %d · cierre basket %d · semana nueva %d · mode=%s (debe draw) · piedra nodo=%d (0) · dibujado contiene socio=%s · cierre mode=%s (debe empty)',
+            $partner->getId(), $node->getId(), $cierre->getId(), $shiftedIn->getId(),
+            $mode, $nodeStone, $drawnContains ? 'sí' : 'NO', $cierreMode,
+        ));
+    }
+
     private function sharedBajaScenario(): void
     {
         $partner = $this->pickPartner(self::COMP_SEMANAL, null);
@@ -606,6 +699,66 @@ class VerifyDeliveryBatteryCommand extends Command
             $destNode->getName(), $inDest ? 'sí' : 'NO',
             $originNode->getName(), $inOrigin ? 'NO (sigue)' : 'sí',
             $dateOk ? 'ok' : 'MAL', $stillDest ? 'sí' : 'NO',
+        ));
+    }
+
+    /**
+     * Cambio de nodo modelado como OVERRIDE (PartnerNodeOverride) sobre una semana DIBUJADA
+     * (futura, sin generar). A diferencia de relocateNodeScenario (que genera y mueve la
+     * piedra), aquí NO se genera: se inserta el override y se comprueba la PROYECCIÓN. El
+     * socio (de un nodo biweekly) debe salir del dibujo de su nodo de casa y aparecer en el
+     * dibujo del nodo destino, en una semana donde ambos reparten. Es la red del paso 2 del
+     * modelo de overrides (el motor; el relocate que crea el override viene después).
+     */
+    private function nodeOverrideDrawnScenario(): void
+    {
+        $label = 'Cambio de nodo (override) en semana dibujada';
+        $partner = $this->pickPartner(self::QUINCENAL, null, Node::CADENCE_BIWEEKLY);
+        if ($partner === null) { $this->skip($label, 'sin quincenal en nodo biweekly'); return; }
+        $originNode = $partner->getWeeklyBasketGroup()?->getNode();
+        if ($originNode === null) { $this->skip($label, 'el socio elegido no tiene nodo'); return; }
+        $month = $this->nextMonth();
+        if ($month === null) { $this->skip($label, 'sin mes futuro sin generar'); return; }
+
+        $destNode = $this->nodeRepo->findOneBy(['cadence' => Node::CADENCE_WEEKLY]);
+        if ($destNode === null) { $this->skip($label, 'sin nodo semanal destino'); return; }
+        $destGroup = $this->em->getRepository(WeeklyBasketGroup::class)->findOneBy(['node' => $destNode]);
+        if ($destGroup === null) { $this->skip($label, 'el nodo destino no tiene grupos'); return; }
+
+        // Semana del mes donde reparten AMBOS (el origen para que el socio tenga cesta).
+        $target = null;
+        foreach ($month['baskets'] as $b) {
+            if ($this->nodeDeliveryDate->deliversInBasket($b, $originNode) && $this->nodeDeliveryDate->deliversInBasket($b, $destNode)) {
+                $target = $b;
+                break;
+            }
+        }
+        if ($target === null) { $this->skip($label, 'sin semana común origen/destino'); return; }
+
+        // Override directo (sin pasar por el relocate, que aún mueve piedra). NO se genera:
+        // la semana queda dibujada.
+        $override = new PartnerNodeOverride($partner, $target, $destGroup);
+        $this->em->persist($override);
+        $this->em->flush();
+
+        // 1) DIBUJO (proyección, semana sin generar): el override mueve dónde recoge.
+        $destDrawn = $this->sheet->shape($this->generator->projectLinesForNode($destNode, $target));
+        $originDrawn = $this->sheet->shape($this->generator->projectLinesForNode($originNode, $target));
+        $inDest = $this->sheetDataContainsPartner($destDrawn, $partner);
+        $inOrigin = $this->sheetDataContainsPartner($originDrawn, $partner);
+
+        // 2) CONGELAR la semana: la materialización debe respetar el override igual que el
+        // dibujo (piedra == dibujo). Es la red del paso 4 (createWeeklyBasketsFromShares).
+        $this->generator->generateForBasket($target);
+        $inDestStone = $this->sheetDataContainsPartner($this->sheet->build($destNode, $target), $partner);
+        $inOriginStone = $this->sheetDataContainsPartner($this->sheet->build($originNode, $target), $partner);
+
+        $ok = $inDest && !$inOrigin && $inDestStone && !$inOriginStone;
+        $this->record($label, $ok, sprintf(
+            'socio %d · semana %d · dibujo: en %s=%s/fuera %s=%s · piedra (tras congelar): en %s=%s/fuera %s=%s',
+            $partner->getId(), $target->getId(),
+            $destNode->getName(), $inDest ? 'sí' : 'NO', $originNode->getName(), $inOrigin ? 'NO' : 'sí',
+            $destNode->getName(), $inDestStone ? 'sí' : 'NO', $originNode->getName(), $inOriginStone ? 'NO' : 'sí',
         ));
     }
 
@@ -870,7 +1023,19 @@ class VerifyDeliveryBatteryCommand extends Command
 
     private function sheetContainsPartner(Node $node, Basket $basket, Partner $partner): bool
     {
-        $data = $this->sheet->build($node, $basket);
+        return $this->sheetDataContainsPartner($this->sheet->build($node, $basket), $partner);
+    }
+
+    /**
+     * ¿Aparece el socio en un sheet YA construido (de piedra o dibujado)? Igual que
+     * {@see sheetContainsPartner} pero sobre el array, para poder comprobar el listado
+     * DIBUJADO (shape de la proyección), no solo el de piedra (build).
+     *
+     * @param array<string,mixed> $data    Sheet de NodeDeliverySheet (build o shape).
+     * @param Partner             $partner Socio buscado.
+     */
+    private function sheetDataContainsPartner(array $data, Partner $partner): bool
+    {
         $name = $partner->getNameForDelivery();
         foreach ($data['groups'] as $g) {
             foreach ($g['modalities'] as $m) {

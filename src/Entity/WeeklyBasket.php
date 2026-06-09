@@ -15,7 +15,9 @@ use Symfony\Component\Validator\Constraints as Assert;
 use Gedmo\Mapping\Annotation as Gedmo;
 
 /**
- * @ORM\Table(name="weekly_basket")
+ * @ORM\Table(name="weekly_basket", indexes={
+ *     @ORM\Index(name="IDX_wb_delivery_date", columns={"delivery_date"})
+ * })
  * @ORM\Entity(repositoryClass="App\Repository\WeeklyBasketRepository")
  */
 
@@ -200,5 +202,52 @@ class WeeklyBasket
     {
         $this->delivery_date = $delivery_date;
         return $this;
+    }
+
+    /**
+     * Si esta entrega es un TRASLADADO —el socio recoge esta semana en un nodo
+     * distinto al suyo (override de nodo)— devuelve su grupo de recogida de CASA;
+     * null si recoge en su propio nodo. Se detecta porque el nodo del grupo de
+     * ENTREGA (el de este WeeklyBasket) difiere del nodo del grupo de casa del
+     * socio. Lo consumen el listado en papel ({@see \App\Service\Delivery\NodeDeliverySheet})
+     * y la pantalla v2 del reparto para separar a los trasladados en su sección
+     * "Trasladados (de X)". Funciona igual en piedra (el grupo está re-apuntado
+     * al destino) que en dibujo (la proyección sitúa al socio en el grupo destino).
+     *
+     * @return WeeklyBasketGroup|null Grupo de casa del socio si es trasladado, o null.
+     */
+    public function getRelocatedFromGroup(): ?WeeklyBasketGroup
+    {
+        $homeGroup = $this->partner?->getWeeklyBasketGroup();
+        $deliveryGroup = $this->weekly_basket_group;
+        if ($homeGroup === null || $deliveryGroup === null) {
+            return null;
+        }
+
+        return $homeGroup->getNode()?->getId() !== $deliveryGroup->getNode()?->getId()
+            ? $homeGroup
+            : null;
+    }
+
+    /**
+     * Etiqueta de origen de un TRASLADADO para el listado ("de ..."): nodo y grupo de
+     * casa del socio, deduplicados cuando coinciden. En Cascorro/Midori el grupo se
+     * llama igual que el nodo, así que devuelve solo "Cascorro"; en Torremocha el grupo
+     * es un pueblo, así que devuelve "Torremocha · Bustarviejo" (nodo explícito + pueblo
+     * fino, sin colisión). null si la entrega no es un traslado.
+     *
+     * @return string|null Etiqueta "Nodo · Grupo" (o "Nodo" si coinciden), o null si no es traslado.
+     */
+    public function getRelocatedFromLabel(): ?string
+    {
+        $group = $this->getRelocatedFromGroup();
+        if ($group === null) {
+            return null;
+        }
+
+        $node = $group->getNode()?->getName();
+        $name = $group->getName() ?? '';
+
+        return ($node !== null && $node !== $name) ? $node . ' · ' . $name : $name;
     }
 }

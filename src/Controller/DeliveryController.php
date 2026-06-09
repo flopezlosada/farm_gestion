@@ -21,6 +21,7 @@ use App\Repository\WeeklyBasketGroupRepository;
 use App\Repository\WeeklyBasketItemRepository;
 use App\Repository\WeeklyBasketRepository;
 use App\Repository\WeeklyBasketStatusRepository;
+use App\Service\Delivery\DeliveryModeResolver;
 use App\Service\Delivery\DeliveryShiftApplier;
 use App\Service\Delivery\DeliveryShiftValidator;
 use App\Service\Delivery\ExtraBasketEditor;
@@ -322,36 +323,48 @@ class DeliveryController extends AbstractController
     }
 
     /**
-     * Contadores socios/grupos por nodo cuando la semana se DIBUJA (no
-     * materializada): proyecta cada nodo que reparte ese día y cuenta, en el
-     * mismo formato que {@see WeeklyBasketRepository::countActiveByNodeForBasket}
-     * (la fuente del camino de piedra), para que las pestañas enseñen lo mismo en
-     * una semana futura que en una pasada. Los nodos que no reparten ese día se
-     * omiten (la pestaña cae a "sin reparto hoy"), igual que la query agregada.
+     * Contadores socios/grupos por nodo para las pestañas de la pantalla v2, con la
+     * MISMA decisión piedra-vs-dibujo POR NODO que la tabla (vía DeliveryModeResolver):
+     * cada nodo cuenta de su piedra si la tiene materializada, o de su proyección al
+     * vuelo si le toca dibujar. Los nodos en EMPTY (no reparten, cancelado o pasado sin
+     * piedra) se omiten y su pestaña cae a "sin reparto hoy". Así una semana mixta —un
+     * nodo materializado y otro desplazado por un cierre, sin piedra— muestra en cada
+     * pestaña lo mismo que enseña su tabla.
      *
      * @param Node[] $nodes
      * @return array<int, array{wbg:int, socios:int}>
      */
-    private function projectedCountsByNode(
+    private function deliveryCountsByNode(
         array $nodes,
         Basket $basket,
+        DeliveryModeResolver $deliveryModeResolver,
         WeeklyBasketGenerator $generator,
-        NodeDeliveryDate $nodeDeliveryDate,
+        WeeklyBasketRepository $weeklyBasketRepo,
     ): array {
         $counts = [];
         foreach ($nodes as $n) {
-            if (!$nodeDeliveryDate->deliversInBasket($basket, $n)) {
-                continue;
-            }
-            $deliveries = $generator->projectDeliveriesForNode($n, $basket);
-            $wbgIds = [];
-            foreach ($deliveries as $delivery) {
-                $wbg = $delivery['weeklyBasket']->getWeeklyBasketGroup();
-                if ($wbg !== null) {
-                    $wbgIds[$wbg->getId()] = true;
+            $mode = $deliveryModeResolver->mode($n, $basket);
+            if ($mode === DeliveryModeResolver::STONE) {
+                $stone = $weeklyBasketRepo->findForNodeAndBasket($n, $basket);
+                $wbgIds = [];
+                foreach ($stone as $wb) {
+                    $wbg = $wb->getWeeklyBasketGroup();
+                    if ($wbg !== null) {
+                        $wbgIds[$wbg->getId()] = true;
+                    }
                 }
+                $counts[$n->getId()] = ['socios' => count($stone), 'wbg' => count($wbgIds)];
+            } elseif ($mode === DeliveryModeResolver::DRAW) {
+                $deliveries = $generator->projectDeliveriesForNode($n, $basket);
+                $wbgIds = [];
+                foreach ($deliveries as $delivery) {
+                    $wbg = $delivery['weeklyBasket']->getWeeklyBasketGroup();
+                    if ($wbg !== null) {
+                        $wbgIds[$wbg->getId()] = true;
+                    }
+                }
+                $counts[$n->getId()] = ['socios' => count($deliveries), 'wbg' => count($wbgIds)];
             }
-            $counts[$n->getId()] = ['socios' => count($deliveries), 'wbg' => count($wbgIds)];
         }
 
         return $counts;
@@ -412,7 +425,6 @@ class DeliveryController extends AbstractController
         #[MapEntity(id: 'basketId')] Basket $basket,
         Request $request,
         PartnerRepository $partnerRepo,
-        WeeklyBasketRepository $weeklyBasketRepo,
         ExtraBasketEditor $extraBasketEditor,
     ): Response {
         $back = ['nodeId' => $node->getId(), 'basketId' => $basket->getId()];
@@ -428,10 +440,9 @@ class DeliveryController extends AbstractController
             return $this->redirectToRoute('delivery_by_node', $back);
         }
 
-        if ($weeklyBasketRepo->countPickedInBasket($basket) === 0) {
-            $this->addFlash('error', 'Esa semana aún no está generada: genera primero el listado para poder añadir cestas extra.');
-            return $this->redirectToRoute('delivery_by_node', $back);
-        }
+        // El nodo destino debe tener el reparto YA generado esa semana (no piedra parcial
+        // sobre una semana dibujada): lo valida ExtraBasketEditor por nodo y el catch de
+        // abajo lo flashea. Ver relocate-semanas-futuras-dibujadas-debt.
 
         // Incremento que añade el gestor: cestas de verdura y/o docenas de huevos.
         $addAmounts = [
@@ -505,37 +516,57 @@ class DeliveryController extends AbstractController
         $partnerName = trim(($partner->getName() ?? '') . ' ' . ($partner->getSurname() ?? ''));
 
         try {
-            $relocator->relocate($partner, $basket, $group, 'gestor:' . $this->getUser()->getId());
+            $override = $relocator->relocate($partner, $basket, $group, 'gestor:' . $this->getUser()->getId());
         } catch (\LogicException $e) {
             $this->addFlash('warning', $e->getMessage());
             return $this->redirectToRoute('delivery_by_node', $back);
         }
 
-        $this->addFlash('notice', sprintf('%s recogerá esa semana en "%s".', $partnerName, $group->getName()));
+        // relocate() devuelve null si el destino era el propio nodo de casa: lo gestionó
+        // como vuelta al patrón (returnHome). El mensaje refleja cada caso.
+        $this->addFlash('notice', $override === null
+            ? sprintf('%s vuelve a recoger en su nodo esa semana.', $partnerName)
+            : sprintf('%s recogerá esa semana en "%s".', $partnerName, $group->getName()));
         return $this->redirectToRoute('delivery_by_node', $back);
     }
 
     /**
-     * Grupos a los que el listado de este nodo puede trasladar un socio: los de OTROS
-     * nodos (la acción es "recoger en otro nodo"). Etiqueta "Nodo · Grupo".
+     * NODOS a los que el listado de este nodo puede trasladar un socio EN ESTA SEMANA: los
+     * OTROS nodos que REPARTEN ese basket (la acción es "recoger en otro nodo"). Una opción
+     * por nodo (no por grupo), etiqueta = nombre del nodo. El `id` es un grupo
+     * REPRESENTATIVO del nodo destino: el relocado aparece en la sección "Trasladados" del
+     * destino (NodeDeliverySheet), así que el grupo concreto es invisible; solo hace falta
+     * uno del nodo para anclar el WeeklyBasket. Funciona en semanas dibujadas o generadas
+     * (el override vive sobre la proyección). Ver docs/redesign/modelo-overrides-reparto.md.
      *
-     * @param Node                        $node      Nodo actual de la pantalla.
+     * @param Node                        $node             Nodo actual de la pantalla.
+     * @param Basket                      $basket           Semana del listado.
+     * @param Node[]                      $allNodes         Todos los nodos (ya cargados por byNode).
+     * @param NodeDeliveryDate            $nodeDeliveryDate
      * @param WeeklyBasketGroupRepository $groupRepo
-     * @return list<array{id:int, label:string}> Ordenados por etiqueta.
+     * @return list<array{id:int, label:string}> Ordenados por nombre de nodo.
      */
-    private function relocateTargetGroups(Node $node, WeeklyBasketGroupRepository $groupRepo): array
-    {
-        $groups = [];
-        foreach ($groupRepo->findAll() as $group) {
-            $groupNode = $group->getNode();
-            if ($groupNode === null || $groupNode->getId() === $node->getId()) {
+    private function relocateTargetGroups(
+        Node $node,
+        Basket $basket,
+        array $allNodes,
+        NodeDeliveryDate $nodeDeliveryDate,
+        WeeklyBasketGroupRepository $groupRepo,
+    ): array {
+        $options = [];
+        foreach ($allNodes as $other) {
+            if ($other->getId() === $node->getId() || !$nodeDeliveryDate->deliversInBasket($basket, $other)) {
                 continue;
             }
-            $groups[] = ['id' => $group->getId(), 'label' => $groupNode->getName() . ' · ' . $group->getName()];
+            $representative = $groupRepo->findOneBy(['node' => $other], ['name' => 'ASC']);
+            if ($representative === null) {
+                continue; // nodo sin grupos
+            }
+            $options[] = ['id' => $representative->getId(), 'label' => $other->getName()];
         }
-        usort($groups, static fn (array $a, array $b) => strcmp($a['label'], $b['label']));
+        usort($options, static fn (array $a, array $b) => strcmp($a['label'], $b['label']));
 
-        return $groups;
+        return $options;
     }
 
     /**
@@ -604,6 +635,7 @@ class DeliveryController extends AbstractController
         NodeDeliveryDate $nodeDeliveryDate,
         DeliveryExceptionRepository $deliveryExceptionRepo,
         WeeklyBasketGenerator $generator,
+        DeliveryModeResolver $deliveryModeResolver,
         Request $request,
     ): Response {
         $orden = $request->query->get('orden', 'grupo');
@@ -625,15 +657,15 @@ class DeliveryController extends AbstractController
         $globalException = $deliveryExceptionRepo->findGlobalForBasket($basket);
         $basketGloballyCancelled = $globalException !== null && $globalException->isCancelled();
 
-        // Piedra vs dibujo (rework de materialización tardía): si el día YA tiene
-        // reparto materializado en BBDD, lo leemos tal cual (PIEDRA). Si no lo
-        // tiene y el nodo reparte, el día no está cancelado y no es pasado, lo
-        // DIBUJAMOS al vuelo desde la proyección SIN materializar: así abrir una
-        // semana futura no la congela y un festivo o cambio metido después se
-        // refleja solo. El pasado sin materializar queda vacío (nunca se proyecta
-        // hacia atrás). La semana se congela sola al entrar en operación (cron) o
-        // al editarse a mano.
-        $isMaterialized = $weeklyBasketRepo->countPickedInBasket($basket) > 0;
+        // Piedra vs dibujo (rework de materialización tardía), decisión POR NODO
+        // delegada en DeliveryModeResolver: STONE = leer lo materializado de este nodo;
+        // DRAW = dibujar al vuelo desde la proyección SIN congelar (semana futura o sin
+        // piedra que sí reparte); EMPTY = no reparte, cancelado, o pasado sin piedra.
+        // Por nodo y no global del basket: un cierre que desplaza la cadencia de un nodo
+        // quincenal (Cascorro/Midori) lo deja sin piedra en la semana nueva aunque OTRO
+        // nodo (Torremocha) siga materializado; con la regla global se leía de su piedra
+        // vieja/vacía en vez de dibujarse. Ver vistas-reparto-dibujar-debt.
+        $mode = $deliveryModeResolver->mode($node, $basket);
 
         // amountsByPartner[partner.id] = [componentId => cantidad]: cestas físicas
         // (verdura) y docenas (huevos) por entrega. Vienen de los WeeklyBasketItem
@@ -642,10 +674,8 @@ class DeliveryController extends AbstractController
         // no tiene id, y un socio tiene una sola entrega por nodo+día.
         $amountsByPartner = [];
 
-        if ($isMaterialized) {
-            $weeklyBaskets = $nodeDelivers
-                ? $weeklyBasketRepo->findForNodeAndBasket($node, $basket)
-                : [];
+        if ($mode === DeliveryModeResolver::STONE) {
+            $weeklyBaskets = $weeklyBasketRepo->findForNodeAndBasket($node, $basket);
             $byWbId = $weeklyBasketItemRepo->componentAmountsFor($weeklyBaskets);
             foreach ($weeklyBaskets as $wb) {
                 $pid = $wb->getPartner()?->getId();
@@ -653,7 +683,7 @@ class DeliveryController extends AbstractController
                     $amountsByPartner[$pid] = $byWbId[$wb->getId()] ?? [];
                 }
             }
-        } elseif ($nodeDelivers && !$basketGloballyCancelled && !$this->isPastBasket($basket)) {
+        } elseif ($mode === DeliveryModeResolver::DRAW) {
             $weeklyBaskets = [];
             foreach ($generator->projectDeliveriesForNode($node, $basket) as $delivery) {
                 $wb = $delivery['weeklyBasket'];
@@ -696,7 +726,24 @@ class DeliveryController extends AbstractController
         // orden elegido (por grupo de recogida / por modalidad / lista
         // alfabética). Formato común: secciones con subgrupos y filas, para
         // que el template tenga una sola rama de pintado.
-        $sections = $this->buildSections($weeklyBaskets, $orden);
+        //
+        // Los TRASLADADOS (override de nodo: recogen aquí esta semana viniendo de
+        // OTRO nodo) se apartan ANTES de agrupar y van a su propia sección al final
+        // —igual que en el PDF (NodeDeliverySheet)— para que no se mezclen con los
+        // socios de casa del grupo destino. Siguen contando en los totales del nodo
+        // (sí reparten aquí hoy). La detección es pura en WeeklyBasket::getRelocatedFromGroup.
+        $relocated = array_values(array_filter(
+            $weeklyBaskets,
+            static fn (WeeklyBasket $wb): bool => $wb->getRelocatedFromGroup() !== null,
+        ));
+        $regular = array_values(array_filter(
+            $weeklyBaskets,
+            static fn (WeeklyBasket $wb): bool => $wb->getRelocatedFromGroup() === null,
+        ));
+        $sections = $this->buildSections($regular, $orden);
+        if ($relocated !== []) {
+            $sections[] = $this->relocatedSection($relocated);
+        }
 
         // Mapas por partner.id para el render (clave común a piedra y dibujo):
         //  - pbs: PartnerBasketShare activo en la fecha (para cohorte y huevos).
@@ -723,18 +770,18 @@ class DeliveryController extends AbstractController
             $eggDeliveryMap[$pid] = isset($amounts[BasketComponent::ID_EGGS]);
         }
 
-        // node_active_counts[nodeId] = {wbg, socios}: conteo de reparto de ESE
-        // día por nodo, para las pestañas. En piedra sale de una query agregada
-        // sobre lo materializado; cuando la semana se DIBUJA esa query daría 0 en
-        // todos los nodos (no hay nada en BBDD) y las pestañas mentirían un "sin
-        // reparto hoy" contradiciendo la tabla, así que se proyecta cada nodo.
-        if ($isMaterialized) {
-            $nodeActiveCounts = $weeklyBasketRepo->countActiveByNodeForBasket($basket);
-        } elseif (!$basketGloballyCancelled && !$this->isPastBasket($basket)) {
-            $nodeActiveCounts = $this->projectedCountsByNode($allNodes, $basket, $generator, $nodeDeliveryDate);
-        } else {
-            $nodeActiveCounts = [];
-        }
+        // node_active_counts[nodeId] = {wbg, socios}: conteo de reparto de ESE día por
+        // nodo, para las pestañas. La decisión piedra-vs-dibujo es POR NODO, igual que
+        // la tabla: cada nodo cuenta de su piedra si la tiene, o de su proyección si le
+        // toca dibujar. Así una semana mixta (un nodo materializado, otro desplazado por
+        // un cierre y sin piedra) muestra en cada pestaña lo mismo que su tabla.
+        $nodeActiveCounts = $this->deliveryCountsByNode(
+            $allNodes,
+            $basket,
+            $deliveryModeResolver,
+            $generator,
+            $weeklyBasketRepo,
+        );
 
         return $this->render('delivery/by_node.html.twig', [
             'node' => $node,
@@ -753,7 +800,7 @@ class DeliveryController extends AbstractController
             'egg_delivery_map' => $eggDeliveryMap,
             'cestas_by_partner_id' => $cestasByPartnerId,
             'dozens_by_partner_id' => $dozensByPartnerId,
-            'relocate_groups' => $this->relocateTargetGroups($node, $weeklyBasketGroupRepo),
+            'relocate_groups' => $this->relocateTargetGroups($node, $basket, $allNodes, $nodeDeliveryDate, $weeklyBasketGroupRepo),
             'totals' => $this->computeTotals($weeklyBaskets, $cestasByPartnerId, $dozensByPartnerId),
         ]);
     }
@@ -963,6 +1010,26 @@ class DeliveryController extends AbstractController
             }
         }
         return [$result, $pairEnds];
+    }
+
+    /**
+     * Sección "Trasladados" de la pantalla v2: los socios que esta semana recogen en
+     * este nodo viniendo de OTRO (override de nodo). Va al final del listado, como en
+     * el PDF ({@see NodeDeliverySheet}), en una lista plana ordenada por nombre. Cada
+     * fila se marca "de {grupo de casa}" en _row.html.twig vía
+     * {@see WeeklyBasket::getRelocatedFromGroup}, así que aquí no hace falta subdividir.
+     *
+     * @param WeeklyBasket[] $relocated Entregas trasladadas (todas con getRelocatedFromGroup() != null).
+     * @return array{title:string, subgroups: list<array{bs_id:?int, label:?string, rows: WeeklyBasket[]}>}
+     */
+    private function relocatedSection(array $relocated): array
+    {
+        usort($relocated, $this->compareByDisplayName(...));
+
+        return [
+            'title' => 'Trasladados',
+            'subgroups' => [['bs_id' => null, 'label' => null, 'rows' => $relocated]],
+        ];
     }
 
     /**
@@ -1246,29 +1313,26 @@ class DeliveryController extends AbstractController
         NodeDeliverySheet $sheetBuilder,
         NodeDeliveryDate $nodeDeliveryDate,
         WeeklyBasketGenerator $generator,
-        WeeklyBasketRepository $weeklyBasketRepo,
-        DeliveryExceptionRepository $deliveryExceptionRepo,
+        DeliveryModeResolver $deliveryModeResolver,
     ): Response {
         $nodeIds = array_values(array_filter(array_map('intval', (array) $request->query->all('nodes'))));
 
-        // Piedra vs dibujo idéntico a byNode: si la semana ya está materializada
-        // se lee de piedra; si no (y no está cancelada ni es pasada) se dibuja al
-        // vuelo desde la proyección, sin congelarla.
-        $globalException = $deliveryExceptionRepo->findGlobalForBasket($basket);
-        $basketGloballyCancelled = $globalException !== null && $globalException->isCancelled();
-        $isMaterialized = $weeklyBasketRepo->countPickedInBasket($basket) > 0;
-        $canDraw = !$isMaterialized && !$basketGloballyCancelled && !$this->isPastBasket($basket);
-
+        // Piedra vs dibujo idéntico a byNode y POR NODO (vía DeliveryModeResolver): cada
+        // nodo se lee de su piedra (STONE) si la tiene materializada; si no y le toca, se
+        // dibuja al vuelo desde la proyección (DRAW) sin congelarla; EMPTY no imprime
+        // hoja. La decisión no es global del basket: un cierre que desplaza la cadencia
+        // de un nodo quincenal lo deja sin piedra en la semana nueva aunque otro nodo sí
+        // esté materializado.
         $sheets = [];
         foreach ($nodeRepo->findBy(['id' => $nodeIds ?: [0]], ['name' => 'ASC']) as $node) {
-            if (!$nodeDeliveryDate->deliversInBasket($basket, $node)) {
-                continue;
-            }
-            $sheet = $isMaterialized
-                ? $sheetBuilder->build($node, $basket)
-                : ($canDraw ? $sheetBuilder->shape($generator->projectLinesForNode($node, $basket)) : null);
+            $mode = $deliveryModeResolver->mode($node, $basket);
+            $sheet = match ($mode) {
+                DeliveryModeResolver::STONE => $sheetBuilder->build($node, $basket),
+                DeliveryModeResolver::DRAW => $sheetBuilder->shape($generator->projectLinesForNode($node, $basket)),
+                default => null,
+            };
             if ($sheet === null) {
-                continue; // pasada sin materializar o cancelada: nada que imprimir
+                continue; // EMPTY: no reparte, cancelado, o pasado sin materializar
             }
             $sheets[] = [
                 'node' => $node,

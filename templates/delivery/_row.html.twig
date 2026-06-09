@@ -22,11 +22,13 @@
     data-cestas="{{ cesta_factor }}"
     data-dozens="{{ row_dozens }}"
     data-delivery-date="{{ wb.deliveryDate ? wb.deliveryDate|date('Y-m-d') : '' }}">
+    {% set reloc = wb.relocatedFromLabel %}
     <td class="partner">
         {{ wb.partner.nameForDelivery }}
         {% if wb.partner.displayName and wb.partner.displayName != wb.partner.legalName %}
             <small>{{ wb.partner.legalName }}</small>
         {% endif %}
+        {% if reloc %}<span class="reloc">de {{ reloc }}</span>{% endif %}
     </td>
     <td style="width: 130px;">
         <span class="mod mod--{{ rbs.id }}"><span class="dot"></span>{{ rbs.name }}</span>
@@ -49,7 +51,7 @@
         <div class="dlv-kebab-menu" hidden>
             <a href="{{ path('partner_show', { id: wb.partner.id }) }}">Ver ficha del socix</a>
             <a href="{{ path('partner_edit', { id: wb.partner.id }) }}">Editar socix</a>
-            <a href="{{ path('delivery_shifts_index', { partner: wb.partner.id }) }}">Cambiar de viernes / no recoge</a>
+            <a href="{{ path('partner_delivery_calendar', { id: wb.partner.id, sel: basket.id, month: basket.date|date('n'), year: basket.date|date('Y') }) }}">Cambiar de viernes / no recoge</a>
             <a href="#" class="js-dlv-extra"
                data-partner-id="{{ wb.partner.id }}"
                data-partner-name="{{ wb.partner.nameForDelivery }}">Añadir cesta extra</a>

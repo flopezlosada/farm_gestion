@@ -65,11 +65,15 @@ final class ExtraBasketEditor
 
         $wb = $wbRepo->findOneBy(['basket' => $basket, 'partner' => $partner]);
         if ($wb === null) {
-            // "No le tocaba": se crea su entrega. Solo es seguro si la semana ya está
-            // generada; si no, este WB suelto haría que el generador (rama reuse) trate
-            // la semana como completa y deje fuera al resto de socios.
-            if ($wbRepo->findOneBy(['basket' => $basket]) === null) {
-                throw new \LogicException('No se puede añadir una cesta extra a una semana sin generar: genera primero el listado de esa semana.');
+            // "No le tocaba": se crea su entrega. Solo es seguro si el reparto del NODO del
+            // socio ya está generado esa semana; si solo está dibujado, este WB suelto
+            // dejaría piedra parcial y el listado del nodo marcaría STONE mostrando SOLO a
+            // este socio (comiéndose los proyectados). La comprobación es POR NODO, no
+            // global del basket: otro nodo materializado no hace "completo" al de este
+            // socio. Ver relocate-semanas-futuras-dibujadas-debt.
+            $node = $partner->getWeeklyBasketGroup()?->getNode();
+            if ($node !== null && $wbRepo->findForNodeAndBasket($node, $basket) === []) {
+                throw new \LogicException('No se puede añadir una cesta extra a una semana sin generar para ese nodo: genera primero el listado de esa semana.');
             }
             $wb = $this->createDelivery($partner, $basket);
             $current = [];
