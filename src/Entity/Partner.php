@@ -10,7 +10,10 @@ use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Gedmo\Mapping\Annotation as Gedmo;
 
 /**
- * @ORM\Table(name="partner")
+ * @ORM\Table(name="partner", uniqueConstraints={
+ *     @ORM\UniqueConstraint(name="UNIQ_partner_celular", columns={"celular"}),
+ *     @ORM\UniqueConstraint(name="UNIQ_partner_email", columns={"email"})
+ * })
  * @ORM\Entity(repositoryClass="App\Repository\PartnerRepository")
  * @ORM\HasLifecycleCallbacks
  */
