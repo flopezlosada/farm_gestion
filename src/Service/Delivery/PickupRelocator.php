@@ -4,6 +4,7 @@ namespace App\Service\Delivery;
 
 use App\Entity\Basket;
 use App\Entity\Partner;
+use App\Entity\PartnerDeliveryShift;
 use App\Entity\PartnerEvent;
 use App\Entity\PartnerNodeOverride;
 use App\Entity\WeeklyBasket;
@@ -53,6 +54,14 @@ final class PickupRelocator
      */
     public function relocate(Partner $partner, Basket $basket, WeeklyBasketGroup $toGroup, ?string $actor = null): ?PartnerNodeOverride
     {
+        // Las cestas COMPARTIDAS (alternancia entre dos hogares) NO se trasladan de nodo de
+        // momento: está sin definir cómo afecta al otro hogar (¿se traslada también?, ¿solo el
+        // turno de este?). Se bloquea aquí —no en cada controller— para que ningún punto de
+        // entrada (panel, ficha, listado) lo cuele. Ver deuda compartidas-traslado-nodo.
+        if ($partner->getSharePartner() !== null) {
+            throw new \LogicException('Las cestas compartidas no se pueden trasladar de nodo todavía (pendiente de definir cómo afecta al otro hogar).');
+        }
+
         $destNode = $toGroup->getNode();
         if ($destNode === null) {
             throw new \LogicException('El grupo de destino no tiene un nodo de recogida asociado.');
@@ -66,6 +75,14 @@ final class PickupRelocator
             $this->returnHome($partner, $basket, $actor);
 
             return null;
+        }
+        // Esa semana NO puede tener a la vez un cambio de DÍA o "no recoge" (PartnerDeliveryShift
+        // de entrega entera) y un traslado de NODO: son contradictorios (el move lleva la entrega
+        // a otra semana y el override queda anclado a esta → listado y calendario discrepan). Se
+        // bloquean mutuamente; el guard simétrico está en DeliveryShiftApplier::move. Va DESPUÉS
+        // de returnHome para no impedir la vuelta al patrón. Ver deuda relocate+move.
+        if ($this->em->getRepository(PartnerDeliveryShift::class)->findOutgoing($partner, $basket) !== null) {
+            throw new \LogicException('Esa semana tiene un cambio de día o un "no recoge": quita primero ese cambio si quieres recogerla en otro nodo.');
         }
         if (!$this->nodeDeliveryDate->deliversInBasket($basket, $destNode)) {
             throw new \LogicException('El nodo de destino no reparte esa semana.');

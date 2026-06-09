@@ -9,6 +9,7 @@ use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
 use App\Entity\PartnerDeliveryShift;
 use App\Entity\PartnerEvent;
+use App\Entity\PartnerNodeOverride;
 use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketStatus;
 use App\Repository\PartnerBasketShareRepository;
@@ -100,6 +101,14 @@ final class DeliveryShiftApplier implements ShiftReconciliationActions
      */
     public function move(Partner $partner, Basket $current, Basket $target, ?string $actor = null): void
     {
+        // Esa semana NO puede tener a la vez un traslado puntual de NODO (PartnerNodeOverride)
+        // y un cambio de DÍA: son contradictorios (el override queda anclado a la semana y el
+        // move la lleva a otra → el listado del nodo y el calendario discrepan). Se bloquean
+        // mutuamente; el guard simétrico está en PickupRelocator. Ver deuda relocate+move.
+        if ($this->em->getRepository(PartnerNodeOverride::class)->findForPartnerAndBasket($partner, $current) !== null) {
+            throw new \LogicException('Esa semana la recoges en otro nodo (traslado puntual): quita primero el traslado de nodo si quieres cambiarla de día.');
+        }
+
         /** @var PartnerDeliveryShiftRepository $shiftRepo */
         $shiftRepo = $this->em->getRepository(PartnerDeliveryShift::class);
         /** @var WeeklyBasketRepository $wbRepo */
