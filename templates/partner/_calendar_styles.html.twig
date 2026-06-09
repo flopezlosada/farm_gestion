@@ -12,7 +12,7 @@
   .rcal-grid{background:var(--csa-surface);border:1px solid var(--csa-rule);border-radius:var(--csa-radius-xl);box-shadow:var(--csa-shadow-md);overflow:hidden}
 
   /* cabecera: navegación de mes + acción de reset, integradas en la tarjeta */
-  .rcal-cal-hd{display:flex;align-items:center;gap:var(--csa-sp-3);padding:var(--csa-sp-4) var(--csa-sp-5);background:linear-gradient(180deg,#f1f5e9,var(--csa-surface));border-bottom:1px solid var(--csa-rule)}
+  .rcal-cal-hd{display:flex;align-items:center;gap:var(--csa-sp-3);padding:var(--csa-sp-4) var(--csa-sp-5);background:linear-gradient(180deg,var(--csa-sage-bg),var(--csa-surface));border-bottom:1px solid var(--csa-rule)}
   .rcal-nav{display:flex;align-items:center;gap:var(--csa-sp-3);flex:1;min-width:0}
   .rcal-month{font-family:var(--csa-serif);font-weight:500;font-size:var(--csa-fs-xl);letter-spacing:-.01em;text-transform:capitalize;color:var(--csa-ink)}
   .csa-app a.rcal-navbtn{width:38px;height:38px;border-radius:50%;border:1px solid var(--csa-rule);background:var(--csa-surface);color:var(--csa-ink-soft);display:inline-grid;place-items:center;text-decoration:none;transition:var(--csa-t-fast);flex-shrink:0}
@@ -36,16 +36,16 @@
   .rcal-today-tag{position:absolute;top:8px;right:9px;font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--csa-sky)}
 
   /* día con recogida: lleno verde, número fuerte, marcadores de producto */
-  a.rcal-pick{background:var(--csa-green-soft);border-color:#c4dba6;box-shadow:var(--csa-shadow-sm)}
+  a.rcal-pick{background:var(--csa-sage-bg-hover);border-color:var(--csa-sage-rule);box-shadow:var(--csa-shadow-sm)}
   a.rcal-pick .n{color:var(--csa-green);font-weight:700}
   a.rcal-pick:hover{transform:translateY(-2px);box-shadow:var(--csa-shadow-md);border-color:var(--csa-green)}
 
   /* marcadores: hoja = verdura, óvalo = huevos (FA4 no tiene icono de huevo) */
   .rcal-mk{display:flex;gap:5px;align-self:flex-end}
   .rcal-mk__i{width:22px;height:22px;border-radius:7px;background:#fff;display:grid;place-items:center;font-size:11px}
-  .rcal-mk__i.veg{color:var(--csa-green);box-shadow:inset 0 0 0 1px #c4dba6}
-  .rcal-mk__i.egg{box-shadow:inset 0 0 0 1px #eccf94}
-  .rcal-egg{width:10px;height:13px;border-radius:50% 50% 50% 50%/60% 60% 42% 42%;background:var(--csa-ochre);display:block}
+  .rcal-mk__i.veg{color:var(--csa-green);box-shadow:inset 0 0 0 1px var(--csa-green-soft)}
+  .rcal-mk__i.egg{box-shadow:inset 0 0 0 1px var(--csa-ochre-soft)}
+  .rcal-egg{width:10px;height:13px;border-radius:50% 50% 50% 50%/60% 60% 42% 42%;background:var(--csa-amber);display:block}
 
   /* no recoge nada (vaciado por edición; raro: las saltadas viven en la papelera) */
   a.rcal-skip{background:var(--csa-terracotta-soft);border-color:#f0bfa3}
@@ -67,7 +67,7 @@
 
   /* --- panel del día (estilo "ficha de recogida") --- */
   .rcal-panel{background:var(--csa-surface);border:1px solid var(--csa-rule);border-radius:var(--csa-radius-xl);overflow:hidden;box-shadow:var(--csa-shadow-md)}
-  .rcal-panel__hd{position:relative;padding:var(--csa-sp-6) var(--csa-sp-5) var(--csa-sp-5);background:linear-gradient(180deg,var(--csa-green-soft),#eef4e2)}
+  .rcal-panel__hd{position:relative;padding:var(--csa-sp-6) var(--csa-sp-5) var(--csa-sp-5);background:linear-gradient(180deg,var(--csa-sage-bg),var(--csa-surface))}
   .rcal-panel__hd.is-skip{background:linear-gradient(180deg,var(--csa-terracotta-soft),#fbe6da)}
   .rcal-panel__hd.is-closed{background:linear-gradient(180deg,#e9e8e4,#f2f1ed)}
   .rcal-panel__eyebrow{font-size:var(--csa-fs-xs);text-transform:uppercase;letter-spacing:.08em;font-weight:700;color:var(--csa-green);margin-bottom:6px;display:flex;align-items:center;gap:7px}
@@ -83,8 +83,8 @@
   .rcal-comp{display:flex;align-items:center;gap:var(--csa-sp-4);padding:12px 0}
   .rcal-comp+.rcal-comp{border-top:1px solid var(--csa-rule)}
   .rcal-comp__ic{width:44px;height:44px;border-radius:var(--csa-radius-md);display:grid;place-items:center;font-size:17px;flex-shrink:0}
-  .rcal-comp__ic.veg{background:var(--csa-green-soft);color:var(--csa-green)}
-  .rcal-comp__ic.egg{background:var(--csa-ochre-soft)}
+  .rcal-comp__ic.veg{background:#fff;box-shadow:inset 0 0 0 1px var(--csa-rule);color:var(--csa-green)}
+  .rcal-comp__ic.egg{background:#fff;box-shadow:inset 0 0 0 1px var(--csa-rule)}
   .rcal-comp__ic.egg .rcal-egg{width:15px;height:19px}
   .rcal-comp__t{flex:1}
   .rcal-comp__name{font-weight:600;font-size:var(--csa-fs-md);display:block;color:var(--csa-ink)}
@@ -93,6 +93,19 @@
   .rcal-hint i{margin-top:2px;color:var(--csa-green)}
 
   .rcal-panel__ft{padding:var(--csa-sp-5);border-top:1px solid var(--csa-rule);background:var(--csa-surface-alt)}
+
+  /* Interruptor "recoge / no recoge esta semana": acción reversible, on/off.
+     ON = verde + perilla a la derecha; OFF = gris + perilla a la izquierda. */
+  .csa-app .rcal-switch{display:flex;align-items:center;gap:var(--csa-sp-3);width:100%;background:transparent;border:1px solid transparent;border-radius:var(--csa-radius-md);padding:10px 12px;cursor:pointer;text-align:left;font:inherit;transition:var(--csa-t-fast)}
+  .csa-app .rcal-switch:hover{background:var(--csa-surface)}
+  .csa-app .rcal-switch:focus-visible{outline:2px solid var(--csa-green);outline-offset:2px}
+  .rcal-switch__track{position:relative;width:48px;height:28px;border-radius:var(--csa-radius-pill);background:var(--csa-rule);transition:background var(--csa-t-normal);flex-shrink:0}
+  .rcal-switch__knob{position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(28,29,26,.18);transition:left var(--csa-t-normal)}
+  .csa-app .rcal-switch[aria-pressed="true"] .rcal-switch__track{background:var(--csa-green)}
+  .csa-app .rcal-switch[aria-pressed="true"] .rcal-switch__knob{left:23px}
+  .rcal-switch__txt{display:flex;flex-direction:column;gap:1px;min-width:0}
+  .rcal-switch__label{font-size:var(--csa-fs-md);font-weight:600;color:var(--csa-ink)}
+  .rcal-switch__sub{font-size:var(--csa-fs-xs);color:var(--csa-ink-muted)}
   .rcal-empty{padding:var(--csa-sp-12) var(--csa-sp-5);text-align:center;color:var(--csa-ink-muted);font-size:var(--csa-fs-base)}
 
   /* --- columna izquierda (rejilla + papelera apiladas) --- */
@@ -106,9 +119,9 @@
   .rcal-grip{position:absolute;top:8px;right:9px;color:var(--csa-green);opacity:0;font-size:11px;transition:var(--csa-t-fast)}
   .rcal-grab:hover .rcal-grip{opacity:.6}
   /* destino DISPONIBLE mientras se arrastra (pista suave) */
-  .rcal-dragok{outline:2px dashed #9cc274;outline-offset:-3px;background:var(--csa-green-soft)}
+  .rcal-dragok{outline:2px dashed var(--csa-green);outline-offset:-3px;background:var(--csa-green-soft)}
   /* destino que se está SOBREVOLANDO ahora (pista fuerte) */
-  .rcal-dropok{outline:2px solid var(--csa-green);outline-offset:-3px;background:#cfe3a8}
+  .rcal-dropok{outline:2px solid var(--csa-green);outline-offset:-3px;background:var(--csa-green-soft)}
 
   /* Afordancias por DISPOSITIVO (no por rol): el arrastre es para puntero fino con hover
      (escritorio); el botón "mover por toque" y demás, para pantallas táctiles. Así el socio
@@ -129,7 +142,7 @@
   .rcal-tray.rcal-dragok{outline:none;border:2px dashed var(--csa-terracotta);background:#fdf3ec}
   .rcal-tray.rcal-dropok{outline:none;border:2px solid var(--csa-terracotta);background:#f9dfce}
   .rcal-tray__hd{display:flex;align-items:center;gap:var(--csa-sp-3);margin-bottom:var(--csa-sp-4)}
-  .rcal-tray__ic{width:42px;height:42px;border-radius:var(--csa-radius-md);background:var(--csa-terracotta-soft);color:#b04e22;display:grid;place-items:center;font-size:16px;flex-shrink:0}
+  .rcal-tray__ic{width:42px;height:42px;border-radius:var(--csa-radius-md);background:#fff;box-shadow:inset 0 0 0 1px var(--csa-rule);color:#b04e22;display:grid;place-items:center;font-size:16px;flex-shrink:0}
   .rcal-tray__txt{display:flex;flex-direction:column;gap:2px;min-width:0}
   .rcal-tray__title{font-size:var(--csa-fs-md);font-weight:600;color:var(--csa-ink)}
   .rcal-tray__hint{font-size:var(--csa-fs-xs);color:var(--csa-ink-muted)}
