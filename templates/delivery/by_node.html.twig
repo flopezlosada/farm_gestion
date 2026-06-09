@@ -140,6 +140,10 @@
 .dlv-kebab-menu[hidden] { display: none; }
 .dlv-kebab-menu a { padding: 8px 11px; border-radius: 4px; font-size: 12.5px; color: var(--dlv-ink); text-decoration: none; white-space: nowrap; }
 .dlv-kebab-menu a:hover { background: var(--dlv-sage-l); color: var(--dlv-ink); }
+/* "Quitar cesta extra" es un <form> POST; su botón imita a los <a> del menú. */
+.dlv-kebab-menu form { margin: 0; }
+.dlv-kebab-menu button { display: block; width: 100%; text-align: inherit; padding: 8px 11px; border: 0; border-radius: 4px; background: none; font: inherit; font-size: 12.5px; color: var(--dlv-ink); white-space: nowrap; cursor: pointer; }
+.dlv-kebab-menu button:hover { background: var(--dlv-sage-l); }
 .dlv-toolbar .counters { margin-left: auto; display: flex; align-items: center; gap: 14px; font-size: 12px; color: var(--dlv-ink-soft); }
 .dlv-toolbar .counters b { color: var(--dlv-ink); font-weight: 600; }
 .dlv-toolbar .counters .sep { width: 1px; height: 13px; background: var(--dlv-line-2); }
@@ -187,6 +191,7 @@
 .dlv .mod--6 { background: transparent; color: var(--dlv-ochre-d); border: 1px dashed var(--dlv-ochre); }
 .dlv .mod--7 { background: transparent; color: var(--dlv-terra-d); border: 1px dashed var(--dlv-terra); }
 .dlv .mod--5 { background: #fff2d6; color: var(--dlv-ochre-d); }                .dlv .mod--5 .dot { background: var(--dlv-ochre); }
+.dlv .mod--extra { background: var(--dlv-terra-l); color: var(--dlv-terra-d); } .dlv .mod--extra .dot { background: var(--dlv-terra); }
 .dlv .mod-pair { font-size: 10.5px; color: var(--dlv-ink-faint); margin-top: 3px; font-style: italic; }
 /* etiqueta de socio TRASLADADO (override de nodo): "de {grupo de casa}". */
 .dlv .reloc { display: inline-block; margin-top: 3px; font-size: 10px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--dlv-terra-d); background: var(--dlv-terra-l); padding: 1px 7px; border-radius: 3px; }
@@ -563,7 +568,9 @@
 
         rows.forEach(tr => {
             const ok = (!q || tr.dataset.name.indexOf(q) !== -1)
-                && mods.has(tr.dataset.modality)
+                // Las cestas extra de no-suscriptores no tienen modalidad: nunca las oculta el
+                // filtro de modalidad (siempre visibles salvo búsqueda/huevos).
+                && (tr.dataset.modality === 'extra' || mods.has(tr.dataset.modality))
                 && (!onlyEgg || tr.dataset.eggs === '1');
             tr.classList.toggle('is-hidden', !ok);
         });

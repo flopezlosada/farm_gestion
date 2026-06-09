@@ -134,7 +134,9 @@ class WeeklyBasketRepository extends ServiceEntityRepository
         return $this->createQueryBuilder('wb')
             ->innerJoin('wb.weekly_basket_group', 'wbg')
             ->innerJoin('wb.partner', 'p')
-            ->innerJoin('wb.basket_share', 'bs')
+            // LEFT (no INNER): las entregas "solo extra" de no-suscriptores no tienen modalidad
+            // (basket_share null) y deben aparecer igual — saldrán en la sección "Cestas extra".
+            ->leftJoin('wb.basket_share', 'bs')
             ->where('wbg.node = :node')
             ->andWhere('wb.basket = :basket')
             ->andWhere('wb.weekly_basket_status = :status')

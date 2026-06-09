@@ -15,7 +15,7 @@
 {% set row_dozens = dozens_by_partner_id[wb.partner.id] ?? 0 %}
 <tr class="dlv-row"
     data-name="{{ (wb.partner.nameForDelivery ~ ' ' ~ wb.partner.legalName)|lower }}"
-    data-modality="{{ rbs.id }}"
+    data-modality="{{ rbs ? rbs.id : 'extra' }}"
     data-wbg="{{ wb.weeklyBasketGroup ? wb.weeklyBasketGroup.id : '' }}"
     data-cohort="{{ share.deliveryGroup ?? '' }}"
     data-eggs="{{ row_eggs ? '1' : '0' }}"
@@ -31,7 +31,11 @@
         {% if reloc %}<span class="reloc">de {{ reloc }}</span>{% endif %}
     </td>
     <td style="width: 130px;">
-        <span class="mod mod--{{ rbs.id }}"><span class="dot"></span>{{ rbs.name }}</span>
+        {% if rbs %}
+            <span class="mod mod--{{ rbs.id }}"><span class="dot"></span>{{ rbs.name }}</span>
+        {% else %}
+            <span class="mod mod--extra"><span class="dot"></span>Extra</span>
+        {% endif %}
         {% if wb.partner.sharePartner %}
             <div class="mod-pair">con {{ wb.partner.sharePartner.nameForDelivery }}</div>
         {% endif %}
@@ -55,6 +59,13 @@
             <a href="#" class="js-dlv-extra"
                data-partner-id="{{ wb.partner.id }}"
                data-partner-name="{{ wb.partner.nameForDelivery }}">Añadir cesta extra</a>
+            {% if wb.partner.id in (partner_ids_with_extra ?? []) %}
+            <form method="post" action="{{ path('delivery_remove_extra', { nodeId: node.id, basketId: basket.id }) }}">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token('delivery_remove_extra') }}">
+                <input type="hidden" name="partner_id" value="{{ wb.partner.id }}">
+                <button type="submit">Quitar cesta extra</button>
+            </form>
+            {% endif %}
             {% if can_relocate ?? false %}
             <a href="#" class="js-dlv-relocate"
                data-partner-id="{{ wb.partner.id }}"

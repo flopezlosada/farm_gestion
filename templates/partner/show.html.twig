@@ -714,7 +714,9 @@
                 'BASKET_CHANGE':          { label: 'Cambio en la cesta',        cls: 'basket' },
                 'GROUP_CHANGE_PERMANENT': { label: 'Cambio definitivo A/B',     cls: 'swap'   },
                 'WEEK_SWAP':              { label: 'Cambio puntual de viernes', cls: 'swap'   },
-                'NODE_CHANGE':            { label: 'Cambio de nodo',            cls: 'swap'   }
+                'NODE_CHANGE':            { label: 'Cambio de nodo',            cls: 'swap'   },
+                'BASKET_EXTRA':           { label: 'Cesta extra',               cls: 'basket' },
+                'BASKET_EXTRA_REMOVED':   { label: 'Cesta extra quitada',       cls: 'pause'  }
             } %}
 
             {# Resumen legible de los huevos de un snapshot del payload
@@ -804,6 +806,21 @@
                                             {% if f.delivery_group != t.delivery_group %}
                                                 <div>Grupo: <b>{{ f.delivery_group|default('—') }}</b> → <b>{{ t.delivery_group|default('—') }}</b></div>
                                             {% endif %}
+                                        </div>
+                                    {% elseif event.type == 'BASKET_EXTRA' or event.type == 'BASKET_EXTRA_REMOVED' %}
+                                        {# Cesta extra: semana de entrega + lo añadido (BASKET_EXTRA) o quitado
+                                           (BASKET_EXTRA_REMOVED). Las claves son ids de componente (1 = verdura,
+                                           2 = huevos); el signo lo da el tipo de evento. #}
+                                        {% set amounts = (event.type == 'BASKET_EXTRA' ? payload.added : payload.removed)|default({}) %}
+                                        {% set sign = event.type == 'BASKET_EXTRA' ? '+' : '−' %}
+                                        {% set veg = amounts[1]|default(0) %}
+                                        {% set eggs = amounts[2]|default(0) %}
+                                        {% set parts = [] %}
+                                        {% if veg > 0 %}{% set parts = parts|merge([sign ~ veg ~ ' cesta' ~ (veg > 1 ? 's' : '')]) %}{% endif %}
+                                        {% if eggs > 0 %}{% set parts = parts|merge([sign ~ eggs ~ ' docena' ~ (eggs > 1 ? 's' : '')]) %}{% endif %}
+                                        <div class="prt-timeline__detail">
+                                            {% if payload.basket_date %}<b>{{ payload.basket_date|date('d/m/Y') }}</b>{% endif %}
+                                            {% if parts is not empty %} · {{ parts|join(', ') }}{% endif %}
                                         </div>
                                     {% endif %}
 

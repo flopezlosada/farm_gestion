@@ -224,6 +224,78 @@ class WeeklyBasketComposer
     }
 
     /**
+     * Suma cantidades ADICIONALES (cesta extra) a la composición de una entrega ya
+     * materializada: lee sus líneas reales, añade los deltas por componente (creando la
+     * línea si no existía) y re-estampa. Ajusta {@see WeeklyBasket::setAmount} al nº de
+     * cestas de verdura resultante para que la cabecera siga coherente. No hace flush.
+     *
+     * Es ADITIVA por diseño (no idempotente): llamarla dos veces suma dos veces. El control
+     * de "cuánto se añade" es del llamante (el delta del override de cesta extra). La usan el
+     * editor en vivo (semana generada) y la materialización al congelar una semana dibujada
+     * que tenía overrides de extra. Ver {@see \App\Entity\PartnerBasketExtra}.
+     *
+     * @param WeeklyBasket      $weeklyBasket Entrega materializada.
+     * @param array<int, float> $deltas       componentId => cantidad adicional (<= 0 se ignora).
+     */
+    public function addAmounts(WeeklyBasket $weeklyBasket, array $deltas): void
+    {
+        $byId = [];
+        foreach ($this->copyLines($weeklyBasket) as $line) {
+            $byId[$line['component']->getId()] = $line;
+        }
+
+        $componentRepo = $this->em->getRepository(BasketComponent::class);
+        foreach ($deltas as $componentId => $delta) {
+            if ((float) $delta <= 0) {
+                continue;
+            }
+            if (isset($byId[$componentId])) {
+                $byId[$componentId]['amount'] = number_format((float) $byId[$componentId]['amount'] + (float) $delta, 2, '.', '');
+                continue;
+            }
+            $component = $componentRepo->find($componentId);
+            if ($component !== null) {
+                $byId[$componentId] = ['component' => $component, 'amount' => number_format((float) $delta, 2, '.', '')];
+            }
+        }
+
+        $this->stamp($weeklyBasket, array_values($byId));
+        $weeklyBasket->setAmount((int) round((float) ($byId[BasketComponent::ID_VEGETABLES]['amount'] ?? 0)));
+    }
+
+    /**
+     * Resta cantidades de la composición de una entrega (deshacer una cesta extra): lee sus
+     * líneas reales, resta los deltas por componente y re-estampa, eliminando la línea cuyo
+     * resultado llega a 0. Ajusta {@see WeeklyBasket::setAmount} al nº de cestas de verdura
+     * resultante. No hace flush. Es la inversa de {@see addAmounts}.
+     *
+     * @param WeeklyBasket      $weeklyBasket Entrega materializada.
+     * @param array<int, float> $deltas       componentId => cantidad a restar (<= 0 se ignora).
+     */
+    public function subtractAmounts(WeeklyBasket $weeklyBasket, array $deltas): void
+    {
+        $byId = [];
+        foreach ($this->copyLines($weeklyBasket) as $line) {
+            $byId[$line['component']->getId()] = $line;
+        }
+
+        foreach ($deltas as $componentId => $delta) {
+            if ((float) $delta <= 0 || !isset($byId[$componentId])) {
+                continue;
+            }
+            $remaining = (float) $byId[$componentId]['amount'] - (float) $delta;
+            if ($remaining > 0.001) {
+                $byId[$componentId]['amount'] = number_format($remaining, 2, '.', '');
+            } else {
+                unset($byId[$componentId]); // línea agotada
+            }
+        }
+
+        $this->stamp($weeklyBasket, array_values($byId));
+        $weeklyBasket->setAmount((int) round((float) ($byId[BasketComponent::ID_VEGETABLES]['amount'] ?? 0)));
+    }
+
+    /**
      * @param WeeklyBasket    $weeklyBasket
      * @param BasketComponent $component
      * @param string          $amount Decimal en la unidad natural del componente.

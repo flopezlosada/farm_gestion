@@ -8,6 +8,7 @@ use App\Entity\EggAmount;
 use App\Entity\EggPeriod;
 use App\Entity\Node;
 use App\Entity\Partner;
+use App\Entity\PartnerBasketExtra;
 use App\Entity\PartnerBasketShare;
 use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketGroup;
@@ -272,7 +273,7 @@ class PartnerController extends AbstractController
             'basket_share_names' => $toNameMap($em->getRepository(BasketShare::class)->findAll()),
             'egg_amount_names' => $toNameMap($em->getRepository(EggAmount::class)->findAll()),
             'egg_period_names' => $toNameMap($em->getRepository(EggPeriod::class)->findAll()),
-            'extra_weeks' => $this->extraBasketWeeks($partner, $basketRepo, $weeklyBasketRepo, $nodeDeliveryDate),
+            'extra_weeks' => $this->extraBasketWeeks($partner, $basketRepo, $nodeDeliveryDate),
             'relocate_weeks' => $this->relocatePickupWeeks($partner, $weeklyBasketRepo),
             'relocate_groups' => $this->relocatePickupGroups($partner, $weeklyBasketGroupRepo),
             'donated_baskets' => $donatedBaskets,
@@ -378,22 +379,21 @@ class PartnerController extends AbstractController
     }
 
     /**
-     * Semanas (Basket) a las que se puede añadir una cesta extra a este socix desde
-     * su ficha: las próximas YA GENERADAS (con reparto materializado). Se limita a
-     * generadas porque la cesta extra se fija sobre una entrega existente; las semanas
-     * más tardías sin generar quedan como deuda (aviso diferido). La etiqueta usa la
-     * fecha física del nodo del socix cuando aplica, si no el viernes-ciclo.
+     * Semanas (Basket) a las que se puede añadir una cesta extra a este socix desde su
+     * ficha: las próximas en las que su NODO REPARTE (dibujadas o generadas). La cesta extra
+     * es un override ({@see \App\Entity\PartnerBasketExtra}), así que se puede planificar a
+     * futuro: la proyección la suma al dibujar y la materialización al congelar, sin piedra
+     * parcial. La etiqueta usa la fecha física del nodo (null = el nodo no reparte esa semana,
+     * p. ej. quincenal fuera de fase → se omite).
      *
-     * @param Partner                $partner
-     * @param BasketRepository       $basketRepo
-     * @param WeeklyBasketRepository $weeklyBasketRepo
-     * @param NodeDeliveryDate       $nodeDeliveryDate
+     * @param Partner          $partner
+     * @param BasketRepository $basketRepo
+     * @param NodeDeliveryDate $nodeDeliveryDate
      * @return list<array{id:int, date:\DateTimeInterface}> Semanas ofrecibles, en orden.
      */
     private function extraBasketWeeks(
         Partner $partner,
         BasketRepository $basketRepo,
-        WeeklyBasketRepository $weeklyBasketRepo,
         NodeDeliveryDate $nodeDeliveryDate,
     ): array {
         $node = $partner->getWeeklyBasketGroup()?->getNode();
@@ -402,14 +402,14 @@ class PartnerController extends AbstractController
 
         $weeks = [];
         foreach ($basketRepo->findBetweenDates($from, $to) as $basket) {
-            // Solo semanas con el reparto del NODO del socio YA generado: en una semana
-            // que aún se dibuja, una cesta extra suelta dejaría piedra parcial (ver
-            // relocate-semanas-futuras-dibujadas-debt). Per-node, no global del basket.
-            if ($node === null || $weeklyBasketRepo->findForNodeAndBasket($node, $basket) === []) {
+            // Semanas en las que el nodo del socio REPARTE (físicamente): physicalDateFor da
+            // null si esa semana no le toca (cadencia/excepción), y entonces se omite. No se
+            // exige que esté generada: el override funciona también sobre el dibujo.
+            $physical = $node !== null ? $nodeDeliveryDate->physicalDateFor($basket, $node) : null;
+            if ($physical === null) {
                 continue;
             }
-            $physical = $nodeDeliveryDate->physicalDateFor($basket, $node);
-            $weeks[] = ['id' => $basket->getId(), 'date' => $physical ?? $basket->getDate()];
+            $weeks[] = ['id' => $basket->getId(), 'date' => $physical];
         }
 
         return $weeks;
@@ -898,6 +898,7 @@ class PartnerController extends AbstractController
         WeeklyBasketGenerator $generator,
         PartnerDeliveryShiftRepository $shiftRepository,
         DeliveryShiftApplier $applier,
+        ExtraBasketEditor $extraBasketEditor,
         EntityManagerInterface $em,
     ): Response {
         $basket = $em->getRepository(Basket::class)->find($basketId);
@@ -919,6 +920,21 @@ class PartnerController extends AbstractController
         }
 
         $actor = 'gestor:' . $this->getUser()?->getId();
+
+        // CESTA EXTRA: si el día existe SOLO por una cesta extra (el patrón del socio no le da
+        // entrega esa semana), "no recoge" = QUITAR la extra (cancelarla), no un skip de patrón
+        // (que no tendría cesta que aparcar). Se comprueba antes de las guardas porque un
+        // no-suscriptor (sin cesta activa) no las pasaría, y su extra hay que poder quitarla.
+        // Si el patrón SÍ le da cesta esa semana (la extra va encima), sigue el flujo normal.
+        if (!$request->request->getBoolean('recover')
+            && $extraBasketEditor->hasExtra($partner, $basket)
+            && !$this->patternDelivers($partner, $basket, $generator, $em)
+        ) {
+            $extraBasketEditor->removeExtra($partner, $basket, $actor);
+            $this->addFlash('success', 'Cesta extra quitada: esa semana no recoge.');
+
+            return $backToCalendar();
+        }
 
         $generated = $em->getRepository(WeeklyBasket::class)->findOneBy(['basket' => $basket]) !== null;
         $outgoing = $shiftRepository->findOutgoing($partner, $basket);
@@ -986,6 +1002,24 @@ class PartnerController extends AbstractController
         $this->addFlash('success', 'Marcada como NO recogida esa semana.');
 
         return $backToCalendar();
+    }
+
+    /**
+     * ¿El PATRÓN del socio le da una entrega esa semana (independiente de extras)? Sirve para
+     * decidir si un "no recoge" sobre un día que tiene cesta extra debe quitar la extra (día
+     * que solo existe por ella) o saltar la entrega de patrón (la extra iba encima).
+     *
+     * @param Partner               $partner
+     * @param Basket                $basket
+     * @param WeeklyBasketGenerator $generator
+     * @param EntityManagerInterface $em
+     * @return bool
+     */
+    private function patternDelivers(Partner $partner, Basket $basket, WeeklyBasketGenerator $generator, EntityManagerInterface $em): bool
+    {
+        $share = $em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner, $basket->getDate());
+
+        return $share !== null && $generator->projectShareDelivery($basket, $share) !== null;
     }
 
     /**

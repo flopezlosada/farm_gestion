@@ -5,6 +5,7 @@ namespace App\Service\Delivery;
 use App\Entity\Basket;
 use App\Entity\BasketComponent;
 use App\Entity\Partner;
+use App\Entity\PartnerBasketExtra;
 use App\Entity\PartnerEvent;
 use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketStatus;
@@ -40,9 +41,13 @@ final class ExtraBasketEditor
     }
 
     /**
-     * Añade cestas y/o huevos a la entrega del socio en esa semana (creándola si no
-     * existía) y persiste. El incremento se suma a la composición actual. Transaccional:
-     * hace flush al final.
+     * Añade cestas y/o huevos a la entrega del socio en esa semana como OVERRIDE puntual
+     * ({@see PartnerBasketExtra}), hermano del override de nodo. El incremento se ACUMULA
+     * sobre lo que ya tuviera de extra esa semana. Cascadea a piedra si el reparto del NODO
+     * del socio ya está generado (suma a su entrega, creándola si no le tocaba); si la
+     * semana solo está DIBUJADA, basta el override —la proyección lo suma al dibujar y la
+     * materialización al congelar—, así funciona también a futuro y sin piedra parcial.
+     * Transaccional: hace flush al final.
      *
      * @param Partner            $partner    Socio.
      * @param Basket             $basket     Semana/ciclo de reparto.
@@ -50,9 +55,6 @@ final class ExtraBasketEditor
      *                                       Las ausentes o <= 0 no añaden nada.
      * @param string|null        $note       Motivo libre del gestor (queda en el evento).
      * @param string|null        $actor      Quién lo origina (ver PartnerEvent::$actor).
-     * @return WeeklyBasket La entrega con la cesta extra ya sumada.
-     * @throws \LogicException Si la semana aún no está generada (no hay ninguna entrega en ella):
-     *                         una entrega suelta dejaría el listado de esa semana con solo ella.
      */
     public function addToDelivery(
         Partner $partner,
@@ -60,56 +62,132 @@ final class ExtraBasketEditor
         array $addAmounts,
         ?string $note = null,
         ?string $actor = null,
-    ): WeeklyBasket {
+    ): void {
+        // 1. Override = fuente de verdad. Upsert por componente (acumula sobre lo previo).
+        $deltas = $this->upsertOverrides($partner, $basket, $addAmounts);
+        if ($deltas === []) {
+            return; // nada que añadir (todos los incrementos <= 0).
+        }
+
+        // 2. Cascada a PIEDRA solo si la semana ya está materializada para el NODO del socio.
+        //    Generada: sumamos a su entrega (creándola si no le tocaba). Dibujada: basta el
+        //    override, que la proyección suma al dibujar (no se toca piedra ni se crea parcial).
         $wbRepo = $this->em->getRepository(WeeklyBasket::class);
-
         $wb = $wbRepo->findOneBy(['basket' => $basket, 'partner' => $partner]);
-        if ($wb === null) {
-            // "No le tocaba": se crea su entrega. Solo es seguro si el reparto del NODO del
-            // socio ya está generado esa semana; si solo está dibujado, este WB suelto
-            // dejaría piedra parcial y el listado del nodo marcaría STONE mostrando SOLO a
-            // este socio (comiéndose los proyectados). La comprobación es POR NODO, no
-            // global del basket: otro nodo materializado no hace "completo" al de este
-            // socio. Ver relocate-semanas-futuras-dibujadas-debt.
-            $node = $partner->getWeeklyBasketGroup()?->getNode();
-            if ($node !== null && $wbRepo->findForNodeAndBasket($node, $basket) === []) {
-                throw new \LogicException('No se puede añadir una cesta extra a una semana sin generar para ese nodo: genera primero el listado de esa semana.');
-            }
-            $wb = $this->createDelivery($partner, $basket);
-            $current = [];
+        if ($wb !== null) {
+            $this->composer->addAmounts($wb, $deltas);
         } else {
-            $current = $this->currentAmounts($wb);
+            $node = $partner->getWeeklyBasketGroup()?->getNode();
+            if ($node !== null && $wbRepo->findForNodeAndBasket($node, $basket) !== []) {
+                // Semana generada para el nodo y "no le tocaba": crear su entrega y sumar.
+                $wb = $this->createDelivery($partner, $basket);
+                $this->composer->addAmounts($wb, $deltas);
+            }
+            // Nodo sin generar: semana dibujada → solo el override (lo aplica la proyección).
         }
-
-        $total = $current;
-        foreach ($addAmounts as $componentId => $add) {
-            $total[$componentId] = ($total[$componentId] ?? 0.0) + (float) $add;
-        }
-
-        $this->composer->stamp($wb, $this->linesFrom($total));
-        $wb->setAmount($this->vegetableCount($total));
 
         $this->recordEvent($partner, $basket, $addAmounts, $note, $actor);
         $this->em->flush();
-
-        return $wb;
     }
 
     /**
-     * Composición actual de una entrega como mapa [componentId => cantidad], leyendo
-     * sus líneas reales. Base sobre la que se suma el incremento.
+     * ¿Tiene el socio alguna cesta extra (override) esa semana?
      *
-     * @param WeeklyBasket $wb
-     * @return array<int, float>
+     * @param Partner $partner
+     * @param Basket  $basket
+     * @return bool
      */
-    private function currentAmounts(WeeklyBasket $wb): array
+    public function hasExtra(Partner $partner, Basket $basket): bool
     {
-        $map = [];
-        foreach ($this->composer->copyLines($wb) as $line) {
-            $map[$line['component']->getId()] = (float) $line['amount'];
+        return $this->em->getRepository(PartnerBasketExtra::class)->findForPartnerAndBasket($partner, $basket) !== [];
+    }
+
+    /**
+     * Deshace la cesta extra de un socio esa semana: borra TODOS sus overrides de extra de
+     * esa semana y revierte la piedra si está generada. Para una cesta extra, "no recoge"
+     * equivale a esto (cancelar el añadido). Transaccional: hace flush al final.
+     *
+     * Revertir piedra: si la entrega era "solo extra" (sin modalidad, creada para el extra)
+     * se borra entera; si tenía base (suscripción), se resta el extra de su composición. En
+     * una semana solo DIBUJADA no hay piedra: basta borrar el override (la proyección redibuja).
+     *
+     * @param Partner     $partner Socio.
+     * @param Basket      $basket  Semana/ciclo de reparto.
+     * @param string|null $actor   Quién lo origina (ver PartnerEvent::$actor).
+     * @return bool true si había algún extra que quitar; false si no había nada.
+     */
+    public function removeExtra(Partner $partner, Basket $basket, ?string $actor = null): bool
+    {
+        $extras = $this->em->getRepository(PartnerBasketExtra::class)->findForPartnerAndBasket($partner, $basket);
+        if ($extras === []) {
+            return false;
         }
 
-        return $map;
+        // Deltas a revertir de la piedra y borrado de los overrides (fuente de verdad).
+        $deltas = [];
+        foreach ($extras as $extra) {
+            $component = $extra->getComponent();
+            if ($component !== null) {
+                $deltas[$component->getId()] = (float) $extra->getAmount();
+            }
+            $this->em->remove($extra);
+        }
+
+        // Cascada a piedra si la semana está materializada para el socio.
+        $wb = $this->em->getRepository(WeeklyBasket::class)->findOneBy(['basket' => $basket, 'partner' => $partner]);
+        if ($wb !== null) {
+            if ($wb->getBasketShare() === null) {
+                // Entrega "solo extra" (sin modalidad): era enteramente el extra → se borra
+                // con sus líneas (stamp([]) las limpia antes de quitar el WB).
+                $this->composer->stamp($wb, []);
+                $this->em->remove($wb);
+            } else {
+                // Tenía base de suscripción: se resta el extra y queda su cesta de patrón.
+                $this->composer->subtractAmounts($wb, $deltas);
+            }
+        }
+
+        $this->recordRemovalEvent($partner, $basket, $deltas, $actor);
+        $this->em->flush();
+
+        return true;
+    }
+
+    /**
+     * Crea o re-apunta (ACUMULANDO) el override de cesta extra por componente para esa
+     * semana, y devuelve los deltas efectivos que se añaden ahora (lo que hay que cascadear
+     * a la piedra), descartando los <= 0 y los componentes inexistentes.
+     *
+     * @param Partner            $partner
+     * @param Basket             $basket
+     * @param array<int, string> $addAmounts componentId => incremento.
+     * @return array<int, float> componentId => delta efectivo (> 0).
+     */
+    private function upsertOverrides(Partner $partner, Basket $basket, array $addAmounts): array
+    {
+        $extraRepo = $this->em->getRepository(PartnerBasketExtra::class);
+        $componentRepo = $this->em->getRepository(BasketComponent::class);
+
+        $deltas = [];
+        foreach ($addAmounts as $componentId => $add) {
+            $delta = (float) $add;
+            if ($delta <= 0) {
+                continue;
+            }
+            $component = $componentRepo->find($componentId);
+            if ($component === null) {
+                continue;
+            }
+            $existing = $extraRepo->findOneForPartnerBasketComponent($partner, $basket, $component);
+            if ($existing !== null) {
+                $existing->setAmount(number_format((float) $existing->getAmount() + $delta, 2, '.', ''));
+            } else {
+                $this->em->persist(new PartnerBasketExtra($partner, $basket, $component, number_format($delta, 2, '.', '')));
+            }
+            $deltas[$componentId] = $delta;
+        }
+
+        return $deltas;
     }
 
     /**
@@ -146,44 +224,6 @@ final class ExtraBasketEditor
     }
 
     /**
-     * Convierte el mapa [componentId => cantidad] en las líneas que espera el composer,
-     * resolviendo cada BasketComponent y descartando las cantidades nulas o <= 0.
-     *
-     * @param array<int, float|string> $componentAmounts
-     * @return array<int, array{component: BasketComponent, amount: string}>
-     */
-    private function linesFrom(array $componentAmounts): array
-    {
-        $componentRepo = $this->em->getRepository(BasketComponent::class);
-
-        $lines = [];
-        foreach ($componentAmounts as $componentId => $amount) {
-            if ((float) $amount <= 0) {
-                continue;
-            }
-            $component = $componentRepo->find($componentId);
-            if ($component !== null) {
-                $lines[] = ['component' => $component, 'amount' => number_format((float) $amount, 2, '.', '')];
-            }
-        }
-
-        return $lines;
-    }
-
-    /**
-     * Número de cestas (de verdura) que lleva la entrega, para mantener coherente el
-     * WeeklyBasket::amount (que alimenta los totales de cabecera) con las líneas. 0 si
-     * la entrega es solo de huevos.
-     *
-     * @param array<int, float|string> $componentAmounts
-     * @return int
-     */
-    private function vegetableCount(array $componentAmounts): int
-    {
-        return (int) round((float) ($componentAmounts[BasketComponent::ID_VEGETABLES] ?? 0));
-    }
-
-    /**
      * Deja constancia de la cesta extra en el histórico del socio (PartnerEvent),
      * registrando lo que se AÑADIÓ (no el total).
      *
@@ -204,6 +244,30 @@ final class ExtraBasketEditor
         if ($note !== null && $note !== '') {
             $event->setNotes($note);
         }
+        if ($actor !== null) {
+            $event->setActor($actor);
+        }
+        $this->em->persist($event);
+    }
+
+    /**
+     * Deja constancia de la BAJA de una cesta extra en el histórico (PartnerEvent), con las
+     * cantidades que se quitaron, para que el histórico no quede mostrando "extra añadida"
+     * tras haberla deshecho.
+     *
+     * @param Partner           $partner
+     * @param Basket            $basket
+     * @param array<int, float> $removed componentId => cantidad quitada.
+     * @param string|null       $actor
+     */
+    private function recordRemovalEvent(Partner $partner, Basket $basket, array $removed, ?string $actor): void
+    {
+        $event = new PartnerEvent($partner, PartnerEvent::TYPE_BASKET_EXTRA_REMOVED);
+        $event->setPayload([
+            'basket_id' => $basket->getId(),
+            'basket_date' => $basket->getDate()?->format('Y-m-d'),
+            'removed' => $removed,
+        ]);
         if ($actor !== null) {
             $event->setActor($actor);
         }

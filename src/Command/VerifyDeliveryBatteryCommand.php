@@ -149,6 +149,12 @@ class VerifyDeliveryBatteryCommand extends Command
         $this->extraBasketSumScenario();
         $this->extraBasketNewScenario();
 
+        // Cesta extra como OVERRIDE: sobre semana DIBUJADA (la proyección la suma y al congelar
+        // entra en piedra == dibujo), a un NO-SUSCRIPTOR (sección "Cestas extra"), y DESHACER.
+        $this->extraDrawnWeekScenario();
+        $this->extraNonSubscriberScenario();
+        $this->removeExtraScenario();
+
         // Traslado puntual de lugar: un socio recoge esa semana en otro nodo.
         $this->relocateNodeScenario();
 
@@ -157,6 +163,9 @@ class VerifyDeliveryBatteryCommand extends Command
         // overrides (docs/redesign/modelo-overrides-reparto.md): el socio sale del dibujo de
         // su nodo de casa y aparece en el destino, en una semana que NO está generada.
         $this->nodeOverrideDrawnScenario();
+
+        // Volver al nodo de casa: deshacer un traslado (returnHome) devuelve al socio a su nodo.
+        $this->returnHomeScenario();
 
         $this->report();
 
@@ -552,7 +561,7 @@ class VerifyDeliveryBatteryCommand extends Command
     private function extraBasketSumScenario(): void
     {
         $label = 'Cesta extra (subir cantidad)';
-        $partner = $this->pickPartner(self::SEMANAL, false);
+        $partner = $this->pickPartner(self::SEMANAL, false) ?? $this->pickPartner(self::SEMANAL, true);
         if ($partner === null) { $this->skip($label, 'sin semanal libre sin huevos'); return; }
         $month = $this->nextMonth();
         if ($month === null) { $this->skip($label, 'sin mes futuro sin generar'); return; }
@@ -759,6 +768,171 @@ class VerifyDeliveryBatteryCommand extends Command
             $partner->getId(), $target->getId(),
             $destNode->getName(), $inDest ? 'sí' : 'NO', $originNode->getName(), $inOrigin ? 'NO' : 'sí',
             $destNode->getName(), $inDestStone ? 'sí' : 'NO', $originNode->getName(), $inOriginStone ? 'NO' : 'sí',
+        ));
+    }
+
+    /**
+     * Cesta extra como OVERRIDE sobre una semana DIBUJADA (futura, sin generar), a un socio
+     * SUSCRIPTOR: la proyección debe sumar el delta al dibujar, y al congelar la piedra debe
+     * salir IGUAL (proyección == materializado). Es la red de la capacidad nueva del override
+     * (planificar a futuro sin piedra parcial), análoga a nodeOverrideDrawnScenario.
+     */
+    private function extraDrawnWeekScenario(): void
+    {
+        $label = 'Cesta extra en semana dibujada (proyección == piedra)';
+        $partner = $this->pickPartner(self::SEMANAL, false) ?? $this->pickPartner(self::SEMANAL, true);
+        if ($partner === null) { $this->skip($label, 'sin semanal libre sin huevos'); return; }
+        $node = $partner->getWeeklyBasketGroup()?->getNode();
+        if ($node === null) { $this->skip($label, 'socio sin nodo'); return; }
+        $month = $this->nextMonth();
+        if ($month === null) { $this->skip($label, 'sin mes futuro sin generar'); return; }
+        $target = $month['baskets'][0];
+
+        // Base de patrón dibujada ANTES de la extra (semanal = 1 cesta).
+        $base = $this->sheetDataPartnerCestas($this->sheet->shape($this->generator->projectLinesForNode($node, $target)), $partner);
+
+        // Añadir +2 sobre la semana DIBUJADA (no se genera): solo override.
+        $this->extraBasketEditor->addToDelivery($partner, $target, [BasketComponent::ID_VEGETABLES => '2'], 'verif drawn', 'verif');
+
+        // 1) DIBUJO: la proyección suma el delta.
+        $drawn = $this->sheetDataPartnerCestas($this->sheet->shape($this->generator->projectLinesForNode($node, $target)), $partner);
+
+        // 2) CONGELAR: la materialización aplica el override (piedra == dibujo).
+        $this->generator->generateForBasket($target);
+        $stone = $this->sheetPartnerCestas($node, $target, $partner);
+
+        $expected = ($base ?? 0.0) + 2;
+        $ok = $drawn === $expected && $stone === $expected;
+        $this->record($label, $ok, sprintf(
+            'socio %d · semana %d · base=%s · dibujo=%s · piedra=%s (esperado %s)',
+            $partner->getId(), $target->getId(),
+            $base === null ? 'null' : (string) $base,
+            $drawn === null ? 'null' : (string) $drawn,
+            $stone === null ? 'null' : (string) $stone,
+            (string) $expected,
+        ));
+    }
+
+    /**
+     * Cesta extra a un NO-SUSCRIPTOR (socio activo sin PartnerBasketShare): al no tener
+     * modalidad, debe salir en la sección "Cestas extra" del listado, tanto en el DIBUJO como
+     * tras CONGELAR. Blinda el camino de no-suscriptor (caso AMUMI).
+     */
+    private function extraNonSubscriberScenario(): void
+    {
+        $label = 'Cesta extra a no-suscriptor (sección Cestas extra)';
+        $partner = $this->pickNonSubscriber();
+        if ($partner === null) { $this->skip($label, 'sin socio activo sin suscripción en nodo semanal'); return; }
+        $node = $partner->getWeeklyBasketGroup()?->getNode();
+        if ($node === null) { $this->skip($label, 'socio sin nodo'); return; }
+        $month = $this->nextMonth();
+        if ($month === null) { $this->skip($label, 'sin mes futuro sin generar'); return; }
+        $target = $month['baskets'][0];
+
+        $this->extraBasketEditor->addToDelivery($partner, $target, [BasketComponent::ID_VEGETABLES => '1', BasketComponent::ID_EGGS => '1'], 'verif no-sub', 'verif');
+
+        // DIBUJO: sale en la sección "Cestas extra".
+        $drawnGroup = $this->sheetGroupOfPartner($this->sheet->shape($this->generator->projectLinesForNode($node, $target)), $partner);
+
+        // CONGELAR: idem en piedra.
+        $this->generator->generateForBasket($target);
+        $stoneGroup = $this->sheetGroupOfPartner($this->sheet->build($node, $target), $partner);
+
+        $ok = $drawnGroup === 'Cestas extra' && $stoneGroup === 'Cestas extra';
+        $this->record($label, $ok, sprintf(
+            'socio %d · semana %d · sección dibujo=%s · sección piedra=%s (esperado "Cestas extra")',
+            $partner->getId(), $target->getId(), $drawnGroup ?? 'AUSENTE', $stoneGroup ?? 'AUSENTE',
+        ));
+    }
+
+    /**
+     * Ciclo completo de la cesta extra: DIBUJAR (proyección la suma) → CONGELAR (entra en
+     * piedra) → DESHACER (removeExtra borra el override y revierte la piedra al patrón). Blinda
+     * que "no recoge"/quitar una extra vuelve exactamente a la cesta base.
+     */
+    private function removeExtraScenario(): void
+    {
+        $label = 'Cesta extra: dibujar → congelar → deshacer';
+        $partner = $this->pickPartner(self::SEMANAL, false) ?? $this->pickPartner(self::SEMANAL, true);
+        if ($partner === null) { $this->skip($label, 'sin semanal libre sin huevos'); return; }
+        $node = $partner->getWeeklyBasketGroup()?->getNode();
+        if ($node === null) { $this->skip($label, 'socio sin nodo'); return; }
+        $month = $this->nextMonth();
+        if ($month === null) { $this->skip($label, 'sin mes futuro sin generar'); return; }
+        $target = $month['baskets'][0];
+
+        $base = $this->sheetDataPartnerCestas($this->sheet->shape($this->generator->projectLinesForNode($node, $target)), $partner);
+
+        $this->extraBasketEditor->addToDelivery($partner, $target, [BasketComponent::ID_VEGETABLES => '2'], 'verif', 'verif');
+        $drawnWithExtra = $this->sheetDataPartnerCestas($this->sheet->shape($this->generator->projectLinesForNode($node, $target)), $partner);
+
+        $this->generator->generateForBasket($target);
+        $stoneWithExtra = $this->sheetPartnerCestas($node, $target, $partner);
+
+        $removed = $this->extraBasketEditor->removeExtra($partner, $target, 'verif');
+        $stoneAfterRemove = $this->sheetPartnerCestas($node, $target, $partner);
+
+        $expected = ($base ?? 0.0) + 2;
+        $ok = $drawnWithExtra === $expected && $stoneWithExtra === $expected
+            && $removed === true && $stoneAfterRemove === $base;
+        $this->record($label, $ok, sprintf(
+            'socio %d · semana %d · base=%s · con extra dibujo/piedra=%s/%s · quitada=%s · piedra tras quitar=%s (esperado %s)',
+            $partner->getId(), $target->getId(),
+            $base === null ? 'null' : (string) $base,
+            $drawnWithExtra === null ? 'null' : (string) $drawnWithExtra,
+            $stoneWithExtra === null ? 'null' : (string) $stoneWithExtra,
+            $removed ? 'sí' : 'NO',
+            $stoneAfterRemove === null ? 'null' : (string) $stoneAfterRemove,
+            $base === null ? 'null' : (string) $base,
+        ));
+    }
+
+    /**
+     * Volver al nodo de casa: tras trasladar a un socio a otro nodo (semana generada), returnHome
+     * deshace el traslado — el socio vuelve a salir en su nodo de casa y desaparece del destino.
+     * Inversa de relocateNodeScenario.
+     */
+    private function returnHomeScenario(): void
+    {
+        $label = 'Volver al nodo (deshacer traslado)';
+        $partner = $this->pickPartner(self::QUINCENAL, null, Node::CADENCE_BIWEEKLY);
+        if ($partner === null) { $this->skip($label, 'sin quincenal en nodo biweekly'); return; }
+        $originNode = $partner->getWeeklyBasketGroup()?->getNode();
+        if ($originNode === null) { $this->skip($label, 'el socio elegido no tiene nodo'); return; }
+        $month = $this->nextMonth();
+        if ($month === null) { $this->skip($label, 'sin mes futuro sin generar'); return; }
+
+        $destNode = $this->nodeRepo->findOneBy(['cadence' => Node::CADENCE_WEEKLY]);
+        if ($destNode === null) { $this->skip($label, 'sin nodo semanal destino'); return; }
+        $destGroup = $this->em->getRepository(WeeklyBasketGroup::class)->findOneBy(['node' => $destNode]);
+        if ($destGroup === null) { $this->skip($label, 'el nodo destino no tiene grupos'); return; }
+
+        $target = null;
+        foreach ($month['baskets'] as $b) {
+            if ($this->nodeDeliveryDate->deliversInBasket($b, $originNode) && $this->nodeDeliveryDate->deliversInBasket($b, $destNode)) {
+                $target = $b;
+                break;
+            }
+        }
+        if ($target === null) { $this->skip($label, 'sin semana común origen/destino'); return; }
+
+        foreach ($month['baskets'] as $b) { $this->generator->generateForBasket($b); }
+
+        $this->relocator->relocate($partner, $target, $destGroup, 'verif');
+        $inDestAfterRelocate = $this->sheetContainsPartner($destNode, $target, $partner);
+
+        // Deshacer: vuelve a su nodo de casa.
+        $this->relocator->returnHome($partner, $target, 'verif');
+        $inOrigin = $this->sheetContainsPartner($originNode, $target, $partner);
+        $inDest = $this->sheetContainsPartner($destNode, $target, $partner);
+
+        $ok = $inDestAfterRelocate && $inOrigin && !$inDest;
+        $this->record($label, $ok, sprintf(
+            'socio %d · semana %d · tras trasladar en %s=%s · tras volver: en %s=%s / en %s=%s',
+            $partner->getId(), $target->getId(),
+            $destNode->getName(), $inDestAfterRelocate ? 'sí' : 'NO',
+            $originNode->getName(), $inOrigin ? 'sí' : 'NO',
+            $destNode->getName(), $inDest ? 'NO (sigue)' : 'sí',
         ));
     }
 
@@ -1052,6 +1226,89 @@ class VerifyDeliveryBatteryCommand extends Command
             }
         }
         return false;
+    }
+
+    /**
+     * Cestas (verdura) con que un socio aparece en un sheet YA construido (build o shape), o
+     * null si no aparece. Como {@see sheetPartnerCestas} pero sobre el array, para poder leer
+     * el listado DIBUJADO (proyección).
+     *
+     * @param array<string,mixed> $data
+     */
+    private function sheetDataPartnerCestas(array $data, Partner $partner): ?float
+    {
+        $name = $partner->getNameForDelivery();
+        foreach ($data['groups'] as $g) {
+            foreach ($g['modalities'] as $m) {
+                foreach ($m['rows'] as $r) {
+                    if (($r['name'] ?? '') === $name) {
+                        return (float) $r['cestas'];
+                    }
+                }
+            }
+        }
+        foreach ($data['shared']['rows'] as $r) {
+            if (($r['name'] ?? '') === $name) {
+                return (float) $r['cestas'];
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Nombre del GRUPO/sección del sheet en el que aparece el socio (p. ej. "Cestas extra",
+     * "Trasladados", o un grupo de recogida), o null si no aparece. Para comprobar que una
+     * entrega va a la sección correcta.
+     *
+     * @param array<string,mixed> $data
+     */
+    private function sheetGroupOfPartner(array $data, Partner $partner): ?string
+    {
+        $name = $partner->getNameForDelivery();
+        foreach ($data['groups'] as $g) {
+            foreach ($g['modalities'] as $m) {
+                foreach ($m['rows'] as $r) {
+                    if (($r['name'] ?? '') === $name) {
+                        return $g['name'];
+                    }
+                }
+            }
+        }
+        foreach ($data['shared']['rows'] as $r) {
+            if (($r['name'] ?? '') === $name) {
+                return 'compartidas';
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Elige un socio activo SIN suscripción (sin PartnerBasketShare activo) en un nodo semanal
+     * (reparte todas las semanas, así el target dibujado le toca), que no se haya usado ya. Para
+     * el escenario de cesta extra a no-suscriptor.
+     */
+    private function pickNonSubscriber(): ?Partner
+    {
+        $qb = $this->em->createQueryBuilder()
+            ->select('p')
+            ->from(Partner::class, 'p')
+            ->join('p.weekly_basket_group', 'wbg')
+            ->join('wbg.node', 'n')
+            ->where('p.status = :activo')
+            ->andWhere('p.parent IS NULL')
+            ->andWhere('n.cadence = :weekly')
+            ->andWhere('NOT EXISTS (SELECT 1 FROM ' . PartnerBasketShare::class . ' s WHERE s.partner = p AND s.is_active = 1 AND s.end_date IS NULL)')
+            ->setParameter('activo', 'ACTIVO')
+            ->setParameter('weekly', Node::CADENCE_WEEKLY)
+            ->orderBy('p.id', 'ASC');
+
+        foreach ($qb->getQuery()->getResult() as $partner) {
+            if (!in_array($partner->getId(), $this->usedPartners, true)) {
+                $this->usedPartners[] = $partner->getId();
+                return $partner;
+            }
+        }
+        return null;
     }
 
     /** @return int[] basket ids del mes donde el socio tiene WeeklyBasket, en orden. */

@@ -219,6 +219,119 @@ class WeeklyBasketComposerTest extends TestCase
         $this->assertSame([$item], $removed);
     }
 
+    public function testAddAmountsSumaElDeltaALasLineasYAjustaAmount(): void
+    {
+        // Entrega con 1 cesta de verdura; +2 verdura y +1 docena → 3 verdura y 1 huevo.
+        $veg = $this->component(BasketComponent::ID_VEGETABLES, 'Verdura');
+        $existing = (new WeeklyBasketItem())->setBasketComponent($veg)->setAmount('1.00');
+        $persisted = [];
+        $removed = [];
+        $composer = $this->composerWithItems([$existing], $persisted, $removed);
+
+        $wb = $this->weeklyBasket(modalidad: 1, amount: 1);
+        $composer->addAmounts($wb, [BasketComponent::ID_VEGETABLES => 2.0, BasketComponent::ID_EGGS => 1.0]);
+
+        // stamp re-estampa: borra la línea previa y persiste las nuevas (3 verdura, 1 huevo).
+        $this->assertSame([$existing], $removed);
+        $real = [];
+        foreach ($persisted as $item) {
+            $real[$item->getBasketComponent()->getName()] = $item->getAmount();
+        }
+        $this->assertSame(['Verdura' => '3.00', 'Huevos' => '1.00'], $real);
+        // wb.amount sigue al nº de cestas de verdura tras el extra.
+        $this->assertSame(3, $wb->getAmount());
+    }
+
+    public function testAddAmountsSobreEntregaVaciaCreaLasLineas(): void
+    {
+        // "No le tocaba": sin líneas previas, el extra crea las líneas desde cero.
+        $persisted = [];
+        $composer = $this->composerWithItems([], $persisted);
+
+        $wb = $this->weeklyBasket(modalidad: 1, amount: 0);
+        $composer->addAmounts($wb, [BasketComponent::ID_VEGETABLES => 1.0]);
+
+        $real = [];
+        foreach ($persisted as $item) {
+            $real[$item->getBasketComponent()->getName()] = $item->getAmount();
+        }
+        $this->assertSame(['Verdura' => '1.00'], $real);
+        $this->assertSame(1, $wb->getAmount());
+    }
+
+    public function testSubtractAmountsRestaElDeltaYAjustaAmount(): void
+    {
+        // Entrega con 3 cestas de verdura; quitar 2 (deshacer una extra) → quedan 1.
+        $veg = $this->component(BasketComponent::ID_VEGETABLES, 'Verdura');
+        $existing = (new WeeklyBasketItem())->setBasketComponent($veg)->setAmount('3.00');
+        $persisted = [];
+        $removed = [];
+        $composer = $this->composerWithItems([$existing], $persisted, $removed);
+
+        $wb = $this->weeklyBasket(modalidad: 1, amount: 3);
+        $composer->subtractAmounts($wb, [BasketComponent::ID_VEGETABLES => 2.0]);
+
+        $real = [];
+        foreach ($persisted as $item) {
+            $real[$item->getBasketComponent()->getName()] = $item->getAmount();
+        }
+        $this->assertSame(['Verdura' => '1.00'], $real);
+        $this->assertSame(1, $wb->getAmount());
+    }
+
+    public function testSubtractAmountsEliminaLaLineaQueLlegaACero(): void
+    {
+        // Quitar exactamente lo que llevaba → la línea desaparece (no queda en 0).
+        $veg = $this->component(BasketComponent::ID_VEGETABLES, 'Verdura');
+        $existing = (new WeeklyBasketItem())->setBasketComponent($veg)->setAmount('2.00');
+        $persisted = [];
+        $removed = [];
+        $composer = $this->composerWithItems([$existing], $persisted, $removed);
+
+        $wb = $this->weeklyBasket(modalidad: 1, amount: 2);
+        $composer->subtractAmounts($wb, [BasketComponent::ID_VEGETABLES => 2.0]);
+
+        $this->assertSame([], $persisted); // no se re-estampa ninguna línea
+        $this->assertSame([$existing], $removed); // la vieja se borra
+        $this->assertSame(0, $wb->getAmount());
+    }
+
+    /**
+     * Composer con un itemRepo que devuelve las líneas dadas (para copyLines y para el
+     * borrado de stamp), capturando los WeeklyBasketItem persistidos y removidos.
+     *
+     * @param WeeklyBasketItem[]      $items
+     * @param list<WeeklyBasketItem> &$persisted Recoge los ítems persistidos (re-estampados).
+     * @param list<WeeklyBasketItem> &$removed   Recoge los ítems borrados por stamp.
+     */
+    private function composerWithItems(array $items, array &$persisted, array &$removed = []): WeeklyBasketComposer
+    {
+        $vegetables = (new BasketComponent())->setName('Verdura');
+        $eggs = (new BasketComponent())->setName('Huevos');
+
+        $itemRepo = $this->createMock(ObjectRepository::class);
+        $itemRepo->method('findBy')->willReturn($items);
+        $componentRepo = $this->createMock(ObjectRepository::class);
+        $componentRepo->method('find')->willReturnCallback(
+            static fn ($id) => $id === BasketComponent::ID_VEGETABLES ? $vegetables : $eggs
+        );
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->method('getRepository')->willReturnCallback(
+            static fn (string $class) => $class === WeeklyBasketItem::class ? $itemRepo : $componentRepo
+        );
+        $em->method('persist')->willReturnCallback(function (object $o) use (&$persisted): void {
+            if ($o instanceof WeeklyBasketItem) {
+                $persisted[] = $o;
+            }
+        });
+        $em->method('remove')->willReturnCallback(function (object $o) use (&$removed): void {
+            $removed[] = $o;
+        });
+
+        return new WeeklyBasketComposer($em, $this->eggResolver);
+    }
+
     /**
      * Comprueba que lo persistido coincide EXACTAMENTE con el mapa esperado de
      * componente => cantidad (string decimal), sin sobrar ni faltar líneas.

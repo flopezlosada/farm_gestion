@@ -4,7 +4,9 @@ namespace App\Service\Delivery;
 
 use App\Entity\Basket;
 use App\Entity\Partner;
+use App\Entity\PartnerBasketExtra;
 use App\Entity\PartnerDeliveryShift;
+use App\Entity\PartnerNodeOverride;
 use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketItem;
 use App\Repository\BasketRepository;
@@ -14,7 +16,8 @@ use Doctrine\ORM\EntityManagerInterface;
 
 /**
  * Resetea el calendario de recogida de un socio en un mes A SU PATRÓN: deshace los cambios
- * puntuales (mover/no-recoge/recuperar) y deja las entregas como las generaría el listado.
+ * puntuales (mover/no-recoge/recuperar, cestas extra y traslados de nodo) y deja las entregas
+ * como las generaría el listado.
  *
  * Red de seguridad para cuando un estado queda enredado (ciclos de shifts, cestas perdidas
  * de vista, etc.). Pensado para el botón de admin del calendario.
@@ -71,12 +74,25 @@ final class PartnerMonthResetter
         /** @var WeeklyBasketRepository $wbRepo */
         $wbRepo = $this->em->getRepository(WeeklyBasket::class);
 
-        // 1) Borrar shifts/intents del socio que TOQUEN el mes (origen o destino): mover,
-        //    no-recoge, recuperar y los ciclos enredados.
+        // 1) Borrar TODOS los overrides puntuales del socio que TOQUEN el mes: resetear a
+        //    patrón es justamente quitar las desviaciones de una semana.
+        //    a) Cambios de día / no-recoge / recuperar (PartnerDeliveryShift), por origen o destino.
         foreach ($shiftRepo->findBy(['partner' => $partner]) as $shift) {
             if (in_array($shift->getFromBasket()?->getId(), $monthBasketIds, true)
                 || in_array($shift->getToBasket()?->getId(), $monthBasketIds, true)) {
                 $this->em->remove($shift);
+            }
+        }
+        //    b) Cestas extra (PartnerBasketExtra) y c) traslados de nodo (PartnerNodeOverride),
+        //       ambos de una sola semana → basta comprobar su basket.
+        foreach ($this->em->getRepository(PartnerBasketExtra::class)->findBy(['partner' => $partner]) as $extra) {
+            if (in_array($extra->getBasket()?->getId(), $monthBasketIds, true)) {
+                $this->em->remove($extra);
+            }
+        }
+        foreach ($this->em->getRepository(PartnerNodeOverride::class)->findBy(['partner' => $partner]) as $override) {
+            if (in_array($override->getBasket()?->getId(), $monthBasketIds, true)) {
+                $this->em->remove($override);
             }
         }
         $this->em->flush();

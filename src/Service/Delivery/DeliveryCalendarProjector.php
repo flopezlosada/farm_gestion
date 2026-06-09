@@ -5,6 +5,7 @@ namespace App\Service\Delivery;
 use App\Entity\Basket;
 use App\Entity\BasketComponent;
 use App\Entity\Partner;
+use App\Entity\PartnerBasketExtra;
 use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketItem;
 use App\Repository\DeliveryExceptionRepository;
@@ -41,6 +42,7 @@ final class DeliveryCalendarProjector
         private readonly WeeklyBasketComposer $composer,
         private readonly EggDeliveryResolver $eggResolver,
         private readonly DeliveryExceptionRepository $exceptionRepository,
+        private readonly NodeDeliveryDate $nodeDeliveryDate,
     ) {
     }
 
@@ -251,7 +253,105 @@ final class DeliveryCalendarProjector
         // no tenía entrada proyectada). Es lo que muestra el plan de SANTOS antes de
         // generar. Va al final, cuando ya están todos los slots base (incluido el
         // huevo-extra). Los intents de entrega ENTERA se reflejan en el bucle de arriba.
-        return $this->applyComponentIntentsToSlots($partner, $baskets, $slots);
+        $slots = $this->applyComponentIntentsToSlots($partner, $baskets, $slots);
+
+        // Overrides de CESTA EXTRA (dry): suman su delta a la entrega de esa semana, creando
+        // un slot si su patrón no le daba cesta esa semana (p. ej. mensual en semana libre).
+        return $this->applyBasketExtrasToSlots($partner, $baskets, $slots);
+    }
+
+    /**
+     * Refleja en los slots del calendario los overrides de CESTA EXTRA ({@see PartnerBasketExtra})
+     * del socio: suma el delta de cada componente a la entrega de esa semana, creando un slot
+     * si su patrón no le daba entrega (extra en una semana libre, p. ej. mensual). Es la
+     * contraparte de calendario de {@see WeeklyBasketGenerator::applyBasketExtrasToProjection}.
+     * Va al final, con los slots base ya puestos.
+     *
+     * @param Basket[]                                                   $baskets
+     * @param list<array{date: \DateTimeInterface, basket: Basket, ...}> $slots
+     * @return list<array{date: \DateTimeInterface, basket: Basket, ...}>
+     */
+    private function applyBasketExtrasToSlots(Partner $partner, array $baskets, array $slots): array
+    {
+        $extraRepo = $this->em->getRepository(PartnerBasketExtra::class);
+        $shareRepo = $this->em->getRepository(\App\Entity\PartnerBasketShare::class);
+        $wbRepo = $this->em->getRepository(WeeklyBasket::class);
+        $node = $partner->getWeeklyBasketGroup()?->getNode();
+
+        $idxByBasket = [];
+        foreach ($slots as $i => $slot) {
+            $idxByBasket[$slot['basket']->getId()] = $i;
+        }
+
+        foreach ($baskets as $basket) {
+            $extras = $extraRepo->findForPartnerAndBasket($partner, $basket);
+            if ($extras === []) {
+                continue;
+            }
+            $idx = $idxByBasket[$basket->getId()] ?? null;
+
+            if ($idx === null) {
+                // Extra en una semana sin entrada (su patrón no le da cesta): crear el slot,
+                // con la fecha física del nodo del socio y su modalidad (para el chip), 0 cestas
+                // base. El extra se suma debajo.
+                $share = $shareRepo->findActiveForPartner($partner, $basket->getDate());
+                $date = ($node !== null ? $this->nodeDeliveryDate->physicalDateFor($basket, $node) : null) ?? $basket->getDate();
+                $wb = (new WeeklyBasket())
+                    ->setBasket($basket)
+                    ->setPartner($partner)
+                    ->setWeeklyBasketGroup($partner->getWeeklyBasketGroup())
+                    ->setBasketShare($share?->getBasketShare())
+                    ->setAmount(0)
+                    ->setDeliveryDate($date);
+                $slots[] = [
+                    'date' => $date,
+                    'basket' => $basket,
+                    'source' => 'projected',
+                    'weeklyBasket' => $wb,
+                    'items' => [],
+                    'skipped' => false,
+                    'listed' => $wbRepo->findOneBy(['basket' => $basket->getId()]) !== null,
+                    'available' => [],
+                ];
+                $idx = array_key_last($slots);
+                $idxByBasket[$basket->getId()] = $idx;
+            }
+
+            foreach ($extras as $extra) {
+                $component = $extra->getComponent();
+                $delta = (float) $extra->getAmount();
+                if ($component === null || $delta <= 0) {
+                    continue;
+                }
+                $slots[$idx]['skipped'] = false;
+
+                $merged = false;
+                foreach ($slots[$idx]['items'] as &$line) {
+                    if ($line['component']->getId() === $component->getId()) {
+                        $line['amount'] = number_format((float) $line['amount'] + $delta, 2, '.', '');
+                        $merged = true;
+                        break;
+                    }
+                }
+                unset($line);
+                if (!$merged) {
+                    $slots[$idx]['items'][] = ['component' => $component, 'amount' => number_format($delta, 2, '.', '')];
+                }
+
+                $availHas = false;
+                foreach ($slots[$idx]['available'] as $c) {
+                    if ($c->getId() === $component->getId()) {
+                        $availHas = true;
+                        break;
+                    }
+                }
+                if (!$availHas) {
+                    $slots[$idx]['available'][] = $component;
+                }
+            }
+        }
+
+        return $slots;
     }
 
     /**

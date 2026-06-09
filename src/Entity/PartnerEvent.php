@@ -51,6 +51,13 @@ class PartnerEvent
      */
     public const TYPE_BASKET_EXTRA = 'BASKET_EXTRA';
 
+    /**
+     * Baja de una cesta extra puntual: el gestor deshace un BASKET_EXTRA (para una cesta
+     * extra, "no recoge" = cancelarla). El payload lleva el basket y las cantidades que se
+     * quitaron. Ver App\Service\Delivery\ExtraBasketEditor::removeExtra.
+     */
+    public const TYPE_BASKET_EXTRA_REMOVED = 'BASKET_EXTRA_REMOVED';
+
     public const TYPES = [
         self::TYPE_JOIN,
         self::TYPE_LEAVE,
@@ -65,6 +72,7 @@ class PartnerEvent
         self::TYPE_BASKET_SKIP,
         self::TYPE_BASKET_UNSKIP,
         self::TYPE_BASKET_EXTRA,
+        self::TYPE_BASKET_EXTRA_REMOVED,
     ];
 
     public const ACTOR_SYSTEM = 'system';

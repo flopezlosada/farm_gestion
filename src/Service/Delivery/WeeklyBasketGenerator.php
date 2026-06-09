@@ -8,6 +8,7 @@ use App\Entity\BasketComponent;
 use App\Entity\Node;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
+use App\Entity\PartnerBasketExtra;
 use App\Entity\PartnerDeliveryShift;
 use App\Entity\PartnerNodeOverride;
 use App\Entity\PartnerEvent;
@@ -469,8 +470,81 @@ class WeeklyBasketGenerator
         $onlyEgg = array_merge($onlyEgg, $extraEggOnly);
 
         $this->applyComponentIntents($basket, $outgoing, $incoming);
+        $this->applyBasketExtras($basket, $status);
 
         return [$weekly, $half, $biweekly, $monthly, $onlyEgg];
+    }
+
+    /**
+     * Aplica al congelar una semana los overrides de CESTA EXTRA ({@see PartnerBasketExtra})
+     * de ese Basket: por cada socio con extra, suma sus deltas a su entrega ya materializada
+     * (creándola si no le tocaba), DESPUÉS de toda la materialización normal para que el
+     * WeeklyBasket ya exista. Es la contraparte de piedra de {@see applyBasketExtrasToProjection}
+     * (que lo dibuja en las semanas futuras): así una extra planificada a futuro entra en la
+     * piedra al congelarse sin doble conteo (se suma sobre la composición base recién creada).
+     *
+     * @param Basket             $basket
+     * @param WeeklyBasketStatus $status Estado "recoge" para las entregas creadas de cero.
+     */
+    private function applyBasketExtras(Basket $basket, WeeklyBasketStatus $status): void
+    {
+        $byPartner = $this->em->getRepository(PartnerBasketExtra::class)->extrasByPartnerForBasket($basket);
+        if ($byPartner === []) {
+            return;
+        }
+
+        $wbRepo = $this->em->getRepository(WeeklyBasket::class);
+        $partnerRepo = $this->em->getRepository(Partner::class);
+        $shareRepo = $this->em->getRepository(PartnerBasketShare::class);
+
+        foreach ($byPartner as $partnerId => $deltas) {
+            $partner = $partnerRepo->find($partnerId);
+            if ($partner === null) {
+                continue;
+            }
+            $wb = $wbRepo->findOneBy(['basket' => $basket->getId(), 'partner' => $partnerId]);
+            if ($wb === null) {
+                // "No le tocaba" esa semana: crear su entrega base (0 cestas) antes de sumar
+                // el extra. Con suscripción → entrega de su modalidad; sin suscripción → entrega
+                // "solo extra" sin modalidad (saldrá en la sección "Cestas extra").
+                $share = $shareRepo->findActiveForPartner($partner, $basket->getDate());
+                $node = $partner->getWeeklyBasketGroup()?->getNode();
+                $physical = $node !== null ? $this->nodeDeliveryDate->physicalDateFor($basket, $node) : null;
+                $date = $physical ?? $basket->getDate();
+                $wb = $share !== null
+                    ? $this->newWeeklyBasketForShare($basket, $share, $date, $status)
+                    : $this->newExtraOnlyWeeklyBasket($partner, $basket, $date, $status);
+                $wb->setAmount(0);
+                $this->em->persist($wb);
+                $this->em->flush();
+            }
+            $this->composer->addAmounts($wb, $deltas);
+        }
+
+        $this->em->flush();
+    }
+
+    /**
+     * Crea una entrega "solo extra" para un socio SIN suscripción (sin PartnerBasketShare):
+     * grupo = el de casa del socio, basketShare = null (sin modalidad), 0 cestas base. La
+     * composición (lo añadido) la fija el llamante. Al no tener modalidad, sale en la sección
+     * "Cestas extra" del listado/PDF (ver {@see \App\Entity\PartnerBasketExtra}).
+     *
+     * @param Partner                 $partner
+     * @param Basket                  $basket
+     * @param \DateTimeInterface      $date    Fecha física de entrega.
+     * @param WeeklyBasketStatus|null $status  Estado (null en proyección transitoria).
+     */
+    private function newExtraOnlyWeeklyBasket(Partner $partner, Basket $basket, \DateTimeInterface $date, ?WeeklyBasketStatus $status): WeeklyBasket
+    {
+        return (new WeeklyBasket())
+            ->setBasket($basket)
+            ->setPartner($partner)
+            ->setWeeklyBasketStatus($status)
+            ->setWeeklyBasketGroup($partner->getWeeklyBasketGroup())
+            ->setBasketShare(null)
+            ->setAmount(0)
+            ->setDeliveryDate($date);
     }
 
     /**
@@ -893,7 +967,11 @@ class WeeklyBasketGenerator
         // composición sin sacar al socio. Pase final, como applyComponentIntents en
         // el camino de escritura, para que el dibujo refleje el "muevo solo la
         // verdura" igual que lo hará el materializado al congelarse.
-        return $this->applyComponentIntentsToProjection($node, $basket, $outgoing, $incoming, $deliveries);
+        $deliveries = $this->applyComponentIntentsToProjection($node, $basket, $outgoing, $incoming, $deliveries);
+
+        // Overrides de CESTA EXTRA: suman su delta al dibujar (creando la entrada si al socio
+        // no le tocaba esa semana). Pase final, contraparte de applyBasketExtras en piedra.
+        return $this->applyBasketExtrasToProjection($node, $basket, $relocatedOutPartnerIds, $deliveries);
     }
 
     /**
@@ -1001,6 +1079,117 @@ class WeeklyBasketGenerator
         }
 
         return $deliveries;
+    }
+
+    /**
+     * Aplica a la PROYECCIÓN los overrides de CESTA EXTRA ({@see PartnerBasketExtra}) del
+     * nodo: suma el delta de cada componente a la entrega dibujada del socio, creando la
+     * entrega si no le tocaba esa semana. Es la contraparte de dibujo de {@see applyBasketExtras}
+     * (piedra), para que una extra planificada a futuro se vea en el listado de la semana
+     * dibujada igual que se verá al congelarse.
+     *
+     * La entrega creada para un "no le tocaba" solo se añade si el socio es de ESTE nodo y no
+     * está relocado fuera: su extra se dibuja donde está su entrega; si esa semana recoge en
+     * otro nodo, aparece en la pantalla de aquel (donde su WB sí está en el dibujo).
+     *
+     * Deuda DRY (proyeccion-orquestacion-dry-debt): estructura paralela a {@see applyBasketExtras}
+     * pero sobre líneas-array en vez de WeeklyBasketItem persistidos; la suma de deltas es la
+     * misma idea ({@see WeeklyBasketComposer::addAmounts} en el camino de piedra).
+     *
+     * @param array<int, true> $relocatedOutPartnerIds Socios de este nodo que recogen fuera esta semana.
+     * @param list<array{weeklyBasket: WeeklyBasket, items: array<int, array{component: BasketComponent, amount: string}>}> $deliveries
+     * @return list<array{weeklyBasket: WeeklyBasket, items: array<int, array{component: BasketComponent, amount: string}>}>
+     */
+    private function applyBasketExtrasToProjection(Node $node, Basket $basket, array $relocatedOutPartnerIds, array $deliveries): array
+    {
+        $extrasByPartner = $this->em->getRepository(PartnerBasketExtra::class)->extrasByPartnerForBasket($basket);
+        if ($extrasByPartner === []) {
+            return $deliveries;
+        }
+
+        $componentRepo = $this->em->getRepository(BasketComponent::class);
+        $partnerRepo = $this->em->getRepository(Partner::class);
+        $shareRepo = $this->em->getRepository(PartnerBasketShare::class);
+
+        $indexByPartner = [];
+        foreach ($deliveries as $i => $delivery) {
+            $pid = $delivery['weeklyBasket']->getPartner()?->getId();
+            if ($pid !== null) {
+                $indexByPartner[$pid] = $i;
+            }
+        }
+
+        foreach ($extrasByPartner as $partnerId => $deltas) {
+            $i = $indexByPartner[$partnerId] ?? null;
+            if ($i === null) {
+                // "No le tocaba": crear su entrega base (0 cestas) para colgar el extra, solo
+                // si es de este nodo y no recoge fuera esta semana.
+                $partner = $partnerRepo->find($partnerId);
+                if ($partner === null
+                    || !$this->partnerBelongsToNode($partner, $node)
+                    || isset($relocatedOutPartnerIds[$partnerId])
+                ) {
+                    continue;
+                }
+                $share = $shareRepo->findActiveForPartner($partner, $basket->getDate());
+                $date = $this->nodeDeliveryDate->physicalDateFor($basket, $node) ?? $basket->getDate();
+                // Sin suscripción (no-suscriptor): entrega "solo extra" sin modalidad → sale en
+                // la sección "Cestas extra" del listado. Con suscripción: entrega normal a 0
+                // cestas base sobre la que se suma el extra.
+                $wb = $share !== null
+                    ? $this->newWeeklyBasketForShare($basket, $share, $date, null)
+                    : $this->newExtraOnlyWeeklyBasket($partner, $basket, $date, null);
+                $wb->setAmount(0);
+                $deliveries[] = ['weeklyBasket' => $wb, 'items' => []];
+                $i = array_key_last($deliveries);
+                $indexByPartner[$partnerId] = $i;
+            }
+
+            $deliveries[$i]['items'] = $this->mergeExtraAmounts($deliveries[$i]['items'], $deltas, $componentRepo);
+            // wb.amount = nº de cestas de verdura tras el extra, para que la columna cuadre.
+            $veg = 0.0;
+            foreach ($deliveries[$i]['items'] as $item) {
+                if ($item['component']->getId() === BasketComponent::ID_VEGETABLES) {
+                    $veg = (float) $item['amount'];
+                }
+            }
+            $deliveries[$i]['weeklyBasket']->setAmount((int) round($veg));
+        }
+
+        return $deliveries;
+    }
+
+    /**
+     * Suma los deltas [componentId => cantidad] a las líneas-array {component, amount} dadas,
+     * creando la línea del componente si no existía. Versión de proyección (arrays) de
+     * {@see WeeklyBasketComposer::addAmounts}.
+     *
+     * @param array<int, array{component: BasketComponent, amount: string}> $items
+     * @param array<int, float>                                             $deltas componentId => cantidad adicional.
+     * @param \Doctrine\Persistence\ObjectRepository                        $componentRepo
+     * @return array<int, array{component: BasketComponent, amount: string}>
+     */
+    private function mergeExtraAmounts(array $items, array $deltas, $componentRepo): array
+    {
+        $byId = [];
+        foreach ($items as $item) {
+            $byId[$item['component']->getId()] = $item;
+        }
+        foreach ($deltas as $componentId => $delta) {
+            if ((float) $delta <= 0) {
+                continue;
+            }
+            if (isset($byId[$componentId])) {
+                $byId[$componentId]['amount'] = number_format((float) $byId[$componentId]['amount'] + (float) $delta, 2, '.', '');
+                continue;
+            }
+            $component = $componentRepo->find($componentId);
+            if ($component !== null) {
+                $byId[$componentId] = ['component' => $component, 'amount' => number_format((float) $delta, 2, '.', '')];
+            }
+        }
+
+        return array_values($byId);
     }
 
     /**

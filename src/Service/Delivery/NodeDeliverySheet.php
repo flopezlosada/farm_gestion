@@ -82,12 +82,14 @@ class NodeDeliverySheet
      */
     public function shape(array $lines): array
     {
-        // Partición: compartidas (bloque aparte) vs resto (por grupo). Las líneas
-        // sin modalidad (legacy) no van a ningún bloque pero sí suman en totales.
+        // Partición: compartidas (bloque aparte), cestas extra de no-suscriptores (sin
+        // modalidad → sección propia al final) y resto (por grupo).
         $shared = [];
+        $extra = [];
         $regular = [];
         foreach ($lines as $line) {
             if ($line->basketShareId === null) {
+                $extra[] = $line; // entrega "solo extra" sin modalidad
                 continue;
             }
             if (in_array($line->basketShareId, self::SHARED_BASKET_SHARE_IDS, true)) {
@@ -97,8 +99,13 @@ class NodeDeliverySheet
             }
         }
 
+        $groups = $this->buildGroups($regular);
+        if ($extra !== []) {
+            $groups[] = $this->buildExtraGroup($extra);
+        }
+
         return [
-            'groups' => $this->buildGroups($regular),
+            'groups' => $groups,
             'shared' => $this->buildShared($shared),
             'totals' => $this->computeTotals($lines),
         ];
@@ -257,6 +264,34 @@ class NodeDeliverySheet
             'locality' => '',
             'subtotal_cestas' => $subtotal,
             'modalities' => array_values($mods),
+        ];
+    }
+
+    /**
+     * Sección "Cestas extra" del nodo: entregas "solo extra" de socios SIN suscripción (sin
+     * modalidad, basketShareId null). Va al final, una sola lista ordenada por nombre (sin
+     * subdividir por modalidad porque no tienen). Ver {@see \App\Entity\PartnerBasketExtra}.
+     *
+     * @param DeliveryLine[] $lines
+     * @return array{name:string, color:?string, locality:string, subtotal_cestas:float, modalities: list<array{label:?string, rows: list<array<string,mixed>>}>}
+     */
+    private function buildExtraGroup(array $lines): array
+    {
+        usort($lines, $this->compareByDisplayName(...));
+
+        $rows = [];
+        $subtotal = 0.0;
+        foreach ($lines as $line) {
+            $rows[] = $this->row($line);
+            $subtotal += $line->cestas;
+        }
+
+        return [
+            'name' => 'Cestas extra',
+            'color' => null,
+            'locality' => '',
+            'subtotal_cestas' => $subtotal,
+            'modalities' => [['label' => null, 'rows' => $rows]],
         ];
     }
 

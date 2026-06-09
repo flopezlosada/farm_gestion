@@ -14,6 +14,7 @@ use App\Entity\WeeklyBasketStatus;
 use App\Repository\BasketRepository;
 use App\Repository\DeliveryExceptionRepository;
 use App\Repository\NodeRepository;
+use App\Repository\PartnerBasketExtraRepository;
 use App\Repository\PartnerDeliveryShiftRepository;
 use App\Repository\PartnerRepository;
 use App\Repository\PartnerBasketShareRepository;
@@ -440,9 +441,9 @@ class DeliveryController extends AbstractController
             return $this->redirectToRoute('delivery_by_node', $back);
         }
 
-        // El nodo destino debe tener el reparto YA generado esa semana (no piedra parcial
-        // sobre una semana dibujada): lo valida ExtraBasketEditor por nodo y el catch de
-        // abajo lo flashea. Ver relocate-semanas-futuras-dibujadas-debt.
+        // La cesta extra es un OVERRIDE (PartnerBasketExtra): funciona tanto sobre la semana
+        // ya generada (se cascadea a la piedra) como sobre una dibujada a futuro (la proyección
+        // la suma al dibujar, sin piedra parcial). Ver modelo-overrides-reparto.md.
 
         // Incremento que añade el gestor: cestas de verdura y/o docenas de huevos.
         $addAmounts = [
@@ -472,6 +473,53 @@ class DeliveryController extends AbstractController
         }
 
         $this->addFlash('notice', sprintf('Entrega de %s actualizada para esa semana.', $partnerName));
+        return $this->redirectToRoute('delivery_by_node', $back);
+    }
+
+    /**
+     * Quita la cesta extra de un socio en ESA semana (deshacer): borra el override y revierte
+     * la piedra si está generada. Para una cesta extra, "no la recoge" = cancelarla. Delega en
+     * {@see ExtraBasketEditor::removeExtra}.
+     *
+     * @param Node    $node    Nodo de la pantalla (para volver).
+     * @param Basket  $basket  Semana sobre la que se actúa.
+     * @param Request $request Lleva partner_id y el token CSRF.
+     */
+    #[Route(
+        '/v2/nodo/{nodeId}/{basketId}/quitar-extra',
+        name: 'delivery_remove_extra',
+        methods: ['POST'],
+        requirements: ['nodeId' => '\d+', 'basketId' => '\d+']
+    )]
+    public function removeExtra(
+        #[MapEntity(id: 'nodeId')] Node $node,
+        #[MapEntity(id: 'basketId')] Basket $basket,
+        Request $request,
+        PartnerRepository $partnerRepo,
+        ExtraBasketEditor $extraBasketEditor,
+    ): Response {
+        $back = ['nodeId' => $node->getId(), 'basketId' => $basket->getId()];
+
+        if (!$this->isCsrfTokenValid('delivery_remove_extra', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('error', 'Token de seguridad inválido.');
+            return $this->redirectToRoute('delivery_by_node', $back);
+        }
+
+        $partner = $partnerRepo->find((int) $request->request->get('partner_id'));
+        if (!$partner instanceof Partner) {
+            $this->addFlash('error', 'Falta el socix sobre el que actuar.');
+            return $this->redirectToRoute('delivery_by_node', $back);
+        }
+
+        $partnerName = trim(($partner->getName() ?? '') . ' ' . ($partner->getSurname() ?? ''));
+        $removed = $extraBasketEditor->removeExtra($partner, $basket, 'gestor:' . $this->getUser()->getId());
+
+        $this->addFlash(
+            $removed ? 'notice' : 'warning',
+            $removed
+                ? sprintf('Cesta extra de %s quitada para esa semana.', $partnerName)
+                : sprintf('%s no tenía cesta extra esa semana.', $partnerName),
+        );
         return $this->redirectToRoute('delivery_by_node', $back);
     }
 
@@ -636,6 +684,7 @@ class DeliveryController extends AbstractController
         DeliveryExceptionRepository $deliveryExceptionRepo,
         WeeklyBasketGenerator $generator,
         DeliveryModeResolver $deliveryModeResolver,
+        PartnerBasketExtraRepository $partnerBasketExtraRepo,
         Request $request,
     ): Response {
         $orden = $request->query->get('orden', 'grupo');
@@ -727,20 +776,29 @@ class DeliveryController extends AbstractController
         // alfabética). Formato común: secciones con subgrupos y filas, para
         // que el template tenga una sola rama de pintado.
         //
-        // Los TRASLADADOS (override de nodo: recogen aquí esta semana viniendo de
-        // OTRO nodo) se apartan ANTES de agrupar y van a su propia sección al final
-        // —igual que en el PDF (NodeDeliverySheet)— para que no se mezclen con los
-        // socios de casa del grupo destino. Siguen contando en los totales del nodo
-        // (sí reparten aquí hoy). La detección es pura en WeeklyBasket::getRelocatedFromGroup.
+        // Se apartan ANTES de agrupar (igual que en el PDF) dos clases de entrega que no
+        // encajan en las secciones por modalidad/grupo, y van a su propia sección al final:
+        //  - TRASLADADOS: override de nodo (recogen aquí viniendo de otro nodo). Detección en
+        //    WeeklyBasket::getRelocatedFromGroup (nodo de entrega != nodo de casa).
+        //  - CESTAS EXTRA de NO-SUSCRIPTORES: entrega "solo extra" sin modalidad (basketShare
+        //    null). No tiene 0 socios con basket_share null en piedra, así que null = extra.
+        // Ambas siguen contando en los totales del nodo (sí reparten hoy).
         $relocated = array_values(array_filter(
             $weeklyBaskets,
             static fn (WeeklyBasket $wb): bool => $wb->getRelocatedFromGroup() !== null,
         ));
+        $extraOnly = array_values(array_filter(
+            $weeklyBaskets,
+            static fn (WeeklyBasket $wb): bool => $wb->getRelocatedFromGroup() === null && $wb->getBasketShare() === null,
+        ));
         $regular = array_values(array_filter(
             $weeklyBaskets,
-            static fn (WeeklyBasket $wb): bool => $wb->getRelocatedFromGroup() === null,
+            static fn (WeeklyBasket $wb): bool => $wb->getRelocatedFromGroup() === null && $wb->getBasketShare() !== null,
         ));
         $sections = $this->buildSections($regular, $orden);
+        if ($extraOnly !== []) {
+            $sections[] = $this->extraBasketSection($extraOnly);
+        }
         if ($relocated !== []) {
             $sections[] = $this->relocatedSection($relocated);
         }
@@ -801,6 +859,8 @@ class DeliveryController extends AbstractController
             'cestas_by_partner_id' => $cestasByPartnerId,
             'dozens_by_partner_id' => $dozensByPartnerId,
             'relocate_groups' => $this->relocateTargetGroups($node, $basket, $allNodes, $nodeDeliveryDate, $weeklyBasketGroupRepo),
+            // partner.id de quienes tienen cesta extra esa semana, para ofrecer "Quitar cesta extra".
+            'partner_ids_with_extra' => array_keys($partnerBasketExtraRepo->extrasByPartnerForBasket($basket)),
             'totals' => $this->computeTotals($weeklyBaskets, $cestasByPartnerId, $dozensByPartnerId),
         ]);
     }
@@ -1029,6 +1089,25 @@ class DeliveryController extends AbstractController
         return [
             'title' => 'Trasladados',
             'subgroups' => [['bs_id' => null, 'label' => null, 'rows' => $relocated]],
+        ];
+    }
+
+    /**
+     * Sección "Cestas extra" de la pantalla v2: entregas "solo extra" de socios SIN suscripción
+     * (sin modalidad), que no encajan en las secciones por modalidad/grupo. Va al final, lista
+     * plana ordenada por nombre. Las filas tienen basketShare null; _row.html.twig lo pinta como
+     * "Extra". Ver {@see \App\Entity\PartnerBasketExtra}.
+     *
+     * @param WeeklyBasket[] $extras Entregas con getBasketShare() === null.
+     * @return array{title:string, subgroups: list<array{bs_id:?int, label:?string, rows: WeeklyBasket[]}>}
+     */
+    private function extraBasketSection(array $extras): array
+    {
+        usort($extras, $this->compareByDisplayName(...));
+
+        return [
+            'title' => 'Cestas extra',
+            'subgroups' => [['bs_id' => null, 'label' => null, 'rows' => $extras]],
         ];
     }
 
