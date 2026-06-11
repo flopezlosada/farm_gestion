@@ -233,7 +233,8 @@
                             </p>
                         {% endif %}
 
-                        {% if active_share and bs_id == 4 and partner.sharePartner %}
+                        {# Compartidas: semanal (4), quincenal (6) y mensual (7). #}
+                        {% if active_share and bs_id in [4, 6, 7] and partner.sharePartner %}
                             <div class="prt-share">
                                 <i class="fa fa-handshake-o"></i>
                                 <span><strong>Compartes cesta con</strong> {{ partner.sharePartner.name }} {{ partner.sharePartner.surname }}</span>

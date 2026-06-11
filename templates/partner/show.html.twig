@@ -517,7 +517,9 @@
                         </p>
                     {% endif %}
 
-                    {% if partner.getActiveBasket and partner.getActiveBasket.basketShare.id == 4 %}
+                    {# Compartidas (semanal 4, quincenal 6, mensual 7): mismo gate
+                     # que el botón "¿Comparte con?" de la cabecera. #}
+                    {% if partner.getActiveBasket and partner.getActiveBasket.basketShare.id in [4, 6, 7] %}
                         {% if partner.sharePartner %}
                             <div class="prt-share">
                                 <i class="fa fa-handshake-o"></i>
@@ -691,18 +693,15 @@
                             <a href="{{ path('partner_basket_share_change_modality', { id: partner.getActiveBasket.id }) }}" class="prt-btn">
                                 <i class="fa fa-pencil"></i> Cambiar la cesta
                             </a>
-                            <button type="button" class="prt-btn prt-btn--danger"
-                                onclick="document.getElementById('confirm-partner-show-5').showModal()">
-                                <i class="fa fa-times"></i> Dar de baja la cesta
-                            </button>
-{{ csa.confirm_dialog('confirm-partner-show-5', {
-    variant: 'danger',
-    eyebrow: 'Acción permanente',
-    title: 'Dar de baja la cesta',
-    body: 'El socix dejará de recibir cesta y se conservará el histórico.',
-    confirm_label: 'Dar de baja la cesta',
-    confirm_href: path('partner_basket_share_finalize', { id: partner.getActiveBasket.id }),
-}) }}
+                            {# Lleva directo al formulario de finalizar (que pide la
+                             # fecha de fin y es la confirmación real): el diálogo
+                             # intermedio que había aquí era fricción redundante y su
+                             # copy ("acción permanente") engañaba — el fin puede
+                             # programarse a futuro. #}
+                            <a href="{{ path('partner_basket_share_finalize', { id: partner.getActiveBasket.id }) }}"
+                               class="prt-btn prt-btn--danger">
+                                <i class="fa fa-calendar-times-o"></i> Finalizar cesta…
+                            </a>
                         </footer>
                     {% endif %}
                 </section>
@@ -787,7 +786,14 @@
                                     <span class="prt-timeline__dot prt-timeline__dot--{{ meta.cls }}"></span>
                                     <div class="prt-timeline__head">
                                         <span class="prt-timeline__label">{{ label }}</span>
-                                        <span class="prt-timeline__time">{{ event.occurredAt|format_datetime('medium', 'short', locale='es') }}</span>
+                                        {# Los eventos retro-importados sin fecha real llevan epoch
+                                         # (1970): la fecha original se perdió en el import y no es
+                                         # recuperable — mejor decirlo que enseñar "1 ene 1970". #}
+                                        {% if event.occurredAt|date('Y') < 1971 %}
+                                            <span class="prt-timeline__time" title="La fecha real se perdió en el import original">Fecha desconocida</span>
+                                        {% else %}
+                                            <span class="prt-timeline__time">{{ event.occurredAt|format_datetime('medium', 'short', locale='es') }}</span>
+                                        {% endif %}
                                         {% if actor_label %}
                                             <span class="prt-timeline__actor">{{ actor_label }}</span>
                                         {% endif %}
