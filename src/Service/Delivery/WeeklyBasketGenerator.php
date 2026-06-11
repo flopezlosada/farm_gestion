@@ -1309,9 +1309,21 @@ class WeeklyBasketGenerator
         $shareRepo = $this->em->getRepository(PartnerBasketShare::class);
         $weeklyBasketRepo = $this->em->getRepository(WeeklyBasket::class);
 
+        // Socios cuya entrega ENTERA sale de esta semana por un shift: sus huevos
+        // viajan con la entrega al destino. Sin este guard (que el camino de DIBUJO
+        // sí tenía), el socio de huevo semanal que movía su entrega recibía un
+        // solo-huevo espurio en el origen: huevos DUPLICADOS. Lo cazó el escenario
+        // "Shift mover CON huevos" de la batería.
+        $wholeOutgoing = $this->wholeOutgoingPartnerIds(
+            $this->em->getRepository(PartnerDeliveryShift::class)->findAllOutgoingFromBasket($basket)
+        );
+
         $extras = [];
         foreach ($shareRepo->findActiveSharesWithEggsForBasket($basket) as $share) {
             if (!$this->eggResolver->delivers($share, $basket)) {
+                continue;
+            }
+            if (in_array($share->getPartner()->getId(), $wholeOutgoing, true)) {
                 continue;
             }
             $alreadyMaterialized = $weeklyBasketRepo->findOneBy([
