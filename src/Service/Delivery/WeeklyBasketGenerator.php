@@ -1391,6 +1391,18 @@ class WeeklyBasketGenerator
      */
     public function materializeForPartner(Partner $partner, Basket $basket): ?WeeklyBasket
     {
+        // Entrega ENTERA movida fuera de esta semana por un shift: aquí no se materializa
+        // nada (la composición, huevos incluidos, viaja al destino). La proyección ya lo
+        // excluye de la CESTA, pero sin este guard el fallback de SOLO-HUEVO de abajo
+        // revivía un solo-huevo VIVO en el origen — lo cazó L6 cuando la cascada de
+        // reconciliación pasó por el origen de un move (caso JOSE del clon de batería).
+        $wholeOutgoing = $this->wholeOutgoingPartnerIds(
+            $this->em->getRepository(PartnerDeliveryShift::class)->findAllOutgoingFromBasket($basket)
+        );
+        if (in_array($partner->getId(), $wholeOutgoing, true)) {
+            return null;
+        }
+
         foreach ($this->projectForBasket($basket) as $candidate) {
             if ($candidate->getPartner()->getId() === $partner->getId()) {
                 return $this->materializeShareDelivery($basket, $candidate);
