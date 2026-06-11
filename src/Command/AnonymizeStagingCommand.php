@@ -29,8 +29,10 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  * SOLO toca emails (User.email/emailCanonical, y username/usernameCanonical
  * cuando son un email; Partner.email/email2). No toca nombre, DNI, dirección
  * ni IBAN, para que admin siga reconociendo a los socios y pueda cuadrar el
- * reparto. Pensado para correr en LOCAL contra db_prod_snapshot antes de
- * exportar; no necesita acceso al servidor de staging.
+ * reparto. Pensado para correr en LOCAL contra un CLON del snapshot antes de
+ * exportar (nunca contra la golden: anonimizarla destruiría los emails reales
+ * de la fuente de verdad — {@see DatabaseGuard} lo impide); no necesita acceso
+ * al servidor de staging.
  */
 #[AsCommand(
     name: 'app:anonymize-staging',
@@ -67,6 +69,11 @@ class AnonymizeStagingCommand extends Command
     {
         $io = new SymfonyStyle($input, $output);
         $dryRun = (bool) $input->getOption('dry-run');
+
+        // Reescribe emails de forma irreversible: jamás contra la golden, solo contra un clon.
+        if (!$dryRun) {
+            DatabaseGuard::assertNotProtected($this->em->getConnection());
+        }
 
         $keep = array_map(
             static fn (string $email): string => mb_strtolower(trim($email)),
