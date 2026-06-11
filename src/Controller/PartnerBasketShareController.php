@@ -262,6 +262,7 @@ class PartnerBasketShareController extends AbstractController
         PartnerBasketShare $partnerBasketShare,
         EntityManagerInterface $entityManager,
         PartnerShareEventRecorder $shareEventRecorder,
+        WeeklyBasketGenerator $generator,
     ): Response {
         $form = $this->createFormBuilder()
             ->add('end_date', TextType::class, array('label' => 'Fecha de finalización', 'attr' => array('class' => 'datepicker form-control')))
@@ -289,25 +290,14 @@ class PartnerBasketShareController extends AbstractController
 
 
             $entityManager->persist($partnerBasketShare);
-
-
-            /*
-             * aquí lo que pretendo es que si se le da de baja después de que se ha generado el listado, se borre el registro de listado
-             */
-            $monday = date('d F', strtotime(date('Y', strtotime(date('Y-m-d'))) . "W" . str_pad(date('W'), 2, "0", STR_PAD_LEFT)));
-            $friday = strtotime("+4 day", strtotime($monday));
-            $next_friday = date("Y-m-d", $friday);
-            $end_date_format = $end_date->format("Y-m-d");
-            if ($end_date_format < $next_friday) {
-                $basket = $entityManager->getRepository(\App\Entity\Basket::class)->findBasketByWeekYear(date('Y-m-d'));//número de cesta actual
-                $current_weekly_basket = $entityManager->getRepository(\App\Entity\WeeklyBasket::class)->findOneBy(array("basket" => $basket, "partner" => $partnerBasketShare->getPartner()));
-                if ($current_weekly_basket) {
-                    $entityManager->remove($current_weekly_basket);
-                }
-            }
-
-
             $entityManager->flush();
+
+            // Cascada sobre el listado YA generado: re-materializa las entregas del
+            // socio en todas las semanas generadas desde hoy — las posteriores al fin
+            // desaparecen, las anteriores se conservan. Sustituye al bloque legacy que
+            // solo borraba la semana ACTUAL y dejaba huérfanas las demás generadas
+            // (lo cazó el invariante L10). Misma cascada que el cambio de modalidad.
+            $generator->reconcilePartnerFrom($partnerBasketShare->getPartner(), new \DateTime('today'));
 
             return $this->redirectToRoute('partner_basket_share_list_status', array('status' => 1));
         }
