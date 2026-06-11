@@ -628,7 +628,13 @@
 
                             <div class="prt-mini__cell">
                                 <div class="prt-mini__label">Inicio</div>
-                                <div class="prt-mini__value">{{ partner.getActiveBasket.startDate|date('d/m/Y') }}</div>
+                                {# Sin el guard, date(null) pinta la fecha de HOY — un
+                                 # inicio inventado para los PBS sin fecha del import. #}
+                                {% if partner.getActiveBasket.startDate %}
+                                    <div class="prt-mini__value">{{ partner.getActiveBasket.startDate|date('d/m/Y') }}</div>
+                                {% else %}
+                                    <div class="prt-mini__value prt-mini__value--muted">Sin fecha</div>
+                                {% endif %}
                             </div>
 
                             <div class="prt-mini__cell">
