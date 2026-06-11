@@ -70,8 +70,15 @@ class PartnerBasketShareController extends AbstractController
         ]);
     }
 
+    /**
+     * Corrección IN SITU de la cesta (sin histórico, a diferencia de changeModality).
+     * Tras guardar, reconcilia las semanas YA generadas al patrón corregido: sin esa
+     * cascada, una corrección de huevos (periodo/cantidad/orden) dejaba la piedra
+     * con la config vieja hasta la siguiente generación — lo cazaron los invariantes
+     * L11/L17 sobre el clon de la batería (caso JOSE del escenario MIRIAM).
+     */
     #[Route("/{id}/edit", name: "partner_basket_share_edit", methods: ["GET","POST"])]
-    public function edit(Request $request, PartnerBasketShare $partnerBasketShare, EntityManagerInterface $entityManager, CohortChoiceBuilder $cohortChoiceBuilder): Response
+    public function edit(Request $request, PartnerBasketShare $partnerBasketShare, EntityManagerInterface $entityManager, CohortChoiceBuilder $cohortChoiceBuilder, WeeklyBasketGenerator $generator): Response
     {
         if ($partnerBasketShare->getStartDate()) {
             $partnerBasketShare->setStartDate($partnerBasketShare->getStartDate()->format('Y-m-d'));
@@ -99,6 +106,16 @@ class PartnerBasketShareController extends AbstractController
                 }
             }
             $entityManager->flush();
+
+            // Cascada sobre el listado YA generado: la corrección debe verse también
+            // en las semanas materializadas (misma cascada que changeModality/finalize).
+            $reconciled = $generator->reconcilePartnerFrom($partnerBasketShare->getPartner(), new \DateTime('today'));
+            if ($reconciled !== []) {
+                $this->addFlash('success', sprintf(
+                    'Cesta corregida. %d listado(s) ya generado(s) reconciliado(s) al patrón corregido.',
+                    count($reconciled),
+                ));
+            }
 
             return $this->redirectToRoute('partner_show', array('id' => $partnerBasketShare->getPartner()->getId()));
         }

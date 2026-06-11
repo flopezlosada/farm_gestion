@@ -27,20 +27,42 @@ class PartnerBasketShareControllerTest extends AbstractAuthenticatedTest
     public function testChangeBasketFormRenders(): void
     {
         $client = $this->createAuthenticatedClient();
-        $em = static::getContainer()->get('doctrine')->getManager();
 
-        $activeShare = null;
-        foreach ($em->getRepository(Partner::class)->findAll() as $partner) {
-            if ($partner->hasActiveBasket()) {
-                $activeShare = $partner->getActiveBasket();
-                break;
-            }
-        }
-        $this->assertNotNull($activeShare, 'Fixtures sin socix con cesta activa.');
-
-        $client->request('GET', '/gestion/partner/basket/share/' . $activeShare->getId() . '/change-modality');
+        $client->request('GET', '/gestion/partner/basket/share/' . $this->findActiveShareId() . '/change-modality');
 
         $this->assertSame(200, $client->getResponse()->getStatusCode());
         $this->assertSelectorTextContains('body', 'Cambiar la cesta');
+    }
+
+    /**
+     * GET del formulario de corrección in situ (edit) devuelve 200 — cubre el
+     * wiring de la action (inyección de WeeklyBasketGenerator para la cascada
+     * de reconciliación sobre semanas ya generadas).
+     */
+    public function testEditFormRenders(): void
+    {
+        $client = $this->createAuthenticatedClient();
+
+        $client->request('GET', '/gestion/partner/basket/share/' . $this->findActiveShareId() . '/edit');
+
+        $this->assertSame(200, $client->getResponse()->getStatusCode());
+    }
+
+    /**
+     * Id de una PBS activa cualquiera de las fixtures.
+     *
+     * @return int
+     */
+    private function findActiveShareId(): int
+    {
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        foreach ($em->getRepository(Partner::class)->findAll() as $partner) {
+            if ($partner->hasActiveBasket()) {
+                return $partner->getActiveBasket()->getId();
+            }
+        }
+
+        $this->fail('Fixtures sin socix con cesta activa.');
     }
 }

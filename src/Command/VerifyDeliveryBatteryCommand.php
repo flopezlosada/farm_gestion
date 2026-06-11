@@ -864,10 +864,14 @@ class VerifyDeliveryBatteryCommand extends Command
         $expectedIds = $this->expectedDeliveryDates(self::QUINCENAL, $month, $cohort);
         if (count($expectedIds) < 2) { $this->skip($label, 'el mes no le da 2 cestas a su cohorte'); return; }
 
-        // Forzar el patrón de huevo: MENSUAL, en su 2ª cesta del mes.
+        // Forzar el patrón de huevo: MENSUAL, en su 2ª cesta del mes. Espejo del
+        // flujo admin (PartnerBasketShareController::edit): la corrección in situ
+        // reconcilia las semanas YA generadas — sin esto, los meses que la batería
+        // pre-generó conservaban la config de huevo vieja (violaciones L11/L17).
         $share->setEggPeriod($this->em->getRepository(EggPeriod::class)->find(self::EGG_PERIOD_MENSUAL));
         $share->setEggDayMonthOrder(2);
         $this->em->flush();
+        $this->generator->reconcilePartnerFrom($partner, new \DateTime('today'));
 
         foreach ($month['baskets'] as $b) { $this->generator->generateForBasket($b); }
 
