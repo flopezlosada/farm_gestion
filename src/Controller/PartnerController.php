@@ -364,8 +364,9 @@ class PartnerController extends AbstractController
     /**
      * Añade (o ajusta) la cesta extra puntual de un socix en una semana concreta,
      * desde su ficha. El socix viene fijado por la ruta; el gestor elige la semana
-     * (entre las generadas) y la composición final (cestas de verdura + docenas de
-     * huevos). Delega en ExtraBasketEditor.
+     * (cualquiera en que su nodo reparta, dibujada o generada — ver extraBasketWeeks)
+     * y la composición final (cestas de verdura + docenas de huevos). Delega en
+     * ExtraBasketEditor.
      *
      * @param Request           $request Lleva basket_id, cestas, docenas, nota y CSRF.
      * @param Partner           $partner Socix (de la ruta).
