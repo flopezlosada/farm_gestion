@@ -3,6 +3,7 @@
 namespace App\Security;
 
 use App\Entity\User;
+use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
 use Symfony\Component\Security\Core\Exception\CustomUserMessageAccountStatusException;
 use Symfony\Component\Security\Core\User\UserCheckerInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
@@ -41,8 +42,10 @@ class UserChecker implements UserCheckerInterface
      * Comprobaciones posteriores a validar credenciales. No hay ninguna por ahora.
      *
      * @param UserInterface $user Usuario autenticado.
+     * @param TokenInterface|null $token Token de la autenticación en curso (la
+     *        interfaz lo exigirá en la próxima major de symfony/security-core).
      */
-    public function checkPostAuth(UserInterface $user): void
+    public function checkPostAuth(UserInterface $user, ?TokenInterface $token = null): void
     {
     }
 }
