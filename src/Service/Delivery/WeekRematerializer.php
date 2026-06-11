@@ -53,10 +53,18 @@ class WeekRematerializer
     /**
      * Reconcilia la piedra tras CREAR, EDITAR o BORRAR una excepción que toca
      * la semana dada: re-materializa la semana si está dentro del horizonte ya
-     * generado, y si el cambio desplaza la alternancia (una cancelación GLOBAL
-     * entró o salió), re-materializa también todas las semanas generadas
-     * posteriores. Las semanas fuera del horizonte no se tocan: siguen siendo
-     * dibujo y se congelarán ya con la excepción contada.
+     * generado, y además:
+     *  - si el cambio desplaza la alternancia (una cancelación GLOBAL entró o
+     *    salió), re-materializa todas las semanas generadas posteriores;
+     *  - si no, re-materializa el RESTO DEL MES ya generado: un cierre de nodo
+     *    (o un traslado) recoloca la "N-ésima entrega del mes" de los mensuales
+     *    de ese nodo — con la semántica pegajosa, la semana que absorbe el
+     *    fallback de la cancelada cambia de composición aunque nadie la tocara
+     *    (lo midieron L11/L17 en el clon: PATRICIA/MIGUEL, sept-2027). Acotado
+     *    (≤4 semanas) e idempotente gracias al modelo de overrides.
+     *
+     * Las semanas fuera del horizonte no se tocan: siguen siendo dibujo y se
+     * congelarán ya con la excepción contada.
      *
      * Llamar SIEMPRE después del flush de la excepción: la regeneración
      * consulta la tabla de excepciones y debe ver el estado nuevo.
@@ -77,11 +85,10 @@ class WeekRematerializer
             $summary['week'] = true;
         }
 
-        if ($alternationDisplaced) {
-            foreach ($this->generatedBasketsAfter($week) as $later) {
-                $this->rematerializeWeek($later);
-                $summary['downstream']++;
-            }
+        $sameMonthOnly = !$alternationDisplaced;
+        foreach ($this->generatedBasketsAfter($week, $sameMonthOnly) as $later) {
+            $this->rematerializeWeek($later);
+            $summary['downstream']++;
         }
 
         return $summary;
@@ -125,17 +132,33 @@ class WeekRematerializer
     }
 
     /**
-     * Semanas con piedra posteriores a la dada, en orden.
+     * Semanas con piedra posteriores a la dada, en orden. Con $sameMonthOnly,
+     * solo las del mismo mes calendario (ciclo) que la semana dada — el alcance
+     * de la recolocación de N-ésimas mensuales tras un cierre de nodo/traslado.
      *
+     * @param Basket $week
+     * @param bool   $sameMonthOnly
      * @return Basket[]
      */
-    private function generatedBasketsAfter(Basket $week): array
+    private function generatedBasketsAfter(Basket $week, bool $sameMonthOnly = false): array
     {
-        return $this->em->createQuery(
-            'SELECT DISTINCT b FROM ' . Basket::class . ' b
-             JOIN ' . WeeklyBasket::class . ' wb WITH wb.basket = b
-             WHERE b.date > :date
-             ORDER BY b.date ASC'
-        )->setParameter('date', $week->getDate())->getResult();
+        $dql = 'SELECT DISTINCT b FROM ' . Basket::class . ' b
+                JOIN ' . WeeklyBasket::class . ' wb WITH wb.basket = b
+                WHERE b.date > :date';
+        if ($sameMonthOnly) {
+            $dql .= ' AND b.date <= :monthEnd';
+        }
+        $dql .= ' ORDER BY b.date ASC';
+
+        $query = $this->em->createQuery($dql)->setParameter('date', $week->getDate());
+        if ($sameMonthOnly) {
+            $query->setParameter(
+                'monthEnd',
+                \DateTimeImmutable::createFromInterface($week->getDate())
+                    ->modify('last day of this month')->format('Y-m-d')
+            );
+        }
+
+        return $query->getResult();
     }
 }

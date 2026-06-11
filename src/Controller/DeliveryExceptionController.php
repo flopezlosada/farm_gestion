@@ -198,10 +198,11 @@ class DeliveryExceptionController extends AbstractController
     /**
      * Re-materializa la piedra afectada por el cambio de excepción (alta,
      * edición o borrado): la semana tocada se regenera honrando el estado
-     * nuevo, y si una cancelación global entró o salió, también las semanas
-     * generadas posteriores (la alternancia A/B y de nodos quincenales se
-     * desplaza). Delega en {@see WeekRematerializer}, que no-opera fuera del
-     * horizonte generado, e informa al admin de lo regenerado.
+     * nuevo; si una cancelación global entró o salió, también todas las
+     * semanas generadas posteriores (la alternancia A/B y de nodos quincenales
+     * se desplaza); si no, el resto del mes ya generado (las N-ésimas
+     * mensuales del nodo se recolocan). Delega en {@see WeekRematerializer},
+     * que no-opera fuera del horizonte generado, e informa al admin.
      *
      * @param WeekRematerializer $rematerializer
      * @param Basket|null        $week       Semana afectada (null = nada que hacer).
@@ -219,7 +220,11 @@ class DeliveryExceptionController extends AbstractController
 
         $msg = sprintf('Listado regenerado para la semana del %s.', $week->getDate()?->format('d/m/Y'));
         if ($r['downstream'] > 0) {
-            $msg .= sprintf(' También %d semana(s) posteriores ya generadas (la alternancia quincenal se desplaza).', $r['downstream']);
+            $msg .= sprintf(
+                ' También %d semana(s) posteriores ya generadas (%s).',
+                $r['downstream'],
+                $displaced ? 'la alternancia quincenal se desplaza' : 'las entregas mensuales del mes se recolocan'
+            );
         }
         $this->addFlash('warning', $msg);
     }
