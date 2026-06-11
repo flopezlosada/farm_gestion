@@ -49,6 +49,37 @@ class PartnerBasketShareControllerTest extends AbstractAuthenticatedTest
     }
 
     /**
+     * GET del listado de cestas activas devuelve 200 y pinta la cabecera con
+     * el total — wiring de la action tras retirar los ifs con ids hardcodeados
+     * que contaban mal mensual y compartidas. La aritmética del total la cubre
+     * BasketShareEquivalenceTest (asertar aquí el número exacto recalculándolo
+     * con el mismo código sería tautológico).
+     */
+    public function testActiveListShowsCatalogTotal(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $client->request('GET', '/gestion/partner/basket/share/status/1');
+
+        $this->assertSame(200, $client->getResponse()->getStatusCode());
+        $this->assertSelectorTextContains('body', 'Total actual:');
+    }
+
+    /**
+     * GET del formulario de finalizar cesta (al que ahora se llega por enlace
+     * directo desde la ficha, sin diálogo intermedio) devuelve 200 y pide la
+     * fecha de fin.
+     */
+    public function testFinalizeFormRenders(): void
+    {
+        $client = $this->createAuthenticatedClient();
+
+        $client->request('GET', '/gestion/partner/basket/share/' . $this->findActiveShareId() . '/finalize');
+
+        $this->assertSame(200, $client->getResponse()->getStatusCode());
+        $this->assertSelectorTextContains('body', 'Fecha de fin');
+    }
+
+    /**
      * Id de una PBS activa cualquiera de las fixtures.
      *
      * @return int

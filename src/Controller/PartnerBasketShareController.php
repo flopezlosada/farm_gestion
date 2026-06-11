@@ -251,20 +251,14 @@ class PartnerBasketShareController extends AbstractController
     {
         $baskets = $entityManager->getRepository(\App\Entity\PartnerBasketShare::class)->findAllByStatus($status);//devuelve las activas
 
-        $total_basket = 0;
-        foreach ($baskets as $basket) {
-            if ($basket->getBasketShare()->getId() == 1) {
-                $total_basket += 1;
-            } elseif ($basket->getBasketShare()->getId() == 2) {
-                $total_basket += 0.5;
-            } elseif ($basket->getBasketShare()->getId() == 3) {
-                $total_basket += 0.5;
-            } elseif ($basket->getBasketShare()->getId() == 4) {
-                $total_basket += 0.25;
-            }
-
-
-        }
+        // Total en cestas completas equivalentes según el catálogo. Sustituye
+        // a los ifs con ids hardcodeados, que contaban la mensual doble (0,5),
+        // la semanal compartida a la mitad (0,25) e ignoraban las compartidas
+        // quincenal/mensual (6/7) añadidas después.
+        $total_basket = round(array_sum(array_map(
+            static fn (PartnerBasketShare $basket): float => $basket->getBasketShare()->getCompleteBasketEquivalence(),
+            $baskets
+        )), 2);
 
         return $this->render('partner_basket_share/basket.html.twig', [
             'baskets' => $baskets,
@@ -290,13 +284,29 @@ class PartnerBasketShareController extends AbstractController
 
         if ($form->isSubmitted() && $form->isValid()) {
             $values = $request->get('form');
-            $end_date = new \DateTime($values['end_date']);
+
+            // El campo es TextType (datepicker solo en frontend): con un valor
+            // vacío `new \DateTime('')` significaría HOY y finalizaría la cesta
+            // en silencio. Validar antes de tocar nada.
+            $raw = trim((string) ($values['end_date'] ?? ''));
+            try {
+                $end_date = $raw !== '' ? new \DateTime($raw) : throw new \InvalidArgumentException();
+            } catch (\Exception) {
+                $this->addFlash('warning', 'Indica una fecha de fin válida.');
+
+                return $this->render('partner_basket_share/finalize.html.twig', [
+                    'partner_basket_share' => $partnerBasketShare,
+                    'form' => $form->createView(),
+                ]);
+            }
+
+            $isPast = $end_date < new \DateTimeImmutable('today');
             $partnerBasketShare->setEndDate($end_date);
 
             ////no se puede desactivar si la fecha de fin es posterior al día de hoy porque no sabemos cuántos viernes hay entre la fecha de registrar el cambio y
             // la fecha real de fin. Entonces este cambio de estado se realiza en la generación del listado
 
-            if ($end_date->format('Y-m-d') < date('Y-m-d')) {
+            if ($isPast) {
                 $partnerBasketShare->setIsActive(0);
                 // Histórico: sólo se emite BASKET_END cuando el share queda
                 // realmente desactivado. Si el cierre se programa a futuro,
@@ -316,7 +326,13 @@ class PartnerBasketShareController extends AbstractController
             // (lo cazó el invariante L10). Misma cascada que el cambio de modalidad.
             $generator->reconcilePartnerFrom($partnerBasketShare->getPartner(), new \DateTime('today'));
 
-            return $this->redirectToRoute('partner_basket_share_list_status', array('status' => 1));
+            // Vuelta a la ficha (origen habitual de la acción) con un flash que
+            // distinga cierre inmediato de cierre programado a futuro.
+            $this->addFlash('success', $isPast
+                ? 'Cesta finalizada: la última entrega fue el ' . $end_date->format('d/m/Y') . '.'
+                : 'Fin de cesta programado para el ' . $end_date->format('d/m/Y') . '. La cesta sigue activa hasta entonces.');
+
+            return $this->redirectToRoute('partner_show', ['id' => $partnerBasketShare->getPartner()->getId()]);
         }
 
         return $this->render('partner_basket_share/finalize.html.twig', [

@@ -23,7 +23,9 @@
     {{ csa.page_header(
         'Socixs · Cesta',
         'Finalizar cesta de ' ~ partner_basket_share.partner,
-        'Indica la fecha en la que finaliza la suscripción. A partir de esa fecha la cesta deja de aparecer en el reparto.'
+        'Cesta ' ~ partner_basket_share.basketShare|lower ~ '. Indica la fecha de la última entrega: puede ser
+         futura (la cesta sigue activa hasta entonces y el fin se aplica solo cuando llegue el día). Las semanas
+         de reparto ya dibujadas posteriores a esa fecha se eliminan; las anteriores se conservan.'
     ) }}
 
     {{ form_start(form, {
@@ -34,7 +36,7 @@
 
         <div class="csa-stack-lg">
 
-            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Fecha de baja', subtitle: 'Día en que la socix recibe la última cesta.' } %}
+            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Fecha de fin', subtitle: 'Día de la última entrega. Si es futura, la cesta se finaliza sola al llegar la fecha (p. ej. una cesta acordada por un periodo).' } %}
                 {% block body %}
                     {% import '_macros/csa.html.twig' as csa %}
                     <div class="csa-form-grid">
@@ -46,7 +48,7 @@
             <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
                 <div></div>
                 <div class="csa-row">
-                    {{ csa.btn('Volver al listado', { variant: 'ghost', href: path('partner_basket_share_list_status', { status: 1 }) }) }}
+                    {{ csa.btn('Volver a la ficha', { variant: 'ghost', href: path('partner_show', { id: partner_basket_share.partner.id }) }) }}
                     {{ form_widget(form.save, {
                         label: 'Finalizar cesta',
                         attr: { class: 'csa-btn csa-btn--primary' }
