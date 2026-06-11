@@ -53,6 +53,12 @@ class VerifyDeliveryInvariantsCommand extends Command
                 null,
                 InputOption::VALUE_REQUIRED,
                 'Inicio de la ventana de validación (Y-m-d). Por defecto, hoy.'
+            )
+            ->addOption(
+                'max',
+                null,
+                InputOption::VALUE_REQUIRED,
+                sprintf('Tope de violaciones impresas por ley (0 = sin tope). Por defecto, %d.', self::MAX_PRINTED)
             );
     }
 
@@ -64,6 +70,10 @@ class VerifyDeliveryInvariantsCommand extends Command
         $from = $fromOption !== null
             ? new \DateTimeImmutable((string) $fromOption)
             : new \DateTimeImmutable('today');
+
+        $maxPrinted = $input->getOption('max') !== null
+            ? max(0, (int) $input->getOption('max'))
+            : self::MAX_PRINTED;
 
         $results = $this->suite->run($from, (array) $input->getOption('law'));
         if ($results === []) {
@@ -102,11 +112,12 @@ class VerifyDeliveryInvariantsCommand extends Command
                 count($violations),
                 $isWarning ? 'avisos' : 'violaciones'
             ));
-            foreach (array_slice($violations, 0, self::MAX_PRINTED) as $violation) {
+            $printed = $maxPrinted === 0 ? $violations : array_slice($violations, 0, $maxPrinted);
+            foreach ($printed as $violation) {
                 $io->writeln('      · ' . $violation);
             }
-            if (count($violations) > self::MAX_PRINTED) {
-                $io->writeln(sprintf('      … y %d más.', count($violations) - self::MAX_PRINTED));
+            if (count($violations) > count($printed)) {
+                $io->writeln(sprintf('      … y %d más.', count($violations) - count($printed)));
             }
         }
 

@@ -5,6 +5,7 @@ namespace App\Service\Delivery\Invariant;
 use App\Entity\Basket;
 use App\Entity\BasketComponent;
 use App\Entity\DeliveryException;
+use App\Entity\Node;
 use App\Entity\PartnerBasketExtra;
 use App\Entity\PartnerBasketShare;
 use App\Entity\PartnerDeliveryShift;
@@ -158,9 +159,18 @@ final class EggMonthlyConservationInvariant extends AbstractInvariant
                 }
                 $ops = $opsCache[$opsKey];
 
+                // El periodo de huevo se mide en SEMANAS de calendario, no en aperturas:
+                // en un nodo quincenal (abre cada 2 semanas) el huevo quincenal toca en
+                // CADA apertura — misma convención que L3 para las cestas y que el
+                // resolver. Solo en nodo semanal "quincenal" significa la mitad.
+                $nodeIsBiweekly = $node->getCadence() === Node::CADENCE_BIWEEKLY;
                 $slotOptions = match ($pbs->getEggPeriod()?->getId()) {
                     self::EGG_PERIOD_WEEKLY => [$ops],
-                    self::EGG_PERIOD_BIWEEKLY => $ops > 0 ? array_unique([intdiv($ops, 2), (int) ceil($ops / 2)]) : [0],
+                    self::EGG_PERIOD_BIWEEKLY => match (true) {
+                        $nodeIsBiweekly => [$ops],
+                        $ops > 0 => array_unique([intdiv($ops, 2), (int) ceil($ops / 2)]),
+                        default => [0],
+                    },
                     self::EGG_PERIOD_MONTHLY => [$ops > 0 ? 1 : 0],
                     default => null,
                 };

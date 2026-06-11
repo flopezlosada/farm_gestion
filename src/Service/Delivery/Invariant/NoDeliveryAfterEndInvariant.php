@@ -2,6 +2,7 @@
 
 namespace App\Service\Delivery\Invariant;
 
+use App\Entity\PartnerBasketExtra;
 use App\Entity\PartnerBasketShare;
 use App\Entity\WeeklyBasket;
 
@@ -14,6 +15,9 @@ use App\Entity\WeeklyBasket;
  * Nota: el WB no persiste qué PBS lo originó (esa propiedad es transitoria,
  * ver WeeklyBasket), así que la baja se detecta por ausencia de PBS vigente
  * en la fecha de la semana (NOT EXISTS), no por el end_date de un PBS enlazado.
+ *
+ * Una cesta extra puntual ({@see PartnerBasketExtra}) a un NO suscriptor crea
+ * legítimamente un WB sin PBS que lo cubra — esa semana se tolera.
  */
 final class NoDeliveryAfterEndInvariant extends AbstractInvariant
 {
@@ -43,6 +47,10 @@ final class NoDeliveryAfterEndInvariant extends AbstractInvariant
                      AND (pbs.is_active = 1 OR pbs.end_date IS NOT NULL)
                      AND (pbs.start_date IS NULL OR pbs.start_date <= b.date)
                      AND (pbs.end_date IS NULL OR pbs.end_date >= b.date)
+               )
+               AND NOT EXISTS (
+                   SELECT x.id FROM ' . PartnerBasketExtra::class . ' x
+                   WHERE x.partner = p AND x.basket = b
                )'
         )->setParameter('from', $from)->getArrayResult();
         foreach ($uncovered as $r) {

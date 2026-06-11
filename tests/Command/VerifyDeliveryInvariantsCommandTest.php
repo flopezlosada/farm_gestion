@@ -53,4 +53,15 @@ class VerifyDeliveryInvariantsCommandTest extends KernelTestCase
 
         $this->assertSame(2, $exitCode, 'Un filtro sin coincidencias debe terminar en INVALID.');
     }
+
+    /**
+     * La opción --max (0 = sin tope de violaciones impresas) no rompe el comando.
+     */
+    public function testMaxSinTopeNoRevienta(): void
+    {
+        $tester = $this->tester();
+        $exitCode = $tester->execute(['--max' => '0']);
+
+        $this->assertContains($exitCode, [0, 1]);
+    }
 }
