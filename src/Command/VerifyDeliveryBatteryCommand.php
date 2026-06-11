@@ -23,8 +23,11 @@ use App\Service\Delivery\ExtraBasketEditor;
 use App\Service\Delivery\NodeDeliveryDate;
 use App\Service\Delivery\NodeDeliverySheet;
 use App\Service\Delivery\DeliveryCalendarProjector;
+use App\Service\Delivery\Invariant\DeliveryInvariant;
+use App\Service\Delivery\Invariant\InvariantSuite;
 use App\Service\Delivery\PickupRelocator;
 use App\Service\Delivery\WeeklyBasketGenerator;
+use App\Service\Delivery\WeekRematerializer;
 use App\Service\Partner\BasketModalityChanger;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -87,6 +90,8 @@ class VerifyDeliveryBatteryCommand extends Command
         private readonly PickupRelocator $relocator,
         private readonly DeliveryModeResolver $modeResolver,
         private readonly DeliveryCalendarProjector $calendarProjector,
+        private readonly InvariantSuite $invariantSuite,
+        private readonly WeekRematerializer $weekRematerializer,
     ) {
         parent::__construct();
     }
@@ -121,6 +126,8 @@ class VerifyDeliveryBatteryCommand extends Command
             $this->io->error('Este comando MUTA la BBDD. Corre sobre un clon desechable (db_play) y pasa --force.');
             return Command::FAILURE;
         }
+        // --force confirma la intención; esto verifica el hecho (clon de verdad, no golden/sandbox).
+        DatabaseGuard::assertDisposable($this->em->getConnection(), ['play', 'battery']);
 
         $this->io->title('Batería de verificación de reparto');
 
@@ -139,6 +146,10 @@ class VerifyDeliveryBatteryCommand extends Command
         $this->shiftMoveScenario();
         $this->shiftSkipScenario();
 
+        // Mover CON huevos: la composición entera (verdura + docenas) viaja al destino
+        // (caso Franco — los huevos se quedaban en el viernes de cohorte).
+        $this->shiftMoveWithEggsScenario();
+
         // Nodo biweekly (Madrid, miércoles): reparte solo en sus ciclos activos.
         $this->biweeklyNodeScenario();
 
@@ -149,6 +160,12 @@ class VerifyDeliveryBatteryCommand extends Command
         // piedra propia pero con el basket materializado por otro nodo) debe DIBUJARSE,
         // no salir vacía. Es el hueco que dejó pasar la decisión piedra-vs-dibujo global.
         $this->biweeklyCierreShiftScenario();
+
+        // Excepciones sobre semanas YA generadas: la piedra se re-materializa
+        // (WeekRematerializer, el flujo del alta de excepción del admin).
+        $this->cierreSemanaGeneradaScenario();
+        $this->cierreNodoSemanaGeneradaScenario();
+        $this->trasladoSemanaGeneradaScenario();
 
         // Cesta compartida quincenal (bs=6): media cesta en el bloque compartidas.
         $this->sharedQuincenalScenario();
@@ -193,9 +210,55 @@ class VerifyDeliveryBatteryCommand extends Command
 
         $this->report();
 
-        return array_reduce($this->results, fn (int $c, array $r) => $c + ($r['ok'] ? 0 : 1), 0) === 0
+        // Juicio transversal: tras ejercitar los escenarios, las LEYES del dominio
+        // deben cumplirse sobre todo el clon — caza efectos colaterales que ningún
+        // escenario mira (su aserción es local; los invariantes son globales).
+        $invariantErrors = $this->reportInvariants();
+
+        return $invariantErrors === 0
+            && array_reduce($this->results, fn (int $c, array $r) => $c + ($r['ok'] ? 0 : 1), 0) === 0
             ? Command::SUCCESS
             : Command::FAILURE;
+    }
+
+    /**
+     * Corre la suite de invariantes sobre el estado que dejaron los escenarios
+     * y la reporta. Devuelve el número de violaciones duras (los avisos no
+     * tumban la batería).
+     *
+     * @return int Violaciones con severidad error.
+     */
+    private function reportInvariants(): int
+    {
+        $this->io->section('Invariantes del dominio sobre el clon ejercitado');
+
+        $errors = 0;
+        foreach ($this->invariantSuite->run(new \DateTimeImmutable('today')) as $result) {
+            if ($result['violations'] === []) {
+                $this->io->writeln(sprintf(' <info>✓</info> %s %s', $result['code'], $result['name']));
+                continue;
+            }
+            $isWarning = $result['severity'] === DeliveryInvariant::SEVERITY_WARNING;
+            if (!$isWarning) {
+                $errors += count($result['violations']);
+            }
+            $this->io->writeln(sprintf(
+                ' <%s>%s</> %s %s — %d',
+                $isWarning ? 'comment' : 'error',
+                $isWarning ? '⚠' : '✗',
+                $result['code'],
+                $result['name'],
+                count($result['violations'])
+            ));
+            foreach (array_slice($result['violations'], 0, 10) as $violation) {
+                $this->io->writeln('      · ' . $violation);
+            }
+            if (count($result['violations']) > 10) {
+                $this->io->writeln(sprintf('      … y %d más (detalle: app:verify-delivery-invariants sobre el clon).', count($result['violations']) - 10));
+            }
+        }
+
+        return $errors;
     }
 
     // ---------------------------------------------------------------- escenarios
@@ -327,6 +390,202 @@ class VerifyDeliveryBatteryCommand extends Command
             'socio %d · no-recoge %d · obtenidos [%s] (ausente ese viernes, presente el resto)',
             $partner->getId(), $skip->getId(), implode(',', $got),
         ));
+    }
+
+    /**
+     * Mover una entrega CON huevos: la composición entera viaja al destino (caso
+     * Franco). Elige un semanal con huevo SEMANAL (así el origen lleva docenas
+     * seguro) y comprueba que el destino materializa verdura Y docenas, y que el
+     * origen no conserva entrega viva.
+     */
+    private function shiftMoveWithEggsScenario(): void
+    {
+        $label = 'Shift mover CON huevos (composición viaja — caso Franco)';
+
+        // Buscar uno de huevo SEMANAL (pickPartner solo filtra "tiene huevos"): los
+        // candidatos descartados se devuelven al pool para no vaciarlo de cara a
+        // los escenarios siguientes.
+        $partner = null;
+        $dozens = 0.0;
+        $burned = [];
+        while (($candidate = $this->pickPartner(self::SEMANAL, true)) !== null) {
+            $pbs = $this->shareRepo->findActiveForPartner($candidate);
+            if ($pbs?->getEggPeriod()?->getId() === 1 && $pbs->getEggAmount() !== null) {
+                $partner = $candidate;
+                $dozens = $pbs->getEggAmount()->getDozens();
+                break;
+            }
+            $burned[] = $candidate->getId();
+        }
+        $this->usedPartners = array_values(array_diff($this->usedPartners, $burned));
+        if ($partner === null) { $this->skip($label, 'sin semanal con huevo semanal libre'); return; }
+
+        $month = $this->nextMonth();
+        if ($month === null || count($month['baskets']) < 2) { $this->skip($label, 'mes insuficiente'); return; }
+
+        $from = $month['baskets'][0];
+        $to = $month['baskets'][1];
+        $this->insertShift($partner, $from, $to);
+        foreach ($month['baskets'] as $b) { $this->generator->generateForBasket($b); }
+
+        $destEggs = $this->componentAmountFor($partner, $to, BasketComponent::ID_EGGS);
+        $destVeg = $this->componentAmountFor($partner, $to, BasketComponent::ID_VEGETABLES);
+        $got = $this->partnerDeliveryBasketIds($partner, $month['baskets']);
+
+        $ok = !in_array($from->getId(), $got, true)
+            && in_array($to->getId(), $got, true)
+            && abs($destEggs - $dozens) < 0.01
+            && $destVeg > 0;
+        $this->record($label, $ok, sprintf(
+            'socio %d · %d→%d · destino verdura=%s (debe >0) · docenas=%s (deben %s) · origen fuera=%s',
+            $partner->getId(), $from->getId(), $to->getId(),
+            $destVeg, $destEggs, $dozens,
+            in_array($from->getId(), $got, true) ? 'NO' : 'sí',
+        ));
+    }
+
+    /**
+     * Cierre GLOBAL sobre una semana YA generada: el flujo del admin
+     * (WeekRematerializer::reconcileStone) debe dejar la semana cerrada VACÍA y
+     * re-materializar las posteriores generadas (la alternancia se desplaza),
+     * sin perderlas.
+     */
+    private function cierreSemanaGeneradaScenario(): void
+    {
+        $label = 'Cierre de semana YA generada (re-materializa)';
+        $month = $this->nextMonth();
+        if ($month === null || count($month['baskets']) < 2) { $this->skip($label, 'mes insuficiente'); return; }
+
+        foreach ($month['baskets'] as $b) { $this->generator->generateForBasket($b); }
+
+        $wbRepo = $this->em->getRepository(WeeklyBasket::class);
+        $week = $month['baskets'][0];
+        $next = $month['baskets'][1];
+        $before = $wbRepo->count(['basket' => $week]);
+        $nextBefore = $wbRepo->count(['basket' => $next]);
+        if ($before === 0 || $nextBefore === 0) { $this->skip($label, 'el mes no materializó entregas'); return; }
+
+        $exception = new DeliveryException();
+        $exception->setBasket($week);
+        $exception->setNode(null);
+        $exception->setShiftedDate(null);
+        $exception->setNotes('verif: cierre sobre semana generada');
+        $this->em->persist($exception);
+        $this->em->flush();
+
+        $this->weekRematerializer->reconcileStone($week, true);
+
+        $after = $wbRepo->count(['basket' => $week]);
+        $nextAfter = $wbRepo->count(['basket' => $next]);
+
+        $ok = $after === 0 && $nextAfter > 0;
+        $this->record($label, $ok, sprintf(
+            'semana %d: %d→%d entregas (debe 0) · posterior %d: %d→%d (debe >0, regenerada)',
+            $week->getId(), $before, $after, $next->getId(), $nextBefore, $nextAfter,
+        ));
+    }
+
+    /**
+     * Cierre de UN NODO sobre una semana YA generada: solo las entregas de ese
+     * nodo desaparecen; el resto de nodos conserva su listado.
+     */
+    private function cierreNodoSemanaGeneradaScenario(): void
+    {
+        $label = 'Cierre de nodo en semana generada (solo ese nodo fuera)';
+        $node = $this->nodeRepo->findOneBy(['cadence' => Node::CADENCE_WEEKLY]);
+        if ($node === null) { $this->skip($label, 'sin nodo semanal'); return; }
+        $month = $this->nextMonth();
+        if ($month === null || $month['baskets'] === []) { $this->skip($label, 'mes insuficiente'); return; }
+
+        foreach ($month['baskets'] as $b) { $this->generator->generateForBasket($b); }
+
+        $wbRepo = $this->em->getRepository(WeeklyBasket::class);
+        $week = $month['baskets'][0];
+        $nodeBefore = count($wbRepo->findForNodeAndBasket($node, $week));
+        $totalBefore = $wbRepo->count(['basket' => $week]);
+        if ($nodeBefore === 0 || $totalBefore === $nodeBefore) { $this->skip($label, 'sin reparto mixto de nodos esa semana'); return; }
+
+        $exception = new DeliveryException();
+        $exception->setBasket($week);
+        $exception->setNode($node);
+        $exception->setShiftedDate(null);
+        $exception->setNotes('verif: cierre de nodo sobre semana generada');
+        $this->em->persist($exception);
+        $this->em->flush();
+
+        $this->weekRematerializer->reconcileStone($week, false);
+
+        $nodeAfter = count($wbRepo->findForNodeAndBasket($node, $week));
+        $totalAfter = $wbRepo->count(['basket' => $week]);
+
+        $ok = $nodeAfter === 0 && $totalAfter > 0;
+        $this->record($label, $ok, sprintf(
+            'semana %d · nodo %d: %d→%d entregas (debe 0) · total: %d→%d (resto vivo)',
+            $week->getId(), $node->getId(), $nodeBefore, $nodeAfter, $totalBefore, $totalAfter,
+        ));
+    }
+
+    /**
+     * Traslado (festivo con fecha movida) sobre una semana YA generada: la piedra
+     * se re-materializa con la delivery_date trasladada en todas las entregas.
+     */
+    private function trasladoSemanaGeneradaScenario(): void
+    {
+        $label = 'Traslado de festivo en semana generada (fechas recalculadas)';
+        // Se asevera sobre el nodo SEMANAL: los nodos legacy sin delivery_weekday
+        // caen al viernes-ciclo por diseño y ensuciarían una aserción global.
+        $node = $this->nodeRepo->findOneBy(['cadence' => Node::CADENCE_WEEKLY]);
+        if ($node === null || $node->getDeliveryWeekday() === null) { $this->skip($label, 'sin nodo semanal con día'); return; }
+        $month = $this->nextMonth();
+        if ($month === null || $month['baskets'] === []) { $this->skip($label, 'mes insuficiente'); return; }
+
+        foreach ($month['baskets'] as $b) { $this->generator->generateForBasket($b); }
+
+        $wbRepo = $this->em->getRepository(WeeklyBasket::class);
+        $week = $month['baskets'][0];
+        if (count($wbRepo->findForNodeAndBasket($node, $week)) === 0) { $this->skip($label, 'semana sin entregas del nodo'); return; }
+
+        $shifted = \DateTimeImmutable::createFromInterface($week->getDate())->modify('-1 day');
+        $exception = new DeliveryException();
+        $exception->setBasket($week);
+        $exception->setNode(null);
+        $exception->setShiftedDate($shifted);
+        $exception->setNotes('verif: traslado sobre semana generada');
+        $this->em->persist($exception);
+        $this->em->flush();
+
+        $this->weekRematerializer->reconcileStone($week, false);
+
+        $dates = array_values(array_unique(array_map(
+            static fn (WeeklyBasket $wb): string => $wb->getDeliveryDate()?->format('Y-m-d') ?? 'NULL',
+            $wbRepo->findForNodeAndBasket($node, $week),
+        )));
+
+        $ok = $dates === [$shifted->format('Y-m-d')];
+        $this->record($label, $ok, sprintf(
+            'semana %d trasladada a %s · fechas en piedra del nodo %d: [%s] (debe solo la trasladada)',
+            $week->getId(), $shifted->format('Y-m-d'), $node->getId(), implode(',', $dates),
+        ));
+    }
+
+    /**
+     * Cantidad materializada de un componente en la entrega de un socio esa semana
+     * (0 si no tiene entrega).
+     */
+    private function componentAmountFor(Partner $partner, Basket $basket, int $componentId): float
+    {
+        $wb = $this->em->getRepository(WeeklyBasket::class)->findOneBy(['basket' => $basket, 'partner' => $partner]);
+        if ($wb === null) {
+            return 0.0;
+        }
+        $sum = 0.0;
+        foreach ($this->em->getRepository(WeeklyBasketItem::class)->findBy(['weeklyBasket' => $wb]) as $item) {
+            if ($item->getBasketComponent()?->getId() === $componentId) {
+                $sum += (float) $item->getAmount();
+            }
+        }
+
+        return $sum;
     }
 
     private function sharedQuincenalScenario(): void
@@ -508,6 +767,12 @@ class VerifyDeliveryBatteryCommand extends Command
             $partner->getId(), $node->getId(), $cierre->getId(), $shiftedIn->getId(),
             $mode, $nodeStone, $drawnContains ? 'sí' : 'NO', $cierreMode,
         ));
+
+        // Espejo del flujo admin: las aserciones de arriba prueban la capa resolver
+        // ANTES de reconciliar (el hueco histórico); ahora se re-materializa la piedra
+        // afectada como haría el alta real de la excepción, para que el clon quede
+        // consistente y los invariantes lo juzguen limpio.
+        $this->weekRematerializer->reconcileStone($cierre, true);
     }
 
     private function sharedBajaScenario(): void
@@ -530,6 +795,11 @@ class VerifyDeliveryBatteryCommand extends Command
         } catch (\Throwable $e) {
             $crashed = true;
         }
+
+        // Espejo del flujo admin (finalize): la baja re-materializa las semanas YA
+        // generadas del socio — sin esto, su piedra pre-existente (p. ej. la semana
+        // operativa heredada del clon) queda huérfana del PBS finalizado (L10).
+        $this->generator->reconcilePartnerFrom($partner, new \DateTime('today'));
 
         $this->em->refresh($share);
         $this->em->refresh($partner);
