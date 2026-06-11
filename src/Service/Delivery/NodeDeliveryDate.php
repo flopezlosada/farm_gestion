@@ -64,6 +64,41 @@ class NodeDeliveryDate
     }
 
     /**
+     * Fecha BASE para CONTAR posiciones mensuales: como {@see physicalDateFor()}
+     * pero una CANCELACIÓN conserva la fecha en vez de anularla. Sirve a la
+     * semántica "pegajosa" del orden mensual ({@see MonthlyOperativeOrderResolver}):
+     * la semana cancelada sigue ocupando su posición en el mes (quien iba detrás
+     * no se renumera); solo quien tenía ESA semana hace fallback. Los traslados
+     * sí aplican (cambian fecha y, con ella, el mes que cuenta), y en nodos
+     * biweekly la alineación sigue siendo operativa (un cierre global desplaza
+     * la cadencia del nodo entero — esa semántica no cambia).
+     *
+     * @param Basket $basket Ciclo semanal global.
+     * @param Node $node Nodo donde se entrega.
+     * @return \DateTimeImmutable|null Fecha base, o null si la cadencia no toca.
+     * @throws \LogicException Si el nodo es biweekly sin anchor_date.
+     */
+    public function baselineDateFor(Basket $basket, Node $node): ?\DateTimeImmutable
+    {
+        $physical = $this->naiveDate($basket, $node);
+
+        if ($node->getCadence() === Node::CADENCE_BIWEEKLY && !$this->alignsOperatively($physical, $node)) {
+            return null;
+        }
+
+        $exception = $this->exceptionRepository->findForBasketAndNode($basket, $node);
+        if ($exception === null || $exception->isCancelled()) {
+            return $physical;
+        }
+
+        $shifted = $exception->getShiftedDate();
+
+        return $shifted instanceof \DateTimeImmutable
+            ? $shifted
+            : \DateTimeImmutable::createFromInterface($shifted);
+    }
+
+    /**
      * Fecha física teórica del nodo en este Basket según SU día de la semana
      * y su cadencia, SIN aplicar excepciones de calendario. Devuelve null si
      * el nodo es biweekly y esta semana no le toca repartir.

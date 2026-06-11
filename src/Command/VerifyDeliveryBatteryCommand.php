@@ -177,6 +177,10 @@ class VerifyDeliveryBatteryCommand extends Command
         $this->santosScenario();
         $this->miriamScenario();
 
+        // Orden mensual PEGAJOSO: un cierre global en la 1ª semana del mes no
+        // desplaza al mensual de la 2ª (bajo renumeración caería en la 3ª).
+        $this->mensualStickyScenario();
+
         // Materialización tardía: el listado DIBUJADO al vuelo (proyección, sin
         // persistir) debe ser idéntico al MATERIALIZADO para la misma semana.
         $this->projectionEquivalenceScenario();
@@ -899,6 +903,56 @@ class VerifyDeliveryBatteryCommand extends Command
             'socio %d · cohorte %s · cestas [%s] · huevo solo en %d · verdura en todas=%s · huevo correcto=%s',
             $partner->getId(), $cohort ?? '-', implode(' ', $detail), $eggBasket,
             $verduraOk ? 'sí' : 'NO', $eggOk ? 'sí' : 'NO',
+        ));
+    }
+
+    /**
+     * Semántica PEGAJOSA del orden mensual (2026-06-12): un cierre global en
+     * la 1ª semana del mes NO desplaza al mensual de la 2ª — su "2ª entrega
+     * del mes" sigue siendo la misma semana de calendario (bajo la antigua
+     * renumeración caería en la 3ª). La excepción se registra ANTES de generar
+     * el mes; la mutación del PBS espeja el edit del admin (reconcilia).
+     */
+    private function mensualStickyScenario(): void
+    {
+        $label = 'Orden mensual pegajoso (el cierre no desplaza al de detrás)';
+        $partner = $this->pickPartner(self::MENSUAL, null);
+        if ($partner === null) { $this->skip($label, 'sin mensual libre en nodo semanal'); return; }
+        $share = $this->shareRepo->findActiveForPartner($partner);
+        if ($share === null) { $this->skip($label, 'socio sin cesta activa'); return; }
+        $month = $this->nextMonth();
+        if ($month === null || count($month['baskets']) < 3) { $this->skip($label, 'mes futuro insuficiente'); return; }
+
+        // Su cesta mensual pasa a la 2ª entrega del mes (espejo del edit in situ).
+        $share->setDayMonthOrder(2);
+        $this->em->flush();
+        $this->generator->reconcilePartnerFrom($partner, new \DateTime('today'));
+
+        // Cierre global de la 1ª semana, ANTES de generar el mes.
+        $cierre = new DeliveryException();
+        $cierre->setBasket($month['baskets'][0]);
+        $cierre->setNode(null);
+        $cierre->setShiftedDate(null);
+        $cierre->setNotes('verif: sticky mensual');
+        $this->em->persist($cierre);
+        $this->em->flush();
+
+        foreach ($month['baskets'] as $b) { $this->generator->generateForBasket($b); }
+
+        $wbRepo = $this->em->getRepository(WeeklyBasket::class);
+        $got = [];
+        foreach ($month['baskets'] as $b) {
+            if ($wbRepo->findOneBy(['basket' => $b, 'partner' => $partner]) !== null) {
+                $got[] = $b->getId();
+            }
+        }
+        $expected = $month['baskets'][1]->getId();  // la 2ª de CALENDARIO, pese al cierre de la 1ª
+
+        $ok = $got === [$expected];
+        $this->record($label, $ok, sprintf(
+            'socio %d · cierre en %s · entrega en [%s] (debe [%d]: su 2ª de calendario, no la 3ª)',
+            $partner->getId(), $month['baskets'][0]->getDate()->format('Y-m-d'),
+            implode(',', $got), $expected,
         ));
     }
 

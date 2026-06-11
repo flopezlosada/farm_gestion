@@ -15,6 +15,7 @@ use App\Service\Delivery\BiweeklyCohortResolver;
 use App\Service\Delivery\EggDeliveryResolver;
 use App\Service\Delivery\MonthlyOperativeOrderResolver;
 use App\Service\Delivery\NodeDeliveryDate;
+use Doctrine\ORM\AbstractQuery;
 use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -121,30 +122,39 @@ class EggDeliveryResolverTest extends TestCase
     }
 
     /**
-     * Cesta mensual + huevos mensuales: huevos van con la cesta. Se compara
-     * operativeOrderForNode con dayMonthOrder de la cesta; egg_day_month_order
-     * se ignora.
+     * Cesta mensual + huevos mensuales: huevos van con la cesta. El basket
+     * debe SERVIR el dayMonthOrder de la cesta (semántica pegajosa de
+     * ordersServedBy); egg_day_month_order se ignora.
      */
     public function testMensualConCestaMensualEnSuOrdenTrue(): void
     {
         $share = $this->shareMensualConCesta(2);
-        $this->nodeDeliveryDate->method('deliversInBasket')->willReturn(true);
-        $this->monthly->method('operativeOrderForNode')->willReturn(2);
+        $this->monthly->method('ordersServedBy')->willReturn([2]);
+        $this->assertTrue($this->resolver->delivers($share, $this->basket));
+    }
+
+    /**
+     * El basket que absorbe el fallback de una semana cancelada sirve DOS
+     * órdenes: el mensual de cualquiera de los dos recoge aquí.
+     */
+    public function testMensualConCestaMensualEnOrdenAbsorbidoPorFallbackTrue(): void
+    {
+        $share = $this->shareMensualConCesta(2);
+        $this->monthly->method('ordersServedBy')->willReturn([2, 3]);
         $this->assertTrue($this->resolver->delivers($share, $this->basket));
     }
 
     public function testMensualConCestaMensualEnOrdenDistintoFalse(): void
     {
         $share = $this->shareMensualConCesta(2);
-        $this->nodeDeliveryDate->method('deliversInBasket')->willReturn(true);
-        $this->monthly->method('operativeOrderForNode')->willReturn(3);
+        $this->monthly->method('ordersServedBy')->willReturn([3]);
         $this->assertFalse($this->resolver->delivers($share, $this->basket));
     }
 
     public function testMensualConCestaMensualSiNodoNoEntregaFalse(): void
     {
         $share = $this->shareMensualConCesta(2);
-        $this->nodeDeliveryDate->method('deliversInBasket')->willReturn(false);
+        $this->monthly->method('ordersServedBy')->willReturn([]);
         $this->assertFalse($this->resolver->delivers($share, $this->basket));
     }
 
@@ -159,6 +169,86 @@ class EggDeliveryResolverTest extends TestCase
         $share->setDeliveryGroup('B');
         // egg_day_month_order=null
         $this->assertFalse($this->resolver->delivers($share, $this->basket));
+    }
+
+    /**
+     * Huevo mensual de un SEMANAL (ord = N-ésima entrega del socio en el mes),
+     * semántica pegajosa: cancelada la 2ª semana, la 3ª SIGUE siendo la 3ª —
+     * el huevo de ord=3 no se desplaza a la 4ª (bajo renumeración caería allí).
+     */
+    public function testHuevoMensualPegajosoNoSeDesplazaPorUnCierreAnterior(): void
+    {
+        [$semanas, $share] = $this->mesConCierre(cerrada: 1, eggOrder: 3);  // cerrada la 2ª (idx 1)
+
+        $this->assertTrue($this->resolver->delivers($share, $semanas[2]));   // 3ª: suya
+        $this->assertFalse($this->resolver->delivers($share, $semanas[3]));  // 4ª: NO se desplaza
+    }
+
+    /**
+     * Si la semana designada es justo la cancelada, el huevo cae en la
+     * SIGUIENTE entrega operativa del mes.
+     */
+    public function testHuevoMensualEnSemanaCerradaHaceFallbackALaSiguiente(): void
+    {
+        [$semanas, $share] = $this->mesConCierre(cerrada: 1, eggOrder: 2);
+
+        $this->assertFalse($this->resolver->delivers($share, $semanas[1]));  // cerrada
+        $this->assertTrue($this->resolver->delivers($share, $semanas[2]));   // fallback
+        $this->assertFalse($this->resolver->delivers($share, $semanas[0]));
+    }
+
+    /**
+     * Si la cancelada es la ÚLTIMA del mes (o el orden excede la lista), el
+     * fallback es la última operativa ANTERIOR: el huevo no salta de mes.
+     */
+    public function testHuevoMensualEnUltimaSemanaCerradaHaceFallbackHaciaAtras(): void
+    {
+        [$semanas, $share] = $this->mesConCierre(cerrada: 3, eggOrder: 4);
+
+        $this->assertFalse($this->resolver->delivers($share, $semanas[3]));  // cerrada
+        $this->assertTrue($this->resolver->delivers($share, $semanas[2]));   // última operativa
+    }
+
+    /**
+     * Helper de los tests pegajosos: mes de 4 viernes (junio 2026) con UNA
+     * semana cancelada, y un PBS semanal con huevo mensual en la entrega
+     * $eggOrder. Cablea los mocks de EM (baskets del mes) y NodeDeliveryDate
+     * (base = todas; operativa = todas menos la cerrada).
+     *
+     * @param int $cerrada Índice 0-based de la semana cancelada.
+     * @param int $eggOrder egg_day_month_order del PBS.
+     * @return array{0:Basket[],1:PartnerBasketShare}
+     */
+    private function mesConCierre(int $cerrada, int $eggOrder): array
+    {
+        $semanas = [];
+        foreach (['2026-06-05', '2026-06-12', '2026-06-19', '2026-06-26'] as $i => $iso) {
+            $basket = new Basket();
+            $basket->setDate(new \DateTime($iso));
+            $ref = new \ReflectionProperty(Basket::class, 'id');
+            $ref->setAccessible(true);
+            $ref->setValue($basket, $i + 1);
+            $semanas[] = $basket;
+        }
+
+        $query = $this->createMock(AbstractQuery::class);
+        $query->method('setParameter')->willReturnSelf();
+        $query->method('getResult')->willReturn($semanas);
+        $this->em->method('createQuery')->willReturn($query);
+
+        $cerradaId = $semanas[$cerrada]->getId();
+        $this->nodeDeliveryDate->method('baselineDateFor')->willReturnCallback(
+            static fn (Basket $b) => \DateTimeImmutable::createFromInterface($b->getDate())
+        );
+        $this->nodeDeliveryDate->method('deliversInBasket')->willReturnCallback(
+            static fn (Basket $b) => $b->getId() !== $cerradaId
+        );
+
+        $share = $this->shareConPeriodo(3);
+        $share->setBasketShare($this->makeBasketShare(1));  // cesta SEMANAL
+        $share->setEggDayMonthOrder($eggOrder);
+
+        return [$semanas, $share];
     }
 
     /**

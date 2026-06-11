@@ -319,23 +319,25 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
      *
      * @param mixed $current_basket Basket (firma laxa por coherencia con el resto del repo).
      * @param int $basket_share_id ID de BasketShare (3 mensual, 5 sólo huevos…).
-     * @param int|null $weeklyMonthlyOrder Orden operativo en el nodo weekly; null si éste no entrega esta semana.
-     * @param array<int,int> $biweeklyNodeIdToOrder Mapa nodeId → orden operativo en ese nodo.
+     * @param int[] $weeklyMonthlyOrders Órdenes que el basket sirve en el nodo weekly
+     *              (pegajoso, ver MonthlyOperativeOrderResolver::ordersServedBy);
+     *              vacío si éste no entrega esta semana.
+     * @param array<int,int[]> $biweeklyNodeIdToOrders Mapa nodeId → órdenes servidas en ese nodo.
      * @param bool $only_eggs Filtrar a egg_period=3 (sólo huevos mensuales).
      * @return PartnerBasketShare[]
      */
     public function findBasketPartnersMonthlyNodeAware(
         $current_basket,
         int $basket_share_id,
-        ?int $weeklyMonthlyOrder,
-        array $biweeklyNodeIdToOrder,
+        array $weeklyMonthlyOrders,
+        array $biweeklyNodeIdToOrders,
         bool $only_eggs = false
     ): array {
         $em = $this->getEntityManager();
         $eggPeriod = $only_eggs ? 3 : null;
         $results = [];
 
-        if ($weeklyMonthlyOrder !== null) {
+        if ($weeklyMonthlyOrders !== []) {
             $weeklyDql = "select b from App\\Entity\\PartnerBasketShare b
                           inner join b.partner p
                           left join p.weekly_basket_group wbg
@@ -344,7 +346,7 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
                             and b.is_active = 1
                             and (b.start_date IS NULL OR b.start_date <= :date)
                             and (b.end_date IS NULL OR b.end_date >= :date)
-                            and b.day_month_order = :weekly_order
+                            and b.day_month_order IN (:weekly_orders)
                             and (n.cadence = :cadence_weekly OR n.id IS NULL)";
             if ($eggPeriod !== null) {
                 $weeklyDql .= " and b.egg_period = :egg_period ";
@@ -354,7 +356,7 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
             $weeklyQuery = $em->createQuery($weeklyDql);
             $weeklyQuery->setParameter("basket_share", $basket_share_id);
             $weeklyQuery->setParameter("date", $current_basket->getDate());
-            $weeklyQuery->setParameter("weekly_order", $weeklyMonthlyOrder);
+            $weeklyQuery->setParameter("weekly_orders", $weeklyMonthlyOrders);
             $weeklyQuery->setParameter("cadence_weekly", \App\Entity\Node::CADENCE_WEEKLY);
             if ($eggPeriod !== null) {
                 $weeklyQuery->setParameter("egg_period", $eggPeriod);
@@ -363,7 +365,10 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
             $results = $weeklyQuery->getResult();
         }
 
-        foreach ($biweeklyNodeIdToOrder as $nodeId => $orderForNode) {
+        foreach ($biweeklyNodeIdToOrders as $nodeId => $ordersForNode) {
+            if ($ordersForNode === []) {
+                continue;
+            }
             $biDql = "select b from App\\Entity\\PartnerBasketShare b
                       inner join b.partner p
                       inner join p.weekly_basket_group wbg
@@ -372,7 +377,7 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
                         and b.is_active = 1
                         and (b.start_date IS NULL OR b.start_date <= :date)
                         and (b.end_date IS NULL OR b.end_date >= :date)
-                        and b.day_month_order = :order_for_node
+                        and b.day_month_order IN (:orders_for_node)
                         and n.id = :node_id";
             if ($eggPeriod !== null) {
                 $biDql .= " and b.egg_period = :egg_period ";
@@ -382,7 +387,7 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
             $biQuery = $em->createQuery($biDql);
             $biQuery->setParameter("basket_share", $basket_share_id);
             $biQuery->setParameter("date", $current_basket->getDate());
-            $biQuery->setParameter("order_for_node", $orderForNode);
+            $biQuery->setParameter("orders_for_node", $ordersForNode);
             $biQuery->setParameter("node_id", $nodeId);
             if ($eggPeriod !== null) {
                 $biQuery->setParameter("egg_period", $eggPeriod);

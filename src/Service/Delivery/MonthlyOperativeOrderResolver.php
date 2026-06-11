@@ -12,6 +12,13 @@ use Doctrine\ORM\EntityManagerInterface;
  * de reparto: un mensual con day_month_order = 4 debe recoger en la 4ª
  * entrega de su nodo en el mes, independientemente del calendario.
  *
+ * Dos consultas con semánticas distintas:
+ *  - {@see ordersServedBy}: emparejamiento PEGAJOSO sobre el calendario base
+ *    (una cancelación no desplaza a los mensuales posteriores; el afectado
+ *    hace fallback). Es la que usan generador y resolver de huevos.
+ *  - {@see operativeOrderForNode}: posición entre las entregas REALES
+ *    (renumera). Útil como posición física pura.
+ *
  * "Operativo" se delega en {@see NodeDeliveryDate::deliversInBasket}, que
  * respeta cadencia (un quincenal fuera de fase no entrega) y las
  * `DeliveryException` (cancelación o traslado) que administración registra
@@ -88,6 +95,110 @@ class MonthlyOperativeOrderResolver
     }
 
     /**
+     * Órdenes mensuales que este Basket SIRVE para el nodo, con semántica
+     * PEGAJOSA (2026-06-12, decisión de Paco): las posiciones se cuentan sobre
+     * el calendario BASE del mes ({@see NodeDeliveryDate::baselineDateFor} —
+     * las semanas canceladas siguen ocupando su posición), de modo que un
+     * cierre NO desplaza a los mensuales de las semanas posteriores. El basket
+     * sirve su propia posición base y, además, la de cualquier semana cancelada
+     * cuyo FALLBACK sea él: la siguiente operativa del mes, o la última
+     * operativa si la cancelada no tiene siguiente (el huevo/cesta no salta de mes).
+     *
+     * Ejemplo: viernes [5, 12, 19, 26], cierre del 12 → el 19 sigue siendo la
+     * posición 3 y el 26 la 4; el 19 sirve además la posición 2 (fallback del
+     * cancelado). Devuelve [] si el nodo no entrega en este Basket.
+     *
+     * A diferencia de {@see operativeOrderForNode} (posición entre las entregas
+     * REALES, que renumera), esta es la consulta para EMPAREJAR mensuales
+     * (day_month_order / egg_day_month_order) con su semana.
+     *
+     * @param Basket $basket Ciclo semanal global.
+     * @param Node $node Nodo donde se entrega.
+     * @return int[] Posiciones 1-based que este basket sirve (vacío si no entrega).
+     */
+    public function ordersServedBy(Basket $basket, Node $node): array
+    {
+        if ($this->nodeDeliveryDate->physicalDateFor($basket, $node) === null) {
+            return [];
+        }
+
+        $baseline = $this->nodeDeliveryDate->baselineDateFor($basket, $node);
+        if ($baseline === null) {
+            return [];
+        }
+
+        $entries = $this->baselineMonthDeliveries($baseline, $node);
+
+        $orders = [];
+        $lastOperativeIdx = null;
+        foreach ($entries as $idx => $entry) {
+            if ($entry['operative']) {
+                $lastOperativeIdx = $idx;
+            }
+        }
+        foreach ($entries as $idx => $entry) {
+            if ($entry['operative']) {
+                if ($entry['basketId'] === $basket->getId()) {
+                    $orders[] = $idx + 1;
+                }
+                continue;
+            }
+            // Posición cancelada: ¿su fallback es este basket? Siguiente
+            // operativa del mes; si no la hay, la última operativa.
+            $fallbackIdx = null;
+            for ($j = $idx + 1, $n = count($entries); $j < $n; $j++) {
+                if ($entries[$j]['operative']) {
+                    $fallbackIdx = $j;
+                    break;
+                }
+            }
+            $fallbackIdx ??= $lastOperativeIdx;
+            if ($fallbackIdx !== null && $entries[$fallbackIdx]['basketId'] === $basket->getId()) {
+                $orders[] = $idx + 1;
+            }
+        }
+
+        sort($orders);
+
+        return $orders;
+    }
+
+    /**
+     * Calendario BASE del mes para el nodo: entregas cuyo mes de fecha base
+     * coincide con el de $monthRef, ordenadas por fecha base ascendente, cada
+     * una marcada como operativa o no (cancelada). Misma ventana ±8 días que
+     * {@see monthDeliveries} para capturar traslados entre meses vecinos.
+     *
+     * @param \DateTimeImmutable $monthRef Fecha base que define el mes objetivo.
+     * @param Node $node Nodo donde se entrega.
+     * @return array<int,array{basketId:int,baseline:string,operative:bool}>
+     */
+    private function baselineMonthDeliveries(\DateTimeImmutable $monthRef, Node $node): array
+    {
+        $year  = (int) $monthRef->format('Y');
+        $month = (int) $monthRef->format('m');
+
+        $entries = [];
+        foreach ($this->monthWindowBaskets($monthRef) as $candidate) {
+            $baseline = $this->nodeDeliveryDate->baselineDateFor($candidate, $node);
+            if ($baseline === null) {
+                continue;
+            }
+            if ((int) $baseline->format('Y') === $year && (int) $baseline->format('m') === $month) {
+                $entries[] = [
+                    'basketId'  => $candidate->getId(),
+                    'baseline'  => $baseline->format('Y-m-d'),
+                    'operative' => $this->nodeDeliveryDate->physicalDateFor($candidate, $node) !== null,
+                ];
+            }
+        }
+
+        usort($entries, static fn (array $a, array $b): int => strcmp($a['baseline'], $b['baseline']));
+
+        return $entries;
+    }
+
+    /**
      * Entregas operativas del nodo cuyo mes de FECHA FÍSICA coincide con el de
      * $monthRef, ordenadas por esa fecha física ascendente. Cada entrada es
      * ['basketId' => int, 'physical' => string 'Y-m-d'].
@@ -106,20 +217,8 @@ class MonthlyOperativeOrderResolver
         $year  = (int) $monthRef->format('Y');
         $month = (int) $monthRef->format('m');
 
-        $firstOfMonth = $monthRef->modify('first day of this month');
-        $from = $firstOfMonth->modify('-8 days');
-        $to   = $monthRef->modify('last day of this month')->modify('+8 days');
-
-        $dql = "SELECT b FROM App\\Entity\\Basket b
-                WHERE b.date BETWEEN :from AND :to
-                ORDER BY b.date ASC";
-        $baskets = $this->em->createQuery($dql)
-            ->setParameter('from', $from->format('Y-m-d'))
-            ->setParameter('to', $to->format('Y-m-d'))
-            ->getResult();
-
         $entries = [];
-        foreach ($baskets as $candidate) {
+        foreach ($this->monthWindowBaskets($monthRef) as $candidate) {
             $phys = $this->nodeDeliveryDate->physicalDateFor($candidate, $node);
             if ($phys === null) {
                 continue;
@@ -132,5 +231,29 @@ class MonthlyOperativeOrderResolver
         usort($entries, static fn (array $a, array $b): int => strcmp($a['physical'], $b['physical']));
 
         return $entries;
+    }
+
+    /**
+     * Baskets de la ventana ±8 días alrededor del mes de $monthRef, en orden de
+     * fecha cruda. La ventana captura Baskets trasladados desde/hacia meses
+     * vecinos (los traslados de festivo van al jueves anterior, así que un
+     * Basket de día 1 puede caer en el mes previo).
+     *
+     * @param \DateTimeImmutable $monthRef Fecha que define el mes objetivo.
+     * @return Basket[]
+     */
+    private function monthWindowBaskets(\DateTimeImmutable $monthRef): array
+    {
+        $from = $monthRef->modify('first day of this month')->modify('-8 days');
+        $to   = $monthRef->modify('last day of this month')->modify('+8 days');
+
+        $dql = "SELECT b FROM App\\Entity\\Basket b
+                WHERE b.date BETWEEN :from AND :to
+                ORDER BY b.date ASC";
+
+        return $this->em->createQuery($dql)
+            ->setParameter('from', $from->format('Y-m-d'))
+            ->setParameter('to', $to->format('Y-m-d'))
+            ->getResult();
     }
 }

@@ -47,7 +47,7 @@ class PartnerBasketShareType extends AbstractType
             // Caso Miriam: quincenal que recoge 1er y 3er viernes; "2ª entrega"
             // = los huevos van en su 3er viernes (su segunda cesta). El resolver
             // cuenta sobre las cestas del socio, así que los huevos nunca caen en
-            // un día sin cesta. Ver EggDeliveryResolver::shareDeliveriesInMonth.
+            // un día sin cesta. Ver EggDeliveryResolver::shareBaselineDeliveriesInMonth.
             ->add('eggDayMonthOrder', ChoiceType::class, [
                 'choices'  => [
                     'No corresponde' => null,
