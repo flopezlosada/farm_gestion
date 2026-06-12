@@ -46,7 +46,10 @@ class Booking
      */
     private $image;
 
-    #[Assert\File(maxSize: 6000000)]
+    // Assert\Image y no Assert\File: el cartel se pinta como <img> en la
+    // agenda pública; con File a secas se colaban .pdf/.docx (eventos 1 y 2
+    // históricos) que renderizan como imagen rota.
+    #[Assert\Image(maxSize: 6000000)]
     protected $file;
 
     /**
@@ -106,6 +109,26 @@ class Booking
     public function getWebPath()
     {
         return null === $this->image ? null : $this->getUploadDir() . '/' . $this->image;
+    }
+
+    /**
+     * Indica si el archivo subido es una imagen renderizable como &lt;img&gt;.
+     *
+     * Los eventos 1 y 2 históricos guardaron .docx/.pdf antes de que el form
+     * forzara Assert\Image; para esos hay que evitar pintar una imagen rota
+     * (en el detalle se ofrecen como enlace de descarga en su lugar).
+     *
+     * @return bool true si la extensión del fichero es de imagen.
+     */
+    public function isImage(): bool
+    {
+        if (null === $this->image) {
+            return false;
+        }
+
+        $extension = strtolower(pathinfo($this->image, PATHINFO_EXTENSION));
+
+        return in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'], true);
     }
 
     protected function getUploadRootDir()

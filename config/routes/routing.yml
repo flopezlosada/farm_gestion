@@ -177,6 +177,6 @@ app_audio:
     resource: "routing/audio.xml"
     prefix:   /audio
 
-app_booking:
-    resource: "routing/booking.xml"
-    prefix:   /booking
+# Las rutas de Booking (eventos públicos) viven como atributos en
+# BookingController bajo /gestion/eventos; el XML legacy apuntaba además a
+# acciones create/update que ya no existen.

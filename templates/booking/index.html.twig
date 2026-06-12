@@ -1,6 +1,8 @@
 {# ============================================================
  # Listado de eventos públicos (Booking) — admin.
- # La vista pública es Booking/calendar.html.twig (no se toca).
+ # Mismo patrón de fila rica que el listado de noticias del blog
+ # (miniatura + título + extracto + estado temporal). La vista
+ # pública es la agenda de /asambleas y la caja del blog.
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
@@ -19,7 +21,7 @@
     {{ csa.page_header(
         'Comunicación · Web pública',
         'Eventos públicos',
-        'Citas que aparecen en el calendario de la web pública (booking).'
+        'Citas que aparecen en la agenda de la web pública (/asambleas) y en la caja del blog.'
     ) }}
 
     <div class="csa-row-between" style="margin-bottom: var(--csa-sp-5);">
@@ -29,36 +31,188 @@
         </div>
     </div>
 
+    {# ---------- Estilos específicos (prefijo evt-, espejo de blog-) ---------- #}
+    <style>
+        .evt-table { border: 1px solid var(--csa-rule); border-radius: var(--csa-radius-lg); overflow: hidden; }
+        .evt-table td { padding: var(--csa-sp-5) var(--csa-sp-4) !important; vertical-align: top; }
+
+        .evt-row { display: flex; gap: var(--csa-sp-5); align-items: flex-start; min-width: 0; }
+        .evt-row__thumb {
+            width: 88px; height: 88px;
+            border-radius: var(--csa-radius-md);
+            object-fit: cover;
+            flex-shrink: 0; display: block;
+        }
+        .evt-row__thumb-placeholder {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 88px; height: 88px;
+            border-radius: var(--csa-radius-md);
+            background: var(--csa-ochre-soft);
+            color: var(--csa-amber);
+            font-size: 26px;
+            flex-shrink: 0;
+        }
+        .evt-row__thumb-placeholder--muted { background: var(--csa-surface-alt); color: var(--csa-ink-soft); }
+
+        .evt-row__body { min-width: 0; flex: 1; padding-top: 2px; }
+        .evt-row__status-wrap { margin-bottom: var(--csa-sp-3); }
+        .evt-row__status { text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; font-size: 10px; }
+
+        .evt-row__title {
+            font-family: var(--csa-serif);
+            font-variation-settings: "opsz" 18;
+            font-weight: 500;
+            letter-spacing: -0.012em;
+            font-size: 1.4rem;
+            line-height: 1.2;
+            color: var(--csa-ink);
+            text-decoration: none;
+            display: inline;
+            background-image: linear-gradient(transparent calc(100% - 1px), var(--csa-ink) 1px);
+            background-size: 0 100%;
+            background-repeat: no-repeat;
+            transition: background-size var(--csa-t-normal);
+        }
+        .evt-table tbody tr:hover .evt-row__title { background-size: 100% 100%; }
+
+        .evt-row__excerpt {
+            margin: var(--csa-sp-3) 0 0;
+            color: var(--csa-ink-soft);
+            font-size: var(--csa-fs-sm);
+            line-height: 1.55;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            max-width: 62ch;
+        }
+
+        .evt-row__date { font-family: var(--csa-sans); color: var(--csa-ink); white-space: nowrap; line-height: 1.4; }
+        .evt-row__date-abs { font-size: var(--csa-fs-sm); font-weight: 500; }
+        .evt-row__date-time { color: var(--csa-ink-soft); font-weight: 400; }
+        .evt-row__date-end {
+            display: block;
+            margin-top: 4px;
+            font-family: var(--csa-serif);
+            font-style: italic;
+            font-size: var(--csa-fs-xs);
+            color: var(--csa-ink-soft);
+            font-variation-settings: "opsz" 14;
+        }
+
+        .evt-row__actions { display: flex; gap: 2px; justify-content: flex-end; padding-top: 4px; }
+        .evt-row__action {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 32px; height: 32px;
+            border-radius: var(--csa-radius-md);
+            color: var(--csa-ink-muted);
+            text-decoration: none;
+            font-size: 13px;
+            transition: all var(--csa-t-fast);
+        }
+        .evt-row__action:hover { color: var(--csa-ink); background: var(--csa-surface-alt); }
+        .evt-row__action--view:hover { color: var(--csa-sky); background: var(--csa-sky-soft); }
+        .evt-row__action--edit:hover { color: var(--csa-green); background: var(--csa-green-soft); }
+
+        .csa-badge--amber { background: var(--csa-ochre-soft); color: var(--csa-amber); }
+
+        @media (max-width: 760px) {
+            .evt-row { gap: var(--csa-sp-3); }
+            .evt-row__thumb,
+            .evt-row__thumb-placeholder { width: 64px; height: 64px; }
+            .evt-row__title { font-size: var(--csa-fs-lg); }
+            .evt-row__date { white-space: normal; }
+        }
+    </style>
+
+    {% set today = date()|date('Y-m-d') %}
+
     <div class="csa-table-wrap">
-        <table class="csa-table" data-paginate>
+        <table class="csa-table evt-table" data-paginate>
             <thead>
                 <tr>
-                    <th>Título</th>
-                    <th class="csa-table__col-tight">Inicio</th>
-                    <th class="csa-table__col-tight">Fin</th>
+                    <th>Evento</th>
+                    <th class="csa-table__col-tight">Fecha</th>
                     <th class="csa-table__actions">Acciones</th>
                 </tr>
             </thead>
             <tbody>
                 {% for booking in bookings %}
+                    {# Estado temporal: el eyebrow de la fila. end = fin o, si no hay, el inicio. #}
+                    {% set begin_day = booking.beginAt ? booking.beginAt|date('Y-m-d') : null %}
+                    {% set end_day = (booking.endAt ?: booking.beginAt) ? (booking.endAt ?: booking.beginAt)|date('Y-m-d') : null %}
+                    {% if end_day and end_day < today %}
+                        {% set status_label = 'Finalizado' %}{% set status_tone = 'neutral' %}
+                    {% elseif begin_day == today %}
+                        {% set status_label = 'Hoy' %}{% set status_tone = 'amber' %}
+                    {% elseif begin_day and begin_day > today %}
+                        {% set status_label = 'Próximo' %}{% set status_tone = 'green' %}
+                    {% else %}
+                        {% set status_label = 'En curso' %}{% set status_tone = 'amber' %}
+                    {% endif %}
+
                     <tr>
-                        <td>
-                            <a class="csa-table__primary" href="{{ path('booking_show', { id: booking.id }) }}">{{ booking.title }}</a>
+                        <td data-order="{{ status_label }}">
+                            <div class="evt-row">
+                                {% if booking.image and booking.isImage %}
+                                    <img class="evt-row__thumb"
+                                         src="{{ asset(booking.webPath)|imagine_filter('thumb_latest_post') }}"
+                                         alt="{{ booking.title }}">
+                                {% else %}
+                                    <span class="evt-row__thumb-placeholder {% if status_tone == 'neutral' %}evt-row__thumb-placeholder--muted{% endif %}">
+                                        <i class="fa fa-calendar-check-o"></i>
+                                    </span>
+                                {% endif %}
+                                <div class="evt-row__body">
+                                    <div class="evt-row__status-wrap">
+                                        <span class="csa-badge csa-badge--{{ status_tone }} csa-badge--no-dot evt-row__status">{{ status_label }}</span>
+                                    </div>
+                                    <a class="evt-row__title" href="{{ path('booking_show', { id: booking.id }) }}">
+                                        {{ booking.title }}
+                                    </a>
+                                    {% set excerpt_text = booking.content|excerpt(160) %}
+                                    {% if excerpt_text %}
+                                        <p class="evt-row__excerpt">{{ excerpt_text }}</p>
+                                    {% endif %}
+                                </div>
+                            </div>
                         </td>
-                        <td class="csa-table__col-tight">
-                            {% if booking.beginAt %}{{ booking.beginAt|format_date('medium', locale='es') }}{% else %}—{% endif %}
+
+                        <td class="csa-table__col-tight" data-order="{{ booking.beginAt ? booking.beginAt|date('Y-m-d H:i:s') : '' }}">
+                            {% if booking.beginAt %}
+                                <div class="evt-row__date">
+                                    <span class="evt-row__date-abs">{{ booking.beginAt|format_date('medium', locale='es') }}</span>
+                                    {% if booking.beginAt|date('H:i') != '00:00' %}
+                                        <span class="evt-row__date-time">· {{ booking.beginAt|date('H:i') }} h</span>
+                                    {% endif %}
+                                    {% if booking.endAt and booking.endAt|date('Y-m-d') != booking.beginAt|date('Y-m-d') %}
+                                        <span class="evt-row__date-end">hasta el {{ booking.endAt|format_date('medium', locale='es') }}</span>
+                                    {% endif %}
+                                </div>
+                            {% else %}
+                                <span class="csa-muted">—</span>
+                            {% endif %}
                         </td>
-                        <td class="csa-table__col-tight">
-                            {% if booking.endAt %}{{ booking.endAt|format_date('medium', locale='es') }}{% else %}—{% endif %}
-                        </td>
+
                         <td class="csa-table__actions">
-                            <a href="{{ path('booking_show', { id: booking.id }) }}" title="Ver" aria-label="Ver"><i class="fa fa-eye"></i></a>
-                            <a href="{{ path('booking_edit', { id: booking.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>
+                            <div class="evt-row__actions">
+                                <a href="{{ path('evento_show', { id: booking.id }) }}"
+                                   class="evt-row__action evt-row__action--view"
+                                   target="_blank" rel="noopener"
+                                   title="Ver en la web pública" aria-label="Ver en la web pública">
+                                    <i class="fa fa-external-link"></i>
+                                </a>
+                                <a href="{{ path('booking_edit', { id: booking.id }) }}"
+                                   class="evt-row__action evt-row__action--edit"
+                                   title="Editar evento" aria-label="Editar evento">
+                                    <i class="fa fa-pencil"></i>
+                                </a>
+                            </div>
                         </td>
                     </tr>
                 {% else %}
                     <tr>
-                        <td colspan="4" class="csa-muted" style="text-align: center; padding: var(--csa-sp-8);">
+                        <td colspan="3" class="csa-muted" style="text-align: center; padding: var(--csa-sp-8); font-family: var(--csa-serif); font-style: italic; font-size: var(--csa-fs-lg);">
                             Aún no hay eventos públicos.
                         </td>
                     </tr>

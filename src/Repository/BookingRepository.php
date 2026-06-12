@@ -19,32 +19,26 @@ class BookingRepository extends ServiceEntityRepository
         parent::__construct($registry, Booking::class);
     }
 
-    // /**
-    //  * @return Booking[] Returns an array of Booking objects
-    //  */
-    /*
-    public function findByExampleField($value)
+    /**
+     * Eventos vigentes para la agenda pública: los que aún no han terminado
+     * (si no tienen fecha de fin, los que aún no han empezado), ordenados del
+     * más próximo al más lejano. Se compara contra la medianoche de hoy para
+     * que un evento siga listado durante todo su día.
+     *
+     * @param int|null $limit Máximo de eventos a devolver; null = sin límite.
+     * @return Booking[]
+     */
+    public function findUpcoming(?int $limit = null): array
     {
-        return $this->createQueryBuilder('b')
-            ->andWhere('b.exampleField = :val')
-            ->setParameter('val', $value)
-            ->orderBy('b.id', 'ASC')
-            ->setMaxResults(10)
-            ->getQuery()
-            ->getResult()
-        ;
-    }
-    */
+        $qb = $this->createQueryBuilder('b')
+            ->where('COALESCE(b.endAt, b.beginAt) >= :today')
+            ->setParameter('today', new \DateTimeImmutable('today'))
+            ->orderBy('b.beginAt', 'ASC');
 
-    /*
-    public function findOneBySomeField($value): ?Booking
-    {
-        return $this->createQueryBuilder('b')
-            ->andWhere('b.exampleField = :val')
-            ->setParameter('val', $value)
-            ->getQuery()
-            ->getOneOrNullResult()
-        ;
+        if (null !== $limit) {
+            $qb->setMaxResults($limit);
+        }
+
+        return $qb->getQuery()->getResult();
     }
-    */
 }

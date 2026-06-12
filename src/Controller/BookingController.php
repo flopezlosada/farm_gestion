@@ -12,16 +12,15 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 
-#[Route("/booking")]
+/**
+ * CRUD de eventos públicos (Booking): las citas que comunicación publica en
+ * la agenda de la web pública (/asambleas y la caja del blog). La parte
+ * pública se sirve desde FrontendController, sin login.
+ */
+#[Route("/gestion/eventos")]
 #[IsGranted('ROLE_BLOG')]
 class BookingController extends AbstractController
 {
-
-    #[Route("/calendar", name: "booking_calendar", methods: ["GET"])]
-    public function calendar(): Response
-    {
-        return $this->render('booking/calendar.html.twig');
-    }
 
     #[Route("/", name: "booking_index", methods: ["GET"])]
     public function index(BookingRepository $bookingRepository): Response
@@ -39,8 +38,6 @@ class BookingController extends AbstractController
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $entity->setBeginAt(new \DateTime($entity->getBeginAt()));
-            $entity->setEndAt(new \DateTime($entity->getEndAt()));
             $entityManager->persist($entity);
             $entityManager->flush();
 
@@ -64,21 +61,15 @@ class BookingController extends AbstractController
     #[Route("/{id}/edit", name: "booking_edit", methods: ["GET","POST"])]
     public function edit(Request $request, Booking $booking, EntityManagerInterface $entityManager): Response
     {
-        if ($booking->getBeginAt() instanceof \DateTimeInterface) {
-            $booking->setBeginAt($booking->getBeginAt()->format('Y-m-d'));
-        }
-        if ($booking->getEndAt() instanceof \DateTimeInterface) {
-            $booking->setEndAt($booking->getEndAt()->format('Y-m-d'));
-        }
         $form = $this->createForm(BookingType::class, $booking);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            if ($booking->getBeginAt()) {
-                $booking->setBeginAt(new \DateTime($booking->getBeginAt()));
-            }
-            if ($booking->getEndAt()) {
-                $booking->setEndAt(new \DateTime($booking->getEndAt()));
+            if (null !== $booking->getFile()) {
+                // Si solo se sustituye la imagen, Doctrine no ve cambios (file
+                // no es columna) y no dispararía preUpload: el flag modified
+                // existe justo para ensuciar la entidad en este caso.
+                $booking->setModified(!$booking->getModified());
             }
             $entityManager->flush();
 
