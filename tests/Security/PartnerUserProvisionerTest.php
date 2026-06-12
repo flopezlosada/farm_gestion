@@ -6,7 +6,9 @@ use App\Entity\Partner;
 use App\Entity\User;
 use App\Repository\PartnerRepository;
 use App\Repository\UserRepository;
+use App\Security\PartnerAccessPolicy;
 use App\Security\PartnerUserProvisioner;
+use App\Service\AppSettings;
 use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
@@ -16,9 +18,32 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
  * Tests del provisioning de cuentas de socix. Lógica compartida por el primer
  * acceso del magic-link (resolveOrCreate, parte de un Partner) y el SSO con
  * Google (resolveByVerifiedEmail, parte de un email verificado).
+ *
+ * La creación de cuentas nuevas está condicionada al toggle de configuración
+ * "alta abierta" (AppSettings::SELF_REGISTRATION); provision() es la vía de
+ * admin que se lo salta.
  */
 class PartnerUserProvisionerTest extends TestCase
 {
+    /**
+     * Construye la política de acceso real sobre un UserRepository simulado y
+     * un toggle de alta fijo. Los tests del provisioner no quieren dobles de
+     * la política (es lógica pura barata); sólo de sus dependencias de I/O.
+     *
+     * @param User|null $existingUser lo que devuelve el lookup por email
+     * @param bool      $registrationOpen valor del toggle de alta
+     */
+    private function accessPolicy(?User $existingUser, bool $registrationOpen): PartnerAccessPolicy
+    {
+        $userRepository = $this->createMock(UserRepository::class);
+        $userRepository->method('loadUserByIdentifier')->willReturn($existingUser);
+
+        $settings = $this->createMock(AppSettings::class);
+        $settings->method('getBool')->willReturn($registrationOpen);
+
+        return new PartnerAccessPolicy($userRepository, $settings);
+    }
+
     // -- resolveOrCreate(Partner) ------------------------------------------
 
     /**
@@ -34,8 +59,8 @@ class PartnerUserProvisionerTest extends TestCase
         $provisioner = new PartnerUserProvisioner(
             $em,
             $this->createMock(UserPasswordHasherInterface::class),
-            $this->createMock(UserRepository::class),
             $this->createMock(PartnerRepository::class),
+            $this->accessPolicy(null, true),
             $this->createMock(LoggerInterface::class),
         );
 
@@ -50,9 +75,6 @@ class PartnerUserProvisionerTest extends TestCase
     {
         $existing = new User();
 
-        $userRepository = $this->createMock(UserRepository::class);
-        $userRepository->method('loadUserByIdentifier')->willReturn($existing);
-
         $em = $this->createMock(EntityManagerInterface::class);
         $em->expects($this->never())->method('persist');
         $em->expects($this->never())->method('flush');
@@ -60,8 +82,8 @@ class PartnerUserProvisionerTest extends TestCase
         $provisioner = new PartnerUserProvisioner(
             $em,
             $this->createMock(UserPasswordHasherInterface::class),
-            $userRepository,
             $this->createMock(PartnerRepository::class),
+            $this->accessPolicy($existing, true),
             $this->createMock(LoggerInterface::class),
         );
 
@@ -71,14 +93,12 @@ class PartnerUserProvisionerTest extends TestCase
     }
 
     /**
-     * Sin User previo se crea uno: email/username canonicalizados a
-     * minúsculas, ROLE_PARTNER, passwordSet=false y password hasheado.
+     * Sin User previo y con el alta abierta se crea uno: email/username
+     * canonicalizados a minúsculas, ROLE_PARTNER, passwordSet=false y
+     * password hasheado.
      */
     public function testCreatesPersistsAndCanonicalizesWhenNoUserExists(): void
     {
-        $userRepository = $this->createMock(UserRepository::class);
-        $userRepository->method('loadUserByIdentifier')->willReturn(null);
-
         $hasher = $this->createMock(UserPasswordHasherInterface::class);
         $hasher->method('hashPassword')->willReturn('hashed-placeholder');
 
@@ -89,8 +109,8 @@ class PartnerUserProvisionerTest extends TestCase
         $provisioner = new PartnerUserProvisioner(
             $em,
             $hasher,
-            $userRepository,
             $this->createMock(PartnerRepository::class),
+            $this->accessPolicy(null, true),
             $this->createMock(LoggerInterface::class),
         );
 
@@ -105,6 +125,107 @@ class PartnerUserProvisionerTest extends TestCase
         $this->assertFalse($user->isPasswordSet());
         $this->assertSame($partner, $user->getPartner());
         $this->assertSame('hashed-placeholder', $user->getPassword());
+    }
+
+    // -- gate de alta cerrada ----------------------------------------------
+
+    /**
+     * Con el alta cerrada por configuración no se crea ninguna cuenta nueva:
+     * null, nada persistido, y un log informativo para diagnóstico.
+     */
+    public function testDoesNotCreateWhenSelfRegistrationIsClosed(): void
+    {
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->expects($this->never())->method('persist');
+        $em->expects($this->never())->method('flush');
+
+        $logger = $this->createMock(LoggerInterface::class);
+        $logger->expects($this->once())->method('info');
+
+        $provisioner = new PartnerUserProvisioner(
+            $em,
+            $this->createMock(UserPasswordHasherInterface::class),
+            $this->createMock(PartnerRepository::class),
+            $this->accessPolicy(null, false),
+            $logger,
+        );
+
+        $partner = (new Partner())->setEmail('sin.cuenta@example.com');
+
+        $this->assertNull($provisioner->resolveOrCreate($partner));
+    }
+
+    /**
+     * El alta cerrada NO bloquea a quien ya tiene cuenta: los pilotos
+     * provisionados por admin siguen resolviéndose con normalidad.
+     */
+    public function testResolvesExistingUserEvenWhenSelfRegistrationIsClosed(): void
+    {
+        $existing = new User();
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->expects($this->never())->method('persist');
+
+        $provisioner = new PartnerUserProvisioner(
+            $em,
+            $this->createMock(UserPasswordHasherInterface::class),
+            $this->createMock(PartnerRepository::class),
+            $this->accessPolicy($existing, false),
+            $this->createMock(LoggerInterface::class),
+        );
+
+        $partner = (new Partner())->setEmail('piloto@example.com');
+
+        $this->assertSame($existing, $provisioner->resolveOrCreate($partner));
+    }
+
+    /**
+     * provision() es la vía de admin ("dar acceso" en la ficha): crea la
+     * cuenta aunque el alta esté cerrada.
+     */
+    public function testProvisionCreatesEvenWhenSelfRegistrationIsClosed(): void
+    {
+        $hasher = $this->createMock(UserPasswordHasherInterface::class);
+        $hasher->method('hashPassword')->willReturn('hashed-placeholder');
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->expects($this->once())->method('persist')->with($this->isInstanceOf(User::class));
+        $em->expects($this->once())->method('flush');
+
+        $provisioner = new PartnerUserProvisioner(
+            $em,
+            $hasher,
+            $this->createMock(PartnerRepository::class),
+            $this->accessPolicy(null, false),
+            $this->createMock(LoggerInterface::class),
+        );
+
+        $partner = (new Partner())->setEmail('elegida@example.com');
+
+        $user = $provisioner->provision($partner);
+
+        $this->assertInstanceOf(User::class, $user);
+        $this->assertSame('elegida@example.com', $user->getEmail());
+        $this->assertSame($partner, $user->getPartner());
+    }
+
+    /**
+     * provision() tampoco puede hacer nada sin email: null y nada persistido.
+     */
+    public function testProvisionReturnsNullWhenPartnerHasNoEmail(): void
+    {
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->expects($this->never())->method('persist');
+
+        $provisioner = new PartnerUserProvisioner(
+            $em,
+            $this->createMock(UserPasswordHasherInterface::class),
+            $this->createMock(PartnerRepository::class),
+            $this->accessPolicy(null, false),
+            $this->createMock(LoggerInterface::class),
+        );
+
+        $this->assertNull($provisioner->provision(new Partner()));
     }
 
     // -- resolveByVerifiedEmail(string) (política del SSO) -----------------
@@ -124,8 +245,8 @@ class PartnerUserProvisionerTest extends TestCase
         $provisioner = new PartnerUserProvisioner(
             $em,
             $this->createMock(UserPasswordHasherInterface::class),
-            $this->createMock(UserRepository::class),
             $partnerRepository,
+            $this->accessPolicy(null, true),
             $this->createMock(LoggerInterface::class),
         );
 
@@ -150,8 +271,8 @@ class PartnerUserProvisionerTest extends TestCase
         $provisioner = new PartnerUserProvisioner(
             $em,
             $this->createMock(UserPasswordHasherInterface::class),
-            $this->createMock(UserRepository::class),
             $partnerRepository,
+            $this->accessPolicy(null, true),
             $logger,
         );
 
@@ -170,9 +291,6 @@ class PartnerUserProvisionerTest extends TestCase
         $partnerRepository = $this->createMock(PartnerRepository::class);
         $partnerRepository->method('findActiveByEmail')->willReturn([$partner]);
 
-        $userRepository = $this->createMock(UserRepository::class);
-        $userRepository->method('loadUserByIdentifier')->willReturn(null);
-
         $hasher = $this->createMock(UserPasswordHasherInterface::class);
         $hasher->method('hashPassword')->willReturn('hashed-placeholder');
 
@@ -183,8 +301,8 @@ class PartnerUserProvisionerTest extends TestCase
         $provisioner = new PartnerUserProvisioner(
             $em,
             $hasher,
-            $userRepository,
             $partnerRepository,
+            $this->accessPolicy(null, true),
             $this->createMock(LoggerInterface::class),
         );
 
@@ -194,6 +312,31 @@ class PartnerUserProvisionerTest extends TestCase
         $this->assertSame('unica@gmail.com', $user->getEmail());
         $this->assertSame($partner, $user->getPartner());
         $this->assertTrue($user->isPasswordSet());
+    }
+
+    /**
+     * Con el alta cerrada, el SSO tampoco crea cuentas: un email verificado
+     * de un socix activo SIN User previo no se loguea.
+     */
+    public function testResolveByVerifiedEmailRespectsClosedRegistration(): void
+    {
+        $partner = (new Partner())->setEmail('nueva@gmail.com');
+
+        $partnerRepository = $this->createMock(PartnerRepository::class);
+        $partnerRepository->method('findActiveByEmail')->willReturn([$partner]);
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->expects($this->never())->method('persist');
+
+        $provisioner = new PartnerUserProvisioner(
+            $em,
+            $this->createMock(UserPasswordHasherInterface::class),
+            $partnerRepository,
+            $this->accessPolicy(null, false),
+            $this->createMock(LoggerInterface::class),
+        );
+
+        $this->assertNull($provisioner->resolveByVerifiedEmail('nueva@gmail.com'));
     }
 
     /**
@@ -213,9 +356,6 @@ class PartnerUserProvisionerTest extends TestCase
         $partnerRepository = $this->createMock(PartnerRepository::class);
         $partnerRepository->method('findActiveByEmail')->willReturn([$partner]);
 
-        $userRepository = $this->createMock(UserRepository::class);
-        $userRepository->method('loadUserByIdentifier')->willReturn($existing);
-
         $em = $this->createMock(EntityManagerInterface::class);
         $em->expects($this->never())->method('persist');
         $em->expects($this->once())->method('flush');
@@ -223,8 +363,8 @@ class PartnerUserProvisionerTest extends TestCase
         $provisioner = new PartnerUserProvisioner(
             $em,
             $this->createMock(UserPasswordHasherInterface::class),
-            $userRepository,
             $partnerRepository,
+            $this->accessPolicy($existing, true),
             $this->createMock(LoggerInterface::class),
         );
 

@@ -36,30 +36,21 @@ class PartnerBasketShareController extends AbstractController
         ]);
     }
 
+    /**
+     * Camino legacy de crear una cesta "desde la nada", retirado: creaba el
+     * PartnerBasketShare sin pasar por reconcile (cestas fantasma, sin semanas
+     * materializadas) y llevaba roto desde el rediseño (la plantilla compartida
+     * exige `partner`, que aquí no existía). Administración pidió un único
+     * camino de creación de cesta (reunión 2026-06-11, punto 3): "añadir
+     * cesta" desde la ficha del socix. La ruta se conserva como redirect para
+     * no romper marcadores.
+     */
     #[Route("/new", name: "partner_basket_share_new", methods: ["GET","POST"])]
-    public function new(
-        Request $request,
-        EntityManagerInterface $entityManager,
-        PartnerShareEventRecorder $shareEventRecorder,
-    ): Response {
-        $partnerBasketShare = new PartnerBasketShare();
-        $form = $this->createForm(PartnerBasketShareType::class, $partnerBasketShare);
-        $form->handleRequest($request);
+    public function new(): Response
+    {
+        $this->addFlash('info', 'Las cestas se añaden desde la ficha de cada socix («Añadir cesta»).');
 
-        if ($form->isSubmitted() && $form->isValid()) {
-            $partnerBasketShare->setEggMonthPrice($partnerBasketShare->getEggAmount()->getMonthPrice());
-
-            $entityManager->persist($partnerBasketShare);
-            $shareEventRecorder->recordStart($partnerBasketShare);
-            $entityManager->flush();
-
-            return $this->redirectToRoute('partner_basket_share_index');
-        }
-
-        return $this->render('partner_basket_share/new.html.twig', [
-            'partner_basket_share' => $partnerBasketShare,
-            'form' => $form->createView(),
-        ]);
+        return $this->redirectToRoute('partner_index');
     }
 
     #[Route("/{id}", name: "partner_basket_share_show", methods: ["GET"])]
@@ -342,78 +333,4 @@ class PartnerBasketShareController extends AbstractController
     }
 
 
-    /**
-     * Genera (o recupera) el listado de cestas a repartir el viernes de la
-     * semana en curso. La lógica vive en WeeklyBasketGenerator; aquí solo
-     * orquestamos: buscar el Basket de la semana, delegar, renderizar.
-     */
-    #[Route("/generate/weekly", name: "partner_basket_share_generate_weekly", methods: ["GET"])]
-    public function generateWeekly(WeeklyBasketGenerator $generator, EntityManagerInterface $entityManager): Response
-    {
-        $basket = $entityManager->getRepository(\App\Entity\Basket::class)
-            ->findBasketByWeekYear(date('Y-m-d'));
-
-        if ($basket === false) {
-            $this->addFlash('warning', 'No hay cesta creada para la semana en curso. Crea una desde Granja > Composición de cestas.');
-            return $this->redirectToRoute('partner_basket_share_index');
-        }
-
-        $report = $generator->generateForBasket($basket);
-
-        return $this->render('partner_basket_share/weekly.html.twig', $report->toTemplateContext());
-    }
-
-
-    /**
-     * Cambiar estado de la cesta mensual. Esto es para apuntar si lo recibe o no.
-     */
-    #[Route("/{weekly_basket_status_id}/{weekly_basket_id}/change/status/basket_weekly", name: "partner_basket_weekly_change_status", methods: ["GET"])]
-    public function changeStatusWeeklyBasket($weekly_basket_id, $weekly_basket_status_id, EntityManagerInterface $entityManager)
-    {
-        $weeklyBasket = $entityManager->getRepository(\App\Entity\WeeklyBasket::class)->find($weekly_basket_id);
-        $weeklyBasketStatus = $entityManager->getRepository(\App\Entity\WeeklyBasketStatus::class)->find($weekly_basket_status_id);
-
-        $weeklyBasket->setWeeklyBasketStatus($weeklyBasketStatus);
-
-        $entityManager->persist($weeklyBasket);
-        $entityManager->flush();
-
-        return $this->redirectToRoute('partner_basket_share_generate_weekly');
-    }
-
-    /**
-     * Es para los socios mensuales si quieren recoger la cesta la semana siguiente a la que le toca.
-     * ESto en principio no se puede dejar establecido, por ejemplo, que recoge la 2ª semana de cada mes,
-     * vamos a obligar a que all el mundo recoja en la primera semana. Mientras no se cambie esto, sólo
-     * permitiremos cambios puntuales a través de esta función, que lo que hace es borrar el registro de recogida
-     * de ese socio mensual para que aparezca la semana siguiente.
-     * Bueno, al final sí que se puede elegir el número de semana donde se recoge la cesta, así que esto sigue vigente
-     * por si alguien quiere hacer un cambio puntual.
-     *
-     *  Esto también vale para los quincenales que se quieren cambiar de turno, es decir, empezar a reconger en las semanas alternas
-     * a las actuales.
-     * Lo que hace el sistema es eliminarlo de la tabla weekly_basket de la última cesta y así aparecerá la semana que viene
-     * y ya ha cambiado
-     *
-     */
-    #[Route("/{weekly_basket_id}/change/basket_monthly", name: "partner_basket_monthly_change_week", methods: ["GET"])]
-
-    public function nextWeek($weekly_basket_id, EntityManagerInterface $entityManager)
-    {
-        $weeklyBasket = $entityManager->getRepository(\App\Entity\WeeklyBasket::class)->find($weekly_basket_id);
-        $entityManager->remove($weeklyBasket);
-        $entityManager->flush();
-
-        return $this->redirectToRoute('partner_basket_share_generate_weekly');
-    }
-
-
-    #[Route("/{weekly_basket_id}/regenerate_weekly_list", name: "regenerate_weekly_list", methods: ["GET"])]
-    public function regenerateWeeklyList($weekly_basket_id, EntityManagerInterface $entityManager)
-    {
-        $entityManager->getRepository(\App\Entity\PartnerBasketShare::class)->deleteWeeklyBasket($weekly_basket_id);
-
-
-        return $this->redirectToRoute('partner_basket_share_generate_weekly');
-    }
 }

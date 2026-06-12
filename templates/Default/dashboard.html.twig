@@ -1,71 +1,97 @@
 {# ============================================================
- # Panel de control — versión rediseñada (shell csa)
+ # Panel de control — dashboard por roles
  # ============================================================
- # Mantiene los datos y queries del controller original; sólo
- # cambia la presentación. Patrón coherente con Batch index/show.
+ # Cada sección se pinta sólo si su clave existe en `dash`, que el
+ # controller rellena según los roles del usuario (ROLE_GESTION_REPARTO,
+ # _SOCIXS, _GRANJA, ROLE_BLOG, ROLE_ADMIN). Así un gestor de reparto no
+ # ve granja y viceversa; un admin las ve todas. El diseño nace asimétrico
+ # a propósito —Reparto y Socios densos, Comunicación y Admin ligeros— y
+ # se va llenando según aterriza la hoja de ruta. Ver
+ # docs/redesign/dashboard-roles.md.
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
+{% import _self as ui %}
 
 {% block title %}Panel de control{% endblock %}
+
+{# Celda de KPI, en el mismo lenguaje que la pantalla de reparto (dlv-stat):
+ # número grande Fraunces coloreado por tipo, etiqueta en mayúsculas, sin icono.
+ # `icon` se mantiene en la firma por compatibilidad pero ya no se pinta. #}
+{% macro stat(value, unit, label, delta, icon, tone) %}
+    <div class="dash-stat">
+        <div class="dash-stat__value{% if tone %} dash-stat__value--{{ tone }}{% endif %}">{{ value }}{% if unit %}<span class="u">{{ unit }}</span>{% endif %}</div>
+        <div class="dash-stat__label">{{ label }}</div>
+        {% if delta %}<div class="dash-stat__delta">{{ delta }}</div>{% endif %}
+    </div>
+{% endmacro %}
 
 {% block more_css %}
     {{ parent() }}
     <link rel="stylesheet" href="{{ asset('bundles/app/css/morris/morris.css') }}"/>
     <style>
-    /* stat strip del dashboard, en el lenguaje cream/Fraunces de las
-     * pantallas de reparto, conservando los iconos. */
     .dash { font-variant-numeric: tabular-nums; }
-    .dash-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
-    .dash-stat { position: relative; background: var(--csa-surface); border: 1px solid var(--csa-rule); border-radius: var(--csa-radius-lg); padding: 18px 20px; }
-    /* icono suelto (sin caja), arriba a la derecha, grande y atenuado:
-     * llena el hueco y suaviza el color sin perder la pista cromática. */
-    .dash-stat__icon { position: absolute; top: 16px; right: 18px; font-size: 32px; line-height: 1; opacity: 0.42; }
-    .dash-stat__icon--ochre { color: #c89a3a; }
-    .dash-stat__icon--green { color: #5b7a4c; }
-    .dash-stat__icon--sky   { color: #2e6f8e; }
-    .dash-stat__icon--terra { color: #b45d3a; }
-    .dash-stat__value { font-family: 'Fraunces', serif; font-weight: 600; font-size: 31px; letter-spacing: -0.02em; line-height: 1; color: #1d1c17; }
-    .dash-stat__value .u { font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 500; color: #5a564a; margin-left: 5px; letter-spacing: 0; }
-    .dash-stat__label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #8d8773; margin-top: 9px; font-weight: 600; }
-    .dash-stat__delta { font-size: 11.5px; color: #8d8773; margin-top: 5px; }
-    @media (max-width: 900px) { .dash-stats { grid-template-columns: repeat(2, 1fr); } }
-    /* iconos de las listas del dashboard sin caja de fondo, como los KPIs
-     * (scopeado al dashboard; csa-list se usa en otras pantallas). */
-    .csa-dashboard-grid .csa-list__icon { background: transparent; }
-    .csa-dashboard-grid .csa-list__icon i,
-    .csa-dashboard-grid .csa-list__icon svg { font-size: 24px; opacity: 0.5; }
+    /* Stat cards en el mismo lenguaje que la pantalla de reparto (.dlv-stat):
+     * tarjeta plana, número Fraunces 28px coloreado por tipo, label mayúsculas. */
+    .dash-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .dash-stat { background: var(--csa-surface); border: 1px solid var(--csa-rule); border-radius: 8px; padding: 14px 18px; }
+    .dash-stat__value { font-family: 'Fraunces', serif; font-weight: 600; font-size: 28px; letter-spacing: -0.02em; line-height: 1; color: #1d1c17; }
+    .dash-stat__value .u { font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 500; color: #8d8773; margin-left: 5px; letter-spacing: 0; }
+    .dash-stat__value--green { color: #2f4426; }
+    .dash-stat__value--ochre { color: #8c6919; }
+    .dash-stat__value--sky   { color: #2e5f74; }
+    .dash-stat__value--terra { color: #8a4527; }
+    .dash-stat__value--plum  { color: #5e3a52; }
+    .dash-stat__label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #8d8773; margin-top: 7px; font-weight: 500; }
+    .dash-stat__delta { font-size: 11.5px; color: #8d8773; margin-top: 4px; }
+    .dash-stats--3 { grid-template-columns: repeat(3, 1fr); }
+    @media (max-width: 900px) { .dash-stats, .dash-stats--3 { grid-template-columns: repeat(2, 1fr); } }
+    /* Stats apiladas (lateral): el agregado, secundario. */
+    .dash-stat-stack { display: flex; flex-direction: column; gap: 12px; }
+    /* Título de cada sección de rol (separa Reparto / Socios / Granja…). */
+    .dash-section { margin-bottom: var(--csa-sp-12); }
+    .dash-section__title { font-family: 'Fraunces', serif; font-weight: 600; font-size: 20px; color: #1d1c17; letter-spacing: -0.01em; margin: 0 0 var(--csa-sp-6); display: flex; align-items: baseline; gap: 10px; }
+    .dash-section__title i { font-size: 15px; opacity: 0.5; }
+    .dash-section__title small { font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 500; color: #8d8773; letter-spacing: 0; }
+    /* iconos de las listas sin caja de fondo, como los KPIs. */
+    .csa-dashboard-grid .csa-list__icon, .dash .csa-list__icon { background: transparent; }
+    .csa-dashboard-grid .csa-list__icon i, .dash .csa-list__icon i { font-size: 22px; opacity: 0.5; }
+    .dash-muted-row { color: #8d8773; }
+    /* Cifra por nodo (el dato crítico del reparto): número Fraunces + unidad. */
+    .dash-nodefig { display: flex; align-items: baseline; gap: 3px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .dash-nodefig__n { font-family: 'Fraunces', serif; font-weight: 600; font-size: 21px; line-height: 1; color: #1d1c17; letter-spacing: -0.01em; }
+    .dash-nodefig__u { font-size: 11px; color: #8d8773; margin-right: 2px; }
+    .dash-nodefig__sep { color: #c9c4b4; margin: 0 5px; align-self: center; }
+    .dash-nodefig--off { color: #c9c4b4; font-size: 18px; font-family: 'Fraunces', serif; }
     </style>
 {% endblock %}
 
 {% block more_js %}
     {{ parent() }}
-    <script src="{{ asset('bundles/app/js/morris/raphael-min.js') }}"></script>
-    <script src="{{ asset('bundles/app/js/morris/morris.min.js') }}"></script>
-    <script>
-        $(function() {
-            if (typeof Morris === 'undefined' || !document.getElementById('layweekchart')) {
-                return;
-            }
-            new Morris.Line({
-                element: 'layweekchart',
-                data: [
-                    {% for week in week_lay %}
-                    {
-                        average: {{ (week.total*(active_hen_batch|length)/week.days)|number_format(2,'.',',') }},
-                        week: '{{ week.year_date }}-{{ week.week }}',
-                        value: {{ week.total }}
-                    }{% if not loop.last %},{% endif %}
-                    {% endfor %}
-                ],
-                xkey: 'week',
-                ykeys: ['value', 'average'],
-                labels: ['Huevos', 'Media semanal'],
-                hideHover: true
+    {% if dash.granja is defined and dash.granja.lay_series is not empty %}
+        <script src="{{ asset('bundles/app/js/morris/raphael-min.js') }}"></script>
+        <script src="{{ asset('bundles/app/js/morris/morris.min.js') }}"></script>
+        <script>
+            $(function() {
+                if (typeof Morris === 'undefined' || !document.getElementById('layweekchart')) { return; }
+                new Morris.Line({
+                    element: 'layweekchart',
+                    data: [
+                        {% for week in dash.granja.lay_series %}
+                        {
+                            average: {{ (week.total*(dash.granja.hens|length)/week.days)|number_format(2,'.',',') }},
+                            week: '{{ week.year_date }}-{{ week.week }}',
+                            value: {{ week.total }}
+                        }{% if not loop.last %},{% endif %}
+                        {% endfor %}
+                    ],
+                    xkey: 'week', ykeys: ['value', 'average'],
+                    labels: ['Huevos', 'Media semanal'], hideHover: true
+                });
             });
-        });
-    </script>
+        </script>
+    {% endif %}
 {% endblock %}
 
 {% block csa_crumbs %}
@@ -74,241 +100,364 @@
 
 {% block csa_main %}
 
-    {% if app.user %}
+    {%- set hour = 'now'|date('G') -%}
+    {%- set greeting = hour < 14 ? 'Buenos días' : (hour < 21 ? 'Buenas tardes' : 'Buenas noches') -%}
 
-        {%- set hour = 'now'|date('G') -%}
-        {%- set greeting = hour < 14 ? 'Buenos días' : (hour < 21 ? 'Buenas tardes' : 'Buenas noches') -%}
-        {%- set lay_week = render(controller('App\\Controller\\DefaultController::layWeek'))|trim -%}
-        {%- set production_year = render(controller('App\\Controller\\DefaultController::totalProductionYear'))|trim -%}
+    {{ csa.page_header(
+        'Panel de control · ' ~ 'now'|date('Y'),
+        greeting ~ (app.user ? ', ' ~ app.user.userIdentifier : '') ~ '.',
+        'Tu resumen de hoy, según lo que gestionas.'
+    ) }}
 
-        {{ csa.page_header(
-            'Panel de control · ' ~ 'now'|date('Y'),
-            greeting ~ ', ' ~ app.user.userIdentifier ~ '.',
-            'Esto es lo que pasa hoy en la granja.'
-        ) }}
+    {% if dash is empty %}
+        {{ csa.callout('No hay nada que mostrarte aquí todavía. Usa el menú lateral para navegar.', 'info') }}
+    {% endif %}
 
-        {# ===== KPIs ===== #}
-        <div class="dash" style="margin-bottom: var(--csa-sp-10);">
-            <div class="dash-stats">
-                <div class="dash-stat">
-                    <div class="dash-stat__icon dash-stat__icon--ochre"><i class="fa fa-egg" aria-hidden="true"></i></div>
-                    <div class="dash-stat__value">{{ lay_week }}<span class="u">huevos</span></div>
-                    <div class="dash-stat__label">Puesta semanal</div>
-                    <div class="dash-stat__delta">{{ lay_week == '0' ? 'Aún sin registrar' : (total_lay_eggs ~ ' acumulado en ' ~ 'now'|date('Y')) }}</div>
-                </div>
-                <div class="dash-stat">
-                    <div class="dash-stat__icon dash-stat__icon--green"><i class="fa fa-leaf" aria-hidden="true"></i></div>
-                    <div class="dash-stat__value">{{ production_year|number_format(0, ',', '.') }}<span class="u">kg</span></div>
-                    <div class="dash-stat__label">Producidos · año</div>
-                    <div class="dash-stat__delta">verduras y hortalizas</div>
-                </div>
-                <div class="dash-stat">
-                    <div class="dash-stat__icon dash-stat__icon--sky"><i class="fa fa-seedling" aria-hidden="true"></i></div>
-                    <div class="dash-stat__value">{{ render(controller('App\\Controller\\DefaultController::totalCropWorking')) }}</div>
-                    <div class="dash-stat__label">Cultivos en producción</div>
-                    <div class="dash-stat__delta">sectores activos ahora</div>
-                </div>
-                <div class="dash-stat">
-                    <div class="dash-stat__icon dash-stat__icon--terra"><i class="fa fa-recycle" aria-hidden="true"></i></div>
-                    <div class="dash-stat__value">{{ render(controller('App\\Controller\\DefaultController::totalCompost')) }}<span class="u">t</span></div>
-                    <div class="dash-stat__label">Residuo · año</div>
-                    <div class="dash-stat__delta">compostaje recogido</div>
-                </div>
-            </div>
-        </div>
+    <div class="dash">
 
-        <div class="csa-dashboard-grid">
+        {# ============================================================
+         # REPARTO
+         # ============================================================ #}
+        {% if dash.reparto is defined %}
+            {% set r = dash.reparto %}
+            <div class="dash-section">
+                <h2 class="dash-section__title">
+                    <i class="fa fa-cart-arrow-down" aria-hidden="true"></i> Reparto
+                    {% if r.basket %}<small>semana en curso · {{ r.basket.date|date('d/m/Y') }}</small>{% endif %}
+                </h2>
 
-            <div class="csa-stack-lg">
+                {% if not r.basket %}
+                    {{ csa.callout('No hay ninguna semana de reparto configurada para esta semana.', 'info') }}
+                {% else %}
+                    <div class="csa-dashboard-grid">
 
-                {# ===== Lotes activos: dos cards en paralelo ===== #}
-                <div class="csa-dashboard-pair">
-
-                    {# --- Gallinas --- #}
-                    {% embed '_components/csa_card.html.twig' with {
-                        title: 'Lotes de gallinas',
-                        subtitle: active_hen_batch|length ~ ' activos · puesta semanal'
-                    } %}
-                        {% block body %}
-                            {% if active_hen_batch|length > 0 %}
-                                <ul class="csa-list">
-                                    {% for batch in active_hen_batch %}
-                                        <li class="csa-list__item">
-                                            <a class="csa-list__link" href="{{ path('batch_show', {'id': batch.id}) }}">
-                                                <span class="csa-list__icon csa-list__icon--ochre">
-                                                    <i class="fa fa-egg" aria-hidden="true"></i>
-                                                </span>
-                                                <div class="csa-list__body">
-                                                    <div class="csa-list__primary">Lote #{{ batch.id }}</div>
-                                                    <div class="csa-list__secondary">
-                                                        {{ batch.amount }} {{ batch.product|lower }}
-                                                        {%- if batch.purchaseDate %} · desde {{ batch.purchaseDate|date('d-m-Y') }}{% endif %}
+                        {# ----- Columna principal: lo crítico es POR NODO ----- #}
+                        <div class="csa-stack-lg">
+                            {% embed '_components/csa_card.html.twig' with { title: 'Reparto por nodo', subtitle: 'cestas y huevos de la semana en curso' } %}
+                                {% block body %}
+                                    {% import '_macros/csa.html.twig' as csa %}
+                                    <ul class="csa-list">
+                                        {% for n in r.nodes %}
+                                            <li class="csa-list__item">
+                                                <a class="csa-list__link" href="{{ path('delivery_by_node', {'nodeId': n.node.id, 'basketId': r.basket.id}) }}">
+                                                    <span class="csa-list__icon csa-list__icon--green"><i class="fa fa-map-marker" aria-hidden="true"></i></span>
+                                                    <div class="csa-list__body">
+                                                        <div class="csa-list__primary">{{ n.node.name }}</div>
+                                                        <div class="csa-list__secondary">
+                                                            {%- if not n.delivers %}no reparte esta semana
+                                                            {%- elseif n.date %}{{ n.date|date('l d/m')|capitalize }}
+                                                            {%- endif -%}
+                                                        </div>
                                                     </div>
-                                                </div>
-                                                <div class="csa-list__metric csa-list__metric--ochre">
-                                                    <span class="csa-list__metric-value">{{ batch.weekLay }}</span>
-                                                    <span class="csa-list__metric-unit">/ sem</span>
+                                                    {% if n.delivers %}
+                                                        <div class="dash-nodefig">
+                                                            <span class="dash-nodefig__n">{{ csa.qty(n.cestas) }}</span><span class="dash-nodefig__u">cestas</span>
+                                                            <span class="dash-nodefig__sep">·</span>
+                                                            <span class="dash-nodefig__n">{{ csa.qty(n.docenas) }}</span><span class="dash-nodefig__u">doc.</span>
+                                                        </div>
+                                                    {% else %}
+                                                        <span class="dash-nodefig dash-nodefig--off">—</span>
+                                                    {% endif %}
+                                                    <i class="csa-list__chevron fa fa-chevron-right" aria-hidden="true"></i>
+                                                </a>
+                                            </li>
+                                        {% else %}
+                                            <p class="csa-muted">No hay nodos configurados.</p>
+                                        {% endfor %}
+                                    </ul>
+                                {% endblock %}
+                            {% endembed %}
+
+                            {% embed '_components/csa_card.html.twig' with { title: 'Cambios de socixs esta semana', subtitle: 'no recogen, cambian de día o entran de otra semana' } %}
+                                {% block body %}
+                                    {% if r.changes is empty %}
+                                        <p class="csa-muted">Sin cambios puntuales esta semana.</p>
+                                    {% else %}
+                                        <ul class="csa-list">
+                                            {% for c in r.changes %}
+                                                {% set sh = c.shift %}
+                                                <li class="csa-list__item">
+                                                    <a class="csa-list__link" href="{{ path('delivery_shifts_index', {'basket': r.basket.id}) }}">
+                                                        <span class="csa-list__icon csa-list__icon--{{ c.incoming ? 'sky' : (sh.isSkip ? 'terracotta' : 'plum') }}">
+                                                            <i class="fa {{ c.incoming ? 'fa-sign-in' : (sh.isSkip ? 'fa-ban' : 'fa-exchange') }}" aria-hidden="true"></i>
+                                                        </span>
+                                                        <div class="csa-list__body">
+                                                            <div class="csa-list__primary">{{ sh.partner.surname }}{% if sh.partner.name %}, {{ sh.partner.name }}{% endif %}</div>
+                                                            <div class="csa-list__secondary">
+                                                                {%- if c.incoming %}entra esta semana{% if sh.fromBasket and sh.fromBasket.date %} · desde {{ sh.fromBasket.date|date('d/m') }}{% endif %}
+                                                                {%- elseif sh.isSkip %}no recoge esta semana
+                                                                {%- elseif sh.isWholeDelivery %}pasa al {{ sh.toBasket.date|date('d/m') }}
+                                                                {%- else %}cambia {{ sh.component.name|lower }}{% if sh.toBasket and sh.toBasket.date %} · al {{ sh.toBasket.date|date('d/m') }}{% endif %}
+                                                                {%- endif -%}
+                                                            </div>
+                                                        </div>
+                                                        <i class="csa-list__chevron fa fa-chevron-right" aria-hidden="true"></i>
+                                                    </a>
+                                                </li>
+                                            {% endfor %}
+                                        </ul>
+                                    {% endif %}
+                                {% endblock %}
+                            {% endembed %}
+                        </div>
+
+                        {# ----- Lateral: agregado (secundario) + acciones ----- #}
+                        <aside class="csa-stack-lg">
+                            <div class="dash-stat-stack">
+                                {{ ui.stat(csa.qty(r.total_cestas), 'cestas', 'Total · verdura', null, null, 'green') }}
+                                {{ ui.stat(csa.qty(r.total_docenas), 'docenas', 'Total · huevos', null, null, 'ochre') }}
+                            </div>
+
+                            {% embed '_components/csa_card.html.twig' with { title: 'Acciones rápidas' } %}
+                                {% block body %}
+                                    <ul class="csa-list">
+                                        <li class="csa-list__item">
+                                            <a class="csa-list__link" href="{{ path('delivery_by_node_default') }}">
+                                                <span class="csa-list__icon csa-list__icon--green"><i class="fa fa-cart-arrow-down" aria-hidden="true"></i></span>
+                                                <div class="csa-list__body"><div class="csa-list__primary">Ver reparto</div></div>
+                                                <i class="csa-list__chevron fa fa-chevron-right" aria-hidden="true"></i>
+                                            </a>
+                                        </li>
+                                        <li class="csa-list__item">
+                                            <a class="csa-list__link" href="{{ path('delivery_printable_select', {'basketId': r.basket.id}) }}">
+                                                <span class="csa-list__icon csa-list__icon--sky"><i class="fa fa-print" aria-hidden="true"></i></span>
+                                                <div class="csa-list__body"><div class="csa-list__primary">Imprimir listado</div></div>
+                                                <i class="csa-list__chevron fa fa-chevron-right" aria-hidden="true"></i>
+                                            </a>
+                                        </li>
+                                        <li class="csa-list__item">
+                                            <a class="csa-list__link" href="{{ path('delivery_exception_new') }}">
+                                                <span class="csa-list__icon csa-list__icon--terracotta"><i class="fa fa-calendar-times-o" aria-hidden="true"></i></span>
+                                                <div class="csa-list__body"><div class="csa-list__primary">Nueva excepción</div></div>
+                                                <i class="csa-list__chevron fa fa-chevron-right" aria-hidden="true"></i>
+                                            </a>
+                                        </li>
+                                    </ul>
+                                {% endblock %}
+                            {% endembed %}
+                        </aside>
+
+                    </div>
+                {% endif %}
+            </div>
+        {% endif %}
+
+        {# ============================================================
+         # SOCIOS
+         # ============================================================ #}
+        {% if dash.socios is defined %}
+            {% set s = dash.socios %}
+            <div class="dash-section">
+                <h2 class="dash-section__title"><i class="fa fa-people-carry" aria-hidden="true"></i> Socios</h2>
+
+                <div class="dash-stats dash-stats--3" style="margin-bottom: var(--csa-sp-8);">
+                    {{ ui.stat(s.active, null, 'Socixs activos', null, 'fa-users', 'green') }}
+                    {{ ui.stat(s.this_month.joins, null, 'Altas este mes', s.this_month.label, 'fa-user-plus', 'sky') }}
+                    {{ ui.stat(s.this_month.leaves, null, 'Bajas este mes', s.this_month.label, 'fa-user-times', 'terra') }}
+                </div>
+
+                {% if s.no_basket > 0 or s.no_group > 0 %}
+                    {% embed '_components/csa_card.html.twig' with { title: 'Pendiente de revisar', subtitle: 'socixs activos que requieren atención' } %}
+                        {% block body %}
+                            <ul class="csa-list">
+                                {% if s.no_basket > 0 %}
+                                    <li class="csa-list__item">
+                                        <a class="csa-list__link" href="{{ path('partner_index', { cesta: 'no' }) }}">
+                                            <span class="csa-list__icon csa-list__icon--ochre"><i class="fa fa-shopping-basket" aria-hidden="true"></i></span>
+                                            <div class="csa-list__body"><div class="csa-list__primary">Activos sin cesta</div></div>
+                                            <div class="csa-list__metric csa-list__metric--ochre"><span class="csa-list__metric-value">{{ s.no_basket }}</span></div>
+                                            <i class="csa-list__chevron fa fa-chevron-right" aria-hidden="true"></i>
+                                        </a>
+                                    </li>
+                                {% endif %}
+                                {% if s.no_group > 0 %}
+                                    <li class="csa-list__item">
+                                        <a class="csa-list__link" href="{{ path('partner_index') }}">
+                                            <span class="csa-list__icon csa-list__icon--sky"><i class="fa fa-map-marker" aria-hidden="true"></i></span>
+                                            <div class="csa-list__body"><div class="csa-list__primary">Activos sin grupo de recogida</div></div>
+                                            <div class="csa-list__metric csa-list__metric--sky"><span class="csa-list__metric-value">{{ s.no_group }}</span></div>
+                                            <i class="csa-list__chevron fa fa-chevron-right" aria-hidden="true"></i>
+                                        </a>
+                                    </li>
+                                {% endif %}
+                            </ul>
+                        {% endblock %}
+                    {% endembed %}
+                {% endif %}
+            </div>
+        {% endif %}
+
+        {# ============================================================
+         # GRANJA
+         # ============================================================ #}
+        {% if dash.granja is defined %}
+            {% set g = dash.granja %}
+            <div class="dash-section">
+                <h2 class="dash-section__title"><i class="fa fa-leaf" aria-hidden="true"></i> Granja <small>{{ g.year }}</small></h2>
+
+                <div class="dash-stats {{ g.hens is empty ? 'dash-stats--3' }}" style="margin-bottom: var(--csa-sp-8);">
+                    {{ ui.stat(g.production|number_format(0, ',', '.'), 'kg', 'Producidos · año', 'verduras y hortalizas', 'fa-leaf', 'green') }}
+                    {{ ui.stat(g.crops, null, 'Cultivos en producción', 'sectores activos ahora', 'fa-seedling', 'sky') }}
+                    {{ ui.stat((g.compost / 1000)|number_format(1, ',', '.'), 't', 'Residuo · año', 'compostaje recogido', 'fa-recycle', 'terra') }}
+                    {% if g.hens is not empty %}
+                        {{ ui.stat(g.lay_week, 'huevos', 'Puesta semanal', g.total_lay_eggs ? g.total_lay_eggs ~ ' acumulado' : 'aún sin registrar', 'fa-egg', 'ochre') }}
+                    {% endif %}
+                </div>
+
+                {% if g.hens is not empty or g.chickens is not empty %}
+                    <div class="csa-dashboard-pair" style="margin-bottom: var(--csa-sp-6);">
+                        {% if g.hens is not empty %}
+                            {% embed '_components/csa_card.html.twig' with { title: 'Lotes de gallinas', subtitle: g.hens|length ~ ' activos · puesta semanal' } %}
+                                {% block body %}
+                                    <ul class="csa-list">
+                                        {% for batch in g.hens %}
+                                            <li class="csa-list__item">
+                                                <a class="csa-list__link" href="{{ path('batch_show', {'id': batch.id}) }}">
+                                                    <span class="csa-list__icon csa-list__icon--ochre"><i class="fa fa-egg" aria-hidden="true"></i></span>
+                                                    <div class="csa-list__body">
+                                                        <div class="csa-list__primary">Lote #{{ batch.id }}</div>
+                                                        <div class="csa-list__secondary">{{ batch.amount }} {{ batch.product|lower }}{% if batch.purchaseDate %} · desde {{ batch.purchaseDate|date('d-m-Y') }}{% endif %}</div>
+                                                    </div>
+                                                    <div class="csa-list__metric csa-list__metric--ochre"><span class="csa-list__metric-value">{{ batch.weekLay }}</span><span class="csa-list__metric-unit">/ sem</span></div>
+                                                    <i class="csa-list__chevron fa fa-chevron-right" aria-hidden="true"></i>
+                                                </a>
+                                            </li>
+                                        {% endfor %}
+                                    </ul>
+                                {% endblock %}
+                            {% endembed %}
+                        {% endif %}
+
+                        {% if g.chickens is not empty %}
+                            {% embed '_components/csa_card.html.twig' with { title: 'Lotes de pollos', subtitle: g.chickens|length ~ ' activos · cría para carne' } %}
+                                {% block body %}
+                                    <ul class="csa-list">
+                                        {% for batch in g.chickens %}
+                                            <li class="csa-list__item">
+                                                <a class="csa-list__link" href="{{ path('batch_show', {'id': batch.id}) }}">
+                                                    <span class="csa-list__icon csa-list__icon--terracotta"><i class="fa fa-feather" aria-hidden="true"></i></span>
+                                                    <div class="csa-list__body">
+                                                        <div class="csa-list__primary">Lote #{{ batch.id }}</div>
+                                                        <div class="csa-list__secondary">{{ batch.product|lower }}{% if batch.purchaseDate %} · desde {{ batch.purchaseDate|date('d-m-Y') }}{% endif %}</div>
+                                                    </div>
+                                                    <div class="csa-list__metric csa-list__metric--terracotta"><span class="csa-list__metric-value">{{ batch.amount }}</span><span class="csa-list__metric-unit">animales</span></div>
+                                                    <i class="csa-list__chevron fa fa-chevron-right" aria-hidden="true"></i>
+                                                </a>
+                                            </li>
+                                        {% endfor %}
+                                    </ul>
+                                {% endblock %}
+                            {% endembed %}
+                        {% endif %}
+                    </div>
+
+                    {% if g.lay_series is not empty %}
+                        {% embed '_components/csa_card.html.twig' with { title: 'Evolución de la puesta semanal', subtitle: 'Últimas 10 semanas.' } %}
+                            {% block body %}<div id="layweekchart" style="position: relative; height: 260px;"></div>{% endblock %}
+                        {% endembed %}
+                    {% endif %}
+                {% endif %}
+            </div>
+        {% endif %}
+
+        {# ============================================================
+         # COMUNICACIÓN
+         # ============================================================ #}
+        {% if dash.comunicacion is defined %}
+            {% set c = dash.comunicacion %}
+            <div class="dash-section">
+                <h2 class="dash-section__title"><i class="fa fa-newspaper-o" aria-hidden="true"></i> Comunicación</h2>
+
+                <div class="csa-dashboard-grid">
+                    {% embed '_components/csa_card.html.twig' with { title: 'Últimas entradas', subtitle: 'blog' } %}
+                        {% block body %}
+                            {% if c.posts is empty %}
+                                <p class="csa-muted">Aún no hay entradas publicadas.</p>
+                                <p><a class="csa-btn csa-btn--ghost csa-btn--sm" href="{{ path('blog_new') }}"><i class="fa fa-pencil"></i> Escribir entrada</a></p>
+                            {% else %}
+                                <ul class="csa-list">
+                                    {% for post in c.posts %}
+                                        <li class="csa-list__item">
+                                            <a class="csa-list__link" href="{{ path('blog_edit', {'id': post.id}) }}">
+                                                <span class="csa-list__icon csa-list__icon--plum"><i class="fa fa-file-text-o" aria-hidden="true"></i></span>
+                                                <div class="csa-list__body">
+                                                    <div class="csa-list__primary">{{ post.title }}</div>
+                                                    {% if post.created %}<div class="csa-list__secondary">{{ post.created|date('d/m/Y') }}</div>{% endif %}
                                                 </div>
                                                 <i class="csa-list__chevron fa fa-chevron-right" aria-hidden="true"></i>
                                             </a>
                                         </li>
                                     {% endfor %}
                                 </ul>
-                            {% else %}
-                                <p class="csa-muted">No hay lotes de gallinas activos.</p>
                             {% endif %}
                         {% endblock %}
                     {% endembed %}
 
-                    {# --- Pollos --- #}
-                    {% embed '_components/csa_card.html.twig' with {
-                        title: 'Lotes de pollos',
-                        subtitle: active_chicken_batch|length ~ ' activos · cría para carne'
-                    } %}
+                    {% embed '_components/csa_card.html.twig' with { title: 'Próximos eventos', subtitle: 'agenda pública' } %}
                         {% block body %}
-                            {% if active_chicken_batch|length > 0 %}
+                            {% if c.events is empty %}
+                                <p class="csa-muted">No hay eventos públicos próximos.</p>
+                                <p><a class="csa-btn csa-btn--ghost csa-btn--sm" href="{{ path('booking_new') }}"><i class="fa fa-plus"></i> Crear evento</a></p>
+                            {% else %}
                                 <ul class="csa-list">
-                                    {% for batch in active_chicken_batch %}
+                                    {% for ev in c.events %}
                                         <li class="csa-list__item">
-                                            <a class="csa-list__link" href="{{ path('batch_show', {'id': batch.id}) }}">
-                                                <span class="csa-list__icon csa-list__icon--terracotta">
-                                                    <i class="fa fa-feather" aria-hidden="true"></i>
-                                                </span>
+                                            <a class="csa-list__link" href="{{ path('booking_show', {'id': ev.id}) }}">
+                                                <span class="csa-list__icon csa-list__icon--sky"><i class="fa fa-calendar-check-o" aria-hidden="true"></i></span>
                                                 <div class="csa-list__body">
-                                                    <div class="csa-list__primary">Lote #{{ batch.id }}</div>
-                                                    <div class="csa-list__secondary">
-                                                        {{ batch.product|lower }}
-                                                        {%- if batch.purchaseDate %} · desde {{ batch.purchaseDate|date('d-m-Y') }}{% endif %}
-                                                    </div>
-                                                </div>
-                                                <div class="csa-list__metric csa-list__metric--terracotta">
-                                                    <span class="csa-list__metric-value">{{ batch.amount }}</span>
-                                                    <span class="csa-list__metric-unit">animales</span>
+                                                    <div class="csa-list__primary">{{ ev.title }}</div>
+                                                    {% if ev.date %}<div class="csa-list__secondary">{{ ev.date|date('d/m/Y') }}</div>{% endif %}
                                                 </div>
                                                 <i class="csa-list__chevron fa fa-chevron-right" aria-hidden="true"></i>
                                             </a>
                                         </li>
                                     {% endfor %}
                                 </ul>
-                            {% else %}
-                                <p class="csa-muted">No hay lotes de pollos activos.</p>
                             {% endif %}
                         {% endblock %}
                     {% endembed %}
-
                 </div>
-
-                {# ===== Gráfica de evolución ===== #}
-                {% embed '_components/csa_card.html.twig' with {
-                    title: 'Evolución de la puesta semanal',
-                    subtitle: 'Últimas 10 semanas.'
-                } %}
-                    {% block body %}
-                        <div id="layweekchart" style="position: relative; height: 260px;"></div>
-                    {% endblock %}
-                {% endembed %}
-
             </div>
+        {% endif %}
 
-            <aside class="csa-stack-lg">
+        {# ============================================================
+         # ADMINISTRACIÓN
+         # ============================================================ #}
+        {% if dash.admin is defined %}
+            {% set a = dash.admin %}
+            <div class="dash-section">
+                <h2 class="dash-section__title"><i class="fa fa-cogs" aria-hidden="true"></i> Administración</h2>
 
-                {# ===== Resumen del año ===== #}
-                {% embed '_components/csa_card.html.twig' with {
-                    title: 'Resumen ' ~ 'now'|date('Y'),
-                    subtitle: 'al ' ~ ('now'|format_date('long', locale='es'))
-                } %}
+                {% embed '_components/csa_card.html.twig' with { title: 'Atajos', subtitle: a.users ~ ' usuarias con acceso' } %}
                     {% block body %}
                         <ul class="csa-list">
                             <li class="csa-list__item">
-                                <a class="csa-list__link" href="{{ path('statistic_eggs') }}">
-                                    <span class="csa-list__icon csa-list__icon--ochre">
-                                        <i class="fa fa-egg" aria-hidden="true"></i>
-                                    </span>
-                                    <div class="csa-list__body">
-                                        <div class="csa-list__primary">Huevos puestos</div>
-                                    </div>
-                                    <div class="csa-list__metric csa-list__metric--ochre">
-                                        <span class="csa-list__metric-value">{{ total_lay_eggs|number_format(0, ',', '.') }}</span>
-                                    </div>
+                                <a class="csa-list__link" href="{{ path('user_new') }}">
+                                    <span class="csa-list__icon csa-list__icon--green"><i class="fa fa-user-plus" aria-hidden="true"></i></span>
+                                    <div class="csa-list__body"><div class="csa-list__primary">Alta de usuaria</div></div>
+                                    <i class="csa-list__chevron fa fa-chevron-right" aria-hidden="true"></i>
                                 </a>
                             </li>
                             <li class="csa-list__item">
-                                <a class="csa-list__link" href="{{ path('statistic_user_collect', {'user_id': app.user.id}) }}">
-                                    <span class="csa-list__icon csa-list__icon--terracotta">
-                                        <i class="fa fa-drumstick-bite" aria-hidden="true"></i>
-                                    </span>
-                                    <div class="csa-list__body">
-                                        <div class="csa-list__primary">Kg de pollo</div>
-                                    </div>
-                                    <div class="csa-list__metric csa-list__metric--terracotta">
-                                        <span class="csa-list__metric-value">{{ total_chicken|number_format(0, ',', '.') }}</span>
-                                    </div>
+                                <a class="csa-list__link" href="{{ path('user') }}">
+                                    <span class="csa-list__icon csa-list__icon--sky"><i class="fa fa-users" aria-hidden="true"></i></span>
+                                    <div class="csa-list__body"><div class="csa-list__primary">Gestionar usuarias</div></div>
+                                    <i class="csa-list__chevron fa fa-chevron-right" aria-hidden="true"></i>
                                 </a>
                             </li>
                             <li class="csa-list__item">
-                                <a class="csa-list__link" href="{{ path('statistic_feed') }}">
-                                    <span class="csa-list__icon csa-list__icon--green">
-                                        <i class="fa fa-leaf" aria-hidden="true"></i>
-                                    </span>
-                                    <div class="csa-list__body">
-                                        <div class="csa-list__primary">Kg de verduras</div>
-                                    </div>
-                                    <div class="csa-list__metric csa-list__metric--green">
-                                        <span class="csa-list__metric-value">{{ render(controller('App\\Controller\\DefaultController::totalProductionYear'))|trim|number_format(0, ',', '.') }}</span>
-                                        <span class="csa-list__metric-unit">kg</span>
-                                    </div>
-                                </a>
-                            </li>
-                            <li class="csa-list__item">
-                                <a class="csa-list__link" href="{{ path('statistic_feed') }}">
-                                    <span class="csa-list__icon csa-list__icon--ochre">
-                                        <i class="fa fa-bread-slice" aria-hidden="true"></i>
-                                    </span>
-                                    <div class="csa-list__body">
-                                        <div class="csa-list__primary">Kg de trigo</div>
-                                    </div>
-                                    <div class="csa-list__metric csa-list__metric--ochre">
-                                        <span class="csa-list__metric-value">{{ wheat_year|number_format(0, ',', '.') }}</span>
-                                    </div>
-                                </a>
-                            </li>
-                            <li class="csa-list__item">
-                                <a class="csa-list__link" href="{{ path('statistic_feed') }}">
-                                    <span class="csa-list__icon csa-list__icon--sky">
-                                        <i class="fa fa-seedling" aria-hidden="true"></i>
-                                    </span>
-                                    <div class="csa-list__body">
-                                        <div class="csa-list__primary">Kg pienso pollos</div>
-                                    </div>
-                                    <div class="csa-list__metric csa-list__metric--sky">
-                                        <span class="csa-list__metric-value">{{ broiler_feed_year|number_format(0, ',', '.') }}</span>
-                                    </div>
+                                <a class="csa-list__link" href="{{ path('settings_index') }}">
+                                    <span class="csa-list__icon csa-list__icon--plum"><i class="fa fa-sliders" aria-hidden="true"></i></span>
+                                    <div class="csa-list__body"><div class="csa-list__primary">Configuración</div></div>
+                                    <i class="csa-list__chevron fa fa-chevron-right" aria-hidden="true"></i>
                                 </a>
                             </li>
                         </ul>
                     {% endblock %}
                 {% endembed %}
+            </div>
+        {% endif %}
 
-            </aside>
-
-        </div>
-
-    {% elseif is_granted('ROLE_COMPOST') %}
-
-        {{ csa.page_header(
-            'Compostaje',
-            'Panel'
-        ) }}
-
-        <div class="csa-kpi-row">
-            {{ csa.kpi(
-                'Residuo recogido',
-                render(controller('App\\Controller\\DefaultController::totalCompost')),
-                't',
-                null, null, 'plum'
-            ) }}
-        </div>
-
-    {% endif %}
+    </div>
 
 {% endblock %}

@@ -42,14 +42,22 @@ class PartnerType extends AbstractType
             ->add('state',EntityType::class, array('class' => 'App\Entity\State', 'required' => true, 'placeholder' => "Selecciona provincia"))
             ->add('city', EntityType::class, array("label" => "Municipio", 'class' => 'App\Entity\City', 'required' => true))
             ->add('share_payment', null, array('label'=>'Forma de pago', 'required'=>true))
-            ->add('weekly_basket_group',null,array('label'=>'Indica si está asociada/o a algún grupo de recogida', 'required'=>true))
         ;
+
+        if ($options['include_pickup_group']) {
+            $builder->add('weekly_basket_group', null, array('label' => 'Indica si está asociada/o a algún grupo de recogida', 'required' => true));
+        }
     }
 
     public function configureOptions(OptionsResolver $resolver): void
     {
         $resolver->setDefaults([
             'data_class' => Partner::class,
+            // El alta de socio es sólo datos de persona: el grupo de recogida
+            // pertenece al flujo de cesta ("añadir cesta"), que lo pide cuando
+            // el socio aún no tiene. La edición sí lo expone.
+            'include_pickup_group' => true,
         ]);
+        $resolver->setAllowedTypes('include_pickup_group', 'bool');
     }
 }

@@ -1,0 +1,70 @@
+{# Pantallas más visitadas: barras (vistazo) + tabla (dato exacto). #}
+{% extends 'usage_stats/_layout.html.twig' %}
+
+{% set chart_h = max(topRoutes|length * 26 + 60, 160) %}
+
+{% block usage_body %}
+    {% embed '_components/csa_card.html.twig' with { title: 'Pantallas más visitadas', icon: 'fa-eye', accent: 'green' } %}
+        {% block body %}
+            {% if topRoutes is empty %}
+                <p class="csa-muted" style="text-align: center; padding: var(--csa-sp-8);">
+                    Todavía no hay visitas registradas en este periodo.
+                </p>
+            {% else %}
+                <div id="screens-chart" style="width: 100%; height: {{ chart_h }}px;"></div>
+            {% endif %}
+        {% endblock %}
+    {% endembed %}
+
+    {% embed '_components/csa_card.html.twig' with { title: 'Detalle', icon: 'fa-table' } %}
+        {% block body %}
+            <div class="csa-table-wrap">
+                <table class="csa-table" data-paginate>
+                    <thead>
+                        <tr>
+                            <th>Pantalla (ruta)</th>
+                            <th class="csa-table__col-tight" style="text-align: right;">Visitas</th>
+                            <th class="csa-table__col-tight" style="text-align: right;">% del total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in topRoutes %}
+                            <tr>
+                                <td><code>{{ row.routeName ?? '(sin ruta · 404)' }}</code></td>
+                                <td class="csa-table__col-tight" style="text-align: right;">{{ row.hits }}</td>
+                                <td class="csa-table__col-tight" style="text-align: right;">
+                                    {{ summary.total > 0 ? (row.hits / summary.total * 100)|number_format(1) : '0.0' }}%
+                                </td>
+                            </tr>
+                        {% else %}
+                            <tr><td colspan="3" class="csa-muted" style="text-align: center; padding: var(--csa-sp-8);">
+                                Sin datos en este periodo.
+                            </td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% endblock %}
+    {% endembed %}
+{% endblock %}
+
+{% block chart_js %}
+    {% if topRoutes is not empty %}
+        <script>
+            (function () {
+                const cats = [{% for r in topRoutes %}{{ (r.routeName ?? '(sin ruta · 404)')|json_encode|raw }},{% endfor %}];
+                const data = [{% for r in topRoutes %}{{ r.hits }},{% endfor %}];
+
+                Highcharts.chart('screens-chart', {
+                    chart: { type: 'bar' },
+                    title: { text: null },
+                    xAxis: { categories: cats, labels: { style: { fontSize: '11px' } } },
+                    yAxis: { title: { text: 'Visitas' }, allowDecimals: false, min: 0 },
+                    legend: { enabled: false },
+                    tooltip: { pointFormat: '<b>{point.y}</b> visitas' },
+                    series: [{ name: 'Visitas', data: data, color: '#5a8f3d' }]
+                });
+            })();
+        </script>
+    {% endif %}
+{% endblock %}

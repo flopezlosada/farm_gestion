@@ -4,6 +4,7 @@ namespace App\Form;
 
 use App\Entity\BasketShare;
 use App\Entity\PartnerBasketShare;
+use App\Entity\WeeklyBasketGroup;
 use Doctrine\ORM\EntityRepository;
 use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
@@ -12,6 +13,7 @@ use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
+use Symfony\Component\Validator\Constraints\NotBlank;
 
 class PartnerBasketShareType extends AbstractType
 {
@@ -21,6 +23,22 @@ class PartnerBasketShareType extends AbstractType
      */
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
+        // El alta de socio ya no pide grupo de recogida: si el socio llega
+        // aquí sin grupo, se elige junto con la cesta (el nodo del grupo
+        // determina qué modalidades caben y el turno A/B). No mapeado: lo
+        // persiste el controller en el Partner, no en el PartnerBasketShare.
+        if ($options['ask_pickup_group']) {
+            $builder->add('pickupGroup', EntityType::class, [
+                'class' => WeeklyBasketGroup::class,
+                'label' => 'Grupo de recogida',
+                'mapped' => false,
+                'required' => true,
+                'placeholder' => 'Elige punto y grupo de recogida',
+                'data' => $options['pickup_group'],
+                'constraints' => [new NotBlank(message: 'Indica el grupo de recogida')],
+            ]);
+        }
+
         $builder
 
             ->add('start_date', TextType::class, array('label' => 'Fecha de inicio', 'help'=>"Si la cesta es mensual o sólo tiene huevos una vez al mes, debes indicar la fecha del primer día del mes en que empieza a recibir", 'attr' => array('class' => 'datepicker form-control')))
@@ -101,8 +119,14 @@ class PartnerBasketShareType extends AbstractType
             ],
             // Excluye las modalidades de reparto semanal del select de tipo.
             'exclude_weekly_shares' => false,
+            // Pide el grupo de recogida en el propio form (socio sin grupo).
+            'ask_pickup_group' => false,
+            // Preselección del grupo (la elección hecha antes de recargar).
+            'pickup_group' => null,
         ]);
         $resolver->setAllowedTypes('cohort_choices', 'array');
         $resolver->setAllowedTypes('exclude_weekly_shares', 'bool');
+        $resolver->setAllowedTypes('ask_pickup_group', 'bool');
+        $resolver->setAllowedTypes('pickup_group', ['null', WeeklyBasketGroup::class]);
     }
 }

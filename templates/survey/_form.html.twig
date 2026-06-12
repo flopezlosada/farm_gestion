@@ -1,0 +1,126 @@
+{# ============================================================
+ # Form de encuesta en una sola pantalla: cabecera + colección
+ # dinámica de preguntas. El alta/baja de preguntas y el
+ # mostrar/ocultar el textarea de opciones según el tipo se
+ # resuelven con el prototipo de Symfony + el JS de abajo.
+ #
+ # Los campos de cada pregunta se pintan con el macro local
+ # `question_fields`, reutilizado tanto por las preguntas ya
+ # presentes (edición) como por el prototipo, para que ambos
+ # luzcan la estética csa sin duplicar markup.
+ # ============================================================ #}
+{% import '_macros/csa.html.twig' as csa %}
+{% import _self as svf %}
+{% form_theme form 'form_div_layout.html.twig' %}
+
+{% macro question_fields(q) %}
+    {% import '_macros/csa.html.twig' as csa %}
+    <div class="csa-form-grid">
+        {{ csa.field(q.text, 'Pregunta', { full: true }) }}
+        {{ csa.field(q.type, 'Tipo') }}
+        <div class="csa-field">
+            <div class="csa-field__label-row">
+                <label class="csa-field__label" for="{{ q.required.vars.id }}">Obligatoria</label>
+            </div>
+            <label class="sv-check">{{ form_widget(q.required) }} <span>Hay que responderla</span></label>
+        </div>
+        {{ csa.field(q.optionsText, 'Opciones (una por línea)', { full: true }) }}
+    </div>
+{% endmacro %}
+
+{{ form_start(form, { attr: { class: 'csa-form-narrow' } }) }}
+
+    <div class="csa-stack-lg">
+
+        {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Encuesta', subtitle: 'Título y, si quieres, una descripción y fecha de cierre orientativa.' } %}
+            {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
+                <div class="csa-form-grid">
+                    {{ csa.field(form.title, 'Título', { full: true }) }}
+                    {{ csa.field(form.description, 'Descripción', { full: true }) }}
+                    {{ csa.field(form.closesAt, 'Fecha de cierre (informativa)') }}
+                </div>
+            {% endblock %}
+        {% endembed %}
+
+        {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Preguntas', subtitle: 'Añade tantas como necesites. En opción única/múltiple, escribe una opción por línea.' } %}
+            {% block body %}
+                {% import 'survey/_form.html.twig' as svf %}
+                {% import '_macros/csa.html.twig' as csa %}
+                <div id="sv-questions"
+                     data-prototype="{{ svf.question_fields(form.questions.vars.prototype)|e('html_attr') }}"
+                     data-index="{{ form.questions|length }}">
+                    {% for question in form.questions %}
+                        <div class="sv-q">
+                            {{ svf.question_fields(question) }}
+                            <button type="button" class="csa-btn csa-btn--ghost sv-q-remove">Quitar pregunta</button>
+                        </div>
+                    {% endfor %}
+                </div>
+
+                <button type="button" id="sv-add-question" class="csa-btn csa-btn--ghost" style="margin-top: var(--csa-sp-4);">
+                    + Añadir pregunta
+                </button>
+            {% endblock %}
+        {% endembed %}
+
+        <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+            <div></div>
+            <div class="csa-row">
+                {{ csa.btn('Cancelar', { variant: 'ghost', href: path('survey_index') }) }}
+                <button type="submit" class="csa-btn csa-btn--primary">{{ submit_label|default('Guardar') }}</button>
+            </div>
+        </div>
+
+    </div>
+
+    {{ form_rest(form) }}
+{{ form_end(form, { render_rest: false }) }}
+
+<style>
+    .sv-q { border: 1px solid var(--csa-rule); border-radius: 8px; padding: var(--csa-sp-4); margin-bottom: var(--csa-sp-4); background: #fff; }
+    .sv-check { display: inline-flex; align-items: center; gap: var(--csa-sp-2); font-weight: 400; }
+    .sv-check input { width: auto; height: auto; }
+</style>
+
+<script>
+(function () {
+    var wrap = document.getElementById('sv-questions');
+    if (!wrap) { return; }
+    var TYPES_WITH_OPTIONS = ['single', 'multiple'];
+
+    // Muestra/oculta el campo de opciones (su csa-field) según el tipo.
+    function syncOptions(item) {
+        var typeSelect = item.querySelector('select');
+        var optionsArea = item.querySelector('textarea');
+        if (!typeSelect || !optionsArea) { return; }
+        var field = optionsArea.closest('.csa-field');
+        var show = TYPES_WITH_OPTIONS.indexOf(typeSelect.value) !== -1;
+        if (field) { field.style.display = show ? '' : 'none'; }
+    }
+
+    // Enlaza los eventos de una pregunta (cambio de tipo + botón quitar).
+    function bind(item) {
+        var typeSelect = item.querySelector('select');
+        if (typeSelect) { typeSelect.addEventListener('change', function () { syncOptions(item); }); }
+        var remove = item.querySelector('.sv-q-remove');
+        if (remove) { remove.addEventListener('click', function () { item.parentNode.removeChild(item); }); }
+        syncOptions(item);
+    }
+
+    // Preguntas ya presentes al cargar (caso edición).
+    Array.prototype.forEach.call(wrap.querySelectorAll('.sv-q'), bind);
+
+    document.getElementById('sv-add-question').addEventListener('click', function () {
+        // El índice sólo crece, nunca se reutiliza, para no colisionar nombres.
+        var index = parseInt(wrap.dataset.index, 10);
+        var html = wrap.dataset.prototype.replace(/__question__/g, index);
+        var item = document.createElement('div');
+        item.className = 'sv-q';
+        item.innerHTML = html + '<button type="button" class="csa-btn csa-btn--ghost sv-q-remove">Quitar pregunta</button>';
+        wrap.appendChild(item);
+        wrap.dataset.index = index + 1;
+        bind(item);
+    });
+})();
+</script>

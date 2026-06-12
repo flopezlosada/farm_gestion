@@ -31,6 +31,10 @@ security:
     #   ROLE_GESTION_REPARTO    logística de entrega: reparto semanal, nodos,
     #                           grupos de recogida, excepciones, histórico de cambios
     #   ROLE_BLOG               blog público (admin) + categorías + media
+    #   ROLE_GESTION_ENCUESTAS  crear encuestas internas y ver resultados
+    #                           AGREGADOS (no da acceso a datos personales de
+    #                           socixs: mínimo privilegio, separado a propósito
+    #                           de ROLE_GESTION_SOCIXS)
     #   ROLE_PARTNER            panel propio del socix
     # ===========================================================
     role_hierarchy:
@@ -39,6 +43,7 @@ security:
             - ROLE_GESTION_SOCIXS
             - ROLE_GESTION_REPARTO
             - ROLE_BLOG
+            - ROLE_GESTION_ENCUESTAS
             - ROLE_PARTNER
 
     providers:
@@ -122,6 +127,6 @@ security:
         # cada controller filtra con #[IsGranted('ROLE_GESTION_X')] según
         # su sección.
         - { path: ^/gestion,
-            roles: [ROLE_ADMIN, ROLE_GESTION_GRANJA, ROLE_GESTION_SOCIXS, ROLE_GESTION_REPARTO, ROLE_BLOG] }
+            roles: [ROLE_ADMIN, ROLE_GESTION_GRANJA, ROLE_GESTION_SOCIXS, ROLE_GESTION_REPARTO, ROLE_BLOG, ROLE_GESTION_ENCUESTAS] }
         # Panel del socix (lo construiremos en breve).
         - { path: ^/panel, roles: [ROLE_PARTNER, ROLE_ADMIN] }

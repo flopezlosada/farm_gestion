@@ -174,7 +174,7 @@
 {% set status_param = status_filter ?: 'ALL' %}
 
 {# Conteo de filtros activos (excluyendo status y q) para el badge "Filtros". #}
-{% set active_filters_count = (filters.modalities|length) + (filters.cesta ? 1 : 0) + (filters.node ? 1 : 0) + (filters.wbg ? 1 : 0) %}
+{% set active_filters_count = (filters.modalities|length) + (filters.cesta ? 1 : 0) + (filters.eggs ? 1 : 0) + (filters.node ? 1 : 0) + (filters.wbg ? 1 : 0) %}
 
 <div class="prl">
 
@@ -258,6 +258,20 @@
                     <label><input type="radio" name="cesta" value="" {% if not filters.cesta %}checked{% endif %}> Todxs (con o sin cesta)</label>
                     <label><input type="radio" name="cesta" value="yes" {% if filters.cesta == 'yes' %}checked{% endif %}> Con cesta activa</label>
                     <label><input type="radio" name="cesta" value="no"  {% if filters.cesta == 'no' %}checked{% endif %}> Sin cesta activa</label>
+                </div>
+            </div>
+
+            {# Popover HUEVOS SÍ/NO #}
+            <div class="prl-filt-wrap">
+                <button type="button" class="prl-filt {{ filters.eggs ? 'has' : '' }}" data-pop-trigger="pop-eggs">
+                    Huevos
+                    {% if filters.eggs %}<span class="badge">{{ filters.eggs == 'yes' ? 'sí' : 'no' }}</span>{% endif %}
+                    <svg class="chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+                <div class="prl-pop" id="pop-eggs" hidden>
+                    <label><input type="radio" name="eggs" value="" {% if not filters.eggs %}checked{% endif %}> Todxs (con o sin huevos)</label>
+                    <label><input type="radio" name="eggs" value="yes" {% if filters.eggs == 'yes' %}checked{% endif %}> Con huevos</label>
+                    <label><input type="radio" name="eggs" value="no"  {% if filters.eggs == 'no' %}checked{% endif %}> Sin huevos</label>
                 </div>
             </div>
 
@@ -387,6 +401,7 @@
                             <th>Socix</th>
                             {% if status_filter is null %}<th class="tight">Estado</th>{% endif %}
                             <th class="tight">Cesta</th>
+                            <th class="tight">Huevos</th>
                             <th class="tight">Recogida</th>
                             <th class="tight">Teléfono</th>
                             <th class="tight">Alta</th>
@@ -439,6 +454,16 @@
                                         <span class="prl-cell-muted">vía familiar</span>
                                     {% else %}
                                         <span class="prl-cell-muted">sin cesta</span>
+                                    {% endif %}
+                                </td>
+                                <td class="tight">
+                                    {# Huevos de la cesta activa (mismas clases que Recogida
+                                     # para no duplicar CSS: línea fuerte + sublínea gris). #}
+                                    {% if ab and ab.eggAmount %}
+                                        <div class="prl-pickup__name">{{ ab.eggAmount.name }}</div>
+                                        {% if ab.eggPeriod %}<div class="prl-pickup__node">{{ ab.eggPeriod.name }}</div>{% endif %}
+                                    {% else %}
+                                        <span class="prl-cell-muted">—</span>
                                     {% endif %}
                                 </td>
                                 <td class="tight">

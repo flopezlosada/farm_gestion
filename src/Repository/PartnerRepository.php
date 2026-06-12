@@ -67,6 +67,7 @@ class PartnerRepository extends ServiceEntityRepository
      *     status?: string|null,
      *     modalities?: int[]|null,
      *     cesta?: string|null,   "yes" | "no" | null
+     *     eggs?: string|null,    "yes" | "no" | null
      *     node?: int|null,
      *     wbg?: int|null,
      *     q?: string|null
@@ -101,6 +102,19 @@ class PartnerRepository extends ServiceEntityRepository
                 $qb->andWhere('p.parent IS NULL')->andWhere('pbs.id IS NULL');
             } elseif ($filters['cesta'] === 'yes') {
                 $qb->andWhere('pbs.id IS NOT NULL OR p.parent IS NOT NULL');
+            }
+        }
+
+        // Huevos: se resuelven sobre la cesta activa (mismo join pbs que
+        // modalidad). "Sí": la PBS tiene cantidad de huevos asignada. "No":
+        // no la tiene — incluye tanto socios con cesta sin huevos como sin
+        // PBS propio (secundarios de familia, que heredan del principal),
+        // misma semántica que el filtro de modalidad.
+        if (!empty($filters['eggs'])) {
+            if ($filters['eggs'] === 'yes') {
+                $qb->andWhere('pbs.egg_amount IS NOT NULL');
+            } elseif ($filters['eggs'] === 'no') {
+                $qb->andWhere('pbs.egg_amount IS NULL');
             }
         }
 
@@ -314,6 +328,25 @@ class PartnerRepository extends ServiceEntityRepository
         }
 
         return $series;
+    }
+
+    /**
+     * Nº total de socios en estado ACTIVO, en una sola query agregada.
+     *
+     * No se puede derivar sumando {@see self::countActiveByGroup()}: ese método
+     * excluye a los activos sin grupo de recogida, así que la suma se quedaría
+     * corta. Por eso este contador independiente.
+     *
+     * @return int socios con status = ACTIVO
+     */
+    public function countActive(): int
+    {
+        return (int) $this->createQueryBuilder('p')
+            ->select('COUNT(p.id)')
+            ->where('p.status = :status')
+            ->setParameter('status', Partner::STATUS_ACTIVO)
+            ->getQuery()
+            ->getSingleScalarResult();
     }
 
     /**

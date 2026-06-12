@@ -247,6 +247,8 @@ class BasketShare
     public const IDS_SHARED = [4, 6, 7];
     /** Modalidad quincenal: única que usa la cohorte A/B (delivery_group). */
     public const ID_BIWEEKLY = 2;
+    /** Modalidad mensual (reparto una vez al mes, según day_month_order). */
+    public const ID_MONTHLY = 3;
     /**
      * Modalidades de reparto SEMANAL (cada semana): Semanal (1) y Semanal
      * compartida (4). No caben en un punto de cadencia quincenal, que sólo

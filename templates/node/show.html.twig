@@ -157,6 +157,7 @@
             día de reparto <b>{{ _dow_full[node.deliveryWeekday % 7] }}</b> ·
             cadencia <b>{{ node.cadence == 'weekly' ? 'semanal' : 'quincenal' }}</b>
             {% if node.anchorDate %} · ancla <b>{{ node.anchorDate|date('d/m/Y') }}</b>{% endif %}
+            {% if node.schedule %} · horario público <b>{{ node.schedule }}</b>{% endif %}
         </div>
         <div class="nod-head__actions">
             {% if node.weeklyBasketGroups|length == 0 %}

@@ -489,19 +489,6 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
         return $query->getResult();
     }
 
-
-
-
-    public function deleteWeeklyBasket($basket_id)
-    {
-        $em = $this->getEntityManager();
-        $dql="Delete from App\\Entity\\WeeklyBasket w where w.basket=:basket";
-        $query=$em->createQuery($dql);
-        $query->setParameter("basket",$basket_id);
-
-        return $query->execute();
-    }
-
     /**
      * PBS activas con huevos asignados (egg_amount + egg_period no null) que
      * estaban vigentes en la fecha del Basket. No filtra por modalidad de

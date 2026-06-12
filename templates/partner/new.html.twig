@@ -21,7 +21,7 @@
     {{ csa.page_header(
         'Socixs · Alta',
         'Nuevx socix',
-        'Datos personales, contacto y elección de grupo de recogida.'
+        'Sólo datos de persona. La cesta y el punto de recogida se asignan después desde la ficha.'
     ) }}
 
     {{ form_start(form, { attr: { role: 'form', class: 'csa-form-narrow', enctype: 'multipart/form-data' } }) }}
@@ -62,14 +62,19 @@
                 {% endblock %}
             {% endembed %}
 
-            {% embed '_components/csa_form_section.html.twig' with { num: '4', title: 'Cesta y preferencias', subtitle: 'Forma de pago, grupo de recogida y consumo.' } %}
+            {% embed '_components/csa_form_section.html.twig' with { num: '4', title: 'Cuota y preferencias', subtitle: 'Forma de pago de la cuota y consumo.' } %}
                 {% block body %}
                     {% import '_macros/csa.html.twig' as csa %}
                     <div class="csa-form-grid">
-                        {{ csa.field(form.share_payment, 'Forma de pago') }}
-                        {{ csa.field(form.weekly_basket_group, 'Grupo de recogida') }}
+                        {{ csa.field(form.share_payment, 'Forma de pago de la cuota') }}
                         {{ csa.field(form.eat_meat, '¿Consume cárnicos?', { full: true }) }}
                         {{ csa.field(form.registration_form_file, 'Ficha de socix', { full: true, hint: 'opcional' }) }}
+                    </div>
+                    <div style="margin-top: var(--csa-sp-4);">
+                        {{ csa.callout(
+                            'La cesta y el punto de recogida no se eligen aquí: tras crear la ficha, usa «Añadir cesta» para asignarlos.',
+                            'info', 'shopping-basket'
+                        ) }}
                     </div>
                 {% endblock %}
             {% endembed %}

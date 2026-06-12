@@ -161,6 +161,17 @@
  #
  #   {{ csa.page_header('Granja · Lotes', 'Listado de lotes', 'Animales activos…') }}
  #}
+{# ---------- QTY ----------
+ # Cantidad numérica: entero si es redonda, con 1 decimal si lleva media
+ # (p.ej. cestas compartidas que pesan ½). Evita pintar "3,0" pero respeta
+ # "2,5".
+ #
+ #   {{ csa.qty(2.5) }}  →  2,5
+ #   {{ csa.qty(3) }}    →  3
+ #}
+{% macro qty(v) %}{{ v == v|round ? v|number_format(0, ',', '.') : v|number_format(1, ',', '.') }}{% endmacro %}
+
+
 {% macro page_header(kicker = null, title = '', lead = null) %}
     <div class="csa-page-header">
         {% if kicker %}<div class="csa-kicker">{{ kicker }}</div>{% endif %}

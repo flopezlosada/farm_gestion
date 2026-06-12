@@ -7,6 +7,8 @@ use App\Entity\Node;
 use App\Entity\Partner;
 use App\Entity\WeeklyBasketGroup;
 use App\Repository\DeliveryExceptionRepository;
+use App\Service\AppSettings;
+use App\Service\Delivery\DeliveryDeadline;
 use App\Service\Delivery\NodeDeliveryDate;
 use App\Service\Delivery\Rule\DeadlineRule;
 use PHPUnit\Framework\TestCase;
@@ -28,14 +30,34 @@ class DeadlineRuleTest extends TestCase
 
     protected function setUp(): void
     {
-        $exceptionRepo = $this->createMock(DeliveryExceptionRepository::class);
-        $exceptionRepo->method('findForBasketAndNode')->willReturn(null);
-
-        $this->rule = new DeadlineRule(new NodeDeliveryDate($exceptionRepo));
+        $this->rule = $this->ruleWith(daysBefore: 1);
         $this->partner = new Partner();
         // toBasket no influye en esta regla, pero hay que pasar algo.
         $this->toBasket = new Basket();
         $this->toBasket->setDate(new \DateTime('+14 days'));
+    }
+
+    /**
+     * Construye la regla con una antelación y hora de cierre dadas, mockeando
+     * AppSettings (defaults de catálogo = 1 día, 23:59). La hora se pasa como
+     * "HH:MM" porque DEADLINE_TIME es una cadena.
+     */
+    private function ruleWith(int $daysBefore, string $time = '23:59'): DeadlineRule
+    {
+        $exceptionRepo = $this->createMock(DeliveryExceptionRepository::class);
+        $exceptionRepo->method('findForBasketAndNode')->willReturn(null);
+
+        $settings = $this->createMock(AppSettings::class);
+        $settings->method('getInt')->willReturnMap([
+            [AppSettings::DEADLINE_DAYS_BEFORE, $daysBefore],
+        ]);
+        $settings->method('getTime')->willReturnMap([
+            [AppSettings::DEADLINE_TIME, $time],
+        ]);
+
+        $deadline = new DeliveryDeadline(new NodeDeliveryDate($exceptionRepo), $settings);
+
+        return new DeadlineRule($deadline);
     }
 
     public function testPasaSiElViernesEsFuturoYAunNoHaPasadoElDeadline(): void
@@ -92,6 +114,26 @@ class DeadlineRuleTest extends TestCase
 
         $violation = $this->rule->check($this->partner, $from, $this->toBasket);
         $this->assertNotNull($violation, 'Torremocha: deadline 1 día antes del viernes debe haber pasado.');
+    }
+
+    public function testLaAntelacionConfiguradaCambiaElResultado(): void
+    {
+        // Partner sin nodo ⇒ fallback: deadline = fecha del Basket − N días.
+        // Reparto dentro de 2 días.
+        $from = new Basket();
+        $from->setDate(new \DateTime('+2 days'));
+
+        // Antelación 1 día: deadline mañana 23:59 ⇒ aún no ha pasado.
+        $this->assertNull(
+            $this->ruleWith(daysBefore: 1)->check($this->partner, $from, $this->toBasket),
+            'Con cierre 1 día antes de un reparto a 2 días, el plazo sigue abierto.'
+        );
+
+        // Antelación 3 días: deadline ayer 23:59 ⇒ ya pasó.
+        $this->assertNotNull(
+            $this->ruleWith(daysBefore: 3)->check($this->partner, $from, $this->toBasket),
+            'Con cierre 3 días antes de un reparto a 2 días, el plazo ya está cerrado.'
+        );
     }
 
     public function testParaPartnerEnNodoBiweeklyDevuelveNullSiNoReparte(): void

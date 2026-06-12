@@ -473,6 +473,70 @@
                 </div>
             </section>
 
+            {# Acceso a la web: estado de la cuenta + despliegue selectivo.
+             # OJO, dos variables parecidas: linked_user (arriba, en Datos
+             # personales) va por la relación User->Partner; access_user va por
+             # email canónico (PartnerAccessPolicy) y puede ser la cuenta de un
+             # familiar con buzón compartido. Para "¿puede entrar?" manda
+             # access_user. Solo admin. #}
+            {% if is_granted('ROLE_ADMIN') %}
+                <section class="prt-card" style="margin-top: 18px;">
+                    <header class="prt-card__head">
+                        <h2 class="prt-card__title"><span class="accent"></span>Acceso a la web</h2>
+                    </header>
+                    <div class="prt-card__body">
+                        {% if access_user %}
+                            <dl class="prt-defs">
+                                <div class="prt-defs__row">
+                                    <dt class="prt-defs__label">Cuenta</dt>
+                                    <dd class="prt-defs__value">
+                                        <a href="{{ path('user_show', { id: access_user.id }) }}"><i class="fa fa-user-circle-o" aria-hidden="true"></i> {{ access_user.username }}</a>
+                                        {% if not access_user.enabled %}
+                                            <span class="csa-badge csa-badge--terracotta">Bloqueada</span>
+                                        {% endif %}
+                                    </dd>
+                                </div>
+                                <div class="prt-defs__row">
+                                    <dt class="prt-defs__label">Último acceso</dt>
+                                    <dd class="prt-defs__value{% if not access_user.lastLogin %} prt-defs__value--muted{% endif %}">
+                                        {{ access_user.lastLogin ? access_user.lastLogin|format_datetime('medium', 'short', locale='es') : 'Nunca ha entrado' }}
+                                    </dd>
+                                </div>
+                            </dl>
+                            {% if access_user.enabled %}
+                                <form method="post" action="{{ path('partner_send_access_link', { id: partner.id }) }}" style="margin-top: 12px;">
+                                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('partner_send_access_link') }}">
+                                    <button type="submit" class="csa-btn csa-btn--ghost csa-btn--sm">
+                                        <i class="fa fa-paper-plane-o" aria-hidden="true"></i> Enviar enlace de acceso
+                                    </button>
+                                </form>
+                            {% else %}
+                                <p class="csa-muted" style="margin: 12px 0 0;">Cuenta bloqueada: no se le pueden enviar enlaces de acceso hasta desbloquearla.</p>
+                            {% endif %}
+                        {% elseif partner.email %}
+                            <p class="csa-muted" style="margin-top: 0;">
+                                Sin cuenta de acceso.
+                                {% if not self_registration_open %}
+                                    El alta global está cerrada: este socix no puede creársela; puedes dársela tú desde aquí.
+                                {% endif %}
+                            </p>
+                            <form method="post" action="{{ path('partner_grant_access', { id: partner.id }) }}">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token('partner_grant_access') }}">
+                                <label style="display: block; margin-bottom: 10px; cursor: pointer;">
+                                    <input type="checkbox" name="send_link" value="1" checked>
+                                    Enviarle el enlace de acceso por email al crear la cuenta
+                                </label>
+                                <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">
+                                    <i class="fa fa-key" aria-hidden="true"></i> Dar acceso
+                                </button>
+                            </form>
+                        {% else %}
+                            <p class="csa-muted" style="margin: 0;">Sin email: no se puede dar acceso (el login va por correo).</p>
+                        {% endif %}
+                    </div>
+                </section>
+            {% endif %}
+
             {# Familia #}
             <section class="prt-card prt-card--ochre">
                 <header class="prt-card__head">

@@ -5,7 +5,6 @@ namespace App\Security;
 use App\Entity\Partner;
 use App\Entity\User;
 use App\Repository\PartnerRepository;
-use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
@@ -18,14 +17,20 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
  * El magic-link ya identifica al Partner (email + teléfono) y llama a
  * {@see resolveOrCreate()}; el SSO sólo tiene un email verificado y entra por
  * {@see resolveByVerifiedEmail()}, que aplica la política "exactamente 1 socix".
+ *
+ * La CREACIÓN de cuentas nuevas por estas dos vías está condicionada al toggle
+ * de configuración "alta abierta" ({@see PartnerAccessPolicy::isSelfRegistrationOpen()}):
+ * con el alta cerrada, las cuentas existentes siguen resolviéndose pero no se
+ * crea ninguna nueva. La administración puede saltarse el toggle para un socix
+ * concreto vía {@see provision()} (botón "dar acceso" de la ficha).
  */
 class PartnerUserProvisioner
 {
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly UserPasswordHasherInterface $hasher,
-        private readonly UserRepository $userRepository,
         private readonly PartnerRepository $partnerRepository,
+        private readonly PartnerAccessPolicy $accessPolicy,
         private readonly LoggerInterface $logger,
     ) {
     }
@@ -81,38 +86,74 @@ class PartnerUserProvisioner
     }
 
     /**
-     * Devuelve el User vinculado al Partner, creándolo si no existe.
+     * Devuelve el User vinculado al Partner, creándolo si no existe Y el alta
+     * de usuarixs nuevxs está abierta. Con el alta cerrada las cuentas
+     * existentes se siguen resolviendo (los pilotos provisionados por admin
+     * entran con normalidad), pero no se crea ninguna nueva.
      *
      * Si el Partner no tiene email no se puede provisionar (el login va por
      * correo) y se devuelve null. Si ya existe un User con ese email pero NO
      * está vinculado a este Partner (familia que comparte buzón), se reutiliza
      * el existente; la asociación gestiona esos casos a mano.
      *
-     * El User nuevo se crea con username = email, password aleatorio
-     * (placeholder) y passwordSet = false: la primera vez que entre, el panel
-     * le forzará a configurar su contraseña real.
-     *
      * @param Partner $partner socix ya identificado para el que se quiere el acceso
      *
-     * @return User|null el User vinculado, o null si el Partner no tiene email
+     * @return User|null el User vinculado, o null si no hay email o el alta está cerrada
      */
     public function resolveOrCreate(Partner $partner): ?User
     {
-        $rawEmail = $partner->getEmail();
-        if ($rawEmail === null || $rawEmail === '') {
+        $email = $this->accessPolicy->canonicalEmailOf($partner);
+        if ($email === null) {
             return null;
         }
 
-        // Canonicalizamos a lowercase: los logins son case-insensitive (vía
-        // UserRepository::loadUserByIdentifier) y los identificadores visibles
-        // quedan más limpios.
-        $email = mb_strtolower(trim($rawEmail));
-
-        $existing = $this->userRepository->loadUserByIdentifier($email);
-        if ($existing instanceof User) {
+        $existing = $this->accessPolicy->accountFor($partner);
+        if ($existing !== null) {
             return $existing;
         }
 
+        if (!$this->accessPolicy->isSelfRegistrationOpen()) {
+            $this->logger->info(
+                'Provisioning rechazado: el alta de usuarixs nuevxs está cerrada por configuración.',
+                ['partner_id' => $partner->getId()]
+            );
+
+            return null;
+        }
+
+        return $this->createUser($partner, $email);
+    }
+
+    /**
+     * Provisioning INCONDICIONAL, iniciado por la administración (botón "dar
+     * acceso" de la ficha): crea o recupera la cuenta saltándose el toggle de
+     * alta abierta. Es el mecanismo de despliegue selectivo mientras el grifo
+     * global está cerrado.
+     *
+     * @param Partner $partner socix al que admin quiere dar acceso
+     *
+     * @return User|null el User vinculado, o null si el Partner no tiene email
+     */
+    public function provision(Partner $partner): ?User
+    {
+        $email = $this->accessPolicy->canonicalEmailOf($partner);
+        if ($email === null) {
+            return null;
+        }
+
+        return $this->accessPolicy->accountFor($partner) ?? $this->createUser($partner, $email);
+    }
+
+    /**
+     * Crea y persiste el User de un Partner: username = email canónico,
+     * password aleatorio (placeholder) y passwordSet = false, de modo que la
+     * primera vez que entre, el panel le fuerce a configurar su contraseña real.
+     *
+     * @param Partner $partner socix dueño de la cuenta
+     * @param string  $email   email ya canonicalizado (lowercase, sin espacios)
+     */
+    private function createUser(Partner $partner, string $email): User
+    {
         $user = new User();
         $user->setUsername($email);
         $user->setEmail($email);

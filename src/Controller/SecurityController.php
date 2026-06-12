@@ -2,20 +2,17 @@
 
 namespace App\Controller;
 
-use App\Entity\User;
 use App\Repository\PartnerRepository;
 use App\Repository\UserRepository;
+use App\Security\MagicLinkMailer;
 use App\Security\PartnerUserProvisioner;
-use Symfony\Bridge\Twig\Mime\TemplatedEmail;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Security\Http\Authentication\AuthenticationUtils;
-use Symfony\Component\Security\Http\LoginLink\LoginLinkHandlerInterface;
 
 class SecurityController extends AbstractController
 {
@@ -64,8 +61,7 @@ class SecurityController extends AbstractController
         Request $request,
         PartnerRepository $partnerRepository,
         PartnerUserProvisioner $provisioner,
-        LoginLinkHandlerInterface $loginLinkHandler,
-        MailerInterface $mailer,
+        MagicLinkMailer $magicLinkMailer,
         #[Autowire(service: 'limiter.magic_link')]
         RateLimiterFactory $magicLinkLimiter,
     ): Response {
@@ -126,10 +122,14 @@ class SecurityController extends AbstractController
             ->getQuery()
             ->getOneOrNullResult();
 
+        // Con el alta de usuarixs cerrada por configuración, resolveOrCreate
+        // devuelve null para quien no tenga cuenta: el flujo sigue el camino
+        // antifuga (redirige a /login/sent sin enviar nada), igual que un
+        // email no registrado.
         if ($partner !== null) {
             $user = $provisioner->resolveOrCreate($partner);
             if ($user !== null) {
-                $this->sendMagicLink($user, $loginLinkHandler, $mailer);
+                $magicLinkMailer->send($user);
             }
         }
 
@@ -145,8 +145,7 @@ class SecurityController extends AbstractController
     public function forgot(
         Request $request,
         UserRepository $userRepository,
-        LoginLinkHandlerInterface $loginLinkHandler,
-        MailerInterface $mailer,
+        MagicLinkMailer $magicLinkMailer,
         #[Autowire(service: 'limiter.magic_link')]
         RateLimiterFactory $magicLinkLimiter,
     ): Response {
@@ -180,7 +179,7 @@ class SecurityController extends AbstractController
 
         $user = $userRepository->loadUserByIdentifier($email);
         if ($user !== null) {
-            $this->sendMagicLink($user, $loginLinkHandler, $mailer);
+            $magicLinkMailer->send($user);
         }
 
         return $this->redirectToRoute('app_login_link_sent');
@@ -227,29 +226,5 @@ class SecurityController extends AbstractController
             return null;
         }
         return (int) $digits;
-    }
-
-    private function sendMagicLink(
-        User $user,
-        LoginLinkHandlerInterface $loginLinkHandler,
-        MailerInterface $mailer,
-    ): void {
-        if ($user->getEmail() === null) {
-            return;
-        }
-
-        $details = $loginLinkHandler->createLoginLink($user);
-
-        $message = (new TemplatedEmail())
-            ->to($user->getEmail())
-            ->subject('Tu enlace de acceso a la CSA Vega de Jarama')
-            ->htmlTemplate('email/magic_link.html.twig')
-            ->textTemplate('email/magic_link.txt.twig')
-            ->context([
-                'link' => $details->getUrl(),
-                'expires_at' => $details->getExpiresAt(),
-            ]);
-
-        $mailer->send($message);
     }
 }

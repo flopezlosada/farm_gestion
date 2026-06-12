@@ -2,3 +2,6 @@ framework:
     router:
         strict_requirements: null
         utf8: true
+        # Base para generar URLs absolutas fuera de HTTP (comandos de cron que
+        # mandan emails con enlaces). En prod se sobreescribe en .env.local.
+        default_uri: '%env(DEFAULT_URI)%'

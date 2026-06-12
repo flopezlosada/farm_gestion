@@ -37,7 +37,19 @@ class CohortChoiceBuilder
      */
     public function forPartner(Partner $partner): array
     {
-        $node = $partner->getWeeklyBasketGroup()?->getNode();
+        return $this->forNode($partner->getWeeklyBasketGroup()?->getNode());
+    }
+
+    /**
+     * Variante con nodo explícito, para cuando el grupo de recogida aún no
+     * está fijado en la ficha: el alta de cesta de un socio sin grupo lo
+     * elige en el propio formulario, y las opciones deben recalcularse para
+     * el nodo del grupo elegido (no el del socio, que es NULL).
+     *
+     * @return array{nodeIsBiweekly: bool, nodeName: ?string, nodeDatesLabel: ?string, cohortChoices: array<string, ?string>, excludeWeeklyShares: bool}
+     */
+    public function forNode(?Node $node): array
+    {
         $nodeIsBiweekly = $node !== null && $node->getCadence() === Node::CADENCE_BIWEEKLY;
 
         $upcoming = $this->basketRepository->findBetweenDates(

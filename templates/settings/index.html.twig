@@ -1,0 +1,87 @@
+{# ============================================================
+ # Configuración de la app — toggles de AppSettings (solo admin).
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Configuración{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Configuración</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Administración',
+        'Configuración',
+        'Ajustes de la app: acceso de socixs, envío de emails y plazos de cambios. Los cambios se aplican al momento.'
+    ) }}
+
+    <form method="post" action="{{ path('settings_save') }}" class="csa-form-narrow">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token('settings_save') }}">
+
+        <div class="csa-stack-lg">
+
+            {% for group, items in groups %}
+                {% embed '_components/csa_form_section.html.twig' with { num: loop.index, title: group } %}
+                    {% block body %}
+                        <div class="csa-settings-list">
+                            {% for s in items %}
+                                <label class="csa-setting">
+                                    {% if s.type == 'time' %}
+                                        {% set parts = s.value|split(':') %}
+                                        <span class="csa-timefield">
+                                            <span class="csa-timefield__box">
+                                                <input type="text" inputmode="numeric" maxlength="2"
+                                                       class="csa-timefield__input"
+                                                       name="settings[{{ s.name }}][h]" value="{{ parts[0] }}"
+                                                       aria-label="Hora">
+                                                <span class="csa-timefield__cap">Hora</span>
+                                            </span>
+                                            <span class="csa-timefield__colon">:</span>
+                                            <span class="csa-timefield__box">
+                                                <input type="text" inputmode="numeric" maxlength="2"
+                                                       class="csa-timefield__input"
+                                                       name="settings[{{ s.name }}][m]" value="{{ parts[1] }}"
+                                                       aria-label="Minutos">
+                                                <span class="csa-timefield__cap">Min</span>
+                                            </span>
+                                        </span>
+                                    {% elseif s.type == 'int' %}
+                                        <span class="csa-setting__num">
+                                            <input type="number" class="csa-input csa-input--compact"
+                                                   name="settings[{{ s.name }}]" value="{{ s.value }}"
+                                                   min="{{ s.min }}" max="{{ s.max }}" step="1">
+                                            {% if s.unit %}<span class="csa-setting__unit">{{ s.unit }}</span>{% endif %}
+                                        </span>
+                                    {% else %}
+                                        <span class="csa-toggle">
+                                            <input type="checkbox" class="csa-toggle__input"
+                                                   name="settings[{{ s.name }}]" value="1" {{ s.value ? 'checked' }}>
+                                            <span class="csa-toggle__track"><span class="csa-toggle__thumb"></span></span>
+                                        </span>
+                                    {% endif %}
+                                    <span class="csa-setting__text">
+                                        <span class="csa-setting__label">{{ s.label }}</span>
+                                        <span class="csa-setting__help">{{ s.help }}</span>
+                                    </span>
+                                </label>
+                            {% endfor %}
+                        </div>
+                    {% endblock %}
+                {% endembed %}
+            {% endfor %}
+
+            <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                <div></div>
+                <button type="submit" class="csa-btn csa-btn--primary">Guardar configuración</button>
+            </div>
+
+        </div>
+    </form>
+
+{% endblock %}

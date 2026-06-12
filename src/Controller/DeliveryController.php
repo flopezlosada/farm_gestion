@@ -26,6 +26,7 @@ use App\Service\Delivery\DeliveryModeResolver;
 use App\Service\Delivery\DeliveryShiftApplier;
 use App\Service\Delivery\DeliveryShiftValidator;
 use App\Service\Delivery\ExtraBasketEditor;
+use App\Service\Delivery\NodeDeliveryCounter;
 use App\Service\Delivery\NodeDeliveryDate;
 use App\Service\Delivery\PickupRelocator;
 use App\Service\Delivery\NodeDeliverySheet;
@@ -323,54 +324,6 @@ class DeliveryController extends AbstractController
             < new \DateTimeImmutable('today');
     }
 
-    /**
-     * Contadores socios/grupos por nodo para las pestañas de la pantalla v2, con la
-     * MISMA decisión piedra-vs-dibujo POR NODO que la tabla (vía DeliveryModeResolver):
-     * cada nodo cuenta de su piedra si la tiene materializada, o de su proyección al
-     * vuelo si le toca dibujar. Los nodos en EMPTY (no reparten, cancelado o pasado sin
-     * piedra) se omiten y su pestaña cae a "sin reparto hoy". Así una semana mixta —un
-     * nodo materializado y otro desplazado por un cierre, sin piedra— muestra en cada
-     * pestaña lo mismo que enseña su tabla.
-     *
-     * @param Node[] $nodes
-     * @return array<int, array{wbg:int, socios:int}>
-     */
-    private function deliveryCountsByNode(
-        array $nodes,
-        Basket $basket,
-        DeliveryModeResolver $deliveryModeResolver,
-        WeeklyBasketGenerator $generator,
-        WeeklyBasketRepository $weeklyBasketRepo,
-    ): array {
-        $counts = [];
-        foreach ($nodes as $n) {
-            $mode = $deliveryModeResolver->mode($n, $basket);
-            if ($mode === DeliveryModeResolver::STONE) {
-                $stone = $weeklyBasketRepo->findForNodeAndBasket($n, $basket);
-                $wbgIds = [];
-                foreach ($stone as $wb) {
-                    $wbg = $wb->getWeeklyBasketGroup();
-                    if ($wbg !== null) {
-                        $wbgIds[$wbg->getId()] = true;
-                    }
-                }
-                $counts[$n->getId()] = ['socios' => count($stone), 'wbg' => count($wbgIds)];
-            } elseif ($mode === DeliveryModeResolver::DRAW) {
-                $deliveries = $generator->projectDeliveriesForNode($n, $basket);
-                $wbgIds = [];
-                foreach ($deliveries as $delivery) {
-                    $wbg = $delivery['weeklyBasket']->getWeeklyBasketGroup();
-                    if ($wbg !== null) {
-                        $wbgIds[$wbg->getId()] = true;
-                    }
-                }
-                $counts[$n->getId()] = ['socios' => count($deliveries), 'wbg' => count($wbgIds)];
-            }
-        }
-
-        return $counts;
-    }
-
     #[Route('/historial-cambios/{id}/cancelar', name: 'delivery_shifts_cancel', methods: ['POST'])]
     public function shiftsCancel(
         Request $request,
@@ -663,7 +616,8 @@ class DeliveryController extends AbstractController
 
     /**
      * Listado de reparto v2 (sub-fase 8.8c): tabla agrupada Nodo > WBG > Modalidad.
-     * Reemplaza la pantalla legacy partner_basket_share_generate_weekly.
+     * Sustituyó a la pantalla legacy "Generar listado semanal" (retirada): a
+     * diferencia de aquélla, dibuja desde la proyección y no congela al ver.
      */
     #[Route(
         '/v2/nodo/{nodeId}/{basketId}',
@@ -684,6 +638,7 @@ class DeliveryController extends AbstractController
         DeliveryExceptionRepository $deliveryExceptionRepo,
         WeeklyBasketGenerator $generator,
         DeliveryModeResolver $deliveryModeResolver,
+        NodeDeliveryCounter $deliveryCounter,
         PartnerBasketExtraRepository $partnerBasketExtraRepo,
         Request $request,
     ): Response {
@@ -833,13 +788,7 @@ class DeliveryController extends AbstractController
         // la tabla: cada nodo cuenta de su piedra si la tiene, o de su proyección si le
         // toca dibujar. Así una semana mixta (un nodo materializado, otro desplazado por
         // un cierre y sin piedra) muestra en cada pestaña lo mismo que su tabla.
-        $nodeActiveCounts = $this->deliveryCountsByNode(
-            $allNodes,
-            $basket,
-            $deliveryModeResolver,
-            $generator,
-            $weeklyBasketRepo,
-        );
+        $nodeActiveCounts = $deliveryCounter->countsByNode($allNodes, $basket);
 
         return $this->render('delivery/by_node.html.twig', [
             'node' => $node,

@@ -28,8 +28,9 @@
     <div class="csa-row-between" style="margin-bottom: var(--csa-sp-5);">
         <div></div>
         <div class="csa-row">
+            {# "Nueva cesta" retirado: las cestas se crean desde la ficha del
+               socix ("añadir cesta"), único camino que pasa por reconcile. #}
             {{ csa.btn('Cestas activas', { variant: 'secondary', href: path('partner_basket_share_list_status', { status: 1 }), icon: 'fa-shopping-basket' }) }}
-            {{ csa.btn('Nueva cesta', { variant: 'primary', href: path('partner_basket_share_new'), icon: 'fa-plus' }) }}
         </div>
     </div>
 

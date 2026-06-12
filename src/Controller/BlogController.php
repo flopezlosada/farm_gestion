@@ -94,9 +94,23 @@ class BlogController extends AbstractController
         return $this->render('Blog/frontend_index.html.twig', array(
             'entities' => $pagination,
             'categories' => $this->categoriesWithCount($em),
+            'upcoming_events' => $this->upcomingEvents($em),
             'q' => $q,
         ));
 
+    }
+
+    /**
+     * Próximos eventos públicos (Booking) para la caja del sidebar del blog,
+     * encima de las categorías. Limitado a 3: la agenda completa vive en
+     * /asambleas.
+     *
+     * @param EntityManagerInterface $em
+     * @return \App\Entity\Booking[]
+     */
+    private function upcomingEvents(EntityManagerInterface $em): array
+    {
+        return $em->getRepository(\App\Entity\Booking::class)->findUpcoming(3);
     }
 
     /**
@@ -446,6 +460,7 @@ class BlogController extends AbstractController
             'category' => $category,
             'entities' => $pagination,
             'categories' => $this->categoriesWithCount($em),
+            'upcoming_events' => $this->upcomingEvents($em),
             'q' => $q,
         ));
 

@@ -25,6 +25,9 @@ use App\Service\Delivery\DeliveryCalendarViewBuilder;
 use App\Service\Delivery\DeliveryShiftApplier;
 use App\Service\Delivery\PartnerMonthResetter;
 use App\Repository\WeeklyBasketGroupRepository;
+use App\Security\MagicLinkMailer;
+use App\Security\PartnerAccessPolicy;
+use App\Security\PartnerUserProvisioner;
 use App\Service\Delivery\ExtraBasketEditor;
 use App\Service\Delivery\NodeDeliveryDate;
 use App\Service\Delivery\PickupRelocationOptions;
@@ -66,6 +69,7 @@ class PartnerController extends AbstractController
             'status'     => $statusFilter,
             'modalities' => array_values(array_filter(array_map('intval', (array) $request->query->all('modality')))),
             'cesta'      => in_array($request->query->get('cesta'), ['yes', 'no'], true) ? $request->query->get('cesta') : null,
+            'eggs'       => in_array($request->query->get('eggs'), ['yes', 'no'], true) ? $request->query->get('eggs') : null,
             'node'       => ((int) $request->query->get('node', '')) ?: null,
             'wbg'        => ((int) $request->query->get('wbg', '')) ?: null,
             'q'          => trim((string) $request->query->get('q', '')) ?: null,
@@ -184,7 +188,13 @@ class PartnerController extends AbstractController
     public function new(Request $request, EntityManagerInterface $entityManager): Response
     {
         $partner = new Partner();
-        $form = $this->createForm(PartnerType::class, $partner);
+        // Alta sólo con datos de persona: la cesta Y el grupo de recogida se
+        // asignan después desde la ficha ("añadir cesta"), que es el único
+        // camino de creación de cesta (pasa por reconcile). Pedido por
+        // administración (reunión 2026-06-11, punto 3).
+        $form = $this->createForm(PartnerType::class, $partner, [
+            'include_pickup_group' => false,
+        ]);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
@@ -213,6 +223,7 @@ class PartnerController extends AbstractController
         BasketRepository $basketRepo,
         NodeDeliveryDate $nodeDeliveryDate,
         PickupRelocationOptions $relocationOptions,
+        PartnerAccessPolicy $accessPolicy,
         EntityManagerInterface $em,
     ): Response {
         $events = $partnerEventRepository->findForPartner($partner);
@@ -277,7 +288,106 @@ class PartnerController extends AbstractController
             'relocate_weeks' => $relocationOptions->weeksForPartner($partner),
             'relocate_groups' => $relocationOptions->groupsForPartner($partner),
             'donated_baskets' => $donatedBaskets,
+            // Cuenta utilizable por email canónico (puede ser la de un familiar
+            // con buzón compartido, a diferencia de linked_user que va por la
+            // relación User->Partner). Alimenta la tarjeta "Acceso a la web".
+            'access_user' => $accessPolicy->accountFor($partner),
+            'self_registration_open' => $accessPolicy->isSelfRegistrationOpen(),
         ]);
+    }
+
+    /**
+     * Da acceso a la web a este socix aunque el alta global esté cerrada:
+     * provisiona su User (o recupera el existente) saltándose el toggle de
+     * configuración, y opcionalmente le envía el magic-link en el momento.
+     * Es el mecanismo de despliegue selectivo previo a abrir el grifo.
+     *
+     * @param Request                $request     Lleva send_link (opcional) y el token CSRF.
+     * @param Partner                $partner     Socix (de la ruta).
+     * @param PartnerUserProvisioner $provisioner
+     * @param MagicLinkMailer        $magicLinkMailer
+     */
+    #[Route("/{id}/grant-access", name: "partner_grant_access", methods: ["POST"], requirements: ["id" => "\\d+"])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function grantAccess(
+        Request $request,
+        Partner $partner,
+        PartnerUserProvisioner $provisioner,
+        PartnerAccessPolicy $accessPolicy,
+        MagicLinkMailer $magicLinkMailer,
+    ): Response {
+        $back = ['id' => $partner->getId()];
+
+        if (!$this->isCsrfTokenValid('partner_grant_access', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+            return $this->redirectToRoute('partner_show', $back);
+        }
+
+        // Distinguir crear de recuperar: con un doble submit el flash no debe
+        // decir "creado" sobre una cuenta que ya existía.
+        $alreadyExisted = $accessPolicy->accountFor($partner) !== null;
+
+        $user = $provisioner->provision($partner);
+        if ($user === null) {
+            $this->addFlash('warning', 'No se puede dar acceso: el socix no tiene email.');
+            return $this->redirectToRoute('partner_show', $back);
+        }
+
+        $state = $alreadyExisted ? 'La cuenta ya existía' : 'Acceso creado';
+        if ($request->request->getBoolean('send_link')) {
+            $magicLinkMailer->send($user);
+            $this->addFlash('success', sprintf('%s; enlace enviado a %s.', $state, $user->getEmail()));
+        } else {
+            $this->addFlash('success', sprintf('%s para %s (sin enviar nada).', $state, $user->getEmail()));
+        }
+
+        return $this->redirectToRoute('partner_show', $back);
+    }
+
+    /**
+     * (Re)envía el magic-link de acceso a la cuenta de este socix. Para
+     * socixs sin cuenta está el botón "dar acceso" ({@see grantAccess()}).
+     *
+     * @param Request             $request         Lleva el token CSRF.
+     * @param Partner             $partner         Socix (de la ruta).
+     * @param PartnerAccessPolicy $accessPolicy
+     * @param MagicLinkMailer     $magicLinkMailer
+     */
+    #[Route("/{id}/send-access-link", name: "partner_send_access_link", methods: ["POST"], requirements: ["id" => "\\d+"])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function sendAccessLink(
+        Request $request,
+        Partner $partner,
+        PartnerAccessPolicy $accessPolicy,
+        MagicLinkMailer $magicLinkMailer,
+    ): Response {
+        $back = ['id' => $partner->getId()];
+
+        if (!$this->isCsrfTokenValid('partner_send_access_link', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+            return $this->redirectToRoute('partner_show', $back);
+        }
+
+        $user = $accessPolicy->accountFor($partner);
+        if ($user === null) {
+            $this->addFlash('warning', 'Este socix aún no tiene cuenta de acceso. Usa "Dar acceso" primero.');
+            return $this->redirectToRoute('partner_show', $back);
+        }
+
+        // Una cuenta bloqueada no puede entrar (UserChecker la corta en el
+        // login): enviar el enlace sería un fallo silencioso para el admin.
+        if (!$user->isEnabled()) {
+            $this->addFlash('warning', sprintf('La cuenta %s está bloqueada. Desbloquéala antes de enviarle el enlace.', $user->getEmail()));
+            return $this->redirectToRoute('partner_show', $back);
+        }
+
+        if (!$magicLinkMailer->send($user)) {
+            $this->addFlash('warning', 'La cuenta no tiene email; no se ha podido enviar el enlace.');
+            return $this->redirectToRoute('partner_show', $back);
+        }
+
+        $this->addFlash('success', sprintf('Enlace de acceso enviado a %s.', $user->getEmail()));
+        return $this->redirectToRoute('partner_show', $back);
     }
 
     /**
@@ -1562,14 +1672,40 @@ class PartnerController extends AbstractController
     ): Response {
         $partnerBasketShare = new PartnerBasketShare();
         $partnerBasketShare->setPartner($partner);
-        $cohort = $cohortChoiceBuilder->forPartner($partner);
+
+        // El alta de socio ya no fija grupo de recogida: si el socio no lo
+        // tiene, se elige aquí mismo. El grupo manda sobre el resto del form
+        // (su nodo decide qué modalidades caben y el turno A/B), así que la
+        // página se recarga con ?group=N al cambiarlo y, en el POST, el form
+        // se construye con el grupo enviado para que las choices validen
+        // contra lo realmente ofrecido.
+        $askPickupGroup = $partner->getWeeklyBasketGroup() === null;
+        $pickupGroup = $partner->getWeeklyBasketGroup();
+        if ($askPickupGroup) {
+            $submitted = $request->request->all('partner_basket_share');
+            $groupId = (int) ($submitted['pickupGroup'] ?? $request->query->get('group'));
+            if ($groupId > 0) {
+                // Un id inexistente deja $pickupGroup a NULL: el form se
+                // construye sin grupo y el NotBlank del campo lo rechaza. La
+                // barrera real contra ids arbitrarios es el propio EntityType,
+                // que en el POST sólo acepta grupos del catálogo.
+                $pickupGroup = $entityManager->getRepository(WeeklyBasketGroup::class)->find($groupId);
+            }
+        }
+
+        $cohort = $cohortChoiceBuilder->forNode($pickupGroup?->getNode());
         $form = $this->createForm(PartnerBasketShareType::class, $partnerBasketShare, [
             'cohort_choices' => $cohort['cohortChoices'],
             'exclude_weekly_shares' => $cohort['excludeWeeklyShares'],
+            'ask_pickup_group' => $askPickupGroup,
+            'pickup_group' => $pickupGroup,
         ]);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
+            if ($askPickupGroup) {
+                $partner->setWeeklyBasketGroup($form->get('pickupGroup')->getData());
+            }
             $partnerBasketShare->setStartDate(new \DateTime($partnerBasketShare->getStartDate()));
             $partnerBasketShare->setIsActive(true);
             $values = $request->get('partner_basket_share');

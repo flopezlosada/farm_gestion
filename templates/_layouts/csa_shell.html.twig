@@ -164,14 +164,24 @@
                         <div class="csa-sidebar__group">Comunicación</div>
                         {{ _self.nav_link('Blog', path('blog'), 'fa-newspaper-o',
                            route starts with 'blog') }}
-                        {{ _self.nav_link('Eventos públicos', path('booking'), 'fa-calendar-check-o',
+                        {{ _self.nav_link('Eventos públicos', path('booking_index'), 'fa-calendar-check-o',
                            route starts with 'booking') }}
+                    {% endif %}
+
+                    {% if is_granted('ROLE_GESTION_ENCUESTAS') %}
+                        <div class="csa-sidebar__group">Encuestas</div>
+                        {{ _self.nav_link('Encuestas', path('survey_index'), 'fa-check-square-o',
+                           route starts with 'survey') }}
                     {% endif %}
 
                     {% if is_granted('ROLE_ADMIN') %}
                         <div class="csa-sidebar__group">Administración</div>
                         {{ _self.nav_link('Usuarias', path('user'), 'fa-users',
                            route starts with 'user') }}
+                        {{ _self.nav_link('Configuración', path('settings_index'), 'fa-sliders',
+                           route starts with 'settings') }}
+                        {{ _self.nav_link('Estadísticas de uso', path('usage_stats_index'), 'fa-bar-chart',
+                           route starts with 'usage_stats') }}
                     {% endif %}
                 {% endblock %}
             </nav>

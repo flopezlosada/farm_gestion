@@ -32,9 +32,12 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  * Como WeeklyBasketGenerator es idempotente para Baskets ya generados (rama
  * reuseExistingWeeklyBaskets), correrlo a diario o varias veces no rompe nada.
  *
- * NOTA: mientras las vistas (byNode/show/PDF) sigan materializando al ver, ver
- * una semana futura aún la congela; ese fallback se retira cuando esas vistas
- * pasen a dibujar desde la proyección (frente pendiente del rework).
+ * Las vistas de reparto (byNode v2 y su PDF) ya NO congelan al ver: el
+ * {@see \App\Service\Delivery\DeliveryModeResolver} decide por nodo y, en una
+ * semana futura sin piedra, DIBUJA desde la proyección sin persistir. La
+ * materialización es responsabilidad exclusiva de este cron (y del rematerializador
+ * a mano). Así que congelar es un acto deliberado del lunes, no un efecto colateral
+ * de abrir una pantalla.
  */
 #[AsCommand(name: 'app:generate-weekly-delivery', description: 'Congela el listado de la semana que entra en operación (cron lunes).')]
 class GenerateWeeklyDeliveryCommand extends Command

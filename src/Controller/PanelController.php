@@ -21,6 +21,7 @@ use App\Repository\WeeklyBasketGroupRepository;
 use App\Repository\WeeklyBasketRepository;
 use App\Service\Delivery\DeliveryCalendarProjector;
 use App\Service\Delivery\DeliveryCalendarViewBuilder;
+use App\Service\Delivery\DeliveryDeadline;
 use App\Service\Delivery\DeliveryShiftApplier;
 use App\Service\Delivery\DeliveryShiftValidator;
 use App\Service\Delivery\PickupRelocationOptions;
@@ -53,6 +54,11 @@ use Symfony\Component\Validator\Constraints\NotBlank;
 #[IsGranted('ROLE_PARTNER')]
 class PanelController extends AbstractController
 {
+    public function __construct(
+        private readonly DeliveryDeadline $deadline,
+    ) {
+    }
+
     #[Route('', name: 'panel', methods: ['GET'])]
     public function index(PickupRelocationOptions $relocationOptions): Response
     {
@@ -162,21 +168,6 @@ class PanelController extends AbstractController
 
         return new JsonResponse($cities);
     }
-
-    /**
-     * Deadline para acciones autoservicio sobre la próxima cesta. El
-     * socix puede saltar la cesta, cambiar de nodo de recogida o pedir
-     * cambio puntual de viernes hasta esta hora del jueves previo al
-     * viernes de reparto, en hora local (Europe/Madrid). Pasada esa
-     * hora, las acciones se bloquean y se le pide contactar con la
-     * administración.
-     *
-     * Valor temporal hardcoded — pendiente de parametrizar cuando la
-     * asociación decida la regla definitiva.
-     */
-    private const PICKUP_DEADLINE_WEEKDAY = 4;   // ISO 8601: 4 = jueves
-    private const PICKUP_DEADLINE_HOUR = 23;
-    private const PICKUP_DEADLINE_MINUTE = 59;
 
     /**
      * "Mi cesta" antiguo (próxima cesta + cambios de reparto en formato viejo) RETIRADO:
@@ -298,7 +289,7 @@ class PanelController extends AbstractController
             return $this->redirectToRoute('panel');
         }
 
-        if (!$this->isWithinPickupDeadlineForBasket($basket)) {
+        if (!$this->isWithinPickupDeadlineForBasket($basket, $partner)) {
             $this->addFlash('error', 'Ya no se puede cambiar de nodo para esa semana — el plazo terminó. Contacta con la administración si necesitas avisar.');
             return $this->redirectToRoute('panel');
         }
@@ -437,59 +428,29 @@ class PanelController extends AbstractController
     }
 
     /**
-     * El deadline para tocar una WeeklyBasket concreta es el jueves
-     * 23:59 (zona horaria local) anterior al viernes de reparto del
-     * Basket asociado, alineado con el cierre operativo del reparto.
+     * ¿Sigue abierto el plazo para tocar esta WeeklyBasket? Delega en
+     * {@see DeliveryDeadline}, fuente única del plazo (antelación + hora
+     * configurables, sobre la fecha física del nodo), compartida con el
+     * validador del admin.
      */
-    private function pickupDeadlineFor(WeeklyBasket $weeklyBasket): ?\DateTimeImmutable
+    private function isWithinPickupDeadline(WeeklyBasket $weeklyBasket): bool
     {
-        $basketDate = $weeklyBasket->getBasket()?->getDate();
-        if ($basketDate === null) {
-            return null;
+        $partner = $weeklyBasket->getPartner();
+        $basket = $weeklyBasket->getBasket();
+        if ($partner === null || $basket === null) {
+            return false;
         }
 
-        return $this->pickupDeadlineForDate($basketDate);
+        return $this->deadline->isOpen($partner, $basket);
     }
 
     /**
-     * Deadline (jueves 23:59 anterior al reparto) a partir de la fecha del Basket.
-     * Compartido por las acciones que operan sobre un Basket (calendario) o sobre
-     * una WeeklyBasket (cesta).
+     * ¿Sigue abierto el plazo para que $partner cambie su reparto en $basket?
+     * Misma fuente que {@see isWithinPickupDeadline}.
      */
-    private function pickupDeadlineForDate(\DateTimeInterface $basketDate): \DateTimeImmutable
+    private function isWithinPickupDeadlineForBasket(Basket $basket, Partner $partner): bool
     {
-        // Basket.date suele ser \DateTime mutable; lo pasamos a immutable para
-        // operar con seguridad sin pisar el original.
-        $pickup = $basketDate instanceof \DateTimeImmutable
-            ? $basketDate
-            : \DateTimeImmutable::createFromInterface($basketDate);
-
-        // ISO weekday del viernes habitual = 5. Para llegar al jueves restamos
-        // (viernes - jueves) = 1 día. Si por excepción de calendario el reparto
-        // cae en otro día, abs() garantiza que el deadline queda siempre antes.
-        $diffDays = abs((int) $pickup->format('N') - self::PICKUP_DEADLINE_WEEKDAY);
-
-        return $pickup
-            ->setTime(self::PICKUP_DEADLINE_HOUR, self::PICKUP_DEADLINE_MINUTE, 0)
-            ->modify(sprintf('-%d days', $diffDays));
-    }
-
-    private function isWithinPickupDeadline(WeeklyBasket $weeklyBasket): bool
-    {
-        $deadline = $this->pickupDeadlineFor($weeklyBasket);
-        if ($deadline === null) {
-            return false;
-        }
-        return new \DateTimeImmutable('now') < $deadline;
-    }
-
-    private function isWithinPickupDeadlineForBasket(Basket $basket): bool
-    {
-        $basketDate = $basket->getDate();
-        if ($basketDate === null) {
-            return false;
-        }
-        return new \DateTimeImmutable('now') < $this->pickupDeadlineForDate($basketDate);
+        return $this->deadline->isOpen($partner, $basket);
     }
 
     /**
@@ -596,7 +557,7 @@ class PanelController extends AbstractController
 
         // Plazo de autoservicio: hasta el jueves 23:59 anterior al reparto. Defensa
         // server-side; el calendario ya lo oculta en el cliente cuando ha pasado.
-        if (!$this->isWithinPickupDeadlineForBasket($basket)) {
+        if (!$this->isWithinPickupDeadlineForBasket($basket, $partner)) {
             $this->addFlash('error', 'Ya no se puede cambiar esa semana — el plazo terminó. Si necesitas avisar, contacta con la administración.');
 
             return $backToCalendar();

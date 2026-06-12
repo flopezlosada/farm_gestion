@@ -281,8 +281,8 @@ class WeeklyBasketGenerator
      * dados de baja en el pasado cuyos WeeklyBasket quedaron grabados).
      * No es un bug aquí: PartnerLifecycleSubscriber::leave borra los
      * WeeklyBasket futuros, pero los históricos del snapshot no pasaron
-     * por ese listener. El template _table_list_basket es defensivo
-     * ante este caso y muestra "—" para esos partners.
+     * por ese listener. Las vistas que los pintan deben ser defensivas
+     * ante este caso (Partner sin PBS activo).
      *
      * @return array{0:array,1:array,2:array,3:array,4:array} weekly, half, biweekly, monthly, onlyEgg
      */

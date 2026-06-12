@@ -4,6 +4,7 @@ namespace App\Command;
 
 use App\Entity\PartnerEvent;
 use App\Repository\PartnerEventRepository;
+use App\Service\AppSettings;
 use Symfony\Bridge\Twig\Mime\TemplatedEmail;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -45,6 +46,7 @@ class SendAdminDeliveryChangesSummaryCommand extends Command
     public function __construct(
         private readonly PartnerEventRepository $eventRepository,
         private readonly MailerInterface $mailer,
+        private readonly AppSettings $settings,
     ) {
         parent::__construct();
     }
@@ -64,6 +66,13 @@ class SendAdminDeliveryChangesSummaryCommand extends Command
 
         $dryRun = (bool) $input->getOption('dry-run');
         $to = $input->getOption('to');
+
+        // Toggle de configuración: con el envío apagado el cron no manda nada
+        // (verde para no disparar alertas). El dry-run sigue funcionando.
+        if (!$dryRun && !$this->settings->getBool(AppSettings::EMAIL_ADMIN_DELIVERY_SUMMARY)) {
+            $io->warning('El resumen a administración está desactivado en /gestion/configuracion. No se envía nada.');
+            return Command::SUCCESS;
+        }
 
         if (!$dryRun && !$to) {
             $io->error('Falta --to=email del admin (o usa --dry-run).');

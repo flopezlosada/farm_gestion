@@ -1,0 +1,88 @@
+{# ============================================================
+ # Listado de encuestas internas — shell csa.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% set status_meta = {
+    'draft':  { label: 'Borrador', tone: 'warning' },
+    'open':   { label: 'Abierta',  tone: 'success' },
+    'closed': { label: 'Cerrada',  tone: 'neutral' }
+} %}
+
+{% block title %}Encuestas{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Encuestas</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Encuestas',
+        'Encuestas internas',
+        'Crea encuestas para lxs socixs y consulta los resultados de forma anónima y agregada.'
+    ) }}
+
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-4);">
+        <div></div>
+        {{ csa.btn('+ Nueva encuesta', { variant: 'primary', href: path('survey_new') }) }}
+    </div>
+
+    {% if surveys is empty %}
+        {{ csa.callout('Todavía no hay ninguna encuesta. Crea la primera con el botón de arriba.', 'info') }}
+    {% else %}
+        <div class="csa-card" style="padding: 0; overflow: hidden;">
+            <table class="csa-table" style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr>
+                        <th style="text-align: left; padding: var(--csa-sp-3) var(--csa-sp-4);">Título</th>
+                        <th style="text-align: left; padding: var(--csa-sp-3) var(--csa-sp-4);">Estado</th>
+                        <th style="text-align: right; padding: var(--csa-sp-3) var(--csa-sp-4);">Preguntas</th>
+                        <th style="text-align: right; padding: var(--csa-sp-3) var(--csa-sp-4);">Respuestas</th>
+                        <th style="text-align: right; padding: var(--csa-sp-3) var(--csa-sp-4);">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for survey in surveys %}
+                        {% set meta = status_meta[survey.status] %}
+                        <tr style="border-top: 1px solid var(--csa-rule);">
+                            <td style="padding: var(--csa-sp-3) var(--csa-sp-4);">
+                                <strong>{{ survey.title }}</strong>
+                            </td>
+                            <td style="padding: var(--csa-sp-3) var(--csa-sp-4);">
+                                {{ csa.badge(meta.label, meta.tone) }}
+                            </td>
+                            <td style="padding: var(--csa-sp-3) var(--csa-sp-4); text-align: right;">{{ survey.questions|length }}</td>
+                            <td style="padding: var(--csa-sp-3) var(--csa-sp-4); text-align: right;">{{ counts[survey.id] }}</td>
+                            <td style="padding: var(--csa-sp-3) var(--csa-sp-4); text-align: right; white-space: nowrap;">
+                                <div class="csa-row" style="justify-content: flex-end; gap: var(--csa-sp-2);">
+                                    {% if survey.editable %}
+                                        {{ csa.btn('Editar', { variant: 'ghost', href: path('survey_edit', { id: survey.id }) }) }}
+                                        <form method="post" action="{{ path('survey_open', { id: survey.id }) }}" onsubmit="return confirm('Una vez abierta no podrás editar las preguntas. ¿Abrir la encuesta?');" style="display: inline;">
+                                            <input type="hidden" name="_token" value="{{ csrf_token('survey_open_' ~ survey.id) }}">
+                                            <button type="submit" class="csa-btn csa-btn--primary">Abrir</button>
+                                        </form>
+                                    {% elseif survey.open %}
+                                        <form method="post" action="{{ path('survey_close', { id: survey.id }) }}" onsubmit="return confirm('¿Cerrar la encuesta? Dejará de admitir respuestas.');" style="display: inline;">
+                                            <input type="hidden" name="_token" value="{{ csrf_token('survey_close_' ~ survey.id) }}">
+                                            <button type="submit" class="csa-btn csa-btn--ghost">Cerrar</button>
+                                        </form>
+                                    {% endif %}
+                                    <form method="post" action="{{ path('survey_delete', { id: survey.id }) }}" onsubmit="return confirm('¿Borrar la encuesta y todas sus respuestas? No se puede deshacer.');" style="display: inline;">
+                                        <input type="hidden" name="_token" value="{{ csrf_token('survey_delete_' ~ survey.id) }}">
+                                        <button type="submit" class="csa-btn csa-btn--ghost" style="color: var(--csa-danger, #b3261e);">Borrar</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+
+{% endblock %}
