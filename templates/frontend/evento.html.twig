@@ -1,0 +1,83 @@
+{% extends 'base_front.html.twig' %}
+
+{% block title %}{{ event.title }} · CSA Vega de Jarama{% endblock %}
+
+{% block content %}
+
+    <style>
+        /* Detalle de evento (prefijo ev-), misma tarjeta de lectura que los
+           posts del blog: ancho cómodo, paleta verde/ámbar. */
+        .ev-card {
+            max-width: 900px;
+            margin: 0 auto;
+            background: #fff;
+            border: 1px solid #e4ddcd;
+            border-radius: 16px;
+            padding: 2.4rem 3rem 2.8rem;
+            box-shadow: 0 6px 22px rgba(60, 50, 30, .12);
+        }
+        .ev-card__date {
+            font-size: .85rem;
+            font-weight: 700;
+            color: rgb(248, 177, 51);
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+        .ev-card__title {
+            font-family: 'Nunito', sans-serif;
+            font-weight: 800;
+            color: #138504;
+            font-size: 2.1rem;
+            line-height: 1.18;
+            margin: .3rem 0 1.4rem;
+            padding-bottom: 1.2rem;
+            border-bottom: 3px solid rgb(248, 177, 51);
+        }
+        .ev-card__media { margin-bottom: 1.8rem; border-radius: 14px; overflow: hidden; }
+        .ev-card__media img { width: 100%; display: block; }
+        .ev-card__content { color: #4a443b; font-size: 1.2rem; line-height: 1.85; }
+        .ev-card__content img {
+            display: block;
+            max-width: 100%;
+            height: auto;
+            margin: 1.6rem auto;
+            border-radius: 10px;
+        }
+        .ev-back { display: inline-block; margin: 0 0 1.4rem; font-weight: 700; color: #138504; }
+        .ev-back:hover { color: rgb(151, 181, 57); text-decoration: none; }
+        @media (max-width: 575.98px) {
+            .ev-card { padding: 1.6rem 1.4rem 2rem; }
+        }
+    </style>
+
+    <div class="container py-5">
+        <div style="max-width: 900px; margin: 0 auto;">
+            <a class="ev-back" href="{{ path('asambleas') }}"><i class="fa fa-angle-left"></i> Volver a la agenda</a>
+        </div>
+
+        <article class="ev-card">
+            <div class="ev-card__date">
+                {{ event.beginAt|format_datetime(pattern="EEEE d 'de' MMMM 'de' yyyy", locale='es') }}
+                {%- if event.beginAt|date('H:i') != '00:00' %} · {{ event.beginAt|date('H:i') }} h{% endif %}
+                {%- if event.endAt and event.endAt|date('Y-m-d') != event.beginAt|date('Y-m-d') %}
+                    — hasta el {{ event.endAt|format_datetime(pattern="d 'de' MMMM", locale='es') }}
+                {%- endif %}
+            </div>
+            <h1 class="ev-card__title">{{ event.title }}</h1>
+
+            {% if event.image %}
+                <div class="ev-card__media">
+                    <img src="{{ asset(event.webPath) }}" alt="{{ event.title }}">
+                </div>
+            {% endif %}
+
+            <div class="ev-card__content">
+                {# content|raw: HTML generado con TinyMCE por un rol de
+                   confianza (ROLE_BLOG). El visitante anónimo lo ve pero no
+                   puede escribirlo — mismo trato que los posts del blog. #}
+                {{ event.content|raw }}
+            </div>
+        </article>
+    </div>
+
+{% endblock %}

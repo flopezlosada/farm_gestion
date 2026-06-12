@@ -23,6 +23,60 @@
         <link href="{{ asset('bundles/app/frontend/lib/tempusdominus/css/tempusdominus-bootstrap-4.min.css') }}" rel="stylesheet">
         <link href="https://cdn.jsdelivr.net/npm/lightgallery@2.7.2/css/lightgallery.css" rel="stylesheet">
         <link href="{{ asset('bundles/app/frontend/css/style.css') }}" rel="stylesheet">
+        <style>
+            /* ---- Menú principal: hover / abierto / activo ----
+               El tema pinta hover, .show y .active con un bloque naranja
+               sólido (style.css:~9768) y texto blanco al abrir (~4436). Lo
+               anulamos: el único indicador es el COLOR ámbar (el activo, además,
+               en negrita). Sin subrayado ni relleno. Por defecto, blanco. */
+            .navbar-dark .navbar-nav .nav-link:hover,
+            .navbar-dark .navbar-nav .nav-link:focus,
+            .navbar-dark .navbar-nav .nav-item.show > .nav-link,
+            .navbar-dark .navbar-nav .nav-link.active {
+                color: rgb(248, 177, 51);
+                background: transparent;
+                box-shadow: none;
+            }
+            .navbar-dark .navbar-nav .nav-link.active { font-weight: 700; }
+
+            /* Menú más bajo: el tema usa padding vertical de 30px
+               (style.css:~9786), demasiado alto. */
+            .navbar-dark .navbar-nav .nav-link {
+                padding-top: 15px;
+                padding-bottom: 15px;
+            }
+
+            /* ---- Submenús: prolongación oscura del menú (no una tarjeta
+               blanca que parece de otra página). Flush (margin-top 0) para no
+               dejar un hueco que rompa el hover al ir hacia el submenú. ---- */
+            .navbar-dark .navbar-nav .dropdown-menu {
+                background: #181818;
+                border: none;
+                border-radius: 0 0 10px 10px;
+                box-shadow: 0 14px 30px rgba(0, 0, 0, .35);
+                padding: 6px;
+                margin-top: 0;
+                min-width: 13rem;
+            }
+            .navbar-dark .navbar-nav .dropdown-item {
+                padding: 10px 14px;
+                border-radius: 7px;
+                color: #F2F2F4;
+                font-size: 16px;
+                font-weight: 600;
+                transition: background .15s ease, color .15s ease;
+            }
+            .navbar-dark .navbar-nav .dropdown-item:hover,
+            .navbar-dark .navbar-nav .dropdown-item:focus {
+                background: rgba(255, 255, 255, .07);
+                color: rgb(248, 177, 51);
+            }
+            .navbar-dark .navbar-nav .dropdown-item.active {
+                background: rgba(255, 255, 255, .07);
+                color: rgb(248, 177, 51);
+                font-weight: 700;
+            }
+        </style>
     {% endblock %}
 </head>
 
@@ -69,11 +123,11 @@
                     <div class="d-inline-flex align-items-center">
                         <div class="d-inline-flex flex-column text-center pr-2">
                             <h6>Mantente al día</h6>
-                            <p class="m-0">Visita nuestro calendario</p>
+                            <p class="m-0">Visita nuestra agenda</p>
                         </div>
                         <div class="d-inline-flex flex-column text-center px-3 border-right">
-                            <a target="_blank" href="https://cloud.disroot.org/apps/calendar/embed/T98qkKKSNgLnNx96/dayGridMonth/now">
-                                <img src="{{ asset('bundles/app/img/calendario.png') }}" width="50" height="50" alt="Calendario">
+                            <a href="{{ path('asambleas') }}">
+                                <img src="{{ asset('bundles/app/img/calendario.png') }}" width="50" height="50" alt="Agenda de eventos">
                             </a>
                         </div>
                     </div>
@@ -83,6 +137,8 @@
     {% endblock %}
 
     {% block navbar %}
+        {# Ruta actual para resaltar la sección abierta en el menú. #}
+        {% set _route = app.request.attributes.get('_route') %}
         <div class="container-fluid p-0">
             <nav class="navbar navbar-expand-lg bg-dark navbar-dark py-3 py-lg-0 px-lg-5">
                 <button type="button" class="navbar-toggler" data-toggle="collapse" data-target="#navbarCollapse">
@@ -90,26 +146,24 @@
                 </button>
                 <div class="collapse navbar-collapse justify-content-between px-3" id="navbarCollapse">
                     <div class="navbar-nav mr-auto py-0">
-                        {# CTA principal destacado al inicio del menú: color amarillo CSA
-                         # sobre el navbar oscuro para que resalte sobre el resto de secciones. #}
-                        <a href="{{ path('socios') }}" class="nav-item nav-link" style="color: rgb(248, 177, 51);"><strong>Hazte socix</strong></a>
+                        <a href="{{ path('socios') }}" class="nav-item nav-link{{ _route == 'socios' ? ' active' }}"><strong>Hazte socix</strong></a>
                         <div class="nav-item dropdown">
-                            <a href="#" class="nav-link dropdown-toggle" data-toggle="dropdown">Huerta</a>
-                            <div class="dropdown-menu rounded-0 m-0">
-                                <a href="{{ path('huerta') }}" class="dropdown-item">La huerta</a>
-                                <a href="{{ path('nuestroFuturo') }}" class="dropdown-item">Nuestro futuro</a>
+                            <a href="#" class="nav-link dropdown-toggle{{ _route in ['huerta', 'nuestroFuturo'] ? ' active' }}" data-toggle="dropdown">Huerta</a>
+                            <div class="dropdown-menu">
+                                <a href="{{ path('huerta') }}" class="dropdown-item{{ _route == 'huerta' ? ' active' }}">La huerta</a>
+                                <a href="{{ path('nuestroFuturo') }}" class="dropdown-item{{ _route == 'nuestroFuturo' ? ' active' }}">Nuestro futuro</a>
                             </div>
                         </div>
                         <div class="nav-item dropdown">
-                            <a href="#" class="nav-link dropdown-toggle" data-toggle="dropdown">Creando CSA</a>
-                            <div class="dropdown-menu rounded-0 m-0">
-                                <a href="{{ path('voluntariado') }}" class="dropdown-item">Voluntariado y comisiones</a>
-                                <a href="{{ path('asambleas') }}" class="dropdown-item">Asambleas y eventos</a>
+                            <a href="#" class="nav-link dropdown-toggle{{ _route == 'voluntariado' ? ' active' }}" data-toggle="dropdown">Creando CSA</a>
+                            <div class="dropdown-menu">
+                                <a href="{{ path('voluntariado') }}" class="dropdown-item{{ _route == 'voluntariado' ? ' active' }}">Voluntariado y comisiones</a>
                             </div>
                         </div>
-                        <a href="{{ path('somos') }}" class="nav-item nav-link">Quiénes somos</a>
-                        <a href="{{ path('frontend_blog') }}" class="nav-item nav-link">Blog</a>
-                        <a href="{{ path('blog_category_show', { id: 4 }) }}" class="nav-item nav-link">Recetas</a>
+                        <a href="{{ path('somos') }}" class="nav-item nav-link{{ _route == 'somos' ? ' active' }}">Quiénes somos</a>
+                        <a href="{{ path('asambleas') }}" class="nav-item nav-link{{ _route in ['asambleas', 'evento_show'] ? ' active' }}">Agenda</a>
+                        <a href="{{ path('frontend_blog') }}" class="nav-item nav-link{{ _route in ['frontend_blog', 'blog_show'] ? ' active' }}">Blog</a>
+                        <a href="{{ path('blog_category_show', { id: 4 }) }}" class="nav-item nav-link{{ _route == 'blog_category_show' ? ' active' }}">Recetas</a>
                     </div>
                 </div>
             </nav>

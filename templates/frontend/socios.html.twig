@@ -4,184 +4,241 @@
 
 {% block content %}
 
-<!-- Features Start -->
-    <div class="container-xº bg-light">
-        <div class="container">
-            <div class="row align-items-center">
-                <div class="row py-5">
-            <div class="col-lg-7 pb-5 pb-lg-0 px-3 px-lg-5">
-                
-                <h1 class="display-4 mb-4"><span style="color:rgb(248, 177, 51)">CSA</span> <span style="color:#138504">Vega de jarama</span></h1>
-                <h5 class="text-muted mb-3">Nuestro modelo económico se basa en las cuotas que aportamos las personas socias, siendo la base
-				monetaria del sustento de la agricultura:</h5>
-                <p class="mb-4"> Las personas que trabajan la Tierra no tienen que dedicar
-				tiempo y energía a la venta de los alimentos que producen, con lo que se consigue sustituir los canales
-				de distribución propios de la economía de mercado que obligan a alimentarnos con estádares muy
-				alejados del respeto y el cuidado que necesita la Naturaleza..</p>
-                
-                <!--<a href="" class="btn btn-lg btn-primary mt-3 px-4">Learn More</a>-->
-            </div>
-            <div class="col-lg-5">
-                <div class="row px-3">
-                     <div class="col-12 p-0">
-                        <img  style="width:400px; height: 350px;" src="{{ asset('bundles/app/img/CestaImg1.jpg') }}" alt="">
-                    </div>
-                   
-					<!--<div class="col-6 p-0">
-                        <img class="img-fluid w-100" src="img/about-2.jpg" alt="">
-                    </div>
-                    <div class="col-6 p-0">
-                        <img class="img-fluid w-100" src="img/about-3.jpg" alt="">
-                    </div>-->
-					
-                </div>
-            </div>
-        </div>
-            </div>
-        </div>
-    </div>
-    <!-- Features End -->
+<style>
+    /* Estilos de página: hero con el formulario como protagonista.
+       Prefijo hs- (hazte socix) para no pisar el theme. */
+    .hs-hero {
+        background: linear-gradient(180deg, #f4f9f5 0%, #ffffff 100%);
+    }
+    .hs-form-card {
+        background: #fff;
+        border: 1px solid rgba(0, 0, 0, 0.06);
+        border-top: 2px solid #65C178;
+        border-radius: 4px;
+        box-shadow: 0 10px 30px rgba(19, 133, 4, 0.08);
+        padding: 2rem;
+    }
+    .hs-reason i {
+        color: #138504;
+        opacity: 0.85;
+        width: 2rem;
+        font-size: 1.3rem;
+    }
+    .hs-card {
+        border: 1px solid rgba(0, 0, 0, 0.06);
+        border-top: 2px solid #65C178;
+        border-radius: 4px;
+        background: #fff;
+        height: 100%;
+        padding: 1.5rem;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .hs-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+    }
+    .hs-card .hs-card-icon {
+        color: rgb(248, 177, 51);
+        font-size: 1.6rem;
+        opacity: 0.85;
+    }
+    .hs-node address {
+        margin-bottom: 0;
+    }
+    .hs-node .hs-schedule {
+        color: #138504;
+        font-weight: 700;
+    }
+</style>
 
-  <div class="container py-5">
-        <div class="row py-4">
-            <div class="col-lg-7 pb-5 pb-lg-0 px-3 px-lg-5">
-                <h1 class="display-4 mb-4"><span style="color:rgb(248, 177, 51)">Socios</span> <span style="color:#138504">Csa</span></h1>
-                <h5 class="text-muted mb-3">El modelo social de la CSA está implícito en la siglas que nos nombran:</h5>
-                <p class="mb-4">Comunidad que sotiene
-				agricultura, no solo porque interviene económicamente en su sutento haya o no cesta, si no porque se
-				implica en la gestión y administración de los bienes , los procesos, las tareas y los sueños del colectivo
-				de forma absolutamente voluntaria, cada una de acuerdo a su capacidad e interés. La cohesión de la
-				comunidad se gesta a través de la consecución de pequeños objetivos grupales comunes basados en la
-				relación y los cuidados: salir a cenar, compartir el rato de reparto, realización de tareas agrícolas
-				colectivas, acompañar a la que lo necesita, son alguna de las actividades que surgen de y por la
-				comunidad y que suman a caminar hacia el objetivo mayor que es revertir la direccionalidad del sustento
-				de la agricultura por la comunidad para sentir y comprobar que ésta se articula y sostiene por la
-				actividad agrícola comunitaria.</p>
-                
-                <a href="http://umap.openstreetmap.fr/en/map/csa-vega-de-jarama_855066#11/40.7736/-3.5412" class="btn btn-lg btn-primary mt-3 px-4">Mapa de socios</a>
-            </div>
-            <div class="col-lg-5">
-                <div class="row px-3">
-                    <div class="col-12 p-0">
-                        <img style="width:400px; height: 450px;" src="{{ asset('bundles/app/img/cestasemana.JPG') }}" alt="">
+    {# Hero: el formulario de petición de información es lo principal de la página. #}
+    <div class="hs-hero">
+        <div class="container py-5">
+            <div class="row align-items-center py-4">
+                <div class="col-lg-7 pb-5 pb-lg-0 px-3 px-lg-5">
+                    <h1 class="display-4 mb-3"><span style="color: rgb(248, 177, 51)">Hazte socix</span> <span style="color: #138504">de la CSA</span></h1>
+                    <h5 class="text-muted mb-4">Verdura agroecológica, de temporada y de cercanía, cultivada en la
+                    Sierra Norte de Madrid por una comunidad que sostiene su propia agricultura.</h5>
+                    <div class="hs-reason d-flex align-items-baseline mb-3">
+                        <i class="fa fa-carrot"></i>
+                        <p class="m-0">Cesta de verdura recolectada esa misma mañana, cada viernes, cada quince días o cada mes: tú eliges el ritmo.</p>
                     </div>
+                    <div class="hs-reason d-flex align-items-baseline mb-3">
+                        <i class="fa fa-hand-holding-heart"></i>
+                        <p class="m-0">Tu cuota sostiene directamente a las personas que trabajan la tierra, sin intermediarios ni canales de distribución de mercado.</p>
+                    </div>
+                    <div class="hs-reason d-flex align-items-baseline mb-4">
+                        <i class="fa fa-users"></i>
+                        <p class="m-0">Una comunidad que decide en asamblea y se encuentra en repartos, jornadas de huerta y celebraciones.</p>
+                    </div>
+                    <p class="text-muted mb-0">Escríbenos y te contamos cómo empezar, sin compromiso.</p>
                 </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Booking Start -->
-    <!-- Booking Start -->
-    
-	<div class="container-xº bg-light">
-        <div class="container">
-            <div class="row align-items-center">
-			
-			
-             <div class="col-lg-5">
-                    <div class="bg-secondary py-5 px-4 px-sm-5">
+                <div class="col-lg-5">
+                    <div class="hs-form-card" id="pide-informacion">
                         {{ render(controller('App\\Controller\\GestionController::contactWidget')) }}
                     </div>
                 </div>
-				
-                <div class="col-lg-7 py-5 py-lg-0 px-3 px-lg-5">
-                    <h4 class="text-secondary mb-3">Quieres ser socio de la CSA?</h4>
-                    <h1 class="display-4 mb-4">Pide<span style="color:rgb(248, 177, 51)"> información</span></h1>
-                    <p>Pudes ser socio de la CSA segun el caso que mejor se te adapte</p>
-                    <div class="row py-2">
-                        <div class="col-sm-6">
-                            <div class="d-flex flex-column">
-                                <div class="d-flex align-items-center mb-2">
-                                   
-								   
-                                    <h5 class="text-truncate m-0">Cesta Semanal</h5>
-                                </div>
-                                <p>Una cesta cada viernes</p>
-                            </div>
-                        </div>
-                        <div class="col-sm-6">
-                            <div class="d-flex flex-column">
-                                <div class="d-flex align-items-center mb-2">
-                                    <!-- <h1 class="flaticon-food font-weight-normal text-secondary m-0 mr-3"></h1> -->
-                                    <h5 class="text-truncate m-0">Cesta Quincenal</h5>
-                                </div>
-                                <p>Cesta cada quince dias</p>
-                            </div>
-                        </div>
-                        <div class="col-sm-6">
-                            <div class="d-flex flex-column">
-                                <div class="d-flex align-items-center mb-2">
-                                  <!--    <h1 class="flaticon-grooming font-weight-normal text-secondary m-0 mr-3"></h1>-->
-                                    <h5 class="text-truncate m-0">Cesta mensual</h5>
-                                </div>
-                                <p class="m-0">Cesta Mensual</p>
-                            </div>
-                        </div>
-						
-						
-                    </div>
-					 
-					 <h4 class="mb-2 ">PUNTOS DE DISTRIBUCIÓN MADRID CAPITAL.</h4>
-					<ul>
-						<li>Bar La Lata (Lavapiés): lalatacascorro@gmail.com; C/ Embajadores, 1 (28012) Madrid.
-						Teléfono: 910 33 30 41. Recogida Miércoles de 6 a cierre.</li>
-						
-						<li>Tienda Sostenible Midori: efecto.midori@gmail.com C/Suecia 83, 28022 Madrid
-						Teléfono 625259110. (Zona San Blas)Recogida miércoles de 6 a 8</li>
-						
-						<li>Granel de la Villa c/ Donoso cortes, 1 28015 Madrid. Teléfono 640642132</li>
-						
-						</ul>
-						
-                </div>
-            </div>
-		</div>
-      </div>
-    
-    <!-- Booking end -->
- <!-- Booking end -->
-
-     <!-- Testimonial Start -->
-    <div class="container p-4 pt-0">
-         <div class="d-flex flex-column text-center mb-0">
-            <p>Voluntariado y trabajos en la huerta</p>
-            </div>
-            <div class="owl-carousel testimonial-carousel">
-                 <div class="mx-0 p-2" >
-                    <div class="d-flex align-items-end mb-3 mt-n4 ml-n4">
-                        <img class="img-fluid" src="{{ asset('bundles/app/img/socios1.JPG') }}" style="width:350px; height: 250px;" alt=""> 
-                    </div>
-                     <p >Jornada de trabajo </p>
-                 </div>
-                 <div class="mx-0 p-2" >
-                      <div class="d-flex align-items-end mb-3 mt-n4 ml-n4">
-                        <img class="img-fluid" src="{{ asset('bundles/app/img/calabazas.jpg') }}" style="width:350px; height: 250px;" alt="">    
-                    </div>
-                      <p >Jornada de calabazas </p>
-                    </div>
-				<div class="mx-0 p-2">
-					<div class="d-flex align-items-end mb-3 mt-n4 ml-n4">
-					<img class="img-fluid" src="{{ asset('bundles/app/img/recolecta1.jpg') }}"style="width: 350px; height: 250px;" alt="">
-				</div>
-					<p>Cosecha</p>
-				</div>
-
-				<div class="mx-0 p-2">
-					<div class="d-flex align-items-end mb-3 mt-n4 ml-n4">
-                        <img class="img-fluid" src="{{ asset('bundles/app/img/trabajo3huerta.jpg') }}" style="width:350px; height: 250px;" alt=""> 
-                    </div>
-                    	<p>Jornada de trabajo</p>
-                	</div>
-                    
-                    <div class="mx-0 p-2">
-                     	<div class="d-flex align-items-end mb-3 mt-n4 ml-n4">
-                        <img class="img-fluid" src="{{ asset('bundles/app/img/cestaviernes.JPG') }}" style="width:350px; height: 250px;" alt=""> 
-                   	 </div>
-                   		 <p>Cesta de los viernes</p>
-                    </div>
             </div>
         </div>
-    <!-- Testimonial End -->
+    </div>
 
+    {# Modalidades de cesta #}
+    <div class="container py-5">
+        <div class="text-center mb-4 px-3">
+            <h2 class="mb-2">Elige tu <span style="color: #138504">modalidad de cesta</span></h2>
+            <p class="text-muted">Todas las cestas son de verdura de temporada; cambia la frecuencia con la que recoges.</p>
+        </div>
+        <div class="row">
+            <div class="col-md-4 mb-4 mb-md-0">
+                <div class="hs-card text-center">
+                    <div class="hs-card-icon mb-3"><i class="fa fa-calendar-week"></i></div>
+                    <h5 class="mb-2">Cesta semanal</h5>
+                    <p class="m-0 text-muted">Una cesta cada viernes.</p>
+                </div>
+            </div>
+            <div class="col-md-4 mb-4 mb-md-0">
+                <div class="hs-card text-center">
+                    <div class="hs-card-icon mb-3"><i class="fa fa-calendar-alt"></i></div>
+                    <h5 class="mb-2">Cesta quincenal</h5>
+                    <p class="m-0 text-muted">Una cesta cada quince días.</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="hs-card text-center">
+                    <div class="hs-card-icon mb-3"><i class="fa fa-calendar"></i></div>
+                    <h5 class="mb-2">Cesta mensual</h5>
+                    <p class="m-0 text-muted">Una cesta al mes.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Qué significa ser socix: modelo económico + modelo social #}
+    <div class="container-fluid bg-light">
+        <div class="container py-5">
+            <div class="row align-items-center py-4">
+                <div class="col-lg-7 pb-5 pb-lg-0 px-3 px-lg-5">
+                    <h2 class="mb-3"><span style="color: rgb(248, 177, 51)">Nuestro</span> <span style="color: #138504">modelo económico</span></h2>
+                    <h5 class="text-muted mb-3">Las cuotas de las personas socias son la base monetaria del sustento de la agricultura.</h5>
+                    <p class="mb-0">Las personas que trabajan la Tierra no tienen que dedicar
+                    tiempo y energía a la venta de los alimentos que producen, con lo que se consigue sustituir los canales
+                    de distribución propios de la economía de mercado que obligan a alimentarnos con estándares muy
+                    alejados del respeto y el cuidado que necesita la Naturaleza.</p>
+                </div>
+                <div class="col-lg-5">
+                    <img class="img-fluid" style="max-height: 350px;" src="{{ asset('bundles/app/img/CestaImg1.jpg') }}" alt="Cesta de verdura de la CSA">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container py-5">
+        <div class="row align-items-center py-4">
+            <div class="col-lg-7 pb-5 pb-lg-0 px-3 px-lg-5 order-lg-2">
+                <h2 class="mb-3"><span style="color: rgb(248, 177, 51)">Nuestro</span> <span style="color: #138504">modelo social</span></h2>
+                <h5 class="text-muted mb-3">El modelo social de la CSA está implícito en las siglas que nos nombran:
+                Comunidad que Sostiene la Agricultura.</h5>
+                <p class="mb-4">No solo porque interviene económicamente en su sustento haya o no cesta, sino porque se
+                implica en la gestión y administración de los bienes, los procesos, las tareas y los sueños del colectivo
+                de forma absolutamente voluntaria, cada una de acuerdo a su capacidad e interés. La cohesión de la
+                comunidad se gesta a través de la consecución de pequeños objetivos grupales comunes basados en la
+                relación y los cuidados: salir a cenar, compartir el rato de reparto, realizar tareas agrícolas
+                colectivas o acompañar a la que lo necesita. Todo suma para revertir la direccionalidad del sustento:
+                que la comunidad se articule y sostenga por la actividad agrícola comunitaria.</p>
+                <a href="http://umap.openstreetmap.fr/en/map/csa-vega-de-jarama_855066#11/40.7736/-3.5412" class="btn btn-primary px-4">Mapa de socios</a>
+            </div>
+            <div class="col-lg-5 order-lg-1">
+                <img class="img-fluid" style="max-height: 400px;" src="{{ asset('bundles/app/img/cestasemana.JPG') }}" alt="Cesta semanal de la CSA">
+            </div>
+        </div>
+    </div>
+
+    {# Puntos de recogida (los 3 nodos de reparto). Los horarios salen de
+       Node.schedule (editables desde Gestión > Reparto > Nodos); la clave es
+       el nombre interno del nodo. Dirección y contacto siguen en plantilla:
+       no han cambiado nunca. #}
+    <div class="container-fluid bg-light">
+        <div class="container py-5">
+            <div class="text-center mb-4 px-3">
+                <h2 class="mb-2">Puntos de <span style="color: #138504">recogida</span></h2>
+                <p class="text-muted">Recoge tu cesta donde mejor te venga: en la huerta o en Madrid capital.</p>
+            </div>
+            <div class="row">
+                <div class="col-md-4 mb-4 mb-md-0">
+                    <div class="hs-card hs-node">
+                        <h5 class="mb-2">Torremocha de Jarama <small class="text-muted">(Sierra Norte)</small></h5>
+                        <address>
+                            <p class="mb-1"><i class="fa fa-map-marker-alt mr-2 text-muted"></i>C/ Olivar, 13 — 28189 Torremocha de Jarama</p>
+                            <p class="mb-1"><i class="fa fa-envelope mr-2 text-muted"></i>csa@csavegadejarama.org</p>
+                            {% if schedules['Torremocha'] ?? false %}
+                                <p class="m-0 hs-schedule"><i class="fa fa-clock mr-2"></i>{{ schedules['Torremocha'] }}</p>
+                            {% endif %}
+                        </address>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-4 mb-md-0">
+                    <div class="hs-card hs-node">
+                        <h5 class="mb-2">Bar La Lata <small class="text-muted">(Lavapiés)</small></h5>
+                        <address>
+                            <p class="mb-1"><i class="fa fa-map-marker-alt mr-2 text-muted"></i>C/ Embajadores, 1 — 28012 Madrid</p>
+                            <p class="mb-1"><i class="fa fa-phone mr-2 text-muted"></i>910 33 30 41</p>
+                            <p class="mb-1"><i class="fa fa-envelope mr-2 text-muted"></i>lalatacascorro@gmail.com</p>
+                            {% if schedules['Cascorro'] ?? false %}
+                                <p class="m-0 hs-schedule"><i class="fa fa-clock mr-2"></i>{{ schedules['Cascorro'] }}</p>
+                            {% endif %}
+                        </address>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="hs-card hs-node">
+                        <h5 class="mb-2">Tienda Sostenible Midori <small class="text-muted">(San Blas)</small></h5>
+                        <address>
+                            <p class="mb-1"><i class="fa fa-map-marker-alt mr-2 text-muted"></i>C/ Suecia, 83 — 28022 Madrid</p>
+                            <p class="mb-1"><i class="fa fa-phone mr-2 text-muted"></i>625 25 91 10</p>
+                            <p class="mb-1"><i class="fa fa-envelope mr-2 text-muted"></i>efecto.midori@gmail.com</p>
+                            {% if schedules['Midori'] ?? false %}
+                                <p class="m-0 hs-schedule"><i class="fa fa-clock mr-2"></i>{{ schedules['Midori'] }}</p>
+                            {% endif %}
+                        </address>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Carrusel de jornadas: la vida de la comunidad #}
+    <div class="container py-5">
+        <div class="text-center mb-3 px-3">
+            <h2 class="mb-2">Voluntariado y <span style="color: #138504">trabajos en la huerta</span></h2>
+        </div>
+        <div class="owl-carousel testimonial-carousel">
+            <div class="mx-0 p-2">
+                <img class="img-fluid mb-2" src="{{ asset('bundles/app/img/socios1.JPG') }}" style="width: 350px; height: 250px; object-fit: cover;" alt="Jornada de trabajo">
+                <p class="m-0">Jornada de trabajo</p>
+            </div>
+            <div class="mx-0 p-2">
+                <img class="img-fluid mb-2" src="{{ asset('bundles/app/img/calabazas.jpg') }}" style="width: 350px; height: 250px; object-fit: cover;" alt="Jornada de calabazas">
+                <p class="m-0">Jornada de calabazas</p>
+            </div>
+            <div class="mx-0 p-2">
+                <img class="img-fluid mb-2" src="{{ asset('bundles/app/img/recolecta1.jpg') }}" style="width: 350px; height: 250px; object-fit: cover;" alt="Cosecha">
+                <p class="m-0">Cosecha</p>
+            </div>
+            <div class="mx-0 p-2">
+                <img class="img-fluid mb-2" src="{{ asset('bundles/app/img/trabajo3huerta.jpg') }}" style="width: 350px; height: 250px; object-fit: cover;" alt="Jornada de trabajo en la huerta">
+                <p class="m-0">Jornada de trabajo</p>
+            </div>
+            <div class="mx-0 p-2">
+                <img class="img-fluid mb-2" src="{{ asset('bundles/app/img/cestaviernes.JPG') }}" style="width: 350px; height: 250px; object-fit: cover;" alt="Cesta de los viernes">
+                <p class="m-0">Cesta de los viernes</p>
+            </div>
+        </div>
+    </div>
+
+    {# CTA final: quien ha llegado leyendo hasta aquí vuelve arriba al formulario #}
+    <div class="container pb-4 text-center">
+        <h5 class="text-muted mb-3">¿Te quedan dudas o quieres empezar?</h5>
+        <a href="#pide-informacion" class="btn btn-lg btn-primary px-5">Pide información</a>
+    </div>
 
 {% endblock %}
