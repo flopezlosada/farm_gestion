@@ -1,0 +1,29 @@
+name: Escaneo de secretos
+
+# Gate para que no vuelvan a entrar credenciales al repo (objetivo: poder
+# reabrirlo a público con garantías). Corre en cada push y PR.
+#
+# NOTA: el primer escaneo sobre la historia completa marcará el APP_SECRET
+# que estuvo expuesto y YA se rotó (ver RUNBOOK / commit de seguridad). Es
+# esperado: confirma que hay que purgar ese blob del historial antes de
+# reabrir a público. Para silenciarlo mientras tanto, añade su fingerprint a
+# un fichero .gitleaksignore en la raíz.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  gitleaks:
+    name: gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (historia completa)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
