@@ -9,7 +9,7 @@ use App\Service\Delivery\DeliveryDeadline;
 /**
  * Deadline: prohíbe pedir/cancelar el cambio puntual de viernes una vez
  * pasado el plazo de cierre. El cálculo del plazo (antelación en días + hora,
- * configurables en /gestion/configuracion, sobre la fecha física del reparto
+ * configurables en /gestion/settings, sobre la fecha física del reparto
  * del nodo) vive en {@see DeliveryDeadline}, compartido con el autoservicio del
  * panel para que admin y socix vean exactamente el mismo plazo. Por defecto,
  * el día anterior al reparto a las 23:59.

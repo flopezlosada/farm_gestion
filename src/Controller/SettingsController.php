@@ -13,7 +13,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * Pantalla de configuración de la app: los toggles declarados en
  * {@see AppSettings::BOOLEANS}, agrupados. Sólo administración.
  */
-#[Route('/gestion/configuracion')]
+#[Route('/gestion/settings')]
 #[IsGranted('ROLE_ADMIN')]
 class SettingsController extends AbstractController
 {

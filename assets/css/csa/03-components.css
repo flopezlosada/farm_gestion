@@ -36,7 +36,7 @@
 /* Los botones-enlace (<a class="csa-btn">) heredaban el borde-inferior verde de
    `.csa-app :where(a):hover` (02-base) — el "subrayado verde" en hover que no
    queremos en un botón. Se neutraliza con más especificidad (0,3,1 > 0,2,0). */
-.csa-app a.csa-btn:hover { border-bottom-color: transparent; }
+.csa-app a.csa-btn:hover { border-bottom-color: transparent; text-decoration: none; }
 .csa-btn:disabled,
 .csa-btn[aria-disabled="true"] {
   opacity: 0.5;
@@ -1718,6 +1718,46 @@ a.csa-table__primary:hover {
   color: var(--csa-ink);
   border-bottom-color: var(--csa-ink);
   text-decoration: none;
+}
+
+/* Variante "carpeta": píldoras serif con la activa en oscuro, como los filtros
+   por estado del listado de socios (.prl-tabs). Coherencia visual entre las dos
+   pantallas. No afecta a la variante subrayada por defecto. */
+.csa-tabs--folder {
+  gap: 0;
+  /* Sólo ocupa el ancho de sus pestañas (la línea negra no se estira de más) y
+     se centra en la página; el panel de debajo se centra igual. */
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto var(--csa-sp-5);
+  flex-wrap: nowrap;
+  border-bottom: 2px solid var(--csa-ink);
+}
+.csa-app .csa-tabs--folder .csa-tabs__link,
+.csa-app .csa-tabs--folder .csa-tabs__link:link,
+.csa-app .csa-tabs--folder .csa-tabs__link:visited {
+  font-family: var(--csa-serif);
+  font-weight: 500;
+  font-size: 15px;
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  color: var(--csa-ink-soft);
+  padding: 12px 22px 10px;
+  border: none;
+  border-radius: var(--csa-radius-sm) var(--csa-radius-sm) 0 0;
+  margin-bottom: -2px;
+}
+/* Hover: sólo cambia el color del texto. No pinta fondo, para no tapar la línea
+   negra inferior (el fondo oscuro queda reservado a la pestaña activa). */
+.csa-app .csa-tabs--folder .csa-tabs__link:hover {
+  color: var(--csa-ink);
+  background: transparent;
+}
+.csa-app .csa-tabs--folder .csa-tabs__item.active > .csa-tabs__link,
+.csa-app .csa-tabs--folder .csa-tabs__item.active > .csa-tabs__link:visited {
+  background: var(--csa-ink);
+  color: #fff;
+  border-bottom-color: transparent;
 }
 
 

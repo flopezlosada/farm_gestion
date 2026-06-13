@@ -11,7 +11,7 @@ use App\Service\AppSettings;
  *
  * Calcula el deadline (fecha + hora límite) para que un socix pida o revierta
  * un cambio sobre un Basket: la antelación en días y la hora de cierre salen de
- * {@see AppSettings} (configurables en /gestion/configuracion), y el día base es
+ * {@see AppSettings} (configurables en /gestion/settings), y el día base es
  * la fecha FÍSICA del reparto del nodo del socix (vía {@see NodeDeliveryDate}),
  * no el viernes-ciclo — así Madrid (recogida en miércoles) tiene su plazo y no
  * el del viernes.

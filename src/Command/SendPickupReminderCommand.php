@@ -27,7 +27,7 @@ use Symfony\Bridge\Twig\Mime\TemplatedEmail;
  *
  * Pensado para correr por cron A DIARIO: por defecto resuelve la cesta objetivo
  * como "la del reparto que cae dentro de N días" (N = antelación configurable
- * en /gestion/configuracion, {@see AppSettings::PICKUP_REMINDER_DAYS_BEFORE}).
+ * en /gestion/settings, {@see AppSettings::PICKUP_REMINDER_DAYS_BEFORE}).
  * Si hoy no hay reparto a esa distancia, no manda nada y sale en verde. Se puede
  * forzar una cesta concreta con --basket=ID o --date=YYYY-MM-DD (que ignoran la
  * antelación, para pruebas y reenvíos manuales).
@@ -65,7 +65,7 @@ class SendPickupReminderCommand extends Command
         // (y sale en verde para no disparar alertas). El dry-run sigue
         // funcionando para poder probar destinatarios con el toggle apagado.
         if (!$input->getOption('dry-run') && !$this->settings->getBool(AppSettings::EMAIL_PICKUP_REMINDER)) {
-            $io->warning('El recordatorio de recogida está desactivado en /gestion/configuracion. No se envía nada.');
+            $io->warning('El recordatorio de recogida está desactivado en /gestion/settings. No se envía nada.');
             return Command::SUCCESS;
         }
 

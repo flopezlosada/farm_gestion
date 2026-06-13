@@ -15,11 +15,30 @@
 
 {% block csa_main %}
 
-    {{ csa.page_header(
-        'Administración',
-        'Configuración',
-        'Ajustes de la app: acceso de socixs, envío de emails y plazos de cambios. Los cambios se aplican al momento.'
-    ) }}
+    <div class="csa-row-between" style="align-items: flex-start; gap: var(--csa-sp-4);">
+        {{ csa.page_header(
+            'Administración',
+            'Configuración',
+            'Ajustes de la app, por categorías. Cambia lo que quieras en cualquier pestaña y guarda una sola vez.'
+        ) }}
+        <a href="{{ path('settings_diagnostics') }}" class="csa-btn csa-btn--ghost" style="flex-shrink: 0; margin-top: var(--csa-sp-2);">
+            <i class="fa fa-paper-plane" aria-hidden="true"></i> Diagnóstico de envíos
+        </a>
+    </div>
+
+    {# Pestañas de categoría (cliente): muestran/ocultan cada panel sin recargar,
+     # de modo que el form sigue siendo único y un solo "Guardar" persiste todo
+     # (los campos ocultos se envían igual). A ancho completo para que quepan en
+     # una sola fila; el panel de debajo se limita pero alineado a la izquierda,
+     # así su borde izquierdo coincide con el de las pestañas. #}
+    <ul class="csa-tabs csa-tabs--folder" data-settings-tabs>
+        {% for group in groups|keys %}
+            <li class="csa-tabs__item {{ loop.first ? 'active' }}">
+                <a class="csa-tabs__link" href="#settings-panel-{{ loop.index }}"
+                   data-settings-tab="{{ loop.index }}">{{ group }}</a>
+            </li>
+        {% endfor %}
+    </ul>
 
     <form method="post" action="{{ path('settings_save') }}" class="csa-form-narrow">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token('settings_save') }}">
@@ -27,53 +46,56 @@
         <div class="csa-stack-lg">
 
             {% for group, items in groups %}
-                {% embed '_components/csa_form_section.html.twig' with { num: loop.index, title: group } %}
-                    {% block body %}
-                        <div class="csa-settings-list">
-                            {% for s in items %}
-                                <label class="csa-setting">
-                                    {% if s.type == 'time' %}
-                                        {% set parts = s.value|split(':') %}
-                                        <span class="csa-timefield">
-                                            <span class="csa-timefield__box">
-                                                <input type="text" inputmode="numeric" maxlength="2"
-                                                       class="csa-timefield__input"
-                                                       name="settings[{{ s.name }}][h]" value="{{ parts[0] }}"
-                                                       aria-label="Hora">
-                                                <span class="csa-timefield__cap">Hora</span>
+                <div id="settings-panel-{{ loop.index }}" data-settings-panel="{{ loop.index }}"
+                     {{ not loop.first ? 'hidden' }}>
+                    {% embed '_components/csa_form_section.html.twig' with { num: loop.index, title: group } %}
+                        {% block body %}
+                            <div class="csa-settings-list">
+                                {% for s in items %}
+                                    <label class="csa-setting">
+                                        {% if s.type == 'time' %}
+                                            {% set parts = s.value|split(':') %}
+                                            <span class="csa-timefield">
+                                                <span class="csa-timefield__box">
+                                                    <input type="text" inputmode="numeric" maxlength="2"
+                                                           class="csa-timefield__input"
+                                                           name="settings[{{ s.name }}][h]" value="{{ parts[0] }}"
+                                                           aria-label="Hora">
+                                                    <span class="csa-timefield__cap">Hora</span>
+                                                </span>
+                                                <span class="csa-timefield__colon">:</span>
+                                                <span class="csa-timefield__box">
+                                                    <input type="text" inputmode="numeric" maxlength="2"
+                                                           class="csa-timefield__input"
+                                                           name="settings[{{ s.name }}][m]" value="{{ parts[1] }}"
+                                                           aria-label="Minutos">
+                                                    <span class="csa-timefield__cap">Min</span>
+                                                </span>
                                             </span>
-                                            <span class="csa-timefield__colon">:</span>
-                                            <span class="csa-timefield__box">
-                                                <input type="text" inputmode="numeric" maxlength="2"
-                                                       class="csa-timefield__input"
-                                                       name="settings[{{ s.name }}][m]" value="{{ parts[1] }}"
-                                                       aria-label="Minutos">
-                                                <span class="csa-timefield__cap">Min</span>
+                                        {% elseif s.type == 'int' %}
+                                            <span class="csa-setting__num">
+                                                <input type="number" class="csa-input csa-input--compact"
+                                                       name="settings[{{ s.name }}]" value="{{ s.value }}"
+                                                       min="{{ s.min }}" max="{{ s.max }}" step="1">
+                                                {% if s.unit %}<span class="csa-setting__unit">{{ s.unit }}</span>{% endif %}
                                             </span>
+                                        {% else %}
+                                            <span class="csa-toggle">
+                                                <input type="checkbox" class="csa-toggle__input"
+                                                       name="settings[{{ s.name }}]" value="1" {{ s.value ? 'checked' }}>
+                                                <span class="csa-toggle__track"><span class="csa-toggle__thumb"></span></span>
+                                            </span>
+                                        {% endif %}
+                                        <span class="csa-setting__text">
+                                            <span class="csa-setting__label">{{ s.label }}</span>
+                                            <span class="csa-setting__help">{{ s.help }}</span>
                                         </span>
-                                    {% elseif s.type == 'int' %}
-                                        <span class="csa-setting__num">
-                                            <input type="number" class="csa-input csa-input--compact"
-                                                   name="settings[{{ s.name }}]" value="{{ s.value }}"
-                                                   min="{{ s.min }}" max="{{ s.max }}" step="1">
-                                            {% if s.unit %}<span class="csa-setting__unit">{{ s.unit }}</span>{% endif %}
-                                        </span>
-                                    {% else %}
-                                        <span class="csa-toggle">
-                                            <input type="checkbox" class="csa-toggle__input"
-                                                   name="settings[{{ s.name }}]" value="1" {{ s.value ? 'checked' }}>
-                                            <span class="csa-toggle__track"><span class="csa-toggle__thumb"></span></span>
-                                        </span>
-                                    {% endif %}
-                                    <span class="csa-setting__text">
-                                        <span class="csa-setting__label">{{ s.label }}</span>
-                                        <span class="csa-setting__help">{{ s.help }}</span>
-                                    </span>
-                                </label>
-                            {% endfor %}
-                        </div>
-                    {% endblock %}
-                {% endembed %}
+                                    </label>
+                                {% endfor %}
+                            </div>
+                        {% endblock %}
+                    {% endembed %}
+                </div>
             {% endfor %}
 
             <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
@@ -84,4 +106,24 @@
         </div>
     </form>
 
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    {# Conmutador de pestañas de configuración (client-side). #}
+    <script>
+        document.addEventListener('click', function (e) {
+            var tab = e.target.closest('[data-settings-tab]');
+            if (!tab) { return; }
+            e.preventDefault();
+            var idx = tab.getAttribute('data-settings-tab');
+            document.querySelectorAll('[data-settings-panel]').forEach(function (panel) {
+                panel.hidden = panel.getAttribute('data-settings-panel') !== idx;
+            });
+            document.querySelectorAll('[data-settings-tabs] .csa-tabs__item').forEach(function (item) {
+                item.classList.remove('active');
+            });
+            tab.closest('.csa-tabs__item').classList.add('active');
+        });
+    </script>
 {% endblock %}
