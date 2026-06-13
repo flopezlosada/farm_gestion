@@ -215,6 +215,7 @@ class DefaultController extends AbstractController
             'this_month' => end($months) ?: ['joins' => 0, 'leaves' => 0, 'net' => 0, 'label' => ''],
             'no_basket' => count($partnerRepo->findActiveHasNoBasket()),
             'no_group' => count($partnerRepo->findActiveWithoutGroup()),
+            'needs_review' => $partnerRepo->count(['needs_review' => true]),
         ];
     }
 
@@ -299,6 +300,7 @@ class DefaultController extends AbstractController
             'users' => $em->getRepository(User::class)->count([]),
             'visits_week' => $usage['sessions'],
             'pending_access' => $em->getRepository(Partner::class)->countActiveWithoutAccess(),
+            'needs_review' => $em->getRepository(Partner::class)->count(['needs_review' => true]),
         ];
     }
 

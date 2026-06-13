@@ -174,7 +174,7 @@
 {% set status_param = status_filter ?: 'ALL' %}
 
 {# Conteo de filtros activos (excluyendo status y q) para el badge "Filtros". #}
-{% set active_filters_count = (filters.modalities|length) + (filters.cesta ? 1 : 0) + (filters.eggs ? 1 : 0) + (filters.node ? 1 : 0) + (filters.wbg ? 1 : 0) %}
+{% set active_filters_count = (filters.modalities|length) + (filters.cesta ? 1 : 0) + (filters.eggs ? 1 : 0) + (filters.node ? 1 : 0) + (filters.wbg ? 1 : 0) + (filters.needs_review ? 1 : 0) %}
 
 <div class="prl">
 
@@ -202,6 +202,15 @@
             <div class="v">{{ status_counts.ALL ?? 0 }}</div>
             <div class="l">en total</div>
         </a>
+        {# Acceso a los socixs importados del histórico de prod pendientes de
+           validar. Solo aparece si los hay; destacado en ámbar (atención). #}
+        {% if needs_review_count > 0 %}
+        <a class="prl-stat" href="{{ path('partner_index', { status: 'ALL', needs_review: 1 }) }}"
+           style="text-decoration: none; box-shadow: inset 0 0 0 2px var(--csa-warning, #c89a3a);">
+            <div class="v">{{ needs_review_count }}</div>
+            <div class="l">por confirmar</div>
+        </a>
+        {% endif %}
     </div>
 
     {# ============ TABS por estado ============ #}
@@ -274,6 +283,21 @@
                     <label><input type="radio" name="eggs" value="no"  {% if filters.eggs == 'no' %}checked{% endif %}> Sin huevos</label>
                 </div>
             </div>
+
+            {# Toggle POR CONFIRMAR — filtro binario (todos / solo pendientes) sobre
+             # los socixs importados del histórico de prod. Va dentro del form, así
+             # que el JS lo auto-reenvía al cambiar y se preserva con los demás
+             # filtros. Sin marcar no viaja en el GET → desaparece el filtro solo.
+             # Solo se ofrece si hay pendientes. #}
+            {% if needs_review_count > 0 %}
+                <label class="prl-filt prl-filt--review {{ filters.needs_review ? 'has' : '' }}" style="display: inline-flex; align-items: center; gap: 8px; cursor: pointer; white-space: nowrap; margin: 0;">
+                    <span class="csa-toggle">
+                        <input type="checkbox" class="csa-toggle__input" name="needs_review" value="1" {{ filters.needs_review ? 'checked' }}>
+                        <span class="csa-toggle__track"><span class="csa-toggle__thumb"></span></span>
+                    </span>
+                    Por confirmar ({{ needs_review_count }})
+                </label>
+            {% endif %}
 
             {# Popover NODO #}
             {% if nodes_all|length > 1 %}

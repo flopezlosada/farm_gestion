@@ -15,6 +15,7 @@ use App\Entity\WeeklyBasketGroup;
 use App\Service\Delivery\DeliveryShiftApplier;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Delivery\WeeklyBasketSkipper;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\DomCrawler\Field\ChoiceFormField;
 
 /**
@@ -578,6 +579,84 @@ class PartnerControllerTest extends AbstractAuthenticatedTest
         // La ficha pasa a mostrar la cuenta en vez del botón.
         $crawler = $client->followRedirect();
         $this->assertStringContainsString($email, $crawler->filter('body')->text());
+    }
+
+    /**
+     * Un socix consolidado (needs_review=false) NO se puede eliminar: el guard
+     * lo rechaza (se conserva su histórico; se da de baja, no se borra). El guard
+     * corta antes del CSRF, así que el token es irrelevante.
+     */
+    public function testDeleteRejectsConsolidatedPartner(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $router = static::getContainer()->get('router');
+
+        $partner = $em->getRepository(Partner::class)->findOneBy(['needs_review' => false]);
+        self::assertNotNull($partner, 'Las fixtures deberían tener algún socix consolidado.');
+        $id = $partner->getId();
+
+        $client->request('POST', $router->generate('partner_delete', ['id' => $id]), ['_method' => 'DELETE', '_token' => 'irrelevante']);
+
+        $this->assertResponseRedirects($router->generate('partner_show', ['id' => $id]));
+        $em->clear();
+        self::assertNotNull($em->getRepository(Partner::class)->find($id), 'Un socix consolidado NO debe poder eliminarse.');
+    }
+
+    /**
+     * Una ficha PENDIENTE de confirmar (needs_review=true, sin historial) SÍ se
+     * puede eliminar: es el caso de los socixs importados del histórico de prod
+     * que resultan duplicados o basura.
+     */
+    public function testDeleteRemovesPendingPartner(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $router = static::getContainer()->get('router');
+
+        $partner = (new Partner())
+            ->setName('PENDIENTE TEST BORRADO')
+            ->setStatus(Partner::STATUS_BAJA)
+            ->setNeedsReview(true);
+        $em->persist($partner);
+        $em->flush();
+        $id = $partner->getId();
+
+        // El form de borrado (con su token CSRF) solo se renderiza en fichas pendientes.
+        $crawler = $client->request('GET', $router->generate('partner_edit', ['id' => $id]));
+        $token = $crawler->filter('#partner-delete-form input[name="_token"]')->attr('value');
+
+        $client->request('POST', $router->generate('partner_delete', ['id' => $id]), ['_method' => 'DELETE', '_token' => $token]);
+
+        $this->assertResponseRedirects($router->generate('partner_index'));
+        $em->clear();
+        self::assertNull($em->getRepository(Partner::class)->find($id), 'Una ficha pendiente debe poder eliminarse.');
+    }
+
+    /**
+     * El filtro "por confirmar" (needs_review) del listado muestra los socixs
+     * pendientes de validar y no los consolidados.
+     */
+    public function testNeedsReviewFilterListsPendingPartner(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $router = static::getContainer()->get('router');
+
+        $pending = (new Partner())
+            ->setName('PENDIENTE FILTRO TEST')
+            ->setStatus(Partner::STATUS_BAJA)
+            ->setNeedsReview(true);
+        $em->persist($pending);
+        $em->flush();
+        $id = $pending->getId();
+
+        $client->request('GET', $router->generate('partner_index', ['status' => 'ALL', 'needs_review' => 1]));
+        $this->assertResponseIsSuccessful();
+        self::assertStringContainsString('PENDIENTE FILTRO TEST', (string) $client->getResponse()->getContent());
+
+        $em->remove($em->getRepository(Partner::class)->find($id));
+        $em->flush();
     }
 
     /**

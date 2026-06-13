@@ -57,10 +57,15 @@ class PartnerController extends AbstractController
         EntityManagerInterface $em,
         PaginatorInterface $paginator
     ): Response {
+        // El filtro "por confirmar" es transversal al estado: los pendientes
+        // están en baja, así que al activarlo ignoramos la pestaña de estado
+        // para verlos todos (si no, ACTIVO + por confirmar daría vacío).
+        $needsReview = $request->query->getBoolean('needs_review');
+
         // Pestaña por defecto: ACTIVO. Para ver el listado completo el call
         // site tiene que pedir explícitamente ?status=ALL.
         $rawStatus = $request->query->get('status', Partner::STATUS_ACTIVO);
-        $statusFilter = in_array($rawStatus, Partner::STATUSES, true) ? $rawStatus : null;
+        $statusFilter = $needsReview ? null : (in_array($rawStatus, Partner::STATUSES, true) ? $rawStatus : null);
 
         // Cast manual de node/wbg porque $request->query->getInt() lanza
         // BadRequestException si el valor es "" (string vacío), cosa que el
@@ -73,6 +78,7 @@ class PartnerController extends AbstractController
             'node'       => ((int) $request->query->get('node', '')) ?: null,
             'wbg'        => ((int) $request->query->get('wbg', '')) ?: null,
             'q'          => trim((string) $request->query->get('q', '')) ?: null,
+            'needs_review' => $needsReview ?: null,
         ];
 
         $qb = $partnerRepository->findFilteredQb($filters);
@@ -105,6 +111,9 @@ class PartnerController extends AbstractController
             $counts['ALL'] += (int) $row['total'];
         }
 
+        // Pendientes de confirmar: alimenta el chip de acceso del listado.
+        $needsReviewCount = (int) $partnerRepository->count(['needs_review' => true]);
+
         // Opciones para los popovers de filtro. Las cargo siempre (no son
         // costosas: <10 entidades cada una) para que la UI no se quede sin
         // opciones cuando el listado venga vacío.
@@ -123,6 +132,7 @@ class PartnerController extends AbstractController
             'status_filter'  => $statusFilter,
             'statuses'       => Partner::STATUSES,
             'status_counts'  => $counts,
+            'needs_review_count' => $needsReviewCount,
             'filters'        => $filters,
             'modalities_all' => $modalitiesAll,
             'nodes_all'      => $nodesAll,
@@ -1340,9 +1350,21 @@ class PartnerController extends AbstractController
     #[Route("/{id}", name: "partner_delete", methods: ["DELETE"])]
     public function delete(Request $request, Partner $partner, EntityManagerInterface $entityManager): Response
     {
+        // Solo se eliminan fichas PENDIENTES de confirmar (needs_review): son
+        // las importadas del histórico de producción, sin nada colgando. Un
+        // socix consolidado conserva su histórico (cestas, reparto, eventos);
+        // a ese se le da de BAJA, no se borra. Guard server-side, no basta con
+        // ocultar el botón.
+        if (!$partner->isNeedsReview()) {
+            $this->addFlash('warning', 'Solo se pueden eliminar socixs pendientes de confirmar. A un socix consolidado se le da de baja para conservar su histórico, no se elimina.');
+
+            return $this->redirectToRoute('partner_show', ['id' => $partner->getId()]);
+        }
+
         if ($this->isCsrfTokenValid('delete' . $partner->getId(), $request->request->get('_token'))) {
             $entityManager->remove($partner);
             $entityManager->flush();
+            $this->addFlash('notice', 'Ficha pendiente eliminada.');
         }
 
         return $this->redirectToRoute('partner_index');

@@ -133,6 +133,12 @@ class PartnerRepository extends ServiceEntityRepository
                ->setParameter('qPlain', '%' . $filters['q'] . '%');
         }
 
+        // Socixs pendientes de validar: importados del histórico de producción
+        // que administración aún no ha confirmado (alta real, baja o duplicado).
+        if (!empty($filters['needs_review'])) {
+            $qb->andWhere('p.needs_review = true');
+        }
+
         return $qb;
     }
 

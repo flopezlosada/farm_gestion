@@ -395,9 +395,15 @@
                                 <div class="dash-card__sub">socixs activos que requieren atención</div>
                             </div>
                             <div class="dash-card__body dash-card__body--flush">
-                                {% if s.no_basket == 0 and s.no_group == 0 %}
+                                {% if s.no_basket == 0 and s.no_group == 0 and (s.needs_review|default(0)) == 0 %}
                                     <div class="dash-empty">Nada pendiente: todos los activos tienen cesta y grupo.</div>
                                 {% else %}
+                                    {% if s.needs_review|default(0) > 0 %}
+                                        <a class="dash-row" href="{{ path('partner_index', { needs_review: 1 }) }}">
+                                            <div class="dash-row__body"><div class="dash-row__title">Socixs por confirmar</div><div class="dash-row__sub">importados del histórico de producción</div></div>
+                                            <div class="dash-row__metric dash-row__metric--ochre">{{ s.needs_review }}</div>
+                                        </a>
+                                    {% endif %}
                                     {% if s.no_basket > 0 %}
                                         <a class="dash-row" href="{{ path('partner_index', { cesta: 'no' }) }}">
                                             <div class="dash-row__body"><div class="dash-row__title">Activos sin cesta</div></div>
@@ -612,6 +618,17 @@
                                     </a>
                                 {% else %}
                                     <div class="dash-empty">Todos los socixs activos tienen acceso.</div>
+                                {% endif %}
+                                {# TEMPORAL: aviso de socixs por confirmar para que Paco vea cómo queda;
+                                   se gestiona desde ROLE_GESTION_SOCIXS, así que se quitará de admin. #}
+                                {% if a.needs_review|default(0) > 0 %}
+                                    <a class="dash-row" href="{{ path('partner_index', { needs_review: 1 }) }}">
+                                        <div class="dash-row__body">
+                                            <div class="dash-row__title">Socixs por confirmar</div>
+                                            <div class="dash-row__sub">importados del histórico de producción</div>
+                                        </div>
+                                        <div class="dash-row__metric dash-row__metric--ochre">{{ a.needs_review }}</div>
+                                    </a>
                                 {% endif %}
                             </div>
                         </div>
