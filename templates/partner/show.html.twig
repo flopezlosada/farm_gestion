@@ -505,15 +505,52 @@
                                     </dd>
                                 </div>
                             </dl>
+                            {# El admin no puede revocarse a sí mismo (el backend
+                               también lo corta): si la cuenta de acceso es la suya,
+                               se oculta el botón de revocar. #}
+                            {% set access_is_self = app.user and app.user.id == access_user.id %}
                             {% if access_user.enabled %}
-                                <form method="post" action="{{ path('partner_send_access_link', { id: partner.id }) }}" style="margin-top: 12px;">
-                                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('partner_send_access_link') }}">
-                                    <button type="submit" class="csa-btn csa-btn--ghost csa-btn--sm">
-                                        <i class="fa fa-paper-plane-o" aria-hidden="true"></i> Enviar enlace de acceso
-                                    </button>
-                                </form>
+                                <div style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
+                                    <form method="post" action="{{ path('partner_send_access_link', { id: partner.id }) }}">
+                                        <input type="hidden" name="_csrf_token" value="{{ csrf_token('partner_send_access_link') }}">
+                                        <button type="submit" class="csa-btn csa-btn--ghost csa-btn--sm">
+                                            <i class="fa fa-paper-plane-o" aria-hidden="true"></i> Enviar enlace de acceso
+                                        </button>
+                                    </form>
+                                    {% if not access_is_self %}
+                                        <button type="button" class="csa-btn csa-btn--ghost csa-btn--sm" onclick="document.getElementById('confirm-partner-access-toggle').showModal()">
+                                            <i class="fa fa-ban" aria-hidden="true"></i> Revocar acceso
+                                        </button>
+                                    {% endif %}
+                                </div>
                             {% else %}
-                                <p class="csa-muted" style="margin: 12px 0 0;">Cuenta bloqueada: no se le pueden enviar enlaces de acceso hasta desbloquearla.</p>
+                                <p class="csa-muted" style="margin: 12px 0 0;">Cuenta bloqueada: no se le pueden enviar enlaces de acceso hasta restaurarle el acceso.</p>
+                                {% if not access_is_self %}
+                                    <button type="button" class="csa-btn csa-btn--primary csa-btn--sm" onclick="document.getElementById('confirm-partner-access-toggle').showModal()">
+                                        <i class="fa fa-check-circle" aria-hidden="true"></i> Restaurar acceso
+                                    </button>
+                                {% endif %}
+                            {% endif %}
+
+                            {# Form oculto + confirmación para revocar/restaurar el
+                               acceso reusando el endpoint user_toggle_block (mismo
+                               histórico UserEvent que la ficha de la cuenta); el
+                               hidden return_to_partner hace que vuelva aquí. #}
+                            {% if not access_is_self %}
+                                <form id="partner-access-toggle-form" method="post" action="{{ path('user_toggle_block', { id: access_user.id }) }}" style="display: none;">
+                                    <input type="hidden" name="_token" value="{{ csrf_token('user_toggle_block_' ~ access_user.id) }}">
+                                    <input type="hidden" name="return_to_partner" value="{{ partner.id }}">
+                                </form>
+                                {{ csa.confirm_dialog('confirm-partner-access-toggle', {
+                                    variant: access_user.enabled ? 'danger' : 'default',
+                                    eyebrow: 'Acceso a la web',
+                                    title: access_user.enabled ? 'Revocar acceso' : 'Restaurar acceso',
+                                    body: access_user.enabled
+                                        ? 'Esta persona dejará de poder entrar a la web. Su cuenta y su historial se conservan; podrás devolverle el acceso cuando quieras.'
+                                        : 'Esta persona volverá a poder entrar a la web.',
+                                    confirm_label: access_user.enabled ? 'Revocar' : 'Restaurar',
+                                    external_form_id: 'partner-access-toggle-form',
+                                }) }}
                             {% endif %}
                         {% elseif partner.email %}
                             <p class="csa-muted" style="margin-top: 0;">

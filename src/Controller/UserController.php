@@ -235,9 +235,12 @@ class UserController extends AbstractController
      * preserva todo su historial de granja. Una cuenta no puede bloquearse a
      * sí misma.
      *
-     * @param Request $request Lleva el _token CSRF y un `reason` opcional.
+     * @param Request $request Lleva el _token CSRF, un `reason` opcional y un
+     *                         `return_to_partner` opcional (id del socix al que
+     *                         volver si la acción se lanzó desde su ficha).
      * @param int     $id      Id de la cuenta a bloquear/desbloquear.
-     * @return \Symfony\Component\HttpFoundation\Response Redirección a la ficha.
+     * @return \Symfony\Component\HttpFoundation\Response Redirección a la ficha
+     *         de la cuenta o a la del socix, según el origen.
      */
     public function toggleBlock(Request $request, int $id, EntityManagerInterface $em)
     {
@@ -247,17 +250,26 @@ class UserController extends AbstractController
             throw $this->createNotFoundException('Unable to find User entity.');
         }
 
+        // Destino de la redirección: por defecto la ficha de la cuenta, pero si
+        // la acción se lanzó desde la ficha de un socix (botón "revocar/dar
+        // acceso"), volvemos allí. El id se valida generando la URL nosotros
+        // mismos, así que no hay riesgo de open redirect.
+        $partnerReturnId = $request->request->getInt('return_to_partner');
+        $back = $partnerReturnId > 0
+            ? $this->redirectToRoute('partner_show', array('id' => $partnerReturnId))
+            : $this->redirect($this->generateUrl('user_show', array('id' => $id)));
+
         if (!$this->isCsrfTokenValid('user_toggle_block_' . $id, $request->request->get('_token'))) {
             $this->addFlash('error', 'Token de seguridad inválido. Inténtalo de nuevo.');
 
-            return $this->redirect($this->generateUrl('user_show', array('id' => $id)));
+            return $back;
         }
 
         $current = $this->getUser();
         if ($current instanceof User && $current->getId() === $entity->getId()) {
             $this->addFlash('error', 'No puedes bloquear tu propia cuenta.');
 
-            return $this->redirect($this->generateUrl('user_show', array('id' => $id)));
+            return $back;
         }
 
         // Estado destino: lo contrario del actual.
@@ -280,7 +292,7 @@ class UserController extends AbstractController
             ? 'Cuenta desbloqueada: la usuaria vuelve a tener acceso.'
             : 'Cuenta bloqueada: la usuaria ya no puede entrar.');
 
-        return $this->redirect($this->generateUrl('user_show', array('id' => $id)));
+        return $back;
     }
 
     /**
