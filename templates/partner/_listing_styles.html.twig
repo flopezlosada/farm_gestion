@@ -263,7 +263,7 @@
     color: var(--prl-ink-faint); text-decoration: none;
     transition: 0.12s ease;
 }
-.prl-table .actions a:hover { background: var(--prl-bg); color: var(--prl-sage-d); }
+.prl-table .actions a:hover { background: var(--prl-bg); color: var(--prl-sage-d); border-bottom-color: transparent; }
 .prl-table .actions a + a { margin-left: 2px; }
 
 /* nombre con avatar mini + email/teléfono debajo */
@@ -285,9 +285,10 @@
     color: var(--prl-ink); text-decoration: none; letter-spacing: -0.005em;
     display: block; line-height: 1.2;
 }
-/* a.prl-person__name (0,1,2) para ganar a la regla de Bootstrap3
- * `a:hover { text-decoration: underline }` (0,1,1) y matar el subrayado. */
-a.prl-person__name:hover { color: var(--prl-sage-d); text-decoration: none; }
+/* a.prl-person__name (0,2,1) para ganar tanto al `text-decoration: underline`
+ * de Bootstrap3 como al borde-inferior verde de `.csa-app :where(a):hover`
+ * (02-base, 0,2,0): en el listado el nombre no se subraya al pasar el ratón. */
+a.prl-person__name:hover { color: var(--prl-sage-d); text-decoration: none; border-bottom-color: transparent; }
 .prl-person__meta {
     display: block; font-family: 'Inter', sans-serif;
     font-size: 11px; color: var(--prl-ink-faint); margin-top: 1px;
