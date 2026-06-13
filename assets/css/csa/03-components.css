@@ -36,7 +36,12 @@
 /* Los botones-enlace (<a class="csa-btn">) heredaban el borde-inferior verde de
    `.csa-app :where(a):hover` (02-base) — el "subrayado verde" en hover que no
    queremos en un botón. Se neutraliza con más especificidad (0,3,1 > 0,2,0). */
-.csa-app a.csa-btn:hover { border-bottom-color: transparent; text-decoration: none; }
+/* Mata el subrayado/borde-inferior verde de enlaces (de 02-base y de Bootstrap3)
+ * SIN romper el borde propio de los botones con borde (secondary, danger…):
+ * especificidad (0,2,0) — gana a `.csa-app :where(a):hover` por orden de fuente
+ * (03 va tras 02), pero la pierde frente a `.csa-btn--secondary:hover` etc.
+ * (mismo 0,2,0, definidos después), que así recuperan su borde completo. */
+.csa-btn:hover { border-bottom-color: transparent; text-decoration: none; }
 .csa-btn:disabled,
 .csa-btn[aria-disabled="true"] {
   opacity: 0.5;
@@ -53,9 +58,10 @@
 }
 .csa-btn--primary:hover,
 .csa-btn--primary:focus {
-  background: #3c6630;
-  border-color: #3c6630;
+  background: #2f5022;
+  border-color: #2f5022;
   color: var(--csa-bg);
+  box-shadow: 0 2px 8px rgba(47, 80, 34, 0.28);
 }
 
 .csa-btn--secondary,
@@ -67,9 +73,10 @@
 }
 .csa-btn--secondary:hover,
 .csa-btn--secondary:focus {
-  background: var(--csa-bg);
+  background: var(--csa-surface-alt);
   border-color: var(--csa-ink-soft);
   color: var(--csa-ink);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.10);
 }
 
 .csa-btn--ghost {

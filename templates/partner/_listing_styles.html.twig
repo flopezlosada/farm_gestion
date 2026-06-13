@@ -285,7 +285,9 @@
     color: var(--prl-ink); text-decoration: none; letter-spacing: -0.005em;
     display: block; line-height: 1.2;
 }
-.prl-person__name:hover { color: var(--prl-sage-d); }
+/* a.prl-person__name (0,1,2) para ganar a la regla de Bootstrap3
+ * `a:hover { text-decoration: underline }` (0,1,1) y matar el subrayado. */
+a.prl-person__name:hover { color: var(--prl-sage-d); text-decoration: none; }
 .prl-person__meta {
     display: block; font-family: 'Inter', sans-serif;
     font-size: 11px; color: var(--prl-ink-faint); margin-top: 1px;
