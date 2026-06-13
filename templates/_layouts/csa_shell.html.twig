@@ -40,6 +40,21 @@
         #csa-help-modal kbd { background: #f0ede6; border-radius: 4px; padding: 1px 7px;
             font-family: inherit; font-weight: 600; font-size: 0.95em; }
         #csa-help-modal .csa-modal__body { max-height: 70vh; overflow-y: auto; }
+
+        /* Grupos colapsables del sidebar: la cabecera clona el estilo de
+         * .csa-sidebar__group pero es un botón con chevron. Plegado oculta los
+         * items y gira el chevron. */
+        .csa-navgroup__head {
+            display: flex; align-items: center; justify-content: space-between; gap: 8px;
+            width: 100%; background: none; border: 0; cursor: pointer; font-family: inherit;
+            padding: var(--csa-sp-4) var(--csa-sp-5) var(--csa-sp-2);
+            font-size: var(--csa-fs-xs); letter-spacing: 0.1em; text-transform: uppercase;
+            color: var(--csa-sage-muted); font-weight: 500;
+        }
+        .csa-navgroup__head:hover { color: var(--csa-sage-text); }
+        .csa-navgroup__chev { font-size: 9px; opacity: 0.6; transition: transform 0.15s ease; }
+        .csa-navgroup.is-collapsed .csa-navgroup__chev { transform: rotate(-90deg); }
+        .csa-navgroup.is-collapsed .csa-navgroup__items { display: none; }
     </style>
 {% endblock %}
 
@@ -114,6 +129,23 @@
             if (overlay) { overlay.addEventListener('click', close); }
             document.addEventListener('keydown', function (e) {
                 if (e.key === 'Escape') { close(); }
+            });
+        }());
+
+        // Grupos colapsables del sidebar: clic en la cabecera pliega/despliega.
+        // El grupo de la pantalla activa SIEMPRE se expande (aunque arrancara
+        // plegado para el admin), para que se vea dónde estás.
+        (function () {
+            document.querySelectorAll('.csa-navgroup').forEach(function (group) {
+                var head = group.querySelector('.csa-navgroup__head');
+                if (head) {
+                    head.addEventListener('click', function () {
+                        group.classList.toggle('is-collapsed');
+                    });
+                }
+                if (group.querySelector('.csa-sidebar__link--active')) {
+                    group.classList.remove('is-collapsed');
+                }
             });
         }());
     </script>
@@ -198,55 +230,96 @@
                 {% block csa_nav %}
                     {%- set route = app.request.attributes.get('_route') -%}
 
-                    {# Día a día — siempre visible para usuarios autenticados con cualquier rol de gestión #}
-                    <div class="csa-sidebar__group">Día a día</div>
-                    {{ _self.nav_link('Panel', path('dashboard'), 'fa-home',
-                       route == 'dashboard') }}
-                    {{ _self.nav_link('Calendario', path('calendar'), 'fa-calendar',
-                       route starts with 'calendar') }}
-                    {{ _self.nav_link('Ayuda', path('help_index'), 'fa-question-circle',
-                       route starts with 'help') }}
+                    {# Día a día — accesos generales, siempre visibles. Colapsable como
+                     # el resto (coherencia), pero abierto por defecto. #}
+                    <div class="csa-navgroup">
+                        <button type="button" class="csa-navgroup__head">Día a día <i class="csa-navgroup__chev fa fa-chevron-down" aria-hidden="true"></i></button>
+                        <div class="csa-navgroup__items">
+                            {{ _self.nav_link('Panel', path('dashboard'), 'fa-home',
+                               route == 'dashboard') }}
+                            {{ _self.nav_link('Calendario', path('calendar'), 'fa-calendar',
+                               route starts with 'calendar') }}
+                            {{ _self.nav_link('Ayuda', path('help_index'), 'fa-question-circle',
+                               route starts with 'help') }}
+                        </div>
+                    </div>
+
+                    {# Administración va PRIMERO: es el dominio propio del admin. Sólo lo
+                     # ve ROLE_ADMIN, así que para los gestores no-admin el menú no cambia.
+                     # El resto de grupos (que el admin también tiene por jerarquía) quedan
+                     # debajo, secundarios. #}
+                    {% if is_granted('ROLE_ADMIN') %}
+                        <div class="csa-navgroup">
+                            <button type="button" class="csa-navgroup__head">Administración <i class="csa-navgroup__chev fa fa-chevron-down" aria-hidden="true"></i></button>
+                            <div class="csa-navgroup__items">
+                                {{ _self.nav_link('Usuarias', path('user'), 'fa-users',
+                                   route starts with 'user') }}
+                                {{ _self.nav_link('Configuración', path('settings_index'), 'fa-sliders',
+                                   route starts with 'settings') }}
+                                {{ _self.nav_link('Estadísticas de uso', path('usage_stats_index'), 'fa-bar-chart',
+                                   route starts with 'usage_stats') }}
+                            </div>
+                        </div>
+                    {% endif %}
+
+                    {# Grupos de rol: colapsables. Para el admin arrancan PLEGADOS
+                     # (su dominio es Administración, arriba); el JS expande siempre el
+                     # grupo de la pantalla activa. Para un gestor no-admin arrancan
+                     # abiertos. #}
+                    {%- set sec_collapsed = is_granted('ROLE_ADMIN') ? ' is-collapsed' : '' -%}
 
                     {% if is_granted('ROLE_GESTION_GRANJA') %}
-                        <div class="csa-sidebar__group">Granja</div>
-                        {{ _self.nav_link('Lotes', path('batch'), 'fa-sliders',
-                           route starts with 'batch') }}
-                        {{ _self.nav_link('Cultivos', path('crop'), 'fa-leaf',
-                           route starts with 'crop') }}
-                        {{ _self.nav_link('Tareas', path('task'), 'fa-tasks',
-                           route starts with 'task') }}
-                        {{ _self.nav_link('Cosechas / huevos', path('lay'), 'fa-egg',
-                           route starts with 'lay') }}
-                        {{ _self.nav_link('Trabajos culturales', path('culturalwork'), 'fa-compass',
-                           route starts with 'culturalwork') }}
-                        {{ _self.nav_link('Compost', path('compostcollection'), 'fa-recycle',
-                           route starts with 'compostcollection') }}
-                        {# Composición de las cestas que se cosechan cada viernes (no confundir con
-                         # el reparto a socixs, que vive en el grupo Socixs > Reparto semanal). #}
-                        {{ _self.nav_link('Composición de cestas', path('production_show_basket', { year: 'now'|date('Y') }), 'fa-shopping-basket',
-                           route starts with 'production') }}
+                        <div class="csa-navgroup{{ sec_collapsed }}">
+                            <button type="button" class="csa-navgroup__head">Granja <i class="csa-navgroup__chev fa fa-chevron-down" aria-hidden="true"></i></button>
+                            <div class="csa-navgroup__items">
+                                {{ _self.nav_link('Lotes', path('batch'), 'fa-sliders',
+                                   route starts with 'batch') }}
+                                {{ _self.nav_link('Cultivos', path('crop'), 'fa-leaf',
+                                   route starts with 'crop') }}
+                                {{ _self.nav_link('Tareas', path('task'), 'fa-tasks',
+                                   route starts with 'task') }}
+                                {{ _self.nav_link('Cosechas / huevos', path('lay'), 'fa-egg',
+                                   route starts with 'lay') }}
+                                {{ _self.nav_link('Trabajos culturales', path('culturalwork'), 'fa-compass',
+                                   route starts with 'culturalwork') }}
+                                {{ _self.nav_link('Compost', path('compostcollection'), 'fa-recycle',
+                                   route starts with 'compostcollection') }}
+                                {# Composición de las cestas que se cosechan cada viernes (no confundir con
+                                 # el reparto a socixs, que vive en el grupo Socixs > Reparto semanal). #}
+                                {{ _self.nav_link('Composición de cestas', path('production_show_basket', { year: 'now'|date('Y') }), 'fa-shopping-basket',
+                                   route starts with 'production') }}
+                            </div>
+                        </div>
                     {% endif %}
 
                     {% if is_granted('ROLE_GESTION_SOCIXS') %}
-                        <div class="csa-sidebar__group">Socios</div>
-                        {{ _self.nav_link('Listado', path('partner_index'), 'fa-people-carry',
-                           (route starts with 'partner_' and not (route starts with 'partner_basket_share')) and route != 'partner_evolution') }}
-                        {{ _self.nav_link('Evolución', path('partner_evolution'), 'fa-line-chart',
-                           route == 'partner_evolution') }}
+                        <div class="csa-navgroup{{ sec_collapsed }}">
+                            <button type="button" class="csa-navgroup__head">Socios <i class="csa-navgroup__chev fa fa-chevron-down" aria-hidden="true"></i></button>
+                            <div class="csa-navgroup__items">
+                                {{ _self.nav_link('Listado', path('partner_index'), 'fa-people-carry',
+                                   (route starts with 'partner_' and not (route starts with 'partner_basket_share')) and route != 'partner_evolution') }}
+                                {{ _self.nav_link('Evolución', path('partner_evolution'), 'fa-line-chart',
+                                   route == 'partner_evolution') }}
+                            </div>
+                        </div>
                     {% endif %}
 
                     {% if is_granted('ROLE_GESTION_REPARTO') %}
-                        <div class="csa-sidebar__group">Reparto</div>
-                        {{ _self.nav_link('Reparto semanal', path('delivery_by_node_default'), 'fa-cart-arrow-down',
-                           route starts with 'delivery_by_node') }}
-                        {{ _self.nav_link('Histórico de cambios', path('delivery_shifts_index'), 'fa-exchange',
-                           route starts with 'delivery_shifts') }}
-                        {{ _self.nav_link('Grupos de recogida', path('weekly_basket_group_index'), 'fa-map-marker',
-                           route starts with 'weekly_basket_group') }}
-                        {{ _self.nav_link('Nodos de reparto', path('node_index'), 'fa-sitemap',
-                           route starts with 'node_') }}
-                        {{ _self.nav_link('Excepciones de reparto', path('delivery_exception_index'), 'fa-calendar-times-o',
-                           route starts with 'delivery_exception') }}
+                        <div class="csa-navgroup{{ sec_collapsed }}">
+                            <button type="button" class="csa-navgroup__head">Reparto <i class="csa-navgroup__chev fa fa-chevron-down" aria-hidden="true"></i></button>
+                            <div class="csa-navgroup__items">
+                                {{ _self.nav_link('Reparto semanal', path('delivery_by_node_default'), 'fa-cart-arrow-down',
+                                   route starts with 'delivery_by_node') }}
+                                {{ _self.nav_link('Histórico de cambios', path('delivery_shifts_index'), 'fa-exchange',
+                                   route starts with 'delivery_shifts') }}
+                                {{ _self.nav_link('Grupos de recogida', path('weekly_basket_group_index'), 'fa-map-marker',
+                                   route starts with 'weekly_basket_group') }}
+                                {{ _self.nav_link('Nodos de reparto', path('node_index'), 'fa-sitemap',
+                                   route starts with 'node_') }}
+                                {{ _self.nav_link('Excepciones de reparto', path('delivery_exception_index'), 'fa-calendar-times-o',
+                                   route starts with 'delivery_exception') }}
+                            </div>
+                        </div>
                     {% endif %}
 
                     {# Comercio (Ventas/Compras) retirado del menú 2026-06-07 — pendiente
@@ -254,28 +327,27 @@
                      # Ver deuda comercio-menu-retirado-debt. #}
 
                     {% if is_granted('ROLE_BLOG') %}
-                        <div class="csa-sidebar__group">Comunicación</div>
-                        {{ _self.nav_link('Blog', path('blog'), 'fa-newspaper-o',
-                           route starts with 'blog') }}
-                        {{ _self.nav_link('Eventos públicos', path('booking_index'), 'fa-calendar-check-o',
-                           route starts with 'booking') }}
+                        <div class="csa-navgroup{{ sec_collapsed }}">
+                            <button type="button" class="csa-navgroup__head">Comunicación <i class="csa-navgroup__chev fa fa-chevron-down" aria-hidden="true"></i></button>
+                            <div class="csa-navgroup__items">
+                                {{ _self.nav_link('Blog', path('blog'), 'fa-newspaper-o',
+                                   route starts with 'blog') }}
+                                {{ _self.nav_link('Eventos públicos', path('booking_index'), 'fa-calendar-check-o',
+                                   route starts with 'booking') }}
+                            </div>
+                        </div>
                     {% endif %}
 
                     {% if is_granted('ROLE_GESTION_ENCUESTAS') and is_granted('FEATURE_SURVEYS') %}
-                        <div class="csa-sidebar__group">Encuestas</div>
-                        {{ _self.nav_link('Encuestas', path('survey_index'), 'fa-check-square-o',
-                           route starts with 'survey') }}
+                        <div class="csa-navgroup{{ sec_collapsed }}">
+                            <button type="button" class="csa-navgroup__head">Encuestas <i class="csa-navgroup__chev fa fa-chevron-down" aria-hidden="true"></i></button>
+                            <div class="csa-navgroup__items">
+                                {{ _self.nav_link('Encuestas', path('survey_index'), 'fa-check-square-o',
+                                   route starts with 'survey') }}
+                            </div>
+                        </div>
                     {% endif %}
 
-                    {% if is_granted('ROLE_ADMIN') %}
-                        <div class="csa-sidebar__group">Administración</div>
-                        {{ _self.nav_link('Usuarias', path('user'), 'fa-users',
-                           route starts with 'user') }}
-                        {{ _self.nav_link('Configuración', path('settings_index'), 'fa-sliders',
-                           route starts with 'settings') }}
-                        {{ _self.nav_link('Estadísticas de uso', path('usage_stats_index'), 'fa-bar-chart',
-                           route starts with 'usage_stats') }}
-                    {% endif %}
                 {% endblock %}
             </nav>
         </aside>

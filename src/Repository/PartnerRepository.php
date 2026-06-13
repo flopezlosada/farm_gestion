@@ -4,6 +4,7 @@ namespace App\Repository;
 
 use App\Entity\Basket;
 use App\Entity\Partner;
+use App\Entity\User;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
@@ -344,6 +345,34 @@ class PartnerRepository extends ServiceEntityRepository
         return (int) $this->createQueryBuilder('p')
             ->select('COUNT(p.id)')
             ->where('p.status = :status')
+            ->setParameter('status', Partner::STATUS_ACTIVO)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
+    /**
+     * Nº de socios ACTIVOS que aún no tienen acceso a la app: ningún {@see User}
+     * los referencia. El vínculo vive en el lado User ({@see User::$partner},
+     * OneToOne), de ahí la subconsulta NOT IN sobre los partner_id ya ocupados
+     * (Partner no tiene relación inversa que permita un LEFT JOIN directo).
+     *
+     * Alimenta el aviso "pendientes de dar acceso" del dashboard de admin: cuánta
+     * gente falta por enganchar al login (magic-link).
+     *
+     * @return int socios ACTIVO sin User vinculado
+     */
+    public function countActiveWithoutAccess(): int
+    {
+        $linkedPartnerIds = $this->getEntityManager()->createQueryBuilder()
+            ->select('IDENTITY(u.partner)')
+            ->from(User::class, 'u')
+            ->where('u.partner IS NOT NULL')
+            ->getDQL();
+
+        return (int) $this->createQueryBuilder('p')
+            ->select('COUNT(p.id)')
+            ->where('p.status = :status')
+            ->andWhere("p.id NOT IN ({$linkedPartnerIds})")
             ->setParameter('status', Partner::STATUS_ACTIVO)
             ->getQuery()
             ->getSingleScalarResult();

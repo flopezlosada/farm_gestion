@@ -10,7 +10,9 @@ use App\Entity\CropWorking;
 use App\Entity\Lay;
 use App\Entity\Node;
 use App\Entity\Partner;
+use App\Entity\PartnerEvent;
 use App\Entity\Production;
+use App\Entity\UsageHit;
 use App\Entity\User;
 use App\Service\Delivery\NodeDeliveryCounter;
 use App\Service\Delivery\NodeDeliveryDate;
@@ -34,8 +36,9 @@ class DefaultController extends AbstractController
 
     /**
      * Panel de control por roles: cada dominio sólo se calcula (y se pinta) si
-     * el usuario tiene su rol. Un gestor de reparto no dispara ni una query de
-     * granja, y un admin —que los tiene todos— ve las cinco secciones. Es el
+     * el usuario tiene su rol, y no dispara ni una query de los dominios que no
+     * gestiona. El admin es un caso aparte (ROLE_ADMIN excluyente): ve sólo su
+     * sección de gobierno del sistema, no la suma de todos los dominios. Es el
      * mismo principio que ya usa el menú lateral, llevado al dashboard, en vez
      * del bloque único de granja que veía todo el mundo.
      */
@@ -47,20 +50,25 @@ class DefaultController extends AbstractController
     ): Response {
         $dash = [];
 
-        if ($this->isGranted('ROLE_GESTION_REPARTO')) {
-            $dash['reparto'] = $this->repartoSummary($em, $nodeDeliveryDate, $deliveryCounter);
-        }
-        if ($this->isGranted('ROLE_GESTION_SOCIXS')) {
-            $dash['socios'] = $this->sociosSummary($em);
-        }
-        if ($this->isGranted('ROLE_GESTION_GRANJA')) {
-            $dash['granja'] = $this->granjaSummary($em);
-        }
-        if ($this->isGranted('ROLE_BLOG')) {
-            $dash['comunicacion'] = $this->comunicacionSummary($em);
-        }
+        // ROLE_ADMIN es EXCLUYENTE en el dashboard: el admin tiene todos los
+        // roles por jerarquía, así que ve SOLO su sección de gobierno del
+        // sistema, no la suma de todos los dominios. El resto de gestores (mono
+        // o multi-rol, no admin) ven cada sección cuyo rol tengan.
         if ($this->isGranted('ROLE_ADMIN')) {
             $dash['admin'] = $this->adminSummary($em);
+        } else {
+            if ($this->isGranted('ROLE_GESTION_REPARTO')) {
+                $dash['reparto'] = $this->repartoSummary($em, $nodeDeliveryDate, $deliveryCounter);
+            }
+            if ($this->isGranted('ROLE_GESTION_SOCIXS')) {
+                $dash['socios'] = $this->sociosSummary($em);
+            }
+            if ($this->isGranted('ROLE_GESTION_GRANJA')) {
+                $dash['granja'] = $this->granjaSummary($em);
+            }
+            if ($this->isGranted('ROLE_BLOG')) {
+                $dash['comunicacion'] = $this->comunicacionSummary($em);
+            }
         }
 
         return $this->render('Default/dashboard.html.twig', ['dash' => $dash]);
@@ -83,7 +91,8 @@ class DefaultController extends AbstractController
      *     nodes: list<array{node: Node, delivers: bool, cestas: float, docenas: float, date: ?\DateTimeInterface}>,
      *     total_cestas: float,
      *     total_docenas: float,
-     *     changes: list<array{shift: \App\Entity\PartnerDeliveryShift, incoming: bool}>
+     *     changes: list<array{shift: \App\Entity\PartnerDeliveryShift, incoming: bool}>,
+     *     novedades: PartnerEvent[]
      * }
      */
     private function repartoSummary(
@@ -148,7 +157,45 @@ class DefaultController extends AbstractController
             'total_cestas' => $totalCestas,
             'total_docenas' => $totalDocenas,
             'changes' => $changes,
+            'novedades' => $this->recentNews($em),
         ];
+    }
+
+    /**
+     * Novedades recientes de la cartera de socixs (últimos 30 días): los cambios
+     * ESTRUCTURALES que le importan al gestor de reparto —altas, bajas, pausas,
+     * inicios/fines de cesta, cambios de modalidad, de nodo o de grupo, y cestas
+     * extra. Se dejan FUERA los cambios operativos de la semana en curso
+     * (WEEK_SWAP / SKIP), que ya viven en su propio bloque "Cambios de socixs
+     * esta semana" para no duplicar.
+     *
+     * Lee del feed inmutable {@see PartnerEvent} vía
+     * {@see PartnerEventRepository::findByTypesSince}. Filtra eventos sin socio
+     * (registro huérfano) y corta a las 8 más recientes.
+     *
+     * @return PartnerEvent[]
+     */
+    private function recentNews(EntityManagerInterface $em): array
+    {
+        $types = [
+            PartnerEvent::TYPE_JOIN,
+            PartnerEvent::TYPE_LEAVE,
+            PartnerEvent::TYPE_PAUSE,
+            PartnerEvent::TYPE_RESUME,
+            PartnerEvent::TYPE_BASKET_START,
+            PartnerEvent::TYPE_BASKET_END,
+            PartnerEvent::TYPE_BASKET_CHANGE,
+            PartnerEvent::TYPE_NODE_CHANGE,
+            PartnerEvent::TYPE_GROUP_CHANGE_PERMANENT,
+            PartnerEvent::TYPE_BASKET_EXTRA,
+            PartnerEvent::TYPE_BASKET_EXTRA_REMOVED,
+        ];
+        $since = new \DateTimeImmutable('-30 days');
+
+        $events = $em->getRepository(PartnerEvent::class)->findByTypesSince($types, $since);
+        $events = array_filter($events, static fn (PartnerEvent $e): bool => $e->getPartner() !== null);
+
+        return array_slice(array_values($events), 0, 8);
     }
 
     /**
@@ -234,16 +281,25 @@ class DefaultController extends AbstractController
     }
 
     /**
-     * Resumen de administración: el dashboard del admin es consecuencia de SUS
-     * permisos. Hoy su superficie propia es usuarias y configuración (ambas
-     * gateadas por ROLE_ADMIN, sin rol dedicado todavía — eso es la tarea 8.7).
-     * Se queda ligero a propósito: atajos a sus acciones + nº de usuarias.
+     * Resumen de administración: el "gobierno del sistema", lo que sólo el admin
+     * toca y no cae en las otras secciones —usuarias, configuración, diagnóstico
+     * de emails y estadísticas de uso. Tres cifras propias: usuarias con acceso,
+     * visitas (sesiones únicas) a la zona de gestión en los últimos 7 días, y
+     * socixs activos aún SIN acceso (pendientes de enganchar al login).
      *
-     * @return array{users: int}
+     * @return array{users: int, visits_week: int, pending_access: int}
      */
     private function adminSummary(EntityManagerInterface $em): array
     {
-        return ['users' => $em->getRepository(User::class)->count([])];
+        $now = new \DateTimeImmutable();
+        $usage = $em->getRepository(UsageHit::class)
+            ->summary(UsageHit::AREA_GESTION, $now->modify('-7 days'), $now);
+
+        return [
+            'users' => $em->getRepository(User::class)->count([]),
+            'visits_week' => $usage['sessions'],
+            'pending_access' => $em->getRepository(Partner::class)->countActiveWithoutAccess(),
+        ];
     }
 
     /**
