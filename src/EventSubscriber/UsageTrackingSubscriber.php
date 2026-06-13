@@ -79,7 +79,10 @@ final class UsageTrackingSubscriber
     private function resolveArea(string $path): ?string
     {
         foreach (self::AREA_BY_PREFIX as $prefix => $area) {
-            if (str_starts_with($path, $prefix)) {
+            // La sección exacta (/gestion) o un segmento hijo (/gestion/...),
+            // no un mero prefijo de cadena: /gestionado-por-terceros NO es zona
+            // privada aunque empiece por «/gestion».
+            if ($path === $prefix || str_starts_with($path, $prefix . '/')) {
                 return $area;
             }
         }
