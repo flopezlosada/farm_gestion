@@ -36,6 +36,17 @@
     <script>
         $(function() {
             $('.csa-table[data-paginate]').each(function() {
+                // No inicializar tablas sin filas de datos reales: una fila
+                // placeholder («Sin datos…») es un único <td colspan>, y
+                // DataTables peta («Requested unknown parameter») al no casar
+                // las celdas con las cabeceras. Si la primera fila del cuerpo no
+                // tiene tantas celdas como columnas, la tabla no se pagina (sin
+                // datos no hace falta) en vez de romper.
+                var cols = $(this).find('thead th').length;
+                var firstRow = $(this).find('tbody tr').first();
+                if (firstRow.length === 0 || firstRow.children('td, th').length !== cols) {
+                    return;
+                }
                 $(this).DataTable({
                     // l = length, f = filter, r = processing, t = table, i = info, p = paginate
                     dom: '<"csa-dt-top"lf>rt<"csa-dt-bottom"ip>',
