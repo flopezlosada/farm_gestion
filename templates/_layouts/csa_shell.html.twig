@@ -255,7 +255,9 @@
                                 {{ _self.nav_link('Usuarias', path('user'), 'fa-users',
                                    route starts with 'user') }}
                                 {{ _self.nav_link('Configuración', path('settings_index'), 'fa-sliders',
-                                   route starts with 'settings') }}
+                                   (route starts with 'settings') and not (route starts with 'settings_diagnostics')) }}
+                                {{ _self.nav_link('Diagnóstico de envíos', path('settings_diagnostics'), 'fa-paper-plane',
+                                   route starts with 'settings_diagnostics') }}
                                 {{ _self.nav_link('Estadísticas de uso', path('usage_stats_index'), 'fa-bar-chart',
                                    route starts with 'usage_stats') }}
                             </div>

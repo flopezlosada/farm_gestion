@@ -15,16 +15,11 @@
 
 {% block csa_main %}
 
-    <div class="csa-row-between" style="align-items: flex-start; gap: var(--csa-sp-4);">
-        {{ csa.page_header(
-            'Administración',
-            'Configuración',
-            'Ajustes de la app, por categorías. Cambia lo que quieras en cualquier pestaña y guarda una sola vez.'
-        ) }}
-        <a href="{{ path('settings_diagnostics') }}" class="csa-btn csa-btn--ghost" style="flex-shrink: 0; margin-top: var(--csa-sp-2);">
-            <i class="fa fa-paper-plane" aria-hidden="true"></i> Diagnóstico de envíos
-        </a>
-    </div>
+    {{ csa.page_header(
+        'Administración',
+        'Configuración',
+        'Ajustes de la app, por categorías. Cambia lo que quieras en cualquier pestaña y guarda una sola vez.'
+    ) }}
 
     {# Pestañas de categoría (cliente): muestran/ocultan cada panel sin recargar,
      # de modo que el form sigue siendo único y un solo "Guardar" persiste todo
