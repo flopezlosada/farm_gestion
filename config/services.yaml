@@ -67,3 +67,11 @@ services:
     App\EventSubscriber\SessionIdleTimeoutSubscriber:
         arguments:
             $maxIdleTime: '%app.session.max_idle_time%'
+
+    # Interruptor general del correo: decora el mailer y corta el envío cuando
+    # el ajuste email.enabled está apagado. El resto de argumentos (AppSettings,
+    # logger) se autowire-an.
+    App\Mailer\KillSwitchMailer:
+        decorates: mailer
+        arguments:
+            $inner: '@.inner'

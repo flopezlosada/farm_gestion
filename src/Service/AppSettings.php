@@ -28,6 +28,15 @@ class AppSettings
      */
     public const SELF_REGISTRATION = 'access.self_registration';
 
+    /**
+     * Interruptor general del correo saliente. Apagado, la app NO entrega NINGÚN
+     * email, sea cual sea su toggle individual: lo corta {@see \App\Mailer\KillSwitchMailer}
+     * antes de llegar al transporte. Pensado como apagado de emergencia y para
+     * probar flujos que envían correo sin que salga nada. Encendido (default),
+     * cada email sigue gobernado por su propio ajuste.
+     */
+    public const EMAIL_ENABLED = 'email.enabled';
+
     /** Envío del recordatorio de recogida (app:send-pickup-reminders). */
     public const EMAIL_PICKUP_REMINDER = 'email.pickup_reminder';
 
@@ -103,6 +112,12 @@ class AppSettings
      * nuevo es añadir una entrada (y leerla donde toque).
      */
     public const BOOLEANS = [
+        self::EMAIL_ENABLED => [
+            'group' => 'Envío de emails',
+            'label' => 'Enviar emails',
+            'help' => 'Interruptor general. Apagado, la app no envía NINGÚN email (recordatorios, enlaces de acceso, resúmenes…), pase lo que pase con los ajustes de abajo. Úsalo como apagado de emergencia o para probar sin que salga nada. En funcionamiento normal, déjalo encendido.',
+            'default' => true,
+        ],
         self::SELF_REGISTRATION => [
             'group' => 'Acceso de socixs',
             'label' => 'Alta abierta de usuarixs nuevxs',
