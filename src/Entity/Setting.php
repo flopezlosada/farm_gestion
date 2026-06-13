@@ -6,7 +6,7 @@ use Doctrine\ORM\Mapping as ORM;
 
 /**
  * Ajuste de configuración de la app (clave-valor), editable en caliente desde
- * /gestion/configuracion. Existe porque el hosting es FTP sin SSH: cambiar un
+ * /gestion/settings. Existe porque el hosting es FTP sin SSH: cambiar un
  * parámetro de entorno en producción exige un mini-deploy, y cosas como "abrir
  * el acceso a socixs nuevxs" o "activar el email de recordatorio" tienen que
  * poder encenderse y apagarse al momento.

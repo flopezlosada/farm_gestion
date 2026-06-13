@@ -7,7 +7,7 @@ use App\Service\AppSettings;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
- * Pantalla de configuración (/gestion/configuracion): render, guardado de
+ * Pantalla de configuración (/gestion/settings): render, guardado de
  * toggles y aplicación de defaults cuando no hay override.
  */
 class SettingsControllerTest extends AbstractAuthenticatedTest
@@ -33,7 +33,7 @@ class SettingsControllerTest extends AbstractAuthenticatedTest
     public function testIndexRendersAllCatalogSettings(): void
     {
         $client = $this->createAuthenticatedClient();
-        $crawler = $client->request('GET', '/gestion/configuracion/');
+        $crawler = $client->request('GET', '/gestion/settings/');
 
         $this->assertResponseIsSuccessful();
         foreach (array_merge(array_keys(AppSettings::BOOLEANS), array_keys(AppSettings::INTEGERS)) as $name) {
@@ -57,17 +57,20 @@ class SettingsControllerTest extends AbstractAuthenticatedTest
     public function testSavePersistsToggles(): void
     {
         $client = $this->createAuthenticatedClient();
-        $crawler = $client->request('GET', '/gestion/configuracion/');
+        $crawler = $client->request('GET', '/gestion/settings/');
 
         $form = $crawler->selectButton('Guardar configuración')->form();
         $form[sprintf('settings[%s]', AppSettings::SELF_REGISTRATION)]->tick();
+        // Su default es true, así que viene marcado del HTML; lo desmarcamos
+        // para comprobar que, ausente del POST, el controller lo apaga.
+        $form[sprintf('settings[%s]', AppSettings::EMAIL_ADMIN_DELIVERY_SUMMARY)]->untick();
         $client->submit($form);
 
-        $this->assertResponseRedirects('/gestion/configuracion/');
+        $this->assertResponseRedirects('/gestion/settings/');
 
         $settings = static::getContainer()->get(AppSettings::class);
         $this->assertTrue($settings->getBool(AppSettings::SELF_REGISTRATION));
-        // No marcado en el form ⇒ se guarda apagado, aunque su default sea true.
+        // Desmarcado en el form ⇒ se guarda apagado, aunque su default sea true.
         $this->assertFalse($settings->getBool(AppSettings::EMAIL_ADMIN_DELIVERY_SUMMARY));
     }
 
@@ -103,14 +106,14 @@ class SettingsControllerTest extends AbstractAuthenticatedTest
     public function testSavePersistsAndClampsIntegers(): void
     {
         $client = $this->createAuthenticatedClient();
-        $crawler = $client->request('GET', '/gestion/configuracion/');
+        $crawler = $client->request('GET', '/gestion/settings/');
 
         $form = $crawler->selectButton('Guardar configuración')->form();
         $form[sprintf('settings[%s]', AppSettings::PICKUP_REMINDER_DAYS_BEFORE)]->setValue('3');
         $form[sprintf('settings[%s]', AppSettings::DEADLINE_DAYS_BEFORE)]->setValue('99'); // fuera de rango
         $client->submit($form);
 
-        $this->assertResponseRedirects('/gestion/configuracion/');
+        $this->assertResponseRedirects('/gestion/settings/');
 
         $settings = static::getContainer()->get(AppSettings::class);
         $this->assertSame(3, $settings->getInt(AppSettings::PICKUP_REMINDER_DAYS_BEFORE));
@@ -140,14 +143,14 @@ class SettingsControllerTest extends AbstractAuthenticatedTest
     public function testSaveCombinesTimeFieldsIntoValue(): void
     {
         $client = $this->createAuthenticatedClient();
-        $crawler = $client->request('GET', '/gestion/configuracion/');
+        $crawler = $client->request('GET', '/gestion/settings/');
 
         $form = $crawler->selectButton('Guardar configuración')->form();
         $form[sprintf('settings[%s][h]', AppSettings::DEADLINE_TIME)]->setValue('9');
         $form[sprintf('settings[%s][m]', AppSettings::DEADLINE_TIME)]->setValue('5');
         $client->submit($form);
 
-        $this->assertResponseRedirects('/gestion/configuracion/');
+        $this->assertResponseRedirects('/gestion/settings/');
 
         $settings = static::getContainer()->get(AppSettings::class);
         $this->assertSame('09:05', $settings->getTime(AppSettings::DEADLINE_TIME));
