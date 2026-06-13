@@ -49,9 +49,14 @@
        papelera) y recuperar (sacar de la papelera a un día). El flujo por toque para móvil
        es ADITIVO y se oculta en escritorio por CSS. El socio no tiene reset de mes (es una
        acción de gestión). #}
+    {# El autoservicio (saltar/mover/recuperar) está tras el feature-flag
+       FEATURE_PARTNER_SELFSERVICE. Con él apagado, can_self_serve es false y el
+       calendario se reusa en SOLO LECTURA: cal.readonly desactiva arrastre,
+       papelera y botones de acción. La protección dura vive en cada endpoint. #}
     {% include 'partner/_calendar.html.twig' with {
         cal: {
-            dnd: true,
+            dnd: can_self_serve,
+            readonly: not can_self_serve,
             route_view: 'panel_calendar',
             route_skip: 'panel_calendar_skip',
             route_move: 'panel_calendar_move',

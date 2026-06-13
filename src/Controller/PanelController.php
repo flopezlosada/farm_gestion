@@ -74,7 +74,11 @@ class PanelController extends AbstractController
 
         // Las cestas COMPARTIDAS (alternancia entre dos hogares) no se trasladan de nodo de
         // momento (lo bloquea PickupRelocator): no ofrecer el atajo. Vacío → modal sin pintar.
-        $canRelocate = $owner->getSharePartner() === null;
+        // Además, el traslado es autoservicio: tras el feature-flag (la acción
+        // panel_basket_change_group ya responde 403 con él apagado). Vaciar aquí evita
+        // ofrecer un atajo que acabaría en error.
+        $canRelocate = $owner->getSharePartner() === null
+            && $this->isGranted('FEATURE_PARTNER_SELFSERVICE');
 
         // La home replica las secciones de la ficha admin (partner/show) pero en
         // SOLO LECTURA: el socix ve sus datos, su cesta, su familia y su histórico,
@@ -191,6 +195,7 @@ class PanelController extends AbstractController
      * resumen periódico.
      */
     #[Route('/cesta/skip-toggle', name: 'panel_basket_skip_toggle', methods: ['POST'])]
+    #[IsGranted('FEATURE_PARTNER_SELFSERVICE')]
     public function skipNextBasket(
         Request $request,
         WeeklyBasketRepository $weeklyBasketRepository,
@@ -265,6 +270,7 @@ class PanelController extends AbstractController
      * @return Response
      */
     #[Route('/cesta/change-group', name: 'panel_basket_change_group', methods: ['POST'])]
+    #[IsGranted('FEATURE_PARTNER_SELFSERVICE')]
     public function changePickupGroup(
         Request $request,
         BasketRepository $basketRepository,
@@ -327,6 +333,7 @@ class PanelController extends AbstractController
      * contactar con admin si quiere forzar.
      */
     #[Route('/cesta/cambiar-viernes', name: 'panel_basket_shift_request', methods: ['POST'])]
+    #[IsGranted('FEATURE_PARTNER_SELFSERVICE')]
     public function requestShift(
         Request $request,
         WeeklyBasketRepository $weeklyBasketRepository,
@@ -386,6 +393,7 @@ class PanelController extends AbstractController
      * el validator igualmente: el deadline aplica también a la reversión.
      */
     #[Route('/cesta/cancelar-cambio-viernes', name: 'panel_basket_shift_cancel', methods: ['POST'])]
+    #[IsGranted('FEATURE_PARTNER_SELFSERVICE')]
     public function cancelShift(
         Request $request,
         WeeklyBasketRepository $weeklyBasketRepository,
@@ -476,11 +484,17 @@ class PanelController extends AbstractController
         $year = $request->query->has('year') ? (int) $request->query->get('year') : null;
         $selectedBasketId = (int) $request->query->get('sel', 0);
 
+        // El autoservicio (saltar/mover/recuperar) está tras un feature-flag: con él
+        // apagado el calendario queda en solo-lectura — sin drop targets ni botones de
+        // acción. La protección dura vive en cada endpoint (#[IsGranted]); esto es UX
+        // para no ofrecer gestos que acabarían en un 403.
+        $canSelfServe = $this->isGranted('FEATURE_PARTNER_SELFSERVICE');
+
         // withDropTargets: true → calcula los días libres a los que el socio puede mover
         // una entrega (los marca para el flujo de "mover por toque").
-        $view = $viewBuilder->build($partner, $year, $month, $selectedBasketId, withDropTargets: true);
+        $view = $viewBuilder->build($partner, $year, $month, $selectedBasketId, withDropTargets: $canSelfServe);
 
-        return $this->render('Panel/calendar.html.twig', $view);
+        return $this->render('Panel/calendar.html.twig', $view + ['can_self_serve' => $canSelfServe]);
     }
 
     /**
@@ -517,6 +531,7 @@ class PanelController extends AbstractController
      * @return Response
      */
     #[Route('/calendar/skip/{basketId}', name: 'panel_calendar_skip', methods: ['POST'], requirements: ['basketId' => '\\d+'])]
+    #[IsGranted('FEATURE_PARTNER_SELFSERVICE')]
     public function calendarSkip(
         int $basketId,
         Request $request,
@@ -636,6 +651,7 @@ class PanelController extends AbstractController
      * @return Response
      */
     #[Route('/calendar/move/{basketId}', name: 'panel_calendar_move', methods: ['POST'], requirements: ['basketId' => '\\d+'])]
+    #[IsGranted('FEATURE_PARTNER_SELFSERVICE')]
     public function calendarMove(
         int $basketId,
         Request $request,
@@ -771,6 +787,7 @@ class PanelController extends AbstractController
      * @return Response
      */
     #[Route('/calendar/recover/{basketId}', name: 'panel_calendar_recover', methods: ['POST'], requirements: ['basketId' => '\\d+'])]
+    #[IsGranted('FEATURE_PARTNER_SELFSERVICE')]
     public function calendarRecover(
         int $basketId,
         Request $request,

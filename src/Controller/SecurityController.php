@@ -6,12 +6,15 @@ use App\Repository\PartnerRepository;
 use App\Repository\UserRepository;
 use App\Security\MagicLinkMailer;
 use App\Security\PartnerUserProvisioner;
+use App\Security\UserChecker;
+use App\Service\AppSettings;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Security\Core\Exception\AccountStatusException;
 use Symfony\Component\Security\Http\Authentication\AuthenticationUtils;
 
 class SecurityController extends AbstractController
@@ -62,6 +65,7 @@ class SecurityController extends AbstractController
         PartnerRepository $partnerRepository,
         PartnerUserProvisioner $provisioner,
         MagicLinkMailer $magicLinkMailer,
+        AppSettings $settings,
         #[Autowire(service: 'limiter.magic_link')]
         RateLimiterFactory $magicLinkLimiter,
     ): Response {
@@ -70,6 +74,14 @@ class SecurityController extends AbstractController
         }
 
         if (!$this->isCsrfTokenValid('login_link_first', (string) $request->request->get('_csrf_token'))) {
+            return $this->redirectToRoute('app_login_link_sent');
+        }
+
+        // El primer acceso es exclusivo de socixs. Con el acceso de socixs cerrado
+        // por configuración (FEATURE_PARTNER_LOGIN), no tiene sentido enviar un
+        // magic-link que el UserChecker rechazaría: seguimos el camino antifuga
+        // (redirige a "enviado" sin mandar nada), igual que un email no registrado.
+        if (!$settings->getBool(AppSettings::FEATURE_PARTNER_LOGIN)) {
             return $this->redirectToRoute('app_login_link_sent');
         }
 
@@ -146,6 +158,7 @@ class SecurityController extends AbstractController
         Request $request,
         UserRepository $userRepository,
         MagicLinkMailer $magicLinkMailer,
+        UserChecker $userChecker,
         #[Autowire(service: 'limiter.magic_link')]
         RateLimiterFactory $magicLinkLimiter,
     ): Response {
@@ -177,9 +190,19 @@ class SecurityController extends AbstractController
             ]);
         }
 
+        // Solo mandamos el enlace si la cuenta podría entrar AHORA: el UserChecker
+        // es la fuente única de esa decisión (acceso de socixs cerrado por
+        // configuración, o cuenta bloqueada). Si no, seguimos el camino antifuga
+        // (redirige a "enviado" sin mandar nada), igual que un email no registrado.
+        // No duplicamos aquí la lista de roles de equipo: la conoce el UserChecker.
         $user = $userRepository->loadUserByIdentifier($email);
         if ($user !== null) {
-            $magicLinkMailer->send($user);
+            try {
+                $userChecker->checkPreAuth($user);
+                $magicLinkMailer->send($user);
+            } catch (AccountStatusException) {
+                // No puede entrar: no enviamos enlace. Antifuga intacto.
+            }
         }
 
         return $this->redirectToRoute('app_login_link_sent');

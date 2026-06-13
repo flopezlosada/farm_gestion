@@ -8,7 +8,9 @@ use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
 use App\Entity\PartnerDeliveryShift;
 use App\Entity\PartnerNodeOverride;
+use App\Entity\Setting;
 use App\Entity\WeeklyBasket;
+use App\Service\AppSettings;
 use App\Service\Delivery\DeliveryShiftApplier;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Delivery\WeeklyBasketSkipper;
@@ -69,6 +71,28 @@ class PanelBasketActionsTest extends AbstractPartnerAuthenticatedTest
                 WHERE p.email = :email',
             $params,
         );
+
+        // El autoservicio del socix vive tras el feature-flag FEATURE_PARTNER_SELFSERVICE,
+        // apagado por defecto. Estos tests ejercitan justamente esas acciones (saltar,
+        // mover, cambiar de nodo), así que lo encendemos; el tearDown limpia el override.
+        $client->getContainer()->get(AppSettings::class)
+            ->setBool(AppSettings::FEATURE_PARTNER_SELFSERVICE, true);
+    }
+
+    /**
+     * Limpia los overrides de configuración persistidos (el feature-flag que
+     * encendemos en resetSocixState) para no contaminar otros tests, que
+     * cuentan con los defaults del catálogo.
+     */
+    protected function tearDown(): void
+    {
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        foreach ($em->getRepository(Setting::class)->findAll() as $setting) {
+            $em->remove($setting);
+        }
+        $em->flush();
+
+        parent::tearDown();
     }
 
     private function reloadSocixPartner(EntityManagerInterface $em): Partner

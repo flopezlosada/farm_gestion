@@ -23,6 +23,24 @@
 {% block more_css %}
     {{ parent() }}
     {{ encore_entry_link_tags('app') }}
+
+    {# Estilos del contenido de ayuda dentro del modal contextual (los «?»).
+     # Las tarjetas (.csa-card) ya tienen estilo del bundle; aquí solo los
+     # pasos, que son propios de la guía. Replican lo justo de help/section.
+     # html.twig — es CSS de presentación, no contenido (el texto vive en un
+     # único parcial servido por help_fragment). #}
+    <style>
+        #csa-help-modal .csa-card { margin-bottom: 14px; }
+        #csa-help-modal .csa-card:last-child { margin-bottom: 0; }
+        #csa-help-modal .help-steps { margin: 0; padding-left: 1.4em; }
+        #csa-help-modal .help-steps > li { margin-bottom: 11px; line-height: 1.65;
+            font-size: 14.5px; color: #2b2b2b; }
+        #csa-help-modal .help-steps > li:last-child { margin-bottom: 0; }
+        #csa-help-modal .help-steps strong { font-weight: 600; color: #1d1c17; }
+        #csa-help-modal kbd { background: #f0ede6; border-radius: 4px; padding: 1px 7px;
+            font-family: inherit; font-weight: 600; font-size: 0.95em; }
+        #csa-help-modal .csa-modal__body { max-height: 70vh; overflow-y: auto; }
+    </style>
 {% endblock %}
 
 {% block more_js %}
@@ -99,6 +117,68 @@
             });
         }());
     </script>
+    {# Ayuda contextual: los «?» (csa.help) son enlaces a la guía; aquí los
+     # interceptamos para abrir el modal cargando el MISMO parcial de la guía
+     # (fuente única) por fetch. Si algo falla, dejamos pasar el click y el
+     # enlace lleva a la guía como respaldo. Delegación en document para que
+     # cubra «?» pintados en cualquier pantalla. #}
+    <script>
+        (function () {
+            var modal = document.getElementById('csa-help-modal');
+            if (!modal || typeof modal.showModal !== 'function') { return; }
+            var body = modal.querySelector('[data-help-body]');
+
+            document.addEventListener('click', function (e) {
+                var link = e.target.closest('a[data-help-url]');
+                if (!link) { return; }
+                e.preventDefault();
+
+                var url = link.getAttribute('data-help-url');
+                var anchor = link.getAttribute('data-help-anchor');
+                var title = modal.querySelector('#csa-help-modal-title');
+
+                body.innerHTML = '<p style="color:#8d8773;">Cargando ayuda…</p>';
+                title.textContent = 'Cómo se hace';
+                modal.showModal();
+
+                fetch(url, { credentials: 'same-origin' })
+                    .then(function (r) { if (!r.ok) { throw new Error(r.status); } return r.text(); })
+                    .then(function (html) {
+                        var card = null;
+                        if (anchor) {
+                            var tmp = document.createElement('div');
+                            tmp.innerHTML = html;
+                            card = tmp.querySelector('#' + (window.CSS && CSS.escape ? CSS.escape(anchor) : anchor));
+                        }
+                        if (card) {
+                            // Solo la tarea pedida. Su título sube a la cabecera del
+                            // modal para no repetirlo dentro de la tarjeta.
+                            var head = card.querySelector('.csa-card__title');
+                            if (head) { title.textContent = head.textContent.trim(); }
+                            var cardHead = card.querySelector('.csa-card__header');
+                            if (cardHead) { cardHead.remove(); }
+                            body.innerHTML = '';
+                            body.appendChild(card);
+                        } else {
+                            // Sin ancla (o no encontrada): el área entera, como respaldo.
+                            body.innerHTML = html;
+                        }
+                        body.scrollTop = 0;
+                    })
+                    .catch(function () {
+                        // Respaldo: que el enlace haga su trabajo (abre la guía).
+                        modal.close();
+                        window.open(link.href, '_blank', 'noopener');
+                    });
+            });
+
+            // Cerrar al hacer click en el backdrop (fuera del contenido).
+            modal.addEventListener('click', function (e) {
+                if (e.target === modal) { modal.close(); }
+            });
+        }());
+    </script>
+
     {# El cierre de los avisos flash lo aporta el propio componente
      # _components/csa_flashes.html.twig (autónomo), compartido con el panel. #}
 {% endblock %}
@@ -124,6 +204,8 @@
                        route == 'dashboard') }}
                     {{ _self.nav_link('Calendario', path('calendar'), 'fa-calendar',
                        route starts with 'calendar') }}
+                    {{ _self.nav_link('Ayuda', path('help_index'), 'fa-question-circle',
+                       route starts with 'help') }}
 
                     {% if is_granted('ROLE_GESTION_GRANJA') %}
                         <div class="csa-sidebar__group">Granja</div>
@@ -179,7 +261,7 @@
                            route starts with 'booking') }}
                     {% endif %}
 
-                    {% if is_granted('ROLE_GESTION_ENCUESTAS') %}
+                    {% if is_granted('ROLE_GESTION_ENCUESTAS') and is_granted('FEATURE_SURVEYS') %}
                         <div class="csa-sidebar__group">Encuestas</div>
                         {{ _self.nav_link('Encuestas', path('survey_index'), 'fa-check-square-o',
                            route starts with 'survey') }}
@@ -272,6 +354,24 @@
 
     </div>
 </div>
+
+{# Modal de ayuda contextual. Vacío: el JS le inyecta el parcial de la guía
+ # al pulsar un «?». Único en el shell, reutilizado por todas las pantallas. #}
+<dialog id="csa-help-modal" class="csa-modal csa-modal--info" aria-labelledby="csa-help-modal-title">
+    <button class="csa-modal__close" type="button" aria-label="Cerrar" onclick="this.closest('dialog').close()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l14 14M19 5L5 19"/></svg>
+    </button>
+    <header class="csa-modal__header">
+        <div class="csa-modal__heading">
+            <span class="csa-modal__eyebrow">Ayuda</span>
+            <h2 class="csa-modal__title" id="csa-help-modal-title">Cómo se hace</h2>
+        </div>
+    </header>
+    <div class="csa-modal__body" data-help-body></div>
+    <footer class="csa-modal__footer">
+        <button type="button" class="csa-modal__btn csa-modal__btn--ghost" onclick="this.closest('dialog').close()">Cerrar</button>
+    </footer>
+</dialog>
 {% endblock %}
 
 

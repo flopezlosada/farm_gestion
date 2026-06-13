@@ -2,8 +2,10 @@
 
 namespace App\Controller;
 
+use App\Entity\Question;
 use App\Entity\Survey;
 use App\Form\SurveyType;
+use App\Repository\SurveyAnswerRepository;
 use App\Repository\SurveyParticipationRepository;
 use App\Repository\SurveyRepository;
 use Doctrine\ORM\EntityManagerInterface;
@@ -21,7 +23,8 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * personales de socixs (mínimo privilegio): aquí sólo se manejan encuestas y
  * resultados agregados, nunca quién respondió qué.
  */
-#[Route('/gestion/encuestas')]
+#[Route('/gestion/surveys')]
+#[IsGranted('FEATURE_SURVEYS')]
 #[IsGranted('ROLE_GESTION_ENCUESTAS')]
 class SurveyController extends AbstractController
 {
@@ -29,25 +32,124 @@ class SurveyController extends AbstractController
      * Listado de encuestas con el número de participantes de cada una.
      */
     #[Route('/', name: 'survey_index', methods: ['GET'])]
-    public function index(SurveyRepository $surveys, SurveyParticipationRepository $participations): Response
+    public function index(Request $request, SurveyRepository $surveys, SurveyParticipationRepository $participations): Response
     {
-        $all = $surveys->findBy([], ['createdAt' => 'DESC']);
+        $showArchived = $request->query->getBoolean('archived');
 
-        $counts = [];
-        foreach ($all as $survey) {
-            $counts[$survey->getId()] = $participations->countForSurvey($survey);
+        // Pocas encuestas: cargar ambos conjuntos es trivial y simplifica los
+        // contadores (estado siempre sobre las activas; "archivadas" aparte).
+        $active = $surveys->findBy(['archived' => false], ['createdAt' => 'DESC']);
+        $archived = $surveys->findBy(['archived' => true], ['createdAt' => 'DESC']);
+
+        // Participantes por encuesta en una sola consulta (sin N+1).
+        $counts = $participations->countBySurvey();
+
+        // Contadores por estado (sobre las activas) para la tira de cabecera.
+        $statusCounts = [
+            Survey::STATUS_DRAFT  => 0,
+            Survey::STATUS_OPEN   => 0,
+            Survey::STATUS_CLOSED => 0,
+        ];
+        foreach ($active as $survey) {
+            ++$statusCounts[$survey->getStatus()];
         }
 
         return $this->render('survey/index.html.twig', [
-            'surveys' => $all,
-            'counts'  => $counts,
+            'surveys'        => $showArchived ? $archived : $active,
+            'counts'         => $counts,
+            'status_counts'  => $statusCounts,
+            'total'          => count($active),
+            'archived_count' => count($archived),
+            'show_archived'  => $showArchived,
         ]);
+    }
+
+    /**
+     * Ficha de una encuesta en SOLO LECTURA: su estructura (preguntas, tipos y
+     * opciones) sea cual sea su estado. Para las en borrador, editar ya enseña
+     * la estructura; esta vista es la única forma de ver una encuesta ya abierta
+     * o cerrada, que no se editan.
+     */
+    #[Route('/{id}', name: 'survey_show', methods: ['GET'], requirements: ['id' => '\d+'])]
+    public function show(Survey $survey, SurveyParticipationRepository $participations): Response
+    {
+        return $this->render('survey/show.html.twig', [
+            'survey'        => $survey,
+            'participants'  => $participations->countForSurvey($survey),
+        ]);
+    }
+
+    /**
+     * Resultados agregados y anónimos de una encuesta. Por pregunta:
+     *   - single/multiple → recuento por opción.
+     *   - scale           → recuento por valor 1-5 y media.
+     *   - text            → lista de respuestas libres (no se agregan).
+     *
+     * Nunca se cruza una respuesta con quién la dio: solo agregados.
+     */
+    #[Route('/{id}/results', name: 'survey_results', methods: ['GET'], requirements: ['id' => '\d+'])]
+    public function results(Survey $survey, SurveyAnswerRepository $answers, SurveyParticipationRepository $participations): Response
+    {
+        $blocks = [];
+        foreach ($survey->getQuestions() as $question) {
+            $blocks[] = $this->resultBlock($question, $answers);
+        }
+
+        return $this->render('survey/results.html.twig', [
+            'survey'       => $survey,
+            'participants' => $participations->countForSurvey($survey),
+            'blocks'       => $blocks,
+        ]);
+    }
+
+    /**
+     * Construye el bloque de resultados de una pregunta según su tipo.
+     *
+     * @return array<string, mixed>
+     */
+    private function resultBlock(Question $question, SurveyAnswerRepository $answers): array
+    {
+        $block = ['question' => $question, 'type' => $question->getType()];
+
+        if ($question->usesOptions()) {
+            $byOption = $answers->countByOption($question);
+            $rows = [];
+            foreach ($question->getOptions() as $option) {
+                $rows[] = ['label' => $option->getLabel(), 'count' => $byOption[$option->getId()] ?? 0];
+            }
+            $block['options'] = $rows;
+
+            return $block;
+        }
+
+        if (Question::TYPE_SCALE === $question->getType()) {
+            $byValue = $answers->countByScaleValue($question);
+            $rows = [];
+            $sum = 0;
+            $n = 0;
+            for ($i = Question::SCALE_MIN; $i <= Question::SCALE_MAX; ++$i) {
+                $count = $byValue[$i] ?? 0;
+                $rows[] = ['value' => $i, 'count' => $count];
+                $sum += $i * $count;
+                $n += $count;
+            }
+            $block['scale'] = $rows;
+            $block['scale_n'] = $n;
+            $block['scale_avg'] = $n > 0 ? $sum / $n : null;
+
+            return $block;
+        }
+
+        // Texto libre.
+        $block['texts'] = $answers->findTextAnswers($question);
+
+        return $block;
     }
 
     /**
      * Crear una encuesta nueva. Nace en borrador.
      */
-    #[Route('/nueva', name: 'survey_new', methods: ['GET', 'POST'])]
+    #[Route('/new', name: 'survey_new', methods: ['GET', 'POST'])]
     public function new(Request $request, EntityManagerInterface $em): Response
     {
         $survey = new Survey();
@@ -72,7 +174,7 @@ class SurveyController extends AbstractController
      * Editar una encuesta. Sólo en borrador: una vez abierta, tocar las
      * preguntas invalidaría las respuestas ya recogidas.
      */
-    #[Route('/{id}/editar', name: 'survey_edit', methods: ['GET', 'POST'])]
+    #[Route('/{id}/edit', name: 'survey_edit', methods: ['GET', 'POST'])]
     public function edit(Request $request, Survey $survey, EntityManagerInterface $em): Response
     {
         if (!$survey->isEditable()) {
@@ -101,7 +203,7 @@ class SurveyController extends AbstractController
     /**
      * Abrir la encuesta a respuestas. A partir de aquí ya no se edita.
      */
-    #[Route('/{id}/abrir', name: 'survey_open', methods: ['POST'])]
+    #[Route('/{id}/open', name: 'survey_open', methods: ['POST'])]
     public function open(Request $request, Survey $survey, EntityManagerInterface $em): Response
     {
         if (!$this->isCsrfTokenValid('survey_open_'.$survey->getId(), (string) $request->request->get('_token'))) {
@@ -126,7 +228,7 @@ class SurveyController extends AbstractController
     /**
      * Cerrar la encuesta. Deja de admitir respuestas; sólo quedan resultados.
      */
-    #[Route('/{id}/cerrar', name: 'survey_close', methods: ['POST'])]
+    #[Route('/{id}/close', name: 'survey_close', methods: ['POST'])]
     public function close(Request $request, Survey $survey, EntityManagerInterface $em): Response
     {
         if (!$this->isCsrfTokenValid('survey_close_'.$survey->getId(), (string) $request->request->get('_token'))) {
@@ -143,13 +245,22 @@ class SurveyController extends AbstractController
     }
 
     /**
-     * Borrar la encuesta y, en cascada, sus preguntas, opciones y respuestas.
+     * Borrar la encuesta y, en cascada, sus preguntas y opciones. SOLO en
+     * borrador: en cuanto se abre (o se cierra) puede haber votos y el dato no
+     * se pierde — la opción entonces es archivar, no borrar. Un borrador nunca
+     * tiene respuestas. Guard server-side, no solo ocultar el botón.
      */
-    #[Route('/{id}/borrar', name: 'survey_delete', methods: ['POST'])]
+    #[Route('/{id}/delete', name: 'survey_delete', methods: ['POST'])]
     public function delete(Request $request, Survey $survey, EntityManagerInterface $em): Response
     {
         if (!$this->isCsrfTokenValid('survey_delete_'.$survey->getId(), (string) $request->request->get('_token'))) {
             $this->addFlash('warning', 'Token de seguridad inválido.');
+
+            return $this->redirectToRoute('survey_index');
+        }
+
+        if (!$survey->isEditable()) {
+            $this->addFlash('warning', 'Solo se pueden borrar encuestas en borrador. Si está abierta o cerrada, archívala (así no se pierden las respuestas).');
 
             return $this->redirectToRoute('survey_index');
         }
@@ -162,14 +273,59 @@ class SurveyController extends AbstractController
     }
 
     /**
-     * Fija la posición de cada pregunta según su orden en el formulario, para
-     * que se rendericen siempre en el orden en que el equipo las colocó.
+     * Archivar: la oculta del listado sin borrar nada. Conserva preguntas y
+     * respuestas. Reversible con {@see self::unarchive}.
+     */
+    #[Route('/{id}/archive', name: 'survey_archive', methods: ['POST'])]
+    public function archive(Request $request, Survey $survey, EntityManagerInterface $em): Response
+    {
+        if (!$this->isCsrfTokenValid('survey_archive_'.$survey->getId(), (string) $request->request->get('_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+
+            return $this->redirectToRoute('survey_index');
+        }
+
+        $survey->setArchived(true);
+        $em->flush();
+        $this->addFlash('success', 'Encuesta archivada. Sigue guardada con sus respuestas; la ves en "Archivadas".');
+
+        return $this->redirectToRoute('survey_index');
+    }
+
+    /**
+     * Desarchivar: la devuelve al listado.
+     */
+    #[Route('/{id}/unarchive', name: 'survey_unarchive', methods: ['POST'])]
+    public function unarchive(Request $request, Survey $survey, EntityManagerInterface $em): Response
+    {
+        if (!$this->isCsrfTokenValid('survey_unarchive_'.$survey->getId(), (string) $request->request->get('_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+
+            return $this->redirectToRoute('survey_index');
+        }
+
+        $survey->setArchived(false);
+        $em->flush();
+        $this->addFlash('success', 'Encuesta restaurada al listado.');
+
+        return $this->redirectToRoute('survey_index');
+    }
+
+    /**
+     * Fija la posición de cada pregunta y de cada una de sus opciones según el
+     * orden en que llegan del formulario, para que se rendericen siempre en el
+     * orden en que el equipo las colocó.
      */
     private function reindexQuestions(Survey $survey): void
     {
-        $position = 0;
+        $questionPosition = 0;
         foreach ($survey->getQuestions() as $question) {
-            $question->setPosition($position++);
+            $question->setPosition($questionPosition++);
+
+            $optionPosition = 0;
+            foreach ($question->getOptions() as $option) {
+                $option->setPosition($optionPosition++);
+            }
         }
     }
 }

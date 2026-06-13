@@ -11,7 +11,7 @@ use Doctrine\ORM\EntityManagerInterface;
  *
  * Aquí viven los catálogos de claves conocidas — {@see self::BOOLEANS} y
  * {@see self::INTEGERS} —: cada ajuste se declara con su etiqueta, su texto de
- * ayuda (lo que ve la administración en la pantalla /gestion/configuracion) y
+ * ayuda (lo que ve la administración en la pantalla /gestion/settings) y
  * su default (los enteros, además, con su rango min/max). Leer una clave fuera
  * del catálogo es un bug de programación y revienta en el acto, no devuelve un
  * default silencioso.
@@ -44,6 +44,17 @@ class AppSettings
     public const EMAIL_ADMIN_DELIVERY_SUMMARY = 'email.admin_delivery_summary';
 
     /**
+     * Red de seguridad para entornos de prueba: si tiene valor, TODOS los emails
+     * que envía la app se entregan SOLO a esa(s) dirección(es) — separadas por
+     * comas —, sin importar el destinatario original (que sigue visible en la
+     * cabecera To). La aplica {@see \App\Mailer\RedirectRecipientsListener}.
+     * Vacío (default) = sin redirección, cada email va a su destinatario real:
+     * así DEBE quedar en producción. Se edita desde la pantalla de diagnóstico
+     * de envíos, no desde el form general de ajustes.
+     */
+    public const EMAIL_REDIRECT_TO = 'email.redirect_to';
+
+    /**
      * Antelación (en días sobre la fecha del reparto) con la que se envía el
      * recordatorio de recogida. La lee {@see \App\Command\SendPickupReminderCommand}.
      */
@@ -60,6 +71,31 @@ class AppSettings
      * (24h). La lee {@see \App\Service\Delivery\Rule\DeadlineRule}.
      */
     public const DEADLINE_TIME = 'delivery.deadline_time';
+
+    /**
+     * ¿Pueden lxs socixs entrar a la web? Gobierna las tres vías de acceso no-admin
+     * (formulario, magic-link y Google) desde un único punto, {@see \App\Security\UserChecker}.
+     * Apagado, sólo entra quien tenga un rol de gestión/admin; lxs socixs reciben
+     * un aviso de que el acceso aún no está abierto. Pensado para el rodaje en
+     * producción: primero se abre el acceso (sólo lectura) y, más tarde, el
+     * autoservicio ({@see self::FEATURE_PARTNER_SELFSERVICE}).
+     */
+    public const FEATURE_PARTNER_LOGIN = 'feature.partner_login';
+
+    /**
+     * ¿Pueden lxs socixs hacer cambios desde su panel (saltar cesta, mover,
+     * cambiar de viernes o de nodo)? Apagado, el panel y el calendario quedan en
+     * solo-lectura y las acciones de escritura responden 403. Lo resuelve
+     * {@see \App\Security\FeatureVoter} vía {@see is_granted('FEATURE_PARTNER_SELFSERVICE')}.
+     */
+    public const FEATURE_PARTNER_SELFSERVICE = 'feature.partner_selfservice';
+
+    /**
+     * ¿Está abierto el módulo de encuestas (gestión y respuesta de socixs)?
+     * Apagado, se ocultan del menú y sus rutas responden 403. Lo resuelve
+     * {@see \App\Security\FeatureVoter} vía {@see is_granted('FEATURE_SURVEYS')}.
+     */
+    public const FEATURE_SURVEYS = 'feature.surveys';
 
     /**
      * Catálogo de ajustes booleanos: clave => [grupo, etiqueta, ayuda, default].
@@ -91,6 +127,24 @@ class AppSettings
             'help' => 'Digest periódico con los cambios autoservicio de lxs socixs (saltar cesta, cambiar de nodo…).',
             'default' => true,
         ],
+        self::FEATURE_PARTNER_LOGIN => [
+            'group' => 'Funcionalidades en rodaje',
+            'label' => 'Acceso de socixs a la web',
+            'help' => 'Permite que lxs socixs entren (formulario, enlace por email o Google). Apagado, sólo entra el equipo de gestión. Enciéndelo cuando quieras que empiecen a entrar a consultar sus datos.',
+            'default' => false,
+        ],
+        self::FEATURE_PARTNER_SELFSERVICE => [
+            'group' => 'Funcionalidades en rodaje',
+            'label' => 'Autoservicio de socixs',
+            'help' => 'Permite que lxs socixs hagan cambios desde su panel (saltar cesta, mover, cambiar de viernes o de nodo). Apagado, su panel queda en solo-lectura. Requiere tener abierto el acceso de socixs.',
+            'default' => false,
+        ],
+        self::FEATURE_SURVEYS => [
+            'group' => 'Funcionalidades en rodaje',
+            'label' => 'Encuestas',
+            'help' => 'Abre el módulo de encuestas, tanto la gestión interna como la respuesta de lxs socixs. Apagado, se oculta del menú y no es accesible.',
+            'default' => false,
+        ],
     ];
 
     /**
@@ -112,8 +166,8 @@ class AppSettings
             'unit' => 'días',
         ],
         self::DEADLINE_DAYS_BEFORE => [
-            'group' => 'Cambios de socixs',
-            'label' => 'Cierre de cambios: antelación',
+            'group' => 'Cierre de reparto',
+            'label' => 'Antelación del cierre',
             'help' => 'Cuántos días antes del reparto se cierra el plazo para que un socix pida un cambio puntual (saltar, cambiar de viernes o de nodo). 1 = el día anterior al reparto.',
             'default' => 1,
             'min' => 0,
@@ -129,8 +183,8 @@ class AppSettings
      */
     public const TIMES = [
         self::DEADLINE_TIME => [
-            'group' => 'Cambios de socixs',
-            'label' => 'Cierre de cambios: hora',
+            'group' => 'Cierre de reparto',
+            'label' => 'Hora del cierre',
             'help' => 'A qué hora del día de cierre termina el plazo para pedir un cambio puntual. La administración siempre puede forzar un cambio fuera de plazo.',
             'default' => '23:59',
         ],
@@ -138,6 +192,22 @@ class AppSettings
 
     /** Valida una hora "HH:MM" en 24h (00:00–23:59). */
     private const TIME_PATTERN = '/^([01]\d|2[0-3]):[0-5]\d$/';
+
+    /**
+     * Catálogo de ajustes de texto libre: clave => [grupo, etiqueta, ayuda,
+     * default]. A diferencia de {@see self::BOOLEANS}/{@see self::INTEGERS}/
+     * {@see self::TIMES}, estos NO se pintan en el form general de ajustes: son
+     * ajustes que viven en pantallas específicas (p.ej. la redirección de
+     * pruebas, en el diagnóstico de envíos).
+     */
+    public const STRINGS = [
+        self::EMAIL_REDIRECT_TO => [
+            'group' => 'Pruebas de envío',
+            'label' => 'Redirigir todos los emails a',
+            'help' => 'Direcciones (separadas por comas) que recibirán TODOS los emails de la app, en lugar de sus destinatarios reales. Pensado para staging: te llegan a tu bandeja sin escribir a socixs. DÉJALO VACÍO EN PRODUCCIÓN.',
+            'default' => '',
+        ],
+    ];
 
     /**
      * Overrides cargados de BBDD, clave => valor crudo. Null hasta la primera
@@ -227,6 +297,46 @@ class AppSettings
 
         $setting = $this->repository->findOneBy(['name' => $name]) ?? (new Setting())->setName($name);
         $setting->setValue((string) $value);
+
+        $this->em->persist($setting);
+        $this->em->flush();
+
+        $this->stored = null;
+    }
+
+    /**
+     * Lee un ajuste de texto del catálogo: el override de BBDD si existe, el
+     * default si no.
+     *
+     * @param string $name Clave declarada en {@see self::STRINGS}.
+     * @throws \InvalidArgumentException Si la clave no está en el catálogo.
+     */
+    public function getString(string $name): string
+    {
+        $definition = self::STRINGS[$name]
+            ?? throw new \InvalidArgumentException(sprintf('Ajuste desconocido "%s"; decláralo en AppSettings::STRINGS.', $name));
+
+        $stored = $this->loadStored()[$name] ?? null;
+
+        return $stored ?? $definition['default'];
+    }
+
+    /**
+     * Persiste un ajuste de texto (crea la fila si no existía), recortando
+     * espacios sobrantes, y refresca la memo.
+     *
+     * @param string $name  Clave declarada en {@see self::STRINGS}.
+     * @param string $value Valor a guardar.
+     * @throws \InvalidArgumentException Si la clave no está en el catálogo.
+     */
+    public function setString(string $name, string $value): void
+    {
+        if (!isset(self::STRINGS[$name])) {
+            throw new \InvalidArgumentException(sprintf('Ajuste desconocido "%s"; decláralo en AppSettings::STRINGS.', $name));
+        }
+
+        $setting = $this->repository->findOneBy(['name' => $name]) ?? (new Setting())->setName($name);
+        $setting->setValue(trim($value));
 
         $this->em->persist($setting);
         $this->em->flush();
