@@ -1,0 +1,58 @@
+{# Contenido de ayuda · Reparto. Cada tarea en su tarjeta. #}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% embed '_components/csa_card.html.twig' with { id: 'ver', title: 'Ver el reparto de una semana' } %}
+    {% block body %}
+        <ol class="help-steps">
+            <li>En el menú, entra en <strong>Reparto → Reparto semanal</strong>. Se abre el primer nodo y la próxima semana.</li>
+            <li>Cambia de <strong>semana</strong> con la tira de fechas de arriba (flechas <kbd>‹</kbd> <kbd>›</kbd> para ver más).</li>
+            <li>Cambia de <strong>nodo</strong> con las pestañas. Arriba ves el resumen: socios, grupos, cestas, cuántos llevan huevos y docenas totales.</li>
+            <li>Puedes <strong>buscar</strong> por nombre, filtrar por modalidad y cambiar el <strong>orden</strong> (por grupo, por modalidad o alfabético).</li>
+        </ol>
+    {% endblock %}
+{% endembed %}
+
+{% embed '_components/csa_card.html.twig' with { id: 'viernes', title: 'Cambiar a alguien de viernes (puntualmente)' } %}
+    {% block body %}
+        {% import '_macros/csa.html.twig' as csa %}
+        <ol class="help-steps">
+            <li>Abre la ficha del socio y pulsa <strong>«Calendario de recogida»</strong>.</li>
+            <li>Para <strong>moverle</strong> a otro viernes: pulsa la semana, elige el viernes destino y confirma.</li>
+            <li>Para que <strong>no recoja</strong> esa semana: márcalo desde esa entrega. Después puedes <strong>recuperarla</strong> en otro día.</li>
+        </ol>
+        {{ csa.callout(
+            'Antes de deshacer un cambio que ya hiciste, habla con el socix: volverá a recoger en su día original.',
+            'warning'
+        ) }}
+    {% endblock %}
+{% endembed %}
+
+{% embed '_components/csa_card.html.twig' with { id: 'otro-nodo', title: 'Que recoja en otro nodo puntualmente' } %}
+    {% block body %}
+        <ol class="help-steps">
+            <li>En <strong>Reparto semanal</strong>, busca al socio en la tabla.</li>
+            <li>Pulsa el menú de tres puntos de su fila y elige <strong>«Recoger en otro nodo»</strong>.</li>
+            <li>Elige la semana y el nodo destino, y pulsa <strong>«Trasladar»</strong>. Aparecerá en la sección <strong>«Trasladados»</strong> de ese nodo.</li>
+        </ol>
+    {% endblock %}
+{% endembed %}
+
+{% embed '_components/csa_card.html.twig' with { id: 'extra', title: 'Añadir o quitar una cesta extra' } %}
+    {% block body %}
+        <ol class="help-steps">
+            <li>Desde la ficha del socio o desde <strong>Reparto semanal</strong> (menú de tres puntos), elige <strong>«Añadir cesta extra»</strong>.</li>
+            <li>Elige la semana e indica cuántas cestas de verdura y/o docenas de huevos de más, con una nota si quieres.</li>
+            <li>Para retirarla, usa <strong>«Quitar cesta extra»</strong> desde el menú de tres puntos de su fila.</li>
+        </ol>
+    {% endblock %}
+{% endembed %}
+
+{% embed '_components/csa_card.html.twig' with { id: 'festivo', title: 'Marcar un festivo o un cierre' } %}
+    {% block body %}
+        <ol class="help-steps">
+            <li>En el menú, entra en <strong>Reparto → Excepciones de reparto</strong> y crea una nueva.</li>
+            <li>Indica si afecta a <strong>todos los nodos</strong> (cierre) o a <strong>uno solo</strong> (traslado de fecha).</li>
+            <li>El reparto de esas semanas se recalcula solo teniendo en cuenta la excepción.</li>
+        </ol>
+    {% endblock %}
+{% endembed %}

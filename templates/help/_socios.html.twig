@@ -1,0 +1,59 @@
+{# Contenido de ayuda · Socios. Cada tarea en su tarjeta. #}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% embed '_components/csa_card.html.twig' with { id: 'alta', title: 'Dar de alta a un socio nuevo' } %}
+    {% block body %}
+        {% import '_macros/csa.html.twig' as csa %}
+        <ol class="help-steps">
+            <li>En el menú, entra en <strong>Socios → Listado</strong> y pulsa <strong>«Crear socix»</strong>.</li>
+            <li>Rellena sus datos: nombre y apellidos, DNI, fecha de inscripción, teléfono, email y dirección (provincia y municipio).</li>
+            <li>Elige la <strong>forma de pago de la cuota</strong> y si <strong>consume cárnicos</strong>. Si tienes su ficha en PDF, puedes adjuntarla.</li>
+            <li>Pulsa <strong>«Crear socix»</strong>.</li>
+        </ol>
+        {{ csa.callout(
+            'La cesta y el punto de recogida NO se eligen aquí. Primero se crea la ficha; después se le asigna la cesta (tarjeta siguiente).',
+            'info'
+        ) }}
+    {% endblock %}
+{% endembed %}
+
+{% embed '_components/csa_card.html.twig' with { id: 'cesta', title: 'Asignarle la cesta y el punto de recogida' } %}
+    {% block body %}
+        <ol class="help-steps">
+            <li>Entra en la ficha del socio (pulsa su nombre en el listado) y pulsa <strong>«Añadir cesta»</strong>.</li>
+            <li>Elige el <strong>grupo de recogida</strong>: define dónde recoge y qué modalidades hay disponibles ahí.</li>
+            <li>Elige el <strong>tipo de cesta</strong> (Semanal, Quincenal, Mensual, Compartida o Solo huevos) y la cantidad.</li>
+            <li>Si lleva <strong>huevos</strong>, indica la cantidad y la frecuencia.</li>
+            <li>Pon la <strong>fecha de inicio</strong>. Según el caso, te pedirá el viernes del mes (mensual) o el turno A/B (quincenal).</li>
+            <li>Pulsa <strong>«Añadir cesta»</strong>. Si es <strong>compartida</strong>, después te pedirá con quién la comparte.</li>
+        </ol>
+    {% endblock %}
+{% endembed %}
+
+{% embed '_components/csa_card.html.twig' with { id: 'editar', title: 'Editar la ficha' } %}
+    {% block body %}
+        <ol class="help-steps">
+            <li>Abre la ficha del socio y pulsa <strong>«Editar ficha»</strong>.</li>
+            <li>Cambia lo que necesites y pulsa <strong>«Guardar cambios»</strong>.</li>
+        </ol>
+    {% endblock %}
+{% endembed %}
+
+{% embed '_components/csa_card.html.twig' with { id: 'estado', title: 'Pausar, reanudar o dar de baja' } %}
+    {% block body %}
+        <ol class="help-steps">
+            <li>En la ficha del socio verás los botones según su estado.</li>
+            <li><strong>Pausar</strong>: deja de recibir cesta pero sigue siendo socix; podrás reactivarle con <strong>«Reanudar»</strong>.</li>
+            <li><strong>Dar de baja</strong>: deja de recibir cesta y se conserva su histórico. Pide confirmación.</li>
+        </ol>
+    {% endblock %}
+{% endembed %}
+
+{% embed '_components/csa_card.html.twig' with { id: 'buscar', title: 'Buscar y filtrar socios' } %}
+    {% block body %}
+        <ol class="help-steps">
+            <li>En <strong>Socios → Listado</strong>, arriba tienes las pestañas <strong>Activxs / Pausadxs / De baja / Todxs</strong>.</li>
+            <li>Puedes filtrar por modalidad, si tiene cesta o huevos, nodo y grupo de recogida, o escribir en <strong>«Buscar…»</strong>.</li>
+        </ol>
+    {% endblock %}
+{% endembed %}

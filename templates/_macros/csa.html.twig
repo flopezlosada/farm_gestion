@@ -297,6 +297,28 @@
     </dialog>
 {% endmacro %}
 
+{# ---------- AYUDA CONTEXTUAL ----------
+ # «?» discreto que enlaza a la guía de ayuda, directo a la tarjeta de una
+ # tarea concreta. Abre en pestaña nueva para no perder un formulario a medias.
+ #
+ #   {{ csa.help('socios', 'cesta') }}
+ #
+ # section: slug del área (socios|reparto|cosechas). anchor: id de la tarjeta
+ # (opcional; sin él, lleva al principio del área). label: texto accesible.
+ #
+ # El «?» es un enlace de verdad a la guía: el JS del shell (csa_shell) lo
+ # intercepta y abre el modal de ayuda cargando el MISMO parcial de la guía
+ # (fuente única). Si el JS no estuviera, el enlace sigue llevando a la guía
+ # en una pestaña nueva (degradación elegante). Estilo inline a propósito: así
+ # funciona en cualquier pantalla sin recompilar Encore. #}
+{% macro help(section, anchor = null, label = 'Ver la guía de ayuda') %}
+    <a href="{{ path('help_section', { section: section }) }}{{ anchor ? '#' ~ anchor }}"
+       data-help-url="{{ path('help_fragment', { section: section }) }}"{% if anchor %} data-help-anchor="{{ anchor }}"{% endif %}
+       target="_blank" rel="noopener"
+       title="{{ label }}" aria-label="{{ label }}"
+       style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,.07);color:#5a564a;font-size:11px;font-weight:700;line-height:1;text-decoration:none;border-bottom:0;vertical-align:middle;">?</a>
+{% endmacro %}
+
 {# Macro privada: SVG del icono según variante. No se llama desde call sites. #}
 {% macro csa_modal_icon(variant) -%}
     {%- if variant == 'danger' -%}

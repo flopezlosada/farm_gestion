@@ -172,6 +172,7 @@
                 <a href="{{ path('partner_delivery_calendar', { id: partner.id }) }}" class="prt-btn">
                     <i class="fa fa-calendar"></i> Calendario de recogida
                 </a>
+                {{ csa.help('reparto', 'viernes', 'Ayuda: cambiar a alguien de viernes') }}
             {% endif %}
 
             {% if partner.status == 'ACTIVO' %}
@@ -187,6 +188,7 @@
                     <a href="{{ path('partner_add_basket', { id: partner.id }) }}" class="prt-btn">
                         <i class="fa fa-shopping-basket"></i> Añadir cesta
                     </a>
+                    {{ csa.help('socios', 'cesta', 'Ayuda: asignar la cesta y el punto de recogida') }}
                 {% endif %}
 
                 {% if extra_weeks is not empty %}

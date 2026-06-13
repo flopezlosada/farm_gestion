@@ -1,0 +1,66 @@
+{# ============================================================
+ # Portada de la ayuda (/gestion/help).
+ # Acceso por temas: tres tarjetas grandes que llevan a la página de
+ # cada área. Sin contenido denso aquí — solo elegir a dónde ir.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Ayuda{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Ayuda</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    <style>
+        /* Portada de la ayuda. Estilos locales (pantalla estática, no toca
+           el bundle de Encore). Paleta sobria, hermana de --dash-*. */
+        .help-tiles { display: grid; grid-template-columns: repeat(3, 1fr);
+            gap: 18px; margin-top: var(--csa-sp-6); }
+        .help-tile { display: flex; flex-direction: column; gap: 12px;
+            padding: 26px 24px; border: 1px solid #ebe7dd; border-radius: 12px;
+            background: #fff; text-decoration: none; color: #1d1c17;
+            transition: border-color .12s ease, box-shadow .12s ease, transform .12s ease; }
+        .help-tile, .help-tile:hover { border-bottom: 1px solid #ebe7dd; }
+        .help-tile:hover { border-color: #d8d2c2; box-shadow: 0 6px 22px rgba(0,0,0,.05);
+            transform: translateY(-2px); color: #1d1c17; }
+        .help-tile__icon { width: 52px; height: 52px; border-radius: 12px;
+            display: inline-flex; align-items: center; justify-content: center;
+            font-size: 24px; }
+        .help-tile__title { font-family: 'Fraunces', serif; font-weight: 600;
+            font-size: 20px; letter-spacing: -0.01em; }
+        .help-tile__lead { color: #5a564a; font-size: 13.5px; line-height: 1.55; flex: 1; }
+        .help-tile__cta { font-size: 13px; font-weight: 600; display: inline-flex;
+            align-items: center; gap: 7px; }
+        .help-tile--green .help-tile__icon { background: #eaf0e2; color: #2f4426; }
+        .help-tile--green .help-tile__cta { color: #2f4426; }
+        .help-tile--sky   .help-tile__icon { background: #e0edf2; color: #2e5f74; }
+        .help-tile--sky   .help-tile__cta { color: #2e5f74; }
+        .help-tile--ochre .help-tile__icon { background: #faf1d8; color: #8c6919; }
+        .help-tile--ochre .help-tile__cta { color: #8c6919; }
+        @media (max-width: 860px) { .help-tiles { grid-template-columns: 1fr; } }
+    </style>
+
+    {{ csa.page_header(
+        'Ayuda',
+        'Cómo se hacen las cosas',
+        'Guías paso a paso de las tareas del día a día. Elige un tema para empezar.'
+    ) }}
+
+    <div class="help-tiles">
+        {% for slug, s in sections %}
+            <a class="help-tile help-tile--{{ s.accent }}" href="{{ path('help_section', { section: slug }) }}">
+                <span class="help-tile__icon"><i class="fa {{ s.icon }}" aria-hidden="true"></i></span>
+                <span class="help-tile__title">{{ s.label }}</span>
+                <span class="help-tile__lead">{{ s.lead }}</span>
+                <span class="help-tile__cta">Ver guía <i class="fa fa-arrow-right" aria-hidden="true"></i></span>
+            </a>
+        {% endfor %}
+    </div>
+
+{% endblock %}

@@ -103,6 +103,7 @@ jobs:
               --exclude-glob 'var/sessions/' \
               --exclude-glob 'CLAUDE.md' \
               --exclude-glob 'README.md' \
+              --exclude-glob 'RUNBOOK.md' \
               --exclude-glob 'phpstan.dist.neon' \
               --exclude-glob 'rector.php' \
               --exclude-glob 'phpunit.xml*' \

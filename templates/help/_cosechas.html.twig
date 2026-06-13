@@ -1,0 +1,20 @@
+{# Contenido de ayuda · Cosechas y huevos. Cada tarea en su tarjeta. #}
+
+{% embed '_components/csa_card.html.twig' with { id: 'puesta', title: 'Registrar una recogida de huevos' } %}
+    {% block body %}
+        <ol class="help-steps">
+            <li>En el menú, entra en <strong>Granja → Cosechas / huevos</strong> y pulsa <strong>«Nueva puesta»</strong>.</li>
+            <li>Rellena <strong>«Fecha de puesta»</strong>, <strong>«Cantidad»</strong> y <strong>«Indica el lote»</strong>.</li>
+            <li>Pulsa <strong>«Crear puesta»</strong>. La semana se calcula sola a partir de la fecha.</li>
+        </ol>
+    {% endblock %}
+{% endembed %}
+
+{% embed '_components/csa_card.html.twig' with { id: 'consultar', title: 'Consultar o corregir puestas' } %}
+    {% block body %}
+        <ol class="help-steps">
+            <li>En <strong>Granja → Cosechas / huevos</strong> tienes la lista de puestas registradas (fecha, lote, cantidad, semana).</li>
+            <li>Usa el icono del <strong>lápiz</strong> para editar una puesta o el del <strong>ojo</strong> para ver su detalle.</li>
+        </ol>
+    {% endblock %}
+{% endembed %}
