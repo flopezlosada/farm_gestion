@@ -83,6 +83,14 @@ class UserChecker implements UserCheckerInterface
     /**
      * ¿El User pertenece al equipo de gestión (tiene algún rol de {@see self::TEAM_ROLES})?
      *
+     * OJO: `getRoles()` devuelve los roles DIRECTOS del usuario (los de BBDD +
+     * ROLE_USER), NO los derivados de la jerarquía de `security.yaml` — ésa la
+     * resuelve el RoleHierarchyVoter durante la AUTORIZACIÓN, no aquí (preAuth).
+     * Hoy es correcto porque los roles de equipo se asignan directamente; si en
+     * el futuro un rol de equipo pasara a derivarse sólo por jerarquía (p. ej.
+     * ROLE_X → ROLE_GESTION_*), este chequeo no lo vería y habría que inyectar
+     * el RoleHierarchyInterface y expandir aquí.
+     *
      * @param User $user Usuario a comprobar.
      * @return bool true si entra a /gestion, false si es socix puro.
      */
