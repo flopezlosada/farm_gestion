@@ -90,6 +90,20 @@ class SettingsDiagnosticsController extends AbstractController
         }
 
         $value = trim((string) $request->request->get('redirect_to'));
+
+        // Admite varias direcciones separadas por comas. Se valida cada una
+        // antes de persistir: un email malformado reventaría luego en
+        // `new Address(...)` dentro del RedirectRecipientsListener, en plena
+        // cadena de envío real.
+        if ($value !== '') {
+            foreach (array_map('trim', explode(',', $value)) as $addr) {
+                if (!filter_var($addr, FILTER_VALIDATE_EMAIL)) {
+                    $this->addFlash('warning', sprintf('"%s" no es una dirección de email válida; no se ha guardado.', $addr));
+                    return $this->redirectToRoute('settings_diagnostics');
+                }
+            }
+        }
+
         $this->settings->setString(AppSettings::EMAIL_REDIRECT_TO, $value);
 
         $this->addFlash('success', $value === ''
