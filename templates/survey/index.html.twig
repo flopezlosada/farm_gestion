@@ -1,14 +1,26 @@
 {# ============================================================
- # Listado de encuestas internas — shell csa.
+ # Listado de encuestas internas — al estilo del listado de socixs
+ # (stat strip + tabla prl-*). Reutiliza partner/_listing_styles.
+ #
+ # El controller pasa:
+ #   - surveys         Survey[] del conjunto visible (activas o archivadas)
+ #   - counts          array survey_id => nº de participantes
+ #   - status_counts   ['draft'=>N, 'open'=>N, 'closed'=>N] (sobre activas)
+ #   - total           nº de encuestas activas
+ #   - archived_count  nº de encuestas archivadas
+ #   - show_archived   ¿estamos viendo las archivadas?
+ #
+ # Reglas: una encuesta con votos NO se borra (se perderían) — solo se
+ # archiva. El borrado solo se ofrece cuando no tiene ni una respuesta.
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
 
-{% set status_meta = {
-    'draft':  { label: 'Borrador', tone: 'warning' },
-    'open':   { label: 'Abierta',  tone: 'success' },
-    'closed': { label: 'Cerrada',  tone: 'neutral' }
+{% set status_chip = {
+    'draft':  { label: 'Borrador', cls: 'pausado' },
+    'open':   { label: 'Abierta',  cls: 'activo'  },
+    'closed': { label: 'Cerrada',  cls: 'baja'    }
 } %}
 
 {% block title %}Encuestas{% endblock %}
@@ -16,73 +28,226 @@
 {% block csa_crumbs %}
     <a href="{{ path('dashboard') }}">Inicio</a>
     <span class="csa-topbar__crumbs-sep">/</span>
-    <span class="csa-topbar__crumb-active">Encuestas</span>
+    {% if show_archived %}
+        <a href="{{ path('survey_index') }}">Encuestas</a>
+        <span class="csa-topbar__crumbs-sep">/</span>
+        <span class="csa-topbar__crumb-active">Archivadas</span>
+    {% else %}
+        <span class="csa-topbar__crumb-active">Encuestas</span>
+    {% endif %}
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    <style>
+        /* Acciones en UNA sola fila (nowrap): sin esto, en la celda estrecha
+         * (width:1%) los botones envuelven y disparan la altura de la fila. */
+        .sv-actions { display: flex; align-items: center; gap: 6px; justify-content: flex-end; flex-wrap: nowrap; }
+        .sv-actions form { margin: 0; display: inline-flex; }
+        .prl-table .actions .sv-actions a { display: inline-flex; }
+        .prl-table .actions .sv-actions .prl-btn { white-space: nowrap; }
+    </style>
 {% endblock %}
 
 {% block csa_main %}
 
+<div class="prl">
+
     {{ csa.page_header(
-        'Encuestas',
-        'Encuestas internas',
-        'Crea encuestas para lxs socixs y consulta los resultados de forma anónima y agregada.'
+        'Encuestas · Listado',
+        show_archived ? 'Encuestas archivadas' : 'Encuestas internas',
+        show_archived
+            ? 'Encuestas ocultas del listado. Conservan sus respuestas; puedes restaurarlas.'
+            : 'Crea encuestas para lxs socixs y consulta los resultados de forma anónima y agregada.'
     ) }}
 
-    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-4);">
-        <div></div>
-        {{ csa.btn('+ Nueva encuesta', { variant: 'primary', href: path('survey_new') }) }}
+    {# ============ STAT STRIP ============ #}
+    <div class="prl-stats">
+        <div class="prl-stat prl-stat--paused">
+            <div class="v">{{ status_counts.draft }}</div>
+            <div class="l">borradores</div>
+        </div>
+        <div class="prl-stat prl-stat--active">
+            <div class="v">{{ status_counts.open }}</div>
+            <div class="l">abiertas</div>
+        </div>
+        <div class="prl-stat prl-stat--leave">
+            <div class="v">{{ status_counts.closed }}</div>
+            <div class="l">cerradas</div>
+        </div>
+        <a class="prl-stat" href="{{ path('survey_index', { archived: 1 }) }}" style="text-decoration: none;">
+            <div class="v">{{ archived_count }}</div>
+            <div class="l">archivadas</div>
+        </a>
     </div>
 
-    {% if surveys is empty %}
-        {{ csa.callout('Todavía no hay ninguna encuesta. Crea la primera con el botón de arriba.', 'info') }}
-    {% else %}
-        <div class="csa-card" style="padding: 0; overflow: hidden;">
-            <table class="csa-table" style="width: 100%; border-collapse: collapse;">
+    {# ============ TOOLBAR ============ #}
+    <div class="prl-toolbar">
+        <div class="counters">
+            <b>{{ surveys|length }}</b>
+            {{ show_archived ? 'archivada' : 'encuesta' }}{{ surveys|length == 1 ? '' : 's' }}
+        </div>
+        <div class="spacer"></div>
+        {% if show_archived %}
+            <a href="{{ path('survey_index') }}" class="prl-btn">
+                <i class="fa fa-arrow-left"></i> Volver al listado
+            </a>
+        {% else %}
+            <a href="{{ path('survey_new') }}" class="prl-btn prl-btn--primary">
+                <i class="fa fa-plus"></i> Nueva encuesta
+            </a>
+        {% endif %}
+    </div>
+
+    {# ============ TABLA ============ #}
+    <div class="prl-table-wrap">
+        {% if surveys is empty %}
+            <div class="prl-empty">
+                {% if show_archived %}
+                    No hay ninguna encuesta archivada.
+                {% else %}
+                    Todavía no hay ninguna encuesta. Crea la primera con el botón de arriba.
+                {% endif %}
+            </div>
+        {% else %}
+            <table class="prl-table">
                 <thead>
                     <tr>
-                        <th style="text-align: left; padding: var(--csa-sp-3) var(--csa-sp-4);">Título</th>
-                        <th style="text-align: left; padding: var(--csa-sp-3) var(--csa-sp-4);">Estado</th>
-                        <th style="text-align: right; padding: var(--csa-sp-3) var(--csa-sp-4);">Preguntas</th>
-                        <th style="text-align: right; padding: var(--csa-sp-3) var(--csa-sp-4);">Respuestas</th>
-                        <th style="text-align: right; padding: var(--csa-sp-3) var(--csa-sp-4);">Acciones</th>
+                        <th>Encuesta</th>
+                        <th class="tight">Estado</th>
+                        <th class="tight">Preguntas</th>
+                        <th class="tight">Respuestas</th>
+                        <th class="actions"><span class="sr-only">Acciones</span></th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for survey in surveys %}
-                        {% set meta = status_meta[survey.status] %}
-                        <tr style="border-top: 1px solid var(--csa-rule);">
-                            <td style="padding: var(--csa-sp-3) var(--csa-sp-4);">
-                                <strong>{{ survey.title }}</strong>
+                        {% set sc = status_chip[survey.status]|default({ label: survey.status, cls: 'baja' }) %}
+                        {% set votes = counts[survey.id] ?? 0 %}
+                        {# Solo los borradores se borran; abiertas/cerradas se archivan. #}
+                        {% set can_delete = survey.status == 'draft' %}
+                        <tr>
+                            <td>
+                                <div class="prl-person">
+                                    <span class="prl-person__avatar prl-person__avatar--{{ show_archived ? 'muted' : 'sage' }}" aria-hidden="true">
+                                        <i class="fa fa-check-square-o"></i>
+                                    </span>
+                                    <div class="prl-person__body">
+                                        <a class="prl-person__name" href="{{ path('survey_show', { id: survey.id }) }}">
+                                            {{ survey.title }}
+                                        </a>
+                                        {% if survey.description %}
+                                            <span class="prl-person__meta">{{ survey.description }}</span>
+                                        {% endif %}
+                                        {% if survey.closesAt %}
+                                            <span class="prl-person__meta">Cierre orientativo: {{ survey.closesAt|date('d/m/Y') }}</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
                             </td>
-                            <td style="padding: var(--csa-sp-3) var(--csa-sp-4);">
-                                {{ csa.badge(meta.label, meta.tone) }}
+                            <td class="tight">
+                                <span class="prl-chip prl-chip--{{ sc.cls }}"><span class="dot"></span>{{ sc.label }}</span>
                             </td>
-                            <td style="padding: var(--csa-sp-3) var(--csa-sp-4); text-align: right;">{{ survey.questions|length }}</td>
-                            <td style="padding: var(--csa-sp-3) var(--csa-sp-4); text-align: right;">{{ counts[survey.id] }}</td>
-                            <td style="padding: var(--csa-sp-3) var(--csa-sp-4); text-align: right; white-space: nowrap;">
-                                <div class="csa-row" style="justify-content: flex-end; gap: var(--csa-sp-2);">
-                                    {% if survey.editable %}
-                                        {{ csa.btn('Editar', { variant: 'ghost', href: path('survey_edit', { id: survey.id }) }) }}
-                                        <form method="post" action="{{ path('survey_open', { id: survey.id }) }}" onsubmit="return confirm('Una vez abierta no podrás editar las preguntas. ¿Abrir la encuesta?');" style="display: inline;">
-                                            <input type="hidden" name="_token" value="{{ csrf_token('survey_open_' ~ survey.id) }}">
-                                            <button type="submit" class="csa-btn csa-btn--primary">Abrir</button>
-                                        </form>
-                                    {% elseif survey.open %}
-                                        <form method="post" action="{{ path('survey_close', { id: survey.id }) }}" onsubmit="return confirm('¿Cerrar la encuesta? Dejará de admitir respuestas.');" style="display: inline;">
-                                            <input type="hidden" name="_token" value="{{ csrf_token('survey_close_' ~ survey.id) }}">
-                                            <button type="submit" class="csa-btn csa-btn--ghost">Cerrar</button>
-                                        </form>
+                            <td class="tight">{{ survey.questions|length }}</td>
+                            <td class="tight">{{ votes }}</td>
+                            <td class="actions">
+                                <div class="sv-actions">
+                                    <a href="{{ path('survey_show', { id: survey.id }) }}" title="Ver" aria-label="Ver"><i class="fa fa-eye"></i></a>
+
+                                    {% if survey.status != 'draft' %}
+                                        <a href="{{ path('survey_results', { id: survey.id }) }}" title="Resultados" aria-label="Resultados"><i class="fa fa-bar-chart"></i></a>
                                     {% endif %}
-                                    <form method="post" action="{{ path('survey_delete', { id: survey.id }) }}" onsubmit="return confirm('¿Borrar la encuesta y todas sus respuestas? No se puede deshacer.');" style="display: inline;">
-                                        <input type="hidden" name="_token" value="{{ csrf_token('survey_delete_' ~ survey.id) }}">
-                                        <button type="submit" class="csa-btn csa-btn--ghost" style="color: var(--csa-danger, #b3261e);">Borrar</button>
-                                    </form>
+
+                                    {% if show_archived %}
+                                        {# --- Desarchivar --- #}
+                                        <button type="button" class="prl-btn prl-btn--sm" onclick="document.getElementById('dlg-unarchive-{{ survey.id }}').showModal()">
+                                            <i class="fa fa-undo"></i> Desarchivar
+                                        </button>
+                                        {{ csa.confirm_dialog('dlg-unarchive-' ~ survey.id, {
+                                            variant: 'info',
+                                            eyebrow: 'Restaurar',
+                                            title: 'Restaurar “' ~ survey.title ~ '”',
+                                            body: 'Volverá a aparecer en el listado de encuestas.',
+                                            confirm_label: 'Desarchivar',
+                                            action: path('survey_unarchive', { id: survey.id }),
+                                            csrf_name: '_token',
+                                            csrf_token: csrf_token('survey_unarchive_' ~ survey.id)
+                                        }) }}
+                                    {% else %}
+                                        {% if survey.editable %}
+                                            <a href="{{ path('survey_edit', { id: survey.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>
+                                            {# --- Abrir --- #}
+                                            <button type="button" class="prl-btn prl-btn--primary prl-btn--sm" onclick="document.getElementById('dlg-open-{{ survey.id }}').showModal()">
+                                                <i class="fa fa-play"></i> Abrir
+                                            </button>
+                                            {{ csa.confirm_dialog('dlg-open-' ~ survey.id, {
+                                                variant: 'info',
+                                                eyebrow: 'Abrir a respuestas',
+                                                title: 'Abrir “' ~ survey.title ~ '”',
+                                                body: 'Lxs socixs podrán responder. Una vez abierta ya no podrás editar las preguntas.',
+                                                confirm_label: 'Abrir encuesta',
+                                                action: path('survey_open', { id: survey.id }),
+                                                csrf_name: '_token',
+                                                csrf_token: csrf_token('survey_open_' ~ survey.id)
+                                            }) }}
+                                        {% elseif survey.open %}
+                                            {# --- Cerrar --- #}
+                                            <button type="button" class="prl-btn prl-btn--warn prl-btn--sm" onclick="document.getElementById('dlg-close-{{ survey.id }}').showModal()">
+                                                <i class="fa fa-stop"></i> Cerrar
+                                            </button>
+                                            {{ csa.confirm_dialog('dlg-close-' ~ survey.id, {
+                                                variant: 'warning',
+                                                eyebrow: 'Cerrar',
+                                                title: 'Cerrar “' ~ survey.title ~ '”',
+                                                body: 'Dejará de admitir respuestas. Los resultados quedan disponibles.',
+                                                confirm_label: 'Cerrar encuesta',
+                                                action: path('survey_close', { id: survey.id }),
+                                                csrf_name: '_token',
+                                                csrf_token: csrf_token('survey_close_' ~ survey.id)
+                                            }) }}
+                                        {% endif %}
+
+                                        {# --- Archivar --- #}
+                                        <button type="button" class="prl-btn prl-btn--sm" onclick="document.getElementById('dlg-archive-{{ survey.id }}').showModal()">
+                                            <i class="fa fa-archive"></i> Archivar
+                                        </button>
+                                        {{ csa.confirm_dialog('dlg-archive-' ~ survey.id, {
+                                            variant: 'info',
+                                            eyebrow: 'Archivar',
+                                            title: 'Archivar “' ~ survey.title ~ '”',
+                                            body: 'Se ocultará del listado, pero se conserva con todas sus respuestas. Podrás restaurarla desde “Archivadas”.',
+                                            confirm_label: 'Archivar',
+                                            action: path('survey_archive', { id: survey.id }),
+                                            csrf_name: '_token',
+                                            csrf_token: csrf_token('survey_archive_' ~ survey.id)
+                                        }) }}
+                                    {% endif %}
+
+                                    {# --- Borrar: SOLO si no tiene votos --- #}
+                                    {% if can_delete %}
+                                        <button type="button" class="prl-btn prl-btn--danger prl-btn--sm" title="Borrar" onclick="document.getElementById('dlg-delete-{{ survey.id }}').showModal()">
+                                            <i class="fa fa-trash"></i>
+                                        </button>
+                                        {{ csa.confirm_dialog('dlg-delete-' ~ survey.id, {
+                                            variant: 'danger',
+                                            eyebrow: 'Acción permanente',
+                                            title: 'Borrar “' ~ survey.title ~ '”',
+                                            body: 'Se borrará la encuesta con sus preguntas. No tiene respuestas, así que no se pierde ningún voto. No se puede deshacer.',
+                                            confirm_label: 'Borrar',
+                                            action: path('survey_delete', { id: survey.id }),
+                                            csrf_name: '_token',
+                                            csrf_token: csrf_token('survey_delete_' ~ survey.id)
+                                        }) }}
+                                    {% endif %}
                                 </div>
                             </td>
                         </tr>
                     {% endfor %}
                 </tbody>
             </table>
-        </div>
-    {% endif %}
+        {% endif %}
+    </div>
 
+</div>
 {% endblock %}

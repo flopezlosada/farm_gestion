@@ -50,4 +50,27 @@ class SurveyParticipationRepository extends ServiceEntityRepository
             ->getQuery()
             ->getSingleScalarResult();
     }
+
+    /**
+     * Participantes por encuesta en una sola consulta (evita el N+1 al pintar
+     * el listado). Las encuestas sin participaciones no aparecen; el caller
+     * completa a 0.
+     *
+     * @return array<int, int> survey_id => número de participantes
+     */
+    public function countBySurvey(): array
+    {
+        $rows = $this->createQueryBuilder('p')
+            ->select('IDENTITY(p.survey) AS surveyId', 'COUNT(p.id) AS total')
+            ->groupBy('p.survey')
+            ->getQuery()
+            ->getScalarResult();
+
+        $counts = [];
+        foreach ($rows as $row) {
+            $counts[(int) $row['surveyId']] = (int) $row['total'];
+        }
+
+        return $counts;
+    }
 }

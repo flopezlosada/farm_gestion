@@ -1,0 +1,207 @@
+{# ============================================================
+ # Resultados agregados y anónimos de una encuesta — shell csa.
+ #
+ #   - survey        Survey
+ #   - participants  nº de socixs que respondieron (denominador)
+ #   - blocks        por pregunta: { question, type, options|scale|texts, ... }
+ #
+ # Color: cada pregunta toma un tono de la paleta (rota con el índice) para
+ # que con muchas preguntas no sea un muro verde. Dentro de single/multiple,
+ # la opción ganadora va en el tono FUERTE y el resto en el tono MEDIO del
+ # mismo color. En escala lo que importa es la MEDIA: se resalta como número
+ # grande + medidor; la distribución va como detalle secundario.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% set type_meta = {
+    'single':   'Opción única',
+    'multiple': 'Opción múltiple',
+    'scale':    'Escala 1–5',
+    'text':     'Texto libre'
+} %}
+
+{% set status_meta = {
+    'draft':  { label: 'Borrador', tone: 'warning' },
+    'open':   { label: 'Abierta',  tone: 'success' },
+    'closed': { label: 'Cerrada',  tone: 'neutral' }
+} %}
+
+{# Una barra (etiqueta | pista | conteo). El color sale de las variables CSS
+ # --rest / --win que fija la pregunta (clase svr-hue-N). #}
+{% macro bar(label, count, total, narrow, winner) %}
+    {% set pct = total > 0 ? (count / total * 100) : 0 %}
+    <div class="svr-bar{{ narrow|default(false) ? ' svr-bar--narrow' : '' }}{{ winner|default(false) ? ' svr-bar--winner' : '' }}">
+        <span class="svr-bar__label" title="{{ label }}">
+            {% if winner|default(false) %}<i class="fa fa-star svr-bar__star" aria-hidden="true" title="Opción más votada"></i> {% endif %}{{ label }}
+        </span>
+        <span class="svr-bar__track">
+            <span class="svr-bar__fill" style="width: {{ pct }}%;"></span>
+        </span>
+        <span class="svr-bar__count">{{ count }} · {{ pct|round }}%</span>
+    </div>
+{% endmacro %}
+
+{% import _self as svr %}
+
+{% block title %}Resultados · {{ survey.title }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('survey_index') }}">Encuestas</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('survey_show', { id: survey.id }) }}">{{ survey.title }}</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Resultados</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    <style>
+        .svr-meta { display: flex; align-items: center; gap: var(--csa-sp-3); margin-bottom: var(--csa-sp-4); }
+        /* Fuente explícita con fallback concreto: las respuestas salían en la
+         * serif por defecto del navegador (la variable no resolvía aquí). Se
+         * propaga por herencia a etiquetas, conteos, media y textos. */
+        .svr-q { padding: var(--csa-sp-4); font-family: var(--csa-sans, "Inter", -apple-system, system-ui, sans-serif); }
+        .svr-q + .svr-q { margin-top: var(--csa-sp-3); }
+        .svr-q__head { display: flex; align-items: baseline; gap: var(--csa-sp-2); margin-bottom: var(--csa-sp-3); }
+        .svr-q__title { font-weight: 600; }
+
+        /* ---- Paleta por pregunta: --rest (resto), --win (ganadora), --tint (fondo fila ganadora) ---- */
+        .svr-hue-0 { --rest: #7fa15c; --win: #34611c; --tint: #e9f0df; }
+        .svr-hue-1 { --rest: #cfa948; --win: #8a6512; --tint: #f4ecd6; }
+        .svr-hue-2 { --rest: #cd8763; --win: #9e451f; --tint: #f3e1d7; }
+        .svr-hue-3 { --rest: #5fa79b; --win: #1d6256; --tint: #dcefe9; }
+        .svr-hue-4 { --rest: #a87f9c; --win: #663553; --tint: #eee0ea; }
+        .svr-hue-5 { --rest: #7e9bc0; --win: #2f527d; --tint: #e3e9f2; }
+
+        /* ---- Barra en UNA fila: etiqueta | pista | conteo ---- */
+        .svr-bar { display: flex; align-items: center; gap: var(--csa-sp-3); }
+        .svr-bar + .svr-bar { margin-top: 6px; }
+        .svr-bar__label {
+            flex: 0 0 150px; font-size: 13px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .svr-bar--narrow .svr-bar__label { flex-basis: 28px; text-align: center; color: var(--csa-ink-faint, #888); }
+        .svr-bar__track { flex: 1; height: 16px; border-radius: 5px; background: var(--csa-rule, #eee); overflow: hidden; }
+        .svr-bar__fill { display: block; height: 100%; background: var(--rest, #7fa15c); min-width: 2px; }
+        .svr-bar__count { flex: 0 0 auto; min-width: 62px; text-align: right; font-size: 12px; color: var(--csa-ink-faint, #888); white-space: nowrap; }
+
+        /* Opción ganadora: tono fuerte + fondo tenue en la fila + negrita + estrella.
+         * Padding solo vertical para no desalinear las columnas. */
+        .svr-bar--winner { background: var(--tint, #eaf1e1); border-radius: 6px; padding-top: 4px; padding-bottom: 4px; }
+        .svr-bar--winner .svr-bar__fill { background: var(--win, #34611c); }
+        .svr-bar--winner .svr-bar__label { font-weight: 700; color: var(--csa-ink, #1f2a1a); }
+        .svr-bar--winner .svr-bar__count { font-weight: 700; color: var(--csa-ink, #1f2a1a); }
+        .svr-bar__star { color: var(--win, #8a6512); font-size: 11px; }
+
+        /* ---- Escala: la MEDIA como dato principal ---- */
+        .svr-avg-box { display: flex; align-items: center; gap: var(--csa-sp-4); }
+        .svr-avg-box__num { font-size: 34px; font-weight: 700; line-height: 1; color: var(--win, #34611c); white-space: nowrap; }
+        .svr-avg-box__den { font-size: 16px; font-weight: 500; color: var(--csa-ink-faint, #888); }
+        .svr-avg-box__gauge { flex: 1; }
+        .svr-avg-box__track { height: 12px; border-radius: 6px; background: var(--csa-rule, #eee); overflow: hidden; }
+        .svr-avg-box__fill { height: 100%; background: var(--win, #34611c); border-radius: 6px; }
+        .svr-avg-box__ends { display: flex; justify-content: space-between; font-size: 11px; color: var(--csa-ink-faint, #888); margin-top: 3px; }
+        .svr-dist { margin-top: var(--csa-sp-3); }
+        .svr-dist > summary { cursor: pointer; font-size: 13px; color: var(--csa-ink-faint, #888); margin-bottom: var(--csa-sp-2); }
+
+        /* Respuestas de texto libre: tarjetas tipo cita. */
+        .svr-texts { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: var(--csa-sp-3); }
+        .svr-texts li {
+            position: relative;
+            padding: var(--csa-sp-3) var(--csa-sp-4) var(--csa-sp-3) 38px;
+            background: var(--csa-surface, #f7f7f4);
+            border: 1px solid var(--csa-rule, #e8e6df);
+            border-left: 3px solid var(--rest, #7fa15c);
+            border-radius: 10px;
+            font-style: italic;
+            color: var(--csa-ink-soft, #3f3f3a);
+            line-height: 1.45;
+        }
+        .svr-texts li::before {
+            content: "\201C"; /* comilla de apertura */
+            position: absolute; left: 12px; top: 6px;
+            font-family: Georgia, "Times New Roman", serif;
+            font-size: 28px; line-height: 1;
+            color: var(--rest, #7fa15c); opacity: 0.55;
+        }
+    </style>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header('Encuesta · Resultados', survey.title, 'Resultados agregados y anónimos. No se puede saber quién respondió qué.') }}
+
+    {% set sm = status_meta[survey.status] %}
+    <div class="svr-meta">
+        {{ csa.badge(sm.label, sm.tone) }}
+        <span class="csa-muted"><strong>{{ participants }}</strong> socix{{ participants == 1 ? '' : 's' }} {{ participants == 1 ? 'ha' : 'han' }} respondido</span>
+    </div>
+
+    {% if participants == 0 %}
+        {{ csa.callout('Todavía no hay respuestas. Cuando lxs socixs respondan, aquí verás los resultados.', 'info') }}
+    {% else %}
+        {% for block in blocks %}
+            <div class="csa-card svr-q svr-hue-{{ loop.index0 % 6 }}">
+                <div class="svr-q__head">
+                    <span class="svr-q__title">{{ loop.index }}. {{ block.question.text }}</span>
+                    {{ csa.badge(type_meta[block.type]|default(block.type), 'neutral') }}
+                </div>
+
+                {% if block.type == 'single' or block.type == 'multiple' %}
+                    {# Máximo para resaltar la(s) opción(es) ganadora(s). #}
+                    {% set max_count = block.options|length ? max(block.options|map(r => r.count)) : 0 %}
+                    {% for row in block.options %}
+                        {{ svr.bar(row.label, row.count, participants, false, max_count > 0 and row.count == max_count) }}
+                    {% else %}
+                        <span class="csa-muted">Esta pregunta no tiene opciones.</span>
+                    {% endfor %}
+
+                {% elseif block.type == 'scale' %}
+                    {% if block.scale_avg is null %}
+                        <span class="csa-muted">Sin respuestas.</span>
+                    {% else %}
+                        <div class="svr-avg-box">
+                            <div class="svr-avg-box__num">
+                                {{ block.scale_avg|number_format(1, ',', '.') }}<span class="svr-avg-box__den"> / 5</span>
+                            </div>
+                            <div class="svr-avg-box__gauge">
+                                <div class="svr-avg-box__track">
+                                    <div class="svr-avg-box__fill" style="width: {{ block.scale_avg / 5 * 100 }}%;"></div>
+                                </div>
+                                <div class="svr-avg-box__ends"><span>1 · nada</span><span>media de {{ block.scale_n }} respuesta{{ block.scale_n == 1 ? '' : 's' }}</span><span>5 · mucho</span></div>
+                            </div>
+                        </div>
+
+                        <details class="svr-dist">
+                            <summary>Ver distribución de votos (1–5)</summary>
+                            {% for row in block.scale %}
+                                {{ svr.bar(row.value, row.count, block.scale_n, true, false) }}
+                            {% endfor %}
+                        </details>
+                    {% endif %}
+
+                {% else %}
+                    {% if block.texts is empty %}
+                        <span class="csa-muted">Sin respuestas de texto.</span>
+                    {% else %}
+                        <ul class="svr-texts">
+                            {% for text in block.texts %}
+                                <li>{{ text }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                {% endif %}
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="csa-row" style="gap: var(--csa-sp-2); margin-top: var(--csa-sp-5);">
+        {{ csa.btn('Volver al listado', { variant: 'secondary', href: path('survey_index'), icon: 'fa-arrow-left' }) }}
+        {{ csa.btn('Ver estructura', { variant: 'secondary', href: path('survey_show', { id: survey.id }), icon: 'fa-list-ul' }) }}
+    </div>
+
+{% endblock %}

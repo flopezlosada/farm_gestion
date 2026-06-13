@@ -55,6 +55,15 @@ class Survey
     private \DateTimeImmutable $createdAt;
 
     /**
+     * Archivada: se oculta del listado por defecto, pero NO se borra — conserva
+     * sus preguntas y respuestas. Es ortogonal al ciclo de vida (una encuesta
+     * cerrada con votos se archiva para no verla, sin perder el dato).
+     *
+     * @ORM\Column(name="archived", type="boolean")
+     */
+    private bool $archived = false;
+
+    /**
      * Cierre opcional anunciado. NO cierra la encuesta por sí solo (el cambio
      * de estado es explícito); sirve para informar a lxs socixs de la fecha
      * límite. NULL = sin fecha anunciada.
@@ -137,6 +146,18 @@ class Survey
     public function getCreatedAt(): \DateTimeImmutable
     {
         return $this->createdAt;
+    }
+
+    public function isArchived(): bool
+    {
+        return $this->archived;
+    }
+
+    public function setArchived(bool $archived): self
+    {
+        $this->archived = $archived;
+
+        return $this;
     }
 
     public function getClosesAt(): ?\DateTimeInterface

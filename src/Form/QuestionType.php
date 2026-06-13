@@ -3,11 +3,10 @@
 namespace App\Form;
 
 use App\Entity\Question;
-use App\Entity\QuestionOption;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
-use Symfony\Component\Form\Extension\Core\Type\TextareaType;
+use Symfony\Component\Form\Extension\Core\Type\CollectionType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\Form\FormEvent;
@@ -17,19 +16,16 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
 /**
  * Form de una pregunta dentro de la {@see SurveyType}.
  *
- * Las opciones (single/multiple) NO se modelan como sub-colección de inputs,
- * sino como un único textarea "una opción por línea" ({@see $optionsText},
- * campo no mapeado). Así el form de la encuesta tiene un solo nivel de
- * colección dinámica (las preguntas) en lugar de dos anidados, que es donde se
- * concentra el dolor de JS y prototipos. La conversión texto ↔ QuestionOption
- * se hace aquí, encapsulada en dos listeners:
+ * Las opciones (single/multiple) se modelan como una colección anidada de
+ * {@see QuestionOptionType}: cada opción es un campo de texto propio, con
+ * botones de añadir/quitar (la plantilla resuelve el prototipo `__option__`).
+ * El form de la encuesta tiene por tanto DOS niveles de colección (preguntas →
+ * opciones); el dolor de prototipos anidados se concentra en el JS de
+ * `survey/_form.html.twig`, pero la UX para el equipo es la natural (un campo
+ * por opción) en lugar de un textarea "una por línea".
  *
- *   - PRE_SET_DATA  → al editar, vuelca las opciones existentes al textarea.
- *   - POST_SUBMIT   → reconstruye las QuestionOption desde las líneas del
- *                     textarea (sólo si el tipo usa opciones).
- *
- * Reconstruir (limpiar + recrear) es seguro porque la encuesta sólo se edita
- * en borrador, cuando todavía no hay respuestas que puedan apuntar a una opción.
+ * Reordenar/limpiar opciones es seguro porque la encuesta solo se edita en
+ * borrador, cuando todavía no hay respuestas que apunten a una opción.
  */
 class QuestionType extends AbstractType
 {
@@ -56,56 +52,25 @@ class QuestionType extends AbstractType
             ->add('required', CheckboxType::class, [
                 'label'    => 'Obligatoria',
                 'required' => false,
+            ])
+            ->add('options', CollectionType::class, [
+                'entry_type'     => QuestionOptionType::class,
+                'allow_add'      => true,
+                'allow_delete'   => true,
+                'by_reference'   => false,
+                'label'          => false,
+                'prototype'      => true,
+                'prototype_name' => '__option__',
             ]);
 
-        // Al cargar (edición), volcamos las opciones existentes al textarea.
-        $builder->addEventListener(FormEvents::PRE_SET_DATA, function (FormEvent $event): void {
-            $question = $event->getData();
-            $optionsText = '';
-            if ($question instanceof Question) {
-                $labels = array_map(
-                    static fn (QuestionOption $o): string => $o->getLabel(),
-                    $question->getOptions()->toArray()
-                );
-                $optionsText = implode("\n", $labels);
-            }
-
-            $event->getForm()->add('optionsText', TextareaType::class, [
-                'label'    => 'Opciones (una por línea)',
-                'mapped'   => false,
-                'required' => false,
-                'data'     => $optionsText,
-                'attr'     => ['rows' => 4, 'placeholder' => "Lunes\nMartes\nMiércoles"],
-            ]);
-        });
-
-        // Al enviar, reconstruimos las QuestionOption desde el textarea.
+        // Si el tipo no usa opciones (escala / texto), descartar las que pudieran
+        // haber quedado en el DOM al cambiar de tipo. orphanRemoval=true las borra.
         $builder->addEventListener(FormEvents::POST_SUBMIT, function (FormEvent $event): void {
             $question = $event->getData();
-            if (!$question instanceof Question) {
-                return;
-            }
-
-            // orphanRemoval=true borra de BBDD las que quitemos aquí.
-            foreach ($question->getOptions()->toArray() as $existing) {
-                $question->removeOption($existing);
-            }
-
-            if (!$question->usesOptions()) {
-                return;
-            }
-
-            $raw = (string) $event->getForm()->get('optionsText')->getData();
-            $labels = array_values(array_filter(
-                array_map('trim', explode("\n", $raw)),
-                static fn (string $line): bool => '' !== $line
-            ));
-
-            foreach ($labels as $position => $label) {
-                $option = (new QuestionOption())
-                    ->setLabel($label)
-                    ->setPosition($position);
-                $question->addOption($option);
+            if ($question instanceof Question && !$question->usesOptions()) {
+                foreach ($question->getOptions()->toArray() as $option) {
+                    $question->removeOption($option);
+                }
             }
         });
     }
