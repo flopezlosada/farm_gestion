@@ -75,6 +75,12 @@ jobs:
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
         run: |
+          # Excluimos solo el assets/ de RAÍZ (entry point de Webpack Encore),
+          # anclado con ^ vía --exclude (regex). Con 'exclude-glob assets/' NO se
+          # anclaba y arrastraba los assets/ anidados de los assets legacy (p.ej.
+          # bundles/app/frontend/lib/owlcarousel/assets/ → CSS del carrusel 404).
+          # OJO: este comentario va FUERA del lftp -c "...": dentro de la cadena,
+          # bash no trata # como comentario y se lo pasa a lftp, rompiendo el mirror.
           lftp -c "
             set ssl:verify-certificate no;
             set ftp:ssl-allow no;
@@ -115,10 +121,6 @@ jobs:
               --exclude-glob 'package.json' \
               --exclude-glob 'yarn.lock' \
               --exclude-glob 'webpack.config.js' \
-              # Solo el assets/ de raíz (entry point de Webpack Encore). Anclado
-              # con ^: 'exclude-glob assets/' NO ancla y se cargaba también los
-              # assets/ anidados de los assets legacy (p.ej.
-              # bundles/app/frontend/lib/owlcarousel/assets/ → CSS del carrusel 404).
               --exclude '^assets/' \
               . deploy/staging/;
             # Invalida el cache compilado de prod. En prod Symfony NO recompila
