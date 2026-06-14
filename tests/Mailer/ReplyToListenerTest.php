@@ -9,6 +9,7 @@ use Symfony\Component\Mailer\Envelope;
 use Symfony\Component\Mailer\Event\MessageEvent;
 use Symfony\Component\Mime\Address;
 use Symfony\Component\Mime\Email;
+use Symfony\Component\Mime\RawMessage;
 
 /**
  * Reply-To global: se añade cuando EMAIL_REPLY_TO tiene valor, no cuando está
@@ -64,5 +65,18 @@ class ReplyToListenerTest extends TestCase
     {
         $email = $this->plainEmail()->replyTo(new Address('visitante@contacto.org'));
         $this->assertSame(['visitante@contacto.org'], $this->replyToAfter('csa@csavegadejarama.org', $email));
+    }
+
+    public function testIgnoraMensajeNoEmail(): void
+    {
+        // Un RawMessage no es un Email: el listener no debe tocarlo ni leer
+        // siquiera el ajuste (no hay cabecera Reply-To que poner).
+        $settings = $this->createMock(AppSettings::class);
+        $settings->expects($this->never())->method('getString');
+
+        $envelope = new Envelope(new Address('noreply@csavegadejarama.org'), [new Address('real@socix.org')]);
+        $event = new MessageEvent(new RawMessage('contenido crudo'), $envelope, 'smtp://test');
+
+        (new ReplyToListener($settings))($event);
     }
 }

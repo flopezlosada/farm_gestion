@@ -71,7 +71,7 @@
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token('diagnostics_reply_to') }}">
                     <span class="csa-setting__text" style="flex: 1;">
                         <span class="csa-setting__label">Responder-a</span>
-                        <input type="text" class="csa-input" name="reply_to"
+                        <input type="email" class="csa-input" name="reply_to"
                                value="{{ reply_to }}" placeholder="csa@csavegadejarama.org (vacío = desactivado)">
                     </span>
                     <button type="submit" class="csa-btn csa-btn--primary">Guardar</button>
