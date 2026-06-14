@@ -36,9 +36,17 @@
     1: 'Semanal',
     2: 'Quincenal',
     3: 'Mensual',
-    4: 'Compartida',
     5: 'Solo huevos'
 } %}
+
+{# Las cestas compartidas (4 semanal, 6 quincenal, 7 mensual) no son una
+ # modalidad visual aparte: son su modalidad base + el atributo "compartida".
+ # base_mod las reduce a su modalidad base para reutilizar label y color de
+ # chip (1/2/3/5); shared_ids marca cuáles llevan la sublínea "compartida".
+ # Así el chip nunca desborda la columna y no hay que mantener un color por
+ # cada basket_share nuevo. #}
+{% set base_mod = { 1: 1, 2: 2, 3: 3, 4: 1, 5: 5, 6: 2, 7: 3 } %}
+{% set shared_ids = [4, 6, 7] %}
 
 {% block title %}{{ title|default('Socixs') }}{% endblock %}
 
@@ -246,7 +254,12 @@
                 </button>
                 <div class="prl-pop" id="pop-mod" hidden>
                     {% for m in modalities_all %}
-                        <label class="mod-{{ m.id }}">
+                        {# El dot toma el color de la modalidad BASE (las compartidas
+                         # 4/6/7 no tienen color propio en el CSS): así heredan
+                         # mod-1/2/3 y el filtro queda coherente con el chip de la
+                         # tabla. El label sí mantiene el nombre completo para
+                         # distinguir cada opción de filtro. #}
+                        <label class="mod-{{ base_mod[m.id] ?? m.id }}">
                             <input type="checkbox" name="modality[]" value="{{ m.id }}"
                                    {% if m.id in filters.modalities %}checked{% endif %}>
                             <span class="dot"></span>
@@ -470,10 +483,12 @@
                                 {% endif %}
                                 <td class="tight">
                                     {% if ab %}
-                                        <span class="prl-chip prl-chip--mod-{{ bs_id }}">
-                                            {% if bs_id != 4 %}<span class="dot"></span>{% endif %}
-                                            {{ mod_labels[bs_id] ?? ab.basketShare.name }}
+                                        {% set base_id = base_mod[bs_id] ?? bs_id %}
+                                        <span class="prl-chip prl-chip--mod-{{ base_id }}">
+                                            <span class="dot"></span>
+                                            {{ mod_labels[base_id] ?? ab.basketShare.name }}
                                         </span>
+                                        {% if bs_id in shared_ids %}<div class="prl-pickup__node">compartida</div>{% endif %}
                                     {% elseif partner.parent %}
                                         <span class="prl-cell-muted">vía familiar</span>
                                     {% else %}
