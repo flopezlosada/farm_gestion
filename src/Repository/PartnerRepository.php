@@ -81,9 +81,10 @@ class PartnerRepository extends ServiceEntityRepository
             ->leftJoin('pbs.basket_share', 'bs')
             ->leftJoin('p.weekly_basket_group', 'wbg')
             ->leftJoin('wbg.node', 'n')
-            ->addSelect('pbs', 'bs', 'wbg', 'n')
-            ->orderBy('p.surname', 'ASC')
-            ->addOrderBy('p.name', 'ASC');
+            ->addSelect('pbs', 'bs', 'wbg', 'n');
+        // El orden lo aplica KnpPaginator en el controller (cabeceras
+        // clicables + default por nombre). No fijamos ORDER BY aquí para no
+        // pisar el campo de ordenación que pide el usuario desde la cabecera.
 
         if (!empty($filters['status'])) {
             $qb->andWhere('p.status = :status')->setParameter('status', $filters['status']);

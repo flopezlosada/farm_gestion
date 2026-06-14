@@ -86,7 +86,19 @@ class PartnerController extends AbstractController
         $pagination = $paginator->paginate(
             $qb->getQuery(),
             $request->query->getInt('page', 1),
-            25
+            25,
+            [
+                // Orden por defecto: nombre asc (la columna "Socix" muestra
+                // "nombre apellido", así que ordenar por nombre es lo que el
+                // usuario espera). Apellido como desempate estable: Knp encadena
+                // varios campos con '+', no admite array (lanzaría
+                // InvalidValueException "Cannot sort with array parameter").
+                'defaultSortFieldName' => 'p.name+p.surname',
+                'defaultSortDirection' => 'asc',
+                // Sólo estos valores exactos pueden llegar por ?sort= (anti-inyección);
+                // el subscriber compara el string completo contra esta lista.
+                'sortFieldWhitelist'   => ['p.name+p.surname', 'p.name', 'p.inscription_date', 'p.status'],
+            ]
         );
 
         $title = match ($statusFilter) {

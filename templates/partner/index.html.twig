@@ -422,13 +422,13 @@
                     <thead>
                         <tr>
                             {% if bulk_any %}<th class="check"><span class="sr-only">Selección</span></th>{% endif %}
-                            <th>Socix</th>
-                            {% if status_filter is null %}<th class="tight">Estado</th>{% endif %}
-                            <th class="tight">Cesta</th>
-                            <th class="tight">Huevos</th>
-                            <th class="tight">Recogida</th>
-                            <th class="tight">Teléfono</th>
-                            <th class="tight">Alta</th>
+                            <th class="col-socix prl-sortable">{{ knp_pagination_sortable(pagination, 'Socix', 'p.name+p.surname') }}</th>
+                            {% if status_filter is null %}<th class="col-estado tight prl-sortable">{{ knp_pagination_sortable(pagination, 'Estado', 'p.status') }}</th>{% endif %}
+                            <th class="col-cesta">Cesta</th>
+                            <th class="col-huevos">Huevos</th>
+                            <th class="col-recogida">Recogida</th>
+                            <th class="col-tel tight">Teléfono</th>
+                            <th class="col-alta tight prl-sortable">{{ knp_pagination_sortable(pagination, 'Alta', 'p.inscription_date') }}</th>
                             <th class="actions"><span class="sr-only">Acciones</span></th>
                         </tr>
                     </thead>
@@ -490,7 +490,7 @@
                                         <span class="prl-cell-muted">—</span>
                                     {% endif %}
                                 </td>
-                                <td class="tight">
+                                <td>
                                     {% if partner.weeklyBasketGroup %}
                                         <div class="prl-pickup__name">{{ partner.weeklyBasketGroup.name }}</div>
                                         {% if partner.weeklyBasketGroup.node %}
