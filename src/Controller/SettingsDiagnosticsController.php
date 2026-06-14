@@ -72,6 +72,7 @@ class SettingsDiagnosticsController extends AbstractController
         return $this->render('settings/diagnostics.html.twig', [
             'default_email' => $this->currentUserEmail(),
             'redirect_to' => $this->settings->getString(AppSettings::EMAIL_REDIRECT_TO),
+            'reply_to' => $this->settings->getString(AppSettings::EMAIL_REPLY_TO),
             'result' => $result,
         ]);
     }
@@ -109,6 +110,35 @@ class SettingsDiagnosticsController extends AbstractController
         $this->addFlash('success', $value === ''
             ? 'Redirección desactivada: cada email irá a su destinatario real.'
             : sprintf('Redirección activada: todos los emails irán a %s.', $value));
+
+        return $this->redirectToRoute('settings_diagnostics');
+    }
+
+    /**
+     * Guarda el Reply-To global ({@see AppSettings::EMAIL_REPLY_TO}): con valor,
+     * las respuestas a los emails de la app irán ahí (el From sigue siendo
+     * noreply@); vacío, se desactiva. Valida que sea una única dirección.
+     */
+    #[Route('/reply-to', name: 'settings_diagnostics_reply_to', methods: ['POST'])]
+    public function saveReplyTo(Request $request): Response
+    {
+        if (!$this->isCsrfTokenValid('diagnostics_reply_to', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+            return $this->redirectToRoute('settings_diagnostics');
+        }
+
+        $value = trim((string) $request->request->get('reply_to'));
+
+        if ($value !== '' && !filter_var($value, FILTER_VALIDATE_EMAIL)) {
+            $this->addFlash('warning', sprintf('"%s" no es una dirección de email válida; no se ha guardado.', $value));
+            return $this->redirectToRoute('settings_diagnostics');
+        }
+
+        $this->settings->setString(AppSettings::EMAIL_REPLY_TO, $value);
+
+        $this->addFlash('success', $value === ''
+            ? 'Reply-To desactivado: los emails no llevarán dirección de respuesta.'
+            : sprintf('Reply-To activado: las respuestas irán a %s.', $value));
 
         return $this->redirectToRoute('settings_diagnostics');
     }

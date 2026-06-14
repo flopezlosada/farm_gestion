@@ -52,8 +52,35 @@
             {% endblock %}
         {% endembed %}
 
+        {# ---- Reply-To global ---- #}
+        {% embed '_components/csa_form_section.html.twig' with { num: 2, title: 'Responder-a (Reply-To)' } %}
+            {% block body %}
+                <p class="csa-setting__help" style="margin-bottom: var(--csa-sp-4);">
+                    El remitente de los correos es <strong>noreply@</strong>. Si rellenas aquí una dirección,
+                    las respuestas de lxs socixs irán a esa cuenta (útil en el rodaje, mientras aún no
+                    gestionan desde la web). No afecta a correos que ya llevan su propio Reply-To, como el
+                    formulario de contacto. <strong>Vacío = sin Reply-To.</strong>
+                </p>
+                {% if reply_to %}
+                    <div class="csa-alert csa-alert--info" role="status" style="margin-bottom: var(--csa-sp-3);">
+                        <i class="csa-alert__icon fa fa-reply" aria-hidden="true"></i>
+                        <div class="csa-alert__body">Reply-To ACTIVO: las respuestas van a <strong>{{ reply_to }}</strong>.</div>
+                    </div>
+                {% endif %}
+                <form method="post" action="{{ path('settings_diagnostics_reply_to') }}" class="csa-row" style="gap: var(--csa-sp-3); align-items: flex-end;">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('diagnostics_reply_to') }}">
+                    <span class="csa-setting__text" style="flex: 1;">
+                        <span class="csa-setting__label">Responder-a</span>
+                        <input type="text" class="csa-input" name="reply_to"
+                               value="{{ reply_to }}" placeholder="csa@csavegadejarama.org (vacío = desactivado)">
+                    </span>
+                    <button type="submit" class="csa-btn csa-btn--primary">Guardar</button>
+                </form>
+            {% endblock %}
+        {% endembed %}
+
         {# ---- Email de prueba ---- #}
-        {% embed '_components/csa_form_section.html.twig' with { num: 2, title: 'Email de prueba' } %}
+        {% embed '_components/csa_form_section.html.twig' with { num: 3, title: 'Email de prueba' } %}
             {% block body %}
                 <p class="csa-setting__help" style="margin-bottom: var(--csa-sp-4);">
                     Envía un correo de muestra para comprobar que el SMTP de este entorno conecta y entrega.
@@ -72,7 +99,7 @@
         {% endembed %}
 
         {# ---- Disparadores de cron ---- #}
-        {% embed '_components/csa_form_section.html.twig' with { num: 3, title: 'Disparadores de cron' } %}
+        {% embed '_components/csa_form_section.html.twig' with { num: 4, title: 'Disparadores de cron' } %}
             {% block body %}
                 <p class="csa-setting__help" style="margin-bottom: var(--csa-sp-4);">
                     Lanza los comandos que en producción correrán por cron y mira su salida.
@@ -113,7 +140,7 @@
         {% endembed %}
 
         {# ---- Previsualizar plantillas ---- #}
-        {% embed '_components/csa_form_section.html.twig' with { num: 4, title: 'Previsualizar emails' } %}
+        {% embed '_components/csa_form_section.html.twig' with { num: 5, title: 'Previsualizar emails' } %}
             {% block body %}
                 <p class="csa-setting__help" style="margin-bottom: var(--csa-sp-4);">
                     Abre el email renderizado con datos reales en una pestaña nueva, sin enviar nada.
@@ -138,7 +165,7 @@
 
         {# ---- Salida del último comando ---- #}
         {% if result %}
-            {% embed '_components/csa_form_section.html.twig' with { num: 5, title: 'Salida del comando' } %}
+            {% embed '_components/csa_form_section.html.twig' with { num: 6, title: 'Salida del comando' } %}
                 {% block body %}
                     <p class="csa-setting__help" style="margin-bottom: var(--csa-sp-3);">
                         <code>{{ result.command }}</code> ·
