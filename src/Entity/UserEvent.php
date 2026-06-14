@@ -23,10 +23,12 @@ class UserEvent
 {
     public const TYPE_BLOCK = 'BLOCK';
     public const TYPE_UNBLOCK = 'UNBLOCK';
+    public const TYPE_PASSWORD_RESET_FORCED = 'PASSWORD_RESET_FORCED';
 
     public const TYPES = [
         self::TYPE_BLOCK,
         self::TYPE_UNBLOCK,
+        self::TYPE_PASSWORD_RESET_FORCED,
     ];
 
     public const ACTOR_SYSTEM = 'system';

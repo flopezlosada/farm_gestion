@@ -122,6 +122,11 @@ security:
         # Dispatcher post-login: solo accesible logueado. Redirige a
         # /gestion/dashboard o /panel según roles.
         - { path: ^/post-login$, roles: IS_AUTHENTICATED_FULLY }
+        # Pantalla de (re)establecer contraseña: cualquier cuenta autenticada
+        # (incluida sesión recordada) para no encerrar a quien llega con
+        # remember_me. La protege ForcePasswordChangeSubscriber, que reconduce
+        # aquí a quien tenga passwordSet = false.
+        - { path: ^/account, roles: IS_AUTHENTICATED_REMEMBERED }
         - { path: ^/contact$, roles: PUBLIC_ACCESS }
         # Cualquier rol de gestión permite entrar a /gestion. Dentro,
         # cada controller filtra con #[IsGranted('ROLE_GESTION_X')] según

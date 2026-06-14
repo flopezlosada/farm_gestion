@@ -45,6 +45,10 @@ class UserController extends AbstractController
 
         if ($form->isSubmitted() && $form->isValid()) {
             $entity->setPassword($hasher->hashPassword($entity, $form->get('plainPassword')->getData()));
+            // La contraseña que pone admin es TEMPORAL: admin la conoce, así que
+            // la cuenta nace con passwordSet = false (default) a propósito. En su
+            // primer login, ForcePasswordChangeSubscriber la fuerza a elegir una
+            // contraseña propia que admin nunca verá.
             $em->persist($entity);
             $em->flush();
 
@@ -291,6 +295,67 @@ class UserController extends AbstractController
         $this->addFlash('success', $willEnable
             ? 'Cuenta desbloqueada: la usuaria vuelve a tener acceso.'
             : 'Cuenta bloqueada: la usuaria ya no puede entrar.');
+
+        return $back;
+    }
+
+    /**
+     * Obliga a la cuenta a (re)establecer su contraseña: pone passwordSet = false
+     * y deja constancia en el histórico (UserEvent). En la siguiente petición de
+     * esa cuenta, {@see \App\EventSubscriber\ForcePasswordChangeSubscriber} la
+     * reconduce a la pantalla de cambio y bloquea el resto hasta que elija una
+     * contraseña nueva.
+     *
+     * OJO: si la persona entra con Google, esto no le afecta —el SSO vuelve a
+     * marcar passwordSet = true al loguear—, porque su credencial es Google, no
+     * una contraseña. La plantilla avisa de ello.
+     *
+     * @param Request $request Lleva el _token CSRF y un `return_to_partner`
+     *                         opcional (id del socix al que volver si la acción
+     *                         se lanzó desde su ficha).
+     * @param int     $id      Id de la cuenta a la que forzar el cambio.
+     * @return \Symfony\Component\HttpFoundation\Response Redirección a la ficha
+     *         de la cuenta o a la del socix, según el origen.
+     */
+    public function forcePasswordReset(Request $request, int $id, EntityManagerInterface $em)
+    {
+        $entity = $em->getRepository(\App\Entity\User::class)->find($id);
+
+        if (!$entity) {
+            throw $this->createNotFoundException('Unable to find User entity.');
+        }
+
+        $partnerReturnId = $request->request->getInt('return_to_partner');
+        $back = $partnerReturnId > 0
+            ? $this->redirectToRoute('partner_show', array('id' => $partnerReturnId))
+            : $this->redirect($this->generateUrl('user_show', array('id' => $id)));
+
+        if (!$this->isCsrfTokenValid('user_force_password_reset_' . $id, $request->request->get('_token'))) {
+            $this->addFlash('error', 'Token de seguridad inválido. Inténtalo de nuevo.');
+
+            return $back;
+        }
+
+        // Ya estaba pendiente de configurar contraseña: nada que hacer.
+        if (!$entity->isPasswordSet()) {
+            $this->addFlash('notice', 'Esta cuenta ya tenía pendiente establecer su contraseña.');
+
+            return $back;
+        }
+
+        $entity->setPasswordSet(false);
+
+        $event = new UserEvent($entity, UserEvent::TYPE_PASSWORD_RESET_FORCED);
+        $current = $this->getUser();
+        $event->setActor($current instanceof User ? 'gestor:' . $current->getId() : UserEvent::ACTOR_SYSTEM);
+        $reason = trim((string) $request->request->get('reason', ''));
+        if ($reason !== '') {
+            $event->setNotes($reason);
+        }
+        $em->persist($event);
+        $em->flush();
+
+        $this->addFlash('success', 'Se ha forzado el cambio de contraseña: la próxima vez que entre con email y contraseña tendrá que elegir una nueva.');
 
         return $back;
     }

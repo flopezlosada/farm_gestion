@@ -30,9 +30,6 @@ use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Delivery\WeeklyBasketSkipper;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use Symfony\Component\Form\Extension\Core\Type\PasswordType;
-use Symfony\Component\Form\Extension\Core\Type\RepeatedType;
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -40,8 +37,6 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
-use Symfony\Component\Validator\Constraints\Length;
-use Symfony\Component\Validator\Constraints\NotBlank;
 
 /**
  * Panel del socix — vista personal de cada socia/o.
@@ -899,68 +894,18 @@ class PanelController extends AbstractController
     }
 
     /**
-     * Pantalla bloqueante tras el primer magic-link: el User aterriza aquí
-     * para elegir su contraseña permanente antes de poder usar el panel.
-     * Si ya tiene contraseña configurada, redirige al panel directamente
-     * (la página deja de tener sentido).
-     */
-    #[Route('/setup', name: 'panel_setup', methods: ['GET', 'POST'])]
-    public function setup(
-        Request $request,
-        EntityManagerInterface $em,
-        UserPasswordHasherInterface $hasher,
-    ): Response {
-        $user = $this->getUser();
-        if ($user->isPasswordSet()) {
-            return $this->redirectToRoute('panel');
-        }
-
-        $form = $this->createFormBuilder()
-            ->add('plainPassword', RepeatedType::class, [
-                'type' => PasswordType::class,
-                'invalid_message' => 'Las contraseñas no coinciden.',
-                'required' => true,
-                'first_options' => ['label' => 'Nueva contraseña'],
-                'second_options' => ['label' => 'Repite la contraseña'],
-                'constraints' => [
-                    new NotBlank(message: 'Indica una contraseña.'),
-                    new Length(min: 8, minMessage: 'La contraseña debe tener al menos {{ limit }} caracteres.'),
-                ],
-            ])
-            ->add('submit', SubmitType::class, ['label' => 'Guardar y entrar'])
-            ->getForm();
-
-        $form->handleRequest($request);
-
-        if ($form->isSubmitted() && $form->isValid()) {
-            $user->setPassword($hasher->hashPassword($user, $form->get('plainPassword')->getData()));
-            $user->setPasswordSet(true);
-            $em->flush();
-
-            $this->addFlash('notice', 'Contraseña configurada. Ya puedes entrar con tu email y contraseña la próxima vez.');
-            return $this->redirectToRoute('panel');
-        }
-
-        return $this->render('Panel/setup.html.twig', [
-            'form' => $form->createView(),
-        ]);
-    }
-
-    /**
-     * Gating común a todas las acciones del panel:
-     *   - User aún no ha configurado su contraseña → /panel/setup.
-     *   - User sin Partner vinculado → fuera del panel.
+     * Gating común a todas las acciones del panel: comprueba que el User tenga
+     * un Partner vinculado; si no, lo saca del panel.
+     *
+     * El forzado de contraseña (passwordSet = false) NO se mira aquí: lo cubre
+     * globalmente {@see \App\EventSubscriber\ForcePasswordChangeSubscriber},
+     * que intercepta la petición antes de llegar a este controller.
      *
      * Devuelve null si todo está bien y el controller puede seguir.
-     * No se aplica a la acción setup (que justamente atiende el primer caso).
      */
     private function ensureReady(): ?RedirectResponse
     {
         $user = $this->getUser();
-
-        if ($user !== null && method_exists($user, 'isPasswordSet') && !$user->isPasswordSet()) {
-            return $this->redirectToRoute('panel_setup');
-        }
 
         if ($user && method_exists($user, 'getPartner') && $user->getPartner() !== null) {
             return null;
