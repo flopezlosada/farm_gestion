@@ -5,6 +5,7 @@ namespace App\Command;
 use App\Entity\Basket;
 use App\Entity\WeeklyBasket;
 use App\Repository\DeliveryExceptionRepository;
+use App\Service\AppSettings;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -49,6 +50,7 @@ class GenerateWeeklyDeliveryCommand extends Command
         private readonly EntityManagerInterface $em,
         private readonly WeeklyBasketGenerator $generator,
         private readonly DeliveryExceptionRepository $exceptionRepository,
+        private readonly AppSettings $settings,
     ) {
         parent::__construct();
     }
@@ -58,6 +60,7 @@ class GenerateWeeklyDeliveryCommand extends Command
         $this
             ->addOption('weeks', null, InputOption::VALUE_REQUIRED, 'Cuántos viernes congelar desde hoy (default 1: solo el que entra en operación)', self::DEFAULT_WEEKS)
             ->addOption('basket-id', null, InputOption::VALUE_REQUIRED, 'Procesar un Basket concreto (ignora --weeks). Útil para regenerar ciclos pasados tras una corrección.')
+            ->addOption('force', null, InputOption::VALUE_NONE, 'Ignora el gate de la tarea programada (ejecución manual)')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Lista los Baskets que tocaría sin persistir nada');
     }
 
@@ -68,6 +71,14 @@ class GenerateWeeklyDeliveryCommand extends Command
         $weeks = max(1, (int) $input->getOption('weeks'));
         $dryRun = (bool) $input->getOption('dry-run');
         $basketId = $input->getOption('basket-id');
+
+        // Gate de la tarea programada: apagada en /gestion/settings, NO congela
+        // nada (verde para no disparar alertas del cron). El dry-run y --force
+        // (ejecución manual explícita) la saltan.
+        if (!$dryRun && !$input->getOption('force') && !$this->settings->getBool(AppSettings::CRON_GENERATE_WEEKLY_DELIVERY)) {
+            $io->warning('La tarea programada del congelado semanal está desactivada en /gestion/settings. No se ejecuta.');
+            return Command::SUCCESS;
+        }
 
         if ($basketId !== null) {
             $basket = $this->em->getRepository(Basket::class)->find((int) $basketId);

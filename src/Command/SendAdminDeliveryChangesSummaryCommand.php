@@ -47,6 +47,7 @@ class SendAdminDeliveryChangesSummaryCommand extends Command
             ->addOption('to', null, InputOption::VALUE_REQUIRED, 'Dirección de email del admin (obligatorio si no es dry-run)')
             ->addOption('days', null, InputOption::VALUE_REQUIRED, 'Cuántos días hacia atrás incluir', self::DEFAULT_DAYS)
             ->addOption('since', null, InputOption::VALUE_REQUIRED, 'Fecha desde la que incluir (YYYY-MM-DD). Sobrescribe --days')
+            ->addOption('force', null, InputOption::VALUE_NONE, 'Ignora el gate de la tarea programada (ejecución manual); no afecta a los toggles de email')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Lista los eventos que enviaría sin enviar nada');
     }
 
@@ -56,6 +57,14 @@ class SendAdminDeliveryChangesSummaryCommand extends Command
 
         $dryRun = (bool) $input->getOption('dry-run');
         $to = $input->getOption('to');
+
+        // Gate de la tarea programada: apagada en /gestion/settings, la tarea ni
+        // siquiera reúne los eventos (verde para no disparar alertas del cron).
+        // El dry-run y --force (ejecución manual explícita) la saltan.
+        if (!$dryRun && !$input->getOption('force') && !$this->settings->getBool(AppSettings::CRON_ADMIN_DELIVERY_SUMMARY)) {
+            $io->warning('La tarea programada del resumen a administración está desactivada en /gestion/settings. No se ejecuta.');
+            return Command::SUCCESS;
+        }
 
         // Toggle de configuración: con el envío apagado el cron no manda nada
         // (verde para no disparar alertas). El dry-run sigue funcionando.

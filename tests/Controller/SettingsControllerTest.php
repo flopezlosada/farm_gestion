@@ -155,4 +155,65 @@ class SettingsControllerTest extends AbstractAuthenticatedTest
         $settings = static::getContainer()->get(AppSettings::class);
         $this->assertSame('09:05', $settings->getTime(AppSettings::DEADLINE_TIME));
     }
+
+    /**
+     * La sección "Tareas programadas" expone, por cada cron, su formulario de
+     * ejecución manual (y el de previsualización en los que la ofrecen).
+     */
+    public function testCronSectionExposesRunForms(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $crawler = $client->request('GET', '/gestion/settings/');
+
+        $this->assertResponseIsSuccessful();
+        // Cada cron tiene su form de ejecución real.
+        $this->assertCount(1, $crawler->filter('#cronrun-cron_generate_weekly_delivery'));
+        $this->assertCount(1, $crawler->filter('#cronrun-cron_purge_usage_hits'));
+        // Los de email ofrecen además previsualización (dry-run).
+        $this->assertCount(1, $crawler->filter('#crondry-cron_pickup_reminder'));
+        $this->assertCount(1, $crawler->filter('#crondry-cron_admin_delivery_summary'));
+        // Los de mantenimiento NO ofrecen previsualización.
+        $this->assertCount(0, $crawler->filter('#crondry-cron_purge_usage_hits'));
+    }
+
+    /**
+     * Lanzar a mano un cron de mantenimiento (la purga, idempotente y sin
+     * email) lo ejecuta en proceso, redirige y muestra la salida del comando.
+     */
+    public function testManualCronRunExecutesAndShowsOutput(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $crawler = $client->request('GET', '/gestion/settings/');
+
+        // El form lleva su token CSRF y los campos ocultos (cron + mode=run).
+        $form = $crawler->filter('#cronrun-cron_purge_usage_hits')->form();
+        $client->submit($form);
+
+        $this->assertResponseRedirects('/gestion/settings/');
+        $crawler = $client->followRedirect();
+        $this->assertStringContainsString('Resultado:', $crawler->text());
+    }
+
+    /**
+     * Un cron desconocido en el POST se rechaza (lista blanca {@see AppSettings::CRONS})
+     * sin ejecutar nada.
+     */
+    public function testManualCronRunRejectsUnknownTask(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $crawler = $client->request('GET', '/gestion/settings/');
+
+        // Token válido tomado de un form ya renderizado (misma sesión).
+        $token = $crawler->filter('#cronrun-cron_purge_usage_hits input[name="_csrf_token"]')->attr('value');
+
+        $client->request('POST', '/gestion/settings/cron/run', [
+            '_csrf_token' => $token,
+            'cron' => 'cron.no_existe',
+            'mode' => 'run',
+        ]);
+
+        $this->assertResponseRedirects('/gestion/settings/');
+        $crawler = $client->followRedirect();
+        $this->assertStringContainsString('Tarea desconocida', $crawler->text());
+    }
 }

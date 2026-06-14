@@ -3,6 +3,7 @@
 namespace App\Command;
 
 use App\Repository\UsageHitRepository;
+use App\Service\AppSettings;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -24,6 +25,7 @@ class PurgeUsageHitsCommand extends Command
 
     public function __construct(
         private readonly UsageHitRepository $repository,
+        private readonly AppSettings $settings,
     ) {
         parent::__construct();
     }
@@ -32,12 +34,21 @@ class PurgeUsageHitsCommand extends Command
     {
         $this
             ->addOption('days', null, InputOption::VALUE_REQUIRED, 'Días de retención', (string) self::DEFAULT_DAYS)
+            ->addOption('force', null, InputOption::VALUE_NONE, 'Ignora el gate de la tarea programada (ejecución manual)')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'No borra; solo informa');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
+
+        // Gate de la tarea programada: apagada en /gestion/settings, no borra
+        // nada (verde para no disparar alertas del cron). El dry-run y --force
+        // (ejecución manual explícita) la saltan.
+        if (!$input->getOption('dry-run') && !$input->getOption('force') && !$this->settings->getBool(AppSettings::CRON_PURGE_USAGE_HITS)) {
+            $io->warning('La tarea programada de purga del rastro de uso está desactivada en /gestion/settings. No se ejecuta.');
+            return Command::SUCCESS;
+        }
 
         $days = (int) $input->getOption('days');
         if ($days < 1) {

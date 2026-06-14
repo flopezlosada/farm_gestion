@@ -3,9 +3,13 @@
 namespace App\Controller;
 
 use App\Service\AppSettings;
+use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Console\Input\ArrayInput;
+use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\KernelInterface;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
@@ -22,11 +26,87 @@ class SettingsController extends AbstractController
      * tal y como los declara el catálogo.
      */
     #[Route('/', name: 'settings_index', methods: ['GET'])]
-    public function index(AppSettings $settings): Response
+    public function index(Request $request, AppSettings $settings): Response
     {
+        // La salida de la última ejecución manual de un cron se guarda en sesión
+        // (no en flash: es multilínea) y se consume una sola vez al mostrarla.
+        $cronOutput = $request->getSession()->remove('cron_last_output');
+
         return $this->render('settings/index.html.twig', [
             'groups' => $this->groupedSettings($settings),
+            'cron_output' => $cronOutput,
         ]);
+    }
+
+    /**
+     * Lanza un cron a mano, en proceso (sin depender de exec/proc_open, que el
+     * hosting compartido puede tener deshabilitados): usa la API de consola de
+     * Symfony y captura la salida para mostrársela a la administración.
+     *
+     * Sólo se puede lanzar lo declarado en {@see AppSettings::CRONS} (lista
+     * blanca: el `cron` del POST se valida contra ese mapa). `mode=dry` añade
+     * --dry-run; cualquier otro valor es ejecución real y pasa --force para
+     * saltar el gate de la tarea programada (no los toggles de email, que se
+     * respetan: con el email apagado, un envío manual tampoco sale).
+     */
+    #[Route('/cron/run', name: 'settings_cron_run', methods: ['POST'])]
+    public function runCron(Request $request, KernelInterface $kernel): Response
+    {
+        if (!$this->isCsrfTokenValid('settings_cron_run', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+            return $this->redirectToRoute('settings_index');
+        }
+
+        $key = (string) $request->request->get('cron');
+        $meta = AppSettings::CRONS[$key] ?? null;
+        if ($meta === null) {
+            $this->addFlash('warning', 'Tarea desconocida.');
+            return $this->redirectToRoute('settings_index');
+        }
+
+        $dryRun = $request->request->get('mode') === 'dry';
+
+        $args = ['command' => $meta['command']];
+        if ($dryRun) {
+            $args['--dry-run'] = true;
+        } else {
+            $args['--force'] = true;
+        }
+
+        // El resumen a administración necesita un destinatario en ejecución real:
+        // se lo mandamos a quien pulsa (el admin de la sesión). En dry-run no hace
+        // falta (no envía nada).
+        if ($key === AppSettings::CRON_ADMIN_DELIVERY_SUMMARY && !$dryRun) {
+            $adminEmail = $this->getUser()?->getEmail();
+            if (!$adminEmail) {
+                $this->addFlash('warning', 'Tu usuario no tiene email configurado; no se puede enviar el resumen. Usa la previsualización o configura tu email.');
+                return $this->redirectToRoute('settings_index');
+            }
+            $args['--to'] = $adminEmail;
+        }
+
+        // Estos comandos son cortos (volúmenes pequeños), pero el envío por SMTP
+        // puede tardar: levantamos el límite de tiempo para que no lo corte PHP.
+        @set_time_limit(0);
+
+        $application = new Application($kernel);
+        $application->setAutoExit(false);
+        $output = new BufferedOutput();
+        $exitCode = $application->run(new ArrayInput($args), $output);
+
+        $label = AppSettings::BOOLEANS[$key]['label'] ?? $meta['command'];
+        $request->getSession()->set('cron_last_output', [
+            'label' => $label . ($dryRun ? ' (previsualización)' : ''),
+            'command' => $meta['command'],
+            'output' => trim($output->fetch()),
+            'ok' => $exitCode === 0,
+        ]);
+        $this->addFlash(
+            $exitCode === 0 ? 'success' : 'error',
+            sprintf('Tarea «%s» ejecutada (código %d). Salida abajo.', $label, $exitCode)
+        );
+
+        return $this->redirectToRoute('settings_index');
     }
 
     /**
@@ -83,13 +163,21 @@ class SettingsController extends AbstractController
         $groups = [];
 
         foreach (AppSettings::BOOLEANS as $name => $definition) {
-            $groups[$definition['group']][] = [
+            $item = [
                 'type' => 'bool',
                 'name' => $name,
                 'label' => $definition['label'],
                 'help' => $definition['help'],
                 'value' => $settings->getBool($name),
             ];
+            // Los toggles de cron llevan además su comando para el botón
+            // "Ejecutar ahora" (y si piden confirmación / ofrecen dry-run).
+            if (isset(AppSettings::CRONS[$name])) {
+                $item['command'] = AppSettings::CRONS[$name]['command'];
+                $item['confirm'] = AppSettings::CRONS[$name]['confirm'];
+                $item['dry'] = AppSettings::CRONS[$name]['dry'];
+            }
+            $groups[$definition['group']][] = $item;
         }
 
         foreach (AppSettings::INTEGERS as $name => $definition) {

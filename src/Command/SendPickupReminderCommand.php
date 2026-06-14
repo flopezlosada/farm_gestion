@@ -54,12 +54,21 @@ class SendPickupReminderCommand extends Command
         $this
             ->addOption('basket', null, InputOption::VALUE_REQUIRED, 'ID de Basket concreto')
             ->addOption('date', null, InputOption::VALUE_REQUIRED, 'Fecha del viernes (YYYY-MM-DD)')
+            ->addOption('force', null, InputOption::VALUE_NONE, 'Ignora el gate de la tarea programada (ejecución manual); no afecta a los toggles de email')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'No envía, solo lista destinatarios');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
+
+        // Gate de la tarea programada: apagada en /gestion/settings, la tarea ni
+        // siquiera calcula destinatarios (sale en verde para no disparar alertas
+        // del cron). El dry-run y --force (ejecución manual explícita) la saltan.
+        if (!$input->getOption('dry-run') && !$input->getOption('force') && !$this->settings->getBool(AppSettings::CRON_PICKUP_REMINDER)) {
+            $io->warning('La tarea programada del recordatorio está desactivada en /gestion/settings. No se ejecuta.');
+            return Command::SUCCESS;
+        }
 
         // Toggle de configuración: con el envío apagado el cron no manda nada
         // (y sale en verde para no disparar alertas). El dry-run sigue

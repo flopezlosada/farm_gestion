@@ -21,6 +21,17 @@
         'Ajustes de la app, por categorías. Cambia lo que quieras en cualquier pestaña y guarda una sola vez.'
     ) }}
 
+    {# Salida de la última ejecución manual de un cron (se muestra una sola vez). #}
+    {% if cron_output %}
+        <div class="csa-card {{ cron_output.ok ? 'csa-card--accent-green' : 'csa-card--accent-terracotta' }}" style="margin-bottom:var(--csa-sp-5);">
+            <div class="csa-row-between">
+                <strong>Resultado: {{ cron_output.label }}</strong>
+                <code class="csa-setting__help">{{ cron_output.command }}</code>
+            </div>
+            <pre style="margin-top:var(--csa-sp-3); white-space:pre-wrap; overflow:auto; max-height:360px; font-size:12px; background:var(--csa-surface-alt); padding:var(--csa-sp-3); border-radius:6px;">{{ cron_output.output ?: '(sin salida)' }}</pre>
+        </div>
+    {% endif %}
+
     {# Pestañas de categoría (cliente): muestran/ocultan cada panel sin recargar,
      # de modo que el form sigue siendo único y un solo "Guardar" persiste todo
      # (los campos ocultos se envían igual). A ancho completo para que quepan en
@@ -86,6 +97,23 @@
                                             <span class="csa-setting__help">{{ s.help }}</span>
                                         </span>
                                     </label>
+                                    {# Tareas programadas: botones de ejecución manual. Los envíos van a
+                                     # formularios externos (definidos tras el form de guardado), referenciados
+                                     # por `form=`, porque no se pueden anidar formularios. #}
+                                    {% if s.command is defined %}
+                                        {% set idsafe = s.name|replace({'.': '_'}) %}
+                                        <div class="csa-setting__actions" style="display:flex; gap:var(--csa-sp-2); padding:0 0 var(--csa-sp-2) calc(var(--csa-sp-8) + var(--csa-sp-2));">
+                                            {% if s.confirm %}
+                                                <button type="button" class="csa-btn csa-btn--ghost csa-btn--sm"
+                                                        onclick="document.getElementById('confirm-cron-{{ idsafe }}').showModal()">Ejecutar ahora</button>
+                                            {% else %}
+                                                <button type="submit" form="cronrun-{{ idsafe }}" class="csa-btn csa-btn--ghost csa-btn--sm">Ejecutar ahora</button>
+                                            {% endif %}
+                                            {% if s.dry %}
+                                                <button type="submit" form="crondry-{{ idsafe }}" class="csa-btn csa-btn--ghost csa-btn--sm">Previsualizar</button>
+                                            {% endif %}
+                                        </div>
+                                    {% endif %}
                                 {% endfor %}
                             </div>
                         {% endblock %}
@@ -100,6 +128,39 @@
 
         </div>
     </form>
+
+    {# Formularios de ejecución manual de crons, fuera del form de guardado (no se
+     # pueden anidar). Cada botón "Ejecutar ahora"/"Previsualizar" los referencia
+     # por `form=`; los de email confirman antes con un diálogo. #}
+    {% for group, items in groups %}
+        {% for s in items %}
+            {% if s.command is defined %}
+                {% set idsafe = s.name|replace({'.': '_'}) %}
+                <form id="cronrun-{{ idsafe }}" method="post" action="{{ path('settings_cron_run') }}" hidden>
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('settings_cron_run') }}">
+                    <input type="hidden" name="cron" value="{{ s.name }}">
+                    <input type="hidden" name="mode" value="run">
+                </form>
+                {% if s.dry %}
+                    <form id="crondry-{{ idsafe }}" method="post" action="{{ path('settings_cron_run') }}" hidden>
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token('settings_cron_run') }}">
+                        <input type="hidden" name="cron" value="{{ s.name }}">
+                        <input type="hidden" name="mode" value="dry">
+                    </form>
+                {% endif %}
+                {% if s.confirm %}
+                    {{ csa.confirm_dialog('confirm-cron-' ~ idsafe, {
+                        variant: 'warning',
+                        title: 'Ejecutar ahora: ' ~ s.label,
+                        body: 'La tarea se ejecuta de inmediato y enviará correo real, salvo que el envío de emails esté apagado en esta misma pantalla. ¿Continuar?',
+                        confirm_label: 'Ejecutar',
+                        cancel_label: 'Cancelar',
+                        external_form_id: 'cronrun-' ~ idsafe,
+                    }) }}
+                {% endif %}
+            {% endif %}
+        {% endfor %}
+    {% endfor %}
 
 {% endblock %}
 

@@ -64,6 +64,17 @@ class AppSettings
     public const EMAIL_REDIRECT_TO = 'email.redirect_to';
 
     /**
+     * Dirección de Reply-To que se añade a TODOS los emails salientes que no
+     * lleven ya uno propio (p.ej. el formulario de contacto pone el del
+     * visitante y NO se pisa). El From es un buzón `noreply@`; este ajuste
+     * permite que las respuestas de socixs lleguen a una cuenta humana leída
+     * durante el rodaje, cuando aún no tienen acceso a la web. La aplica
+     * {@see \App\Mailer\ReplyToListener}. Vacío (default) = sin Reply-To. Se
+     * edita desde la pantalla de diagnóstico de envíos.
+     */
+    public const EMAIL_REPLY_TO = 'email.reply_to';
+
+    /**
      * Antelación (en días sobre la fecha del reparto) con la que se envía el
      * recordatorio de recogida. La lee {@see \App\Command\SendPickupReminderCommand}.
      */
@@ -105,6 +116,35 @@ class AppSettings
      * {@see \App\Security\FeatureVoter} vía {@see is_granted('FEATURE_SURVEYS')}.
      */
     public const FEATURE_SURVEYS = 'feature.surveys';
+
+    /**
+     * Interruptores de las tareas programadas (crons). Apagado, el comando
+     * correspondiente sale sin hacer nada en cuanto arranca: como el hosting es
+     * solo-FTP y no podemos tocar el crontab desde la app, el cron sigue
+     * disparando pero se auto-inhibe leyendo este flag. Son independientes de los
+     * toggles de email: para los dos crons que envían correo, apagar el cron
+     * impide incluso calcular destinatarios; apagar solo el email deja correr la
+     * tarea pero no entrega nada.
+     */
+    public const CRON_PICKUP_REMINDER = 'cron.pickup_reminder';
+    public const CRON_ADMIN_DELIVERY_SUMMARY = 'cron.admin_delivery_summary';
+    public const CRON_PURGE_USAGE_HITS = 'cron.purge_usage_hits';
+    public const CRON_GENERATE_WEEKLY_DELIVERY = 'cron.generate_weekly_delivery';
+
+    /**
+     * Mapa de tareas programadas para la ejecución manual desde la pantalla de
+     * configuración: clave del toggle => metadatos. `command` es el nombre del
+     * comando de consola que se lanza en proceso ({@see \App\Controller\SettingsController::runCron});
+     * `confirm` marca los que envían correo real (piden confirmación en la UI);
+     * `dry` los que ofrecen además un botón de previsualización (--dry-run).
+     * Es también la lista blanca: sólo se puede lanzar a mano lo declarado aquí.
+     */
+    public const CRONS = [
+        self::CRON_GENERATE_WEEKLY_DELIVERY => ['command' => 'app:generate-weekly-delivery', 'confirm' => false, 'dry' => false],
+        self::CRON_PICKUP_REMINDER => ['command' => 'app:send-pickup-reminders', 'confirm' => true, 'dry' => true],
+        self::CRON_ADMIN_DELIVERY_SUMMARY => ['command' => 'app:send-admin-delivery-changes-summary', 'confirm' => true, 'dry' => true],
+        self::CRON_PURGE_USAGE_HITS => ['command' => 'app:purge-usage-hits', 'confirm' => false, 'dry' => false],
+    ];
 
     /**
      * Catálogo de ajustes booleanos: clave => [grupo, etiqueta, ayuda, default].
@@ -159,6 +199,30 @@ class AppSettings
             'label' => 'Encuestas',
             'help' => 'Abre el módulo de encuestas, tanto la gestión interna como la respuesta de lxs socixs. Apagado, se oculta del menú y no es accesible.',
             'default' => false,
+        ],
+        self::CRON_GENERATE_WEEKLY_DELIVERY => [
+            'group' => 'Tareas programadas',
+            'label' => 'Congelar el listado semanal',
+            'help' => 'Cada lunes blinda el listado del reparto de la semana que entra, para que no se mueva bajo quien reparte (app:generate-weekly-delivery). Es la tarea más delicada: apagada, el listado de la semana NO se congela. Déjala encendida salvo que sepas lo que haces.',
+            'default' => true,
+        ],
+        self::CRON_PICKUP_REMINDER => [
+            'group' => 'Tareas programadas',
+            'label' => 'Tarea del recordatorio de recogida',
+            'help' => 'Ejecuta a diario el comando que avisa a quincenales y mensuales del próximo reparto (app:send-pickup-reminders). Es independiente del email: apagada aquí, la tarea ni se ejecuta; si la dejas encendida pero apagas el email del recordatorio, corre pero no envía.',
+            'default' => true,
+        ],
+        self::CRON_ADMIN_DELIVERY_SUMMARY => [
+            'group' => 'Tareas programadas',
+            'label' => 'Tarea del resumen a administración',
+            'help' => 'Ejecuta el comando del digest periódico de cambios a administración (app:send-admin-delivery-changes-summary). Independiente del email del resumen, igual que el recordatorio.',
+            'default' => true,
+        ],
+        self::CRON_PURGE_USAGE_HITS => [
+            'group' => 'Tareas programadas',
+            'label' => 'Purga del rastro de uso',
+            'help' => 'Borra periódicamente la telemetría de uso anterior al período de retención (app:purge-usage-hits), por minimización de datos. Apagada, el rastro se acumula sin límite.',
+            'default' => true,
         ],
     ];
 
@@ -220,6 +284,12 @@ class AppSettings
             'group' => 'Pruebas de envío',
             'label' => 'Redirigir todos los emails a',
             'help' => 'Direcciones (separadas por comas) que recibirán TODOS los emails de la app, en lugar de sus destinatarios reales. Pensado para staging: te llegan a tu bandeja sin escribir a socixs. DÉJALO VACÍO EN PRODUCCIÓN.',
+            'default' => '',
+        ],
+        self::EMAIL_REPLY_TO => [
+            'group' => 'Correo',
+            'label' => 'Responder-a (Reply-To) de los emails',
+            'help' => 'Si rellenas una dirección, las respuestas a los correos de la app irán ahí (el remitente sigue siendo noreply@). Útil en el rodaje, mientras lxs socixs aún no gestionan desde la web. Vacío = sin Reply-To.',
             'default' => '',
         ],
     ];
