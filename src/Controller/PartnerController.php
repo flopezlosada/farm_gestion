@@ -19,14 +19,18 @@ use App\Entity\BasketComponent;
 use App\Repository\BasketRepository;
 use App\Repository\PartnerDeliveryShiftRepository;
 use App\Repository\PartnerRepository;
+use App\Service\Delivery\CohortChoiceBuilder;
 use App\Service\Delivery\DeliveryCalendarProjector;
 use App\Service\Delivery\DeliveryCalendarViewBuilder;
 use App\Service\Delivery\DeliveryShiftApplier;
 use App\Service\Delivery\PartnerMonthResetter;
 use App\Repository\WeeklyBasketGroupRepository;
-use App\Repository\WeeklyBasketRepository;
+use App\Security\MagicLinkMailer;
+use App\Security\PartnerAccessPolicy;
+use App\Security\PartnerUserProvisioner;
 use App\Service\Delivery\ExtraBasketEditor;
 use App\Service\Delivery\NodeDeliveryDate;
+use App\Service\Delivery\PickupRelocationOptions;
 use App\Service\Delivery\PickupRelocator;
 use App\Service\Delivery\WeeklyBasketComponentEditor;
 use App\Service\Delivery\WeeklyBasketGenerator;
@@ -53,10 +57,15 @@ class PartnerController extends AbstractController
         EntityManagerInterface $em,
         PaginatorInterface $paginator
     ): Response {
+        // El filtro "por confirmar" es transversal al estado: los pendientes
+        // están en baja, así que al activarlo ignoramos la pestaña de estado
+        // para verlos todos (si no, ACTIVO + por confirmar daría vacío).
+        $needsReview = $request->query->getBoolean('needs_review');
+
         // Pestaña por defecto: ACTIVO. Para ver el listado completo el call
         // site tiene que pedir explícitamente ?status=ALL.
         $rawStatus = $request->query->get('status', Partner::STATUS_ACTIVO);
-        $statusFilter = in_array($rawStatus, Partner::STATUSES, true) ? $rawStatus : null;
+        $statusFilter = $needsReview ? null : (in_array($rawStatus, Partner::STATUSES, true) ? $rawStatus : null);
 
         // Cast manual de node/wbg porque $request->query->getInt() lanza
         // BadRequestException si el valor es "" (string vacío), cosa que el
@@ -65,9 +74,11 @@ class PartnerController extends AbstractController
             'status'     => $statusFilter,
             'modalities' => array_values(array_filter(array_map('intval', (array) $request->query->all('modality')))),
             'cesta'      => in_array($request->query->get('cesta'), ['yes', 'no'], true) ? $request->query->get('cesta') : null,
+            'eggs'       => in_array($request->query->get('eggs'), ['yes', 'no'], true) ? $request->query->get('eggs') : null,
             'node'       => ((int) $request->query->get('node', '')) ?: null,
             'wbg'        => ((int) $request->query->get('wbg', '')) ?: null,
             'q'          => trim((string) $request->query->get('q', '')) ?: null,
+            'needs_review' => $needsReview ?: null,
         ];
 
         $qb = $partnerRepository->findFilteredQb($filters);
@@ -75,7 +86,19 @@ class PartnerController extends AbstractController
         $pagination = $paginator->paginate(
             $qb->getQuery(),
             $request->query->getInt('page', 1),
-            25
+            25,
+            [
+                // Orden por defecto: nombre asc (la columna "Socix" muestra
+                // "nombre apellido", así que ordenar por nombre es lo que el
+                // usuario espera). Apellido como desempate estable: Knp encadena
+                // varios campos con '+', no admite array (lanzaría
+                // InvalidValueException "Cannot sort with array parameter").
+                'defaultSortFieldName' => 'p.name+p.surname',
+                'defaultSortDirection' => 'asc',
+                // Sólo estos valores exactos pueden llegar por ?sort= (anti-inyección);
+                // el subscriber compara el string completo contra esta lista.
+                'sortFieldWhitelist'   => ['p.name+p.surname', 'p.name', 'p.inscription_date', 'p.status'],
+            ]
         );
 
         $title = match ($statusFilter) {
@@ -100,6 +123,9 @@ class PartnerController extends AbstractController
             $counts['ALL'] += (int) $row['total'];
         }
 
+        // Pendientes de confirmar: alimenta el chip de acceso del listado.
+        $needsReviewCount = (int) $partnerRepository->count(['needs_review' => true]);
+
         // Opciones para los popovers de filtro. Las cargo siempre (no son
         // costosas: <10 entidades cada una) para que la UI no se quede sin
         // opciones cuando el listado venga vacío.
@@ -118,6 +144,7 @@ class PartnerController extends AbstractController
             'status_filter'  => $statusFilter,
             'statuses'       => Partner::STATUSES,
             'status_counts'  => $counts,
+            'needs_review_count' => $needsReviewCount,
             'filters'        => $filters,
             'modalities_all' => $modalitiesAll,
             'nodes_all'      => $nodesAll,
@@ -183,7 +210,13 @@ class PartnerController extends AbstractController
     public function new(Request $request, EntityManagerInterface $entityManager): Response
     {
         $partner = new Partner();
-        $form = $this->createForm(PartnerType::class, $partner);
+        // Alta sólo con datos de persona: la cesta Y el grupo de recogida se
+        // asignan después desde la ficha ("añadir cesta"), que es el único
+        // camino de creación de cesta (pasa por reconcile). Pedido por
+        // administración (reunión 2026-06-11, punto 3).
+        $form = $this->createForm(PartnerType::class, $partner, [
+            'include_pickup_group' => false,
+        ]);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
@@ -210,9 +243,9 @@ class PartnerController extends AbstractController
         Partner $partner,
         \App\Repository\PartnerEventRepository $partnerEventRepository,
         BasketRepository $basketRepo,
-        WeeklyBasketRepository $weeklyBasketRepo,
-        WeeklyBasketGroupRepository $weeklyBasketGroupRepo,
         NodeDeliveryDate $nodeDeliveryDate,
+        PickupRelocationOptions $relocationOptions,
+        PartnerAccessPolicy $accessPolicy,
         EntityManagerInterface $em,
     ): Response {
         $events = $partnerEventRepository->findForPartner($partner);
@@ -274,64 +307,109 @@ class PartnerController extends AbstractController
             'egg_amount_names' => $toNameMap($em->getRepository(EggAmount::class)->findAll()),
             'egg_period_names' => $toNameMap($em->getRepository(EggPeriod::class)->findAll()),
             'extra_weeks' => $this->extraBasketWeeks($partner, $basketRepo, $nodeDeliveryDate),
-            'relocate_weeks' => $this->relocatePickupWeeks($partner, $weeklyBasketRepo),
-            'relocate_groups' => $this->relocatePickupGroups($partner, $weeklyBasketGroupRepo),
+            'relocate_weeks' => $relocationOptions->weeksForPartner($partner),
+            'relocate_groups' => $relocationOptions->groupsForPartner($partner),
             'donated_baskets' => $donatedBaskets,
+            // Cuenta utilizable por email canónico (puede ser la de un familiar
+            // con buzón compartido, a diferencia de linked_user que va por la
+            // relación User->Partner). Alimenta la tarjeta "Acceso a la web".
+            'access_user' => $accessPolicy->accountFor($partner),
+            'self_registration_open' => $accessPolicy->isSelfRegistrationOpen(),
         ]);
     }
 
     /**
-     * Semanas (Basket) a las que el socix puede trasladar su recogida a otro nodo: las
-     * FUTURAS en las que YA tiene entrega (solo se traslada lo que existe). La etiqueta
-     * usa la fecha física actual de su entrega.
+     * Da acceso a la web a este socix aunque el alta global esté cerrada:
+     * provisiona su User (o recupera el existente) saltándose el toggle de
+     * configuración, y opcionalmente le envía el magic-link en el momento.
+     * Es el mecanismo de despliegue selectivo previo a abrir el grifo.
      *
-     * @param Partner                $partner
-     * @param WeeklyBasketRepository $weeklyBasketRepo
-     * @return list<array{basketId:int, date:\DateTimeInterface}>
+     * @param Request                $request     Lleva send_link (opcional) y el token CSRF.
+     * @param Partner                $partner     Socix (de la ruta).
+     * @param PartnerUserProvisioner $provisioner
+     * @param MagicLinkMailer        $magicLinkMailer
      */
-    private function relocatePickupWeeks(Partner $partner, WeeklyBasketRepository $weeklyBasketRepo): array
-    {
-        $weeks = [];
-        foreach ($weeklyBasketRepo->findFutureForPartner($partner) as $wb) {
-            $basket = $wb->getBasket();
-            if ($basket === null) {
-                continue;
-            }
-            $weeks[] = ['basketId' => $basket->getId(), 'date' => $wb->getDeliveryDate() ?? $basket->getDate()];
+    #[Route("/{id}/grant-access", name: "partner_grant_access", methods: ["POST"], requirements: ["id" => "\\d+"])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function grantAccess(
+        Request $request,
+        Partner $partner,
+        PartnerUserProvisioner $provisioner,
+        PartnerAccessPolicy $accessPolicy,
+        MagicLinkMailer $magicLinkMailer,
+    ): Response {
+        $back = ['id' => $partner->getId()];
+
+        if (!$this->isCsrfTokenValid('partner_grant_access', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+            return $this->redirectToRoute('partner_show', $back);
         }
 
-        return $weeks;
+        // Distinguir crear de recuperar: con un doble submit el flash no debe
+        // decir "creado" sobre una cuenta que ya existía.
+        $alreadyExisted = $accessPolicy->accountFor($partner) !== null;
+
+        $user = $provisioner->provision($partner);
+        if ($user === null) {
+            $this->addFlash('warning', 'No se puede dar acceso: el socix no tiene email.');
+            return $this->redirectToRoute('partner_show', $back);
+        }
+
+        $state = $alreadyExisted ? 'La cuenta ya existía' : 'Acceso creado';
+        if ($request->request->getBoolean('send_link')) {
+            $magicLinkMailer->send($user);
+            $this->addFlash('success', sprintf('%s; enlace enviado a %s.', $state, $user->getEmail()));
+        } else {
+            $this->addFlash('success', sprintf('%s para %s (sin enviar nada).', $state, $user->getEmail()));
+        }
+
+        return $this->redirectToRoute('partner_show', $back);
     }
 
     /**
-     * NODOS a los que el socix puede trasladar su recogida: una opción por nodo distinto al
-     * suyo, etiqueta = nombre del nodo. El `id` es un grupo REPRESENTATIVO del nodo destino
-     * (el relocado sale en la sección "Trasladados", así que el grupo concreto es invisible;
-     * basta uno para anclar el WeeklyBasket). No se filtra por "reparte esa semana" porque
-     * la semana se elige aparte (chips); si el par semana/nodo no encaja, PickupRelocator lo
-     * rechaza con aviso. Ver docs/redesign/modelo-overrides-reparto.md.
+     * (Re)envía el magic-link de acceso a la cuenta de este socix. Para
+     * socixs sin cuenta está el botón "dar acceso" ({@see grantAccess()}).
      *
-     * @param Partner                     $partner
-     * @param WeeklyBasketGroupRepository $groupRepo
-     * @return list<array{id:int, label:string}> Ordenados por nombre de nodo.
+     * @param Request             $request         Lleva el token CSRF.
+     * @param Partner             $partner         Socix (de la ruta).
+     * @param PartnerAccessPolicy $accessPolicy
+     * @param MagicLinkMailer     $magicLinkMailer
      */
-    private function relocatePickupGroups(Partner $partner, WeeklyBasketGroupRepository $groupRepo): array
-    {
-        $currentNodeId = $partner->getWeeklyBasketGroup()?->getNode()?->getId();
+    #[Route("/{id}/send-access-link", name: "partner_send_access_link", methods: ["POST"], requirements: ["id" => "\\d+"])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function sendAccessLink(
+        Request $request,
+        Partner $partner,
+        PartnerAccessPolicy $accessPolicy,
+        MagicLinkMailer $magicLinkMailer,
+    ): Response {
+        $back = ['id' => $partner->getId()];
 
-        // Un grupo representativo por nodo (el primero por nombre), excluyendo el nodo de casa.
-        $byNode = [];
-        foreach ($groupRepo->findBy([], ['name' => 'ASC']) as $group) {
-            $node = $group->getNode();
-            if ($node === null || $node->getId() === $currentNodeId) {
-                continue;
-            }
-            $byNode[$node->getId()] ??= ['id' => $group->getId(), 'label' => $node->getName()];
+        if (!$this->isCsrfTokenValid('partner_send_access_link', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+            return $this->redirectToRoute('partner_show', $back);
         }
-        $options = array_values($byNode);
-        usort($options, static fn (array $a, array $b) => strcmp($a['label'], $b['label']));
 
-        return $options;
+        $user = $accessPolicy->accountFor($partner);
+        if ($user === null) {
+            $this->addFlash('warning', 'Este socix aún no tiene cuenta de acceso. Usa "Dar acceso" primero.');
+            return $this->redirectToRoute('partner_show', $back);
+        }
+
+        // Una cuenta bloqueada no puede entrar (UserChecker la corta en el
+        // login): enviar el enlace sería un fallo silencioso para el admin.
+        if (!$user->isEnabled()) {
+            $this->addFlash('warning', sprintf('La cuenta %s está bloqueada. Desbloquéala antes de enviarle el enlace.', $user->getEmail()));
+            return $this->redirectToRoute('partner_show', $back);
+        }
+
+        if (!$magicLinkMailer->send($user)) {
+            $this->addFlash('warning', 'La cuenta no tiene email; no se ha podido enviar el enlace.');
+            return $this->redirectToRoute('partner_show', $back);
+        }
+
+        $this->addFlash('success', sprintf('Enlace de acceso enviado a %s.', $user->getEmail()));
+        return $this->redirectToRoute('partner_show', $back);
     }
 
     /**
@@ -418,8 +496,9 @@ class PartnerController extends AbstractController
     /**
      * Añade (o ajusta) la cesta extra puntual de un socix en una semana concreta,
      * desde su ficha. El socix viene fijado por la ruta; el gestor elige la semana
-     * (entre las generadas) y la composición final (cestas de verdura + docenas de
-     * huevos). Delega en ExtraBasketEditor.
+     * (cualquiera en que su nodo reparta, dibujada o generada — ver extraBasketWeeks)
+     * y la composición final (cestas de verdura + docenas de huevos). Delega en
+     * ExtraBasketEditor.
      *
      * @param Request           $request Lleva basket_id, cestas, docenas, nota y CSRF.
      * @param Partner           $partner Socix (de la ruta).
@@ -1283,9 +1362,21 @@ class PartnerController extends AbstractController
     #[Route("/{id}", name: "partner_delete", methods: ["DELETE"])]
     public function delete(Request $request, Partner $partner, EntityManagerInterface $entityManager): Response
     {
+        // Solo se eliminan fichas PENDIENTES de confirmar (needs_review): son
+        // las importadas del histórico de producción, sin nada colgando. Un
+        // socix consolidado conserva su histórico (cestas, reparto, eventos);
+        // a ese se le da de BAJA, no se borra. Guard server-side, no basta con
+        // ocultar el botón.
+        if (!$partner->isNeedsReview()) {
+            $this->addFlash('warning', 'Solo se pueden eliminar socixs pendientes de confirmar. A un socix consolidado se le da de baja para conservar su histórico, no se elimina.');
+
+            return $this->redirectToRoute('partner_show', ['id' => $partner->getId()]);
+        }
+
         if ($this->isCsrfTokenValid('delete' . $partner->getId(), $request->request->get('_token'))) {
             $entityManager->remove($partner);
             $entityManager->flush();
+            $this->addFlash('notice', 'Ficha pendiente eliminada.');
         }
 
         return $this->redirectToRoute('partner_index');
@@ -1307,11 +1398,21 @@ class PartnerController extends AbstractController
                 static fn (Partner $p) => $p->getId() !== $partner->getId()
             ));
         } else {
-            $baskets = $entityManager->getRepository(\App\Entity\PartnerBasketShare::class)->findBy(array('is_active' => 1, 'basket_share' => 4));
-            foreach ($baskets as $basket) {
-                if (!$basket->getPartner()->getSharePartner()) //solo muestra los que no están ya relacionados
-                {
-                    $partners[] = $basket->getPartner();
+            // add_share_partner: la pareja de una compartida es OTRA compartida de la
+            // MISMA modalidad (4/6/7) sin pareja todavía — comparten una sola cesta
+            // alternándose. Antes se ofrecía sólo basket_share=4 (semanal compartida),
+            // así que las quincenales/mensuales compartidas no encontraban con quién
+            // emparejar.
+            $shareTypeId = $partner->getActiveBasket()?->getBasketShare()?->getId();
+            $partners = [];
+            if ($shareTypeId !== null) {
+                $baskets = $entityManager->getRepository(\App\Entity\PartnerBasketShare::class)
+                    ->findBy(['is_active' => 1, 'basket_share' => $shareTypeId]);
+                foreach ($baskets as $basket) {
+                    $candidate = $basket->getPartner();
+                    if ($candidate->getId() !== $partner->getId() && !$candidate->getSharePartner()) {
+                        $partners[] = $candidate;
+                    }
                 }
             }
         }
@@ -1600,13 +1701,45 @@ class PartnerController extends AbstractController
         Partner $partner,
         EntityManagerInterface $entityManager,
         PartnerShareEventRecorder $shareEventRecorder,
+        CohortChoiceBuilder $cohortChoiceBuilder,
+        WeeklyBasketGenerator $generator,
     ): Response {
         $partnerBasketShare = new PartnerBasketShare();
         $partnerBasketShare->setPartner($partner);
-        $form = $this->createForm(PartnerBasketShareType::class, $partnerBasketShare);
+
+        // El alta de socio ya no fija grupo de recogida: si el socio no lo
+        // tiene, se elige aquí mismo. El grupo manda sobre el resto del form
+        // (su nodo decide qué modalidades caben y el turno A/B), así que la
+        // página se recarga con ?group=N al cambiarlo y, en el POST, el form
+        // se construye con el grupo enviado para que las choices validen
+        // contra lo realmente ofrecido.
+        $askPickupGroup = $partner->getWeeklyBasketGroup() === null;
+        $pickupGroup = $partner->getWeeklyBasketGroup();
+        if ($askPickupGroup) {
+            $submitted = $request->request->all('partner_basket_share');
+            $groupId = (int) ($submitted['pickupGroup'] ?? $request->query->get('group'));
+            if ($groupId > 0) {
+                // Un id inexistente deja $pickupGroup a NULL: el form se
+                // construye sin grupo y el NotBlank del campo lo rechaza. La
+                // barrera real contra ids arbitrarios es el propio EntityType,
+                // que en el POST sólo acepta grupos del catálogo.
+                $pickupGroup = $entityManager->getRepository(WeeklyBasketGroup::class)->find($groupId);
+            }
+        }
+
+        $cohort = $cohortChoiceBuilder->forNode($pickupGroup?->getNode());
+        $form = $this->createForm(PartnerBasketShareType::class, $partnerBasketShare, [
+            'cohort_choices' => $cohort['cohortChoices'],
+            'exclude_weekly_shares' => $cohort['excludeWeeklyShares'],
+            'ask_pickup_group' => $askPickupGroup,
+            'pickup_group' => $pickupGroup,
+        ]);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
+            if ($askPickupGroup) {
+                $partner->setWeeklyBasketGroup($form->get('pickupGroup')->getData());
+            }
             $partnerBasketShare->setStartDate(new \DateTime($partnerBasketShare->getStartDate()));
             $partnerBasketShare->setIsActive(true);
             $values = $request->get('partner_basket_share');
@@ -1631,27 +1764,23 @@ class PartnerController extends AbstractController
             }
             $entityManager->persist($partnerBasketShare);
             $shareEventRecorder->recordStart($partnerBasketShare);
-
-
-            $basket = $entityManager->getRepository(\App\Entity\Basket::class)->findBasketByWeekYear(date('Y-m-d'));//número de cesta actual
-            if ($partnerBasketShare->getStartDate() <= $basket->getDate()) {
-                $control_weekly_basket = $entityManager->getRepository(\App\Entity\WeeklyBasket::class)->findBy(array("basket" => $basket->getId()));//para ver si ya la he creado, si está en la tabla weekly_basket la cesta actual
-                if ($control_weekly_basket) {//si ya está creada la lista de esta semana, hay que añadir un registro más con el nuevo socio que empieza esta semana
-                    $weekly_basket = new WeeklyBasket();
-                    $weekly_basket->setBasket($basket);
-                    $weekly_basket->setPartner($partner);
-                    $weekly_basket->setAmount($partnerBasketShare->getAmount());
-                    $weekly_basket_status = $entityManager->getRepository(\App\Entity\WeeklyBasketStatus::class)->find(1);
-                    $weekly_basket->setWeeklyBasketStatus($weekly_basket_status);
-                    $weekly_basket->setBasketShare($partnerBasketShare->getBasketShare());
-                    // Fallback Torremocha (viernes-ciclo). Deuda: en cuanto entren altas en Madrid,
-                    // este controller debe inyectar NodeDeliveryDate y resolver la fecha real del nodo.
-                    $weekly_basket->setDeliveryDate($basket->getDate());
-                    $entityManager->persist($weekly_basket);
-                }
-            }
-
             $entityManager->flush();
+
+            // En las semanas YA generadas desde su alta, materializa al socio SÓLO
+            // donde su patrón (modalidad + cohorte + nodo) lo coloca, componiendo sus
+            // items; las semanas aún sin generar se dibujan al vuelo (proyección). Antes
+            // se creaba aquí un WeeklyBasket a mano que ignoraba la cohorte y nacía vacío
+            // —el "no recoge" fantasma de las altas a mitad de mes—.
+            $generator->reconcilePartnerFrom($partner, $partnerBasketShare->getStartDate());
+
+            // Una cesta compartida alterna entre DOS hogares: si nace sin pareja, lleva
+            // directo a elegir con quién comparte en vez de a la ficha, para que no se
+            // quede huérfana (sin pareja no materializa bien la verdura).
+            if (in_array($partnerBasketShare->getBasketShare()->getId(), BasketShare::IDS_SHARED, true)
+                && $partner->getSharePartner() === null) {
+                $this->addFlash('info', 'Es una cesta compartida: indica con quién la comparte.');
+                return $this->redirectToRoute('family', ['id' => $partner->getId(), 'type' => 'add_share_partner']);
+            }
 
             return $this->redirectToRoute('partner_show', array('id' => $partner->getId()));
         }
@@ -1660,7 +1789,10 @@ class PartnerController extends AbstractController
             'partner_basket_share' => $partnerBasketShare,
             'entity' => $partnerBasketShare,
             'form' => $form->createView(),
-            'partner' => $partner
+            'partner' => $partner,
+            'node_is_biweekly' => $cohort['nodeIsBiweekly'],
+            'node_name' => $cohort['nodeName'],
+            'node_dates_label' => $cohort['nodeDatesLabel'],
         ]);
 
 
@@ -1680,6 +1812,20 @@ class PartnerController extends AbstractController
         }
         $partner1 = $entityManager->getRepository(\App\Entity\Partner::class)->find($partner1_id);
         $partner2 = $entityManager->getRepository(\App\Entity\Partner::class)->find($partner2_id);
+
+        // Defensa: sólo se emparejan dos compartidas de la MISMA modalidad (4/6/7)
+        // que aún no tengan pareja. Comparten una única cesta alternándose; emparejar
+        // modalidades distintas o sobre una ya emparejada deja datos incoherentes.
+        $bs1 = $partner1->getActiveBasket()?->getBasketShare()?->getId();
+        $bs2 = $partner2->getActiveBasket()?->getBasketShare()?->getId();
+        if ($bs1 === null || !in_array($bs1, BasketShare::IDS_SHARED, true) || $bs1 !== $bs2
+            || $partner1->getSharePartner() !== null || $partner2->getSharePartner() !== null) {
+            $session->getFlashBag()->add(
+                'warning',
+                'Sólo se pueden emparejar dos cestas compartidas de la misma modalidad que aún no tengan pareja.'
+            );
+            return $this->redirectToRoute('partner_show', array('id' => $partner1_id));
+        }
 
         $partner1->setSharePartner($partner2);
         $partner2->setSharePartner($partner1);

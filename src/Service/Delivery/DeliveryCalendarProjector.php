@@ -6,6 +6,7 @@ use App\Entity\Basket;
 use App\Entity\BasketComponent;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketExtra;
+use App\Entity\PartnerNodeOverride;
 use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketItem;
 use App\Repository\DeliveryExceptionRepository;
@@ -257,7 +258,58 @@ final class DeliveryCalendarProjector
 
         // Overrides de CESTA EXTRA (dry): suman su delta a la entrega de esa semana, creando
         // un slot si su patrón no le daba cesta esa semana (p. ej. mensual en semana libre).
-        return $this->applyBasketExtrasToSlots($partner, $baskets, $slots);
+        $slots = $this->applyBasketExtrasToSlots($partner, $baskets, $slots);
+
+        // Overrides de NODO (PartnerNodeOverride): el socio recoge esa semana en otro nodo.
+        // Va el ÚLTIMO porque solo reubica (fecha física + etiqueta) los slots ya puestos,
+        // incluidos los que crearon los pasos anteriores.
+        return $this->applyNodeOverridesToSlots($partner, $baskets, $slots);
+    }
+
+    /**
+     * Refleja en los slots los traslados puntuales de NODO ({@see PartnerNodeOverride}): la
+     * semana se recoge en otro nodo. Recalcula la fecha física con el nodo destino (para que
+     * la rejilla mueva el día — clave en semanas DIBUJADAS, donde la proyección usó el nodo de
+     * casa; las materializadas ya traen la fecha buena del WeeklyBasket que tocó PickupRelocator)
+     * y marca el slot con el nodo destino para que el panel del día muestre "Recoge en X". El
+     * override existe solo si el nodo destino reparte esa semana (lo valida PickupRelocator), así
+     * que no hay que reevaluar la cadencia aquí. Contraparte de calendario de
+     * {@see WeeklyBasketGenerator::projectDeliveriesForNode} (camino de listado/PDF).
+     *
+     * @param Basket[]                                                   $baskets
+     * @param list<array{date: \DateTimeInterface, basket: Basket, ...}> $slots
+     * @return list<array{date: \DateTimeInterface, basket: Basket, ...}>
+     */
+    private function applyNodeOverridesToSlots(Partner $partner, array $baskets, array $slots): array
+    {
+        $overrideRepo = $this->em->getRepository(PartnerNodeOverride::class);
+
+        // Un mismo Basket puede tener VARIOS slots (papelera + rejilla); todos se reubican.
+        $idxsByBasket = [];
+        foreach ($slots as $i => $slot) {
+            $idxsByBasket[$slot['basket']->getId()][] = $i;
+        }
+
+        foreach ($baskets as $basket) {
+            $override = $overrideRepo->findForPartnerAndBasket($partner, $basket);
+            if ($override === null) {
+                continue;
+            }
+            $destGroup = $override->getTargetGroup();
+            $destNode = $destGroup?->getNode();
+            if ($destNode === null) {
+                continue;
+            }
+
+            $date = $this->nodeDeliveryDate->physicalDateFor($basket, $destNode) ?? $basket->getDate();
+            foreach ($idxsByBasket[$basket->getId()] ?? [] as $idx) {
+                $slots[$idx]['date'] = $date;
+                $slots[$idx]['pickup_place'] = $destNode->getName();
+                $slots[$idx]['relocated'] = true;
+            }
+        }
+
+        return $slots;
     }
 
     /**

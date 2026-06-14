@@ -11,6 +11,7 @@ use App\Repository\DeliveryExceptionRepository;
 use App\Repository\NodeRepository;
 use App\Service\Delivery\ClosureShiftReconciler;
 use App\Service\Delivery\NodeDeliveryDate;
+use App\Service\Delivery\WeekRematerializer;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -72,7 +73,7 @@ class DeliveryExceptionController extends AbstractController
      * @return Response
      */
     #[Route('/new', name: 'delivery_exception_new', methods: ['GET', 'POST'])]
-    public function new(Request $request, EntityManagerInterface $entityManager, DeliveryExceptionRepository $repository, NodeRepository $nodeRepository, BasketRepository $basketRepository, NodeDeliveryDate $deliveryDate, ClosureShiftReconciler $reconciler): Response
+    public function new(Request $request, EntityManagerInterface $entityManager, DeliveryExceptionRepository $repository, NodeRepository $nodeRepository, BasketRepository $basketRepository, NodeDeliveryDate $deliveryDate, ClosureShiftReconciler $reconciler, WeekRematerializer $rematerializer): Response
     {
         $exception = new DeliveryException();
         $form = $this->createForm(DeliveryExceptionType::class, $exception);
@@ -86,6 +87,7 @@ class DeliveryExceptionController extends AbstractController
                 $entityManager->flush();
                 $this->addFlash('success', 'Excepción de reparto creada.');
                 $this->reconcileClosure($exception, $reconciler);
+                $this->reconcileStone($rematerializer, $exception->getBasket(), $exception->isCancelled() && $exception->isGlobal());
 
                 return $this->redirectToRoute('delivery_exception_index');
             }
@@ -106,8 +108,13 @@ class DeliveryExceptionController extends AbstractController
      * @return Response
      */
     #[Route('/{id}/edit', name: 'delivery_exception_edit', methods: ['GET', 'POST'])]
-    public function edit(Request $request, DeliveryException $exception, EntityManagerInterface $entityManager, DeliveryExceptionRepository $repository, NodeRepository $nodeRepository, BasketRepository $basketRepository, NodeDeliveryDate $deliveryDate, ClosureShiftReconciler $reconciler): Response
+    public function edit(Request $request, DeliveryException $exception, EntityManagerInterface $entityManager, DeliveryExceptionRepository $repository, NodeRepository $nodeRepository, BasketRepository $basketRepository, NodeDeliveryDate $deliveryDate, ClosureShiftReconciler $reconciler, WeekRematerializer $rematerializer): Response
     {
+        // Estado PREVIO: si la edición cambia de semana o de tipo, la semana que
+        // tocaba ANTES también necesita re-materializarse.
+        $previousBasket = $exception->getBasket();
+        $previousWasGlobalClosure = $exception->isCancelled() && $exception->isGlobal();
+
         $form = $this->createForm(DeliveryExceptionType::class, $exception);
         $form->handleRequest($request);
 
@@ -118,6 +125,12 @@ class DeliveryExceptionController extends AbstractController
                 $entityManager->flush();
                 $this->addFlash('success', 'Excepción de reparto actualizada.');
                 $this->reconcileClosure($exception, $reconciler);
+
+                $displaced = $previousWasGlobalClosure || ($exception->isCancelled() && $exception->isGlobal());
+                if ($previousBasket !== null && $previousBasket->getId() !== $exception->getBasket()?->getId()) {
+                    $this->reconcileStone($rematerializer, $previousBasket, $previousWasGlobalClosure);
+                }
+                $this->reconcileStone($rematerializer, $exception->getBasket(), $displaced);
 
                 return $this->redirectToRoute('delivery_exception_index');
             }
@@ -137,15 +150,22 @@ class DeliveryExceptionController extends AbstractController
      * @return Response
      */
     #[Route('/{id}', name: 'delivery_exception_delete', methods: ['POST'])]
-    public function delete(Request $request, DeliveryException $exception, EntityManagerInterface $entityManager): Response
+    public function delete(Request $request, DeliveryException $exception, EntityManagerInterface $entityManager, WeekRematerializer $rematerializer): Response
     {
         if (!$this->isCsrfTokenValid('delete' . $exception->getId(), (string) $request->request->get('_token'))) {
             return $this->redirectToRoute('delivery_exception_index');
         }
 
+        // Estado previo: tras borrar, la semana vuelve a su forma natural (y si
+        // era cancelación global, la alternancia vuelve a moverse hacia atrás).
+        $basket = $exception->getBasket();
+        $wasGlobalClosure = $exception->isCancelled() && $exception->isGlobal();
+
         $entityManager->remove($exception);
         $entityManager->flush();
         $this->addFlash('success', 'Excepción de reparto borrada.');
+
+        $this->reconcileStone($rematerializer, $basket, $wasGlobalClosure);
 
         return $this->redirectToRoute('delivery_exception_index');
     }
@@ -171,6 +191,40 @@ class DeliveryExceptionController extends AbstractController
         );
         if ($r['notify'] !== []) {
             $msg .= sprintf(' Avisar a %d socio(s) para que rehagan su cambio (pendiente de mail).', count($r['notify']));
+        }
+        $this->addFlash('warning', $msg);
+    }
+
+    /**
+     * Re-materializa la piedra afectada por el cambio de excepción (alta,
+     * edición o borrado): la semana tocada se regenera honrando el estado
+     * nuevo; si una cancelación global entró o salió, también todas las
+     * semanas generadas posteriores (la alternancia A/B y de nodos quincenales
+     * se desplaza); si no, el resto del mes ya generado (las N-ésimas
+     * mensuales del nodo se recolocan). Delega en {@see WeekRematerializer},
+     * que no-opera fuera del horizonte generado, e informa al admin.
+     *
+     * @param WeekRematerializer $rematerializer
+     * @param Basket|null        $week       Semana afectada (null = nada que hacer).
+     * @param bool               $displaced  True si una cancelación global cambió.
+     */
+    private function reconcileStone(WeekRematerializer $rematerializer, ?Basket $week, bool $displaced): void
+    {
+        if ($week === null) {
+            return;
+        }
+        $r = $rematerializer->reconcileStone($week, $displaced);
+        if (!$r['week'] && $r['downstream'] === 0) {
+            return; // fuera del horizonte generado: el dibujo ya refleja la excepción
+        }
+
+        $msg = sprintf('Listado regenerado para la semana del %s.', $week->getDate()?->format('d/m/Y'));
+        if ($r['downstream'] > 0) {
+            $msg .= sprintf(
+                ' También %d semana(s) posteriores ya generadas (%s).',
+                $r['downstream'],
+                $displaced ? 'la alternancia quincenal se desplaza' : 'las entregas mensuales del mes se recolocan'
+            );
         }
         $this->addFlash('warning', $msg);
     }

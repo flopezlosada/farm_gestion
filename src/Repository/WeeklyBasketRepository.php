@@ -215,6 +215,39 @@ class WeeklyBasketRepository extends ServiceEntityRepository
     }
 
     /**
+     * Destinatarios MATERIALIZADOS del recordatorio de recogida para un Basket:
+     * las WeeklyBasket que se recogen (status 1) cuya modalidad está entre las
+     * pedidas. A diferencia de los finders legacy de PartnerBasketShare (que
+     * calculan "a quién le tocaría" por modalidad + cohorte), esto lee el modelo
+     * ya materializado, así que respeta skips, traslados y overrides: quien
+     * marcó "no recojo" tiene status 2 y no sale; quien se trasladó sigue
+     * apareciendo (su WeeklyBasket existe, sólo cambia el grupo de entrega).
+     *
+     * @param int[] $basketShareIds Modalidades a incluir (p.ej. quincenal y mensual).
+     * @return WeeklyBasket[]
+     */
+    public function findPickedForBasketByShares(Basket $basket, array $basketShareIds): array
+    {
+        if ($basketShareIds === []) {
+            return [];
+        }
+
+        return $this->createQueryBuilder('wb')
+            ->innerJoin('wb.partner', 'p')
+            ->innerJoin('wb.basket_share', 'bs')
+            ->where('wb.basket = :basket')
+            ->andWhere('wb.weekly_basket_status = :status')
+            ->andWhere('bs.id IN (:shares)')
+            ->setParameter('basket', $basket)
+            ->setParameter('status', 1)
+            ->setParameter('shares', $basketShareIds)
+            ->orderBy('p.name', 'ASC')
+            ->addOrderBy('p.surname', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
      * Número de cestas a repartir en un Basket: cuenta las WeeklyBasket
      * cuyo status indica que se recogen (status_id = 1). Las marcadas como
      * "no recoge" (status 2) no se cuentan porque no llegan a salir.

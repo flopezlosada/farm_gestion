@@ -1,0 +1,72 @@
+{# ============================================================
+ # Página de un área de ayuda (/gestion/help/{section}).
+ # Cabecera + pestañas para saltar entre áreas + el contenido del área
+ # (un parcial por tema). Cada tarea vive en su propia tarjeta para que
+ # respire; el ancho de lectura se limita a propósito.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% set meta = sections[current] %}
+
+{% block title %}Ayuda · {{ meta.label }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('help_index') }}">Ayuda</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ meta.label }}</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    <style>
+        /* Página de área de ayuda. Estilos locales (pantalla estática). */
+        .help-tabs { display: flex; flex-wrap: wrap; gap: 8px;
+            margin-bottom: var(--csa-sp-6); }
+        .help-tab { display: inline-flex; align-items: center; gap: 8px;
+            padding: 9px 16px; border-radius: 999px; border: 1px solid #ebe7dd;
+            background: #fff; color: #5a564a; text-decoration: none;
+            font-size: 13.5px; font-weight: 600; }
+        .help-tab, .help-tab:hover { border-bottom: 1px solid #ebe7dd; }
+        .help-tab:hover { border-color: #d8d2c2; color: #1d1c17; }
+        .help-tab--active { background: #1d1c17; border-color: #1d1c17; color: #fff; }
+        .help-tab--active:hover { background: #1d1c17; border-color: #1d1c17; color: #fff; }
+
+        /* Ancho de lectura limitado: líneas largas cansan. */
+        .help-doc { max-width: 820px; }
+        .help-doc .csa-card { margin-bottom: 16px; scroll-margin-top: 84px; }
+        .help-doc .csa-card:last-child { margin-bottom: 0; }
+        /* Resalte breve al llegar desde un «?» contextual (#ancla). */
+        .help-doc .csa-card:target { box-shadow: 0 0 0 2px #c89a3a, 0 6px 22px rgba(0,0,0,.06); }
+
+        /* Pasos: interlineado generoso y separación clara entre puntos. */
+        .help-steps { margin: 0; padding-left: 1.4em; }
+        .help-steps > li { margin-bottom: 11px; line-height: 1.65;
+            font-size: 14.5px; color: #2b2b2b; }
+        .help-steps > li:last-child { margin-bottom: 0; }
+        .help-steps strong { font-weight: 600; color: #1d1c17; }
+        .help-steps + .csa-callout, .csa-callout + .help-note { margin-top: 14px; }
+        .help-doc kbd { background: #f0ede6; border-radius: 4px; padding: 1px 7px;
+            font-family: inherit; font-weight: 600; font-size: 0.95em; }
+    </style>
+
+    {{ csa.page_header('Ayuda', meta.label, meta.lead) }}
+
+    <nav class="help-tabs" aria-label="Áreas de la ayuda">
+        {% for slug, s in sections %}
+            <a class="help-tab{{ slug == current ? ' help-tab--active' }}"
+               href="{{ path('help_section', { section: slug }) }}"
+               {{ slug == current ? 'aria-current="page"' }}>
+                <i class="fa {{ s.icon }}" aria-hidden="true"></i> {{ s.label }}
+            </a>
+        {% endfor %}
+    </nav>
+
+    <div class="help-doc">
+        {% include 'help/_' ~ current ~ '.html.twig' %}
+    </div>
+
+{% endblock %}

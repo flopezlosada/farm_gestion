@@ -110,10 +110,10 @@ class EggDeliveryResolver
         $shareTypeId = $share->getBasketShare()?->getId();
 
         if ($shareTypeId === self::SHARE_MONTHLY) {
-            // Cesta mensual: huevos con la cesta. Sólo entrega en el viernes
-            // operativo que coincida con day_month_order y donde el nodo reparte.
-            return $this->nodeDeliveryDate->deliversInBasket($basket, $node)
-                && $this->monthlyOrder->operativeOrderForNode($basket, $node) === $share->getDayMonthOrder();
+            // Cesta mensual: huevos con la cesta. Emparejamiento PEGAJOSO
+            // (ordersServedBy): un cierre no desplaza al mensual de las
+            // semanas posteriores; el de la semana cerrada hace fallback.
+            return in_array($share->getDayMonthOrder(), $this->monthlyOrder->ordersServedBy($basket, $node), true);
         }
 
         $order = $share->getEggDayMonthOrder();
@@ -121,24 +121,48 @@ class EggDeliveryResolver
             return false;
         }
 
-        $deliveries = $this->shareDeliveriesInMonth($share, $basket, $node);
-        foreach ($deliveries as $i => $b) {
-            if ($b->getId() === $basket->getId()) {
-                return ($i + 1) === $order;
+        // Semántica pegajosa también aquí: el orden apunta a la lista BASE de
+        // entregas del socio en el mes (las semanas canceladas conservan su
+        // posición). Si la designada está cancelada, fallback a la siguiente
+        // operativa del mes; si no hay siguiente (o el orden excede la lista),
+        // a la última operativa — el huevo no salta de mes ni se pierde.
+        $deliveries = $this->shareBaselineDeliveriesInMonth($share, $basket, $node);
+        if ($deliveries === []) {
+            return false;
+        }
+
+        $designated = min($order, count($deliveries)) - 1;
+        $resolved = null;
+        for ($j = $designated, $n = count($deliveries); $j < $n; $j++) {
+            if ($deliveries[$j]['operative']) {
+                $resolved = $j;
+                break;
             }
         }
-        return false;
+        if ($resolved === null) {
+            for ($j = $designated - 1; $j >= 0; $j--) {
+                if ($deliveries[$j]['operative']) {
+                    $resolved = $j;
+                    break;
+                }
+            }
+        }
+
+        return $resolved !== null && $deliveries[$resolved]['basket']->getId() === $basket->getId();
     }
 
     /**
-     * Baskets del mes calendario en los que el partner SÍ recoge cesta,
-     * según su modalidad (basket_share) y cohorte (delivery_group), filtrando
-     * además por cadencia del nodo y excepciones (vía NodeDeliveryDate). El
-     * resultado va ordenado por fecha ascendente.
+     * Lista BASE de entregas del partner en el mes calendario, según su
+     * modalidad (basket_share) y cohorte (delivery_group). "Base" = las semanas
+     * canceladas por excepción CONSERVAN su posición en la lista (con
+     * operative=false), para que el orden mensual del huevo sea pegajoso: un
+     * cierre no renumera las entregas posteriores. La cadencia del nodo sí
+     * filtra (una semana fuera de fase no es entrega, ni base ni operativa).
+     * Ordenada por fecha ascendente.
      *
-     * @return Basket[]
+     * @return array<int,array{basket:Basket,operative:bool}>
      */
-    private function shareDeliveriesInMonth(PartnerBasketShare $share, Basket $basket, Node $node): array
+    private function shareBaselineDeliveriesInMonth(PartnerBasketShare $share, Basket $basket, Node $node): array
     {
         $date = $basket->getDate();
         $dql = "SELECT b FROM App\\Entity\\Basket b
@@ -151,16 +175,26 @@ class EggDeliveryResolver
 
         $shareTypeId = $share->getBasketShare()?->getId();
 
-        return array_values(array_filter($monthBaskets, function (Basket $b) use ($share, $node, $shareTypeId) {
-            if (!$this->nodeDeliveryDate->deliversInBasket($b, $node)) {
-                return false;
+        $deliveries = [];
+        foreach ($monthBaskets as $b) {
+            if ($this->nodeDeliveryDate->baselineDateFor($b, $node) === null) {
+                continue;
             }
-            return match ($shareTypeId) {
+            $isDelivery = match ($shareTypeId) {
                 self::SHARE_WEEKLY, self::SHARE_HALF, self::SHARE_ONLY_EGG => true,
                 self::SHARE_BIWEEKLY => $this->biweeklyCohort->cohortForBasket($b) === $share->getDeliveryGroup(),
-                self::SHARE_MONTHLY  => $this->monthlyOrder->operativeOrderForNode($b, $node) === $share->getDayMonthOrder(),
+                self::SHARE_MONTHLY  => in_array($share->getDayMonthOrder(), $this->monthlyOrder->ordersServedBy($b, $node), true),
                 default              => false,
             };
-        }));
+            if (!$isDelivery) {
+                continue;
+            }
+            $deliveries[] = [
+                'basket'    => $b,
+                'operative' => $this->nodeDeliveryDate->deliversInBasket($b, $node),
+            ];
+        }
+
+        return $deliveries;
     }
 }

@@ -1,0 +1,72 @@
+{# Pantallas que han fallado: barras (vistazo) + tabla (dato exacto). #}
+{% extends 'usage_stats/_layout.html.twig' %}
+
+{% set chart_h = max(errors|length * 26 + 60, 160) %}
+
+{% block usage_body %}
+    {% embed '_components/csa_card.html.twig' with { title: 'Pantallas que han fallado', icon: 'fa-exclamation-triangle', accent: 'terracotta' } %}
+        {% block body %}
+            <p class="csa-muted" style="margin: 0 0 var(--csa-sp-4) 0; font-size: 0.875em;">
+                Códigos 4xx/5xx. Ojo: un formulario enviado con datos inválidos devuelve 200, no error;
+                eso aquí no aparece (se vería como visitas repetidas a la misma pantalla en «Resumen»).
+            </p>
+            {% if errors is empty %}
+                <p class="csa-muted" style="text-align: center; padding: var(--csa-sp-8);">
+                    Ningún error registrado en este periodo. 🎉
+                </p>
+            {% else %}
+                <div id="errors-chart" style="width: 100%; height: {{ chart_h }}px;"></div>
+            {% endif %}
+        {% endblock %}
+    {% endembed %}
+
+    {% embed '_components/csa_card.html.twig' with { title: 'Detalle', icon: 'fa-table' } %}
+        {% block body %}
+            <div class="csa-table-wrap">
+                <table class="csa-table" data-paginate>
+                    <thead>
+                        <tr>
+                            <th>Pantalla (ruta)</th>
+                            <th class="csa-table__col-tight" style="text-align: right;">Código</th>
+                            <th class="csa-table__col-tight" style="text-align: right;">Veces</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in errors %}
+                            <tr>
+                                <td><code>{{ row.routeName ?? '(sin ruta · 404)' }}</code></td>
+                                <td class="csa-table__col-tight" style="text-align: right;">{{ row.statusCode }}</td>
+                                <td class="csa-table__col-tight" style="text-align: right;">{{ row.hits }}</td>
+                            </tr>
+                        {% else %}
+                            <tr><td colspan="3" class="csa-muted" style="text-align: center; padding: var(--csa-sp-8);">
+                                Ningún error en este periodo. 🎉
+                            </td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% endblock %}
+    {% endembed %}
+{% endblock %}
+
+{% block chart_js %}
+    {% if errors is not empty %}
+        <script>
+            (function () {
+                const cats = [{% for r in errors %}{{ ((r.routeName ?? '(sin ruta · 404)') ~ ' · ' ~ r.statusCode)|json_encode|raw }},{% endfor %}];
+                const data = [{% for r in errors %}{{ r.hits }},{% endfor %}];
+
+                Highcharts.chart('errors-chart', {
+                    chart: { type: 'bar' },
+                    title: { text: null },
+                    xAxis: { categories: cats, labels: { style: { fontSize: '11px' } } },
+                    yAxis: { title: { text: 'Veces' }, allowDecimals: false, min: 0 },
+                    legend: { enabled: false },
+                    tooltip: { pointFormat: '<b>{point.y}</b> veces' },
+                    series: [{ name: 'Errores', data: data, color: '#b04e22' }]
+                });
+            })();
+        </script>
+    {% endif %}
+{% endblock %}

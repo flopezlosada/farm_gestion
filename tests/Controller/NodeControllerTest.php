@@ -104,6 +104,42 @@ class NodeControllerTest extends AbstractAuthenticatedTest
     }
 
     /**
+     * El horario público (Node.schedule) se puede editar desde el form
+     * de edición y persiste. Autocontenido: crea su propio nodo y lo borra.
+     */
+    public function testEditPersistsPublicSchedule(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        $node = (new Node())
+            ->setName('TEST Nodo horario ' . uniqid())
+            ->setDeliveryWeekday(3)
+            ->setCadence(Node::CADENCE_WEEKLY);
+        $em->persist($node);
+        $em->flush();
+        $nodeId = $node->getId();
+
+        $crawler = $client->request('GET', sprintf('/gestion/node/%d/edit', $nodeId));
+        $form = $crawler->filter('form[name="node"]')->form();
+        $form['node[schedule]'] = 'Miércoles de 19:00 a 21:00';
+        $client->submit($form);
+        $this->assertResponseRedirects('/gestion/node/', message: 'El submit del form de edición debería redirigir.');
+
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $reloaded = $em->getRepository(Node::class)->find($nodeId);
+        $this->assertSame(
+            'Miércoles de 19:00 a 21:00',
+            $reloaded->getSchedule(),
+            'El horario público debería haberse guardado desde el form de edición.'
+        );
+
+        // Limpieza.
+        $em->remove($reloaded);
+        $em->flush();
+    }
+
+    /**
      * GET /gestion/node/{id}/edit con admin logueado devuelve 200
      * para los 3 nodos sembrados durante 8.8a (Torremocha, Cascorro, Midori).
      */

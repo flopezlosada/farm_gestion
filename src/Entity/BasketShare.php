@@ -52,7 +52,7 @@ class BasketShare
 
     /**
      * Equivalencia en cestas  completas. Es decir, si es semana, vale 1; si es quincenal, 0,5; si es mensual 0,25; Si solo huevos 0;
-     * @var smallint $complete_basket_equivalence
+     * @var string $complete_basket_equivalence Decimal: Doctrine lo hidrata como string.
      * @ORM\Column(name="complete_basket_equivalence",type="decimal", precision=8, scale=2)
      */
     private $complete_basket_equivalence;
@@ -247,6 +247,8 @@ class BasketShare
     public const IDS_SHARED = [4, 6, 7];
     /** Modalidad quincenal: única que usa la cohorte A/B (delivery_group). */
     public const ID_BIWEEKLY = 2;
+    /** Modalidad mensual (reparto una vez al mes, según day_month_order). */
+    public const ID_MONTHLY = 3;
     /**
      * Modalidades de reparto SEMANAL (cada semana): Semanal (1) y Semanal
      * compartida (4). No caben en un punto de cadencia quincenal, que sólo
@@ -274,9 +276,17 @@ class BasketShare
         return in_array($this->id, self::IDS_SHARED, true) ? 0.5 : 1.0;
     }
 
-    public function getCompleteBasketEquivalence(): ?int
+    /**
+     * Equivalencia en cestas completas amortizada al mes (semanal 1, quincenal
+     * 0,5, mensual 0,25, compartidas la mitad). La columna es decimal y
+     * Doctrine la hidrata como string: el tipo de retorno int histórico
+     * coercionaba "0.50" a 0 y todas las modalidades no semanales contaban 0.
+     *
+     * @return float Equivalencia mensual en cestas completas.
+     */
+    public function getCompleteBasketEquivalence(): float
     {
-        return $this->complete_basket_equivalence;
+        return (float) $this->complete_basket_equivalence;
     }
 
     public function setCompleteBasketEquivalence(string $complete_basket_equivalence): self

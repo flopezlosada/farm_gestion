@@ -4,6 +4,7 @@ namespace App\Repository;
 
 use App\Entity\Basket;
 use App\Entity\Partner;
+use App\Entity\User;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
@@ -67,6 +68,7 @@ class PartnerRepository extends ServiceEntityRepository
      *     status?: string|null,
      *     modalities?: int[]|null,
      *     cesta?: string|null,   "yes" | "no" | null
+     *     eggs?: string|null,    "yes" | "no" | null
      *     node?: int|null,
      *     wbg?: int|null,
      *     q?: string|null
@@ -79,9 +81,10 @@ class PartnerRepository extends ServiceEntityRepository
             ->leftJoin('pbs.basket_share', 'bs')
             ->leftJoin('p.weekly_basket_group', 'wbg')
             ->leftJoin('wbg.node', 'n')
-            ->addSelect('pbs', 'bs', 'wbg', 'n')
-            ->orderBy('p.surname', 'ASC')
-            ->addOrderBy('p.name', 'ASC');
+            ->addSelect('pbs', 'bs', 'wbg', 'n');
+        // El orden lo aplica KnpPaginator en el controller (cabeceras
+        // clicables + default por nombre). No fijamos ORDER BY aquí para no
+        // pisar el campo de ordenación que pide el usuario desde la cabecera.
 
         if (!empty($filters['status'])) {
             $qb->andWhere('p.status = :status')->setParameter('status', $filters['status']);
@@ -104,6 +107,19 @@ class PartnerRepository extends ServiceEntityRepository
             }
         }
 
+        // Huevos: se resuelven sobre la cesta activa (mismo join pbs que
+        // modalidad). "Sí": la PBS tiene cantidad de huevos asignada. "No":
+        // no la tiene — incluye tanto socios con cesta sin huevos como sin
+        // PBS propio (secundarios de familia, que heredan del principal),
+        // misma semántica que el filtro de modalidad.
+        if (!empty($filters['eggs'])) {
+            if ($filters['eggs'] === 'yes') {
+                $qb->andWhere('pbs.egg_amount IS NOT NULL');
+            } elseif ($filters['eggs'] === 'no') {
+                $qb->andWhere('pbs.egg_amount IS NULL');
+            }
+        }
+
         if (!empty($filters['node'])) {
             $qb->andWhere('n.id = :node')->setParameter('node', (int) $filters['node']);
         }
@@ -116,6 +132,12 @@ class PartnerRepository extends ServiceEntityRepository
             $qb->andWhere('LOWER(p.name) LIKE :q OR LOWER(p.surname) LIKE :q OR LOWER(p.display_name) LIKE :q OR LOWER(p.email) LIKE :q OR p.celular LIKE :qPlain')
                ->setParameter('q', '%' . mb_strtolower($filters['q']) . '%')
                ->setParameter('qPlain', '%' . $filters['q'] . '%');
+        }
+
+        // Socixs pendientes de validar: importados del histórico de producción
+        // que administración aún no ha confirmado (alta real, baja o duplicado).
+        if (!empty($filters['needs_review'])) {
+            $qb->andWhere('p.needs_review = true');
         }
 
         return $qb;
@@ -314,6 +336,53 @@ class PartnerRepository extends ServiceEntityRepository
         }
 
         return $series;
+    }
+
+    /**
+     * Nº total de socios en estado ACTIVO, en una sola query agregada.
+     *
+     * No se puede derivar sumando {@see self::countActiveByGroup()}: ese método
+     * excluye a los activos sin grupo de recogida, así que la suma se quedaría
+     * corta. Por eso este contador independiente.
+     *
+     * @return int socios con status = ACTIVO
+     */
+    public function countActive(): int
+    {
+        return (int) $this->createQueryBuilder('p')
+            ->select('COUNT(p.id)')
+            ->where('p.status = :status')
+            ->setParameter('status', Partner::STATUS_ACTIVO)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
+    /**
+     * Nº de socios ACTIVOS que aún no tienen acceso a la app: ningún {@see User}
+     * los referencia. El vínculo vive en el lado User ({@see User::$partner},
+     * OneToOne), de ahí la subconsulta NOT IN sobre los partner_id ya ocupados
+     * (Partner no tiene relación inversa que permita un LEFT JOIN directo).
+     *
+     * Alimenta el aviso "pendientes de dar acceso" del dashboard de admin: cuánta
+     * gente falta por enganchar al login (magic-link).
+     *
+     * @return int socios ACTIVO sin User vinculado
+     */
+    public function countActiveWithoutAccess(): int
+    {
+        $linkedPartnerIds = $this->getEntityManager()->createQueryBuilder()
+            ->select('IDENTITY(u.partner)')
+            ->from(User::class, 'u')
+            ->where('u.partner IS NOT NULL')
+            ->getDQL();
+
+        return (int) $this->createQueryBuilder('p')
+            ->select('COUNT(p.id)')
+            ->where('p.status = :status')
+            ->andWhere("p.id NOT IN ({$linkedPartnerIds})")
+            ->setParameter('status', Partner::STATUS_ACTIVO)
+            ->getQuery()
+            ->getSingleScalarResult();
     }
 
     /**

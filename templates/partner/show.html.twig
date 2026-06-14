@@ -172,10 +172,11 @@
                 <a href="{{ path('partner_delivery_calendar', { id: partner.id }) }}" class="prt-btn">
                     <i class="fa fa-calendar"></i> Calendario de recogida
                 </a>
+                {{ csa.help('reparto', 'viernes', 'Ayuda: cambiar a alguien de viernes') }}
             {% endif %}
 
             {% if partner.status == 'ACTIVO' %}
-                {% if partner.getActiveBasket and partner.getActiveBasket.basketShare.id == 4 and partner.sharePartner is null %}
+                {% if partner.getActiveBasket and partner.getActiveBasket.basketShare.id in [4, 6, 7] and partner.sharePartner is null %}
                     <a href="{{ path('family', { id: partner.id, type: 'add_share_partner' }) }}" class="prt-btn">
                         <i class="fa fa-handshake-o"></i> ¿Comparte con?
                     </a>
@@ -187,6 +188,7 @@
                     <a href="{{ path('partner_add_basket', { id: partner.id }) }}" class="prt-btn">
                         <i class="fa fa-shopping-basket"></i> Añadir cesta
                     </a>
+                    {{ csa.help('socios', 'cesta', 'Ayuda: asignar la cesta y el punto de recogida') }}
                 {% endif %}
 
                 {% if extra_weeks is not empty %}
@@ -256,7 +258,9 @@
                     </dialog>
                 {% endif %}
 
-                {% if relocate_weeks is not empty and relocate_groups is not empty %}
+                {# Compartidas (alternancia entre dos hogares): el traslado de nodo está
+                   bloqueado de momento (ver PickupRelocator). No se ofrece el botón. #}
+                {% if relocate_weeks is not empty and relocate_groups is not empty and partner.sharePartner is null %}
                     <button type="button" class="prt-btn"
                             onclick="document.getElementById('relocate-pickup-dialog').showModal()">
                         <i class="fa fa-exchange"></i> Recoger en otro nodo
@@ -471,6 +475,107 @@
                 </div>
             </section>
 
+            {# Acceso a la web: estado de la cuenta + despliegue selectivo.
+             # OJO, dos variables parecidas: linked_user (arriba, en Datos
+             # personales) va por la relación User->Partner; access_user va por
+             # email canónico (PartnerAccessPolicy) y puede ser la cuenta de un
+             # familiar con buzón compartido. Para "¿puede entrar?" manda
+             # access_user. Solo admin. #}
+            {% if is_granted('ROLE_ADMIN') %}
+                <section class="prt-card" style="margin-top: 18px;">
+                    <header class="prt-card__head">
+                        <h2 class="prt-card__title"><span class="accent"></span>Acceso a la web</h2>
+                    </header>
+                    <div class="prt-card__body">
+                        {% if access_user %}
+                            <dl class="prt-defs">
+                                <div class="prt-defs__row">
+                                    <dt class="prt-defs__label">Cuenta</dt>
+                                    <dd class="prt-defs__value">
+                                        <a href="{{ path('user_show', { id: access_user.id }) }}"><i class="fa fa-user-circle-o" aria-hidden="true"></i> {{ access_user.username }}</a>
+                                        {% if not access_user.enabled %}
+                                            <span class="csa-badge csa-badge--terracotta">Bloqueada</span>
+                                        {% endif %}
+                                    </dd>
+                                </div>
+                                <div class="prt-defs__row">
+                                    <dt class="prt-defs__label">Último acceso</dt>
+                                    <dd class="prt-defs__value{% if not access_user.lastLogin %} prt-defs__value--muted{% endif %}">
+                                        {{ access_user.lastLogin ? access_user.lastLogin|format_datetime('medium', 'short', locale='es') : 'Nunca ha entrado' }}
+                                    </dd>
+                                </div>
+                            </dl>
+                            {# El admin no puede revocarse a sí mismo (el backend
+                               también lo corta): si la cuenta de acceso es la suya,
+                               se oculta el botón de revocar. #}
+                            {% set access_is_self = app.user and app.user.id == access_user.id %}
+                            {% if access_user.enabled %}
+                                <div style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
+                                    <form method="post" action="{{ path('partner_send_access_link', { id: partner.id }) }}">
+                                        <input type="hidden" name="_csrf_token" value="{{ csrf_token('partner_send_access_link') }}">
+                                        <button type="submit" class="csa-btn csa-btn--ghost csa-btn--sm">
+                                            <i class="fa fa-paper-plane-o" aria-hidden="true"></i> Enviar enlace de acceso
+                                        </button>
+                                    </form>
+                                    {% if not access_is_self %}
+                                        <button type="button" class="csa-btn csa-btn--ghost csa-btn--sm" onclick="document.getElementById('confirm-partner-access-toggle').showModal()">
+                                            <i class="fa fa-ban" aria-hidden="true"></i> Revocar acceso
+                                        </button>
+                                    {% endif %}
+                                </div>
+                            {% else %}
+                                <p class="csa-muted" style="margin: 12px 0 0;">Cuenta bloqueada: no se le pueden enviar enlaces de acceso hasta restaurarle el acceso.</p>
+                                {% if not access_is_self %}
+                                    <button type="button" class="csa-btn csa-btn--primary csa-btn--sm" onclick="document.getElementById('confirm-partner-access-toggle').showModal()">
+                                        <i class="fa fa-check-circle" aria-hidden="true"></i> Restaurar acceso
+                                    </button>
+                                {% endif %}
+                            {% endif %}
+
+                            {# Form oculto + confirmación para revocar/restaurar el
+                               acceso reusando el endpoint user_toggle_block (mismo
+                               histórico UserEvent que la ficha de la cuenta); el
+                               hidden return_to_partner hace que vuelva aquí. #}
+                            {% if not access_is_self %}
+                                <form id="partner-access-toggle-form" method="post" action="{{ path('user_toggle_block', { id: access_user.id }) }}" style="display: none;">
+                                    <input type="hidden" name="_token" value="{{ csrf_token('user_toggle_block_' ~ access_user.id) }}">
+                                    <input type="hidden" name="return_to_partner" value="{{ partner.id }}">
+                                </form>
+                                {{ csa.confirm_dialog('confirm-partner-access-toggle', {
+                                    variant: access_user.enabled ? 'danger' : 'default',
+                                    eyebrow: 'Acceso a la web',
+                                    title: access_user.enabled ? 'Revocar acceso' : 'Restaurar acceso',
+                                    body: access_user.enabled
+                                        ? 'Esta persona dejará de poder entrar a la web. Su cuenta y su historial se conservan; podrás devolverle el acceso cuando quieras.'
+                                        : 'Esta persona volverá a poder entrar a la web.',
+                                    confirm_label: access_user.enabled ? 'Revocar' : 'Restaurar',
+                                    external_form_id: 'partner-access-toggle-form',
+                                }) }}
+                            {% endif %}
+                        {% elseif partner.email %}
+                            <p class="csa-muted" style="margin-top: 0;">
+                                Sin cuenta de acceso.
+                                {% if not self_registration_open %}
+                                    El alta global está cerrada: este socix no puede creársela; puedes dársela tú desde aquí.
+                                {% endif %}
+                            </p>
+                            <form method="post" action="{{ path('partner_grant_access', { id: partner.id }) }}">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token('partner_grant_access') }}">
+                                <label style="display: block; margin-bottom: 10px; cursor: pointer;">
+                                    <input type="checkbox" name="send_link" value="1" checked>
+                                    Enviarle el enlace de acceso por email al crear la cuenta
+                                </label>
+                                <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">
+                                    <i class="fa fa-key" aria-hidden="true"></i> Dar acceso
+                                </button>
+                            </form>
+                        {% else %}
+                            <p class="csa-muted" style="margin: 0;">Sin email: no se puede dar acceso (el login va por correo).</p>
+                        {% endif %}
+                    </div>
+                </section>
+            {% endif %}
+
             {# Familia #}
             <section class="prt-card prt-card--ochre">
                 <header class="prt-card__head">
@@ -515,7 +620,9 @@
                         </p>
                     {% endif %}
 
-                    {% if partner.getActiveBasket and partner.getActiveBasket.basketShare.id == 4 %}
+                    {# Compartidas (semanal 4, quincenal 6, mensual 7): mismo gate
+                     # que el botón "¿Comparte con?" de la cabecera. #}
+                    {% if partner.getActiveBasket and partner.getActiveBasket.basketShare.id in [4, 6, 7] %}
                         {% if partner.sharePartner %}
                             <div class="prt-share">
                                 <i class="fa fa-handshake-o"></i>
@@ -626,7 +733,13 @@
 
                             <div class="prt-mini__cell">
                                 <div class="prt-mini__label">Inicio</div>
-                                <div class="prt-mini__value">{{ partner.getActiveBasket.startDate|date('d/m/Y') }}</div>
+                                {# Sin el guard, date(null) pinta la fecha de HOY — un
+                                 # inicio inventado para los PBS sin fecha del import. #}
+                                {% if partner.getActiveBasket.startDate %}
+                                    <div class="prt-mini__value">{{ partner.getActiveBasket.startDate|date('d/m/Y') }}</div>
+                                {% else %}
+                                    <div class="prt-mini__value prt-mini__value--muted">Sin fecha</div>
+                                {% endif %}
                             </div>
 
                             <div class="prt-mini__cell">
@@ -683,18 +796,15 @@
                             <a href="{{ path('partner_basket_share_change_modality', { id: partner.getActiveBasket.id }) }}" class="prt-btn">
                                 <i class="fa fa-pencil"></i> Cambiar la cesta
                             </a>
-                            <button type="button" class="prt-btn prt-btn--danger"
-                                onclick="document.getElementById('confirm-partner-show-5').showModal()">
-                                <i class="fa fa-times"></i> Dar de baja la cesta
-                            </button>
-{{ csa.confirm_dialog('confirm-partner-show-5', {
-    variant: 'danger',
-    eyebrow: 'Acción permanente',
-    title: 'Dar de baja la cesta',
-    body: 'El socix dejará de recibir cesta y se conservará el histórico.',
-    confirm_label: 'Dar de baja la cesta',
-    confirm_href: path('partner_basket_share_finalize', { id: partner.getActiveBasket.id }),
-}) }}
+                            {# Lleva directo al formulario de finalizar (que pide la
+                             # fecha de fin y es la confirmación real): el diálogo
+                             # intermedio que había aquí era fricción redundante y su
+                             # copy ("acción permanente") engañaba — el fin puede
+                             # programarse a futuro. #}
+                            <a href="{{ path('partner_basket_share_finalize', { id: partner.getActiveBasket.id }) }}"
+                               class="prt-btn prt-btn--danger">
+                                <i class="fa fa-calendar-times-o"></i> Finalizar cesta…
+                            </a>
                         </footer>
                     {% endif %}
                 </section>
@@ -779,7 +889,14 @@
                                     <span class="prt-timeline__dot prt-timeline__dot--{{ meta.cls }}"></span>
                                     <div class="prt-timeline__head">
                                         <span class="prt-timeline__label">{{ label }}</span>
-                                        <span class="prt-timeline__time">{{ event.occurredAt|format_datetime('medium', 'short', locale='es') }}</span>
+                                        {# Los eventos retro-importados sin fecha real llevan epoch
+                                         # (1970): la fecha original se perdió en el import y no es
+                                         # recuperable — mejor decirlo que enseñar "1 ene 1970". #}
+                                        {% if event.occurredAt|date('Y') < 1971 %}
+                                            <span class="prt-timeline__time" title="La fecha real se perdió en el import original">Fecha desconocida</span>
+                                        {% else %}
+                                            <span class="prt-timeline__time">{{ event.occurredAt|format_datetime('medium', 'short', locale='es') }}</span>
+                                        {% endif %}
                                         {% if actor_label %}
                                             <span class="prt-timeline__actor">{{ actor_label }}</span>
                                         {% endif %}

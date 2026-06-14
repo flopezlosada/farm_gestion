@@ -48,6 +48,15 @@
                 {% endblock %}
             {% endembed %}
 
+            {% embed '_components/csa_form_section.html.twig' with { num: '3', title: 'Web pública', subtitle: 'Lo que ven lxs visitantes en la página Hazte socix.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.schedule, 'Horario público', { full: true }) }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
             <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
                 <div></div>
                 <div class="csa-row">

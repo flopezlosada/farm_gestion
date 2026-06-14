@@ -1,0 +1,185 @@
+{# ============================================================
+ # Diagnóstico de envíos — email de prueba y disparadores de cron.
+ # Solo admin. Sirve para probar sin SSH lo que normalmente solo se
+ # ejercita por consola.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Diagnóstico de envíos{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Diagnóstico de envíos</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Administración',
+        'Diagnóstico de envíos',
+        'Prueba el envío de correo de este entorno y lanza a mano los disparadores de cron para ver qué harían. Útil en staging para verificar emails y crons sin terminal.'
+    ) }}
+
+    <div class="csa-form-narrow csa-stack-lg">
+
+        {# ---- Redirección de pruebas ---- #}
+        {% embed '_components/csa_form_section.html.twig' with { num: 1, title: 'Redirección de pruebas' } %}
+            {% block body %}
+                <p class="csa-setting__help" style="margin-bottom: var(--csa-sp-4);">
+                    Si rellenas una dirección, <strong>todos</strong> los emails que envíe la app irán solo ahí
+                    (sea quien sea el destinatario, que sigue visible en la cabecera del mensaje). Pensado para
+                    staging: ves los envíos llegar a tu bandeja sin escribir a socixs.
+                    <strong>Déjalo vacío en producción.</strong>
+                </p>
+                {% if redirect_to %}
+                    <div class="csa-alert csa-alert--warning" role="status" style="margin-bottom: var(--csa-sp-3);">
+                        <i class="csa-alert__icon fa fa-exclamation-triangle" aria-hidden="true"></i>
+                        <div class="csa-alert__body">Redirección ACTIVA: todos los emails van a <strong>{{ redirect_to }}</strong>.</div>
+                    </div>
+                {% endif %}
+                <form method="post" action="{{ path('settings_diagnostics_redirect') }}" class="csa-row" style="gap: var(--csa-sp-3); align-items: flex-end;">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('diagnostics_redirect') }}">
+                    <span class="csa-setting__text" style="flex: 1;">
+                        <span class="csa-setting__label">Redirigir todos los emails a</span>
+                        <input type="text" class="csa-input" name="redirect_to"
+                               value="{{ redirect_to }}" placeholder="tu@email.org (vacío = desactivado)">
+                    </span>
+                    <button type="submit" class="csa-btn csa-btn--primary">Guardar</button>
+                </form>
+            {% endblock %}
+        {% endembed %}
+
+        {# ---- Reply-To global ---- #}
+        {% embed '_components/csa_form_section.html.twig' with { num: 2, title: 'Responder-a (Reply-To)' } %}
+            {% block body %}
+                <p class="csa-setting__help" style="margin-bottom: var(--csa-sp-4);">
+                    El remitente de los correos es <strong>noreply@</strong>. Si rellenas aquí una dirección,
+                    las respuestas de lxs socixs irán a esa cuenta (útil en el rodaje, mientras aún no
+                    gestionan desde la web). No afecta a correos que ya llevan su propio Reply-To, como el
+                    formulario de contacto. <strong>Vacío = sin Reply-To.</strong>
+                </p>
+                {% if reply_to %}
+                    <div class="csa-alert csa-alert--info" role="status" style="margin-bottom: var(--csa-sp-3);">
+                        <i class="csa-alert__icon fa fa-reply" aria-hidden="true"></i>
+                        <div class="csa-alert__body">Reply-To ACTIVO: las respuestas van a <strong>{{ reply_to }}</strong>.</div>
+                    </div>
+                {% endif %}
+                <form method="post" action="{{ path('settings_diagnostics_reply_to') }}" class="csa-row" style="gap: var(--csa-sp-3); align-items: flex-end;">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('diagnostics_reply_to') }}">
+                    <span class="csa-setting__text" style="flex: 1;">
+                        <span class="csa-setting__label">Responder-a</span>
+                        <input type="email" class="csa-input" name="reply_to"
+                               value="{{ reply_to }}" placeholder="csa@csavegadejarama.org (vacío = desactivado)">
+                    </span>
+                    <button type="submit" class="csa-btn csa-btn--primary">Guardar</button>
+                </form>
+            {% endblock %}
+        {% endembed %}
+
+        {# ---- Email de prueba ---- #}
+        {% embed '_components/csa_form_section.html.twig' with { num: 3, title: 'Email de prueba' } %}
+            {% block body %}
+                <p class="csa-setting__help" style="margin-bottom: var(--csa-sp-4);">
+                    Envía un correo de muestra para comprobar que el SMTP de este entorno conecta y entrega.
+                    Por defecto se manda a tu cuenta; puedes cambiar la dirección.
+                </p>
+                <form method="post" action="{{ path('settings_diagnostics_test_email') }}" class="csa-row" style="gap: var(--csa-sp-3); align-items: flex-end;">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('diagnostics_test_email') }}">
+                    <span class="csa-setting__text" style="flex: 1;">
+                        <span class="csa-setting__label">Destinatario</span>
+                        <input type="email" class="csa-input" name="email"
+                               value="{{ default_email }}" placeholder="tu@email.org">
+                    </span>
+                    <button type="submit" class="csa-btn csa-btn--primary">Enviar prueba</button>
+                </form>
+            {% endblock %}
+        {% endembed %}
+
+        {# ---- Disparadores de cron ---- #}
+        {% embed '_components/csa_form_section.html.twig' with { num: 4, title: 'Disparadores de cron' } %}
+            {% block body %}
+                <p class="csa-setting__help" style="margin-bottom: var(--csa-sp-4);">
+                    Lanza los comandos que en producción correrán por cron y mira su salida.
+                    <strong>Simular</strong> no envía nada (lista a quién iría); <strong>ejecutar</strong> envía de verdad
+                    (respetando los toggles de configuración). El recordatorio resuelve la cesta del próximo reparto
+                    según la antelación configurada.
+                </p>
+
+                <div class="csa-settings-list">
+                    {% for trigger in [
+                        { which: 'reminder', label: 'Recordatorio de recogida', cmd: 'app:send-pickup-reminders' },
+                        { which: 'summary',  label: 'Resumen de cambios a admin', cmd: 'app:send-admin-delivery-changes-summary' }
+                    ] %}
+                        <div class="csa-row-between" style="padding: var(--csa-sp-3) 0; gap: var(--csa-sp-3);">
+                            <span class="csa-setting__text">
+                                <span class="csa-setting__label">{{ trigger.label }}</span>
+                                <span class="csa-setting__help"><code>{{ trigger.cmd }}</code></span>
+                            </span>
+                            <span class="csa-row" style="gap: var(--csa-sp-2);">
+                                <form method="post" action="{{ path('settings_diagnostics_cron') }}">
+                                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('diagnostics_cron') }}">
+                                    <input type="hidden" name="which" value="{{ trigger.which }}">
+                                    <input type="hidden" name="dry_run" value="1">
+                                    <button type="submit" class="csa-btn csa-btn--ghost">Simular</button>
+                                </form>
+                                <form method="post" action="{{ path('settings_diagnostics_cron') }}"
+                                      onsubmit="return confirm('Esto ENVÍA correo de verdad (a las direcciones reales, o a la redirección de pruebas si está activa). ¿Continuar?');">
+                                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('diagnostics_cron') }}">
+                                    <input type="hidden" name="which" value="{{ trigger.which }}">
+                                    <input type="hidden" name="dry_run" value="0">
+                                    <button type="submit" class="csa-btn csa-btn--primary">Ejecutar</button>
+                                </form>
+                            </span>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endblock %}
+        {% endembed %}
+
+        {# ---- Previsualizar plantillas ---- #}
+        {% embed '_components/csa_form_section.html.twig' with { num: 5, title: 'Previsualizar emails' } %}
+            {% block body %}
+                <p class="csa-setting__help" style="margin-bottom: var(--csa-sp-4);">
+                    Abre el email renderizado con datos reales en una pestaña nueva, sin enviar nada.
+                </p>
+                <div class="csa-settings-list">
+                    {% for tpl in [
+                        { which: 'magic_link',      label: 'Enlace de acceso (magic-link)' },
+                        { which: 'pickup_reminder', label: 'Recordatorio de recogida' },
+                        { which: 'admin_summary',   label: 'Resumen de cambios a admin' }
+                    ] %}
+                        <div class="csa-row-between" style="padding: var(--csa-sp-3) 0;">
+                            <span class="csa-setting__text">
+                                <span class="csa-setting__label">{{ tpl.label }}</span>
+                            </span>
+                            <a href="{{ path('settings_diagnostics_preview', { which: tpl.which }) }}"
+                               target="_blank" rel="noopener" class="csa-btn csa-btn--ghost">Previsualizar</a>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endblock %}
+        {% endembed %}
+
+        {# ---- Salida del último comando ---- #}
+        {% if result %}
+            {% embed '_components/csa_form_section.html.twig' with { num: 6, title: 'Salida del comando' } %}
+                {% block body %}
+                    <p class="csa-setting__help" style="margin-bottom: var(--csa-sp-3);">
+                        <code>{{ result.command }}</code> ·
+                        {% if result.exit == 0 %}
+                            <span style="color: var(--csa-ok, green);">terminó OK (código 0)</span>
+                        {% else %}
+                            <span style="color: var(--csa-danger, #c0392b);">terminó con código {{ result.exit }}</span>
+                        {% endif %}
+                    </p>
+                    <pre style="background: var(--csa-surface-2, #f4f4f4); padding: var(--csa-sp-3); border-radius: 6px; overflow-x: auto; font-size: 0.85em; line-height: 1.4;">{{ result.output }}</pre>
+                {% endblock %}
+            {% endembed %}
+        {% endif %}
+
+    </div>
+
+{% endblock %}

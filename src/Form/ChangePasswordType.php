@@ -5,8 +5,8 @@ namespace App\Form;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\PasswordType;
 use Symfony\Component\Form\Extension\Core\Type\RepeatedType;
+use App\Validator\StrongPassword;
 use Symfony\Component\Form\FormBuilderInterface;
-use Symfony\Component\Validator\Constraints\Length;
 use Symfony\Component\Validator\Constraints\NotBlank;
 
 /**
@@ -30,10 +30,7 @@ class ChangePasswordType extends AbstractType
                 'first_options' => ['label' => 'Nueva contraseña'],
                 'second_options' => ['label' => 'Repetir nueva contraseña'],
                 'invalid_message' => 'Las contraseñas nuevas no coinciden.',
-                'constraints' => [
-                    new NotBlank(['message' => 'Indica la nueva contraseña.']),
-                    new Length(['min' => 6, 'minMessage' => 'Al menos 6 caracteres.']),
-                ],
+                'constraints' => [new StrongPassword()],
             ]);
     }
 }

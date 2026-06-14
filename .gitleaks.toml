@@ -1,0 +1,20 @@
+# Configuración de gitleaks para CSA Vega.
+#
+# Extiende las reglas por defecto y exime el fichero `.env` del repo: éste solo
+# contiene DEFAULTS DE DESARROLLO (el APP_SECRET de dev y las credenciales
+# públicas de DDEV `db:db`), nunca secretos reales. Los secretos de verdad
+# (prod/staging) viven en `.env.local`, que está gitignored y jamás llega al
+# repo. Ver la cabecera de `.env` y el RUNBOOK.md.
+#
+# El escaneo sigue cubriendo el resto del repo y su historia.
+
+title = "CSA Vega · gitleaks"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = ".env del repo = defaults de desarrollo; los secretos reales van a .env.local (gitignored)"
+paths = [
+    '''^\.env$''',
+]

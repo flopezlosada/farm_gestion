@@ -7,7 +7,10 @@ use App\Entity\Basket;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
 use App\Entity\PartnerDeliveryShift;
+use App\Entity\PartnerNodeOverride;
+use App\Entity\Setting;
 use App\Entity\WeeklyBasket;
+use App\Service\AppSettings;
 use App\Service\Delivery\DeliveryShiftApplier;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Delivery\WeeklyBasketSkipper;
@@ -62,6 +65,34 @@ class PanelBasketActionsTest extends AbstractPartnerAuthenticatedTest
                 WHERE p.email = :email',
             $params,
         );
+        $conn->executeStatement(
+            'DELETE pno FROM partner_node_override pno
+                INNER JOIN partner p ON p.id = pno.partner_id
+                WHERE p.email = :email',
+            $params,
+        );
+
+        // El autoservicio del socix vive tras el feature-flag FEATURE_PARTNER_SELFSERVICE,
+        // apagado por defecto. Estos tests ejercitan justamente esas acciones (saltar,
+        // mover, cambiar de nodo), así que lo encendemos; el tearDown limpia el override.
+        $client->getContainer()->get(AppSettings::class)
+            ->setBool(AppSettings::FEATURE_PARTNER_SELFSERVICE, true);
+    }
+
+    /**
+     * Limpia los overrides de configuración persistidos (el feature-flag que
+     * encendemos en resetSocixState) para no contaminar otros tests, que
+     * cuentan con los defaults del catálogo.
+     */
+    protected function tearDown(): void
+    {
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        foreach ($em->getRepository(Setting::class)->findAll() as $setting) {
+            $em->remove($setting);
+        }
+        $em->flush();
+
+        parent::tearDown();
     }
 
     private function reloadSocixPartner(EntityManagerInterface $em): Partner
@@ -216,5 +247,35 @@ class PanelBasketActionsTest extends AbstractPartnerAuthenticatedTest
         $shift = $em->getRepository(PartnerDeliveryShift::class)
             ->findOneBy(['partner' => $partner->getId(), 'fromBasket' => $basketId]);
         $this->assertNull($shift, 'Sin token CSRF válido no debe crearse ningún cambio puntual.');
+    }
+
+    /**
+     * POST de "recoger en otro nodo" (traslado puntual de nodo) sin token CSRF
+     * válido redirige y NO crea ningún PartnerNodeOverride. La guarda CSRF se
+     * evalúa antes que el plazo y la resolución de datos, así que es determinista
+     * (no depende de la fecha ni de que las fixtures cableen nodos a los grupos).
+     */
+    public function testChangeGroupRechazaCsrfInvalido(): void
+    {
+        $client = $this->createPartnerAuthenticatedClient();
+        $this->resetSocixState($client);
+        $em = $this->em($client);
+        $partner = $this->reloadSocixPartner($em);
+
+        $wb = $this->farthestSocixWeeklyBasket($em, $partner);
+        $this->assertNotNull($wb);
+        $basketId = $wb->getBasket()->getId();
+
+        $client->request('POST', '/panel/cesta/change-group', [
+            '_csrf_token' => 'token-invalido',
+            'basket_id' => $basketId,
+            'group_id' => 1,
+        ]);
+        $this->assertResponseRedirects();
+
+        $em->clear();
+        $override = $em->getRepository(PartnerNodeOverride::class)
+            ->findOneBy(['partner' => $partner->getId(), 'basket' => $basketId]);
+        $this->assertNull($override, 'Sin token CSRF válido no debe crearse ningún traslado de nodo.');
     }
 }

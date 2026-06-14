@@ -4,6 +4,7 @@ namespace App\Form;
 
 use App\Entity\Partner;
 use App\Entity\User;
+use App\Validator\StrongPassword;
 use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
@@ -13,8 +14,6 @@ use Symfony\Component\Form\Extension\Core\Type\RepeatedType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
-use Symfony\Component\Validator\Constraints\Length;
-use Symfony\Component\Validator\Constraints\NotBlank;
 
 class UserType extends AbstractType
 {
@@ -49,10 +48,7 @@ class UserType extends AbstractType
                 'second_options' => ['label' => 'Repetir contraseña'],
                 'invalid_message' => 'Las contraseñas no coinciden.',
                 'required' => true,
-                'constraints' => [
-                    new NotBlank(),
-                    new Length(['min' => 6]),
-                ],
+                'constraints' => [new StrongPassword()],
             ]);
         }
 

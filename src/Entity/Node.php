@@ -70,6 +70,16 @@ class Node
     private ?\DateTimeInterface $anchorDate = null;
 
     /**
+     * Horario público de recogida, texto libre que se muestra tal cual en la
+     * web pública (página "Hazte socix"). Ej.: «Miércoles de 18:00 a 20:00».
+     * NULL = no se muestra horario para este nodo.
+     *
+     * @ORM\Column(type="string", length=255, nullable=true)
+     */
+    #[Assert\Length(max: 255)]
+    private ?string $schedule = null;
+
+    /**
      * Grupos de socios (proximidad) que cuelgan de este nodo.
      *
      * @ORM\OneToMany(targetEntity="WeeklyBasketGroup", mappedBy="node")
@@ -162,6 +172,24 @@ class Node
     public function setAnchorDate(?\DateTimeInterface $anchorDate): self
     {
         $this->anchorDate = $anchorDate;
+        return $this;
+    }
+
+    /**
+     * @return string|null Horario público de recogida, o null si no se publica.
+     */
+    public function getSchedule(): ?string
+    {
+        return $this->schedule;
+    }
+
+    /**
+     * @param string|null $schedule Horario público de recogida (texto libre).
+     * @return self
+     */
+    public function setSchedule(?string $schedule): self
+    {
+        $this->schedule = $schedule;
         return $this;
     }
 

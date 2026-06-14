@@ -1,0 +1,110 @@
+{# ============================================================
+ # Base de las estadísticas de uso: cabecera + sub-navegación + filtros + KPIs.
+ # Las sub-pantallas (index/screens/errors) extienden esta y rellenan
+ # `usage_body` (contenido) y `chart_js` (script del gráfico).
+ #
+ # Todos los enlaces de filtro y de sub-navegación arrastran area + from + to,
+ # apuntando a la sub-pantalla actual (app.request _route) para que cambiar un
+ # filtro no te saque de la pestaña en la que estás.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% set current = app.request.attributes.get('_route') %}
+{% set qs = { area: area, from: from, to: to } %}
+
+{% block title %}Estadísticas de uso{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Estadísticas de uso</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Administración',
+        'Estadísticas de uso',
+        'Rastro anónimo de las visitas a la zona privada. No identifica a nadie.'
+    ) }}
+
+    {# ---- Navegación entre pantallas: pestañas (subrayado), no botones,
+         # para que se distingan a simple vista de los filtros de abajo. ---- #}
+    {% set tabs = {
+        'usage_stats_index':   'Resumen',
+        'usage_stats_screens': 'Pantallas',
+        'usage_stats_errors':  'Errores'
+    } %}
+    <ul class="csa-tabs">
+        {% for route, label in tabs %}
+            <li class="csa-tabs__item {{ current == route ? 'active' : '' }}">
+                <a class="csa-tabs__link" href="{{ path(route, qs) }}">{{ label }}</a>
+            </li>
+        {% endfor %}
+    </ul>
+
+    {# ---- Filtros: dos grupos ETIQUETADOS (Área y Periodo). Cada grupo lleva
+         # su rótulo encima para que se entienda qué hace cada botonera; antes
+         # eran tres rebaños de botones idénticos sin nombre. ---- #}
+    {% set filter_label = 'font-size: 0.7em; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--csa-ink-soft); margin-bottom: var(--csa-sp-1);' %}
+    <div style="display: flex; flex-wrap: wrap; gap: var(--csa-sp-6) var(--csa-sp-8); align-items: flex-start; margin-bottom: var(--csa-sp-3);">
+
+        {# Área #}
+        <div style="display: flex; flex-direction: column;">
+            <span style="{{ filter_label }}">Área</span>
+            <div style="display: flex; gap: var(--csa-sp-1);">
+                {% for key, label in areas %}
+                    <a href="{{ path(current, qs|merge({ area: key })) }}"
+                       class="csa-btn csa-btn--sm {{ area == key ? 'csa-btn--primary' : 'csa-btn--ghost' }}">{{ label }}</a>
+                {% endfor %}
+            </div>
+        </div>
+
+        {# Periodo: atajos + rango a medida, juntos bajo un mismo rótulo. #}
+        <div style="display: flex; flex-direction: column;">
+            <span style="{{ filter_label }}">Periodo</span>
+            <div style="display: flex; gap: var(--csa-sp-1); flex-wrap: wrap; align-items: center;">
+                {% for p in presets %}
+                    <a href="{{ path(current, { area: area, from: p.from, to: p.to }) }}"
+                       class="csa-btn csa-btn--sm {{ (from == p.from and to == p.to) ? 'csa-btn--primary' : 'csa-btn--ghost' }}">{{ p.label }}</a>
+                {% endfor %}
+                <span class="csa-muted" style="margin: 0 var(--csa-sp-1);">·</span>
+                <form method="get" action="{{ path(current) }}"
+                      style="display: flex; align-items: center; gap: var(--csa-sp-2);">
+                    <input type="hidden" name="area" value="{{ area }}">
+                    <input type="date" name="from" value="{{ from }}" class="csa-input csa-input--compact" aria-label="Desde">
+                    <span class="csa-muted">–</span>
+                    <input type="date" name="to" value="{{ to }}" class="csa-input csa-input--compact" aria-label="Hasta">
+                    <button type="submit" class="csa-btn csa-btn--sm csa-btn--secondary">Aplicar</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    {# Contexto activo en una línea; el glosario de cada área queda en el title. #}
+    <p class="csa-muted" style="margin: 0 0 var(--csa-sp-6) 0; font-size: 0.85em;">
+        Mostrando
+        <strong title="{% if area == 'panel' %}El panel privado de cada socix (/panel): su cesta, su calendario de recogida y sus datos.{% else %}El back-office del equipo (/gestion): la administración interna (socios, reparto, granja, blog…).{% endif %}">{{ areas[area] }}</strong>
+        · del {{ from }} al {{ to }}.
+    </p>
+
+    {# ---- KPIs (comunes a las tres pantallas) ---- #}
+    {% set error_rate = summary.total > 0 ? (summary.errors / summary.total * 100) : 0 %}
+    <div class="csa-kpi-row" style="margin-bottom: var(--csa-sp-6);">
+        {{ csa.kpi('Visitas', summary.total, null, null, null, 'green') }}
+        {{ csa.kpi('Visitas únicas', summary.sessions, 'sesiones', null, null, 'sky') }}
+        {{ csa.kpi('Pantallas distintas', summary.screens, null, null, null, 'ochre') }}
+        {{ csa.kpi('Tasa de error', error_rate|number_format(1), '%', null, null, error_rate > 5 ? 'terracotta' : 'green') }}
+    </div>
+
+    {% block usage_body %}{% endblock %}
+
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    <script src="https://code.highcharts.com/highcharts.js"></script>
+    {% block chart_js %}{% endblock %}
+{% endblock %}

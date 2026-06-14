@@ -231,6 +231,16 @@ class Partner
     private string $status = self::STATUS_ACTIVO;
 
     /**
+     * Marca de reconciliación: socio traído del dump de producción que
+     * administración aún no ha validado (¿alta real, baja histórica o
+     * duplicado de una ficha ya existente?). Se lista en el panel "Socios por
+     * confirmar"; al resolverlo se apaga. Los socios ya consolidados nacen en false.
+     *
+     * @ORM\Column(type="boolean", options={"default": false})
+     */
+    private bool $needs_review = false;
+
+    /**
      * parientes
      * One Category has Many Categories.
      * @Orm\OneToMany(targetEntity="Partner", mappedBy="parent")
@@ -1018,6 +1028,16 @@ class Partner
         return $this;
     }
 
+    public function isNeedsReview(): bool
+    {
+        return $this->needs_review;
+    }
 
+    public function setNeedsReview(bool $needs_review): self
+    {
+        $this->needs_review = $needs_review;
+
+        return $this;
+    }
 
 }

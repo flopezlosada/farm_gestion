@@ -157,6 +157,56 @@ class NodeDeliveryDateTest extends TestCase
         $this->assertNull($resolver->physicalDateFor($this->makeBasket('2026-05-22'), $node));
     }
 
+    /**
+     * baselineDateFor es la fecha para CONTAR posiciones mensuales (semántica
+     * pegajosa): una CANCELACIÓN conserva la fecha (la semana sigue ocupando
+     * su posición), mientras que un TRASLADO sí mueve la fecha (y con ella el
+     * mes que cuenta).
+     */
+    public function testBaselineDateForConservaLaFechaAnteCancelacion(): void
+    {
+        $node = $this->makeNode('Torremocha', 5, Node::CADENCE_WEEKLY);
+        $basket = $this->makeBasket('2026-12-25');
+
+        $exception = new DeliveryException();
+        $exception->setBasket($basket);
+        $exception->setShiftedDate(null); // cancelación
+
+        $resolver = $this->makeResolver($exception);
+
+        $baseline = $resolver->baselineDateFor($basket, $node);
+        $this->assertNotNull($baseline, 'La semana cancelada sigue ocupando su posición.');
+        $this->assertSame('2026-12-25', $baseline->format('Y-m-d'));
+        $this->assertNull($resolver->physicalDateFor($basket, $node), 'Pero físicamente no reparte.');
+    }
+
+    public function testBaselineDateForAplicaLosTraslados(): void
+    {
+        $node = $this->makeNode('Torremocha', 5, Node::CADENCE_WEEKLY);
+        $basket = $this->makeBasket('2026-12-25');
+
+        $exception = new DeliveryException();
+        $exception->setBasket($basket);
+        $exception->setShiftedDate(new \DateTimeImmutable('2026-12-23'));
+
+        $resolver = $this->makeResolver($exception);
+
+        $baseline = $resolver->baselineDateFor($basket, $node);
+        $this->assertNotNull($baseline);
+        $this->assertSame('2026-12-23', $baseline->format('Y-m-d'));
+    }
+
+    public function testBaselineDateForRespetaLaCadenciaBiweekly(): void
+    {
+        // Semana fuera de fase del nodo biweekly: no es posición de su mes.
+        $node = $this->makeNode('Cascorro', 3, Node::CADENCE_BIWEEKLY, '2026-05-06');
+
+        $this->assertNull($this->resolver->baselineDateFor($this->makeBasket('2026-05-15'), $node));
+        $baseline = $this->resolver->baselineDateFor($this->makeBasket('2026-05-22'), $node);
+        $this->assertNotNull($baseline);
+        $this->assertSame('2026-05-20', $baseline->format('Y-m-d'));
+    }
+
     public function testOperativeDateForIgnoraLosCierres(): void
     {
         // El picker del CRUD usa operativeDateFor (semanas crudas): aunque haya

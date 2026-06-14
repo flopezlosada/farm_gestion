@@ -4,6 +4,7 @@ namespace App\Form;
 
 use App\Entity\BasketShare;
 use App\Entity\PartnerBasketShare;
+use App\Entity\WeeklyBasketGroup;
 use Doctrine\ORM\EntityRepository;
 use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
@@ -12,6 +13,7 @@ use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
+use Symfony\Component\Validator\Constraints\NotBlank;
 
 class PartnerBasketShareType extends AbstractType
 {
@@ -19,8 +21,24 @@ class PartnerBasketShareType extends AbstractType
      * @param FormBuilderInterface $builder
      * @param array $options
      */
-    public function buildForm(FormBuilderInterface $builder, array $options)
+    public function buildForm(FormBuilderInterface $builder, array $options): void
     {
+        // El alta de socio ya no pide grupo de recogida: si el socio llega
+        // aquí sin grupo, se elige junto con la cesta (el nodo del grupo
+        // determina qué modalidades caben y el turno A/B). No mapeado: lo
+        // persiste el controller en el Partner, no en el PartnerBasketShare.
+        if ($options['ask_pickup_group']) {
+            $builder->add('pickupGroup', EntityType::class, [
+                'class' => WeeklyBasketGroup::class,
+                'label' => 'Grupo de recogida',
+                'mapped' => false,
+                'required' => true,
+                'placeholder' => 'Elige punto y grupo de recogida',
+                'data' => $options['pickup_group'],
+                'constraints' => [new NotBlank(message: 'Indica el grupo de recogida')],
+            ]);
+        }
+
         $builder
 
             ->add('start_date', TextType::class, array('label' => 'Fecha de inicio', 'help'=>"Si la cesta es mensual o sólo tiene huevos una vez al mes, debes indicar la fecha del primer día del mes en que empieza a recibir", 'attr' => array('class' => 'datepicker form-control')))
@@ -42,6 +60,23 @@ class PartnerBasketShareType extends AbstractType
             ])
             ->add('egg_amount',null,array('label'=>'Cantidad de huevos', 'placeholder'=>'No quiere huevos'))
             ->add('egg_period',null,array('label'=>'Frecuencia de recogida de huevos'))
+            // Sólo para huevos mensuales: en cuál de las ENTREGAS DE CESTA del
+            // socio en el mes viajan los huevos (no el viernes del calendario).
+            // Caso Miriam: quincenal que recoge 1er y 3er viernes; "2ª entrega"
+            // = los huevos van en su 3er viernes (su segunda cesta). El resolver
+            // cuenta sobre las cestas del socio, así que los huevos nunca caen en
+            // un día sin cesta. Ver EggDeliveryResolver::shareBaselineDeliveriesInMonth.
+            ->add('eggDayMonthOrder', ChoiceType::class, [
+                'choices'  => [
+                    'No corresponde' => null,
+                    'En su 1ª cesta del mes' => 1,
+                    'En su 2ª cesta del mes' => 2,
+                    'En su 3ª cesta del mes' => 3,
+                    'En su 4ª cesta del mes' => 4,
+                ],
+                'label' => 'En qué cesta del mes recibe los huevos',
+                'help' => 'Los huevos viajan dentro de una de las cestas del socio (nunca en un día sin cesta). Una quincenal que recoge el 1er y 3er viernes y elige «2ª cesta» recibe los huevos en su segunda cesta.',
+            ])
             ->add('dayMonthOrder', ChoiceType::class,[
                 'choices'  => [
                     'No corresponde' => null,
@@ -49,7 +84,7 @@ class PartnerBasketShareType extends AbstractType
                     'Segundo viernes' => 2,
                     'Tercer viernes' => 3,
                     'Cuarto viernes' => 4,
-                ], 'label'=>"Selecciona el viernes que recoge"])
+                ], 'label'=>"Qué viernes del mes recoge la cesta"])
             ->add('deliveryGroup', ChoiceType::class, [
                 'label' => 'Turno de viernes (quincenal)',
                 'help' => 'Sólo para quincenales en puntos de reparto semanales. Cada opción muestra los viernes reales en que recoge.',
@@ -71,7 +106,7 @@ class PartnerBasketShareType extends AbstractType
         ;
     }
 
-    public function configureOptions(OptionsResolver $resolver)
+    public function configureOptions(OptionsResolver $resolver): void
     {
         $resolver->setDefaults([
             'data_class' => PartnerBasketShare::class,
@@ -84,8 +119,14 @@ class PartnerBasketShareType extends AbstractType
             ],
             // Excluye las modalidades de reparto semanal del select de tipo.
             'exclude_weekly_shares' => false,
+            // Pide el grupo de recogida en el propio form (socio sin grupo).
+            'ask_pickup_group' => false,
+            // Preselección del grupo (la elección hecha antes de recargar).
+            'pickup_group' => null,
         ]);
         $resolver->setAllowedTypes('cohort_choices', 'array');
         $resolver->setAllowedTypes('exclude_weekly_shares', 'bool');
+        $resolver->setAllowedTypes('ask_pickup_group', 'bool');
+        $resolver->setAllowedTypes('pickup_group', ['null', WeeklyBasketGroup::class]);
     }
 }

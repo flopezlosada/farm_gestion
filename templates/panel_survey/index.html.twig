@@ -1,0 +1,49 @@
+{# ============================================================
+ # Encuestas abiertas para el socix — panel.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_panel.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Encuestas{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('panel') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Encuestas</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header('Encuestas', 'Encuestas abiertas', 'Tu opinión nos ayuda a mejorar. Las respuestas son anónimas.') }}
+
+    {% if surveys is empty %}
+        {{ csa.callout('Ahora mismo no hay ninguna encuesta abierta. ¡Gracias por pasarte!', 'info') }}
+    {% else %}
+        <div class="csa-stack">
+            {% for survey in surveys %}
+                <div class="csa-card" style="padding: var(--csa-sp-4);">
+                    <div class="csa-row-between" style="align-items: center; gap: var(--csa-sp-3);">
+                        <div>
+                            <strong>{{ survey.title }}</strong>
+                            {% if survey.description %}
+                                <div class="csa-muted" style="margin-top: var(--csa-sp-1);">{{ survey.description }}</div>
+                            {% endif %}
+                            {% if survey.closesAt %}
+                                <div class="csa-muted" style="margin-top: var(--csa-sp-1);">Abierta hasta el {{ survey.closesAt|date('d/m/Y') }}.</div>
+                            {% endif %}
+                        </div>
+                        <div style="white-space: nowrap;">
+                            {% if answered[survey.id] %}
+                                {{ csa.badge('Ya respondida', 'success') }}
+                            {% else %}
+                                {{ csa.btn('Responder', { variant: 'primary', href: path('panel_survey_respond', { id: survey.id }) }) }}
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+{% endblock %}

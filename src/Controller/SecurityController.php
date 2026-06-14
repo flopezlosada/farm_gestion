@@ -5,17 +5,24 @@ namespace App\Controller;
 use App\Entity\User;
 use App\Repository\PartnerRepository;
 use App\Repository\UserRepository;
+use App\Security\MagicLinkMailer;
 use App\Security\PartnerUserProvisioner;
-use Symfony\Bridge\Twig\Mime\TemplatedEmail;
+use App\Security\UserChecker;
+use App\Service\AppSettings;
+use App\Validator\StrongPassword;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Component\Form\Extension\Core\Type\PasswordType;
+use Symfony\Component\Form\Extension\Core\Type\RepeatedType;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\Mailer\MailerInterface;
+use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Security\Core\Exception\AccountStatusException;
 use Symfony\Component\Security\Http\Authentication\AuthenticationUtils;
-use Symfony\Component\Security\Http\LoginLink\LoginLinkHandlerInterface;
 
 class SecurityController extends AbstractController
 {
@@ -52,6 +59,67 @@ class SecurityController extends AbstractController
     }
 
     /**
+     * Pantalla bloqueante para (re)establecer la contraseña. Sirve a CUALQUIER
+     * cuenta autenticada —socix o gestión—, a diferencia de la antigua
+     * /panel/setup que vivía bajo /panel y solo alcanzaba a socixs.
+     *
+     * Se llega aquí de dos formas, ambas señaladas por User::isPasswordSet() ==
+     * false y reconducidas por {@see \App\EventSubscriber\ForcePasswordChangeSubscriber}:
+     *   - primer acceso por magic-link (la cuenta nace sin contraseña real),
+     *   - forzado manual por la administración (botón "obligar a cambiar").
+     *
+     * Quien entra por Google nunca aterriza aquí: el SSO marca passwordSet=true
+     * (ver PartnerUserProvisioner), así que su credencial es Google, no una
+     * contraseña.
+     */
+    #[Route('/account/password', name: 'app_account_password', methods: ['GET', 'POST'])]
+    public function accountPassword(
+        Request $request,
+        EntityManagerInterface $em,
+        UserPasswordHasherInterface $hasher,
+    ): Response {
+        $user = $this->getUser();
+        if (!$user instanceof User) {
+            return $this->redirectToRoute('app_login');
+        }
+
+        // Ya tiene contraseña: la pantalla no aplica (evita que alguien la abra
+        // a mano para reescribir su contraseña sin pasar por el perfil, que sí
+        // pide la actual).
+        if ($user->isPasswordSet()) {
+            return $this->redirectToRoute('app_post_login');
+        }
+
+        $form = $this->createFormBuilder()
+            ->add('plainPassword', RepeatedType::class, [
+                'type' => PasswordType::class,
+                'invalid_message' => 'Las contraseñas no coinciden.',
+                'required' => true,
+                'first_options' => ['label' => 'Nueva contraseña'],
+                'second_options' => ['label' => 'Repite la contraseña'],
+                'constraints' => [new StrongPassword()],
+            ])
+            ->add('submit', SubmitType::class, ['label' => 'Guardar y continuar'])
+            ->getForm();
+
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted() && $form->isValid()) {
+            $user->setPassword($hasher->hashPassword($user, $form->get('plainPassword')->getData()));
+            $user->setPasswordSet(true);
+            $em->flush();
+
+            $this->addFlash('notice', 'Contraseña configurada. Ya puedes seguir usando la aplicación.');
+
+            return $this->redirectToRoute('app_post_login');
+        }
+
+        return $this->render('Security/set_password.html.twig', [
+            'form' => $form->createView(),
+        ]);
+    }
+
+    /**
      * Primer acceso de un socix sin User aún. El socix mete email y celular;
      * si la pareja coincide con un Partner registrado, se crea (o reutiliza)
      * el User vinculado y se le envía el magic-link al correo.
@@ -64,8 +132,8 @@ class SecurityController extends AbstractController
         Request $request,
         PartnerRepository $partnerRepository,
         PartnerUserProvisioner $provisioner,
-        LoginLinkHandlerInterface $loginLinkHandler,
-        MailerInterface $mailer,
+        MagicLinkMailer $magicLinkMailer,
+        AppSettings $settings,
         #[Autowire(service: 'limiter.magic_link')]
         RateLimiterFactory $magicLinkLimiter,
     ): Response {
@@ -74,6 +142,14 @@ class SecurityController extends AbstractController
         }
 
         if (!$this->isCsrfTokenValid('login_link_first', (string) $request->request->get('_csrf_token'))) {
+            return $this->redirectToRoute('app_login_link_sent');
+        }
+
+        // El primer acceso es exclusivo de socixs. Con el acceso de socixs cerrado
+        // por configuración (FEATURE_PARTNER_LOGIN), no tiene sentido enviar un
+        // magic-link que el UserChecker rechazaría: seguimos el camino antifuga
+        // (redirige a "enviado" sin mandar nada), igual que un email no registrado.
+        if (!$settings->getBool(AppSettings::FEATURE_PARTNER_LOGIN)) {
             return $this->redirectToRoute('app_login_link_sent');
         }
 
@@ -126,10 +202,14 @@ class SecurityController extends AbstractController
             ->getQuery()
             ->getOneOrNullResult();
 
+        // Con el alta de usuarixs cerrada por configuración, resolveOrCreate
+        // devuelve null para quien no tenga cuenta: el flujo sigue el camino
+        // antifuga (redirige a /login/sent sin enviar nada), igual que un
+        // email no registrado.
         if ($partner !== null) {
             $user = $provisioner->resolveOrCreate($partner);
             if ($user !== null) {
-                $this->sendMagicLink($user, $loginLinkHandler, $mailer);
+                $magicLinkMailer->send($user);
             }
         }
 
@@ -145,8 +225,8 @@ class SecurityController extends AbstractController
     public function forgot(
         Request $request,
         UserRepository $userRepository,
-        LoginLinkHandlerInterface $loginLinkHandler,
-        MailerInterface $mailer,
+        MagicLinkMailer $magicLinkMailer,
+        UserChecker $userChecker,
         #[Autowire(service: 'limiter.magic_link')]
         RateLimiterFactory $magicLinkLimiter,
     ): Response {
@@ -178,9 +258,19 @@ class SecurityController extends AbstractController
             ]);
         }
 
+        // Solo mandamos el enlace si la cuenta podría entrar AHORA: el UserChecker
+        // es la fuente única de esa decisión (acceso de socixs cerrado por
+        // configuración, o cuenta bloqueada). Si no, seguimos el camino antifuga
+        // (redirige a "enviado" sin mandar nada), igual que un email no registrado.
+        // No duplicamos aquí la lista de roles de equipo: la conoce el UserChecker.
         $user = $userRepository->loadUserByIdentifier($email);
         if ($user !== null) {
-            $this->sendMagicLink($user, $loginLinkHandler, $mailer);
+            try {
+                $userChecker->checkPreAuth($user);
+                $magicLinkMailer->send($user);
+            } catch (AccountStatusException) {
+                // No puede entrar: no enviamos enlace. Antifuga intacto.
+            }
         }
 
         return $this->redirectToRoute('app_login_link_sent');
@@ -227,29 +317,5 @@ class SecurityController extends AbstractController
             return null;
         }
         return (int) $digits;
-    }
-
-    private function sendMagicLink(
-        User $user,
-        LoginLinkHandlerInterface $loginLinkHandler,
-        MailerInterface $mailer,
-    ): void {
-        if ($user->getEmail() === null) {
-            return;
-        }
-
-        $details = $loginLinkHandler->createLoginLink($user);
-
-        $message = (new TemplatedEmail())
-            ->to($user->getEmail())
-            ->subject('Tu enlace de acceso a la CSA Vega de Jarama')
-            ->htmlTemplate('email/magic_link.html.twig')
-            ->textTemplate('email/magic_link.txt.twig')
-            ->context([
-                'link' => $details->getUrl(),
-                'expires_at' => $details->getExpiresAt(),
-            ]);
-
-        $mailer->send($message);
     }
 }

@@ -1,71 +1,194 @@
 {# ============================================================
- # Panel de control — versión rediseñada (shell csa)
+ # Panel de control — dashboard por roles
  # ============================================================
- # Mantiene los datos y queries del controller original; sólo
- # cambia la presentación. Patrón coherente con Batch index/show.
+ # Cada sección se pinta sólo si su clave existe en `dash`, que el
+ # controller rellena según los roles del usuario (ROLE_GESTION_REPARTO,
+ # _SOCIXS, _GRANJA, ROLE_BLOG, ROLE_ADMIN). Así un gestor de reparto no
+ # ve granja y viceversa; un admin las ve todas. El diseño nace asimétrico
+ # a propósito —Reparto y Socios densos, Comunicación y Admin ligeros— y
+ # se va llenando según aterriza la hoja de ruta. Ver
+ # docs/redesign/dashboard-roles.md.
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
+{% import _self as ui %}
 
 {% block title %}Panel de control{% endblock %}
+
+{# Celda de KPI, en el mismo lenguaje que la pantalla de reparto (dlv-stat):
+ # número grande Fraunces coloreado por tipo, etiqueta en mayúsculas, sin icono.
+ # `icon` se mantiene en la firma por compatibilidad pero ya no se pinta. #}
+{% macro stat(value, unit, label, delta, icon, tone) %}
+    <div class="dash-stat">
+        <div class="dash-stat__value{% if tone %} dash-stat__value--{{ tone }}{% endif %}">{{ value }}{% if unit %}<span class="u">{{ unit }}</span>{% endif %}</div>
+        <div class="dash-stat__label">{{ label }}</div>
+        {% if delta %}<div class="dash-stat__delta">{{ delta }}</div>{% endif %}
+    </div>
+{% endmacro %}
 
 {% block more_css %}
     {{ parent() }}
     <link rel="stylesheet" href="{{ asset('bundles/app/css/morris/morris.css') }}"/>
     <style>
-    /* stat strip del dashboard, en el lenguaje cream/Fraunces de las
-     * pantallas de reparto, conservando los iconos. */
-    .dash { font-variant-numeric: tabular-nums; }
-    .dash-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
-    .dash-stat { position: relative; background: var(--csa-surface); border: 1px solid var(--csa-rule); border-radius: var(--csa-radius-lg); padding: 18px 20px; }
-    /* icono suelto (sin caja), arriba a la derecha, grande y atenuado:
-     * llena el hueco y suaviza el color sin perder la pista cromática. */
-    .dash-stat__icon { position: absolute; top: 16px; right: 18px; font-size: 32px; line-height: 1; opacity: 0.42; }
-    .dash-stat__icon--ochre { color: #c89a3a; }
-    .dash-stat__icon--green { color: #5b7a4c; }
-    .dash-stat__icon--sky   { color: #2e6f8e; }
-    .dash-stat__icon--terra { color: #b45d3a; }
-    .dash-stat__value { font-family: 'Fraunces', serif; font-weight: 600; font-size: 31px; letter-spacing: -0.02em; line-height: 1; color: #1d1c17; }
-    .dash-stat__value .u { font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 500; color: #5a564a; margin-left: 5px; letter-spacing: 0; }
-    .dash-stat__label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #8d8773; margin-top: 9px; font-weight: 600; }
-    .dash-stat__delta { font-size: 11.5px; color: #8d8773; margin-top: 5px; }
-    @media (max-width: 900px) { .dash-stats { grid-template-columns: repeat(2, 1fr); } }
-    /* iconos de las listas del dashboard sin caja de fondo, como los KPIs
-     * (scopeado al dashboard; csa-list se usa en otras pantallas). */
-    .csa-dashboard-grid .csa-list__icon { background: transparent; }
-    .csa-dashboard-grid .csa-list__icon i,
-    .csa-dashboard-grid .csa-list__icon svg { font-size: 24px; opacity: 0.5; }
+    /* ============================================================
+     * Lenguaje del dashboard — tokens locales (--dash-*), paleta
+     * HERMANA de --dlv-* (reparto v2) y --prl-* (listado socixs).
+     * El panel habla el mismo idioma sobrio que esas pantallas:
+     * tablas de línea fina, hover sage, números Fraunces tabulares,
+     * SIN iconos redondos de colores. Ver docs/redesign/dashboard-roles.md.
+     * ============================================================ */
+    .dash {
+        --dash-line: #ebe7dd;  --dash-line-2: #d8d2c2;
+        --dash-ink: #1d1c17;   --dash-ink-soft: #5a564a;  --dash-ink-faint: #8d8773;
+        --dash-sage: #5b7a4c;  --dash-sage-d: #2f4426;     --dash-sage-l: #eaf0e2;
+        --dash-ochre: #c89a3a; --dash-ochre-d: #8c6919;    --dash-ochre-l: #faf1d8;
+        --dash-terra: #b45d3a; --dash-terra-d: #7d3a1f;    --dash-terra-l: #fae6dc;
+        --dash-bg: #fbfaf6;    --dash-surface: #ffffff;
+        /* Forzar Inter como base del bloque: blinda la cascada frente a
+         * Bootstrap 3 (que se carga antes y mete Helvetica/Arial en los <a>
+         * y botones heredados). Mismo blindaje que --prl/--dlv. */
+        font-family: 'Inter', sans-serif;
+        font-variant-numeric: tabular-nums;
+    }
+
+    /* ---------- stat strip (tarjeta plana, nº Fraunces coloreado) ---------- */
+    .dash-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .dash-stats--3 { grid-template-columns: repeat(3, 1fr); }
+    .dash-stat { background: var(--dash-surface); border: 1px solid var(--dash-line); border-radius: 8px; padding: 14px 18px; display: flex; flex-direction: column; gap: 5px; }
+    .dash-stat__value { font-family: 'Fraunces', serif; font-weight: 600; font-size: 28px; letter-spacing: -0.02em; line-height: 1; color: var(--dash-ink); }
+    .dash-stat__value .u { font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 500; color: var(--dash-ink-faint); margin-left: 5px; letter-spacing: 0; }
+    .dash-stat__value--green { color: var(--dash-sage-d); }
+    .dash-stat__value--ochre { color: var(--dash-ochre-d); }
+    .dash-stat__value--sky   { color: #2e5f74; }
+    .dash-stat__value--terra { color: var(--dash-terra-d); }
+    .dash-stat__value--plum  { color: #5e3a52; }
+    .dash-stat__label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--dash-ink-faint); font-weight: 500; }
+    .dash-stat__delta { font-size: 11.5px; color: var(--dash-ink-faint); }
+    .dash-stat-stack { display: flex; flex-direction: column; gap: 12px; }
+
+    /* ---------- título de sección de rol (sin icono, separado) ---------- */
+    /* El panel arranca con un separador fino tras el saludo, y cada sección
+     * deja aire arriba para que el título de sección NO parezca colgar del
+     * page-header (ni de la sección anterior). */
+    .dash { border-top: 1px solid var(--dash-line); padding-top: 24px; }
+    .dash-section { margin-top: 36px; }
+    .dash-section:first-child { margin-top: 0; }
+    /* `.dash` prefijo: sube la especificidad a 0,2,0 para ganar a
+     * `.csa-app h2 { margin: 0 }` (0,1,1) del shell, que si no pisa el margen. */
+    .dash .dash-section__title { font-family: 'Fraunces', serif; font-weight: 600; font-size: 20px; color: var(--dash-ink); letter-spacing: -0.01em; margin: 0 0 20px; display: flex; align-items: baseline; gap: 10px; }
+    .dash .dash-section__title small { font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 500; color: var(--dash-ink-faint); letter-spacing: 0; }
+
+    /* ---------- grid principal (contenido | lateral) ---------- */
+    .dash-grid { display: grid; grid-template-columns: 1fr 320px; gap: 20px; align-items: start; }
+    .dash-col { display: flex; flex-direction: column; gap: 16px; }
+
+    /* ---------- card sobria (cabecera con gradiente, como dlv-wbg) ---------- */
+    .dash-card { background: var(--dash-surface); border: 1px solid var(--dash-line); border-radius: 8px; overflow: hidden; }
+    /* Cabecera del bloque: banda con fondo beige perceptible y borde inferior
+     * marcado, para que se lea como cabecera y no se funda con el cuerpo blanco
+     * (--dash-bg #fbfaf6 era casi #fff y no contrastaba) ni con el thead. */
+    .dash-card__head { padding: 13px 16px; border-bottom: 1px solid var(--dash-line-2); background: #f0ece1; }
+    .dash-card__title { font-family: 'Fraunces', serif; font-weight: 600; font-size: 15px; color: var(--dash-ink); letter-spacing: -0.01em; }
+    .dash-card__sub { font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dash-ink-faint); margin-top: 3px; font-weight: 500; }
+    .dash-card__body { padding: 8px 16px; }
+    .dash-card__body--flush { padding: 0; }
+
+    /* ---------- tabla por nodo (el dato crítico del reparto) ---------- */
+    .dash-table { width: 100%; border-collapse: collapse; }
+    /* thead sin fondo: la banda de cabecera ya la da .dash-card__head; aquí solo
+     * la fila de columnas, sutil, separada por un borde fino. */
+    .dash-table thead th { text-align: left; padding: 9px 16px; font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dash-ink-faint); font-weight: 600; border-bottom: 1px solid var(--dash-line); white-space: nowrap; }
+    .dash-table thead th.num { text-align: right; }
+    .dash-table tbody td { padding: 12px 16px; font-size: 12.5px; color: var(--dash-ink); border-bottom: 1px solid var(--dash-line); vertical-align: middle; }
+    .dash-table tbody tr:last-child td { border-bottom: 0; }
+    .dash-table tbody tr.is-link:hover td { background: var(--dash-sage-l); }
+    .dash-table .node { font-family: 'Fraunces', serif; font-weight: 500; font-size: 14.5px; color: var(--dash-ink); letter-spacing: -0.005em; }
+    .dash-table .node a { color: inherit; text-decoration: none; border-bottom: 0; }
+    .dash-table tbody tr.is-link:hover .node a { color: var(--dash-sage-d); }
+    .dash-table .when { color: var(--dash-ink-soft); font-size: 12px; }
+    .dash-table .off { color: var(--dash-ink-faint); font-style: italic; font-size: 12px; }
+    .dash-table td.num { text-align: right; white-space: nowrap; }
+    .dash-table .fig { font-family: 'Fraunces', serif; font-weight: 600; font-size: 15px; letter-spacing: -0.01em; color: var(--dash-ink); }
+    .dash-table .fig--cestas { color: var(--dash-sage-d); }
+    .dash-table .fig--docenas { color: var(--dash-ochre-d); }
+    .dash-table .fig__u { font-size: 10.5px; color: var(--dash-ink-faint); font-family: 'Inter', sans-serif; margin-left: 3px; }
+    .dash-table .fig--off { color: var(--dash-line-2); font-size: 16px; }
+
+    /* ---------- cambios puntuales de socixs ---------- */
+    .dash-change { display: flex; align-items: center; gap: 12px; padding: 11px 16px; border-bottom: 1px solid var(--dash-line); }
+    .dash-change:last-child { border-bottom: 0; }
+    .dash-change__body { flex: 1; min-width: 0; }
+    .dash-change__who { font-family: 'Fraunces', serif; font-weight: 500; font-size: 13.5px; color: var(--dash-ink); letter-spacing: -0.005em; }
+    .dash-change__what { font-size: 11.5px; color: var(--dash-ink-faint); margin-top: 1px; }
+    .dash-chip { display: inline-flex; align-items: center; padding: 3px 9px 4px; border-radius: 4px; font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; flex-shrink: 0; }
+    .dash-chip--in   { background: var(--dash-sage-l);  color: var(--dash-sage-d); }
+    .dash-chip--skip { background: var(--dash-terra-l); color: var(--dash-terra-d); }
+    .dash-chip--swap { background: var(--dash-ochre-l); color: var(--dash-ochre-d); }
+
+    /* ---------- acciones rápidas (botones planos) ---------- */
+    .dash-actions { display: flex; flex-direction: column; gap: 8px; }
+    /* font-family explícita: el <a> trae `a { font-family: inherit }` de
+     * sb-admin/bootstrap y la cadena de `inherit` se torcía a la fuente legacy;
+     * fijarla aquí (0,1,0) gana a ese `a` (0,0,1) sin depender de la herencia. */
+    .dash-btn { display: flex; align-items: center; gap: 11px; padding: 11px 14px; border: 1px solid var(--dash-line); border-radius: 7px; background: var(--dash-surface); color: var(--dash-ink); font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 500; text-decoration: none; transition: 0.12s ease; }
+    .dash-btn, .dash-btn:hover { border-bottom: 1px solid var(--dash-line); } /* pisa el subrayado verde global de a:hover */
+    .dash-btn:hover { border-color: var(--dash-line-2); background: var(--dash-bg); color: var(--dash-ink); }
+    .dash-btn .fa { color: var(--dash-ink-faint); width: 16px; text-align: center; }
+    .dash-btn:hover .fa { color: var(--dash-sage-d); }
+
+    /* ---------- empty ---------- */
+    .dash-empty { padding: 28px 16px; text-align: center; color: var(--dash-ink-faint); font-size: 13px; font-style: italic; }
+
+    /* ---------- fila-enlace sobria (listas: avisos, lotes, blog, eventos) ----------
+     * Reutilizable en todas las secciones. Sin icono redondo ni chevron; el
+     * realce lo da el hover. La métrica opcional vive a la derecha en Fraunces. */
+    .dash-row { display: flex; align-items: center; gap: 12px; padding: 11px 16px; text-decoration: none; color: var(--dash-ink); border-bottom: 1px solid var(--dash-line); }
+    .dash-row:hover { background: var(--dash-sage-l); border-bottom-color: var(--dash-line); } /* mantiene la línea, no el verde global */
+    .dash-row:last-child { border-bottom-color: transparent; }
+    .dash-row__body { flex: 1; min-width: 0; }
+    .dash-row__title { font-family: 'Fraunces', serif; font-weight: 500; font-size: 13.5px; color: var(--dash-ink); letter-spacing: -0.005em; }
+    .dash-row:hover .dash-row__title { color: var(--dash-sage-d); }
+    .dash-row__sub { font-size: 11.5px; color: var(--dash-ink-faint); margin-top: 1px; }
+    .dash-row__metric { font-family: 'Fraunces', serif; font-weight: 600; font-size: 16px; color: var(--dash-ink); letter-spacing: -0.01em; flex-shrink: 0; white-space: nowrap; }
+    .dash-row__metric .u { font-family: 'Inter', sans-serif; font-size: 10.5px; color: var(--dash-ink-faint); margin-left: 3px; font-weight: 500; }
+    .dash-row__metric--ochre { color: var(--dash-ochre-d); }
+    .dash-row__metric--sky   { color: #2e5f74; }
+    .dash-row__metric--terra { color: var(--dash-terra-d); }
+    .dash-row__metric--green { color: var(--dash-sage-d); }
+
+    @media (max-width: 900px) {
+        .dash-stats, .dash-stats--3 { grid-template-columns: repeat(2, 1fr); }
+        .dash-grid { grid-template-columns: 1fr; }
+    }
     </style>
 {% endblock %}
 
 {% block more_js %}
     {{ parent() }}
-    <script src="{{ asset('bundles/app/js/morris/raphael-min.js') }}"></script>
-    <script src="{{ asset('bundles/app/js/morris/morris.min.js') }}"></script>
-    <script>
-        $(function() {
-            if (typeof Morris === 'undefined' || !document.getElementById('layweekchart')) {
-                return;
-            }
-            new Morris.Line({
-                element: 'layweekchart',
-                data: [
-                    {% for week in week_lay %}
-                    {
-                        average: {{ (week.total*(active_hen_batch|length)/week.days)|number_format(2,'.',',') }},
-                        week: '{{ week.year_date }}-{{ week.week }}',
-                        value: {{ week.total }}
-                    }{% if not loop.last %},{% endif %}
-                    {% endfor %}
-                ],
-                xkey: 'week',
-                ykeys: ['value', 'average'],
-                labels: ['Huevos', 'Media semanal'],
-                hideHover: true
+    {% if dash.granja is defined and dash.granja.lay_series is not empty %}
+        <script src="{{ asset('bundles/app/js/morris/raphael-min.js') }}"></script>
+        <script src="{{ asset('bundles/app/js/morris/morris.min.js') }}"></script>
+        <script>
+            $(function() {
+                if (typeof Morris === 'undefined' || !document.getElementById('layweekchart')) { return; }
+                new Morris.Line({
+                    element: 'layweekchart',
+                    data: [
+                        {% for week in dash.granja.lay_series %}
+                        {
+                            average: {{ (week.total*(dash.granja.hens|length)/week.days)|number_format(2,'.',',') }},
+                            week: '{{ week.year_date }}-{{ week.week }}',
+                            value: {{ week.total }}
+                        }{% if not loop.last %},{% endif %}
+                        {% endfor %}
+                    ],
+                    xkey: 'week', ykeys: ['value', 'average'],
+                    labels: ['Huevos', 'Media semanal'], hideHover: true
+                });
             });
-        });
-    </script>
+        </script>
+    {% endif %}
 {% endblock %}
 
 {% block csa_crumbs %}
@@ -74,241 +197,456 @@
 
 {% block csa_main %}
 
-    {% if app.user %}
+    {%- set hour = 'now'|date('G') -%}
+    {%- set greeting = hour < 14 ? 'Buenos días' : (hour < 21 ? 'Buenas tardes' : 'Buenas noches') -%}
 
-        {%- set hour = 'now'|date('G') -%}
-        {%- set greeting = hour < 14 ? 'Buenos días' : (hour < 21 ? 'Buenas tardes' : 'Buenas noches') -%}
-        {%- set lay_week = render(controller('App\\Controller\\DefaultController::layWeek'))|trim -%}
-        {%- set production_year = render(controller('App\\Controller\\DefaultController::totalProductionYear'))|trim -%}
+    {{ csa.page_header(
+        'Panel de control · ' ~ 'now'|date('Y'),
+        greeting ~ (app.user ? ', ' ~ app.user.userIdentifier : '') ~ '.',
+        'Tu resumen de hoy, según lo que gestionas.'
+    ) }}
 
-        {{ csa.page_header(
-            'Panel de control · ' ~ 'now'|date('Y'),
-            greeting ~ ', ' ~ app.user.userIdentifier ~ '.',
-            'Esto es lo que pasa hoy en la granja.'
-        ) }}
-
-        {# ===== KPIs ===== #}
-        <div class="dash" style="margin-bottom: var(--csa-sp-10);">
-            <div class="dash-stats">
-                <div class="dash-stat">
-                    <div class="dash-stat__icon dash-stat__icon--ochre"><i class="fa fa-egg" aria-hidden="true"></i></div>
-                    <div class="dash-stat__value">{{ lay_week }}<span class="u">huevos</span></div>
-                    <div class="dash-stat__label">Puesta semanal</div>
-                    <div class="dash-stat__delta">{{ lay_week == '0' ? 'Aún sin registrar' : (total_lay_eggs ~ ' acumulado en ' ~ 'now'|date('Y')) }}</div>
-                </div>
-                <div class="dash-stat">
-                    <div class="dash-stat__icon dash-stat__icon--green"><i class="fa fa-leaf" aria-hidden="true"></i></div>
-                    <div class="dash-stat__value">{{ production_year|number_format(0, ',', '.') }}<span class="u">kg</span></div>
-                    <div class="dash-stat__label">Producidos · año</div>
-                    <div class="dash-stat__delta">verduras y hortalizas</div>
-                </div>
-                <div class="dash-stat">
-                    <div class="dash-stat__icon dash-stat__icon--sky"><i class="fa fa-seedling" aria-hidden="true"></i></div>
-                    <div class="dash-stat__value">{{ render(controller('App\\Controller\\DefaultController::totalCropWorking')) }}</div>
-                    <div class="dash-stat__label">Cultivos en producción</div>
-                    <div class="dash-stat__delta">sectores activos ahora</div>
-                </div>
-                <div class="dash-stat">
-                    <div class="dash-stat__icon dash-stat__icon--terra"><i class="fa fa-recycle" aria-hidden="true"></i></div>
-                    <div class="dash-stat__value">{{ render(controller('App\\Controller\\DefaultController::totalCompost')) }}<span class="u">t</span></div>
-                    <div class="dash-stat__label">Residuo · año</div>
-                    <div class="dash-stat__delta">compostaje recogido</div>
-                </div>
-            </div>
-        </div>
-
-        <div class="csa-dashboard-grid">
-
-            <div class="csa-stack-lg">
-
-                {# ===== Lotes activos: dos cards en paralelo ===== #}
-                <div class="csa-dashboard-pair">
-
-                    {# --- Gallinas --- #}
-                    {% embed '_components/csa_card.html.twig' with {
-                        title: 'Lotes de gallinas',
-                        subtitle: active_hen_batch|length ~ ' activos · puesta semanal'
-                    } %}
-                        {% block body %}
-                            {% if active_hen_batch|length > 0 %}
-                                <ul class="csa-list">
-                                    {% for batch in active_hen_batch %}
-                                        <li class="csa-list__item">
-                                            <a class="csa-list__link" href="{{ path('batch_show', {'id': batch.id}) }}">
-                                                <span class="csa-list__icon csa-list__icon--ochre">
-                                                    <i class="fa fa-egg" aria-hidden="true"></i>
-                                                </span>
-                                                <div class="csa-list__body">
-                                                    <div class="csa-list__primary">Lote #{{ batch.id }}</div>
-                                                    <div class="csa-list__secondary">
-                                                        {{ batch.amount }} {{ batch.product|lower }}
-                                                        {%- if batch.purchaseDate %} · desde {{ batch.purchaseDate|date('d-m-Y') }}{% endif %}
-                                                    </div>
-                                                </div>
-                                                <div class="csa-list__metric csa-list__metric--ochre">
-                                                    <span class="csa-list__metric-value">{{ batch.weekLay }}</span>
-                                                    <span class="csa-list__metric-unit">/ sem</span>
-                                                </div>
-                                                <i class="csa-list__chevron fa fa-chevron-right" aria-hidden="true"></i>
-                                            </a>
-                                        </li>
-                                    {% endfor %}
-                                </ul>
-                            {% else %}
-                                <p class="csa-muted">No hay lotes de gallinas activos.</p>
-                            {% endif %}
-                        {% endblock %}
-                    {% endembed %}
-
-                    {# --- Pollos --- #}
-                    {% embed '_components/csa_card.html.twig' with {
-                        title: 'Lotes de pollos',
-                        subtitle: active_chicken_batch|length ~ ' activos · cría para carne'
-                    } %}
-                        {% block body %}
-                            {% if active_chicken_batch|length > 0 %}
-                                <ul class="csa-list">
-                                    {% for batch in active_chicken_batch %}
-                                        <li class="csa-list__item">
-                                            <a class="csa-list__link" href="{{ path('batch_show', {'id': batch.id}) }}">
-                                                <span class="csa-list__icon csa-list__icon--terracotta">
-                                                    <i class="fa fa-feather" aria-hidden="true"></i>
-                                                </span>
-                                                <div class="csa-list__body">
-                                                    <div class="csa-list__primary">Lote #{{ batch.id }}</div>
-                                                    <div class="csa-list__secondary">
-                                                        {{ batch.product|lower }}
-                                                        {%- if batch.purchaseDate %} · desde {{ batch.purchaseDate|date('d-m-Y') }}{% endif %}
-                                                    </div>
-                                                </div>
-                                                <div class="csa-list__metric csa-list__metric--terracotta">
-                                                    <span class="csa-list__metric-value">{{ batch.amount }}</span>
-                                                    <span class="csa-list__metric-unit">animales</span>
-                                                </div>
-                                                <i class="csa-list__chevron fa fa-chevron-right" aria-hidden="true"></i>
-                                            </a>
-                                        </li>
-                                    {% endfor %}
-                                </ul>
-                            {% else %}
-                                <p class="csa-muted">No hay lotes de pollos activos.</p>
-                            {% endif %}
-                        {% endblock %}
-                    {% endembed %}
-
-                </div>
-
-                {# ===== Gráfica de evolución ===== #}
-                {% embed '_components/csa_card.html.twig' with {
-                    title: 'Evolución de la puesta semanal',
-                    subtitle: 'Últimas 10 semanas.'
-                } %}
-                    {% block body %}
-                        <div id="layweekchart" style="position: relative; height: 260px;"></div>
-                    {% endblock %}
-                {% endembed %}
-
-            </div>
-
-            <aside class="csa-stack-lg">
-
-                {# ===== Resumen del año ===== #}
-                {% embed '_components/csa_card.html.twig' with {
-                    title: 'Resumen ' ~ 'now'|date('Y'),
-                    subtitle: 'al ' ~ ('now'|format_date('long', locale='es'))
-                } %}
-                    {% block body %}
-                        <ul class="csa-list">
-                            <li class="csa-list__item">
-                                <a class="csa-list__link" href="{{ path('statistic_eggs') }}">
-                                    <span class="csa-list__icon csa-list__icon--ochre">
-                                        <i class="fa fa-egg" aria-hidden="true"></i>
-                                    </span>
-                                    <div class="csa-list__body">
-                                        <div class="csa-list__primary">Huevos puestos</div>
-                                    </div>
-                                    <div class="csa-list__metric csa-list__metric--ochre">
-                                        <span class="csa-list__metric-value">{{ total_lay_eggs|number_format(0, ',', '.') }}</span>
-                                    </div>
-                                </a>
-                            </li>
-                            <li class="csa-list__item">
-                                <a class="csa-list__link" href="{{ path('statistic_user_collect', {'user_id': app.user.id}) }}">
-                                    <span class="csa-list__icon csa-list__icon--terracotta">
-                                        <i class="fa fa-drumstick-bite" aria-hidden="true"></i>
-                                    </span>
-                                    <div class="csa-list__body">
-                                        <div class="csa-list__primary">Kg de pollo</div>
-                                    </div>
-                                    <div class="csa-list__metric csa-list__metric--terracotta">
-                                        <span class="csa-list__metric-value">{{ total_chicken|number_format(0, ',', '.') }}</span>
-                                    </div>
-                                </a>
-                            </li>
-                            <li class="csa-list__item">
-                                <a class="csa-list__link" href="{{ path('statistic_feed') }}">
-                                    <span class="csa-list__icon csa-list__icon--green">
-                                        <i class="fa fa-leaf" aria-hidden="true"></i>
-                                    </span>
-                                    <div class="csa-list__body">
-                                        <div class="csa-list__primary">Kg de verduras</div>
-                                    </div>
-                                    <div class="csa-list__metric csa-list__metric--green">
-                                        <span class="csa-list__metric-value">{{ render(controller('App\\Controller\\DefaultController::totalProductionYear'))|trim|number_format(0, ',', '.') }}</span>
-                                        <span class="csa-list__metric-unit">kg</span>
-                                    </div>
-                                </a>
-                            </li>
-                            <li class="csa-list__item">
-                                <a class="csa-list__link" href="{{ path('statistic_feed') }}">
-                                    <span class="csa-list__icon csa-list__icon--ochre">
-                                        <i class="fa fa-bread-slice" aria-hidden="true"></i>
-                                    </span>
-                                    <div class="csa-list__body">
-                                        <div class="csa-list__primary">Kg de trigo</div>
-                                    </div>
-                                    <div class="csa-list__metric csa-list__metric--ochre">
-                                        <span class="csa-list__metric-value">{{ wheat_year|number_format(0, ',', '.') }}</span>
-                                    </div>
-                                </a>
-                            </li>
-                            <li class="csa-list__item">
-                                <a class="csa-list__link" href="{{ path('statistic_feed') }}">
-                                    <span class="csa-list__icon csa-list__icon--sky">
-                                        <i class="fa fa-seedling" aria-hidden="true"></i>
-                                    </span>
-                                    <div class="csa-list__body">
-                                        <div class="csa-list__primary">Kg pienso pollos</div>
-                                    </div>
-                                    <div class="csa-list__metric csa-list__metric--sky">
-                                        <span class="csa-list__metric-value">{{ broiler_feed_year|number_format(0, ',', '.') }}</span>
-                                    </div>
-                                </a>
-                            </li>
-                        </ul>
-                    {% endblock %}
-                {% endembed %}
-
-            </aside>
-
-        </div>
-
-    {% elseif is_granted('ROLE_COMPOST') %}
-
-        {{ csa.page_header(
-            'Compostaje',
-            'Panel'
-        ) }}
-
-        <div class="csa-kpi-row">
-            {{ csa.kpi(
-                'Residuo recogido',
-                render(controller('App\\Controller\\DefaultController::totalCompost')),
-                't',
-                null, null, 'plum'
-            ) }}
-        </div>
-
+    {% if dash is empty %}
+        {{ csa.callout('No hay nada que mostrarte aquí todavía. Usa el menú lateral para navegar.', 'info') }}
     {% endif %}
+
+    <div class="dash">
+
+        {# ============================================================
+         # REPARTO
+         # ============================================================ #}
+        {% if dash.reparto is defined %}
+            {% set r = dash.reparto %}
+            <div class="dash-section">
+                <h2 class="dash-section__title">
+                    Reparto
+                    {% if r.basket %}<small>semana en curso · {{ r.basket.date|date('d/m/Y') }}</small>{% endif %}
+                </h2>
+
+                {% if not r.basket %}
+                    {{ csa.callout('No hay ninguna semana de reparto configurada para esta semana.', 'info') }}
+                {% else %}
+                    <div class="dash-grid">
+
+                        {# ----- Columna principal: lo crítico es POR NODO ----- #}
+                        <div class="dash-col">
+                            <div class="dash-card">
+                                <div class="dash-card__head">
+                                    <div class="dash-card__title">Reparto por nodo</div>
+                                    <div class="dash-card__sub">cestas y huevos de la semana en curso</div>
+                                </div>
+                                <div class="dash-card__body dash-card__body--flush">
+                                    {% if r.nodes is empty %}
+                                        <div class="dash-empty">No hay nodos configurados.</div>
+                                    {% else %}
+                                        <table class="dash-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Nodo</th>
+                                                    <th>Día de reparto</th>
+                                                    <th class="num">Cestas</th>
+                                                    <th class="num">Docenas</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for n in r.nodes %}
+                                                    <tr class="{{ n.delivers ? 'is-link' : '' }}">
+                                                        <td class="node">
+                                                            {% if n.delivers %}
+                                                                <a href="{{ path('delivery_by_node', {'nodeId': n.node.id, 'basketId': r.basket.id}) }}">{{ n.node.name }}</a>
+                                                            {% else %}
+                                                                {{ n.node.name }}
+                                                            {% endif %}
+                                                        </td>
+                                                        <td>
+                                                            {%- if n.delivers and n.date %}<span class="when">{{ n.date|date('l d/m')|capitalize }}</span>
+                                                            {%- else %}<span class="off">no reparte esta semana</span>
+                                                            {%- endif -%}
+                                                        </td>
+                                                        <td class="num">
+                                                            {% if n.delivers %}<span class="fig fig--cestas">{{ csa.qty(n.cestas) }}</span>
+                                                            {% else %}<span class="fig fig--off">—</span>{% endif %}
+                                                        </td>
+                                                        <td class="num">
+                                                            {% if n.delivers %}<span class="fig fig--docenas">{{ csa.qty(n.docenas) }}</span>
+                                                            {% else %}<span class="fig fig--off">—</span>{% endif %}
+                                                        </td>
+                                                    </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <div class="dash-card">
+                                <div class="dash-card__head">
+                                    <div class="dash-card__title">Cambios de socixs esta semana</div>
+                                    <div class="dash-card__sub">no recogen, cambian de día o entran de otra semana</div>
+                                </div>
+                                <div class="dash-card__body dash-card__body--flush">
+                                    {% if r.changes is empty %}
+                                        <div class="dash-empty">Sin cambios puntuales esta semana.</div>
+                                    {% else %}
+                                        {% for c in r.changes %}
+                                            {% set sh = c.shift %}
+                                            <div class="dash-change">
+                                                <span class="dash-chip dash-chip--{{ c.incoming ? 'in' : (sh.isSkip ? 'skip' : 'swap') }}">
+                                                    {{- c.incoming ? 'Entra' : (sh.isSkip ? 'No recoge' : 'Cambio') -}}
+                                                </span>
+                                                <div class="dash-change__body">
+                                                    <div class="dash-change__who">{{ sh.partner.surname }}{% if sh.partner.name %}, {{ sh.partner.name }}{% endif %}</div>
+                                                    <div class="dash-change__what">
+                                                        {%- if c.incoming %}entra esta semana{% if sh.fromBasket and sh.fromBasket.date %} · desde {{ sh.fromBasket.date|date('d/m') }}{% endif %}
+                                                        {%- elseif sh.isSkip %}no recoge esta semana
+                                                        {%- elseif sh.isWholeDelivery %}pasa al {{ sh.toBasket.date|date('d/m') }}
+                                                        {%- else %}cambia {{ sh.component.name|lower }}{% if sh.toBasket and sh.toBasket.date %} · al {{ sh.toBasket.date|date('d/m') }}{% endif %}
+                                                        {%- endif -%}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        {% endfor %}
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            {# ----- Novedades recientes de la cartera (estructurales) ----- #}
+                            {% set news_meta = {
+                                'JOIN':                   { label: 'Alta',          tone: 'in'   },
+                                'LEAVE':                  { label: 'Baja',          tone: 'skip' },
+                                'PAUSE':                  { label: 'Pausa',         tone: 'swap' },
+                                'RESUME':                 { label: 'Reanuda',       tone: 'in'   },
+                                'BASKET_START':           { label: 'Inicia cesta',  tone: 'in'   },
+                                'BASKET_END':             { label: 'Fin de cesta',  tone: 'skip' },
+                                'BASKET_CHANGE':          { label: 'Cambio cesta',  tone: 'swap' },
+                                'NODE_CHANGE':            { label: 'Cambio nodo',   tone: 'swap' },
+                                'GROUP_CHANGE_PERMANENT': { label: 'Cambio grupo',  tone: 'swap' },
+                                'BASKET_EXTRA':           { label: 'Cesta extra',   tone: 'in'   },
+                                'BASKET_EXTRA_REMOVED':   { label: 'Extra quitada', tone: 'skip' }
+                            } %}
+                            <div class="dash-card">
+                                <div class="dash-card__head">
+                                    <div class="dash-card__title">Novedades</div>
+                                    <div class="dash-card__sub">altas, bajas, cambios de cesta y extras · últimos 30 días</div>
+                                </div>
+                                <div class="dash-card__body dash-card__body--flush">
+                                    {% if r.novedades is empty %}
+                                        <div class="dash-empty">Sin novedades en los últimos 30 días.</div>
+                                    {% else %}
+                                        {% for ev in r.novedades %}
+                                            {% set meta = news_meta[ev.type]|default({ label: ev.type, tone: 'swap' }) %}
+                                            <div class="dash-change">
+                                                <span class="dash-chip dash-chip--{{ meta.tone }}">{{ meta.label }}</span>
+                                                <div class="dash-change__body">
+                                                    <div class="dash-change__who">{{ ev.partner.surname }}{% if ev.partner.name %}, {{ ev.partner.name }}{% endif %}</div>
+                                                    <div class="dash-change__what">{{ ev.occurredAt|date('d/m/Y') }}</div>
+                                                </div>
+                                            </div>
+                                        {% endfor %}
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        {# ----- Lateral: agregado (secundario) + acciones ----- #}
+                        <aside class="dash-col">
+                            <div class="dash-stat-stack">
+                                {{ ui.stat(csa.qty(r.total_cestas), 'cestas', 'Total · verdura', null, null, 'green') }}
+                                {{ ui.stat(csa.qty(r.total_docenas), 'docenas', 'Total · huevos', null, null, 'ochre') }}
+                            </div>
+
+                            <div class="dash-actions">
+                                <a class="dash-btn" href="{{ path('delivery_by_node_default') }}">
+                                    <i class="fa fa-cart-arrow-down" aria-hidden="true"></i> Ver reparto
+                                </a>
+                                <a class="dash-btn" href="{{ path('delivery_printable_select', {'basketId': r.basket.id}) }}">
+                                    <i class="fa fa-print" aria-hidden="true"></i> Imprimir listado
+                                </a>
+                                <a class="dash-btn" href="{{ path('delivery_exception_new') }}">
+                                    <i class="fa fa-calendar-times-o" aria-hidden="true"></i> Nueva excepción
+                                </a>
+                            </div>
+                        </aside>
+
+                    </div>
+                {% endif %}
+            </div>
+        {% endif %}
+
+        {# ============================================================
+         # SOCIOS
+         # ============================================================ #}
+        {% if dash.socios is defined %}
+            {% set s = dash.socios %}
+            <div class="dash-section">
+                <h2 class="dash-section__title">Socios</h2>
+
+                <div class="dash-stats dash-stats--3" style="margin-bottom: 16px;">
+                    {{ ui.stat(s.active, null, 'Socixs activos', null, null, 'green') }}
+                    {{ ui.stat(s.this_month.joins, null, 'Altas este mes', s.this_month.label, null, 'sky') }}
+                    {{ ui.stat(s.this_month.leaves, null, 'Bajas este mes', s.this_month.label, null, 'terra') }}
+                </div>
+
+                <div class="dash-grid">
+                    <div class="dash-col">
+                        <div class="dash-card">
+                            <div class="dash-card__head">
+                                <div class="dash-card__title">Pendiente de revisar</div>
+                                <div class="dash-card__sub">socixs activos que requieren atención</div>
+                            </div>
+                            <div class="dash-card__body dash-card__body--flush">
+                                {% if s.no_basket == 0 and s.no_group == 0 and (s.needs_review|default(0)) == 0 %}
+                                    <div class="dash-empty">Nada pendiente: todos los activos tienen cesta y grupo.</div>
+                                {% else %}
+                                    {% if s.needs_review|default(0) > 0 %}
+                                        <a class="dash-row" href="{{ path('partner_index', { needs_review: 1 }) }}">
+                                            <div class="dash-row__body"><div class="dash-row__title">Socixs por confirmar</div><div class="dash-row__sub">importados del histórico de producción</div></div>
+                                            <div class="dash-row__metric dash-row__metric--ochre">{{ s.needs_review }}</div>
+                                        </a>
+                                    {% endif %}
+                                    {% if s.no_basket > 0 %}
+                                        <a class="dash-row" href="{{ path('partner_index', { cesta: 'no' }) }}">
+                                            <div class="dash-row__body"><div class="dash-row__title">Activos sin cesta</div></div>
+                                            <div class="dash-row__metric dash-row__metric--ochre">{{ s.no_basket }}</div>
+                                        </a>
+                                    {% endif %}
+                                    {% if s.no_group > 0 %}
+                                        <a class="dash-row" href="{{ path('partner_index') }}">
+                                            <div class="dash-row__body"><div class="dash-row__title">Activos sin grupo de recogida</div></div>
+                                            <div class="dash-row__metric dash-row__metric--sky">{{ s.no_group }}</div>
+                                        </a>
+                                    {% endif %}
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <aside class="dash-col">
+                        <div class="dash-actions">
+                            <a class="dash-btn" href="{{ path('partner_new') }}"><i class="fa fa-user-plus" aria-hidden="true"></i> Nuevo socix</a>
+                            <a class="dash-btn" href="{{ path('partner_index') }}"><i class="fa fa-users" aria-hidden="true"></i> Ver socixs</a>
+                            <a class="dash-btn" href="{{ path('partner_evolution') }}"><i class="fa fa-line-chart" aria-hidden="true"></i> Evolución</a>
+                        </div>
+                    </aside>
+                </div>
+            </div>
+        {% endif %}
+
+        {# ============================================================
+         # GRANJA
+         # ============================================================ #}
+        {% if dash.granja is defined %}
+            {% set g = dash.granja %}
+            <div class="dash-section">
+                <h2 class="dash-section__title">Granja <small>{{ g.year }}</small></h2>
+
+                <div class="dash-stats {{ g.hens is empty ? 'dash-stats--3' }}" style="margin-bottom: 16px;">
+                    {{ ui.stat(g.production|number_format(0, ',', '.'), 'kg', 'Producidos · año', 'verduras y hortalizas', null, 'green') }}
+                    {{ ui.stat(g.crops, null, 'Cultivos en producción', 'sectores activos ahora', null, 'sky') }}
+                    {{ ui.stat((g.compost / 1000)|number_format(1, ',', '.'), 't', 'Residuo · año', 'compostaje recogido', null, 'terra') }}
+                    {% if g.hens is not empty %}
+                        {{ ui.stat(g.lay_week, 'huevos', 'Puesta semanal', g.total_lay_eggs ? g.total_lay_eggs ~ ' acumulado' : 'aún sin registrar', null, 'ochre') }}
+                    {% endif %}
+                </div>
+
+                <div class="dash-grid">
+                    <div class="dash-col">
+                    {% if g.hens is not empty or g.chickens is not empty %}
+                        {% if g.hens is not empty %}
+                            <div class="dash-card">
+                                <div class="dash-card__head">
+                                    <div class="dash-card__title">Lotes de gallinas</div>
+                                    <div class="dash-card__sub">{{ g.hens|length }} activos · puesta semanal</div>
+                                </div>
+                                <div class="dash-card__body dash-card__body--flush">
+                                    {% for batch in g.hens %}
+                                        <a class="dash-row" href="{{ path('batch_show', {'id': batch.id}) }}">
+                                            <div class="dash-row__body">
+                                                <div class="dash-row__title">Lote #{{ batch.id }}</div>
+                                                <div class="dash-row__sub">{{ batch.amount }} {{ batch.product|lower }}{% if batch.purchaseDate %} · desde {{ batch.purchaseDate|date('d-m-Y') }}{% endif %}</div>
+                                            </div>
+                                            <div class="dash-row__metric dash-row__metric--ochre">{{ batch.weekLay }}<span class="u">/ sem</span></div>
+                                        </a>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        {% endif %}
+
+                        {% if g.chickens is not empty %}
+                            <div class="dash-card">
+                                <div class="dash-card__head">
+                                    <div class="dash-card__title">Lotes de pollos</div>
+                                    <div class="dash-card__sub">{{ g.chickens|length }} activos · cría para carne</div>
+                                </div>
+                                <div class="dash-card__body dash-card__body--flush">
+                                    {% for batch in g.chickens %}
+                                        <a class="dash-row" href="{{ path('batch_show', {'id': batch.id}) }}">
+                                            <div class="dash-row__body">
+                                                <div class="dash-row__title">Lote #{{ batch.id }}</div>
+                                                <div class="dash-row__sub">{{ batch.product|lower }}{% if batch.purchaseDate %} · desde {{ batch.purchaseDate|date('d-m-Y') }}{% endif %}</div>
+                                            </div>
+                                            <div class="dash-row__metric dash-row__metric--terra">{{ batch.amount }}<span class="u">animales</span></div>
+                                        </a>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        {% endif %}
+
+                        {% if g.lay_series is not empty %}
+                            <div class="dash-card">
+                                <div class="dash-card__head">
+                                    <div class="dash-card__title">Evolución de la puesta semanal</div>
+                                    <div class="dash-card__sub">últimas 10 semanas</div>
+                                </div>
+                                <div class="dash-card__body">
+                                    <div id="layweekchart" style="position: relative; height: 260px;"></div>
+                                </div>
+                            </div>
+                        {% endif %}
+                    {% else %}
+                        <div class="dash-card">
+                            <div class="dash-card__body"><div class="dash-empty">Sin lotes de aves activos ahora mismo.</div></div>
+                        </div>
+                    {% endif %}
+                    </div>
+
+                    <aside class="dash-col">
+                        <div class="dash-actions">
+                            <a class="dash-btn" href="{{ path('harvest_new') }}"><i class="fa fa-leaf" aria-hidden="true"></i> Registrar cosecha</a>
+                            <a class="dash-btn" href="{{ path('cropworking') }}"><i class="fa fa-list" aria-hidden="true"></i> Cultivos</a>
+                            <a class="dash-btn" href="{{ path('lay_new') }}"><i class="fa fa-plus" aria-hidden="true"></i> Registrar puesta</a>
+                        </div>
+                    </aside>
+                </div>
+            </div>
+        {% endif %}
+
+        {# ============================================================
+         # COMUNICACIÓN
+         # ============================================================ #}
+        {% if dash.comunicacion is defined %}
+            {% set c = dash.comunicacion %}
+            <div class="dash-section">
+                <h2 class="dash-section__title">Comunicación</h2>
+
+                <div class="dash-grid">
+                    <div class="dash-col">
+                    <div class="dash-card">
+                        <div class="dash-card__head">
+                            <div class="dash-card__title">Últimas entradas</div>
+                            <div class="dash-card__sub">blog</div>
+                        </div>
+                        <div class="dash-card__body{{ c.posts is empty ? '' : ' dash-card__body--flush' }}">
+                            {% if c.posts is empty %}
+                                <div class="dash-empty">Aún no hay entradas publicadas.</div>
+                            {% else %}
+                                {% for post in c.posts %}
+                                    <a class="dash-row" href="{{ path('blog_edit', {'id': post.id}) }}">
+                                        <div class="dash-row__body">
+                                            <div class="dash-row__title">{{ post.title }}</div>
+                                            {% if post.created %}<div class="dash-row__sub">{{ post.created|date('d/m/Y') }}</div>{% endif %}
+                                        </div>
+                                    </a>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="dash-card">
+                        <div class="dash-card__head">
+                            <div class="dash-card__title">Próximos eventos</div>
+                            <div class="dash-card__sub">agenda pública</div>
+                        </div>
+                        <div class="dash-card__body{{ c.events is empty ? '' : ' dash-card__body--flush' }}">
+                            {% if c.events is empty %}
+                                <div class="dash-empty">No hay eventos públicos próximos.</div>
+                            {% else %}
+                                {% for ev in c.events %}
+                                    <a class="dash-row" href="{{ path('booking_show', {'id': ev.id}) }}">
+                                        <div class="dash-row__body">
+                                            <div class="dash-row__title">{{ ev.title }}</div>
+                                            {% if ev.date %}<div class="dash-row__sub">{{ ev.date|date('d/m/Y') }}</div>{% endif %}
+                                        </div>
+                                    </a>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+                    </div>
+                    </div>
+
+                    <aside class="dash-col">
+                        <div class="dash-actions">
+                            <a class="dash-btn" href="{{ path('blog_new') }}"><i class="fa fa-pencil" aria-hidden="true"></i> Escribir entrada</a>
+                            <a class="dash-btn" href="{{ path('booking_new') }}"><i class="fa fa-calendar-plus-o" aria-hidden="true"></i> Crear evento</a>
+                            <a class="dash-btn" href="{{ path('blog') }}"><i class="fa fa-newspaper-o" aria-hidden="true"></i> Gestionar blog</a>
+                            <a class="dash-btn" href="{{ path('booking_index') }}"><i class="fa fa-calendar" aria-hidden="true"></i> Ver agenda</a>
+                        </div>
+                    </aside>
+                </div>
+            </div>
+        {% endif %}
+
+        {# ============================================================
+         # ADMINISTRACIÓN
+         # ============================================================ #}
+        {% if dash.admin is defined %}
+            {% set a = dash.admin %}
+            <div class="dash-section">
+                <h2 class="dash-section__title">Administración <small>gobierno del sistema</small></h2>
+
+                <div class="dash-stats dash-stats--3" style="margin-bottom: 16px;">
+                    {{ ui.stat(a.users, null, 'Usuarias con acceso', null, null, 'green') }}
+                    {{ ui.stat(a.visits_week, null, 'Visitas · 7 días', 'sesiones en gestión', null, 'sky') }}
+                    {{ ui.stat(a.pending_access, null, 'Pendientes de acceso', 'socixs activos sin login', null, 'ochre') }}
+                </div>
+
+                <div class="dash-grid">
+                    <div class="dash-col">
+                        <div class="dash-card">
+                            <div class="dash-card__head">
+                                <div class="dash-card__title">Accesos</div>
+                                <div class="dash-card__sub">socixs activos y su acceso a la app</div>
+                            </div>
+                            <div class="dash-card__body dash-card__body--flush">
+                                {% if a.pending_access > 0 %}
+                                    <a class="dash-row" href="{{ path('partner_index') }}">
+                                        <div class="dash-row__body">
+                                            <div class="dash-row__title">Activos sin acceso</div>
+                                            <div class="dash-row__sub">pendientes de enganchar al login</div>
+                                        </div>
+                                        <div class="dash-row__metric dash-row__metric--ochre">{{ a.pending_access }}</div>
+                                    </a>
+                                {% else %}
+                                    <div class="dash-empty">Todos los socixs activos tienen acceso.</div>
+                                {% endif %}
+                                {# TEMPORAL: aviso de socixs por confirmar para que Paco vea cómo queda;
+                                   se gestiona desde ROLE_GESTION_SOCIXS, así que se quitará de admin. #}
+                                {% if a.needs_review|default(0) > 0 %}
+                                    <a class="dash-row" href="{{ path('partner_index', { needs_review: 1 }) }}">
+                                        <div class="dash-row__body">
+                                            <div class="dash-row__title">Socixs por confirmar</div>
+                                            <div class="dash-row__sub">importados del histórico de producción</div>
+                                        </div>
+                                        <div class="dash-row__metric dash-row__metric--ochre">{{ a.needs_review }}</div>
+                                    </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <aside class="dash-col">
+                        <div class="dash-actions">
+                            <a class="dash-btn" href="{{ path('user_new') }}"><i class="fa fa-user-plus" aria-hidden="true"></i> Alta de usuaria</a>
+                            <a class="dash-btn" href="{{ path('user') }}"><i class="fa fa-users" aria-hidden="true"></i> Gestionar usuarias</a>
+                            <a class="dash-btn" href="{{ path('settings_index') }}"><i class="fa fa-sliders" aria-hidden="true"></i> Configuración</a>
+                            <a class="dash-btn" href="{{ path('settings_diagnostics') }}"><i class="fa fa-envelope-o" aria-hidden="true"></i> Diagnóstico de emails</a>
+                            <a class="dash-btn" href="{{ path('usage_stats_index') }}"><i class="fa fa-bar-chart" aria-hidden="true"></i> Estadísticas de uso</a>
+                        </div>
+                    </aside>
+                </div>
+            </div>
+        {% endif %}
+
+    </div>
 
 {% endblock %}

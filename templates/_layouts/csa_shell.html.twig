@@ -23,6 +23,39 @@
 {% block more_css %}
     {{ parent() }}
     {{ encore_entry_link_tags('app') }}
+
+    {# Estilos del contenido de ayuda dentro del modal contextual (los «?»).
+     # Las tarjetas (.csa-card) ya tienen estilo del bundle; aquí solo los
+     # pasos, que son propios de la guía. Replican lo justo de help/section.
+     # html.twig — es CSS de presentación, no contenido (el texto vive en un
+     # único parcial servido por help_fragment). #}
+    <style>
+        #csa-help-modal .csa-card { margin-bottom: 14px; }
+        #csa-help-modal .csa-card:last-child { margin-bottom: 0; }
+        #csa-help-modal .help-steps { margin: 0; padding-left: 1.4em; }
+        #csa-help-modal .help-steps > li { margin-bottom: 11px; line-height: 1.65;
+            font-size: 14.5px; color: #2b2b2b; }
+        #csa-help-modal .help-steps > li:last-child { margin-bottom: 0; }
+        #csa-help-modal .help-steps strong { font-weight: 600; color: #1d1c17; }
+        #csa-help-modal kbd { background: #f0ede6; border-radius: 4px; padding: 1px 7px;
+            font-family: inherit; font-weight: 600; font-size: 0.95em; }
+        #csa-help-modal .csa-modal__body { max-height: 70vh; overflow-y: auto; }
+
+        /* Grupos colapsables del sidebar: la cabecera clona el estilo de
+         * .csa-sidebar__group pero es un botón con chevron. Plegado oculta los
+         * items y gira el chevron. */
+        .csa-navgroup__head {
+            display: flex; align-items: center; justify-content: space-between; gap: 8px;
+            width: 100%; background: none; border: 0; cursor: pointer; font-family: inherit;
+            padding: var(--csa-sp-4) var(--csa-sp-5) var(--csa-sp-2);
+            font-size: var(--csa-fs-xs); letter-spacing: 0.1em; text-transform: uppercase;
+            color: var(--csa-sage-muted); font-weight: 500;
+        }
+        .csa-navgroup__head:hover { color: var(--csa-sage-text); }
+        .csa-navgroup__chev { font-size: 9px; opacity: 0.6; transition: transform 0.15s ease; }
+        .csa-navgroup.is-collapsed .csa-navgroup__chev { transform: rotate(-90deg); }
+        .csa-navgroup.is-collapsed .csa-navgroup__items { display: none; }
+    </style>
 {% endblock %}
 
 {% block more_js %}
@@ -36,6 +69,17 @@
     <script>
         $(function() {
             $('.csa-table[data-paginate]').each(function() {
+                // No inicializar tablas sin filas de datos reales: una fila
+                // placeholder («Sin datos…») es un único <td colspan>, y
+                // DataTables peta («Requested unknown parameter») al no casar
+                // las celdas con las cabeceras. Si la primera fila del cuerpo no
+                // tiene tantas celdas como columnas, la tabla no se pagina (sin
+                // datos no hace falta) en vez de romper.
+                var cols = $(this).find('thead th').length;
+                var firstRow = $(this).find('tbody tr').first();
+                if (firstRow.length === 0 || firstRow.children('td, th').length !== cols) {
+                    return;
+                }
                 $(this).DataTable({
                     // l = length, f = filter, r = processing, t = table, i = info, p = paginate
                     dom: '<"csa-dt-top"lf>rt<"csa-dt-bottom"ip>',
@@ -87,7 +131,86 @@
                 if (e.key === 'Escape') { close(); }
             });
         }());
+
+        // Grupos colapsables del sidebar: clic en la cabecera pliega/despliega.
+        // El grupo de la pantalla activa SIEMPRE se expande (aunque arrancara
+        // plegado para el admin), para que se vea dónde estás.
+        (function () {
+            document.querySelectorAll('.csa-navgroup').forEach(function (group) {
+                var head = group.querySelector('.csa-navgroup__head');
+                if (head) {
+                    head.addEventListener('click', function () {
+                        group.classList.toggle('is-collapsed');
+                    });
+                }
+                if (group.querySelector('.csa-sidebar__link--active')) {
+                    group.classList.remove('is-collapsed');
+                }
+            });
+        }());
     </script>
+    {# Ayuda contextual: los «?» (csa.help) son enlaces a la guía; aquí los
+     # interceptamos para abrir el modal cargando el MISMO parcial de la guía
+     # (fuente única) por fetch. Si algo falla, dejamos pasar el click y el
+     # enlace lleva a la guía como respaldo. Delegación en document para que
+     # cubra «?» pintados en cualquier pantalla. #}
+    <script>
+        (function () {
+            var modal = document.getElementById('csa-help-modal');
+            if (!modal || typeof modal.showModal !== 'function') { return; }
+            var body = modal.querySelector('[data-help-body]');
+
+            document.addEventListener('click', function (e) {
+                var link = e.target.closest('a[data-help-url]');
+                if (!link) { return; }
+                e.preventDefault();
+
+                var url = link.getAttribute('data-help-url');
+                var anchor = link.getAttribute('data-help-anchor');
+                var title = modal.querySelector('#csa-help-modal-title');
+
+                body.innerHTML = '<p style="color:#8d8773;">Cargando ayuda…</p>';
+                title.textContent = 'Cómo se hace';
+                modal.showModal();
+
+                fetch(url, { credentials: 'same-origin' })
+                    .then(function (r) { if (!r.ok) { throw new Error(r.status); } return r.text(); })
+                    .then(function (html) {
+                        var card = null;
+                        if (anchor) {
+                            var tmp = document.createElement('div');
+                            tmp.innerHTML = html;
+                            card = tmp.querySelector('#' + (window.CSS && CSS.escape ? CSS.escape(anchor) : anchor));
+                        }
+                        if (card) {
+                            // Solo la tarea pedida. Su título sube a la cabecera del
+                            // modal para no repetirlo dentro de la tarjeta.
+                            var head = card.querySelector('.csa-card__title');
+                            if (head) { title.textContent = head.textContent.trim(); }
+                            var cardHead = card.querySelector('.csa-card__header');
+                            if (cardHead) { cardHead.remove(); }
+                            body.innerHTML = '';
+                            body.appendChild(card);
+                        } else {
+                            // Sin ancla (o no encontrada): el área entera, como respaldo.
+                            body.innerHTML = html;
+                        }
+                        body.scrollTop = 0;
+                    })
+                    .catch(function () {
+                        // Respaldo: que el enlace haga su trabajo (abre la guía).
+                        modal.close();
+                        window.open(link.href, '_blank', 'noopener');
+                    });
+            });
+
+            // Cerrar al hacer click en el backdrop (fuera del contenido).
+            modal.addEventListener('click', function (e) {
+                if (e.target === modal) { modal.close(); }
+            });
+        }());
+    </script>
+
     {# El cierre de los avisos flash lo aporta el propio componente
      # _components/csa_flashes.html.twig (autónomo), compartido con el panel. #}
 {% endblock %}
@@ -107,53 +230,98 @@
                 {% block csa_nav %}
                     {%- set route = app.request.attributes.get('_route') -%}
 
-                    {# Día a día — siempre visible para usuarios autenticados con cualquier rol de gestión #}
-                    <div class="csa-sidebar__group">Día a día</div>
-                    {{ _self.nav_link('Panel', path('dashboard'), 'fa-home',
-                       route == 'dashboard') }}
-                    {{ _self.nav_link('Calendario', path('calendar'), 'fa-calendar',
-                       route starts with 'calendar') }}
+                    {# Día a día — accesos generales, siempre visibles. Colapsable como
+                     # el resto (coherencia), pero abierto por defecto. #}
+                    <div class="csa-navgroup">
+                        <button type="button" class="csa-navgroup__head">Día a día <i class="csa-navgroup__chev fa fa-chevron-down" aria-hidden="true"></i></button>
+                        <div class="csa-navgroup__items">
+                            {{ _self.nav_link('Panel', path('dashboard'), 'fa-home',
+                               route == 'dashboard') }}
+                            {{ _self.nav_link('Calendario', path('calendar'), 'fa-calendar',
+                               route starts with 'calendar') }}
+                            {{ _self.nav_link('Ayuda', path('help_index'), 'fa-question-circle',
+                               route starts with 'help') }}
+                        </div>
+                    </div>
+
+                    {# Administración va PRIMERO: es el dominio propio del admin. Sólo lo
+                     # ve ROLE_ADMIN, así que para los gestores no-admin el menú no cambia.
+                     # El resto de grupos (que el admin también tiene por jerarquía) quedan
+                     # debajo, secundarios. #}
+                    {% if is_granted('ROLE_ADMIN') %}
+                        <div class="csa-navgroup">
+                            <button type="button" class="csa-navgroup__head">Administración <i class="csa-navgroup__chev fa fa-chevron-down" aria-hidden="true"></i></button>
+                            <div class="csa-navgroup__items">
+                                {{ _self.nav_link('Usuarias', path('user'), 'fa-users',
+                                   route starts with 'user') }}
+                                {{ _self.nav_link('Configuración', path('settings_index'), 'fa-sliders',
+                                   (route starts with 'settings') and not (route starts with 'settings_diagnostics')) }}
+                                {{ _self.nav_link('Diagnóstico de envíos', path('settings_diagnostics'), 'fa-paper-plane',
+                                   route starts with 'settings_diagnostics') }}
+                                {{ _self.nav_link('Estadísticas de uso', path('usage_stats_index'), 'fa-bar-chart',
+                                   route starts with 'usage_stats') }}
+                            </div>
+                        </div>
+                    {% endif %}
+
+                    {# Grupos de rol: colapsables. Para el admin arrancan PLEGADOS
+                     # (su dominio es Administración, arriba); el JS expande siempre el
+                     # grupo de la pantalla activa. Para un gestor no-admin arrancan
+                     # abiertos. #}
+                    {%- set sec_collapsed = is_granted('ROLE_ADMIN') ? ' is-collapsed' : '' -%}
 
                     {% if is_granted('ROLE_GESTION_GRANJA') %}
-                        <div class="csa-sidebar__group">Granja</div>
-                        {{ _self.nav_link('Lotes', path('batch'), 'fa-sliders',
-                           route starts with 'batch') }}
-                        {{ _self.nav_link('Cultivos', path('crop'), 'fa-leaf',
-                           route starts with 'crop') }}
-                        {{ _self.nav_link('Tareas', path('task'), 'fa-tasks',
-                           route starts with 'task') }}
-                        {{ _self.nav_link('Cosechas / huevos', path('lay'), 'fa-egg',
-                           route starts with 'lay') }}
-                        {{ _self.nav_link('Trabajos culturales', path('culturalwork'), 'fa-compass',
-                           route starts with 'culturalwork') }}
-                        {{ _self.nav_link('Compost', path('compostcollection'), 'fa-recycle',
-                           route starts with 'compostcollection') }}
-                        {# Composición de las cestas que se cosechan cada viernes (no confundir con
-                         # el reparto a socixs, que vive en el grupo Socixs > Reparto semanal). #}
-                        {{ _self.nav_link('Composición de cestas', path('production_show_basket', { year: 'now'|date('Y') }), 'fa-shopping-basket',
-                           route starts with 'production') }}
+                        <div class="csa-navgroup{{ sec_collapsed }}">
+                            <button type="button" class="csa-navgroup__head">Granja <i class="csa-navgroup__chev fa fa-chevron-down" aria-hidden="true"></i></button>
+                            <div class="csa-navgroup__items">
+                                {{ _self.nav_link('Lotes', path('batch'), 'fa-sliders',
+                                   route starts with 'batch') }}
+                                {{ _self.nav_link('Cultivos', path('crop'), 'fa-leaf',
+                                   route starts with 'crop') }}
+                                {{ _self.nav_link('Tareas', path('task'), 'fa-tasks',
+                                   route starts with 'task') }}
+                                {{ _self.nav_link('Cosechas / huevos', path('lay'), 'fa-egg',
+                                   route starts with 'lay') }}
+                                {{ _self.nav_link('Trabajos culturales', path('culturalwork'), 'fa-compass',
+                                   route starts with 'culturalwork') }}
+                                {{ _self.nav_link('Compost', path('compostcollection'), 'fa-recycle',
+                                   route starts with 'compostcollection') }}
+                                {# Composición de las cestas que se cosechan cada viernes (no confundir con
+                                 # el reparto a socixs, que vive en el grupo Socixs > Reparto semanal). #}
+                                {{ _self.nav_link('Composición de cestas', path('production_show_basket', { year: 'now'|date('Y') }), 'fa-shopping-basket',
+                                   route starts with 'production') }}
+                            </div>
+                        </div>
                     {% endif %}
 
                     {% if is_granted('ROLE_GESTION_SOCIXS') %}
-                        <div class="csa-sidebar__group">Socios</div>
-                        {{ _self.nav_link('Listado', path('partner_index'), 'fa-people-carry',
-                           (route starts with 'partner_' and not (route starts with 'partner_basket_share')) and route != 'partner_evolution') }}
-                        {{ _self.nav_link('Evolución', path('partner_evolution'), 'fa-line-chart',
-                           route == 'partner_evolution') }}
+                        <div class="csa-navgroup{{ sec_collapsed }}">
+                            <button type="button" class="csa-navgroup__head">Socios <i class="csa-navgroup__chev fa fa-chevron-down" aria-hidden="true"></i></button>
+                            <div class="csa-navgroup__items">
+                                {{ _self.nav_link('Listado', path('partner_index'), 'fa-people-carry',
+                                   (route starts with 'partner_' and not (route starts with 'partner_basket_share')) and route != 'partner_evolution') }}
+                                {{ _self.nav_link('Evolución', path('partner_evolution'), 'fa-line-chart',
+                                   route == 'partner_evolution') }}
+                            </div>
+                        </div>
                     {% endif %}
 
                     {% if is_granted('ROLE_GESTION_REPARTO') %}
-                        <div class="csa-sidebar__group">Reparto</div>
-                        {{ _self.nav_link('Reparto semanal', path('delivery_by_node_default'), 'fa-cart-arrow-down',
-                           route starts with 'delivery_by_node') }}
-                        {{ _self.nav_link('Histórico de cambios', path('delivery_shifts_index'), 'fa-exchange',
-                           route starts with 'delivery_shifts') }}
-                        {{ _self.nav_link('Grupos de recogida', path('weekly_basket_group_index'), 'fa-map-marker',
-                           route starts with 'weekly_basket_group') }}
-                        {{ _self.nav_link('Nodos de reparto', path('node_index'), 'fa-sitemap',
-                           route starts with 'node_') }}
-                        {{ _self.nav_link('Excepciones de reparto', path('delivery_exception_index'), 'fa-calendar-times-o',
-                           route starts with 'delivery_exception') }}
+                        <div class="csa-navgroup{{ sec_collapsed }}">
+                            <button type="button" class="csa-navgroup__head">Reparto <i class="csa-navgroup__chev fa fa-chevron-down" aria-hidden="true"></i></button>
+                            <div class="csa-navgroup__items">
+                                {{ _self.nav_link('Reparto semanal', path('delivery_by_node_default'), 'fa-cart-arrow-down',
+                                   route starts with 'delivery_by_node') }}
+                                {{ _self.nav_link('Histórico de cambios', path('delivery_shifts_index'), 'fa-exchange',
+                                   route starts with 'delivery_shifts') }}
+                                {{ _self.nav_link('Grupos de recogida', path('weekly_basket_group_index'), 'fa-map-marker',
+                                   route starts with 'weekly_basket_group') }}
+                                {{ _self.nav_link('Nodos de reparto', path('node_index'), 'fa-sitemap',
+                                   route starts with 'node_') }}
+                                {{ _self.nav_link('Excepciones de reparto', path('delivery_exception_index'), 'fa-calendar-times-o',
+                                   route starts with 'delivery_exception') }}
+                            </div>
+                        </div>
                     {% endif %}
 
                     {# Comercio (Ventas/Compras) retirado del menú 2026-06-07 — pendiente
@@ -161,18 +329,27 @@
                      # Ver deuda comercio-menu-retirado-debt. #}
 
                     {% if is_granted('ROLE_BLOG') %}
-                        <div class="csa-sidebar__group">Comunicación</div>
-                        {{ _self.nav_link('Blog', path('blog'), 'fa-newspaper-o',
-                           route starts with 'blog') }}
-                        {{ _self.nav_link('Eventos públicos', path('booking'), 'fa-calendar-check-o',
-                           route starts with 'booking') }}
+                        <div class="csa-navgroup{{ sec_collapsed }}">
+                            <button type="button" class="csa-navgroup__head">Comunicación <i class="csa-navgroup__chev fa fa-chevron-down" aria-hidden="true"></i></button>
+                            <div class="csa-navgroup__items">
+                                {{ _self.nav_link('Blog', path('blog'), 'fa-newspaper-o',
+                                   route starts with 'blog') }}
+                                {{ _self.nav_link('Eventos públicos', path('booking_index'), 'fa-calendar-check-o',
+                                   route starts with 'booking') }}
+                            </div>
+                        </div>
                     {% endif %}
 
-                    {% if is_granted('ROLE_ADMIN') %}
-                        <div class="csa-sidebar__group">Administración</div>
-                        {{ _self.nav_link('Usuarias', path('user'), 'fa-users',
-                           route starts with 'user') }}
+                    {% if is_granted('ROLE_GESTION_ENCUESTAS') and is_granted('FEATURE_SURVEYS') %}
+                        <div class="csa-navgroup{{ sec_collapsed }}">
+                            <button type="button" class="csa-navgroup__head">Encuestas <i class="csa-navgroup__chev fa fa-chevron-down" aria-hidden="true"></i></button>
+                            <div class="csa-navgroup__items">
+                                {{ _self.nav_link('Encuestas', path('survey_index'), 'fa-check-square-o',
+                                   route starts with 'survey') }}
+                            </div>
+                        </div>
                     {% endif %}
+
                 {% endblock %}
             </nav>
         </aside>
@@ -251,6 +428,24 @@
 
     </div>
 </div>
+
+{# Modal de ayuda contextual. Vacío: el JS le inyecta el parcial de la guía
+ # al pulsar un «?». Único en el shell, reutilizado por todas las pantallas. #}
+<dialog id="csa-help-modal" class="csa-modal csa-modal--info" aria-labelledby="csa-help-modal-title">
+    <button class="csa-modal__close" type="button" aria-label="Cerrar" onclick="this.closest('dialog').close()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l14 14M19 5L5 19"/></svg>
+    </button>
+    <header class="csa-modal__header">
+        <div class="csa-modal__heading">
+            <span class="csa-modal__eyebrow">Ayuda</span>
+            <h2 class="csa-modal__title" id="csa-help-modal-title">Cómo se hace</h2>
+        </div>
+    </header>
+    <div class="csa-modal__body" data-help-body></div>
+    <footer class="csa-modal__footer">
+        <button type="button" class="csa-modal__btn csa-modal__btn--ghost" onclick="this.closest('dialog').close()">Cerrar</button>
+    </footer>
+</dialog>
 {% endblock %}
 
 

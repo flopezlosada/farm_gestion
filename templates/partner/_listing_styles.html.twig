@@ -240,7 +240,19 @@
     background: var(--prl-surface); border: 1px solid var(--prl-line);
     border-radius: 8px; overflow: hidden;
 }
-.prl-table { width: 100%; border-collapse: collapse; }
+/* table-layout: fixed → los anchos de columna los fija la fila de cabecera,
+   NO el contenido de cada página. Sin esto, ordenar (o paginar) reordena
+   filas con contenido de distinto largo y las columnas saltan de ancho. */
+.prl-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+/* Anchos por columna (sólo hacen falta en el thead con table-layout: fixed).
+   La columna Socix no lleva ancho: absorbe el espacio restante. */
+.prl-table .col-estado   { width: 108px; }
+.prl-table .col-cesta    { width: 130px; }
+.prl-table .col-huevos   { width: 128px; }
+.prl-table .col-recogida { width: 210px; }
+.prl-table .col-tel      { width: 118px; }
+.prl-table .col-alta     { width: 104px; }
+.prl-table .check        { width: 38px; }
 .prl-table thead th {
     text-align: left; padding: 10px 14px;
     font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase;
@@ -254,16 +266,33 @@
 }
 .prl-table tbody tr:last-child td { border-bottom: 0; }
 .prl-table tbody tr:hover td { background: var(--prl-sage-l); }
-.prl-table .tight { white-space: nowrap; width: 1%; }
+.prl-table .tight { white-space: nowrap; }
 .prl-table th.tight { padding-left: 10px; padding-right: 10px; }
-.prl-table .actions { text-align: right; white-space: nowrap; width: 1%; }
+/* Cabeceras ordenables (KnpPaginator). El <a> hereda el look del th y
+   ocupa toda la celda para que el área clicable sea la cabecera entera.
+   La clase del enlace refleja el estado actual: a.asc → ascendente,
+   a.desc → descendente, a.sortable → sin ordenar. */
+.prl-table th.prl-sortable { padding: 0; }
+.prl-table th.prl-sortable a {
+    display: block; padding: 10px 14px;
+    color: inherit; text-decoration: none; border-bottom: none;
+    cursor: pointer; transition: color 0.12s ease;
+}
+.prl-table th.tight.prl-sortable a { padding-left: 10px; padding-right: 10px; }
+.prl-table th.prl-sortable a:hover { color: var(--prl-sage-d); }
+.prl-table th.prl-sortable a::after {
+    content: '↕'; margin-left: 5px; opacity: 0.35; font-size: 10px;
+}
+.prl-table th.prl-sortable a.asc::after  { content: '↑'; opacity: 0.9; }
+.prl-table th.prl-sortable a.desc::after { content: '↓'; opacity: 0.9; }
+.prl-table .actions { text-align: right; white-space: nowrap; width: 84px; }
 .prl-table .actions a {
     display: inline-flex; align-items: center; justify-content: center;
     width: 28px; height: 28px; border-radius: 5px;
     color: var(--prl-ink-faint); text-decoration: none;
     transition: 0.12s ease;
 }
-.prl-table .actions a:hover { background: var(--prl-bg); color: var(--prl-sage-d); }
+.prl-table .actions a:hover { background: var(--prl-bg); color: var(--prl-sage-d); border-bottom-color: transparent; }
 .prl-table .actions a + a { margin-left: 2px; }
 
 /* nombre con avatar mini + email/teléfono debajo */
@@ -285,7 +314,10 @@
     color: var(--prl-ink); text-decoration: none; letter-spacing: -0.005em;
     display: block; line-height: 1.2;
 }
-.prl-person__name:hover { color: var(--prl-sage-d); }
+/* a.prl-person__name (0,2,1) para ganar tanto al `text-decoration: underline`
+ * de Bootstrap3 como al borde-inferior verde de `.csa-app :where(a):hover`
+ * (02-base, 0,2,0): en el listado el nombre no se subraya al pasar el ratón. */
+a.prl-person__name:hover { color: var(--prl-sage-d); text-decoration: none; border-bottom-color: transparent; }
 .prl-person__meta {
     display: block; font-family: 'Inter', sans-serif;
     font-size: 11px; color: var(--prl-ink-faint); margin-top: 1px;

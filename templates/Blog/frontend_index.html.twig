@@ -213,6 +213,25 @@
                         </div>
                     </form>
 
+                    {# Caja de próximos eventos, encima de las categorías
+                     # (punto 9 de la reunión de admin del 2026-06-11). Solo
+                     # se pinta si hay eventos vigentes en la agenda. #}
+                    {% if upcoming_events is defined and upcoming_events is not empty %}
+                        <h5 class="mb-3">Próximos eventos</h5>
+                        <ul class="list-unstyled mb-2">
+                            {% for event in upcoming_events %}
+                                <li class="mb-3">
+                                    <a href="{{ path('evento_show', { id: event.id }) }}">{{ event.title }}</a><br>
+                                    <small class="text-muted">
+                                        {{ event.beginAt|format_datetime(pattern="EEEE d 'de' MMMM", locale='es') }}
+                                        {%- if event.beginAt|date('H:i') != '00:00' %} · {{ event.beginAt|date('H:i') }} h{% endif %}
+                                    </small>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                        <p class="mb-4"><a href="{{ path('asambleas') }}">Ver toda la agenda <i class="fa fa-angle-right"></i></a></p>
+                    {% endif %}
+
                     <h5 class="mb-3">Categorías</h5>
                     <ul class="list-unstyled mb-0">
                         <li class="mb-2">

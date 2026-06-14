@@ -89,11 +89,12 @@ class WeeklyBasketGenerator
     }
 
     /**
-     * Orden operativo del Basket entre los viernes del mes del nodo weekly
-     * (Torremocha). Null si Torremocha no entrega en este Basket (excepción
-     * global o de nodo cancela). En tal caso la rama weekly+sin-nodo de la
-     * query mensual node-aware no debe traer partners — el repo lo respeta
-     * ignorando `$weeklyMonthlyOrder` cuando es null.
+     * Órdenes mensuales que el Basket sirve entre los viernes del mes del
+     * nodo weekly (Torremocha), con semántica pegajosa
+     * ({@see MonthlyOperativeOrderResolver::ordersServedBy}). Vacío si
+     * Torremocha no entrega en este Basket (excepción global o de nodo
+     * cancela) — en tal caso la rama weekly+sin-nodo de la query mensual
+     * node-aware no debe traer partners; el repo la omite con lista vacía.
      *
      * Asume un único nodo weekly en el sistema (hoy Torremocha). Si en el
      * futuro hubiera varios nodos weekly compartiendo día y excepciones,
@@ -103,16 +104,17 @@ class WeeklyBasketGenerator
      * Sub-fase 8.8e (2026-05-28): sustituye al hardcode NON_OPERATIVE_FRIDAYS.
      *
      * @param Basket $basket
-     * @return int|null 1-based, o null si el nodo weekly no entrega esta semana.
+     * @return int[] Órdenes 1-based que este basket sirve (pegajoso, con
+     *               fallbacks de semanas canceladas); vacío si no entrega.
      */
-    private function weeklyMonthlyOrderFor(Basket $basket): ?int
+    private function weeklyMonthlyOrdersFor(Basket $basket): array
     {
         $weeklyNode = $this->nodeRepository->findOneBy(['cadence' => Node::CADENCE_WEEKLY]);
         if ($weeklyNode === null) {
-            return null;
+            return [];
         }
 
-        return $this->monthlyResolver->operativeOrderForNode($basket, $weeklyNode);
+        return $this->monthlyResolver->ordersServedBy($basket, $weeklyNode);
     }
 
     /**
@@ -125,15 +127,15 @@ class WeeklyBasketGenerator
      * Sub-fase 8.8b3 (2026-05-28).
      *
      * @param Basket $basket
-     * @return array<int,int> nodeId → 1-based operative order del nodo.
+     * @return array<int,int[]> nodeId → órdenes 1-based que el basket sirve en ese nodo.
      */
-    private function monthlyOrderByBiweeklyNode(Basket $basket): array
+    private function monthlyOrdersByBiweeklyNode(Basket $basket): array
     {
         $map = [];
         foreach ($this->activeBiweeklyNodes($basket) as $node) {
-            $order = $this->monthlyResolver->operativeOrderForNode($basket, $node);
-            if ($order !== null) {
-                $map[$node->getId()] = $order;
+            $orders = $this->monthlyResolver->ordersServedBy($basket, $node);
+            if ($orders !== []) {
+                $map[$node->getId()] = $orders;
             }
         }
         return $map;
@@ -279,8 +281,8 @@ class WeeklyBasketGenerator
      * dados de baja en el pasado cuyos WeeklyBasket quedaron grabados).
      * No es un bug aquí: PartnerLifecycleSubscriber::leave borra los
      * WeeklyBasket futuros, pero los históricos del snapshot no pasaron
-     * por ese listener. El template _table_list_basket es defensivo
-     * ante este caso y muestra "—" para esos partners.
+     * por ese listener. Las vistas que los pintan deben ser defensivas
+     * ante este caso (Partner sin PBS activo).
      *
      * @return array{0:array,1:array,2:array,3:array,4:array} weekly, half, biweekly, monthly, onlyEgg
      */
@@ -629,14 +631,14 @@ class WeeklyBasketGenerator
         $shareRepo = $this->em->getRepository(PartnerBasketShare::class);
 
         $cohort = $this->cohortResolver->cohortForBasket($basket);
-        $weeklyMonthlyOrder = $this->weeklyMonthlyOrderFor($basket);
+        $weeklyMonthlyOrders = $this->weeklyMonthlyOrdersFor($basket);
         $activeBiweeklyNodeIds = $this->activeBiweeklyNodeIds($basket);
-        $biweeklyNodeMonthlyOrders = $this->monthlyOrderByBiweeklyNode($basket);
+        $biweeklyNodeMonthlyOrders = $this->monthlyOrdersByBiweeklyNode($basket);
 
         $weekly = $shareRepo->findBasketPartnersByTypeAndCity(self::SHARE_WEEKLY, 1, $basket);
         $half = $shareRepo->findBasketPartnersByTypeAndCity(self::SHARE_HALF, 1, $basket);
         $biweekly = $shareRepo->findBasketPartnersBiweeklyNodeAware($basket, self::SHARE_BIWEEKLY, 1, $cohort, $activeBiweeklyNodeIds);
-        $monthly = $shareRepo->findBasketPartnersMonthlyNodeAware($basket, self::SHARE_MONTHLY, $weeklyMonthlyOrder, $biweeklyNodeMonthlyOrders);
+        $monthly = $shareRepo->findBasketPartnersMonthlyNodeAware($basket, self::SHARE_MONTHLY, $weeklyMonthlyOrders, $biweeklyNodeMonthlyOrders);
 
         // Quincenal/mensual COMPARTIDA (bs 6/7): misma cadencia que su no-compartida
         // (cohorte quincenal / orden operativo mensual), pero media cesta. Se buscan
@@ -644,11 +646,11 @@ class WeeklyBasketGenerator
         // el peso ½ (getDeliveredBasketWeight) y moveSharedToHalf las reubica al bloque
         // de compartidas (tienen share_partner_id). Sin esto su cesta no se materializa.
         $biweekly = array_merge($biweekly, $shareRepo->findBasketPartnersBiweeklyNodeAware($basket, self::SHARE_BIWEEKLY_SHARED, 1, $cohort, $activeBiweeklyNodeIds));
-        $monthly = array_merge($monthly, $shareRepo->findBasketPartnersMonthlyNodeAware($basket, self::SHARE_MONTHLY_SHARED, $weeklyMonthlyOrder, $biweeklyNodeMonthlyOrders));
+        $monthly = array_merge($monthly, $shareRepo->findBasketPartnersMonthlyNodeAware($basket, self::SHARE_MONTHLY_SHARED, $weeklyMonthlyOrders, $biweeklyNodeMonthlyOrders));
 
         $onlyEggWeekly = $shareRepo->findBasketPartnersByTypeAndCity(self::SHARE_ONLY_EGG, 1, $basket, true);
         $onlyEggBiweekly = $shareRepo->findBasketPartnersBiweeklyNodeAware($basket, self::SHARE_ONLY_EGG, 1, $cohort, $activeBiweeklyNodeIds, true);
-        $onlyEggMonthly = $shareRepo->findBasketPartnersMonthlyNodeAware($basket, self::SHARE_ONLY_EGG, $weeklyMonthlyOrder, $biweeklyNodeMonthlyOrders, true);
+        $onlyEggMonthly = $shareRepo->findBasketPartnersMonthlyNodeAware($basket, self::SHARE_ONLY_EGG, $weeklyMonthlyOrders, $biweeklyNodeMonthlyOrders, true);
         $onlyEgg = array_merge($onlyEggWeekly, $onlyEggBiweekly, $onlyEggMonthly);
 
         // Misma lógica que en reuseExisting: cualquier compartición (share_partner_id
@@ -1309,9 +1311,21 @@ class WeeklyBasketGenerator
         $shareRepo = $this->em->getRepository(PartnerBasketShare::class);
         $weeklyBasketRepo = $this->em->getRepository(WeeklyBasket::class);
 
+        // Socios cuya entrega ENTERA sale de esta semana por un shift: sus huevos
+        // viajan con la entrega al destino. Sin este guard (que el camino de DIBUJO
+        // sí tenía), el socio de huevo semanal que movía su entrega recibía un
+        // solo-huevo espurio en el origen: huevos DUPLICADOS. Lo cazó el escenario
+        // "Shift mover CON huevos" de la batería.
+        $wholeOutgoing = $this->wholeOutgoingPartnerIds(
+            $this->em->getRepository(PartnerDeliveryShift::class)->findAllOutgoingFromBasket($basket)
+        );
+
         $extras = [];
         foreach ($shareRepo->findActiveSharesWithEggsForBasket($basket) as $share) {
             if (!$this->eggResolver->delivers($share, $basket)) {
+                continue;
+            }
+            if (in_array($share->getPartner()->getId(), $wholeOutgoing, true)) {
                 continue;
             }
             $alreadyMaterialized = $weeklyBasketRepo->findOneBy([
@@ -1379,6 +1393,18 @@ class WeeklyBasketGenerator
      */
     public function materializeForPartner(Partner $partner, Basket $basket): ?WeeklyBasket
     {
+        // Entrega ENTERA movida fuera de esta semana por un shift: aquí no se materializa
+        // nada (la composición, huevos incluidos, viaja al destino). La proyección ya lo
+        // excluye de la CESTA, pero sin este guard el fallback de SOLO-HUEVO de abajo
+        // revivía un solo-huevo VIVO en el origen — lo cazó L6 cuando la cascada de
+        // reconciliación pasó por el origen de un move (caso JOSE del clon de batería).
+        $wholeOutgoing = $this->wholeOutgoingPartnerIds(
+            $this->em->getRepository(PartnerDeliveryShift::class)->findAllOutgoingFromBasket($basket)
+        );
+        if (in_array($partner->getId(), $wholeOutgoing, true)) {
+            return null;
+        }
+
         foreach ($this->projectForBasket($basket) as $candidate) {
             if ($candidate->getPartner()->getId() === $partner->getId()) {
                 return $this->materializeShareDelivery($basket, $candidate);

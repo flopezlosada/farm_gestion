@@ -3,20 +3,52 @@
 namespace App\Tests\Controller;
 
 use App\DataFixtures\PartnerUserFixtures;
+use App\Entity\BasketShare;
 use App\Entity\Basket;
+use App\Entity\Node;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
 use App\Entity\PartnerDeliveryShift;
+use App\Entity\PartnerEvent;
 use App\Entity\WeeklyBasket;
+use App\Entity\WeeklyBasketGroup;
 use App\Service\Delivery\DeliveryShiftApplier;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Delivery\WeeklyBasketSkipper;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\DomCrawler\Field\ChoiceFormField;
 
 /**
  * Smoke test del listado y la edición de socixs.
  */
 class PartnerControllerTest extends AbstractAuthenticatedTest
 {
+    /**
+     * Id del User creado por testGrantAccessProvisionsUserFromShow, para
+     * limpiarlo en tearDown aunque una assertion intermedia falle (si quedara
+     * huérfano en db_test, contaminaría pases posteriores sin recarga de
+     * fixtures).
+     */
+    private ?int $grantedUserId = null;
+
+    /**
+     * Limpieza de estado creado por los tests de acceso (ver $grantedUserId).
+     */
+    protected function tearDown(): void
+    {
+        if ($this->grantedUserId !== null) {
+            $em = static::getContainer()->get('doctrine')->getManager();
+            $user = $em->find(\App\Entity\User::class, $this->grantedUserId);
+            if ($user !== null) {
+                $em->remove($user);
+                $em->flush();
+            }
+            $this->grantedUserId = null;
+        }
+
+        parent::tearDown();
+    }
+
     /**
      * GET /gestion/partner/ con admin logueado devuelve 200.
      */
@@ -55,6 +87,25 @@ class PartnerControllerTest extends AbstractAuthenticatedTest
         $em = static::getContainer()->get('doctrine')->getManager();
         $em->remove($em->getRepository(Partner::class)->find($partnerId));
         $em->flush();
+    }
+
+    /**
+     * GET de la ficha de un socio devuelve 200. Cubre en runtime la ficha tras
+     * extraer los builders de "recoger en otro nodo" (semanas + nodos destino) al
+     * servicio compartido PickupRelocationOptions: la ficha los consume vía el
+     * servicio, así que un 500 en ese camino lo delata aquí.
+     */
+    public function testPartnerShowReturnsOk(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        $partner = $em->getRepository(Partner::class)
+            ->findOneBy(['email' => PartnerUserFixtures::USER_SOCIX_EMAIL]);
+        $this->assertNotNull($partner, 'Fixtures sin socix de prueba (PartnerUserFixtures).');
+
+        $client->request('GET', sprintf('/gestion/partner/%d', $partner->getId()));
+        $this->assertSame(200, $client->getResponse()->getStatusCode());
     }
 
     /**
@@ -282,5 +333,343 @@ class PartnerControllerTest extends AbstractAuthenticatedTest
 
         $client->request('GET', sprintf('/gestion/partner/%d/set_payer/family', $partner->getId()));
         $this->assertSame(200, $client->getResponse()->getStatusCode());
+    }
+
+    /**
+     * GET del formulario de añadir cesta devuelve 200. Cubre en runtime el render
+     * del form (campos condicionales de huevos, dropdowns csa, toggle gratuita) y
+     * el cálculo del turno con fechas reales vía CohortChoiceBuilder: un 500 en ese
+     * camino (campo huérfano, opción inexistente, etc.) lo delata aquí.
+     */
+    public function testAddBasketFormReturnsOk(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        $partner = $em->getRepository(Partner::class)
+            ->findOneBy(['email' => PartnerUserFixtures::USER_SOCIX_EMAIL]);
+        $this->assertNotNull($partner, 'Fixtures sin socix de prueba (PartnerUserFixtures).');
+
+        $client->request('GET', sprintf('/gestion/partner/%d/add_basket', $partner->getId()));
+        $this->assertSame(200, $client->getResponse()->getStatusCode());
+    }
+
+    /**
+     * GET del formulario de cambiar la cesta (cambio de modalidad con histórico)
+     * devuelve 200. Regresión: al exponer egg_day_month_order en el form compartido,
+     * change_modality colocaba mal el campo y CohortChoiceBuilder alimenta su turno;
+     * este smoke caza un 500 de render en ese camino.
+     */
+    public function testChangeModalityFormReturnsOk(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        $share = $em->getRepository(PartnerBasketShare::class)->findOneBy(['is_active' => 1]);
+        $this->assertNotNull($share, 'Fixtures sin ninguna cesta activa.');
+
+        $client->request('GET', sprintf('/gestion/partner/basket/share/%d/change-modality', $share->getId()));
+        $this->assertSame(200, $client->getResponse()->getStatusCode());
+    }
+
+    /**
+     * El alta de socio es sólo datos de persona (reunión admin 2026-06-11,
+     * punto 3): el form NO ofrece grupo de recogida, y el POST crea la ficha
+     * sin grupo y sin ninguna cesta. Grupo y cesta se asignan después desde
+     * "añadir cesta", el único camino de creación de cesta (pasa por reconcile).
+     */
+    public function testNewPartnerCreatesPersonWithoutGroupNorBasket(): void
+    {
+        $client = $this->createAuthenticatedClient();
+
+        $crawler = $client->request('GET', '/gestion/partner/new');
+        $this->assertSame(200, $client->getResponse()->getStatusCode());
+
+        $form = $crawler->selectButton('Crear socix')->form();
+        $this->assertFalse(
+            $form->has('partner[weekly_basket_group]'),
+            'El alta no debe pedir grupo de recogida: se asigna junto con la cesta.'
+        );
+
+        $surname = 'Alta Solo Persona ' . uniqid();
+        $form['partner[name]'] = 'TEST';
+        $form['partner[surname]'] = $surname;
+        $form['partner[email]'] = uniqid('alta') . '@example.test';
+        $form['partner[inscription_date]'] = '2026-06-12';
+        $form['partner[state]']->setValue(self::firstOptionValue($form['partner[state]']));
+        $form['partner[city]']->setValue(self::firstOptionValue($form['partner[city]']));
+        $form['partner[share_payment]']->setValue(self::firstOptionValue($form['partner[share_payment]']));
+        $client->submit($form);
+
+        $this->assertTrue($client->getResponse()->isRedirect(), 'El alta válida debe redirigir a la ficha.');
+
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $partner = $em->getRepository(Partner::class)->findOneBy(['surname' => $surname]);
+        $this->assertNotNull($partner, 'El alta no creó el socio.');
+        $this->assertNull($partner->getWeeklyBasketGroup(), 'El alta no debe asignar grupo de recogida.');
+        $this->assertCount(0, $partner->getPartnerBasketShares(), 'El alta no debe crear ninguna cesta.');
+
+        $em->remove($partner);
+        $em->flush();
+    }
+
+    /**
+     * "Añadir cesta" pide el grupo de recogida cuando el socio no lo tiene
+     * (el alta ya no lo fija) y, al guardar, lo persiste en la ficha además
+     * de crear la cesta. La fecha de inicio lejana evita que reconcile
+     * materialice semanas (no hay semanas generadas tan a futuro) y mantiene
+     * el test autocontenido.
+     */
+    public function testAddBasketAsksAndPersistsPickupGroupWhenMissing(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        $partner = (new Partner())
+            ->setName('TEST')
+            ->setSurname('Sin Grupo ' . uniqid())
+            ->setStatus(Partner::STATUS_ACTIVO);
+        $em->persist($partner);
+        $em->flush();
+        $partnerId = $partner->getId();
+
+        $crawler = $client->request('GET', sprintf('/gestion/partner/%d/add_basket', $partnerId));
+        $this->assertSame(200, $client->getResponse()->getStatusCode());
+
+        $form = $crawler->selectButton('Añadir cesta')->form();
+        $this->assertTrue(
+            $form->has('partner_basket_share[pickupGroup]'),
+            'Sin grupo en la ficha, el form de cesta debe pedir el grupo de recogida.'
+        );
+
+        $groupValue = self::firstOptionValue($form['partner_basket_share[pickupGroup]']);
+        $form['partner_basket_share[pickupGroup]']->setValue($groupValue);
+        // Semanal (id 1): modalidad simple, sin pareja compartida ni huevos.
+        $form['partner_basket_share[basket_share]']->setValue('1');
+        $form['partner_basket_share[start_date]'] = '2030-01-04';
+        $client->submit($form);
+
+        $this->assertTrue(
+            $client->getResponse()->isRedirect(sprintf('/gestion/partner/%d', $partnerId)),
+            'Tras crear la cesta debe redirigir a la ficha.'
+        );
+
+        $em->clear();
+        $fresh = $em->find(Partner::class, $partnerId);
+        $this->assertNotNull($fresh->getWeeklyBasketGroup(), 'El grupo elegido debe quedar fijado en la ficha.');
+        $this->assertSame((int) $groupValue, $fresh->getWeeklyBasketGroup()->getId());
+        $shares = $em->getRepository(PartnerBasketShare::class)->findBy(['partner' => $fresh]);
+        $this->assertCount(1, $shares, 'Debe haberse creado exactamente una cesta.');
+
+        // Limpieza: lo que el flujo crea alrededor (semanas materializadas si
+        // las hubiera, histórico de eventos) y la propia ficha.
+        foreach ($em->getRepository(WeeklyBasket::class)->findBy(['partner' => $fresh]) as $weeklyBasket) {
+            $em->remove($weeklyBasket);
+        }
+        foreach ($em->getRepository(PartnerEvent::class)->findBy(['partner' => $fresh]) as $event) {
+            $em->remove($event);
+        }
+        foreach ($shares as $share) {
+            $em->remove($share);
+        }
+        $em->remove($fresh);
+        $em->flush();
+    }
+
+    /**
+     * Elegir (vía ?group=N) un grupo cuyo nodo es QUINCENAL refiltra el form:
+     * las modalidades de reparto semanal desaparecen del select y el grupo
+     * queda preseleccionado. Los grupos de las fixtures no tienen nodo, así
+     * que el escenario crea el suyo (nodo quincenal + grupo) para ejercitar
+     * el camino real de Cascorro/Midori, no el fallback de nodo NULL.
+     */
+    public function testAddBasketWithBiweeklyGroupExcludesWeeklyShares(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        $node = (new Node())
+            ->setName('TEST Nodo Quincenal ' . uniqid())
+            ->setDeliveryWeekday(3)
+            ->setCadence(Node::CADENCE_BIWEEKLY)
+            // Un nodo quincenal sin ancla lanza LogicException al calcular
+            // sus fechas (NodeDeliveryDate::basketAlignsWithAnchor).
+            ->setAnchorDate(new \DateTimeImmutable('2026-06-03'));
+        $group = (new WeeklyBasketGroup())
+            ->setName('TEST Grupo Quincenal ' . uniqid())
+            ->setColor('#cccccc')
+            ->setNode($node);
+        $partner = (new Partner())
+            ->setName('TEST')
+            ->setSurname('Sin Grupo Quincenal ' . uniqid())
+            ->setStatus(Partner::STATUS_ACTIVO);
+        $em->persist($node);
+        $em->persist($group);
+        $em->persist($partner);
+        $em->flush();
+        [$partnerId, $groupId, $nodeId] = [$partner->getId(), $group->getId(), $node->getId()];
+
+        $crawler = $client->request('GET', sprintf('/gestion/partner/%d/add_basket?group=%d', $partnerId, $groupId));
+        $this->assertSame(200, $client->getResponse()->getStatusCode());
+
+        $form = $crawler->selectButton('Añadir cesta')->form();
+        $this->assertSame(
+            (string) $groupId,
+            $form['partner_basket_share[pickupGroup]']->getValue(),
+            'El grupo pasado por ?group debe llegar preseleccionado.'
+        );
+        $offered = $form['partner_basket_share[basket_share]']->availableOptionValues();
+        foreach (BasketShare::IDS_WEEKLY as $weeklyId) {
+            $this->assertNotContains(
+                (string) $weeklyId,
+                $offered,
+                'Un nodo quincenal no puede ofrecer modalidades de reparto semanal.'
+            );
+        }
+
+        $em->remove($em->find(Partner::class, $partnerId));
+        $em->remove($em->find(WeeklyBasketGroup::class, $groupId));
+        $em->remove($em->find(Node::class, $nodeId));
+        $em->flush();
+    }
+
+    /**
+     * El botón "Dar acceso" de la ficha provisiona el User del socix aunque
+     * el alta global esté cerrada (default del catálogo de settings). Es el
+     * mecanismo de despliegue selectivo previo a abrir el grifo.
+     */
+    public function testGrantAccessProvisionsUserFromShow(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $userRepository = $em->getRepository(\App\Entity\User::class);
+
+        // Un socix con email cuya cuenta NO exista aún (las fixtures solo
+        // crean users para admin y para el socix de PartnerUserFixtures).
+        $candidates = $em->getRepository(Partner::class)->createQueryBuilder('p')
+            ->where("p.email IS NOT NULL AND p.email != ''")
+            ->setMaxResults(20)
+            ->getQuery()
+            ->getResult();
+        $partner = null;
+        foreach ($candidates as $candidate) {
+            if ($userRepository->loadUserByIdentifier(mb_strtolower(trim($candidate->getEmail()))) === null) {
+                $partner = $candidate;
+                break;
+            }
+        }
+        $this->assertNotNull($partner, 'Las fixtures no dejan ningún socix con email y sin cuenta.');
+
+        $crawler = $client->request('GET', '/gestion/partner/' . $partner->getId());
+        $this->assertResponseIsSuccessful();
+
+        // Sin enviar el magic-link: aquí se prueba el provisioning, no el correo.
+        $form = $crawler->selectButton('Dar acceso')->form();
+        $form['send_link']->untick();
+        $client->submit($form);
+
+        $this->assertResponseRedirects('/gestion/partner/' . $partner->getId());
+
+        $email = mb_strtolower(trim($partner->getEmail()));
+        $user = $userRepository->loadUserByIdentifier($email);
+        $this->assertNotNull($user, 'Dar acceso no ha creado el User.');
+        $this->grantedUserId = $user->getId();
+        $this->assertFalse($user->isPasswordSet());
+
+        // La ficha pasa a mostrar la cuenta en vez del botón.
+        $crawler = $client->followRedirect();
+        $this->assertStringContainsString($email, $crawler->filter('body')->text());
+    }
+
+    /**
+     * Un socix consolidado (needs_review=false) NO se puede eliminar: el guard
+     * lo rechaza (se conserva su histórico; se da de baja, no se borra). El guard
+     * corta antes del CSRF, así que el token es irrelevante.
+     */
+    public function testDeleteRejectsConsolidatedPartner(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $router = static::getContainer()->get('router');
+
+        $partner = $em->getRepository(Partner::class)->findOneBy(['needs_review' => false]);
+        self::assertNotNull($partner, 'Las fixtures deberían tener algún socix consolidado.');
+        $id = $partner->getId();
+
+        $client->request('POST', $router->generate('partner_delete', ['id' => $id]), ['_method' => 'DELETE', '_token' => 'irrelevante']);
+
+        $this->assertResponseRedirects($router->generate('partner_show', ['id' => $id]));
+        $em->clear();
+        self::assertNotNull($em->getRepository(Partner::class)->find($id), 'Un socix consolidado NO debe poder eliminarse.');
+    }
+
+    /**
+     * Una ficha PENDIENTE de confirmar (needs_review=true, sin historial) SÍ se
+     * puede eliminar: es el caso de los socixs importados del histórico de prod
+     * que resultan duplicados o basura.
+     */
+    public function testDeleteRemovesPendingPartner(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $router = static::getContainer()->get('router');
+
+        $partner = (new Partner())
+            ->setName('PENDIENTE TEST BORRADO')
+            ->setStatus(Partner::STATUS_BAJA)
+            ->setNeedsReview(true);
+        $em->persist($partner);
+        $em->flush();
+        $id = $partner->getId();
+
+        // El form de borrado (con su token CSRF) solo se renderiza en fichas pendientes.
+        $crawler = $client->request('GET', $router->generate('partner_edit', ['id' => $id]));
+        $token = $crawler->filter('#partner-delete-form input[name="_token"]')->attr('value');
+
+        $client->request('POST', $router->generate('partner_delete', ['id' => $id]), ['_method' => 'DELETE', '_token' => $token]);
+
+        $this->assertResponseRedirects($router->generate('partner_index'));
+        $em->clear();
+        self::assertNull($em->getRepository(Partner::class)->find($id), 'Una ficha pendiente debe poder eliminarse.');
+    }
+
+    /**
+     * El filtro "por confirmar" (needs_review) del listado muestra los socixs
+     * pendientes de validar y no los consolidados.
+     */
+    public function testNeedsReviewFilterListsPendingPartner(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $router = static::getContainer()->get('router');
+
+        $pending = (new Partner())
+            ->setName('PENDIENTE FILTRO TEST')
+            ->setStatus(Partner::STATUS_BAJA)
+            ->setNeedsReview(true);
+        $em->persist($pending);
+        $em->flush();
+        $id = $pending->getId();
+
+        $client->request('GET', $router->generate('partner_index', ['status' => 'ALL', 'needs_review' => 1]));
+        $this->assertResponseIsSuccessful();
+        self::assertStringContainsString('PENDIENTE FILTRO TEST', (string) $client->getResponse()->getContent());
+
+        $em->remove($em->getRepository(Partner::class)->find($id));
+        $em->flush();
+    }
+
+    /**
+     * Primer valor no vacío de un select del crawler (salta el placeholder).
+     */
+    private static function firstOptionValue(ChoiceFormField $field): string
+    {
+        $values = array_values(array_filter(
+            $field->availableOptionValues(),
+            static fn (string $value): bool => $value !== '',
+        ));
+        self::assertNotEmpty($values, 'El select no ofrece ninguna opción.');
+
+        return $values[0];
     }
 }

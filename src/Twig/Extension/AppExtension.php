@@ -34,7 +34,7 @@ class AppExtension extends AbstractExtension
         return 'app_extension';
     }
 
-    public function getFilters()
+    public function getFilters(): array
     {
         return array(
             new TwigFilter('delete_image', array($this, 'deleteImage')),
@@ -125,7 +125,7 @@ class AppExtension extends AbstractExtension
         return $clean;
     }
 
-    public function getFunctions()
+    public function getFunctions(): array
     {
         return array(
             new TwigFunction('has_image', array($this, 'hasImage')),

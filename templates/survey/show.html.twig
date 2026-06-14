@@ -1,0 +1,111 @@
+{# ============================================================
+ # Ficha de encuesta en SOLO LECTURA — shell csa.
+ # Muestra la estructura (preguntas, tipo y opciones) de una
+ # encuesta en cualquier estado. Es la única forma de ver una
+ # encuesta ya abierta o cerrada (esas no se editan).
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% set status_meta = {
+    'draft':  { label: 'Borrador', tone: 'warning' },
+    'open':   { label: 'Abierta',  tone: 'success' },
+    'closed': { label: 'Cerrada',  tone: 'neutral' }
+} %}
+
+{% set type_meta = {
+    'single':   'Opción única',
+    'multiple': 'Opción múltiple',
+    'scale':    'Escala 1–5',
+    'text':     'Texto libre'
+} %}
+
+{% set meta = status_meta[survey.status] %}
+
+{% block title %}{{ survey.title }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('survey_index') }}">Encuestas</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ survey.title }}</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header('Encuesta', survey.title, survey.description) }}
+
+    <div class="csa-row" style="gap: var(--csa-sp-3); margin-bottom: var(--csa-sp-4); align-items: center;">
+        {{ csa.badge(meta.label, meta.tone) }}
+        <span class="csa-muted">{{ survey.questions|length }} pregunta(s) · {{ participants }} respuesta(s)</span>
+        {% if survey.closesAt %}
+            <span class="csa-muted">· Cierre orientativo: {{ survey.closesAt|date('d/m/Y') }}</span>
+        {% endif %}
+    </div>
+
+    <div class="csa-card" style="padding: 0; overflow: hidden;">
+        {% for question in survey.questions %}
+            <div style="padding: var(--csa-sp-4); {% if not loop.first %}border-top: 1px solid var(--csa-rule);{% endif %}">
+                <div class="csa-row" style="gap: var(--csa-sp-2); align-items: baseline;">
+                    <strong>{{ loop.index }}. {{ question.text }}</strong>
+                    {{ csa.badge(type_meta[question.type]|default(question.type), 'neutral') }}
+                    {% if not question.required %}
+                        <span class="csa-muted">(opcional)</span>
+                    {% endif %}
+                </div>
+
+                {# Vista previa fiel del widget con que responderá el socix (deshabilitada). #}
+                {% if question.usesOptions %}
+                    <div class="sv-preview">
+                        {% for option in question.options %}
+                            <label class="sv-opt">
+                                <input type="{{ question.type == 'multiple' ? 'checkbox' : 'radio' }}" disabled>
+                                <span>{{ option.label }}</span>
+                            </label>
+                        {% endfor %}
+                    </div>
+                {% elseif question.type == 'scale' %}
+                    <div class="sv-preview sv-scale">
+                        {% for n in 1..5 %}
+                            <label class="sv-opt"><input type="radio" disabled> <span>{{ n }}</span></label>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <textarea class="csa-input" rows="2" disabled placeholder="Respuesta de texto libre…" style="width:100%; margin-top: var(--csa-sp-2);"></textarea>
+                {% endif %}
+            </div>
+        {% else %}
+            <div style="padding: var(--csa-sp-4);">
+                {{ csa.callout('Esta encuesta todavía no tiene preguntas.', 'warning') }}
+            </div>
+        {% endfor %}
+    </div>
+
+    <div class="csa-row" style="gap: var(--csa-sp-2); margin-top: var(--csa-sp-4);">
+        {{ csa.btn('Volver al listado', { variant: 'secondary', href: path('survey_index'), icon: 'fa-arrow-left' }) }}
+        {% if survey.status != 'draft' %}
+            {{ csa.btn('Ver resultados', { variant: 'primary', href: path('survey_results', { id: survey.id }), icon: 'fa-bar-chart' }) }}
+        {% endif %}
+        {% if survey.editable %}
+            {{ csa.btn('Editar', { variant: 'primary', href: path('survey_edit', { id: survey.id }), icon: 'fa-pencil' }) }}
+        {% endif %}
+    </div>
+
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    <style>
+        .sv-preview { display: flex; flex-direction: column; gap: var(--csa-sp-2); margin-top: var(--csa-sp-3); }
+        .sv-preview .sv-opt { display: inline-flex; align-items: center; gap: var(--csa-sp-2); font-weight: 400; }
+        .sv-preview .sv-opt input { width: auto; height: auto; margin: 0; }
+        .sv-preview.sv-scale { flex-direction: row; flex-wrap: wrap; gap: var(--csa-sp-3); }
+        .sv-preview.sv-scale .sv-opt {
+            flex-direction: column; gap: var(--csa-sp-1);
+            border: 1px solid var(--csa-rule); border-radius: 8px;
+            padding: var(--csa-sp-2) var(--csa-sp-3); min-width: 3rem; text-align: center;
+        }
+    </style>
+{% endblock %}

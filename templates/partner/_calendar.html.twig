@@ -217,8 +217,14 @@
                     {% endif %}
                 </div>
                 <div class="rcal-panel__day">{{ selected.date|format_date('full', locale='es')|capitalize }}</div>
-                {% if pickup_place and not is_skip and not is_closed %}
-                    <div class="rcal-panel__where"><i class="fa fa-map-marker"></i>Recoge en {{ pickup_place }}</div>
+                {# El lugar es el del slot seleccionado: si esa semana está trasladada a otro
+                   nodo (PartnerNodeOverride), el slot trae su nodo destino; si no, el de casa. #}
+                {% set where = selected.pickup_place|default(pickup_place) %}
+                {% if where and not is_skip and not is_closed %}
+                    <div class="rcal-panel__where">
+                        <i class="fa fa-map-marker"></i>Recoge en {{ where }}
+                        {% if selected.relocated|default(false) %}<span class="rcal-panel__reloc">· trasladada esta semana</span>{% endif %}
+                    </div>
                 {% endif %}
             </div>
 

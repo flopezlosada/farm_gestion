@@ -10,9 +10,13 @@ blog_category_show:
     controller: App\Controller\BlogController::show_category
     path: /blog/category/{id}
 
-booking_calendar_show:
-    controller: App\Controller\BookingController::show
-    path: /booking/{id}
+# Detalle público de un evento de la agenda. La antigua booking_calendar_show
+# apuntaba a BookingController::show, que está tras el IsGranted(ROLE_BLOG) de
+# clase: para un visitante anónimo nunca funcionó.
+evento_show:
+    controller: App\Controller\FrontendController::evento
+    path: /evento/{id}
+    requirements: { id: '\d+' }
 
 app_contact:
     controller: App\Controller\GestionController::contacted
@@ -36,20 +40,20 @@ voluntariado:
     controller: Symfony\Bundle\FrameworkBundle\Controller\TemplateController
     defaults: { template: 'frontend/voluntariado.html.twig' }
 
+# /asambleas dejó de ser estática: pinta la agenda de eventos públicos.
 asambleas:
     path: /asambleas
-    controller: Symfony\Bundle\FrameworkBundle\Controller\TemplateController
-    defaults: { template: 'frontend/asambleas.html.twig' }
+    controller: App\Controller\FrontendController::asambleas
 
 somos:
     path: /quienessomos
     controller: Symfony\Bundle\FrameworkBundle\Controller\TemplateController
     defaults: { template: 'frontend/quienes_somos.html.twig' }
 
+# /socio dejó de ser estática: necesita los horarios públicos de los nodos.
 socios:
     path: /socio
-    controller: Symfony\Bundle\FrameworkBundle\Controller\TemplateController
-    defaults: { template: 'frontend/socios.html.twig' }
+    controller: App\Controller\FrontendController::socios
 
 cambiocesta:
     path: /cambiocesta

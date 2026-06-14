@@ -6,6 +6,7 @@ use App\Entity\Node;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\DateType;
+use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 
@@ -57,6 +58,11 @@ class NodeType extends AbstractType
                 'widget'   => 'single_text',
                 'required' => false,
                 'help'     => 'Un viernes-ciclo que SÍ reparte. A partir de aquí alternan operativos vs vacíos.',
+            ])
+            ->add('schedule', TextType::class, [
+                'label'    => 'Horario público',
+                'required' => false,
+                'help'     => 'Se muestra tal cual en la web pública (Hazte socix), p. ej. «Miércoles de 18:00 a 20:00». Vacío = no se publica.',
             ])
         ;
     }

@@ -5,10 +5,12 @@ namespace App\Tests\Service\Delivery;
 use App\Entity\Basket;
 use App\Entity\Node;
 use App\Entity\Partner;
+use App\Entity\PartnerDeliveryShift;
 use App\Entity\PartnerEvent;
 use App\Entity\PartnerNodeOverride;
 use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketGroup;
+use App\Repository\PartnerDeliveryShiftRepository;
 use App\Repository\PartnerNodeOverrideRepository;
 use App\Repository\WeeklyBasketRepository;
 use App\Service\Delivery\NodeDeliveryDate;
@@ -51,7 +53,7 @@ class PickupRelocatorTest extends TestCase
      * @param bool                     &$flushed
      * @param array<int, object>       &$removed         Capturados por em->remove (vuelta al patrón).
      */
-    private function buildRelocator(?WeeklyBasket $wb, bool $delivers, ?PartnerNodeOverride $existingOverride, array &$persisted, bool &$flushed, array &$removed = []): PickupRelocator
+    private function buildRelocator(?WeeklyBasket $wb, bool $delivers, ?PartnerNodeOverride $existingOverride, array &$persisted, bool &$flushed, array &$removed = [], ?PartnerDeliveryShift $outgoingShift = null): PickupRelocator
     {
         $wbRepo = $this->createMock(WeeklyBasketRepository::class);
         $wbRepo->method('findOneBy')->willReturn($wb);
@@ -59,9 +61,14 @@ class PickupRelocatorTest extends TestCase
         $overrideRepo = $this->createMock(PartnerNodeOverrideRepository::class);
         $overrideRepo->method('findForPartnerAndBasket')->willReturn($existingOverride);
 
+        // Cambio de día/"no recoge" saliente de esa semana (guard de exclusión relocate↔move).
+        $shiftRepo = $this->createMock(PartnerDeliveryShiftRepository::class);
+        $shiftRepo->method('findOutgoing')->willReturn($outgoingShift);
+
         $em = $this->createMock(EntityManagerInterface::class);
         $em->method('getRepository')->willReturnCallback(fn (string $class) => match ($class) {
             PartnerNodeOverride::class => $overrideRepo,
+            PartnerDeliveryShift::class => $shiftRepo,
             default => $wbRepo,
         });
         $em->method('persist')->willReturnCallback(function (object $e) use (&$persisted): void {
@@ -153,6 +160,39 @@ class PickupRelocatorTest extends TestCase
 
         $this->expectException(\LogicException::class);
         $relocator->relocate(new Partner(), new Basket(), $toGroup, 'gestor:1');
+    }
+
+    public function testThrowsWhenWeekHasOutgoingDayChange(): void
+    {
+        // Exclusión relocate↔move: si esa semana tiene un cambio de día / "no recoge"
+        // (PartnerDeliveryShift de entrega entera saliente), no se puede trasladar de nodo
+        // a la vez (son contradictorios). El guard simétrico vive en DeliveryShiftApplier::move.
+        $toGroup = $this->group(20, $this->node(2));
+        $shift = $this->createMock(PartnerDeliveryShift::class);
+
+        $persisted = [];
+        $flushed = false;
+        $removed = [];
+        $relocator = $this->buildRelocator(null, true, null, $persisted, $flushed, $removed, $shift);
+
+        $this->expectException(\LogicException::class);
+        $relocator->relocate(new Partner(), new Basket(), $toGroup, 'gestor:1');
+    }
+
+    public function testThrowsWhenPartnerSharesBasket(): void
+    {
+        // Las cestas COMPARTIDAS (alternancia entre dos hogares) no se trasladan de nodo de
+        // momento: el guard salta antes de tocar nada (sin definir cómo afecta al otro hogar).
+        $partner = $this->createMock(Partner::class);
+        $partner->method('getSharePartner')->willReturn($this->createMock(Partner::class));
+        $toGroup = $this->group(20, $this->node(2));
+
+        $persisted = [];
+        $flushed = false;
+        $relocator = $this->buildRelocator(null, true, null, $persisted, $flushed);
+
+        $this->expectException(\LogicException::class);
+        $relocator->relocate($partner, new Basket(), $toGroup, 'gestor:1');
     }
 
     public function testRelocatingToOwnNodeVuelveAlPatron(): void

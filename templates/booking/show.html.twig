@@ -55,29 +55,56 @@
         </div>
     </div>
 
-    {% embed '_components/csa_card.html.twig' with { title: 'Datos del evento', accent: 'sky' } %}
-        {% block body %}
-            <dl class="csa-defs">
-                {% if booking.beginAt %}
-                    <div class="csa-defs__row">
-                        <dt class="csa-defs__label">Inicio</dt>
-                        <dd class="csa-defs__value">{{ booking.beginAt|format_date('long', locale='es') }}</dd>
+    <div class="csa-content-aside">
+
+        {# ===== Columna ancha: cartel + descripción ===== #}
+        <div>
+            {% if booking.image %}
+                {% if booking.isImage %}
+                    <img src="{{ asset(booking.webPath) }}" alt="{{ booking.title }}"
+                         style="display: block; width: 100%; height: auto; border-radius: var(--csa-radius-lg); border: 1px solid var(--csa-rule); margin-bottom: var(--csa-sp-6);">
+                {% else %}
+                    {{ csa.callout(
+                        'Este evento tiene un archivo adjunto que no es una imagen (' ~ booking.image|split('.')|last|upper ~ '); no se puede previsualizar.',
+                        'info'
+                    ) }}
+                    <div style="margin: var(--csa-sp-3) 0 var(--csa-sp-6);">
+                        {{ csa.btn('Ver documento adjunto', { variant: 'secondary', href: asset(booking.webPath), icon: 'fa-file-o' }) }}
                     </div>
                 {% endif %}
-                {% if booking.endAt %}
-                    <div class="csa-defs__row">
-                        <dt class="csa-defs__label">Fin</dt>
-                        <dd class="csa-defs__value">{{ booking.endAt|format_date('long', locale='es') }}</dd>
-                    </div>
-                {% endif %}
-                {% if booking.content is defined and booking.content %}
-                    <div class="csa-defs__row csa-defs__row--full">
-                        <dt class="csa-defs__label">Contenido</dt>
-                        <dd class="csa-defs__value">{{ booking.content|raw }}</dd>
-                    </div>
-                {% endif %}
-            </dl>
-        {% endblock %}
-    {% endembed %}
+            {% endif %}
+
+            {% if booking.content is defined and booking.content %}
+                {% embed '_components/csa_card.html.twig' with { title: 'Descripción', accent: 'plum', icon: 'fa-align-left' } %}
+                    {% block body %}
+                        <div class="csa-soft" style="line-height: var(--csa-lh-normal);">{{ booking.content|raw }}</div>
+                    {% endblock %}
+                {% endembed %}
+            {% endif %}
+        </div>
+
+        {# ===== Columna lateral: fechas ===== #}
+        <div>
+            {% embed '_components/csa_card.html.twig' with { title: 'Datos del evento', accent: 'sky', icon: 'fa-calendar' } %}
+                {% block body %}
+                    <dl class="csa-defs">
+                        {% if booking.beginAt %}
+                            <div class="csa-defs__row csa-defs__row--full">
+                                <dt class="csa-defs__label">Inicio</dt>
+                                <dd class="csa-defs__value">{{ booking.beginAt|format_date('long', locale='es') }}</dd>
+                            </div>
+                        {% endif %}
+                        {% if booking.endAt %}
+                            <div class="csa-defs__row csa-defs__row--full">
+                                <dt class="csa-defs__label">Fin</dt>
+                                <dd class="csa-defs__value">{{ booking.endAt|format_date('long', locale='es') }}</dd>
+                            </div>
+                        {% endif %}
+                    </dl>
+                {% endblock %}
+            {% endembed %}
+        </div>
+
+    </div>{# /csa-content-aside #}
 
 {% endblock %}

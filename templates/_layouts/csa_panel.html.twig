@@ -35,6 +35,9 @@
                 {{ _self.nav_link('Mi perfil', path('panel_profile'), 'fa-user', route starts with 'panel_profile') }}
                 {{ _self.nav_link('Mi calendario', path('panel_calendar'), 'fa-calendar', route starts with 'panel_calendar') }}
                 {{ _self.nav_link('Mi familia', path('panel_family'), 'fa-users', route starts with 'panel_family') }}
+                {% if is_granted('FEATURE_SURVEYS') %}
+                    {{ _self.nav_link('Encuestas', path('panel_survey_index'), 'fa-check-square-o', route starts with 'panel_survey') }}
+                {% endif %}
             </nav>
         </aside>
 

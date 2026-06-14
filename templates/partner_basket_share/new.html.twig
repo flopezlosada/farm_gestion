@@ -28,22 +28,41 @@
         'Tipo de cesta, huevos, frecuencia y fecha de inicio.'
     ) }}
 
-    {{ form_start(form, { attr: { role: 'form', class: 'csa-form-narrow' } }) }}
+    {{ form_start(form, { attr: { role: 'form', class: 'csa-form-narrow', 'data-csa-dropdowns': '1' } }) }}
 
         <div class="csa-stack-lg">
 
-            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Tipo de cesta', subtitle: 'Periodicidad y opciones.' } %}
+            {# Socio sin grupo de recogida (el alta ya no lo pide): se elige
+               aquí. Cambiarlo recarga la página para refiltrar modalidades
+               y turnos según el nodo del grupo elegido. #}
+            {% set sn = form.pickupGroup is defined ? 1 : 0 %}
+            {% if form.pickupGroup is defined %}
+                {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Punto de recogida', subtitle: 'Dónde recogerá la cesta. Determina qué modalidades y turnos están disponibles.' } %}
+                    {% block body %}
+                        {% import '_macros/csa.html.twig' as csa %}
+                        <div class="csa-form-grid">
+                            {{ csa.field(form.pickupGroup, 'Grupo de recogida', { full: true, hint: 'al guardar, el grupo queda fijado en la ficha de socix' }) }}
+                        </div>
+                    {% endblock %}
+                {% endembed %}
+            {% endif %}
+
+            {% embed '_components/csa_form_section.html.twig' with { num: 1 + sn, title: 'Tipo de cesta', subtitle: 'Periodicidad y opciones.' } %}
                 {% block body %}
                     {% import '_macros/csa.html.twig' as csa %}
                     <div class="csa-form-grid">
                         {{ csa.field(form.basket_share, 'Tipo de cesta', { full: true }) }}
                         {{ csa.field(form.amount, 'Cantidad de cestas', { hint: 'normalmente 1' }) }}
-                        {{ csa.field(form.isFreeBasket, '¿Es cesta gratuita?') }}
                     </div>
+                    <label class="csa-toggle" style="margin-top: var(--csa-sp-4);">
+                        {{ form_widget(form.isFreeBasket, { attr: { class: 'csa-toggle__input' } }) }}
+                        <span class="csa-toggle__track"><span class="csa-toggle__thumb"></span></span>
+                        <span class="csa-toggle__text">Cesta gratuita <small>Donada o solidaria · se factura a 0&nbsp;€</small></span>
+                    </label>
                 {% endblock %}
             {% endembed %}
 
-            {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Huevos', subtitle: 'Cantidad y frecuencia (sólo si la cesta incluye huevos).' } %}
+            {% embed '_components/csa_form_section.html.twig' with { num: 2 + sn, title: 'Huevos', subtitle: 'Cantidad y frecuencia (sólo si la cesta incluye huevos).' } %}
                 {% block body %}
                     {% import '_macros/csa.html.twig' as csa %}
                     <div class="csa-form-grid">
@@ -51,19 +70,38 @@
                         <div id="egg_period" class="csa-field--full hidden">
                             {{ csa.field(form.egg_period, 'Frecuencia de huevos', { full: true }) }}
                         </div>
+                        <div id="egg_day_month_order" class="csa-field--full hidden">
+                            {{ csa.field(form.eggDayMonthOrder, 'En qué cesta del mes recibe los huevos', { full: true }) }}
+                        </div>
                     </div>
                 {% endblock %}
             {% endembed %}
 
-            {% embed '_components/csa_form_section.html.twig' with { num: '3', title: 'Calendario', subtitle: 'Fecha de inicio, día concreto del mes y grupo de reparto si procede.' } %}
+            {% embed '_components/csa_form_section.html.twig' with { num: 3 + sn, title: 'Calendario', subtitle: 'Cuándo empieza y, según la modalidad, qué viernes recoge la cesta.' } %}
                 {% block body %}
                     {% import '_macros/csa.html.twig' as csa %}
                     <div class="csa-form-grid">
                         {{ csa.field(form.start_date, 'Fecha de inicio', { full: true, attr: { class: 'csa-input datepicker' } }) }}
                         <div id="day_month_order" class="csa-field--full hidden">
-                            {{ csa.field(form.dayMonthOrder, 'Día del mes', { full: true }) }}
+                            {{ csa.field(form.dayMonthOrder, 'Qué viernes del mes recoge la cesta', { full: true }) }}
                         </div>
-                        {{ csa.field(form.deliveryGroup, 'Grupo de reparto', { full: true }) }}
+                        {% if node_is_biweekly|default(false) %}
+                            {# El punto reparte quincenalmente por sí mismo: el turno lo fija
+                               el nodo, no se elige. Mostramos sus fechas como información. #}
+                            <div class="csa-field--full">
+                                {{ csa.callout(
+                                    'Recoge en ' ~ (node_name|default('')) ~ (node_dates_label|default(false)
+                                        ? ' · ' ~ node_dates_label
+                                        : '') ~ ' El turno lo fija el punto de recogida; aquí no se elige.',
+                                    'info', 'map-marker'
+                                ) }}
+                                <div hidden>{{ form_row(form.deliveryGroup) }}</div>
+                            </div>
+                        {% else %}
+                            <div id="delivery_group" class="csa-field--full hidden">
+                                {{ csa.field(form.deliveryGroup, 'Turno de viernes (quincenal A/B)', { full: true }) }}
+                            </div>
+                        {% endif %}
                     </div>
                 {% endblock %}
             {% endembed %}
@@ -93,21 +131,74 @@
         document.querySelectorAll('.datepicker, .datepicker2, .datepicker3')
             .forEach(function (el) { el.type = 'date'; });
 
-        // Lógica condicional heredada del legacy: mostrar day_month_order
-        // y egg_period según el tipo de cesta / frecuencia de huevos.
+        // Cambiar el grupo de recogida recarga la página con ?group=N: el
+        // nodo del grupo decide qué modalidades y turnos se ofrecen, y eso
+        // se recalcula en servidor (no hay datos aún que perder al recargar).
+        var pickupSelect = document.getElementById('partner_basket_share_pickupGroup');
+        if (pickupSelect) {
+            pickupSelect.addEventListener('change', function () {
+                var url = new URL(window.location.href);
+                if (this.value) { url.searchParams.set('group', this.value); }
+                else { url.searchParams.delete('group'); }
+                window.location.href = url.toString();
+            });
+        }
+
+        // Verdura y huevos son dos calendarios independientes:
+        //  - day_month_order  = qué entrega del mes lleva la CESTA (sólo cesta mensual).
+        //  - egg_period       = frecuencia de los HUEVOS (sólo si recibe huevos).
+        //  - eggDayMonthOrder = en cuál de las cestas del socio viajan los huevos.
+        //    Sólo aplica con huevos MENSUALES y cesta NO mensual; en la cesta
+        //    mensual los huevos van con la única cesta (el resolver lo ignora).
+        var eggOrderSelect = document.getElementById('partner_basket_share_eggDayMonthOrder');
+        var eggOrderOptions = eggOrderSelect ? Array.prototype.slice.call(eggOrderSelect.options) : [];
+
+        // Cuántas cestas al mes ofrece cada modalidad: no proponer "3ª/4ª cesta" a
+        // quien no las tiene. Quincenal=2 cubre el caso normal (deuda consciente: el
+        // mes de 5 viernes con 3ª cesta quincenal es un borde raro).
+        function maxCestasForModality(basketShare) {
+            return (basketShare == 2) ? 2 : 4;
+        }
+
+        // Reconstruye las opciones del select reusando las originales (sin duplicar
+        // textos) y avisa al csa-dropdown con un 'change' para que refresque.
+        function limitEggOptions(max) {
+            if (!eggOrderSelect) return;
+            var current = eggOrderSelect.value;
+            eggOrderSelect.innerHTML = '';
+            eggOrderOptions.forEach(function (opt) {
+                if (opt.value === '' || parseInt(opt.value, 10) <= max) {
+                    eggOrderSelect.appendChild(opt);
+                }
+            });
+            var stillThere = Array.prototype.some.call(eggOrderSelect.options, function (o) { return o.value === current; });
+            eggOrderSelect.value = stillThere ? current : '';
+            eggOrderSelect.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
         function syncConditionals() {
             var basketShare = $('#partner_basket_share_basket_share').val();
+            var hasEggs = $('#partner_basket_share_egg_amount').val() !== '';
             var eggPeriod = $('#partner_basket_share_egg_period').val();
-            var showDayMonth = (basketShare == 3) || (eggPeriod == 3);
-            var showEggPeriod = (basketShare == 5);
 
-            $('#day_month_order').toggleClass('hidden', !showDayMonth);
+            var showCestaDayMonth = (basketShare == 3);
+            var showEggPeriod = hasEggs;
+            var showEggDayMonth = hasEggs && (eggPeriod == 3) && (basketShare != 3);
+            // El turno A/B sólo es de las quincenales (normal y compartida).
+            var showDeliveryGroup = (basketShare == 2 || basketShare == 6);
+
+            $('#day_month_order').toggleClass('hidden', !showCestaDayMonth);
             $('#egg_period').toggleClass('hidden', !showEggPeriod);
-            if (!showDayMonth) $('#partner_basket_share_dayMonthOrder').val(0);
-            if (!showEggPeriod) $('#partner_basket_share_egg_period').val(0);
+            $('#egg_day_month_order').toggleClass('hidden', !showEggDayMonth);
+            $('#delivery_group').toggleClass('hidden', !showDeliveryGroup);
+
+            if (showEggDayMonth) {
+                limitEggOptions(maxCestasForModality(basketShare));
+            }
         }
 
         $('#partner_basket_share_basket_share').change(syncConditionals);
+        $('#partner_basket_share_egg_amount').change(syncConditionals);
         $('#partner_basket_share_egg_period').change(syncConditionals);
         syncConditionals();
     </script>

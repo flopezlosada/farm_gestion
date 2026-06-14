@@ -46,8 +46,8 @@
                 {% block body %}
                     {% import '_macros/csa.html.twig' as csa %}
                     <div class="csa-form-grid">
-                        {{ csa.field(form.beginAt, 'Inicio', { attr: { class: 'csa-input datepicker' } }) }}
-                        {{ csa.field(form.endAt, 'Fin', { attr: { class: 'csa-input datepicker' } }) }}
+                        {{ csa.field(form.beginAt, 'Inicio', { attr: { class: 'csa-input' } }) }}
+                        {{ csa.field(form.endAt, 'Fin', { hint: 'opcional', attr: { class: 'csa-input' } }) }}
                     </div>
                 {% endblock %}
             {% endembed %}
@@ -79,8 +79,4 @@
 {% block more_js %}
     {{ parent() }}
     {{ tinymce_init() }}
-    <script>
-        document.querySelectorAll('.datepicker, .datepicker2, .datepicker3')
-            .forEach(function (el) { el.type = 'date'; });
-    </script>
 {% endblock %}

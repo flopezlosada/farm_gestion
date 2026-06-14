@@ -22,32 +22,32 @@ class ContactType extends AbstractType
                 'label' => false,
                 'attr' => ['placeholder' => 'Nombre...', 'class' => 'form-control p-3'],
                 'constraints' => [
-                    new NotBlank(['message' => 'Por favor, indica tu nombre']),
-                    new Length(['max' => 100]),
+                    new NotBlank(message: 'Por favor, indica tu nombre'),
+                    new Length(max: 100),
                 ],
             ])
             ->add('email', EmailType::class, [
                 'label' => false,
                 'attr' => ['placeholder' => 'Correo...', 'class' => 'form-control p-3'],
                 'constraints' => [
-                    new NotBlank(['message' => 'Por favor, indica un email']),
-                    new Email(['message' => 'Tu email parece incorrecto']),
+                    new NotBlank(message: 'Por favor, indica un email'),
+                    new Email(message: 'Tu email parece incorrecto'),
                 ],
             ])
             ->add('subject', TextType::class, [
                 'label' => false,
                 'attr' => ['placeholder' => 'Asunto...', 'class' => 'form-control p-3'],
                 'constraints' => [
-                    new NotBlank(['message' => 'Por favor, indica un asunto']),
-                    new Length(['max' => 150]),
+                    new NotBlank(message: 'Por favor, indica un asunto'),
+                    new Length(max: 150),
                 ],
             ])
             ->add('body', TextareaType::class, [
                 'label' => false,
                 'attr' => ['placeholder' => 'Mensaje...', 'class' => 'form-control p-3', 'rows' => 4],
                 'constraints' => [
-                    new NotBlank(['message' => 'Por favor, indica aquí tu mensaje']),
-                    new Length(['max' => 5000]),
+                    new NotBlank(message: 'Por favor, indica aquí tu mensaje'),
+                    new Length(max: 5000),
                 ],
             ])
             ->add('submit', SubmitType::class, [

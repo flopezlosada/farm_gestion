@@ -30,7 +30,8 @@ class NodeFixtures extends Fixture implements DependentFixtureInterface
         $node1 = (new Node())
             ->setName('Torremocha')
             ->setDeliveryWeekday(5)
-            ->setCadence(Node::CADENCE_WEEKLY);
+            ->setCadence(Node::CADENCE_WEEKLY)
+            ->setSchedule('Viernes de 18:00 a 20:00');
         $nodeIdProperty->setValue($node1, 1);
         $manager->persist($node1);
 
@@ -39,7 +40,8 @@ class NodeFixtures extends Fixture implements DependentFixtureInterface
             ->setName('Cascorro')
             ->setDeliveryWeekday(3)
             ->setCadence(Node::CADENCE_BIWEEKLY)
-            ->setAnchorDate(new \DateTime('2026-05-06'));
+            ->setAnchorDate(new \DateTime('2026-05-06'))
+            ->setSchedule('Miércoles de 18:00 a cierre');
         $nodeIdProperty->setValue($node2, 2);
         $manager->persist($node2);
 
@@ -48,7 +50,8 @@ class NodeFixtures extends Fixture implements DependentFixtureInterface
             ->setName('Midori')
             ->setDeliveryWeekday(3)
             ->setCadence(Node::CADENCE_BIWEEKLY)
-            ->setAnchorDate(new \DateTime('2026-05-06'));
+            ->setAnchorDate(new \DateTime('2026-05-06'))
+            ->setSchedule('Miércoles de 18:00 a 20:00');
         $nodeIdProperty->setValue($node3, 3);
         $manager->persist($node3);
 

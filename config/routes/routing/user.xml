@@ -36,4 +36,8 @@
         <default key="_controller">App\Controller\UserController::toggleBlock</default>
     </route>
 
+    <route id="user_force_password_reset" path="/{id}/force-password-reset" methods="POST">
+        <default key="_controller">App\Controller\UserController::forcePasswordReset</default>
+    </route>
+
 </routes>

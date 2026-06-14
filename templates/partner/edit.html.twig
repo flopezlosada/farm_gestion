@@ -85,6 +85,10 @@
 
             <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
                 <div>
+                    {# Eliminar SOLO en fichas pendientes de confirmar (importadas del
+                       histórico de prod, sin nada colgando). En una ficha consolidada
+                       no se ofrece: se da de baja para conservar el histórico. #}
+                    {% if partner.needsReview %}
                     <button type="button" class="csa-btn csa-btn--ghost"
                     onclick="document.getElementById('confirm-partner-delete').showModal()">
                         Eliminar
@@ -97,6 +101,7 @@
                 confirm_label: 'Eliminar',
                 external_form_id: 'partner-delete-form',
             }) }}
+                    {% endif %}
                 </div>
                 <div class="csa-row">
                     {{ csa.btn('Cancelar', { variant: 'ghost', href: path('partner_show', { id: partner.id }) }) }}

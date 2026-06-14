@@ -36,7 +36,12 @@
 /* Los botones-enlace (<a class="csa-btn">) heredaban el borde-inferior verde de
    `.csa-app :where(a):hover` (02-base) — el "subrayado verde" en hover que no
    queremos en un botón. Se neutraliza con más especificidad (0,3,1 > 0,2,0). */
-.csa-app a.csa-btn:hover { border-bottom-color: transparent; }
+/* Mata el subrayado/borde-inferior verde de enlaces (de 02-base y de Bootstrap3)
+ * SIN romper el borde propio de los botones con borde (secondary, danger…):
+ * especificidad (0,2,0) — gana a `.csa-app :where(a):hover` por orden de fuente
+ * (03 va tras 02), pero la pierde frente a `.csa-btn--secondary:hover` etc.
+ * (mismo 0,2,0, definidos después), que así recuperan su borde completo. */
+.csa-btn:hover { border-bottom-color: transparent; text-decoration: none; }
 .csa-btn:disabled,
 .csa-btn[aria-disabled="true"] {
   opacity: 0.5;
@@ -53,9 +58,10 @@
 }
 .csa-btn--primary:hover,
 .csa-btn--primary:focus {
-  background: #3c6630;
-  border-color: #3c6630;
+  background: #2f5022;
+  border-color: #2f5022;
   color: var(--csa-bg);
+  box-shadow: 0 2px 8px rgba(47, 80, 34, 0.28);
 }
 
 .csa-btn--secondary,
@@ -67,9 +73,10 @@
 }
 .csa-btn--secondary:hover,
 .csa-btn--secondary:focus {
-  background: var(--csa-bg);
+  background: var(--csa-surface-alt);
   border-color: var(--csa-ink-soft);
   color: var(--csa-ink);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.10);
 }
 
 .csa-btn--ghost {
@@ -956,6 +963,103 @@ select.csa-input,
 
 
 /* ============================================================
+ * SETTING ROW — fila de ajuste (pantalla de configuración)
+ * ============================================================
+ * Un control (switch o campo numérico) alineado con su bloque de
+ * texto (etiqueta + ayuda). Las filas de un mismo grupo se separan
+ * con una regla fina. Tipografía heredada de los tokens csa para que
+ * concuerde con el resto de formularios. */
+.csa-setting {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--csa-sp-4);
+  padding: var(--csa-sp-4) 0;
+}
+.csa-setting:first-child { padding-top: 0; }
+.csa-setting:last-child { padding-bottom: 0; }
+.csa-setting + .csa-setting { border-top: 1px solid var(--csa-rule); }
+
+/* El control (switch, número o reloj) no lleva texto propio: va en __text. */
+.csa-setting > .csa-toggle,
+.csa-setting > .csa-setting__num,
+.csa-setting > .csa-input { flex-shrink: 0; margin-top: 1px; }
+
+.csa-setting__text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* Sin negrita: la etiqueta es texto normal en ink, la ayuda en muted —
+ * mismo lenguaje que .csa-toggle__text. Fuente sans (Inter) explícita. */
+.csa-setting__label {
+  display: block;
+  font-family: var(--csa-sans);
+  font-size: var(--csa-fs-base);
+  font-weight: 400;
+  color: var(--csa-ink);
+}
+.csa-setting__help {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--csa-sans);
+  font-size: var(--csa-fs-xs);
+  font-weight: 400;
+  line-height: var(--csa-lh-snug);
+  color: var(--csa-ink-muted);
+}
+
+/* Control numérico/horario compacto: el .csa-input estándar pero ajustado al
+ * contenido (no a ancho completo) y conservando las flechas nativas del
+ * navegador para subir/bajar el valor. La unidad ("días") va al lado, fuera
+ * del input. */
+.csa-input--compact {
+  width: auto;
+  height: 36px;
+  padding: 6px 8px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+input[type="number"].csa-input--compact { width: 4.5rem; padding-right: 4px; }
+
+.csa-setting__num { display: inline-flex; align-items: center; gap: var(--csa-sp-2); }
+.csa-setting__unit { font-size: var(--csa-fs-sm); color: var(--csa-ink-muted); }
+
+/* Entrada de hora estilo "reloj digital": dos cajas [HH] : [MM] con el número
+ * grande, su etiqueta debajo y foco con acento verde. Sin desplegable (no se
+ * sale de pantalla) y sin JS. El minuto/hora se teclea; el servidor valida y
+ * normaliza a HH:MM. */
+.csa-timefield { display: inline-flex; align-items: flex-start; gap: var(--csa-sp-2); }
+.csa-timefield__box { display: inline-flex; flex-direction: column; align-items: center; gap: 4px; }
+.csa-timefield__input {
+  width: 3.25rem;
+  height: 3rem;
+  padding: 0;
+  text-align: center;
+  font-family: var(--csa-sans);
+  font-size: var(--csa-fs-xl);
+  font-variant-numeric: tabular-nums;
+  color: var(--csa-ink);
+  background: var(--csa-surface-alt);
+  border: 1px solid var(--csa-rule);
+  border-radius: var(--csa-radius-lg);
+  outline: none;
+  transition: border-color var(--csa-t-fast), background var(--csa-t-fast), box-shadow var(--csa-t-fast);
+}
+.csa-timefield__input:focus {
+  border-color: var(--csa-green);
+  background: var(--csa-green-soft);
+  box-shadow: 0 0 0 1px var(--csa-green);
+}
+.csa-timefield__cap { font-size: var(--csa-fs-xs); color: var(--csa-ink-muted); }
+.csa-timefield__colon {
+  height: 3rem;
+  display: flex;
+  align-items: center;
+  font-size: var(--csa-fs-xl);
+  color: var(--csa-ink-soft);
+}
+
+
+/* ============================================================
  * DROPDOWN — <select> "enhanced" (ver assets/js/csa-dropdown.js)
  * ============================================================
  * Sustituye visualmente al <select> nativo manteniéndolo oculto y
@@ -1621,6 +1725,46 @@ a.csa-table__primary:hover {
   color: var(--csa-ink);
   border-bottom-color: var(--csa-ink);
   text-decoration: none;
+}
+
+/* Variante "carpeta": píldoras serif con la activa en oscuro, como los filtros
+   por estado del listado de socios (.prl-tabs). Coherencia visual entre las dos
+   pantallas. No afecta a la variante subrayada por defecto. */
+.csa-tabs--folder {
+  gap: 0;
+  /* Sólo ocupa el ancho de sus pestañas (la línea negra no se estira de más) y
+     se centra en la página; el panel de debajo se centra igual. */
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto var(--csa-sp-5);
+  flex-wrap: nowrap;
+  border-bottom: 2px solid var(--csa-ink);
+}
+.csa-app .csa-tabs--folder .csa-tabs__link,
+.csa-app .csa-tabs--folder .csa-tabs__link:link,
+.csa-app .csa-tabs--folder .csa-tabs__link:visited {
+  font-family: var(--csa-serif);
+  font-weight: 500;
+  font-size: 15px;
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  color: var(--csa-ink-soft);
+  padding: 12px 22px 10px;
+  border: none;
+  border-radius: var(--csa-radius-sm) var(--csa-radius-sm) 0 0;
+  margin-bottom: -2px;
+}
+/* Hover: sólo cambia el color del texto. No pinta fondo, para no tapar la línea
+   negra inferior (el fondo oscuro queda reservado a la pestaña activa). */
+.csa-app .csa-tabs--folder .csa-tabs__link:hover {
+  color: var(--csa-ink);
+  background: transparent;
+}
+.csa-app .csa-tabs--folder .csa-tabs__item.active > .csa-tabs__link,
+.csa-app .csa-tabs--folder .csa-tabs__item.active > .csa-tabs__link:visited {
+  background: var(--csa-ink);
+  color: #fff;
+  border-bottom-color: transparent;
 }
 
 

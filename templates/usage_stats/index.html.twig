@@ -1,0 +1,43 @@
+{# Resumen: evolución temporal. Tres series; muestra/oculta cada una clicando
+ # en la leyenda (nativo de Highcharts). #}
+{% extends 'usage_stats/_layout.html.twig' %}
+
+{% block usage_body %}
+    {% embed '_components/csa_card.html.twig' with { title: 'Evolución por día', icon: 'fa-line-chart', accent: 'green' } %}
+        {% block body %}
+            <p class="csa-muted" style="margin: 0 0 var(--csa-sp-3) 0; font-size: 0.875em;">
+                Clica en la leyenda para mostrar u ocultar cada serie.
+            </p>
+            <div id="usage-chart" style="width: 100%; height: 360px;"></div>
+        {% endblock %}
+    {% endembed %}
+{% endblock %}
+
+{% block chart_js %}
+    <script>
+        (function () {
+            const categories = [{% for row in series %}'{{ row.label }}',{% endfor %}];
+            const hits     = [{% for row in series %}{{ row.hits }},{% endfor %}];
+            const sessions = [{% for row in series %}{{ row.sessions }},{% endfor %}];
+            const errors   = [{% for row in series %}{{ row.errors }},{% endfor %}];
+
+            Highcharts.chart('usage-chart', {
+                chart: { zoomType: 'x' },
+                title: { text: null },
+                xAxis: { categories: categories },
+                yAxis: [
+                    { title: { text: 'Visitas' }, allowDecimals: false, min: 0 },
+                    { title: { text: 'Errores' }, opposite: true, allowDecimals: false, min: 0 }
+                ],
+                tooltip: { shared: true },
+                legend: { align: 'center', verticalAlign: 'bottom' },
+                plotOptions: { series: { marker: { enabled: false } } },
+                series: [
+                    { name: 'Visitas',        type: 'areaspline', data: hits,     color: '#5a8f3d', yAxis: 0, fillOpacity: 0.15 },
+                    { name: 'Visitas únicas', type: 'spline',     data: sessions, color: '#3b6fa6', yAxis: 0 },
+                    { name: 'Errores',        type: 'column',     data: errors,   color: '#b04e22', yAxis: 1 }
+                ]
+            });
+        })();
+    </script>
+{% endblock %}

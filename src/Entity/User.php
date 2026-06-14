@@ -59,11 +59,13 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface, LegacyP
     private $password;
 
     /**
-     * Marca si el User ha elegido su contraseña permanente. Los Users
-     * creados por la vía de "primer acceso" (magic-link) arrancan con
-     * un password aleatorio que nadie va a usar y passwordSet = false;
-     * la primera vez que entran por el link, el panel les redirige a
-     * /panel/setup antes de dejarles seguir.
+     * Marca si el User ha elegido su contraseña permanente. Arranca en false
+     * cuando nadie ha fijado aún una contraseña real: cuentas creadas por
+     * "primer acceso" (magic-link, con un password aleatorio placeholder) o
+     * altas desde admin (cuya contraseña es temporal y el admin conoce).
+     * Mientras esté en false, {@see \App\EventSubscriber\ForcePasswordChangeSubscriber}
+     * reconduce a la persona a /account/password antes de dejarle seguir.
+     * También es la señal que usa el forzado manual del cambio de contraseña.
      *
      * @ORM\Column(name="password_set", type="boolean", options={"default": false})
      */

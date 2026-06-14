@@ -55,8 +55,8 @@
                 {% block body %}
                     {% import '_macros/csa.html.twig' as csa %}
                     <div class="csa-form-grid">
-                        {{ csa.field(form.beginAt, 'Inicio', { attr: { class: 'csa-input datepicker' } }) }}
-                        {{ csa.field(form.endAt, 'Fin', { attr: { class: 'csa-input datepicker' } }) }}
+                        {{ csa.field(form.beginAt, 'Inicio', { attr: { class: 'csa-input' } }) }}
+                        {{ csa.field(form.endAt, 'Fin', { hint: 'opcional', attr: { class: 'csa-input' } }) }}
                     </div>
                 {% endblock %}
             {% endembed %}
@@ -64,6 +64,13 @@
             {% embed '_components/csa_form_section.html.twig' with { num: '3', title: 'Imagen', subtitle: 'Sustituye el cartel del evento (opcional).' } %}
                 {% block body %}
                     {% import '_macros/csa.html.twig' as csa %}
+                    {% if booking.image and booking.isImage %}
+                        <div style="margin-bottom: var(--csa-sp-4);">
+                            <div class="csa-defs__label" style="margin-bottom: var(--csa-sp-2);">Cartel actual</div>
+                            <img src="{{ asset(booking.webPath) }}" alt="{{ booking.title }}"
+                                 style="display: block; max-width: 240px; height: auto; border-radius: var(--csa-radius-md); border: 1px solid var(--csa-rule);">
+                        </div>
+                    {% endif %}
                     <div class="csa-form-grid">
                         {{ csa.field(form.file, 'Sustituir archivo', { full: true, hint: 'opcional' }) }}
                     </div>
@@ -101,8 +108,4 @@
 {% block more_js %}
     {{ parent() }}
     {{ tinymce_init() }}
-    <script>
-        document.querySelectorAll('.datepicker, .datepicker2, .datepicker3')
-            .forEach(function (el) { el.type = 'date'; });
-    </script>
 {% endblock %}

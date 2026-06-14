@@ -3,6 +3,7 @@
 namespace App\Tests\Repository;
 
 use App\Entity\BasketShare;
+use App\Entity\EggAmount;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
 use App\Repository\PartnerRepository;
@@ -65,6 +66,53 @@ class PartnerRepositoryTest extends KernelTestCase
         $this->assertNotContains($inactive->getId(), $ids, 'Un socix inactivo NO debe ofrecerse.');
         $this->assertNotContains($existingRelative->getId(), $ids, 'Un familiar ya asociado NO debe reaparecer.');
         $this->assertNotContains($principal->getId(), $ids, 'El propio principal NO debe ofrecerse a sí mismo.');
+    }
+
+    /**
+     * El filtro `eggs` del listado parte a los socixs por si su cesta activa
+     * lleva huevos (egg_amount asignado) o no. Autocontenido: crea su propio
+     * EggAmount para no depender del catálogo de db_test.
+     */
+    public function testFiltroEggsSeparaSociosConHuevosDeLosQueNoTienen(): void
+    {
+        self::bootKernel();
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        $weekly = $em->getRepository(BasketShare::class)->find(self::SHARE_WEEKLY);
+        $this->assertNotNull($weekly, 'El catálogo debe tener la cesta semanal (id 1).');
+
+        $eggAmount = new EggAmount();
+        $eggAmount->setName('1 docena (test)');
+        $eggAmount->setMonthPrice('0.00');
+        $em->persist($eggAmount);
+
+        // CON cesta y huevos.
+        $withEggs = $this->makePartner($em, 'RepoEggs ConHuevos', true);
+        $this->makeActiveShare($em, $weekly, $withEggs)->setEggAmount($eggAmount);
+
+        // CON cesta, SIN huevos.
+        $noEggs = $this->makePartner($em, 'RepoEggs SinHuevos', true);
+        $this->makeActiveShare($em, $weekly, $noEggs);
+
+        $em->flush();
+
+        /** @var PartnerRepository $repo */
+        $repo = $em->getRepository(Partner::class);
+
+        $yesIds = $this->idsOf($repo->findFilteredQb(['eggs' => 'yes'])->getQuery()->getResult());
+        $this->assertContains($withEggs->getId(), $yesIds, 'eggs=yes debe incluir a quien lleva huevos en su cesta activa.');
+        $this->assertNotContains($noEggs->getId(), $yesIds, 'eggs=yes NO debe incluir a quien no lleva huevos.');
+
+        $noIds = $this->idsOf($repo->findFilteredQb(['eggs' => 'no'])->getQuery()->getResult());
+        $this->assertContains($noEggs->getId(), $noIds, 'eggs=no debe incluir a quien no lleva huevos.');
+        $this->assertNotContains($withEggs->getId(), $noIds, 'eggs=no NO debe incluir a quien lleva huevos.');
+    }
+
+    /** @param Partner[] $partners */
+    private function idsOf(array $partners): array
+    {
+        return array_map(static fn (Partner $p): int => $p->getId(), $partners);
     }
 
     private function makePartner(EntityManagerInterface $em, string $name, bool $active): Partner

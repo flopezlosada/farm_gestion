@@ -108,13 +108,18 @@ jobs:
               --exclude-glob 'var/sessions/' \
               --exclude-glob 'CLAUDE.md' \
               --exclude-glob 'README.md' \
+              --exclude-glob 'RUNBOOK.md' \
               --exclude-glob 'phpstan.dist.neon' \
               --exclude-glob 'rector.php' \
               --exclude-glob 'phpunit.xml*' \
               --exclude-glob 'package.json' \
               --exclude-glob 'yarn.lock' \
               --exclude-glob 'webpack.config.js' \
-              --exclude-glob 'assets/' \
+              # Solo el assets/ de raíz (entry point de Webpack Encore). Anclado
+              # con ^: 'exclude-glob assets/' NO ancla y se cargaba también los
+              # assets/ anidados de los assets legacy (p.ej.
+              # bundles/app/frontend/lib/owlcarousel/assets/ → CSS del carrusel 404).
+              --exclude '^assets/' \
               . deploy/staging/;
             # Invalida el cache compilado de prod. En prod Symfony NO recompila
             # plantillas/config al cambiar el fuente: sirve lo que tenga en

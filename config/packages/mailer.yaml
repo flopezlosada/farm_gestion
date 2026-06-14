@@ -1,6 +1,13 @@
 framework:
     mailer:
         dsn: '%env(MAILER_DSN)%'
+        # La red de seguridad de destinatarios para staging NO se cablea con el
+        # `envelope.recipients` nativo (ese nodo exige una lista de strings y un
+        # valor vacío revienta la validación en compile-time). Se resuelve con
+        # App\Mailer\RedirectRecipientsListener, que lee el ajuste
+        # AppSettings::EMAIL_REDIRECT_TO y reescribe el sobre solo cuando tiene
+        # valor (vacío = no-op). Conmutable desde /gestion/settings/diagnostics.
+        #
         # Remitente por defecto. Default en .env, override por entorno en su
         # .env.local correspondiente. Permite que staging etiquete el From con
         # [STAGING] sin que afecte a producción.

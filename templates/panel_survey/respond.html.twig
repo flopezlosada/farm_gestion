@@ -1,0 +1,88 @@
+{# ============================================================
+ # Responder una encuesta — panel del socix.
+ # Cada pregunta se pinta según su tipo: radios (single / escala),
+ # checkboxes (multiple) o textarea (texto). El widget lo arma
+ # SurveyResponseType; aquí se le da la estética csa.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_panel.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}{{ survey.title }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('panel') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('panel_survey_index') }}">Encuestas</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ survey.title }}</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header('Encuesta', survey.title, survey.description) }}
+
+    {{ form_start(form) }}
+        <div class="csa-stack">
+            {% for question in survey.questions %}
+                {% set field = attribute(form, 'q' ~ question.id) %}
+                <div class="csa-card sv-q-card">
+                    <div class="sv-q-text">
+                        {{ loop.index }}. {{ question.text }}
+                        {% if question.required %}<span class="sv-req" title="Obligatoria">*</span>{% endif %}
+                    </div>
+
+                    {% if question.type == 'text' %}
+                        {{ form_widget(field, { attr: { class: 'csa-input', style: 'width:100%;' } }) }}
+                    {% else %}
+                        <div class="sv-options{% if question.type == 'scale' %} sv-scale{% endif %}">
+                            {% for opt in field %}
+                                <label class="sv-opt">
+                                    {{ form_widget(opt) }}
+                                    <span>{{ opt.vars.label }}</span>
+                                </label>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    {{ form_errors(field) }}
+                </div>
+            {% endfor %}
+        </div>
+
+        <div class="csa-row" style="gap: var(--csa-sp-2); margin-top: var(--csa-sp-4);">
+            {{ csa.btn('Cancelar', { variant: 'ghost', href: path('panel_survey_index') }) }}
+            <button type="submit" class="csa-btn csa-btn--primary">Enviar respuesta</button>
+        </div>
+
+        {{ form_rest(form) }}
+    {{ form_end(form, { render_rest: false }) }}
+
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    <style>
+        .sv-q-card { padding: var(--csa-sp-4); }
+        .sv-q-text { font-weight: 600; margin-bottom: var(--csa-sp-3); }
+        .sv-req { color: var(--csa-danger, #b3261e); }
+
+        /* Single / multiple: una opción por fila, radio/checkbox + etiqueta. */
+        .sv-options { display: flex; flex-direction: column; gap: var(--csa-sp-2); }
+        .sv-opt { display: inline-flex; align-items: center; gap: var(--csa-sp-2); font-weight: 400; cursor: pointer; }
+        .sv-opt input { width: auto; height: auto; margin: 0; }
+
+        /* Escala 1-5: radios en fila, como botones. */
+        .sv-scale { flex-direction: row; flex-wrap: wrap; gap: var(--csa-sp-3); }
+        .sv-scale .sv-opt {
+            flex-direction: column;
+            gap: var(--csa-sp-1);
+            border: 1px solid var(--csa-rule);
+            border-radius: 8px;
+            padding: var(--csa-sp-2) var(--csa-sp-3);
+            min-width: 3rem;
+            text-align: center;
+        }
+        .sv-scale .sv-opt:hover { border-color: var(--csa-accent, #4a7c2f); }
+    </style>
+{% endblock %}

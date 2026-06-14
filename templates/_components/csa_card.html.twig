@@ -11,8 +11,10 @@
  # header. accent es opcional; valores: sky, ochre, plum, green, terracotta.
  # icon es una clase FontAwesome 4 (ej. 'fa-shopping-basket'); opcional.
  # variant es opcional; 'hero' para resaltar como acción principal.
+ # id es opcional; sirve de ancla para enlazar a la tarjeta (p. ej. desde
+ # los «?» de ayuda contextual).
  #}
-<section class="csa-card csa-card--flush{% if accent is defined and accent %} csa-card--accent-{{ accent }}{% endif %}{% if variant is defined and variant %} csa-card--{{ variant }}{% endif %}">
+<section{% if id is defined and id %} id="{{ id }}"{% endif %} class="csa-card csa-card--flush{% if accent is defined and accent %} csa-card--accent-{{ accent }}{% endif %}{% if variant is defined and variant %} csa-card--{{ variant }}{% endif %}">
     {% if title is defined and title %}
         <header class="csa-card__header">
             <div class="csa-card__header-main">

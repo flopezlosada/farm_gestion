@@ -21,16 +21,15 @@ use App\Repository\WeeklyBasketGroupRepository;
 use App\Repository\WeeklyBasketRepository;
 use App\Service\Delivery\DeliveryCalendarProjector;
 use App\Service\Delivery\DeliveryCalendarViewBuilder;
+use App\Service\Delivery\DeliveryDeadline;
 use App\Service\Delivery\DeliveryShiftApplier;
 use App\Service\Delivery\DeliveryShiftValidator;
+use App\Service\Delivery\PickupRelocationOptions;
 use App\Service\Delivery\PickupRelocator;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Delivery\WeeklyBasketSkipper;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use Symfony\Component\Form\Extension\Core\Type\PasswordType;
-use Symfony\Component\Form\Extension\Core\Type\RepeatedType;
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -38,8 +37,6 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
-use Symfony\Component\Validator\Constraints\Length;
-use Symfony\Component\Validator\Constraints\NotBlank;
 
 /**
  * Panel del socix — vista personal de cada socia/o.
@@ -52,8 +49,13 @@ use Symfony\Component\Validator\Constraints\NotBlank;
 #[IsGranted('ROLE_PARTNER')]
 class PanelController extends AbstractController
 {
+    public function __construct(
+        private readonly DeliveryDeadline $deadline,
+    ) {
+    }
+
     #[Route('', name: 'panel', methods: ['GET'])]
-    public function index(): Response
+    public function index(PickupRelocationOptions $relocationOptions): Response
     {
         if (($redirect = $this->ensureReady()) !== null) {
             return $redirect;
@@ -61,14 +63,30 @@ class PanelController extends AbstractController
 
         $partner = $this->getUser()->getPartner();
 
+        // El traslado de nodo opera sobre la cesta de la FAMILIA (el principal), igual que
+        // el calendario: un secundario tramita el traslado de la cesta de su hogar.
+        $owner = $this->basketOwner($partner);
+
+        // Las cestas COMPARTIDAS (alternancia entre dos hogares) no se trasladan de nodo de
+        // momento (lo bloquea PickupRelocator): no ofrecer el atajo. Vacío → modal sin pintar.
+        // Además, el traslado es autoservicio: tras el feature-flag (la acción
+        // panel_basket_change_group ya responde 403 con él apagado). Vaciar aquí evita
+        // ofrecer un atajo que acabaría en error.
+        $canRelocate = $owner->getSharePartner() === null
+            && $this->isGranted('FEATURE_PARTNER_SELFSERVICE');
+
         // La home replica las secciones de la ficha admin (partner/show) pero en
         // SOLO LECTURA: el socix ve sus datos, su cesta, su familia y su histórico,
         // sin las acciones de gestión (cambiar/dar de baja cesta, quitar familiares).
-        // El autoservicio (saltar/cambiar viernes/nodo) vive en /panel/cesta.
+        // Único autoservicio embebido aquí: "recoger en otro nodo" (traslado puntual),
+        // un atajo del que también vive en el calendario. El resto (saltar/mover) va al
+        // calendario de recogida.
         return $this->render('Panel/index.html.twig', [
             'partner' => $partner,
             'active_share' => $this->activeShare($partner),
             'group' => $partner->getWeeklyBasketGroup(),
+            'relocate_weeks' => $canRelocate ? $relocationOptions->weeksForPartner($owner) : [],
+            'relocate_groups' => $canRelocate ? $relocationOptions->groupsForPartner($owner) : [],
         ]);
     }
 
@@ -151,21 +169,6 @@ class PanelController extends AbstractController
     }
 
     /**
-     * Deadline para acciones autoservicio sobre la próxima cesta. El
-     * socix puede saltar la cesta, cambiar de nodo de recogida o pedir
-     * cambio puntual de viernes hasta esta hora del jueves previo al
-     * viernes de reparto, en hora local (Europe/Madrid). Pasada esa
-     * hora, las acciones se bloquean y se le pide contactar con la
-     * administración.
-     *
-     * Valor temporal hardcoded — pendiente de parametrizar cuando la
-     * asociación decida la regla definitiva.
-     */
-    private const PICKUP_DEADLINE_WEEKDAY = 4;   // ISO 8601: 4 = jueves
-    private const PICKUP_DEADLINE_HOUR = 23;
-    private const PICKUP_DEADLINE_MINUTE = 59;
-
-    /**
      * "Mi cesta" antiguo (próxima cesta + cambios de reparto en formato viejo) RETIRADO:
      * toda la gestión vive ahora en el calendario de recogida (no recoger / mover, con
      * sus reglas). La ruta se mantiene como redirección para enlaces o marcadores viejos.
@@ -187,6 +190,7 @@ class PanelController extends AbstractController
      * resumen periódico.
      */
     #[Route('/cesta/skip-toggle', name: 'panel_basket_skip_toggle', methods: ['POST'])]
+    #[IsGranted('FEATURE_PARTNER_SELFSERVICE')]
     public function skipNextBasket(
         Request $request,
         WeeklyBasketRepository $weeklyBasketRepository,
@@ -245,14 +249,26 @@ class PanelController extends AbstractController
     }
 
     /**
-     * Cambio puntual de nodo de recogida para la próxima cesta. Toca
-     * solo WeeklyBasket.weekly_basket_group (que es histórico por
-     * diseño), NO Partner.weekly_basket_group (que es el por defecto).
+     * Cambio puntual de nodo de recogida para una semana concreta (la elige el socix
+     * entre sus entregas futuras). El traslado vive en {@see PickupRelocator}, compartido
+     * con el admin: crea/re-apunta el PartnerNodeOverride de esa semana, cascadea a piedra
+     * si está materializada y registra el evento. NO toca Partner.weeklyBasketGroup (el
+     * nodo de casa permanente): el cambio es solo de ese reparto.
+     *
+     * En familias resuelve el dueño de la cesta (el principal, vía {@see basketOwner}),
+     * como el resto del autoservicio del calendario.
+     *
+     * @param Request                     $request   Lleva basket_id, group_id y el token CSRF.
+     * @param BasketRepository            $basketRepository
+     * @param WeeklyBasketGroupRepository $weeklyBasketGroupRepository
+     * @param PickupRelocator             $relocator
+     * @return Response
      */
     #[Route('/cesta/change-group', name: 'panel_basket_change_group', methods: ['POST'])]
+    #[IsGranted('FEATURE_PARTNER_SELFSERVICE')]
     public function changePickupGroup(
         Request $request,
-        WeeklyBasketRepository $weeklyBasketRepository,
+        BasketRepository $basketRepository,
         WeeklyBasketGroupRepository $weeklyBasketGroupRepository,
         PickupRelocator $relocator,
     ): Response {
@@ -262,42 +278,46 @@ class PanelController extends AbstractController
 
         if (!$this->isCsrfTokenValid('panel_basket_change_group', (string) $request->request->get('_csrf_token'))) {
             $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
-            return $this->redirectToRoute('panel_basket');
+            return $this->redirectToRoute('panel');
         }
 
-        $partner = $this->getUser()->getPartner();
-        $next = $weeklyBasketRepository->findNextForPartner($partner);
+        $partner = $this->basketOwner($this->getUser()->getPartner());
 
-        if ($next === null) {
-            $this->addFlash('warning', 'No tienes una próxima cesta sobre la que actuar.');
-            return $this->redirectToRoute('panel_basket');
+        $basketId = (int) $request->request->get('basket_id', 0);
+        $basket = $basketId > 0 ? $basketRepository->find($basketId) : null;
+        if ($basket === null) {
+            $this->addFlash('error', 'Selecciona una semana válida.');
+            return $this->redirectToRoute('panel');
         }
 
-        if (!$this->isWithinPickupDeadline($next)) {
-            $this->addFlash('error', 'Ya no se puede cambiar de nodo para esta semana — el plazo terminó. Contacta con la administración si necesitas avisar.');
-            return $this->redirectToRoute('panel_basket');
+        if (!$this->isWithinPickupDeadlineForBasket($basket, $partner)) {
+            $this->addFlash('error', 'Ya no se puede cambiar de nodo para esa semana — el plazo terminó. Contacta con la administración si necesitas avisar.');
+            return $this->redirectToRoute('panel');
         }
 
         $groupId = (int) $request->request->get('group_id', 0);
         $group = $groupId > 0 ? $weeklyBasketGroupRepository->find($groupId) : null;
         if ($group === null) {
-            $this->addFlash('error', 'Selecciona un grupo de recogida válido.');
-            return $this->redirectToRoute('panel_basket');
+            $this->addFlash('error', 'Selecciona un nodo de recogida válido.');
+            return $this->redirectToRoute('panel');
         }
 
-        // El traslado (cambiar el grupo del WB de la semana, recalcular su fecha física
-        // según el nodo destino y registrar el evento) vive en PickupRelocator, que
-        // comparten panel y admin. Valida que el destino reparta esa semana y que no sea
-        // el mismo grupo.
+        // El traslado (crear/re-apuntar el override, cascadear a piedra si la semana ya está
+        // materializada, recalcular la fecha física y registrar el evento) vive en
+        // PickupRelocator, compartido con el admin. Valida que el destino reparta esa semana.
         try {
-            $relocator->relocate($partner, $next->getBasket(), $group, 'partner:' . $partner->getId());
+            $relocator->relocate($partner, $basket, $group, 'partner:' . $partner->getId());
         } catch (\LogicException $e) {
             $this->addFlash('warning', $e->getMessage());
-            return $this->redirectToRoute('panel_basket');
+            return $this->redirectToRoute('panel');
         }
 
-        $this->addFlash('notice', sprintf('Listo: esta semana recogerás la cesta en "%s". El cambio aplica solo a este reparto.', $group->getName()));
-        return $this->redirectToRoute('panel_basket');
+        $this->addFlash('notice', sprintf(
+            'Listo: la semana del %s recogerás la cesta en "%s". El cambio aplica solo a ese reparto.',
+            $basket->getDate()->format('d/m/Y'),
+            $group->getName(),
+        ));
+        return $this->redirectToRoute('panel');
     }
 
     /**
@@ -308,6 +328,7 @@ class PanelController extends AbstractController
      * contactar con admin si quiere forzar.
      */
     #[Route('/cesta/cambiar-viernes', name: 'panel_basket_shift_request', methods: ['POST'])]
+    #[IsGranted('FEATURE_PARTNER_SELFSERVICE')]
     public function requestShift(
         Request $request,
         WeeklyBasketRepository $weeklyBasketRepository,
@@ -367,6 +388,7 @@ class PanelController extends AbstractController
      * el validator igualmente: el deadline aplica también a la reversión.
      */
     #[Route('/cesta/cancelar-cambio-viernes', name: 'panel_basket_shift_cancel', methods: ['POST'])]
+    #[IsGranted('FEATURE_PARTNER_SELFSERVICE')]
     public function cancelShift(
         Request $request,
         WeeklyBasketRepository $weeklyBasketRepository,
@@ -409,59 +431,29 @@ class PanelController extends AbstractController
     }
 
     /**
-     * El deadline para tocar una WeeklyBasket concreta es el jueves
-     * 23:59 (zona horaria local) anterior al viernes de reparto del
-     * Basket asociado, alineado con el cierre operativo del reparto.
+     * ¿Sigue abierto el plazo para tocar esta WeeklyBasket? Delega en
+     * {@see DeliveryDeadline}, fuente única del plazo (antelación + hora
+     * configurables, sobre la fecha física del nodo), compartida con el
+     * validador del admin.
      */
-    private function pickupDeadlineFor(WeeklyBasket $weeklyBasket): ?\DateTimeImmutable
+    private function isWithinPickupDeadline(WeeklyBasket $weeklyBasket): bool
     {
-        $basketDate = $weeklyBasket->getBasket()?->getDate();
-        if ($basketDate === null) {
-            return null;
+        $partner = $weeklyBasket->getPartner();
+        $basket = $weeklyBasket->getBasket();
+        if ($partner === null || $basket === null) {
+            return false;
         }
 
-        return $this->pickupDeadlineForDate($basketDate);
+        return $this->deadline->isOpen($partner, $basket);
     }
 
     /**
-     * Deadline (jueves 23:59 anterior al reparto) a partir de la fecha del Basket.
-     * Compartido por las acciones que operan sobre un Basket (calendario) o sobre
-     * una WeeklyBasket (cesta).
+     * ¿Sigue abierto el plazo para que $partner cambie su reparto en $basket?
+     * Misma fuente que {@see isWithinPickupDeadline}.
      */
-    private function pickupDeadlineForDate(\DateTimeInterface $basketDate): \DateTimeImmutable
+    private function isWithinPickupDeadlineForBasket(Basket $basket, Partner $partner): bool
     {
-        // Basket.date suele ser \DateTime mutable; lo pasamos a immutable para
-        // operar con seguridad sin pisar el original.
-        $pickup = $basketDate instanceof \DateTimeImmutable
-            ? $basketDate
-            : \DateTimeImmutable::createFromInterface($basketDate);
-
-        // ISO weekday del viernes habitual = 5. Para llegar al jueves restamos
-        // (viernes - jueves) = 1 día. Si por excepción de calendario el reparto
-        // cae en otro día, abs() garantiza que el deadline queda siempre antes.
-        $diffDays = abs((int) $pickup->format('N') - self::PICKUP_DEADLINE_WEEKDAY);
-
-        return $pickup
-            ->setTime(self::PICKUP_DEADLINE_HOUR, self::PICKUP_DEADLINE_MINUTE, 0)
-            ->modify(sprintf('-%d days', $diffDays));
-    }
-
-    private function isWithinPickupDeadline(WeeklyBasket $weeklyBasket): bool
-    {
-        $deadline = $this->pickupDeadlineFor($weeklyBasket);
-        if ($deadline === null) {
-            return false;
-        }
-        return new \DateTimeImmutable('now') < $deadline;
-    }
-
-    private function isWithinPickupDeadlineForBasket(Basket $basket): bool
-    {
-        $basketDate = $basket->getDate();
-        if ($basketDate === null) {
-            return false;
-        }
-        return new \DateTimeImmutable('now') < $this->pickupDeadlineForDate($basketDate);
+        return $this->deadline->isOpen($partner, $basket);
     }
 
     /**
@@ -487,11 +479,17 @@ class PanelController extends AbstractController
         $year = $request->query->has('year') ? (int) $request->query->get('year') : null;
         $selectedBasketId = (int) $request->query->get('sel', 0);
 
+        // El autoservicio (saltar/mover/recuperar) está tras un feature-flag: con él
+        // apagado el calendario queda en solo-lectura — sin drop targets ni botones de
+        // acción. La protección dura vive en cada endpoint (#[IsGranted]); esto es UX
+        // para no ofrecer gestos que acabarían en un 403.
+        $canSelfServe = $this->isGranted('FEATURE_PARTNER_SELFSERVICE');
+
         // withDropTargets: true → calcula los días libres a los que el socio puede mover
         // una entrega (los marca para el flujo de "mover por toque").
-        $view = $viewBuilder->build($partner, $year, $month, $selectedBasketId, withDropTargets: true);
+        $view = $viewBuilder->build($partner, $year, $month, $selectedBasketId, withDropTargets: $canSelfServe);
 
-        return $this->render('Panel/calendar.html.twig', $view);
+        return $this->render('Panel/calendar.html.twig', $view + ['can_self_serve' => $canSelfServe]);
     }
 
     /**
@@ -528,6 +526,7 @@ class PanelController extends AbstractController
      * @return Response
      */
     #[Route('/calendar/skip/{basketId}', name: 'panel_calendar_skip', methods: ['POST'], requirements: ['basketId' => '\\d+'])]
+    #[IsGranted('FEATURE_PARTNER_SELFSERVICE')]
     public function calendarSkip(
         int $basketId,
         Request $request,
@@ -568,7 +567,7 @@ class PanelController extends AbstractController
 
         // Plazo de autoservicio: hasta el jueves 23:59 anterior al reparto. Defensa
         // server-side; el calendario ya lo oculta en el cliente cuando ha pasado.
-        if (!$this->isWithinPickupDeadlineForBasket($basket)) {
+        if (!$this->isWithinPickupDeadlineForBasket($basket, $partner)) {
             $this->addFlash('error', 'Ya no se puede cambiar esa semana — el plazo terminó. Si necesitas avisar, contacta con la administración.');
 
             return $backToCalendar();
@@ -647,6 +646,7 @@ class PanelController extends AbstractController
      * @return Response
      */
     #[Route('/calendar/move/{basketId}', name: 'panel_calendar_move', methods: ['POST'], requirements: ['basketId' => '\\d+'])]
+    #[IsGranted('FEATURE_PARTNER_SELFSERVICE')]
     public function calendarMove(
         int $basketId,
         Request $request,
@@ -782,6 +782,7 @@ class PanelController extends AbstractController
      * @return Response
      */
     #[Route('/calendar/recover/{basketId}', name: 'panel_calendar_recover', methods: ['POST'], requirements: ['basketId' => '\\d+'])]
+    #[IsGranted('FEATURE_PARTNER_SELFSERVICE')]
     public function calendarRecover(
         int $basketId,
         Request $request,
@@ -893,68 +894,18 @@ class PanelController extends AbstractController
     }
 
     /**
-     * Pantalla bloqueante tras el primer magic-link: el User aterriza aquí
-     * para elegir su contraseña permanente antes de poder usar el panel.
-     * Si ya tiene contraseña configurada, redirige al panel directamente
-     * (la página deja de tener sentido).
-     */
-    #[Route('/setup', name: 'panel_setup', methods: ['GET', 'POST'])]
-    public function setup(
-        Request $request,
-        EntityManagerInterface $em,
-        UserPasswordHasherInterface $hasher,
-    ): Response {
-        $user = $this->getUser();
-        if ($user->isPasswordSet()) {
-            return $this->redirectToRoute('panel');
-        }
-
-        $form = $this->createFormBuilder()
-            ->add('plainPassword', RepeatedType::class, [
-                'type' => PasswordType::class,
-                'invalid_message' => 'Las contraseñas no coinciden.',
-                'required' => true,
-                'first_options' => ['label' => 'Nueva contraseña'],
-                'second_options' => ['label' => 'Repite la contraseña'],
-                'constraints' => [
-                    new NotBlank(message: 'Indica una contraseña.'),
-                    new Length(min: 8, minMessage: 'La contraseña debe tener al menos {{ limit }} caracteres.'),
-                ],
-            ])
-            ->add('submit', SubmitType::class, ['label' => 'Guardar y entrar'])
-            ->getForm();
-
-        $form->handleRequest($request);
-
-        if ($form->isSubmitted() && $form->isValid()) {
-            $user->setPassword($hasher->hashPassword($user, $form->get('plainPassword')->getData()));
-            $user->setPasswordSet(true);
-            $em->flush();
-
-            $this->addFlash('notice', 'Contraseña configurada. Ya puedes entrar con tu email y contraseña la próxima vez.');
-            return $this->redirectToRoute('panel');
-        }
-
-        return $this->render('Panel/setup.html.twig', [
-            'form' => $form->createView(),
-        ]);
-    }
-
-    /**
-     * Gating común a todas las acciones del panel:
-     *   - User aún no ha configurado su contraseña → /panel/setup.
-     *   - User sin Partner vinculado → fuera del panel.
+     * Gating común a todas las acciones del panel: comprueba que el User tenga
+     * un Partner vinculado; si no, lo saca del panel.
+     *
+     * El forzado de contraseña (passwordSet = false) NO se mira aquí: lo cubre
+     * globalmente {@see \App\EventSubscriber\ForcePasswordChangeSubscriber},
+     * que intercepta la petición antes de llegar a este controller.
      *
      * Devuelve null si todo está bien y el controller puede seguir.
-     * No se aplica a la acción setup (que justamente atiende el primer caso).
      */
     private function ensureReady(): ?RedirectResponse
     {
         $user = $this->getUser();
-
-        if ($user !== null && method_exists($user, 'isPasswordSet') && !$user->isPasswordSet()) {
-            return $this->redirectToRoute('panel_setup');
-        }
 
         if ($user && method_exists($user, 'getPartner') && $user->getPartner() !== null) {
             return null;
