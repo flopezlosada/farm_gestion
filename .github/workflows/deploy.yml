@@ -118,4 +118,11 @@ jobs:
               --exclude-glob 'webpack.config.js' \
               --exclude '^assets/' \
               . gestion_csa_4/;
+            # Invalida el cache compilado de prod. En prod Symfony NO recompila
+            # plantillas/config al cambiar el fuente: sirve lo que tenga en
+            # var/cache/prod (que se excluye del FTP). Sin esto, un deploy de
+            # código nuevo seguiría sirviendo plantillas viejas o una
+            # compilación corrupta. Symfony lo regenera on-demand en el primer
+            # request (más lento esa vez). -f: no falla si el dir no existe.
+            rm -rf gestion_csa_4/var/cache/prod;
           "

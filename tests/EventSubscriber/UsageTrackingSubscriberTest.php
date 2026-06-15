@@ -188,6 +188,37 @@ class UsageTrackingSubscriberTest extends TestCase
     }
 
     /**
+     * Caso real: en kernel.terminate la sesión ya viene guardada y CERRADA (el
+     * SessionListener la cierra en kernel.response, que corre antes), así que
+     * isStarted() es false aunque hubo sesión. El hash debe registrarse igual a
+     * partir del id, que sobrevive al cierre. Sin esto, "visitas únicas" cuenta
+     * siempre 0 porque todos los session_hash quedan a null.
+     */
+    public function testSessionHashIsRecordedEvenWhenSessionAlreadyClosedAtTerminate(): void
+    {
+        $session = new Session(new MockArraySessionStorage());
+        $session->setId('sesion-cerrada');
+        $session->start();
+        $session->save(); // mimetiza el cierre que hace Symfony en kernel.response.
+        $this->assertFalse($session->isStarted());
+
+        $captured = null;
+        $connection = $this->createMock(Connection::class);
+        $connection->expects($this->once())->method('insert')
+            ->willReturnCallback(function (string $table, array $data) use (&$captured): int {
+                $captured = $data;
+
+                return 1;
+            });
+
+        $this->subscriber($connection)->onKernelTerminate(
+            $this->terminateEvent('/gestion', session: $session),
+        );
+
+        $this->assertSame(hash('sha256', 'sesion-cerrada' . self::SECRET), $captured['session_hash']);
+    }
+
+    /**
      * La telemetría es best-effort: si el INSERT revienta (BBDD caída, tabla
      * inexistente…), el subscriber se traga el error, lo deja en el log como
      * warning y NO lo propaga — registrar una visita jamás debe tumbar la web.
