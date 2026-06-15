@@ -91,19 +91,22 @@ final class UsageTrackingSubscriber
 
     /**
      * Hash no reversible del id de sesión, para correlacionar las peticiones de
-     * una misma visita sin identificar a la persona. Null si no hay sesión
-     * iniciada (no forzamos crear una solo para medir).
+     * una misma visita sin identificar a la persona.
+     *
+     * No comprobamos isStarted(): para cuando se dispara kernel.terminate, el
+     * SessionListener de Symfony ya ha guardado y cerrado la sesión en
+     * kernel.response (session_write_close pone started=false), así que aquí
+     * isStarted() es SIEMPRE false. El id, en cambio, sobrevive al cierre. Nos
+     * apoyamos en getId(): vacío cuando no hubo sesión (visita anónima, que no se
+     * correlaciona) y, si no, el id real con el que hashear. getId() no arranca
+     * sesión, así que seguimos sin crear una sólo para medir.
      */
     private function sessionHash(Request $request): ?string
     {
         if (!$request->hasSession()) {
             return null;
         }
-        $session = $request->getSession();
-        if (!$session->isStarted()) {
-            return null;
-        }
-        $id = $session->getId();
+        $id = $request->getSession()->getId();
         return $id === '' ? null : hash('sha256', $id . $this->secret);
     }
 }
