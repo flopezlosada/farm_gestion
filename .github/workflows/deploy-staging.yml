@@ -95,18 +95,10 @@ jobs:
             set ftp:use-rest no;
             set xfer:clobber on;
             open -u $FTP_USERNAME,$FTP_PASSWORD $FTP_SERVER;
-            # Los ficheros de autoload de Composer llevan un hash acoplado:
-            # vendor/autoload.php -> ComposerAutoloaderInit<hash>,
-            # autoload_real.php -> ComposerStaticInit<hash>. Al cambiar
-            # composer.lock, Composer regenera el set con un hash nuevo. El
-            # mirror incremental (compara fecha/tamaño) puede subir uno y
-            # saltarse el otro: el set queda desincronizado y la app revienta
-            # en el arranque con Class ComposerStaticInit<hash> not found
-            # (500 mudo). Los borramos en remoto para forzar que el mirror los
-            # re-suba SIEMPRE completos y con el mismo hash. OJO: nada de
-            # comillas dobles en este comentario, romperían la cadena lftp -c.
-            rm -rf deploy/staging/vendor/composer;
-            rm -f deploy/staging/vendor/autoload.php;
+            # El set de autoload de Composer (acoplado por hash) NO se toca en el
+            # mirror: se re-sube forzado y consistente DESPUES del mirror (abajo),
+            # para no abrir ventana de caida. OJO: nada de comillas dobles en los
+            # comentarios de aquí, romperían la cadena lftp -c.
             mirror -R --parallel=2 --verbose=2 \
               --exclude-glob '.git*' \
               --exclude-glob '.github/' \
@@ -135,6 +127,27 @@ jobs:
               --exclude-glob 'webpack.config.js' \
               --exclude '^assets/' \
               . deploy/staging/;
+            # Re-sube el set de autoload de Composer FORZADO (put/mput no comparan
+            # mtime: siempre transfieren) y consistente. Los ficheros llevan un
+            # hash acoplado (vendor/autoload.php -> ComposerAutoloaderInit<hash>,
+            # autoload_real.php -> ComposerStaticInit<hash>); el mirror incremental
+            # podía subir uno y saltarse otro -> Class ComposerStaticInit<hash> not
+            # found y 500 mudo. Listamos los ficheros explícitos (vendor/composer
+            # tiene subdirs, nada de glob) y dejamos vendor/autoload.php (el entry
+            # point) el ULTIMO. El set viejo consistente sirve durante el mirror;
+            # aquí solo hay un parpadeo de ~1-2s. OJO: sin comillas dobles.
+            mput -O deploy/staging/vendor/composer \
+              vendor/composer/autoload_real.php \
+              vendor/composer/autoload_static.php \
+              vendor/composer/autoload_classmap.php \
+              vendor/composer/autoload_files.php \
+              vendor/composer/autoload_namespaces.php \
+              vendor/composer/autoload_psr4.php \
+              vendor/composer/installed.php \
+              vendor/composer/installed.json \
+              vendor/composer/InstalledVersions.php \
+              vendor/composer/platform_check.php;
+            put vendor/autoload.php -o deploy/staging/vendor/autoload.php;
             # Invalida el cache compilado de prod. En prod Symfony NO recompila
             # plantillas/config al cambiar el fuente: sirve lo que tenga en
             # var/cache/prod (que se excluye del FTP). Sin esto, un deploy de
