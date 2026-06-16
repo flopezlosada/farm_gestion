@@ -71,7 +71,12 @@ services:
     # Interruptor general del correo: decora el mailer y corta el envío cuando
     # el ajuste email.enabled está apagado. El resto de argumentos (AppSettings,
     # logger) se autowire-an.
+    #
+    # Decora 'mailer.mailer' (el servicio real), NO el alias 'mailer': el
+    # autowiring de MailerInterface resuelve a 'mailer.mailer', así que decorar
+    # solo 'mailer' dejaba fuera a todo lo inyectado por tipo (comandos y
+    # controllers) y el kill-switch no interceptaba nada.
     App\Mailer\KillSwitchMailer:
-        decorates: mailer
+        decorates: mailer.mailer
         arguments:
             $inner: '@.inner'
