@@ -6,6 +6,8 @@ use App\Entity\Partner;
 use App\Entity\User;
 use App\Repository\PartnerEventRepository;
 use App\Repository\PartnerRepository;
+use App\Service\AppSettings;
+use App\Service\Delivery\DeliveryDeadline;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Security\Http\LoginLink\LoginLinkHandlerInterface;
@@ -39,6 +41,8 @@ class EmailPreviewFactory
         private readonly DeliveryChangeFormatter $formatter,
         private readonly Security $security,
         private readonly UrlGeneratorInterface $urls,
+        private readonly AppSettings $settings,
+        private readonly DeliveryDeadline $deadline,
     ) {
     }
 
@@ -86,22 +90,28 @@ class EmailPreviewFactory
 
     /**
      * Recordatorio para un socix real de la base (el primero que haya),
-     * fechado en el próximo viernes y con los enlaces de acción activos para
-     * que se vea el botón.
+     * fechado en el próximo viernes. La preview refleja el master switch
+     * {@see AppSettings::EMAIL_PICKUP_REMINDER_LINKS} para que se vea el email
+     * tal como saldrá según tengas los enlaces de acción activados o no (la
+     * policy por-destinatario {@see PartnerAccessPolicy::canUseActionLinks} no
+     * se previsualiza: varía socix a socix y no es lo que controla el toggle).
      *
      * @return array<string, mixed>
      */
     private function pickupReminderContext(): array
     {
         $partner = $this->partners->findOneBy([]) ?? (new Partner())->setName('Ejemplo');
+        $pickupDate = new \DateTimeImmutable('next friday');
 
         return [
             'partner' => $partner,
             'modality' => 'quincenal',
-            'pickup_date' => new \DateTimeImmutable('next friday'),
+            'pickup_date' => $pickupDate,
             'was_shifted' => false,
-            'can_act' => true,
+            'can_act' => $this->settings->getBool(AppSettings::EMAIL_PICKUP_REMINDER_LINKS),
             'calendar_url' => $this->urls->generate('panel_calendar', [], UrlGeneratorInterface::ABSOLUTE_URL),
+            // Deadline coherente con los ajustes de cierre, sobre la fecha de ejemplo.
+            'deadline' => $this->deadline->fromPhysicalDate($pickupDate),
         ];
     }
 

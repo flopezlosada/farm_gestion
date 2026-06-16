@@ -184,7 +184,10 @@ class SettingsDiagnosticsController extends AbstractController
 
         try {
             $this->mailer->send($message);
-            $this->addFlash('success', sprintf('Email de prueba enviado a %s. Revisa la bandeja (o Mailpit/Mailtrap según el entorno).', $to));
+            $redirect = $this->settings->getString(AppSettings::EMAIL_REDIRECT_TO);
+            $this->addFlash('success', $redirect === ''
+                ? sprintf('Email de prueba enviado a %s. Revisa la bandeja (o Mailpit/Mailtrap según el entorno).', $to)
+                : sprintf('Email de prueba para %s. La redirección de pruebas está activa: la entrega real fue a %s (revisa esa bandeja, o Mailpit/Mailtrap según el entorno).', $to, $redirect));
         } catch (TransportExceptionInterface $e) {
             $this->addFlash('error', sprintf('No se pudo enviar: %s', $e->getMessage()));
         }
@@ -235,6 +238,10 @@ class SettingsDiagnosticsController extends AbstractController
             'command' => $command . ($dryRun ? ' --dry-run' : ' (envío real)'),
             'exit' => $run['exit'],
             'output' => $run['output'],
+            // En envío real, el destino que pinta el comando es el nominal (header To);
+            // si la redirección de pruebas está activa, la entrega real fue aquí. Se lo
+            // damos a la vista para que avise y no cunda el pánico al ver otro destinatario.
+            'redirect_to' => $dryRun ? '' : $this->settings->getString(AppSettings::EMAIL_REDIRECT_TO),
         ]);
 
         return $this->redirectToRoute('settings_diagnostics');

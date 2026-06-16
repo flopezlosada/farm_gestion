@@ -8,6 +8,7 @@ use App\Repository\DeliveryExceptionRepository;
 use App\Repository\WeeklyBasketRepository;
 use App\Security\PartnerAccessPolicy;
 use App\Service\AppSettings;
+use App\Service\Delivery\DeliveryDeadline;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -45,6 +46,7 @@ class SendPickupReminderCommand extends Command
         private readonly AppSettings $settings,
         private readonly PartnerAccessPolicy $accessPolicy,
         private readonly UrlGeneratorInterface $urlGenerator,
+        private readonly DeliveryDeadline $deadline,
     ) {
         parent::__construct();
     }
@@ -151,6 +153,9 @@ class SendPickupReminderCommand extends Command
                     // con ~decenas de envíos por semana.
                     'can_act' => $linksEnabled && $this->accessPolicy->canUseActionLinks($r['partner']),
                     'calendar_url' => $this->urlGenerator->generate('panel_calendar', [], UrlGeneratorInterface::ABSOLUTE_URL),
+                    // Plazo real de cierre para ESTE socix y ESTE reparto (misma
+                    // fuente que el panel y el validador): nada de literales.
+                    'deadline' => $this->deadline->forPartnerAndBasket($r['partner'], $basket),
                 ]);
 
             $this->mailer->send($message);
