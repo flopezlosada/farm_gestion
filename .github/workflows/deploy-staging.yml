@@ -95,6 +95,18 @@ jobs:
             set ftp:use-rest no;
             set xfer:clobber on;
             open -u $FTP_USERNAME,$FTP_PASSWORD $FTP_SERVER;
+            # Los ficheros de autoload de Composer llevan un hash acoplado:
+            # vendor/autoload.php -> ComposerAutoloaderInit<hash>,
+            # autoload_real.php -> ComposerStaticInit<hash>. Al cambiar
+            # composer.lock, Composer regenera el set con un hash nuevo. El
+            # mirror incremental (compara fecha/tamaño) puede subir uno y
+            # saltarse el otro: el set queda desincronizado y la app revienta
+            # en el arranque con Class ComposerStaticInit<hash> not found
+            # (500 mudo). Los borramos en remoto para forzar que el mirror los
+            # re-suba SIEMPRE completos y con el mismo hash. OJO: nada de
+            # comillas dobles en este comentario, romperían la cadena lftp -c.
+            rm -rf deploy/staging/vendor/composer;
+            rm -f deploy/staging/vendor/autoload.php;
             mirror -R --parallel=2 --verbose=2 \
               --exclude-glob '.git*' \
               --exclude-glob '.github/' \
