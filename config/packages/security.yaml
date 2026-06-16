@@ -119,9 +119,15 @@ security:
         # ^/connect cubre el arranque y el callback del SSO de Google. Públicas:
         # el login lo resuelve GoogleAuthenticator tras volver de Google.
         - { path: ^/connect, roles: PUBLIC_ACCESS }
-        # Dispatcher post-login: solo accesible logueado. Redirige a
-        # /gestion/dashboard o /panel según roles.
-        - { path: ^/post-login$, roles: IS_AUTHENTICATED_FULLY }
+        # Dispatcher post-login: accesible a cualquier cuenta autenticada,
+        # incluida la sesión recordada (remember_me). Solo redirige por rol a
+        # /gestion/dashboard o /panel — no expone nada sensible, y ambos
+        # destinos están gateados por su cuenta. DEBE ser IS_AUTHENTICATED_REMEMBERED
+        # y no _FULLY: con _FULLY, un usuario que vuelve solo con la cookie
+        # remember_me (sin sesión, p.ej. tras limpiar el cache del servidor)
+        # entra en bucle infinito — /login ve getUser() y manda a /post-login,
+        # /post-login exige _FULLY y rebota a /login. Coherente con ^/account.
+        - { path: ^/post-login$, roles: IS_AUTHENTICATED_REMEMBERED }
         # Pantalla de (re)establecer contraseña: cualquier cuenta autenticada
         # (incluida sesión recordada) para no encerrar a quien llega con
         # remember_me. La protege ForcePasswordChangeSubscriber, que reconduce
