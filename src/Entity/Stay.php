@@ -114,6 +114,15 @@ class Stay
     private $updated;
 
     /**
+     * Datos de prácticas, si esta estancia es de tipo prácticas; null en otro
+     * caso. Cascade remove: borrar la estancia borra sus datos de prácticas.
+     *
+     * @var InternshipDetail|null
+     * @ORM\OneToOne(targetEntity="InternshipDetail", mappedBy="stay", cascade={"remove"})
+     */
+    private $internshipDetail;
+
+    /**
      * ¿Esta estancia ocupa una cama? Sólo las confirmadas: una solicitud sin
      * confirmar o una cancelación no comprometen aforo.
      *
@@ -260,5 +269,24 @@ class Stay
     public function getUpdated(): ?\DateTime
     {
         return $this->updated;
+    }
+
+    /**
+     * @return InternshipDetail|null
+     */
+    public function getInternshipDetail(): ?InternshipDetail
+    {
+        return $this->internshipDetail;
+    }
+
+    /**
+     * @param InternshipDetail|null $internshipDetail
+     * @return self
+     */
+    public function setInternshipDetail(?InternshipDetail $internshipDetail): self
+    {
+        $this->internshipDetail = $internshipDetail;
+
+        return $this;
     }
 }

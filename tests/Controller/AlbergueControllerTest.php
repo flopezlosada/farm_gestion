@@ -5,6 +5,7 @@ namespace App\Tests\Controller;
 use App\Entity\Helper;
 use App\Entity\HelperSource;
 use App\Entity\HostingCapacity;
+use App\Entity\InternshipDetail;
 use App\Entity\Stay;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
@@ -134,6 +135,63 @@ class AlbergueControllerTest extends AbstractAuthenticatedTest
         $em->remove($em->getRepository(Helper::class)->find($helperAId));
         $em->remove($em->getRepository(Helper::class)->find($helperBId));
         $em->remove($em->getRepository(HostingCapacity::class)->find($capacityId));
+        $em->remove($em->getRepository(HelperSource::class)->find($sourceId));
+        $em->flush();
+    }
+
+    /**
+     * Datos de prácticas: se crean por formulario para una estancia y, al borrar
+     * la estancia, se borran en cascada (no queda huérfano).
+     */
+    public function testInternshipDetailCreateAndCascadeOnStayDelete(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $em = $this->em();
+        $source = $this->createSource($em, 'TEST prácticas ' . uniqid());
+        $helper = $this->createHelper($em, 'TEST estudiante ' . uniqid(), $source);
+        $stay = (new Stay())
+            ->setHelper($helper)
+            ->setArrivalDate(new \DateTimeImmutable('2099-09-01'))
+            ->setDepartureDate(new \DateTimeImmutable('2099-12-01'))
+            ->setStatus(Stay::STATUS_REQUESTED);
+        $em->persist($stay);
+        $em->flush();
+
+        $sourceId = $source->getId();
+        $helperId = $helper->getId();
+        $stayId = $stay->getId();
+
+        $crawler = $client->request('GET', sprintf('/gestion/albergue/stays/%d/internship', $stayId));
+        $this->assertResponseIsSuccessful();
+
+        $form = $crawler->filter('form')->form();
+        $form['internship_detail[tutorName]'] = 'Dra. Tutora';
+        $form['internship_detail[reportStatus]'] = InternshipDetail::REPORT_DELIVERED;
+        $client->submit($form);
+        $this->assertResponseRedirects(sprintf('/gestion/albergue/helpers/%d', $helperId));
+
+        $detail = $this->em()->getRepository(InternshipDetail::class)->findOneBy(['stay' => $stayId]);
+        $this->assertNotNull($detail, 'Los datos de prácticas deberían haberse creado.');
+        $this->assertTrue($detail->isReportDelivered());
+        $detailId = $detail->getId();
+
+        // Borrar la estancia debe llevarse sus datos de prácticas (cascade).
+        // clear() fuerza una carga FRESCA del Stay (como en producción, donde lo
+        // trae el resolver con su internshipDetail cargado por ser OneToOne
+        // inverso); sin esto, el Stay del identity map tendría internshipDetail
+        // a null y el cascade no dispararía.
+        $em = $this->em();
+        $em->clear();
+        $em->remove($em->getRepository(Stay::class)->find($stayId));
+        $em->flush();
+        $this->assertNull(
+            $this->em()->getRepository(InternshipDetail::class)->find($detailId),
+            'Los datos de prácticas deberían borrarse en cascada con la estancia.',
+        );
+
+        // Limpieza.
+        $em = $this->em();
+        $em->remove($em->getRepository(Helper::class)->find($helperId));
         $em->remove($em->getRepository(HelperSource::class)->find($sourceId));
         $em->flush();
     }

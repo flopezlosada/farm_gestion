@@ -3,7 +3,9 @@
 namespace App\Controller;
 
 use App\Entity\Helper;
+use App\Entity\InternshipDetail;
 use App\Entity\Stay;
+use App\Form\InternshipDetailType;
 use App\Form\StayType;
 use App\Service\Hosting\HostingAvailabilityChecker;
 use Doctrine\ORM\EntityManagerInterface;
@@ -92,6 +94,44 @@ class StayController extends AbstractController
         }
 
         return $this->render('stay/edit.html.twig', [
+            'helper' => $stay->getHelper(),
+            'stay' => $stay,
+            'form' => $form->createView(),
+        ]);
+    }
+
+    /**
+     * Edita (o crea al vuelo) los datos de prácticas de una estancia. Sólo tiene
+     * sentido para estancias de prácticas; para el resto simplemente no se usa.
+     *
+     * @param Request $request
+     * @param Stay $stay
+     * @param EntityManagerInterface $entityManager
+     * @return Response
+     */
+    #[Route('/{id}/internship', name: 'stay_internship', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
+    public function editInternship(Request $request, Stay $stay, EntityManagerInterface $entityManager): Response
+    {
+        $detail = $stay->getInternshipDetail();
+        $isNew = $detail === null;
+        if ($isNew) {
+            $detail = (new InternshipDetail())->setStay($stay);
+        }
+
+        $form = $this->createForm(InternshipDetailType::class, $detail);
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted() && $form->isValid()) {
+            if ($isNew) {
+                $entityManager->persist($detail);
+            }
+            $entityManager->flush();
+            $this->addFlash('success', 'Datos de prácticas guardados.');
+
+            return $this->redirectToRoute('helper_show', ['id' => $stay->getHelper()->getId()]);
+        }
+
+        return $this->render('stay/internship.html.twig', [
             'helper' => $stay->getHelper(),
             'stay' => $stay,
             'form' => $form->createView(),

@@ -98,10 +98,14 @@
                         </div>
                         <div class="hsh-stay__meta">
                             {{ csa.badge(status_label[stay.status] ?? stay.status, status_tone[stay.status] ?? 'neutral') }}
+                            {% if stay.internshipDetail %}
+                                {{ csa.badge(stay.internshipDetail.reportDelivered ? 'Informe entregado' : 'Informe pendiente', stay.internshipDetail.reportDelivered ? 'green' : 'ochre') }}
+                            {% endif %}
                             {% if stay.notes %}· {{ stay.notes|length > 80 ? stay.notes|slice(0, 80) ~ '…' : stay.notes }}{% endif %}
                         </div>
                     </div>
                     <div class="hsh-stay__actions">
+                        {{ csa.btn('Prácticas', { variant: 'ghost', size: 'sm', href: path('stay_internship', { id: stay.id }), icon: 'fa-graduation-cap' }) }}
                         {{ csa.btn('Editar', { variant: 'ghost', size: 'sm', href: path('stay_edit', { id: stay.id }), icon: 'fa-pencil' }) }}
                         <form method="post" action="{{ path('stay_delete', { id: stay.id }) }}" onsubmit="return confirm('¿Borrar esta estancia?');" style="display: inline;">
                             <input type="hidden" name="_token" value="{{ csrf_token('delete' ~ stay.id) }}">
