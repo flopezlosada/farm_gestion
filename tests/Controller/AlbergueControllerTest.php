@@ -66,6 +66,22 @@ class AlbergueControllerTest extends AbstractAuthenticatedTest
     }
 
     /**
+     * El calendario de ocupación responde 200, tanto en la ventana por defecto
+     * como navegando a un mes concreto. No lo cubre GestionSmokeRoutesTest (la
+     * ruta no termina en "/").
+     */
+    public function testTimelineRenders(): void
+    {
+        $client = $this->createAuthenticatedClient();
+
+        $client->request('GET', '/gestion/albergue/timeline');
+        $this->assertResponseIsSuccessful();
+
+        $client->request('GET', '/gestion/albergue/timeline?from=2099-06');
+        $this->assertResponseIsSuccessful();
+    }
+
+    /**
      * Guard de aforo: con 1 plaza el mes, una primera estancia confirmada cabe;
      * una segunda confirmada que solapa se rechaza (no redirige, no persiste) y
      * la respuesta avisa del conflicto.

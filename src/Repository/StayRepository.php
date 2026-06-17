@@ -56,4 +56,35 @@ class StayRepository extends ServiceEntityRepository
 
         return $qb->getQuery()->getResult();
     }
+
+    /**
+     * Estancias de los estados dados que solapan con el rango [$from, $to), con
+     * su voluntario traído en el mismo SELECT (el timeline pinta una fila por
+     * persona, así que sin esto sería N+1). Por defecto confirmadas y
+     * solicitadas; las canceladas no se muestran en el calendario.
+     *
+     * @param \DateTimeImmutable $from     Inicio del rango (incluido).
+     * @param \DateTimeImmutable $to       Fin del rango (excluido).
+     * @param string[]           $statuses Estados a incluir.
+     * @return Stay[] Ordenadas por voluntario y llegada.
+     */
+    public function findOverlapping(
+        \DateTimeImmutable $from,
+        \DateTimeImmutable $to,
+        array $statuses = [Stay::STATUS_CONFIRMED, Stay::STATUS_REQUESTED],
+    ): array {
+        return $this->createQueryBuilder('s')
+            ->addSelect('h')
+            ->join('s.helper', 'h')
+            ->andWhere('s.status IN (:statuses)')
+            ->andWhere('s.arrivalDate < :to')
+            ->andWhere('s.departureDate > :from')
+            ->setParameter('statuses', $statuses)
+            ->setParameter('from', $from)
+            ->setParameter('to', $to)
+            ->orderBy('h.name', 'ASC')
+            ->addOrderBy('s.arrivalDate', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
 }
