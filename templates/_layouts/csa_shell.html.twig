@@ -314,10 +314,8 @@
                                    route == 'albergue_timeline') }}
                                 {{ _self.nav_link('Voluntarios', path('helper_index'), 'fa-bed',
                                    route starts with 'helper_' or route starts with 'stay_') }}
-                                {{ _self.nav_link('Aforo', path('hosting_capacity_index'), 'fa-calendar-check-o',
-                                   route starts with 'hosting_capacity') }}
-                                {{ _self.nav_link('Métricas', path('albergue_stats'), 'fa-bar-chart',
-                                   route == 'albergue_stats') }}
+                                {# Aforo y Métricas deshabilitados del menú por ahora (no aportan aún);
+                                 # las pantallas siguen existiendo (hosting_capacity_* / albergue_stats). #}
                             </div>
                         </div>
                     {% endif %}

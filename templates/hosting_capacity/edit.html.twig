@@ -26,13 +26,17 @@
 
     {{ form_start(form, { attr: { role: 'form', class: 'csa-form-narrow' } }) }}
 
+        {% if form.vars.errors|length > 0 %}
+            {{ csa.callout(form_errors(form)|striptags|trim, 'danger', 'exclamation-triangle') }}
+        {% endif %}
+
         <div class="csa-stack-lg">
-            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Aforo del mes', subtitle: 'Apertura y plazas.' } %}
+            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Aforo del mes', subtitle: 'Apertura y plazas (máximo: las camas de la casa).' } %}
                 {% block body %}
                     {% import '_macros/csa.html.twig' as csa %}
                     <div class="csa-form-grid">
                         {{ csa.field(form.open, 'Abierto este mes', { full: true }) }}
-                        {{ csa.field(form.capacity, 'Plazas (aforo operativo)') }}
+                        {{ csa.field(form.capacity, 'Plazas (máx. ' ~ physical_capacity ~ ')', { attr: { max: physical_capacity } }) }}
                     </div>
                 {% endblock %}
             {% endembed %}

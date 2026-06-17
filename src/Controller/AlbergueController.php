@@ -91,7 +91,7 @@ class AlbergueController extends AbstractController
         $year = (int) $request->query->get('year', (new \DateTimeImmutable('today'))->format('Y'));
 
         return $this->render('albergue/stats.html.twig', [
-            'stats' => $statsBuilder->bySource($year),
+            'stats' => $statsBuilder->forYear($year),
             'prev_year' => $year - 1,
             'next_year' => $year + 1,
         ]);

@@ -8,6 +8,7 @@ use App\Repository\HostingCapacityRepository;
 use App\Service\AppSettings;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\FormError;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
@@ -55,6 +56,27 @@ class HostingCapacityController extends AbstractController
     }
 
     /**
+     * Fija el aforo FÍSICO de la casa (nº de camas) desde la pantalla de aforo.
+     * Es el ancla del calendario: las plazas de cada mes no pueden superarlo.
+     *
+     * @param Request $request
+     * @param AppSettings $settings
+     * @return Response
+     */
+    #[Route('/physical', name: 'hosting_capacity_set_physical', methods: ['POST'])]
+    public function setPhysical(Request $request, AppSettings $settings): Response
+    {
+        $year = (int) $request->request->get('year', (new \DateTimeImmutable('today'))->format('Y'));
+
+        if ($this->isCsrfTokenValid('hosting_physical', (string) $request->request->get('_token'))) {
+            $settings->setInt(AppSettings::HOSTING_PHYSICAL_CAPACITY, (int) $request->request->get('physical_capacity'));
+            $this->addFlash('success', 'Camas de la casa actualizadas.');
+        }
+
+        return $this->redirectToRoute('hosting_capacity_index', ['year' => $year]);
+    }
+
+    /**
      * Edita el aforo de un mes concreto. Si el mes no tiene fila aún, se crea
      * una partiendo del aforo físico de referencia.
      *
@@ -89,23 +111,35 @@ class HostingCapacityController extends AbstractController
                 ->setCapacity($settings->getInt(AppSettings::HOSTING_PHYSICAL_CAPACITY));
         }
 
+        $physical = $settings->getInt(AppSettings::HOSTING_PHYSICAL_CAPACITY);
+
         $form = $this->createForm(HostingCapacityType::class, $capacity);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            if ($isNew) {
-                $entityManager->persist($capacity);
-            }
-            $entityManager->flush();
-            $this->addFlash('success', 'Aforo del mes guardado.');
+            // El operativo del mes nunca puede superar las camas de la casa.
+            if ($capacity->getCapacity() > $physical) {
+                $form->addError(new FormError(sprintf(
+                    'Las plazas (%d) no pueden superar las camas de la casa (%d). Sube primero el aforo físico.',
+                    $capacity->getCapacity(),
+                    $physical,
+                )));
+            } else {
+                if ($isNew) {
+                    $entityManager->persist($capacity);
+                }
+                $entityManager->flush();
+                $this->addFlash('success', 'Aforo del mes guardado.');
 
-            return $this->redirectToRoute('hosting_capacity_index', ['year' => $year]);
+                return $this->redirectToRoute('hosting_capacity_index', ['year' => $year]);
+            }
         }
 
         return $this->render('hosting_capacity/edit.html.twig', [
             'capacity' => $capacity,
             'year' => $year,
             'month' => $month,
+            'physical_capacity' => $physical,
             'form' => $form->createView(),
         ]);
     }

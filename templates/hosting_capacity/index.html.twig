@@ -33,6 +33,13 @@
 .cap-card__cap--closed { color: #8c3b1f; font-size: 18px; }
 .cap-card__cap--default { color: #8d8773; }
 .cap-card__note { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--csa-ink-faint, #8d8773); margin-top: 6px; font-weight: 500; }
+
+/* Ancla: camas de la casa (aforo físico), editable aquí. */
+.cap-physical { background: #fff; border: 1px solid var(--csa-rule, #ebe7dd); border-radius: 10px; padding: 16px 20px; margin-bottom: 22px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.cap-physical__label { font-family: var(--csa-serif); font-weight: 600; font-size: 15px; color: var(--csa-ink, #1d1c17); }
+.cap-physical__form { display: flex; align-items: center; gap: 8px; }
+.cap-physical__input { width: 72px; height: 36px; box-sizing: border-box; border: 1px solid var(--csa-line-2, #d8d2c2); border-radius: 6px; padding: 0 10px; font-size: 16px; text-align: center; font-family: var(--csa-serif); }
+.cap-physical__help { font-size: 12px; color: var(--csa-ink-faint, #8d8773); flex: 1 1 100%; }
 </style>
 {% endblock %}
 
@@ -40,8 +47,20 @@
     {{ csa.page_header(
         'Albergue',
         'Aforo del albergue',
-        'Plazas que ofrecéis cada mes. Un mes sin configurar hereda el aforo físico de la casa (' ~ physical_capacity ~ ' camas).'
+        'Cada mes ofrece por defecto las camas de la casa. Aquí puedes cerrar meses (vacaciones, obras…) o reducir las plazas de un mes concreto.'
     ) }}
+
+    {# Ancla: las camas de la casa. Es el máximo; el aforo de cada mes no lo supera. #}
+    <div class="cap-physical">
+        <div class="cap-physical__label">Camas en la casa</div>
+        <form method="post" action="{{ path('hosting_capacity_set_physical') }}" class="cap-physical__form">
+            <input type="hidden" name="_token" value="{{ csrf_token('hosting_physical') }}">
+            <input type="hidden" name="year" value="{{ year }}">
+            <input type="number" name="physical_capacity" value="{{ physical_capacity }}" min="0" max="50" class="cap-physical__input">
+            {{ csa.btn('Guardar', { variant: 'secondary', size: 'sm', type: 'submit' }) }}
+        </form>
+        <div class="cap-physical__help">Es el máximo de plazas: el aforo de cada mes no puede superarlo. Por defecto, cada mes ofrece estas camas.</div>
+    </div>
 
     <div class="csa-row-between" style="margin-bottom: var(--csa-sp-5);">
         <div class="csa-row" style="align-items: center; gap: 12px;">
