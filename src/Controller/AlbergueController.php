@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\Entity\Stay;
 use App\Repository\StayRepository;
+use App\Service\Hosting\HostingStatsBuilder;
 use App\Service\Hosting\HostingTimelineBuilder;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -56,6 +57,26 @@ class AlbergueController extends AbstractController
             'current_stays' => $currentStays,
             'prev_month' => $from->modify('-1 month')->format('Y-m'),
             'next_month' => $from->modify('+1 month')->format('Y-m'),
+        ]);
+    }
+
+    /**
+     * Métricas por procedencia: cuántos voluntarios, estancias y noches por
+     * origen en el año seleccionado.
+     *
+     * @param Request $request
+     * @param HostingStatsBuilder $statsBuilder
+     * @return Response
+     */
+    #[Route('/stats', name: 'albergue_stats', methods: ['GET'])]
+    public function stats(Request $request, HostingStatsBuilder $statsBuilder): Response
+    {
+        $year = (int) $request->query->get('year', (new \DateTimeImmutable('today'))->format('Y'));
+
+        return $this->render('albergue/stats.html.twig', [
+            'stats' => $statsBuilder->bySource($year),
+            'prev_year' => $year - 1,
+            'next_year' => $year + 1,
         ]);
     }
 

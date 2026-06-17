@@ -83,6 +83,20 @@ class AlbergueControllerTest extends AbstractAuthenticatedTest
     }
 
     /**
+     * Las métricas por procedencia responden 200 (año por defecto y concreto).
+     */
+    public function testStatsRenders(): void
+    {
+        $client = $this->createAuthenticatedClient();
+
+        $client->request('GET', '/gestion/albergue/stats');
+        $this->assertResponseIsSuccessful();
+
+        $client->request('GET', '/gestion/albergue/stats?year=2099');
+        $this->assertResponseIsSuccessful();
+    }
+
+    /**
      * Guard de aforo: con 1 plaza el mes, una primera estancia confirmada cabe;
      * una segunda confirmada que solapa se rechaza (no redirige, no persiste) y
      * la respuesta avisa del conflicto.

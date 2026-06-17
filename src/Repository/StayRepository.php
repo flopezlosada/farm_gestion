@@ -87,4 +87,32 @@ class StayRepository extends ServiceEntityRepository
             ->getQuery()
             ->getResult();
     }
+
+    /**
+     * Estancias cuya LLEGADA cae en el año dado, con su voluntario y la
+     * procedencia traídos en el mismo SELECT (las métricas agrupan por
+     * procedencia, sin esto sería N+1). Por defecto confirmadas y solicitadas;
+     * las canceladas no cuentan para métricas.
+     *
+     * @param int      $year     Año de la llegada.
+     * @param string[] $statuses Estados a incluir.
+     * @return Stay[]
+     */
+    public function findByArrivalYear(
+        int $year,
+        array $statuses = [Stay::STATUS_CONFIRMED, Stay::STATUS_REQUESTED],
+    ): array {
+        return $this->createQueryBuilder('s')
+            ->addSelect('h', 'src')
+            ->join('s.helper', 'h')
+            ->join('h.source', 'src')
+            ->andWhere('s.status IN (:statuses)')
+            ->andWhere('s.arrivalDate >= :from')
+            ->andWhere('s.arrivalDate < :to')
+            ->setParameter('statuses', $statuses)
+            ->setParameter('from', new \DateTimeImmutable(sprintf('%04d-01-01', $year)))
+            ->setParameter('to', new \DateTimeImmutable(sprintf('%04d-01-01', $year + 1)))
+            ->getQuery()
+            ->getResult();
+    }
 }
