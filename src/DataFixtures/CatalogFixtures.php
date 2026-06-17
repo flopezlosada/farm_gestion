@@ -196,7 +196,7 @@ class CatalogFixtures extends Fixture
         // id forzado porque ningún código referencia una procedencia concreta
         // por id (a diferencia de BasketShare/WeeklyBasketStatus). Lista inicial
         // derivada de los orígenes reales que maneja la asociación.
-        foreach (['WWOOF', 'Workaway', 'HelpX', 'Prácticas universidad', 'Erasmus', 'Boca a boca'] as $sourceName) {
+        foreach (['WWOOF', 'Workaway', 'HelpX', 'Campus Rural', 'Prácticas universidad', 'Erasmus', 'Boca a boca'] as $sourceName) {
             $source = (new HelperSource())->setName($sourceName);
             $manager->persist($source);
             $this->addReference(self::REF_HELPER_SOURCE_PREFIX . $sourceName, $source);
