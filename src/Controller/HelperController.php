@@ -3,9 +3,11 @@
 namespace App\Controller;
 
 use App\Entity\Helper;
+use App\Entity\Stay;
 use App\Form\HelperType;
 use App\Repository\HelperRepository;
 use App\Repository\HelperSourceRepository;
+use App\Repository\StayRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -36,6 +38,7 @@ class HelperController extends AbstractController
         Request $request,
         HelperRepository $helperRepository,
         HelperSourceRepository $sourceRepository,
+        StayRepository $stayRepository,
     ): Response {
         $term = trim((string) $request->query->get('q', ''));
         $sourceId = $request->query->get('source');
@@ -43,11 +46,18 @@ class HelperController extends AbstractController
 
         $helpers = $helperRepository->search($term, $sourceId);
 
+        $today = new \DateTimeImmutable('today');
+
         return $this->render('helper/index.html.twig', [
             'helpers' => $helpers,
             'sources' => $sourceRepository->findBy([], ['name' => 'ASC']),
             'q' => $term,
             'selected_source' => $sourceId,
+            'stats' => [
+                'total' => $helperRepository->count([]),
+                'current' => count($stayRepository->findOverlapping($today, $today->modify('+1 day'), [Stay::STATUS_CONFIRMED])),
+                'arrivals' => count($stayRepository->findArrivalsBetween($today, $today->modify('+30 days'))),
+            ],
         ]);
     }
 
