@@ -52,6 +52,9 @@ class AppSettings
     /** Envío del resumen de cambios a admin (app:send-admin-delivery-changes-summary). */
     public const EMAIL_ADMIN_DELIVERY_SUMMARY = 'email.admin_delivery_summary';
 
+    /** Envío del recordatorio de llegadas/salidas del albergue al equipo (app:send-albergue-arrivals-reminder). */
+    public const EMAIL_ALBERGUE_REMINDER = 'email.albergue_reminder';
+
     /**
      * Red de seguridad para entornos de prueba: si tiene valor, TODOS los emails
      * que envía la app se entregan SOLO a esa(s) dirección(es) — separadas por
@@ -139,6 +142,7 @@ class AppSettings
     public const CRON_ADMIN_DELIVERY_SUMMARY = 'cron.admin_delivery_summary';
     public const CRON_PURGE_USAGE_HITS = 'cron.purge_usage_hits';
     public const CRON_GENERATE_WEEKLY_DELIVERY = 'cron.generate_weekly_delivery';
+    public const CRON_ALBERGUE_REMINDER = 'cron.albergue_reminder';
 
     /**
      * Mapa de tareas programadas para la ejecución manual desde la pantalla de
@@ -153,6 +157,7 @@ class AppSettings
         self::CRON_PICKUP_REMINDER => ['command' => 'app:send-pickup-reminders', 'confirm' => true, 'dry' => true],
         self::CRON_ADMIN_DELIVERY_SUMMARY => ['command' => 'app:send-admin-delivery-changes-summary', 'confirm' => true, 'dry' => true],
         self::CRON_PURGE_USAGE_HITS => ['command' => 'app:purge-usage-hits', 'confirm' => false, 'dry' => false],
+        self::CRON_ALBERGUE_REMINDER => ['command' => 'app:send-albergue-arrivals-reminder', 'confirm' => true, 'dry' => true],
     ];
 
     /**
@@ -190,6 +195,12 @@ class AppSettings
             'label' => 'Resumen de cambios a administración',
             'help' => 'Digest periódico con los cambios autoservicio de lxs socixs (saltar cesta, cambiar de nodo…).',
             'default' => true,
+        ],
+        self::EMAIL_ALBERGUE_REMINDER => [
+            'group' => 'Emails internos',
+            'label' => 'Recordatorio de llegadas/salidas del albergue',
+            'help' => 'Aviso al equipo con las llegadas y salidas confirmadas de los próximos días en el albergue (preparar camas, etc.). Se envía a la dirección configurada en el cron.',
+            'default' => false,
         ],
         self::FEATURE_PARTNER_LOGIN => [
             'group' => 'Funcionalidades en rodaje',
@@ -231,6 +242,12 @@ class AppSettings
             'group' => 'Tareas programadas',
             'label' => 'Purga del rastro de uso',
             'help' => 'Borra periódicamente la telemetría de uso anterior al período de retención (app:purge-usage-hits), por minimización de datos. Apagada, el rastro se acumula sin límite.',
+            'default' => true,
+        ],
+        self::CRON_ALBERGUE_REMINDER => [
+            'group' => 'Tareas programadas',
+            'label' => 'Recordatorio de llegadas/salidas del albergue',
+            'help' => 'Ejecuta a diario el comando que avisa al equipo de las llegadas y salidas próximas del albergue (app:send-albergue-arrivals-reminder). Independiente del email: apagada aquí, la tarea ni se ejecuta; encendida pero con el email apagado, corre pero no envía.',
             'default' => true,
         ],
     ];

@@ -115,4 +115,56 @@ class StayRepository extends ServiceEntityRepository
             ->getQuery()
             ->getResult();
     }
+
+    /**
+     * Estancias CONFIRMADAS que LLEGAN en [$from, $to), con su voluntario, para
+     * el recordatorio de llegadas. Ordenadas por fecha de llegada.
+     *
+     * @param \DateTimeImmutable $from
+     * @param \DateTimeImmutable $to
+     * @return Stay[]
+     */
+    public function findArrivalsBetween(\DateTimeImmutable $from, \DateTimeImmutable $to): array
+    {
+        return $this->byDateField('arrivalDate', $from, $to);
+    }
+
+    /**
+     * Estancias CONFIRMADAS que SALEN en [$from, $to), con su voluntario, para el
+     * recordatorio de salidas. Ordenadas por fecha de salida.
+     *
+     * @param \DateTimeImmutable $from
+     * @param \DateTimeImmutable $to
+     * @return Stay[]
+     */
+    public function findDeparturesBetween(\DateTimeImmutable $from, \DateTimeImmutable $to): array
+    {
+        return $this->byDateField('departureDate', $from, $to);
+    }
+
+    /**
+     * Estancias confirmadas cuyo campo de fecha indicado cae en [$from, $to),
+     * con el voluntario en el mismo SELECT. Helper privado de
+     * {@see self::findArrivalsBetween()} / {@see self::findDeparturesBetween()}.
+     *
+     * @param string             $field 'arrivalDate' o 'departureDate'.
+     * @param \DateTimeImmutable $from
+     * @param \DateTimeImmutable $to
+     * @return Stay[]
+     */
+    private function byDateField(string $field, \DateTimeImmutable $from, \DateTimeImmutable $to): array
+    {
+        return $this->createQueryBuilder('s')
+            ->addSelect('h')
+            ->join('s.helper', 'h')
+            ->andWhere('s.status = :status')
+            ->andWhere(sprintf('s.%s >= :from', $field))
+            ->andWhere(sprintf('s.%s < :to', $field))
+            ->setParameter('status', Stay::STATUS_CONFIRMED)
+            ->setParameter('from', $from)
+            ->setParameter('to', $to)
+            ->orderBy('s.' . $field, 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
 }

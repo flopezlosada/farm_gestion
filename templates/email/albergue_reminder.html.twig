@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Albergue: próximas llegadas y salidas · CSA Vega de Jarama</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #333; max-width: 720px; margin: 0 auto; padding: 24px;">
+
+    <h2 style="color: #5a8f3d; margin-top: 0;">Albergue · próximos {{ days }} días</h2>
+
+    <p>
+        Del <strong>{{ from|date('d/m/Y') }}</strong> al <strong>{{ until|date_modify('-1 day')|date('d/m/Y') }}</strong>:
+    </p>
+
+    <h3 style="color: #2f4426; margin-bottom: 6px;">Llegadas ({{ arrivals|length }})</h3>
+    {% if arrivals|length > 0 %}
+        <ul style="padding-left: 18px;">
+            {% for stay in arrivals %}
+                <li style="margin-bottom: 4px;">
+                    <strong>{{ stay.arrivalDate|date('d/m') }}</strong> · {{ stay.helper.name }}
+                    {% if not stay.departureConfirmed %}<span style="color: #8c6919;">(salida estimada {{ stay.departureDate|date('d/m') }})</span>{% else %}<span style="color: #777;">(hasta {{ stay.departureDate|date('d/m') }})</span>{% endif %}
+                </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p style="color: #777;">Ninguna.</p>
+    {% endif %}
+
+    <h3 style="color: #8c3b1f; margin-bottom: 6px;">Salidas ({{ departures|length }})</h3>
+    {% if departures|length > 0 %}
+        <ul style="padding-left: 18px;">
+            {% for stay in departures %}
+                <li style="margin-bottom: 4px;">
+                    <strong>{{ stay.departureDate|date('d/m') }}</strong> · {{ stay.helper.name }}
+                    {% if not stay.departureConfirmed %}<span style="color: #8c6919;">(estimada)</span>{% endif %}
+                </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p style="color: #777;">Ninguna.</p>
+    {% endif %}
+
+    <p style="margin-top: 32px; color: #777; font-size: 13px;">
+        Recordatorio automático del albergue.<br>
+        CSA Vega de Jarama · <a href="https://csavegadejarama.org">csavegadejarama.org</a>
+    </p>
+
+</body>
+</html>
