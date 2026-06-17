@@ -99,7 +99,22 @@ final class HostingTimelineBuilder
                 'occupied' => $peak,
                 'capacity' => $capacity,
                 'state' => $this->state($peak, $capacity),
+                'active' => $peak > 0,
             ];
+        }
+
+        $rows = $this->buildRows($stays, $from, $to, $monthCount, fn (\DateTimeImmutable $d) => $this->monthIndex($from, $d));
+
+        // Un mes es "activo" (se pinta ancho) si tiene ocupación o lo atraviesa
+        // alguna estancia; los meses muertos se colapsan a una columna estrecha.
+        foreach ($rows as $row) {
+            foreach ($row['segments'] as $segment) {
+                for ($i = $segment['offset']; $i < $segment['offset'] + $segment['span']; $i++) {
+                    if (isset($cols[$i])) {
+                        $cols[$i]['active'] = true;
+                    }
+                }
+            }
         }
 
         return [
@@ -108,7 +123,7 @@ final class HostingTimelineBuilder
             'to' => $to,
             'col_count' => $monthCount,
             'cols' => $cols,
-            'rows' => $this->buildRows($stays, $from, $to, $monthCount, fn (\DateTimeImmutable $d) => $this->monthIndex($from, $d)),
+            'rows' => $rows,
         ];
     }
 

@@ -48,10 +48,12 @@ class AlbergueController extends AbstractController
         $from = $this->windowStart($request->query->get('from'));
 
         if ($monthly) {
+            // Vista por meses = AÑO NATURAL (enero–diciembre); navega por años.
+            $year = (int) $from->format('Y');
+            $from = new \DateTimeImmutable(sprintf('%04d-01-01', $year));
             $timeline = $timelineBuilder->buildMonthly($from, self::TIMELINE_MONTHS_SPAN);
-            // En vista mensual la navegación salta de año en año.
-            $prev = $from->modify('-12 months')->format('Y-m');
-            $next = $from->modify('+12 months')->format('Y-m');
+            $prev = sprintf('%04d-01', $year - 1);
+            $next = sprintf('%04d-01', $year + 1);
         } else {
             $timeline = $timelineBuilder->buildDaily($from, $from->modify(sprintf('+%d months', self::TIMELINE_DAYS_MONTHS)));
             $prev = $from->modify('-1 month')->format('Y-m');

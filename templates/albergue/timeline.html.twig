@@ -6,11 +6,24 @@
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
 
-{% set col = timeline.unit == 'month' ? 84 : 22 %}
-{% set track_w = timeline.col_count * col %}
+{# Anchos por columna. En vista meses, los meses SIN actividad se colapsan
+ # estrechos para que los meses con gente ocupen más ancho; en vista días todas
+ # las columnas miden igual. lefts[] da la x de cada columna; col_w[] su ancho. #}
+{% set lefts = [] %}
+{% set col_w = [] %}
+{% set acc = 0 %}
+{% for c in timeline.cols %}
+    {% set w = timeline.unit == 'month' ? (c.active ? 120 : 26) : 22 %}
+    {% set lefts = lefts|merge([acc]) %}
+    {% set col_w = col_w|merge([w]) %}
+    {% set acc = acc + w %}
+{% endfor %}
+{% set track_w = acc %}
 {% set month_abbr = { 1:'ene',2:'feb',3:'mar',4:'abr',5:'may',6:'jun',7:'jul',8:'ago',9:'sep',10:'oct',11:'nov',12:'dic' } %}
 {% set status_label = { 'confirmed': 'Confirmada', 'requested': 'Solicitada' } %}
 {% set last_day = timeline.to|date_modify('-1 day') %}
+{# Paleta de colores por voluntario (rotada por id), para diferenciarlos. #}
+{% set bar_palette = ['#5b7a4c', '#c89a3a', '#b45d3a', '#2e6f8e', '#7d5a9c', '#557d6e', '#a8552f', '#3f6b3a'] %}
 
 {% block title %}Albergue · Calendario{% endblock %}
 
@@ -41,10 +54,12 @@
 .tl-scroll { overflow-x: auto; background: #fff; border: 1px solid var(--csa-rule, #ebe7dd); border-radius: 10px; }
 .tl-row { display: flex; align-items: stretch; border-bottom: 1px solid var(--csa-rule, #f0ede5); }
 .tl-row:last-child { border-bottom: none; }
-.tl-label { position: sticky; left: 0; z-index: 2; flex: 0 0 170px; width: 170px; background: #fff; border-right: 1px solid var(--csa-line-2, #d8d2c2); padding: 8px 12px; font-size: 13px; display: flex; align-items: center; }
+.tl-label { position: sticky; left: 0; z-index: 2; flex: 0 0 210px; width: 210px; background: #fff; border-right: 1px solid var(--csa-line-2, #d8d2c2); padding: 8px 12px; font-size: 12.5px; line-height: 1.2; display: flex; align-items: center; }
 .tl-label--head { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--csa-ink-faint, #8d8773); font-weight: 600; }
 .tl-label a { color: var(--csa-ink, #1d1c17); text-decoration: none; font-weight: 600; }
 .tl-label a:hover { text-decoration: underline; }
+.tl-label__src { font-size: 10.5px; color: var(--csa-ink-faint, #8d8773); margin-top: 2px; letter-spacing: 0.02em; }
+.tl-daycell--dim { color: #c8c2b2; }
 .tl-track { position: relative; flex: 0 0 auto; }
 
 .tl-daycell { position: absolute; top: 0; bottom: 0; box-sizing: border-box; border-right: 1px solid #f4f2ec; font-size: 10px; text-align: center; color: var(--csa-ink-faint, #8d8773); display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.15; }
@@ -61,10 +76,10 @@
 .tl-occcell--over { background: #f6d9cd; color: #8c3b1f; font-weight: 700; }
 .tl-occcell--closed { background: #ece9e3; color: #b0a98f; }
 
-.tl-bar { position: absolute; top: 6px; height: 22px; border-radius: 5px; box-sizing: border-box; font-size: 11px; line-height: 22px; color: #fff; padding: 0 8px; overflow: hidden; white-space: nowrap; }
-.tl-bar--confirmed { background: #5b7a4c; }
-.tl-bar--requested { background: #fff; color: #8c6919; border: 1px dashed #c89a3a; }
-.tl-helperrow { height: 34px; }
+/* La barra toma el color del voluntario (inline). Confirmada = sólida;
+ * solicitada = punteada y hueca (no ocupa aforo). */
+.tl-bar { position: absolute; top: 7px; height: 22px; border-radius: 5px; box-sizing: border-box; font-size: 11px; line-height: 21px; padding: 0 8px; overflow: hidden; white-space: nowrap; font-weight: 600; }
+.tl-helperrow { min-height: 44px; }
 
 .tl-legend { display: flex; gap: 18px; margin-top: 12px; font-size: 12px; color: var(--csa-ink-faint, #8d8773); flex-wrap: wrap; }
 .tl-legend span { display: inline-flex; align-items: center; gap: 6px; }
@@ -94,14 +109,20 @@
 
     {# ---------- Controles: vista + navegación ---------- #}
     <div class="csa-row-between" style="margin-bottom: var(--csa-sp-4); align-items: center; flex-wrap: wrap; gap: 12px;">
+        {# Semanas arranca en el mes ACTUAL (la semana de hoy), no en el enero del
+         # año que se esté viendo en Meses. Meses mantiene el año en contexto. #}
         <div class="tl-toggle">
-            <a href="{{ path('albergue_timeline', { view: 'days', from: timeline.from|date('Y-m') }) }}" class="{{ view == 'days' ? 'active' : '' }}">Semanas</a>
+            <a href="{{ path('albergue_timeline', { view: 'days', from: today|date('Y-m') }) }}" class="{{ view == 'days' ? 'active' : '' }}">Semanas</a>
             <a href="{{ path('albergue_timeline', { view: 'months', from: timeline.from|date('Y-m') }) }}" class="{{ view == 'months' ? 'active' : '' }}">Meses</a>
         </div>
         <div class="csa-row" style="align-items: center; gap: 10px;">
             {{ csa.btn('◂', { variant: 'ghost', href: path('albergue_timeline', { view: view, from: prev_window }) }) }}
             <strong style="font-family: var(--csa-serif); font-size: 16px;">
-                {{ month_abbr[timeline.from|date('n')] }} {{ timeline.from|date('Y') }} – {{ month_abbr[last_day|date('n')] }} {{ last_day|date('Y') }}
+                {% if view == 'months' %}
+                    {{ timeline.from|date('Y') }}
+                {% else %}
+                    {{ month_abbr[timeline.from|date('n')] }} {{ timeline.from|date('Y') }} – {{ month_abbr[last_day|date('n')] }} {{ last_day|date('Y') }}
+                {% endif %}
             </strong>
             {{ csa.btn('▸', { variant: 'ghost', href: path('albergue_timeline', { view: view, from: next_window }) }) }}
         </div>
@@ -115,13 +136,14 @@
             <div class="tl-label tl-label--head">Voluntario</div>
             <div class="tl-track" style="width: {{ track_w }}px;">
                 {% for c in timeline.cols %}
-                    {% set left = loop.index0 * col %}
+                    {% set left = lefts[loop.index0] %}
+                    {% set w = col_w[loop.index0] %}
                     {% if timeline.unit == 'month' %}
-                        <div class="tl-daycell{{ c.date|date('Y-m') == today|date('Y-m') ? ' tl-daycell--today' : '' }}" style="left: {{ left }}px; width: {{ col }}px;">
-                            {{ month_abbr[c.date|date('n')] }}<span class="tl-daycell__y">{{ c.date|date('y') }}</span>
+                        <div class="tl-daycell{{ c.active ? '' : ' tl-daycell--dim' }}{{ c.date|date('Y-m') == today|date('Y-m') ? ' tl-daycell--today' : '' }}" style="left: {{ left }}px; width: {{ w }}px;">
+                            {{ month_abbr[c.date|date('n')] }}{% if c.active %}<span class="tl-daycell__y">{{ c.date|date('y') }}</span>{% endif %}
                         </div>
                     {% else %}
-                        <div class="tl-daycell{{ c.weekend ? ' tl-daycell--weekend' : '' }}{{ c.date|date('Y-m-d') == today|date('Y-m-d') ? ' tl-daycell--today' : '' }}" style="left: {{ left }}px; width: {{ col }}px;">
+                        <div class="tl-daycell{{ c.weekend ? ' tl-daycell--weekend' : '' }}{{ c.date|date('Y-m-d') == today|date('Y-m-d') ? ' tl-daycell--today' : '' }}" style="left: {{ left }}px; width: {{ w }}px;">
                             {{ c.date|date('j') }}
                         </div>
                         {% if c.date|date('j') == '1' or loop.first %}
@@ -134,10 +156,10 @@
 
         {# Ocupación por columna #}
         <div class="tl-row tl-occ">
-            <div class="tl-label tl-label--head">{{ timeline.unit == 'month' ? 'Pico/mes' : 'Ocupación' }}</div>
+            <div class="tl-label tl-label--head">{{ timeline.unit == 'month' ? 'Ocupación máx.' : 'Ocupación' }}</div>
             <div class="tl-track" style="width: {{ track_w }}px;">
                 {% for c in timeline.cols %}
-                    <div class="tl-occcell tl-occcell--{{ c.state }}" style="left: {{ loop.index0 * col }}px; width: {{ col }}px;"
+                    <div class="tl-occcell tl-occcell--{{ c.state }}" style="left: {{ lefts[loop.index0] }}px; width: {{ col_w[loop.index0] }}px;"
                          title="{{ c.date|date(timeline.unit == 'month' ? 'm/Y' : 'd/m') }}: {{ c.occupied }}/{{ c.capacity }}{{ c.state == 'closed' ? ' (cerrado)' : '' }}">
                         {{ c.state == 'closed' ? '·' : c.occupied }}
                     </div>
@@ -147,14 +169,28 @@
 
         {# Una fila por voluntario #}
         {% for row in timeline.rows %}
+            {% set bar_color = bar_palette[(row.helper.id|default(0)) % bar_palette|length] %}
             <div class="tl-row tl-helperrow">
-                <div class="tl-label"><a href="{{ path('helper_show', { id: row.helper.id }) }}">{{ row.helper.name }}</a></div>
+                <div class="tl-label">
+                    <div>
+                        <a href="{{ path('helper_show', { id: row.helper.id }) }}">{{ row.helper.name }}</a>
+                        {% if row.helper.source %}<div class="tl-label__src">{{ row.helper.source.name }}</div>{% endif %}
+                    </div>
+                </div>
                 <div class="tl-track" style="width: {{ track_w }}px;">
                     {% for seg in row.segments %}
-                        <div class="tl-bar tl-bar--{{ seg.status }}"
-                             style="left: {{ seg.offset * col }}px; width: {{ seg.span * col - 2 }}px;"
-                             title="{{ status_label[seg.status] ?? seg.status }}">
-                            {{ status_label[seg.status] ?? seg.status }}
+                        {% set end_idx = seg.offset + seg.span - 1 %}
+                        {% set seg_left = lefts[seg.offset] %}
+                        {% set seg_w = lefts[end_idx] + col_w[end_idx] - seg_left - 2 %}
+                        {% if seg.status == 'requested' %}
+                            {% set bar_style = 'background:#fff; border:1px dashed ' ~ bar_color ~ '; color:' ~ bar_color ~ ';' %}
+                        {% else %}
+                            {% set bar_style = 'background:' ~ bar_color ~ '; color:#fff;' %}
+                        {% endif %}
+                        <div class="tl-bar"
+                             style="left: {{ seg_left }}px; width: {{ seg_w }}px; {{ bar_style }}"
+                             title="{{ row.helper.name }} · {{ status_label[seg.status] ?? seg.status }}">
+                            {{ row.helper.name }}
                         </div>
                     {% endfor %}
                 </div>
@@ -165,8 +201,8 @@
     </div>
 
     <div class="tl-legend">
-        <span><i style="background:#5b7a4c;"></i> Confirmada</span>
-        <span><i style="background:#fff;border:1px dashed #c89a3a;"></i> Solicitada (no ocupa aforo)</span>
+        <span><i style="background:linear-gradient(90deg,#5b7a4c 33%,#c89a3a 33%,#c89a3a 66%,#b45d3a 66%);"></i> Cada color, un voluntario · sólida = confirmada</span>
+        <span><i style="background:#fff;border:1px dashed #888;"></i> Punteada = solicitada (no ocupa aforo)</span>
         <span><i style="background:#e7eede;"></i> Lleno</span>
         <span><i style="background:#f6d9cd;"></i> Sobre aforo</span>
         <span><i style="background:#ece9e3;"></i> Cerrado</span>
