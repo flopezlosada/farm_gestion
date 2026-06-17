@@ -5,15 +5,15 @@ te toca recoger tu cesta {{ modality }} en la CSA Vega de Jarama.
 {% if was_shifted %}
 ATENCIÓN: el reparto se ha desplazado a esta fecha (no es el viernes habitual).
 {% endif %}
+{% set deadline_phrase %}{% if deadline %}antes del {{ deadline|format_datetime(pattern="EEEE d 'de' MMMM 'a las' HH:mm", locale='es') }}{% else %}con la debida antelación{% endif %}{% endset %}
 {% if can_act %}
 Si no puedes recoger tu cesta esta semana o quieres cambiar tu turno A/B
-puntualmente, puedes hacerlo tú desde tu calendario antes del miércoles
-a las 23:59:
+puntualmente, puedes hacerlo tú desde tu calendario {{ deadline_phrase }}:
 
 {{ calendar_url }}
 {% else %}
 Si no puedes recoger tu cesta esta semana o quieres cambiar tu turno A/B
-puntualmente, dínoslo antes del miércoles a las 23:59.
+puntualmente, dínoslo {{ deadline_phrase }}.
 {% endif %}
 
 Un abrazo,

@@ -1,0 +1,23 @@
+Albergue · próximos {{ days }} días · CSA Vega de Jarama
+=======================================================
+
+Del {{ from|date('d/m/Y') }} al {{ until|date_modify('-1 day')|date('d/m/Y') }}:
+
+LLEGADAS ({{ arrivals|length }})
+{% for stay in arrivals %}
+- {{ stay.arrivalDate|date('d/m') }} · {{ stay.helper.name }}{% if not stay.departureConfirmed %} (salida estimada {{ stay.departureDate|date('d/m') }}){% else %} (hasta {{ stay.departureDate|date('d/m') }}){% endif %}
+
+{% else %}
+(ninguna)
+{% endfor %}
+
+SALIDAS ({{ departures|length }})
+{% for stay in departures %}
+- {{ stay.departureDate|date('d/m') }} · {{ stay.helper.name }}{% if not stay.departureConfirmed %} (estimada){% endif %}
+
+{% else %}
+(ninguna)
+{% endfor %}
+
+--
+Recordatorio automático del albergue · CSA Vega de Jarama

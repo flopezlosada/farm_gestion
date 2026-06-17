@@ -1,0 +1,66 @@
+{# ============================================================
+ # Form compartido de voluntario de acogida (new + edit).
+ # Espera: form, submit_label, cancel_path.
+ # ============================================================ #}
+{% form_theme form 'form_div_layout.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{{ form_start(form, { attr: { role: 'form', class: 'csa-form-narrow' } }) }}
+
+    <div class="csa-stack-lg">
+
+        {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Quién es', subtitle: 'Nombre y de dónde nos llega.' } %}
+            {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
+                <div class="csa-form-grid">
+                    {{ csa.field(form.name, 'Nombre completo', { full: true }) }}
+                    {{ csa.field(form.source, 'Procedencia') }}
+                    {{ csa.field(form.country, 'País') }}
+                </div>
+            {% endblock %}
+        {% endembed %}
+
+        {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Contacto', subtitle: 'Cómo localizarle y a quién avisar.' } %}
+            {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
+                <div class="csa-form-grid">
+                    {{ csa.field(form.email, 'Email') }}
+                    {{ csa.field(form.phone, 'Teléfono') }}
+                    {{ csa.field(form.languages, 'Idiomas') }}
+                    {{ csa.field(form.birthDate, 'Fecha de nacimiento') }}
+                    {{ csa.field(form.emergencyContact, 'Contacto de emergencia', { full: true }) }}
+                </div>
+            {% endblock %}
+        {% endembed %}
+
+        {% embed '_components/csa_form_section.html.twig' with { num: '3', title: 'Prácticas', subtitle: 'Sólo para estudiantes en prácticas; el resto puede dejarlo en blanco.' } %}
+            {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
+                <div class="csa-form-grid">
+                    {{ csa.field(form.studies, 'Área de estudios') }}
+                    {{ csa.field(form.university, 'Universidad') }}
+                </div>
+            {% endblock %}
+        {% endembed %}
+
+        {% embed '_components/csa_form_section.html.twig' with { num: '4', title: 'Notas', subtitle: 'Cualquier detalle útil.' } %}
+            {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
+                <div class="csa-form-grid">
+                    {{ csa.field(form.notes, 'Notas', { full: true }) }}
+                </div>
+            {% endblock %}
+        {% endembed %}
+
+        <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+            <div></div>
+            <div class="csa-row">
+                {{ csa.btn('Cancelar', { variant: 'ghost', href: cancel_path }) }}
+                <button type="submit" class="csa-btn csa-btn--primary">{{ submit_label }}</button>
+            </div>
+        </div>
+
+    </div>
+
+    {{ form_rest(form) }}
+{{ form_end(form, { render_rest: false }) }}

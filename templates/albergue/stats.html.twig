@@ -1,0 +1,62 @@
+{# ============================================================
+ # Albergue · Métricas de ocupación del año.
+ # ============================================================ #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% set month_names = {
+    1: 'Enero', 2: 'Febrero', 3: 'Marzo', 4: 'Abril', 5: 'Mayo', 6: 'Junio',
+    7: 'Julio', 8: 'Agosto', 9: 'Septiembre', 10: 'Octubre', 11: 'Noviembre', 12: 'Diciembre'
+} %}
+
+{% block title %}Albergue · Métricas {{ stats.year }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('helper_index') }}">Albergue</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Métricas {{ stats.year }}</span>
+{% endblock %}
+
+{% block more_css %}
+{{ parent() }}
+<style>
+.met-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
+.met-note { margin-top: 16px; font-size: 12.5px; color: var(--csa-ink-faint, #8d8773); max-width: 640px; line-height: 1.5; }
+.met-empty { padding: 40px 18px; text-align: center; color: var(--csa-ink-faint, #8d8773); font-style: italic; background: #fff; border: 1px dashed var(--csa-line-2, #d8d2c2); border-radius: 8px; }
+</style>
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header('Albergue', 'Ocupación del albergue', 'Cómo de aprovechado está el albergue a lo largo del año.') }}
+
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-5);">
+        <div class="csa-row" style="align-items: center; gap: 10px;">
+            {{ csa.btn('◂ ' ~ prev_year, { variant: 'ghost', href: path('albergue_stats', { year: prev_year }) }) }}
+            <strong style="font-family: var(--csa-serif); font-size: 20px;">{{ stats.year }}</strong>
+            {{ csa.btn(next_year ~ ' ▸', { variant: 'ghost', href: path('albergue_stats', { year: next_year }) }) }}
+        </div>
+        {{ csa.btn('Voluntarios', { variant: 'ghost', href: path('helper_index'), icon: 'fa-bed' }) }}
+    </div>
+
+    {% if stats.stays > 0 %}
+        <div class="met-kpis">
+            {{ csa.kpi('Ocupación', stats.occupancy_pct, '%', 'camas-noche usadas vs disponibles', null, 'green', 'fa-bed') }}
+            {{ csa.kpi('Camas-noche usadas', stats.used_nights, null, 'de ' ~ stats.available_nights ~ ' disponibles') }}
+            {{ csa.kpi('Estancia media', stats.avg_stay, ' noches', 'por estancia confirmada') }}
+            {% if stats.busiest_month %}
+                {{ csa.kpi('Mes más lleno', month_names[stats.busiest_month], null, stats.busiest_peak ~ ' a la vez', null, 'ochre') }}
+            {% endif %}
+            {{ csa.kpi('Voluntarios', stats.helpers, null, stats.stays ~ ' estancia' ~ (stats.stays == 1 ? '' : 's')) }}
+        </div>
+
+        <p class="met-note">
+            La ocupación compara las camas-noche realmente usadas (estancias confirmadas) con las
+            disponibles (las camas de la casa cada día que el albergue está abierto). Puede pasar de
+            100% si algún día se admitió más gente que plazas.
+        </p>
+    {% else %}
+        <div class="met-empty">No hay estancias confirmadas en {{ stats.year }}.</div>
+    {% endif %}
+{% endblock %}

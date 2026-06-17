@@ -8,6 +8,7 @@ use App\Repository\DeliveryExceptionRepository;
 use App\Repository\WeeklyBasketRepository;
 use App\Security\PartnerAccessPolicy;
 use App\Service\AppSettings;
+use App\Service\Delivery\DeliveryDeadline;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -45,6 +46,7 @@ class SendPickupReminderCommand extends Command
         private readonly AppSettings $settings,
         private readonly PartnerAccessPolicy $accessPolicy,
         private readonly UrlGeneratorInterface $urlGenerator,
+        private readonly DeliveryDeadline $deadline,
     ) {
         parent::__construct();
     }
@@ -125,6 +127,18 @@ class SendPickupReminderCommand extends Command
         // informativo (sin botón de acción) para todo el mundo.
         $linksEnabled = $this->settings->getBool(AppSettings::EMAIL_PICKUP_REMINDER_LINKS);
 
+        // Fecha física del reparto que se comunica (con el traslado por excepción
+        // ya aplicado) y plazo de cierre calculado SOBRE ESA MISMA fecha. Es la
+        // que ve el socix, así que el plazo queda coherente con ella y nunca sale
+        // nulo. Antes el deadline se recalculaba por nodo con forPartnerAndBasket(),
+        // que devuelve null en nodos biweekly fuera de fase (Madrid) y dejaba el
+        // aviso sin plazo. No depende del destinatario, así que se calcula una vez.
+        $pickupDate = $exception?->getShiftedDate() ?? $basket->getDate();
+        $pickupDate = $pickupDate instanceof \DateTimeImmutable
+            ? $pickupDate
+            : \DateTimeImmutable::createFromInterface($pickupDate);
+        $deadline = $this->deadline->fromPhysicalDate($pickupDate);
+
         $sent = 0;
         $skipped = 0;
         foreach ($recipients as $r) {
@@ -142,7 +156,7 @@ class SendPickupReminderCommand extends Command
                 ->context([
                     'partner' => $r['partner'],
                     'modality' => $r['modality'],
-                    'pickup_date' => $exception?->getShiftedDate() ?? $basket->getDate(),
+                    'pickup_date' => $pickupDate,
                     'was_shifted' => $exception !== null && !$exception->isCancelled(),
                     // Los enlaces de acción exigen login: solo se pintan si el
                     // master switch está encendido Y el socix puede entrar
@@ -151,6 +165,7 @@ class SendPickupReminderCommand extends Command
                     // con ~decenas de envíos por semana.
                     'can_act' => $linksEnabled && $this->accessPolicy->canUseActionLinks($r['partner']),
                     'calendar_url' => $this->urlGenerator->generate('panel_calendar', [], UrlGeneratorInterface::ABSOLUTE_URL),
+                    'deadline' => $deadline,
                 ]);
 
             $this->mailer->send($message);

@@ -176,6 +176,16 @@
                         {% endif %}
                     </p>
                     <pre style="background: var(--csa-surface-2, #f4f4f4); padding: var(--csa-sp-3); border-radius: 6px; overflow-x: auto; font-size: 0.85em; line-height: 1.4;">{{ result.output }}</pre>
+                    {% if result.redirect_to is defined and result.redirect_to %}
+                        <div class="csa-alert csa-alert--warning" role="status" style="margin-top: var(--csa-sp-3);">
+                            <i class="csa-alert__icon fa fa-exclamation-triangle" aria-hidden="true"></i>
+                            <div class="csa-alert__body">
+                                <strong>Redirección de pruebas activa.</strong> El destinatario que aparece arriba
+                                es el nominal; la entrega real fue a <strong>{{ result.redirect_to }}</strong>.
+                                En local los emails no salen a internet: quedan capturados en Mailpit.
+                            </div>
+                        </div>
+                    {% endif %}
                 {% endblock %}
             {% endembed %}
         {% endif %}

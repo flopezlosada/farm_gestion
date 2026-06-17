@@ -306,6 +306,20 @@
                         </div>
                     {% endif %}
 
+                    {% if is_granted('ROLE_GESTION_ALBERGUE') %}
+                        <div class="csa-navgroup{{ sec_collapsed }}">
+                            <button type="button" class="csa-navgroup__head">Albergue <i class="csa-navgroup__chev fa fa-chevron-down" aria-hidden="true"></i></button>
+                            <div class="csa-navgroup__items">
+                                {{ _self.nav_link('Calendario', path('albergue_timeline', { view: 'months' }), 'fa-calendar',
+                                   route == 'albergue_timeline') }}
+                                {{ _self.nav_link('Voluntarios', path('helper_index'), 'fa-bed',
+                                   route starts with 'helper_' or route starts with 'stay_') }}
+                                {# Aforo y Métricas deshabilitados del menú por ahora (no aportan aún);
+                                 # las pantallas siguen existiendo (hosting_capacity_* / albergue_stats). #}
+                            </div>
+                        </div>
+                    {% endif %}
+
                     {% if is_granted('ROLE_GESTION_REPARTO') %}
                         <div class="csa-navgroup{{ sec_collapsed }}">
                             <button type="button" class="csa-navgroup__head">Reparto <i class="csa-navgroup__chev fa fa-chevron-down" aria-hidden="true"></i></button>

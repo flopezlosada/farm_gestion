@@ -45,6 +45,20 @@ final class DeliveryDeadline
             return null;
         }
 
+        return $this->fromPhysicalDate($physicalDate);
+    }
+
+    /**
+     * Aplica la política de plazos (antelación en días + hora de cierre, ambas
+     * de {@see AppSettings}) a una fecha física de reparto ya conocida. Es el
+     * núcleo que comparten el cálculo por socix y los usos que ya tienen la fecha
+     * a mano (p. ej. el texto del recordatorio de recogida), para que el plazo
+     * que se comunica sea SIEMPRE el configurado y no un literal.
+     *
+     * @param \DateTimeImmutable $physicalDate Fecha física del reparto.
+     */
+    public function fromPhysicalDate(\DateTimeImmutable $physicalDate): \DateTimeImmutable
+    {
         $daysBefore = $this->settings->getInt(AppSettings::DEADLINE_DAYS_BEFORE);
         [$hour, $minute] = $this->closingTime();
 

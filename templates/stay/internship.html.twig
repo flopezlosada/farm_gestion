@@ -1,0 +1,58 @@
+{# Datos de prácticas de una estancia — shell csa. #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% form_theme form 'form_div_layout.html.twig' %}
+
+{% block title %}Prácticas · {{ helper.name }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('helper_index') }}">Albergue</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('helper_show', { id: helper.id }) }}">{{ helper.name }}</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Prácticas</span>
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header(
+        'Albergue',
+        'Datos de prácticas',
+        helper.name ~ ' · estancia ' ~ stay.arrivalDate|date('d/m/Y') ~ ' → ' ~ stay.departureDate|date('d/m/Y')
+    ) }}
+
+    {{ form_start(form, { attr: { role: 'form', class: 'csa-form-narrow' } }) }}
+        <div class="csa-stack-lg">
+            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Tutor y convenio', subtitle: 'Quién tutoriza y la referencia del convenio.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.tutorName, 'Tutor/a') }}
+                        {{ csa.field(form.tutorEmail, 'Email del tutor/a') }}
+                        {{ csa.field(form.agreementReference, 'Referencia del convenio', { full: true }) }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Informe', subtitle: 'Estado de la memoria de prácticas.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.reportStatus, 'Informe de prácticas') }}
+                        {{ csa.field(form.notes, 'Notas de prácticas', { full: true }) }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                <div></div>
+                <div class="csa-row">
+                    {{ csa.btn('Cancelar', { variant: 'ghost', href: path('helper_show', { id: helper.id }) }) }}
+                    <button type="submit" class="csa-btn csa-btn--primary">Guardar prácticas</button>
+                </div>
+            </div>
+        </div>
+        {{ form_rest(form) }}
+    {{ form_end(form, { render_rest: false }) }}
+{% endblock %}

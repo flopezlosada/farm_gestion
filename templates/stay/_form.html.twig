@@ -1,0 +1,49 @@
+{# ============================================================
+ # Form compartido de estancia (new + edit).
+ # Espera: form, helper, submit_label, cancel_path.
+ # ============================================================ #}
+{% form_theme form 'form_div_layout.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{{ form_start(form, { attr: { role: 'form', class: 'csa-form-narrow' } }) }}
+
+    {# Errores globales del form: aquí cae el aviso del guard de aforo. #}
+    {% if form.vars.errors|length > 0 %}
+        {{ csa.callout(form_errors(form)|striptags|trim, 'danger', 'exclamation-triangle') }}
+    {% endif %}
+
+    <div class="csa-stack-lg">
+
+        {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Fechas', subtitle: 'La cama se ocupa desde la llegada hasta el día antes de la salida.' } %}
+            {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
+                <div class="csa-form-grid">
+                    {{ csa.field(form.arrivalDate, 'Llegada') }}
+                    {{ csa.field(form.departureDate, 'Salida (estimada)') }}
+                    {{ csa.field(form.departureConfirmed, 'Salida confirmada', { full: true }) }}
+                </div>
+            {% endblock %}
+        {% endembed %}
+
+        {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Estado y notas', subtitle: 'Sólo las confirmadas ocupan plaza y cuentan para el aforo.' } %}
+            {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
+                <div class="csa-form-grid">
+                    {{ csa.field(form.status, 'Estado') }}
+                    {{ csa.field(form.notes, 'Notas', { full: true }) }}
+                </div>
+            {% endblock %}
+        {% endembed %}
+
+        <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+            <div></div>
+            <div class="csa-row">
+                {{ csa.btn('Cancelar', { variant: 'ghost', href: cancel_path }) }}
+                <button type="submit" class="csa-btn csa-btn--primary">{{ submit_label }}</button>
+            </div>
+        </div>
+
+    </div>
+
+    {{ form_rest(form) }}
+{{ form_end(form, { render_rest: false }) }}

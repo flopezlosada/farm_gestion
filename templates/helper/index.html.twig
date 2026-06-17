@@ -1,0 +1,243 @@
+{# ============================================================
+ # Listado de voluntarios de acogida del albergue.
+ # Reutiliza el lenguaje visual --prl-* del listado de socixs
+ # (partial _listing_styles compartido). Filtros (texto, procedencia,
+ # rango de fechas), orden por columnas y fechas de entrada/salida.
+ # ============================================================ #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{# Cabecera ordenable: enlace que fija ?sort/?dir conservando los filtros. #}
+{% macro sorth(label, key, sort, dir, fp) %}
+    {% set ndir = (sort == key and dir == 'asc') ? 'desc' : 'asc' %}
+    <a class="{{ sort == key ? dir : '' }}" href="{{ path('helper_index', fp|merge({ sort: key, dir: ndir })) }}">{{ label }}</a>
+{% endmacro %}
+
+{% set source_tone = { 1: 'mod-1', 2: 'mod-2', 0: 'mod-3' } %}
+{% set avatar_palette = ['', 'ochre', 'terra', 'ink'] %}
+{% set fp = { q: q, source: selected_source, year: selected_year } %}
+
+{% block title %}Albergue · Voluntarios{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Albergue</span>
+{% endblock %}
+
+{% block more_css %}
+{{ parent() }}
+{% include 'partner/_listing_styles.html.twig' %}
+<style>
+.prl-table .col-source   { width: 160px; }
+.prl-table .col-country  { width: 90px; }
+.prl-table .col-contact  { width: 160px; }
+.prl-table .col-entrada  { width: 110px; }
+.prl-table .col-salida   { width: 130px; }
+/* La procedencia es de longitud variable: que el chip envuelva dentro de su
+ * celda en vez de desbordarse sobre País. */
+.prl-table td.col-source { overflow: hidden; }
+.prl-table td.col-source .prl-chip { white-space: normal; max-width: 100%; }
+.hlp-date { font-family: 'Fraunces', serif; font-weight: 500; font-size: 13px; color: var(--prl-ink, #1d1c17); white-space: nowrap; }
+.hlp-date__est { font-family: 'Inter', sans-serif; font-size: 10.5px; color: var(--prl-ochre-d, #8c6919); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 1px; }
+</style>
+{% endblock %}
+
+{% block more_js %}
+{{ parent() }}
+<script>
+    // Listado de voluntarios — popover de procedencia + auto-submit de filtros.
+    (function () {
+        document.querySelectorAll('[data-pop-trigger]').forEach(function (btn) {
+            btn.addEventListener('click', function (ev) {
+                ev.stopPropagation();
+                var pop = document.getElementById(btn.getAttribute('data-pop-trigger'));
+                if (!pop) return;
+                var open = !pop.hidden;
+                document.querySelectorAll('.prl-pop').forEach(function (p) { p.hidden = true; });
+                pop.hidden = open;
+            });
+        });
+        document.addEventListener('click', function (ev) {
+            document.querySelectorAll('.prl-pop').forEach(function (pop) {
+                if (pop.hidden || pop.contains(ev.target)) return;
+                var trigger = document.querySelector('[data-pop-trigger="' + pop.id + '"]');
+                if (trigger && trigger.contains(ev.target)) return;
+                pop.hidden = true;
+            });
+        });
+
+        var form = document.getElementById('hlp-filter-form');
+        if (!form) return;
+        form.querySelectorAll('input[type="radio"]').forEach(function (el) {
+            el.addEventListener('change', function () { form.submit(); });
+        });
+        var search = form.querySelector('input[name="q"]');
+        if (search) {
+            var t = null;
+            search.addEventListener('input', function () {
+                clearTimeout(t);
+                t = setTimeout(function () { form.submit(); }, 350);
+            });
+            if (search.value) {
+                search.focus();
+                var end = search.value.length;
+                search.setSelectionRange(end, end);
+            }
+        }
+    }());
+</script>
+{% endblock %}
+
+{% block csa_main %}
+<div class="prl">
+
+    {{ csa.page_header(
+        'Albergue · Voluntarios',
+        'Voluntarios de acogida',
+        'Personas que vienen a colaborar a cambio de alojamiento y comida: prácticas (Campus Rural), wwoofers, Workaway…'
+    ) }}
+
+    {# ============ STAT STRIP ============ #}
+    <div class="prl-stats" style="grid-template-columns: repeat(3, 1fr);">
+        <div class="prl-stat">
+            <div class="v">{{ stats.total }}</div>
+            <div class="l">voluntarios</div>
+        </div>
+        <a class="prl-stat prl-stat--active" href="{{ path('albergue_timeline') }}" style="text-decoration: none;">
+            <div class="v">{{ stats.current }}</div>
+            <div class="l">hoy en el albergue</div>
+        </a>
+        <a class="prl-stat prl-stat--paused" href="{{ path('albergue_timeline') }}" style="text-decoration: none;">
+            <div class="v">{{ stats.arrivals }}</div>
+            <div class="l">llegan (30 días)</div>
+        </a>
+    </div>
+
+    {# ============ TOOLBAR ============ #}
+    <form method="get" action="{{ path('helper_index') }}" id="hlp-filter-form">
+        <input type="hidden" name="sort" value="{{ sort }}">
+        <input type="hidden" name="dir" value="{{ dir }}">
+        <div class="prl-toolbar">
+            <div class="prl-search">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
+                <input type="search" name="q" value="{{ q }}" placeholder="Buscar por nombre o país…" autocomplete="off">
+            </div>
+
+            <div class="prl-filt-wrap">
+                <button type="button" class="prl-filt {{ selected_source ? 'has' : '' }}" data-pop-trigger="pop-source">
+                    Procedencia
+                    {% if selected_source %}<span class="badge">1</span>{% endif %}
+                    <svg class="chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+                <div class="prl-pop" id="pop-source" hidden>
+                    <label><input type="radio" name="source" value="" {{ selected_source ? '' : 'checked' }}> Todas</label>
+                    {% for source in sources %}
+                        <label><input type="radio" name="source" value="{{ source.id }}" {{ selected_source == source.id ? 'checked' : '' }}> {{ source.name }}</label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="prl-filt-wrap">
+                <button type="button" class="prl-filt {{ selected_year ? 'has' : '' }}" data-pop-trigger="pop-year">
+                    {{ selected_year ?: 'Año' }}
+                    <svg class="chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+                <div class="prl-pop" id="pop-year" hidden>
+                    <label><input type="radio" name="year" value="" {{ selected_year ? '' : 'checked' }}> Todos los años</label>
+                    {% for y in years %}
+                        <label><input type="radio" name="year" value="{{ y }}" {{ selected_year == y ? 'checked' : '' }}> {{ y }}</label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            {% if q or selected_source or selected_year %}
+                <a class="prl-filt prl-filt--clear" href="{{ path('helper_index') }}" title="Limpiar filtros">
+                    <i class="fa fa-times-circle" aria-hidden="true"></i> Limpiar
+                </a>
+            {% endif %}
+
+            <span class="prl-filt-divider"></span>
+            <div class="counters"><b>{{ rows|length }}</b> voluntario{{ rows|length == 1 ? '' : 's' }}</div>
+            <div class="spacer"></div>
+
+            <a href="{{ path('albergue_timeline', { view: 'months' }) }}" class="prl-btn"><i class="fa fa-calendar"></i> Calendario</a>
+            {# Aforo y Métricas deshabilitados por ahora (no aportan aún); pantallas vivas. #}
+            <a href="{{ path('helper_new') }}" class="prl-btn prl-btn--primary"><i class="fa fa-plus"></i> Nuevo voluntario</a>
+        </div>
+        <noscript><button type="submit" class="prl-btn prl-btn--primary">Filtrar</button></noscript>
+    </form>
+
+    {# ============ TABLA ============ #}
+    <div class="prl-table-wrap">
+        {% if rows|length == 0 %}
+            <div class="prl-empty">
+                {% if q or selected_source or desde or hasta %}No hay voluntarios que cumplan los filtros.{% else %}Aún no hay voluntarios registrados.{% endif %}
+            </div>
+        {% else %}
+            <table class="prl-table">
+                <thead>
+                    <tr>
+                        <th class="col-socix prl-sortable">{{ _self.sorth('Voluntario', 'name', sort, dir, fp) }}</th>
+                        <th class="col-source prl-sortable">{{ _self.sorth('Procedencia', 'source', sort, dir, fp) }}</th>
+                        <th class="col-country tight prl-sortable">{{ _self.sorth('País', 'country', sort, dir, fp) }}</th>
+                        <th class="col-contact">Contacto</th>
+                        <th class="col-entrada tight prl-sortable">{{ _self.sorth('Entrada', 'arrival', sort, dir, fp) }}</th>
+                        <th class="col-salida tight prl-sortable">{{ _self.sorth('Salida', 'departure', sort, dir, fp) }}</th>
+                        <th class="actions"><span class="sr-only">Acciones</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                        {% set helper = row.helper %}
+                        {% set stay = row.stay %}
+                        {% set initials = (helper.name|first|upper) ~ (helper.name|split(' ')|length > 1 ? (helper.name|split(' '))[1]|first|upper : '') %}
+                        {% set avatar_tone = avatar_palette[(helper.id|default(0)) % 4] %}
+                        {% set tone = source_tone[(helper.source.id|default(0)) % 3] %}
+                        <tr>
+                            <td>
+                                <div class="prl-person">
+                                    <span class="prl-person__avatar {{ avatar_tone ? 'prl-person__avatar--' ~ avatar_tone : '' }}" aria-hidden="true">{{ initials }}</span>
+                                    <div class="prl-person__body">
+                                        <a class="prl-person__name" href="{{ path('helper_show', { id: helper.id }) }}">{{ helper.name }}</a>
+                                        {% if helper.email %}<span class="prl-person__meta">{{ helper.email }}</span>{% endif %}
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="col-source">
+                                <span class="prl-chip prl-chip--{{ tone }}"><span class="dot"></span>{{ helper.source.name }}</span>
+                            </td>
+                            <td class="tight">{{ helper.country ?: '—' }}</td>
+                            <td>
+                                {% if helper.phone %}
+                                    <div class="prl-pickup__name">{{ helper.phone }}</div>
+                                {% elseif helper.email %}
+                                    <div class="prl-pickup__name">{{ helper.email }}</div>
+                                {% else %}
+                                    <span class="prl-cell-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td class="tight">
+                                {% if stay %}<span class="hlp-date">{{ stay.arrivalDate|date('d/m/Y') }}</span>{% else %}<span class="prl-cell-muted">—</span>{% endif %}
+                            </td>
+                            <td class="tight">
+                                {% if stay %}
+                                    <span class="hlp-date">{{ stay.departureDate|date('d/m/Y') }}</span>
+                                    {% if not stay.departureConfirmed %}<div class="hlp-date__est">estimada</div>{% endif %}
+                                {% else %}
+                                    <span class="prl-cell-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td class="actions">
+                                <a href="{{ path('helper_show', { id: helper.id }) }}" title="Ver" aria-label="Ver"><i class="fa fa-eye"></i></a>
+                                <a href="{{ path('helper_edit', { id: helper.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

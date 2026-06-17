@@ -17,10 +17,11 @@
         </p>
     {% endif %}
 
+    {% set deadline_phrase %}{% if deadline %}antes del <strong>{{ deadline|format_datetime(pattern="EEEE d 'de' MMMM 'a las' HH:mm", locale='es') }}</strong>{% else %}con la debida antelación{% endif %}{% endset %}
+
     {% if can_act %}
         <p>Si no puedes recoger tu cesta esta semana o quieres cambiar tu turno A↔B puntualmente,
-           puedes hacerlo tú directamente desde tu calendario antes del
-           <strong>miércoles a las 23:59</strong>:</p>
+           puedes hacerlo tú directamente desde tu calendario {{ deadline_phrase|raw }}:</p>
         <p style="text-align: center; margin: 24px 0;">
             <a href="{{ calendar_url }}"
                style="background: #5a8f3d; color: #fff; text-decoration: none; padding: 12px 22px; border-radius: 6px; display: inline-block;">
@@ -29,7 +30,7 @@
         </p>
     {% else %}
         <p>Si por cualquier motivo no puedes recoger tu cesta esta semana o quieres cambiar tu turno A↔B
-           puntualmente, dínoslo antes del <strong>miércoles a las 23:59</strong>.</p>
+           puntualmente, dínoslo {{ deadline_phrase|raw }}.</p>
     {% endif %}
 
     <p style="margin-top: 32px; color: #777; font-size: 13px;">
