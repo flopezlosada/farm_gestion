@@ -32,7 +32,7 @@ class HostingStatsBuilderTest extends TestCase
         ];
 
         $stayRepository = $this->createMock(StayRepository::class);
-        $stayRepository->method('findConfirmedOverlapping')->willReturn($stays);
+        $stayRepository->method('findOverlapping')->willReturn($stays);
 
         $builder = new HostingStatsBuilder(
             $stayRepository,
@@ -58,7 +58,7 @@ class HostingStatsBuilderTest extends TestCase
     public function testSinEstanciasConfirmadas(): void
     {
         $stayRepository = $this->createMock(StayRepository::class);
-        $stayRepository->method('findConfirmedOverlapping')->willReturn([]);
+        $stayRepository->method('findOverlapping')->willReturn([]);
 
         $builder = new HostingStatsBuilder(
             $stayRepository,

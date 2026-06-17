@@ -2,6 +2,7 @@
 
 namespace App\Service\Hosting;
 
+use App\Entity\Stay;
 use App\Repository\StayRepository;
 
 /**
@@ -38,7 +39,9 @@ final class HostingStatsBuilder
         $from = new \DateTimeImmutable(sprintf('%04d-01-01', $year));
         $to = new \DateTimeImmutable(sprintf('%04d-01-01', $year + 1));
 
-        $stays = $this->stayRepository->findConfirmedOverlapping($from, $to);
+        // findOverlapping (no findConfirmedOverlapping) porque trae el Helper en
+        // el mismo SELECT: el bucle de abajo lo necesita y así no hay N+1.
+        $stays = $this->stayRepository->findOverlapping($from, $to, [Stay::STATUS_CONFIRMED]);
         $capacityForDay = $this->capacityResolver->capacityForDayBetween($from, $to->modify('-1 day'));
 
         $used = 0;

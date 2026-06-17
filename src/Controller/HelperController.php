@@ -273,6 +273,8 @@ class HelperController extends AbstractController
     public function delete(Request $request, Helper $helper, EntityManagerInterface $entityManager): Response
     {
         if (!$this->isCsrfTokenValid('delete' . $helper->getId(), (string) $request->request->get('_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+
             return $this->redirectToRoute('helper_show', ['id' => $helper->getId()]);
         }
 

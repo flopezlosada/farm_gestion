@@ -71,6 +71,8 @@ class HostingCapacityController extends AbstractController
         if ($this->isCsrfTokenValid('hosting_physical', (string) $request->request->get('_token'))) {
             $settings->setInt(AppSettings::HOSTING_PHYSICAL_CAPACITY, (int) $request->request->get('physical_capacity'));
             $this->addFlash('success', 'Camas de la casa actualizadas.');
+        } else {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
         }
 
         return $this->redirectToRoute('hosting_capacity_index', ['year' => $year]);

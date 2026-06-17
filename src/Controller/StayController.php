@@ -155,6 +155,8 @@ class StayController extends AbstractController
             $entityManager->remove($stay);
             $entityManager->flush();
             $this->addFlash('success', 'Estancia borrada.');
+        } else {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
         }
 
         return $this->redirectToRoute('helper_show', ['id' => $helperId]);

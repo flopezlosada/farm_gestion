@@ -181,6 +181,12 @@ class StayRepository extends ServiceEntityRepository
      */
     private function byDateField(string $field, \DateTimeImmutable $from, \DateTimeImmutable $to): array
     {
+        // El campo se interpola en el DQL: lista blanca para que nunca pueda ser
+        // un valor arbitrario (defensa aunque hoy los llamadores pasen literales).
+        if (!in_array($field, ['arrivalDate', 'departureDate'], true)) {
+            throw new \InvalidArgumentException(sprintf('Campo de fecha no permitido: "%s".', $field));
+        }
+
         return $this->createQueryBuilder('s')
             ->addSelect('h')
             ->join('s.helper', 'h')
