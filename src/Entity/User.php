@@ -72,6 +72,19 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface, LegacyP
     private bool $passwordSet = false;
 
     /**
+     * Acceso anticipado concedido por la administración: deja entrar a este
+     * socix aunque el grifo global de acceso de socixs ({@see
+     * \App\Service\AppSettings::FEATURE_PARTNER_LOGIN}) esté cerrado. Lo activa
+     * el botón "Dar acceso" de la ficha ({@see
+     * \App\Security\PartnerUserProvisioner::provision()}) y lo respeta el
+     * {@see \App\Security\UserChecker}. Es el mecanismo de despliegue selectivo
+     * (autorizar socixs uno a uno) previo a abrir el acceso a todo el mundo.
+     *
+     * @ORM\Column(name="early_access", type="boolean", options={"default": false})
+     */
+    private bool $earlyAccess = false;
+
+    /**
      * @ORM\Column(name="last_login", type="datetime", nullable=true)
      */
     private $lastLogin;
@@ -242,6 +255,21 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface, LegacyP
     public function setEnabled(bool $enabled): self
     {
         $this->enabled = $enabled;
+        return $this;
+    }
+
+    /**
+     * ¿Tiene acceso anticipado concedido por la administración? Si es true,
+     * entra aunque el acceso global de socixs esté cerrado.
+     */
+    public function isEarlyAccess(): bool
+    {
+        return $this->earlyAccess;
+    }
+
+    public function setEarlyAccess(bool $earlyAccess): self
+    {
+        $this->earlyAccess = $earlyAccess;
         return $this;
     }
 
