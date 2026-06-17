@@ -1,15 +1,21 @@
 {# ============================================================
  # Listado de voluntarios de acogida del albergue.
  # Reutiliza el lenguaje visual --prl-* del listado de socixs
- # (partial _listing_styles compartido) para un aspecto consistente.
+ # (partial _listing_styles compartido). Filtros (texto, procedencia,
+ # rango de fechas), orden por columnas y fechas de entrada/salida.
  # ============================================================ #}
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
 
-{# Color de chip/avatar rotado por id de procedencia (sage/ochre/terra),
- # reusando las clases mod-1/2/3 del CSS de socixs. #}
+{# Cabecera ordenable: enlace que fija ?sort/?dir conservando los filtros. #}
+{% macro sorth(label, key, sort, dir, fp) %}
+    {% set ndir = (sort == key and dir == 'asc') ? 'desc' : 'asc' %}
+    <a class="{{ sort == key ? dir : '' }}" href="{{ path('helper_index', fp|merge({ sort: key, dir: ndir })) }}">{{ label }}</a>
+{% endmacro %}
+
 {% set source_tone = { 1: 'mod-1', 2: 'mod-2', 0: 'mod-3' } %}
 {% set avatar_palette = ['', 'ochre', 'terra', 'ink'] %}
+{% set fp = { q: q, source: selected_source, year: selected_year } %}
 
 {% block title %}Albergue · Voluntarios{% endblock %}
 
@@ -23,17 +29,24 @@
 {{ parent() }}
 {% include 'partner/_listing_styles.html.twig' %}
 <style>
-.prl-table .col-source  { width: 150px; }
-.prl-table .col-country { width: 130px; }
-.prl-table .col-contact { width: 200px; }
-.prl-table .col-stays   { width: 90px; }
+.prl-table .col-source   { width: 160px; }
+.prl-table .col-country  { width: 90px; }
+.prl-table .col-contact  { width: 160px; }
+.prl-table .col-entrada  { width: 110px; }
+.prl-table .col-salida   { width: 130px; }
+/* La procedencia es de longitud variable: que el chip envuelva dentro de su
+ * celda en vez de desbordarse sobre País. */
+.prl-table td.col-source { overflow: hidden; }
+.prl-table td.col-source .prl-chip { white-space: normal; max-width: 100%; }
+.hlp-date { font-family: 'Fraunces', serif; font-weight: 500; font-size: 13px; color: var(--prl-ink, #1d1c17); white-space: nowrap; }
+.hlp-date__est { font-family: 'Inter', sans-serif; font-size: 10.5px; color: var(--prl-ochre-d, #8c6919); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 1px; }
 </style>
 {% endblock %}
 
 {% block more_js %}
 {{ parent() }}
 <script>
-    // Listado de voluntarios — popover de procedencia + auto-submit.
+    // Listado de voluntarios — popover de procedencia + auto-submit de filtros.
     (function () {
         document.querySelectorAll('[data-pop-trigger]').forEach(function (btn) {
             btn.addEventListener('click', function (ev) {
@@ -82,7 +95,7 @@
     {{ csa.page_header(
         'Albergue · Voluntarios',
         'Voluntarios de acogida',
-        'Gente que viene a trabajar a cambio de cama y comida. Cada persona vive una vez; sus visitas son estancias.'
+        'Personas que vienen a colaborar a cambio de alojamiento y comida: prácticas (Campus Rural), wwoofers, Workaway…'
     ) }}
 
     {# ============ STAT STRIP ============ #}
@@ -103,6 +116,8 @@
 
     {# ============ TOOLBAR ============ #}
     <form method="get" action="{{ path('helper_index') }}" id="hlp-filter-form">
+        <input type="hidden" name="sort" value="{{ sort }}">
+        <input type="hidden" name="dir" value="{{ dir }}">
         <div class="prl-toolbar">
             <div class="prl-search">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
@@ -123,17 +138,30 @@
                 </div>
             </div>
 
-            {% if q or selected_source %}
+            <div class="prl-filt-wrap">
+                <button type="button" class="prl-filt {{ selected_year ? 'has' : '' }}" data-pop-trigger="pop-year">
+                    {{ selected_year ?: 'Año' }}
+                    <svg class="chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+                <div class="prl-pop" id="pop-year" hidden>
+                    <label><input type="radio" name="year" value="" {{ selected_year ? '' : 'checked' }}> Todos los años</label>
+                    {% for y in years %}
+                        <label><input type="radio" name="year" value="{{ y }}" {{ selected_year == y ? 'checked' : '' }}> {{ y }}</label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            {% if q or selected_source or selected_year %}
                 <a class="prl-filt prl-filt--clear" href="{{ path('helper_index') }}" title="Limpiar filtros">
                     <i class="fa fa-times-circle" aria-hidden="true"></i> Limpiar
                 </a>
             {% endif %}
 
             <span class="prl-filt-divider"></span>
-            <div class="counters"><b>{{ helpers|length }}</b> voluntario{{ helpers|length == 1 ? '' : 's' }}</div>
+            <div class="counters"><b>{{ rows|length }}</b> voluntario{{ rows|length == 1 ? '' : 's' }}</div>
             <div class="spacer"></div>
 
-            <a href="{{ path('albergue_timeline') }}" class="prl-btn"><i class="fa fa-calendar"></i> Calendario</a>
+            <a href="{{ path('albergue_timeline', { view: 'months' }) }}" class="prl-btn"><i class="fa fa-calendar"></i> Calendario</a>
             <a href="{{ path('hosting_capacity_index') }}" class="prl-btn"><i class="fa fa-bed"></i> Aforo</a>
             <a href="{{ path('albergue_stats') }}" class="prl-btn"><i class="fa fa-bar-chart"></i> Métricas</a>
             <a href="{{ path('helper_new') }}" class="prl-btn prl-btn--primary"><i class="fa fa-plus"></i> Nuevo voluntario</a>
@@ -143,24 +171,27 @@
 
     {# ============ TABLA ============ #}
     <div class="prl-table-wrap">
-        {% if helpers|length == 0 %}
+        {% if rows|length == 0 %}
             <div class="prl-empty">
-                {% if q or selected_source %}No hay voluntarios que cumplan el filtro.{% else %}Aún no hay voluntarios registrados.{% endif %}
+                {% if q or selected_source or desde or hasta %}No hay voluntarios que cumplan los filtros.{% else %}Aún no hay voluntarios registrados.{% endif %}
             </div>
         {% else %}
             <table class="prl-table">
                 <thead>
                     <tr>
-                        <th class="col-socix">Voluntario</th>
-                        <th class="col-source">Procedencia</th>
-                        <th class="col-country tight">País</th>
+                        <th class="col-socix prl-sortable">{{ _self.sorth('Voluntario', 'name', sort, dir, fp) }}</th>
+                        <th class="col-source prl-sortable">{{ _self.sorth('Procedencia', 'source', sort, dir, fp) }}</th>
+                        <th class="col-country tight prl-sortable">{{ _self.sorth('País', 'country', sort, dir, fp) }}</th>
                         <th class="col-contact">Contacto</th>
-                        <th class="col-stays tight">Estancias</th>
+                        <th class="col-entrada tight prl-sortable">{{ _self.sorth('Entrada', 'arrival', sort, dir, fp) }}</th>
+                        <th class="col-salida tight prl-sortable">{{ _self.sorth('Salida', 'departure', sort, dir, fp) }}</th>
                         <th class="actions"><span class="sr-only">Acciones</span></th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for helper in helpers %}
+                    {% for row in rows %}
+                        {% set helper = row.helper %}
+                        {% set stay = row.stay %}
                         {% set initials = (helper.name|first|upper) ~ (helper.name|split(' ')|length > 1 ? (helper.name|split(' '))[1]|first|upper : '') %}
                         {% set avatar_tone = avatar_palette[(helper.id|default(0)) % 4] %}
                         {% set tone = source_tone[(helper.source.id|default(0)) % 3] %}
@@ -174,7 +205,7 @@
                                     </div>
                                 </div>
                             </td>
-                            <td>
+                            <td class="col-source">
                                 <span class="prl-chip prl-chip--{{ tone }}"><span class="dot"></span>{{ helper.source.name }}</span>
                             </td>
                             <td class="tight">{{ helper.country ?: '—' }}</td>
@@ -187,7 +218,17 @@
                                     <span class="prl-cell-muted">—</span>
                                 {% endif %}
                             </td>
-                            <td class="tight">{{ helper.stays|length }}</td>
+                            <td class="tight">
+                                {% if stay %}<span class="hlp-date">{{ stay.arrivalDate|date('d/m/Y') }}</span>{% else %}<span class="prl-cell-muted">—</span>{% endif %}
+                            </td>
+                            <td class="tight">
+                                {% if stay %}
+                                    <span class="hlp-date">{{ stay.departureDate|date('d/m/Y') }}</span>
+                                    {% if not stay.departureConfirmed %}<div class="hlp-date__est">estimada</div>{% endif %}
+                                {% else %}
+                                    <span class="prl-cell-muted">—</span>
+                                {% endif %}
+                            </td>
                             <td class="actions">
                                 <a href="{{ path('helper_show', { id: helper.id }) }}" title="Ver" aria-label="Ver"><i class="fa fa-eye"></i></a>
                                 <a href="{{ path('helper_edit', { id: helper.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>

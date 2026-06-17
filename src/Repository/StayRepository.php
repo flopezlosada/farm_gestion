@@ -89,6 +89,33 @@ class StayRepository extends ServiceEntityRepository
     }
 
     /**
+     * Años que tienen estancias (no canceladas), de más reciente a más antiguo,
+     * incluyendo siempre el año actual. Para el filtro por año del listado.
+     *
+     * @return int[]
+     */
+    public function activeYears(): array
+    {
+        $row = $this->createQueryBuilder('s')
+            ->select('MIN(s.arrivalDate) AS mn', 'MAX(s.departureDate) AS mx')
+            ->andWhere('s.status != :cancelled')
+            ->setParameter('cancelled', Stay::STATUS_CANCELLED)
+            ->getQuery()
+            ->getScalarResult();
+
+        $current = (int) (new \DateTimeImmutable('today'))->format('Y');
+        $row = $row[0] ?? null;
+        if ($row === null || empty($row['mn']) || empty($row['mx'])) {
+            return [$current];
+        }
+
+        $min = min((int) substr((string) $row['mn'], 0, 4), $current);
+        $max = max((int) substr((string) $row['mx'], 0, 4), $current);
+
+        return range($max, $min);
+    }
+
+    /**
      * Estancias cuya LLEGADA cae en el año dado, con su voluntario y la
      * procedencia traídos en el mismo SELECT (las métricas agrupan por
      * procedencia, sin esto sería N+1). Por defecto confirmadas y solicitadas;

@@ -43,22 +43,151 @@ class HelperController extends AbstractController
         $term = trim((string) $request->query->get('q', ''));
         $sourceId = $request->query->get('source');
         $sourceId = ($sourceId === null || $sourceId === '') ? null : (int) $sourceId;
-
-        $helpers = $helperRepository->search($term, $sourceId);
+        $year = $request->query->get('year');
+        $year = ($year === null || $year === '') ? null : (int) $year;
+        $sort = (string) $request->query->get('sort', 'name');
+        $dir = $request->query->get('dir') === 'desc' ? 'desc' : 'asc';
 
         $today = new \DateTimeImmutable('today');
 
+        // Filtro por año: quien tenga alguna estancia que toque ese año natural.
+        $from = $year !== null ? new \DateTimeImmutable(sprintf('%04d-01-01', $year)) : null;
+        $to = $year !== null ? new \DateTimeImmutable(sprintf('%04d-12-31', $year)) : null;
+
+        // Cada fila lleva su estancia "relevante" (la actual; si no, la próxima;
+        // si no, la última pasada), de donde salen las fechas y el orden.
+        $rows = [];
+        foreach ($helperRepository->search($term, $sourceId) as $helper) {
+            if ($year !== null && !$this->hasStayInRange($helper, $from, $to)) {
+                continue;
+            }
+            $rows[] = ['helper' => $helper, 'stay' => $this->primaryStay($helper, $today)];
+        }
+        $rows = $this->sortRows($rows, $sort, $dir);
+
         return $this->render('helper/index.html.twig', [
-            'helpers' => $helpers,
+            'rows' => $rows,
             'sources' => $sourceRepository->findBy([], ['name' => 'ASC']),
+            'years' => $stayRepository->activeYears(),
             'q' => $term,
             'selected_source' => $sourceId,
+            'selected_year' => $year,
+            'sort' => $sort,
+            'dir' => $dir,
             'stats' => [
                 'total' => $helperRepository->count([]),
                 'current' => count($stayRepository->findOverlapping($today, $today->modify('+1 day'), [Stay::STATUS_CONFIRMED])),
                 'arrivals' => count($stayRepository->findArrivalsBetween($today, $today->modify('+30 days'))),
             ],
         ]);
+    }
+
+    /**
+     * Estancia "relevante" de un voluntario para el listado: la que esté en
+     * curso; si no hay, la próxima por llegar; si tampoco, la última pasada.
+     * Ignora las canceladas. Null si no tiene ninguna.
+     *
+     * @param Helper $helper
+     * @param \DateTimeImmutable $today
+     * @return \App\Entity\Stay|null
+     */
+    private function primaryStay(Helper $helper, \DateTimeImmutable $today): ?Stay
+    {
+        $current = null;
+        $upcoming = null;
+        $past = null;
+        foreach ($helper->getStays() as $stay) {
+            if ($stay->getStatus() === Stay::STATUS_CANCELLED) {
+                continue;
+            }
+            $arrival = $stay->getArrivalDate();
+            $departure = $stay->getDepartureDate();
+            if ($arrival <= $today && $today < $departure) {
+                $current = $stay;
+            } elseif ($arrival > $today) {
+                if ($upcoming === null || $arrival < $upcoming->getArrivalDate()) {
+                    $upcoming = $stay;
+                }
+            } elseif ($past === null || $departure > $past->getDepartureDate()) {
+                $past = $stay;
+            }
+        }
+
+        return $current ?? $upcoming ?? $past;
+    }
+
+    /**
+     * ¿El voluntario tiene alguna estancia (no cancelada) que solape el rango
+     * [$from, $hasta] (días inclusive; cualquiera de los dos extremos puede ser
+     * null = sin tope por ese lado)?
+     *
+     * @param Helper $helper
+     * @param \DateTimeImmutable|null $from
+     * @param \DateTimeImmutable|null $to
+     * @return bool
+     */
+    private function hasStayInRange(Helper $helper, ?\DateTimeImmutable $from, ?\DateTimeImmutable $to): bool
+    {
+        $toExclusive = $to?->modify('+1 day');
+        foreach ($helper->getStays() as $stay) {
+            if ($stay->getStatus() === Stay::STATUS_CANCELLED) {
+                continue;
+            }
+            if ($from !== null && $stay->getDepartureDate() <= $from) {
+                continue;
+            }
+            if ($toExclusive !== null && $stay->getArrivalDate() >= $toExclusive) {
+                continue;
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Ordena las filas por la columna pedida. Las fechas/null van al final en
+     * ascendente.
+     *
+     * @param array<int, array{helper: Helper, stay: \App\Entity\Stay|null}> $rows
+     * @param string $sort
+     * @param string $dir
+     * @return array<int, array{helper: Helper, stay: \App\Entity\Stay|null}>
+     */
+    private function sortRows(array $rows, string $sort, string $dir): array
+    {
+        usort($rows, fn (array $x, array $y) => match ($sort) {
+            'source' => strcasecmp((string) $x['helper']->getSource()?->getName(), (string) $y['helper']->getSource()?->getName()),
+            'country' => strcasecmp((string) $x['helper']->getCountry(), (string) $y['helper']->getCountry()),
+            'arrival' => $this->compareDates($x['stay']?->getArrivalDate(), $y['stay']?->getArrivalDate()),
+            'departure' => $this->compareDates($x['stay']?->getDepartureDate(), $y['stay']?->getDepartureDate()),
+            default => strcasecmp((string) $x['helper']->getName(), (string) $y['helper']->getName()),
+        });
+
+        return $dir === 'desc' ? array_reverse($rows) : $rows;
+    }
+
+    /**
+     * Compara dos fechas dejando los null al final (en ascendente).
+     *
+     * @param \DateTimeImmutable|null $a
+     * @param \DateTimeImmutable|null $b
+     * @return int
+     */
+    private function compareDates(?\DateTimeImmutable $a, ?\DateTimeImmutable $b): int
+    {
+        if ($a === null && $b === null) {
+            return 0;
+        }
+        if ($a === null) {
+            return 1;
+        }
+        if ($b === null) {
+            return -1;
+        }
+
+        return $a <=> $b;
     }
 
     /**
