@@ -1,0 +1,79 @@
+{# ============================================================
+ # Calendario de aforo del albergue: los 12 meses de un año.
+ # ============================================================ #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% set month_names = {
+    1: 'Enero', 2: 'Febrero', 3: 'Marzo', 4: 'Abril', 5: 'Mayo', 6: 'Junio',
+    7: 'Julio', 8: 'Agosto', 9: 'Septiembre', 10: 'Octubre', 11: 'Noviembre', 12: 'Diciembre'
+} %}
+
+{% block title %}Albergue · Aforo {{ year }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('helper_index') }}">Albergue</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Aforo {{ year }}</span>
+{% endblock %}
+
+{% block more_css %}
+{{ parent() }}
+<style>
+.cap-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; }
+.cap-card { display: block; text-decoration: none; color: inherit; background: #fff; border: 1px solid var(--csa-rule, #ebe7dd); border-left: 4px solid var(--csa-line-2, #d8d2c2); border-radius: 10px; padding: 16px 18px; transition: 0.14s; }
+.cap-card:hover { box-shadow: 0 6px 20px rgba(40,36,24,0.08); transform: translateY(-1px); }
+.cap-card--open { border-left-color: #5b7a4c; }
+.cap-card--closed { border-left-color: #b15c3b; background: #fbf4f1; }
+.cap-card--default { border-left-color: #d8d2c2; }
+.cap-card__month { font-family: var(--csa-serif); font-weight: 600; font-size: 17px; color: var(--csa-ink, #1d1c17); }
+.cap-card__cap { margin-top: 10px; font-family: var(--csa-serif); font-weight: 600; font-size: 26px; line-height: 1; color: #2f4426; }
+.cap-card__cap--closed { color: #8c3b1f; font-size: 18px; }
+.cap-card__cap--default { color: #8d8773; }
+.cap-card__note { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--csa-ink-faint, #8d8773); margin-top: 6px; font-weight: 500; }
+</style>
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header(
+        'Albergue',
+        'Aforo del albergue',
+        'Plazas que ofrecéis cada mes. Un mes sin configurar hereda el aforo físico de la casa (' ~ physical_capacity ~ ' camas).'
+    ) }}
+
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-5);">
+        <div class="csa-row" style="align-items: center; gap: 12px;">
+            {{ csa.btn('◂ ' ~ (year - 1), { variant: 'ghost', href: path('hosting_capacity_index', { year: year - 1 }) }) }}
+            <strong style="font-family: var(--csa-serif); font-size: 20px;">{{ year }}</strong>
+            {{ csa.btn((year + 1) ~ ' ▸', { variant: 'ghost', href: path('hosting_capacity_index', { year: year + 1 }) }) }}
+        </div>
+        {{ csa.btn('Volver a voluntarios', { variant: 'ghost', href: path('helper_index') }) }}
+    </div>
+
+    <div class="cap-grid">
+        {% for month, row in months %}
+            {% if row is null %}
+                {% set kind = 'default' %}
+            {% elseif row.open %}
+                {% set kind = 'open' %}
+            {% else %}
+                {% set kind = 'closed' %}
+            {% endif %}
+            <a class="cap-card cap-card--{{ kind }}" href="{{ path('hosting_capacity_edit', { year: year, month: month }) }}">
+                <div class="cap-card__month">{{ month_names[month] }}</div>
+                {% if row is null %}
+                    <div class="cap-card__cap cap-card__cap--default">{{ physical_capacity }}</div>
+                    <div class="cap-card__note">Sin configurar (físico)</div>
+                {% elseif row.open %}
+                    <div class="cap-card__cap">{{ row.capacity }}</div>
+                    <div class="cap-card__note">Plazas</div>
+                {% else %}
+                    <div class="cap-card__cap cap-card__cap--closed">Cerrado</div>
+                    <div class="cap-card__note">No se admite a nadie</div>
+                {% endif %}
+            </a>
+        {% endfor %}
+    </div>
+{% endblock %}

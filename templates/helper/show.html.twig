@@ -1,0 +1,117 @@
+{# ============================================================
+ # Ficha del voluntario de acogida: datos + historial de estancias.
+ # ============================================================ #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% set status_tone = { 'confirmed': 'green', 'requested': 'ochre', 'cancelled': 'neutral' } %}
+{% set status_label = { 'confirmed': 'Confirmada', 'requested': 'Solicitada', 'cancelled': 'Cancelada' } %}
+
+{% block title %}{{ helper.name }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('helper_index') }}">Albergue</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ helper.name }}</span>
+{% endblock %}
+
+{% block more_css %}
+{{ parent() }}
+<style>
+.hsh-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px 28px; background: #fff; border: 1px solid var(--csa-rule, #ebe7dd); border-radius: 10px; padding: 20px 24px; }
+.hsh-dt { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--csa-ink-faint, #8d8773); font-weight: 600; margin-bottom: 3px; }
+.hsh-dd { font-size: 14px; color: var(--csa-ink, #1d1c17); }
+.hsh-dd--muted { color: var(--csa-ink-faint, #8d8773); }
+.hsh-section-title { font-family: var(--csa-serif); font-size: 18px; font-weight: 600; color: var(--csa-ink, #1d1c17); margin: 28px 0 14px; }
+.hsh-stays { display: flex; flex-direction: column; gap: 10px; }
+.hsh-stay { display: flex; align-items: center; justify-content: space-between; gap: 16px; background: #fff; border: 1px solid var(--csa-rule, #ebe7dd); border-radius: 9px; padding: 14px 18px; }
+.hsh-stay--cancelled { opacity: 0.6; }
+.hsh-stay__dates { font-weight: 600; color: var(--csa-ink, #1d1c17); }
+.hsh-stay__meta { font-size: 12.5px; color: var(--csa-ink-faint, #8d8773); margin-top: 2px; }
+.hsh-stay__actions { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+.hsh-empty { padding: 28px 18px; text-align: center; color: var(--csa-ink-faint, #8d8773); font-size: 13px; font-style: italic; background: #fff; border: 1px dashed var(--csa-line-2, #d8d2c2); border-radius: 8px; }
+</style>
+{% endblock %}
+
+{% block csa_main %}
+    {# Form oculto del borrado del voluntario (lo dispara el modal de confirmación). #}
+    <form id="helper-delete-form" method="post" action="{{ path('helper_delete', { id: helper.id }) }}" style="display: none;">
+        <input type="hidden" name="_token" value="{{ csrf_token('delete' ~ helper.id) }}">
+    </form>
+
+    {{ csa.page_header('Albergue', helper.name, helper.source.name) }}
+
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-5);">
+        <div></div>
+        <div class="csa-row">
+            <button type="button" class="csa-btn csa-btn--danger" onclick="document.getElementById('confirm-helper-delete').showModal()">
+                <i class="fa fa-trash"></i><span>Borrar</span>
+            </button>
+            {{ csa.confirm_dialog('confirm-helper-delete', {
+                variant: 'danger',
+                title: 'Borrar voluntario',
+                body: 'Se borrará «' ~ helper.name ~ '». No se puede deshacer.',
+                confirm_label: 'Borrar',
+                external_form_id: 'helper-delete-form',
+            }) }}
+            {{ csa.btn('Editar', { variant: 'secondary', href: path('helper_edit', { id: helper.id }), icon: 'fa-pencil' }) }}
+            {{ csa.btn('Volver', { variant: 'ghost', href: path('helper_index') }) }}
+        </div>
+    </div>
+
+    {# ---------- Datos ---------- #}
+    <div class="hsh-grid">
+        <div><div class="hsh-dt">Procedencia</div><div class="hsh-dd">{{ helper.source.name }}</div></div>
+        <div><div class="hsh-dt">País</div><div class="hsh-dd{{ helper.country ? '' : ' hsh-dd--muted' }}">{{ helper.country ?: '—' }}</div></div>
+        <div><div class="hsh-dt">Email</div><div class="hsh-dd{{ helper.email ? '' : ' hsh-dd--muted' }}">{{ helper.email ?: '—' }}</div></div>
+        <div><div class="hsh-dt">Teléfono</div><div class="hsh-dd{{ helper.phone ? '' : ' hsh-dd--muted' }}">{{ helper.phone ?: '—' }}</div></div>
+        <div><div class="hsh-dt">Idiomas</div><div class="hsh-dd{{ helper.languages ? '' : ' hsh-dd--muted' }}">{{ helper.languages ?: '—' }}</div></div>
+        <div><div class="hsh-dt">Nacimiento</div><div class="hsh-dd{{ helper.birthDate ? '' : ' hsh-dd--muted' }}">{{ helper.birthDate ? helper.birthDate|date('d/m/Y') : '—' }}</div></div>
+        <div><div class="hsh-dt">Contacto de emergencia</div><div class="hsh-dd{{ helper.emergencyContact ? '' : ' hsh-dd--muted' }}">{{ helper.emergencyContact ?: '—' }}</div></div>
+        {% if helper.studies or helper.university %}
+            <div><div class="hsh-dt">Estudios</div><div class="hsh-dd">{{ helper.studies ?: '—' }}</div></div>
+            <div><div class="hsh-dt">Universidad</div><div class="hsh-dd">{{ helper.university ?: '—' }}</div></div>
+        {% endif %}
+    </div>
+
+    {% if helper.notes %}
+        <div class="hsh-grid" style="margin-top: 14px;">
+            <div style="grid-column: 1 / -1;"><div class="hsh-dt">Notas</div><div class="hsh-dd">{{ helper.notes|nl2br }}</div></div>
+        </div>
+    {% endif %}
+
+    {# ---------- Estancias ---------- #}
+    <div class="csa-row-between" style="margin-top: 28px;">
+        <div class="hsh-section-title" style="margin: 0;">Estancias</div>
+        {{ csa.btn('Nueva estancia', { variant: 'primary', href: path('stay_new', { helperId: helper.id }), icon: 'fa-plus' }) }}
+    </div>
+
+    {% if stays|length > 0 %}
+        <div class="hsh-stays" style="margin-top: 14px;">
+            {% for stay in stays %}
+                <div class="hsh-stay{{ stay.status == 'cancelled' ? ' hsh-stay--cancelled' : '' }}">
+                    <div>
+                        <div class="hsh-stay__dates">
+                            {{ stay.arrivalDate|date('d/m/Y') }} → {{ stay.departureDate|date('d/m/Y') }}{{ stay.departureConfirmed ? '' : ' (estimada)' }}
+                        </div>
+                        <div class="hsh-stay__meta">
+                            {{ csa.badge(status_label[stay.status] ?? stay.status, status_tone[stay.status] ?? 'neutral') }}
+                            {% if stay.notes %}· {{ stay.notes|length > 80 ? stay.notes|slice(0, 80) ~ '…' : stay.notes }}{% endif %}
+                        </div>
+                    </div>
+                    <div class="hsh-stay__actions">
+                        {{ csa.btn('Editar', { variant: 'ghost', size: 'sm', href: path('stay_edit', { id: stay.id }), icon: 'fa-pencil' }) }}
+                        <form method="post" action="{{ path('stay_delete', { id: stay.id }) }}" onsubmit="return confirm('¿Borrar esta estancia?');" style="display: inline;">
+                            <input type="hidden" name="_token" value="{{ csrf_token('delete' ~ stay.id) }}">
+                            <button type="submit" class="csa-btn csa-btn--ghost csa-btn--sm"><i class="fa fa-trash"></i><span>Borrar</span></button>
+                        </form>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="hsh-empty" style="margin-top: 14px;">Aún no hay estancias registradas.</div>
+    {% endif %}
+{% endblock %}

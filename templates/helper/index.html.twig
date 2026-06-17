@@ -1,0 +1,92 @@
+{# ============================================================
+ # Listado filtrable de voluntarios de acogida del albergue.
+ # ============================================================ #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Albergue · Voluntarios{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Albergue</span>
+{% endblock %}
+
+{% block more_css %}
+{{ parent() }}
+<style>
+.hlp-bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 18px; }
+.hlp-bar__field { display: flex; flex-direction: column; gap: 4px; }
+.hlp-bar__field label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--csa-ink-faint, #8d8773); font-weight: 600; }
+.hlp-table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid var(--csa-rule, #ebe7dd); border-radius: 10px; overflow: hidden; }
+.hlp-table th { text-align: left; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--csa-ink-faint, #8d8773); font-weight: 600; padding: 12px 16px; border-bottom: 1px solid var(--csa-rule, #ebe7dd); }
+.hlp-table td { padding: 12px 16px; border-bottom: 1px solid var(--csa-rule, #f0ede5); font-size: 14px; }
+.hlp-table tr:last-child td { border-bottom: none; }
+.hlp-table tbody tr { cursor: pointer; transition: background 0.12s; }
+.hlp-table tbody tr:hover { background: #fbfaf6; }
+.hlp-table__name { font-weight: 600; color: var(--csa-ink, #1d1c17); }
+.hlp-table__muted { color: var(--csa-ink-faint, #8d8773); }
+.hlp-empty { padding: 40px 18px; text-align: center; color: var(--csa-ink-faint, #8d8773); font-size: 13px; font-style: italic; background: #fff; border: 1px dashed var(--csa-line-2, #d8d2c2); border-radius: 8px; }
+</style>
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header(
+        'Albergue',
+        'Voluntarios de acogida',
+        'Gente que viene a trabajar a cambio de cama y comida. Cada persona vive una vez; sus visitas son estancias.'
+    ) }}
+
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-4);">
+        <form method="get" action="{{ path('helper_index') }}" class="hlp-bar">
+            <div class="hlp-bar__field">
+                <label for="q">Buscar</label>
+                <input type="text" id="q" name="q" value="{{ q }}" placeholder="Nombre o país" class="csa-input">
+            </div>
+            <div class="hlp-bar__field">
+                <label for="source">Procedencia</label>
+                <select id="source" name="source" class="csa-input">
+                    <option value="">Todas</option>
+                    {% for source in sources %}
+                        <option value="{{ source.id }}"{{ selected_source == source.id ? ' selected' : '' }}>{{ source.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="csa-btn csa-btn--secondary">Filtrar</button>
+            {% if q or selected_source %}
+                {{ csa.btn('Limpiar', { variant: 'ghost', href: path('helper_index') }) }}
+            {% endif %}
+        </form>
+        <div class="csa-row">
+            {{ csa.btn('Aforo del albergue', { variant: 'ghost', href: path('hosting_capacity_index'), icon: 'fa-bed' }) }}
+            {{ csa.btn('Nuevo voluntario', { variant: 'primary', href: path('helper_new'), icon: 'fa-plus' }) }}
+        </div>
+    </div>
+
+    {% if helpers|length > 0 %}
+        <table class="hlp-table">
+            <thead>
+                <tr>
+                    <th>Nombre</th>
+                    <th>Procedencia</th>
+                    <th>País</th>
+                    <th>Contacto</th>
+                    <th>Estancias</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for helper in helpers %}
+                    <tr onclick="window.location='{{ path('helper_show', { id: helper.id }) }}'">
+                        <td class="hlp-table__name">{{ helper.name }}</td>
+                        <td>{{ helper.source.name }}</td>
+                        <td class="hlp-table__muted">{{ helper.country ?: '—' }}</td>
+                        <td class="hlp-table__muted">{{ helper.email ?: helper.phone ?: '—' }}</td>
+                        <td>{{ helper.stays|length }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <div class="hlp-empty">No hay voluntarios que cumplan el filtro.</div>
+    {% endif %}
+{% endblock %}

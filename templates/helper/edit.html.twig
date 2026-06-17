@@ -1,0 +1,21 @@
+{# Editar voluntario de acogida — shell csa. #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Editar {{ helper.name }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('helper_index') }}">Albergue</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('helper_show', { id: helper.id }) }}">{{ helper.name }}</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Editar</span>
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header('Albergue', 'Editar voluntario', helper.name) }}
+
+    {{ include('helper/_form.html.twig', { submit_label: 'Guardar cambios', cancel_path: path('helper_show', { id: helper.id }) }) }}
+{% endblock %}

@@ -306,6 +306,18 @@
                         </div>
                     {% endif %}
 
+                    {% if is_granted('ROLE_GESTION_ALBERGUE') %}
+                        <div class="csa-navgroup{{ sec_collapsed }}">
+                            <button type="button" class="csa-navgroup__head">Albergue <i class="csa-navgroup__chev fa fa-chevron-down" aria-hidden="true"></i></button>
+                            <div class="csa-navgroup__items">
+                                {{ _self.nav_link('Voluntarios', path('helper_index'), 'fa-bed',
+                                   route starts with 'helper_' or route starts with 'stay_') }}
+                                {{ _self.nav_link('Aforo', path('hosting_capacity_index'), 'fa-calendar-check-o',
+                                   route starts with 'hosting_capacity') }}
+                            </div>
+                        </div>
+                    {% endif %}
+
                     {% if is_granted('ROLE_GESTION_REPARTO') %}
                         <div class="csa-navgroup{{ sec_collapsed }}">
                             <button type="button" class="csa-navgroup__head">Reparto <i class="csa-navgroup__chev fa fa-chevron-down" aria-hidden="true"></i></button>

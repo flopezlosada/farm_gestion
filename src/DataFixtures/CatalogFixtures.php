@@ -7,6 +7,7 @@ use App\Entity\BasketShare;
 use App\Entity\City;
 use App\Entity\EggAmount;
 use App\Entity\EggPeriod;
+use App\Entity\HelperSource;
 use App\Entity\SharePayment;
 use App\Entity\State;
 use App\Entity\WeeklyBasketGroup;
@@ -32,6 +33,7 @@ class CatalogFixtures extends Fixture
     public const REF_STATE_PREFIX = 'state_';
     public const REF_WB_STATUS_PREFIX = 'wb_status_';
     public const REF_COMPONENT_PREFIX = 'component_';
+    public const REF_HELPER_SOURCE_PREFIX = 'helper_source_';
 
     /**
      * Carga todos los catálogos y registra referencias para los fixtures dependientes.
@@ -187,6 +189,17 @@ class CatalogFixtures extends Fixture
             $componentIdProperty->setValue($component, $componentId);
             $manager->persist($component);
             $this->addReference(self::REF_COMPONENT_PREFIX . $name, $component);
+        }
+
+        // Procedencias de los voluntarios de acogida (Helper). Catálogo como
+        // DATO, no jerarquía de clases: añadir un origen nuevo es una fila. Sin
+        // id forzado porque ningún código referencia una procedencia concreta
+        // por id (a diferencia de BasketShare/WeeklyBasketStatus). Lista inicial
+        // derivada de los orígenes reales que maneja la asociación.
+        foreach (['WWOOF', 'Workaway', 'HelpX', 'Prácticas universidad', 'Erasmus', 'Boca a boca'] as $sourceName) {
+            $source = (new HelperSource())->setName($sourceName);
+            $manager->persist($source);
+            $this->addReference(self::REF_HELPER_SOURCE_PREFIX . $sourceName, $source);
         }
 
         $manager->flush();

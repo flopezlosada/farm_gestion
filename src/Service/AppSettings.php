@@ -81,6 +81,15 @@ class AppSettings
     public const PICKUP_REMINDER_DAYS_BEFORE = 'email.pickup_reminder_days_before';
 
     /**
+     * Aforo FÍSICO de referencia del albergue: número de camas disponibles en la
+     * casa. NO es el límite que aplica el guard de ocupación —ese es el aforo
+     * OPERATIVO por mes ({@see \App\Entity\HostingCapacity})—, sino el valor que
+     * se usa como aforo por defecto de un mes que aún no tiene fila configurada.
+     * Lo lee {@see \App\Service\Hosting\HostingCapacityResolver}.
+     */
+    public const HOSTING_PHYSICAL_CAPACITY = 'hosting.physical_capacity';
+
+    /**
      * Antelación (en días sobre la fecha física del reparto) con la que se
      * cierra el plazo del cambio puntual de un socix. La lee {@see \App\Service\Delivery\Rule\DeadlineRule}.
      */
@@ -252,6 +261,15 @@ class AppSettings
             'min' => 0,
             'max' => 7,
             'unit' => 'días',
+        ],
+        self::HOSTING_PHYSICAL_CAPACITY => [
+            'group' => 'Albergue',
+            'label' => 'Aforo físico del albergue',
+            'help' => 'Número de camas de la casa. Se usa como aforo por defecto de los meses que aún no tengas configurados a mano. Para abrir o cerrar meses concretos o cambiar el aforo de un mes, usa el calendario de aforo del albergue.',
+            'default' => 0,
+            'min' => 0,
+            'max' => 50,
+            'unit' => 'camas',
         ],
     ];
 
