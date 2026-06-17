@@ -181,7 +181,8 @@ class PartnerUserProvisionerTest extends TestCase
 
     /**
      * provision() es la vía de admin ("dar acceso" en la ficha): crea la
-     * cuenta aunque el alta esté cerrada.
+     * cuenta aunque el alta esté cerrada y le concede acceso anticipado, de
+     * modo que entre con el grifo global cerrado.
      */
     public function testProvisionCreatesEvenWhenSelfRegistrationIsClosed(): void
     {
@@ -190,7 +191,7 @@ class PartnerUserProvisionerTest extends TestCase
 
         $em = $this->createMock(EntityManagerInterface::class);
         $em->expects($this->once())->method('persist')->with($this->isInstanceOf(User::class));
-        $em->expects($this->once())->method('flush');
+        $em->expects($this->atLeastOnce())->method('flush');
 
         $provisioner = new PartnerUserProvisioner(
             $em,
@@ -207,6 +208,38 @@ class PartnerUserProvisionerTest extends TestCase
         $this->assertInstanceOf(User::class, $user);
         $this->assertSame('elegida@example.com', $user->getEmail());
         $this->assertSame($partner, $user->getPartner());
+        $this->assertTrue($user->isEarlyAccess());
+    }
+
+    /**
+     * provision() sobre una cuenta que ya existía (p. ej. Alberto, provisionado
+     * antes de existir la marca) le concede el acceso anticipado y persiste el
+     * cambio: el botón "dar acceso" significa "este socix puede entrar ya",
+     * con cuenta nueva o vieja.
+     */
+    public function testProvisionGrantsEarlyAccessToExistingUser(): void
+    {
+        $existing = (new User())->setEmail('alberto@example.com');
+        $this->assertFalse($existing->isEarlyAccess());
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->expects($this->never())->method('persist');
+        $em->expects($this->once())->method('flush');
+
+        $provisioner = new PartnerUserProvisioner(
+            $em,
+            $this->createMock(UserPasswordHasherInterface::class),
+            $this->createMock(PartnerRepository::class),
+            $this->accessPolicy($existing, false),
+            $this->createMock(LoggerInterface::class),
+        );
+
+        $partner = (new Partner())->setEmail('alberto@example.com');
+
+        $user = $provisioner->provision($partner);
+
+        $this->assertSame($existing, $user);
+        $this->assertTrue($user->isEarlyAccess());
     }
 
     /**

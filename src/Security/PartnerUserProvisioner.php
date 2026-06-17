@@ -127,8 +127,13 @@ class PartnerUserProvisioner
     /**
      * Provisioning INCONDICIONAL, iniciado por la administración (botón "dar
      * acceso" de la ficha): crea o recupera la cuenta saltándose el toggle de
-     * alta abierta. Es el mecanismo de despliegue selectivo mientras el grifo
-     * global está cerrado.
+     * alta abierta y le concede acceso anticipado, de modo que el socix pueda
+     * entrar aunque el grifo global de acceso de socixs siga cerrado. Es el
+     * mecanismo de despliegue selectivo (autorizar uno a uno) previo a abrir.
+     *
+     * La marca de acceso anticipado se asegura también cuando la cuenta ya
+     * existía: el botón significa "este socix puede entrar ya", con cuenta
+     * nueva o vieja.
      *
      * @param Partner $partner socix al que admin quiere dar acceso
      *
@@ -141,7 +146,14 @@ class PartnerUserProvisioner
             return null;
         }
 
-        return $this->accessPolicy->accountFor($partner) ?? $this->createUser($partner, $email);
+        $user = $this->accessPolicy->accountFor($partner) ?? $this->createUser($partner, $email);
+
+        if (!$user->isEarlyAccess()) {
+            $user->setEarlyAccess(true);
+            $this->em->flush();
+        }
+
+        return $user;
     }
 
     /**

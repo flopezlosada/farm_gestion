@@ -62,7 +62,15 @@ class UserChecker implements UserCheckerInterface
             );
         }
 
-        if (!$this->settings->getBool(AppSettings::FEATURE_PARTNER_LOGIN) && !$this->belongsToTeam($user)) {
+        // Acceso de socixs cerrado: solo se rechaza a quien no es del equipo NI
+        // tiene acceso anticipado concedido a dedo por la administración (el
+        // botón "Dar acceso" de la ficha). Así el grifo global sigue cerrado
+        // para todo el mundo salvo los socixs autorizados uno a uno.
+        if (
+            !$this->settings->getBool(AppSettings::FEATURE_PARTNER_LOGIN)
+            && !$this->belongsToTeam($user)
+            && !$user->isEarlyAccess()
+        ) {
             throw new CustomUserMessageAccountStatusException(
                 'El acceso de socixs a la web todavía no está disponible. Te avisaremos en cuanto puedas entrar.'
             );

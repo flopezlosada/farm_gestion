@@ -67,4 +67,19 @@ class UserCheckerTest extends TestCase
 
         (new UserChecker($this->settings(true)))->checkPreAuth($this->socix()->setEnabled(false));
     }
+
+    public function testSocixConAccesoAnticipadoEntraAunqueElGrifoEsteCerrado(): void
+    {
+        (new UserChecker($this->settings(false)))->checkPreAuth($this->socix()->setEarlyAccess(true));
+
+        $this->addToAssertionCount(1); // no lanzó: pasa
+    }
+
+    public function testCuentaBloqueadaRechazadaAunqueTengaAccesoAnticipado(): void
+    {
+        $this->expectException(CustomUserMessageAccountStatusException::class);
+
+        (new UserChecker($this->settings(false)))
+            ->checkPreAuth($this->socix()->setEarlyAccess(true)->setEnabled(false));
+    }
 }
