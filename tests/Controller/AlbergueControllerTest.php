@@ -80,6 +80,9 @@ class AlbergueControllerTest extends AbstractAuthenticatedTest
 
         $client->request('GET', '/gestion/albergue/timeline?from=2099-06');
         $this->assertResponseIsSuccessful();
+
+        $client->request('GET', '/gestion/albergue/timeline?view=months');
+        $this->assertResponseIsSuccessful();
     }
 
     /**

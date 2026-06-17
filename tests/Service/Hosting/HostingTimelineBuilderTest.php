@@ -43,20 +43,21 @@ class HostingTimelineBuilderTest extends TestCase
             new OccupancyChecker(),
         );
 
-        $timeline = $builder->build(new \DateTimeImmutable('2026-07-01'), new \DateTimeImmutable('2026-07-08'));
+        $timeline = $builder->buildDaily(new \DateTimeImmutable('2026-07-01'), new \DateTimeImmutable('2026-07-08'));
 
         // Ventana.
-        $this->assertSame(7, $timeline['day_count']);
-        $this->assertCount(7, $timeline['days']);
+        $this->assertSame('day', $timeline['unit']);
+        $this->assertSame(7, $timeline['col_count']);
+        $this->assertCount(7, $timeline['cols']);
 
         // Ocupación (sólo confirmadas): 1/jul=1(B), 2/jul=2(A+B)=lleno, 3/jul=1(A),
         // 5/jul=0 (A se fue el 5; la solicitada del 6 no cuenta).
-        $this->assertSame(1, $timeline['days'][0]['occupied']);
-        $this->assertSame('free', $timeline['days'][0]['state']);
-        $this->assertSame(2, $timeline['days'][1]['occupied']);
-        $this->assertSame('full', $timeline['days'][1]['state']);
-        $this->assertSame(1, $timeline['days'][2]['occupied']);
-        $this->assertSame(0, $timeline['days'][4]['occupied']);  // 5/jul
+        $this->assertSame(1, $timeline['cols'][0]['occupied']);
+        $this->assertSame('free', $timeline['cols'][0]['state']);
+        $this->assertSame(2, $timeline['cols'][1]['occupied']);
+        $this->assertSame('full', $timeline['cols'][1]['state']);
+        $this->assertSame(1, $timeline['cols'][2]['occupied']);
+        $this->assertSame(0, $timeline['cols'][4]['occupied']);  // 5/jul
 
         // Filas: Ana (2 segmentos) y Beto (1 segmento).
         $this->assertCount(2, $timeline['rows']);
@@ -96,12 +97,53 @@ class HostingTimelineBuilderTest extends TestCase
             new OccupancyChecker(),
         );
 
-        $timeline = $builder->build(new \DateTimeImmutable('2026-08-01'), new \DateTimeImmutable('2026-08-05'));
+        $timeline = $builder->buildDaily(new \DateTimeImmutable('2026-08-01'), new \DateTimeImmutable('2026-08-05'));
 
-        $this->assertSame('closed', $timeline['days'][0]['state']);  // 1 ago: cerrado, sin nadie
-        $this->assertSame('over', $timeline['days'][1]['state']);    // 2 ago: cerrado pero ocupado
-        $this->assertSame('over', $timeline['days'][2]['state']);    // 3 ago
-        $this->assertSame('closed', $timeline['days'][3]['state']);  // 4 ago: salió
+        $this->assertSame('closed', $timeline['cols'][0]['state']);  // 1 ago: cerrado, sin nadie
+        $this->assertSame('over', $timeline['cols'][1]['state']);    // 2 ago: cerrado pero ocupado
+        $this->assertSame('over', $timeline['cols'][2]['state']);    // 3 ago
+        $this->assertSame('closed', $timeline['cols'][3]['state']);  // 4 ago: salió
+    }
+
+    public function testVistaMensualUsaElPicoDelMes(): void
+    {
+        $ana = $this->helper(1, 'Ana');
+        $beto = $this->helper(2, 'Beto');
+
+        // Ana cruza julio→agosto; Beto solapa con ella unos días de julio.
+        // Julio: pico 2 (Ana+Beto). Agosto: pico 1 (Ana). Septiembre: nadie.
+        $stays = [
+            $this->stay($ana, '2026-07-05', '2026-08-10', Stay::STATUS_CONFIRMED),
+            $this->stay($beto, '2026-07-10', '2026-07-15', Stay::STATUS_CONFIRMED),  // solapa con Ana
+        ];
+
+        $stayRepository = $this->createMock(StayRepository::class);
+        $stayRepository->method('findOverlapping')->willReturn($stays);
+
+        $builder = new HostingTimelineBuilder(
+            $stayRepository,
+            $this->resolverWithJulyCapacity(2),  // aforo 2 (vale para todos los meses sin fila: físico 0... ver nota)
+            new OccupancyChecker(),
+        );
+
+        $timeline = $builder->buildMonthly(new \DateTimeImmutable('2026-07-15'), 3);
+
+        $this->assertSame('month', $timeline['unit']);
+        $this->assertSame(3, $timeline['col_count']);
+        $this->assertSame('2026-07', $timeline['cols'][0]['date']->format('Y-m'));
+        // Julio: pico 2 (Ana+Beto solapadas) → lleno con aforo 2.
+        $this->assertSame(2, $timeline['cols'][0]['occupied']);
+        $this->assertSame('full', $timeline['cols'][0]['state']);
+        // Agosto: pico 1 → libre.
+        $this->assertSame(1, $timeline['cols'][1]['occupied']);
+        // Septiembre: nadie.
+        $this->assertSame(0, $timeline['cols'][2]['occupied']);
+
+        // Ana abarca julio y agosto (2 meses): un segmento offset 0, span 2.
+        $ana_row = $timeline['rows'][0];
+        $this->assertSame('Ana', $ana_row['helper']->getName());
+        $this->assertSame(0, $ana_row['segments'][0]['offset']);
+        $this->assertSame(2, $ana_row['segments'][0]['span']);
     }
 
     /**

@@ -1,14 +1,16 @@
 {# ============================================================
  # Albergue · Calendario de ocupación (timeline tipo Gantt) +
- # panel "hoy en el albergue". UX funcional, pendiente de rediseño.
+ # panel "hoy en el albergue". Dos vistas: por días (detalle) y por
+ # meses (panorámica). UX funcional, pendiente de pulido fino.
  # ============================================================ #}
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
 
-{% set col = 22 %}{# ancho px de cada día #}
-{% set track_w = timeline.day_count * col %}
+{% set col = timeline.unit == 'month' ? 84 : 22 %}
+{% set track_w = timeline.col_count * col %}
 {% set month_abbr = { 1:'ene',2:'feb',3:'mar',4:'abr',5:'may',6:'jun',7:'jul',8:'ago',9:'sep',10:'oct',11:'nov',12:'dic' } %}
 {% set status_label = { 'confirmed': 'Confirmada', 'requested': 'Solicitada' } %}
+{% set last_day = timeline.to|date_modify('-1 day') %}
 
 {% block title %}Albergue · Calendario{% endblock %}
 
@@ -30,6 +32,12 @@
 .tl-today__chip b { color: #2f4426; }
 .tl-today__empty { color: var(--csa-ink-faint, #8d8773); font-style: italic; font-size: 13px; }
 
+/* Toggle de vista (Semanas / Meses) — pestañas tipo segmented control. */
+.tl-toggle { display: inline-flex; border: 1px solid var(--csa-line-2, #d8d2c2); border-radius: 7px; overflow: hidden; }
+.tl-toggle a { padding: 7px 16px; font-size: 12.5px; font-weight: 500; text-decoration: none; color: var(--csa-ink-soft, #5a564a); background: #fff; }
+.tl-toggle a + a { border-left: 1px solid var(--csa-line-2, #d8d2c2); }
+.tl-toggle a.active { background: #2f4426; color: #fff; }
+
 .tl-scroll { overflow-x: auto; background: #fff; border: 1px solid var(--csa-rule, #ebe7dd); border-radius: 10px; }
 .tl-row { display: flex; align-items: stretch; border-bottom: 1px solid var(--csa-rule, #f0ede5); }
 .tl-row:last-child { border-bottom: none; }
@@ -39,12 +47,13 @@
 .tl-label a:hover { text-decoration: underline; }
 .tl-track { position: relative; flex: 0 0 auto; }
 
-.tl-daycell { position: absolute; top: 0; bottom: 0; box-sizing: border-box; border-right: 1px solid #f4f2ec; font-size: 10px; text-align: center; color: var(--csa-ink-faint, #8d8773); }
+.tl-daycell { position: absolute; top: 0; bottom: 0; box-sizing: border-box; border-right: 1px solid #f4f2ec; font-size: 10px; text-align: center; color: var(--csa-ink-faint, #8d8773); display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.15; }
 .tl-daycell--weekend { background: #faf8f3; }
 .tl-daycell--today { background: #fff7e6; border-right-color: #e9c879; }
+.tl-daycell__y { font-size: 9px; opacity: 0.7; }
 .tl-monthlabel { position: absolute; top: 0; font-size: 11px; font-weight: 600; color: var(--csa-ink, #1d1c17); padding: 4px 4px; white-space: nowrap; }
 
-.tl-head { height: 34px; }
+.tl-head { height: 38px; }
 .tl-occ { height: 30px; }
 .tl-occcell { position: absolute; top: 3px; bottom: 3px; box-sizing: border-box; font-size: 10px; line-height: 24px; text-align: center; color: #555; }
 .tl-occcell--free { background: #f3f6ef; }
@@ -83,46 +92,54 @@
         {% endif %}
     </div>
 
-    {# ---------- Navegación de mes ---------- #}
-    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-4);">
+    {# ---------- Controles: vista + navegación ---------- #}
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-4); align-items: center; flex-wrap: wrap; gap: 12px;">
+        <div class="tl-toggle">
+            <a href="{{ path('albergue_timeline', { view: 'days', from: timeline.from|date('Y-m') }) }}" class="{{ view == 'days' ? 'active' : '' }}">Semanas</a>
+            <a href="{{ path('albergue_timeline', { view: 'months', from: timeline.from|date('Y-m') }) }}" class="{{ view == 'months' ? 'active' : '' }}">Meses</a>
+        </div>
         <div class="csa-row" style="align-items: center; gap: 10px;">
-            {{ csa.btn('◂ Mes anterior', { variant: 'ghost', href: path('albergue_timeline', { from: prev_month }) }) }}
-            {% set last_day = timeline.to|date_modify('-1 day') %}
+            {{ csa.btn('◂', { variant: 'ghost', href: path('albergue_timeline', { view: view, from: prev_window }) }) }}
             <strong style="font-family: var(--csa-serif); font-size: 16px;">
                 {{ month_abbr[timeline.from|date('n')] }} {{ timeline.from|date('Y') }} – {{ month_abbr[last_day|date('n')] }} {{ last_day|date('Y') }}
             </strong>
-            {{ csa.btn('Mes siguiente ▸', { variant: 'ghost', href: path('albergue_timeline', { from: next_month }) }) }}
+            {{ csa.btn('▸', { variant: 'ghost', href: path('albergue_timeline', { view: view, from: next_window }) }) }}
         </div>
         {{ csa.btn('Voluntarios', { variant: 'ghost', href: path('helper_index'), icon: 'fa-bed' }) }}
     </div>
 
     {# ---------- Timeline ---------- #}
     <div class="tl-scroll">
-        {# Cabecera: meses + días #}
+        {# Cabecera de columnas #}
         <div class="tl-row tl-head">
             <div class="tl-label tl-label--head">Voluntario</div>
             <div class="tl-track" style="width: {{ track_w }}px;">
-                {% for day in timeline.days %}
+                {% for c in timeline.cols %}
                     {% set left = loop.index0 * col %}
-                    <div class="tl-daycell{{ day.date|date('N') in ['6','7'] ? ' tl-daycell--weekend' : '' }}{{ day.date|date('Y-m-d') == today|date('Y-m-d') ? ' tl-daycell--today' : '' }}"
-                         style="left: {{ left }}px; width: {{ col }}px;">
-                        {{ day.date|date('j') }}
-                    </div>
-                    {% if day.date|date('j') == '1' or loop.first %}
-                        <div class="tl-monthlabel" style="left: {{ left }}px;">{{ month_abbr[day.date|date('n')] }}</div>
+                    {% if timeline.unit == 'month' %}
+                        <div class="tl-daycell{{ c.date|date('Y-m') == today|date('Y-m') ? ' tl-daycell--today' : '' }}" style="left: {{ left }}px; width: {{ col }}px;">
+                            {{ month_abbr[c.date|date('n')] }}<span class="tl-daycell__y">{{ c.date|date('y') }}</span>
+                        </div>
+                    {% else %}
+                        <div class="tl-daycell{{ c.weekend ? ' tl-daycell--weekend' : '' }}{{ c.date|date('Y-m-d') == today|date('Y-m-d') ? ' tl-daycell--today' : '' }}" style="left: {{ left }}px; width: {{ col }}px;">
+                            {{ c.date|date('j') }}
+                        </div>
+                        {% if c.date|date('j') == '1' or loop.first %}
+                            <div class="tl-monthlabel" style="left: {{ left }}px;">{{ month_abbr[c.date|date('n')] }}</div>
+                        {% endif %}
                     {% endif %}
                 {% endfor %}
             </div>
         </div>
 
-        {# Ocupación por día #}
+        {# Ocupación por columna #}
         <div class="tl-row tl-occ">
-            <div class="tl-label tl-label--head">Ocupación</div>
+            <div class="tl-label tl-label--head">{{ timeline.unit == 'month' ? 'Pico/mes' : 'Ocupación' }}</div>
             <div class="tl-track" style="width: {{ track_w }}px;">
-                {% for day in timeline.days %}
-                    <div class="tl-occcell tl-occcell--{{ day.state }}" style="left: {{ loop.index0 * col }}px; width: {{ col }}px;"
-                         title="{{ day.date|date('d/m') }}: {{ day.occupied }}/{{ day.capacity }}{{ day.state == 'closed' ? ' (cerrado)' : '' }}">
-                        {{ day.state == 'closed' ? '·' : day.occupied }}
+                {% for c in timeline.cols %}
+                    <div class="tl-occcell tl-occcell--{{ c.state }}" style="left: {{ loop.index0 * col }}px; width: {{ col }}px;"
+                         title="{{ c.date|date(timeline.unit == 'month' ? 'm/Y' : 'd/m') }}: {{ c.occupied }}/{{ c.capacity }}{{ c.state == 'closed' ? ' (cerrado)' : '' }}">
+                        {{ c.state == 'closed' ? '·' : c.occupied }}
                     </div>
                 {% endfor %}
             </div>

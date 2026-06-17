@@ -23,8 +23,11 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[IsGranted('ROLE_GESTION_ALBERGUE')]
 class AlbergueController extends AbstractController
 {
-    /** Nº de meses que abarca la ventana del timeline. */
-    private const TIMELINE_MONTHS = 3;
+    /** Meses que abarca la ventana del timeline en vista por días. */
+    private const TIMELINE_DAYS_MONTHS = 3;
+
+    /** Meses que abarca la ventana del timeline en vista por meses. */
+    private const TIMELINE_MONTHS_SPAN = 12;
 
     /**
      * Calendario de ocupación: una fila por voluntario con sus estancias, la
@@ -41,8 +44,19 @@ class AlbergueController extends AbstractController
         HostingTimelineBuilder $timelineBuilder,
         StayRepository $stayRepository,
     ): Response {
+        $monthly = $request->query->get('view') === 'months';
         $from = $this->windowStart($request->query->get('from'));
-        $to = $from->modify(sprintf('+%d months', self::TIMELINE_MONTHS));
+
+        if ($monthly) {
+            $timeline = $timelineBuilder->buildMonthly($from, self::TIMELINE_MONTHS_SPAN);
+            // En vista mensual la navegación salta de año en año.
+            $prev = $from->modify('-12 months')->format('Y-m');
+            $next = $from->modify('+12 months')->format('Y-m');
+        } else {
+            $timeline = $timelineBuilder->buildDaily($from, $from->modify(sprintf('+%d months', self::TIMELINE_DAYS_MONTHS)));
+            $prev = $from->modify('-1 month')->format('Y-m');
+            $next = $from->modify('+1 month')->format('Y-m');
+        }
 
         $today = new \DateTimeImmutable('today');
         $currentStays = $stayRepository->findOverlapping(
@@ -52,11 +66,12 @@ class AlbergueController extends AbstractController
         );
 
         return $this->render('albergue/timeline.html.twig', [
-            'timeline' => $timelineBuilder->build($from, $to),
+            'timeline' => $timeline,
+            'view' => $monthly ? 'months' : 'days',
             'today' => $today,
             'current_stays' => $currentStays,
-            'prev_month' => $from->modify('-1 month')->format('Y-m'),
-            'next_month' => $from->modify('+1 month')->format('Y-m'),
+            'prev_window' => $prev,
+            'next_window' => $next,
         ]);
     }
 
