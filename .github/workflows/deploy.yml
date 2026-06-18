@@ -89,12 +89,25 @@ jobs:
             set net:reconnect-interval-base 10;
             set cmd:show-status yes;
             set xfer:log yes;
+            # Sin REST/reanudacion: ante un reintento, lftp re-sube el fichero
+            # ENTERO en vez de hacer append sobre la transferencia parcial (el
+            # append corrompia .twig/.php duplicando su contenido). clobber on
+            # fuerza sobreescritura. Ambos cubren TAMBIEN el mirror de abajo
+            # (antes clobber estaba tras el mirror y este corria sin proteccion).
+            set ftp:use-rest no;
+            set xfer:clobber on;
             open -u $FTP_USERNAME,$FTP_PASSWORD $FTP_SERVER;
             # El set de autoload de Composer (acoplado por hash) NO se toca en el
             # mirror: se re-sube forzado y consistente DESPUES del mirror (abajo),
             # para no abrir ventana de caida. OJO: nada de comillas dobles en los
             # comentarios de aquí, romperían la cadena lftp -c.
-            mirror -R --only-newer --parallel=4 --verbose=2 \
+            # --parallel=1 (secuencial) A PROPOSITO. Con paralelismo (antes =4)
+            # dos transferencias FTP concurrentes pueden cruzar su canal de datos
+            # PASV bajo reintentos de red y escribir los bytes de un fichero en el
+            # destino de otro (el 2026-06-18 paso en staging: una entidad PHP
+            # acabo conteniendo un bower.json -> headers already sent + 500).
+            # Secuencial elimina la clase de bug; el deploy tarda algo mas.
+            mirror -R --only-newer --parallel=1 --verbose=2 \
               --exclude-glob '.git*' \
               --exclude-glob '.github/' \
               --exclude-glob '.idea/' \
@@ -131,7 +144,6 @@ jobs:
             # tiene subdirs, nada de glob) y dejamos vendor/autoload.php (el entry
             # point) el ULTIMO. El set viejo consistente sirve durante el mirror;
             # aquí solo hay un parpadeo de ~1-2s. OJO: sin comillas dobles.
-            set xfer:clobber on;
             mput -O gestion_csa_4/vendor/composer \
               vendor/composer/autoload_real.php \
               vendor/composer/autoload_static.php \
@@ -152,3 +164,15 @@ jobs:
             # request (más lento esa vez). -f: no falla si el dir no existe.
             rm -rf gestion_csa_4/var/cache/prod;
           "
+
+      # Verifica que la home responde sana tras el deploy. Caza la corrupcion
+      # de ficheros en el transporte (un .php/.twig servido en crudo o un 500)
+      # antes de que la descubra una persona. La home es publica (frontend).
+      - name: Smoke check post-deploy
+        run: |
+          code=$(curl -sS -m 30 -o /tmp/resp.html -w '%{http_code}' https://csavegadejarama.org/ || echo 000)
+          echo "HTTP $code"
+          if [ "$code" != "200" ]; then echo "::error::La home no devuelve 200 (codigo $code)"; exit 1; fi
+          if grep -qF '<?php' /tmp/resp.html; then echo "::error::La home sirve PHP en crudo (fichero corrupto en el deploy)"; exit 1; fi
+          if ! grep -qiF 'Vega de Jarama' /tmp/resp.html; then echo "::error::La home no contiene el marcador esperado"; exit 1; fi
+          echo "Smoke check OK"
