@@ -4,6 +4,7 @@ namespace App\Tests\Controller;
 
 use App\Entity\Question;
 use App\Entity\Survey;
+use App\Entity\User;
 
 /**
  * Flujo de gestión de encuestas (ROLE_GESTION_ENCUESTAS, vía admin): alta,
@@ -175,5 +176,31 @@ class SurveyAdminControllerTest extends AbstractAuthenticatedTest
         // Viernes es la ganadora: su fila lleva el modificador svr-bar--winner.
         $winnerLabels = $crawler->filter('.svr-bar--winner .svr-bar__label')->each(fn ($n) => trim($n->text()));
         $this->assertContains('Viernes', $winnerLabels);
+    }
+
+    /**
+     * Modelo lectura/escritura aplicado a encuestas: un usuario con SOLO
+     * ROLE_GESTION_ENCUESTAS (lectura) ve el listado (200) pero el firewall le
+     * rechaza con 403 crear una encuesta (toda escritura es POST). La
+     * contraparte de escritura la ejercitan el resto de tests de esta clase
+     * vía admin (que tiene _EDIT por jerarquía).
+     */
+    public function testReadOnlyRoleCannotCreateSurvey(): void
+    {
+        $client = static::createClient();
+        $this->enableSurveys();
+        $user = $this->createUserWithRoles(['ROLE_GESTION_ENCUESTAS']);
+        $userId = $user->getId();
+        $client->loginUser($user);
+
+        $client->request('GET', '/gestion/surveys/');
+        $this->assertResponseIsSuccessful();
+
+        $client->request('POST', '/gestion/surveys/new');
+        $this->assertResponseStatusCodeSame(403);
+
+        $em = $this->em();
+        $em->remove($em->getRepository(User::class)->find($userId));
+        $em->flush();
     }
 }

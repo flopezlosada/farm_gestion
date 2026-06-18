@@ -43,4 +43,32 @@ abstract class AbstractAuthenticatedTest extends WebTestCase
 
         return $client;
     }
+
+    /**
+     * Crea y persiste un usuario del equipo con los roles dados, para probar
+     * el acceso por rol sin depender del admin de las fixtures. Requiere un
+     * kernel arrancado (llama antes a {@see static::createClient()}).
+     *
+     * enabled=true y passwordSet=true para que ni el UserChecker (bloqueo) ni
+     * el ForcePasswordChangeSubscriber (cambio forzado) interfieran.
+     *
+     * @param string[] $roles
+     */
+    protected function createUserWithRoles(array $roles): User
+    {
+        $suffix = uniqid();
+        $user = (new User())
+            ->setUsername('test-user-' . $suffix)
+            ->setEmail('test-user-' . $suffix . '@example.test')
+            ->setPassword('x')
+            ->setEnabled(true)
+            ->setPasswordSet(true)
+            ->setRoles($roles);
+
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $em->persist($user);
+        $em->flush();
+
+        return $user;
+    }
 }

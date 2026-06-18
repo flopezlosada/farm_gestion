@@ -163,7 +163,9 @@
 
             <a href="{{ path('albergue_timeline', { view: 'months' }) }}" class="prl-btn"><i class="fa fa-calendar"></i> Calendario</a>
             {# Aforo y Métricas deshabilitados por ahora (no aportan aún); pantallas vivas. #}
-            <a href="{{ path('helper_new') }}" class="prl-btn prl-btn--primary"><i class="fa fa-plus"></i> Nuevo voluntario</a>
+            {% if is_granted('ROLE_GESTION_ALBERGUE_EDIT') %}
+                <a href="{{ path('helper_new') }}" class="prl-btn prl-btn--primary"><i class="fa fa-plus"></i> Nuevo voluntario</a>
+            {% endif %}
         </div>
         <noscript><button type="submit" class="prl-btn prl-btn--primary">Filtrar</button></noscript>
     </form>
@@ -230,7 +232,9 @@
                             </td>
                             <td class="actions">
                                 <a href="{{ path('helper_show', { id: helper.id }) }}" title="Ver" aria-label="Ver"><i class="fa fa-eye"></i></a>
-                                <a href="{{ path('helper_edit', { id: helper.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>
+                                {% if is_granted('ROLE_GESTION_ALBERGUE_EDIT') %}
+                                    <a href="{{ path('helper_edit', { id: helper.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>
+                                {% endif %}
                             </td>
                         </tr>
                     {% endfor %}

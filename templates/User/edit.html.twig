@@ -90,12 +90,9 @@
                 {% endblock %}
             {% endembed %}
 
-            {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Permisos' } %}
+            {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Permisos', subtitle: 'Nivel de acceso por sección. Admin incluye todo lo demás.' } %}
                 {% block body %}
-                    {% import '_macros/csa.html.twig' as csa %}
-                    <div class="csa-form-grid">
-                        {{ csa.field(edit_form.roles, 'Roles', { full: true }) }}
-                    </div>
+                    {% include 'User/_permissions.html.twig' with { permform: edit_form } %}
                 {% endblock %}
             {% endembed %}
 
