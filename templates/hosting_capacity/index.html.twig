@@ -51,15 +51,21 @@
     ) }}
 
     {# Ancla: las camas de la casa. Es el máximo; el aforo de cada mes no lo supera. #}
+    {% set can_edit = is_granted('ROLE_GESTION_ALBERGUE_EDIT') %}
     <div class="cap-physical">
         <div class="cap-physical__label">Camas en la casa</div>
-        <form method="post" action="{{ path('hosting_capacity_set_physical') }}" class="cap-physical__form">
-            <input type="hidden" name="_token" value="{{ csrf_token('hosting_physical') }}">
-            <input type="hidden" name="year" value="{{ year }}">
-            <input type="number" name="physical_capacity" value="{{ physical_capacity }}" min="0" max="50" class="cap-physical__input">
-            {{ csa.btn('Guardar', { variant: 'secondary', size: 'sm', type: 'submit' }) }}
-        </form>
-        <div class="cap-physical__help">Es el máximo de plazas: el aforo de cada mes no puede superarlo. Por defecto, cada mes ofrece estas camas.</div>
+        {% if can_edit %}
+            <form method="post" action="{{ path('hosting_capacity_set_physical') }}" class="cap-physical__form">
+                <input type="hidden" name="_token" value="{{ csrf_token('hosting_physical') }}">
+                <input type="hidden" name="year" value="{{ year }}">
+                <input type="number" name="physical_capacity" value="{{ physical_capacity }}" min="0" max="50" class="cap-physical__input">
+                {{ csa.btn('Guardar', { variant: 'secondary', size: 'sm', type: 'submit' }) }}
+            </form>
+            <div class="cap-physical__help">Es el máximo de plazas: el aforo de cada mes no puede superarlo. Por defecto, cada mes ofrece estas camas.</div>
+        {% else %}
+            <div class="cap-physical__input" style="display: inline-flex; align-items: center; justify-content: center;">{{ physical_capacity }}</div>
+            <div class="cap-physical__help">Es el máximo de plazas: el aforo de cada mes no puede superarlo. Por defecto, cada mes ofrece estas camas.</div>
+        {% endif %}
     </div>
 
     <div class="csa-row-between" style="margin-bottom: var(--csa-sp-5);">
@@ -80,7 +86,7 @@
             {% else %}
                 {% set kind = 'closed' %}
             {% endif %}
-            <a class="cap-card cap-card--{{ kind }}" href="{{ path('hosting_capacity_edit', { year: year, month: month }) }}">
+            {% if can_edit %}<a class="cap-card cap-card--{{ kind }}" href="{{ path('hosting_capacity_edit', { year: year, month: month }) }}">{% else %}<div class="cap-card cap-card--{{ kind }}">{% endif %}
                 <div class="cap-card__month">{{ month_names[month] }}</div>
                 {% if row is null %}
                     <div class="cap-card__cap cap-card__cap--default">{{ physical_capacity }}</div>
@@ -92,7 +98,7 @@
                     <div class="cap-card__cap cap-card__cap--closed">Cerrado</div>
                     <div class="cap-card__note">No se admite a nadie</div>
                 {% endif %}
-            </a>
+            {% if can_edit %}</a>{% else %}</div>{% endif %}
         {% endfor %}
     </div>
 {% endblock %}

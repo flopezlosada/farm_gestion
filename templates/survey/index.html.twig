@@ -93,7 +93,7 @@
             <a href="{{ path('survey_index') }}" class="prl-btn">
                 <i class="fa fa-arrow-left"></i> Volver al listado
             </a>
-        {% else %}
+        {% elseif is_granted('ROLE_GESTION_ENCUESTAS_EDIT') %}
             <a href="{{ path('survey_new') }}" class="prl-btn prl-btn--primary">
                 <i class="fa fa-plus"></i> Nueva encuesta
             </a>
@@ -159,6 +159,7 @@
                                         <a href="{{ path('survey_results', { id: survey.id }) }}" title="Resultados" aria-label="Resultados"><i class="fa fa-bar-chart"></i></a>
                                     {% endif %}
 
+                                    {% if is_granted('ROLE_GESTION_ENCUESTAS_EDIT') %}
                                     {% if show_archived %}
                                         {# --- Desarchivar --- #}
                                         <button type="button" class="prl-btn prl-btn--sm" onclick="document.getElementById('dlg-unarchive-{{ survey.id }}').showModal()">
@@ -240,6 +241,7 @@
                                             csrf_token: csrf_token('survey_delete_' ~ survey.id)
                                         }) }}
                                     {% endif %}
+                                    {% endif %}{# is_granted ROLE_GESTION_ENCUESTAS_EDIT #}
                                 </div>
                             </td>
                         </tr>

@@ -1,0 +1,52 @@
+{# ============================================================
+ # Bloque de permisos por sección: interruptor de Administrador +
+ # un control segmentado por sección (Sin acceso / Lectura / Edición;
+ # las secciones sin split solo Sin acceso / Acceso completo).
+ #
+ # Espera `permform` = la vista del form de usuario (UserType). Recorre
+ # sus campos `access_*`, así que añadir una sección (registro SECTIONS
+ # de UserType) no toca esta plantilla.
+ # ============================================================ #}
+<style>
+.perm-rows { display: flex; flex-direction: column; gap: var(--csa-sp-1); margin-top: var(--csa-sp-4); }
+.perm-row { display: flex; align-items: center; justify-content: space-between; gap: var(--csa-sp-4); padding: 10px 0; border-bottom: 1px solid var(--csa-rule); }
+.perm-row:last-child { border-bottom: 0; }
+.perm-row__label { font-size: 14px; font-weight: 500; color: var(--csa-ink); }
+
+/* Control segmentado: radios ocultos + labels-botón; el activo resaltado.
+ * Color por nivel para escanear la columna de un vistazo:
+ * gris = sin acceso, ámbar = lectura, verde = edición. */
+/* Ancho FIJO e idéntico en todas las filas (tengan 2 o 3 niveles) para que las
+ * cajas cuadren; dentro, cada segmento reparte el espacio por igual. */
+.csa-seg { display: flex; position: relative; width: 300px; border: 1px solid var(--csa-rule); border-radius: 999px; overflow: hidden; background: var(--csa-surface-alt); flex-shrink: 0; padding: 2px; gap: 2px; }
+.csa-seg__input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.csa-seg__btn { flex: 1 1 0; text-align: center; margin: 0; padding: 6px 8px; font-size: 12.5px; font-weight: 500; line-height: 1.2; color: var(--csa-ink-soft); cursor: pointer; user-select: none; border-radius: 999px; transition: background var(--csa-t-fast), color var(--csa-t-fast); white-space: nowrap; }
+.csa-seg__btn:hover { color: var(--csa-ink); }
+.csa-seg__input:checked + .csa-seg__btn { color: #fff; box-shadow: 0 1px 2px rgba(28,29,26,0.18); }
+.csa-seg__input[value="none"]:checked + .csa-seg__btn { background: var(--csa-ink-muted); }
+.csa-seg__input[value="read"]:checked + .csa-seg__btn { background: var(--csa-ochre); }
+.csa-seg__input[value="edit"]:checked + .csa-seg__btn { background: var(--csa-green); }
+.csa-seg__input:focus-visible + .csa-seg__btn { outline: 2px solid var(--csa-green); outline-offset: 1px; }
+</style>
+
+<label class="csa-toggle">
+    {{ form_widget(permform.is_admin, { attr: { class: 'csa-toggle__input' } }) }}
+    <span class="csa-toggle__track"><span class="csa-toggle__thumb"></span></span>
+    <span class="csa-toggle__text">Administrador <small>acceso a todo; ignora los niveles de abajo</small></span>
+</label>
+
+<div class="perm-rows">
+    {% for child in permform %}
+        {% if child.vars.name starts with 'access_' %}
+            <div class="perm-row">
+                <span class="perm-row__label">{{ child.vars.label }}</span>
+                <div class="csa-seg">
+                    {% for opt in child %}
+                        {{ form_widget(opt, { attr: { class: 'csa-seg__input' } }) }}
+                        <label class="csa-seg__btn" for="{{ opt.vars.id }}">{{ opt.vars.label }}</label>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endif %}
+    {% endfor %}
+</div>

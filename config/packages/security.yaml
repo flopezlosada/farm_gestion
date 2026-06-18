@@ -31,13 +31,23 @@ security:
     #   ROLE_GESTION_REPARTO    logística de entrega: reparto semanal, nodos,
     #                           grupos de recogida, excepciones, histórico de cambios
     #   ROLE_BLOG               blog público (admin) + categorías + media
-    #   ROLE_GESTION_ENCUESTAS  crear encuestas internas y ver resultados
-    #                           AGREGADOS (no da acceso a datos personales de
-    #                           socixs: mínimo privilegio, separado a propósito
-    #                           de ROLE_GESTION_SOCIXS)
-    #   ROLE_GESTION_ALBERGUE   voluntarios de acogida del albergue (helpers,
-    #                           estancias y aforo mensual). Separado de socixs:
-    #                           son personas y datos distintos
+    #   ROLE_GESTION_ENCUESTAS  LECTURA de encuestas internas: ver encuestas y
+    #                           resultados AGREGADOS (no da acceso a datos
+    #                           personales de socixs: mínimo privilegio,
+    #                           separado a propósito de ROLE_GESTION_SOCIXS)
+    #   ROLE_GESTION_ENCUESTAS_EDIT  ESCRITURA de encuestas (crear/editar/abrir/
+    #                           cerrar/borrar/archivar; incluye lectura por
+    #                           jerarquía). Mismo modelo que el albergue.
+    #   ROLE_GESTION_ALBERGUE   LECTURA del albergue (helpers, estancias y
+    #                           aforo mensual). Separado de socixs: son
+    #                           personas y datos distintos
+    #   ROLE_GESTION_ALBERGUE_EDIT  ESCRITURA del albergue (incluye lectura por
+    #                           jerarquía). Piloto del modelo lectura/escritura
+    #                           por sección: la lectura la da el rol base y la
+    #                           escritura el sufijo _EDIT. Sin ninguno = sin
+    #                           acceso. La escritura se exige a nivel de método
+    #                           HTTP en access_control (ver más abajo), sin
+    #                           tocar los controllers.
     #   ROLE_PARTNER            panel propio del socix
     # ===========================================================
     role_hierarchy:
@@ -46,9 +56,14 @@ security:
             - ROLE_GESTION_SOCIXS
             - ROLE_GESTION_REPARTO
             - ROLE_BLOG
-            - ROLE_GESTION_ENCUESTAS
-            - ROLE_GESTION_ALBERGUE
+            - ROLE_GESTION_ENCUESTAS_EDIT
+            - ROLE_GESTION_ALBERGUE_EDIT
             - ROLE_PARTNER
+        # La escritura incluye la lectura (modelo lectura/escritura por sección).
+        ROLE_GESTION_ALBERGUE_EDIT:
+            - ROLE_GESTION_ALBERGUE
+        ROLE_GESTION_ENCUESTAS_EDIT:
+            - ROLE_GESTION_ENCUESTAS
 
     providers:
         # Sin "property": Symfony delega en UserRepository::loadUserByIdentifier
@@ -138,6 +153,18 @@ security:
         # aquí a quien tenga passwordSet = false.
         - { path: ^/account, roles: IS_AUTHENTICATED_REMEMBERED }
         - { path: ^/contact$, roles: PUBLIC_ACCESS }
+        # Albergue (piloto lectura/escritura por sección): la lectura la da
+        # ROLE_GESTION_ALBERGUE (vía el #[IsGranted] de clase y la regla
+        # ^/gestion de abajo); la ESCRITURA se exige aquí a nivel de método
+        # HTTP. Toda mutación del albergue es POST/PUT/PATCH/DELETE, así que
+        # esta única regla protege el alta/edición/borrado/aforo sin tocar
+        # los controllers. DEBE ir antes de la regla genérica ^/gestion
+        # (access_control aplica la PRIMERA regla que casa path + método).
+        - { path: ^/gestion/albergue, methods: [POST, PUT, PATCH, DELETE], roles: ROLE_GESTION_ALBERGUE_EDIT }
+        # Encuestas (mismo modelo): lectura = ver encuestas y resultados; la
+        # escritura (crear/editar/abrir/cerrar/borrar/archivar, todo POST) exige
+        # _EDIT. También debe ir antes de la regla genérica ^/gestion.
+        - { path: ^/gestion/surveys, methods: [POST, PUT, PATCH, DELETE], roles: ROLE_GESTION_ENCUESTAS_EDIT }
         # Cualquier rol de gestión permite entrar a /gestion. Dentro,
         # cada controller filtra con #[IsGranted('ROLE_GESTION_X')] según
         # su sección.

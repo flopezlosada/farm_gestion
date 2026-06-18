@@ -7,6 +7,7 @@ use App\Entity\HelperSource;
 use App\Entity\HostingCapacity;
 use App\Entity\InternshipDetail;
 use App\Entity\Stay;
+use App\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Component\DomCrawler\Crawler;
@@ -210,6 +211,63 @@ class AlbergueControllerTest extends AbstractAuthenticatedTest
         $em = $this->em();
         $em->remove($em->getRepository(Helper::class)->find($helperId));
         $em->remove($em->getRepository(HelperSource::class)->find($sourceId));
+        $em->flush();
+    }
+
+    /**
+     * Piloto del modelo lectura/escritura por sección. Un usuario con SOLO
+     * ROLE_GESTION_ALBERGUE (lectura) ve el listado (200) pero no se le pinta
+     * el botón de alta, y el firewall le rechaza con 403 cualquier escritura
+     * (regla access_control por método HTTP, sin tocar el controller).
+     */
+    public function testReadOnlyRoleCanReadButNotWrite(): void
+    {
+        $client = static::createClient();
+        $user = $this->createUserWithRoles(['ROLE_GESTION_ALBERGUE']);
+        $userId = $user->getId();
+        $client->loginUser($user);
+
+        // Lectura: el listado responde y sin botón de alta.
+        $client->request('GET', '/gestion/albergue/helpers/');
+        $this->assertResponseIsSuccessful();
+        $this->assertSelectorNotExists(
+            'a[href$="/gestion/albergue/helpers/new"]',
+            'Un solo-lectura no debería ver el botón de alta de voluntario.',
+        );
+
+        // Escritura: el firewall corta el POST por método antes del controller.
+        $client->request('POST', '/gestion/albergue/helpers/new');
+        $this->assertResponseStatusCodeSame(403);
+
+        $em = $this->em();
+        $em->remove($em->getRepository(User::class)->find($userId));
+        $em->flush();
+    }
+
+    /**
+     * Contraparte del piloto: un usuario de ESCRITURA (ROLE_GESTION_ALBERGUE_EDIT,
+     * que incluye la lectura por jerarquía) sí ve el botón de alta y el firewall
+     * le deja pasar al formulario de nuevo voluntario (200, no 403).
+     */
+    public function testEditRoleSeesWriteAffordances(): void
+    {
+        $client = static::createClient();
+        $user = $this->createUserWithRoles(['ROLE_GESTION_ALBERGUE_EDIT']);
+        $userId = $user->getId();
+        $client->loginUser($user);
+
+        $client->request('GET', '/gestion/albergue/helpers/');
+        $this->assertResponseIsSuccessful();
+        $this->assertSelectorExists(
+            'a[href$="/gestion/albergue/helpers/new"]',
+            'Un usuario de escritura debería ver el botón de alta de voluntario.',
+        );
+
+        $client->request('GET', '/gestion/albergue/helpers/new');
+        $this->assertResponseIsSuccessful();
+
+        $em = $this->em();
+        $em->remove($em->getRepository(User::class)->find($userId));
         $em->flush();
     }
 

@@ -37,26 +37,30 @@
 
 {% block csa_main %}
     {# Form oculto del borrado del voluntario (lo dispara el modal de confirmación). #}
-    <form id="helper-delete-form" method="post" action="{{ path('helper_delete', { id: helper.id }) }}" style="display: none;">
-        <input type="hidden" name="_token" value="{{ csrf_token('delete' ~ helper.id) }}">
-    </form>
+    {% if is_granted('ROLE_GESTION_ALBERGUE_EDIT') %}
+        <form id="helper-delete-form" method="post" action="{{ path('helper_delete', { id: helper.id }) }}" style="display: none;">
+            <input type="hidden" name="_token" value="{{ csrf_token('delete' ~ helper.id) }}">
+        </form>
+    {% endif %}
 
     {{ csa.page_header('Albergue', helper.name, helper.source.name) }}
 
     <div class="csa-row-between" style="margin-bottom: var(--csa-sp-5);">
         <div></div>
         <div class="csa-row">
-            <button type="button" class="csa-btn csa-btn--danger" onclick="document.getElementById('confirm-helper-delete').showModal()">
-                <i class="fa fa-trash"></i><span>Borrar</span>
-            </button>
-            {{ csa.confirm_dialog('confirm-helper-delete', {
-                variant: 'danger',
-                title: 'Borrar voluntario',
-                body: 'Se borrará «' ~ helper.name ~ '». No se puede deshacer.',
-                confirm_label: 'Borrar',
-                external_form_id: 'helper-delete-form',
-            }) }}
-            {{ csa.btn('Editar', { variant: 'secondary', href: path('helper_edit', { id: helper.id }), icon: 'fa-pencil' }) }}
+            {% if is_granted('ROLE_GESTION_ALBERGUE_EDIT') %}
+                <button type="button" class="csa-btn csa-btn--danger" onclick="document.getElementById('confirm-helper-delete').showModal()">
+                    <i class="fa fa-trash"></i><span>Borrar</span>
+                </button>
+                {{ csa.confirm_dialog('confirm-helper-delete', {
+                    variant: 'danger',
+                    title: 'Borrar voluntario',
+                    body: 'Se borrará «' ~ helper.name ~ '». No se puede deshacer.',
+                    confirm_label: 'Borrar',
+                    external_form_id: 'helper-delete-form',
+                }) }}
+                {{ csa.btn('Editar', { variant: 'secondary', href: path('helper_edit', { id: helper.id }), icon: 'fa-pencil' }) }}
+            {% endif %}
             {{ csa.btn('Volver', { variant: 'ghost', href: path('helper_index') }) }}
         </div>
     </div>
@@ -85,7 +89,9 @@
     {# ---------- Estancias ---------- #}
     <div class="csa-row-between" style="margin-top: 28px;">
         <div class="hsh-section-title" style="margin: 0;">Estancias</div>
-        {{ csa.btn('Nueva estancia', { variant: 'primary', href: path('stay_new', { helperId: helper.id }), icon: 'fa-plus' }) }}
+        {% if is_granted('ROLE_GESTION_ALBERGUE_EDIT') %}
+            {{ csa.btn('Nueva estancia', { variant: 'primary', href: path('stay_new', { helperId: helper.id }), icon: 'fa-plus' }) }}
+        {% endif %}
     </div>
 
     {% if stays|length > 0 %}
@@ -104,14 +110,16 @@
                             {% if stay.notes %}· {{ stay.notes|length > 80 ? stay.notes|slice(0, 80) ~ '…' : stay.notes }}{% endif %}
                         </div>
                     </div>
-                    <div class="hsh-stay__actions">
-                        {{ csa.btn('Prácticas', { variant: 'ghost', size: 'sm', href: path('stay_internship', { id: stay.id }), icon: 'fa-graduation-cap' }) }}
-                        {{ csa.btn('Editar', { variant: 'ghost', size: 'sm', href: path('stay_edit', { id: stay.id }), icon: 'fa-pencil' }) }}
-                        <form method="post" action="{{ path('stay_delete', { id: stay.id }) }}" onsubmit="return confirm('¿Borrar esta estancia?');" style="display: inline;">
-                            <input type="hidden" name="_token" value="{{ csrf_token('delete' ~ stay.id) }}">
-                            <button type="submit" class="csa-btn csa-btn--ghost csa-btn--sm"><i class="fa fa-trash"></i><span>Borrar</span></button>
-                        </form>
-                    </div>
+                    {% if is_granted('ROLE_GESTION_ALBERGUE_EDIT') %}
+                        <div class="hsh-stay__actions">
+                            {{ csa.btn('Prácticas', { variant: 'ghost', size: 'sm', href: path('stay_internship', { id: stay.id }), icon: 'fa-graduation-cap' }) }}
+                            {{ csa.btn('Editar', { variant: 'ghost', size: 'sm', href: path('stay_edit', { id: stay.id }), icon: 'fa-pencil' }) }}
+                            <form method="post" action="{{ path('stay_delete', { id: stay.id }) }}" onsubmit="return confirm('¿Borrar esta estancia?');" style="display: inline;">
+                                <input type="hidden" name="_token" value="{{ csrf_token('delete' ~ stay.id) }}">
+                                <button type="submit" class="csa-btn csa-btn--ghost csa-btn--sm"><i class="fa fa-trash"></i><span>Borrar</span></button>
+                            </form>
+                        </div>
+                    {% endif %}
                 </div>
             {% endfor %}
         </div>

@@ -88,7 +88,7 @@
         {% if survey.status != 'draft' %}
             {{ csa.btn('Ver resultados', { variant: 'primary', href: path('survey_results', { id: survey.id }), icon: 'fa-bar-chart' }) }}
         {% endif %}
-        {% if survey.editable %}
+        {% if survey.editable and is_granted('ROLE_GESTION_ENCUESTAS_EDIT') %}
             {{ csa.btn('Editar', { variant: 'primary', href: path('survey_edit', { id: survey.id }), icon: 'fa-pencil' }) }}
         {% endif %}
     </div>

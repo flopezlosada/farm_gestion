@@ -34,7 +34,15 @@ class UserChecker implements UserCheckerInterface
         'ROLE_GESTION_SOCIXS',
         'ROLE_GESTION_REPARTO',
         'ROLE_BLOG',
+        // Secciones con el modelo lectura/escritura partido: se listan AMBOS
+        // roles (lectura y _EDIT) porque getRoles() devuelve los roles
+        // ALMACENADOS sin expandir la jerarquía — a un usuario de escritura se
+        // le guarda solo el _EDIT (la lectura le llega por jerarquía en los
+        // voters, no aquí).
         'ROLE_GESTION_ENCUESTAS',
+        'ROLE_GESTION_ENCUESTAS_EDIT',
+        'ROLE_GESTION_ALBERGUE',
+        'ROLE_GESTION_ALBERGUE_EDIT',
     ];
 
     public function __construct(
