@@ -99,7 +99,15 @@ jobs:
             # mirror: se re-sube forzado y consistente DESPUES del mirror (abajo),
             # para no abrir ventana de caida. OJO: nada de comillas dobles en los
             # comentarios de aquí, romperían la cadena lftp -c.
-            mirror -R --parallel=2 --verbose=2 \
+            # --parallel=1 (secuencial) A PROPOSITO. Con paralelismo (antes =2)
+            # dos transferencias FTP concurrentes pueden cruzar su canal de datos
+            # PASV bajo reintentos de red y escribir los bytes de un fichero en el
+            # destino de otro: el 2026-06-18 src/Entity/PartnerBasketShare.php
+            # acabo conteniendo el bower.json de lightgallery -> headers already
+            # sent + MappingException + 500. Secuencial elimina la clase de bug
+            # (solo hay una transferencia de datos viva a la vez). El deploy tarda
+            # algo mas; irrelevante frente a servir la web rota.
+            mirror -R --parallel=1 --verbose=2 \
               --exclude-glob '.git*' \
               --exclude-glob '.github/' \
               --exclude-glob '.idea/' \
@@ -156,3 +164,15 @@ jobs:
             # request (más lento esa vez). -f: no falla si el dir no existe.
             rm -rf deploy/staging/var/cache/prod;
           "
+
+      # Verifica que la home responde sana tras el deploy. Caza la corrupcion
+      # de ficheros en el transporte (un .php/.twig servido en crudo o un 500)
+      # antes de que la descubra una persona. La home es publica (frontend).
+      - name: Smoke check post-deploy
+        run: |
+          code=$(curl -sS -m 30 -o /tmp/resp.html -w '%{http_code}' https://staging.csavegadejarama.org/ || echo 000)
+          echo "HTTP $code"
+          if [ "$code" != "200" ]; then echo "::error::La home no devuelve 200 (codigo $code)"; exit 1; fi
+          if grep -qF '<?php' /tmp/resp.html; then echo "::error::La home sirve PHP en crudo (fichero corrupto en el deploy)"; exit 1; fi
+          if ! grep -qiF 'Vega de Jarama' /tmp/resp.html; then echo "::error::La home no contiene el marcador esperado"; exit 1; fi
+          echo "Smoke check OK"
