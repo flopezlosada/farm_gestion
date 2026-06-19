@@ -86,6 +86,27 @@
         </div>
     {% endif %}
 
+    {# ---------- Cesta de reparto ---------- #}
+    <div class="csa-row-between" style="margin-top: 28px;">
+        <div class="hsh-section-title" style="margin: 0;">Cesta de reparto</div>
+        {% if helper.basketActive %}
+            {{ csa.btn('Calendario de recogida', { variant: 'secondary', href: path('helper_basket_calendar', { id: helper.id }), icon: 'fa-calendar' }) }}
+        {% endif %}
+    </div>
+    <div class="hsh-grid" style="margin-top: 14px;">
+        <div>
+            <div class="hsh-dt">Estado</div>
+            <div class="hsh-dd">
+                {{ csa.badge(helper.basketActive ? 'Activa' : 'Sin cesta', helper.basketActive ? 'green' : 'neutral') }}
+            </div>
+        </div>
+        {% if helper.basketActive %}
+            <div><div class="hsh-dt">Nodo de recogida</div><div class="hsh-dd">{{ helper.basketNode ? helper.basketNode.name : 'Torremocha (por defecto)' }}</div></div>
+            <div><div class="hsh-dt">Cestas de verdura</div><div class="hsh-dd">{{ helper.basketVegBaskets }}</div></div>
+            <div><div class="hsh-dt">Docenas de huevos</div><div class="hsh-dd">{{ helper.basketEggDozens == helper.basketEggDozens|round ? helper.basketEggDozens|number_format(0) : helper.basketEggDozens|number_format(1, ',', '.') }}</div></div>
+        {% endif %}
+    </div>
+
     {# ---------- Estancias ---------- #}
     <div class="csa-row-between" style="margin-top: 28px;">
         <div class="hsh-section-title" style="margin: 0;">Estancias</div>

@@ -3,11 +3,18 @@
 namespace App\Controller;
 
 use App\Entity\Helper;
+use App\Entity\HelperBasketSkip;
+use App\Entity\Node;
 use App\Entity\Stay;
 use App\Form\HelperType;
+use App\Repository\BasketRepository;
+use App\Repository\HelperBasketSkipRepository;
 use App\Repository\HelperRepository;
 use App\Repository\HelperSourceRepository;
+use App\Repository\NodeRepository;
 use App\Repository\StayRepository;
+use App\Service\Delivery\HelperDeliveryResolver;
+use App\Service\Delivery\NodeDeliveryDate;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -207,6 +214,128 @@ class HelperController extends AbstractController
             'helper' => $helper,
             'stays' => $stays,
         ]);
+    }
+
+    /**
+     * Calendario de recogida del voluntario: las semanas en que su nodo reparte
+     * durante sus estancias confirmadas, con un interruptor recoge/no-recoge por
+     * semana. Como la cesta es semanal no hay cambio de fecha posible: lo único
+     * editable es saltar la recogida ({@see HelperBasketSkip}).
+     *
+     * @param Helper $helper
+     * @param NodeRepository $nodeRepository
+     * @param BasketRepository $basketRepository
+     * @param NodeDeliveryDate $nodeDeliveryDate
+     * @param HelperBasketSkipRepository $skipRepository
+     * @return Response
+     */
+    #[Route('/{id}/calendario', name: 'helper_basket_calendar', methods: ['GET'], requirements: ['id' => '\d+'])]
+    public function basketCalendar(
+        Helper $helper,
+        NodeRepository $nodeRepository,
+        BasketRepository $basketRepository,
+        NodeDeliveryDate $nodeDeliveryDate,
+        HelperBasketSkipRepository $skipRepository,
+    ): Response {
+        $node = $this->resolveBasketNode($helper, $nodeRepository);
+
+        $weeks = [];
+        if ($helper->isBasketActive() && $node !== null) {
+            $skipped = $skipRepository->skippedDatesForHelper($helper);
+            $today = new \DateTimeImmutable('today');
+
+            // Por cada estancia confirmada, las fechas físicas de reparto del nodo
+            // dentro de [llegada, salida). Se itera una ventana de Baskets algo más
+            // ancha (±7 días) porque la fecha física del nodo puede caer en otro día
+            // de la semana que el viernes-ciclo; luego se recorta al rango real.
+            foreach ($helper->getStays() as $stay) {
+                if ($stay->getStatus() !== Stay::STATUS_CONFIRMED) {
+                    continue;
+                }
+                $arrival = $stay->getArrivalDate();
+                $departure = $stay->getDepartureDate();
+                foreach ($basketRepository->findBetweenDates($arrival->modify('-7 days'), $departure->modify('+7 days')) as $basket) {
+                    $physical = $nodeDeliveryDate->physicalDateFor($basket, $node);
+                    if ($physical === null || $physical < $arrival || $physical >= $departure) {
+                        continue;
+                    }
+                    $key = $physical->format('Y-m-d');
+                    $weeks[$key] = [
+                        'date' => $physical,
+                        'skipped' => isset($skipped[$key]),
+                        'past' => $physical < $today,
+                    ];
+                }
+            }
+            ksort($weeks);
+        }
+
+        return $this->render('helper/basket_calendar.html.twig', [
+            'helper' => $helper,
+            'node' => $node,
+            'weeks' => array_values($weeks),
+        ]);
+    }
+
+    /**
+     * Marca/desmarca el "no recoge" de un voluntario en una semana concreta. Crea
+     * el {@see HelperBasketSkip} si no existía (no recoge) o lo borra si existía
+     * (vuelve a recoger). La escritura la protege el access_control de albergue
+     * (POST → ROLE_GESTION_ALBERGUE_EDIT).
+     *
+     * @param Request $request
+     * @param Helper $helper
+     * @param HelperBasketSkipRepository $skipRepository
+     * @param EntityManagerInterface $entityManager
+     * @return Response
+     */
+    #[Route('/{id}/calendario/skip', name: 'helper_basket_calendar_skip', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function basketCalendarSkip(
+        Request $request,
+        Helper $helper,
+        HelperBasketSkipRepository $skipRepository,
+        EntityManagerInterface $entityManager,
+    ): Response {
+        if (!$this->isCsrfTokenValid('helper_basket_skip', (string) $request->request->get('_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+
+            return $this->redirectToRoute('helper_basket_calendar', ['id' => $helper->getId()]);
+        }
+
+        $raw = (string) $request->request->get('date');
+        $date = \DateTimeImmutable::createFromFormat('!Y-m-d', $raw);
+        if ($date === false) {
+            $this->addFlash('error', 'Fecha no válida.');
+
+            return $this->redirectToRoute('helper_basket_calendar', ['id' => $helper->getId()]);
+        }
+
+        $existing = $skipRepository->findOneByHelperAndDate($helper, $date);
+        if ($existing !== null) {
+            $entityManager->remove($existing);
+            $this->addFlash('success', sprintf('%s vuelve a recoger el %s.', $helper->getName(), $date->format('d/m/Y')));
+        } else {
+            $entityManager->persist(new HelperBasketSkip($helper, $date));
+            $this->addFlash('success', sprintf('%s no recoge el %s.', $helper->getName(), $date->format('d/m/Y')));
+        }
+        $entityManager->flush();
+
+        return $this->redirectToRoute('helper_basket_calendar', ['id' => $helper->getId()]);
+    }
+
+    /**
+     * Nodo de recogida efectivo del voluntario: el suyo asignado, o Torremocha
+     * por defecto cuando no tiene ninguno (mismo criterio que
+     * {@see HelperDeliveryResolver}). Null sólo si ni siquiera existe Torremocha.
+     *
+     * @param Helper $helper
+     * @param NodeRepository $nodeRepository
+     * @return Node|null
+     */
+    private function resolveBasketNode(Helper $helper, NodeRepository $nodeRepository): ?Node
+    {
+        return $helper->getBasketNode()
+            ?? $nodeRepository->findOneBy(['name' => HelperDeliveryResolver::DEFAULT_NODE_NAME]);
     }
 
     /**
