@@ -126,7 +126,7 @@
                 <tr class="sub">
                     <td class="s-blank" colspan="4"></td>
                     <td class="s-cell">{{ m.qty(group.subtotal_cestas) }}</td>
-                    <td class="s-blank"></td>
+                    <td class="{{ group.subtotal_eggs ? 's-cell' : 's-blank' }}">{{ group.subtotal_eggs }}</td>
                 </tr>
             {% endfor %}
 
@@ -142,12 +142,10 @@
                         <td class="t-es">{{ row.egg_spec }}</td>
                     </tr>
                 {% endfor %}
-                {% set shared_cestas = 0 %}
-                {% for row in sheet.shared.rows %}{% set shared_cestas = shared_cestas + row.cestas %}{% endfor %}
                 <tr class="sub">
                     <td class="s-blank" colspan="4"></td>
-                    <td class="s-cell">{{ m.qty(shared_cestas) }}</td>
-                    <td class="s-blank"></td>
+                    <td class="s-cell">{{ m.qty(sheet.shared.subtotal_cestas) }}</td>
+                    <td class="{{ sheet.shared.subtotal_eggs ? 's-cell' : 's-blank' }}">{{ sheet.shared.subtotal_eggs }}</td>
                 </tr>
             {% endif %}
         </table>

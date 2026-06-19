@@ -60,8 +60,8 @@ class NodeDeliverySheet
      * WeeklyBasket YA materializados (camino de piedra).
      *
      * @return array{
-     *   groups: list<array{name:string, color:?string, locality:string, subtotal_cestas:float, modalities: list<array{label:string, rows: list<array<string,mixed>>}>}>,
-     *   shared: array{rows: list<array<string,mixed>>},
+     *   groups: list<array{name:string, color:?string, locality:string, subtotal_cestas:float, subtotal_eggs:?string, modalities: list<array{label:string, rows: list<array<string,mixed>>}>}>,
+     *   shared: array{rows: list<array<string,mixed>>, subtotal_cestas: float, subtotal_eggs: ?string},
      *   totals: array{cestas:float, docenas:float}
      * }
      */
@@ -95,8 +95,8 @@ class NodeDeliverySheet
      *
      * @param DeliveryLine[] $lines
      * @return array{
-     *   groups: list<array{name:string, color:?string, locality:string, subtotal_cestas:float, modalities: list<array{label:string, rows: list<array<string,mixed>>}>}>,
-     *   shared: array{rows: list<array<string,mixed>>},
+     *   groups: list<array{name:string, color:?string, locality:string, subtotal_cestas:float, subtotal_eggs:?string, modalities: list<array{label:string, rows: list<array<string,mixed>>}>}>,
+     *   shared: array{rows: list<array<string,mixed>>, subtotal_cestas: float, subtotal_eggs: ?string},
      *   totals: array{cestas:float, docenas:float}
      * }
      */
@@ -200,10 +200,11 @@ class NodeDeliverySheet
 
     /**
      * Grupos de recogida (WBG) en orden alfabético; dentro, subgrupos por
-     * modalidad (bs.id ascendente: S, Q, M, H) con su subtotal de cestas.
+     * modalidad (bs.id ascendente: S, Q, M, H) con su subtotal de cestas y de
+     * huevos (este último en la notación compacta D/M de las filas).
      *
      * @param DeliveryLine[] $lines
-     * @return list<array{name:string, color:?string, locality:string, subtotal_cestas:float, modalities: list<array{label:string, rows: list<array<string,mixed>>}>}>
+     * @return list<array{name:string, color:?string, locality:string, subtotal_cestas:float, subtotal_eggs:?string, modalities: list<array{label:string, rows: list<array<string,mixed>>}>}>
      */
     private function buildGroups(array $lines): array
     {
@@ -230,10 +231,12 @@ class NodeDeliverySheet
                 'locality' => $this->localityFor($line->groupName ?? ''),
                 'mods' => [],
                 'subtotal_cestas' => 0.0,
+                'subtotal_dozens' => 0.0,
             ];
             $byWbg[$gid]['mods'][$bucket['order']] ??= ['label' => $bucket['label'], 'rows' => []];
             $byWbg[$gid]['mods'][$bucket['order']]['rows'][] = $this->row($line);
             $byWbg[$gid]['subtotal_cestas'] += $line->cestas;
+            $byWbg[$gid]['subtotal_dozens'] += $line->dozens;
         }
 
         uasort($byWbg, static fn (array $a, array $b): int => strnatcasecmp($a['name'], $b['name']));
@@ -253,6 +256,7 @@ class NodeDeliverySheet
                 'color' => $g['color'],
                 'locality' => $g['locality'],
                 'subtotal_cestas' => $g['subtotal_cestas'],
+                'subtotal_eggs' => $this->formatEggs($g['subtotal_dozens'])['spec'],
                 'modalities' => array_values($g['mods']),
             ];
         }
@@ -271,7 +275,7 @@ class NodeDeliverySheet
      * casa}" (row['relocated_from']). Mismas subdivisiones por modalidad que un grupo normal.
      *
      * @param DeliveryLine[] $lines
-     * @return array{name:string, color:?string, locality:string, subtotal_cestas:float, modalities: list<array{label:string, rows: list<array<string,mixed>>}>}
+     * @return array{name:string, color:?string, locality:string, subtotal_cestas:float, subtotal_eggs:?string, modalities: list<array{label:string, rows: list<array<string,mixed>>}>}
      */
     private function buildRelocatedGroup(array $lines): array
     {
@@ -294,6 +298,7 @@ class NodeDeliverySheet
             'color' => null,
             'locality' => '',
             'subtotal_cestas' => $subtotal,
+            'subtotal_eggs' => $this->eggSubtotalSpec($lines),
             'modalities' => array_values($mods),
         ];
     }
@@ -304,7 +309,7 @@ class NodeDeliverySheet
      * subdividir por modalidad porque no tienen). Ver {@see \App\Entity\PartnerBasketExtra}.
      *
      * @param DeliveryLine[] $lines
-     * @return array{name:string, color:?string, locality:string, subtotal_cestas:float, modalities: list<array{label:?string, rows: list<array<string,mixed>>}>}
+     * @return array{name:string, color:?string, locality:string, subtotal_cestas:float, subtotal_eggs:?string, modalities: list<array{label:?string, rows: list<array<string,mixed>>}>}
      */
     private function buildExtraGroup(array $lines): array
     {
@@ -322,6 +327,7 @@ class NodeDeliverySheet
             'color' => null,
             'locality' => '',
             'subtotal_cestas' => $subtotal,
+            'subtotal_eggs' => $this->eggSubtotalSpec($lines),
             'modalities' => [['label' => null, 'rows' => $rows]],
         ];
     }
@@ -334,7 +340,7 @@ class NodeDeliverySheet
      * del nodo igual que cualquier otra entrega.
      *
      * @param DeliveryLine[] $lines Líneas con isHelper=true.
-     * @return array{name:string, color:?string, locality:string, subtotal_cestas:float, modalities: list<array{label:?string, rows: list<array<string,mixed>>}>}
+     * @return array{name:string, color:?string, locality:string, subtotal_cestas:float, subtotal_eggs:?string, modalities: list<array{label:?string, rows: list<array<string,mixed>>}>}
      */
     private function buildHelperGroup(array $lines): array
     {
@@ -352,8 +358,27 @@ class NodeDeliverySheet
             'color' => null,
             'locality' => '',
             'subtotal_cestas' => $subtotal,
+            'subtotal_eggs' => $this->eggSubtotalSpec($lines),
             'modalities' => [['label' => null, 'rows' => $rows]],
         ];
+    }
+
+    /**
+     * Subtotal de huevos de un conjunto de líneas, en la notación compacta D/M
+     * del listado (p. ej. "2D+1M"); null si la sección no lleva huevos. Va en el
+     * pie de cada sección, bajo la columna de huevos.
+     *
+     * @param DeliveryLine[] $lines
+     * @return string|null
+     */
+    private function eggSubtotalSpec(array $lines): ?string
+    {
+        $dozens = 0.0;
+        foreach ($lines as $line) {
+            $dozens += $line->dozens;
+        }
+
+        return $this->formatEggs($dozens)['spec'];
     }
 
     /**
@@ -390,7 +415,7 @@ class NodeDeliverySheet
      * WBG) porque en este bloque no se agrupa por grupo de recogida.
      *
      * @param DeliveryLine[] $lines
-     * @return array{rows: list<array<string,mixed>>}
+     * @return array{rows: list<array<string,mixed>>, subtotal_cestas: float, subtotal_eggs: ?string}
      */
     private function buildShared(array $lines): array
     {
@@ -398,14 +423,20 @@ class NodeDeliverySheet
         [$ordered, $pairEnds] = $this->pinSharedPairs($lines);
 
         $rows = [];
+        $subtotal = 0.0;
         foreach ($ordered as $line) {
             $row = $this->row($line);
             $row['color'] = $line->groupColor;
             $row['pair_end'] = isset($pairEnds[spl_object_id($line)]);
             $rows[] = $row;
+            $subtotal += $line->cestas;
         }
 
-        return ['rows' => $rows];
+        return [
+            'rows' => $rows,
+            'subtotal_cestas' => $subtotal,
+            'subtotal_eggs' => $this->eggSubtotalSpec($lines),
+        ];
     }
 
     /**

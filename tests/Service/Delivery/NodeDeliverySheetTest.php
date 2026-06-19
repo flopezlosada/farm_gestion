@@ -50,6 +50,7 @@ class NodeDeliverySheetTest extends TestCase
 
         $torreGroup = $groups[1];
         $this->assertSame(2.0, $torreGroup['subtotal_cestas'], 'subtotal = 1 + 1 + 0 (solo huevos)');
+        $this->assertSame('2D+1M', $torreGroup['subtotal_eggs'], 'huevos del grupo = 1D (Cris) + 1D+1M (Raquel) = 2,5 docenas');
         $this->assertSame('Torremocha', $torreGroup['locality']);
         $this->assertSame(
             ['Semanales', 'Quincenales y mensuales', 'Solo huevos'],
@@ -77,6 +78,7 @@ class NodeDeliverySheetTest extends TestCase
         // Bustarviejo: quincenal con huevos → QH, "1M" / 6.
         $bustaGroup = $groups[0];
         $this->assertSame(1.0, $bustaGroup['subtotal_cestas']);
+        $this->assertSame('1M', $bustaGroup['subtotal_eggs'], 'huevos del grupo = 1M (Victoria, media docena)');
         $victoriaRow = $bustaGroup['modalities'][0]['rows'][0];
         $this->assertSame('QH', $victoriaRow['code']);
         $this->assertSame('1M', $victoriaRow['egg_spec']);
@@ -122,6 +124,7 @@ class NodeDeliverySheetTest extends TestCase
                         'color' => '#e0a585',
                         'locality' => 'Bustarviejo',
                         'subtotal_cestas' => 1.0,
+                        'subtotal_eggs' => '1M',
                         'modalities' => [
                             [
                                 'label' => 'Quincenales y mensuales',
@@ -136,6 +139,7 @@ class NodeDeliverySheetTest extends TestCase
                         'color' => '#85c0e0',
                         'locality' => 'Torremocha',
                         'subtotal_cestas' => 2.0,
+                        'subtotal_eggs' => '2D+1M',
                         'modalities' => [
                             [
                                 'label' => 'Semanales',
@@ -164,6 +168,8 @@ class NodeDeliverySheetTest extends TestCase
                         ['name' => 'Pilar y Eduardo', 'code' => 'SC', 'cestas' => 0.5, 'egg_spec' => null, 'egg_count' => 0, 'locality' => 'Torremocha', 'relocated_from' => null, 'color' => '#85c0e0', 'pair_end' => true],
                         ['name' => 'Hilde', 'code' => 'QC', 'cestas' => 0.5, 'egg_spec' => null, 'egg_count' => 0, 'locality' => 'Bustarviejo', 'relocated_from' => null, 'color' => '#e0a585', 'pair_end' => true],
                     ],
+                    'subtotal_cestas' => 1.5,
+                    'subtotal_eggs' => null,
                 ],
                 'totals' => ['cestas' => 4.5, 'docenas' => 3.0],
             ],
@@ -277,6 +283,7 @@ class NodeDeliverySheetTest extends TestCase
         $this->assertSame('', $rows[0]['code'], 'Sin código de modalidad.');
         $this->assertSame('1D', $rows[0]['egg_spec']);
         $this->assertNull($rows[1]['egg_spec'], 'Marie no lleva huevos.');
+        $this->assertSame('1D', $albergue['subtotal_eggs'], 'subtotal huevos Albergue = 1D (Germán) + 0 (Marie)');
 
         // Totales: 1 + 2 = 3 cestas, 1 docena.
         $this->assertSame(3.0, $result['totals']['cestas']);
