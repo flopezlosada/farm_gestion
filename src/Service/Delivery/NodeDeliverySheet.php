@@ -51,6 +51,7 @@ class NodeDeliverySheet
         private readonly WeeklyBasketRepository $weeklyBasketRepo,
         private readonly WeeklyBasketItemRepository $weeklyBasketItemRepo,
         private readonly PartnerBasketShareRepository $partnerBasketShareRepo,
+        private readonly HelperDeliveryResolver $helperDeliveryResolver,
     ) {
     }
 
@@ -66,7 +67,26 @@ class NodeDeliverySheet
      */
     public function build(Node $node, Basket $basket): array
     {
-        return $this->shape($this->linesFromMaterialized($node, $basket));
+        return $this->shape(array_merge(
+            $this->linesFromMaterialized($node, $basket),
+            $this->helperLines($node, $basket),
+        ));
+    }
+
+    /**
+     * Líneas de entrega de los voluntarios del albergue que recogen en este
+     * nodo+día (cesta derivada, no materializada). El camino de PIEDRA las
+     * mezcla dentro de {@see build}; el camino de DIBUJO (proyección) debe
+     * anexarlas a las líneas proyectadas antes de {@see shape}, por eso se
+     * expone aquí en vez de esconderlas en build().
+     *
+     * @param Node   $node
+     * @param Basket $basket
+     * @return DeliveryLine[]
+     */
+    public function helperLines(Node $node, Basket $basket): array
+    {
+        return $this->helperDeliveryResolver->forNodeAndBasket($node, $basket);
     }
 
     /**
@@ -82,12 +102,20 @@ class NodeDeliverySheet
      */
     public function shape(array $lines): array
     {
-        // Partición: compartidas (bloque aparte), cestas extra de no-suscriptores (sin
-        // modalidad → sección propia al final) y resto (por grupo).
+        // Partición: voluntarios del albergue (sección propia, sin modalidad pero
+        // NO son "cestas extra"), compartidas (bloque aparte), cestas extra de
+        // no-suscriptores (sin modalidad → sección propia al final) y resto (por
+        // grupo). Los voluntarios se apartan ANTES del check de modalidad null,
+        // que si no caerían en "Cestas extra".
+        $helper = [];
         $shared = [];
         $extra = [];
         $regular = [];
         foreach ($lines as $line) {
+            if ($line->isHelper) {
+                $helper[] = $line;
+                continue;
+            }
             if ($line->basketShareId === null) {
                 $extra[] = $line; // entrega "solo extra" sin modalidad
                 continue;
@@ -102,6 +130,9 @@ class NodeDeliverySheet
         $groups = $this->buildGroups($regular);
         if ($extra !== []) {
             $groups[] = $this->buildExtraGroup($extra);
+        }
+        if ($helper !== []) {
+            $groups[] = $this->buildHelperGroup($helper);
         }
 
         return [
@@ -296,6 +327,36 @@ class NodeDeliverySheet
     }
 
     /**
+     * Sección "Albergue" del nodo: cestas de los voluntarios de acogida que
+     * recogen aquí esta semana (cesta derivada de su estancia, ver
+     * {@see HelperDeliveryResolver}). Va al final, una sola lista ordenada por
+     * nombre, sin subdividir por modalidad (no la tienen). Cuenta en los totales
+     * del nodo igual que cualquier otra entrega.
+     *
+     * @param DeliveryLine[] $lines Líneas con isHelper=true.
+     * @return array{name:string, color:?string, locality:string, subtotal_cestas:float, modalities: list<array{label:?string, rows: list<array<string,mixed>>}>}
+     */
+    private function buildHelperGroup(array $lines): array
+    {
+        usort($lines, $this->compareByDisplayName(...));
+
+        $rows = [];
+        $subtotal = 0.0;
+        foreach ($lines as $line) {
+            $rows[] = $this->row($line);
+            $subtotal += $line->cestas;
+        }
+
+        return [
+            'name' => 'Albergue',
+            'color' => null,
+            'locality' => '',
+            'subtotal_cestas' => $subtotal,
+            'modalities' => [['label' => null, 'rows' => $rows]],
+        ];
+    }
+
+    /**
      * Bucket de modalidad del listado en papel, tal como lo subdivide el Excel:
      * Semanales (bs 1), Quincenales y mensuales (bs 2 y 3), Solo huevos (bs 5).
      * Las compartidas (4/6/7) no llegan aquí (van a su bloque aparte).
@@ -396,6 +457,13 @@ class NodeDeliverySheet
      */
     private function deriveCode(DeliveryLine $line): string
     {
+        // Los voluntarios del albergue no tienen modalidad: celda de código vacía
+        // (sin esto, llevar huevos los marcaría "H" = solo-huevos, que es falso —
+        // suelen llevar verdura + huevos).
+        if ($line->isHelper) {
+            return '';
+        }
+
         $bsId = $line->basketShareId;
         $base = self::CODE_BY_BASKET_SHARE[$bsId] ?? '';
         if ($bsId === 5) {

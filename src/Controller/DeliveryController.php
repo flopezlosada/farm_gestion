@@ -22,10 +22,12 @@ use App\Repository\WeeklyBasketGroupRepository;
 use App\Repository\WeeklyBasketItemRepository;
 use App\Repository\WeeklyBasketRepository;
 use App\Repository\WeeklyBasketStatusRepository;
+use App\Service\Delivery\DeliveryLine;
 use App\Service\Delivery\DeliveryModeResolver;
 use App\Service\Delivery\DeliveryShiftApplier;
 use App\Service\Delivery\DeliveryShiftValidator;
 use App\Service\Delivery\ExtraBasketEditor;
+use App\Service\Delivery\HelperDeliveryResolver;
 use App\Service\Delivery\NodeDeliveryCounter;
 use App\Service\Delivery\NodeDeliveryDate;
 use App\Service\Delivery\PickupRelocator;
@@ -640,6 +642,7 @@ class DeliveryController extends AbstractController
         DeliveryModeResolver $deliveryModeResolver,
         NodeDeliveryCounter $deliveryCounter,
         PartnerBasketExtraRepository $partnerBasketExtraRepo,
+        HelperDeliveryResolver $helperDeliveryResolver,
         Request $request,
     ): Response {
         $orden = $request->query->get('orden', 'grupo');
@@ -790,6 +793,30 @@ class DeliveryController extends AbstractController
         // un cierre y sin piedra) muestra en cada pestaña lo mismo que su tabla.
         $nodeActiveCounts = $deliveryCounter->countsByNode($allNodes, $basket);
 
+        // Voluntarios del albergue que recogen aquí esta semana (cesta derivada,
+        // no materializada). No usan _row.html.twig (es partner-céntrico): van en
+        // su propia sección "Albergue" con filas simples, y suman a los totales.
+        $helperLines = $helperDeliveryResolver->forNodeAndBasket($node, $basket);
+        $helperRows = array_map(
+            static fn (DeliveryLine $line): array => [
+                'name' => $line->nameForDelivery,
+                'cestas' => $line->cestas,
+                'dozens' => $line->dozens,
+            ],
+            $helperLines,
+        );
+        $totals = $this->computeTotals($weeklyBaskets, $cestasByPartnerId, $dozensByPartnerId);
+        if ($helperLines !== []) {
+            $totals['grupos'] += 1; // la sección "Albergue" cuenta como un grupo de recogida más.
+            foreach ($helperLines as $line) {
+                $totals['cestas'] += $line->cestas;
+                if ($line->dozens > 0) {
+                    $totals['docenas'] += $line->dozens;
+                    $totals['con_huevos'] += 1;
+                }
+            }
+        }
+
         return $this->render('delivery/by_node.html.twig', [
             'node' => $node,
             'basket' => $basket,
@@ -810,7 +837,8 @@ class DeliveryController extends AbstractController
             'relocate_groups' => $this->relocateTargetGroups($node, $basket, $allNodes, $nodeDeliveryDate, $weeklyBasketGroupRepo),
             // partner.id de quienes tienen cesta extra esa semana, para ofrecer "Quitar cesta extra".
             'partner_ids_with_extra' => array_keys($partnerBasketExtraRepo->extrasByPartnerForBasket($basket)),
-            'totals' => $this->computeTotals($weeklyBaskets, $cestasByPartnerId, $dozensByPartnerId),
+            'helper_rows' => $helperRows,
+            'totals' => $totals,
         ]);
     }
 
@@ -1356,7 +1384,13 @@ class DeliveryController extends AbstractController
             $mode = $deliveryModeResolver->mode($node, $basket);
             $sheet = match ($mode) {
                 DeliveryModeResolver::STONE => $sheetBuilder->build($node, $basket),
-                DeliveryModeResolver::DRAW => $sheetBuilder->shape($generator->projectLinesForNode($node, $basket)),
+                // Camino de dibujo: las líneas de los voluntarios del albergue
+                // (cesta derivada) se anexan a la proyección de socios antes de
+                // dar forma. En STONE ya las mezcla build() por dentro.
+                DeliveryModeResolver::DRAW => $sheetBuilder->shape(array_merge(
+                    $generator->projectLinesForNode($node, $basket),
+                    $sheetBuilder->helperLines($node, $basket),
+                )),
                 default => null,
             };
             if ($sheet === null) {

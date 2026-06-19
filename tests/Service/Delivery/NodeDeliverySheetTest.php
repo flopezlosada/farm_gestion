@@ -15,6 +15,8 @@ use App\Entity\WeeklyBasketGroup;
 use App\Repository\PartnerBasketShareRepository;
 use App\Repository\WeeklyBasketItemRepository;
 use App\Repository\WeeklyBasketRepository;
+use App\Service\Delivery\DeliveryLine;
+use App\Service\Delivery\HelperDeliveryResolver;
 use App\Service\Delivery\NodeDeliverySheet;
 use PHPUnit\Framework\TestCase;
 
@@ -33,6 +35,8 @@ class NodeDeliverySheetTest extends TestCase
     private array $amounts = [];
     /** @var array<int,?PartnerBasketShare> partner.id => PBS activo */
     private array $pbsByPartner = [];
+    /** @var DeliveryLine[] líneas de voluntarios del albergue que devuelve el resolver mockeado */
+    private array $helperLines = [];
 
     public function testHojaCompletaDeUnNodo(): void
     {
@@ -223,6 +227,62 @@ class NodeDeliverySheetTest extends TestCase
      *
      * @return array<string,mixed>
      */
+    /**
+     * Las cestas de voluntarios del albergue (líneas isHelper) van a un grupo
+     * propio "Albergue" al final, no a "Cestas extra" aunque no tengan modalidad,
+     * y sus cantidades cuentan en los totales del nodo.
+     */
+    public function testHelperBasketsFormOwnGroupAndCountInTotals(): void
+    {
+        // Sin socios materializados; sólo dos voluntarios derivados.
+        $this->helperLines = [
+            new DeliveryLine(
+                nameForDelivery: 'Germán',
+                basketShareId: null,
+                subscribedToEggs: true,
+                cestas: 1.0,
+                dozens: 1.0,
+                groupId: null,
+                groupName: null,
+                groupColor: null,
+                city: null,
+                partnerId: null,
+                sharePartnerId: null,
+                relocatedFromLabel: null,
+                isHelper: true,
+            ),
+            new DeliveryLine(
+                nameForDelivery: 'Marie',
+                basketShareId: null,
+                subscribedToEggs: false,
+                cestas: 2.0,
+                dozens: 0.0,
+                groupId: null,
+                groupName: null,
+                groupColor: null,
+                city: null,
+                partnerId: null,
+                sharePartnerId: null,
+                relocatedFromLabel: null,
+                isHelper: true,
+            ),
+        ];
+
+        $result = $this->buildSheet();
+
+        $this->assertSame(['Albergue'], array_column($result['groups'], 'name'), 'Sin socios, el único grupo es Albergue.');
+        $albergue = $result['groups'][0];
+        $rows = $albergue['modalities'][0]['rows'];
+        $this->assertSame(['Germán', 'Marie'], array_column($rows, 'name'), 'Ordenados por nombre.');
+        $this->assertSame('', $rows[0]['code'], 'Sin código de modalidad.');
+        $this->assertSame('1D', $rows[0]['egg_spec']);
+        $this->assertNull($rows[1]['egg_spec'], 'Marie no lleva huevos.');
+
+        // Totales: 1 + 2 = 3 cestas, 1 docena.
+        $this->assertSame(3.0, $result['totals']['cestas']);
+        $this->assertSame(1.0, $result['totals']['docenas']);
+    }
+
     private function buildSheet(): array
     {
         $wbs = array_values($this->wbs);
@@ -240,7 +300,10 @@ class NodeDeliverySheetTest extends TestCase
             static fn (Partner $p): ?PartnerBasketShare => $pbsByPartner[$p->getId()] ?? null,
         );
 
-        $this->sheet = new NodeDeliverySheet($wbRepo, $itemRepo, $pbsRepo);
+        $helperResolver = $this->createMock(HelperDeliveryResolver::class);
+        $helperResolver->method('forNodeAndBasket')->willReturn($this->helperLines);
+
+        $this->sheet = new NodeDeliverySheet($wbRepo, $itemRepo, $pbsRepo, $helperResolver);
 
         return $this->sheet->build(new Node(), (new Basket())->setDate(new \DateTime('2026-05-15')));
     }
