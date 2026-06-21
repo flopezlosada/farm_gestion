@@ -261,7 +261,7 @@ class WorkController extends AbstractController
      * @return Response
      */
     #[Route('/vacations/request', name: 'work_vacation_request', methods: ['POST'])]
-    public function requestVacation(Request $request, EntityManagerInterface $em): Response
+    public function requestVacation(Request $request, EntityManagerInterface $em, AbsenceRepository $absences): Response
     {
         if (($redirect = $this->ensureWorker()) !== null) {
             return $redirect;
@@ -276,6 +276,11 @@ class WorkController extends AbstractController
         $end = $this->parseDate((string) $request->request->get('end_date'));
         if ($start === null || $end === null || $end < $start) {
             $this->addFlash('error', 'Revisa las fechas: indica un desde y un hasta válidos.');
+            return $this->redirectToRoute('work_vacations');
+        }
+
+        if ($absences->findOverlappingForWorker($this->worker(), $start, $end) !== []) {
+            $this->addFlash('error', 'Ya tienes una ausencia en esas fechas. Cancélala antes de pedir otra.');
             return $this->redirectToRoute('work_vacations');
         }
 

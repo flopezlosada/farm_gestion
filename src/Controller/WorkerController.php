@@ -194,13 +194,18 @@ class WorkerController extends AbstractController
      * @return Response
      */
     #[Route('/{id}/absence/new', name: 'staff_absence_new', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
-    public function newAbsence(Request $request, Worker $worker, EntityManagerInterface $em): Response
+    public function newAbsence(Request $request, Worker $worker, EntityManagerInterface $em, AbsenceRepository $absences): Response
     {
         $absence = (new Absence())->setWorker($worker);
         $form = $this->createForm(AbsenceType::class, $absence);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
+            if ($absences->findOverlappingForWorker($worker, $absence->getStartDate(), $absence->getEndDate()) !== []) {
+                $this->addFlash('error', 'Ese trabajador ya tiene una ausencia en esas fechas.');
+
+                return $this->redirectToRoute('staff_show', ['id' => $worker->getId()]);
+            }
             $absence->setStatus(Absence::STATUS_APPROVED);
             $absence->setApprovedBy($this->getUser());
             $em->persist($absence);

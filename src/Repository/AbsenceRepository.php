@@ -79,6 +79,33 @@ class AbsenceRepository extends ServiceEntityRepository
     }
 
     /**
+     * Ausencias VIGENTES (solicitadas o aprobadas) de un trabajador que solapan el
+     * rango [from, to]. Sirve para impedir solicitar/registrar dos ausencias en las
+     * mismas fechas. Las rechazadas y canceladas no cuentan (no ocupan).
+     *
+     * @param Absence|null       $exclude Ausencia a excluir (al editar una existente), o null.
+     * @return Absence[]
+     */
+    public function findOverlappingForWorker(Worker $worker, \DateTimeImmutable $from, \DateTimeImmutable $to, ?Absence $exclude = null): array
+    {
+        $qb = $this->createQueryBuilder('a')
+            ->andWhere('a.worker = :worker')
+            ->andWhere('a.status IN (:active)')
+            ->andWhere('a.startDate <= :to')
+            ->andWhere('a.endDate >= :from')
+            ->setParameter('worker', $worker)
+            ->setParameter('active', [Absence::STATUS_REQUESTED, Absence::STATUS_APPROVED])
+            ->setParameter('from', $from)
+            ->setParameter('to', $to);
+
+        if ($exclude !== null && $exclude->getId() !== null) {
+            $qb->andWhere('a.id != :exclude')->setParameter('exclude', $exclude->getId());
+        }
+
+        return $qb->getQuery()->getResult();
+    }
+
+    /**
      * Ausencias pendientes de decisión (solicitadas), ordenadas por fecha de
      * inicio. Es la bandeja de aprobación del supervisor.
      *

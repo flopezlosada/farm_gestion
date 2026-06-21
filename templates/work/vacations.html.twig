@@ -32,8 +32,8 @@
         .yc-d--per  { --c: var(--csa-sky);        --cs: var(--csa-sky-soft); }
         .yc-d--baja { --c: var(--csa-terracotta); --cs: var(--csa-terracotta-soft); }
         .yc-d--other{ --c: var(--csa-ink-soft);   --cs: var(--csa-bg); }
-        .yc-d--pending  { opacity: .5; }                            /* pendiente: pálido */
-        .yc-d--approved { box-shadow: inset 0 0 0 2px var(--c); }    /* aprobada: + borde del color */
+        /* Aprobada = relleno pleno (lo de .yc-d--abs); pendiente = el mismo color, pálido. Sin bordes. */
+        .yc-d--pending { opacity: .45; }
         .yc-d--today { outline: 2px solid var(--csa-ink); outline-offset: -2px; }
         .yc-legend { display: flex; flex-wrap: wrap; gap: var(--csa-sp-2) var(--csa-sp-4); margin-bottom: var(--csa-sp-5); font-size: .8rem; color: var(--csa-ink-soft); }
         .yc-legend span { display: inline-flex; align-items: center; gap: .4rem; }
@@ -64,6 +64,9 @@
         .seg__opt span { font-family: var(--csa-sans); font-weight: 500; }
         /* El modal no lleva icono: el cuerpo no debe indentarse para dejarle hueco. */
         #vac-modal .csa-modal__body { padding-left: var(--csa-sp-6); }
+        /* El placeholder dd/mm/yyyy del input date salía en negrita (UA webkit). */
+        .vac-form .csa-input { font-weight: 400; }
+        .vac-form input[type="date"]::-webkit-datetime-edit { font-weight: 400; }
     </style>
 {% endblock %}
 
@@ -83,7 +86,7 @@
             <span><i class="yc-sw--per"></i> Permiso</span>
             <span><i class="yc-sw--baja"></i> Baja</span>
             <span><i class="yc-sw--hol"></i> Festivos</span>
-            <span class="yc-legend__note">· pálido = pendiente · con borde = aprobada</span>
+            <span class="yc-legend__note">· pálido = pendiente · sólido = aprobada</span>
         </div>
 
         <div class="yc-grid">
