@@ -6,13 +6,16 @@ use App\Entity\TimeEntry;
 
 /**
  * Guarda la coherencia del registro al añadir o corregir un fichaje: dentro de un
- * día, las entradas y salidas deben alternar (entrada, salida, entrada…) y el día
- * no puede empezar por una salida. Sin esto, "Añadir fichaje" deja apilar tres
- * salidas seguidas y descuadra la jornada.
+ * día, las entradas y salidas deben alternar (entrada, salida, entrada…), el día
+ * no puede empezar por una salida y la última entrada puede quedar abierta
+ * (jornada en curso). Sin esto, "Añadir fichaje" deja apilar salidas seguidas y
+ * corregir una hora puede saltar un fichaje por encima de su pareja y descuadrar
+ * la jornada.
  *
- * La regla es LOCAL (mira los dos vecinos por hora), no global: así permite
- * intercalar un fichaje olvidado a media mañana sin tener que rehacer el día, y
- * no atrapa al usuario cuando repara un día ya descuadrado (anular sigue libre).
+ * Valida la SECUENCIA COMPLETA del día resultante (no solo los vecinos del fichaje
+ * tocado): así detecta también cuando mover una hora deja huérfano a otro fichaje.
+ * Permite reparar un día ya descuadrado SI la operación lo deja bien (p. ej.
+ * completar un huérfano); para casos que requieren varios pasos, anular es libre.
  *
  * Lógica pura: recibe los fichajes vigentes del día (sin el que se corrige) y el
  * fichaje propuesto, y devuelve el motivo del rechazo o null si encaja.
@@ -20,8 +23,9 @@ use App\Entity\TimeEntry;
 class PunchSequenceGuard
 {
     /**
-     * Comprueba si un fichaje de tipo $type a la hora $at encaja en la secuencia
-     * del día. Devuelve null si es válido, o un motivo legible si rompe el orden.
+     * Comprueba si un fichaje de tipo $type a la hora $at deja el día como una
+     * secuencia válida (entrada, salida, …). Devuelve null si es válido, o un
+     * motivo legible si rompe el orden.
      *
      * @param string             $type       TimeEntry::TYPE_IN o TYPE_OUT.
      * @param \DateTimeImmutable $at          Hora propuesta del fichaje (Madrid).
@@ -30,39 +34,24 @@ class PunchSequenceGuard
      */
     public function check(string $type, \DateTimeImmutable $at, array $dayEntries): ?string
     {
-        // Vecino anterior (mayor hora <= at) y siguiente (menor hora > at). El <=
-        // hace que un fichaje a la misma hora cuente como anterior, lo que rechaza
-        // duplicados del mismo tipo a la misma hora.
-        $prev = null;
-        $next = null;
+        // Secuencia del día resultante (existentes + el nuevo), ordenada por hora.
+        $sequence = [];
         foreach ($dayEntries as $entry) {
-            $t = $entry->getOccurredAt();
-            if ($t <= $at) {
-                if ($prev === null || $t > $prev->getOccurredAt()) {
-                    $prev = $entry;
-                }
-            } elseif ($next === null || $t < $next->getOccurredAt()) {
-                $next = $entry;
-            }
+            $sequence[] = ['in' => $entry->isIn(), 'at' => $entry->getOccurredAt()];
         }
+        $sequence[] = ['in' => $type === TimeEntry::TYPE_IN, 'at' => $at];
+        usort($sequence, static fn (array $a, array $b): int => $a['at'] <=> $b['at']);
 
-        if ($type === TimeEntry::TYPE_IN) {
-            if ($prev !== null && $prev->isIn()) {
-                return 'Antes de esa hora ya hay una entrada sin su salida.';
+        // Debe alternar empezando por entrada: entrada, salida, entrada, salida…
+        // (la última entrada sin cerrar es válida: jornada en curso).
+        $expectIn = true;
+        foreach ($sequence as $item) {
+            if ($item['in'] !== $expectIn) {
+                return $expectIn
+                    ? 'Ese cambio deja una salida sin su entrada: la jornada debe ir entrada, salida, entrada…'
+                    : 'Ese cambio deja una entrada sin su salida: la jornada debe ir entrada, salida, entrada…';
             }
-            if ($next !== null && $next->isIn()) {
-                return 'El siguiente fichaje del día ya es una entrada; faltaría la salida intermedia.';
-            }
-
-            return null;
-        }
-
-        // Salida: necesita una entrada abierta justo antes y no puede ir seguida de otra salida.
-        if ($prev === null || !$prev->isIn()) {
-            return 'Una salida tiene que ir después de una entrada.';
-        }
-        if ($next !== null && !$next->isIn()) {
-            return 'El siguiente fichaje del día ya es una salida; rompería la alternancia.';
+            $expectIn = !$expectIn;
         }
 
         return null;

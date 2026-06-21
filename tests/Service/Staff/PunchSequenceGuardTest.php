@@ -7,10 +7,10 @@ use App\Service\Staff\PunchSequenceGuard;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Alternancia entrada-salida al añadir/corregir un fichaje. La regla es local:
- * los vecinos por hora deben ser del tipo contrario y el día no empieza por
- * salida. Cubre el desastre que motivó esto (varias salidas seguidas) y el caso
- * legítimo de intercalar un fichaje olvidado a media mañana.
+ * Alternancia entrada-salida al añadir/corregir un fichaje. La secuencia del día
+ * resultante debe alternar empezando por entrada (la última entrada puede quedar
+ * abierta). Cubre el desastre que motivó esto (varias salidas seguidas), el caso
+ * legítimo de completar un huérfano, y mover una entrada por encima de su salida.
  */
 class PunchSequenceGuardTest extends TestCase
 {
@@ -82,6 +82,14 @@ class PunchSequenceGuardTest extends TestCase
             $this->entry(TimeEntry::TYPE_OUT, '18:00'),
         ];
         $this->assertNotNull($this->guard->check(TimeEntry::TYPE_IN, $this->hm('09:00'), $day));
+    }
+
+    public function testEntradaMovidaDespuesDeSuSalidaSeRechaza(): void
+    {
+        // Corregir una entrada a una hora POSTERIOR a su salida la deja huérfana:
+        // el día quedaría salida(11:11), entrada(12:00) → empieza por salida.
+        $day = [$this->entry(TimeEntry::TYPE_OUT, '11:11')];
+        $this->assertNotNull($this->guard->check(TimeEntry::TYPE_IN, $this->hm('12:00'), $day));
     }
 
     public function testSalidaIntermediaEntreEntradasEsValida(): void
