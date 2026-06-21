@@ -143,7 +143,7 @@ class WorkerController extends AbstractController
         // Reconstruye las jornadas (tramos + total) a partir de los fichajes.
         $days = $workdays->buildDays($entries, $madrid);
 
-        $year = (int) (new \DateTimeImmutable('today'))->format('Y');
+        $year = (int) (new \DateTimeImmutable('today', $madrid))->format('Y');
         $usedVacationDays = array_sum(array_map(
             static fn ($a) => $a->getCalendarDayCount(),
             $absences->findApprovedVacationsForWorkerInYear($worker, $year),
@@ -734,7 +734,8 @@ class WorkerController extends AbstractController
      */
     private function timeOnto(\DateTimeImmutable $base, string $time): ?\DateTimeImmutable
     {
-        if (preg_match('/^(\d{1,2}):(\d{2})$/', trim($time), $m) !== 1) {
+        if (preg_match('/^(\d{1,2}):(\d{2})$/', trim($time), $m) !== 1
+            || (int) $m[1] > 23 || (int) $m[2] > 59) {
             return null;
         }
 

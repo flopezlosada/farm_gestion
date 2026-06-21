@@ -385,7 +385,12 @@ class WorkController extends AbstractController
      */
     private function worker(): Worker
     {
-        return $this->getUser()->getWorker();
+        $user = $this->getUser();
+        if (!$user instanceof User || !$user->getWorker() instanceof Worker) {
+            throw $this->createAccessDeniedException('Requiere ficha de trabajador.');
+        }
+
+        return $user->getWorker();
     }
 
     /**
@@ -476,7 +481,8 @@ class WorkController extends AbstractController
      */
     private function timeOnto(\DateTimeImmutable $base, string $time): ?\DateTimeImmutable
     {
-        if (preg_match('/^(\d{1,2}):(\d{2})$/', trim($time), $m) !== 1) {
+        if (preg_match('/^(\d{1,2}):(\d{2})$/', trim($time), $m) !== 1
+            || (int) $m[1] > 23 || (int) $m[2] > 59) {
             return null;
         }
 
