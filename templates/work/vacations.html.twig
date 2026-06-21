@@ -157,11 +157,18 @@
                     <span style="color:#6b7280;">{{ a.startDate|date('d/m/Y') }} – {{ a.endDate|date('d/m/Y') }} ({{ working_days[a.id] }} d laborables)</span>
                     <span style="margin-left:auto; font-size:.72rem; font-weight:600; border-radius:999px; padding:.1rem .55rem; color:{{ st[1] }}; background:{{ st[2] }};">{{ st[0] }}</span>
                     {% if a.status in ['requested', 'approved'] %}
-                        <form method="post" action="{{ path('work_vacation_cancel', { absenceId: a.id }) }}"
-                              onsubmit="return confirm('¿Cancelar esta solicitud?');" style="margin-left:.6rem;">
-                            <input type="hidden" name="_csrf_token" value="{{ csrf_token('work_vacation') }}">
-                            <button type="submit" class="wk-btn wk-btn--ghost wk-btn--sm" style="padding:.3rem .8rem; font-size:.8rem;">Cancelar</button>
-                        </form>
+                        <button type="button" class="wk-btn wk-btn--ghost wk-btn--sm" style="margin-left:.6rem; padding:.3rem .8rem; font-size:.8rem;"
+                                onclick="document.getElementById('cancel-{{ a.id }}').showModal()">Cancelar</button>
+                        {{ csa.confirm_dialog('cancel-' ~ a.id, {
+                            variant: 'danger',
+                            title: 'Cancelar ausencia',
+                            body: 'Se cancelará la ausencia. Si ya ha empezado, se conservan los días hasta hoy y se libera el resto.',
+                            confirm_label: 'Sí, cancelar',
+                            cancel_label: 'No',
+                            action: path('work_vacation_cancel', { absenceId: a.id }),
+                            csrf_token: csrf_token('work_vacation'),
+                            csrf_name: '_csrf_token',
+                        }) }}
                     {% endif %}
                 </div>
             {% else %}
