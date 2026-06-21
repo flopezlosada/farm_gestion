@@ -48,7 +48,7 @@
     </div>
 
     <details class="stf-add" open>
-        <summary><i class="fa fa-plus-circle"></i> Añadir un fichaje a este día</summary>
+        <summary><i class="fa fa-plus-circle"></i> Añadir un registro a este día</summary>
         <form method="post" action="{{ path('work_entry_add') }}" class="stf-addrow">
             <input type="hidden" name="_token" value="{{ csrf_token('work_entry') }}">
             <input type="hidden" name="return_to" value="{{ ymd }}">
@@ -60,9 +60,9 @@
                 </select>
             </label>
             <label>Hora
-                <input type="time" name="time" required>
+                <input type="time" name="time" class="csa-input" required>
             </label>
-            <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">Añadir fichaje</button>
+            <button type="submit" class="csa-btn csa-btn--primary">Añadir</button>
         </form>
     </details>
 {% endblock %}

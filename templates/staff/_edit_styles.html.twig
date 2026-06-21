@@ -42,11 +42,15 @@
     .stf-add { margin-top: 1.4rem; }
     .stf-add > summary { cursor: pointer; color: #2f6f43; font-weight: 600; }
 
-    /* Fila compacta para añadir un fichaje olvidado (sin motivo: lo pone el backend). */
+    /* Fila compacta para añadir un fichaje olvidado (sin motivo: lo pone el backend).
+       Reusa .csa-input (40px, el input canónico) para que tipo y hora cuadren. */
     .stf-addrow { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .7rem; margin-top: .9rem; }
-    .stf-addrow label { display: flex; flex-direction: column; font-size: .75rem; color: #6b7280; gap: .25rem; }
-    .stf-addrow select, .stf-addrow input { font-size: .9rem; padding: .4rem .5rem; border: 1px solid #d1d5db; border-radius: 6px; }
-    .stf-addrow .csa-btn { white-space: nowrap; }
+    .stf-addrow label { display: flex; flex-direction: column; font-size: .75rem; color: #6b7280; gap: .3rem; }
+    .stf-addrow .csa-input { width: auto; }
+    .stf-addrow select.csa-input { min-width: 8rem; }
+    .stf-addrow input[type="time"].csa-input { width: 8rem; }
+    .stf-addrow input[type="date"].csa-input { width: 10rem; }
+    .stf-addrow .csa-btn { height: 40px; white-space: nowrap; }
 
     /* Aviso de jornada descuadrada / incompleta. */
     .day-warn { display:flex; align-items:flex-start; gap:.6rem; padding:.8rem 1rem; border-radius:10px; margin-bottom:1.2rem; font-size:.9rem; line-height:1.4; }
