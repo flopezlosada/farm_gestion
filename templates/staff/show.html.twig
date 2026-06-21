@@ -138,7 +138,7 @@
     {# ===== Añadir fichaje olvidado ===== #}
     <details class="stf-add">
         <summary><i class="fa fa-plus-circle"></i> Añadir un fichaje olvidado</summary>
-        <form method="post" action="{{ path('staff_entry_add', { id: worker.id }) }}" class="stf-edit__form" style="margin-top:.8rem;">
+        <form method="post" action="{{ path('staff_entry_add', { id: worker.id }) }}" class="stf-addrow">
             <input type="hidden" name="_token" value="{{ csrf_token('staff_entry' ~ worker.id) }}">
             <label>Tipo
                 <select name="type" class="csa-input">
@@ -151,9 +151,6 @@
             </label>
             <label>Hora
                 <input type="time" name="time" required>
-            </label>
-            <label>Motivo
-                <input type="text" name="reason" placeholder="p. ej. olvidó fichar la entrada">
             </label>
             <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">Añadir fichaje</button>
         </form>

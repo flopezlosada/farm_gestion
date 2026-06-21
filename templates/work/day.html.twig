@@ -49,21 +49,18 @@
 
     <details class="stf-add" open>
         <summary><i class="fa fa-plus-circle"></i> Añadir un fichaje a este día</summary>
-        <form method="post" action="{{ path('work_entry_add') }}" class="stf-edit__form" style="margin-top:.8rem; max-width:320px;">
+        <form method="post" action="{{ path('work_entry_add') }}" class="stf-addrow">
             <input type="hidden" name="_token" value="{{ csrf_token('work_entry') }}">
             <input type="hidden" name="return_to" value="{{ ymd }}">
             <input type="hidden" name="date" value="{{ ymd }}">
             <label>Tipo
                 <select name="type" class="csa-input">
-                    <option value="in">Entrada</option>
-                    <option value="out">Salida</option>
+                    <option value="in"{{ open ? '' : ' selected' }}>Entrada</option>
+                    <option value="out"{{ open ? ' selected' : '' }}>Salida</option>
                 </select>
             </label>
             <label>Hora
-                <input type="time" name="time" value="09:00" required>
-            </label>
-            <label>Motivo
-                <input type="text" name="reason" placeholder="p. ej. olvidé fichar la entrada">
+                <input type="time" name="time" required>
             </label>
             <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">Añadir fichaje</button>
         </form>
