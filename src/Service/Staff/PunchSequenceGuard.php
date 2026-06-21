@@ -48,8 +48,8 @@ class PunchSequenceGuard
         foreach ($sequence as $item) {
             if ($item['in'] !== $expectIn) {
                 return $expectIn
-                    ? 'Ese cambio deja una salida sin su entrada: la jornada debe ir entrada, salida, entrada…'
-                    : 'Ese cambio deja una entrada sin su salida: la jornada debe ir entrada, salida, entrada…';
+                    ? 'Esa hora deja una salida por delante de su entrada. La entrada tiene que ir antes que la salida.'
+                    : 'Esa hora deja dos entradas seguidas sin una salida en medio. Pon la salida antes de la siguiente entrada.';
             }
             $expectIn = !$expectIn;
         }
