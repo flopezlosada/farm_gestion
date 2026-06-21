@@ -23,6 +23,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * security.yaml (access_control de ^/gestion/staff), igual que el resto del área.
  */
 #[Route('/gestion/staff/holidays')]
+#[IsGranted('FEATURE_LABORAL')]
 #[IsGranted('ROLE_GESTION_LABORAL')]
 class HolidayController extends AbstractController
 {

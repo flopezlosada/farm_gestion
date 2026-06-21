@@ -36,6 +36,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * supervisor.
  */
 #[Route('/work')]
+#[IsGranted('FEATURE_LABORAL')]
 #[IsGranted('ROLE_WORKER')]
 class WorkController extends AbstractController
 {

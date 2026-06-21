@@ -26,6 +26,7 @@ class FeatureVoter extends Voter
     private const FEATURES = [
         'FEATURE_PARTNER_SELFSERVICE' => AppSettings::FEATURE_PARTNER_SELFSERVICE,
         'FEATURE_SURVEYS' => AppSettings::FEATURE_SURVEYS,
+        'FEATURE_LABORAL' => AppSettings::FEATURE_LABORAL,
     ];
 
     public function __construct(private readonly AppSettings $settings)

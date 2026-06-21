@@ -35,6 +35,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * access_control, igual que el albergue, sin tocar cada action.
  */
 #[Route('/gestion/staff')]
+#[IsGranted('FEATURE_LABORAL')]
 #[IsGranted('ROLE_GESTION_LABORAL')]
 class WorkerController extends AbstractController
 {

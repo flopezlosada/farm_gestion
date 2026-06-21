@@ -13,7 +13,7 @@
 
 {% set has_gestion = is_granted('ROLE_ADMIN') or is_granted('ROLE_GESTION_GRANJA') or is_granted('ROLE_GESTION_SOCIXS') or is_granted('ROLE_GESTION_REPARTO') or is_granted('ROLE_BLOG') or is_granted('ROLE_GESTION_ENCUESTAS') or is_granted('ROLE_GESTION_ALBERGUE') or is_granted('ROLE_GESTION_LABORAL') %}
 {% set has_panel = app.user and app.user.partner %}
-{% set has_work = app.user and app.user.worker %}
+{% set has_work = app.user and app.user.worker and is_granted('FEATURE_LABORAL') %}
 {% set area_count = (has_gestion ? 1 : 0) + (has_panel ? 1 : 0) + (has_work ? 1 : 0) %}
 
 {% if area_count > 1 %}
