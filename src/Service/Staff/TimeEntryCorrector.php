@@ -5,6 +5,7 @@ namespace App\Service\Staff;
 use App\Entity\TimeEntry;
 use App\Entity\User;
 use App\Entity\Worker;
+use App\Repository\TimeEntryRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Clock\ClockInterface;
 
@@ -30,6 +31,8 @@ class TimeEntryCorrector
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly ClockInterface $clock,
+        private readonly TimeEntryRepository $timeEntries,
+        private readonly PunchSequenceGuard $guard,
     ) {
     }
 
@@ -43,6 +46,8 @@ class TimeEntryCorrector
      * @param string             $source         TimeEntry::SOURCE_SELF o SOURCE_SUPERVISOR.
      * @param string             $reason         Motivo (queda en la traza).
      * @return TimeEntry El fichaje nuevo.
+     *
+     * @throws PunchSequenceException Si la nueva hora rompería el orden del día.
      */
     public function correctTime(
         TimeEntry $original,
@@ -51,6 +56,9 @@ class TimeEntryCorrector
         string $source,
         string $reason,
     ): TimeEntry {
+        // El original va a anularse, así que se excluye al validar el reemplazo.
+        $this->assertConsistent($original->getWorker(), $original->getType(), $newOccurredAt, $original->getId());
+
         $original->void($author, $reason, $this->nowUtc());
 
         $replacement = (new TimeEntry())
@@ -92,6 +100,8 @@ class TimeEntryCorrector
      * @param string             $source     TimeEntry::SOURCE_SELF o SOURCE_SUPERVISOR.
      * @param string|null        $note       Justificación opcional.
      * @return TimeEntry El fichaje creado.
+     *
+     * @throws PunchSequenceException Si el fichaje rompería el orden del día.
      */
     public function addEntry(
         Worker $worker,
@@ -101,6 +111,8 @@ class TimeEntryCorrector
         string $source,
         ?string $note = null,
     ): TimeEntry {
+        $this->assertConsistent($worker, $type, $occurredAt, null);
+
         $entry = (new TimeEntry())
             ->setWorker($worker)
             ->setType($type)
@@ -113,6 +125,36 @@ class TimeEntryCorrector
         $this->em->flush();
 
         return $entry;
+    }
+
+    /**
+     * Valida que un fichaje (tipo + hora) encaje en la secuencia entrada-salida de
+     * su día, o lanza {@see PunchSequenceException}. Se apoya en {@see PunchSequenceGuard}
+     * con los fichajes vigentes del día, opcionalmente excluyendo uno (el que se
+     * corrige, que va a anularse).
+     *
+     * @param Worker             $worker     Trabajador.
+     * @param string             $type       Tipo del fichaje propuesto.
+     * @param \DateTimeImmutable $at         Hora propuesta (Madrid).
+     * @param int|null           $excludeId  Id del fichaje a excluir (el que se corrige), o null.
+     * @return void
+     *
+     * @throws PunchSequenceException
+     */
+    private function assertConsistent(Worker $worker, string $type, \DateTimeImmutable $at, ?int $excludeId): void
+    {
+        $dayStart = $at->setTime(0, 0, 0);
+        $dayEnd = $dayStart->modify('+1 day');
+
+        $dayEntries = $this->timeEntries->findEffectiveForWorkerBetween($worker, $dayStart, $dayEnd);
+        if ($excludeId !== null) {
+            $dayEntries = array_filter($dayEntries, static fn (TimeEntry $e) => $e->getId() !== $excludeId);
+        }
+
+        $reason = $this->guard->check($type, $at, $dayEntries);
+        if ($reason !== null) {
+            throw new PunchSequenceException($reason);
+        }
     }
 
     /**

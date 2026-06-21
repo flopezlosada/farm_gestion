@@ -10,6 +10,7 @@ use App\Repository\AbsenceRepository;
 use App\Repository\HolidayRepository;
 use App\Repository\TimeEntryRepository;
 use App\Service\Staff\MonthGridBuilder;
+use App\Service\Staff\PunchSequenceException;
 use App\Service\Staff\TimeClock;
 use App\Service\Staff\TimeEntryCorrector;
 use App\Service\Staff\TimeInputParser;
@@ -324,8 +325,12 @@ class WorkController extends AbstractController
             return $this->redirectAfterEntry($request);
         }
 
-        $corrector->addEntry($this->worker(), $type, $occurredAt, $this->getUser(), TimeEntry::SOURCE_SELF, $this->reasonOrDefault($request));
-        $this->addFlash('success', 'Fichaje añadido.');
+        try {
+            $corrector->addEntry($this->worker(), $type, $occurredAt, $this->getUser(), TimeEntry::SOURCE_SELF, $this->reasonOrDefault($request));
+            $this->addFlash('success', 'Fichaje añadido.');
+        } catch (PunchSequenceException $e) {
+            $this->addFlash('error', $e->getMessage());
+        }
 
         return $this->redirectAfterEntry($request);
     }
@@ -355,8 +360,12 @@ class WorkController extends AbstractController
             return $this->redirectAfterEntry($request);
         }
 
-        $corrector->correctTime($entry, $occurredAt, $this->getUser(), TimeEntry::SOURCE_SELF, $this->reasonOrDefault($request));
-        $this->addFlash('success', 'Hora corregida.');
+        try {
+            $corrector->correctTime($entry, $occurredAt, $this->getUser(), TimeEntry::SOURCE_SELF, $this->reasonOrDefault($request));
+            $this->addFlash('success', 'Hora corregida.');
+        } catch (PunchSequenceException $e) {
+            $this->addFlash('error', $e->getMessage());
+        }
 
         return $this->redirectAfterEntry($request);
     }

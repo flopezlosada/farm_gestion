@@ -15,6 +15,7 @@ use App\Security\MagicLinkMailer;
 use App\Security\WorkerUserProvisioner;
 use App\Service\Staff\GapFinder;
 use App\Service\Staff\MonthGridBuilder;
+use App\Service\Staff\PunchSequenceException;
 use App\Service\Staff\TimeEntryCorrector;
 use App\Service\Staff\TimeInputParser;
 use App\Service\Staff\WorkdayBuilder;
@@ -502,8 +503,12 @@ class WorkerController extends AbstractController
             return $this->redirectToRoute('staff_show', ['id' => $worker->getId()]);
         }
 
-        $corrector->addEntry($worker, $type, $occurredAt, $this->getUser(), TimeEntry::SOURCE_SUPERVISOR, $this->reasonOrDefault($request));
-        $this->addFlash('success', 'Fichaje añadido.');
+        try {
+            $corrector->addEntry($worker, $type, $occurredAt, $this->getUser(), TimeEntry::SOURCE_SUPERVISOR, $this->reasonOrDefault($request));
+            $this->addFlash('success', 'Fichaje añadido.');
+        } catch (PunchSequenceException $e) {
+            $this->addFlash('error', $e->getMessage());
+        }
 
         return $this->redirectAfterEntry($request, $worker);
     }
@@ -536,8 +541,12 @@ class WorkerController extends AbstractController
             return $this->redirectAfterEntry($request, $worker);
         }
 
-        $corrector->correctTime($entry, $occurredAt, $this->getUser(), TimeEntry::SOURCE_SUPERVISOR, $this->reasonOrDefault($request));
-        $this->addFlash('success', 'Hora corregida.');
+        try {
+            $corrector->correctTime($entry, $occurredAt, $this->getUser(), TimeEntry::SOURCE_SUPERVISOR, $this->reasonOrDefault($request));
+            $this->addFlash('success', 'Hora corregida.');
+        } catch (PunchSequenceException $e) {
+            $this->addFlash('error', $e->getMessage());
+        }
 
         return $this->redirectAfterEntry($request, $worker);
     }
