@@ -286,6 +286,7 @@ class WorkController extends AbstractController
             'current_year' => $currentYear,
             'min_year' => $absences->earliestStartYear($worker) ?? $currentYear,
             'year_has_holidays' => $yearHasHolidays,
+            'today_ymd' => (new \DateTimeImmutable('today', $madrid))->format('Y-m-d'),
             'year_calendar' => $yearCalendar->build($year, $madrid, new \DateTimeImmutable('today', $madrid), $holidayDates, $absenceDays),
         ]);
     }
