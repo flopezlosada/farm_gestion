@@ -19,6 +19,7 @@ class MonthGridBuilder
      * @param array<string, string>  $covered  Tipo de ausencia por día cubierto, clave 'Y-m-d'.
      * @param \DateTimeImmutable     $today    Hoy (para marcar hoy y no contar futuro/hueco).
      * @param \DateTimeImmutable|null $hireDate Alta del trabajador (no hay hueco antes).
+     * @param array<string, string>  $holidays Nombre del festivo por día, clave 'Y-m-d'.
      * @return array<int, array<int, array>> Semanas, cada una con 7 celdas.
      */
     public function build(
@@ -29,6 +30,7 @@ class MonthGridBuilder
         array $covered,
         \DateTimeImmutable $today,
         ?\DateTimeImmutable $hireDate,
+        array $holidays = [],
     ): array {
         $monthStart = new \DateTimeImmutable(sprintf('%04d-%02d-01 00:00:00', $year, $month), $tz);
         $monthEnd = $monthStart->modify('first day of next month');
@@ -51,13 +53,16 @@ class MonthGridBuilder
             $isPast = $cursor < $today;
             $afterHire = $hireDay === null || $cursor >= $hireDay;
 
+            $holiday = $holidays[$key] ?? null;
+
             $week[] = [
                 'date' => $cursor,
                 'inMonth' => $inMonth,
                 'day' => $cursor->format('j'),
                 'total' => $hasEntries ? $totals[$key] : null,
                 'absence' => $covered[$key] ?? null,
-                'isGap' => $inMonth && $weekday <= 5 && $isPast && $afterHire && !$hasEntries && !isset($covered[$key]),
+                'holiday' => $holiday,
+                'isGap' => $inMonth && $weekday <= 5 && $isPast && $afterHire && !$hasEntries && !isset($covered[$key]) && $holiday === null,
                 'isToday' => $key === $today->format('Y-m-d'),
                 'isFuture' => $cursor > $today,
             ];

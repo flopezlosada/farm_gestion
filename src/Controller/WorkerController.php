@@ -8,6 +8,7 @@ use App\Entity\Worker;
 use App\Form\AbsenceType;
 use App\Form\WorkerType;
 use App\Repository\AbsenceRepository;
+use App\Repository\HolidayRepository;
 use App\Repository\TimeEntryRepository;
 use App\Repository\WorkerRepository;
 use App\Security\MagicLinkMailer;
@@ -71,6 +72,7 @@ class WorkerController extends AbstractController
      * @param TimeEntryRepository $timeEntries
      * @param AbsenceRepository   $absences
      * @param GapFinder           $gapFinder
+     * @param HolidayRepository   $holidays
      * @return Response
      */
     #[Route('/gaps', name: 'staff_gaps', methods: ['GET'])]
@@ -79,11 +81,15 @@ class WorkerController extends AbstractController
         TimeEntryRepository $timeEntries,
         AbsenceRepository $absences,
         GapFinder $gapFinder,
+        HolidayRepository $holidays,
     ): Response {
         $madrid = new \DateTimeZone('Europe/Madrid');
 
         $today = new \DateTimeImmutable('today', $madrid);
         $fromMadrid = $today->modify(sprintf('-%d days', self::GAP_DAYS));
+
+        // Los festivos son los mismos para todos: una sola consulta fuera del bucle.
+        $holidayDates = $holidays->findNamesBetween($fromMadrid, $today);
 
         $rows = [];
         foreach ($workers->findActive() as $worker) {
@@ -103,7 +109,7 @@ class WorkerController extends AbstractController
                 }
             }
 
-            $gaps = $gapFinder->gapsFor($fromMadrid, $today, $worker->getHireDate(), $worked, $covered);
+            $gaps = $gapFinder->gapsFor($fromMadrid, $today, $worker->getHireDate(), $worked, $covered, $holidayDates);
             if ($gaps !== []) {
                 $rows[] = ['worker' => $worker, 'gaps' => $gaps];
             }
@@ -572,6 +578,8 @@ class WorkerController extends AbstractController
      * @param TimeEntryRepository $timeEntries
      * @param AbsenceRepository   $absences
      * @param WorkdayBuilder      $workdays
+     * @param MonthGridBuilder    $gridBuilder
+     * @param HolidayRepository   $holidays
      * @return Response
      */
     #[Route('/{id}/calendar', name: 'staff_calendar', methods: ['GET'], requirements: ['id' => '\d+'])]
@@ -582,6 +590,7 @@ class WorkerController extends AbstractController
         AbsenceRepository $absences,
         WorkdayBuilder $workdays,
         MonthGridBuilder $gridBuilder,
+        HolidayRepository $holidays,
     ): Response {
         $madrid = new \DateTimeZone('Europe/Madrid');
         $today = new \DateTimeImmutable('today', $madrid);
@@ -612,7 +621,8 @@ class WorkerController extends AbstractController
             }
         }
 
-        $weeks = $gridBuilder->build($year, $month, $madrid, $totals, $covered, $today, $worker->getHireDate());
+        $holidayDates = $holidays->findNamesBetween($monthStart, $monthEnd->modify('-1 day'));
+        $weeks = $gridBuilder->build($year, $month, $madrid, $totals, $covered, $today, $worker->getHireDate(), $holidayDates);
 
         return $this->render('staff/calendar.html.twig', [
             'worker' => $worker,

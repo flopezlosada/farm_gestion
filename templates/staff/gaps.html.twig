@@ -29,7 +29,7 @@
 {% block csa_main %}
     {{ csa.page_header('Personal', 'Huecos del registro', 'Días laborables de los últimos ' ~ days ~ ' días sin fichaje y sin ausencia justificada. Revísalos antes de que se acumulen.') }}
 
-    {{ csa.callout('Sin calendario de festivos: un festivo entre semana puede aparecer como hueco. Úsalo como guía, no como verdad absoluta.', 'info') }}
+    {{ csa.callout('Los festivos del calendario laboral (menú Personal · Festivos) no cuentan como hueco. Mantenlo al día para que un festivo entre semana no salga aquí como olvido.', 'info') }}
 
     {% for row in rows %}
         <div class="gap-card">

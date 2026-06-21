@@ -58,6 +58,22 @@ class GapFinderTest extends TestCase
         $this->assertSame(['2026-06-17', '2026-06-18', '2026-06-19'], $keys);
     }
 
+    public function testDiaFestivoNoEsHueco(): void
+    {
+        // Festivo el miércoles 17 (laborable): no debe contar como hueco.
+        $gaps = (new GapFinder())->gapsFor(
+            $this->d('2026-06-15'),
+            $this->d('2026-06-22'),
+            $this->d('2020-01-01'),
+            [],
+            [],
+            ['2026-06-17' => 'San Festivo'],
+        );
+
+        $keys = array_map(static fn ($d) => $d->format('Y-m-d'), $gaps);
+        $this->assertSame(['2026-06-15', '2026-06-16', '2026-06-18', '2026-06-19'], $keys);
+    }
+
     public function testNoHayHuecosAntesDelAlta(): void
     {
         $gaps = (new GapFinder())->gapsFor(

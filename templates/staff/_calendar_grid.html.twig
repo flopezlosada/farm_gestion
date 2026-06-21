@@ -28,6 +28,8 @@
                                     {% if cell.total.anomaly %}<span class="cal-badge cal-badge--warn">Revisar</span>{% endif %}
                                 {% elseif cell.absence %}
                                     <span class="cal-badge cal-badge--abs">{{ absence_labels[cell.absence]|default('Ausencia') }}</span>
+                                {% elseif cell.holiday %}
+                                    <span class="cal-badge cal-badge--holiday" title="{{ cell.holiday }}">Festivo</span>
                                 {% elseif cell.isGap %}
                                     <span class="cal-badge cal-badge--gap">Sin fichar</span>
                                 {% endif %}

@@ -7,6 +7,7 @@ use App\Entity\TimeEntry;
 use App\Entity\User;
 use App\Entity\Worker;
 use App\Repository\AbsenceRepository;
+use App\Repository\HolidayRepository;
 use App\Repository\TimeEntryRepository;
 use App\Service\Staff\MonthGridBuilder;
 use App\Service\Staff\TimeClock;
@@ -101,6 +102,7 @@ class WorkController extends AbstractController
      * @param AbsenceRepository   $absences
      * @param WorkdayBuilder      $workdays
      * @param MonthGridBuilder    $gridBuilder
+     * @param HolidayRepository   $holidays
      * @return Response
      */
     #[Route('/calendar', name: 'work_calendar', methods: ['GET'])]
@@ -110,6 +112,7 @@ class WorkController extends AbstractController
         AbsenceRepository $absences,
         WorkdayBuilder $workdays,
         MonthGridBuilder $gridBuilder,
+        HolidayRepository $holidays,
     ): Response {
         if (($redirect = $this->ensureWorker()) !== null) {
             return $redirect;
@@ -143,9 +146,11 @@ class WorkController extends AbstractController
             }
         }
 
+        $holidayDates = $holidays->findNamesBetween($monthStart, $monthEnd->modify('-1 day'));
+
         return $this->render('work/calendar.html.twig', [
             'worker' => $worker,
-            'weeks' => $gridBuilder->build($year, $month, $madrid, $totals, $covered, $today, $worker->getHireDate()),
+            'weeks' => $gridBuilder->build($year, $month, $madrid, $totals, $covered, $today, $worker->getHireDate(), $holidayDates),
             'month_label' => $monthStart,
             'prev' => $monthStart->modify('-1 month'),
             'next' => $monthStart->modify('+1 month'),
