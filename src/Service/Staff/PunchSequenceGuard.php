@@ -61,7 +61,7 @@ class PunchSequenceGuard
         if ($prev === null || !$prev->isIn()) {
             return 'Una salida tiene que ir después de una entrada.';
         }
-        if ($next !== null && $next->isOut()) {
+        if ($next !== null && !$next->isIn()) {
             return 'El siguiente fichaje del día ya es una salida; rompería la alternancia.';
         }
 

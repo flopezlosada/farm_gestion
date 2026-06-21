@@ -21,37 +21,37 @@ class PunchSequenceGuardTest extends TestCase
         $this->guard = new PunchSequenceGuard();
     }
 
-    private function at(string $hm): \DateTimeImmutable
+    private function hm(string $hm): \DateTimeImmutable
     {
         return new \DateTimeImmutable("2026-06-19 $hm:00", new \DateTimeZone('Europe/Madrid'));
     }
 
     private function entry(string $type, string $hm): TimeEntry
     {
-        return (new TimeEntry())->setType($type)->setOccurredAt($this->at($hm));
+        return (new TimeEntry())->setType($type)->setOccurredAt($this->hm($hm));
     }
 
     public function testEntradaEnDiaVacioEsValida(): void
     {
-        $this->assertNull($this->guard->check(TimeEntry::TYPE_IN, $this->at('09:00'), []));
+        $this->assertNull($this->guard->check(TimeEntry::TYPE_IN, $this->hm('09:00'), []));
     }
 
     public function testSalidaEnDiaVacioSeRechaza(): void
     {
         // Una salida no puede ser el primer fichaje del día.
-        $this->assertNotNull($this->guard->check(TimeEntry::TYPE_OUT, $this->at('09:00'), []));
+        $this->assertNotNull($this->guard->check(TimeEntry::TYPE_OUT, $this->hm('09:00'), []));
     }
 
     public function testSalidaTrasEntradaAbiertaEsValida(): void
     {
         $day = [$this->entry(TimeEntry::TYPE_IN, '09:00')];
-        $this->assertNull($this->guard->check(TimeEntry::TYPE_OUT, $this->at('14:00'), $day));
+        $this->assertNull($this->guard->check(TimeEntry::TYPE_OUT, $this->hm('14:00'), $day));
     }
 
     public function testSegundaEntradaSinSalidaIntermediaSeRechaza(): void
     {
         $day = [$this->entry(TimeEntry::TYPE_IN, '09:00')];
-        $this->assertNotNull($this->guard->check(TimeEntry::TYPE_IN, $this->at('10:00'), $day));
+        $this->assertNotNull($this->guard->check(TimeEntry::TYPE_IN, $this->hm('10:00'), $day));
     }
 
     public function testSegundaSalidaSeguidaSeRechaza(): void
@@ -61,7 +61,7 @@ class PunchSequenceGuardTest extends TestCase
             $this->entry(TimeEntry::TYPE_IN, '09:00'),
             $this->entry(TimeEntry::TYPE_OUT, '13:00'),
         ];
-        $this->assertNotNull($this->guard->check(TimeEntry::TYPE_OUT, $this->at('14:00'), $day));
+        $this->assertNotNull($this->guard->check(TimeEntry::TYPE_OUT, $this->hm('14:00'), $day));
     }
 
     public function testEntradaQueCompletaUnaSalidaHuerfanaEsValida(): void
@@ -69,7 +69,7 @@ class PunchSequenceGuardTest extends TestCase
         // Día con una salida suelta (estado roto): meter la entrada que falta
         // ANTES de ella la completa y es válido.
         $day = [$this->entry(TimeEntry::TYPE_OUT, '13:00')];
-        $this->assertNull($this->guard->check(TimeEntry::TYPE_IN, $this->at('09:00'), $day));
+        $this->assertNull($this->guard->check(TimeEntry::TYPE_IN, $this->hm('09:00'), $day));
     }
 
     public function testEntradaAntesDeOtraEntradaSeRechaza(): void
@@ -81,7 +81,7 @@ class PunchSequenceGuardTest extends TestCase
             $this->entry(TimeEntry::TYPE_IN, '14:00'),
             $this->entry(TimeEntry::TYPE_OUT, '18:00'),
         ];
-        $this->assertNotNull($this->guard->check(TimeEntry::TYPE_IN, $this->at('09:00'), $day));
+        $this->assertNotNull($this->guard->check(TimeEntry::TYPE_IN, $this->hm('09:00'), $day));
     }
 
     public function testSalidaIntermediaEntreEntradasEsValida(): void
@@ -92,6 +92,6 @@ class PunchSequenceGuardTest extends TestCase
             $this->entry(TimeEntry::TYPE_IN, '14:00'),
             $this->entry(TimeEntry::TYPE_OUT, '18:00'),
         ];
-        $this->assertNull($this->guard->check(TimeEntry::TYPE_OUT, $this->at('13:00'), $day));
+        $this->assertNull($this->guard->check(TimeEntry::TYPE_OUT, $this->hm('13:00'), $day));
     }
 }
