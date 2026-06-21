@@ -41,8 +41,15 @@
         .vac-bar h2 { font-size: var(--csa-fs-md); margin: 0; }
         /* Campos del modal de solicitud. */
         .vac-form { display: grid; gap: var(--csa-sp-4); text-align: left; }
-        .vac-form label { display: flex; flex-direction: column; gap: var(--csa-sp-1); font-size: var(--csa-fs-sm); color: var(--csa-ink-soft); }
+        .vac-form > label { display: flex; flex-direction: column; gap: var(--csa-sp-1); font-size: var(--csa-fs-sm); color: var(--csa-ink-soft); }
         @media (min-width: 520px) { .vac-form__dates { display: grid; grid-template-columns: 1fr 1fr; gap: var(--csa-sp-4); } }
+        /* Tipo como radio-cards canónicas, con estado marcado por CSS (:has), sin JS. */
+        .vac-form__label { font-size: var(--csa-fs-sm); color: var(--csa-ink-soft); display: block; margin-bottom: var(--csa-sp-2); }
+        .vac-form .csa-radio-card span:last-child { font-size: var(--csa-fs-sm); color: var(--csa-ink); }
+        .csa-radio-card input { position: absolute; opacity: 0; width: 0; height: 0; }
+        .csa-radio-card:has(input:checked) { border-color: var(--csa-ochre); background: #fffaf0; }
+        .csa-radio-card:has(input:checked) .csa-radio-card__dot { border-color: var(--csa-ochre); }
+        .csa-radio-card:has(input:checked) .csa-radio-card__dot::after { content: ''; position: absolute; inset: 3px; border-radius: 50%; background: var(--csa-ochre); }
     </style>
 {% endblock %}
 
@@ -134,13 +141,23 @@
             </header>
             <div class="csa-modal__body">
                 <div class="vac-form">
-                    <label>Tipo
-                        <select name="type" class="csa-select">
-                            <option value="vacation">Vacaciones</option>
-                            <option value="permit">Permiso</option>
-                            <option value="sick_leave">Baja médica</option>
-                        </select>
-                    </label>
+                    <div>
+                        <span class="vac-form__label">Tipo</span>
+                        <div class="csa-radio-group">
+                            <label class="csa-radio-card">
+                                <input type="radio" name="type" value="vacation" checked>
+                                <span class="csa-radio-card__dot"></span><span>Vacaciones</span>
+                            </label>
+                            <label class="csa-radio-card">
+                                <input type="radio" name="type" value="permit">
+                                <span class="csa-radio-card__dot"></span><span>Permiso</span>
+                            </label>
+                            <label class="csa-radio-card">
+                                <input type="radio" name="type" value="sick_leave">
+                                <span class="csa-radio-card__dot"></span><span>Baja médica</span>
+                            </label>
+                        </div>
+                    </div>
                     <div class="vac-form__dates">
                         <label>Desde <input type="date" name="start_date" class="csa-input" data-vac-start required></label>
                         <label>Hasta <input type="date" name="end_date" class="csa-input" data-vac-end required></label>
