@@ -16,6 +16,7 @@ use App\Security\WorkerUserProvisioner;
 use App\Service\Staff\GapFinder;
 use App\Service\Staff\MonthGridBuilder;
 use App\Service\Staff\PunchSequenceException;
+use App\Service\Staff\WorkingDayCounter;
 use App\Service\Staff\TimeEntryCorrector;
 use App\Service\Staff\TimeInputParser;
 use App\Service\Staff\WorkdayBuilder;
@@ -140,6 +141,8 @@ class WorkerController extends AbstractController
         AbsenceRepository $absences,
         WorkerUserProvisioner $provisioner,
         WorkdayBuilder $workdays,
+        HolidayRepository $holidays,
+        WorkingDayCounter $workingDays,
     ): Response {
         $madrid = new \DateTimeZone('Europe/Madrid');
 
@@ -153,10 +156,29 @@ class WorkerController extends AbstractController
         $days = $workdays->buildDays($entries, $madrid);
 
         $year = (int) (new \DateTimeImmutable('today', $madrid))->format('Y');
-        $usedVacationDays = array_sum(array_map(
-            static fn ($a) => $a->getCalendarDayCount(),
-            $absences->findApprovedVacationsForWorkerInYear($worker, $year),
-        ));
+        $yearStart = new \DateTimeImmutable(sprintf('%d-01-01', $year), $madrid);
+        $yearEnd = new \DateTimeImmutable(sprintf('%d-12-31', $year), $madrid);
+
+        // Festivos de una sola consulta que cubra el año y las ausencias mostradas.
+        $sorted = $this->sortedAbsences($worker);
+        $minDate = $yearStart;
+        $maxDate = $yearEnd;
+        foreach ($sorted as $absence) {
+            $minDate = $absence->getStartDate() < $minDate ? $absence->getStartDate() : $minDate;
+            $maxDate = $absence->getEndDate() > $maxDate ? $absence->getEndDate() : $maxDate;
+        }
+        $holidayDates = $holidays->findNamesBetween($minDate, $maxDate);
+
+        // Saldo en días LABORABLES (sin findes ni festivos), recortado al año.
+        $usedVacationDays = 0;
+        foreach ($absences->findApprovedVacationsForWorkerInYear($worker, $year) as $vacation) {
+            $usedVacationDays += $workingDays->count($vacation->getStartDate(), $vacation->getEndDate(), $holidayDates, $yearStart, $yearEnd);
+        }
+
+        $absenceWorkingDays = [];
+        foreach ($sorted as $absence) {
+            $absenceWorkingDays[$absence->getId()] = $workingDays->count($absence->getStartDate(), $absence->getEndDate(), $holidayDates);
+        }
 
         return $this->render('staff/show.html.twig', [
             'worker' => $worker,
@@ -165,7 +187,8 @@ class WorkerController extends AbstractController
             'vacation_used' => $usedVacationDays,
             'vacation_total' => $worker->getAnnualVacationDays(),
             'access_user' => $provisioner->userFor($worker),
-            'absences' => $this->sortedAbsences($worker),
+            'absences' => $sorted,
+            'working_days' => $absenceWorkingDays,
         ]);
     }
 

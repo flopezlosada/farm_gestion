@@ -15,6 +15,7 @@ use App\Service\Staff\TimeClock;
 use App\Service\Staff\TimeEntryCorrector;
 use App\Service\Staff\TimeInputParser;
 use App\Service\Staff\WorkdayBuilder;
+use App\Service\Staff\WorkingDayCounter;
 use App\Service\Staff\YearCalendarBuilder;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bridge\Doctrine\Attribute\MapEntity;
@@ -203,7 +204,7 @@ class WorkController extends AbstractController
      * @return Response
      */
     #[Route('/vacations', name: 'work_vacations', methods: ['GET'])]
-    public function vacations(AbsenceRepository $absences, HolidayRepository $holidays, YearCalendarBuilder $yearCalendar): Response
+    public function vacations(AbsenceRepository $absences, HolidayRepository $holidays, YearCalendarBuilder $yearCalendar, WorkingDayCounter $workingDays): Response
     {
         if (($redirect = $this->ensureWorker()) !== null) {
             return $redirect;
@@ -212,18 +213,33 @@ class WorkController extends AbstractController
         $worker = $this->worker();
         $madrid = $this->madrid();
         $year = (int) (new \DateTimeImmutable('today', $madrid))->format('Y');
-        $used = array_sum(array_map(
-            static fn (Absence $a) => $a->getCalendarDayCount(),
-            $absences->findApprovedVacationsForWorkerInYear($worker, $year),
-        ));
 
         $mine = $worker->getAbsences()->toArray();
         usort($mine, static fn (Absence $a, Absence $b) => $b->getStartDate() <=> $a->getStartDate());
 
-        // Calendario anual: festivos + mis ausencias (aprobadas o pendientes) por día.
+        // Festivos de una sola consulta que cubra el año Y todas las ausencias mostradas.
         $yearStart = new \DateTimeImmutable(sprintf('%d-01-01', $year), $madrid);
         $yearEnd = new \DateTimeImmutable(sprintf('%d-12-31', $year), $madrid);
-        $holidayDates = $holidays->findNamesBetween($yearStart, $yearEnd);
+        $minDate = $yearStart;
+        $maxDate = $yearEnd;
+        foreach ($mine as $absence) {
+            $minDate = $absence->getStartDate() < $minDate ? $absence->getStartDate() : $minDate;
+            $maxDate = $absence->getEndDate() > $maxDate ? $absence->getEndDate() : $maxDate;
+        }
+        $holidayDates = $holidays->findNamesBetween($minDate, $maxDate);
+
+        // Saldo: días LABORABLES de las vacaciones aprobadas del año (sin findes ni
+        // festivos), recortados al año natural.
+        $used = 0;
+        foreach ($absences->findApprovedVacationsForWorkerInYear($worker, $year) as $vacation) {
+            $used += $workingDays->count($vacation->getStartDate(), $vacation->getEndDate(), $holidayDates, $yearStart, $yearEnd);
+        }
+
+        // Días laborables de cada ausencia, para la etiqueta de la lista.
+        $absenceWorkingDays = [];
+        foreach ($mine as $absence) {
+            $absenceWorkingDays[$absence->getId()] = $workingDays->count($absence->getStartDate(), $absence->getEndDate(), $holidayDates);
+        }
 
         $absenceDays = [];
         foreach ($mine as $absence) {
@@ -249,6 +265,7 @@ class WorkController extends AbstractController
             'vacation_total' => $worker->getAnnualVacationDays(),
             'vacation_used' => $used,
             'my_absences' => $mine,
+            'working_days' => $absenceWorkingDays,
             'year_calendar' => $yearCalendar->build($year, $madrid, new \DateTimeImmutable('today', $madrid), $holidayDates, $absenceDays),
         ]);
     }

@@ -47,7 +47,7 @@ class HolidayRepository extends ServiceEntityRepository
     }
 
     /**
-     * Festivos ordenados por fecha descendente (los próximos primero). Es la lista
+     * Festivos ordenados por fecha ascendente (de enero a diciembre). Es la lista
      * del CRUD de festivos.
      *
      * @return Holiday[]
@@ -55,7 +55,7 @@ class HolidayRepository extends ServiceEntityRepository
     public function findAllOrdered(): array
     {
         return $this->createQueryBuilder('h')
-            ->orderBy('h.date', 'DESC')
+            ->orderBy('h.date', 'ASC')
             ->getQuery()
             ->getResult();
     }

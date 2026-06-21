@@ -134,7 +134,7 @@
                 {% set st = abs_state[a.status]|default(['—','#6b7280','#f3f4f6']) %}
                 <div class="wk-vac__row">
                     <span>{{ abs_type[a.type]|default(a.type) }}</span>
-                    <span style="color:#6b7280;">{{ a.startDate|date('d/m/Y') }} – {{ a.endDate|date('d/m/Y') }} ({{ a.calendarDayCount }} d)</span>
+                    <span style="color:#6b7280;">{{ a.startDate|date('d/m/Y') }} – {{ a.endDate|date('d/m/Y') }} ({{ working_days[a.id] }} d laborables)</span>
                     <span style="margin-left:auto; font-size:.72rem; font-weight:600; border-radius:999px; padding:.1rem .55rem; color:{{ st[1] }}; background:{{ st[2] }};">{{ st[0] }}</span>
                     {% if a.status in ['requested', 'approved'] %}
                         <form method="post" action="{{ path('work_vacation_cancel', { absenceId: a.id }) }}"
