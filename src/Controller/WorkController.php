@@ -234,9 +234,10 @@ class WorkController extends AbstractController
             $end = $absence->getEndDate() < $yearEnd ? $absence->getEndDate() : $yearEnd;
             while ($cursor <= $end) {
                 $key = $cursor->format('Y-m-d');
-                // La aprobada manda sobre la pendiente si solapan.
+                // La aprobada manda sobre la pendiente si solapan. Se guarda tipo y
+                // estado: el calendario colorea por tipo y matiza por estado.
                 if (!isset($absenceDays[$key]) || $absence->getStatus() === Absence::STATUS_APPROVED) {
-                    $absenceDays[$key] = $absence->getStatus();
+                    $absenceDays[$key] = ['type' => $absence->getType(), 'status' => $absence->getStatus()];
                 }
                 $cursor = $cursor->modify('+1 day');
             }
@@ -286,17 +287,23 @@ class WorkController extends AbstractController
             $type = Absence::TYPE_VACATION;
         }
 
+        // La baja médica no se aprueba (la determina el parte médico): se registra
+        // directa. Vacaciones y permiso sí pasan por aprobación del supervisor.
+        $status = $type === Absence::TYPE_SICK_LEAVE ? Absence::STATUS_APPROVED : Absence::STATUS_REQUESTED;
+
         $absence = (new Absence())
             ->setWorker($this->worker())
             ->setType($type)
             ->setStartDate($start)
             ->setEndDate($end)
-            ->setStatus(Absence::STATUS_REQUESTED)
+            ->setStatus($status)
             ->setNote(trim((string) $request->request->get('note')) ?: null);
 
         $em->persist($absence);
         $em->flush();
-        $this->addFlash('notice', 'Solicitud enviada. Te avisaremos cuando se apruebe.');
+        $this->addFlash('notice', $status === Absence::STATUS_APPROVED
+            ? 'Baja registrada.'
+            : 'Solicitud enviada. Te avisaremos cuando se apruebe.');
 
         return $this->redirectToRoute('work_vacations');
     }

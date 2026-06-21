@@ -26,15 +26,23 @@
         .yc-d--empty { color: transparent; }
         .yc-d--we   { color: var(--csa-ink-muted); }
         .yc-d--hol  { background: var(--csa-plum-soft); color: var(--csa-plum); font-weight: 600; }
-        .yc-d--appr { background: var(--csa-green-soft); color: var(--csa-green); font-weight: 600; }
-        .yc-d--req  { background: var(--csa-ochre-soft); color: var(--csa-ochre); font-weight: 600; }
-        .yc-d--today { box-shadow: inset 0 0 0 2px var(--csa-green); border-radius: 5px; }
+        /* Ausencias: el COLOR lo da el tipo (vars --c/--cs); el ESTADO, el tratamiento. */
+        .yc-d--abs  { background: var(--cs); color: var(--c); font-weight: 600; }
+        .yc-d--vac  { --c: var(--csa-green);      --cs: var(--csa-green-soft); }
+        .yc-d--per  { --c: var(--csa-sky);        --cs: var(--csa-sky-soft); }
+        .yc-d--baja { --c: var(--csa-terracotta); --cs: var(--csa-terracotta-soft); }
+        .yc-d--other{ --c: var(--csa-ink-soft);   --cs: var(--csa-bg); }
+        .yc-d--pending  { opacity: .5; }                            /* pendiente: pálido */
+        .yc-d--approved { box-shadow: inset 0 0 0 2px var(--c); }    /* aprobada: + borde del color */
+        .yc-d--today { outline: 2px solid var(--csa-ink); outline-offset: -2px; }
         .yc-legend { display: flex; flex-wrap: wrap; gap: var(--csa-sp-2) var(--csa-sp-4); margin-bottom: var(--csa-sp-5); font-size: .8rem; color: var(--csa-ink-soft); }
         .yc-legend span { display: inline-flex; align-items: center; gap: .4rem; }
         .yc-legend i { width: .9rem; height: .9rem; border-radius: 3px; display: inline-block; }
+        .yc-sw--vac  { background: var(--csa-green-soft); }
+        .yc-sw--per  { background: var(--csa-sky-soft); }
+        .yc-sw--baja { background: var(--csa-terracotta-soft); }
         .yc-sw--hol  { background: var(--csa-plum-soft); }
-        .yc-sw--appr { background: var(--csa-green-soft); }
-        .yc-sw--req  { background: var(--csa-ochre-soft); }
+        .yc-legend__note { color: var(--csa-ink-muted); }
 
         /* Cabecera de la sección de solicitudes con su CTA. */
         .vac-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--csa-sp-3); margin-bottom: var(--csa-sp-3); }
@@ -43,18 +51,24 @@
         .vac-form { display: grid; gap: var(--csa-sp-4); text-align: left; }
         .vac-form > label { display: flex; flex-direction: column; gap: var(--csa-sp-1); font-size: var(--csa-fs-sm); color: var(--csa-ink-soft); }
         @media (min-width: 520px) { .vac-form__dates { display: grid; grid-template-columns: 1fr 1fr; gap: var(--csa-sp-4); } }
-        /* Tipo como radio-cards canónicas, con estado marcado por CSS (:has), sin JS. */
         .vac-form__label { font-size: var(--csa-fs-sm); color: var(--csa-ink-soft); display: block; margin-bottom: var(--csa-sp-2); }
-        .vac-form .csa-radio-card span:last-child { font-size: var(--csa-fs-sm); color: var(--csa-ink); }
-        .csa-radio-card input { position: absolute; opacity: 0; width: 0; height: 0; }
-        .csa-radio-card:has(input:checked) { border-color: var(--csa-ochre); background: #fffaf0; }
-        .csa-radio-card:has(input:checked) .csa-radio-card__dot { border-color: var(--csa-ochre); }
-        .csa-radio-card:has(input:checked) .csa-radio-card__dot::after { content: ''; position: absolute; inset: 3px; border-radius: 50%; background: var(--csa-ochre); }
+        /* Tipo como control segmentado (1 de 3), coloreado por tipo. Fuente sans, sin negrita. */
+        .seg { display: flex; flex-wrap: wrap; gap: var(--csa-sp-2); }
+        .seg__opt { flex: 1 1 28%; text-align: center; padding: 9px 6px; border: 1px solid var(--csa-rule); border-radius: var(--csa-radius-md); cursor: pointer; font-family: var(--csa-sans); font-size: var(--csa-fs-sm); font-weight: 500; color: var(--csa-ink-soft); background: var(--csa-surface); transition: border-color var(--csa-t-fast), background var(--csa-t-fast), color var(--csa-t-fast); }
+        .seg__opt:hover { border-color: var(--csa-ink-muted); }
+        .seg__opt input { position: absolute; opacity: 0; width: 0; height: 0; }
+        .seg__opt--vac:has(input:checked)  { background: var(--csa-green-soft);      color: var(--csa-green);      border-color: var(--csa-green); }
+        .seg__opt--per:has(input:checked)  { background: var(--csa-sky-soft);        color: var(--csa-sky);        border-color: var(--csa-sky); }
+        .seg__opt--baja:has(input:checked) { background: var(--csa-terracotta-soft); color: var(--csa-terracotta); border-color: var(--csa-terracotta); }
+        .seg__opt span { font-family: var(--csa-sans); font-weight: 500; }
+        /* El modal no lleva icono: el cuerpo no debe indentarse para dejarle hueco. */
+        #vac-modal .csa-modal__body { padding-left: var(--csa-sp-6); }
     </style>
 {% endblock %}
 
 {% block csa_main %}
     {% set abs_type = { vacation: 'Vacaciones', sick_leave: 'Baja médica', permit: 'Permiso', other: 'Ausencia' } %}
+    {% set month_names = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'] %}
     {% set abs_state = { requested: ['Pendiente','#92400e','#fef3c7'], approved: ['Aprobada','#2f6f43','#e7f3ea'], rejected: ['Rechazada','#9b1c1c','#fde2e2'], cancelled: ['Cancelada','#6b7280','#f3f4f6'] } %}
 
     <div class="wk">
@@ -64,15 +78,17 @@
         </header>
 
         <div class="yc-legend">
-            <span><i class="yc-sw--appr"></i> Vacaciones aprobadas</span>
-            <span><i class="yc-sw--req"></i> Pendientes</span>
+            <span><i class="yc-sw--vac"></i> Vacaciones</span>
+            <span><i class="yc-sw--per"></i> Permiso</span>
+            <span><i class="yc-sw--baja"></i> Baja</span>
             <span><i class="yc-sw--hol"></i> Festivos</span>
+            <span class="yc-legend__note">· pálido = pendiente · con borde = aprobada</span>
         </div>
 
         <div class="yc-grid">
             {% for m in year_calendar %}
                 <div class="yc-month">
-                    <div class="yc-month__name">{{ m.first|date('F', 'Europe/Madrid')|capitalize }}</div>
+                    <div class="yc-month__name">{{ month_names[m.month - 1] }}</div>
                     <table class="yc-cal">
                         <thead>
                             <tr><th>L</th><th>M</th><th>X</th><th>J</th><th>V</th><th>S</th><th>D</th></tr>
@@ -86,8 +102,11 @@
                                         {% else %}
                                             {% set cls = 'yc-d' %}
                                             {% set tip = '' %}
-                                            {% if cell.absence == 'approved' %}{% set cls = cls ~ ' yc-d--appr' %}{% set tip = 'Vacaciones aprobadas' %}
-                                            {% elseif cell.absence == 'requested' %}{% set cls = cls ~ ' yc-d--req' %}{% set tip = 'Pendiente de aprobar' %}
+                                            {% if cell.absence %}
+                                                {% set tcls = { vacation: 'yc-d--vac', permit: 'yc-d--per', sick_leave: 'yc-d--baja' } %}
+                                                {% set statecls = cell.absence.status == 'approved' ? 'yc-d--approved' : 'yc-d--pending' %}
+                                                {% set cls = cls ~ ' yc-d--abs ' ~ (tcls[cell.absence.type]|default('yc-d--other')) ~ ' ' ~ statecls %}
+                                                {% set tip = (abs_type[cell.absence.type]|default('Ausencia')) ~ (cell.absence.status == 'approved' ? ' · aprobada' : ' · pendiente') %}
                                             {% elseif cell.holiday %}{% set cls = cls ~ ' yc-d--hol' %}{% set tip = cell.holiday %}
                                             {% elseif cell.weekend %}{% set cls = cls ~ ' yc-d--we' %}{% endif %}
                                             <td class="{{ cls }}{{ cell.isToday ? ' yc-d--today' : '' }}"{% if tip %} title="{{ tip }}"{% endif %}>{{ cell.day }}</td>
@@ -143,19 +162,10 @@
                 <div class="vac-form">
                     <div>
                         <span class="vac-form__label">Tipo</span>
-                        <div class="csa-radio-group">
-                            <label class="csa-radio-card">
-                                <input type="radio" name="type" value="vacation" checked>
-                                <span class="csa-radio-card__dot"></span><span>Vacaciones</span>
-                            </label>
-                            <label class="csa-radio-card">
-                                <input type="radio" name="type" value="permit">
-                                <span class="csa-radio-card__dot"></span><span>Permiso</span>
-                            </label>
-                            <label class="csa-radio-card">
-                                <input type="radio" name="type" value="sick_leave">
-                                <span class="csa-radio-card__dot"></span><span>Baja médica</span>
-                            </label>
+                        <div class="seg" role="radiogroup" aria-label="Tipo de ausencia">
+                            <label class="seg__opt seg__opt--vac"><input type="radio" name="type" value="vacation" checked><span>Vacaciones</span></label>
+                            <label class="seg__opt seg__opt--per"><input type="radio" name="type" value="permit"><span>Permiso</span></label>
+                            <label class="seg__opt seg__opt--baja"><input type="radio" name="type" value="sick_leave"><span>Baja médica</span></label>
                         </div>
                     </div>
                     <div class="vac-form__dates">
