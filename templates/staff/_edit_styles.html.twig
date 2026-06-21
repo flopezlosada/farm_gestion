@@ -13,6 +13,20 @@
     .stf-late { font-size: .7rem; font-weight: 600; color: #92400e; background: #fef3c7; border-radius: 999px; padding: .1rem .5rem; }
     .stf-reg-empty { padding: 2rem 1rem; text-align: center; color: #9ca3af; }
 
+    /* Edición inline de la hora de un fichaje (estilo Factorial). */
+    .pun { display: inline-flex; align-items: center; gap: .4rem; }
+    .pun__view, .pun__edit { display: inline-flex; align-items: center; gap: .3rem; }
+    .pun__btn { border: none; background: none; cursor: pointer; padding: .2rem .35rem; border-radius: 6px; color: #9ca3af; font-size: .78rem; line-height: 1; }
+    .pun__btn:hover { background: #f3f4f6; }
+    .pun__pen:hover { color: #2f6f43; }
+    .pun__ok { color: #2f8f4e; }
+    .pun__ok:hover { background: #e7f3ea; color: #226c39; }
+    .pun__cancel:hover { color: #6b7280; }
+    .pun__del { color: #b4632b; }
+    .pun__del:hover { background: #fbe8dd; color: #9b1c1c; }
+    .pun__input { font-size: .9rem; padding: .2rem .35rem; border: 1px solid #2f8f4e; border-radius: 6px; font-variant-numeric: tabular-nums; }
+    .pun [hidden] { display: none !important; }
+
     /* Controles de corrección por fichaje (details inline). */
     .stf-edit { display: inline-block; position: relative; }
     .stf-edit > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: .4rem; padding: .15rem .4rem; border-radius: 8px; }
@@ -36,3 +50,44 @@
     .day-warn--warn { background:#fef3c7; color:#92400e; }
     .day-warn--info { background:#e0f2fe; color:#075985; }
 </style>
+
+{# Edición inline de la hora: el lápiz abre el input, Enter o el tick guardan
+ # (submit nativo del form), Esc o la ✕ cierran, la papelera anula. Delegado,
+ # se monta una vez por página. #}
+<script>
+(function () {
+    function closePun(pun) {
+        var view = pun.querySelector('[data-pun-view]');
+        var form = pun.querySelector('[data-pun-edit-form]');
+        var del = pun.querySelector('[data-pun-void]');
+        if (view) { view.hidden = false; }
+        if (form) { form.hidden = true; }
+        if (del) { del.hidden = true; }
+    }
+
+    document.addEventListener('click', function (e) {
+        var editBtn = e.target.closest('[data-pun-edit]');
+        if (editBtn) {
+            var pun = editBtn.closest('[data-pun]');
+            document.querySelectorAll('[data-pun]').forEach(function (other) {
+                if (other !== pun) { closePun(other); }
+            });
+            pun.querySelector('[data-pun-view]').hidden = true;
+            pun.querySelector('[data-pun-edit-form]').hidden = false;
+            var del = pun.querySelector('[data-pun-void]');
+            if (del) { del.hidden = false; }
+            var input = pun.querySelector('[data-pun-input]');
+            if (input) { input.focus(); if (input.select) { input.select(); } }
+            return;
+        }
+        var cancelBtn = e.target.closest('[data-pun-cancel]');
+        if (cancelBtn) { closePun(cancelBtn.closest('[data-pun]')); }
+    });
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Escape') { return; }
+        var pun = e.target.closest('[data-pun]');
+        if (pun) { closePun(pun); }
+    });
+})();
+</script>
