@@ -135,15 +135,15 @@
             <div class="csa-modal__body">
                 <div class="vac-form">
                     <label>Tipo
-                        <select name="type" class="csa-input">
+                        <select name="type" class="csa-select">
                             <option value="vacation">Vacaciones</option>
                             <option value="permit">Permiso</option>
                             <option value="sick_leave">Baja médica</option>
                         </select>
                     </label>
                     <div class="vac-form__dates">
-                        <label>Desde <input type="date" name="start_date" class="csa-input" required></label>
-                        <label>Hasta <input type="date" name="end_date" class="csa-input" required></label>
+                        <label>Desde <input type="date" name="start_date" class="csa-input" data-vac-start required></label>
+                        <label>Hasta <input type="date" name="end_date" class="csa-input" data-vac-end required></label>
                     </div>
                     <label>Comentario <input type="text" name="note" class="csa-input" placeholder="opcional"></label>
                 </div>
@@ -154,4 +154,18 @@
             </footer>
         </form>
     </dialog>
+
+    {# Validación de fechas en cliente: "Hasta" nunca antes de "Desde" (validación
+     # nativa antes del submit, sin ida y vuelta al servidor). #}
+    <script>
+    (function () {
+        var start = document.querySelector('[data-vac-start]');
+        var end = document.querySelector('[data-vac-end]');
+        if (!start || !end) { return; }
+        start.addEventListener('change', function () {
+            end.min = start.value;
+            if (end.value && end.value < start.value) { end.value = start.value; }
+        });
+    })();
+    </script>
 {% endblock %}
