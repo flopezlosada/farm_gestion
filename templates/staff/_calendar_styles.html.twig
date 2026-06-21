@@ -1,0 +1,20 @@
+{# Estilos del calendario mensual (supervisor y trabajador). #}
+<style>
+    .cal-nav { display:flex; align-items:center; gap:1rem; margin-bottom:1rem; }
+    .cal-nav__title { font-size:1.2rem; font-weight:700; text-transform:capitalize; min-width:200px; text-align:center; }
+    .cal-grid { width:100%; border-collapse:collapse; table-layout:fixed; background:#fff; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; }
+    .cal-grid th { font-size:.75rem; text-transform:uppercase; letter-spacing:.03em; color:#6b7280; padding:.5rem; border-bottom:1px solid #eef0f2; text-align:center; }
+    .cal-cell { height:84px; vertical-align:top; border:1px solid #f3f4f6; padding:0; }
+    .cal-cell a, .cal-cell span.cal-day-wrap { display:block; height:100%; padding:.4rem .5rem; text-decoration:none; color:inherit; }
+    .cal-cell a:hover { background:#fafaf8; }
+    .cal-cell--out { background:#fafafa; color:#c7c7c7; }
+    .cal-cell--weekend { background:#fbfaf7; }
+    .cal-cell--today { outline:2px solid #2f8f4e; outline-offset:-2px; }
+    .cal-num { font-size:.85rem; font-weight:600; }
+    .cal-span { margin-top:.4rem; font-size:.8rem; color:#374151; font-variant-numeric:tabular-nums; }
+    .cal-total { margin-top:.15rem; font-size:.95rem; font-weight:700; color:#2f6f43; font-variant-numeric:tabular-nums; }
+    .cal-badge { margin-top:.5rem; display:inline-block; font-size:.72rem; font-weight:600; border-radius:6px; padding:.1rem .4rem; }
+    .cal-badge--gap { background:#fef3c7; color:#92400e; }
+    .cal-badge--abs { background:#e0f2fe; color:#075985; }
+    .cal-badge--warn { background:#fde2e2; color:#9b1c1c; }
+</style>

@@ -1,0 +1,25 @@
+{# ============================================================
+ # Aviso del estado de una jornada (compartido por la vista de día del
+ # supervisor y la del trabajador). Señala incoherencias sin bloquear:
+ # el registro refleja la realidad, pero un día descuadrado debe verse.
+ #
+ # Espera: open, anomaly, date, madrid.
+ # ============================================================ #}
+{% set is_past = date|date('Y-m-d', madrid) < 'now'|date('Y-m-d', madrid) %}
+
+{% if anomaly %}
+    <div class="day-warn day-warn--bad">
+        <i class="fa fa-exclamation-triangle" aria-hidden="true"></i>
+        <span>Esta jornada está descuadrada: hay fichajes sin pareja (una entrada sin su salida, o una salida sin su entrada). Corrige las horas o anula los que sobren para que entrada y salida casen.</span>
+    </div>
+{% elseif open and is_past %}
+    <div class="day-warn day-warn--warn">
+        <i class="fa fa-clock-o" aria-hidden="true"></i>
+        <span>Falta una salida en esta jornada: hay una entrada sin cerrar. Añade la salida o corrige el registro.</span>
+    </div>
+{% elseif open %}
+    <div class="day-warn day-warn--info">
+        <i class="fa fa-clock-o" aria-hidden="true"></i>
+        <span>Jornada en curso: hay una entrada sin salida todavía.</span>
+    </div>
+{% endif %}

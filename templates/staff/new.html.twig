@@ -1,0 +1,19 @@
+{# Nuevo trabajador — shell csa. #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Nuevo trabajador{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('staff_index') }}">Personal</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Nuevo</span>
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header('Personal', 'Nuevo trabajador', 'Da de alta una ficha laboral para el registro de jornada y las vacaciones.') }}
+
+    {{ include('staff/_form.html.twig', { submit_label: 'Crear trabajador', cancel_path: path('staff_index') }) }}
+{% endblock %}

@@ -1,0 +1,38 @@
+{# Estilos compartidos del registro de jornada y sus controles de edición
+ # (ficha y vista de día). #}
+<style>
+    .stf-reg { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; overflow: visible; }
+    .stf-day { border-bottom: 1px solid #eef0f2; }
+    .stf-day:last-child { border-bottom: none; }
+    .stf-day__head { padding: .6rem 1rem; font-weight: 600; background: #fafaf8; text-transform: capitalize; }
+    .stf-pun { display: flex; align-items: center; gap: .7rem; padding: .55rem 1rem; }
+    .stf-pun__icon { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; color: #fff; flex: none; font-size: .8rem; }
+    .stf-pun__icon--in  { background: #2f8f4e; }
+    .stf-pun__icon--out { background: #b4632b; }
+    .stf-pun__time { font-variant-numeric: tabular-nums; }
+    .stf-late { font-size: .7rem; font-weight: 600; color: #92400e; background: #fef3c7; border-radius: 999px; padding: .1rem .5rem; }
+    .stf-reg-empty { padding: 2rem 1rem; text-align: center; color: #9ca3af; }
+
+    /* Controles de corrección por fichaje (details inline). */
+    .stf-edit { display: inline-block; position: relative; }
+    .stf-edit > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: .4rem; padding: .15rem .4rem; border-radius: 8px; }
+    .stf-edit > summary::-webkit-details-marker { display: none; }
+    .stf-edit > summary:hover { background: #f3f4f6; }
+    .stf-edit__pen { font-size: .72rem; color: #9ca3af; }
+    .stf-edit[open] > summary .stf-edit__pen { color: #2f6f43; }
+    .stf-edit__panel { position: absolute; z-index: 10; margin-top: .4rem; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.1); padding: .9rem; min-width: 260px; }
+    .stf-edit__form { display: flex; flex-direction: column; gap: .5rem; margin-bottom: .6rem; }
+    .stf-edit__form label { display: flex; flex-direction: column; font-size: .78rem; color: #6b7280; gap: .2rem; }
+    .stf-edit__form input, .stf-edit__form select { font-size: .9rem; padding: .35rem .5rem; border: 1px solid #d1d5db; border-radius: 6px; }
+    .stf-edit__void-reason { margin-bottom: .4rem; width: 100%; }
+    .stf-add { margin-top: 1.4rem; }
+    .stf-add > summary { cursor: pointer; color: #2f6f43; font-weight: 600; }
+    .stf-add .stf-edit__form { max-width: 320px; }
+
+    /* Aviso de jornada descuadrada / incompleta. */
+    .day-warn { display:flex; align-items:flex-start; gap:.6rem; padding:.8rem 1rem; border-radius:10px; margin-bottom:1.2rem; font-size:.9rem; line-height:1.4; }
+    .day-warn i { margin-top:.15rem; }
+    .day-warn--bad  { background:#fde2e2; color:#9b1c1c; }
+    .day-warn--warn { background:#fef3c7; color:#92400e; }
+    .day-warn--info { background:#e0f2fe; color:#075985; }
+</style>

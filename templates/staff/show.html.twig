@@ -1,0 +1,171 @@
+{# Ficha de trabajador: datos, vacaciones y registro de jornada reciente. #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% import 'staff/_punch.html.twig' as p %}
+
+{% block title %}{{ worker.name }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('staff_index') }}">Personal</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ worker.name }}</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'staff/_edit_styles.html.twig' %}
+{% endblock %}
+
+{% block csa_main %}
+    {% set madrid = 'Europe/Madrid' %}
+
+    {{ csa.page_header('Personal', worker.name, worker.active ? 'Trabajador activo' : 'Trabajador inactivo') }}
+
+    <div class="csa-grid-kpi" style="margin-bottom: 1.4rem;">
+        {{ csa.kpi('Alta', worker.hireDate ? worker.hireDate|date('d/m/Y') : '—', null, null, null, 'sky', 'fa-calendar') }}
+        {{ csa.kpi('Vacaciones ' ~ year, vacation_used ~ ' / ' ~ vacation_total, 'días', null, null, 'ochre', 'fa-umbrella') }}
+    </div>
+
+    {# ===== Acceso para fichar ===== #}
+    <div class="stf-access" style="background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:1.1rem 1.2rem; margin-bottom:1.6rem;">
+        <h2 style="margin:0 0 .7rem; font-size:1.1rem;">Acceso para fichar</h2>
+        {% if access_user %}
+            <p style="margin:0 0 .8rem; color:#374151;">
+                <i class="fa fa-check-circle" style="color:#2f8f4e;"></i>
+                Tiene acceso con <strong>{{ access_user.email }}</strong>.
+            </p>
+            <div class="csa-row" style="gap:.6rem;">
+                <form method="post" action="{{ path('staff_access_resend', { id: worker.id }) }}">
+                    <input type="hidden" name="_token" value="{{ csrf_token('staff_access' ~ worker.id) }}">
+                    <button type="submit" class="csa-btn csa-btn--secondary csa-btn--sm"><i class="fa fa-paper-plane"></i><span>Reenviar enlace</span></button>
+                </form>
+                <form method="post" action="{{ path('staff_access_revoke', { id: worker.id }) }}"
+                      onsubmit="return confirm('¿Retirar el acceso de {{ worker.name|e('js') }}? No podrá fichar hasta que se lo vuelvas a dar.');">
+                    <input type="hidden" name="_token" value="{{ csrf_token('staff_access' ~ worker.id) }}">
+                    <button type="submit" class="csa-btn csa-btn--ghost csa-btn--sm">Retirar acceso</button>
+                </form>
+            </div>
+        {% else %}
+            <p style="margin:0 0 .8rem; color:#6b7280;">
+                Aún no puede fichar. Dale acceso con su email: si ya tiene cuenta (p. ej. es socix) se la reutiliza; si no, se crea una nueva y se le envía un enlace para entrar.
+            </p>
+            <form method="post" action="{{ path('staff_access_grant', { id: worker.id }) }}" class="csa-row" style="gap:.6rem; flex-wrap:wrap;">
+                <input type="hidden" name="_token" value="{{ csrf_token('staff_access' ~ worker.id) }}">
+                <input type="email" name="email" required placeholder="email@ejemplo.org" class="csa-input" style="max-width:280px;">
+                <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm"><i class="fa fa-key"></i><span>Dar acceso y enviar enlace</span></button>
+            </form>
+        {% endif %}
+    </div>
+
+    {# ===== Vacaciones y ausencias ===== #}
+    {% set abs_type = { vacation: 'Vacaciones', sick_leave: 'Baja médica', permit: 'Permiso', other: 'Otra ausencia' } %}
+    {% set abs_state = { requested: ['Solicitada','#92400e','#fef3c7'], approved: ['Aprobada','#2f6f43','#e7f3ea'], rejected: ['Rechazada','#9b1c1c','#fde2e2'], cancelled: ['Cancelada','#6b7280','#f3f4f6'] } %}
+    <div class="stf-access" style="background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:1.1rem 1.2rem; margin-bottom:1.6rem;">
+        <div class="csa-row-between" style="margin-bottom:.8rem;">
+            <h2 style="margin:0; font-size:1.1rem;">Vacaciones y ausencias</h2>
+            {{ csa.btn('Registrar ausencia', { variant: 'secondary', icon: 'fa-plus', href: path('staff_absence_new', { id: worker.id }) }) }}
+        </div>
+        {% for a in absences %}
+            {% set st = abs_state[a.status]|default(['—','#6b7280','#f3f4f6']) %}
+            <div class="csa-row-between" style="padding:.55rem 0; border-top:1px solid #f3f4f6;">
+                <div>
+                    <strong>{{ abs_type[a.type]|default(a.type) }}</strong>
+                    <span style="color:#6b7280;">· {{ a.startDate|date('d/m/Y') }} – {{ a.endDate|date('d/m/Y') }} ({{ a.calendarDayCount }} día{{ a.calendarDayCount == 1 ? '' : 's' }})</span>
+                    <span style="margin-left:.4rem; font-size:.72rem; font-weight:600; border-radius:999px; padding:.1rem .55rem; color:{{ st[1] }}; background:{{ st[2] }};">{{ st[0] }}</span>
+                </div>
+                <div class="csa-row" style="gap:.4rem;">
+                    {% if a.status == 'requested' %}
+                        <form method="post" action="{{ path('staff_absence_approve', { id: worker.id, absenceId: a.id }) }}">
+                            <input type="hidden" name="_token" value="{{ csrf_token('staff_absence' ~ worker.id) }}">
+                            <button class="csa-btn csa-btn--primary csa-btn--sm">Aprobar</button>
+                        </form>
+                        <form method="post" action="{{ path('staff_absence_reject', { id: worker.id, absenceId: a.id }) }}">
+                            <input type="hidden" name="_token" value="{{ csrf_token('staff_absence' ~ worker.id) }}">
+                            <button class="csa-btn csa-btn--ghost csa-btn--sm">Rechazar</button>
+                        </form>
+                    {% elseif a.status != 'cancelled' and a.status != 'rejected' %}
+                        <form method="post" action="{{ path('staff_absence_cancel', { id: worker.id, absenceId: a.id }) }}"
+                              onsubmit="return confirm('¿Cancelar esta ausencia?');">
+                            <input type="hidden" name="_token" value="{{ csrf_token('staff_absence' ~ worker.id) }}">
+                            <button class="csa-btn csa-btn--ghost csa-btn--sm">Cancelar</button>
+                        </form>
+                    {% endif %}
+                </div>
+            </div>
+        {% else %}
+            <p style="margin:0; color:#9ca3af;">Sin vacaciones ni ausencias registradas.</p>
+        {% endfor %}
+    </div>
+
+    <div class="csa-row-between" style="margin-bottom: 1.2rem;">
+        <h2 style="margin:0; font-size:1.1rem;">Registro reciente</h2>
+        <div class="csa-row">
+            {{ csa.btn('Ver calendario', { variant: 'secondary', icon: 'fa-calendar', href: path('staff_calendar', { id: worker.id }) }) }}
+            {{ csa.btn('Editar ficha', { variant: 'ghost', icon: 'fa-pencil', href: path('staff_edit', { id: worker.id }) }) }}
+        </div>
+    </div>
+
+    <div class="stf-reg">
+        {% for day in days %}
+            <div class="stf-day">
+                <div class="stf-day__head" style="display:flex; align-items:center; gap:.6rem;">
+                    <span>{{ day.date|date('l, j M', madrid) }}</span>
+                    {% if day.anomaly %}<span class="stf-late" style="background:#fde2e2; color:#9b1c1c;">Revisar</span>{% endif %}
+                    {% if day.open %}<span class="stf-late" style="background:#e0f2fe; color:#075985;">En curso</span>{% endif %}
+                    <span style="margin-left:auto; font-variant-numeric:tabular-nums; font-weight:600;">
+                        {{ (day.totalMinutes // 60) }}h {{ '%02d'|format(day.totalMinutes % 60) }}m
+                    </span>
+                </div>
+                {% set popts = { csrf_id: 'staff_entry' ~ worker.id, correct_route: 'staff_entry_correct', void_route: 'staff_entry_void', base_params: { id: worker.id } } %}
+                {% for seg in day.segments %}
+                    <div class="stf-pun">
+                        {{ p.punch(seg.in, 'in', madrid, popts) }}
+                        <span style="color:#9ca3af;">→</span>
+                        {{ p.punch(seg.out, 'out', madrid, popts) }}
+                        {% if seg.minutes is not null %}
+                            <span style="margin-left:auto; color:#6b7280;">{{ (seg.minutes // 60) }}h {{ '%02d'|format(seg.minutes % 60) }}m</span>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="stf-reg-empty">Sin fichajes en los últimos días.</div>
+        {% endfor %}
+    </div>
+
+    {# ===== Añadir fichaje olvidado ===== #}
+    <details class="stf-add">
+        <summary><i class="fa fa-plus-circle"></i> Añadir un fichaje olvidado</summary>
+        <form method="post" action="{{ path('staff_entry_add', { id: worker.id }) }}" class="stf-edit__form" style="margin-top:.8rem;">
+            <input type="hidden" name="_token" value="{{ csrf_token('staff_entry' ~ worker.id) }}">
+            <label>Tipo
+                <select name="type" class="csa-input">
+                    <option value="in">Entrada</option>
+                    <option value="out">Salida</option>
+                </select>
+            </label>
+            <label>Fecha
+                <input type="date" name="date" required>
+            </label>
+            <label>Hora
+                <input type="time" name="time" required>
+            </label>
+            <label>Motivo
+                <input type="text" name="reason" placeholder="p. ej. olvidó fichar la entrada">
+            </label>
+            <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">Añadir fichaje</button>
+        </form>
+    </details>
+
+    {% if worker.timeEntries|length == 0 %}
+        <div class="csa-row" style="margin-top: 1.4rem;">
+            <form method="post" action="{{ path('staff_delete', { id: worker.id }) }}"
+                  onsubmit="return confirm('¿Borrar a {{ worker.name|e('js') }}? Esta acción no se puede deshacer.');">
+                <input type="hidden" name="_token" value="{{ csrf_token('delete' ~ worker.id) }}">
+                <button type="submit" class="csa-btn csa-btn--ghost csa-btn--sm">Borrar trabajador</button>
+            </form>
+        </div>
+    {% endif %}
+{% endblock %}
