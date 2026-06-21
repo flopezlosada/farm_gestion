@@ -1,5 +1,6 @@
-{# Mis vacaciones (trabajador): saldo, calendario anual, solicitar y mis solicitudes. #}
+{# Mis vacaciones (trabajador): saldo, calendario anual, solicitar (modal) y mis solicitudes. #}
 {% extends '_layouts/csa_work.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
 
 {% block title %}Mis vacaciones{% endblock %}
 
@@ -13,30 +14,40 @@
     {{ parent() }}
     {% include 'work/_styles.html.twig' %}
     <style>
-        /* Calendario anual (12 mini-meses). Mobile-first: colapsa a 1 columna. */
-        .yc-grid { display: grid; gap: var(--csa-sp-4); grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr)); margin-bottom: var(--csa-sp-5); }
-        .yc-month { background: var(--csa-surface); border: 1px solid var(--csa-rule); border-radius: var(--csa-radius-md); padding: var(--csa-sp-3); }
+        /* Calendario anual: 1 columna en móvil (mobile-first), 3 en web. */
+        .yc-grid { display: grid; gap: var(--csa-sp-4); grid-template-columns: 1fr; margin-bottom: var(--csa-sp-5); }
+        @media (min-width: 720px) { .yc-grid { grid-template-columns: repeat(3, 1fr); } }
+        .yc-month { background: var(--csa-surface); border: 1px solid var(--csa-rule); border-radius: var(--csa-radius-md); padding: var(--csa-sp-4); }
         .yc-month__name { font-weight: 600; text-transform: capitalize; margin-bottom: var(--csa-sp-2); color: var(--csa-ink); }
         .yc-cal { width: 100%; border-collapse: collapse; table-layout: fixed; }
-        .yc-cal th { font-size: .62rem; font-weight: 500; color: var(--csa-ink-muted); padding: 2px 0; text-align: center; }
-        .yc-d { text-align: center; font-size: .72rem; padding: 0; height: 1.7rem; color: var(--csa-ink-soft); border-radius: 5px; font-variant-numeric: tabular-nums; }
+        .yc-cal th { font-size: .64rem; font-weight: 500; color: var(--csa-ink-muted); padding: 2px 0 4px; text-align: center; }
+        /* Celdas a tope, sin radio: un rango de días sale como banda continua, no como burbujas. */
+        .yc-d { text-align: center; font-size: .74rem; height: 1.85rem; color: var(--csa-ink-soft); font-variant-numeric: tabular-nums; }
         .yc-d--empty { color: transparent; }
-        .yc-d--we   { color: var(--csa-ink-muted); background: var(--csa-bg); }
+        .yc-d--we   { color: var(--csa-ink-muted); }
         .yc-d--hol  { background: var(--csa-plum-soft); color: var(--csa-plum); font-weight: 600; }
         .yc-d--appr { background: var(--csa-green-soft); color: var(--csa-green); font-weight: 600; }
         .yc-d--req  { background: var(--csa-ochre-soft); color: var(--csa-ochre); font-weight: 600; }
-        .yc-d--today { outline: 2px solid var(--csa-green); outline-offset: -2px; }
+        .yc-d--today { box-shadow: inset 0 0 0 2px var(--csa-green); border-radius: 5px; }
         .yc-legend { display: flex; flex-wrap: wrap; gap: var(--csa-sp-2) var(--csa-sp-4); margin-bottom: var(--csa-sp-5); font-size: .8rem; color: var(--csa-ink-soft); }
         .yc-legend span { display: inline-flex; align-items: center; gap: .4rem; }
         .yc-legend i { width: .9rem; height: .9rem; border-radius: 3px; display: inline-block; }
         .yc-sw--hol  { background: var(--csa-plum-soft); }
         .yc-sw--appr { background: var(--csa-green-soft); }
         .yc-sw--req  { background: var(--csa-ochre-soft); }
+
+        /* Cabecera de la sección de solicitudes con su CTA. */
+        .vac-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--csa-sp-3); margin-bottom: var(--csa-sp-3); }
+        .vac-bar h2 { font-size: var(--csa-fs-md); margin: 0; }
+        /* Campos del modal de solicitud. */
+        .vac-form { display: grid; gap: var(--csa-sp-4); text-align: left; }
+        .vac-form label { display: flex; flex-direction: column; gap: var(--csa-sp-1); font-size: var(--csa-fs-sm); color: var(--csa-ink-soft); }
+        @media (min-width: 520px) { .vac-form__dates { display: grid; grid-template-columns: 1fr 1fr; gap: var(--csa-sp-4); } }
     </style>
 {% endblock %}
 
 {% block csa_main %}
-    {% set abs_type = { vacation: 'Vacaciones', sick_leave: 'Baja', permit: 'Permiso', other: 'Ausencia' } %}
+    {% set abs_type = { vacation: 'Vacaciones', sick_leave: 'Baja médica', permit: 'Permiso', other: 'Ausencia' } %}
     {% set abs_state = { requested: ['Pendiente','#92400e','#fef3c7'], approved: ['Aprobada','#2f6f43','#e7f3ea'], rejected: ['Rechazada','#9b1c1c','#fde2e2'], cancelled: ['Cancelada','#6b7280','#f3f4f6'] } %}
 
     <div class="wk">
@@ -83,18 +94,12 @@
             {% endfor %}
         </div>
 
-        <div class="wk-vac">
-            <div class="wk-vac__head">
-                <span>Solicitar vacaciones</span>
-            </div>
-            <form method="post" action="{{ path('work_vacation_request') }}" class="wk-vac__form">
-                <input type="hidden" name="_csrf_token" value="{{ csrf_token('work_vacation') }}">
-                <label>Desde <input type="date" name="start_date" required></label>
-                <label>Hasta <input type="date" name="end_date" required></label>
-                <label class="wk-vac__note">Comentario <input type="text" name="note" placeholder="opcional"></label>
-                <button type="submit" class="wk-btn wk-btn--in wk-btn--sm">Solicitar</button>
-            </form>
+        <div class="vac-bar">
+            <h2>Mis solicitudes</h2>
+            {{ csa.btn('Solicitar ausencia', { variant: 'primary', icon: 'fa-plus', attr: { onclick: "document.getElementById('vac-modal').showModal()" } }) }}
+        </div>
 
+        <div class="wk-vac">
             {% for a in my_absences %}
                 {% set st = abs_state[a.status]|default(['—','#6b7280','#f3f4f6']) %}
                 <div class="wk-vac__row">
@@ -109,7 +114,44 @@
                         </form>
                     {% endif %}
                 </div>
+            {% else %}
+                <div class="wk-empty">No has solicitado nada todavía.</div>
             {% endfor %}
         </div>
     </div>
+
+    {# Modal de solicitud (reusa el lenguaje visual .csa-modal). #}
+    <dialog id="vac-modal" class="csa-modal csa-modal--info" aria-labelledby="vac-modal-title">
+        <form method="post" action="{{ path('work_vacation_request') }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token('work_vacation') }}">
+            <button class="csa-modal__close" type="button" aria-label="Cerrar" onclick="this.closest('dialog').close()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l14 14M19 5L5 19"/></svg>
+            </button>
+            <header class="csa-modal__header">
+                <div class="csa-modal__heading">
+                    <h2 class="csa-modal__title" id="vac-modal-title">Solicitar ausencia</h2>
+                </div>
+            </header>
+            <div class="csa-modal__body">
+                <div class="vac-form">
+                    <label>Tipo
+                        <select name="type" class="csa-input">
+                            <option value="vacation">Vacaciones</option>
+                            <option value="permit">Permiso</option>
+                            <option value="sick_leave">Baja médica</option>
+                        </select>
+                    </label>
+                    <div class="vac-form__dates">
+                        <label>Desde <input type="date" name="start_date" class="csa-input" required></label>
+                        <label>Hasta <input type="date" name="end_date" class="csa-input" required></label>
+                    </div>
+                    <label>Comentario <input type="text" name="note" class="csa-input" placeholder="opcional"></label>
+                </div>
+            </div>
+            <footer class="csa-modal__footer">
+                <button type="button" class="csa-modal__btn csa-modal__btn--ghost" onclick="this.closest('dialog').close()">Cancelar</button>
+                <button type="submit" class="csa-modal__btn csa-modal__btn--primary">Solicitar</button>
+            </footer>
+        </form>
+    </dialog>
 {% endblock %}

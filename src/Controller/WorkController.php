@@ -277,9 +277,17 @@ class WorkController extends AbstractController
             return $this->redirectToRoute('work_vacations');
         }
 
+        // El trabajador puede pedir vacaciones, permiso o baja. Solo las vacaciones
+        // descuentan saldo; baja y permiso quedan como ausencia justificada (la baja,
+        // en rigor, se acredita con el parte médico: aquí solo se deja constancia).
+        $type = (string) $request->request->get('type', Absence::TYPE_VACATION);
+        if (!in_array($type, [Absence::TYPE_VACATION, Absence::TYPE_PERMIT, Absence::TYPE_SICK_LEAVE], true)) {
+            $type = Absence::TYPE_VACATION;
+        }
+
         $absence = (new Absence())
             ->setWorker($this->worker())
-            ->setType(Absence::TYPE_VACATION)
+            ->setType($type)
             ->setStartDate($start)
             ->setEndDate($end)
             ->setStatus(Absence::STATUS_REQUESTED)
@@ -287,7 +295,7 @@ class WorkController extends AbstractController
 
         $em->persist($absence);
         $em->flush();
-        $this->addFlash('notice', 'Solicitud de vacaciones enviada. Te avisaremos cuando se apruebe.');
+        $this->addFlash('notice', 'Solicitud enviada. Te avisaremos cuando se apruebe.');
 
         return $this->redirectToRoute('work_vacations');
     }
