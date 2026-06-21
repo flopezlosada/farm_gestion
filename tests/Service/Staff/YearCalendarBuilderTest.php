@@ -18,7 +18,10 @@ class YearCalendarBuilderTest extends TestCase
             new \DateTimeZone('Europe/Madrid'),
             new \DateTimeImmutable('2026-06-21 00:00:00', new \DateTimeZone('Europe/Madrid')),
             ['2026-01-01' => 'Año Nuevo'],
-            ['2026-07-15' => 'approved', '2026-07-16' => 'requested'],
+            [
+                '2026-07-15' => ['type' => 'vacation', 'status' => 'approved'],
+                '2026-07-16' => ['type' => 'permit', 'status' => 'requested'],
+            ],
         );
     }
 
@@ -55,11 +58,11 @@ class YearCalendarBuilderTest extends TestCase
         $this->assertSame('Año Nuevo', $cell['holiday']);
     }
 
-    public function testMarcaAusenciasPorEstado(): void
+    public function testMarcaAusenciasPorTipoYEstado(): void
     {
         $months = $this->build();
-        $this->assertSame('approved', $this->cell($months, 7, 15)['absence']);
-        $this->assertSame('requested', $this->cell($months, 7, 16)['absence']);
+        $this->assertSame(['type' => 'vacation', 'status' => 'approved'], $this->cell($months, 7, 15)['absence']);
+        $this->assertSame(['type' => 'permit', 'status' => 'requested'], $this->cell($months, 7, 16)['absence']);
     }
 
     public function testMarcaFinDeSemanaYHoy(): void
