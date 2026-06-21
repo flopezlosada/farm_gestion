@@ -10,62 +10,58 @@
     <span class="csa-topbar__crumb-active">Personal</span>
 {% endblock %}
 
-{% block more_css %}
-    {{ parent() }}
-    <style>
-        .stf-table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; }
-        .stf-table th { text-align: left; font-size: .8rem; text-transform: uppercase; letter-spacing: .03em; color: #6b7280; padding: .7rem 1rem; border-bottom: 1px solid #eef0f2; }
-        .stf-table td { padding: .8rem 1rem; border-bottom: 1px solid #f3f4f6; }
-        .stf-table tr:last-child td { border-bottom: none; }
-        .stf-table tr:hover td { background: #fafaf8; }
-        .stf-name { font-weight: 600; color: #1d1c17; text-decoration: none; }
-        .stf-name:hover { text-decoration: underline; }
-        .stf-chip { font-size: .72rem; font-weight: 600; border-radius: 999px; padding: .15rem .6rem; }
-        .stf-chip--on  { background: #e7f3ea; color: #2f6f43; }
-        .stf-chip--off { background: #f3f4f6; color: #6b7280; }
-        .stf-empty { padding: 2rem 1rem; text-align: center; color: #9ca3af; }
-    </style>
-{% endblock %}
-
 {% block csa_main %}
     {{ csa.page_header('Personal', 'Trabajadores', 'Fichas laborales para el registro de jornada y las vacaciones.') }}
 
-    <div class="csa-grid-kpi" style="margin-bottom: 1.4rem;">
+    <div class="csa-grid-kpi" style="margin-bottom: var(--csa-sp-6);">
         {{ csa.kpi('Trabajadores', stats.total, null, null, null, 'sky', 'fa-id-badge') }}
         {{ csa.kpi('Activos', stats.active, null, null, null, 'green', 'fa-check') }}
     </div>
 
-    <div class="csa-row-between" style="margin-bottom: 1rem;">
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-4);">
         <div></div>
         {{ csa.btn('Nuevo trabajador', { variant: 'primary', icon: 'fa-plus', href: path('staff_new') }) }}
     </div>
 
-    <table class="stf-table">
-        <thead>
-            <tr>
-                <th>Nombre</th>
-                <th>Alta</th>
-                <th>Vacaciones/año</th>
-                <th>Estado</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for worker in workers %}
+    <div class="csa-table-wrap">
+        <table class="csa-table">
+            <thead>
                 <tr>
-                    <td><a class="stf-name" href="{{ path('staff_show', { id: worker.id }) }}">{{ worker.name }}</a></td>
-                    <td>{{ worker.hireDate ? worker.hireDate|date('d/m/Y') : '—' }}</td>
-                    <td>{{ worker.annualVacationDays }} días</td>
-                    <td>
-                        {% if worker.active %}
-                            <span class="stf-chip stf-chip--on">Activo</span>
-                        {% else %}
-                            <span class="stf-chip stf-chip--off">Inactivo</span>
-                        {% endif %}
-                    </td>
+                    <th>Nombre</th>
+                    <th class="csa-table__col-tight">Alta</th>
+                    <th class="csa-table__col-tight">Vacaciones/año</th>
+                    <th class="csa-table__col-tight">Estado</th>
+                    <th class="csa-table__actions">Acciones</th>
                 </tr>
-            {% else %}
-                <tr><td colspan="4" class="stf-empty">Aún no hay trabajadores. Crea el primero con «Nuevo trabajador».</td></tr>
-            {% endfor %}
-        </tbody>
-    </table>
+            </thead>
+            <tbody>
+                {% for worker in workers %}
+                    <tr>
+                        <td>
+                            <a class="csa-table__primary" href="{{ path('staff_show', { id: worker.id }) }}">{{ worker.name }}</a>
+                        </td>
+                        <td class="csa-table__col-tight">{{ worker.hireDate ? worker.hireDate|date('d/m/Y') : '—' }}</td>
+                        <td class="csa-table__col-tight">{{ worker.annualVacationDays }} días</td>
+                        <td class="csa-table__col-tight">
+                            {% if worker.active %}
+                                {{ csa.badge('Activo', 'green') }}
+                            {% else %}
+                                {{ csa.badge('Inactivo', 'neutral') }}
+                            {% endif %}
+                        </td>
+                        <td class="csa-table__actions">
+                            <a href="{{ path('staff_show', { id: worker.id }) }}" title="Ver" aria-label="Ver"><i class="fa fa-eye"></i></a>
+                            <a href="{{ path('staff_edit', { id: worker.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="5" class="csa-muted" style="text-align: center; padding: var(--csa-sp-8);">
+                            Aún no hay trabajadores. Crea el primero con «Nuevo trabajador».
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 {% endblock %}
