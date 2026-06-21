@@ -1,0 +1,70 @@
+{% extends '_layouts/csa_work.html.twig' %}
+
+{% block title %}Fichar{% endblock %}
+
+{% block csa_crumbs %}
+    <span class="csa-topbar__crumb-active">Fichar</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'work/_styles.html.twig' %}
+{% endblock %}
+
+{% block csa_main %}
+    {% set madrid = 'Europe/Madrid' %}
+    {% set last = today_entries|last %}
+
+    <div class="wk">
+
+        <header class="wk-hero">
+            <h1 class="wk-hero__title">Hola, {{ worker.name }}</h1>
+            <div class="wk-hero__date">{{ 'now'|date('l, j F Y', madrid) }}</div>
+        </header>
+
+        {# ===== Estado + botón de fichar ===== #}
+        <div class="wk-clock wk-clock--{{ is_open ? 'in' : 'out' }}">
+            {% if is_open %}
+                <p class="wk-clock__state">Estás trabajando</p>
+                <p class="wk-clock__since">
+                    {% if last %}Entrada fichada a las {{ last.occurredAt|date('H:i', madrid) }}{% endif %}
+                </p>
+            {% else %}
+                <p class="wk-clock__state">No estás fichando ahora mismo</p>
+                <p class="wk-clock__since">Pulsa para empezar tu jornada</p>
+            {% endif %}
+
+            <form method="post" action="{{ path('work_clock') }}">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token('work_clock') }}">
+                <button type="submit" class="wk-btn wk-btn--{{ is_open ? 'out' : 'in' }}">
+                    <i class="fa {{ is_open ? 'fa-sign-out' : 'fa-sign-in' }}" aria-hidden="true"></i>
+                    {{ is_open ? 'Fichar salida' : 'Fichar entrada' }}
+                </button>
+            </form>
+        </div>
+
+        {# ===== Fichajes de hoy ===== #}
+        <div class="wk-today">
+            <div class="wk-today__head">Hoy</div>
+            {% for entry in today_entries %}
+                <div class="wk-row">
+                    <span class="wk-row__icon wk-row__icon--{{ entry.in ? 'in' : 'out' }}" aria-hidden="true">
+                        <i class="fa {{ entry.in ? 'fa-sign-in' : 'fa-sign-out' }}"></i>
+                    </span>
+                    <span class="wk-row__type">{{ entry.in ? 'Entrada' : 'Salida' }}</span>
+                    {% if entry.late %}<span class="wk-chip-late">Fichado tarde</span>{% endif %}
+                    <span class="wk-row__time">{{ entry.occurredAt|date('H:i', madrid) }}</span>
+                </div>
+            {% else %}
+                <div class="wk-empty">Aún no has fichado hoy.</div>
+            {% endfor %}
+        </div>
+
+        <p style="text-align:center; margin-top:1.2rem;">
+            <a class="wk-btn wk-btn--ghost wk-btn--sm" href="{{ path('work_calendar') }}">
+                <i class="fa fa-calendar" aria-hidden="true"></i> Ver mi calendario
+            </a>
+        </p>
+
+    </div>
+{% endblock %}

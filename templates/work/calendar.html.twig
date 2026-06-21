@@ -1,0 +1,30 @@
+{# Mi calendario mensual de fichajes (trabajador). #}
+{% extends '_layouts/csa_work.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% set madrid = 'Europe/Madrid' %}
+
+{% block title %}Mi calendario{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('work') }}">Mi jornada</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Calendario</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'staff/_calendar_styles.html.twig' %}
+{% endblock %}
+
+{% block csa_main %}
+    <div class="cal-nav">
+        {{ csa.btn('', { variant: 'ghost', icon: 'fa-chevron-left', href: path('work_calendar', { year: prev|date('Y'), month: prev|date('n') }) }) }}
+        <div class="cal-nav__title">{{ month_label|date('F Y', madrid) }}</div>
+        {{ csa.btn('', { variant: 'ghost', icon: 'fa-chevron-right', href: path('work_calendar', { year: next|date('Y'), month: next|date('n') }) }) }}
+    </div>
+
+    {{ include('staff/_calendar_grid.html.twig', { weeks: weeks, day_route: 'work_day', base_params: {}, madrid: madrid }) }}
+
+    <p style="color:#6b7280; font-size:.85rem; margin-top:1rem;">Pulsa un día para ver, corregir o añadir tus fichajes.</p>
+{% endblock %}

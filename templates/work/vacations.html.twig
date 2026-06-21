@@ -1,0 +1,58 @@
+{# Mis vacaciones (trabajador): saldo, solicitar y mis solicitudes. #}
+{% extends '_layouts/csa_work.html.twig' %}
+
+{% block title %}Mis vacaciones{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('work') }}">Mi jornada</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Vacaciones</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'work/_styles.html.twig' %}
+{% endblock %}
+
+{% block csa_main %}
+    {% set abs_type = { vacation: 'Vacaciones', sick_leave: 'Baja', permit: 'Permiso', other: 'Ausencia' } %}
+    {% set abs_state = { requested: ['Pendiente','#92400e','#fef3c7'], approved: ['Aprobada','#2f6f43','#e7f3ea'], rejected: ['Rechazada','#9b1c1c','#fde2e2'], cancelled: ['Cancelada','#6b7280','#f3f4f6'] } %}
+
+    <div class="wk">
+        <header class="wk-hero">
+            <h1 class="wk-hero__title">Mis vacaciones {{ year }}</h1>
+            <div class="wk-hero__date">{{ vacation_used }} de {{ vacation_total }} días usados · quedan {{ vacation_total - vacation_used }}</div>
+        </header>
+
+        <div class="wk-vac">
+            <div class="wk-vac__head">
+                <span>Solicitar vacaciones</span>
+            </div>
+            <form method="post" action="{{ path('work_vacation_request') }}" class="wk-vac__form">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token('work_vacation') }}">
+                <label>Desde <input type="date" name="start_date" required></label>
+                <label>Hasta <input type="date" name="end_date" required></label>
+                <label class="wk-vac__note">Comentario <input type="text" name="note" placeholder="opcional"></label>
+                <button type="submit" class="wk-btn wk-btn--in wk-btn--sm">Solicitar</button>
+            </form>
+
+            {% for a in my_absences %}
+                {% set st = abs_state[a.status]|default(['—','#6b7280','#f3f4f6']) %}
+                <div class="wk-vac__row">
+                    <span>{{ abs_type[a.type]|default(a.type) }}</span>
+                    <span style="color:#6b7280;">{{ a.startDate|date('d/m/Y') }} – {{ a.endDate|date('d/m/Y') }} ({{ a.calendarDayCount }} d)</span>
+                    <span style="margin-left:auto; font-size:.72rem; font-weight:600; border-radius:999px; padding:.1rem .55rem; color:{{ st[1] }}; background:{{ st[2] }};">{{ st[0] }}</span>
+                    {% if a.status in ['requested', 'approved'] %}
+                        <form method="post" action="{{ path('work_vacation_cancel', { absenceId: a.id }) }}"
+                              onsubmit="return confirm('¿Cancelar esta solicitud?');" style="margin-left:.6rem;">
+                            <input type="hidden" name="_csrf_token" value="{{ csrf_token('work_vacation') }}">
+                            <button type="submit" class="wk-btn wk-btn--ghost wk-btn--sm" style="padding:.3rem .8rem; font-size:.8rem;">Cancelar</button>
+                        </form>
+                    {% endif %}
+                </div>
+            {% else %}
+                <div class="wk-empty">No has solicitado vacaciones todavía.</div>
+            {% endfor %}
+        </div>
+    </div>
+{% endblock %}

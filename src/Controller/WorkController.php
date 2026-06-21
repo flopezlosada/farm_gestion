@@ -1,0 +1,532 @@
+<?php
+
+namespace App\Controller;
+
+use App\Entity\Absence;
+use App\Entity\TimeEntry;
+use App\Entity\User;
+use App\Entity\Worker;
+use App\Repository\AbsenceRepository;
+use App\Repository\TimeEntryRepository;
+use App\Service\Staff\MonthGridBuilder;
+use App\Service\Staff\TimeClock;
+use App\Service\Staff\TimeEntryCorrector;
+use App\Service\Staff\WorkdayBuilder;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bridge\Doctrine\Attribute\MapEntity;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\RedirectResponse;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
+
+/**
+ * Panel propio del trabajador (faceta laboral): fichar, su calendario de jornada
+ * con corrección en autoservicio, y sus vacaciones. Espejo del panel del socix
+ * ({@see PanelController}) pero sobre el registro horario. Requiere ROLE_WORKER,
+ * derivado de tener un Worker vinculado al User.
+ *
+ * El trabajador corrige sus PROPIOS fichajes sin aprobación (modelo Factorial:
+ * la traza append-only es la garantía); las vacaciones sí las aprueba el
+ * supervisor.
+ */
+#[Route('/work')]
+#[IsGranted('ROLE_WORKER')]
+class WorkController extends AbstractController
+{
+    /**
+     * Fichar: estado actual (dentro/fuera), botón de fichar y fichajes de hoy.
+     *
+     * @param TimeClock           $clock
+     * @param TimeEntryRepository $timeEntries
+     * @return Response
+     */
+    #[Route('', name: 'work', methods: ['GET'])]
+    public function index(TimeClock $clock, TimeEntryRepository $timeEntries): Response
+    {
+        if (($redirect = $this->ensureWorker()) !== null) {
+            return $redirect;
+        }
+
+        $worker = $this->worker();
+        [$from, $to] = $this->dayWindow(new \DateTimeImmutable('today', $this->madrid()));
+
+        return $this->render('work/index.html.twig', [
+            'worker' => $worker,
+            'is_open' => $clock->hasOpenInterval($worker),
+            'today_entries' => $timeEntries->findEffectiveForWorkerBetween($worker, $from, $to),
+        ]);
+    }
+
+    /**
+     * Ficha el siguiente evento (entrada/salida según el estado).
+     *
+     * @param Request   $request
+     * @param TimeClock $clock
+     * @return Response
+     */
+    #[Route('/clock', name: 'work_clock', methods: ['POST'])]
+    public function clock(Request $request, TimeClock $clock): Response
+    {
+        if (($redirect = $this->ensureWorker()) !== null) {
+            return $redirect;
+        }
+
+        if (!$this->isCsrfTokenValid('work_clock', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
+            return $this->redirectToRoute('work');
+        }
+
+        $worker = $this->worker();
+        if (!$worker->isActive()) {
+            $this->addFlash('error', 'Tu ficha laboral está inactiva: no puedes fichar. Contacta con la administración.');
+            return $this->redirectToRoute('work');
+        }
+
+        $entry = $clock->clockNext($worker, $this->getUser());
+        $this->addFlash('notice', $entry->getType() === TimeEntry::TYPE_IN
+            ? 'Entrada fichada. ¡Buen trabajo!'
+            : 'Salida fichada. ¡Hasta la próxima!');
+
+        return $this->redirectToRoute('work');
+    }
+
+    /**
+     * Mi calendario mensual de fichajes. Cada día enlaza a su detalle.
+     *
+     * @param Request             $request
+     * @param TimeEntryRepository $timeEntries
+     * @param AbsenceRepository   $absences
+     * @param WorkdayBuilder      $workdays
+     * @param MonthGridBuilder    $gridBuilder
+     * @return Response
+     */
+    #[Route('/calendar', name: 'work_calendar', methods: ['GET'])]
+    public function calendar(
+        Request $request,
+        TimeEntryRepository $timeEntries,
+        AbsenceRepository $absences,
+        WorkdayBuilder $workdays,
+        MonthGridBuilder $gridBuilder,
+    ): Response {
+        if (($redirect = $this->ensureWorker()) !== null) {
+            return $redirect;
+        }
+
+        $worker = $this->worker();
+        $madrid = $this->madrid();
+        $today = new \DateTimeImmutable('today', $madrid);
+
+        $year = (int) $request->query->get('year', $today->format('Y'));
+        $month = (int) $request->query->get('month', $today->format('n'));
+        if ($month < 1 || $month > 12) {
+            $month = (int) $today->format('n');
+        }
+
+        $monthStart = new \DateTimeImmutable(sprintf('%04d-%02d-01 00:00:00', $year, $month), $madrid);
+        $monthEnd = $monthStart->modify('first day of next month');
+
+        $entries = $timeEntries->findEffectiveForWorkerBetween($worker, $monthStart, $monthEnd);
+        $totals = [];
+        foreach ($workdays->buildDays($entries, $madrid) as $day) {
+            $totals[$day['date']->format('Y-m-d')] = $day;
+        }
+
+        $covered = [];
+        foreach ($absences->findApprovedForWorkerBetween($worker, $monthStart, $monthEnd) as $absence) {
+            $cursor = $absence->getStartDate();
+            while ($cursor <= $absence->getEndDate()) {
+                $covered[$cursor->format('Y-m-d')] = $absence->getType();
+                $cursor = $cursor->modify('+1 day');
+            }
+        }
+
+        return $this->render('work/calendar.html.twig', [
+            'worker' => $worker,
+            'weeks' => $gridBuilder->build($year, $month, $madrid, $totals, $covered, $today, $worker->getHireDate()),
+            'month_label' => $monthStart,
+            'prev' => $monthStart->modify('-1 month'),
+            'next' => $monthStart->modify('+1 month'),
+        ]);
+    }
+
+    /**
+     * Detalle de un día propio: fichajes de la jornada con corregir/anular/añadir.
+     *
+     * @param string              $date
+     * @param TimeEntryRepository $timeEntries
+     * @param WorkdayBuilder      $workdays
+     * @return Response
+     */
+    #[Route('/day/{date}', name: 'work_day', methods: ['GET'], requirements: ['date' => '\d{4}-\d{2}-\d{2}'])]
+    public function day(string $date, TimeEntryRepository $timeEntries, WorkdayBuilder $workdays): Response
+    {
+        if (($redirect = $this->ensureWorker()) !== null) {
+            return $redirect;
+        }
+
+        $madrid = $this->madrid();
+        $dayStart = \DateTimeImmutable::createFromFormat('!Y-m-d', $date, $madrid);
+        if ($dayStart === false) {
+            throw $this->createNotFoundException('Fecha no válida.');
+        }
+        [$from, $to] = $this->dayWindow($dayStart);
+        $days = $workdays->buildDays($timeEntries->findEffectiveForWorkerBetween($this->worker(), $from, $to), $madrid);
+
+        return $this->render('work/day.html.twig', [
+            'worker' => $this->worker(),
+            'date' => $dayStart,
+            'segments' => $days[0]['segments'] ?? [],
+            'total' => $days[0]['totalMinutes'] ?? 0,
+            'open' => $days[0]['open'] ?? false,
+            'anomaly' => $days[0]['anomaly'] ?? false,
+        ]);
+    }
+
+    /**
+     * Mis vacaciones: saldo del año, lista de mis solicitudes y formulario para
+     * pedir nuevas.
+     *
+     * @param AbsenceRepository $absences
+     * @return Response
+     */
+    #[Route('/vacations', name: 'work_vacations', methods: ['GET'])]
+    public function vacations(AbsenceRepository $absences): Response
+    {
+        if (($redirect = $this->ensureWorker()) !== null) {
+            return $redirect;
+        }
+
+        $worker = $this->worker();
+        $year = (int) (new \DateTimeImmutable('today', $this->madrid()))->format('Y');
+        $used = array_sum(array_map(
+            static fn (Absence $a) => $a->getCalendarDayCount(),
+            $absences->findApprovedVacationsForWorkerInYear($worker, $year),
+        ));
+
+        $mine = $worker->getAbsences()->toArray();
+        usort($mine, static fn (Absence $a, Absence $b) => $b->getStartDate() <=> $a->getStartDate());
+
+        return $this->render('work/vacations.html.twig', [
+            'worker' => $worker,
+            'year' => $year,
+            'vacation_total' => $worker->getAnnualVacationDays(),
+            'vacation_used' => $used,
+            'my_absences' => $mine,
+        ]);
+    }
+
+    /**
+     * Solicita vacaciones (estado SOLICITADA, pendiente de aprobación).
+     *
+     * @param Request                $request
+     * @param EntityManagerInterface $em
+     * @return Response
+     */
+    #[Route('/vacations/request', name: 'work_vacation_request', methods: ['POST'])]
+    public function requestVacation(Request $request, EntityManagerInterface $em): Response
+    {
+        if (($redirect = $this->ensureWorker()) !== null) {
+            return $redirect;
+        }
+
+        if (!$this->isCsrfTokenValid('work_vacation', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
+            return $this->redirectToRoute('work_vacations');
+        }
+
+        $start = $this->parseDate((string) $request->request->get('start_date'));
+        $end = $this->parseDate((string) $request->request->get('end_date'));
+        if ($start === null || $end === null || $end < $start) {
+            $this->addFlash('error', 'Revisa las fechas: indica un desde y un hasta válidos.');
+            return $this->redirectToRoute('work_vacations');
+        }
+
+        $absence = (new Absence())
+            ->setWorker($this->worker())
+            ->setType(Absence::TYPE_VACATION)
+            ->setStartDate($start)
+            ->setEndDate($end)
+            ->setStatus(Absence::STATUS_REQUESTED)
+            ->setNote(trim((string) $request->request->get('note')) ?: null);
+
+        $em->persist($absence);
+        $em->flush();
+        $this->addFlash('notice', 'Solicitud de vacaciones enviada. Te avisaremos cuando se apruebe.');
+
+        return $this->redirectToRoute('work_vacations');
+    }
+
+    /**
+     * Cancela una solicitud/vacación propia.
+     *
+     * @param Request                $request
+     * @param Absence                $absence
+     * @param EntityManagerInterface $em
+     * @return Response
+     */
+    #[Route('/vacations/{absenceId}/cancel', name: 'work_vacation_cancel', methods: ['POST'], requirements: ['absenceId' => '\d+'])]
+    public function cancelVacation(
+        Request $request,
+        #[MapEntity(id: 'absenceId')] Absence $absence,
+        EntityManagerInterface $em,
+    ): Response {
+        if (($redirect = $this->ensureWorker()) !== null) {
+            return $redirect;
+        }
+
+        if (!$this->isCsrfTokenValid('work_vacation', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('error', 'Token de seguridad inválido.');
+            return $this->redirectToRoute('work_vacations');
+        }
+
+        if ($absence->getWorker()?->getId() !== $this->worker()->getId()) {
+            throw $this->createNotFoundException('Esa ausencia no es tuya.');
+        }
+
+        $absence->setStatus(Absence::STATUS_CANCELLED);
+        $em->flush();
+        $this->addFlash('notice', 'Solicitud cancelada.');
+
+        return $this->redirectToRoute('work_vacations');
+    }
+
+    /**
+     * Añade un fichaje olvidado a una jornada propia.
+     *
+     * @param Request            $request
+     * @param TimeEntryCorrector $corrector
+     * @return Response
+     */
+    #[Route('/entry/add', name: 'work_entry_add', methods: ['POST'])]
+    public function addEntry(Request $request, TimeEntryCorrector $corrector): Response
+    {
+        if (($redirect = $this->ensureWorker()) !== null) {
+            return $redirect;
+        }
+
+        if (!$this->isCsrfTokenValid('work_entry', (string) $request->request->get('_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+            return $this->redirectToRoute('work');
+        }
+
+        $type = (string) $request->request->get('type');
+        $occurredAt = $this->composeDateTime((string) $request->request->get('date'), (string) $request->request->get('time'));
+        if (!in_array($type, TimeEntry::TYPES, true) || $occurredAt === null) {
+            $this->addFlash('error', 'Indica un tipo y una hora válidos.');
+            return $this->redirectAfterEntry($request);
+        }
+
+        $corrector->addEntry($this->worker(), $type, $occurredAt, $this->getUser(), TimeEntry::SOURCE_SELF, $this->reasonOrDefault($request));
+        $this->addFlash('success', 'Fichaje añadido.');
+
+        return $this->redirectAfterEntry($request);
+    }
+
+    /**
+     * Corrige la hora de un fichaje propio.
+     *
+     * @param Request            $request
+     * @param TimeEntry          $entry
+     * @param TimeEntryCorrector $corrector
+     * @return Response
+     */
+    #[Route('/entry/{entryId}/correct', name: 'work_entry_correct', methods: ['POST'], requirements: ['entryId' => '\d+'])]
+    public function correctEntry(
+        Request $request,
+        #[MapEntity(id: 'entryId')] TimeEntry $entry,
+        TimeEntryCorrector $corrector,
+    ): Response {
+        if (($error = $this->guardOwnEntry($request, $entry)) !== null) {
+            return $error;
+        }
+
+        $occurredAt = $this->timeOnto($entry->getOccurredAt(), (string) $request->request->get('time'));
+        if ($occurredAt === null) {
+            $this->addFlash('error', 'Indica una hora válida.');
+            return $this->redirectAfterEntry($request);
+        }
+
+        $corrector->correctTime($entry, $occurredAt, $this->getUser(), TimeEntry::SOURCE_SELF, $this->reasonOrDefault($request));
+        $this->addFlash('success', 'Hora corregida.');
+
+        return $this->redirectAfterEntry($request);
+    }
+
+    /**
+     * Anula un fichaje propio.
+     *
+     * @param Request            $request
+     * @param TimeEntry          $entry
+     * @param TimeEntryCorrector $corrector
+     * @return Response
+     */
+    #[Route('/entry/{entryId}/void', name: 'work_entry_void', methods: ['POST'], requirements: ['entryId' => '\d+'])]
+    public function voidEntry(
+        Request $request,
+        #[MapEntity(id: 'entryId')] TimeEntry $entry,
+        TimeEntryCorrector $corrector,
+    ): Response {
+        if (($error = $this->guardOwnEntry($request, $entry)) !== null) {
+            return $error;
+        }
+
+        $corrector->voidEntry($entry, $this->getUser(), $this->reasonOrDefault($request));
+        $this->addFlash('success', 'Fichaje anulado.');
+
+        return $this->redirectAfterEntry($request);
+    }
+
+    /**
+     * Worker de la sesión.
+     *
+     * @return Worker
+     */
+    private function worker(): Worker
+    {
+        return $this->getUser()->getWorker();
+    }
+
+    /**
+     * @return \DateTimeZone Madrid.
+     */
+    private function madrid(): \DateTimeZone
+    {
+        return new \DateTimeZone('Europe/Madrid');
+    }
+
+    /**
+     * Ventana [día, día+1) de un día de Madrid, para consultar fichajes. Todo se
+     * almacena y compara en hora de Madrid (huso único), sin conversiones.
+     *
+     * @param \DateTimeImmutable $dayMadrid Medianoche del día en Madrid.
+     * @return array{0: \DateTimeImmutable, 1: \DateTimeImmutable}
+     */
+    private function dayWindow(\DateTimeImmutable $dayMadrid): array
+    {
+        return [$dayMadrid, $dayMadrid->modify('+1 day')];
+    }
+
+    /**
+     * Valida CSRF y que el fichaje sea del trabajador de la sesión y siga vigente.
+     *
+     * @param Request   $request
+     * @param TimeEntry $entry
+     * @return RedirectResponse|null
+     */
+    private function guardOwnEntry(Request $request, TimeEntry $entry): ?RedirectResponse
+    {
+        if (($redirect = $this->ensureWorker()) !== null) {
+            return $redirect;
+        }
+        if (!$this->isCsrfTokenValid('work_entry', (string) $request->request->get('_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+            return $this->redirectAfterEntry($request);
+        }
+        if ($entry->getWorker()?->getId() !== $this->worker()->getId()) {
+            throw $this->createNotFoundException('Ese fichaje no es tuyo.');
+        }
+        if ($entry->isVoided()) {
+            $this->addFlash('warning', 'Ese fichaje ya estaba anulado.');
+            return $this->redirectAfterEntry($request);
+        }
+
+        return null;
+    }
+
+    /**
+     * Redirección tras tocar un fichaje: al día si venía de ahí (return_to), o a Fichar.
+     *
+     * @param Request $request
+     * @return RedirectResponse
+     */
+    private function redirectAfterEntry(Request $request): RedirectResponse
+    {
+        $returnTo = (string) $request->request->get('return_to', '');
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $returnTo) === 1) {
+            return $this->redirectToRoute('work_day', ['date' => $returnTo]);
+        }
+
+        return $this->redirectToRoute('work');
+    }
+
+    /**
+     * Compone fecha (Y-m-d) y hora (H:i) en un instante de Madrid, o null si no
+     * son parseables.
+     *
+     * @param string $date
+     * @param string $time
+     * @return \DateTimeImmutable|null
+     */
+    private function composeDateTime(string $date, string $time): ?\DateTimeImmutable
+    {
+        $dt = \DateTimeImmutable::createFromFormat('!Y-m-d H:i', trim($date) . ' ' . trim($time), $this->madrid());
+
+        return $dt === false ? null : $dt;
+    }
+
+    /**
+     * Aplica una hora (H:i) sobre la fecha de un fichaje existente (en Madrid),
+     * conservando su día.
+     *
+     * @param \DateTimeImmutable $base
+     * @param string             $time
+     * @return \DateTimeImmutable|null
+     */
+    private function timeOnto(\DateTimeImmutable $base, string $time): ?\DateTimeImmutable
+    {
+        if (preg_match('/^(\d{1,2}):(\d{2})$/', trim($time), $m) !== 1) {
+            return null;
+        }
+
+        return $base->setTime((int) $m[1], (int) $m[2]);
+    }
+
+    /**
+     * Convierte un input date (Y-m-d) en fecha, o null si no es válido.
+     *
+     * @param string $value
+     * @return \DateTimeImmutable|null
+     */
+    private function parseDate(string $value): ?\DateTimeImmutable
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return null;
+        }
+        $date = \DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+
+        return $date === false ? null : $date;
+    }
+
+    /**
+     * Motivo desde el request con texto por defecto.
+     *
+     * @param Request $request
+     * @return string
+     */
+    private function reasonOrDefault(Request $request): string
+    {
+        $reason = trim((string) $request->request->get('reason', ''));
+
+        return $reason !== '' ? $reason : 'Corrección del trabajador';
+    }
+
+    /**
+     * El User debe tener un Worker vinculado.
+     *
+     * @return RedirectResponse|null
+     */
+    private function ensureWorker(): ?RedirectResponse
+    {
+        $user = $this->getUser();
+        if ($user instanceof User && $user->getWorker() instanceof Worker) {
+            return null;
+        }
+
+        $this->addFlash('error', 'Tu usuaria no está vinculada a una ficha de trabajador.');
+
+        return $this->redirectToRoute($this->isGranted('ROLE_ADMIN') ? 'dashboard' : 'homepage');
+    }
+}
