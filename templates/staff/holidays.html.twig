@@ -15,24 +15,52 @@
 {% block more_css %}
     {{ parent() }}
     <style>
-        .hol-add { display: flex; gap: var(--csa-sp-4); align-items: flex-end; flex-wrap: wrap;
+        .hol-bar { display: flex; gap: var(--csa-sp-4); align-items: flex-end; flex-wrap: wrap;
                    background: var(--csa-surface); border: 1px solid var(--csa-rule);
                    border-radius: var(--csa-radius-lg); padding: var(--csa-sp-5);
-                   margin-bottom: var(--csa-sp-6); }
-        .hol-add .csa-field { margin: 0; }
+                   margin-bottom: var(--csa-sp-5); }
+        .hol-bar__block { display: flex; flex-direction: column; gap: var(--csa-sp-1); }
+        .hol-bar__label { font-size: var(--csa-fs-sm); color: var(--csa-ink-soft); }
+        .hol-bar .csa-field { margin: 0; }
+        .hol-bar__sep { width: 1px; align-self: stretch; background: var(--csa-rule); }
+        .hol-edit-cell { background: var(--csa-bg); }
+        .hol-edit-form { display: flex; gap: var(--csa-sp-3); align-items: flex-end; flex-wrap: wrap; padding: var(--csa-sp-2) 0; }
+        .hol-edit-form label { display: flex; flex-direction: column; gap: var(--csa-sp-1); font-size: var(--csa-fs-sm); font-weight: 500; color: var(--csa-ink-soft); }
+        .hol-icon-btn { background: none; border: none; cursor: pointer; padding: .2rem .35rem; border-radius: 6px; color: var(--csa-ink-soft); }
+        .hol-icon-btn:hover { background: var(--csa-bg); color: var(--csa-ink); }
+        .hol-icon-btn--danger { color: var(--csa-terracotta); }
     </style>
 {% endblock %}
 
 {% block csa_main %}
-    {{ csa.page_header('Personal', 'Festivos', 'Días no laborables del calendario laboral. No cuentan como hueco del registro y se marcan en los calendarios. Mételos a mano cada año (nacionales, autonómicos de Madrid y locales).') }}
+    {{ csa.page_header('Personal', 'Festivos', 'Días no laborables del calendario laboral. No cuentan como hueco del registro y se marcan en los calendarios.') }}
 
-    {% form_theme form 'form_div_layout.html.twig' %}
-    {{ form_start(form, { action: path('staff_holiday_new'), attr: { class: 'hol-add' } }) }}
-        {{ csa.field(form.date, 'Fecha') }}
-        {{ csa.field(form.name, 'Nombre del festivo') }}
-        {{ csa.btn('Añadir festivo', { variant: 'primary', type: 'submit' }) }}
-        {{ form_rest(form) }}
-    {{ form_end(form, { render_rest: false }) }}
+    {{ csa.callout('Importar trae los festivos habituales (nacionales + Comunidad de Madrid + Semana Santa). NO es la lista oficial cerrada: revísala (el calendario oficial puede trasladar alguno) y añade a mano los 2 festivos LOCALES de tu municipio.', 'info') }}
+
+    <div class="hol-bar">
+        {# Importar festivos oficiales del año #}
+        <form method="post" action="{{ path('staff_holiday_import') }}" class="hol-bar" style="border:none;padding:0;margin:0;background:none;">
+            <input type="hidden" name="_token" value="{{ csrf_token('import_holidays') }}">
+            <div class="hol-bar__block">
+                <span class="hol-bar__label">Año</span>
+                <select name="year" class="csa-select" style="width:auto;">
+                    {% for y in import_years %}<option value="{{ y }}">{{ y }}</option>{% endfor %}
+                </select>
+            </div>
+            {{ csa.btn('Importar festivos', { variant: 'secondary', icon: 'fa-download', type: 'submit' }) }}
+        </form>
+
+        <div class="hol-bar__sep"></div>
+
+        {# Añadir uno suelto a mano (incluidos los locales) #}
+        {% form_theme form 'form_div_layout.html.twig' %}
+        {{ form_start(form, { action: path('staff_holiday_new'), attr: { class: 'hol-bar', style: 'border:none;padding:0;margin:0;background:none;' } }) }}
+            {{ csa.field(form.date, 'Fecha') }}
+            {{ csa.field(form.name, 'Nombre del festivo') }}
+            {{ csa.btn('Añadir', { variant: 'primary', type: 'submit' }) }}
+            {{ form_rest(form) }}
+        {{ form_end(form, { render_rest: false }) }}
+    </div>
 
     <div class="csa-table-wrap">
         <table class="csa-table">
@@ -46,25 +74,51 @@
             </thead>
             <tbody>
                 {% for holiday in holidays %}
-                    <tr>
+                    {% set ymd = holiday.date|date('Y-m-d') %}
+                    <tr data-hol-row="{{ holiday.id }}">
                         <td class="csa-table__primary">{{ holiday.date|date('d/m/Y') }}</td>
                         <td class="csa-table__col-tight csa-muted" style="text-transform: capitalize;">{{ holiday.date|date('l', 'Europe/Madrid')|capitalize }}</td>
                         <td>{{ holiday.name }}</td>
                         <td class="csa-table__actions">
+                            <button type="button" class="hol-icon-btn" title="Editar" aria-label="Editar" data-hol-edit="{{ holiday.id }}"><i class="fa fa-pencil"></i></button>
                             <form method="post" action="{{ path('staff_holiday_delete', { id: holiday.id }) }}" onsubmit="return confirm('¿Borrar el festivo «{{ holiday.name|e('js') }}»?');" style="display: inline;">
                                 <input type="hidden" name="_token" value="{{ csrf_token('delete_holiday' ~ holiday.id) }}">
-                                <button type="submit" class="csa-table__action--danger" style="background: none; border: none; cursor: pointer;" title="Borrar" aria-label="Borrar"><i class="fa fa-trash"></i></button>
+                                <button type="submit" class="hol-icon-btn hol-icon-btn--danger" title="Borrar" aria-label="Borrar"><i class="fa fa-trash"></i></button>
+                            </form>
+                        </td>
+                    </tr>
+                    <tr class="hol-edit-cell" data-hol-editrow="{{ holiday.id }}" hidden>
+                        <td colspan="4">
+                            <form method="post" action="{{ path('staff_holiday_edit', { id: holiday.id }) }}" class="hol-edit-form">
+                                <input type="hidden" name="_token" value="{{ csrf_token('edit_holiday' ~ holiday.id) }}">
+                                <label>Fecha <input type="date" name="date" value="{{ ymd }}" class="csa-input" style="width:auto;" required></label>
+                                <label>Nombre <input type="text" name="name" value="{{ holiday.name }}" class="csa-input" required></label>
+                                {{ csa.btn('Guardar', { variant: 'primary', type: 'submit' }) }}
+                                {{ csa.btn('Cancelar', { variant: 'ghost', type: 'button', attr: { 'data-hol-canceledit': holiday.id } }) }}
                             </form>
                         </td>
                     </tr>
                 {% else %}
                     <tr>
                         <td colspan="4" class="csa-muted" style="text-align: center; padding: var(--csa-sp-8);">
-                            Aún no hay festivos. Añade el primero con el formulario de arriba.
+                            Aún no hay festivos. Importa los del año o añade el primero a mano.
                         </td>
                     </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
+
+    {# Editar festivo: el lápiz despliega la fila de edición; cancelar la oculta. #}
+    <script>
+    (function () {
+        function row(id) { return document.querySelector('[data-hol-editrow="' + id + '"]'); }
+        document.addEventListener('click', function (e) {
+            var edit = e.target.closest('[data-hol-edit]');
+            if (edit) { var r = row(edit.getAttribute('data-hol-edit')); if (r) { r.hidden = !r.hidden; } return; }
+            var cancel = e.target.closest('[data-hol-canceledit]');
+            if (cancel) { var r2 = row(cancel.getAttribute('data-hol-canceledit')); if (r2) { r2.hidden = true; } }
+        });
+    })();
+    </script>
 {% endblock %}
