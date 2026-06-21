@@ -204,7 +204,7 @@ class WorkController extends AbstractController
      * @return Response
      */
     #[Route('/vacations', name: 'work_vacations', methods: ['GET'])]
-    public function vacations(AbsenceRepository $absences, HolidayRepository $holidays, YearCalendarBuilder $yearCalendar, WorkingDayCounter $workingDays): Response
+    public function vacations(Request $request, AbsenceRepository $absences, HolidayRepository $holidays, YearCalendarBuilder $yearCalendar, WorkingDayCounter $workingDays): Response
     {
         if (($redirect = $this->ensureWorker()) !== null) {
             return $redirect;
@@ -212,7 +212,13 @@ class WorkController extends AbstractController
 
         $worker = $this->worker();
         $madrid = $this->madrid();
-        $year = (int) (new \DateTimeImmutable('today', $madrid))->format('Y');
+        // Año navegable: se puede mirar años pasados y el siguiente (pedir en
+        // diciembre las vacaciones de Navidad del año que viene).
+        $currentYear = (int) (new \DateTimeImmutable('today', $madrid))->format('Y');
+        $year = (int) $request->query->get('year', (string) $currentYear);
+        if ($year < $currentYear - 10 || $year > $currentYear + 1) {
+            $year = $currentYear;
+        }
 
         $mine = $worker->getAbsences()->toArray();
         usort($mine, static fn (Absence $a, Absence $b) => $b->getStartDate() <=> $a->getStartDate());
@@ -227,6 +233,17 @@ class WorkController extends AbstractController
             $maxDate = $absence->getEndDate() > $maxDate ? $absence->getEndDate() : $maxDate;
         }
         $holidayDates = $holidays->findNamesBetween($minDate, $maxDate);
+
+        // ¿Hay festivos cargados para el año que se mira? (típico: el año que viene
+        // aún no los tiene; se avisa de que el cálculo no los descuenta todavía).
+        $yearPrefix = sprintf('%d-', $year);
+        $yearHasHolidays = false;
+        foreach (array_keys($holidayDates) as $hDate) {
+            if (str_starts_with($hDate, $yearPrefix)) {
+                $yearHasHolidays = true;
+                break;
+            }
+        }
 
         // Saldo: días LABORABLES de las vacaciones aprobadas del año (sin findes ni
         // festivos), recortados al año natural.
@@ -266,6 +283,8 @@ class WorkController extends AbstractController
             'vacation_used' => $used,
             'my_absences' => $mine,
             'working_days' => $absenceWorkingDays,
+            'current_year' => $currentYear,
+            'year_has_holidays' => $yearHasHolidays,
             'year_calendar' => $yearCalendar->build($year, $madrid, new \DateTimeImmutable('today', $madrid), $holidayDates, $absenceDays),
         ]);
     }

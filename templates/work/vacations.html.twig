@@ -62,6 +62,10 @@
         .seg__opt--per:has(input:checked)  { background: var(--csa-sky-soft);        color: var(--csa-sky);        border-color: var(--csa-sky); }
         .seg__opt--baja:has(input:checked) { background: var(--csa-terracotta-soft); color: var(--csa-terracotta); border-color: var(--csa-terracotta); }
         .seg__opt span { font-family: var(--csa-sans); font-weight: 500; }
+        .vac-yearnav { display: flex; align-items: center; gap: var(--csa-sp-3); margin-bottom: var(--csa-sp-1); }
+        .vac-yearnav__btn { display: inline-grid; place-items: center; width: 2rem; height: 2rem; border-radius: 8px; color: var(--csa-ink-soft); text-decoration: none; }
+        .vac-yearnav__btn:hover { background: var(--csa-bg); color: var(--csa-ink); }
+        .vac-yearnav__btn--off { opacity: .3; pointer-events: none; }
         /* El modal no lleva icono: el cuerpo no debe indentarse para dejarle hueco. */
         #vac-modal .csa-modal__body { padding-left: var(--csa-sp-6); }
         /* El placeholder dd/mm/yyyy del input date salía en negrita (UA webkit). */
@@ -77,9 +81,21 @@
 
     <div class="wk">
         <header class="wk-hero">
-            <h1 class="wk-hero__title">Mis vacaciones {{ year }}</h1>
+            <div class="vac-yearnav">
+                <a href="{{ path('work_vacations', { year: year - 1 }) }}" class="vac-yearnav__btn" aria-label="Año anterior"><i class="fa fa-chevron-left"></i></a>
+                <h1 class="wk-hero__title" style="margin:0;">Mis vacaciones {{ year }}</h1>
+                {% if year < current_year + 1 %}
+                    <a href="{{ path('work_vacations', { year: year + 1 }) }}" class="vac-yearnav__btn" aria-label="Año siguiente"><i class="fa fa-chevron-right"></i></a>
+                {% else %}
+                    <span class="vac-yearnav__btn vac-yearnav__btn--off"><i class="fa fa-chevron-right"></i></span>
+                {% endif %}
+            </div>
             <div class="wk-hero__date">{{ vacation_used }} de {{ vacation_total }} días usados · quedan {{ vacation_total - vacation_used }}</div>
         </header>
+
+        {% if not year_has_holidays %}
+            {{ csa.callout('Los festivos de ' ~ year ~ ' aún no están cargados, así que el saldo y el calendario todavía no los descuentan. Puedes pedir vacaciones igualmente.', 'warning') }}
+        {% endif %}
 
         <div class="yc-legend">
             <span><i class="yc-sw--vac"></i> Vacaciones</span>
