@@ -102,7 +102,10 @@
                                             <td class="yc-d yc-d--empty"></td>
                                         {% else %}
                                             {% set evs = by_day[cell.date|date('Y-m-d')]|default([]) %}
-                                            <td class="yc-d{{ cell.weekend ? ' yc-d--we' : '' }}{{ cell.holiday ? ' yc-d--hol' : '' }}{{ cell.isToday ? ' yc-d--today' : '' }}"{% if cell.holiday %} title="{{ cell.holiday }}"{% endif %}>
+                                            {% set tparts = [] %}
+                                            {% if cell.holiday %}{% set tparts = tparts|merge(['Festivo: ' ~ cell.holiday]) %}{% endif %}
+                                            {% for e in evs %}{% set tparts = tparts|merge([e.name ~ ': ' ~ (abs_type[e.type]|default('Ausencia')) ~ ' (' ~ (e.status == 'approved' ? 'aprobada' : 'pendiente') ~ ')']) %}{% endfor %}
+                                            <td class="yc-d{{ cell.weekend ? ' yc-d--we' : '' }}{{ cell.holiday ? ' yc-d--hol' : '' }}{{ cell.isToday ? ' yc-d--today' : '' }}"{% if tparts is not empty %} title="{{ tparts|join("\n") }}"{% endif %}>
                                                 <span class="yc-num">{{ cell.day }}</span>
                                                 {% if evs|length %}
                                                     <span class="yc-evs">
