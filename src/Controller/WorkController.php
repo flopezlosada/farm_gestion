@@ -284,6 +284,7 @@ class WorkController extends AbstractController
             'my_absences' => $mine,
             'working_days' => $absenceWorkingDays,
             'current_year' => $currentYear,
+            'min_year' => $absences->earliestStartYear($worker) ?? $currentYear,
             'year_has_holidays' => $yearHasHolidays,
             'year_calendar' => $yearCalendar->build($year, $madrid, new \DateTimeImmutable('today', $madrid), $holidayDates, $absenceDays),
         ]);

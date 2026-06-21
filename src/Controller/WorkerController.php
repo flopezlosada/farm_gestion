@@ -179,6 +179,7 @@ class WorkerController extends AbstractController
         return $this->render('staff/team_calendar.html.twig', [
             'year' => $year,
             'current_year' => $currentYear,
+            'min_year' => $absences->earliestStartYear() ?? $currentYear,
             'grid' => $grid,
             'by_day' => $byDay,
             'team_workers' => $teamWorkers,

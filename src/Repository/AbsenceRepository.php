@@ -106,6 +106,25 @@ class AbsenceRepository extends ServiceEntityRepository
     }
 
     /**
+     * Año de la ausencia más antigua (por fecha de inicio), opcionalmente de un
+     * trabajador concreto. Sirve para no ofrecer navegar a años pasados sin datos.
+     *
+     * @param Worker|null $worker Trabajador, o null para todo el equipo.
+     * @return int|null Año, o null si no hay ausencias.
+     */
+    public function earliestStartYear(?Worker $worker = null): ?int
+    {
+        $qb = $this->createQueryBuilder('a')->select('MIN(a.startDate)');
+        if ($worker !== null) {
+            $qb->andWhere('a.worker = :worker')->setParameter('worker', $worker);
+        }
+
+        $min = $qb->getQuery()->getSingleScalarResult();
+
+        return $min !== null ? (int) (new \DateTimeImmutable((string) $min))->format('Y') : null;
+    }
+
+    /**
      * Ausencias pendientes de decisión (solicitadas), ordenadas por fecha de
      * inicio. Es la bandeja de aprobación del supervisor.
      *
