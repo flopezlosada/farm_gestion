@@ -15,6 +15,7 @@ use App\Service\Staff\TimeClock;
 use App\Service\Staff\TimeEntryCorrector;
 use App\Service\Staff\TimeInputParser;
 use App\Service\Staff\WorkdayBuilder;
+use App\Service\Staff\YearCalendarBuilder;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bridge\Doctrine\Attribute\MapEntity;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -195,18 +196,21 @@ class WorkController extends AbstractController
      * Mis vacaciones: saldo del año, lista de mis solicitudes y formulario para
      * pedir nuevas.
      *
-     * @param AbsenceRepository $absences
+     * @param AbsenceRepository   $absences
+     * @param HolidayRepository   $holidays
+     * @param YearCalendarBuilder $yearCalendar
      * @return Response
      */
     #[Route('/vacations', name: 'work_vacations', methods: ['GET'])]
-    public function vacations(AbsenceRepository $absences): Response
+    public function vacations(AbsenceRepository $absences, HolidayRepository $holidays, YearCalendarBuilder $yearCalendar): Response
     {
         if (($redirect = $this->ensureWorker()) !== null) {
             return $redirect;
         }
 
         $worker = $this->worker();
-        $year = (int) (new \DateTimeImmutable('today', $this->madrid()))->format('Y');
+        $madrid = $this->madrid();
+        $year = (int) (new \DateTimeImmutable('today', $madrid))->format('Y');
         $used = array_sum(array_map(
             static fn (Absence $a) => $a->getCalendarDayCount(),
             $absences->findApprovedVacationsForWorkerInYear($worker, $year),
@@ -215,12 +219,35 @@ class WorkController extends AbstractController
         $mine = $worker->getAbsences()->toArray();
         usort($mine, static fn (Absence $a, Absence $b) => $b->getStartDate() <=> $a->getStartDate());
 
+        // Calendario anual: festivos + mis ausencias (aprobadas o pendientes) por día.
+        $yearStart = new \DateTimeImmutable(sprintf('%d-01-01', $year), $madrid);
+        $yearEnd = new \DateTimeImmutable(sprintf('%d-12-31', $year), $madrid);
+        $holidayDates = $holidays->findNamesBetween($yearStart, $yearEnd);
+
+        $absenceDays = [];
+        foreach ($mine as $absence) {
+            if (!in_array($absence->getStatus(), [Absence::STATUS_APPROVED, Absence::STATUS_REQUESTED], true)) {
+                continue;
+            }
+            $cursor = $absence->getStartDate() > $yearStart ? $absence->getStartDate() : $yearStart;
+            $end = $absence->getEndDate() < $yearEnd ? $absence->getEndDate() : $yearEnd;
+            while ($cursor <= $end) {
+                $key = $cursor->format('Y-m-d');
+                // La aprobada manda sobre la pendiente si solapan.
+                if (!isset($absenceDays[$key]) || $absence->getStatus() === Absence::STATUS_APPROVED) {
+                    $absenceDays[$key] = $absence->getStatus();
+                }
+                $cursor = $cursor->modify('+1 day');
+            }
+        }
+
         return $this->render('work/vacations.html.twig', [
             'worker' => $worker,
             'year' => $year,
             'vacation_total' => $worker->getAnnualVacationDays(),
             'vacation_used' => $used,
             'my_absences' => $mine,
+            'year_calendar' => $yearCalendar->build($year, $madrid, new \DateTimeImmutable('today', $madrid), $holidayDates, $absenceDays),
         ]);
     }
 

@@ -1,4 +1,4 @@
-{# Mis vacaciones (trabajador): saldo, solicitar y mis solicitudes. #}
+{# Mis vacaciones (trabajador): saldo, calendario anual, solicitar y mis solicitudes. #}
 {% extends '_layouts/csa_work.html.twig' %}
 
 {% block title %}Mis vacaciones{% endblock %}
@@ -12,6 +12,27 @@
 {% block more_css %}
     {{ parent() }}
     {% include 'work/_styles.html.twig' %}
+    <style>
+        /* Calendario anual (12 mini-meses). Mobile-first: colapsa a 1 columna. */
+        .yc-grid { display: grid; gap: var(--csa-sp-4); grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr)); margin-bottom: var(--csa-sp-5); }
+        .yc-month { background: var(--csa-surface); border: 1px solid var(--csa-rule); border-radius: var(--csa-radius-md); padding: var(--csa-sp-3); }
+        .yc-month__name { font-weight: 600; text-transform: capitalize; margin-bottom: var(--csa-sp-2); color: var(--csa-ink); }
+        .yc-cal { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        .yc-cal th { font-size: .62rem; font-weight: 500; color: var(--csa-ink-muted); padding: 2px 0; text-align: center; }
+        .yc-d { text-align: center; font-size: .72rem; padding: 0; height: 1.7rem; color: var(--csa-ink-soft); border-radius: 5px; font-variant-numeric: tabular-nums; }
+        .yc-d--empty { color: transparent; }
+        .yc-d--we   { color: var(--csa-ink-muted); background: var(--csa-bg); }
+        .yc-d--hol  { background: var(--csa-plum-soft); color: var(--csa-plum); font-weight: 600; }
+        .yc-d--appr { background: var(--csa-green-soft); color: var(--csa-green); font-weight: 600; }
+        .yc-d--req  { background: var(--csa-ochre-soft); color: var(--csa-ochre); font-weight: 600; }
+        .yc-d--today { outline: 2px solid var(--csa-green); outline-offset: -2px; }
+        .yc-legend { display: flex; flex-wrap: wrap; gap: var(--csa-sp-2) var(--csa-sp-4); margin-bottom: var(--csa-sp-5); font-size: .8rem; color: var(--csa-ink-soft); }
+        .yc-legend span { display: inline-flex; align-items: center; gap: .4rem; }
+        .yc-legend i { width: .9rem; height: .9rem; border-radius: 3px; display: inline-block; }
+        .yc-sw--hol  { background: var(--csa-plum-soft); }
+        .yc-sw--appr { background: var(--csa-green-soft); }
+        .yc-sw--req  { background: var(--csa-ochre-soft); }
+    </style>
 {% endblock %}
 
 {% block csa_main %}
@@ -23,6 +44,44 @@
             <h1 class="wk-hero__title">Mis vacaciones {{ year }}</h1>
             <div class="wk-hero__date">{{ vacation_used }} de {{ vacation_total }} días usados · quedan {{ vacation_total - vacation_used }}</div>
         </header>
+
+        <div class="yc-legend">
+            <span><i class="yc-sw--appr"></i> Vacaciones aprobadas</span>
+            <span><i class="yc-sw--req"></i> Pendientes</span>
+            <span><i class="yc-sw--hol"></i> Festivos</span>
+        </div>
+
+        <div class="yc-grid">
+            {% for m in year_calendar %}
+                <div class="yc-month">
+                    <div class="yc-month__name">{{ m.first|date('F', 'Europe/Madrid')|capitalize }}</div>
+                    <table class="yc-cal">
+                        <thead>
+                            <tr><th>L</th><th>M</th><th>X</th><th>J</th><th>V</th><th>S</th><th>D</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for week in m.weeks %}
+                                <tr>
+                                    {% for cell in week %}
+                                        {% if not cell.inMonth %}
+                                            <td class="yc-d yc-d--empty"></td>
+                                        {% else %}
+                                            {% set cls = 'yc-d' %}
+                                            {% set tip = '' %}
+                                            {% if cell.absence == 'approved' %}{% set cls = cls ~ ' yc-d--appr' %}{% set tip = 'Vacaciones aprobadas' %}
+                                            {% elseif cell.absence == 'requested' %}{% set cls = cls ~ ' yc-d--req' %}{% set tip = 'Pendiente de aprobar' %}
+                                            {% elseif cell.holiday %}{% set cls = cls ~ ' yc-d--hol' %}{% set tip = cell.holiday %}
+                                            {% elseif cell.weekend %}{% set cls = cls ~ ' yc-d--we' %}{% endif %}
+                                            <td class="{{ cls }}{{ cell.isToday ? ' yc-d--today' : '' }}"{% if tip %} title="{{ tip }}"{% endif %}>{{ cell.day }}</td>
+                                        {% endif %}
+                                    {% endfor %}
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endfor %}
+        </div>
 
         <div class="wk-vac">
             <div class="wk-vac__head">
@@ -50,8 +109,6 @@
                         </form>
                     {% endif %}
                 </div>
-            {% else %}
-                <div class="wk-empty">No has solicitado vacaciones todavía.</div>
             {% endfor %}
         </div>
     </div>
