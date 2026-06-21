@@ -30,19 +30,23 @@
         .ty-tg__dot { width: .8rem; height: .8rem; border-radius: 50%; background: var(--wc); }
         .ty-tg:has(input:not(:checked)) { opacity: .45; text-decoration: line-through; }
 
-        .yc-grid { display: grid; gap: var(--csa-sp-4); grid-template-columns: 1fr; }
+        /* Ancho acotado: el shell de gestión es ancho y, sin tope, los 3 mini-meses
+           se estiran enormes. Lo limitamos para que se vean como los del trabajador. */
+        .yc-grid { display: grid; gap: var(--csa-sp-4); grid-template-columns: 1fr; max-width: 56rem; }
         @media (min-width: 720px) { .yc-grid { grid-template-columns: repeat(3, 1fr); } }
         .yc-month { background: var(--csa-surface); border: 1px solid var(--csa-rule); border-radius: var(--csa-radius-md); padding: var(--csa-sp-3); }
         .yc-month__name { font-weight: 600; margin-bottom: var(--csa-sp-1); color: var(--csa-ink); font-size: var(--csa-fs-sm); }
         .yc-cal { width: 100%; border-collapse: collapse; table-layout: fixed; }
         .yc-cal th { font-size: .58rem; font-weight: 500; color: var(--csa-ink-muted); padding: 1px 0 3px; text-align: center; }
-        .yc-d { height: 1.85rem; vertical-align: top; text-align: center; }
-        .yc-num { font-size: .66rem; color: var(--csa-ink-soft); font-variant-numeric: tabular-nums; line-height: 1; }
+        /* Misma altura que el calendario del trabajador: los puntos se superponen al
+           pie de la celda (posición absoluta), no añaden altura. */
+        .yc-d { position: relative; height: 1.85rem; vertical-align: middle; text-align: center; }
+        .yc-num { font-size: .72rem; color: var(--csa-ink-soft); font-variant-numeric: tabular-nums; }
         .yc-d--we .yc-num { color: var(--csa-ink-muted); }
         .yc-d--hol { background: var(--csa-plum-soft); }
         .yc-d--today .yc-num { font-weight: 700; color: var(--csa-ink); text-decoration: underline; }
-        .yc-evs { display: flex; flex-wrap: wrap; gap: 2px; justify-content: center; margin-top: 1px; }
-        .ev { width: 6px; height: 6px; border-radius: 50%; background: var(--wc); }
+        .yc-evs { position: absolute; left: 0; right: 0; bottom: 1px; display: flex; gap: 2px; justify-content: center; }
+        .ev { width: 5px; height: 5px; border-radius: 50%; background: var(--wc); }
         .ev--pending { background: transparent; border: 1.5px solid var(--wc); }
 
         /* Paleta por trabajador (color = persona). */
