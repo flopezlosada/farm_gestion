@@ -16,6 +16,7 @@ use App\Security\WorkerUserProvisioner;
 use App\Service\Staff\GapFinder;
 use App\Service\Staff\MonthGridBuilder;
 use App\Service\Staff\PunchSequenceException;
+use App\Service\Staff\TeamMonthBuilder;
 use App\Service\Staff\WorkingDayCounter;
 use App\Service\Staff\TimeEntryCorrector;
 use App\Service\Staff\TimeInputParser;
@@ -121,6 +122,64 @@ class WorkerController extends AbstractController
         return $this->render('staff/gaps.html.twig', [
             'rows' => $rows,
             'days' => self::GAP_DAYS,
+        ]);
+    }
+
+    /**
+     * Calendario del EQUIPO: una fila por trabajador con sus ausencias (pedidas y
+     * aprobadas) del mes, para ver de un vistazo solapes y planificar. Navega por
+     * meses.
+     *
+     * @param Request           $request
+     * @param WorkerRepository  $workers
+     * @param AbsenceRepository $absences
+     * @param HolidayRepository $holidays
+     * @param TeamMonthBuilder  $builder
+     * @return Response
+     */
+    #[Route('/calendar', name: 'staff_team_calendar', methods: ['GET'])]
+    public function teamCalendar(Request $request, WorkerRepository $workers, AbsenceRepository $absences, HolidayRepository $holidays, TeamMonthBuilder $builder): Response
+    {
+        $madrid = new \DateTimeZone('Europe/Madrid');
+        $today = new \DateTimeImmutable('today', $madrid);
+        $year = (int) $request->query->get('year', $today->format('Y'));
+        $month = (int) $request->query->get('month', $today->format('n'));
+        if ($month < 1 || $month > 12) {
+            $month = (int) $today->format('n');
+        }
+
+        $monthStart = new \DateTimeImmutable(sprintf('%04d-%02d-01 00:00:00', $year, $month), $madrid);
+        $monthEnd = $monthStart->modify('first day of next month');
+        $lastDay = $monthEnd->modify('-1 day');
+
+        $holidayDates = $holidays->findNamesBetween($monthStart, $lastDay);
+        $days = $builder->monthDays($year, $month, $madrid, $today, $holidayDates);
+
+        $active = $workers->findBy(['active' => true], ['name' => 'ASC']);
+        $rows = [];
+        foreach ($active as $worker) {
+            $map = [];
+            foreach ($absences->findOverlappingForWorker($worker, $monthStart, $lastDay) as $absence) {
+                $cursor = $absence->getStartDate() > $monthStart ? $absence->getStartDate() : $monthStart;
+                $end = $absence->getEndDate() < $lastDay ? $absence->getEndDate() : $lastDay;
+                while ($cursor <= $end) {
+                    $key = $cursor->format('Y-m-d');
+                    // La aprobada manda sobre la pendiente si solapan.
+                    if (!isset($map[$key]) || $absence->getStatus() === Absence::STATUS_APPROVED) {
+                        $map[$key] = ['type' => $absence->getType(), 'status' => $absence->getStatus()];
+                    }
+                    $cursor = $cursor->modify('+1 day');
+                }
+            }
+            $rows[] = ['worker' => $worker, 'days' => $map];
+        }
+
+        return $this->render('staff/team_calendar.html.twig', [
+            'days' => $days,
+            'rows' => $rows,
+            'month_label' => $monthStart,
+            'prev' => $monthStart->modify('-1 month'),
+            'next' => $monthStart->modify('+1 month'),
         ]);
     }
 

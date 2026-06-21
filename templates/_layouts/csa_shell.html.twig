@@ -326,6 +326,8 @@
                             <div class="csa-navgroup__items">
                                 {{ _self.nav_link('Trabajadores', path('staff_index'), 'fa-id-badge',
                                    route == 'staff_index' or route == 'staff_show' or route == 'staff_new' or route == 'staff_edit') }}
+                                {{ _self.nav_link('Calendario del equipo', path('staff_team_calendar'), 'fa-calendar',
+                                   route == 'staff_team_calendar') }}
                                 {{ _self.nav_link('Huecos del registro', path('staff_gaps'), 'fa-exclamation-triangle',
                                    route == 'staff_gaps') }}
                                 {{ _self.nav_link('Festivos', path('staff_holidays'), 'fa-calendar-times-o',
