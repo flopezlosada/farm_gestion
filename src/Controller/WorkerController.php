@@ -16,8 +16,8 @@ use App\Security\WorkerUserProvisioner;
 use App\Service\Staff\GapFinder;
 use App\Service\Staff\MonthGridBuilder;
 use App\Service\Staff\PunchSequenceException;
-use App\Service\Staff\TeamMonthBuilder;
 use App\Service\Staff\WorkingDayCounter;
+use App\Service\Staff\YearCalendarBuilder;
 use App\Service\Staff\TimeEntryCorrector;
 use App\Service\Staff\TimeInputParser;
 use App\Service\Staff\WorkdayBuilder;
@@ -138,48 +138,50 @@ class WorkerController extends AbstractController
      * @return Response
      */
     #[Route('/calendar', name: 'staff_team_calendar', methods: ['GET'])]
-    public function teamCalendar(Request $request, WorkerRepository $workers, AbsenceRepository $absences, HolidayRepository $holidays, TeamMonthBuilder $builder): Response
+    public function teamCalendar(Request $request, WorkerRepository $workers, AbsenceRepository $absences, HolidayRepository $holidays, YearCalendarBuilder $yearCalendar): Response
     {
         $madrid = new \DateTimeZone('Europe/Madrid');
         $today = new \DateTimeImmutable('today', $madrid);
-        $year = (int) $request->query->get('year', $today->format('Y'));
-        $month = (int) $request->query->get('month', $today->format('n'));
-        if ($month < 1 || $month > 12) {
-            $month = (int) $today->format('n');
+        $currentYear = (int) $today->format('Y');
+        $year = (int) $request->query->get('year', (string) $currentYear);
+        if ($year < $currentYear - 10 || $year > $currentYear + 1) {
+            $year = $currentYear;
         }
 
-        $monthStart = new \DateTimeImmutable(sprintf('%04d-%02d-01 00:00:00', $year, $month), $madrid);
-        $monthEnd = $monthStart->modify('first day of next month');
-        $lastDay = $monthEnd->modify('-1 day');
+        $yearStart = new \DateTimeImmutable(sprintf('%d-01-01', $year), $madrid);
+        $yearEnd = new \DateTimeImmutable(sprintf('%d-12-31', $year), $madrid);
+        $holidayDates = $holidays->findNamesBetween($yearStart, $yearEnd);
 
-        $holidayDates = $holidays->findNamesBetween($monthStart, $lastDay);
-        $days = $builder->monthDays($year, $month, $madrid, $today, $holidayDates);
+        // Mismo grid de 12 mini-meses que el calendario del trabajador (sin ausencias
+        // propias: los eventos del equipo se pintan encima por día).
+        $grid = $yearCalendar->build($year, $madrid, $today, $holidayDates, []);
 
         $active = $workers->findBy(['active' => true], ['name' => 'ASC']);
-        $rows = [];
-        foreach ($active as $worker) {
-            $map = [];
-            foreach ($absences->findOverlappingForWorker($worker, $monthStart, $lastDay) as $absence) {
-                $cursor = $absence->getStartDate() > $monthStart ? $absence->getStartDate() : $monthStart;
-                $end = $absence->getEndDate() < $lastDay ? $absence->getEndDate() : $lastDay;
+        $teamWorkers = [];
+        $byDay = [];
+        foreach (array_values($active) as $index => $worker) {
+            $teamWorkers[] = ['index' => $index, 'name' => $worker->getName()];
+            foreach ($absences->findOverlappingForWorker($worker, $yearStart, $yearEnd) as $absence) {
+                $cursor = $absence->getStartDate() > $yearStart ? $absence->getStartDate() : $yearStart;
+                $end = $absence->getEndDate() < $yearEnd ? $absence->getEndDate() : $yearEnd;
                 while ($cursor <= $end) {
-                    $key = $cursor->format('Y-m-d');
-                    // La aprobada manda sobre la pendiente si solapan.
-                    if (!isset($map[$key]) || $absence->getStatus() === Absence::STATUS_APPROVED) {
-                        $map[$key] = ['type' => $absence->getType(), 'status' => $absence->getStatus()];
-                    }
+                    $byDay[$cursor->format('Y-m-d')][] = [
+                        'index' => $index,
+                        'name' => $worker->getName(),
+                        'type' => $absence->getType(),
+                        'status' => $absence->getStatus(),
+                    ];
                     $cursor = $cursor->modify('+1 day');
                 }
             }
-            $rows[] = ['worker' => $worker, 'days' => $map];
         }
 
         return $this->render('staff/team_calendar.html.twig', [
-            'days' => $days,
-            'rows' => $rows,
-            'month_label' => $monthStart,
-            'prev' => $monthStart->modify('-1 month'),
-            'next' => $monthStart->modify('+1 month'),
+            'year' => $year,
+            'current_year' => $currentYear,
+            'grid' => $grid,
+            'by_day' => $byDay,
+            'team_workers' => $teamWorkers,
         ]);
     }
 

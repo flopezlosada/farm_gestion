@@ -1,4 +1,6 @@
-{# Calendario del equipo: ausencias de todos los trabajadores en el mes. #}
+{# Calendario del equipo: año completo (12 mini-meses), ausencias de todos los
+ # trabajadores juntas, un punto por trabajador (color por persona), con toggles
+ # para mostrar/ocultar cada uno. Mismo formato que el calendario del trabajador. #}
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
 
@@ -15,82 +17,123 @@
 {% block more_css %}
     {{ parent() }}
     <style>
-        .tm-nav { display: flex; align-items: center; gap: var(--csa-sp-3); margin-bottom: var(--csa-sp-4); }
-        .tm-nav__title { font-size: var(--csa-fs-lg); font-weight: 600; text-transform: capitalize; min-width: 11rem; text-align: center; }
-        .tm-wrap { overflow-x: auto; border: 1px solid var(--csa-rule); border-radius: var(--csa-radius-lg); background: var(--csa-surface); }
-        .tm { border-collapse: collapse; }
-        .tm th, .tm td { text-align: center; font-size: .72rem; padding: 0; font-variant-numeric: tabular-nums; }
-        .tm__name { text-align: left; padding: .5rem .8rem; white-space: nowrap; position: sticky; left: 0; background: var(--csa-surface); font-weight: 500; min-width: 9rem; z-index: 1; border-right: 1px solid var(--csa-rule); }
-        .tm__dh { padding: .3rem 0; color: var(--csa-ink-muted); width: 1.7rem; line-height: 1.2; }
-        .tm__dh small { display: block; font-size: .6rem; }
-        .tm__dh--today { color: var(--csa-ink); font-weight: 700; }
-        .tm__cell { height: 1.9rem; border-left: 1px solid var(--csa-rule-soft); }
-        .tm__dh--we, .tm__cell--we   { background: var(--csa-bg); }
-        .tm__dh--hol, .tm__cell--hol { background: var(--csa-plum-soft); }
-        .tm__cell--vac  { background: var(--csa-green-soft); }
-        .tm__cell--per  { background: var(--csa-sky-soft); }
-        .tm__cell--baja { background: var(--csa-terracotta-soft); }
-        .tm__cell--other{ background: var(--csa-bg); }
-        .tm__cell--pending { opacity: .45; }
-        .tm-legend { display: flex; flex-wrap: wrap; gap: var(--csa-sp-2) var(--csa-sp-4); margin-top: var(--csa-sp-4); font-size: .8rem; color: var(--csa-ink-soft); }
-        .tm-legend span { display: inline-flex; align-items: center; gap: .4rem; }
-        .tm-legend i { width: .9rem; height: .9rem; border-radius: 3px; display: inline-block; }
-        .tm-sw--vac{background:var(--csa-green-soft)} .tm-sw--per{background:var(--csa-sky-soft)} .tm-sw--baja{background:var(--csa-terracotta-soft)} .tm-sw--hol{background:var(--csa-plum-soft)}
+        .ty-nav { display: flex; align-items: center; gap: var(--csa-sp-3); margin-bottom: var(--csa-sp-3); }
+        .ty-nav__title { font-size: var(--csa-fs-lg); font-weight: 600; min-width: 6rem; text-align: center; }
+        .ty-nav__btn { display: inline-grid; place-items: center; width: 2rem; height: 2rem; border-radius: 8px; color: var(--csa-ink-soft); text-decoration: none; }
+        .ty-nav__btn:hover { background: var(--csa-bg); color: var(--csa-ink); }
+        .ty-nav__btn--off { opacity: .3; pointer-events: none; }
+
+        /* Toggles por trabajador (chips con su color). */
+        .ty-toggles { display: flex; flex-wrap: wrap; gap: var(--csa-sp-2); margin-bottom: var(--csa-sp-5); }
+        .ty-tg { display: inline-flex; align-items: center; gap: .45rem; padding: .3rem .7rem; border: 1px solid var(--csa-rule); border-radius: 999px; cursor: pointer; font-size: var(--csa-fs-sm); user-select: none; }
+        .ty-tg input { position: absolute; opacity: 0; width: 0; height: 0; }
+        .ty-tg__dot { width: .8rem; height: .8rem; border-radius: 50%; background: var(--wc); }
+        .ty-tg:has(input:not(:checked)) { opacity: .45; text-decoration: line-through; }
+
+        .yc-grid { display: grid; gap: var(--csa-sp-4); grid-template-columns: 1fr; }
+        @media (min-width: 720px) { .yc-grid { grid-template-columns: repeat(3, 1fr); } }
+        .yc-month { background: var(--csa-surface); border: 1px solid var(--csa-rule); border-radius: var(--csa-radius-md); padding: var(--csa-sp-4); }
+        .yc-month__name { font-weight: 600; margin-bottom: var(--csa-sp-2); color: var(--csa-ink); }
+        .yc-cal { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        .yc-cal th { font-size: .64rem; font-weight: 500; color: var(--csa-ink-muted); padding: 2px 0 4px; text-align: center; }
+        .yc-d { height: 2.2rem; vertical-align: top; text-align: center; }
+        .yc-d--empty { }
+        .yc-num { font-size: .72rem; color: var(--csa-ink-soft); font-variant-numeric: tabular-nums; }
+        .yc-d--we .yc-num { color: var(--csa-ink-muted); }
+        .yc-d--hol { background: var(--csa-plum-soft); }
+        .yc-d--today .yc-num { font-weight: 700; color: var(--csa-ink); text-decoration: underline; }
+        .yc-evs { display: flex; flex-wrap: wrap; gap: 2px; justify-content: center; margin-top: 2px; }
+        .ev { width: 7px; height: 7px; border-radius: 50%; background: var(--wc); }
+        .ev--pending { background: transparent; border: 1.5px solid var(--wc); }
+
+        /* Paleta por trabajador (color = persona). */
+        .ev--w0, .ty-tg--w0 { --wc: var(--csa-green); }
+        .ev--w1, .ty-tg--w1 { --wc: var(--csa-sky); }
+        .ev--w2, .ty-tg--w2 { --wc: var(--csa-terracotta); }
+        .ev--w3, .ty-tg--w3 { --wc: var(--csa-plum); }
+        .ev--w4, .ty-tg--w4 { --wc: var(--csa-ochre); }
+
+        .ty-note { margin-top: var(--csa-sp-4); font-size: .8rem; color: var(--csa-ink-muted); }
     </style>
 {% endblock %}
 
 {% block csa_main %}
     {% set month_names = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'] %}
-    {% set wdl = ['L','M','X','J','V','S','D'] %}
-    {% set tcls = { vacation: 'tm__cell--vac', permit: 'tm__cell--per', sick_leave: 'tm__cell--baja' } %}
 
-    {{ csa.page_header('Personal', 'Calendario del equipo', 'Vacaciones y ausencias de todo el equipo en el mes. Para ver solapes y planificar.') }}
+    {{ csa.page_header('Personal', 'Calendario del equipo', 'Vacaciones y ausencias de todo el equipo en el año. Usa los toggles para mostrar u ocultar cada persona.') }}
 
-    <div class="tm-nav">
-        {{ csa.btn('', { variant: 'ghost', icon: 'fa-chevron-left', href: path('staff_team_calendar', { year: prev|date('Y'), month: prev|date('n') }) }) }}
-        <div class="tm-nav__title">{{ month_names[(month_label|date('n')) - 1] }} {{ month_label|date('Y') }}</div>
-        {{ csa.btn('', { variant: 'ghost', icon: 'fa-chevron-right', href: path('staff_team_calendar', { year: next|date('Y'), month: next|date('n') }) }) }}
+    <div class="ty-nav">
+        <a href="{{ path('staff_team_calendar', { year: year - 1 }) }}" class="ty-nav__btn" aria-label="Año anterior"><i class="fa fa-chevron-left"></i></a>
+        <div class="ty-nav__title">{{ year }}</div>
+        {% if year < current_year + 1 %}
+            <a href="{{ path('staff_team_calendar', { year: year + 1 }) }}" class="ty-nav__btn" aria-label="Año siguiente"><i class="fa fa-chevron-right"></i></a>
+        {% else %}
+            <span class="ty-nav__btn ty-nav__btn--off"><i class="fa fa-chevron-right"></i></span>
+        {% endif %}
     </div>
 
-    <div class="tm-wrap">
-        <table class="tm">
-            <thead>
-                <tr>
-                    <th class="tm__name">Trabajador</th>
-                    {% for d in days %}
-                        <th class="tm__dh{{ d.weekend ? ' tm__dh--we' : '' }}{{ d.holiday ? ' tm__dh--hol' : '' }}{{ d.today ? ' tm__dh--today' : '' }}"
-                            {% if d.holiday %}title="{{ d.holiday }}"{% endif %}>
-                            {{ d.day }}<small>{{ wdl[(d.ymd|date('N')) - 1] }}</small>
-                        </th>
-                    {% endfor %}
-                </tr>
-            </thead>
-            <tbody>
-                {% for row in rows %}
-                    <tr>
-                        <td class="tm__name">{{ row.worker.name }}</td>
-                        {% for d in days %}
-                            {% set a = row.days[d.ymd] ?? null %}
-                            {% set cls = 'tm__cell' %}
-                            {% if a %}
-                                {% set cls = cls ~ ' ' ~ (tcls[a.type]|default('tm__cell--other')) ~ (a.status == 'approved' ? '' : ' tm__cell--pending') %}
-                            {% elseif d.holiday %}{% set cls = cls ~ ' tm__cell--hol' %}
-                            {% elseif d.weekend %}{% set cls = cls ~ ' tm__cell--we' %}{% endif %}
-                            <td class="{{ cls }}"{% if a %} title="{{ row.worker.name }}: {{ a.status == 'approved' ? 'aprobada' : 'pendiente' }}"{% endif %}></td>
-                        {% endfor %}
-                    </tr>
-                {% else %}
-                    <tr><td class="tm__name" colspan="{{ days|length + 1 }}" style="text-align:center;color:var(--csa-ink-muted);padding:var(--csa-sp-6);">No hay trabajadores activos.</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
+    {% if team_workers is empty %}
+        <p class="csa-muted">No hay trabajadores activos.</p>
+    {% else %}
+        <div class="ty-toggles">
+            {% for w in team_workers %}
+                <label class="ty-tg ty-tg--w{{ w.index % 5 }}">
+                    <input type="checkbox" checked data-team-toggle="{{ w.index % 5 }}">
+                    <span class="ty-tg__dot"></span>{{ w.name }}
+                </label>
+            {% endfor %}
+        </div>
 
-    <div class="tm-legend">
-        <span><i class="tm-sw--vac"></i> Vacaciones</span>
-        <span><i class="tm-sw--per"></i> Permiso</span>
-        <span><i class="tm-sw--baja"></i> Baja</span>
-        <span><i class="tm-sw--hol"></i> Festivos</span>
-        <span style="color:var(--csa-ink-muted);">· pálido = pendiente · sólido = aprobada</span>
-    </div>
+        <div class="yc-grid" data-team-grid>
+            {% for m in grid %}
+                <div class="yc-month">
+                    <div class="yc-month__name">{{ month_names[m.month - 1] }}</div>
+                    <table class="yc-cal">
+                        <thead><tr><th>L</th><th>M</th><th>X</th><th>J</th><th>V</th><th>S</th><th>D</th></tr></thead>
+                        <tbody>
+                            {% for week in m.weeks %}
+                                <tr>
+                                    {% for cell in week %}
+                                        {% if not cell.inMonth %}
+                                            <td class="yc-d yc-d--empty"></td>
+                                        {% else %}
+                                            {% set evs = by_day[cell.date|date('Y-m-d')]|default([]) %}
+                                            <td class="yc-d{{ cell.weekend ? ' yc-d--we' : '' }}{{ cell.holiday ? ' yc-d--hol' : '' }}{{ cell.isToday ? ' yc-d--today' : '' }}"{% if cell.holiday %} title="{{ cell.holiday }}"{% endif %}>
+                                                <span class="yc-num">{{ cell.day }}</span>
+                                                {% if evs|length %}
+                                                    <span class="yc-evs">
+                                                        {% for e in evs %}<span class="ev ev--w{{ e.index % 5 }}{{ e.status == 'approved' ? '' : ' ev--pending' }}" title="{{ e.name }} · {{ e.type }} · {{ e.status == 'approved' ? 'aprobada' : 'pendiente' }}"></span>{% endfor %}
+                                                    </span>
+                                                {% endif %}
+                                            </td>
+                                        {% endif %}
+                                    {% endfor %}
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endfor %}
+        </div>
+
+        <div class="ty-note">Punto relleno = aprobada · punto hueco = pendiente. Un punto por persona.</div>
+    {% endif %}
+
+    {# Toggles: ocultar/mostrar los puntos de cada trabajador. #}
+    <script>
+    (function () {
+        var grid = document.querySelector('[data-team-grid]');
+        if (!grid) { return; }
+        document.querySelectorAll('[data-team-toggle]').forEach(function (cb) {
+            cb.addEventListener('change', function () {
+                grid.classList.toggle('hide-w' + cb.getAttribute('data-team-toggle'), !cb.checked);
+            });
+        });
+    })();
+    </script>
+    <style>
+        [data-team-grid].hide-w0 .ev--w0, [data-team-grid].hide-w1 .ev--w1,
+        [data-team-grid].hide-w2 .ev--w2, [data-team-grid].hide-w3 .ev--w3,
+        [data-team-grid].hide-w4 .ev--w4 { display: none; }
+    </style>
 {% endblock %}
