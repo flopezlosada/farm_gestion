@@ -53,11 +53,10 @@
             <input type="hidden" name="_token" value="{{ csrf_token('work_entry') }}">
             <input type="hidden" name="return_to" value="{{ ymd }}">
             <input type="hidden" name="date" value="{{ ymd }}">
+            {% set next_type = open ? 'out' : 'in' %}
+            <input type="hidden" name="type" value="{{ next_type }}">
             <label>Tipo
-                <select name="type" class="csa-input">
-                    <option value="in"{{ open ? '' : ' selected' }}>Entrada</option>
-                    <option value="out"{{ open ? ' selected' : '' }}>Salida</option>
-                </select>
+                <span class="stf-fixedtype stf-fixedtype--{{ next_type }}">{{ next_type == 'out' ? 'Salida' : 'Entrada' }}</span>
             </label>
             <label>Hora
                 <input type="time" name="time" class="csa-input" required>

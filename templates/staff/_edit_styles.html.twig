@@ -51,6 +51,10 @@
     .stf-addrow input[type="time"].csa-input { width: 8rem; }
     .stf-addrow input[type="date"].csa-input { width: 10rem; }
     .stf-addrow .csa-btn { height: 40px; white-space: nowrap; }
+    /* Tipo fijo (el que toca según el último fichaje): no se elige, se muestra. */
+    .stf-fixedtype { display: inline-flex; align-items: center; height: 40px; padding: 0 .9rem; border-radius: var(--csa-radius-md); font-weight: 600; box-sizing: border-box; }
+    .stf-fixedtype--in  { background: #e7f3ea; color: #226c39; }
+    .stf-fixedtype--out { background: #fbe8dd; color: #9b1c1c; }
 
     /* Aviso de jornada descuadrada / incompleta. */
     .day-warn { display:flex; align-items:flex-start; gap:.6rem; padding:.8rem 1rem; border-radius:10px; margin-bottom:1.2rem; font-size:.9rem; line-height:1.4; }
