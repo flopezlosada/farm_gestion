@@ -49,7 +49,8 @@
         .vac-bar h2 { font-size: var(--csa-fs-md); margin: 0; }
         /* Campos del modal de solicitud. */
         .vac-form { display: grid; gap: var(--csa-sp-4); text-align: left; }
-        .vac-form > label { display: flex; flex-direction: column; gap: var(--csa-sp-1); font-size: var(--csa-fs-sm); color: var(--csa-ink-soft); }
+        /* font-weight explícito: Bootstrap pone label{font-weight:700} y lo dejaba en negrita. */
+        .vac-form > label, .vac-form__dates label { display: flex; flex-direction: column; gap: var(--csa-sp-1); font-size: var(--csa-fs-sm); font-weight: 500; color: var(--csa-ink-soft); }
         @media (min-width: 520px) { .vac-form__dates { display: grid; grid-template-columns: 1fr 1fr; gap: var(--csa-sp-4); } }
         .vac-form__label { font-size: var(--csa-fs-sm); color: var(--csa-ink-soft); display: block; margin-bottom: var(--csa-sp-2); }
         /* Tipo como control segmentado (1 de 3), coloreado por tipo. Fuente sans, sin negrita. */
