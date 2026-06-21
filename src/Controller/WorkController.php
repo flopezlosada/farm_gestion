@@ -376,9 +376,26 @@ class WorkController extends AbstractController
             throw $this->createNotFoundException('Esa ausencia no es tuya.');
         }
 
-        $absence->setStatus(Absence::STATUS_CANCELLED);
-        $em->flush();
-        $this->addFlash('notice', 'Solicitud cancelada.');
+        $today = new \DateTimeImmutable('today', $this->madrid());
+
+        if ($absence->getEndDate() < $today) {
+            // Ya terminó: cancelarla "desharía" días disfrutados. No se permite.
+            $this->addFlash('error', 'Esa ausencia ya ha terminado; no se puede cancelar.');
+        } elseif ($absence->getStartDate() > $today) {
+            // Aún no ha empezado: se cancela entera.
+            $absence->setStatus(Absence::STATUS_CANCELLED);
+            $em->flush();
+            $this->addFlash('notice', 'Solicitud cancelada.');
+        } else {
+            // En curso: se cancela A PARTIR DE MAÑANA. Los días ya disfrutados (hasta
+            // hoy incluido) se conservan y siguen contando; se libera el resto.
+            $absence->setEndDate($today);
+            $em->flush();
+            $this->addFlash('notice', sprintf(
+                'Cancelada a partir de mañana. Se conservan los días hasta hoy (%s).',
+                $today->format('d/m/Y'),
+            ));
+        }
 
         return $this->redirectToRoute('work_vacations');
     }
