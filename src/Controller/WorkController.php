@@ -11,6 +11,7 @@ use App\Repository\TimeEntryRepository;
 use App\Service\Staff\MonthGridBuilder;
 use App\Service\Staff\TimeClock;
 use App\Service\Staff\TimeEntryCorrector;
+use App\Service\Staff\TimeInputParser;
 use App\Service\Staff\WorkdayBuilder;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bridge\Doctrine\Attribute\MapEntity;
@@ -300,7 +301,7 @@ class WorkController extends AbstractController
      * @return Response
      */
     #[Route('/entry/add', name: 'work_entry_add', methods: ['POST'])]
-    public function addEntry(Request $request, TimeEntryCorrector $corrector): Response
+    public function addEntry(Request $request, TimeEntryCorrector $corrector, TimeInputParser $timeInput): Response
     {
         if (($redirect = $this->ensureWorker()) !== null) {
             return $redirect;
@@ -312,7 +313,7 @@ class WorkController extends AbstractController
         }
 
         $type = (string) $request->request->get('type');
-        $occurredAt = $this->composeDateTime((string) $request->request->get('date'), (string) $request->request->get('time'));
+        $occurredAt = $timeInput->composeDateTime((string) $request->request->get('date'), (string) $request->request->get('time'));
         if (!in_array($type, TimeEntry::TYPES, true) || $occurredAt === null) {
             $this->addFlash('error', 'Indica un tipo y una hora válidos.');
             return $this->redirectAfterEntry($request);
@@ -337,12 +338,13 @@ class WorkController extends AbstractController
         Request $request,
         #[MapEntity(id: 'entryId')] TimeEntry $entry,
         TimeEntryCorrector $corrector,
+        TimeInputParser $timeInput,
     ): Response {
         if (($error = $this->guardOwnEntry($request, $entry)) !== null) {
             return $error;
         }
 
-        $occurredAt = $this->timeOnto($entry->getOccurredAt(), (string) $request->request->get('time'));
+        $occurredAt = $timeInput->timeOnto($entry->getOccurredAt(), (string) $request->request->get('time'));
         if ($occurredAt === null) {
             $this->addFlash('error', 'Indica una hora válida.');
             return $this->redirectAfterEntry($request);
@@ -454,39 +456,6 @@ class WorkController extends AbstractController
         }
 
         return $this->redirectToRoute('work');
-    }
-
-    /**
-     * Compone fecha (Y-m-d) y hora (H:i) en un instante de Madrid, o null si no
-     * son parseables.
-     *
-     * @param string $date
-     * @param string $time
-     * @return \DateTimeImmutable|null
-     */
-    private function composeDateTime(string $date, string $time): ?\DateTimeImmutable
-    {
-        $dt = \DateTimeImmutable::createFromFormat('!Y-m-d H:i', trim($date) . ' ' . trim($time), $this->madrid());
-
-        return $dt === false ? null : $dt;
-    }
-
-    /**
-     * Aplica una hora (H:i) sobre la fecha de un fichaje existente (en Madrid),
-     * conservando su día.
-     *
-     * @param \DateTimeImmutable $base
-     * @param string             $time
-     * @return \DateTimeImmutable|null
-     */
-    private function timeOnto(\DateTimeImmutable $base, string $time): ?\DateTimeImmutable
-    {
-        if (preg_match('/^(\d{1,2}):(\d{2})$/', trim($time), $m) !== 1
-            || (int) $m[1] > 23 || (int) $m[2] > 59) {
-            return null;
-        }
-
-        return $base->setTime((int) $m[1], (int) $m[2]);
     }
 
     /**

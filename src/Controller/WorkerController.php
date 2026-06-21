@@ -15,6 +15,7 @@ use App\Security\WorkerUserProvisioner;
 use App\Service\Staff\GapFinder;
 use App\Service\Staff\MonthGridBuilder;
 use App\Service\Staff\TimeEntryCorrector;
+use App\Service\Staff\TimeInputParser;
 use App\Service\Staff\WorkdayBuilder;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bridge\Doctrine\Attribute\MapEntity;
@@ -473,7 +474,7 @@ class WorkerController extends AbstractController
      * @return Response
      */
     #[Route('/{id}/entry/add', name: 'staff_entry_add', methods: ['POST'], requirements: ['id' => '\d+'])]
-    public function addEntry(Request $request, Worker $worker, TimeEntryCorrector $corrector): Response
+    public function addEntry(Request $request, Worker $worker, TimeEntryCorrector $corrector, TimeInputParser $timeInput): Response
     {
         if (!$this->isCsrfTokenValid('staff_entry' . $worker->getId(), (string) $request->request->get('_token'))) {
             $this->addFlash('warning', 'Token de seguridad inválido.');
@@ -488,7 +489,7 @@ class WorkerController extends AbstractController
             return $this->redirectToRoute('staff_show', ['id' => $worker->getId()]);
         }
 
-        $occurredAt = $this->composeDateTime((string) $request->request->get('date'), (string) $request->request->get('time'));
+        $occurredAt = $timeInput->composeDateTime((string) $request->request->get('date'), (string) $request->request->get('time'));
         if ($occurredAt === null) {
             $this->addFlash('error', 'Indica una fecha y hora válidas.');
 
@@ -516,12 +517,13 @@ class WorkerController extends AbstractController
         Worker $worker,
         #[MapEntity(id: 'entryId')] TimeEntry $entry,
         TimeEntryCorrector $corrector,
+        TimeInputParser $timeInput,
     ): Response {
         if (($error = $this->guardEntry($request, $worker, $entry)) !== null) {
             return $error;
         }
 
-        $occurredAt = $this->timeOnto($entry->getOccurredAt(), (string) $request->request->get('time'));
+        $occurredAt = $timeInput->timeOnto($entry->getOccurredAt(), (string) $request->request->get('time'));
         if ($occurredAt === null) {
             $this->addFlash('error', 'Indica una hora válida.');
 
@@ -709,38 +711,6 @@ class WorkerController extends AbstractController
         return null;
     }
 
-    /**
-     * Compone fecha (Y-m-d) y hora (H:i) en un instante de Madrid, o null si no
-     * son parseables.
-     *
-     * @param string $date
-     * @param string $time
-     * @return \DateTimeImmutable|null
-     */
-    private function composeDateTime(string $date, string $time): ?\DateTimeImmutable
-    {
-        $dt = \DateTimeImmutable::createFromFormat('!Y-m-d H:i', trim($date) . ' ' . trim($time), new \DateTimeZone('Europe/Madrid'));
-
-        return $dt === false ? null : $dt;
-    }
-
-    /**
-     * Aplica una hora (H:i) sobre la fecha de un fichaje existente (Madrid),
-     * conservando su día.
-     *
-     * @param \DateTimeImmutable $base
-     * @param string             $time
-     * @return \DateTimeImmutable|null
-     */
-    private function timeOnto(\DateTimeImmutable $base, string $time): ?\DateTimeImmutable
-    {
-        if (preg_match('/^(\d{1,2}):(\d{2})$/', trim($time), $m) !== 1
-            || (int) $m[1] > 23 || (int) $m[2] > 59) {
-            return null;
-        }
-
-        return $base->setTime((int) $m[1], (int) $m[2]);
-    }
 
     /**
      * Motivo de la corrección desde el request, con un texto por defecto si viene
