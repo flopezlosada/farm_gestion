@@ -1,8 +1,9 @@
 {# ============================================================
  # Calendario de recogida de la cesta de un voluntario del albergue.
- # Lista las semanas en que su nodo reparte durante sus estancias
- # confirmadas, con un interruptor recoge / no-recoge por semana.
- # La cesta es semanal: no hay cambio de fecha, sólo saltar la recogida.
+ # Lista las semanas en que su nodo reparte durante sus estancias confirmadas,
+ # con un interruptor recoge / no-recoge por semana. La cesta es semanal: no hay
+ # cambio de fecha (a diferencia del calendario de socix), sólo saltar la recogida.
+ # Por eso es una LISTA de semanas y no una rejilla de mes.
  # ============================================================ #}
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
@@ -22,12 +23,14 @@
 {% block more_css %}
 {{ parent() }}
 <style>
-.hbc-list { display: flex; flex-direction: column; gap: 8px; }
-.hbc-week { display: flex; align-items: center; justify-content: space-between; gap: 16px; background: #fff; border: 1px solid var(--csa-rule, #ebe7dd); border-radius: 9px; padding: 12px 18px; }
-.hbc-week--skipped { background: var(--csa-surface-2, #faf8f2); }
-.hbc-week--past { opacity: 0.55; }
-.hbc-date { font-weight: 600; color: var(--csa-ink, #1d1c17); }
-.hbc-empty { padding: 28px 18px; text-align: center; color: var(--csa-ink-faint, #8d8773); font-size: 13px; font-style: italic; background: #fff; border: 1px dashed var(--csa-line-2, #d8d2c2); border-radius: 8px; }
+.hbc { display: flex; flex-direction: column; }
+.hbc-week { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 13px 18px; border-bottom: 1px solid var(--csa-rule-soft); }
+.hbc-week:last-child { border-bottom: 0; }
+.hbc-week--past { opacity: 0.5; }
+.hbc-week__left { display: flex; align-items: center; gap: 14px; }
+.hbc-dow { font-size: var(--csa-fs-xs); letter-spacing: .1em; text-transform: uppercase; color: var(--csa-ink-muted); font-weight: 600; }
+.hbc-date { font-family: var(--csa-serif); font-weight: 600; font-size: var(--csa-fs-lg); color: var(--csa-ink); }
+.hbc-empty { padding: 28px 18px; text-align: center; color: var(--csa-ink-muted); font-size: var(--csa-fs-sm); font-style: italic; }
 </style>
 {% endblock %}
 
@@ -35,36 +38,44 @@
     {{ csa.page_header('Albergue', 'Calendario de recogida', helper.name ~ (node ? ' · ' ~ node.name : '')) }}
 
     <div class="csa-row-between" style="margin-bottom: var(--csa-sp-5);">
-        <p class="csa-text-muted" style="margin: 0; max-width: 60ch;">
-            Cada semana en que reparte {{ node ? node.name : 'el nodo' }} durante sus estancias.
-            La cesta es semanal: si una semana no recoge, márcala como «no recoge» (no se puede cambiar de fecha).
+        <p class="csa-text-muted" style="margin: 0; max-width: 62ch;">
+            Cada semana en que reparte {{ node ? node.name : 'el nodo' }} durante sus estancias. La cesta es
+            semanal: si una semana no recoge, apaga su interruptor (no se puede cambiar de fecha).
         </p>
         {{ csa.btn('Volver a la ficha', { variant: 'ghost', href: path('helper_show', { id: helper.id }) }) }}
     </div>
 
     {% if not helper.basketActive %}
-        <div class="hbc-empty">Este voluntario no tiene cesta de reparto activa.</div>
+        <div class="hbc-empty" style="border: 1px dashed var(--csa-rule); border-radius: 8px; background: #fff;">Este voluntario no tiene cesta de reparto activa.</div>
     {% elseif weeks is empty %}
-        <div class="hbc-empty">No hay semanas de reparto en sus estancias confirmadas.</div>
+        <div class="hbc-empty" style="border: 1px dashed var(--csa-rule); border-radius: 8px; background: #fff;">No hay semanas de reparto en sus estancias confirmadas.</div>
     {% else %}
-        <div class="hbc-list">
-            {% for week in weeks %}
-                <div class="hbc-week{{ week.skipped ? ' hbc-week--skipped' : '' }}{{ week.past ? ' hbc-week--past' : '' }}">
-                    <div>
-                        <span class="hbc-date">{{ week.date|date('d/m/Y') }}</span>
-                        {{ csa.badge(week.skipped ? 'No recoge' : 'Recoge', week.skipped ? 'neutral' : 'green') }}
-                    </div>
-                    {% if is_granted('ROLE_GESTION_ALBERGUE_EDIT') %}
-                        <form method="post" action="{{ path('helper_basket_calendar_skip', { id: helper.id }) }}" style="display: inline;">
-                            <input type="hidden" name="_token" value="{{ csrf_token('helper_basket_skip') }}">
-                            <input type="hidden" name="date" value="{{ week.date|date('Y-m-d') }}">
-                            <button type="submit" class="csa-btn csa-btn--ghost csa-btn--sm">
-                                {{ week.skipped ? 'Volver a recoger' : 'No recoge esta semana' }}
-                            </button>
-                        </form>
-                    {% endif %}
+        {% embed '_components/csa_card.html.twig' with { title: 'Semanas de recogida', accent: 'green' } %}
+            {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
+                {% set _dow = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB'] %}
+                <div class="hbc">
+                    {% for week in weeks %}
+                        <div class="hbc-week{{ week.past ? ' hbc-week--past' : '' }}">
+                            <div class="hbc-week__left">
+                                <span class="hbc-dow">{{ _dow[week.date|date('w')] }}</span>
+                                <span class="hbc-date">{{ week.date|date('d/m/Y') }}</span>
+                                {{ csa.badge(week.skipped ? 'No recoge' : 'Recoge', week.skipped ? 'neutral' : 'green') }}
+                            </div>
+                            {% if is_granted('ROLE_GESTION_ALBERGUE_EDIT') and not week.past %}
+                                <form method="post" action="{{ path('helper_basket_calendar_skip', { id: helper.id }) }}" style="margin: 0;">
+                                    <input type="hidden" name="_token" value="{{ csrf_token('helper_basket_skip') }}">
+                                    <input type="hidden" name="date" value="{{ week.date|date('Y-m-d') }}">
+                                    <label class="csa-toggle" title="{{ week.skipped ? 'Volver a recoger' : 'Marcar no recoge' }}">
+                                        <input type="checkbox" class="csa-toggle__input" {{ week.skipped ? '' : 'checked' }} onchange="this.form.submit()">
+                                        <span class="csa-toggle__track"><span class="csa-toggle__thumb"></span></span>
+                                    </label>
+                                </form>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
                 </div>
-            {% endfor %}
-        </div>
+            {% endblock %}
+        {% endembed %}
     {% endif %}
 {% endblock %}
