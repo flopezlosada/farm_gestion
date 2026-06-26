@@ -9,8 +9,6 @@
 {% set status_tone = { 'confirmed': 'activo', 'requested': 'warn', 'cancelled': 'mute' } %}
 {% set status_label = { 'confirmed': 'Confirmada', 'requested': 'Solicitada', 'cancelled': 'Cancelada' } %}
 
-{% set parts = helper.name|split(' ')|filter(p => p is not empty) %}
-{% set initials = (parts|first|first|upper) ~ (parts|length > 1 ? parts|last|first|upper : '') %}
 {% set avatar_palette = ['sage', 'ochre', 'terra', 'ink'] %}
 {% set avatar_tone = avatar_palette[(helper.id|default(0)) % 4] %}
 
@@ -51,7 +49,7 @@
 
     {# ============ HERO ============ #}
     <header class="prt-hero">
-        <span class="prt-avatar prt-avatar--{{ avatar_tone }}" aria-hidden="true">{{ initials }}</span>
+        <span class="prt-avatar prt-avatar--{{ avatar_tone }}" aria-hidden="true"><i class="fa fa-bed"></i></span>
 
         <div>
             <h1 class="prt-hero__title">{{ helper.name }}</h1>
