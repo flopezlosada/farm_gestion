@@ -441,9 +441,11 @@ class NodeDeliverySheet
 
     /**
      * Fila imprimible de una entrega: nombre de reparto, código de modalidad,
-     * cestas físicas y especificación de huevos.
+     * cestas físicas y especificación de huevos. `partner_id` permite casar al
+     * mismo socio entre semanas distintas (lo usa el listado mensual en matriz);
+     * es null en entregas sin socio detrás (extra de no-suscriptor, voluntario).
      *
-     * @return array{name:string, code:string, cestas:float, egg_spec:?string, egg_count:int, locality:string}
+     * @return array{name:string, code:string, cestas:float, egg_spec:?string, egg_count:int, locality:string, relocated_from:?string, partner_id:?int}
      */
     private function row(DeliveryLine $line): array
     {
@@ -457,6 +459,7 @@ class NodeDeliverySheet
             'egg_count' => $eggs['count'],
             'locality' => $this->localityForRow($line),
             'relocated_from' => $line->relocatedFromLabel,
+            'partner_id' => $line->partnerId,
         ];
     }
 

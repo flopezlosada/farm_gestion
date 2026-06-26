@@ -28,6 +28,7 @@ use App\Service\Delivery\DeliveryShiftApplier;
 use App\Service\Delivery\DeliveryShiftValidator;
 use App\Service\Delivery\ExtraBasketEditor;
 use App\Service\Delivery\HelperDeliveryResolver;
+use App\Service\Delivery\MonthlyDeliveryMatrix;
 use App\Service\Delivery\NodeDeliveryCounter;
 use App\Service\Delivery\NodeDeliveryDate;
 use App\Service\Delivery\PickupRelocator;
@@ -1381,18 +1382,7 @@ class DeliveryController extends AbstractController
         // esté materializado.
         $sheets = [];
         foreach ($nodeRepo->findBy(['id' => $nodeIds ?: [0]], ['name' => 'ASC']) as $node) {
-            $mode = $deliveryModeResolver->mode($node, $basket);
-            $sheet = match ($mode) {
-                DeliveryModeResolver::STONE => $sheetBuilder->build($node, $basket),
-                // Camino de dibujo: las líneas de los voluntarios del albergue
-                // (cesta derivada) se anexan a la proyección de socios antes de
-                // dar forma. En STONE ya las mezcla build() por dentro.
-                DeliveryModeResolver::DRAW => $sheetBuilder->shape(array_merge(
-                    $generator->projectLinesForNode($node, $basket),
-                    $sheetBuilder->helperLines($node, $basket),
-                )),
-                default => null,
-            };
+            $sheet = $this->nodeSheet($node, $basket, $deliveryModeResolver, $sheetBuilder, $generator);
             if ($sheet === null) {
                 continue; // EMPTY: no reparte, cancelado, o pasado sin materializar
             }
@@ -1433,5 +1423,137 @@ class DeliveryController extends AbstractController
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => sprintf('attachment; filename="%s"', $filename),
         ]);
+    }
+
+    /**
+     * Selector del listado MENSUAL: elegir mes y nodos. La ventana de meses es
+     * sólo el ANTERIOR, el ACTUAL y el SIGUIENTE (relativos a hoy): el mensual se
+     * manda a principios de mes mirando al mes que viene, no hace falta más. Se
+     * llega desde la pantalla de reparto.
+     */
+    #[Route('/imprimible-mensual', name: 'delivery_printable_monthly_select', methods: ['GET'])]
+    public function monthlyPrintableSelect(NodeRepository $nodeRepo): Response
+    {
+        $base = new \DateTimeImmutable('first day of this month');
+        $months = [];
+        foreach ([-1 => 'anterior', 0 => 'actual', 1 => 'siguiente'] as $offset => $rel) {
+            $m = $base->modify(sprintf('%+d months', $offset));
+            $months[] = [
+                'ym' => $m->format('Y-m'),
+                'year' => (int) $m->format('Y'),
+                'month' => (int) $m->format('n'),
+                'rel' => $rel,
+                'current' => $offset === 0,
+            ];
+        }
+
+        return $this->render('delivery/printable_monthly_select.html.twig', [
+            'months' => $months,
+            'nodes' => $nodeRepo->findBy([], ['name' => 'ASC']),
+        ]);
+    }
+
+    /**
+     * Listado MENSUAL imprimible (PDF apaisado vía dompdf) en formato matriz:
+     * socios en filas (por nodo → grupo → modalidad) y los viernes del mes en
+     * columnas, un nodo por hoja como el semanal. Reúne las hojas semanales de
+     * cada viernes del mes ({@see nodeSheet}, piedra o dibujo) y las pivota con
+     * {@see MonthlyDeliveryMatrix}. Mes y nodos vienen de {@see monthlyPrintableSelect}
+     * por query (?ym=YYYY-MM&nodes[]=). Es una PREVISIÓN: las semanas futuras se
+     * dibujan al vuelo y pueden cambiar tras enviarlo.
+     */
+    #[Route('/imprimible-mensual/pdf', name: 'delivery_printable_monthly_pdf', methods: ['GET'])]
+    public function monthlyPrintablePdf(
+        Request $request,
+        BasketRepository $basketRepo,
+        NodeRepository $nodeRepo,
+        NodeDeliverySheet $sheetBuilder,
+        DeliveryModeResolver $deliveryModeResolver,
+        WeeklyBasketGenerator $generator,
+        MonthlyDeliveryMatrix $matrixBuilder,
+    ): Response {
+        // ym = "YYYY-MM" del selector. Ausente o mal formado → de vuelta al selector.
+        if (preg_match('/^(\d{4})-(\d{2})$/', (string) $request->query->get('ym', ''), $mt) !== 1) {
+            return $this->redirectToRoute('delivery_printable_monthly_select');
+        }
+        $year = (int) $mt[1];
+        $month = (int) $mt[2];
+        if ($month < 1 || $month > 12) {
+            return $this->redirectToRoute('delivery_printable_monthly_select');
+        }
+
+        $from = new \DateTimeImmutable(sprintf('%04d-%02d-01', $year, $month));
+        $to = $from->modify('last day of this month');
+
+        $baskets = $basketRepo->findBetweenDates($from, $to);
+        if ($baskets === []) {
+            $this->addFlash('warning', 'No hay viernes de reparto registrados en ese mes.');
+
+            return $this->redirectToRoute('delivery_printable_monthly_select');
+        }
+
+        // Nodos elegidos en la pantalla de impresión (?nodes[]=); sin selección,
+        // todos. Mismo criterio piedra/dibujo POR NODO que el semanal, una vez por
+        // cada viernes del mes: los nodos que no reparten un viernes (quincenal
+        // fuera de fase, festivo) no aportan hoja esa semana → celdas vacías.
+        $nodeIds = array_values(array_filter(array_map('intval', (array) $request->query->all('nodes'))));
+        $nodes = $nodeRepo->findBy($nodeIds !== [] ? ['id' => $nodeIds] : [], ['name' => 'ASC']);
+        $weeks = [];
+        foreach ($baskets as $basket) {
+            $nodeSheets = [];
+            foreach ($nodes as $node) {
+                $sheet = $this->nodeSheet($node, $basket, $deliveryModeResolver, $sheetBuilder, $generator);
+                if ($sheet !== null) {
+                    $nodeSheets[] = ['node' => $node, 'sheet' => $sheet];
+                }
+            }
+            $weeks[] = ['date' => $basket->getDate(), 'nodes' => $nodeSheets];
+        }
+
+        $html = $this->renderView('delivery/printable_monthly.html.twig', [
+            'matrix' => $matrixBuilder->build($weeks),
+            'year' => $year,
+            'month' => $month,
+        ]);
+
+        $options = new Options();
+        $options->set('defaultFont', 'DejaVu Sans');
+        $dompdf = new Dompdf($options);
+        $dompdf->loadHtml($html);
+        $dompdf->setPaper('A4', 'landscape');
+        $dompdf->render();
+
+        $filename = sprintf('reparto-mensual-%04d-%02d.pdf', $year, $month);
+
+        return new Response($dompdf->output(), Response::HTTP_OK, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => sprintf('attachment; filename="%s"', $filename),
+        ]);
+    }
+
+    /**
+     * Hoja de reparto de un nodo en un viernes (Basket): de PIEDRA si la semana
+     * está materializada ({@see NodeDeliverySheet::build}); DIBUJADA al vuelo
+     * desde la proyección si al nodo le toca pero no está materializada; o null
+     * (EMPTY) si ese nodo no reparte ese día. Pieza común del listado semanal
+     * ({@see printablePdf}) y del mensual ({@see monthlyPrintablePdf}).
+     *
+     * @return array|null Estructura de {@see NodeDeliverySheet}, o null si EMPTY.
+     */
+    private function nodeSheet(
+        Node $node,
+        Basket $basket,
+        DeliveryModeResolver $modeResolver,
+        NodeDeliverySheet $sheetBuilder,
+        WeeklyBasketGenerator $generator,
+    ): ?array {
+        return match ($modeResolver->mode($node, $basket)) {
+            DeliveryModeResolver::STONE => $sheetBuilder->build($node, $basket),
+            DeliveryModeResolver::DRAW => $sheetBuilder->shape(array_merge(
+                $generator->projectLinesForNode($node, $basket),
+                $sheetBuilder->helperLines($node, $basket),
+            )),
+            default => null,
+        };
     }
 }

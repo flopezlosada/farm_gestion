@@ -264,12 +264,16 @@
 
     {{ csa.page_header('Socixs · Reparto', _heading, 'Listado de socixs que recogen cesta este día.') }}
 
-    <p style="margin: -8px 0 16px;">
-        <a href="{{ path('delivery_printable_select', { basketId: basket.id }) }}"
-           style="display: inline-flex; align-items: center; gap: 7px; padding: 7px 14px; border-radius: 6px; background: var(--dlv-surface); border: 1px solid var(--dlv-line-2); color: var(--dlv-ink); text-decoration: none; font-weight: 500; font-size: 13px;">
-            <i class="fa fa-print" aria-hidden="true"></i> Imprimir listado
-        </a>
-    </p>
+    <div style="display: flex; flex-wrap: wrap; gap: 10px; margin: -4px 0 18px;">
+        {{ csa.btn('Listado semanal', {
+            variant: 'primary', icon: 'fa-print',
+            href: path('delivery_printable_select', { basketId: basket.id }),
+        }) }}
+        {{ csa.btn('Listado mensual', {
+            variant: 'info-soft', icon: 'fa-table',
+            href: path('delivery_printable_monthly_select'),
+        }) }}
+    </div>
 
     {# ============ Mini-timeline + page head ============ #}
     <div class="dlv-head">
