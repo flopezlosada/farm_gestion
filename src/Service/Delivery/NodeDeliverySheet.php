@@ -51,6 +51,7 @@ class NodeDeliverySheet
         private readonly WeeklyBasketRepository $weeklyBasketRepo,
         private readonly WeeklyBasketItemRepository $weeklyBasketItemRepo,
         private readonly PartnerBasketShareRepository $partnerBasketShareRepo,
+        private readonly HelperDeliveryResolver $helperDeliveryResolver,
     ) {
     }
 
@@ -59,14 +60,33 @@ class NodeDeliverySheet
      * WeeklyBasket YA materializados (camino de piedra).
      *
      * @return array{
-     *   groups: list<array{name:string, color:?string, locality:string, subtotal_cestas:float, modalities: list<array{label:string, rows: list<array<string,mixed>>}>}>,
-     *   shared: array{rows: list<array<string,mixed>>},
+     *   groups: list<array{name:string, color:?string, locality:string, subtotal_cestas:float, subtotal_eggs:?string, modalities: list<array{label:string, rows: list<array<string,mixed>>}>}>,
+     *   shared: array{rows: list<array<string,mixed>>, subtotal_cestas: float, subtotal_eggs: ?string},
      *   totals: array{cestas:float, docenas:float}
      * }
      */
     public function build(Node $node, Basket $basket): array
     {
-        return $this->shape($this->linesFromMaterialized($node, $basket));
+        return $this->shape(array_merge(
+            $this->linesFromMaterialized($node, $basket),
+            $this->helperLines($node, $basket),
+        ));
+    }
+
+    /**
+     * Líneas de entrega de los voluntarios del albergue que recogen en este
+     * nodo+día (cesta derivada, no materializada). El camino de PIEDRA las
+     * mezcla dentro de {@see build}; el camino de DIBUJO (proyección) debe
+     * anexarlas a las líneas proyectadas antes de {@see shape}, por eso se
+     * expone aquí en vez de esconderlas en build().
+     *
+     * @param Node   $node
+     * @param Basket $basket
+     * @return DeliveryLine[]
+     */
+    public function helperLines(Node $node, Basket $basket): array
+    {
+        return $this->helperDeliveryResolver->forNodeAndBasket($node, $basket);
     }
 
     /**
@@ -75,19 +95,27 @@ class NodeDeliverySheet
      *
      * @param DeliveryLine[] $lines
      * @return array{
-     *   groups: list<array{name:string, color:?string, locality:string, subtotal_cestas:float, modalities: list<array{label:string, rows: list<array<string,mixed>>}>}>,
-     *   shared: array{rows: list<array<string,mixed>>},
+     *   groups: list<array{name:string, color:?string, locality:string, subtotal_cestas:float, subtotal_eggs:?string, modalities: list<array{label:string, rows: list<array<string,mixed>>}>}>,
+     *   shared: array{rows: list<array<string,mixed>>, subtotal_cestas: float, subtotal_eggs: ?string},
      *   totals: array{cestas:float, docenas:float}
      * }
      */
     public function shape(array $lines): array
     {
-        // Partición: compartidas (bloque aparte), cestas extra de no-suscriptores (sin
-        // modalidad → sección propia al final) y resto (por grupo).
+        // Partición: voluntarios del albergue (sección propia, sin modalidad pero
+        // NO son "cestas extra"), compartidas (bloque aparte), cestas extra de
+        // no-suscriptores (sin modalidad → sección propia al final) y resto (por
+        // grupo). Los voluntarios se apartan ANTES del check de modalidad null,
+        // que si no caerían en "Cestas extra".
+        $helper = [];
         $shared = [];
         $extra = [];
         $regular = [];
         foreach ($lines as $line) {
+            if ($line->isHelper) {
+                $helper[] = $line;
+                continue;
+            }
             if ($line->basketShareId === null) {
                 $extra[] = $line; // entrega "solo extra" sin modalidad
                 continue;
@@ -102,6 +130,9 @@ class NodeDeliverySheet
         $groups = $this->buildGroups($regular);
         if ($extra !== []) {
             $groups[] = $this->buildExtraGroup($extra);
+        }
+        if ($helper !== []) {
+            $groups[] = $this->buildHelperGroup($helper);
         }
 
         return [
@@ -169,10 +200,11 @@ class NodeDeliverySheet
 
     /**
      * Grupos de recogida (WBG) en orden alfabético; dentro, subgrupos por
-     * modalidad (bs.id ascendente: S, Q, M, H) con su subtotal de cestas.
+     * modalidad (bs.id ascendente: S, Q, M, H) con su subtotal de cestas y de
+     * huevos (este último en la notación compacta D/M de las filas).
      *
      * @param DeliveryLine[] $lines
-     * @return list<array{name:string, color:?string, locality:string, subtotal_cestas:float, modalities: list<array{label:string, rows: list<array<string,mixed>>}>}>
+     * @return list<array{name:string, color:?string, locality:string, subtotal_cestas:float, subtotal_eggs:?string, modalities: list<array{label:string, rows: list<array<string,mixed>>}>}>
      */
     private function buildGroups(array $lines): array
     {
@@ -199,10 +231,12 @@ class NodeDeliverySheet
                 'locality' => $this->localityFor($line->groupName ?? ''),
                 'mods' => [],
                 'subtotal_cestas' => 0.0,
+                'subtotal_dozens' => 0.0,
             ];
             $byWbg[$gid]['mods'][$bucket['order']] ??= ['label' => $bucket['label'], 'rows' => []];
             $byWbg[$gid]['mods'][$bucket['order']]['rows'][] = $this->row($line);
             $byWbg[$gid]['subtotal_cestas'] += $line->cestas;
+            $byWbg[$gid]['subtotal_dozens'] += $line->dozens;
         }
 
         uasort($byWbg, static fn (array $a, array $b): int => strnatcasecmp($a['name'], $b['name']));
@@ -222,6 +256,7 @@ class NodeDeliverySheet
                 'color' => $g['color'],
                 'locality' => $g['locality'],
                 'subtotal_cestas' => $g['subtotal_cestas'],
+                'subtotal_eggs' => $this->formatEggs($g['subtotal_dozens'])['spec'],
                 'modalities' => array_values($g['mods']),
             ];
         }
@@ -240,7 +275,7 @@ class NodeDeliverySheet
      * casa}" (row['relocated_from']). Mismas subdivisiones por modalidad que un grupo normal.
      *
      * @param DeliveryLine[] $lines
-     * @return array{name:string, color:?string, locality:string, subtotal_cestas:float, modalities: list<array{label:string, rows: list<array<string,mixed>>}>}
+     * @return array{name:string, color:?string, locality:string, subtotal_cestas:float, subtotal_eggs:?string, modalities: list<array{label:string, rows: list<array<string,mixed>>}>}
      */
     private function buildRelocatedGroup(array $lines): array
     {
@@ -263,6 +298,7 @@ class NodeDeliverySheet
             'color' => null,
             'locality' => '',
             'subtotal_cestas' => $subtotal,
+            'subtotal_eggs' => $this->eggSubtotalSpec($lines),
             'modalities' => array_values($mods),
         ];
     }
@@ -273,7 +309,7 @@ class NodeDeliverySheet
      * subdividir por modalidad porque no tienen). Ver {@see \App\Entity\PartnerBasketExtra}.
      *
      * @param DeliveryLine[] $lines
-     * @return array{name:string, color:?string, locality:string, subtotal_cestas:float, modalities: list<array{label:?string, rows: list<array<string,mixed>>}>}
+     * @return array{name:string, color:?string, locality:string, subtotal_cestas:float, subtotal_eggs:?string, modalities: list<array{label:?string, rows: list<array<string,mixed>>}>}
      */
     private function buildExtraGroup(array $lines): array
     {
@@ -291,8 +327,58 @@ class NodeDeliverySheet
             'color' => null,
             'locality' => '',
             'subtotal_cestas' => $subtotal,
+            'subtotal_eggs' => $this->eggSubtotalSpec($lines),
             'modalities' => [['label' => null, 'rows' => $rows]],
         ];
+    }
+
+    /**
+     * Sección "Albergue" del nodo: cestas de los voluntarios de acogida que
+     * recogen aquí esta semana (cesta derivada de su estancia, ver
+     * {@see HelperDeliveryResolver}). Va al final, una sola lista ordenada por
+     * nombre, sin subdividir por modalidad (no la tienen). Cuenta en los totales
+     * del nodo igual que cualquier otra entrega.
+     *
+     * @param DeliveryLine[] $lines Líneas con isHelper=true.
+     * @return array{name:string, color:?string, locality:string, subtotal_cestas:float, subtotal_eggs:?string, modalities: list<array{label:?string, rows: list<array<string,mixed>>}>}
+     */
+    private function buildHelperGroup(array $lines): array
+    {
+        usort($lines, $this->compareByDisplayName(...));
+
+        $rows = [];
+        $subtotal = 0.0;
+        foreach ($lines as $line) {
+            $rows[] = $this->row($line);
+            $subtotal += $line->cestas;
+        }
+
+        return [
+            'name' => 'Albergue',
+            'color' => null,
+            'locality' => '',
+            'subtotal_cestas' => $subtotal,
+            'subtotal_eggs' => $this->eggSubtotalSpec($lines),
+            'modalities' => [['label' => null, 'rows' => $rows]],
+        ];
+    }
+
+    /**
+     * Subtotal de huevos de un conjunto de líneas, en la notación compacta D/M
+     * del listado (p. ej. "2D+1M"); null si la sección no lleva huevos. Va en el
+     * pie de cada sección, bajo la columna de huevos.
+     *
+     * @param DeliveryLine[] $lines
+     * @return string|null
+     */
+    private function eggSubtotalSpec(array $lines): ?string
+    {
+        $dozens = 0.0;
+        foreach ($lines as $line) {
+            $dozens += $line->dozens;
+        }
+
+        return $this->formatEggs($dozens)['spec'];
     }
 
     /**
@@ -329,7 +415,7 @@ class NodeDeliverySheet
      * WBG) porque en este bloque no se agrupa por grupo de recogida.
      *
      * @param DeliveryLine[] $lines
-     * @return array{rows: list<array<string,mixed>>}
+     * @return array{rows: list<array<string,mixed>>, subtotal_cestas: float, subtotal_eggs: ?string}
      */
     private function buildShared(array $lines): array
     {
@@ -337,21 +423,29 @@ class NodeDeliverySheet
         [$ordered, $pairEnds] = $this->pinSharedPairs($lines);
 
         $rows = [];
+        $subtotal = 0.0;
         foreach ($ordered as $line) {
             $row = $this->row($line);
             $row['color'] = $line->groupColor;
             $row['pair_end'] = isset($pairEnds[spl_object_id($line)]);
             $rows[] = $row;
+            $subtotal += $line->cestas;
         }
 
-        return ['rows' => $rows];
+        return [
+            'rows' => $rows,
+            'subtotal_cestas' => $subtotal,
+            'subtotal_eggs' => $this->eggSubtotalSpec($lines),
+        ];
     }
 
     /**
      * Fila imprimible de una entrega: nombre de reparto, código de modalidad,
-     * cestas físicas y especificación de huevos.
+     * cestas físicas y especificación de huevos. `partner_id` permite casar al
+     * mismo socio entre semanas distintas (lo usa el listado mensual en matriz);
+     * es null en entregas sin socio detrás (extra de no-suscriptor, voluntario).
      *
-     * @return array{name:string, code:string, cestas:float, egg_spec:?string, egg_count:int, locality:string}
+     * @return array{name:string, code:string, cestas:float, egg_spec:?string, egg_count:int, locality:string, relocated_from:?string, partner_id:?int}
      */
     private function row(DeliveryLine $line): array
     {
@@ -365,6 +459,7 @@ class NodeDeliverySheet
             'egg_count' => $eggs['count'],
             'locality' => $this->localityForRow($line),
             'relocated_from' => $line->relocatedFromLabel,
+            'partner_id' => $line->partnerId,
         ];
     }
 
@@ -396,6 +491,13 @@ class NodeDeliverySheet
      */
     private function deriveCode(DeliveryLine $line): string
     {
+        // Los voluntarios del albergue no tienen modalidad: celda de código vacía
+        // (sin esto, llevar huevos los marcaría "H" = solo-huevos, que es falso —
+        // suelen llevar verdura + huevos).
+        if ($line->isHelper) {
+            return '';
+        }
+
         $bsId = $line->basketShareId;
         $base = self::CODE_BY_BASKET_SHARE[$bsId] ?? '';
         if ($bsId === 5) {

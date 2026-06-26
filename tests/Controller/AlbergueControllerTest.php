@@ -2,7 +2,9 @@
 
 namespace App\Tests\Controller;
 
+use App\Entity\Basket;
 use App\Entity\Helper;
+use App\Entity\HelperBasketSkip;
 use App\Entity\HelperSource;
 use App\Entity\HostingCapacity;
 use App\Entity\InternshipDetail;
@@ -268,6 +270,97 @@ class AlbergueControllerTest extends AbstractAuthenticatedTest
 
         $em = $this->em();
         $em->remove($em->getRepository(User::class)->find($userId));
+        $em->flush();
+    }
+
+    /**
+     * Calendario de recogida del voluntario y toggle "no recoge": con cesta
+     * activa y una estancia confirmada que cubre una semana de reparto de
+     * Torremocha, el calendario lista esa semana; saltarla crea el
+     * HelperBasketSkip y volver a recogerla lo borra (round-trip por HTTP).
+     *
+     * Autocontenido y determinista: crea su propio Basket en un viernes futuro
+     * aislado de los que siembran las fixtures (next/following friday relativos
+     * a hoy), de modo que NO depende del día de la semana en que corra el test.
+     * Torremocha (nodo por defecto) reparte los viernes, así que la fecha física
+     * del ciclo es ese mismo viernes.
+     */
+    public function testHelperBasketCalendarSkipRoundTrip(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $em = $this->em();
+
+        $source = $this->createSource($em, 'TEST cesta ' . uniqid());
+        $helper = $this->createHelper($em, 'TEST voluntario cesta ' . uniqid(), $source);
+        $helper->setBasketActive(true)->setBasketVegBaskets(1)->setBasketEggDozens(1.0);
+
+        // Viernes futuro propio, alejado de los Baskets de las fixtures.
+        $friday = (new \DateTimeImmutable('today'))->modify('next friday')->modify('+5 weeks');
+        $basket = (new Basket())
+            ->setDate(\DateTime::createFromImmutable($friday))
+            ->setWeek((int) $friday->format('W'))
+            ->setAmount(1);
+        $em->persist($basket);
+
+        // Estancia confirmada ceñida a ese viernes (±2 días): el calendario lista
+        // exactamente esa semana de reparto y ninguna otra.
+        $stay = (new Stay())
+            ->setHelper($helper)
+            ->setArrivalDate($friday->modify('-2 days'))
+            ->setDepartureDate($friday->modify('+2 days'))
+            ->setStatus(Stay::STATUS_CONFIRMED);
+        $em->persist($stay);
+        $em->flush();
+
+        $sourceId = $source->getId();
+        $helperId = $helper->getId();
+        $stayId = $stay->getId();
+        $basketId = $basket->getId();
+        $fridayHuman = $friday->format('d/m/Y');
+        $fridayIso = $friday->format('Y-m-d');
+
+        // clear() fuerza que la petición cargue un Helper FRESCO (como en
+        // producción, donde MapEntity lo trae de cero): si no, el helper recién
+        // creado conserva en el identity map su colección stays vacía (nunca se
+        // hizo addStay, sólo stay->setHelper), y el calendario saldría sin semanas.
+        $this->em()->clear();
+
+        // El calendario lista la semana de ese viernes con su botón de saltar.
+        $crawler = $client->request('GET', sprintf('/gestion/albergue/helpers/%d/calendario', $helperId));
+        $this->assertResponseIsSuccessful();
+        $this->assertStringContainsString($fridayHuman, $crawler->filter('body')->text());
+
+        // Saltar esa semana → redirige al calendario y persiste el skip.
+        $form = $crawler->filterXPath(sprintf('//form[.//input[@value="%s"]]', $fridayIso))->form();
+        $client->submit($form);
+        $this->assertResponseRedirects(sprintf('/gestion/albergue/helpers/%d/calendario', $helperId));
+
+        $skip = $this->em()->getRepository(HelperBasketSkip::class)
+            ->findOneBy(['helper' => $helperId, 'date' => $friday]);
+        $this->assertNotNull($skip, 'El "no recoge" debería haberse guardado.');
+
+        // Volver a recogerla → borra el skip.
+        $crawler = $client->request('GET', sprintf('/gestion/albergue/helpers/%d/calendario', $helperId));
+        $form = $crawler->filterXPath(sprintf('//form[.//input[@value="%s"]]', $fridayIso))->form();
+        $client->submit($form);
+        $this->assertResponseRedirects(sprintf('/gestion/albergue/helpers/%d/calendario', $helperId));
+
+        $this->assertNull(
+            $this->em()->getRepository(HelperBasketSkip::class)
+                ->findOneBy(['helper' => $helperId, 'date' => $friday]),
+            'Volver a recoger debería borrar el skip.',
+        );
+
+        // Limpieza (por si quedara algún skip, antes del helper).
+        $em = $this->em();
+        foreach ($em->getRepository(HelperBasketSkip::class)->findBy(['helper' => $helperId]) as $s) {
+            $em->remove($s);
+        }
+        $em->remove($em->getRepository(Stay::class)->find($stayId));
+        $em->flush();
+        $em->remove($em->getRepository(Helper::class)->find($helperId));
+        $em->remove($em->getRepository(HelperSource::class)->find($sourceId));
+        $em->remove($em->getRepository(Basket::class)->find($basketId));
         $em->flush();
     }
 

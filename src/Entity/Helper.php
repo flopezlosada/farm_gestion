@@ -122,6 +122,51 @@ class Helper
     private $notes;
 
     /**
+     * ¿Este voluntario se lleva cesta de reparto durante su estancia? Interruptor
+     * que enciende/apaga su aparición en el listado de reparto. La composición
+     * (cestas de verdura + docenas) se fija al darlo de alta; lo único editable
+     * por semana es saltar la recogida ({@see HelperBasketSkip}). Modelo derivado:
+     * la cesta NO se materializa en weekly_basket, se dibuja al vuelo desde esta
+     * config + las fechas de la estancia (ver {@see \App\Service\Delivery\HelperDeliveryResolver}).
+     *
+     * @var bool
+     * @ORM\Column(name="basket_active", type="boolean", options={"default": false})
+     */
+    private $basketActive = false;
+
+    /**
+     * Nodo de recogida de la cesta del voluntario (hoy siempre Torremocha, pero
+     * configurable). Si es null, el resolver lo trata como Torremocha (default
+     * flexible), así no hace falta tocar todos los registros existentes.
+     *
+     * @var Node|null
+     * @ORM\ManyToOne(targetEntity="Node")
+     * @ORM\JoinColumn(name="basket_node_id", referencedColumnName="id", nullable=true)
+     */
+    private $basketNode;
+
+    /**
+     * Número de cestas de verdura que se lleva cada semana (0 o más). 0 = solo
+     * huevos. La hoja de reparto sólo sabe pintar verdura (cestas) y huevos
+     * (docenas), por eso la composición son estas dos cantidades y no un modelo
+     * genérico de N componentes.
+     *
+     * @var int
+     * @ORM\Column(name="basket_veg_baskets", type="integer", options={"default": 1})
+     */
+    #[Assert\PositiveOrZero]
+    private $basketVegBaskets = 1;
+
+    /**
+     * Docenas de huevos por semana (0 o más; admite medias docenas, p. ej. 0.5).
+     *
+     * @var float
+     * @ORM\Column(name="basket_egg_dozens", type="float", options={"default": 1})
+     */
+    #[Assert\PositiveOrZero]
+    private $basketEggDozens = 1.0;
+
+    /**
      * @var \DateTime
      * @Gedmo\Timestampable(on="create")
      * @ORM\Column(name="created", type="datetime")
@@ -387,6 +432,82 @@ class Helper
     public function getStays(): Collection
     {
         return $this->stays;
+    }
+
+    /**
+     * @return bool
+     */
+    public function isBasketActive(): bool
+    {
+        return $this->basketActive;
+    }
+
+    /**
+     * @param bool $basketActive
+     * @return self
+     */
+    public function setBasketActive(bool $basketActive): self
+    {
+        $this->basketActive = $basketActive;
+
+        return $this;
+    }
+
+    /**
+     * @return Node|null
+     */
+    public function getBasketNode(): ?Node
+    {
+        return $this->basketNode;
+    }
+
+    /**
+     * @param Node|null $basketNode
+     * @return self
+     */
+    public function setBasketNode(?Node $basketNode): self
+    {
+        $this->basketNode = $basketNode;
+
+        return $this;
+    }
+
+    /**
+     * @return int
+     */
+    public function getBasketVegBaskets(): int
+    {
+        return $this->basketVegBaskets;
+    }
+
+    /**
+     * @param int $basketVegBaskets
+     * @return self
+     */
+    public function setBasketVegBaskets(int $basketVegBaskets): self
+    {
+        $this->basketVegBaskets = $basketVegBaskets;
+
+        return $this;
+    }
+
+    /**
+     * @return float
+     */
+    public function getBasketEggDozens(): float
+    {
+        return $this->basketEggDozens;
+    }
+
+    /**
+     * @param float $basketEggDozens
+     * @return self
+     */
+    public function setBasketEggDozens(float $basketEggDozens): self
+    {
+        $this->basketEggDozens = $basketEggDozens;
+
+        return $this;
     }
 
     /**

@@ -15,6 +15,8 @@ use App\Entity\WeeklyBasketGroup;
 use App\Repository\PartnerBasketShareRepository;
 use App\Repository\WeeklyBasketItemRepository;
 use App\Repository\WeeklyBasketRepository;
+use App\Service\Delivery\DeliveryLine;
+use App\Service\Delivery\HelperDeliveryResolver;
 use App\Service\Delivery\NodeDeliverySheet;
 use PHPUnit\Framework\TestCase;
 
@@ -33,6 +35,8 @@ class NodeDeliverySheetTest extends TestCase
     private array $amounts = [];
     /** @var array<int,?PartnerBasketShare> partner.id => PBS activo */
     private array $pbsByPartner = [];
+    /** @var DeliveryLine[] líneas de voluntarios del albergue que devuelve el resolver mockeado */
+    private array $helperLines = [];
 
     public function testHojaCompletaDeUnNodo(): void
     {
@@ -46,6 +50,7 @@ class NodeDeliverySheetTest extends TestCase
 
         $torreGroup = $groups[1];
         $this->assertSame(2.0, $torreGroup['subtotal_cestas'], 'subtotal = 1 + 1 + 0 (solo huevos)');
+        $this->assertSame('2D+1M', $torreGroup['subtotal_eggs'], 'huevos del grupo = 1D (Cris) + 1D+1M (Raquel) = 2,5 docenas');
         $this->assertSame('Torremocha', $torreGroup['locality']);
         $this->assertSame(
             ['Semanales', 'Quincenales y mensuales', 'Solo huevos'],
@@ -73,6 +78,7 @@ class NodeDeliverySheetTest extends TestCase
         // Bustarviejo: quincenal con huevos → QH, "1M" / 6.
         $bustaGroup = $groups[0];
         $this->assertSame(1.0, $bustaGroup['subtotal_cestas']);
+        $this->assertSame('1M', $bustaGroup['subtotal_eggs'], 'huevos del grupo = 1M (Victoria, media docena)');
         $victoriaRow = $bustaGroup['modalities'][0]['rows'][0];
         $this->assertSame('QH', $victoriaRow['code']);
         $this->assertSame('1M', $victoriaRow['egg_spec']);
@@ -118,11 +124,12 @@ class NodeDeliverySheetTest extends TestCase
                         'color' => '#e0a585',
                         'locality' => 'Bustarviejo',
                         'subtotal_cestas' => 1.0,
+                        'subtotal_eggs' => '1M',
                         'modalities' => [
                             [
                                 'label' => 'Quincenales y mensuales',
                                 'rows' => [
-                                    ['name' => 'Victoria y David', 'code' => 'QH', 'cestas' => 1.0, 'egg_spec' => '1M', 'egg_count' => 6, 'locality' => 'Bustarviejo', 'relocated_from' => null],
+                                    ['name' => 'Victoria y David', 'code' => 'QH', 'cestas' => 1.0, 'egg_spec' => '1M', 'egg_count' => 6, 'locality' => 'Bustarviejo', 'relocated_from' => null, 'partner_id' => 4],
                                 ],
                             ],
                         ],
@@ -132,23 +139,24 @@ class NodeDeliverySheetTest extends TestCase
                         'color' => '#85c0e0',
                         'locality' => 'Torremocha',
                         'subtotal_cestas' => 2.0,
+                        'subtotal_eggs' => '2D+1M',
                         'modalities' => [
                             [
                                 'label' => 'Semanales',
                                 'rows' => [
-                                    ['name' => 'Cris y Paco', 'code' => 'SH', 'cestas' => 1.0, 'egg_spec' => '1D', 'egg_count' => 12, 'locality' => 'Torremocha', 'relocated_from' => null],
+                                    ['name' => 'Cris y Paco', 'code' => 'SH', 'cestas' => 1.0, 'egg_spec' => '1D', 'egg_count' => 12, 'locality' => 'Torremocha', 'relocated_from' => null, 'partner_id' => 1],
                                 ],
                             ],
                             [
                                 'label' => 'Quincenales y mensuales',
                                 'rows' => [
-                                    ['name' => 'Miguel y Paloma', 'code' => 'Q', 'cestas' => 1.0, 'egg_spec' => null, 'egg_count' => 0, 'locality' => 'Torremocha', 'relocated_from' => null],
+                                    ['name' => 'Miguel y Paloma', 'code' => 'Q', 'cestas' => 1.0, 'egg_spec' => null, 'egg_count' => 0, 'locality' => 'Torremocha', 'relocated_from' => null, 'partner_id' => 2],
                                 ],
                             ],
                             [
                                 'label' => 'Solo huevos',
                                 'rows' => [
-                                    ['name' => 'Raquel', 'code' => 'H', 'cestas' => 0.0, 'egg_spec' => '1D+1M', 'egg_count' => 18, 'locality' => 'Torremocha', 'relocated_from' => null],
+                                    ['name' => 'Raquel', 'code' => 'H', 'cestas' => 0.0, 'egg_spec' => '1D+1M', 'egg_count' => 18, 'locality' => 'Torremocha', 'relocated_from' => null, 'partner_id' => 3],
                                 ],
                             ],
                         ],
@@ -156,10 +164,12 @@ class NodeDeliverySheetTest extends TestCase
                 ],
                 'shared' => [
                     'rows' => [
-                        ['name' => 'Eduardo y Pilar', 'code' => 'SC', 'cestas' => 0.5, 'egg_spec' => null, 'egg_count' => 0, 'locality' => 'Torremocha', 'relocated_from' => null, 'color' => '#85c0e0', 'pair_end' => false],
-                        ['name' => 'Pilar y Eduardo', 'code' => 'SC', 'cestas' => 0.5, 'egg_spec' => null, 'egg_count' => 0, 'locality' => 'Torremocha', 'relocated_from' => null, 'color' => '#85c0e0', 'pair_end' => true],
-                        ['name' => 'Hilde', 'code' => 'QC', 'cestas' => 0.5, 'egg_spec' => null, 'egg_count' => 0, 'locality' => 'Bustarviejo', 'relocated_from' => null, 'color' => '#e0a585', 'pair_end' => true],
+                        ['name' => 'Eduardo y Pilar', 'code' => 'SC', 'cestas' => 0.5, 'egg_spec' => null, 'egg_count' => 0, 'locality' => 'Torremocha', 'relocated_from' => null, 'partner_id' => 6, 'color' => '#85c0e0', 'pair_end' => false],
+                        ['name' => 'Pilar y Eduardo', 'code' => 'SC', 'cestas' => 0.5, 'egg_spec' => null, 'egg_count' => 0, 'locality' => 'Torremocha', 'relocated_from' => null, 'partner_id' => 5, 'color' => '#85c0e0', 'pair_end' => true],
+                        ['name' => 'Hilde', 'code' => 'QC', 'cestas' => 0.5, 'egg_spec' => null, 'egg_count' => 0, 'locality' => 'Bustarviejo', 'relocated_from' => null, 'partner_id' => 7, 'color' => '#e0a585', 'pair_end' => true],
                     ],
+                    'subtotal_cestas' => 1.5,
+                    'subtotal_eggs' => null,
                 ],
                 'totals' => ['cestas' => 4.5, 'docenas' => 3.0],
             ],
@@ -223,6 +233,63 @@ class NodeDeliverySheetTest extends TestCase
      *
      * @return array<string,mixed>
      */
+    /**
+     * Las cestas de voluntarios del albergue (líneas isHelper) van a un grupo
+     * propio "Albergue" al final, no a "Cestas extra" aunque no tengan modalidad,
+     * y sus cantidades cuentan en los totales del nodo.
+     */
+    public function testHelperBasketsFormOwnGroupAndCountInTotals(): void
+    {
+        // Sin socios materializados; sólo dos voluntarios derivados.
+        $this->helperLines = [
+            new DeliveryLine(
+                nameForDelivery: 'Germán',
+                basketShareId: null,
+                subscribedToEggs: true,
+                cestas: 1.0,
+                dozens: 1.0,
+                groupId: null,
+                groupName: null,
+                groupColor: null,
+                city: null,
+                partnerId: null,
+                sharePartnerId: null,
+                relocatedFromLabel: null,
+                isHelper: true,
+            ),
+            new DeliveryLine(
+                nameForDelivery: 'Marie',
+                basketShareId: null,
+                subscribedToEggs: false,
+                cestas: 2.0,
+                dozens: 0.0,
+                groupId: null,
+                groupName: null,
+                groupColor: null,
+                city: null,
+                partnerId: null,
+                sharePartnerId: null,
+                relocatedFromLabel: null,
+                isHelper: true,
+            ),
+        ];
+
+        $result = $this->buildSheet();
+
+        $this->assertSame(['Albergue'], array_column($result['groups'], 'name'), 'Sin socios, el único grupo es Albergue.');
+        $albergue = $result['groups'][0];
+        $rows = $albergue['modalities'][0]['rows'];
+        $this->assertSame(['Germán', 'Marie'], array_column($rows, 'name'), 'Ordenados por nombre.');
+        $this->assertSame('', $rows[0]['code'], 'Sin código de modalidad.');
+        $this->assertSame('1D', $rows[0]['egg_spec']);
+        $this->assertNull($rows[1]['egg_spec'], 'Marie no lleva huevos.');
+        $this->assertSame('1D', $albergue['subtotal_eggs'], 'subtotal huevos Albergue = 1D (Germán) + 0 (Marie)');
+
+        // Totales: 1 + 2 = 3 cestas, 1 docena.
+        $this->assertSame(3.0, $result['totals']['cestas']);
+        $this->assertSame(1.0, $result['totals']['docenas']);
+    }
+
     private function buildSheet(): array
     {
         $wbs = array_values($this->wbs);
@@ -240,7 +307,10 @@ class NodeDeliverySheetTest extends TestCase
             static fn (Partner $p): ?PartnerBasketShare => $pbsByPartner[$p->getId()] ?? null,
         );
 
-        $this->sheet = new NodeDeliverySheet($wbRepo, $itemRepo, $pbsRepo);
+        $helperResolver = $this->createMock(HelperDeliveryResolver::class);
+        $helperResolver->method('forNodeAndBasket')->willReturn($this->helperLines);
+
+        $this->sheet = new NodeDeliverySheet($wbRepo, $itemRepo, $pbsRepo, $helperResolver);
 
         return $this->sheet->build(new Node(), (new Basket())->setDate(new \DateTime('2026-05-15')));
     }

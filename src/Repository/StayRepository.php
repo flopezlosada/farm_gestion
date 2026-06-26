@@ -2,6 +2,7 @@
 
 namespace App\Repository;
 
+use App\Entity\Node;
 use App\Entity\Stay;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
@@ -86,6 +87,55 @@ class StayRepository extends ServiceEntityRepository
             ->addOrderBy('s.arrivalDate', 'ASC')
             ->getQuery()
             ->getResult();
+    }
+
+    /**
+     * Estancias CONFIRMADAS con cesta de reparto ACTIVA que cubren el día dado
+     * en el nodo dado, con su voluntario en el mismo SELECT (sin N+1). Alimenta
+     * a {@see \App\Service\Delivery\HelperDeliveryResolver}: quién debe salir en
+     * el listado de reparto de ese nodo esa semana.
+     *
+     * El día se cubre con la convención de medio intervalo abierto del aforo
+     * (arrival <= date < departure: el día de salida ya no recoge), reusando la
+     * forma de {@see self::findConfirmedOverlapping()} con el rango [date, date+1).
+     *
+     * El nodo efectivo del voluntario es {@see Helper::$basketNode}; cuando es
+     * null se trata como el nodo por defecto (Torremocha). El llamador indica con
+     * $includeNullNode si ESTE nodo es el por defecto, para recoger también a los
+     * voluntarios sin nodo asignado.
+     *
+     * @param \DateTimeImmutable $date            Fecha física de entrega del nodo.
+     * @param Node               $node            Nodo cuyo listado se construye.
+     * @param bool               $includeNullNode Si true, incluye también helpers con basketNode null.
+     * @return Stay[] Ordenadas por nombre del voluntario.
+     */
+    public function findConfirmedDeliveringOn(
+        \DateTimeImmutable $date,
+        Node $node,
+        bool $includeNullNode,
+    ): array {
+        $to = $date->modify('+1 day');
+
+        $qb = $this->createQueryBuilder('s')
+            ->addSelect('h')
+            ->join('s.helper', 'h')
+            ->andWhere('s.status = :status')
+            ->andWhere('s.arrivalDate < :to')
+            ->andWhere('s.departureDate > :from')
+            ->andWhere('h.basketActive = true')
+            ->setParameter('status', Stay::STATUS_CONFIRMED)
+            ->setParameter('from', $date)
+            ->setParameter('to', $to)
+            ->orderBy('h.name', 'ASC');
+
+        if ($includeNullNode) {
+            $qb->andWhere('h.basketNode = :node OR h.basketNode IS NULL');
+        } else {
+            $qb->andWhere('h.basketNode = :node');
+        }
+        $qb->setParameter('node', $node);
+
+        return $qb->getQuery()->getResult();
     }
 
     /**

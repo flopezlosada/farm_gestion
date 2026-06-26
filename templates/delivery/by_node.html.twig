@@ -264,12 +264,16 @@
 
     {{ csa.page_header('Socixs · Reparto', _heading, 'Listado de socixs que recogen cesta este día.') }}
 
-    <p style="margin: -8px 0 16px;">
-        <a href="{{ path('delivery_printable_select', { basketId: basket.id }) }}"
-           style="display: inline-flex; align-items: center; gap: 7px; padding: 7px 14px; border-radius: 6px; background: var(--dlv-surface); border: 1px solid var(--dlv-line-2); color: var(--dlv-ink); text-decoration: none; font-weight: 500; font-size: 13px;">
-            <i class="fa fa-print" aria-hidden="true"></i> Imprimir listado
-        </a>
-    </p>
+    <div style="display: flex; flex-wrap: wrap; gap: 10px; margin: -4px 0 18px;">
+        {{ csa.btn('Listado semanal', {
+            variant: 'primary', icon: 'fa-print',
+            href: path('delivery_printable_select', { basketId: basket.id }),
+        }) }}
+        {{ csa.btn('Listado mensual', {
+            variant: 'info-soft', icon: 'fa-table',
+            href: path('delivery_printable_monthly_select'),
+        }) }}
+    </div>
 
     {# ============ Mini-timeline + page head ============ #}
     <div class="dlv-head">
@@ -379,7 +383,7 @@
     </div>
 
     {# ============ Listado (secciones unificadas según el modo de orden) ============ #}
-    {% if sections is empty %}
+    {% if sections is empty and helper_rows is empty %}
         <div class="empty">
             Este nodo no tiene reparto el {{ basket.date|date('d/m/Y') }}.
             {% if node.cadence == 'biweekly' %}
@@ -431,6 +435,52 @@
                 </div>
             </section>
         {% endfor %}
+
+        {# ============ Albergue (cestas de voluntarios, cesta derivada) ============ #}
+        {% if helper_rows is not empty %}
+            {% set alb_cestas = 0 %}
+            {% set alb_huevos = 0 %}
+            {% for row in helper_rows %}
+                {% set alb_cestas = alb_cestas + row.cestas %}
+                {% if row.dozens > 0 %}{% set alb_huevos = alb_huevos + 1 %}{% endif %}
+            {% endfor %}
+            <section class="dlv-wbg">
+                <header class="dlv-wbg__head" onclick="this.parentElement.classList.toggle('collapsed')">
+                    <svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+                    <div>
+                        <span class="dlv-wbg__name">Albergue</span>
+                    </div>
+                    <div class="dlv-wbg__meta">
+                        <div class="m"><span class="n">{{ helper_rows|length }}</span><span class="l">voluntarios</span></div>
+                        <div class="m"><span class="n">{{ alb_cestas == alb_cestas|round ? alb_cestas|number_format(0) : alb_cestas|number_format(1, ',', '.') }}</span><span class="l">cestas</span></div>
+                        <div class="m eggs"><span class="n">{{ alb_huevos }}</span><span class="l">huevos</span></div>
+                    </div>
+                </header>
+                <div class="dlv-wbg__body">
+                    <table>
+                        <tbody>
+                        {% for row in helper_rows %}
+                            <tr class="dlv-row">
+                                <td class="partner">{{ row.name }}</td>
+                                <td style="width: 130px;">
+                                    <span class="mod mod--extra"><span class="dot"></span>Albergue</span>
+                                </td>
+                                <td class="num-c" style="width: 70px;">{{ row.cestas == row.cestas|round ? row.cestas|number_format(0) : row.cestas|number_format(1, ',', '.') }}</td>
+                                <td style="width: 110px;">
+                                    {% if row.dozens > 0 %}
+                                        <span class="num-c">{{ row.dozens == row.dozens|round ? row.dozens|number_format(0) : row.dozens|number_format(1, ',', '.') }} doc.</span>
+                                    {% else %}
+                                        <span class="no">—</span>
+                                    {% endif %}
+                                </td>
+                                <td class="dlv-actions" style="width: 44px;"></td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        {% endif %}
     {% endif %}
 
     {# ============ Modal de cesta extra puntual ============ #}

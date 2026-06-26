@@ -43,7 +43,19 @@
             {% endblock %}
         {% endembed %}
 
-        {% embed '_components/csa_form_section.html.twig' with { num: '4', title: 'Notas', subtitle: 'Cualquier detalle útil.' } %}
+        {% embed '_components/csa_form_section.html.twig' with { num: '4', title: 'Cesta de reparto', subtitle: 'Cesta semanal que se lleva durante su estancia. Las cantidades se fijan aquí; para saltar una semana, usa su calendario de recogida.' } %}
+            {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
+                <div class="csa-form-grid">
+                    {{ csa.field(form.basketActive, 'Se lleva cesta de reparto', { full: true }) }}
+                    {{ csa.field(form.basketNode, 'Nodo de recogida') }}
+                    {{ csa.field(form.basketVegBaskets, 'Cestas de verdura') }}
+                    {{ csa.field(form.basketEggDozens, 'Docenas de huevos') }}
+                </div>
+            {% endblock %}
+        {% endembed %}
+
+        {% embed '_components/csa_form_section.html.twig' with { num: '5', title: 'Notas', subtitle: 'Cualquier detalle útil.' } %}
             {% block body %}
                 {% import '_macros/csa.html.twig' as csa %}
                 <div class="csa-form-grid">

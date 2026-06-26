@@ -32,6 +32,9 @@ final class DeliveryLine
      *        distinto al suyo (override de nodo), la etiqueta de su origen de CASA
      *        ("Nodo · Grupo", deduplicada cuando coinciden), para marcarlo "de X" en la
      *        sección Trasladados del nodo destino. null = recoge en su nodo (normal).
+     * @param bool        $isHelper Si la línea es la cesta de un voluntario del albergue
+     *        (no un socio): va a su propia sección "Albergue", no a "Cestas extra" aunque
+     *        no tenga modalidad. Ver {@see HelperDeliveryResolver} y {@see NodeDeliverySheet::shape}.
      */
     public function __construct(
         public readonly string $nameForDelivery,
@@ -46,6 +49,7 @@ final class DeliveryLine
         public readonly ?int $partnerId,
         public readonly ?int $sharePartnerId,
         public readonly ?string $relocatedFromLabel = null,
+        public readonly bool $isHelper = false,
     ) {
     }
 }

@@ -1,77 +1,76 @@
 {# ============================================================
- # Selector de nodos para el listado imprimible de un día.
+ # Listado de reparto SEMANAL — elegir nodos e imprimir el viernes en curso.
+ # Se llega desde el botón "Listado semanal" de la pantalla de reparto.
  #
  # Recibe (de DeliveryController::printableSelect):
- #   - basket   Basket del día a imprimir.
+ #   - basket   Basket del viernes.
  #   - nodes    list<{node, delivers:bool, physical_date:?Date}>.
- #
- # El form hace GET a delivery_printable_pdf con nodes[] → un único PDF,
- # cada nodo en su(s) hoja(s).
+ #   - any_delivers  bool.
  # ============================================================ #}
 {% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
 
-{% block title %}Imprimir reparto · {{ basket.date|date('d/m/Y') }}{% endblock %}
+{% set _month_es = ['', 'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'] %}
+
+{% block title %}Imprimir reparto semanal · {{ basket.date|date('d/m/Y') }}{% endblock %}
 
 {% block csa_crumbs %}
     <a href="{{ path('dashboard') }}">Inicio</a>
     <span class="csa-topbar__crumbs-sep">/</span>
-    Socixs
+    Reparto
     <span class="csa-topbar__crumbs-sep">/</span>
-    <span class="csa-topbar__crumb-active">Imprimir reparto</span>
+    <span class="csa-topbar__crumb-active">Listado semanal</span>
 {% endblock %}
 
 {% block more_css %}
 {{ parent() }}
 <style>
-.prt-sel { max-width: 640px; }
-.prt-sel__head { font-family: 'Fraunces', serif; font-weight: 600; font-size: 24px; margin: 0 0 4px; letter-spacing: -0.02em; }
-.prt-sel__sub { color: #8d8773; font-size: 13px; margin-bottom: 24px; }
-.prt-sel__list { border: 1px solid #ebe7dd; border-radius: 8px; overflow: hidden; }
-.prt-sel__item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #f2efe7; }
-.prt-sel__item:last-child { border-bottom: 0; }
-.prt-sel__item input { width: 18px; height: 18px; }
-.prt-sel__item--off { opacity: .6; }
-.prt-sel__item--off input { cursor: not-allowed; }
-.prt-sel__name { font-weight: 600; color: #1d1c17; }
-.prt-sel__meta { margin-left: auto; font-size: 12px; color: #8d8773; }
-.prt-sel__meta--off { color: #b45d3a; }
-.prt-sel__empty { margin-top: 16px; color: #b45d3a; font-size: 13px; }
-.prt-sel__actions { margin-top: 24px; display: flex; gap: 12px; }
-.prt-btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; border-radius: 6px; border: 0; cursor: pointer; font-weight: 600; font-size: 14px; text-decoration: none; }
-.prt-btn--go { background: #5b7a4c; color: #fff; }
-.prt-btn--go:disabled { background: #c2c2b4; cursor: not-allowed; }
-.prt-btn--ghost { background: #f2efe7; color: #5a564a; }
+.npick { display: grid; border: 1px solid var(--csa-rule); border-radius: var(--csa-radius-md); overflow: hidden; max-width: 620px; }
+.npick__item { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--csa-rule-soft); cursor: pointer; }
+.npick__item:last-child { border-bottom: 0; }
+.npick__item:hover { background: var(--csa-surface-alt); }
+.npick__item input { width: 17px; height: 17px; accent-color: var(--csa-green); }
+.npick__name { font-weight: 600; color: var(--csa-ink); }
+.npick__meta { margin-left: auto; font-size: var(--csa-fs-xs); color: var(--csa-ink-muted); }
+.npick__meta--off { color: var(--csa-terracotta); }
+.npick__actions { display: flex; gap: 10px; align-items: center; margin-top: 20px; }
 </style>
 {% endblock %}
 
 {% block csa_main %}
-<div class="prt-sel">
-    <h1 class="prt-sel__head">Imprimir listado de reparto</h1>
-    <p class="prt-sel__sub">{{ basket.date|date('l d \\d\\e F \\d\\e Y')|capitalize }} · elige los nodos a incluir. Cada nodo sale en su hoja.</p>
+    {{ csa.page_header(
+        'Reparto · Listado semanal',
+        'Viernes ' ~ basket.date|date('j') ~ ' de ' ~ _month_es[basket.date|date('n')],
+        'Elige los nodos a incluir. Cada nodo sale en su propia hoja.'
+    ) }}
 
-    <form method="get" action="{{ path('delivery_printable_pdf', {basketId: basket.id}) }}" target="_blank">
-        <div class="prt-sel__list">
-            {% for row in nodes %}
-                <label class="prt-sel__item{{ row.delivers ? '' : ' prt-sel__item--off' }}">
-                    <input type="checkbox" name="nodes[]" value="{{ row.node.id }}" {{ row.delivers ? 'checked' : 'disabled' }}>
-                    <span class="prt-sel__name">{{ row.node.name }}</span>
-                    {% if row.delivers %}
-                        <span class="prt-sel__meta">reparte el {{ row.physical_date ? row.physical_date|date('d/m') : '—' }}</span>
-                    {% else %}
-                        <span class="prt-sel__meta prt-sel__meta--off">no reparte este día</span>
-                    {% endif %}
-                </label>
-            {% endfor %}
-        </div>
+    {% embed '_components/csa_card.html.twig' with { title: 'Nodos a incluir', accent: 'green' } %}
+        {% block body %}
+            {% import '_macros/csa.html.twig' as csa %}
+            <form method="get" action="{{ path('delivery_printable_pdf', { basketId: basket.id }) }}" target="_blank">
+                <div class="npick">
+                    {% for row in nodes %}
+                        <label class="npick__item">
+                            <input type="checkbox" name="nodes[]" value="{{ row.node.id }}" {{ row.delivers ? 'checked' : 'disabled' }}>
+                            <span class="npick__name">{{ row.node.name }}</span>
+                            {% if row.delivers %}
+                                <span class="npick__meta">reparte el viernes {{ row.physical_date ? row.physical_date|date('d/m') : '—' }}</span>
+                            {% else %}
+                                <span class="npick__meta npick__meta--off">no reparte ese viernes</span>
+                            {% endif %}
+                        </label>
+                    {% endfor %}
+                </div>
 
-        {% if not any_delivers %}
-            <p class="prt-sel__empty">Ningún nodo reparte este día, no hay listado que imprimir.</p>
-        {% endif %}
+                {% if not any_delivers %}
+                    {{ csa.callout('Ningún nodo reparte ese viernes: no hay listado que imprimir.', 'warning', 'exclamation-triangle') }}
+                {% endif %}
 
-        <div class="prt-sel__actions">
-            <button type="submit" class="prt-btn prt-btn--go"{{ any_delivers ? '' : ' disabled' }}>Generar PDF</button>
-            <a href="{{ path('delivery_by_node', {nodeId: nodes|first.node.id, basketId: basket.id}) }}" class="prt-btn prt-btn--ghost">Volver al reparto</a>
-        </div>
-    </form>
-</div>
+                <div class="npick__actions">
+                    {{ csa.btn('Generar listado semanal', { variant: 'primary', icon: 'fa-print', type: 'submit', disabled: not any_delivers }) }}
+                    {{ csa.btn('Volver al reparto', { variant: 'ghost', href: path('delivery_by_node', { nodeId: nodes|first.node.id, basketId: basket.id }) }) }}
+                </div>
+            </form>
+        {% endblock %}
+    {% endembed %}
 {% endblock %}

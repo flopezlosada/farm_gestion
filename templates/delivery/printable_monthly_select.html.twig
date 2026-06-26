@@ -1,0 +1,92 @@
+{# ============================================================
+ # Listado de reparto MENSUAL — elegir mes y nodos. Se llega desde el botón
+ # "Listado mensual" de la pantalla de reparto.
+ #
+ # Recibe (de DeliveryController::monthlyPrintableSelect):
+ #   - months  list<{ym:'YYYY-MM', year, month, rel:'anterior'|'actual'|'siguiente', current:bool}>.
+ #   - nodes   App\Entity\Node[].
+ #
+ # El form hace GET a delivery_printable_monthly_pdf con ym (radio) + nodes[].
+ # ============================================================ #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Imprimir reparto mensual{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    Reparto
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Listado mensual</span>
+{% endblock %}
+
+{% block more_css %}
+{{ parent() }}
+<style>
+/* Selector de mes: tres tarjetas-radio grandes, una sola elegible. */
+.mpick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; max-width: 620px; }
+.mpick__opt input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.mpick__card { display: block; padding: 16px; border: 1.5px solid var(--csa-rule); border-radius: var(--csa-radius-md); background: var(--csa-surface); cursor: pointer; transition: border-color var(--csa-t-fast), background var(--csa-t-fast); }
+.mpick__card:hover { border-color: var(--csa-green); }
+.mpick__opt input:checked + .mpick__card { border-color: var(--csa-green); background: var(--csa-green-soft); }
+.mpick__opt input:focus-visible + .mpick__card { outline: 2px solid var(--csa-green); outline-offset: 2px; }
+.mpick__month { font-family: var(--csa-serif); font-size: var(--csa-fs-lg); color: var(--csa-ink); text-transform: capitalize; line-height: 1.1; }
+.mpick__rel { display: block; margin-top: 4px; font-size: var(--csa-fs-xs); letter-spacing: .05em; text-transform: uppercase; color: var(--csa-ink-muted); }
+
+.npick { display: grid; border: 1px solid var(--csa-rule); border-radius: var(--csa-radius-md); overflow: hidden; max-width: 620px; }
+.npick__item { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--csa-rule-soft); cursor: pointer; }
+.npick__item:last-child { border-bottom: 0; }
+.npick__item:hover { background: var(--csa-surface-alt); }
+.npick__item input { width: 17px; height: 17px; accent-color: var(--csa-green); }
+.npick__name { font-weight: 600; color: var(--csa-ink); }
+.mpick-actions { display: flex; gap: 10px; align-items: center; margin-top: 22px; }
+.mpick-label { font-size: var(--csa-fs-xs); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--csa-ink-muted); margin: 18px 0 8px; }
+</style>
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header(
+        'Reparto · Listado mensual',
+        'Imprimir un mes completo',
+        'El listado mensual sale en matriz, con todos los viernes del mes en columnas. Es una previsión: las semanas futuras pueden cambiar.'
+    ) }}
+
+    {% embed '_components/csa_card.html.twig' with { title: 'Mes y nodos', accent: 'sky' } %}
+        {% block body %}
+            {% import '_macros/csa.html.twig' as csa %}
+            {% set _month_es = ['', 'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'] %}
+            {% set _rel_label = { 'anterior': 'mes anterior', 'actual': 'este mes', 'siguiente': 'mes que viene' } %}
+
+            <form method="get" action="{{ path('delivery_printable_monthly_pdf') }}" target="_blank">
+                <div class="mpick-label">Mes a imprimir</div>
+                <div class="mpick">
+                    {% for m in months %}
+                        <label class="mpick__opt">
+                            <input type="radio" name="ym" value="{{ m.ym }}" {{ m.rel == 'siguiente' ? 'checked' : '' }}>
+                            <span class="mpick__card">
+                                <span class="mpick__month">{{ _month_es[m.month] }} {{ m.year }}</span>
+                                <span class="mpick__rel">{{ _rel_label[m.rel] }}</span>
+                            </span>
+                        </label>
+                    {% endfor %}
+                </div>
+
+                <div class="mpick-label">Nodos a incluir</div>
+                <div class="npick">
+                    {% for node in nodes %}
+                        <label class="npick__item">
+                            <input type="checkbox" name="nodes[]" value="{{ node.id }}" checked>
+                            <span class="npick__name">{{ node.name }}</span>
+                        </label>
+                    {% endfor %}
+                </div>
+
+                <div class="mpick-actions">
+                    {{ csa.btn('Generar listado mensual', { variant: 'primary', icon: 'fa-table', type: 'submit' }) }}
+                    {{ csa.btn('Volver al reparto', { variant: 'ghost', href: path('delivery_by_node_default') }) }}
+                </div>
+            </form>
+        {% endblock %}
+    {% endembed %}
+{% endblock %}
