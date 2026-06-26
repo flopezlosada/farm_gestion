@@ -41,8 +41,16 @@ class EggPeriod
     #[Assert\Length(max: 255, min: 5)]
     private $name;
 
-
-
+    /**
+     * Precio mensual por UNA docena a esta frecuencia (semanal 20 / quincenal 10
+     * / mensual 5). La cuota de huevos = este precio × nº de docenas (EggAmount).
+     * Es una cuota FIJA mensual: el factor de repartos (4/2/1) ya va incorporado
+     * en el número, no se recalcula por los repartos reales del mes.
+     *
+     * @var string $month_price
+     * @ORM\Column(name="month_price", type="decimal", precision=8, scale=2, options={"default": 0})
+     */
+    private $month_price = '0';
 
 
     /**
@@ -70,6 +78,18 @@ class EggPeriod
     public function setName(string $name): self
     {
         $this->name = $name;
+
+        return $this;
+    }
+
+    public function getMonthPrice(): ?string
+    {
+        return $this->month_price;
+    }
+
+    public function setMonthPrice(string $month_price): self
+    {
+        $this->month_price = $month_price;
 
         return $this;
     }

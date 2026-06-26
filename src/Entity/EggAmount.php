@@ -43,8 +43,11 @@ class EggAmount
 
 
     /**
-     * Precio de cesta al mes
-     * @var smallint $month_price
+     * @deprecated Ya NO se usa para calcular la cuota de huevos. Desde precios 2026
+     * la cuota = EggPeriod::getMonthPrice() (precio/docena por frecuencia) ×
+     * EggAmount::getDozens(). Este campo queda vestigial hasta que se limpie el schema.
+     *
+     * @var string $month_price
      * @ORM\Column(name="month_price",type="decimal", precision=8, scale=2)
      */
     private $month_price;

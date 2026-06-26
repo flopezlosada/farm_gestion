@@ -28,6 +28,7 @@ use App\Service\Delivery\NodeDeliveryDate;
 use App\Service\Delivery\PickupRelocationOptions;
 use App\Service\Delivery\PickupRelocator;
 use App\Service\Delivery\WeeklyBasketGenerator;
+use App\Service\Partner\BasketPricing;
 use App\Service\Partner\PartnerShareEventRecorder;
 use Doctrine\ORM\EntityManagerInterface;
 use Knp\Component\Pager\PaginatorInterface;
@@ -924,6 +925,7 @@ class PartnerController extends AbstractController
         PartnerShareEventRecorder $shareEventRecorder,
         CohortChoiceBuilder $cohortChoiceBuilder,
         WeeklyBasketGenerator $generator,
+        BasketPricing $basketPricing,
     ): Response {
         $partnerBasketShare = new PartnerBasketShare();
         $partnerBasketShare->setPartner($partner);
@@ -965,17 +967,10 @@ class PartnerController extends AbstractController
             $partnerBasketShare->setIsActive(true);
             $values = $request->get('partner_basket_share');
             if (isset($values['isFreeBasket'])) {
-
                 $partnerBasketShare->setMonthPrice(0);
                 $partnerBasketShare->setEggMonthPrice(0);
             } else {
-
-                $partnerBasketShare->setMonthPrice($partnerBasketShare->getBasketShare()->getMonthPrice() * $partnerBasketShare->getAmount());
-                if ($partnerBasketShare->getEggAmount()) {
-                    $partnerBasketShare->setEggMonthPrice($partnerBasketShare->getEggAmount()->getMonthPrice() * $partnerBasketShare->getAmount());
-                } else {
-                    $partnerBasketShare->setEggMonthPrice(0);
-                }
+                $basketPricing->applyTo($partnerBasketShare);
             }
 
             if ($partnerBasketShare->getBasketShare()->getId() == 3) {
