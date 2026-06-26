@@ -7,9 +7,13 @@
  #
  # Replica el Excel que usan hoy (docs/Listado Sierra 2026_04_30.pdf): rejilla
  # densa con líneas, localidad con color en cada fila, "CESTAS" + cantidad,
- # huevos (solo la especificación, sin el total — eso es para el cálculo del
- # xls), subtotal amarillo por grupo, compartidas en bloque aparte con su color,
- # totales al final y el trozo recortable de Trabensol. Un nodo por hoja.
+ # huevos (especificación), subtotal amarillo por grupo, compartidas en bloque
+ # aparte, totales al final y el trozo recortable de Trabensol. Un nodo por hoja.
+ #
+ # No partir grupos entre páginas: cada GRUPO es su propia <table> con
+ # page-break-inside:avoid (dompdf 2.x lo honra en <table>, NO en <tbody>). Para
+ # que las columnas sigan alineadas, la cabecera y todas las tablas de grupo
+ # comparten table-layout:fixed (clase .grid) y el mismo <colgroup>.
  # ============================================================ #}
 {% macro qty(c) %}
     {%- if c == 0 -%}*{%- elseif c == 0.5 -%}½{%- elseif c == c|round -%}{{ c|number_format(0) }}{%- else -%}{{ c|number_format(1, ',', '.') }}{%- endif -%}
@@ -32,6 +36,10 @@
 {% endmacro %}
 
 {% import _self as m %}
+{# Fila invisible que fija los anchos: en table-layout:fixed dompdf toma los
+   anchos de la PRIMERA fila (su soporte de <colgroup> es poco fiable). La misma
+   fila en cabecera y en cada tabla de grupo mantiene las columnas alineadas. #}
+{% set widthrow %}<tr class="wdef"><td style="width:15%"></td><td style="width:36%"></td><td style="width:9%"></td><td style="width:13%"></td><td style="width:8%"></td><td style="width:19%"></td></tr>{% endset %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -39,40 +47,46 @@
 <style>
     @page { margin: 0.8cm 0.7cm; }
     * { font-family: 'DejaVu Sans', sans-serif; }
-    body { color: #000; font-size: 8.5px; }
+    body { color: #000; font-size: 11px; }
 
     .node, .cut { page-break-after: always; }
     .cut:last-child { page-break-after: auto; }
 
+    /* Fila invisible de fijación de anchos (no debe verse). */
+    .wdef td { padding: 0; height: 0; line-height: 0; font-size: 0; border: 0; }
+
+    /* Cada grupo es su propia tabla; dompdf NO la parte entre páginas. */
+    .grp-block { page-break-inside: avoid; }
+
     .title { text-align: center; font-size: 9px; letter-spacing: .1em; color: #333; margin-bottom: 3px; }
 
     table { width: 100%; border-collapse: collapse; }
-    td { border: 0.5px solid #b7b7b7; padding: 1.5px 5px; vertical-align: middle; }
+    .grid { table-layout: fixed; }
+    td { border: 0.5px solid #b7b7b7; padding: 2.5px 5px; vertical-align: middle; overflow: hidden; }
 
     /* Cabecera */
-    .hd-mail { font-weight: bold; font-size: 9px; border: 0; }
-    .hd-day  { background: #d9d9d9; font-weight: bold; font-size: 11px; text-align: center; letter-spacing: .03em; }
-    .hd-c, .hd-h { background: #9bbb59; color: #fff; font-weight: bold; text-align: center; font-size: 8px; letter-spacing: .04em; }
+    .hd-mail { font-weight: bold; font-size: 11px; border: 0; }
+    .hd-day  { background: #d9d9d9; font-weight: bold; font-size: 13px; text-align: center; letter-spacing: .03em; }
+    .hd-c, .hd-h { background: #9bbb59; color: #fff; font-weight: bold; text-align: center; font-size: 10px; letter-spacing: .04em; }
     .hd-star { background: #9bbb59; text-align: center; border-color: #9bbb59; }
 
     /* Cabecera de grupo (sección) */
     .grp td { border: 0; padding-top: 5px; padding-bottom: 1px; }
-    .grp .g-name { font-weight: bold; font-size: 9.5px; }
+    .grp .g-name { font-weight: bold; font-size: 12px; }
 
-    /* Subtítulo de modalidad dentro de un grupo (SEMANALES / QUINCENALES Y MENSUALES / SOLO HUEVOS) */
-    .modsub td { border: 0; padding: 3px 5px 1px; font-weight: bold; font-size: 7.5px; letter-spacing: .1em; text-transform: uppercase; color: #555; }
+    /* Subtítulo de modalidad dentro de un grupo */
+    .modsub td { border: 0; padding: 3px 5px 1px; font-weight: bold; font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: #555; }
 
     /* Filas */
-    .t-loc  { width: 15%; font-weight: bold; font-size: 7.5px; text-transform: uppercase; letter-spacing: .02em; }
-    .t-name { width: 36%; }
-    .t-code { width: 9%;  text-align: center; font-weight: bold; }
-    .t-cl   { width: 13%; text-align: center; font-size: 7px; color: #555; }
-    .t-q    { width: 8%;  text-align: center; font-weight: bold; }
-    .t-es   { width: 19%; text-align: center; font-weight: bold; }
+    .t-loc  { font-weight: bold; font-size: 9px; text-transform: uppercase; letter-spacing: .02em; }
+    .t-code { text-align: center; font-weight: bold; }
+    .t-cl   { text-align: center; font-size: 9px; color: #555; }
+    .t-q    { text-align: center; font-weight: bold; }
+    .t-es   { text-align: center; font-weight: bold; }
 
     /* Subtotal (amarillo) */
     .sub td { border: 0.5px solid #b7b7b7; }
-    .sub .s-cell { background: #ffe14d; text-align: center; font-weight: bold; font-size: 9.5px; }
+    .sub .s-cell { background: #ffe14d; text-align: center; font-weight: bold; font-size: 12px; }
     .sub .s-blank { border: 0; }
 
     /* Compartidas */
@@ -99,7 +113,8 @@
     <div class="node">
         <div class="title">{{ _month_es[basket.date|date('n')] }}_{{ basket.date|date('Y') }}</div>
 
-        <table>
+        <table class="grid">
+            {{ widthrow }}
             <tr>
                 <td class="hd-mail" colspan="3">csa@csavegadejarama.org</td>
                 <td class="hd-day" colspan="3">{{ _dow_es[day|date('w')] }} {{ day|date('j') }} DE {{ _month_es[day|date('n')] }}</td>
@@ -110,8 +125,11 @@
                 <td class="hd-star">*</td>
                 <td class="hd-h">HUEVOS</td>
             </tr>
+        </table>
 
-            {% for group in sheet.groups %}
+        {% for group in sheet.groups %}
+            <table class="grid grp-block">
+                {{ widthrow }}
                 <tr class="grp">
                     <td class="g-name" colspan="6">{{ group.name }}</td>
                 </tr>
@@ -128,9 +146,12 @@
                     <td class="s-cell">{{ m.qty(group.subtotal_cestas) }}</td>
                     <td class="{{ group.subtotal_eggs ? 's-cell' : 's-blank' }}">{{ group.subtotal_eggs }}</td>
                 </tr>
-            {% endfor %}
+            </table>
+        {% endfor %}
 
-            {% if sheet.shared.rows is not empty %}
+        {% if sheet.shared.rows is not empty %}
+            <table class="grid grp-block">
+                {{ widthrow }}
                 <tr class="shared-hd"><td colspan="6">Compartidas</td></tr>
                 {% for row in sheet.shared.rows %}
                     <tr class="{{ row.pair_end ? 'pair-end' : '' }}">
@@ -147,8 +168,8 @@
                     <td class="s-cell">{{ m.qty(sheet.shared.subtotal_cestas) }}</td>
                     <td class="{{ sheet.shared.subtotal_eggs ? 's-cell' : 's-blank' }}">{{ sheet.shared.subtotal_eggs }}</td>
                 </tr>
-            {% endif %}
-        </table>
+            </table>
+        {% endif %}
 
         <table class="totals">
             <tr>
