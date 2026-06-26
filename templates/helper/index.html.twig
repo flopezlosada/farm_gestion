@@ -15,7 +15,9 @@
 
 {% set source_tone = { 1: 'mod-1', 2: 'mod-2', 0: 'mod-3' } %}
 {% set avatar_palette = ['', 'ochre', 'terra', 'ink'] %}
-{% set fp = { q: q, source: selected_source, year: selected_year } %}
+{# year: 'all' explícito cuando no hay filtro de año, para que los enlaces de
+   orden/limpiar NO recaigan al año actual (el defecto sin parámetro). #}
+{% set fp = { q: q, source: selected_source, year: selected_year ?: 'all' } %}
 
 {% block title %}Albergue · Voluntarios{% endblock %}
 
@@ -152,7 +154,7 @@
             </div>
 
             {% if q or selected_source or selected_year %}
-                <a class="prl-filt prl-filt--clear" href="{{ path('helper_index') }}" title="Limpiar filtros">
+                <a class="prl-filt prl-filt--clear" href="{{ path('helper_index', { year: 'all' }) }}" title="Limpiar filtros">
                     <i class="fa fa-times-circle" aria-hidden="true"></i> Limpiar
                 </a>
             {% endif %}

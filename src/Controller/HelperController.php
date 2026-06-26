@@ -55,7 +55,7 @@ class HelperController extends AbstractController
         $yearParam = $request->query->get('year');
         $year = match (true) {
             $yearParam === null => (int) date('Y'),
-            $yearParam === '' => null,
+            $yearParam === '', $yearParam === 'all' => null,
             default => (int) $yearParam,
         };
         $sort = (string) $request->query->get('sort', 'name');
