@@ -1,0 +1,147 @@
+{# ============================================================
+ # Listado de reparto MENSUAL imprimible (dompdf, apaisado). Standalone.
+ # Recibe (de DeliveryController::monthlyPrintablePdf):
+ #   - matrix  estructura de MonthlyDeliveryMatrix: {weeks, nodes[groups[modalities[rows]]]}
+ #   - year, month
+ #
+ # Matriz: socios en filas (nodo → grupo → modalidad), viernes del mes en columnas.
+ # Por semana: CESTAS / cantidad / huevos(spec) / huevos(nº). Un nodo por hoja.
+ #
+ # No partir grupos entre páginas: cada GRUPO es su propia <table> con
+ # page-break-inside:avoid (dompdf 2.x lo honra en <table>, NO en <tbody>). Para
+ # que las columnas sigan alineadas entre tablas, todas comparten table-layout:fixed
+ # y el mismo <colgroup>. La cabecera de columnas va en su propia tabla al inicio
+ # de cada nodo (no se repite en páginas de continuación de un nodo grande).
+ # ============================================================ #}
+{% macro qty(c) %}
+    {%- if c == 0 -%}{%- elseif c == 0.5 -%}½{%- elseif c == c|round -%}{{ c|number_format(0) }}{%- else -%}{{ c|number_format(1, ',', '.') }}{%- endif -%}
+{% endmacro %}
+{% import _self as m %}
+{% set _month_es = ['', 'ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'] %}
+{% set _dow_es = ['DOMINGO', 'LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO'] %}
+{% set weeks = matrix.weeks %}
+{% set ncols = 3 + 4 * weeks|length %}
+{% set wk = 76.5 / weeks|length %}
+{# Fila invisible que fija los anchos de columna: en table-layout:fixed dompdf
+   toma los anchos de la PRIMERA fila (su soporte de <colgroup> es poco fiable).
+   La misma fila en cabecera y en cada tabla de grupo → columnas alineadas. #}
+{% set widthrow %}<tr class="wdef"><td style="width:6%"></td><td style="width:14%"></td><td style="width:3.5%"></td>{% for w in weeks %}<td style="width:{{ (wk*0.34)|number_format(2,'.','') }}%"></td><td style="width:{{ (wk*0.16)|number_format(2,'.','') }}%"></td><td style="width:{{ (wk*0.34)|number_format(2,'.','') }}%"></td><td style="width:{{ (wk*0.16)|number_format(2,'.','') }}%"></td>{% endfor %}</tr>{% endset %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<style>
+    @page { margin: 0.6cm 0.5cm; }
+    * { font-family: 'DejaVu Sans', sans-serif; }
+    body { color: #000; font-size: 7px; }
+
+    .title { text-align: center; font-size: 10px; letter-spacing: .12em; color: #333; margin-bottom: 4px; font-weight: bold; }
+
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    td { border: 0.5px solid #b7b7b7; padding: 1px 3px; vertical-align: middle; overflow: hidden; }
+
+    /* Cabecera de columnas (una tabla aparte al inicio del nodo) */
+    .hd-mail { font-weight: bold; font-size: 8px; border: 0; text-align: left; }
+    .hd-week { background: #d9d9d9; font-weight: bold; font-size: 8px; text-align: center; letter-spacing: .02em; }
+    .hd-c, .hd-h { background: #9bbb59; color: #fff; font-weight: bold; text-align: center; font-size: 7px; letter-spacing: .03em; }
+
+    /* Cabeceras de grupo */
+    .grp td { border: 0; padding-top: 4px; padding-bottom: 1px; }
+    .grp .g-name { font-weight: bold; font-size: 8px; }
+    .shared-hd td { background: #e26b0a; color: #fff; font-weight: bold; font-size: 8px; letter-spacing: .08em; text-transform: uppercase; padding: 2px 4px; }
+    .modsub td { border: 0; padding: 2px 4px 0; font-weight: bold; font-size: 6.5px; letter-spacing: .08em; text-transform: uppercase; color: #555; }
+
+    /* Filas */
+    .t-loc  { font-weight: bold; font-size: 6.5px; text-transform: uppercase; }
+    .t-code { text-align: center; font-weight: bold; }
+    .c-cl   { text-align: center; font-size: 6px; color: #555; }
+    .c-q    { text-align: center; font-weight: bold; }
+    .c-es   { text-align: center; font-weight: bold; }
+    .c-en   { text-align: center; color: #555; }
+    .wk-alt { background: #f4f4f4; }
+
+    /* Subtotal (amarillo) */
+    .sub td { border: 0.5px solid #b7b7b7; }
+    .sub .s-cell { background: #ffe14d; text-align: center; font-weight: bold; font-size: 8px; }
+
+    /* Fila invisible de fijación de anchos (no debe verse). */
+    .wdef td { padding: 0; height: 0; line-height: 0; font-size: 0; border: 0; }
+
+    /* Cada grupo es su propia tabla; dompdf NO la parte entre páginas. */
+    .grp-block { page-break-inside: avoid; }
+
+    /* Un nodo por hoja, como el listado semanal. */
+    .node-page { page-break-after: always; }
+    .node-page:last-child { page-break-after: auto; }
+</style>
+</head>
+<body>
+{% for node in matrix.nodes %}
+<div class="node-page">
+    <div class="title">REPARTO {{ _month_es[month] }} {{ year }} · {{ node.name }}</div>
+
+    <table class="mhead">
+        {{ widthrow }}
+        <tr>
+            <td class="hd-mail" colspan="3">csa@csavegadejarama.org</td>
+            {% for w in weeks %}<td class="hd-week" colspan="4">{{ _dow_es[w.date|date('w')] }} {{ w.date|date('j') }} {{ _month_es[w.date|date('n')] }}</td>{% endfor %}
+        </tr>
+        <tr>
+            <td style="border:0;" colspan="3"></td>
+            {% for w in weeks %}<td class="hd-c" colspan="2">CESTA</td><td class="hd-h" colspan="2">HUEVOS</td>{% endfor %}
+        </tr>
+    </table>
+
+    {% for group in node.groups %}
+        <table class="grp-block">
+            {{ widthrow }}
+            {% if group.shared %}
+                <tr class="shared-hd"><td colspan="{{ ncols }}">Compartidas</td></tr>
+            {% elseif group.name != node.name %}
+                <tr class="grp"><td class="g-name" colspan="{{ ncols }}">{{ group.name }}</td></tr>
+            {% endif %}
+
+            {% for mod in group.modalities %}
+                {% if group.multi_mod and mod.label %}
+                    <tr class="modsub"><td colspan="{{ ncols }}">{{ mod.label }}</td></tr>
+                {% endif %}
+                {% for row in mod.rows %}
+                    <tr>
+                        <td class="t-loc" style="background: {{ row.color }};">{{ row.locality }}</td>
+                        <td>{{ row.name }}</td>
+                        <td class="t-code">{{ row.code }}</td>
+                        {% for cell in row.cells %}
+                            {% set alt = loop.index0 is odd ? 'wk-alt' : '' %}
+                            {% if cell %}
+                                <td class="c-cl {{ alt }}">{{ cell.cestas > 0 ? 'CESTAS' : '' }}</td>
+                                <td class="c-q {{ alt }}">{{ m.qty(cell.cestas) }}</td>
+                                <td class="c-es {{ alt }}">{{ cell.egg_spec }}</td>
+                                <td class="c-en {{ alt }}">{{ cell.egg_count > 0 ? cell.egg_count : '' }}</td>
+                            {% else %}
+                                <td class="{{ alt }}"></td><td class="{{ alt }}"></td><td class="{{ alt }}"></td><td class="{{ alt }}"></td>
+                            {% endif %}
+                        {% endfor %}
+                    </tr>
+                {% endfor %}
+            {% endfor %}
+
+            <tr class="sub">
+                <td colspan="3" style="border:0;"></td>
+                {% for st in group.subtotals %}
+                    {% if st %}
+                        <td></td>
+                        <td class="s-cell">{{ m.qty(st.cestas) }}</td>
+                        <td class="{{ st.egg_spec ? 's-cell' : '' }}" colspan="2">{{ st.egg_spec }}</td>
+                    {% else %}
+                        <td colspan="4" style="border:0;"></td>
+                    {% endif %}
+                {% endfor %}
+            </tr>
+        </table>
+    {% endfor %}
+</div>
+{% else %}
+    <p style="padding:16px;">No hay reparto para este mes.</p>
+{% endfor %}
+</body>
+</html>

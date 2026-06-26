@@ -116,6 +116,49 @@ class DeliveryControllerTest extends AbstractAuthenticatedTest
         );
     }
 
+    public function testMonthlyPrintableSelectReturnsOk(): void
+    {
+        $client = $this->createAuthenticatedClient();
+
+        $client->request('GET', '/gestion/reparto/imprimible-mensual');
+
+        $this->assertSame(200, $client->getResponse()->getStatusCode());
+    }
+
+    /**
+     * Sin ym (o con ym mal formado) el PDF mensual no se genera: vuelve al selector.
+     */
+    public function testMonthlyPdfWithBadYmRedirectsToSelect(): void
+    {
+        $client = $this->createAuthenticatedClient();
+
+        $client->request('GET', '/gestion/reparto/imprimible-mensual/pdf', ['ym' => 'no-valido']);
+
+        $this->assertResponseRedirects();
+        $this->assertStringContainsString(
+            '/imprimible-mensual',
+            (string) $client->getResponse()->headers->get('Location'),
+        );
+    }
+
+    /**
+     * Con un mes que tiene viernes sembrados y un nodo que reparte, el listado
+     * mensual (matriz) se genera y devuelve un PDF.
+     */
+    public function testMonthlyPdfWithValidMonthReturnsPdf(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $ym = $this->firstBasket()->getDate()->format('Y-m');
+
+        $client->request('GET', '/gestion/reparto/imprimible-mensual/pdf', ['ym' => $ym, 'nodes' => ['1']]);
+
+        $this->assertSame(200, $client->getResponse()->getStatusCode());
+        $this->assertStringContainsString(
+            'application/pdf',
+            (string) $client->getResponse()->headers->get('Content-Type'),
+        );
+    }
+
     /**
      * Id del primer Basket sembrado (el más próximo en el tiempo). Se resuelve
      * por repositorio en vez de hardcodear porque el id es autogenerado.
@@ -123,6 +166,14 @@ class DeliveryControllerTest extends AbstractAuthenticatedTest
      * @return int
      */
     private function firstBasketId(): int
+    {
+        return $this->firstBasket()->getId();
+    }
+
+    /**
+     * Primer Basket sembrado (el más próximo en el tiempo).
+     */
+    private function firstBasket(): Basket
     {
         $basket = static::getContainer()
             ->get('doctrine')
@@ -133,6 +184,6 @@ class DeliveryControllerTest extends AbstractAuthenticatedTest
             throw new \RuntimeException('Fixtures sin Basket; carga PartnerUserFixtures en db_test antes de correr los tests.');
         }
 
-        return $basket->getId();
+        return $basket;
     }
 }
