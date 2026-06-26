@@ -44,6 +44,23 @@ class BasketPricingTest extends TestCase
         $this->assertSame('0', $this->pricing->eggMonthPrice($this->eggAmount(1.0), null));
     }
 
+    public function testVerduraGratisOSoloHuevosCero(): void
+    {
+        // Modalidad a 0 € (p. ej. "Solo huevos") → verdura 0 aunque lleve varias.
+        $this->assertSame('0.00', $this->pricing->vegMonthPrice($this->basketShare('0.00'), 3));
+    }
+
+    public function testApplyToSinModalidadNiHuevosNoRevienta(): void
+    {
+        $pbs = new PartnerBasketShare();
+        $pbs->setAmount(1);
+
+        $this->pricing->applyTo($pbs);
+
+        $this->assertSame('0', $pbs->getMonthPrice());
+        $this->assertSame('0', $pbs->getEggMonthPrice());
+    }
+
     public function testApplyToEstampaAmbasCuotas(): void
     {
         $pbs = (new PartnerBasketShare())

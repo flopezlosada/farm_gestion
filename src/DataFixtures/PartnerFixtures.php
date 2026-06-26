@@ -8,6 +8,7 @@ use App\Entity\EggAmount;
 use App\Entity\EggPeriod;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
+use App\Service\Partner\BasketPricing;
 use App\Entity\SharePayment;
 use App\Entity\State;
 use App\Entity\WeeklyBasketGroup;
@@ -63,7 +64,11 @@ class PartnerFixtures extends Fixture implements DependentFixtureInterface
         'Dos docenas',
     ];
 
-    private const EGG_PERIOD_NAMES = ['Semanal', 'Quincenal'];
+    private const EGG_PERIOD_NAMES = ['Semanal', 'Quincenal', 'Mensual'];
+
+    public function __construct(private readonly BasketPricing $basketPricing)
+    {
+    }
 
     /**
      * Carga los socixs sintéticos junto con su cesta activa.
@@ -164,7 +169,6 @@ class PartnerFixtures extends Fixture implements DependentFixtureInterface
         $partnerBasketShare->setIsActive(true);
         $partnerBasketShare->setAmount(1);
         $partnerBasketShare->setVegetablesBasketAmount(1);
-        $partnerBasketShare->setMonthPrice($basketShare->getMonthPrice());
         $partnerBasketShare->setStartDate($faker->dateTimeBetween('-2 years', '-1 month'));
 
         $isOnlyEggs = $basketShare->getName() === 'Solo huevos';
@@ -175,15 +179,15 @@ class PartnerFixtures extends Fixture implements DependentFixtureInterface
             /** @var EggAmount $eggAmount */
             $eggAmount = $this->getReference(CatalogFixtures::REF_EGG_AMOUNT_PREFIX . $eggAmountName, EggAmount::class);
             $partnerBasketShare->setEggAmount($eggAmount);
-            $partnerBasketShare->setEggMonthPrice($eggAmount->getMonthPrice());
 
             $eggPeriodName = $faker->randomElement(self::EGG_PERIOD_NAMES);
             /** @var EggPeriod $eggPeriod */
             $eggPeriod = $this->getReference(CatalogFixtures::REF_EGG_PERIOD_PREFIX . $eggPeriodName, EggPeriod::class);
             $partnerBasketShare->setEggPeriod($eggPeriod);
-        } else {
-            $partnerBasketShare->setEggMonthPrice('0.00');
         }
+
+        // Cuota con la fórmula real (verdura × cestas + huevos por frecuencia × docenas).
+        $this->basketPricing->applyTo($partnerBasketShare);
 
         if ($basketShare->getName() === 'Mensual') {
             $partnerBasketShare->setDayMonthOrder($faker->numberBetween(1, 4));

@@ -53,15 +53,16 @@ class RecalcBasketPricesCommand extends Command
         $changed = $skippedFree = 0;
         $samples = [];
         foreach ($shares as $pbs) {
-            $oldVeg = (float) $pbs->getMonthPrice();
-            $oldEgg = (float) $pbs->getEggMonthPrice();
-
+            // Comparación en cadena con 2 decimales (representación canónica del
+            // DECIMAL): evita falsos positivos/negativos por redondeo de floats.
             $bs = $pbs->getBasketShare();
-            $newVeg = $bs !== null ? (float) $this->basketPricing->vegMonthPrice($bs, (int) $pbs->getAmount()) : 0.0;
-            $newEgg = (float) $this->basketPricing->eggMonthPrice($pbs->getEggAmount(), $pbs->getEggPeriod());
+            $oldVeg = $this->money($pbs->getMonthPrice());
+            $oldEgg = $this->money($pbs->getEggMonthPrice());
+            $newVeg = $bs !== null ? $this->money($this->basketPricing->vegMonthPrice($bs, (int) $pbs->getAmount())) : '0.00';
+            $newEgg = $this->money($this->basketPricing->eggMonthPrice($pbs->getEggAmount(), $pbs->getEggPeriod()));
 
             // Cesta gratis (a 0 pese a tener catálogo con precio): no tocar.
-            if ($oldVeg === 0.0 && $oldEgg === 0.0 && ($newVeg > 0.0 || $newEgg > 0.0)) {
+            if ($oldVeg === '0.00' && $oldEgg === '0.00' && ($newVeg !== '0.00' || $newEgg !== '0.00')) {
                 $skippedFree++;
                 continue;
             }
@@ -73,8 +74,8 @@ class RecalcBasketPricesCommand extends Command
             if (count($samples) < 15) {
                 $samples[] = [
                     (string) $pbs->getPartner()?->getName(),
-                    sprintf('%.2f → %.2f', $oldVeg, $newVeg),
-                    sprintf('%.2f → %.2f', $oldEgg, $newEgg),
+                    sprintf('%s → %s', $oldVeg, $newVeg),
+                    sprintf('%s → %s', $oldEgg, $newEgg),
                 ];
             }
             if ($force) {
@@ -98,5 +99,11 @@ class RecalcBasketPricesCommand extends Command
         }
 
         return Command::SUCCESS;
+    }
+
+    /** Normaliza un precio (string o null de la BD) a cadena con 2 decimales. */
+    private function money(?string $value): string
+    {
+        return number_format((float) $value, 2, '.', '');
     }
 }
