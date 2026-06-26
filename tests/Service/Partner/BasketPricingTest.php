@@ -63,10 +63,11 @@ class BasketPricingTest extends TestCase
 
     public function testApplyToEstampaAmbasCuotas(): void
     {
-        $pbs = (new PartnerBasketShare())
-            ->setBasketShare($this->basketShare('55.00'))
-            ->setEggAmount($this->eggAmount(1.0))
-            ->setEggPeriod($this->eggPeriod('10.00'));
+        // Estos setters devuelven void (no se encadenan): statements separados.
+        $pbs = new PartnerBasketShare();
+        $pbs->setBasketShare($this->basketShare('55.00'));
+        $pbs->setEggAmount($this->eggAmount(1.0));
+        $pbs->setEggPeriod($this->eggPeriod('10.00'));
         $pbs->setAmount(1);
 
         $this->pricing->applyTo($pbs);
