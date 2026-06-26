@@ -1,11 +1,18 @@
 {# ============================================================
- # Ficha del voluntario de acogida: datos + historial de estancias.
+ # Ficha del voluntario de acogida — mismo lenguaje visual que la ficha de socix
+ # (reusa partner_card_styles: hero + avatar + chips + tarjetas + mini-stats).
+ # Datos + cesta de reparto + historial de estancias.
  # ============================================================ #}
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
 
-{% set status_tone = { 'confirmed': 'green', 'requested': 'ochre', 'cancelled': 'neutral' } %}
+{% set status_tone = { 'confirmed': 'activo', 'requested': 'warn', 'cancelled': 'mute' } %}
 {% set status_label = { 'confirmed': 'Confirmada', 'requested': 'Solicitada', 'cancelled': 'Cancelada' } %}
+
+{% set parts = helper.name|split(' ')|filter(p => p is not empty) %}
+{% set initials = (parts|first|first|upper) ~ (parts|length > 1 ? parts|last|first|upper : '') %}
+{% set avatar_palette = ['sage', 'ochre', 'terra', 'ink'] %}
+{% set avatar_tone = avatar_palette[(helper.id|default(0)) % 4] %}
 
 {% block title %}{{ helper.name }}{% endblock %}
 
@@ -19,132 +26,153 @@
 
 {% block more_css %}
 {{ parent() }}
+{% include '_components/partner_card_styles.html.twig' %}
 <style>
-.hsh-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px 28px; background: #fff; border: 1px solid var(--csa-rule, #ebe7dd); border-radius: 10px; padding: 20px 24px; }
-.hsh-dt { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--csa-ink-faint, #8d8773); font-weight: 600; margin-bottom: 3px; }
-.hsh-dd { font-size: 14px; color: var(--csa-ink, #1d1c17); }
-.hsh-dd--muted { color: var(--csa-ink-faint, #8d8773); }
-.hsh-section-title { font-family: var(--csa-serif); font-size: 18px; font-weight: 600; color: var(--csa-ink, #1d1c17); margin: 28px 0 14px; }
-.hsh-stays { display: flex; flex-direction: column; gap: 10px; }
-.hsh-stay { display: flex; align-items: center; justify-content: space-between; gap: 16px; background: #fff; border: 1px solid var(--csa-rule, #ebe7dd); border-radius: 9px; padding: 14px 18px; }
-.hsh-stay--cancelled { opacity: 0.6; }
-.hsh-stay__dates { font-weight: 600; color: var(--csa-ink, #1d1c17); }
-.hsh-stay__meta { font-size: 12.5px; color: var(--csa-ink-faint, #8d8773); margin-top: 2px; }
-.hsh-stay__actions { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
-.hsh-empty { padding: 28px 18px; text-align: center; color: var(--csa-ink-faint, #8d8773); font-size: 13px; font-style: italic; background: #fff; border: 1px dashed var(--csa-line-2, #d8d2c2); border-radius: 8px; }
+/* Lista de estancias — tokens .prt locales (estamos dentro de .prt). */
+.hst { display: flex; flex-direction: column; gap: 8px; }
+.hst-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 11px 14px; border: 1px solid var(--prt-line); border-radius: 7px; background: var(--prt-bg); }
+.hst-row--cancelled { opacity: 0.55; }
+.hst-row__dates { font-family: 'Fraunces', serif; font-weight: 600; font-size: 14px; color: var(--prt-ink); letter-spacing: -0.005em; }
+.hst-row__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; font-size: 12px; color: var(--prt-ink-faint); }
+.hst-row__actions { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.hst-empty { padding: 26px 14px; text-align: center; color: var(--prt-ink-faint); font-style: italic; font-size: 13px; background: var(--prt-bg); border: 1px dashed var(--prt-line-2); border-radius: 7px; }
 </style>
 {% endblock %}
 
 {% block csa_main %}
-    {# Form oculto del borrado del voluntario (lo dispara el modal de confirmación). #}
-    {% if is_granted('ROLE_GESTION_ALBERGUE_EDIT') %}
-        <form id="helper-delete-form" method="post" action="{{ path('helper_delete', { id: helper.id }) }}" style="display: none;">
-            <input type="hidden" name="_token" value="{{ csrf_token('delete' ~ helper.id) }}">
-        </form>
-    {% endif %}
+{# Form oculto del borrado del voluntario (lo dispara el modal de confirmación). #}
+{% if is_granted('ROLE_GESTION_ALBERGUE_EDIT') %}
+    <form id="helper-delete-form" method="post" action="{{ path('helper_delete', { id: helper.id }) }}" style="display: none;">
+        <input type="hidden" name="_token" value="{{ csrf_token('delete' ~ helper.id) }}">
+    </form>
+{% endif %}
 
-    {{ csa.page_header('Albergue', helper.name, helper.source.name) }}
+<div class="prt">
 
-    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-5);">
-        <div></div>
-        <div class="csa-row">
+    {# ============ HERO ============ #}
+    <header class="prt-hero">
+        <span class="prt-avatar prt-avatar--{{ avatar_tone }}" aria-hidden="true">{{ initials }}</span>
+
+        <div>
+            <h1 class="prt-hero__title">{{ helper.name }}</h1>
+            <div class="prt-hero__meta">
+                <span class="prt-chip prt-chip--mute">{{ helper.source.name }}</span>
+                {% if helper.basketActive %}
+                    <span class="prt-chip prt-chip--activo"><span class="dot"></span>Cesta activa</span>
+                {% else %}
+                    <span class="prt-chip prt-chip--baja"><span class="dot"></span>Sin cesta</span>
+                {% endif %}
+                {% if helper.country %}<span class="sep">·</span><span>{{ helper.country }}</span>{% endif %}
+            </div>
+        </div>
+
+        <div class="prt-hero__actions">
             {% if is_granted('ROLE_GESTION_ALBERGUE_EDIT') %}
-                <button type="button" class="csa-btn csa-btn--danger" onclick="document.getElementById('confirm-helper-delete').showModal()">
+                {{ csa.btn('Editar', { variant: 'secondary', href: path('helper_edit', { id: helper.id }), icon: 'fa-pencil' }) }}
+                <button type="button" class="csa-btn csa-btn--danger-soft" onclick="document.getElementById('confirm-helper-delete').showModal()">
                     <i class="fa fa-trash"></i><span>Borrar</span>
                 </button>
-                {{ csa.confirm_dialog('confirm-helper-delete', {
-                    variant: 'danger',
-                    title: 'Borrar voluntario',
-                    body: 'Se borrará «' ~ helper.name ~ '». No se puede deshacer.',
-                    confirm_label: 'Borrar',
-                    external_form_id: 'helper-delete-form',
-                }) }}
-                {{ csa.btn('Editar', { variant: 'secondary', href: path('helper_edit', { id: helper.id }), icon: 'fa-pencil' }) }}
             {% endif %}
             {{ csa.btn('Volver', { variant: 'ghost', href: path('helper_index') }) }}
         </div>
-    </div>
+    </header>
 
-    {# ---------- Datos ---------- #}
-    <div class="hsh-grid">
-        <div><div class="hsh-dt">Procedencia</div><div class="hsh-dd">{{ helper.source.name }}</div></div>
-        <div><div class="hsh-dt">País</div><div class="hsh-dd{{ helper.country ? '' : ' hsh-dd--muted' }}">{{ helper.country ?: '—' }}</div></div>
-        <div><div class="hsh-dt">Email</div><div class="hsh-dd{{ helper.email ? '' : ' hsh-dd--muted' }}">{{ helper.email ?: '—' }}</div></div>
-        <div><div class="hsh-dt">Teléfono</div><div class="hsh-dd{{ helper.phone ? '' : ' hsh-dd--muted' }}">{{ helper.phone ?: '—' }}</div></div>
-        <div><div class="hsh-dt">Idiomas</div><div class="hsh-dd{{ helper.languages ? '' : ' hsh-dd--muted' }}">{{ helper.languages ?: '—' }}</div></div>
-        <div><div class="hsh-dt">Nacimiento</div><div class="hsh-dd{{ helper.birthDate ? '' : ' hsh-dd--muted' }}">{{ helper.birthDate ? helper.birthDate|date('d/m/Y') : '—' }}</div></div>
-        <div><div class="hsh-dt">Contacto de emergencia</div><div class="hsh-dd{{ helper.emergencyContact ? '' : ' hsh-dd--muted' }}">{{ helper.emergencyContact ?: '—' }}</div></div>
-        {% if helper.studies or helper.university %}
-            <div><div class="hsh-dt">Estudios</div><div class="hsh-dd">{{ helper.studies ?: '—' }}</div></div>
-            <div><div class="hsh-dt">Universidad</div><div class="hsh-dd">{{ helper.university ?: '—' }}</div></div>
-        {% endif %}
-    </div>
-
-    {% if helper.notes %}
-        <div class="hsh-grid" style="margin-top: 14px;">
-            <div style="grid-column: 1 / -1;"><div class="hsh-dt">Notas</div><div class="hsh-dd">{{ helper.notes|nl2br }}</div></div>
-        </div>
+    {% if is_granted('ROLE_GESTION_ALBERGUE_EDIT') %}
+        {{ csa.confirm_dialog('confirm-helper-delete', {
+            variant: 'danger',
+            title: 'Borrar voluntario',
+            body: 'Se borrará «' ~ helper.name ~ '». No se puede deshacer.',
+            confirm_label: 'Borrar',
+            external_form_id: 'helper-delete-form',
+        }) }}
     {% endif %}
 
-    {# ---------- Cesta de reparto ---------- #}
-    <div class="csa-row-between" style="margin-top: 28px;">
-        <div class="hsh-section-title" style="margin: 0;">Cesta de reparto</div>
-        {% if helper.basketActive %}
-            {{ csa.btn('Calendario de recogida', { variant: 'secondary', href: path('helper_basket_calendar', { id: helper.id }), icon: 'fa-calendar' }) }}
-        {% endif %}
-    </div>
-    <div class="hsh-grid" style="margin-top: 14px;">
-        <div>
-            <div class="hsh-dt">Estado</div>
-            <div class="hsh-dd">
-                {{ csa.badge(helper.basketActive ? 'Activa' : 'Sin cesta', helper.basketActive ? 'green' : 'neutral') }}
-            </div>
-        </div>
-        {% if helper.basketActive %}
-            <div><div class="hsh-dt">Nodo de recogida</div><div class="hsh-dd">{{ helper.basketNode ? helper.basketNode.name : 'Torremocha (por defecto)' }}</div></div>
-            <div><div class="hsh-dt">Cestas de verdura</div><div class="hsh-dd">{{ helper.basketVegBaskets }}</div></div>
-            <div><div class="hsh-dt">Docenas de huevos</div><div class="hsh-dd">{{ helper.basketEggDozens == helper.basketEggDozens|round ? helper.basketEggDozens|number_format(0) : helper.basketEggDozens|number_format(1, ',', '.') }}</div></div>
-        {% endif %}
-    </div>
-
-    {# ---------- Estancias ---------- #}
-    <div class="csa-row-between" style="margin-top: 28px;">
-        <div class="hsh-section-title" style="margin: 0;">Estancias</div>
-        {% if is_granted('ROLE_GESTION_ALBERGUE_EDIT') %}
-            {{ csa.btn('Nueva estancia', { variant: 'primary', href: path('stay_new', { helperId: helper.id }), icon: 'fa-plus' }) }}
-        {% endif %}
-    </div>
-
-    {% if stays|length > 0 %}
-        <div class="hsh-stays" style="margin-top: 14px;">
-            {% for stay in stays %}
-                <div class="hsh-stay{{ stay.status == 'cancelled' ? ' hsh-stay--cancelled' : '' }}">
-                    <div>
-                        <div class="hsh-stay__dates">
-                            {{ stay.arrivalDate|date('d/m/Y') }} → {{ stay.departureDate|date('d/m/Y') }}{{ stay.departureConfirmed ? '' : ' (estimada)' }}
-                        </div>
-                        <div class="hsh-stay__meta">
-                            {{ csa.badge(status_label[stay.status] ?? stay.status, status_tone[stay.status] ?? 'neutral') }}
-                            {% if stay.internshipDetail %}
-                                {{ csa.badge(stay.internshipDetail.reportDelivered ? 'Informe entregado' : 'Informe pendiente', stay.internshipDetail.reportDelivered ? 'green' : 'ochre') }}
-                            {% endif %}
-                            {% if stay.notes %}· {{ stay.notes|length > 80 ? stay.notes|slice(0, 80) ~ '…' : stay.notes }}{% endif %}
-                        </div>
-                    </div>
-                    {% if is_granted('ROLE_GESTION_ALBERGUE_EDIT') %}
-                        <div class="hsh-stay__actions">
-                            {{ csa.btn('Prácticas', { variant: 'ghost', size: 'sm', href: path('stay_internship', { id: stay.id }), icon: 'fa-graduation-cap' }) }}
-                            {{ csa.btn('Editar', { variant: 'ghost', size: 'sm', href: path('stay_edit', { id: stay.id }), icon: 'fa-pencil' }) }}
-                            <form method="post" action="{{ path('stay_delete', { id: stay.id }) }}" onsubmit="return confirm('¿Borrar esta estancia?');" style="display: inline;">
-                                <input type="hidden" name="_token" value="{{ csrf_token('delete' ~ stay.id) }}">
-                                <button type="submit" class="csa-btn csa-btn--ghost csa-btn--sm"><i class="fa fa-trash"></i><span>Borrar</span></button>
-                            </form>
-                        </div>
+    <div class="prt-cols">
+        {# ============ Datos ============ #}
+        <section class="prt-card">
+            <div class="prt-card__head"><h2 class="prt-card__title"><span class="accent"></span>Datos</h2></div>
+            <div class="prt-card__body">
+                <dl class="prt-defs">
+                    <div class="prt-defs__row"><dt class="prt-defs__label">Email</dt><dd class="prt-defs__value{{ helper.email ? '' : ' prt-defs__value--muted' }}">{{ helper.email ? ('<a href="mailto:' ~ helper.email ~ '">' ~ helper.email ~ '</a>')|raw : '—' }}</dd></div>
+                    <div class="prt-defs__row"><dt class="prt-defs__label">Teléfono</dt><dd class="prt-defs__value{{ helper.phone ? '' : ' prt-defs__value--muted' }}">{{ helper.phone ?: '—' }}</dd></div>
+                    <div class="prt-defs__row"><dt class="prt-defs__label">Idiomas</dt><dd class="prt-defs__value{{ helper.languages ? '' : ' prt-defs__value--muted' }}">{{ helper.languages ?: '—' }}</dd></div>
+                    <div class="prt-defs__row"><dt class="prt-defs__label">Nacimiento</dt><dd class="prt-defs__value{{ helper.birthDate ? '' : ' prt-defs__value--muted' }}">{{ helper.birthDate ? helper.birthDate|date('d/m/Y') : '—' }}</dd></div>
+                    <div class="prt-defs__row prt-defs__row--full"><dt class="prt-defs__label">Contacto de emergencia</dt><dd class="prt-defs__value{{ helper.emergencyContact ? '' : ' prt-defs__value--muted' }}">{{ helper.emergencyContact ?: '—' }}</dd></div>
+                    {% if helper.studies or helper.university %}
+                        <div class="prt-defs__row"><dt class="prt-defs__label">Estudios</dt><dd class="prt-defs__value">{{ helper.studies ?: '—' }}</dd></div>
+                        <div class="prt-defs__row"><dt class="prt-defs__label">Universidad</dt><dd class="prt-defs__value">{{ helper.university ?: '—' }}</dd></div>
                     {% endif %}
-                </div>
-            {% endfor %}
+                    {% if helper.notes %}
+                        <div class="prt-defs__row prt-defs__row--full"><dt class="prt-defs__label">Notas</dt><dd class="prt-defs__value">{{ helper.notes|nl2br }}</dd></div>
+                    {% endif %}
+                </dl>
+            </div>
+        </section>
+
+        {# ============ Cesta de reparto ============ #}
+        <section class="prt-card{{ helper.basketActive ? '' : ' prt-card--ink' }}">
+            <div class="prt-card__head">
+                <h2 class="prt-card__title"><span class="accent"></span>Cesta de reparto</h2>
+                {% if helper.basketActive %}
+                    {{ csa.btn('Calendario', { variant: 'ghost', size: 'sm', href: path('helper_basket_calendar', { id: helper.id }), icon: 'fa-calendar' }) }}
+                {% endif %}
+            </div>
+            <div class="prt-card__body">
+                {% if helper.basketActive %}
+                    <div class="prt-basket__name">Activa durante su estancia</div>
+                    <div class="prt-basket__sub">Para saltar una semana concreta, usa el calendario de recogida.</div>
+                    <div class="prt-mini">
+                        <div class="prt-mini__cell"><div class="prt-mini__label">Nodo de recogida</div><div class="prt-mini__value">{{ helper.basketNode ? helper.basketNode.name : 'Torremocha' }}</div></div>
+                        <div class="prt-mini__cell"><div class="prt-mini__label">Cestas de verdura</div><div class="prt-mini__value">{{ helper.basketVegBaskets }}</div></div>
+                        <div class="prt-mini__cell"><div class="prt-mini__label">Docenas de huevos</div><div class="prt-mini__value">{{ helper.basketEggDozens == helper.basketEggDozens|round ? helper.basketEggDozens|number_format(0) : helper.basketEggDozens|number_format(1, ',', '.') }}</div></div>
+                    </div>
+                {% else %}
+                    <div class="prt-mini__value--muted">Este voluntario no se lleva cesta de reparto. Actívala desde «Editar».</div>
+                {% endif %}
+            </div>
+        </section>
+    </div>
+
+    {# ============ Estancias ============ #}
+    <section class="prt-card">
+        <div class="prt-card__head">
+            <h2 class="prt-card__title"><span class="accent"></span>Estancias</h2>
+            {% if is_granted('ROLE_GESTION_ALBERGUE_EDIT') %}
+                {{ csa.btn('Nueva estancia', { variant: 'primary', size: 'sm', href: path('stay_new', { helperId: helper.id }), icon: 'fa-plus' }) }}
+            {% endif %}
         </div>
-    {% else %}
-        <div class="hsh-empty" style="margin-top: 14px;">Aún no hay estancias registradas.</div>
-    {% endif %}
+        <div class="prt-card__body">
+            {% if stays|length > 0 %}
+                <div class="hst">
+                    {% for stay in stays %}
+                        <div class="hst-row{{ stay.status == 'cancelled' ? ' hst-row--cancelled' : '' }}">
+                            <div>
+                                <div class="hst-row__dates">{{ stay.arrivalDate|date('d/m/Y') }} → {{ stay.departureDate|date('d/m/Y') }}{{ stay.departureConfirmed ? '' : ' (estimada)' }}</div>
+                                <div class="hst-row__meta">
+                                    <span class="prt-chip prt-chip--{{ status_tone[stay.status] ?? 'mute' }}">{{ status_label[stay.status] ?? stay.status }}</span>
+                                    {% if stay.internshipDetail %}
+                                        <span class="prt-chip prt-chip--{{ stay.internshipDetail.reportDelivered ? 'activo' : 'warn' }}">{{ stay.internshipDetail.reportDelivered ? 'Informe entregado' : 'Informe pendiente' }}</span>
+                                    {% endif %}
+                                    {% if stay.notes %}· {{ stay.notes|length > 80 ? stay.notes|slice(0, 80) ~ '…' : stay.notes }}{% endif %}
+                                </div>
+                            </div>
+                            {% if is_granted('ROLE_GESTION_ALBERGUE_EDIT') %}
+                                <div class="hst-row__actions">
+                                    {{ csa.btn('Prácticas', { variant: 'ghost', size: 'sm', href: path('stay_internship', { id: stay.id }), icon: 'fa-graduation-cap' }) }}
+                                    {{ csa.btn('Editar', { variant: 'ghost', size: 'sm', href: path('stay_edit', { id: stay.id }), icon: 'fa-pencil' }) }}
+                                    <form method="post" action="{{ path('stay_delete', { id: stay.id }) }}" onsubmit="return confirm('¿Borrar esta estancia?');" style="display: inline;">
+                                        <input type="hidden" name="_token" value="{{ csrf_token('delete' ~ stay.id) }}">
+                                        <button type="submit" class="csa-btn csa-btn--ghost csa-btn--sm"><i class="fa fa-trash"></i><span>Borrar</span></button>
+                                    </form>
+                                </div>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="hst-empty">Aún no hay estancias registradas.</div>
+            {% endif %}
+        </div>
+    </section>
+</div>
 {% endblock %}
