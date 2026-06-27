@@ -907,7 +907,17 @@ class DeliveryController extends AbstractController
 
     /**
      * Secciones por grupo de recogida (WBG), con subgrupos por modalidad.
-     * Confía en el orden del query (wbg.name, basket_share.id, partner.name).
+     *
+     * Ordena en PHP de forma ESTABLE e independiente del origen de las
+     * entregas: grupos por nombre de WBG, subgrupos por basket_share.id y filas
+     * por nombre de reparto. Antes confiaba en el ORDER BY del query
+     * (wbg.name, basket_share.id, partner.name), que SOLO existe en el camino de
+     * piedra ({@see WeeklyBasketRepository::findForNodeAndBasket}); el dibujo al
+     * vuelo viene de la proyección sin orden, así que el listado se reordenaba
+     * según la semana estuviera congelada o no. Ahora el orden es el mismo que
+     * usan el PDF ({@see NodeDeliverySheet}) y los otros modos de la pantalla:
+     * por {@see Partner::getNameForDelivery()} (lo que de verdad se imprime), no
+     * por el campo crudo p.name.
      *
      * @param WeeklyBasket[] $weeklyBaskets
      * @return list<array{title:?string, subgroups: list<array{bs_id:?int, label:?string, rows: WeeklyBasket[]}>}>
@@ -926,8 +936,22 @@ class DeliveryController extends AbstractController
             $byWbg[$wbg->getId()]['subs'][$bs->getId()]['rows'][] = $wb;
         }
 
+        uasort($byWbg, static fn (array $a, array $b): int => strnatcasecmp($a['title'] ?? '', $b['title'] ?? ''));
+
         return array_map(
-            fn (array $g): array => ['title' => $g['title'], 'subgroups' => array_values($g['subs'])],
+            function (array $g): array {
+                ksort($g['subs']);
+                foreach ($g['subs'] as &$sub) {
+                    usort($sub['rows'], $this->compareByDisplayName(...));
+                }
+                unset($sub);
+
+                // array_values: el template itera la lista posicionalmente; sin
+                // esto saldría indexada por basket_share.id (claves de ksort).
+                return ['title' => $g['title'], 'subgroups' => array_values($g['subs'])];
+            },
+            // array_values: re-secuencia tras el uasort, que preserva las claves
+            // (WBG ids) — el render espera una lista 0..n, no un mapa por id.
             array_values($byWbg),
         );
     }
