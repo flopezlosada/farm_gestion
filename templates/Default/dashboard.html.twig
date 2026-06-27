@@ -160,6 +160,14 @@
     @media (max-width: 900px) {
         .dash-stats, .dash-stats--3 { grid-template-columns: repeat(2, 1fr); }
         .dash-grid { grid-template-columns: 1fr; }
+        /* Evita el desplazamiento horizontal en móvil: un item de grid tiene
+           min-width:auto por defecto y se ensancha hasta el contenido mínimo —las
+           cabeceras nowrap de la tabla "Reparto por nodo"— empujando toda la
+           página a lo ancho (la tarjeta es overflow:hidden, pero lo que crece es
+           la pista del grid). Dejamos que la columna encoja y que las cabeceras
+           envuelvan, así la tabla cabe sin forzar ancho. */
+        .dash-col { min-width: 0; }
+        .dash-table thead th { white-space: normal; }
     }
     </style>
 {% endblock %}

@@ -42,8 +42,7 @@
         <div class="csa-main">
             <header class="csa-topbar">
                 <button type="button" class="csa-btn csa-btn--ghost csa-btn--sm csa-sidebar-toggle"
-                        aria-label="Abrir navegación"
-                        onclick="document.getElementById('csa-sidebar').classList.toggle('csa-sidebar--open')">
+                        aria-label="Abrir navegación" aria-controls="csa-sidebar" aria-expanded="false">
                     <i class="fa fa-bars"></i>
                 </button>
 
@@ -88,6 +87,8 @@
         </div>
 
     </div>
+
+    {% include '_components/sidebar_drawer.html.twig' %}
 </div>
 {% endblock %}
 
