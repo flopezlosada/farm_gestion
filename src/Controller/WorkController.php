@@ -10,8 +10,10 @@ use App\Repository\AbsenceRepository;
 use App\Repository\HolidayRepository;
 use App\Repository\TimeEntryRepository;
 use App\Service\Staff\MonthGridBuilder;
+use App\Service\Staff\MonthlyTimesheetReport;
 use App\Service\Staff\PunchSequenceException;
 use App\Service\Staff\TimeClock;
+use App\Service\Staff\TimesheetPdfRenderer;
 use App\Service\Staff\TimeEntryCorrector;
 use App\Service\Staff\TimeInputParser;
 use App\Service\Staff\WorkdayBuilder;
@@ -159,6 +161,41 @@ class WorkController extends AbstractController
             'prev' => $monthStart->modify('-1 month'),
             'next' => $monthStart->modify('+1 month'),
         ]);
+    }
+
+    /**
+     * Descarga el PDF del justificante mensual de la PROPIA jornada. La copia que
+     * el trabajador guarda y firma: su ancla de integridad del registro fuera de
+     * la BBDD.
+     *
+     * @param Request                $request
+     * @param MonthlyTimesheetReport $report
+     * @param TimesheetPdfRenderer   $pdf
+     * @return Response
+     */
+    #[Route('/timesheet.pdf', name: 'work_timesheet_pdf', methods: ['GET'])]
+    public function timesheetPdf(
+        Request $request,
+        MonthlyTimesheetReport $report,
+        TimesheetPdfRenderer $pdf,
+    ): Response {
+        if (($redirect = $this->ensureWorker()) !== null) {
+            return $redirect;
+        }
+
+        $worker = $this->worker();
+        $madrid = $this->madrid();
+        $today = new \DateTimeImmutable('today', $madrid);
+
+        $year = (int) $request->query->get('year', $today->format('Y'));
+        $month = (int) $request->query->get('month', $today->format('n'));
+        if ($month < 1 || $month > 12) {
+            $month = (int) $today->format('n');
+        }
+
+        $sheet = $report->forMonth($worker, $year, $month, $madrid, $today);
+
+        return $pdf->download($worker, $year, $month, $sheet, new \DateTimeImmutable('now', $madrid));
     }
 
     /**

@@ -30,5 +30,9 @@
         {{ csa.btn('', { variant: 'ghost', icon: 'fa-chevron-right', href: path('staff_calendar', { id: worker.id, year: next|date('Y'), month: next|date('n') }) }) }}
     </div>
 
+    <div class="csa-row" style="justify-content: flex-end; margin-bottom: var(--csa-sp-4);">
+        {{ csa.btn('Descargar justificante', { variant: 'secondary', icon: 'fa-file-pdf-o', href: path('staff_timesheet_pdf', { id: worker.id, year: month_label|date('Y'), month: month_label|date('n') }) }) }}
+    </div>
+
     {{ include('staff/_calendar_grid.html.twig', { weeks: weeks, day_route: 'staff_day', base_params: { id: worker.id }, madrid: madrid }) }}
 {% endblock %}

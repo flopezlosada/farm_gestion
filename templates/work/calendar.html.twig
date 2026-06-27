@@ -24,6 +24,10 @@
         {{ csa.btn('', { variant: 'ghost', icon: 'fa-chevron-right', href: path('work_calendar', { year: next|date('Y'), month: next|date('n') }) }) }}
     </div>
 
+    <div class="csa-row" style="justify-content: flex-end; margin-bottom: var(--csa-sp-4);">
+        {{ csa.btn('Descargar mi justificante', { variant: 'secondary', icon: 'fa-file-pdf-o', href: path('work_timesheet_pdf', { year: month_label|date('Y'), month: month_label|date('n') }) }) }}
+    </div>
+
     {{ include('staff/_calendar_grid.html.twig', { weeks: weeks, day_route: 'work_day', base_params: {}, madrid: madrid }) }}
 
     <p style="color:#6b7280; font-size:.85rem; margin-top:1rem;">Pulsa un día para ver, corregir o añadir tus fichajes.</p>

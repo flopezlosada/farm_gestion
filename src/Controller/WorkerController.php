@@ -15,7 +15,9 @@ use App\Security\MagicLinkMailer;
 use App\Security\WorkerUserProvisioner;
 use App\Service\Staff\GapFinder;
 use App\Service\Staff\MonthGridBuilder;
+use App\Service\Staff\MonthlyTimesheetReport;
 use App\Service\Staff\PunchSequenceException;
+use App\Service\Staff\TimesheetPdfRenderer;
 use App\Service\Staff\WorkingDayCounter;
 use App\Service\Staff\YearCalendarBuilder;
 use App\Service\Staff\TimeEntryCorrector;
@@ -769,6 +771,38 @@ class WorkerController extends AbstractController
             'prev' => $monthStart->modify('-1 month'),
             'next' => $monthStart->modify('+1 month'),
         ]);
+    }
+
+    /**
+     * Descarga el PDF del justificante mensual de jornada del trabajador. Es la
+     * copia que se le entrega para que firme (ancla de integridad del registro
+     * fuera de la BBDD). Lectura: basta ROLE_GESTION_LABORAL.
+     *
+     * @param Request                $request
+     * @param Worker                 $worker
+     * @param MonthlyTimesheetReport $report
+     * @param TimesheetPdfRenderer   $pdf
+     * @return Response
+     */
+    #[Route('/{id}/timesheet.pdf', name: 'staff_timesheet_pdf', methods: ['GET'], requirements: ['id' => '\d+'])]
+    public function timesheetPdf(
+        Request $request,
+        Worker $worker,
+        MonthlyTimesheetReport $report,
+        TimesheetPdfRenderer $pdf,
+    ): Response {
+        $madrid = new \DateTimeZone('Europe/Madrid');
+        $today = new \DateTimeImmutable('today', $madrid);
+
+        $year = (int) $request->query->get('year', $today->format('Y'));
+        $month = (int) $request->query->get('month', $today->format('n'));
+        if ($month < 1 || $month > 12) {
+            $month = (int) $today->format('n');
+        }
+
+        $sheet = $report->forMonth($worker, $year, $month, $madrid, $today);
+
+        return $pdf->download($worker, $year, $month, $sheet, new \DateTimeImmutable('now', $madrid));
     }
 
     /**
