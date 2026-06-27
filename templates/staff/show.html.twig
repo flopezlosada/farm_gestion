@@ -181,6 +181,7 @@
                     confirm_label: 'Sí, destruir y borrar',
                     action: path('staff_delete', { id: worker.id }),
                     csrf_token: csrf_token('delete' ~ worker.id),
+                    csrf_name: '_token',
                     extra_fields: [{ name: 'force', value: '1' }],
                 }) }}
             {% else %}
@@ -199,6 +200,7 @@
                     confirm_label: 'Borrar',
                     action: path('staff_delete', { id: worker.id }),
                     csrf_token: csrf_token('delete' ~ worker.id),
+                    csrf_name: '_token',
                 }) }}
             {% endif %}
         </div>
