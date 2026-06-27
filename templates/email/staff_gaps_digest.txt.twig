@@ -1,0 +1,15 @@
+Huecos del registro de jornada
+==============================
+
+Días laborables sin fichar y sin ausencia justificada de los últimos {{ days }} días
+(desde el {{ from|format_date('long', locale='es') }}).
+Conviene completarlos cuanto antes, mientras se recuerda la hora real.
+
+{% for row in rows %}
+{{ row.worker.name }} — {{ row.gaps|length }} día(s):
+{% for d in row.gaps %}  - {{ d|format_date(pattern='EEEE d/MM/y', locale='es') }}
+{% endfor %}
+{% endfor %}
+--
+Aviso automático semanal del control horario.
+CSA Vega de Jarama · csavegadejarama.org

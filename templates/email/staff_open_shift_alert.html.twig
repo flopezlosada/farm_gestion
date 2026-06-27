@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Salida abierta · CSA Vega de Jarama</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #333; max-width: 720px; margin: 0 auto; padding: 24px;">
+
+    <h2 style="color: #9b1c1c; margin-top: 0;">Salida sin cerrar en el registro de jornada</h2>
+
+    <p>
+        {{ rows|length == 1 ? 'Un trabajador tiene' : 'Hay trabajadores con' }}
+        una entrada sin la salida correspondiente de un día anterior. Conviene
+        corregirlo pronto, mientras se recuerda la hora real de salida.
+    </p>
+
+    <table style="border-collapse: collapse; width: 100%; margin-top: 12px;">
+        <thead>
+            <tr style="background: #f3f0e8;">
+                <th style="text-align: left; padding: 8px; border-bottom: 1px solid #ddd;">Trabajador</th>
+                <th style="text-align: left; padding: 8px; border-bottom: 1px solid #ddd;">Entrada sin cerrar</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in rows %}
+                <tr>
+                    <td style="padding: 8px; border-bottom: 1px solid #eee;">{{ row.worker.name }}</td>
+                    <td style="padding: 8px; border-bottom: 1px solid #eee; color: #555;">{{ row.since|format_datetime('long', 'short', locale='es') }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <p style="margin-top: 32px; color: #777; font-size: 13px;">
+        Aviso automático del control horario.<br>
+        CSA Vega de Jarama · <a href="https://csavegadejarama.org">csavegadejarama.org</a>
+    </p>
+
+</body>
+</html>

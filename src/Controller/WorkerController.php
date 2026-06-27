@@ -13,7 +13,7 @@ use App\Repository\TimeEntryRepository;
 use App\Repository\WorkerRepository;
 use App\Security\MagicLinkMailer;
 use App\Security\WorkerUserProvisioner;
-use App\Service\Staff\GapFinder;
+use App\Service\Staff\GapReport;
 use App\Service\Staff\MonthGridBuilder;
 use App\Service\Staff\MonthlyTimesheetReport;
 use App\Service\Staff\PunchSequenceException;
@@ -74,55 +74,18 @@ class WorkerController extends AbstractController
      * sin fichaje y sin ausencia justificada. Es lo que el supervisor revisa para
      * que no se acumulen olvidos. No persiste nada: se calcula al vuelo.
      *
-     * @param WorkerRepository    $workers
-     * @param TimeEntryRepository $timeEntries
-     * @param AbsenceRepository   $absences
-     * @param GapFinder           $gapFinder
-     * @param HolidayRepository   $holidays
+     * @param GapReport $gapReport
      * @return Response
      */
     #[Route('/gaps', name: 'staff_gaps', methods: ['GET'])]
-    public function gaps(
-        WorkerRepository $workers,
-        TimeEntryRepository $timeEntries,
-        AbsenceRepository $absences,
-        GapFinder $gapFinder,
-        HolidayRepository $holidays,
-    ): Response {
+    public function gaps(GapReport $gapReport): Response
+    {
         $madrid = new \DateTimeZone('Europe/Madrid');
-
         $today = new \DateTimeImmutable('today', $madrid);
         $fromMadrid = $today->modify(sprintf('-%d days', self::GAP_DAYS));
 
-        // Los festivos son los mismos para todos: una sola consulta fuera del bucle.
-        $holidayDates = $holidays->findNamesBetween($fromMadrid, $today);
-
-        $rows = [];
-        foreach ($workers->findActive() as $worker) {
-            // Días con algún fichaje (clave Y-m-d en Madrid).
-            $worked = [];
-            foreach ($timeEntries->findEffectiveForWorkerBetween($worker, $fromMadrid, $today) as $entry) {
-                $worked[$entry->getOccurredAt()->format('Y-m-d')] = true;
-            }
-
-            // Días cubiertos por una ausencia aprobada (vacaciones, baja, permiso).
-            $covered = [];
-            foreach ($absences->findApprovedForWorkerBetween($worker, $fromMadrid, $today) as $absence) {
-                $cursor = $absence->getStartDate();
-                while ($cursor <= $absence->getEndDate()) {
-                    $covered[$cursor->format('Y-m-d')] = true;
-                    $cursor = $cursor->modify('+1 day');
-                }
-            }
-
-            $gaps = $gapFinder->gapsFor($fromMadrid, $today, $worker->getHireDate(), $worked, $covered, $holidayDates);
-            if ($gaps !== []) {
-                $rows[] = ['worker' => $worker, 'gaps' => $gaps];
-            }
-        }
-
         return $this->render('staff/gaps.html.twig', [
-            'rows' => $rows,
+            'rows' => $gapReport->activeWorkersGaps($fromMadrid, $today),
             'days' => self::GAP_DAYS,
         ]);
     }
