@@ -1,51 +1,55 @@
 {# Estilos compartidos del registro de jornada y sus controles de edición
  # (ficha y vista de día). #}
 <style>
-    .stf-reg { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; overflow: visible; }
-    .stf-day { border-bottom: 1px solid #eef0f2; }
+    /* Colores estructurales y de estado vía tokens --csa-*. Los rojos
+       destructivos (#9b1c1c) y la paleta multi-estado del callout .day-warn se
+       dejan en hex a propósito: son semánticas deliberadas que conviene
+       tokenizar revisándolas en pantalla (sesión de UI/UX). */
+    .stf-reg { background: var(--csa-surface); border: 1px solid var(--csa-rule); border-radius: var(--csa-radius-lg); overflow: visible; }
+    .stf-day { border-bottom: 1px solid var(--csa-rule-soft); }
     .stf-day:last-child { border-bottom: none; }
-    .stf-day__head { padding: .6rem 1rem; font-weight: 600; background: #fafaf8; text-transform: capitalize; }
+    .stf-day__head { padding: .6rem 1rem; font-weight: 600; background: var(--csa-surface-alt); text-transform: capitalize; }
     .stf-pun { display: flex; align-items: center; gap: .7rem; padding: .55rem 1rem; }
     .stf-pun__icon { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; color: #fff; flex: none; font-size: .8rem; }
-    .stf-pun__icon--in  { background: #2f8f4e; }
-    .stf-pun__icon--out { background: #b4632b; }
+    .stf-pun__icon--in  { background: var(--csa-green); }
+    .stf-pun__icon--out { background: var(--csa-terracotta); }
     .stf-pun__time { font-variant-numeric: tabular-nums; }
-    .stf-late { font-size: .7rem; font-weight: 600; color: #92400e; background: #fef3c7; border-radius: 999px; padding: .1rem .5rem; }
-    .stf-reg-empty { padding: 2rem 1rem; text-align: center; color: #9ca3af; }
+    .stf-late { font-size: .7rem; font-weight: 600; color: var(--csa-amber); background: var(--csa-ochre-soft); border-radius: var(--csa-radius-pill); padding: .1rem .5rem; }
+    .stf-reg-empty { padding: 2rem 1rem; text-align: center; color: var(--csa-ink-muted); }
 
     /* Edición inline de la hora de un fichaje (estilo Factorial). */
     .pun { display: inline-flex; align-items: center; gap: .4rem; }
     .pun__view, .pun__edit { display: inline-flex; align-items: center; gap: .3rem; }
-    .pun__btn { border: none; background: none; cursor: pointer; padding: .2rem .35rem; border-radius: 6px; color: #9ca3af; font-size: .78rem; line-height: 1; }
-    .pun__btn:hover { background: #f3f4f6; }
-    .pun__pen:hover { color: #2f6f43; }
-    .pun__ok { color: #2f8f4e; }
-    .pun__ok:hover { background: #e7f3ea; color: #226c39; }
-    .pun__cancel:hover { color: #6b7280; }
-    .pun__del { color: #b4632b; }
-    .pun__del:hover { background: #fbe8dd; color: #9b1c1c; }
-    .pun__input { font-size: .9rem; padding: .2rem .35rem; border: 1px solid #2f8f4e; border-radius: 6px; font-variant-numeric: tabular-nums; }
+    .pun__btn { border: none; background: none; cursor: pointer; padding: .2rem .35rem; border-radius: var(--csa-radius-sm); color: var(--csa-ink-muted); font-size: .78rem; line-height: 1; }
+    .pun__btn:hover { background: var(--csa-surface-alt); }
+    .pun__pen:hover { color: var(--csa-green); }
+    .pun__ok { color: var(--csa-green); }
+    .pun__ok:hover { background: var(--csa-green-soft); color: var(--csa-green); }
+    .pun__cancel:hover { color: var(--csa-ink-muted); }
+    .pun__del { color: var(--csa-terracotta); }
+    .pun__del:hover { background: var(--csa-terracotta-soft); color: #9b1c1c; }
+    .pun__input { font-size: .9rem; padding: .2rem .35rem; border: 1px solid var(--csa-green); border-radius: var(--csa-radius-sm); font-variant-numeric: tabular-nums; }
     .pun [hidden] { display: none !important; }
 
     /* Controles de corrección por fichaje (details inline). */
     .stf-edit { display: inline-block; position: relative; }
-    .stf-edit > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: .4rem; padding: .15rem .4rem; border-radius: 8px; }
+    .stf-edit > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: .4rem; padding: .15rem .4rem; border-radius: var(--csa-radius-md); }
     .stf-edit > summary::-webkit-details-marker { display: none; }
-    .stf-edit > summary:hover { background: #f3f4f6; }
-    .stf-edit__pen { font-size: .72rem; color: #9ca3af; }
-    .stf-edit[open] > summary .stf-edit__pen { color: #2f6f43; }
-    .stf-edit__panel { position: absolute; z-index: 10; margin-top: .4rem; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.1); padding: .9rem; min-width: 260px; }
+    .stf-edit > summary:hover { background: var(--csa-surface-alt); }
+    .stf-edit__pen { font-size: .72rem; color: var(--csa-ink-muted); }
+    .stf-edit[open] > summary .stf-edit__pen { color: var(--csa-green); }
+    .stf-edit__panel { position: absolute; z-index: 10; margin-top: .4rem; background: var(--csa-surface); border: 1px solid var(--csa-rule); border-radius: var(--csa-radius-lg); box-shadow: var(--csa-shadow-md); padding: .9rem; min-width: 260px; max-width: 90vw; }
     .stf-edit__form { display: flex; flex-direction: column; gap: .5rem; margin-bottom: .6rem; }
-    .stf-edit__form label { display: flex; flex-direction: column; font-size: .78rem; color: #6b7280; gap: .2rem; }
-    .stf-edit__form input, .stf-edit__form select { font-size: .9rem; padding: .35rem .5rem; border: 1px solid #d1d5db; border-radius: 6px; }
+    .stf-edit__form label { display: flex; flex-direction: column; font-size: .78rem; color: var(--csa-ink-muted); gap: .2rem; }
+    .stf-edit__form input, .stf-edit__form select { font-size: .9rem; padding: .35rem .5rem; border: 1px solid var(--csa-rule); border-radius: var(--csa-radius-sm); }
     .stf-edit__void-reason { margin-bottom: .4rem; width: 100%; }
     .stf-add { margin-top: 1.4rem; }
-    .stf-add > summary { cursor: pointer; color: #2f6f43; font-weight: 600; }
+    .stf-add > summary { cursor: pointer; color: var(--csa-green); font-weight: 600; }
 
     /* Fila compacta para añadir un fichaje olvidado (sin motivo: lo pone el backend).
        Reusa .csa-input (40px, el input canónico) para que tipo y hora cuadren. */
     .stf-addrow { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .7rem; margin-top: .9rem; }
-    .stf-addrow label { display: flex; flex-direction: column; font-size: .75rem; color: #6b7280; gap: .3rem; }
+    .stf-addrow label { display: flex; flex-direction: column; font-size: .75rem; color: var(--csa-ink-muted); gap: .3rem; }
     .stf-addrow .csa-input { width: auto; }
     .stf-addrow select.csa-input { min-width: 8rem; }
     .stf-addrow input[type="time"].csa-input { width: 8rem; }
@@ -53,15 +57,28 @@
     .stf-addrow .csa-btn { height: 40px; white-space: nowrap; }
     /* Tipo fijo (el que toca según el último fichaje): no se elige, se muestra. */
     .stf-fixedtype { display: inline-flex; align-items: center; height: 40px; padding: 0 .9rem; border-radius: var(--csa-radius-md); font-weight: 600; box-sizing: border-box; }
-    .stf-fixedtype--in  { background: #e7f3ea; color: #226c39; }
-    .stf-fixedtype--out { background: #fbe8dd; color: #9b1c1c; }
+    .stf-fixedtype--in  { background: var(--csa-green-soft); color: var(--csa-green); }
+    .stf-fixedtype--out { background: var(--csa-terracotta-soft); color: #9b1c1c; }
 
-    /* Aviso de jornada descuadrada / incompleta. */
-    .day-warn { display:flex; align-items:flex-start; gap:.6rem; padding:.8rem 1rem; border-radius:10px; margin-bottom:1.2rem; font-size:.9rem; line-height:1.4; }
+    /* Aviso de jornada descuadrada / incompleta. Paleta multi-estado deliberada
+       (rojo/ámbar/azul); pendiente tokenizar con revisión en pantalla. */
+    .day-warn { display:flex; align-items:flex-start; gap:.6rem; padding:.8rem 1rem; border-radius:var(--csa-radius-lg); margin-bottom:1.2rem; font-size:.9rem; line-height:1.4; }
     .day-warn i { margin-top:.15rem; }
     .day-warn--bad  { background:#fde2e2; color:#9b1c1c; }
     .day-warn--warn { background:#fef3c7; color:#92400e; }
     .day-warn--info { background:#e0f2fe; color:#075985; }
+
+    /* Móvil: el popover de corrección y la fila de añadir a una columna ancha. */
+    @media (max-width: 560px) {
+        .stf-edit__panel { min-width: 0; width: 90vw; right: 0; }
+        .stf-addrow { flex-direction: column; align-items: stretch; }
+        .stf-addrow label { width: 100%; }
+        .stf-addrow .csa-input,
+        .stf-addrow select.csa-input,
+        .stf-addrow input[type="time"].csa-input,
+        .stf-addrow input[type="date"].csa-input { width: 100%; }
+        .stf-addrow .csa-btn { width: 100%; }
+    }
 </style>
 
 {# Edición inline de la hora: el lápiz abre el input, Enter o el tick guardan
