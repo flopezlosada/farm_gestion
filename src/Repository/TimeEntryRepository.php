@@ -66,4 +66,33 @@ class TimeEntryRepository extends ServiceEntityRepository
             ->getQuery()
             ->getOneOrNullResult();
     }
+
+    /**
+     * Último fichaje vigente de un trabajador DENTRO de un rango [from, to). A
+     * diferencia de {@see self::findLastEffectiveForWorker()} (último global),
+     * sirve para decidir el estado del día sin arrastrar tramos abiertos de días
+     * anteriores: una entrada sin cerrar de ayer no debe contar como "trabajando
+     * hoy". El olvido de salida queda como anomalía que detecta el panel de
+     * huecos / el aviso de salida abierta.
+     *
+     * @param Worker             $worker Trabajador.
+     * @param \DateTimeImmutable $from   Inicio del rango, incluido.
+     * @param \DateTimeImmutable $to     Fin del rango, excluido.
+     * @return TimeEntry|null
+     */
+    public function findLastEffectiveForWorkerBetween(Worker $worker, \DateTimeImmutable $from, \DateTimeImmutable $to): ?TimeEntry
+    {
+        return $this->createQueryBuilder('t')
+            ->andWhere('t.worker = :worker')
+            ->andWhere('t.voidedAt IS NULL')
+            ->andWhere('t.occurredAt >= :from')
+            ->andWhere('t.occurredAt < :to')
+            ->setParameter('worker', $worker)
+            ->setParameter('from', $from)
+            ->setParameter('to', $to)
+            ->orderBy('t.occurredAt', 'DESC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
 }
