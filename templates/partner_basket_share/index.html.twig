@@ -68,7 +68,9 @@
                         </td>
                         <td class="csa-table__actions">
                             <a href="{{ path('partner_basket_share_show', { id: pbs.id }) }}" title="Ver" aria-label="Ver"><i class="fa fa-eye"></i></a>
+                            {% if is_granted('ROLE_GESTION_SOCIXS_EDIT') %}
                             <a href="{{ path('partner_basket_share_edit', { id: pbs.id }) }}" title="Corregir errata (sin histórico)" aria-label="Corregir errata"><i class="fa fa-pencil"></i></a>
+                            {% endif %}
                         </td>
                     </tr>
                 {% else %}

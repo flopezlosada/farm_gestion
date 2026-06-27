@@ -48,7 +48,7 @@ class UserType extends AbstractType
      */
     public const SECTIONS = [
         'granja'    => ['label' => 'Granja',             'read' => 'ROLE_GESTION_GRANJA',    'edit' => null],
-        'socixs'    => ['label' => 'Socixs',             'read' => 'ROLE_GESTION_SOCIXS',    'edit' => null],
+        'socixs'    => ['label' => 'Socixs',             'read' => 'ROLE_GESTION_SOCIXS',    'edit' => 'ROLE_GESTION_SOCIXS_EDIT'],
         'reparto'   => ['label' => 'Reparto',            'read' => 'ROLE_GESTION_REPARTO',   'edit' => null],
         'blog'      => ['label' => 'Blog y comunicación', 'read' => 'ROLE_BLOG',             'edit' => null],
         'encuestas' => ['label' => 'Encuestas',          'read' => 'ROLE_GESTION_ENCUESTAS', 'edit' => 'ROLE_GESTION_ENCUESTAS_EDIT'],
@@ -246,12 +246,13 @@ class UserType extends AbstractType
         // Preservar los roles que este formulario NO gestiona (p.ej.
         // ROLE_SUPER_ADMIN del admin, ROLE_GUEST, ROLE_COMPOST). Sin esto, al
         // guardar la ficha se reconstruiría el array desde cero y se perderían.
-        // ROLE_USER y ROLE_PARTNER se derivan en User::getRoles() (no se
-        // almacenan), así que no se preservan a mano.
+        // ROLE_USER, ROLE_PARTNER y ROLE_WORKER se derivan en User::getRoles()
+        // (de las relaciones ORM, no se almacenan), así que no se preservan a
+        // mano: persistirlos duplicaría el rol en la columna.
         $user = $form->getData();
         if ($user instanceof User) {
             $managed = self::managedRoles();
-            $derived = ['ROLE_USER', 'ROLE_PARTNER'];
+            $derived = ['ROLE_USER', 'ROLE_PARTNER', 'ROLE_WORKER'];
             foreach ($user->getRoles() as $role) {
                 if (!\in_array($role, $managed, true) && !\in_array($role, $derived, true)) {
                     $roles[] = $role;
