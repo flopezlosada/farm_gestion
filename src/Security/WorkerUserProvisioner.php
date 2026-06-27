@@ -113,4 +113,34 @@ class WorkerUserProvisioner
 
         $this->em->flush();
     }
+
+    /**
+     * Libera la cuenta de login al BORRAR un trabajador (no al retirarle el
+     * acceso). A diferencia de {@see WorkerUserProvisioner::revokeAccess()}, que
+     * deshabilita la cuenta huérfana para conservarla, aquí el trabajador
+     * desaparece por completo: una cuenta que SOLO servía para fichar (sin socix
+     * ni roles de equipo) se BORRA, para no dejar un login muerto. Si la cuenta
+     * es compartida (también socix o del equipo) solo se le quita la faceta
+     * laboral y sigue viva.
+     *
+     * No hace flush: forma parte del borrado del Worker, que el controller
+     * confirma en una sola transacción.
+     *
+     * @param Worker $worker Trabajador que se está borrando.
+     * @return void
+     */
+    public function releaseUserOnWorkerDeletion(Worker $worker): void
+    {
+        $user = $this->userFor($worker);
+        if ($user === null) {
+            return;
+        }
+
+        $user->setWorker(null);
+
+        $leftover = array_diff($user->getRoles(), ['ROLE_USER']);
+        if ($user->getPartner() === null && $leftover === []) {
+            $this->em->remove($user);
+        }
+    }
 }

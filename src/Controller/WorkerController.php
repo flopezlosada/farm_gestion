@@ -873,26 +873,44 @@ class WorkerController extends AbstractController
     }
 
     /**
-     * Borra un trabajador. No se permite si tiene fichajes: el registro de
-     * jornada se conserva 4 años por ley aunque la persona se vaya, así que para
-     * un trabajador con histórico la vía correcta es marcarlo inactivo, no
-     * borrarlo.
+     * Borra un trabajador y sus datos asociados.
      *
-     * @param Request                $request
-     * @param Worker                 $worker
-     * @param EntityManagerInterface $em
+     * Por defecto se BLOQUEA si tiene fichajes: el registro de jornada se conserva
+     * 4 años por ley aunque la persona se vaya, así que la vía correcta para un
+     * trabajador con histórico es marcarlo inactivo, no borrarlo. Solo con
+     * `force=1` (acción reservada a ROLE_GESTION_LABORAL_EDIT por access_control,
+     * pensada para limpiar trabajadores de PRUEBA) se borra aun teniendo fichajes,
+     * destruyendo el registro de jornada.
+     *
+     * En cualquier caso el borrado arrastra en cascada lo que solo tiene sentido
+     * junto al trabajador (no hay retención legal de esto): sus ausencias, y la
+     * cuenta de login si quedaba huérfana ({@see WorkerUserProvisioner::releaseUserOnWorkerDeletion()}).
+     * Antes el delete solo miraba `time_entries` y un trabajador con ausencias o
+     * con cuenta podía petar por FK o dejar un login muerto.
+     *
+     * @param Request                 $request
+     * @param Worker                  $worker
+     * @param EntityManagerInterface  $em
+     * @param WorkerUserProvisioner   $provisioner
      * @return Response
      */
     #[Route('/{id}', name: 'staff_delete', methods: ['POST'], requirements: ['id' => '\d+'])]
-    public function delete(Request $request, Worker $worker, EntityManagerInterface $em): Response
-    {
+    public function delete(
+        Request $request,
+        Worker $worker,
+        EntityManagerInterface $em,
+        WorkerUserProvisioner $provisioner,
+    ): Response {
         if (!$this->isCsrfTokenValid('delete' . $worker->getId(), (string) $request->request->get('_token'))) {
             $this->addFlash('warning', 'Token de seguridad inválido.');
 
             return $this->redirectToRoute('staff_show', ['id' => $worker->getId()]);
         }
 
-        if ($worker->getTimeEntries()->count() > 0) {
+        $entryCount = $worker->getTimeEntries()->count();
+        $force = $request->request->getBoolean('force');
+
+        if ($entryCount > 0 && !$force) {
             $this->addFlash('error', sprintf(
                 'No se puede borrar «%s»: tiene fichajes registrados (el registro de jornada se conserva por ley). Márcalo como inactivo.',
                 $worker->getName(),
@@ -901,9 +919,30 @@ class WorkerController extends AbstractController
             return $this->redirectToRoute('staff_show', ['id' => $worker->getId()]);
         }
 
+        $name = $worker->getName();
+
+        // Forzado: se destruye también el registro de jornada (solo limpieza de
+        // pruebas; el bloqueo legal lo cubre el caso normal de arriba).
+        if ($entryCount > 0) {
+            foreach ($worker->getTimeEntries() as $entry) {
+                $em->remove($entry);
+            }
+        }
+
+        // Ausencias: no tienen retención legal, se borran siempre con el trabajador.
+        foreach ($worker->getAbsences() as $absence) {
+            $em->remove($absence);
+        }
+
+        // Cuenta de login: se borra si era solo laboral, se desvincula si es compartida.
+        $provisioner->releaseUserOnWorkerDeletion($worker);
+
         $em->remove($worker);
         $em->flush();
-        $this->addFlash('success', sprintf('Trabajador «%s» borrado.', $worker->getName()));
+
+        $this->addFlash('success', $force && $entryCount > 0
+            ? sprintf('Trabajador «%s» borrado junto con sus %d fichajes y sus ausencias.', $name, $entryCount)
+            : sprintf('Trabajador «%s» borrado.', $name));
 
         return $this->redirectToRoute('staff_index');
     }

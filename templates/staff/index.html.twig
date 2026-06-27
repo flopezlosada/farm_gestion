@@ -52,6 +52,19 @@
                         <td class="csa-table__actions">
                             <a href="{{ path('staff_show', { id: worker.id }) }}" title="Ver" aria-label="Ver"><i class="fa fa-eye"></i></a>
                             <a href="{{ path('staff_edit', { id: worker.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>
+                            {% if is_granted('ROLE_GESTION_LABORAL_EDIT') %}
+                                <a href="#" title="Borrar" aria-label="Borrar" class="csa-table__action--danger"
+                                   onclick="event.preventDefault(); document.getElementById('confirm-worker-delete-{{ worker.id }}').showModal();"><i class="fa fa-trash"></i></a>
+                                {{ csa.confirm_dialog('confirm-worker-delete-' ~ worker.id, {
+                                    variant: 'danger',
+                                    eyebrow: 'Acción permanente',
+                                    title: 'Borrar a ' ~ worker.name,
+                                    body: 'Se borrará el trabajador junto con sus ausencias y su cuenta de acceso. Si tiene fichajes registrados, el borrado se bloqueará (entra en su ficha para forzarlo). No se puede deshacer.',
+                                    confirm_label: 'Borrar',
+                                    action: path('staff_delete', { id: worker.id }),
+                                    csrf_token: csrf_token('delete' ~ worker.id),
+                                }) }}
+                            {% endif %}
                         </td>
                     </tr>
                 {% else %}
