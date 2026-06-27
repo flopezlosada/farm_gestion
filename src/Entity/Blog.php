@@ -95,6 +95,15 @@ class Blog
      */
     private $slug;
 
+    /**
+     * Contador de visitas reales a la entrada en el blog público. Se
+     * incrementa cada vez que se renderiza el post {@see \App\Controller\BlogController::show()}.
+     *
+     * @var int $views
+     * @ORM\Column(name="views", type="integer", options={"default": 0})
+     */
+    private $views = 0;
+
 
     public function __construct()
     {
@@ -182,6 +191,42 @@ class Blog
     public function getSlug()
     {
         return $this->slug;
+    }
+
+    /**
+     * Get views
+     *
+     * @return int
+     */
+    public function getViews()
+    {
+        return (int) $this->views;
+    }
+
+    /**
+     * Set views
+     *
+     * @param int $views
+     *
+     * @return Blog
+     */
+    public function setViews($views)
+    {
+        $this->views = (int) $views;
+
+        return $this;
+    }
+
+    /**
+     * Incrementa el contador de visitas en uno y lo devuelve.
+     *
+     * @return Blog
+     */
+    public function incrementViews()
+    {
+        $this->views = (int) $this->views + 1;
+
+        return $this;
     }
 
     public function __toString()

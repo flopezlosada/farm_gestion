@@ -105,6 +105,15 @@ class AppSettings
     public const DEADLINE_TIME = 'delivery.deadline_time';
 
     /**
+     * Umbral de la regla de equilibrio: máxima diferencia de cestas permitida
+     * entre dos viernes consecutivos tras aplicar un cambio puntual. La lee
+     * {@see \App\Service\Delivery\Rule\BalanceWithinThresholdRule}. Sólo entra
+     * en juego cuando lxs socixs piden cambios desde el panel (autoservicio);
+     * admin siempre puede forzar el cambio aunque rompa el equilibrio.
+     */
+    public const BALANCE_THRESHOLD = 'delivery.balance_threshold';
+
+    /**
      * ¿Pueden lxs socixs entrar a la web? Gobierna las tres vías de acceso no-admin
      * (formulario, magic-link y Google) desde un único punto, {@see \App\Security\UserChecker}.
      * Apagado, sólo entra quien tenga un rol de gestión/admin; lxs socixs reciben
@@ -292,6 +301,15 @@ class AppSettings
             'min' => 0,
             'max' => 7,
             'unit' => 'días',
+        ],
+        self::BALANCE_THRESHOLD => [
+            'group' => 'Cierre de reparto',
+            'label' => 'Umbral de equilibrio entre viernes',
+            'help' => 'Máxima diferencia de cestas permitida entre dos viernes consecutivos cuando un socix pide un cambio puntual desde el panel. 3 = no se permite que un viernes acabe con más de 3 cestas de diferencia respecto al anterior o al siguiente. La administración siempre puede forzar el cambio aunque rompa el equilibrio.',
+            'default' => 3,
+            'min' => 1,
+            'max' => 20,
+            'unit' => 'cestas',
         ],
         self::HOSTING_PHYSICAL_CAPACITY => [
             'group' => 'Albergue',

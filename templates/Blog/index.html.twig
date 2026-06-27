@@ -238,8 +238,8 @@
             color: var(--csa-ink-muted);
         }
 
-        /* Alcance: dos pares icono+número apilados. Datos PLACEHOLDER
-         # (ver [[blog-stats-deuda]]). Tipográfico, no llamativo. */
+        /* Visitas: icono + número de visitas reales al post en el blog
+         # público. Tipográfico, no llamativo. */
         .blog-row__reach {
             font-family: var(--csa-sans);
             font-size: var(--csa-fs-sm);
@@ -316,17 +316,13 @@
                 <tr>
                     <th>Noticia</th>
                     <th class="csa-table__col-tight">Publicación</th>
-                    <th class="csa-table__col-tight">Alcance</th>
+                    <th class="csa-table__col-tight">Visitas</th>
                     <th class="csa-table__actions">Acciones</th>
                 </tr>
             </thead>
             <tbody>
                 {% for entity in entities %}
                     {% set tone = entity.category ? cat_tone_map[entity.category.id]|default('neutral') : null %}
-                    {# Stats PLACEHOLDER derivadas del id (consistentes entre
-                     # recargas, NO es dato real). Ver [[blog-stats-deuda]]. #}
-                    {% set fake_views = (entity.id * 137) % 4000 + 80 %}
-                    {% set fake_comments = (entity.id * 23) % 80 %}
                     <tr>
                         <td>
                             <div class="blog-row">
@@ -374,17 +370,12 @@
                             {% endif %}
                         </td>
 
-                        <td class="csa-table__col-tight" data-order="{{ fake_views }}">
-                            <div class="blog-row__reach" title="Datos provisionales — pendiente analytics real">
+                        <td class="csa-table__col-tight" data-order="{{ entity.views }}">
+                            <div class="blog-row__reach">
                                 <div class="blog-row__reach-row">
                                     <i class="fa fa-eye"></i>
-                                    <span class="blog-row__reach-num">{{ fake_views|number_format(0, ',', '.') }}</span>
-                                    <span class="blog-row__reach-label">vistas</span>
-                                </div>
-                                <div class="blog-row__reach-row">
-                                    <i class="fa fa-comment-o"></i>
-                                    <span class="blog-row__reach-num">{{ fake_comments }}</span>
-                                    <span class="blog-row__reach-label">{{ fake_comments == 1 ? 'comentario' : 'comentarios' }}</span>
+                                    <span class="blog-row__reach-num">{{ entity.views|number_format(0, ',', '.') }}</span>
+                                    <span class="blog-row__reach-label">{{ entity.views == 1 ? 'visita' : 'visitas' }}</span>
                                 </div>
                             </div>
                         </td>
