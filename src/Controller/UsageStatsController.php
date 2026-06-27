@@ -16,7 +16,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * pantallas y errores) que comparten cabecera, filtros (área + rango de fechas)
  * y KPIs. Solo administración.
  */
-#[Route('/gestion/estadisticas-uso')]
+#[Route('/gestion/usage-stats')]
 #[IsGranted('ROLE_ADMIN')]
 class UsageStatsController extends AbstractController
 {
@@ -48,7 +48,7 @@ class UsageStatsController extends AbstractController
         ]);
     }
 
-    #[Route('/pantallas', name: 'usage_stats_screens', methods: ['GET'])]
+    #[Route('/screens', name: 'usage_stats_screens', methods: ['GET'])]
     public function screens(Request $request, UsageHitRepository $hits): Response
     {
         $f = $this->resolveFilters($request);
@@ -58,7 +58,7 @@ class UsageStatsController extends AbstractController
         ]);
     }
 
-    #[Route('/errores', name: 'usage_stats_errors', methods: ['GET'])]
+    #[Route('/errors', name: 'usage_stats_errors', methods: ['GET'])]
     public function errors(Request $request, UsageHitRepository $hits): Response
     {
         $f = $this->resolveFilters($request);
