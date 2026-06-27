@@ -13,9 +13,11 @@ use App\Repository\TimeEntryRepository;
 use App\Repository\WorkerRepository;
 use App\Security\MagicLinkMailer;
 use App\Security\WorkerUserProvisioner;
-use App\Service\Staff\GapFinder;
+use App\Service\Staff\GapReport;
 use App\Service\Staff\MonthGridBuilder;
+use App\Service\Staff\MonthlyTimesheetReport;
 use App\Service\Staff\PunchSequenceException;
+use App\Service\Staff\TimesheetPdfRenderer;
 use App\Service\Staff\WorkingDayCounter;
 use App\Service\Staff\YearCalendarBuilder;
 use App\Service\Staff\TimeEntryCorrector;
@@ -72,55 +74,18 @@ class WorkerController extends AbstractController
      * sin fichaje y sin ausencia justificada. Es lo que el supervisor revisa para
      * que no se acumulen olvidos. No persiste nada: se calcula al vuelo.
      *
-     * @param WorkerRepository    $workers
-     * @param TimeEntryRepository $timeEntries
-     * @param AbsenceRepository   $absences
-     * @param GapFinder           $gapFinder
-     * @param HolidayRepository   $holidays
+     * @param GapReport $gapReport
      * @return Response
      */
     #[Route('/gaps', name: 'staff_gaps', methods: ['GET'])]
-    public function gaps(
-        WorkerRepository $workers,
-        TimeEntryRepository $timeEntries,
-        AbsenceRepository $absences,
-        GapFinder $gapFinder,
-        HolidayRepository $holidays,
-    ): Response {
+    public function gaps(GapReport $gapReport): Response
+    {
         $madrid = new \DateTimeZone('Europe/Madrid');
-
         $today = new \DateTimeImmutable('today', $madrid);
         $fromMadrid = $today->modify(sprintf('-%d days', self::GAP_DAYS));
 
-        // Los festivos son los mismos para todos: una sola consulta fuera del bucle.
-        $holidayDates = $holidays->findNamesBetween($fromMadrid, $today);
-
-        $rows = [];
-        foreach ($workers->findActive() as $worker) {
-            // Días con algún fichaje (clave Y-m-d en Madrid).
-            $worked = [];
-            foreach ($timeEntries->findEffectiveForWorkerBetween($worker, $fromMadrid, $today) as $entry) {
-                $worked[$entry->getOccurredAt()->format('Y-m-d')] = true;
-            }
-
-            // Días cubiertos por una ausencia aprobada (vacaciones, baja, permiso).
-            $covered = [];
-            foreach ($absences->findApprovedForWorkerBetween($worker, $fromMadrid, $today) as $absence) {
-                $cursor = $absence->getStartDate();
-                while ($cursor <= $absence->getEndDate()) {
-                    $covered[$cursor->format('Y-m-d')] = true;
-                    $cursor = $cursor->modify('+1 day');
-                }
-            }
-
-            $gaps = $gapFinder->gapsFor($fromMadrid, $today, $worker->getHireDate(), $worked, $covered, $holidayDates);
-            if ($gaps !== []) {
-                $rows[] = ['worker' => $worker, 'gaps' => $gaps];
-            }
-        }
-
         return $this->render('staff/gaps.html.twig', [
-            'rows' => $rows,
+            'rows' => $gapReport->activeWorkersGaps($fromMadrid, $today),
             'days' => self::GAP_DAYS,
         ]);
     }
@@ -345,7 +310,12 @@ class WorkerController extends AbstractController
     }
 
     /**
-     * Cancela una ausencia (aprobada o solicitada).
+     * Cancela una ausencia (aprobada o solicitada). Aplica la MISMA regla que la
+     * cancelación del trabajador ({@see \App\Controller\WorkController::cancelVacation}):
+     * si ya terminó no se toca, si no ha empezado se cancela entera, y si está en
+     * curso se TRUNCA a hoy conservando los días disfrutados. Antes el supervisor
+     * la marcaba CANCELLED sin truncar, borrando los días ya disfrutados del
+     * cómputo.
      *
      * @param Request                $request
      * @param Worker                 $worker
@@ -360,7 +330,38 @@ class WorkerController extends AbstractController
         #[MapEntity(id: 'absenceId')] Absence $absence,
         EntityManagerInterface $em,
     ): Response {
-        return $this->changeAbsenceStatus($request, $worker, $absence, Absence::STATUS_CANCELLED, 'Ausencia cancelada.', $em);
+        if (!$this->isCsrfTokenValid('staff_absence' . $worker->getId(), (string) $request->request->get('_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+
+            return $this->redirectToRoute('staff_show', ['id' => $worker->getId()]);
+        }
+
+        if ($absence->getWorker()?->getId() !== $worker->getId()) {
+            throw $this->createNotFoundException('La ausencia no pertenece a este trabajador.');
+        }
+
+        $today = new \DateTimeImmutable('today', new \DateTimeZone('Europe/Madrid'));
+
+        switch ($absence->cancelAsOf($today)) {
+            case Absence::CANCEL_TOO_LATE:
+                $this->addFlash('warning', 'Esa ausencia ya ha terminado; no se puede cancelar.');
+                break;
+            case Absence::CANCEL_FULL:
+                // No se toca approvedBy: ese campo registra quién APROBÓ la
+                // ausencia, no quién la cancela (cancelar no es aprobar).
+                $em->flush();
+                $this->addFlash('success', 'Ausencia cancelada.');
+                break;
+            case Absence::CANCEL_TRUNCATED:
+                $em->flush();
+                $this->addFlash('success', sprintf(
+                    'Cancelada a partir de mañana. Se conservan los días hasta hoy (%s).',
+                    $today->format('d/m/Y'),
+                ));
+                break;
+        }
+
+        return $this->redirectToRoute('staff_show', ['id' => $worker->getId()]);
     }
 
     /**
@@ -736,6 +737,42 @@ class WorkerController extends AbstractController
     }
 
     /**
+     * Descarga el PDF del justificante mensual de jornada del trabajador. Es la
+     * copia que se le entrega para que firme (ancla de integridad del registro
+     * fuera de la BBDD). Lectura: basta ROLE_GESTION_LABORAL.
+     *
+     * @param Request                $request
+     * @param Worker                 $worker
+     * @param MonthlyTimesheetReport $report
+     * @param TimesheetPdfRenderer   $pdf
+     * @return Response
+     */
+    #[Route('/{id}/timesheet.pdf', name: 'staff_timesheet_pdf', methods: ['GET'], requirements: ['id' => '\d+'])]
+    public function timesheetPdf(
+        Request $request,
+        Worker $worker,
+        MonthlyTimesheetReport $report,
+        TimesheetPdfRenderer $pdf,
+    ): Response {
+        $madrid = new \DateTimeZone('Europe/Madrid');
+        $today = new \DateTimeImmutable('today', $madrid);
+        $currentYear = (int) $today->format('Y');
+
+        $year = (int) $request->query->get('year', (string) $currentYear);
+        if ($year < $currentYear - 10 || $year > $currentYear + 1) {
+            $year = $currentYear;
+        }
+        $month = (int) $request->query->get('month', $today->format('n'));
+        if ($month < 1 || $month > 12) {
+            $month = (int) $today->format('n');
+        }
+
+        $sheet = $report->forMonth($worker, $year, $month, $madrid, $today);
+
+        return $pdf->download($worker, $year, $month, $sheet, new \DateTimeImmutable('now', $madrid));
+    }
+
+    /**
      * Detalle de un día: los fichajes de esa jornada con los controles para
      * corregir/anular/añadir. Es a donde lleva cada celda del calendario.
      *
@@ -837,26 +874,44 @@ class WorkerController extends AbstractController
     }
 
     /**
-     * Borra un trabajador. No se permite si tiene fichajes: el registro de
-     * jornada se conserva 4 años por ley aunque la persona se vaya, así que para
-     * un trabajador con histórico la vía correcta es marcarlo inactivo, no
-     * borrarlo.
+     * Borra un trabajador y sus datos asociados.
      *
-     * @param Request                $request
-     * @param Worker                 $worker
-     * @param EntityManagerInterface $em
+     * Por defecto se BLOQUEA si tiene fichajes: el registro de jornada se conserva
+     * 4 años por ley aunque la persona se vaya, así que la vía correcta para un
+     * trabajador con histórico es marcarlo inactivo, no borrarlo. Solo con
+     * `force=1` (acción reservada a ROLE_GESTION_LABORAL_EDIT por access_control,
+     * pensada para limpiar trabajadores de PRUEBA) se borra aun teniendo fichajes,
+     * destruyendo el registro de jornada.
+     *
+     * En cualquier caso el borrado arrastra en cascada lo que solo tiene sentido
+     * junto al trabajador (no hay retención legal de esto): sus ausencias, y la
+     * cuenta de login si quedaba huérfana ({@see WorkerUserProvisioner::releaseUserOnWorkerDeletion()}).
+     * Antes el delete solo miraba `time_entries` y un trabajador con ausencias o
+     * con cuenta podía petar por FK o dejar un login muerto.
+     *
+     * @param Request                 $request
+     * @param Worker                  $worker
+     * @param EntityManagerInterface  $em
+     * @param WorkerUserProvisioner   $provisioner
      * @return Response
      */
     #[Route('/{id}', name: 'staff_delete', methods: ['POST'], requirements: ['id' => '\d+'])]
-    public function delete(Request $request, Worker $worker, EntityManagerInterface $em): Response
-    {
+    public function delete(
+        Request $request,
+        Worker $worker,
+        EntityManagerInterface $em,
+        WorkerUserProvisioner $provisioner,
+    ): Response {
         if (!$this->isCsrfTokenValid('delete' . $worker->getId(), (string) $request->request->get('_token'))) {
             $this->addFlash('warning', 'Token de seguridad inválido.');
 
             return $this->redirectToRoute('staff_show', ['id' => $worker->getId()]);
         }
 
-        if ($worker->getTimeEntries()->count() > 0) {
+        $entryCount = $worker->getTimeEntries()->count();
+        $force = $request->request->getBoolean('force');
+
+        if ($entryCount > 0 && !$force) {
             $this->addFlash('error', sprintf(
                 'No se puede borrar «%s»: tiene fichajes registrados (el registro de jornada se conserva por ley). Márcalo como inactivo.',
                 $worker->getName(),
@@ -865,9 +920,30 @@ class WorkerController extends AbstractController
             return $this->redirectToRoute('staff_show', ['id' => $worker->getId()]);
         }
 
+        $name = $worker->getName();
+
+        // Forzado: se destruye también el registro de jornada (solo limpieza de
+        // pruebas; el bloqueo legal lo cubre el caso normal de arriba).
+        if ($entryCount > 0) {
+            foreach ($worker->getTimeEntries() as $entry) {
+                $em->remove($entry);
+            }
+        }
+
+        // Ausencias: no tienen retención legal, se borran siempre con el trabajador.
+        foreach ($worker->getAbsences() as $absence) {
+            $em->remove($absence);
+        }
+
+        // Cuenta de login: se borra si era solo laboral, se desvincula si es compartida.
+        $provisioner->releaseUserOnWorkerDeletion($worker);
+
         $em->remove($worker);
         $em->flush();
-        $this->addFlash('success', sprintf('Trabajador «%s» borrado.', $worker->getName()));
+
+        $this->addFlash('success', $force && $entryCount > 0
+            ? sprintf('Trabajador «%s» borrado junto con sus %d fichajes y sus ausencias.', $name, $entryCount)
+            : sprintf('Trabajador «%s» borrado.', $name));
 
         return $this->redirectToRoute('staff_index');
     }

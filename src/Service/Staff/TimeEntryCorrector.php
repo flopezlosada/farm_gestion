@@ -41,7 +41,7 @@ class TimeEntryCorrector
      * tipo con la hora indicada. Devuelve el fichaje nuevo.
      *
      * @param TimeEntry          $original       Fichaje a corregir.
-     * @param \DateTimeImmutable $newOccurredAt  Hora correcta (en UTC).
+     * @param \DateTimeImmutable $newOccurredAt  Hora correcta (en hora de Madrid).
      * @param User               $author         Quién corrige.
      * @param string             $source         TimeEntry::SOURCE_SELF o SOURCE_SUPERVISOR.
      * @param string             $reason         Motivo (queda en la traza).
@@ -59,7 +59,7 @@ class TimeEntryCorrector
         // El original va a anularse, así que se excluye al validar el reemplazo.
         $this->assertConsistent($original->getWorker(), $original->getType(), $newOccurredAt, $original->getId());
 
-        $original->void($author, $reason, $this->nowUtc());
+        $original->void($author, $reason, $this->nowMadrid());
 
         $replacement = (new TimeEntry())
             ->setWorker($original->getWorker())
@@ -85,7 +85,7 @@ class TimeEntryCorrector
      */
     public function voidEntry(TimeEntry $original, User $author, string $reason): void
     {
-        $original->void($author, $reason, $this->nowUtc());
+        $original->void($author, $reason, $this->nowMadrid());
         $this->em->flush();
     }
 
@@ -95,7 +95,7 @@ class TimeEntryCorrector
      *
      * @param Worker             $worker     Trabajador.
      * @param string             $type       TimeEntry::TYPE_IN o TYPE_OUT.
-     * @param \DateTimeImmutable $occurredAt Hora del fichaje (en UTC).
+     * @param \DateTimeImmutable $occurredAt Hora del fichaje (en hora de Madrid).
      * @param User               $author     Quién lo añade.
      * @param string             $source     TimeEntry::SOURCE_SELF o SOURCE_SUPERVISOR.
      * @param string|null        $note       Justificación opcional.
@@ -162,7 +162,7 @@ class TimeEntryCorrector
      *
      * @return \DateTimeImmutable
      */
-    private function nowUtc(): \DateTimeImmutable
+    private function nowMadrid(): \DateTimeImmutable
     {
         return $this->clock->now()->setTimezone(new \DateTimeZone('Europe/Madrid'));
     }

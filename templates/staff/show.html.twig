@@ -85,9 +85,12 @@
                             <input type="hidden" name="_token" value="{{ csrf_token('staff_absence' ~ worker.id) }}">
                             <button class="csa-btn csa-btn--ghost csa-btn--sm">Rechazar</button>
                         </form>
-                    {% elseif a.status != 'cancelled' and a.status != 'rejected' %}
+                    {% elseif a.status != 'cancelled' and a.status != 'rejected' and a.endDate|date('Y-m-d') >= 'now'|date('Y-m-d') %}
+                        {% set abs_in_progress = a.startDate|date('Y-m-d') <= 'now'|date('Y-m-d') %}
                         <form method="post" action="{{ path('staff_absence_cancel', { id: worker.id, absenceId: a.id }) }}"
-                              onsubmit="return confirm('¿Cancelar esta ausencia?');">
+                              onsubmit="return confirm({{ (abs_in_progress
+                                  ? 'Esta ausencia está en curso: se conservarán los días hasta hoy y se liberará el resto. ¿Continuar?'
+                                  : '¿Cancelar esta ausencia?')|json_encode }});">
                             <input type="hidden" name="_token" value="{{ csrf_token('staff_absence' ~ worker.id) }}">
                             <button class="csa-btn csa-btn--ghost csa-btn--sm">Cancelar</button>
                         </form>
@@ -156,13 +159,50 @@
         </form>
     </details>
 
-    {% if worker.timeEntries|length == 0 %}
-        <div class="csa-row" style="margin-top: 1.4rem;">
-            <form method="post" action="{{ path('staff_delete', { id: worker.id }) }}"
-                  onsubmit="return confirm('¿Borrar a {{ worker.name|e('js') }}? Esta acción no se puede deshacer.');">
-                <input type="hidden" name="_token" value="{{ csrf_token('delete' ~ worker.id) }}">
-                <button type="submit" class="csa-btn csa-btn--ghost csa-btn--sm">Borrar trabajador</button>
-            </form>
+    {% if is_granted('ROLE_GESTION_LABORAL_EDIT') %}
+        {% set entry_count = worker.timeEntries|length %}
+        <div class="csa-danger-zone" style="margin-top: 2rem; padding-top: 1.2rem; border-top: 1px solid var(--csa-border, #e5e7eb);">
+            <h3 style="margin: 0 0 .3rem; font-size: 1rem; color: var(--csa-terracotta, #9b1c1c);">Zona peligrosa</h3>
+            {% if entry_count > 0 %}
+                <p style="margin: 0 0 .8rem; color: #6b7280; font-size: .9rem;">
+                    Este trabajador tiene <strong>{{ entry_count }}</strong> fichaje{{ entry_count == 1 ? '' : 's' }}.
+                    Para una baja real márcalo como <strong>inactivo</strong> (conserva el registro). Borrarlo
+                    destruye el registro de jornada y solo debe usarse para limpiar trabajadores de prueba.
+                </p>
+                <button type="button" class="csa-btn csa-btn--danger"
+                        onclick="document.getElementById('confirm-worker-delete').showModal()">
+                    <i class="fa fa-trash"></i> Forzar borrado
+                </button>
+                {{ csa.confirm_dialog('confirm-worker-delete', {
+                    variant: 'danger',
+                    eyebrow: 'Destruye el registro de jornada',
+                    title: 'Borrar definitivamente a ' ~ worker.name,
+                    body: 'Se borrarán los ' ~ entry_count ~ ' fichajes (registro que la ley obliga a conservar 4 años), sus ausencias y su cuenta de acceso. No se puede deshacer. Úsalo solo para limpiar trabajadores de prueba; para una baja real marca al trabajador como inactivo.',
+                    confirm_label: 'Sí, destruir y borrar',
+                    action: path('staff_delete', { id: worker.id }),
+                    csrf_token: csrf_token('delete' ~ worker.id),
+                    csrf_name: '_token',
+                    extra_fields: [{ name: 'force', value: '1' }],
+                }) }}
+            {% else %}
+                <p style="margin: 0 0 .8rem; color: #6b7280; font-size: .9rem;">
+                    No tiene fichajes. Se borrará junto con sus ausencias y su cuenta de acceso.
+                </p>
+                <button type="button" class="csa-btn csa-btn--danger"
+                        onclick="document.getElementById('confirm-worker-delete').showModal()">
+                    <i class="fa fa-trash"></i> Borrar trabajador
+                </button>
+                {{ csa.confirm_dialog('confirm-worker-delete', {
+                    variant: 'danger',
+                    eyebrow: 'Acción permanente',
+                    title: 'Borrar a ' ~ worker.name,
+                    body: 'Se borrará el trabajador junto con sus ausencias y su cuenta de acceso. No se puede deshacer.',
+                    confirm_label: 'Borrar',
+                    action: path('staff_delete', { id: worker.id }),
+                    csrf_token: csrf_token('delete' ~ worker.id),
+                    csrf_name: '_token',
+                }) }}
+            {% endif %}
         </div>
     {% endif %}
 {% endblock %}

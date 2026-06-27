@@ -51,4 +51,98 @@ class AbsenceTest extends TestCase
 
         $this->assertSame(5, $absence->getCalendarDayCount());
     }
+
+    public function testCancelarAusenciaYaTerminadaNoLaToca(): void
+    {
+        $absence = (new Absence())
+            ->setStatus(Absence::STATUS_APPROVED)
+            ->setStartDate(new \DateTimeImmutable('2026-08-01'))
+            ->setEndDate(new \DateTimeImmutable('2026-08-05'));
+
+        $today = new \DateTimeImmutable('2026-08-10');
+
+        $this->assertSame(Absence::CANCEL_TOO_LATE, $absence->cancelAsOf($today));
+        $this->assertSame(Absence::STATUS_APPROVED, $absence->getStatus());
+        $this->assertEquals(new \DateTimeImmutable('2026-08-05'), $absence->getEndDate());
+    }
+
+    public function testCancelarAusenciaFuturaLaCancelaEntera(): void
+    {
+        $absence = (new Absence())
+            ->setStatus(Absence::STATUS_APPROVED)
+            ->setStartDate(new \DateTimeImmutable('2026-08-20'))
+            ->setEndDate(new \DateTimeImmutable('2026-08-25'));
+
+        $today = new \DateTimeImmutable('2026-08-10');
+
+        $this->assertSame(Absence::CANCEL_FULL, $absence->cancelAsOf($today));
+        $this->assertSame(Absence::STATUS_CANCELLED, $absence->getStatus());
+        $this->assertEquals(new \DateTimeImmutable('2026-08-25'), $absence->getEndDate());
+    }
+
+    public function testCancelarAusenciaEnCursoLaTruncaAHoy(): void
+    {
+        $absence = (new Absence())
+            ->setStatus(Absence::STATUS_APPROVED)
+            ->setStartDate(new \DateTimeImmutable('2026-08-05'))
+            ->setEndDate(new \DateTimeImmutable('2026-08-25'));
+
+        $today = new \DateTimeImmutable('2026-08-10');
+
+        // En curso: se trunca a hoy (conserva lo disfrutado) y NO se marca cancelada.
+        $this->assertSame(Absence::CANCEL_TRUNCATED, $absence->cancelAsOf($today));
+        $this->assertSame(Absence::STATUS_APPROVED, $absence->getStatus());
+        $this->assertEquals($today, $absence->getEndDate());
+    }
+
+    public function testCancelarAusenciaQueEmpiezaHoyLaTrunca(): void
+    {
+        $absence = (new Absence())
+            ->setStatus(Absence::STATUS_APPROVED)
+            ->setStartDate(new \DateTimeImmutable('2026-08-10'))
+            ->setEndDate(new \DateTimeImmutable('2026-08-25'));
+
+        $today = new \DateTimeImmutable('2026-08-10');
+
+        // El día de inicio es hoy: cuenta como en curso, trunca a hoy (1 día).
+        $this->assertSame(Absence::CANCEL_TRUNCATED, $absence->cancelAsOf($today));
+        $this->assertEquals($today, $absence->getEndDate());
+    }
+
+    public function testCancelarAusenciaQueTerminoAyerEsDemasiadoTarde(): void
+    {
+        $absence = (new Absence())
+            ->setStatus(Absence::STATUS_APPROVED)
+            ->setStartDate(new \DateTimeImmutable('2026-08-05'))
+            ->setEndDate(new \DateTimeImmutable('2026-08-09'));
+
+        // Hoy es el día siguiente al fin: ya terminó, no se toca.
+        $this->assertSame(Absence::CANCEL_TOO_LATE, $absence->cancelAsOf(new \DateTimeImmutable('2026-08-10')));
+        $this->assertEquals(new \DateTimeImmutable('2026-08-09'), $absence->getEndDate());
+    }
+
+    public function testCancelarAusenciaQueTerminaHoyLaTrunca(): void
+    {
+        $absence = (new Absence())
+            ->setStatus(Absence::STATUS_APPROVED)
+            ->setStartDate(new \DateTimeImmutable('2026-08-05'))
+            ->setEndDate(new \DateTimeImmutable('2026-08-10'));
+
+        $today = new \DateTimeImmutable('2026-08-10');
+
+        // El último día es hoy: sigue en curso (límite inclusivo), trunca a hoy.
+        $this->assertSame(Absence::CANCEL_TRUNCATED, $absence->cancelAsOf($today));
+        $this->assertEquals($today, $absence->getEndDate());
+    }
+
+    public function testCancelarAusenciaSinFechasNoLaMuta(): void
+    {
+        $absence = (new Absence())->setStatus(Absence::STATUS_APPROVED);
+
+        // Sin start/end no hay nada que cancelar con sentido: se trata como
+        // "demasiado tarde" y NO se muta (ni estado ni fechas).
+        $this->assertSame(Absence::CANCEL_TOO_LATE, $absence->cancelAsOf(new \DateTimeImmutable('2026-08-10')));
+        $this->assertSame(Absence::STATUS_APPROVED, $absence->getStatus());
+        $this->assertNull($absence->getEndDate());
+    }
 }

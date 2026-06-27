@@ -73,13 +73,18 @@ class SettingsController extends AbstractController
             $args['--force'] = true;
         }
 
-        // El resumen a administración necesita un destinatario en ejecución real:
-        // se lo mandamos a quien pulsa (el admin de la sesión). En dry-run no hace
-        // falta (no envía nada).
-        if ($key === AppSettings::CRON_ADMIN_DELIVERY_SUMMARY && !$dryRun) {
+        // Estas tareas necesitan un destinatario en ejecución real (el supervisor o
+        // admin): se lo mandamos a quien pulsa (el admin de la sesión). En dry-run no
+        // hace falta (no envían nada). En el cron real el --to lo fija la línea del cron.
+        $needsRecipient = [
+            AppSettings::CRON_ADMIN_DELIVERY_SUMMARY,
+            AppSettings::CRON_STAFF_GAPS_DIGEST,
+            AppSettings::CRON_STAFF_OPEN_SHIFT_ALERT,
+        ];
+        if (in_array($key, $needsRecipient, true) && !$dryRun) {
             $adminEmail = $this->getUser()?->getEmail();
             if (!$adminEmail) {
-                $this->addFlash('warning', 'Tu usuario no tiene email configurado; no se puede enviar el resumen. Usa la previsualización o configura tu email.');
+                $this->addFlash('warning', 'Tu usuario no tiene email configurado; no se puede enviar. Usa la previsualización o configura tu email.');
                 return $this->redirectToRoute('settings_index');
             }
             $args['--to'] = $adminEmail;

@@ -10,8 +10,10 @@ use App\Repository\AbsenceRepository;
 use App\Repository\HolidayRepository;
 use App\Repository\TimeEntryRepository;
 use App\Service\Staff\MonthGridBuilder;
+use App\Service\Staff\MonthlyTimesheetReport;
 use App\Service\Staff\PunchSequenceException;
 use App\Service\Staff\TimeClock;
+use App\Service\Staff\TimesheetPdfRenderer;
 use App\Service\Staff\TimeEntryCorrector;
 use App\Service\Staff\TimeInputParser;
 use App\Service\Staff\WorkdayBuilder;
@@ -159,6 +161,45 @@ class WorkController extends AbstractController
             'prev' => $monthStart->modify('-1 month'),
             'next' => $monthStart->modify('+1 month'),
         ]);
+    }
+
+    /**
+     * Descarga el PDF del justificante mensual de la PROPIA jornada. La copia que
+     * el trabajador guarda y firma: su ancla de integridad del registro fuera de
+     * la BBDD.
+     *
+     * @param Request                $request
+     * @param MonthlyTimesheetReport $report
+     * @param TimesheetPdfRenderer   $pdf
+     * @return Response
+     */
+    #[Route('/timesheet.pdf', name: 'work_timesheet_pdf', methods: ['GET'])]
+    public function timesheetPdf(
+        Request $request,
+        MonthlyTimesheetReport $report,
+        TimesheetPdfRenderer $pdf,
+    ): Response {
+        if (($redirect = $this->ensureWorker()) !== null) {
+            return $redirect;
+        }
+
+        $worker = $this->worker();
+        $madrid = $this->madrid();
+        $today = new \DateTimeImmutable('today', $madrid);
+        $currentYear = (int) $today->format('Y');
+
+        $year = (int) $request->query->get('year', (string) $currentYear);
+        if ($year < $currentYear - 10 || $year > $currentYear + 1) {
+            $year = $currentYear;
+        }
+        $month = (int) $request->query->get('month', $today->format('n'));
+        if ($month < 1 || $month > 12) {
+            $month = (int) $today->format('n');
+        }
+
+        $sheet = $report->forMonth($worker, $year, $month, $madrid, $today);
+
+        return $pdf->download($worker, $year, $month, $sheet, new \DateTimeImmutable('now', $madrid));
     }
 
     /**
@@ -330,9 +371,14 @@ class WorkController extends AbstractController
             $type = Absence::TYPE_VACATION;
         }
 
-        // La baja médica no se aprueba (la determina el parte médico): se registra
-        // directa. Vacaciones y permiso sí pasan por aprobación del supervisor.
-        $status = $type === Absence::TYPE_SICK_LEAVE ? Absence::STATUS_APPROVED : Absence::STATUS_REQUESTED;
+        // Ni la baja médica ni el permiso retribuido se aprueban: la baja la
+        // determina el parte médico, y el permiso del art. 37.3 ET es un derecho
+        // del trabajador (previo aviso y justificación), no una concesión
+        // discrecional de la empresa, que solo puede objetar defectos de forma.
+        // Ambos se registran directos. Solo las vacaciones, cuya fecha es de común
+        // acuerdo (art. 38 ET), pasan por la aprobación del supervisor.
+        $autoApproved = in_array($type, [Absence::TYPE_SICK_LEAVE, Absence::TYPE_PERMIT], true);
+        $status = $autoApproved ? Absence::STATUS_APPROVED : Absence::STATUS_REQUESTED;
 
         $absence = (new Absence())
             ->setWorker($this->worker())
@@ -344,9 +390,11 @@ class WorkController extends AbstractController
 
         $em->persist($absence);
         $em->flush();
-        $this->addFlash('notice', $status === Absence::STATUS_APPROVED
-            ? 'Baja registrada.'
-            : 'Solicitud enviada. Te avisaremos cuando se apruebe.');
+        $this->addFlash('notice', match (true) {
+            $type === Absence::TYPE_SICK_LEAVE => 'Baja registrada.',
+            $type === Absence::TYPE_PERMIT => 'Permiso registrado.',
+            default => 'Solicitud enviada. Te avisaremos cuando se apruebe.',
+        });
 
         return $this->redirectToRoute('work_vacations');
     }
@@ -380,23 +428,21 @@ class WorkController extends AbstractController
 
         $today = new \DateTimeImmutable('today', $this->madrid());
 
-        if ($absence->getEndDate() < $today) {
-            // Ya terminó: cancelarla "desharía" días disfrutados. No se permite.
-            $this->addFlash('error', 'Esa ausencia ya ha terminado; no se puede cancelar.');
-        } elseif ($absence->getStartDate() > $today) {
-            // Aún no ha empezado: se cancela entera.
-            $absence->setStatus(Absence::STATUS_CANCELLED);
-            $em->flush();
-            $this->addFlash('notice', 'Solicitud cancelada.');
-        } else {
-            // En curso: se cancela A PARTIR DE MAÑANA. Los días ya disfrutados (hasta
-            // hoy incluido) se conservan y siguen contando; se libera el resto.
-            $absence->setEndDate($today);
-            $em->flush();
-            $this->addFlash('notice', sprintf(
-                'Cancelada a partir de mañana. Se conservan los días hasta hoy (%s).',
-                $today->format('d/m/Y'),
-            ));
+        switch ($absence->cancelAsOf($today)) {
+            case Absence::CANCEL_TOO_LATE:
+                $this->addFlash('error', 'Esa ausencia ya ha terminado; no se puede cancelar.');
+                break;
+            case Absence::CANCEL_FULL:
+                $em->flush();
+                $this->addFlash('notice', 'Solicitud cancelada.');
+                break;
+            case Absence::CANCEL_TRUNCATED:
+                $em->flush();
+                $this->addFlash('notice', sprintf(
+                    'Cancelada a partir de mañana. Se conservan los días hasta hoy (%s).',
+                    $today->format('d/m/Y'),
+                ));
+                break;
         }
 
         return $this->redirectToRoute('work_vacations');

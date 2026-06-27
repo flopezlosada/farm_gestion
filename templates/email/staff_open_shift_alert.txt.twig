@@ -1,0 +1,12 @@
+Salida sin cerrar en el registro de jornada
+===========================================
+
+{{ rows|length == 1 ? 'Un trabajador tiene' : 'Hay trabajadores con' }} una entrada sin la
+salida correspondiente de un día anterior. Conviene corregirlo pronto, mientras
+se recuerda la hora real de salida.
+
+{% for row in rows %}  - {{ row.worker.name }}: entrada de {{ row.since|format_datetime('long', 'short', locale='es') }}
+{% endfor %}
+--
+Aviso automático del control horario.
+CSA Vega de Jarama · csavegadejarama.org

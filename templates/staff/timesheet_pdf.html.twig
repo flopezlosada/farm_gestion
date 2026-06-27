@@ -1,0 +1,134 @@
+{# ============================================================
+ # Justificante mensual de jornada (dompdf). Standalone: NO extiende el shell.
+ # Recibe (de WorkerController::monthlyPdf / WorkController::monthlyPdf):
+ #   - worker        Worker.
+ #   - sheet         estructura de MonthlyTimesheetBuilder::build()
+ #                   ({ rows, totalMinutes, workedDays, missingDays }).
+ #   - year, month   del periodo.
+ #   - month_label   \DateTimeImmutable del primer día del mes.
+ #   - generated_at  \DateTimeImmutable de la generación.
+ #
+ # Es el ancla de integridad legal del registro fuera de la BBDD: cada trabajador
+ # recibe su jornada periódica y la firma. Una fila por día natural del mes.
+ # ============================================================ #}
+{% macro hm(minutes) %}{% if minutes > 0 %}{{ (minutes // 60) }}h {{ '%02d'|format(minutes % 60) }}m{% else %}—{% endif %}{% endmacro %}
+{% import _self as m %}
+{% set dow_names = { 1: 'Lun', 2: 'Mar', 3: 'Mié', 4: 'Jue', 5: 'Vie', 6: 'Sáb', 7: 'Dom' } %}
+{% set month_names = { 1: 'enero', 2: 'febrero', 3: 'marzo', 4: 'abril', 5: 'mayo', 6: 'junio', 7: 'julio', 8: 'agosto', 9: 'septiembre', 10: 'octubre', 11: 'noviembre', 12: 'diciembre' } %}
+{% set abs_labels = { vacation: 'Vacaciones', sick_leave: 'Baja médica', permit: 'Permiso', other: 'Ausencia' } %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <style>
+        * { font-family: 'DejaVu Sans', sans-serif; }
+        body { font-size: 10px; color: #1f2937; margin: 0; }
+        h1 { font-size: 16px; margin: 0 0 2px; }
+        .sub { color: #6b7280; font-size: 10px; margin: 0; }
+        .head { border-bottom: 2px solid #2f6f43; padding-bottom: 8px; margin-bottom: 10px; }
+        .meta { width: 100%; margin-bottom: 12px; font-size: 10px; }
+        .meta td { padding: 1px 0; }
+        .meta .lbl { color: #6b7280; width: 130px; }
+        table.sheet { width: 100%; border-collapse: collapse; }
+        table.sheet th { background: #2f6f43; color: #fff; font-size: 9px; text-align: left; padding: 4px 6px; }
+        table.sheet td { border-bottom: 1px solid #e5e7eb; padding: 3px 6px; font-size: 9.5px; }
+        td.day { white-space: nowrap; width: 86px; }
+        td.total { text-align: right; white-space: nowrap; width: 64px; }
+        td.tot-b { font-weight: bold; }
+        tr.weekend td, tr.before_hire td, tr.future td { color: #9ca3af; }
+        tr.weekend td.day { background: #f9fafb; }
+        tr.missing td { background: #fef3f2; }
+        tr.missing td.obs { color: #9b1c1c; }
+        .badge { font-size: 8.5px; }
+        tfoot td { border-top: 2px solid #2f6f43; padding: 6px; font-weight: bold; }
+        .totals { margin-top: 10px; font-size: 10px; }
+        .totals span { margin-right: 18px; }
+        .sign { margin-top: 34px; width: 100%; }
+        .sign td { width: 50%; padding-top: 28px; border-top: 1px solid #9ca3af; text-align: center; color: #6b7280; font-size: 9px; }
+        .foot { margin-top: 16px; color: #9ca3af; font-size: 8px; }
+    </style>
+</head>
+<body>
+    <div class="head">
+        <h1>Registro de jornada — {{ month_names[month] }} {{ year }}</h1>
+        <p class="sub">CSA Vega de Jarama · Justificante mensual de control horario (RD-ley 8/2019)</p>
+    </div>
+
+    <table class="meta">
+        <tr>
+            <td class="lbl">Trabajador/a</td><td><strong>{{ worker.name }}</strong></td>
+            <td class="lbl">Periodo</td><td>{{ month_names[month] }} de {{ year }}</td>
+        </tr>
+        <tr>
+            <td class="lbl">Fecha de alta</td><td>{{ worker.hireDate ? worker.hireDate|date('d/m/Y') : '—' }}</td>
+            <td class="lbl">Generado</td><td>{{ generated_at|date('d/m/Y H:i') }}</td>
+        </tr>
+    </table>
+
+    <table class="sheet">
+        <thead>
+            <tr>
+                <th>Día</th>
+                <th>Jornada (entrada – salida)</th>
+                <th style="text-align:right;">Total</th>
+                <th>Observación</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in sheet.rows %}
+                <tr class="{{ row.status }}">
+                    <td class="day">{{ dow_names[row.dow] }} {{ row.date|date('d/m') }}</td>
+                    <td>
+                        {%- for seg in row.segments -%}
+                            {%- if not loop.first %} · {% endif -%}
+                            {{ seg.in ? seg.in.occurredAt|date('H:i') : '··' }}–{{ seg.out ? seg.out.occurredAt|date('H:i') : '··' }}
+                        {%- else -%}
+                            {%- if row.status == 'absence' -%}
+                                <span class="badge">{{ abs_labels[row.absenceType]|default('Ausencia') }}</span>
+                            {%- elseif row.status == 'holiday' -%}
+                                <span class="badge">Festivo{{ row.holidayName ? ': ' ~ row.holidayName : '' }}</span>
+                            {%- elseif row.status == 'weekend' -%}
+                                <span class="badge">Fin de semana</span>
+                            {%- elseif row.status == 'missing' -%}
+                                <span class="badge">Sin fichar</span>
+                            {%- else -%}
+                                —
+                            {%- endif -%}
+                        {%- endfor -%}
+                        {%- if row.open %} <span class="badge">(en curso)</span>{% endif -%}
+                        {%- if row.anomaly %} <span class="badge">(revisar)</span>{% endif -%}
+                    </td>
+                    <td class="total{{ row.status == 'worked' ? ' tot-b' : '' }}">{{ m.hm(row.totalMinutes) }}</td>
+                    <td class="obs">
+                        {%- if row.status == 'worked' and row.absenceType %}{{ abs_labels[row.absenceType]|default('') }}{% endif -%}
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="2">TOTAL DEL MES</td>
+                <td class="total">{{ m.hm(sheet.totalMinutes) }}</td>
+                <td></td>
+            </tr>
+        </tfoot>
+    </table>
+
+    <div class="totals">
+        <span>Días trabajados: <strong>{{ sheet.workedDays }}</strong></span>
+        {% if sheet.missingDays > 0 %}<span style="color:#9b1c1c;">Días laborables sin fichar: <strong>{{ sheet.missingDays }}</strong></span>{% endif %}
+    </div>
+
+    <table class="sign">
+        <tr>
+            <td>Firma del trabajador/a</td>
+            <td>Firma de la asociación</td>
+        </tr>
+    </table>
+
+    <p class="foot">
+        Documento generado automáticamente a partir del registro de fichajes. Las horas se calculan emparejando
+        entradas y salidas; los apuntes son inmutables (las correcciones quedan trazadas). Conservar durante 4 años.
+    </p>
+</body>
+</html>

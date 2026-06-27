@@ -36,7 +36,7 @@ class WorkdayBuilder
      */
     public function buildDays(array $entries, \DateTimeZone $tz): array
     {
-        // Ordena por instante real (UTC) para emparejar en secuencia.
+        // Ordena por instante real para emparejar en secuencia.
         usort($entries, static fn (TimeEntry $a, TimeEntry $b) => $a->getOccurredAt() <=> $b->getOccurredAt());
 
         $byDay = [];

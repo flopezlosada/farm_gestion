@@ -55,6 +55,9 @@ class AppSettings
     /** Envío del recordatorio de llegadas/salidas del albergue al equipo (app:send-albergue-arrivals-reminder). */
     public const EMAIL_ALBERGUE_REMINDER = 'email.albergue_reminder';
 
+    /** Envío de los avisos de huecos del registro de jornada al supervisor (digest semanal + salida abierta). */
+    public const EMAIL_STAFF_GAPS = 'email.staff_gaps';
+
     /**
      * Red de seguridad para entornos de prueba: si tiene valor, TODOS los emails
      * que envía la app se entregan SOLO a esa(s) dirección(es) — separadas por
@@ -161,6 +164,12 @@ class AppSettings
     public const CRON_GENERATE_WEEKLY_DELIVERY = 'cron.generate_weekly_delivery';
     public const CRON_ALBERGUE_REMINDER = 'cron.albergue_reminder';
 
+    /** Tarea del digest SEMANAL de huecos del registro de jornada (app:send-staff-gaps-digest). */
+    public const CRON_STAFF_GAPS_DIGEST = 'cron.staff_gaps_digest';
+
+    /** Tarea del aviso de salida abierta del registro de jornada (app:send-staff-open-shift-alert). */
+    public const CRON_STAFF_OPEN_SHIFT_ALERT = 'cron.staff_open_shift_alert';
+
     /**
      * Mapa de tareas programadas para la ejecución manual desde la pantalla de
      * configuración: clave del toggle => metadatos. `command` es el nombre del
@@ -175,6 +184,8 @@ class AppSettings
         self::CRON_ADMIN_DELIVERY_SUMMARY => ['command' => 'app:send-admin-delivery-changes-summary', 'confirm' => true, 'dry' => true],
         self::CRON_PURGE_USAGE_HITS => ['command' => 'app:purge-usage-hits', 'confirm' => false, 'dry' => false],
         self::CRON_ALBERGUE_REMINDER => ['command' => 'app:send-albergue-arrivals-reminder', 'confirm' => true, 'dry' => true],
+        self::CRON_STAFF_GAPS_DIGEST => ['command' => 'app:send-staff-gaps-digest', 'confirm' => true, 'dry' => true],
+        self::CRON_STAFF_OPEN_SHIFT_ALERT => ['command' => 'app:send-staff-open-shift-alert', 'confirm' => true, 'dry' => true],
     ];
 
     /**
@@ -217,6 +228,12 @@ class AppSettings
             'group' => 'Emails internos',
             'label' => 'Recordatorio de llegadas/salidas del albergue',
             'help' => 'Aviso al equipo con las llegadas y salidas confirmadas de los próximos días en el albergue (preparar camas, etc.). Se envía a la dirección configurada en el cron.',
+            'default' => false,
+        ],
+        self::EMAIL_STAFF_GAPS => [
+            'group' => 'Emails internos',
+            'label' => 'Avisos de huecos del registro de jornada',
+            'help' => 'Cubre los dos avisos al supervisor del control horario: el digest semanal con los días laborables sin fichar de cada trabajador, y el aviso de “salida abierta” cuando alguien se deja una entrada sin cerrar de un día anterior. Se envían a la dirección configurada en cada cron.',
             'default' => false,
         ],
         self::FEATURE_PARTNER_LOGIN => [
@@ -272,6 +289,18 @@ class AppSettings
             'label' => 'Recordatorio de llegadas/salidas del albergue',
             'help' => 'Ejecuta a diario el comando que avisa al equipo de las llegadas y salidas próximas del albergue (app:send-albergue-arrivals-reminder). Independiente del email: apagada aquí, la tarea ni se ejecuta; encendida pero con el email apagado, corre pero no envía.',
             'default' => true,
+        ],
+        self::CRON_STAFF_GAPS_DIGEST => [
+            'group' => 'Tareas programadas',
+            'label' => 'Digest semanal de huecos de jornada',
+            'help' => 'Ejecuta una vez por semana el comando que envía al supervisor el resumen de días laborables sin fichar de cada trabajador (app:send-staff-gaps-digest). No hay aviso diario, para no saturar. Independiente del email: apagada aquí, la tarea ni se ejecuta; encendida pero con el email apagado, corre pero no envía.',
+            'default' => false,
+        ],
+        self::CRON_STAFF_OPEN_SHIFT_ALERT => [
+            'group' => 'Tareas programadas',
+            'label' => 'Aviso de salida abierta',
+            'help' => 'Ejecuta a diario el comando que avisa al supervisor si algún trabajador se dejó una entrada sin cerrar de un día anterior (app:send-staff-open-shift-alert). Solo envía cuando hay alguna salida abierta. Independiente del email: apagada aquí, la tarea ni se ejecuta.',
+            'default' => false,
         ],
     ];
 

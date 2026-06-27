@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Huecos del registro de jornada · CSA Vega de Jarama</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #333; max-width: 720px; margin: 0 auto; padding: 24px;">
+
+    <h2 style="color: #5a8f3d; margin-top: 0;">Huecos del registro de jornada</h2>
+
+    <p>
+        Días laborables sin fichar y sin ausencia justificada de los últimos
+        <strong>{{ days }}</strong> días
+        (desde el {{ from|format_date('long', locale='es') }}).
+        Conviene completarlos cuanto antes, mientras se recuerda la hora real.
+    </p>
+
+    {% for row in rows %}
+        <h3 style="margin: 20px 0 6px; color: #333;">{{ row.worker.name }}
+            <span style="color: #9b1c1c; font-weight: normal; font-size: 14px;">— {{ row.gaps|length }} día(s)</span>
+        </h3>
+        <ul style="margin: 0; padding-left: 18px; color: #555;">
+            {% for d in row.gaps %}
+                <li>{{ d|format_date(pattern='EEEE d/MM/y', locale='es') }}</li>
+            {% endfor %}
+        </ul>
+    {% endfor %}
+
+    <p style="margin-top: 32px; color: #777; font-size: 13px;">
+        Aviso automático semanal del control horario.<br>
+        CSA Vega de Jarama · <a href="https://csavegadejarama.org">csavegadejarama.org</a>
+    </p>
+
+</body>
+</html>

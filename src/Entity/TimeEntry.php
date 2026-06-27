@@ -21,9 +21,12 @@ use Symfony\Component\Validator\Constraints as Assert;
  * hora" como "fiché sin querer". La única mutación admitida sobre una fila es
  * fijar su anulación una sola vez ({@see TimeEntry::void()}).
  *
- * UTC: ambos sellos se guardan en UTC y se pintan en hora de Madrid. El día del
- * cambio de hora tiene 23 o 25 horas; guardar hora local a pelo haría mentir los
- * cálculos. La conversión a UTC es responsabilidad de quien crea el evento.
+ * ZONA HORARIA: ambos sellos se guardan y se pintan en hora de Madrid (decisión
+ * 2026-06-20). El PHP del proyecto corre en Europe/Madrid; guardar UTC y dejar
+ * que Doctrine hidratara en Madrid desalineaba los apuntes (se fichaba 09:00 y
+ * se mostraba 07:00). Para huso único + registro legal en hora local es más
+ * simple y correcto operar todo en Madrid; el caso del cambio de hora (nadie
+ * ficha a las 2:30 del cambio DST) es despreciable.
  *
  * FICHAJE TARDÍO: el desfase entre `occurredAt` (cuándo dice que ocurrió) y
  * `recordedAt` (cuándo lo puso el servidor) marca por sí solo los apuntes
@@ -88,7 +91,7 @@ class TimeEntry
     private $type;
 
     /**
-     * Instante del fichaje (UTC): la hora que cuenta como jornada. Inmutable.
+     * Instante del fichaje (hora de Madrid): la hora que cuenta como jornada. Inmutable.
      *
      * @var \DateTimeImmutable|null
      * @ORM\Column(name="occurred_at", type="datetime_immutable")
@@ -97,10 +100,10 @@ class TimeEntry
     private $occurredAt;
 
     /**
-     * Sello de inserción del servidor (UTC): cuándo entró de verdad en la BBDD.
-     * Lo estampa {@see TimeEntry::stampRecordedAt()} en el PrePersist, en UTC
-     * explícito (NO vía Gedmo, que usaría la zona local de PHP y desalinearía los
-     * sellos), y NO se vuelve a tocar. Es la prueba de que el apunte no se
+     * Sello de inserción del servidor (hora de Madrid): cuándo entró de verdad en
+     * la BBDD. Lo estampa {@see TimeEntry::stampRecordedAt()} en el PrePersist, en
+     * Madrid explícito (NO vía Gedmo, que tomaría la zona local de PHP de forma
+     * implícita), y NO se vuelve a tocar. Es la prueba de que el apunte no se
      * manipuló y el que delata los fichajes tardíos.
      *
      * @var \DateTimeImmutable|null
@@ -128,7 +131,7 @@ class TimeEntry
     private $source = self::SOURCE_SELF;
 
     /**
-     * Instante de anulación (UTC), null si el fichaje sigue vigente. La anulación
+     * Instante de anulación (hora de Madrid), null si el fichaje sigue vigente. La anulación
      * es la ÚNICA mutación admitida sobre una fila ya creada, y se hace una sola
      * vez. El registro vigente = fichajes no anulados.
      *
@@ -237,7 +240,7 @@ class TimeEntry
     }
 
     /**
-     * Estampa el sello de inserción en UTC al persistir, si no estaba ya puesto.
+     * Estampa el sello de inserción en hora de Madrid al persistir, si no estaba ya puesto.
      * Lo pone el servidor (no el cliente) y es inmutable a partir de ahí: es la
      * prueba de integridad del fichaje.
      *
@@ -321,7 +324,7 @@ class TimeEntry
 
     /**
      * ¿Se declaró tarde? Cierto cuando el fichaje se registró en un día natural
-     * (UTC) posterior al que dice haber ocurrido. Es la señal que destaca los
+     * (Madrid) posterior al que dice haber ocurrido. Es la señal que destaca los
      * apuntes del pasado en el panel de huecos, sin necesitar un campo extra.
      *
      * @return bool
@@ -387,7 +390,7 @@ class TimeEntry
      *
      * @param User                $by     Login que anula.
      * @param string              $reason Motivo de la anulación.
-     * @param \DateTimeImmutable  $at     Instante de la anulación (UTC).
+     * @param \DateTimeImmutable  $at     Instante de la anulación (hora de Madrid).
      * @return self
      */
     public function void(User $by, string $reason, \DateTimeImmutable $at): self
