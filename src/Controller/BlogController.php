@@ -274,6 +274,12 @@ class BlogController extends AbstractController
             throw $this->createNotFoundException('Unable to find Blog entity.');
         }
 
+        // Contador de visitas reales: cada render del post en el blog público
+        // suma una. Sin deduplicación por sesión/IP (KISS); si en el futuro
+        // estorba el ruido de bots/recargas, se filtra aquí.
+        $entity->incrementViews();
+        $em->flush();
+
         $deleteForm = $this->createDeleteForm($entity->getId());
 
         return $this->render('Blog/show.html.twig', array(
