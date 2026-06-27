@@ -7,6 +7,7 @@ use App\Entity\Partner;
 use App\Entity\WeeklyBasket;
 use App\Repository\BasketRepository;
 use App\Repository\WeeklyBasketRepository;
+use App\Service\AppSettings;
 use App\Service\Delivery\Rule\BalanceWithinThresholdRule;
 use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\TestCase;
@@ -63,6 +64,19 @@ class BalanceWithinThresholdRuleTest extends TestCase
         return $em;
     }
 
+    /**
+     * Construye la regla con un umbral fijo: el umbral vive ahora en
+     * {@see AppSettings::BALANCE_THRESHOLD} y se lee en runtime, así que se
+     * mockea AppSettings para que getInt() devuelva el valor del test.
+     */
+    private function buildRule(EntityManagerInterface $em, int $threshold): BalanceWithinThresholdRule
+    {
+        $settings = $this->createMock(AppSettings::class);
+        $settings->method('getInt')->with(AppSettings::BALANCE_THRESHOLD)->willReturn($threshold);
+
+        return new BalanceWithinThresholdRule($em, $settings);
+    }
+
     public function testPasaCuandoLaDifMaximaQuedaDentroDelUmbral(): void
     {
         $prev = $this->basket(1, '2026-05-29');
@@ -74,7 +88,7 @@ class BalanceWithinThresholdRuleTest extends TestCase
         // Tras shift hipotético: prev=10, from=9, to=11, next=10 → max dif 2.
         $em = $this->buildEm($prev, $from, $to, $next, [1 => 10, 2 => 10, 3 => 10, 4 => 10]);
 
-        $rule = new BalanceWithinThresholdRule($em, threshold: 3);
+        $rule = $this->buildRule($em, 3);
         $this->assertNull($rule->check(new Partner(), $from, $to));
     }
 
@@ -89,7 +103,7 @@ class BalanceWithinThresholdRuleTest extends TestCase
         // Pares consecutivos tras shift: 12-7=5 (rompe), 7-13=6 (rompe), 13-12=1.
         $em = $this->buildEm($prev, $from, $to, $next, [1 => 12, 2 => 8, 3 => 12, 4 => 12]);
 
-        $rule = new BalanceWithinThresholdRule($em, threshold: 3);
+        $rule = $this->buildRule($em, 3);
 
         $v = $rule->check(new Partner(), $from, $to);
         $this->assertNotNull($v);
@@ -106,10 +120,10 @@ class BalanceWithinThresholdRuleTest extends TestCase
         // Tras shift: prev=10, from=8, to=12, next=10. Dif máxima 4 (8-12).
         $em = $this->buildEm($prev, $from, $to, $next, [1 => 10, 2 => 9, 3 => 11, 4 => 10]);
 
-        $ruleEstricto = new BalanceWithinThresholdRule($em, threshold: 2);
+        $ruleEstricto = $this->buildRule($em, 2);
         $this->assertNotNull($ruleEstricto->check(new Partner(), $from, $to), 'Con threshold=2 debe romper');
 
-        $ruleRelajado = new BalanceWithinThresholdRule($em, threshold: 10);
+        $ruleRelajado = $this->buildRule($em, 10);
         $this->assertNull($ruleRelajado->check(new Partner(), $from, $to), 'Con threshold=10 no debe romper');
     }
 }

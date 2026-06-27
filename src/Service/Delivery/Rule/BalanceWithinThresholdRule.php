@@ -7,12 +7,14 @@ use App\Entity\Partner;
 use App\Entity\WeeklyBasket;
 use App\Repository\BasketRepository;
 use App\Repository\WeeklyBasketRepository;
+use App\Service\AppSettings;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
  * Balance: prohíbe shifts que dejen una diferencia de más de N cestas
- * entre dos viernes consecutivos. Por defecto N=3 (la cifra que la
- * administración usa como umbral operativo en Excel hoy).
+ * entre dos viernes consecutivos. El umbral N es configurable desde
+ * /gestion/settings ({@see AppSettings::BALANCE_THRESHOLD}); por defecto
+ * N=3 (la cifra que la administración usa como umbral operativo en Excel hoy).
  *
  * El conteo se calcula sobre WeeklyBasket con status=1 (se recogen):
  * las marcadas como "no recoge" no se incluyen porque no añaden carga
@@ -33,12 +35,14 @@ final class BalanceWithinThresholdRule implements DeliveryShiftRule
 
     public function __construct(
         private readonly EntityManagerInterface $em,
-        private readonly int $threshold = 3,
+        private readonly AppSettings $settings,
     ) {
     }
 
     public function check(Partner $partner, Basket $from, Basket $to): ?DeliveryShiftViolation
     {
+        $threshold = $this->settings->getInt(AppSettings::BALANCE_THRESHOLD);
+
         /** @var BasketRepository $basketRepo */
         $basketRepo = $this->em->getRepository(Basket::class);
         /** @var WeeklyBasketRepository $wbRepo */
@@ -66,13 +70,13 @@ final class BalanceWithinThresholdRule implements DeliveryShiftRule
 
         for ($i = 1, $n = count($counts); $i < $n; $i++) {
             $diff = abs($counts[$i] - $counts[$i - 1]);
-            if ($diff > $this->threshold) {
+            if ($diff > $threshold) {
                 return new DeliveryShiftViolation(
                     self::ID,
                     sprintf(
                         'Con este cambio, la diferencia de cestas entre dos viernes consecutivos pasaría a %d, por encima del límite de %d. La administración puede forzarlo si lo considera oportuno.',
                         $diff,
-                        $this->threshold,
+                        $threshold,
                     ),
                     bypassable: true,
                 );
