@@ -345,7 +345,12 @@ class WorkerController extends AbstractController
     }
 
     /**
-     * Cancela una ausencia (aprobada o solicitada).
+     * Cancela una ausencia (aprobada o solicitada). Aplica la MISMA regla que la
+     * cancelación del trabajador ({@see \App\Controller\WorkController::cancelVacation}):
+     * si ya terminó no se toca, si no ha empezado se cancela entera, y si está en
+     * curso se TRUNCA a hoy conservando los días disfrutados. Antes el supervisor
+     * la marcaba CANCELLED sin truncar, borrando los días ya disfrutados del
+     * cómputo.
      *
      * @param Request                $request
      * @param Worker                 $worker
@@ -360,7 +365,38 @@ class WorkerController extends AbstractController
         #[MapEntity(id: 'absenceId')] Absence $absence,
         EntityManagerInterface $em,
     ): Response {
-        return $this->changeAbsenceStatus($request, $worker, $absence, Absence::STATUS_CANCELLED, 'Ausencia cancelada.', $em);
+        if (!$this->isCsrfTokenValid('staff_absence' . $worker->getId(), (string) $request->request->get('_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+
+            return $this->redirectToRoute('staff_show', ['id' => $worker->getId()]);
+        }
+
+        if ($absence->getWorker()?->getId() !== $worker->getId()) {
+            throw $this->createNotFoundException('La ausencia no pertenece a este trabajador.');
+        }
+
+        $today = new \DateTimeImmutable('today', new \DateTimeZone('Europe/Madrid'));
+
+        switch ($absence->cancelAsOf($today)) {
+            case Absence::CANCEL_TOO_LATE:
+                $this->addFlash('warning', 'Esa ausencia ya ha terminado; no se puede cancelar.');
+                break;
+            case Absence::CANCEL_FULL:
+                $absence->setApprovedBy($this->getUser());
+                $em->flush();
+                $this->addFlash('success', 'Ausencia cancelada.');
+                break;
+            case Absence::CANCEL_TRUNCATED:
+                $absence->setApprovedBy($this->getUser());
+                $em->flush();
+                $this->addFlash('success', sprintf(
+                    'Cancelada a partir de mañana. Se conservan los días hasta hoy (%s).',
+                    $today->format('d/m/Y'),
+                ));
+                break;
+        }
+
+        return $this->redirectToRoute('staff_show', ['id' => $worker->getId()]);
     }
 
     /**

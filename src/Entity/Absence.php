@@ -60,6 +60,13 @@ class Absence
         self::STATUS_CANCELLED,
     ];
 
+    /** Resultado de {@see Absence::cancelAsOf()}: ya había terminado, no se cancela. */
+    public const CANCEL_TOO_LATE = 'too_late';
+    /** Resultado de {@see Absence::cancelAsOf()}: no había empezado, cancelada entera. */
+    public const CANCEL_FULL = 'full';
+    /** Resultado de {@see Absence::cancelAsOf()}: en curso, truncada a hoy. */
+    public const CANCEL_TRUNCATED = 'truncated';
+
     /**
      * @var int|null
      *
@@ -323,6 +330,41 @@ class Absence
         }
 
         return (int) $this->startDate->diff($this->endDate)->days + 1;
+    }
+
+    /**
+     * Cancela la ausencia tomando como referencia el día de hoy, aplicando la
+     * misma regla tanto si la cancela el trabajador como el supervisor:
+     *
+     *  - Si ya terminó (fin < hoy), no se toca nada: cancelarla "desharía" días
+     *    ya disfrutados. Devuelve {@see Absence::CANCEL_TOO_LATE}.
+     *  - Si aún no ha empezado (inicio > hoy), se cancela entera (estado
+     *    CANCELLED). Devuelve {@see Absence::CANCEL_FULL}.
+     *  - Si está en curso (inicio ≤ hoy ≤ fin), se TRUNCA a hoy: se conservan
+     *    los días disfrutados hasta hoy incluido y se libera el resto. Devuelve
+     *    {@see Absence::CANCEL_TRUNCATED}.
+     *
+     * Es lógica pura (solo muta el estado/fin de la propia ausencia); el
+     * controller decide el flash y el flush según el resultado.
+     *
+     * @param \DateTimeImmutable $today Día de hoy (a medianoche, hora de Madrid).
+     * @return string Una de las constantes Absence::CANCEL_*.
+     */
+    public function cancelAsOf(\DateTimeImmutable $today): string
+    {
+        if ($this->endDate !== null && $this->endDate < $today) {
+            return self::CANCEL_TOO_LATE;
+        }
+
+        if ($this->startDate !== null && $this->startDate > $today) {
+            $this->status = self::STATUS_CANCELLED;
+
+            return self::CANCEL_FULL;
+        }
+
+        $this->endDate = $today;
+
+        return self::CANCEL_TRUNCATED;
     }
 
     /**

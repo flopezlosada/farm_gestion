@@ -85,9 +85,12 @@
                             <input type="hidden" name="_token" value="{{ csrf_token('staff_absence' ~ worker.id) }}">
                             <button class="csa-btn csa-btn--ghost csa-btn--sm">Rechazar</button>
                         </form>
-                    {% elseif a.status != 'cancelled' and a.status != 'rejected' %}
+                    {% elseif a.status != 'cancelled' and a.status != 'rejected' and a.endDate|date('Y-m-d') >= 'now'|date('Y-m-d') %}
+                        {% set abs_in_progress = a.startDate|date('Y-m-d') <= 'now'|date('Y-m-d') %}
                         <form method="post" action="{{ path('staff_absence_cancel', { id: worker.id, absenceId: a.id }) }}"
-                              onsubmit="return confirm('¿Cancelar esta ausencia?');">
+                              onsubmit="return confirm({{ (abs_in_progress
+                                  ? 'Esta ausencia está en curso: se conservarán los días hasta hoy y se liberará el resto. ¿Continuar?'
+                                  : '¿Cancelar esta ausencia?')|json_encode }});">
                             <input type="hidden" name="_token" value="{{ csrf_token('staff_absence' ~ worker.id) }}">
                             <button class="csa-btn csa-btn--ghost csa-btn--sm">Cancelar</button>
                         </form>
