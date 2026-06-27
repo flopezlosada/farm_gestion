@@ -352,7 +352,13 @@ class Absence
      */
     public function cancelAsOf(\DateTimeImmutable $today): string
     {
-        if ($this->endDate !== null && $this->endDate < $today) {
+        // Sin fechas completas no hay nada que truncar ni cancelar con sentido:
+        // se trata como "ya no se puede" para no mutar una ausencia malformada.
+        if ($this->startDate === null || $this->endDate === null) {
+            return self::CANCEL_TOO_LATE;
+        }
+
+        if ($this->endDate < $today) {
             return self::CANCEL_TOO_LATE;
         }
 

@@ -347,12 +347,12 @@ class WorkerController extends AbstractController
                 $this->addFlash('warning', 'Esa ausencia ya ha terminado; no se puede cancelar.');
                 break;
             case Absence::CANCEL_FULL:
-                $absence->setApprovedBy($this->getUser());
+                // No se toca approvedBy: ese campo registra quién APROBÓ la
+                // ausencia, no quién la cancela (cancelar no es aprobar).
                 $em->flush();
                 $this->addFlash('success', 'Ausencia cancelada.');
                 break;
             case Absence::CANCEL_TRUNCATED:
-                $absence->setApprovedBy($this->getUser());
                 $em->flush();
                 $this->addFlash('success', sprintf(
                     'Cancelada a partir de mañana. Se conservan los días hasta hoy (%s).',
@@ -756,8 +756,12 @@ class WorkerController extends AbstractController
     ): Response {
         $madrid = new \DateTimeZone('Europe/Madrid');
         $today = new \DateTimeImmutable('today', $madrid);
+        $currentYear = (int) $today->format('Y');
 
-        $year = (int) $request->query->get('year', $today->format('Y'));
+        $year = (int) $request->query->get('year', (string) $currentYear);
+        if ($year < $currentYear - 10 || $year > $currentYear + 1) {
+            $year = $currentYear;
+        }
         $month = (int) $request->query->get('month', $today->format('n'));
         if ($month < 1 || $month > 12) {
             $month = (int) $today->format('n');

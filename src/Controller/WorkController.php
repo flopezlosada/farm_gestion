@@ -186,8 +186,12 @@ class WorkController extends AbstractController
         $worker = $this->worker();
         $madrid = $this->madrid();
         $today = new \DateTimeImmutable('today', $madrid);
+        $currentYear = (int) $today->format('Y');
 
-        $year = (int) $request->query->get('year', $today->format('Y'));
+        $year = (int) $request->query->get('year', (string) $currentYear);
+        if ($year < $currentYear - 10 || $year > $currentYear + 1) {
+            $year = $currentYear;
+        }
         $month = (int) $request->query->get('month', $today->format('n'));
         if ($month < 1 || $month > 12) {
             $month = (int) $today->format('n');

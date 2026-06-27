@@ -6,7 +6,7 @@ use App\Entity\Worker;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\String\Slugger\AsciiSlugger;
+use Symfony\Component\String\Slugger\SluggerInterface;
 use Twig\Environment;
 
 /**
@@ -19,6 +19,7 @@ class TimesheetPdfRenderer
 {
     public function __construct(
         private readonly Environment $twig,
+        private readonly SluggerInterface $slugger,
     ) {
     }
 
@@ -51,7 +52,7 @@ class TimesheetPdfRenderer
         $dompdf->setPaper('A4', 'portrait');
         $dompdf->render();
 
-        $slug = (new AsciiSlugger())->slug((string) $worker->getName())->lower();
+        $slug = $this->slugger->slug((string) $worker->getName())->lower();
         $filename = sprintf('jornada-%s-%04d-%02d.pdf', $slug, $year, $month);
 
         return new Response($dompdf->output(), Response::HTTP_OK, [

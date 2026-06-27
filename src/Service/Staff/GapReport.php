@@ -86,7 +86,9 @@ class GapReport
             }
 
             $since = $last->getOccurredAt();
-            if ($since->format('Y-m-d') < $today->format('Y-m-d')) {
+            // Comparación por día (medianoche): cuenta como salida abierta si la
+            // entrada es de un día ANTERIOR a hoy; la del propio día no.
+            if ($since->setTime(0, 0) < $today) {
                 $rows[] = ['worker' => $worker, 'since' => $since];
             }
         }
