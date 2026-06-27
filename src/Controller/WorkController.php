@@ -330,9 +330,14 @@ class WorkController extends AbstractController
             $type = Absence::TYPE_VACATION;
         }
 
-        // La baja médica no se aprueba (la determina el parte médico): se registra
-        // directa. Vacaciones y permiso sí pasan por aprobación del supervisor.
-        $status = $type === Absence::TYPE_SICK_LEAVE ? Absence::STATUS_APPROVED : Absence::STATUS_REQUESTED;
+        // Ni la baja médica ni el permiso retribuido se aprueban: la baja la
+        // determina el parte médico, y el permiso del art. 37.3 ET es un derecho
+        // del trabajador (previo aviso y justificación), no una concesión
+        // discrecional de la empresa, que solo puede objetar defectos de forma.
+        // Ambos se registran directos. Solo las vacaciones, cuya fecha es de común
+        // acuerdo (art. 38 ET), pasan por la aprobación del supervisor.
+        $autoApproved = in_array($type, [Absence::TYPE_SICK_LEAVE, Absence::TYPE_PERMIT], true);
+        $status = $autoApproved ? Absence::STATUS_APPROVED : Absence::STATUS_REQUESTED;
 
         $absence = (new Absence())
             ->setWorker($this->worker())
@@ -344,9 +349,11 @@ class WorkController extends AbstractController
 
         $em->persist($absence);
         $em->flush();
-        $this->addFlash('notice', $status === Absence::STATUS_APPROVED
-            ? 'Baja registrada.'
-            : 'Solicitud enviada. Te avisaremos cuando se apruebe.');
+        $this->addFlash('notice', match (true) {
+            $type === Absence::TYPE_SICK_LEAVE => 'Baja registrada.',
+            $type === Absence::TYPE_PERMIT => 'Permiso registrado.',
+            default => 'Solicitud enviada. Te avisaremos cuando se apruebe.',
+        });
 
         return $this->redirectToRoute('work_vacations');
     }
