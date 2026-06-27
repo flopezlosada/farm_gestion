@@ -1,0 +1,44 @@
+{# ============================================================
+ # Drawer móvil del sidebar (scrim + JS de abrir/cerrar).
+ # ------------------------------------------------------------
+ # Lo usan los shells personales (csa_panel, csa_work). El de gestión
+ # (csa_shell) trae su propia copia junto al resto de su JS.
+ #
+ # Requisitos del shell que lo incluye:
+ #   - un sidebar con id="csa-sidebar"
+ #   - un botón .csa-sidebar-toggle (SIN onclick: lo gobierna este JS)
+ # El CSS (.csa-sidebar-overlay, .csa-sidebar--open, .csa-sidebar-toggle)
+ # vive en 03-components.css (global). Incluir AL FINAL del <body>, cuando el
+ # botón toggle ya existe en el DOM.
+ #
+ # Sin esto, al abrir el sidebar en móvil tapaba el botón y no había forma de
+ # cerrarlo: el scrim (toque fuera) y la tecla Escape lo resuelven.
+ # ============================================================ #}
+<div class="csa-sidebar-overlay" id="csa-sidebar-overlay" hidden></div>
+<script>
+    (function () {
+        var sidebar = document.getElementById('csa-sidebar');
+        var toggle = document.querySelector('.csa-sidebar-toggle');
+        var overlay = document.getElementById('csa-sidebar-overlay');
+        if (!sidebar || !toggle) { return; }
+
+        function open() {
+            sidebar.classList.add('csa-sidebar--open');
+            if (overlay) { overlay.hidden = false; }
+            toggle.setAttribute('aria-expanded', 'true');
+        }
+        function close() {
+            sidebar.classList.remove('csa-sidebar--open');
+            if (overlay) { overlay.hidden = true; }
+            toggle.setAttribute('aria-expanded', 'false');
+        }
+
+        toggle.addEventListener('click', function () {
+            sidebar.classList.contains('csa-sidebar--open') ? close() : open();
+        });
+        if (overlay) { overlay.addEventListener('click', close); }
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') { close(); }
+        });
+    }());
+</script>
