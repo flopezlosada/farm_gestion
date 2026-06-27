@@ -66,6 +66,38 @@ class PartnerDeliveryCalendarAccessTest extends AbstractAuthenticatedTest
     }
 
     /**
+     * Escritura del calendario tras el split de socixs: la mutación (POST) debe
+     * seguir abierta a reparto y a la escritura de socixs, pero NO al solo
+     * lectura de socixs. Verifica la frontera del firewall (access_control), no
+     * del controller: por eso basta con distinguir 403 (cortado) de cualquier
+     * otro código (dejado pasar; sin CSRF el controller redirige, pero ya no es
+     * cosa del firewall).
+     */
+    public function testCalendarWriteOpenToRepartoAndSocixsEditNotReadOnly(): void
+    {
+        $client = static::createClient();
+        $partner = static::getContainer()->get('doctrine')->getRepository(Partner::class)->findOneBy([]);
+        $this->assertNotNull($partner, 'Fixtures sin partners; carga PartnerFixtures en db_test.');
+
+        $reset = sprintf('/gestion/partner/%d/calendar/reset', $partner->getId());
+
+        // Reparto: conserva la escritura del calendario (regresión del split).
+        $this->loginWithRoles($client, ['ROLE_GESTION_REPARTO']);
+        $client->request('POST', $reset);
+        $this->assertNotSame(403, $client->getResponse()->getStatusCode(), 'Reparto debería poder mutar el calendario.');
+
+        // Escritura de socixs: también.
+        $this->loginWithRoles($client, ['ROLE_GESTION_SOCIXS_EDIT']);
+        $client->request('POST', $reset);
+        $this->assertNotSame(403, $client->getResponse()->getStatusCode(), 'La escritura de socixs debería poder mutar el calendario.');
+
+        // Solo lectura de socixs: NO muta.
+        $this->loginWithRoles($client, ['ROLE_GESTION_SOCIXS']);
+        $client->request('POST', $reset);
+        $this->assertResponseStatusCodeSame(403, 'El solo-lectura de socixs no debería mutar el calendario.');
+    }
+
+    /**
      * @param string[] $roles
      */
     private function loginWithRoles(KernelBrowser $client, array $roles): void

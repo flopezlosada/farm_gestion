@@ -68,6 +68,24 @@ class UserTypeTest extends TypeTestCase
         $this->assertNotContains('ROLE_GESTION_ENCUESTAS', $roles);
     }
 
+    /** Socixs también tiene el split (piloto): edición → rol _EDIT a secas. */
+    public function testSocixsEditLevelStoresEditRoleOnly(): void
+    {
+        $roles = $this->submit(['access_socixs' => UserType::LEVEL_EDIT])->getRoles();
+
+        $this->assertContains('ROLE_GESTION_SOCIXS_EDIT', $roles);
+        $this->assertNotContains('ROLE_GESTION_SOCIXS', $roles);
+    }
+
+    /** Socixs lectura → guarda solo el rol base (sin escritura). */
+    public function testSocixsReadLevelStoresReadRole(): void
+    {
+        $roles = $this->submit(['access_socixs' => UserType::LEVEL_READ])->getRoles();
+
+        $this->assertContains('ROLE_GESTION_SOCIXS', $roles);
+        $this->assertNotContains('ROLE_GESTION_SOCIXS_EDIT', $roles);
+    }
+
     /** Nivel "lectura" en una sección partida → guarda el rol base. */
     public function testAlbergueReadLevelStoresReadRole(): void
     {
