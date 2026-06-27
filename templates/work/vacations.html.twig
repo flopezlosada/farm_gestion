@@ -1,0 +1,229 @@
+{# Mis vacaciones (trabajador): saldo, calendario anual, solicitar (modal) y mis solicitudes. #}
+{% extends '_layouts/csa_work.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Mis vacaciones{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('work') }}">Mi jornada</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Vacaciones</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'work/_styles.html.twig' %}
+    <style>
+        /* Calendario anual: 1 columna en móvil (mobile-first), 3 en web. */
+        .yc-grid { display: grid; gap: var(--csa-sp-4); grid-template-columns: 1fr; margin-bottom: var(--csa-sp-5); }
+        @media (min-width: 720px) { .yc-grid { grid-template-columns: repeat(3, 1fr); } }
+        .yc-month { background: var(--csa-surface); border: 1px solid var(--csa-rule); border-radius: var(--csa-radius-md); padding: var(--csa-sp-4); }
+        .yc-month__name { font-weight: 600; text-transform: capitalize; margin-bottom: var(--csa-sp-2); color: var(--csa-ink); }
+        .yc-cal { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        .yc-cal th { font-size: .64rem; font-weight: 500; color: var(--csa-ink-muted); padding: 2px 0 4px; text-align: center; }
+        /* Celdas a tope, sin radio: un rango de días sale como banda continua, no como burbujas. */
+        .yc-d { text-align: center; font-size: .74rem; height: 1.85rem; color: var(--csa-ink-soft); font-variant-numeric: tabular-nums; }
+        .yc-d--empty { color: transparent; }
+        .yc-d--we   { color: var(--csa-ink-muted); }
+        .yc-d--hol  { background: var(--csa-plum-soft); color: var(--csa-plum); font-weight: 600; }
+        /* Ausencias: el COLOR lo da el tipo (vars --c/--cs); el ESTADO, el tratamiento. */
+        .yc-d--abs  { background: var(--cs); color: var(--c); font-weight: 600; }
+        .yc-d--vac  { --c: var(--csa-green);      --cs: var(--csa-green-soft); }
+        .yc-d--per  { --c: var(--csa-sky);        --cs: var(--csa-sky-soft); }
+        .yc-d--baja { --c: var(--csa-terracotta); --cs: var(--csa-terracotta-soft); }
+        .yc-d--other{ --c: var(--csa-ink-soft);   --cs: var(--csa-bg); }
+        /* Aprobada = relleno pleno (lo de .yc-d--abs); pendiente = el mismo color, pálido. Sin bordes. */
+        .yc-d--pending { opacity: .45; }
+        .yc-d--today { outline: 2px solid var(--csa-ink); outline-offset: -2px; }
+        .yc-legend { display: flex; flex-wrap: wrap; gap: var(--csa-sp-2) var(--csa-sp-4); margin-bottom: var(--csa-sp-5); font-size: .8rem; color: var(--csa-ink-soft); }
+        .yc-legend span { display: inline-flex; align-items: center; gap: .4rem; }
+        .yc-legend i { width: .9rem; height: .9rem; border-radius: 3px; display: inline-block; }
+        .yc-sw--vac  { background: var(--csa-green-soft); }
+        .yc-sw--per  { background: var(--csa-sky-soft); }
+        .yc-sw--baja { background: var(--csa-terracotta-soft); }
+        .yc-sw--hol  { background: var(--csa-plum-soft); }
+        .yc-legend__note { color: var(--csa-ink-muted); }
+
+        /* Cabecera de la sección de solicitudes con su CTA. */
+        .vac-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--csa-sp-3); margin-bottom: var(--csa-sp-3); }
+        .vac-bar h2 { font-size: var(--csa-fs-md); margin: 0; }
+        /* Campos del modal de solicitud. */
+        .vac-form { display: grid; gap: var(--csa-sp-4); text-align: left; }
+        /* font-weight explícito: Bootstrap pone label{font-weight:700} y lo dejaba en negrita. */
+        .vac-form > label, .vac-form__dates label { display: flex; flex-direction: column; gap: var(--csa-sp-1); font-size: var(--csa-fs-sm); font-weight: 500; color: var(--csa-ink-soft); }
+        @media (min-width: 520px) { .vac-form__dates { display: grid; grid-template-columns: 1fr 1fr; gap: var(--csa-sp-4); } }
+        .vac-form__label { font-size: var(--csa-fs-sm); color: var(--csa-ink-soft); display: block; margin-bottom: var(--csa-sp-2); }
+        /* Tipo como control segmentado (1 de 3), coloreado por tipo. Fuente sans, sin negrita. */
+        .seg { display: flex; flex-wrap: wrap; gap: var(--csa-sp-2); }
+        .seg__opt { flex: 1 1 28%; text-align: center; padding: 9px 6px; border: 1px solid var(--csa-rule); border-radius: var(--csa-radius-md); cursor: pointer; font-family: var(--csa-sans); font-size: var(--csa-fs-sm); font-weight: 500; color: var(--csa-ink-soft); background: var(--csa-surface); transition: border-color var(--csa-t-fast), background var(--csa-t-fast), color var(--csa-t-fast); }
+        .seg__opt:hover { border-color: var(--csa-ink-muted); }
+        .seg__opt input { position: absolute; opacity: 0; width: 0; height: 0; }
+        .seg__opt--vac:has(input:checked)  { background: var(--csa-green-soft);      color: var(--csa-green);      border-color: var(--csa-green); }
+        .seg__opt--per:has(input:checked)  { background: var(--csa-sky-soft);        color: var(--csa-sky);        border-color: var(--csa-sky); }
+        .seg__opt--baja:has(input:checked) { background: var(--csa-terracotta-soft); color: var(--csa-terracotta); border-color: var(--csa-terracotta); }
+        .seg__opt span { font-family: var(--csa-sans); font-weight: 500; }
+        .vac-yearnav { display: flex; align-items: center; gap: var(--csa-sp-3); margin-bottom: var(--csa-sp-1); }
+        .vac-yearnav__btn { display: inline-grid; place-items: center; width: 2rem; height: 2rem; border-radius: 8px; color: var(--csa-ink-soft); text-decoration: none; }
+        .vac-yearnav__btn:hover { background: var(--csa-bg); color: var(--csa-ink); }
+        .vac-yearnav__btn--off { opacity: .3; pointer-events: none; }
+        /* El modal no lleva icono: el cuerpo no debe indentarse para dejarle hueco. */
+        #vac-modal .csa-modal__body { padding-left: var(--csa-sp-6); }
+        /* El placeholder dd/mm/yyyy del input date salía en negrita (UA webkit). */
+        .vac-form .csa-input { font-weight: 400; }
+        .vac-form input[type="date"]::-webkit-datetime-edit { font-weight: 400; }
+    </style>
+{% endblock %}
+
+{% block csa_main %}
+    {% set abs_type = { vacation: 'Vacaciones', sick_leave: 'Baja médica', permit: 'Permiso', other: 'Ausencia' } %}
+    {% set month_names = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'] %}
+    {% set abs_state = { requested: ['Pendiente','#92400e','#fef3c7'], approved: ['Aprobada','#2f6f43','#e7f3ea'], rejected: ['Rechazada','#9b1c1c','#fde2e2'], cancelled: ['Cancelada','#6b7280','#f3f4f6'] } %}
+
+    <div class="wk">
+        <header class="wk-hero">
+            <div class="vac-yearnav">
+                {% if year > min_year %}
+                    <a href="{{ path('work_vacations', { year: year - 1 }) }}" class="vac-yearnav__btn" aria-label="Año anterior"><i class="fa fa-chevron-left"></i></a>
+                {% else %}
+                    <span class="vac-yearnav__btn vac-yearnav__btn--off"><i class="fa fa-chevron-left"></i></span>
+                {% endif %}
+                <h1 class="wk-hero__title" style="margin:0;">Mis vacaciones {{ year }}</h1>
+                {% if year < current_year + 1 %}
+                    <a href="{{ path('work_vacations', { year: year + 1 }) }}" class="vac-yearnav__btn" aria-label="Año siguiente"><i class="fa fa-chevron-right"></i></a>
+                {% else %}
+                    <span class="vac-yearnav__btn vac-yearnav__btn--off"><i class="fa fa-chevron-right"></i></span>
+                {% endif %}
+            </div>
+            <div class="wk-hero__date">{{ vacation_used }} de {{ vacation_total }} días usados · quedan {{ vacation_total - vacation_used }}</div>
+        </header>
+
+        {% if not year_has_holidays %}
+            {{ csa.callout('Los festivos de ' ~ year ~ ' aún no están cargados, así que el saldo y el calendario todavía no los descuentan. Puedes pedir vacaciones igualmente.', 'warning') }}
+        {% endif %}
+
+        <div class="yc-legend">
+            <span><i class="yc-sw--vac"></i> Vacaciones</span>
+            <span><i class="yc-sw--per"></i> Permiso</span>
+            <span><i class="yc-sw--baja"></i> Baja</span>
+            <span><i class="yc-sw--hol"></i> Festivos</span>
+            <span class="yc-legend__note">· pálido = pendiente · sólido = aprobada</span>
+        </div>
+
+        <div class="yc-grid">
+            {% for m in year_calendar %}
+                <div class="yc-month">
+                    <div class="yc-month__name">{{ month_names[m.month - 1] }}</div>
+                    <table class="yc-cal">
+                        <thead>
+                            <tr><th>L</th><th>M</th><th>X</th><th>J</th><th>V</th><th>S</th><th>D</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for week in m.weeks %}
+                                <tr>
+                                    {% for cell in week %}
+                                        {% if not cell.inMonth %}
+                                            <td class="yc-d yc-d--empty"></td>
+                                        {% else %}
+                                            {% set cls = 'yc-d' %}
+                                            {% set tip = '' %}
+                                            {% if cell.absence %}
+                                                {% set tcls = { vacation: 'yc-d--vac', permit: 'yc-d--per', sick_leave: 'yc-d--baja' } %}
+                                                {% set statecls = cell.absence.status == 'approved' ? 'yc-d--approved' : 'yc-d--pending' %}
+                                                {% set cls = cls ~ ' yc-d--abs ' ~ (tcls[cell.absence.type]|default('yc-d--other')) ~ ' ' ~ statecls %}
+                                                {% set tip = (abs_type[cell.absence.type]|default('Ausencia')) ~ (cell.absence.status == 'approved' ? ' · aprobada' : ' · pendiente') %}
+                                            {% elseif cell.holiday %}{% set cls = cls ~ ' yc-d--hol' %}{% set tip = cell.holiday %}
+                                            {% elseif cell.weekend %}{% set cls = cls ~ ' yc-d--we' %}{% endif %}
+                                            <td class="{{ cls }}{{ cell.isToday ? ' yc-d--today' : '' }}"{% if tip %} title="{{ tip }}"{% endif %}>{{ cell.day }}</td>
+                                        {% endif %}
+                                    {% endfor %}
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endfor %}
+        </div>
+
+        <div class="vac-bar">
+            <h2>Mis solicitudes</h2>
+            {{ csa.btn('Solicitar ausencia', { variant: 'primary', icon: 'fa-plus', attr: { onclick: "document.getElementById('vac-modal').showModal()" } }) }}
+        </div>
+
+        <div class="wk-vac">
+            {% for a in my_absences %}
+                {% set st = abs_state[a.status]|default(['—','#6b7280','#f3f4f6']) %}
+                <div class="wk-vac__row">
+                    <span>{{ abs_type[a.type]|default(a.type) }}</span>
+                    <span style="color:#6b7280;">{{ a.startDate|date('d/m/Y') }} – {{ a.endDate|date('d/m/Y') }} ({{ working_days[a.id] }} d laborables)</span>
+                    <span style="margin-left:auto; font-size:.72rem; font-weight:600; border-radius:999px; padding:.1rem .55rem; color:{{ st[1] }}; background:{{ st[2] }};">{{ st[0] }}</span>
+                    {% if a.status in ['requested', 'approved'] and a.endDate|date('Y-m-d') > today_ymd %}
+                        <button type="button" class="wk-btn wk-btn--ghost wk-btn--sm" style="margin-left:.6rem; padding:.3rem .8rem; font-size:.8rem;"
+                                onclick="document.getElementById('cancel-{{ a.id }}').showModal()">Cancelar</button>
+                        {{ csa.confirm_dialog('cancel-' ~ a.id, {
+                            variant: 'danger',
+                            title: 'Cancelar ausencia',
+                            body: 'Se cancelará la ausencia. Si ya ha empezado, se conservan los días hasta hoy y se libera el resto.',
+                            confirm_label: 'Sí, cancelar',
+                            cancel_label: 'No',
+                            action: path('work_vacation_cancel', { absenceId: a.id }),
+                            csrf_token: csrf_token('work_vacation'),
+                            csrf_name: '_csrf_token',
+                        }) }}
+                    {% endif %}
+                </div>
+            {% else %}
+                <div class="wk-empty">No has solicitado nada todavía.</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    {# Modal de solicitud (reusa el lenguaje visual .csa-modal). #}
+    <dialog id="vac-modal" class="csa-modal csa-modal--info" aria-labelledby="vac-modal-title">
+        <form method="post" action="{{ path('work_vacation_request') }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token('work_vacation') }}">
+            <button class="csa-modal__close" type="button" aria-label="Cerrar" onclick="this.closest('dialog').close()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l14 14M19 5L5 19"/></svg>
+            </button>
+            <header class="csa-modal__header">
+                <div class="csa-modal__heading">
+                    <h2 class="csa-modal__title" id="vac-modal-title">Solicitar ausencia</h2>
+                </div>
+            </header>
+            <div class="csa-modal__body">
+                <div class="vac-form">
+                    <div>
+                        <span class="vac-form__label">Tipo</span>
+                        <div class="seg" role="radiogroup" aria-label="Tipo de ausencia">
+                            <label class="seg__opt seg__opt--vac"><input type="radio" name="type" value="vacation" checked><span>Vacaciones</span></label>
+                            <label class="seg__opt seg__opt--per"><input type="radio" name="type" value="permit"><span>Permiso</span></label>
+                            <label class="seg__opt seg__opt--baja"><input type="radio" name="type" value="sick_leave"><span>Baja médica</span></label>
+                        </div>
+                    </div>
+                    <div class="vac-form__dates">
+                        <label>Desde <input type="date" name="start_date" class="csa-input" data-vac-start required></label>
+                        <label>Hasta <input type="date" name="end_date" class="csa-input" data-vac-end required></label>
+                    </div>
+                    <label>Comentario <input type="text" name="note" class="csa-input" placeholder="opcional"></label>
+                </div>
+            </div>
+            <footer class="csa-modal__footer">
+                <button type="button" class="csa-modal__btn csa-modal__btn--ghost" onclick="this.closest('dialog').close()">Cancelar</button>
+                <button type="submit" class="csa-modal__btn csa-modal__btn--primary">Solicitar</button>
+            </footer>
+        </form>
+    </dialog>
+
+    {# Validación de fechas en cliente: "Hasta" nunca antes de "Desde" (validación
+     # nativa antes del submit, sin ida y vuelta al servidor). #}
+    <script>
+    (function () {
+        var start = document.querySelector('[data-vac-start]');
+        var end = document.querySelector('[data-vac-end]');
+        if (!start || !end) { return; }
+        start.addEventListener('change', function () {
+            end.min = start.value;
+            if (end.value && end.value < start.value) { end.value = start.value; }
+        });
+    })();
+    </script>
+{% endblock %}

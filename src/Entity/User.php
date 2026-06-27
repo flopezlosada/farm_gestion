@@ -115,6 +115,17 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface, LegacyP
     private ?Partner $partner = null;
 
     /**
+     * Vínculo opcional con un trabajador. Faceta laboral de la persona, espejo de
+     * {@see User::$partner}: una misma persona puede ser socix y trabajador
+     * (Partner + Worker), solo trabajador (Worker sin Partner) o solo socix. Si
+     * se elimina el Worker, este campo queda a NULL en lugar de borrar el User.
+     *
+     * @ORM\OneToOne(targetEntity="App\Entity\Worker")
+     * @ORM\JoinColumn(name="worker_id", referencedColumnName="id", nullable=true, onDelete="SET NULL")
+     */
+    private ?Worker $worker = null;
+
+    /**
      * @var \DateTime $created
      *
      * @Gedmo\Timestampable(on="create")
@@ -338,6 +349,12 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface, LegacyP
         if ($this->partner !== null) {
             $roles[] = 'ROLE_PARTNER';
         }
+        // Mismo criterio para la faceta laboral: un User vinculado a un Worker
+        // es, por definición, un trabajador, así que derivamos ROLE_WORKER de la
+        // relación en vez de duplicarlo en la columna `roles`.
+        if ($this->worker !== null) {
+            $roles[] = 'ROLE_WORKER';
+        }
         return array_unique($roles);
     }
 
@@ -355,6 +372,17 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface, LegacyP
     public function setPartner(?Partner $partner): self
     {
         $this->partner = $partner;
+        return $this;
+    }
+
+    public function getWorker(): ?Worker
+    {
+        return $this->worker;
+    }
+
+    public function setWorker(?Worker $worker): self
+    {
+        $this->worker = $worker;
         return $this;
     }
 

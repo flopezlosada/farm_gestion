@@ -1,0 +1,67 @@
+{# Detalle de un día propio: fichajes + corregir/anular/añadir (trabajador). #}
+{% extends '_layouts/csa_work.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% import 'staff/_punch.html.twig' as p %}
+
+{% set madrid = 'Europe/Madrid' %}
+{% set ymd = date|date('Y-m-d', madrid) %}
+
+{% block title %}Mi jornada · {{ date|date('j M Y', madrid) }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('work') }}">Mi jornada</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('work_calendar', { year: date|date('Y', madrid), month: date|date('n', madrid) }) }}">Calendario</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ date|date('j M', madrid) }}</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'staff/_edit_styles.html.twig' %}
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header('Mi jornada', date|date('l, j F Y', madrid)|capitalize,
+        'Total del día: ' ~ (total // 60) ~ 'h ' ~ '%02d'|format(total % 60) ~ 'm.') }}
+
+    {% set popts = { csrf_id: 'work_entry', correct_route: 'work_entry_correct', void_route: 'work_entry_void', base_params: {}, return_to: ymd } %}
+
+    {{ include('staff/_day_warning.html.twig', { open: open, anomaly: anomaly, date: date, madrid: madrid }) }}
+
+    <div class="stf-reg" style="max-width:560px;">
+        <div class="stf-day">
+            <div class="stf-day__head">Tramos del día</div>
+            {% for seg in segments %}
+                <div class="stf-pun">
+                    {{ p.punch(seg.in, 'in', madrid, popts) }}
+                    <span style="color:#9ca3af;">→</span>
+                    {{ p.punch(seg.out, 'out', madrid, popts) }}
+                    {% if seg.minutes is not null %}
+                        <span style="margin-left:auto; color:#6b7280;">{{ (seg.minutes // 60) }}h {{ '%02d'|format(seg.minutes % 60) }}m</span>
+                    {% endif %}
+                </div>
+            {% else %}
+                <div class="stf-reg-empty">Sin fichajes este día.</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <details class="stf-add" open>
+        <summary><i class="fa fa-plus-circle"></i> Añadir un registro a este día</summary>
+        <form method="post" action="{{ path('work_entry_add') }}" class="stf-addrow">
+            <input type="hidden" name="_token" value="{{ csrf_token('work_entry') }}">
+            <input type="hidden" name="return_to" value="{{ ymd }}">
+            <input type="hidden" name="date" value="{{ ymd }}">
+            {% set next_type = open ? 'out' : 'in' %}
+            <input type="hidden" name="type" value="{{ next_type }}">
+            <label>Tipo
+                <span class="stf-fixedtype stf-fixedtype--{{ next_type }}">{{ next_type == 'out' ? 'Salida' : 'Entrada' }}</span>
+            </label>
+            <label>Hora
+                <input type="time" name="time" class="csa-input" required>
+            </label>
+            <button type="submit" class="csa-btn csa-btn--primary">Añadir</button>
+        </form>
+    </details>
+{% endblock %}

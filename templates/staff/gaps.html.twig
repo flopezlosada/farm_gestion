@@ -1,0 +1,52 @@
+{# Panel de huecos del registro de jornada (módulo laboral). #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Personal · Huecos del registro{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('staff_index') }}">Personal</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Huecos del registro</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    <style>
+        .gap-card { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:1.1rem 1.2rem; margin-bottom:1rem; }
+        .gap-card__head { display:flex; align-items:center; gap:.6rem; margin-bottom:.8rem; }
+        .gap-card__name { font-weight:600; color:#1d1c17; text-decoration:none; }
+        .gap-card__name:hover { text-decoration:underline; }
+        .gap-card__count { margin-left:auto; font-size:.8rem; color:#9b1c1c; background:#fde2e2; border-radius:999px; padding:.15rem .6rem; font-weight:600; }
+        .gap-chips { display:flex; flex-wrap:wrap; gap:.4rem; }
+        .gap-chip { font-size:.8rem; background:#fef3c7; color:#92400e; border-radius:8px; padding:.25rem .55rem; text-transform:capitalize; }
+        .gap-ok { background:#fff; border:1px solid #cfe3cf; border-radius:12px; padding:2rem 1.2rem; text-align:center; color:#2f6f43; }
+    </style>
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header('Personal', 'Huecos del registro', 'Días laborables de los últimos ' ~ days ~ ' días sin fichaje y sin ausencia justificada. Revísalos antes de que se acumulen.') }}
+
+    {{ csa.callout('Los festivos del calendario laboral (menú Personal · Festivos) no cuentan como hueco. Mantenlo al día para que un festivo entre semana no salga aquí como olvido.', 'info') }}
+
+    {% for row in rows %}
+        <div class="gap-card">
+            <div class="gap-card__head">
+                <a class="gap-card__name" href="{{ path('staff_show', { id: row.worker.id }) }}">{{ row.worker.name }}</a>
+                <span class="gap-card__count">{{ row.gaps|length }} día{{ row.gaps|length == 1 ? '' : 's' }} sin fichar</span>
+            </div>
+            <div class="gap-chips">
+                {% for gap in row.gaps %}
+                    <span class="gap-chip">{{ gap|date('D j M', 'Europe/Madrid') }}</span>
+                {% endfor %}
+            </div>
+        </div>
+    {% else %}
+        <div class="gap-ok">
+            <i class="fa fa-check-circle" style="font-size:1.6rem;"></i>
+            <p style="margin:.5rem 0 0;">Todo al día: ningún trabajador tiene huecos en los últimos {{ days }} días.</p>
+        </div>
+    {% endfor %}
+{% endblock %}

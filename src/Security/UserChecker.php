@@ -74,10 +74,17 @@ class UserChecker implements UserCheckerInterface
         // tiene acceso anticipado concedido a dedo por la administración (el
         // botón "Dar acceso" de la ficha). Así el grifo global sigue cerrado
         // para todo el mundo salvo los socixs autorizados uno a uno.
+        //
+        // Los TRABAJADORES quedan exentos: este gate es del rollout de socixs y
+        // un trabajador (faceta laboral) no es un socix — su acceso a fichar no
+        // depende de que el acceso de socixs esté abierto. Quien es socix Y
+        // trabajador entra igualmente (es personal de confianza, no el caso
+        // masivo que el gate frena).
         if (
             !$this->settings->getBool(AppSettings::FEATURE_PARTNER_LOGIN)
             && !$this->belongsToTeam($user)
             && !$user->isEarlyAccess()
+            && $user->getWorker() === null
         ) {
             throw new CustomUserMessageAccountStatusException(
                 'El acceso de socixs a la web todavía no está disponible. Te avisaremos en cuanto puedas entrar.'

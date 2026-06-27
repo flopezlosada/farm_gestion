@@ -320,6 +320,22 @@
                         </div>
                     {% endif %}
 
+                    {% if is_granted('ROLE_GESTION_LABORAL') and is_granted('FEATURE_LABORAL') %}
+                        <div class="csa-navgroup{{ sec_collapsed }}">
+                            <button type="button" class="csa-navgroup__head">Personal <i class="csa-navgroup__chev fa fa-chevron-down" aria-hidden="true"></i></button>
+                            <div class="csa-navgroup__items">
+                                {{ _self.nav_link('Trabajadores', path('staff_index'), 'fa-id-badge',
+                                   route == 'staff_index' or route == 'staff_show' or route == 'staff_new' or route == 'staff_edit') }}
+                                {{ _self.nav_link('Calendario del equipo', path('staff_team_calendar'), 'fa-calendar',
+                                   route == 'staff_team_calendar') }}
+                                {{ _self.nav_link('Huecos del registro', path('staff_gaps'), 'fa-exclamation-triangle',
+                                   route == 'staff_gaps') }}
+                                {{ _self.nav_link('Festivos', path('staff_holidays'), 'fa-calendar-times-o',
+                                   route starts with 'staff_holiday') }}
+                            </div>
+                        </div>
+                    {% endif %}
+
                     {% if is_granted('ROLE_GESTION_REPARTO') %}
                         <div class="csa-navgroup{{ sec_collapsed }}">
                             <button type="button" class="csa-navgroup__head">Reparto <i class="csa-navgroup__chev fa fa-chevron-down" aria-hidden="true"></i></button>
@@ -389,25 +405,9 @@
                 </nav>
 
                 <div class="csa-topbar__user">
-                    {# Muestra el switch "Mi panel" cuando el user está vinculado
-                     # a un Partner real. No usamos is_granted('ROLE_PARTNER') porque
-                     # ROLE_ADMIN lo incluye por jerarquía, lo cual mete a admins
-                     # sin Partner en el flujo /panel/setup. La fuente de verdad es
-                     # User.partner: si está vinculado, hay panel. #}
-                    {% if app.user and app.user.partner %}
-                        <div class="csa-areaswitch" role="group" aria-label="Cambiar de área">
-                            <span class="csa-areaswitch__item csa-areaswitch__item--active" aria-current="page">
-                                <i class="fa fa-cog" aria-hidden="true"></i>
-                                <span class="csa-areaswitch__label">Gestión</span>
-                                <span class="csa-areaswitch__short" aria-hidden="true">G</span>
-                            </span>
-                            <a href="{{ path('panel') }}" class="csa-areaswitch__item" title="Ir a mi panel personal">
-                                <i class="fa fa-user" aria-hidden="true"></i>
-                                <span class="csa-areaswitch__label">Mi panel</span>
-                                <span class="csa-areaswitch__short" aria-hidden="true">P</span>
-                            </a>
-                        </div>
-                    {% endif %}
+                    {# Conmutador de áreas (Gestión / Mi panel / Mi jornada),
+                     # componente compartido por los tres shells. Aquí, activa Gestión. #}
+                    {% include '_components/area_switch.html.twig' with { active: 'gestion' } %}
 
                     <a href="{{ path('homepage') }}" class="csa-topbar__util" target="_blank" rel="noopener" title="Abrir la web pública">
                         <i class="fa fa-globe" aria-hidden="true"></i>

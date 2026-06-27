@@ -1,0 +1,48 @@
+{# ============================================================
+ # Conmutador de áreas (compartido por los tres shells: gestión,
+ # panel del socix y jornada del trabajador).
+ #
+ # Muestra SOLO las áreas que el User tiene por sus facetas:
+ #   - Gestión   → si tiene algún rol de gestión (o ADMIN)
+ #   - Mi panel  → si está vinculado a un Partner (es socix)
+ #   - Mi jornada→ si está vinculado a un Worker (es trabajador)
+ #
+ # Si solo tiene un área, no se pinta nada (no hay a dónde conmutar).
+ # La activa se marca con el parámetro `active` ('gestion'|'panel'|'work').
+ # ============================================================ #}
+
+{% set has_gestion = is_granted('ROLE_ADMIN') or is_granted('ROLE_GESTION_GRANJA') or is_granted('ROLE_GESTION_SOCIXS') or is_granted('ROLE_GESTION_REPARTO') or is_granted('ROLE_BLOG') or is_granted('ROLE_GESTION_ENCUESTAS') or is_granted('ROLE_GESTION_ALBERGUE') or is_granted('ROLE_GESTION_LABORAL') %}
+{% set has_panel = app.user and app.user.partner %}
+{% set has_work = app.user and app.user.worker and is_granted('FEATURE_LABORAL') %}
+{% set area_count = (has_gestion ? 1 : 0) + (has_panel ? 1 : 0) + (has_work ? 1 : 0) %}
+
+{% if area_count > 1 %}
+    <div class="csa-areaswitch" role="group" aria-label="Cambiar de área">
+        {% if has_gestion %}
+            {{ _self.sw_item(active == 'gestion', path('dashboard'), 'fa-cog', 'Gestión', 'G', 'Ir al back-office de gestión') }}
+        {% endif %}
+        {% if has_panel %}
+            {{ _self.sw_item(active == 'panel', path('panel'), 'fa-user', 'Mi panel', 'P', 'Ir a mi panel personal') }}
+        {% endif %}
+        {% if has_work %}
+            {{ _self.sw_item(active == 'work', path('work'), 'fa-clock-o', 'Mi jornada', 'J', 'Ir a mi jornada (fichar)') }}
+        {% endif %}
+    </div>
+{% endif %}
+
+{# Un item del conmutador: span no-clicable si es el área activa, enlace si no. #}
+{% macro sw_item(is_active, href, icon, label, short, title) %}
+    {% if is_active %}
+        <span class="csa-areaswitch__item csa-areaswitch__item--active" aria-current="page">
+            <i class="fa {{ icon }}" aria-hidden="true"></i>
+            <span class="csa-areaswitch__label">{{ label }}</span>
+            <span class="csa-areaswitch__short" aria-hidden="true">{{ short }}</span>
+        </span>
+    {% else %}
+        <a href="{{ href }}" class="csa-areaswitch__item" title="{{ title }}">
+            <i class="fa {{ icon }}" aria-hidden="true"></i>
+            <span class="csa-areaswitch__label">{{ label }}</span>
+            <span class="csa-areaswitch__short" aria-hidden="true">{{ short }}</span>
+        </a>
+    {% endif %}
+{% endmacro %}

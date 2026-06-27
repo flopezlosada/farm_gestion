@@ -1,0 +1,150 @@
+{# Calendario del equipo: año completo (12 mini-meses), ausencias de todos los
+ # trabajadores juntas, un punto por trabajador (color por persona), con toggles
+ # para mostrar/ocultar cada uno. Mismo formato que el calendario del trabajador. #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Personal · Calendario del equipo{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('staff_index') }}">Personal</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Calendario del equipo</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    <style>
+        .ty-nav { display: flex; align-items: center; gap: var(--csa-sp-3); margin-bottom: var(--csa-sp-3); }
+        .ty-nav__title { font-size: var(--csa-fs-lg); font-weight: 600; min-width: 6rem; text-align: center; }
+        .ty-nav__btn { display: inline-grid; place-items: center; width: 2rem; height: 2rem; border-radius: 8px; color: var(--csa-ink-soft); text-decoration: none; }
+        .ty-nav__btn:hover { background: var(--csa-bg); color: var(--csa-ink); }
+        .ty-nav__btn--off { opacity: .3; pointer-events: none; }
+
+        /* Toggles por trabajador (chips con su color). */
+        .ty-toggles { display: flex; flex-wrap: wrap; gap: var(--csa-sp-2); margin-bottom: var(--csa-sp-5); }
+        .ty-tg { display: inline-flex; align-items: center; gap: .45rem; padding: .3rem .7rem; border: 1px solid var(--csa-rule); border-radius: 999px; cursor: pointer; font-size: var(--csa-fs-sm); user-select: none; }
+        .ty-tg input { position: absolute; opacity: 0; width: 0; height: 0; }
+        .ty-tg__dot { width: .8rem; height: .8rem; border-radius: 50%; background: var(--wc); }
+        .ty-tg:has(input:not(:checked)) { opacity: .45; text-decoration: line-through; }
+
+        /* Ancho acotado: el shell de gestión es ancho y, sin tope, los 3 mini-meses
+           se estiran enormes. Lo limitamos para que se vean como los del trabajador. */
+        .yc-grid { display: grid; gap: var(--csa-sp-4); grid-template-columns: 1fr; max-width: 56rem; }
+        @media (min-width: 720px) { .yc-grid { grid-template-columns: repeat(3, 1fr); } }
+        .yc-month { background: var(--csa-surface); border: 1px solid var(--csa-rule); border-radius: var(--csa-radius-md); padding: var(--csa-sp-3); }
+        .yc-month__name { font-weight: 600; margin-bottom: var(--csa-sp-1); color: var(--csa-ink); font-size: var(--csa-fs-sm); }
+        .yc-cal { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        .yc-cal th { font-size: .58rem; font-weight: 500; color: var(--csa-ink-muted); padding: 1px 0 3px; text-align: center; }
+        /* Misma altura que el calendario del trabajador: los puntos se superponen al
+           pie de la celda (posición absoluta), no añaden altura. */
+        .yc-d { position: relative; height: 1.85rem; vertical-align: middle; text-align: center; }
+        .yc-num { font-size: .72rem; color: var(--csa-ink-soft); font-variant-numeric: tabular-nums; }
+        .yc-d--we .yc-num { color: var(--csa-ink-muted); }
+        .yc-d--hol { background: var(--csa-plum-soft); }
+        .yc-d--today .yc-num { font-weight: 700; color: var(--csa-ink); text-decoration: underline; }
+        .yc-evs { position: absolute; left: 0; right: 0; bottom: 1px; display: flex; gap: 2px; justify-content: center; }
+        .ev { width: 5px; height: 5px; border-radius: 50%; background: var(--wc); }
+        .ev--pending { background: transparent; border: 1.5px solid var(--wc); }
+
+        /* Paleta por trabajador (color = persona). */
+        .ev--w0, .ty-tg--w0 { --wc: var(--csa-green); }
+        .ev--w1, .ty-tg--w1 { --wc: var(--csa-sky); }
+        .ev--w2, .ty-tg--w2 { --wc: var(--csa-terracotta); }
+        .ev--w3, .ty-tg--w3 { --wc: var(--csa-plum); }
+        .ev--w4, .ty-tg--w4 { --wc: var(--csa-ochre); }
+
+        .ty-note { margin-top: var(--csa-sp-4); font-size: .8rem; color: var(--csa-ink-muted); }
+    </style>
+{% endblock %}
+
+{% block csa_main %}
+    {% set month_names = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'] %}
+    {% set abs_type = { vacation: 'Vacaciones', sick_leave: 'Baja médica', permit: 'Permiso', other: 'Ausencia' } %}
+
+    {{ csa.page_header('Personal', 'Calendario del equipo', 'Vacaciones y ausencias de todo el equipo en el año. Usa los toggles para mostrar u ocultar cada persona.') }}
+
+    <div class="ty-nav">
+        {% if year > min_year %}
+            <a href="{{ path('staff_team_calendar', { year: year - 1 }) }}" class="ty-nav__btn" aria-label="Año anterior"><i class="fa fa-chevron-left"></i></a>
+        {% else %}
+            <span class="ty-nav__btn ty-nav__btn--off"><i class="fa fa-chevron-left"></i></span>
+        {% endif %}
+        <div class="ty-nav__title">{{ year }}</div>
+        {% if year < current_year + 1 %}
+            <a href="{{ path('staff_team_calendar', { year: year + 1 }) }}" class="ty-nav__btn" aria-label="Año siguiente"><i class="fa fa-chevron-right"></i></a>
+        {% else %}
+            <span class="ty-nav__btn ty-nav__btn--off"><i class="fa fa-chevron-right"></i></span>
+        {% endif %}
+    </div>
+
+    {% if team_workers is empty %}
+        <p class="csa-muted">No hay trabajadores activos.</p>
+    {% else %}
+        <div class="ty-toggles">
+            {% for w in team_workers %}
+                <label class="ty-tg ty-tg--w{{ w.index % 5 }}">
+                    <input type="checkbox" checked data-team-toggle="{{ w.index % 5 }}">
+                    <span class="ty-tg__dot"></span>{{ w.name }}
+                </label>
+            {% endfor %}
+        </div>
+
+        <div class="yc-grid" data-team-grid>
+            {% for m in grid %}
+                <div class="yc-month">
+                    <div class="yc-month__name">{{ month_names[m.month - 1] }}</div>
+                    <table class="yc-cal">
+                        <thead><tr><th>L</th><th>M</th><th>X</th><th>J</th><th>V</th><th>S</th><th>D</th></tr></thead>
+                        <tbody>
+                            {% for week in m.weeks %}
+                                <tr>
+                                    {% for cell in week %}
+                                        {% if not cell.inMonth %}
+                                            <td class="yc-d yc-d--empty"></td>
+                                        {% else %}
+                                            {% set evs = by_day[cell.date|date('Y-m-d')]|default([]) %}
+                                            {% set tparts = [] %}
+                                            {% if cell.holiday %}{% set tparts = tparts|merge(['Festivo: ' ~ cell.holiday]) %}{% endif %}
+                                            {% for e in evs %}{% set tparts = tparts|merge([e.name ~ ': ' ~ (abs_type[e.type]|default('Ausencia')) ~ ' (' ~ (e.status == 'approved' ? 'aprobada' : 'pendiente') ~ ')']) %}{% endfor %}
+                                            <td class="yc-d{{ cell.weekend ? ' yc-d--we' : '' }}{{ cell.holiday ? ' yc-d--hol' : '' }}{{ cell.isToday ? ' yc-d--today' : '' }}"{% if tparts is not empty %} title="{{ tparts|join("\n") }}"{% endif %}>
+                                                <span class="yc-num">{{ cell.day }}</span>
+                                                {% if evs|length %}
+                                                    <span class="yc-evs">
+                                                        {% for e in evs %}<span class="ev ev--w{{ e.index % 5 }}{{ e.status == 'approved' ? '' : ' ev--pending' }}" title="{{ e.name }} · {{ abs_type[e.type]|default('Ausencia') }} · {{ e.status == 'approved' ? 'aprobada' : 'pendiente' }}"></span>{% endfor %}
+                                                    </span>
+                                                {% endif %}
+                                            </td>
+                                        {% endif %}
+                                    {% endfor %}
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endfor %}
+        </div>
+
+        <div class="ty-note">Punto relleno = aprobada · punto hueco = pendiente. Un punto por persona.</div>
+    {% endif %}
+
+    {# Toggles: ocultar/mostrar los puntos de cada trabajador. #}
+    <script>
+    (function () {
+        var grid = document.querySelector('[data-team-grid]');
+        if (!grid) { return; }
+        document.querySelectorAll('[data-team-toggle]').forEach(function (cb) {
+            cb.addEventListener('change', function () {
+                grid.classList.toggle('hide-w' + cb.getAttribute('data-team-toggle'), !cb.checked);
+            });
+        });
+    })();
+    </script>
+    <style>
+        [data-team-grid].hide-w0 .ev--w0, [data-team-grid].hide-w1 .ev--w1,
+        [data-team-grid].hide-w2 .ev--w2, [data-team-grid].hide-w3 .ev--w3,
+        [data-team-grid].hide-w4 .ev--w4 { display: none; }
+    </style>
+{% endblock %}

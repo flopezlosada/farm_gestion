@@ -1,0 +1,67 @@
+{# Listado de trabajadores (módulo laboral). #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Personal · Trabajadores{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Personal</span>
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header('Personal', 'Trabajadores', 'Fichas laborales para el registro de jornada y las vacaciones.') }}
+
+    <div class="csa-grid-kpi" style="margin-bottom: var(--csa-sp-6);">
+        {{ csa.kpi('Trabajadores', stats.total, null, null, null, 'sky', 'fa-id-badge') }}
+        {{ csa.kpi('Activos', stats.active, null, null, null, 'green', 'fa-check') }}
+    </div>
+
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-4);">
+        <div></div>
+        {{ csa.btn('Nuevo trabajador', { variant: 'primary', icon: 'fa-plus', href: path('staff_new') }) }}
+    </div>
+
+    <div class="csa-table-wrap">
+        <table class="csa-table">
+            <thead>
+                <tr>
+                    <th>Nombre</th>
+                    <th class="csa-table__col-tight">Alta</th>
+                    <th class="csa-table__col-tight">Vacaciones/año</th>
+                    <th class="csa-table__col-tight">Estado</th>
+                    <th class="csa-table__actions">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for worker in workers %}
+                    <tr>
+                        <td>
+                            <a class="csa-table__primary" href="{{ path('staff_show', { id: worker.id }) }}">{{ worker.name }}</a>
+                        </td>
+                        <td class="csa-table__col-tight">{{ worker.hireDate ? worker.hireDate|date('d/m/Y') : '—' }}</td>
+                        <td class="csa-table__col-tight">{{ worker.annualVacationDays }} días</td>
+                        <td class="csa-table__col-tight">
+                            {% if worker.active %}
+                                {{ csa.badge('Activo', 'green') }}
+                            {% else %}
+                                {{ csa.badge('Inactivo', 'neutral') }}
+                            {% endif %}
+                        </td>
+                        <td class="csa-table__actions">
+                            <a href="{{ path('staff_show', { id: worker.id }) }}" title="Ver" aria-label="Ver"><i class="fa fa-eye"></i></a>
+                            <a href="{{ path('staff_edit', { id: worker.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="5" class="csa-muted" style="text-align: center; padding: var(--csa-sp-8);">
+                            Aún no hay trabajadores. Crea el primero con «Nuevo trabajador».
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endblock %}

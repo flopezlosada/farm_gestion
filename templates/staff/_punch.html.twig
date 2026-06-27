@@ -1,0 +1,50 @@
+{# ============================================================
+ # Macro compartido: un fichaje con edición inline de su hora
+ # (estilo Factorial). El lápiz convierte la hora en un input;
+ # se guarda con Enter o con el tick (✓), se cancela con Esc o la
+ # ✕, y la papelera anula. Si el fichaje no existe (tramo
+ # incompleto), pinta un guion. Lo usan el supervisor (ficha y
+ # día) y el trabajador (su día), con rutas distintas.
+ #
+ # El JS que activa el modo edición vive en staff/_edit_styles.html.twig
+ # (incluido una vez por página). Sin JS la hora se ve igual, solo
+ # que no es editable: es una mejora progresiva.
+ #
+ # opts:
+ #   csrf_id        id del token CSRF (p. ej. 'staff_entry5' o 'work_entry')
+ #   correct_route  ruta de corregir (p. ej. 'staff_entry_correct')
+ #   void_route     ruta de anular
+ #   base_params    params fijos de la ruta (p. ej. { id: worker_id }) ó {}
+ #   return_to      ymd al que volver tras la acción, o null
+ # ============================================================ #}
+{% macro punch(entry, side, madrid, opts) %}
+    {% if entry %}
+        {% set base = opts.base_params|default({}) %}
+        {% set t = entry.occurredAt|date('H:i', madrid) %}
+        <span class="pun" data-pun>
+            <span class="stf-pun__icon stf-pun__icon--{{ side }}" aria-hidden="true"><i class="fa fa-sign-{{ side == 'in' ? 'in' : 'out' }}"></i></span>
+
+            <span class="pun__view" data-pun-view>
+                <span class="stf-pun__time">{{ t }}</span>
+                <button type="button" class="pun__btn pun__pen" data-pun-edit aria-label="Editar hora"><i class="fa fa-pencil"></i></button>
+            </span>
+
+            <form method="post" action="{{ path(opts.correct_route, base|merge({ entryId: entry.id })) }}" class="pun__edit" data-pun-edit-form hidden>
+                <input type="hidden" name="_token" value="{{ csrf_token(opts.csrf_id) }}">
+                {% if opts.return_to|default(null) %}<input type="hidden" name="return_to" value="{{ opts.return_to }}">{% endif %}
+                <input type="time" name="time" value="{{ t }}" class="pun__input" data-pun-input required>
+                <button type="submit" class="pun__btn pun__ok" aria-label="Guardar hora"><i class="fa fa-check"></i></button>
+                <button type="button" class="pun__btn pun__cancel" data-pun-cancel aria-label="Cancelar"><i class="fa fa-times"></i></button>
+            </form>
+
+            <form method="post" action="{{ path(opts.void_route, base|merge({ entryId: entry.id })) }}" class="pun__void" data-pun-void hidden
+                  onsubmit="return confirm('¿Anular este fichaje? Queda registrado como anulado, no se borra.');">
+                <input type="hidden" name="_token" value="{{ csrf_token(opts.csrf_id) }}">
+                {% if opts.return_to|default(null) %}<input type="hidden" name="return_to" value="{{ opts.return_to }}">{% endif %}
+                <button type="submit" class="pun__btn pun__del" aria-label="Anular fichaje"><i class="fa fa-trash"></i></button>
+            </form>
+        </span>
+    {% else %}
+        <span class="stf-pun__time">—</span>
+    {% endif %}
+{% endmacro %}

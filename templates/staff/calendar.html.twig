@@ -1,0 +1,34 @@
+{# Calendario mensual de fichajes de un trabajador (supervisor). #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% set madrid = 'Europe/Madrid' %}
+
+{% block title %}{{ worker.name }} · Calendario{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('staff_index') }}">Personal</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('staff_show', { id: worker.id }) }}">{{ worker.name }}</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Calendario</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'staff/_calendar_styles.html.twig' %}
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header('Personal · ' ~ worker.name, 'Calendario de fichajes', 'Pulsa un día para ver, corregir o añadir fichajes.') }}
+
+    <div class="cal-nav">
+        {{ csa.btn('', { variant: 'ghost', icon: 'fa-chevron-left', href: path('staff_calendar', { id: worker.id, year: prev|date('Y'), month: prev|date('n') }) }) }}
+        <div class="cal-nav__title">{{ month_label|date('F Y', madrid) }}</div>
+        {{ csa.btn('', { variant: 'ghost', icon: 'fa-chevron-right', href: path('staff_calendar', { id: worker.id, year: next|date('Y'), month: next|date('n') }) }) }}
+    </div>
+
+    {{ include('staff/_calendar_grid.html.twig', { weeks: weeks, day_route: 'staff_day', base_params: { id: worker.id }, madrid: madrid }) }}
+{% endblock %}

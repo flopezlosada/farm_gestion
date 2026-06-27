@@ -3,6 +3,7 @@
 namespace App\Tests\Security;
 
 use App\Entity\User;
+use App\Entity\Worker;
 use App\Security\UserChecker;
 use App\Service\AppSettings;
 use PHPUnit\Framework\TestCase;
@@ -81,5 +82,26 @@ class UserCheckerTest extends TestCase
 
         (new UserChecker($this->settings(false)))
             ->checkPreAuth($this->socix()->setEarlyAccess(true)->setEnabled(false));
+    }
+
+    public function testTrabajadorEntraAunqueElAccesoDeSocixsEsteCerrado(): void
+    {
+        // Un trabajador puro (faceta laboral, sin rol de equipo ni acceso
+        // anticipado) no depende del rollout de socixs: debe poder entrar a fichar.
+        $worker = (new User())->setEnabled(true)->setWorker(new Worker());
+
+        (new UserChecker($this->settings(false)))->checkPreAuth($worker);
+
+        $this->addToAssertionCount(1); // no lanzó: pasa
+    }
+
+    public function testTrabajadorBloqueadoSigueSinPoderEntrar(): void
+    {
+        // La exención laboral no salta el bloqueo de cuenta (enabled=false manda).
+        $this->expectException(CustomUserMessageAccountStatusException::class);
+
+        $worker = (new User())->setEnabled(false)->setWorker(new Worker());
+
+        (new UserChecker($this->settings(false)))->checkPreAuth($worker);
     }
 }
