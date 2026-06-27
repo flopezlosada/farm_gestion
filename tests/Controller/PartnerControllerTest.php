@@ -295,8 +295,12 @@ class PartnerControllerTest extends AbstractAuthenticatedTest
         $shareId = $share->getId();
         $originalPayerId = $share->getPayerPartner()?->getId();
 
-        // Asignar pagador (donación).
-        $client->request('GET', sprintf('/gestion/partner/%d/%d/set_payer', $receptor->getId(), $payer->getId()));
+        // Asignar pagador (donación). Ahora es POST con CSRF: el token se
+        // renderiza en el picker de pagador (un form por candidato).
+        $setPayerAction = sprintf('/gestion/partner/%d/%d/set_payer', $receptor->getId(), $payer->getId());
+        $picker = $client->request('GET', sprintf('/gestion/partner/%d/set_payer/family', $receptor->getId()));
+        $setToken = $picker->filter(sprintf('form[action="%s"] input[name="_csrf_token"]', $setPayerAction))->attr('value');
+        $client->request('POST', $setPayerAction, ['_csrf_token' => $setToken]);
         $this->assertResponseRedirects();
 
         $em->clear();
@@ -304,8 +308,12 @@ class PartnerControllerTest extends AbstractAuthenticatedTest
         $this->assertSame($payer->getId(), $reloaded->getPayerPartner()?->getId(), 'set_payer debe fijar el pagador externo.');
         $this->assertSame($receptor->getId(), $reloaded->getPartner()->getId(), 'El receptor de la cesta no debe cambiar.');
 
-        // Quitar pagador (vuelve a pagarla ella misma).
-        $client->request('GET', sprintf('/gestion/partner/%d/clear_payer', $receptor->getId()));
+        // Quitar pagador (vuelve a pagarla ella misma). El token de clear_payer
+        // se renderiza en la ficha cuando hay pagador externo asignado.
+        $clearPayerAction = sprintf('/gestion/partner/%d/clear_payer', $receptor->getId());
+        $show = $client->request('GET', sprintf('/gestion/partner/%d', $receptor->getId()));
+        $clearToken = $show->filter(sprintf('form[action="%s"] input[name="_csrf_token"]', $clearPayerAction))->attr('value');
+        $client->request('POST', $clearPayerAction, ['_csrf_token' => $clearToken]);
         $this->assertResponseRedirects();
 
         $em->clear();
