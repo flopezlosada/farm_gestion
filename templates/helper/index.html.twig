@@ -18,6 +18,8 @@
 {# year: 'all' explícito cuando no hay filtro de año, para que los enlaces de
    orden/limpiar NO recaigan al año actual (el defecto sin parámetro). #}
 {% set fp = { q: q, source: selected_source, year: selected_year ?: 'all' } %}
+{% set desde = desde|default(null) %}
+{% set hasta = hasta|default(null) %}
 
 {% block title %}Albergue · Voluntarios{% endblock %}
 
