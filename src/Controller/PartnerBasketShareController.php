@@ -13,6 +13,7 @@ use App\Repository\PartnerBasketShareRepository;
 use App\Service\Delivery\CohortChoiceBuilder;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Partner\BasketModalityChanger;
+use App\Service\Partner\BasketPricing;
 use App\Service\Partner\PartnerShareEventRecorder;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -69,7 +70,7 @@ class PartnerBasketShareController extends AbstractController
      * L11/L17 sobre el clon de la batería (caso JOSE del escenario MIRIAM).
      */
     #[Route("/{id}/edit", name: "partner_basket_share_edit", methods: ["GET","POST"])]
-    public function edit(Request $request, PartnerBasketShare $partnerBasketShare, EntityManagerInterface $entityManager, CohortChoiceBuilder $cohortChoiceBuilder, WeeklyBasketGenerator $generator): Response
+    public function edit(Request $request, PartnerBasketShare $partnerBasketShare, EntityManagerInterface $entityManager, CohortChoiceBuilder $cohortChoiceBuilder, WeeklyBasketGenerator $generator, BasketPricing $basketPricing): Response
     {
         if ($partnerBasketShare->getStartDate()) {
             $partnerBasketShare->setStartDate($partnerBasketShare->getStartDate()->format('Y-m-d'));
@@ -89,12 +90,7 @@ class PartnerBasketShareController extends AbstractController
                 $partnerBasketShare->setMonthPrice(0);
                 $partnerBasketShare->setEggMonthPrice(0);
             } else {
-                $partnerBasketShare->setMonthPrice($partnerBasketShare->getBasketShare()->getMonthPrice() * $partnerBasketShare->getAmount());
-                if ($partnerBasketShare->getEggAmount()) {
-                    $partnerBasketShare->setEggMonthPrice($partnerBasketShare->getEggAmount()->getMonthPrice() * $partnerBasketShare->getAmount());
-                } else {
-                    $partnerBasketShare->setEggMonthPrice(0);
-                }
+                $basketPricing->applyTo($partnerBasketShare);
             }
             $entityManager->flush();
 
@@ -144,6 +140,7 @@ class PartnerBasketShareController extends AbstractController
         BasketModalityChanger $modalityChanger,
         WeeklyBasketGenerator $generator,
         CohortChoiceBuilder $cohortChoiceBuilder,
+        BasketPricing $basketPricing,
     ): Response {
         $new = new PartnerBasketShare();
         $new->setPartner($partnerBasketShare->getPartner());
@@ -195,8 +192,7 @@ class PartnerBasketShareController extends AbstractController
                 $new->setMonthPrice(0);
                 $new->setEggMonthPrice(0);
             } else {
-                $new->setMonthPrice($new->getBasketShare()->getMonthPrice() * $new->getAmount());
-                $new->setEggMonthPrice($new->getEggAmount() ? $new->getEggAmount()->getMonthPrice() * $new->getAmount() : 0);
+                $basketPricing->applyTo($new);
             }
 
             try {

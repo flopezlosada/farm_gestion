@@ -8,6 +8,7 @@ use App\Repository\PartnerBasketShareRepository;
 use App\Repository\PartnerRepository;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Partner\BasketModalityChanger;
+use App\Service\Partner\BasketPricing;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -45,6 +46,7 @@ class ChangeBasketModalityCommand extends Command
         private readonly PartnerBasketShareRepository $shareRepository,
         private readonly BasketModalityChanger $modalityChanger,
         private readonly WeeklyBasketGenerator $generator,
+        private readonly BasketPricing $basketPricing,
     ) {
         parent::__construct();
     }
@@ -98,9 +100,8 @@ class ChangeBasketModalityCommand extends Command
         $new->setDayMonthOrder($dayOrder === null || $dayOrder === '' ? null : (int) $dayOrder);
         $new->setEggDayMonthOrder($eggDayOrder === null || $eggDayOrder === '' ? null : (int) $eggDayOrder);
 
-        // Precios derivados (misma fórmula que el form admin).
-        $new->setMonthPrice($toShare->getMonthPrice() * $new->getAmount());
-        $new->setEggMonthPrice($old->getEggAmount() ? $old->getEggAmount()->getMonthPrice() * $new->getAmount() : 0);
+        // Precios derivados (misma fórmula centralizada que el form admin).
+        $this->basketPricing->applyTo($new);
 
         $io->title(sprintf('Cambio de modalidad — socio %d (%s)', $partner->getId(), $partner->getName()));
         $io->definitionList(

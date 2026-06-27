@@ -62,14 +62,16 @@ class CatalogFixtures extends Fixture
         // SHARE_HALF=4 (semanal compartida, antigua media cesta),
         // SHARE_ONLY_EGG=5, y las compartidas quincenal/mensual 6/7, que pesan
         // ½ cesta — BasketShare::IDS_SHARED=[4,6,7]). Cambiar los ids rompe el reparto.
+        // Precios mensuales de la lista oficial 2026 (cesta 100/55/30); las
+        // compartidas (media cesta entre dos hogares) son la mitad por hogar.
         $baskets = [
-            1 => ['name' => 'Semanal',             'price' => '60.00', 'equivalence' => '1.00'],
-            2 => ['name' => 'Quincenal',           'price' => '30.00', 'equivalence' => '0.50'],
-            3 => ['name' => 'Mensual',             'price' => '15.00', 'equivalence' => '0.25'],
-            4 => ['name' => 'Semanal compartida',  'price' => '30.00', 'equivalence' => '0.50'],
-            5 => ['name' => 'Solo huevos',         'price' => '0.00',  'equivalence' => '0.00'],
-            6 => ['name' => 'Quincenal compartida','price' => '15.00', 'equivalence' => '0.25'],
-            7 => ['name' => 'Mensual compartida',  'price' => '7.50',  'equivalence' => '0.13'],
+            1 => ['name' => 'Semanal',             'price' => '100.00', 'equivalence' => '1.00'],
+            2 => ['name' => 'Quincenal',           'price' => '55.00',  'equivalence' => '0.50'],
+            3 => ['name' => 'Mensual',             'price' => '30.00',  'equivalence' => '0.25'],
+            4 => ['name' => 'Semanal compartida',  'price' => '50.00',  'equivalence' => '0.50'],
+            5 => ['name' => 'Solo huevos',         'price' => '0.00',   'equivalence' => '0.00'],
+            6 => ['name' => 'Quincenal compartida','price' => '27.50',  'equivalence' => '0.25'],
+            7 => ['name' => 'Mensual compartida',  'price' => '15.00',  'equivalence' => '0.13'],
         ];
 
         $basketMetadata = $manager->getClassMetadata(BasketShare::class);
@@ -87,8 +89,12 @@ class CatalogFixtures extends Fixture
             $this->addReference(self::REF_BASKET_PREFIX . $data['name'], $basket);
         }
 
-        foreach (['Semanal', 'Quincenal'] as $eggPeriodName) {
-            $eggPeriod = (new EggPeriod())->setName($eggPeriodName);
+        // Precio mensual por docena según frecuencia (lista oficial 2026):
+        // docena semanal 20 / quincenal 10 / mensual 5. La cuota de huevos sale
+        // de aquí × nº de docenas (EggAmount), no del precio de EggAmount.
+        $eggPeriods = ['Semanal' => '20.00', 'Quincenal' => '10.00', 'Mensual' => '5.00'];
+        foreach ($eggPeriods as $eggPeriodName => $eggPeriodPrice) {
+            $eggPeriod = (new EggPeriod())->setName($eggPeriodName)->setMonthPrice($eggPeriodPrice);
             $manager->persist($eggPeriod);
             $this->addReference(self::REF_EGG_PERIOD_PREFIX . $eggPeriodName, $eggPeriod);
         }

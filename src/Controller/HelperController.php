@@ -50,8 +50,14 @@ class HelperController extends AbstractController
         $term = trim((string) $request->query->get('q', ''));
         $sourceId = $request->query->get('source');
         $sourceId = ($sourceId === null || $sourceId === '') ? null : (int) $sourceId;
-        $year = $request->query->get('year');
-        $year = ($year === null || $year === '') ? null : (int) $year;
+        // Por defecto (sin parámetro) se filtra por el AÑO ACTUAL; "Todos los
+        // años" se elige explícitamente (radio con value="" → cadena vacía).
+        $yearParam = $request->query->get('year');
+        $year = match (true) {
+            $yearParam === null => (int) date('Y'),
+            $yearParam === '', $yearParam === 'all' => null,
+            default => (int) $yearParam,
+        };
         $sort = (string) $request->query->get('sort', 'name');
         $dir = $request->query->get('dir') === 'desc' ? 'desc' : 'asc';
 

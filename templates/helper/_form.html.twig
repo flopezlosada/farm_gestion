@@ -5,7 +5,7 @@
 {% form_theme form 'form_div_layout.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
 
-{{ form_start(form, { attr: { role: 'form', class: 'csa-form-narrow' } }) }}
+{{ form_start(form, { attr: { role: 'form', class: 'csa-form-narrow', 'data-csa-dropdowns': '1' } }) }}
 
     <div class="csa-stack-lg">
 
@@ -47,7 +47,11 @@
             {% block body %}
                 {% import '_macros/csa.html.twig' as csa %}
                 <div class="csa-form-grid">
-                    {{ csa.field(form.basketActive, 'Se lleva cesta de reparto', { full: true }) }}
+                    <label class="csa-toggle" style="grid-column: 1 / -1; padding: 4px 0 10px;">
+                        {{ form_widget(form.basketActive, { attr: { class: 'csa-toggle__input' } }) }}
+                        <span class="csa-toggle__track"><span class="csa-toggle__thumb"></span></span>
+                        <span style="font-weight: 600; color: var(--csa-ink);">Se lleva cesta de reparto</span>
+                    </label>
                     {{ csa.field(form.basketNode, 'Nodo de recogida') }}
                     {{ csa.field(form.basketVegBaskets, 'Cestas de verdura') }}
                     {{ csa.field(form.basketEggDozens, 'Docenas de huevos') }}
