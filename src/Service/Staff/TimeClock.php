@@ -15,7 +15,7 @@ use Symfony\Component\Clock\ClockInterface;
  *
  *  1. Decidir si el siguiente fichaje es entrada o salida, alternando a partir
  *     del último fichaje VIGENTE del trabajador (sin tramo abierto → entrada).
- *  2. Estampar el instante en UTC. El reloj se inyecta ({@see ClockInterface})
+ *  2. Estampar el instante en hora de Madrid. El reloj se inyecta ({@see ClockInterface})
  *     para poder fijar "ahora" en los tests con un MockClock.
  *
  * No edita ni borra: el modelo es append-only ({@see TimeEntry}). Corregir un
@@ -60,7 +60,7 @@ class TimeClock
 
     /**
      * Ficha el siguiente evento del trabajador en tiempo real: alterna
-     * entrada/salida según su estado, estampa el instante actual en UTC, marca el
+     * entrada/salida según su estado, estampa el instante actual en hora de Madrid, marca el
      * origen como propio del trabajador y deja constancia del autor. Persiste y
      * confirma.
      *
