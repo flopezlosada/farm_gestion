@@ -9,6 +9,8 @@ use App\Form\DeliveryExceptionType;
 use App\Repository\BasketRepository;
 use App\Repository\DeliveryExceptionRepository;
 use App\Repository\NodeRepository;
+use App\Repository\PartnerRepository;
+use App\Service\Delivery\ClosureShiftNotifier;
 use App\Service\Delivery\ClosureShiftReconciler;
 use App\Service\Delivery\NodeDeliveryDate;
 use App\Service\Delivery\WeekRematerializer;
@@ -73,7 +75,7 @@ class DeliveryExceptionController extends AbstractController
      * @return Response
      */
     #[Route('/new', name: 'delivery_exception_new', methods: ['GET', 'POST'])]
-    public function new(Request $request, EntityManagerInterface $entityManager, DeliveryExceptionRepository $repository, NodeRepository $nodeRepository, BasketRepository $basketRepository, NodeDeliveryDate $deliveryDate, ClosureShiftReconciler $reconciler, WeekRematerializer $rematerializer): Response
+    public function new(Request $request, EntityManagerInterface $entityManager, DeliveryExceptionRepository $repository, NodeRepository $nodeRepository, BasketRepository $basketRepository, NodeDeliveryDate $deliveryDate, ClosureShiftReconciler $reconciler, WeekRematerializer $rematerializer, ClosureShiftNotifier $notifier, PartnerRepository $partnerRepository): Response
     {
         $exception = new DeliveryException();
         $form = $this->createForm(DeliveryExceptionType::class, $exception);
@@ -86,7 +88,7 @@ class DeliveryExceptionController extends AbstractController
                 $entityManager->persist($exception);
                 $entityManager->flush();
                 $this->addFlash('success', 'Excepción de reparto creada.');
-                $this->reconcileClosure($exception, $reconciler);
+                $this->reconcileClosure($exception, $reconciler, $notifier, $partnerRepository);
                 $this->reconcileStone($rematerializer, $exception->getBasket(), $exception->isCancelled() && $exception->isGlobal());
 
                 return $this->redirectToRoute('delivery_exception_index');
@@ -108,7 +110,7 @@ class DeliveryExceptionController extends AbstractController
      * @return Response
      */
     #[Route('/{id}/edit', name: 'delivery_exception_edit', methods: ['GET', 'POST'])]
-    public function edit(Request $request, DeliveryException $exception, EntityManagerInterface $entityManager, DeliveryExceptionRepository $repository, NodeRepository $nodeRepository, BasketRepository $basketRepository, NodeDeliveryDate $deliveryDate, ClosureShiftReconciler $reconciler, WeekRematerializer $rematerializer): Response
+    public function edit(Request $request, DeliveryException $exception, EntityManagerInterface $entityManager, DeliveryExceptionRepository $repository, NodeRepository $nodeRepository, BasketRepository $basketRepository, NodeDeliveryDate $deliveryDate, ClosureShiftReconciler $reconciler, WeekRematerializer $rematerializer, ClosureShiftNotifier $notifier, PartnerRepository $partnerRepository): Response
     {
         // Estado PREVIO: si la edición cambia de semana o de tipo, la semana que
         // tocaba ANTES también necesita re-materializarse.
@@ -124,7 +126,7 @@ class DeliveryExceptionController extends AbstractController
             } else {
                 $entityManager->flush();
                 $this->addFlash('success', 'Excepción de reparto actualizada.');
-                $this->reconcileClosure($exception, $reconciler);
+                $this->reconcileClosure($exception, $reconciler, $notifier, $partnerRepository);
 
                 $displaced = $previousWasGlobalClosure || ($exception->isCancelled() && $exception->isGlobal());
                 if ($previousBasket !== null && $previousBasket->getId() !== $exception->getBasket()?->getId()) {
@@ -173,12 +175,15 @@ class DeliveryExceptionController extends AbstractController
     /**
      * Reconcilia los cambios puntuales que tocan la semana recién guardada, si es
      * un cierre global. Delega en {@see ClosureShiftReconciler} (que no-opera si no
-     * lo es) y resume el resultado en un flash para el admin.
+     * lo es), avisa por email a los socios cuyo cambio se anuló y resume el
+     * resultado en un flash para el admin.
      *
      * @param DeliveryException      $exception  Excepción recién guardada.
      * @param ClosureShiftReconciler $reconciler
+     * @param ClosureShiftNotifier   $notifier   Envía el aviso a los socios afectados.
+     * @param PartnerRepository      $partnerRepository Carga en lote los socios a avisar.
      */
-    private function reconcileClosure(DeliveryException $exception, ClosureShiftReconciler $reconciler): void
+    private function reconcileClosure(DeliveryException $exception, ClosureShiftReconciler $reconciler, ClosureShiftNotifier $notifier, PartnerRepository $partnerRepository): void
     {
         $r = $reconciler->reconcile($exception);
         if ($r['cancelled'] === 0 && $r['repointed'] === 0 && $r['kept'] === 0) {
@@ -189,8 +194,18 @@ class DeliveryExceptionController extends AbstractController
             'Cierre de semana: %d cambio(s) anulado(s), %d re-apuntado(s) a la siguiente semana, %d sin tocar (ya repartidos).',
             $r['cancelled'], $r['repointed'], $r['kept'],
         );
-        if ($r['notify'] !== []) {
-            $msg .= sprintf(' Avisar a %d socio(s) para que rehagan su cambio (pendiente de mail).', count($r['notify']));
+        $week = $exception->getBasket();
+        if ($r['notify'] !== [] && $week !== null) {
+            // Carga en lote (findBy id, sin N+1) y avisa. El envío real lo
+            // gobierna el interruptor general de email; aquí solo se reporta.
+            $partners = $partnerRepository->findBy(['id' => $r['notify']]);
+            $sent = $notifier->notifyCancelled($partners, $week);
+            $msg .= sprintf(
+                ' Se ha avisado por email a %d de %d socio(s) cuyo cambio se anuló%s.',
+                $sent,
+                count($r['notify']),
+                $sent < count($r['notify']) ? ' (el resto no tiene email)' : '',
+            );
         }
         $this->addFlash('warning', $msg);
     }

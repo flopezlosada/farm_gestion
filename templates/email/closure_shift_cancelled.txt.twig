@@ -1,0 +1,13 @@
+Hola {{ partner.nameForDelivery }},
+
+Habías hecho un cambio puntual en tu reparto relacionado con {% if closed_date %}la semana del {{ closed_date|format_date('full', locale='es') }}{% else %}una semana{% endif %}.
+
+ESA SEMANA SE HA CANCELADO (no hay reparto), así que tu cambio se ha anulado.
+Tu cesta vuelve a su día habitual.
+
+Si necesitas volver a cambiar tu turno o tu día de recogida para otra semana,
+puedes hacerlo de nuevo desde tu calendario o avisándonos.
+
+Un abrazo,
+CSA Vega de Jarama
+https://csavegadejarama.org

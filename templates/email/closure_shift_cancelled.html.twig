@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Cambio de reparto anulado · CSA Vega de Jarama</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #333; max-width: 580px; margin: 0 auto; padding: 24px;">
+
+    <h2 style="color: #5a8f3d; margin-top: 0;">Hola {{ partner.nameForDelivery }},</h2>
+
+    <p>Habías hecho un <strong>cambio puntual en tu reparto</strong> relacionado con
+       {% if closed_date %}la semana del <strong>{{ closed_date|format_date('full', locale='es') }}</strong>{% else %}una semana{% endif %}.</p>
+
+    <p style="background: #fdf3e0; border-left: 3px solid #d99820; padding: 10px 14px;">
+        <strong>Esa semana se ha cancelado</strong> (no hay reparto), así que tu
+        cambio <strong>se ha anulado</strong>. Tu cesta vuelve a su día habitual.
+    </p>
+
+    <p>Si necesitas volver a cambiar tu turno o tu día de recogida para otra semana,
+       puedes hacerlo de nuevo desde tu calendario o avisándonos.</p>
+
+    <p style="margin-top: 32px; color: #777; font-size: 13px;">
+        Un abrazo,<br>
+        CSA Vega de Jarama<br>
+        <a href="https://csavegadejarama.org">csavegadejarama.org</a>
+    </p>
+
+</body>
+</html>
