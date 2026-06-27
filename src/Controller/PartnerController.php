@@ -648,9 +648,14 @@ class PartnerController extends AbstractController
 
     }
 
-    #[Route("/{partner1_id}/{partner2_id}/add_family", name: "add_family", methods: ["GET"])]
+    #[Route("/{partner1_id}/{partner2_id}/add_family", name: "add_family", methods: ["POST"])]
     public function addFamily(Request $request, $partner1_id, $partner2_id, EntityManagerInterface $entityManager): Response
     {
+        if (!$this->isCsrfTokenValid('add_family', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+            return $this->redirectToRoute('partner_show', ['id' => $partner1_id]);
+        }
+
         $session = new Session();
 
 
@@ -699,9 +704,14 @@ class PartnerController extends AbstractController
 
     }
 
-    #[Route("/{partner1_id}/{partner2_id}/remove_family", name: "remove_family", methods: ["GET"])]
+    #[Route("/{partner1_id}/{partner2_id}/remove_family", name: "remove_family", methods: ["POST"])]
     public function removeFamily(Request $request, $partner1_id, $partner2_id, EntityManagerInterface $entityManager): Response
     {
+        if (!$this->isCsrfTokenValid('remove_family', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+            return $this->redirectToRoute('partner_show', ['id' => $partner1_id]);
+        }
+
         $session = new Session();
         $partner1 = $entityManager->getRepository(\App\Entity\Partner::class)->find($partner1_id);
         $partner2 = $entityManager->getRepository(\App\Entity\Partner::class)->find($partner2_id);
@@ -721,7 +731,7 @@ class PartnerController extends AbstractController
     }
 
 
-    #[Route("/cities", name: "select_city")]
+    #[Route("/cities", name: "select_city", methods: ["GET"])]
     public function cities(Request $request, EntityManagerInterface $em): Response
     {
         $state = $em->getRepository(\App\Entity\State::class)->findById($request->get('state_id'));
@@ -732,13 +742,18 @@ class PartnerController extends AbstractController
         ]);
     }
 
-    #[Route("/{id}/demote", name: "partner_demote", methods: ["GET"])]
+    #[Route("/{id}/demote", name: "partner_demote", methods: ["POST"])]
     public function demote(
         Request $request,
         Partner $partner,
         #[Target('partner_lifecycle')] WorkflowInterface $workflow,
         EntityManagerInterface $entityManager,
     ): Response {
+        if (!$this->isCsrfTokenValid('partner_demote', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+            return $this->redirectToRoute('partner_show', ['id' => $partner->getId()]);
+        }
+
         if (!$workflow->can($partner, 'leave')) {
             $this->addFlash('warning', sprintf(
                 '%s %s ya está de baja.',
@@ -765,13 +780,18 @@ class PartnerController extends AbstractController
         return $this->redirectToRoute('partner_show', ['id' => $partner->getId()]);
     }
 
-    #[Route("/{id}/promote", name: "partner_promote", methods: ["GET"])]
+    #[Route("/{id}/promote", name: "partner_promote", methods: ["POST"])]
     public function promote(
         Request $request,
         Partner $partner,
         #[Target('partner_lifecycle')] WorkflowInterface $workflow,
         EntityManagerInterface $entityManager,
     ): Response {
+        if (!$this->isCsrfTokenValid('partner_promote', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+            return $this->redirectToRoute('partner_show', ['id' => $partner->getId()]);
+        }
+
         $transition = match (true) {
             $workflow->can($partner, 'rejoin') => 'rejoin',
             $workflow->can($partner, 'resume') => 'resume',
@@ -899,12 +919,18 @@ class PartnerController extends AbstractController
      * Útil para vacaciones, baja médica, etc. El borrado de WeeklyBasket futuros
      * NO se dispara (a diferencia de "leave"); la pausa es reversible vía promote.
      */
-    #[Route("/{id}/pause", name: "partner_pause", methods: ["GET"])]
+    #[Route("/{id}/pause", name: "partner_pause", methods: ["POST"])]
     public function pause(
+        Request $request,
         Partner $partner,
         #[Target('partner_lifecycle')] WorkflowInterface $workflow,
         EntityManagerInterface $entityManager,
     ): Response {
+        if (!$this->isCsrfTokenValid('partner_pause', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+            return $this->redirectToRoute('partner_show', ['id' => $partner->getId()]);
+        }
+
         if (!$workflow->can($partner, 'pause')) {
             $this->addFlash('warning', 'Solo se puede pausar a un socix activx.');
             return $this->redirectToRoute('partner_show', ['id' => $partner->getId()]);
@@ -1015,9 +1041,14 @@ class PartnerController extends AbstractController
     }
 
 
-    #[Route("/{partner1_id}/{partner2_id}/add_share_partner", name: "add_share_partner", methods: ["GET"])]
+    #[Route("/{partner1_id}/{partner2_id}/add_share_partner", name: "add_share_partner", methods: ["POST"])]
     public function addSharePartner(Request $request, $partner1_id, $partner2_id, EntityManagerInterface $entityManager): Response
     {
+        if (!$this->isCsrfTokenValid('add_share_partner', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+            return $this->redirectToRoute('partner_show', ['id' => $partner1_id]);
+        }
+
         $session = new Session();
         if ($partner1_id == $partner2_id) {
             $session->getFlashBag()->add(
@@ -1060,9 +1091,14 @@ class PartnerController extends AbstractController
 
     }
 
-    #[Route("/{partner1_id}/{partner2_id}/remove_share_partner", name: "remove_share_partner", methods: ["GET"])]
+    #[Route("/{partner1_id}/{partner2_id}/remove_share_partner", name: "remove_share_partner", methods: ["POST"])]
     public function removeSharePartner(Request $request, $partner1_id, $partner2_id, EntityManagerInterface $entityManager): Response
     {
+        if (!$this->isCsrfTokenValid('remove_share_partner', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+            return $this->redirectToRoute('partner_show', ['id' => $partner1_id]);
+        }
+
         $session = new Session();
 
         $partner1 = $entityManager->getRepository(\App\Entity\Partner::class)->find($partner1_id);
@@ -1094,9 +1130,14 @@ class PartnerController extends AbstractController
      * @param EntityManagerInterface $entityManager
      * @return Response Redirige a la ficha del receptor.
      */
-    #[Route("/{partner1_id}/{partner2_id}/set_payer", name: "set_payer", methods: ["GET"])]
-    public function setPayer($partner1_id, $partner2_id, EntityManagerInterface $entityManager): Response
+    #[Route("/{partner1_id}/{partner2_id}/set_payer", name: "set_payer", methods: ["POST"])]
+    public function setPayer(Request $request, $partner1_id, $partner2_id, EntityManagerInterface $entityManager): Response
     {
+        if (!$this->isCsrfTokenValid('set_payer', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+            return $this->redirectToRoute('partner_show', ['id' => $partner1_id]);
+        }
+
         if ($partner1_id == $partner2_id) {
             $this->addFlash('warning', 'El pagador debe ser otrx socix distintx del receptor.');
             return $this->redirectToRoute('partner_show', ['id' => $partner1_id]);
@@ -1133,9 +1174,14 @@ class PartnerController extends AbstractController
      * @param EntityManagerInterface $entityManager
      * @return Response Redirige a la ficha del receptor.
      */
-    #[Route("/{id}/clear_payer", name: "clear_payer", methods: ["GET"], requirements: ["id" => "\\d+"])]
-    public function clearPayer(Partner $partner, EntityManagerInterface $entityManager): Response
+    #[Route("/{id}/clear_payer", name: "clear_payer", methods: ["POST"], requirements: ["id" => "\\d+"])]
+    public function clearPayer(Request $request, Partner $partner, EntityManagerInterface $entityManager): Response
     {
+        if (!$this->isCsrfTokenValid('clear_payer', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+            return $this->redirectToRoute('partner_show', ['id' => $partner->getId()]);
+        }
+
         $basket = $partner->getActiveBasket();
         if (!$basket instanceof PartnerBasketShare) {
             $this->addFlash('warning', 'El socix no tiene una cesta activa.');

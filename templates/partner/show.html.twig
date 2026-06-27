@@ -161,8 +161,12 @@
      #   BAJA    → editar, volver al alta
      # Usamos partner.status (string del workflow) y no partner.isActive
      # (boolean que en el dump puede estar desincronizado).
+     #
+     # Toda la barra es de ESCRITURA (editar, cesta, traslados, transiciones de
+     # estado): se gatea con ROLE_GESTION_SOCIXS_EDIT. Un usuario de solo lectura
+     # (ROLE_GESTION_SOCIXS) ve la ficha pero no la barra de acciones.
      # ============================================================ #}
-    {% if app.user %}
+    {% if is_granted('ROLE_GESTION_SOCIXS_EDIT') %}
         <div class="prt-actionbar">
             <a href="{{ path('partner_edit', { id: partner.id }) }}" class="prt-btn prt-btn--primary">
                 <i class="fa fa-pencil"></i> Editar ficha
@@ -339,7 +343,8 @@
                     title: 'Pausar a este socix',
                     body: 'Dejará de recibir cesta pero seguirá siendo socix; podrás reactivarle más adelante.',
                     confirm_label: 'Pausar',
-                    confirm_href: path('partner_pause', { id: partner.id }),
+                    action: path('partner_pause', { id: partner.id }),
+                    csrf_token: csrf_token('partner_pause'),
                 }) }}
 
                 <button type="button" class="prt-btn prt-btn--danger"
@@ -352,14 +357,17 @@
                     title: 'Dar de baja a este socix',
                     body: 'Dejará de recibir cesta y se conservará el histórico.',
                     confirm_label: 'Dar de baja',
-                    confirm_href: path('partner_demote', { id: partner.id }),
+                    action: path('partner_demote', { id: partner.id }),
+                    csrf_token: csrf_token('partner_demote'),
                 }) }}
 
             {% elseif partner.status == 'PAUSADO' %}
-                <a href="{{ path('partner_promote', { id: partner.id }) }}" class="prt-btn"
-                   title="Salir de la pausa y volver a recibir cesta">
-                    <i class="fa fa-play"></i> Reanudar
-                </a>
+                <form method="post" action="{{ path('partner_promote', { id: partner.id }) }}" style="display: inline;">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('partner_promote') }}">
+                    <button type="submit" class="prt-btn" title="Salir de la pausa y volver a recibir cesta">
+                        <i class="fa fa-play"></i> Reanudar
+                    </button>
+                </form>
                 <button type="button" class="prt-btn prt-btn--danger"
                         onclick="document.getElementById('confirm-partner-show-2').showModal()">
                     <i class="fa fa-times"></i> Dar de baja
@@ -370,14 +378,17 @@
                     title: 'Dar de baja a este socix',
                     body: 'Dejará de recibir cesta y se conservará el histórico.',
                     confirm_label: 'Dar de baja',
-                    confirm_href: path('partner_demote', { id: partner.id }),
+                    action: path('partner_demote', { id: partner.id }),
+                    csrf_token: csrf_token('partner_demote'),
                 }) }}
             {% else %}
                 {# status == 'BAJA' → reincorporación. #}
-                <a href="{{ path('partner_promote', { id: partner.id }) }}" class="prt-btn"
-                   title="Volver al alta tras una baja">
-                    <i class="fa fa-undo"></i> Volver al alta
-                </a>
+                <form method="post" action="{{ path('partner_promote', { id: partner.id }) }}" style="display: inline;">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('partner_promote') }}">
+                    <button type="submit" class="prt-btn" title="Volver al alta tras una baja">
+                        <i class="fa fa-undo"></i> Volver al alta
+                    </button>
+                </form>
             {% endif %}
         </div>
     {% endif %}
@@ -597,6 +608,7 @@
                                         <a class="prt-relative__name" href="{{ path('partner_show', { id: relative.id }) }}">
                                             {{ relative.name }} {{ relative.surname }}
                                         </a>
+                                        {% if is_granted('ROLE_GESTION_SOCIXS_EDIT') %}
                                         <button type="button" class="prt-btn"
                                             onclick="document.getElementById('confirm-partner-show-relative-{{ relative.id }}').showModal()">
                                             Quitar
@@ -607,8 +619,10 @@
     title: 'Quitar la relación familiar',
     body: 'La persona se desvinculará del socix. Podrás volver a añadirla.',
     confirm_label: 'Quitar',
-    confirm_href: path('remove_family', { partner1_id: partner.id, partner2_id: relative.id }),
+    action: path('remove_family', { partner1_id: partner.id, partner2_id: relative.id }),
+    csrf_token: csrf_token('remove_family'),
 }) }}
+                                        {% endif %}
                                     </li>
                                 {% endfor %}
                             </ul>
@@ -630,6 +644,7 @@
                                     <strong>Comparte cesta con</strong>
                                     <a href="{{ path('partner_show', { id: partner.sharePartner.id }) }}">{{ partner.sharePartner }}</a>
                                 </span>
+                                {% if is_granted('ROLE_GESTION_SOCIXS_EDIT') %}
                                 <button type="button" class="prt-btn" style="margin-left: auto;"
                                     onclick="document.getElementById('confirm-partner-show-4').showModal()">
                                     Quitar
@@ -640,8 +655,10 @@
     title: 'Quitar la relación de cesta compartida',
     body: 'Ambos socixs dejarán de compartir la cesta. La cesta se mantiene.',
     confirm_label: 'Quitar',
-    confirm_href: path('remove_share_partner', { partner1_id: partner.id, partner2_id: partner.sharePartner.id }),
+    action: path('remove_share_partner', { partner1_id: partner.id, partner2_id: partner.sharePartner.id }),
+    csrf_token: csrf_token('remove_share_partner'),
 }) }}
+                                {% endif %}
                             </div>
                         {% else %}
                             <div class="prt-callout prt-callout--warn" style="margin-top: 14px; margin-bottom: 0;">
@@ -766,7 +783,7 @@
                                     la propia socix
                                 {% endif %}
                             </span>
-                            {% if app.user %}
+                            {% if is_granted('ROLE_GESTION_SOCIXS_EDIT') %}
                                 <span style="margin-left: auto; display: inline-flex; gap: 8px;">
                                     <a href="{{ path('family', { id: partner.id, type: 'set_payer' }) }}" class="prt-btn">
                                         {{ payer ? 'Cambiar' : 'La paga otrx socix' }}
@@ -782,7 +799,8 @@
     title: 'Quitar el pagador externo',
     body: 'La cesta volverá a pagarla la propia socix.',
     confirm_label: 'Que la pague ella misma',
-    confirm_href: path('clear_payer', { id: partner.id }),
+    action: path('clear_payer', { id: partner.id }),
+    csrf_token: csrf_token('clear_payer'),
 }) }}
                                     {% endif %}
                                 </span>
@@ -791,7 +809,7 @@
 
                     </div>
 
-                    {% if app.user %}
+                    {% if is_granted('ROLE_GESTION_SOCIXS_EDIT') %}
                         <footer class="prt-card__foot">
                             <a href="{{ path('partner_basket_share_change_modality', { id: partner.getActiveBasket.id }) }}" class="prt-btn">
                                 <i class="fa fa-pencil"></i> Cambiar la cesta

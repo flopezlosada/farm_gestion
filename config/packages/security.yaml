@@ -27,7 +27,18 @@ security:
     #   ROLE_ADMIN              acceso a todo (alias de todos los demás)
     #   ROLE_GESTION_GRANJA     lotes, gallinas, cosechas, gastos granja,
     #                           composición de las cestas cosechadas (Basket)
-    #   ROLE_GESTION_SOCIXS     alta/baja/edición de Partner + su cesta (PartnerBasketShare)
+    #   ROLE_GESTION_SOCIXS     LECTURA de socixs: ver fichas de Partner, su
+    #                           cesta (PartnerBasketShare), familia y reparto.
+    #                           Sin escritura (modelo lectura/escritura por
+    #                           sección, igual que el albergue)
+    #   ROLE_GESTION_SOCIXS_EDIT  ESCRITURA de socixs (alta/baja/edición de
+    #                           Partner y su cesta, vínculos de familia/compartida,
+    #                           pagador, traslados y cestas extra; incluye lectura
+    #                           por jerarquía). La escritura se exige por método
+    #                           HTTP en access_control sobre ^/gestion/partner;
+    #                           además, las mutaciones que el código legacy
+    #                           exponía por GET se convirtieron a POST para que
+    #                           ese gateo las cubra
     #   ROLE_GESTION_REPARTO    logística de entrega: reparto semanal, nodos,
     #                           grupos de recogida, excepciones, histórico de cambios
     #   ROLE_BLOG               blog público (admin) + categorías + media
@@ -63,7 +74,7 @@ security:
     role_hierarchy:
         ROLE_ADMIN:
             - ROLE_GESTION_GRANJA
-            - ROLE_GESTION_SOCIXS
+            - ROLE_GESTION_SOCIXS_EDIT
             - ROLE_GESTION_REPARTO
             - ROLE_BLOG
             - ROLE_GESTION_ENCUESTAS_EDIT
@@ -72,6 +83,8 @@ security:
             - ROLE_PARTNER
             - ROLE_WORKER
         # La escritura incluye la lectura (modelo lectura/escritura por sección).
+        ROLE_GESTION_SOCIXS_EDIT:
+            - ROLE_GESTION_SOCIXS
         ROLE_GESTION_ALBERGUE_EDIT:
             - ROLE_GESTION_ALBERGUE
         ROLE_GESTION_ENCUESTAS_EDIT:
@@ -167,6 +180,25 @@ security:
         # aquí a quien tenga passwordSet = false.
         - { path: ^/account, roles: IS_AUTHENTICATED_REMEMBERED }
         - { path: ^/contact$, roles: PUBLIC_ACCESS }
+        # Socixs (modelo lectura/escritura por sección): la lectura la da
+        # ROLE_GESTION_SOCIXS (vía el #[IsGranted] de clase y la regla
+        # ^/gestion de abajo); la ESCRITURA se exige aquí por método HTTP.
+        # Cubre las mutaciones de PartnerController y PartnerBasketShareController
+        # (/gestion/partner/basket/share). Para que este gateo sea completo se
+        # convirtieron a POST las mutaciones que el código legacy exponía por
+        # GET (demote/promote/pause, familia, compartida, pagador). DEBE ir
+        # antes de la regla genérica ^/gestion.
+        #
+        # EXCEPCIÓN: el calendario de recogida (PartnerDeliveryCalendarController,
+        # bajo /gestion/partner/{id}/calendar/...) lo operan TAMBIÉN los gestores
+        # de reparto (cambiar a alguien de viernes desde la pantalla de reparto):
+        # su guarda de clase es "ROLE_GESTION_REPARTO o ROLE_GESTION_SOCIXS". Su
+        # escritura debe seguir abierta a reparto, así que va una regla MÁS
+        # ESPECÍFICA antes (access_control aplica la PRIMERA que casa): exige
+        # reparto O escritura de socixs; el solo-lectura de socixs (sin _EDIT)
+        # no muta el calendario.
+        - { path: '^/gestion/partner/\d+/calendar', methods: [POST, PUT, PATCH, DELETE], roles: [ROLE_GESTION_REPARTO, ROLE_GESTION_SOCIXS_EDIT] }
+        - { path: ^/gestion/partner, methods: [POST, PUT, PATCH, DELETE], roles: ROLE_GESTION_SOCIXS_EDIT }
         # Albergue (piloto lectura/escritura por sección): la lectura la da
         # ROLE_GESTION_ALBERGUE (vía el #[IsGranted] de clase y la regla
         # ^/gestion de abajo); la ESCRITURA se exige aquí a nivel de método

@@ -147,10 +147,12 @@
                             </td>
                             <td class="actions">
                                 <a href="{{ path('partner_show', { id: people.id }) }}" title="Ver ficha" aria-label="Ver ficha"><i class="fa fa-eye"></i></a>
+                                {% if is_granted('ROLE_GESTION_SOCIXS_EDIT') %}
                                 <button type="button" class="prl-btn prl-btn--primary prl-btn--sm"
                                         onclick="document.getElementById('confirm-family-{{ people.id }}').showModal()">
                                     <i class="fa fa-link"></i> Asociar
                                 </button>
+                                {% endif %}
                             </td>
                         </tr>
                     {% endfor %}
@@ -178,7 +180,8 @@
             ? ('¿' ~ people.name ~ ' ' ~ people.surname ~ ' pasará a pagar (donar) la cesta de ' ~ partner.name ~ ' ' ~ partner.surname ~ '?')
             : ('¿' ~ people.name ~ ' ' ~ people.surname ~ ' compartirá la cesta con ' ~ partner.name ~ ' ' ~ partner.surname ~ '?')),
     confirm_label: mode.dlg_confirm,
-    confirm_href: path(type, { partner1_id: partner.id, partner2_id: people.id }),
+    action: path(type, { partner1_id: partner.id, partner2_id: people.id }),
+    csrf_token: csrf_token(type),
 }) }}
             {% endfor %}
         {% endif %}

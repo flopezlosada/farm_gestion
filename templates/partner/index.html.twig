@@ -172,7 +172,10 @@
 {% set bulk_pause  = status_filter == 'ACTIVO' %}
 {% set bulk_resume = status_filter == 'PAUSADO' %}
 {% set bulk_rejoin = status_filter == 'BAJA' %}
-{% set bulk_any    = bulk_leave or bulk_pause or bulk_resume or bulk_rejoin %}
+{# Las acciones masivas son ESCRITURA: además del filtro de estado, exigen
+ # ROLE_GESTION_SOCIXS_EDIT. Al gatear aquí, se ocultan de un golpe la barra
+ # masiva, sus botones y la columna de selección (todos cuelgan de bulk_any). #}
+{% set bulk_any    = (bulk_leave or bulk_pause or bulk_resume or bulk_rejoin) and is_granted('ROLE_GESTION_SOCIXS_EDIT') %}
 
 {% set avatar_palette = ['sage', 'ochre', 'terra', 'ink'] %}
 
@@ -370,9 +373,11 @@
             <a href="{{ path('partner_evolution') }}" class="prl-btn">
                 <i class="fa fa-line-chart"></i> Evolución
             </a>
+            {% if is_granted('ROLE_GESTION_SOCIXS_EDIT') %}
             <a href="{{ path('partner_new') }}" class="prl-btn prl-btn--primary">
                 <i class="fa fa-plus"></i> Nuevx socix
             </a>
+            {% endif %}
         </div>
 
         {# noscript fallback: con JS desactivado el form GET no autosubmit;
