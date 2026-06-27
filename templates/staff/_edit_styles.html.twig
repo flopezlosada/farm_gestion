@@ -70,6 +70,12 @@
 
     /* Móvil: el popover de corrección y la fila de añadir a una columna ancha. */
     @media (max-width: 560px) {
+        /* La fila del tramo (entrada → salida + total) se sale al editar, porque
+           el modo edición añade input + tick + cancelar + papelera. Que envuelva
+           en vez de desbordar, con gaps más cortos. */
+        .stf-pun { flex-wrap: wrap; gap: .4rem; padding: .55rem .7rem; }
+        .stf-pun > span[style*="auto"] { margin-left: auto; }
+        .pun__input { width: 5rem; }
         .stf-edit__panel { min-width: 0; width: 90vw; right: 0; }
         .stf-addrow { flex-direction: column; align-items: stretch; }
         .stf-addrow label { width: 100%; }

@@ -45,15 +45,22 @@ class TimeClock
     }
 
     /**
-     * ¿Tiene el trabajador un tramo de jornada abierto? (su último fichaje
-     * vigente es una entrada sin salida posterior).
+     * ¿Tiene el trabajador un tramo de jornada abierto HOY? (su último fichaje
+     * vigente del día es una entrada sin salida posterior).
+     *
+     * El estado se reinicia por día: una entrada sin cerrar de un día anterior
+     * (olvido de fichar la salida) NO cuenta como "trabajando hoy" — si no, el
+     * panel pediría "fichar salida" indefinidamente. El olvido queda como
+     * anomalía del día anterior (panel de huecos / aviso de salida abierta). La
+     * jornada de la asociación es diurna; no se contemplan turnos que crucen la
+     * medianoche ({@see WorkdayBuilder}).
      *
      * @param Worker $worker Trabajador.
      * @return bool
      */
     public function hasOpenInterval(Worker $worker): bool
     {
-        $last = $this->timeEntries->findLastEffectiveForWorker($worker);
+        $last = $this->lastEffectiveToday($worker);
 
         return $last !== null && $last->isIn();
     }
@@ -70,7 +77,9 @@ class TimeClock
      */
     public function clockNext(Worker $worker, User $author): TimeEntry
     {
-        $last = $this->timeEntries->findLastEffectiveForWorker($worker);
+        // Sólo el estado de HOY decide entrada/salida: un día nuevo siempre
+        // arranca en entrada aunque quedara una salida sin fichar el día anterior.
+        $last = $this->lastEffectiveToday($worker);
 
         $entry = (new TimeEntry())
             ->setWorker($worker)
@@ -83,6 +92,22 @@ class TimeClock
         $this->em->flush();
 
         return $entry;
+    }
+
+    /**
+     * Último fichaje vigente del trabajador HOY (día natural de Madrid), o null si
+     * aún no ha fichado hoy. Es la base del estado del día: ignora a propósito los
+     * tramos abiertos de días anteriores para que el estado se reinicie cada día.
+     *
+     * @param Worker $worker Trabajador.
+     * @return TimeEntry|null
+     */
+    private function lastEffectiveToday(Worker $worker): ?TimeEntry
+    {
+        $dayStart = $this->now()->setTime(0, 0, 0);
+        $dayEnd = $dayStart->modify('+1 day');
+
+        return $this->timeEntries->findLastEffectiveForWorkerBetween($worker, $dayStart, $dayEnd);
     }
 
     /**
