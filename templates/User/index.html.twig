@@ -170,13 +170,37 @@
     display: flex; flex-direction: column; gap: 1px;
 }
 .usr-kebab-menu[hidden] { display: none; }
-.usr-kebab-menu a {
-    display: flex; align-items: center; gap: 9px;
+.usr-kebab-menu a,
+.usr-kebab-menu button {
+    display: flex; align-items: center; gap: 9px; width: 100%;
     padding: 8px 11px; border-radius: 4px; font-size: 12.5px;
     color: var(--csa-ink); text-decoration: none; white-space: nowrap;
+    background: none; border: none; cursor: pointer; text-align: left;
+    font-family: inherit; line-height: 1.2;
 }
-.usr-kebab-menu a:hover { background: var(--csa-green-soft); color: var(--csa-ink); text-decoration: none; }
-.usr-kebab-menu a .fa { color: var(--csa-ink-muted); width: 14px; text-align: center; }
+.usr-kebab-menu a:hover,
+.usr-kebab-menu button:hover { background: var(--csa-green-soft); color: var(--csa-ink); text-decoration: none; }
+.usr-kebab-menu a .fa,
+.usr-kebab-menu button .fa { color: var(--csa-ink-muted); width: 14px; text-align: center; }
+.usr-kebab-menu form { margin: 0; }
+/* acción destructiva (bloquear): roja al pasar */
+.usr-kebab-menu button.is-danger:hover { background: var(--csa-terracotta-soft); color: var(--csa-terracotta); }
+.usr-kebab-menu button.is-danger:hover .fa { color: var(--csa-terracotta); }
+
+/* ---------- estado de la cuenta (activa / bloqueada) ---------- */
+.usr-person__nameline { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.usr-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 2px 8px 3px; border-radius: 999px;
+    font-size: 10.5px; font-weight: 600; letter-spacing: 0.02em; line-height: 1.2;
+}
+.usr-status .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.usr-status--active  { background: var(--csa-green-soft); color: var(--csa-green); }
+.usr-status--active .dot  { background: var(--csa-green); }
+.usr-status--blocked { background: var(--csa-terracotta-soft); color: var(--csa-terracotta); }
+.usr-status--blocked .dot { background: var(--csa-terracotta); }
+/* fila de cuenta bloqueada: avatar atenuado para que salte a la vista */
+tr[data-blocked] .usr-person__avatar { filter: grayscale(0.6); opacity: 0.65; }
 
 /* fila de "sin resultados" del filtro client-side */
 .usr-empty td { text-align: center; padding: var(--csa-sp-6); color: var(--csa-ink-muted); font-style: italic; }
@@ -337,12 +361,20 @@
                     {% set assigned_roles = user.roles|filter(r => r != 'ROLE_USER') %}
                     {% set partner_name = user.partner ? (user.partner.name ~ ' ' ~ user.partner.surname) : '' %}
                     <tr data-search="{{ (user.username ~ ' ' ~ user.email ~ ' ' ~ partner_name)|lower }}"
-                        data-roles="{{ assigned_roles|join(' ') }}">
+                        data-roles="{{ assigned_roles|join(' ') }}"
+                        {% if not user.enabled %}data-blocked{% endif %}>
                         <td>
                             <div class="usr-person">
                                 <span class="usr-person__avatar usr-person__avatar--{{ tone }}" aria-hidden="true">{{ initials }}</span>
                                 <div class="usr-person__body">
-                                    <a class="usr-person__name" href="{{ path('user_show', { id: user.id }) }}">{{ user.username }}</a>
+                                    <span class="usr-person__nameline">
+                                        <a class="usr-person__name" href="{{ path('user_show', { id: user.id }) }}">{{ user.username }}</a>
+                                        {% if user.enabled %}
+                                            <span class="usr-status usr-status--active"><span class="dot"></span>Activa</span>
+                                        {% else %}
+                                            <span class="usr-status usr-status--blocked"><span class="dot"></span>Bloqueada</span>
+                                        {% endif %}
+                                    </span>
                                     {% if user.email %}<span class="usr-person__meta">{{ user.email }}</span>{% endif %}
                                 </div>
                             </div>
@@ -379,6 +411,17 @@
                                 <a href="{{ path('user_edit', { id: user.id }) }}"><i class="fa fa-pencil" aria-hidden="true"></i> Editar</a>
                                 {% if user.partner %}
                                     <a href="{{ path('partner_show', { id: user.partner.id }) }}"><i class="fa fa-user-o" aria-hidden="true"></i> Ver socix vinculadx</a>
+                                {% endif %}
+                                {% if not (app.user and app.user.id == user.id) %}
+                                    <form method="post" action="{{ path('user_toggle_block', { id: user.id }) }}"
+                                          onsubmit="return confirm('{{ user.enabled ? '¿Bloquear el acceso de esta cuenta? Su historial se conserva.' : '¿Desbloquear el acceso de esta cuenta?' }}');">
+                                        <input type="hidden" name="_token" value="{{ csrf_token('user_toggle_block_' ~ user.id) }}">
+                                        {% if user.enabled %}
+                                            <button type="submit" class="is-danger"><i class="fa fa-ban" aria-hidden="true"></i> Bloquear acceso</button>
+                                        {% else %}
+                                            <button type="submit"><i class="fa fa-check-circle" aria-hidden="true"></i> Desbloquear acceso</button>
+                                        {% endif %}
+                                    </form>
                                 {% endif %}
                             </div>
                         </td>
