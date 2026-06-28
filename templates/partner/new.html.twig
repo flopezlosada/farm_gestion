@@ -105,7 +105,7 @@
         $('#partner_city').prop('required', true);
         $('#partner_state').change(function () {
             $.ajax({
-                type: 'post',
+                type: 'get',
                 url: '{{ path("select_city") }}',
                 data: { state_id: $(this).val() },
                 success: function (data) {
