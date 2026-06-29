@@ -64,6 +64,20 @@
     .sub td { border: 0.5px solid #b7b7b7; }
     .sub .s-cell { background: #ffe14d; text-align: center; font-weight: bold; font-size: 8px; }
 
+    /* Total del nodo por semana (cestas y docenas) — al pie de la hoja del nodo */
+    .total td { border: 0.5px solid #777; background: #c6d9b0; font-weight: bold; font-size: 8px; }
+    .total .t-lbl { text-align: right; text-transform: uppercase; letter-spacing: .04em; }
+    .total .t-cl, .total .t-eg { text-align: center; }
+
+    /* Hoja resumen del mes (pedido de huevos) */
+    .summary { width: 60%; margin: 6px auto 0; }
+    .summary td { border: 0.5px solid #777; padding: 3px 8px; font-size: 9px; }
+    .summary .sum-hd td { background: #9bbb59; color: #fff; font-weight: bold; text-align: center; letter-spacing: .04em; }
+    .summary .sum-wk { font-weight: bold; }
+    .summary .sum-n { text-align: center; font-weight: bold; }
+    .summary .sum-tot td { background: #ffe14d; font-weight: bold; }
+    .summary .sum-tot .sum-n { font-size: 10px; }
+
     /* Fila invisible de fijación de anchos (no debe verse). */
     .wdef td { padding: 0; height: 0; line-height: 0; font-size: 0; border: 0; }
 
@@ -139,9 +153,49 @@
             </tr>
         </table>
     {% endfor %}
+
+    {# Total del nodo por semana: cestas físicas y docenas de huevos (base del pedido). #}
+    <table class="grp-block">
+        {{ widthrow }}
+        <tr class="total">
+            <td class="t-lbl" colspan="3">Total {{ node.name }}</td>
+            {% for t in node.totals %}
+                {% if t %}
+                    <td class="t-cl" colspan="2">{{ m.qty(t.cestas) }}</td>
+                    <td class="t-eg" colspan="2">{{ m.qty(t.docenas) }} doc</td>
+                {% else %}
+                    <td colspan="4" style="border:0;"></td>
+                {% endif %}
+            {% endfor %}
+        </tr>
+    </table>
 </div>
 {% else %}
     <p style="padding:16px;">No hay reparto para este mes.</p>
 {% endfor %}
+
+{# Resumen del mes: total de cestas y docenas por semana sumando TODOS los nodos.
+   Es la cifra para hacer el pedido de huevos de cada viernes. #}
+{% if matrix.nodes is not empty %}
+    <div class="node-page">
+        <div class="title">RESUMEN {{ _month_es[month] }} {{ year }} · PEDIDO DE HUEVOS</div>
+        <table class="summary">
+            <tr class="sum-hd"><td>SEMANA</td><td>CESTAS</td><td>DOCENAS</td></tr>
+            {% for w in weeks %}
+                {% set gt = matrix.grand_totals[loop.index0] %}
+                <tr>
+                    <td class="sum-wk">{{ _dow_es[w.date|date('w')] }} {{ w.date|date('j') }} {{ _month_es[w.date|date('n')] }}</td>
+                    <td class="sum-n">{{ m.qty(gt.cestas) }}</td>
+                    <td class="sum-n">{{ m.qty(gt.docenas) }}</td>
+                </tr>
+            {% endfor %}
+            <tr class="sum-tot">
+                <td>TOTAL {{ _month_es[month] }}</td>
+                <td class="sum-n">{{ m.qty(matrix.grand_total_month.cestas) }}</td>
+                <td class="sum-n">{{ m.qty(matrix.grand_total_month.docenas) }}</td>
+            </tr>
+        </table>
+    </div>
+{% endif %}
 </body>
 </html>

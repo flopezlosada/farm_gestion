@@ -43,19 +43,30 @@ class MonthlyDeliveryMatrix
      *       name:string, color:?string, shared:bool, multi_mod:bool,
      *       modalities: list<array{label:?string, rows: list<array{name:string, code:string, locality:string, color:?string, cells: list<?array{cestas:float, egg_spec:?string, egg_count:int}>}>}>,
      *       subtotals: list<?array{cestas:float, egg_spec:?string}>
-     *     }>
-     *   }>
+     *     }>,
+     *     totals: list<?array{cestas:float, docenas:float}>
+     *   }>,
+     *   grand_totals: list<array{cestas:float, docenas:float}>,
+     *   grand_total_month: array{cestas:float, docenas:float}
      * }
      */
     public function build(array $weeks): array
     {
         $weekCount = count($weeks);
         $nodes = []; // nodeName => accumulator
+        // Total por semana de TODO el reparto (todos los nodos): la cifra que sirve
+        // para el pedido de huevos de cada viernes. Se va sumando aquí y sale como
+        // resumen del mes, además del total por nodo (que ya trae cada hoja semanal).
+        $grandTotals = array_fill(0, $weekCount, ['cestas' => 0.0, 'docenas' => 0.0]);
 
         foreach (array_values($weeks) as $wi => $week) {
             foreach ($week['nodes'] as $ns) {
                 $nodeName = $ns['node']->getName() ?? '';
-                $nodes[$nodeName] ??= ['name' => $nodeName, 'groups' => []];
+                $nodes[$nodeName] ??= [
+                    'name' => $nodeName,
+                    'groups' => [],
+                    'totals' => array_fill(0, $weekCount, null),
+                ];
 
                 foreach ($ns['sheet']['groups'] ?? [] as $group) {
                     $this->accumulateGroup($nodes[$nodeName]['groups'], $group, false, $wi, $weekCount);
@@ -65,12 +76,33 @@ class MonthlyDeliveryMatrix
                 if ($shared !== null && ($shared['rows'] ?? []) !== []) {
                     $this->accumulateShared($nodes[$nodeName]['groups'], $shared, $wi, $weekCount);
                 }
+
+                // Total del nodo esa semana (cestas físicas + docenas de huevos), tal
+                // como ya lo calcula NodeDeliverySheet::computeTotals para el semanal.
+                $t = $ns['sheet']['totals'] ?? null;
+                if ($t !== null) {
+                    $cestas = (float) ($t['cestas'] ?? 0.0);
+                    $docenas = (float) ($t['docenas'] ?? 0.0);
+                    $nodes[$nodeName]['totals'][$wi] = ['cestas' => $cestas, 'docenas' => $docenas];
+                    $grandTotals[$wi]['cestas'] += $cestas;
+                    $grandTotals[$wi]['docenas'] += $docenas;
+                }
             }
+        }
+
+        // Total del mes entero (suma de todas las semanas): volumen mensual de
+        // cestas y docenas, pie del resumen del pedido de huevos.
+        $grandTotalMonth = ['cestas' => 0.0, 'docenas' => 0.0];
+        foreach ($grandTotals as $g) {
+            $grandTotalMonth['cestas'] += $g['cestas'];
+            $grandTotalMonth['docenas'] += $g['docenas'];
         }
 
         return [
             'weeks' => array_map(static fn (array $w): array => ['date' => $w['date']], array_values($weeks)),
             'nodes' => $this->finalizeNodes($nodes),
+            'grand_totals' => $grandTotals,
+            'grand_total_month' => $grandTotalMonth,
         ];
     }
 
@@ -173,7 +205,7 @@ class MonthlyDeliveryMatrix
         foreach ($nodes as $node) {
             $groups = array_values(array_map($this->finalizeGroup(...), $node['groups']));
             usort($groups, $this->compareGroups(...));
-            $out[] = ['name' => $node['name'], 'groups' => $groups];
+            $out[] = ['name' => $node['name'], 'groups' => $groups, 'totals' => $node['totals']];
         }
 
         return $out;
