@@ -1,35 +1,44 @@
-name: Sembrar estado FTP (producción)
+name: Sembrar estado FTP
 
-# Uso ÚNICO antes del primer deploy de prod con la action de hashes.
-# Genera el .ftp-deploy-sync-state.json con los hashes del contenido que YA
-# está en prod (subido por los deploys lftp previos) y lo sube. Así el primer
-# deploy real de prod sube SOLO el delta (segundos) en vez de los ~21k ficheros
-# (~3,5 h fichero a fichero) y minimiza la ventana de inconsistencia en vivo.
+# Uso ÚNICO antes del primer deploy de un entorno con la action de hashes.
+# El FTP de cdmon NO aguanta subir los ~21k ficheros del tirón (se atasca: en
+# una prueba subió 2.776 en 2h y se colgó). Por eso el primer deploy no puede
+# resubir todo el árbol. Este workflow genera el .ftp-deploy-sync-state.json con
+# los hashes (sha256) del contenido que YA está en el servidor (subido por los
+# deploys lftp previos) y lo sube; así el primer deploy real sube SOLO el delta.
 #
-# CLAVE: hay que sembrar desde el commit que está REALMENTE desplegado en prod
-# (input `ref`, por defecto el del último deploy de prod exitoso), porque el
-# estado le dice a la action "el servidor ya tiene esto". Tras subir el estado,
-# un dry-run del MISMO commit DEBE reportar 0 ficheros a subir: esa es la prueba
-# de que el estado sembrado es fiel. Si reporta muchos, NO desplegar y avisar.
+# CLAVE: sembrar desde el commit que está REALMENTE desplegado en ese entorno
+# (input `ref`), porque el estado le dice a la action "el servidor ya tiene esto".
+# Tras subir el estado, un dry-run del MISMO commit DEBE reportar 0 ficheros a
+# subir: prueba de que el estado sembrado es fiel. Si reporta muchos, NO desplegar.
+#
+# Refs de partida (último deploy exitoso de cada entorno):
+#   staging    -> da27caba2b6cf6e519fe30c01b4701e033e7a057
+#   production -> f6285e836efb0e5e8526f332e2e1b38b4770c545
 on:
   workflow_dispatch:
     inputs:
-      ref:
-        description: 'Commit desplegado HOY en prod (último deploy). NO uses main si prod no está en main.'
+      environment:
+        description: 'Entorno a sembrar'
         required: true
-        default: f6285e836efb0e5e8526f332e2e1b38b4770c545
+        type: choice
+        options: [staging, production]
+        default: staging
+      ref:
+        description: 'Commit desplegado HOY en ese entorno (último deploy exitoso)'
+        required: true
 
 concurrency:
-  group: deploy-prod
+  group: deploy-${{ inputs.environment }}
   cancel-in-progress: false
 
 jobs:
   seed:
-    name: Generar y subir el estado FTP de prod
+    name: Generar y subir el estado FTP
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout del commit desplegado en prod
+      - name: Checkout del commit desplegado en el entorno
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref }}
@@ -75,8 +84,8 @@ jobs:
           cp -R src/Resources/public public/bundles/app
           chmod -R u+rwX,go+rX public/bundles/app
 
-      # Lista de excludes: DEBE coincidir con el `exclude:` de deploy.yml. Se
-      # escribe a un fichero para pasarla al generador del estado.
+      # Lista de excludes: DEBE coincidir con el `exclude:` de deploy.yml /
+      # deploy-staging.yml. Se escribe a un fichero para el generador del estado.
       - name: Preparar lista de excludes
         run: |
           cat > /tmp/ftp-exclude.txt <<'EXCLUDES'
@@ -117,11 +126,12 @@ jobs:
             --exclude-file /tmp/ftp-exclude.txt \
             --out .ftp-deploy-sync-state.json
 
-      - name: Subir SOLO el estado al servidor de prod
+      - name: Subir SOLO el estado al servidor
         env:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          SERVER_DIR: ${{ inputs.environment == 'production' && 'gestion_csa_4' || 'deploy/staging' }}
         run: |
           sudo apt-get update && sudo apt-get install -y lftp
           lftp -c "
@@ -129,13 +139,12 @@ jobs:
             set ftp:ssl-allow no;
             set xfer:clobber on;
             open -u $FTP_USERNAME,$FTP_PASSWORD $FTP_SERVER;
-            put .ftp-deploy-sync-state.json -o gestion_csa_4/.ftp-deploy-sync-state.json;
+            put .ftp-deploy-sync-state.json -o $SERVER_DIR/.ftp-deploy-sync-state.json;
           "
 
       # VERIFICACIÓN: dry-run de la action contra el MISMO commit recién sembrado.
-      # No sube nada (dry-run). En los logs debe decir que subiría ~0 ficheros:
-      # eso confirma que el estado sembrado casa con lo que la action calcula.
-      # Si lista muchos ficheros, el sembrado NO es fiable: no desplegar prod.
+      # No sube nada. En los logs debe decir que subiría ~0 ficheros: confirma que
+      # el estado casa. Si lista muchos, el sembrado NO es fiable: no desplegar.
       - name: Verificar el sembrado (dry-run, no sube nada)
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
@@ -144,7 +153,7 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftp
           local-dir: ./
-          server-dir: gestion_csa_4/
+          server-dir: ${{ inputs.environment == 'production' && 'gestion_csa_4/' || 'deploy/staging/' }}
           dry-run: true
           exclude: |
             **/.git*
