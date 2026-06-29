@@ -106,11 +106,16 @@ final class DeliveryCalendarViewBuilder
                         $occupiedReal[$s['basket']->getId()] = true;
                     }
                 }
-                $monthEnd = $current->modify('last day of this month');
+                // El horizonte de destinos llega hasta la PRIMERA SEMANA COMPLETA del
+                // mes siguiente, no solo a fin de mes: así el último reparto del mes (que
+                // no tiene ningún día libre por detrás) se puede posponer una semana al
+                // mes que viene. El endpoint de mover ya acepta cruzar de mes; el modelo
+                // contempla shifts que cruzan frontera (EggMonthlyConservationInvariant).
+                $rangeEnd = $this->gridHorizonEnd($current);
                 $monthBaskets = $this->em->getRepository(Basket::class)->createQueryBuilder('b')
                     ->where('b.date BETWEEN :start AND :end')
                     ->setParameter('start', $current->format('Y-m-d'))
-                    ->setParameter('end', $monthEnd->format('Y-m-d'))
+                    ->setParameter('end', $rangeEnd->format('Y-m-d'))
                     ->orderBy('b.date', 'ASC')
                     ->getQuery()
                     ->getResult();
@@ -257,7 +262,10 @@ final class DeliveryCalendarViewBuilder
         }
 
         $first = new \DateTimeImmutable(sprintf('%04d-%02d-01', $year, $month));
-        $last = $first->modify('last day of this month');
+        // La rejilla se extiende hasta la primera semana completa del mes siguiente
+        // (mismo horizonte que los destinos de arrastre): da una fila de destino al
+        // último reparto del mes, que de otro modo no tendría día libre detrás.
+        $last = $this->gridHorizonEnd($first);
         // Lunes en/antes del día 1 (N: 1=lunes .. 7=domingo).
         $cursor = $first->modify('-' . ((int) $first->format('N') - 1) . ' days');
 
@@ -277,5 +285,26 @@ final class DeliveryCalendarViewBuilder
         } while ($cursor <= $last);
 
         return $weeks;
+    }
+
+    /**
+     * Domingo de la PRIMERA SEMANA COMPLETA (lunes-domingo) del mes siguiente al dado.
+     *
+     * Marca el límite del calendario y de los destinos de arrastre: el mes visible más
+     * esa primera semana del siguiente. Permite mover el reparto del borde del mes una
+     * semana al mes que viene sin convertir el calendario en una vista multi-mes.
+     *
+     * @param \DateTimeImmutable $current Cualquier día del mes mostrado (se usa su mes).
+     * @return \DateTimeImmutable Domingo (00:00) que cierra esa primera semana completa.
+     */
+    private function gridHorizonEnd(\DateTimeImmutable $current): \DateTimeImmutable
+    {
+        $nextFirst = $current->modify('first day of next month');
+        $dow = (int) $nextFirst->format('N'); // 1=lunes .. 7=domingo
+        // Lunes de la primera semana completa del mes siguiente: el propio día 1 si ya
+        // es lunes, o el lunes inmediatamente posterior en caso contrario.
+        $firstMonday = $dow === 1 ? $nextFirst : $nextFirst->modify('+' . (8 - $dow) . ' days');
+
+        return $firstMonday->modify('+6 days');
     }
 }
