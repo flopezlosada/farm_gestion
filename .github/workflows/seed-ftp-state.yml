@@ -42,6 +42,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref }}
+          # fetch-depth: 0 trae toda la historia: `ref` es un SHA suelto (el commit
+          # desplegado, no la punta de una rama) y el checkout superficial por defecto
+          # (depth 1) no lo encuentra -> "git failed with exit code 1".
+          fetch-depth: 0
 
       - name: Setup PHP 8.3
         uses: shivammathur/setup-php@v2
