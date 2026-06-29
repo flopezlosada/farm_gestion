@@ -123,6 +123,10 @@
   .rcal-dragok{outline:2px dashed var(--csa-green);outline-offset:-3px;background:var(--csa-green-soft)}
   /* destino que se está SOBREVOLANDO ahora (pista fuerte) */
   .rcal-dropok{outline:2px solid var(--csa-green);outline-offset:-3px;background:var(--csa-green-soft)}
+  /* la rejilla muestra la 1ª semana del mes siguiente (celdas .out, atenuadas) para poder
+     posponer el reparto del borde del mes; cuando una de esas celdas es destino soltable,
+     recupera opacidad plena para que no parezca deshabilitada al mover */
+  .rcal-cell.out.rcal-dragok,.rcal-cell.out.rcal-dropok{opacity:1}
 
   /* Afordancias por DISPOSITIVO (no por rol): el arrastre es para puntero fino con hover
      (escritorio); el botón "mover por toque" y demás, para pantallas táctiles. Así el socio
