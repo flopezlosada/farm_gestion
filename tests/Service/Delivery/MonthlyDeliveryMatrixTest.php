@@ -120,7 +120,50 @@ class MonthlyDeliveryMatrixTest extends TestCase
         $this->assertNotNull($nuevo['cells'][1]);
     }
 
+    public function testTotalesPorNodoYGranTotalPorSemana(): void
+    {
+        $result = $this->matrix->build([
+            // Semana A: reparten Madrid (4 cestas, 1 docena) y Sierra (3 cestas, 2½ doc).
+            $this->week('2026-06-05', [
+                $this->sheetFor('Madrid', 'Centro', [$this->row('Leo', 'S', 1.0, 2)], 4.0, 1.0),
+                $this->sheetFor('Sierra', 'Torremocha', [$this->row('Cris', 'S', 1.0, 1)], 3.0, 2.5),
+            ]),
+            // Semana B: solo Sierra (2 cestas, ½ docena); Madrid no reparte.
+            $this->week('2026-06-12', [
+                $this->sheetFor('Sierra', 'Torremocha', [$this->row('Cris', 'S', 1.0, 1)], 2.0, 0.5),
+            ]),
+        ]);
+
+        $byName = [];
+        foreach ($result['nodes'] as $node) {
+            $byName[$node['name']] = $node;
+        }
+
+        // Total por nodo y semana (cestas, docenas).
+        $this->assertSame(['cestas' => 3.0, 'docenas' => 2.5], $byName['Sierra']['totals'][0]);
+        $this->assertSame(['cestas' => 2.0, 'docenas' => 0.5], $byName['Sierra']['totals'][1]);
+        $this->assertSame(['cestas' => 4.0, 'docenas' => 1.0], $byName['Madrid']['totals'][0]);
+        $this->assertNull($byName['Madrid']['totals'][1], 'la semana que el nodo no reparte queda sin total');
+
+        // Gran total por semana: suma de todos los nodos (la cifra del pedido de huevos).
+        $this->assertSame(['cestas' => 7.0, 'docenas' => 3.5], $result['grand_totals'][0]);
+        $this->assertSame(['cestas' => 2.0, 'docenas' => 0.5], $result['grand_totals'][1]);
+    }
+
     // --- helpers de construcción ---
+
+    /** Una hoja de nodo con un único grupo y su total (cestas, docenas) explícito. */
+    private function sheetFor(string $nodeName, string $groupName, array $rows, float $cestas, float $docenas): array
+    {
+        return [
+            'node' => $this->node($nodeName),
+            'sheet' => [
+                'groups' => [$this->group($groupName, [['Semanales', $rows]], $cestas)],
+                'shared' => ['rows' => [], 'subtotal_cestas' => 0.0, 'subtotal_eggs' => null],
+                'totals' => ['cestas' => $cestas, 'docenas' => $docenas],
+            ],
+        ];
+    }
 
     /** @param list<array{node:Node, sheet:array}> $nodes */
     private function week(string $date, array $nodes): array
