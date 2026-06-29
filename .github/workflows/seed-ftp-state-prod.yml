@@ -1,0 +1,176 @@
+name: Sembrar estado FTP (producción)
+
+# Uso ÚNICO antes del primer deploy de prod con la action de hashes.
+# Genera el .ftp-deploy-sync-state.json con los hashes del contenido que YA
+# está en prod (subido por los deploys lftp previos) y lo sube. Así el primer
+# deploy real de prod sube SOLO el delta (segundos) en vez de los ~21k ficheros
+# (~3,5 h fichero a fichero) y minimiza la ventana de inconsistencia en vivo.
+#
+# CLAVE: hay que sembrar desde el commit que está REALMENTE desplegado en prod
+# (input `ref`, por defecto el del último deploy de prod exitoso), porque el
+# estado le dice a la action "el servidor ya tiene esto". Tras subir el estado,
+# un dry-run del MISMO commit DEBE reportar 0 ficheros a subir: esa es la prueba
+# de que el estado sembrado es fiel. Si reporta muchos, NO desplegar y avisar.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Commit desplegado HOY en prod (último deploy). NO uses main si prod no está en main.'
+        required: true
+        default: f6285e836efb0e5e8526f332e2e1b38b4770c545
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  seed:
+    name: Generar y subir el estado FTP de prod
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout del commit desplegado en prod
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, intl, pdo_mysql, gd, exif, iconv
+          tools: composer:2.2
+          coverage: none
+
+      - name: Cache de vendor/
+        id: vendor-cache
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: vendor-php83-${{ hashFiles('composer.lock') }}
+
+      # Build IDÉNTICO al del deploy: el estado debe reflejar el mismo árbol que
+      # la action calculará al desplegar, o el delta saldría inflado.
+      - name: Composer install (solo deps de producción)
+        if: steps.vendor-cache.outputs.cache-hit != 'true'
+        env:
+          APP_ENV: prod
+          APP_DEBUG: '0'
+        run: composer install --no-dev --optimize-autoloader --no-interaction --no-progress
+
+      - name: Setup Node 16
+        uses: actions/setup-node@v4
+        with:
+          node-version: '16'
+
+      - name: Compilar assets para producción
+        run: |
+          npm install --no-audit --no-fund
+          npm run build || npm run dev
+
+      - name: Copiar assets legacy (FTP no transmite symlinks)
+        run: |
+          mkdir -p public/bundles
+          rm -rf public/bundles/app
+          cp -R src/Resources/public public/bundles/app
+          chmod -R u+rwX,go+rX public/bundles/app
+
+      # Lista de excludes: DEBE coincidir con el `exclude:` de deploy.yml. Se
+      # escribe a un fichero para pasarla al generador del estado.
+      - name: Preparar lista de excludes
+        run: |
+          cat > /tmp/ftp-exclude.txt <<'EXCLUDES'
+          **/.git*
+          **/.git*/**
+          .github/**
+          **/.idea/**
+          **/.vscode/**
+          **/.ddev/**
+          **/.claude/**
+          **/node_modules/**
+          **/tests/**
+          backup/**
+          handoff/**
+          .env.local
+          .env.test
+          .env.*.local
+          var/cache/**
+          var/log/**
+          var/sessions/**
+          CLAUDE.md
+          README.md
+          RUNBOOK.md
+          phpstan.dist.neon
+          rector.php
+          phpunit.xml*
+          package.json
+          yarn.lock
+          webpack.config.js
+          assets/**
+          EXCLUDES
+
+      - name: Generar el estado (hashes sha256 del árbol construido)
+        run: |
+          npm install --no-save --no-audit --no-fund minimatch
+          node tools/ftp-seed-state.js \
+            --local-dir ./ \
+            --exclude-file /tmp/ftp-exclude.txt \
+            --out .ftp-deploy-sync-state.json
+
+      - name: Subir SOLO el estado al servidor de prod
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        run: |
+          sudo apt-get update && sudo apt-get install -y lftp
+          lftp -c "
+            set ssl:verify-certificate no;
+            set ftp:ssl-allow no;
+            set xfer:clobber on;
+            open -u $FTP_USERNAME,$FTP_PASSWORD $FTP_SERVER;
+            put .ftp-deploy-sync-state.json -o gestion_csa_4/.ftp-deploy-sync-state.json;
+          "
+
+      # VERIFICACIÓN: dry-run de la action contra el MISMO commit recién sembrado.
+      # No sube nada (dry-run). En los logs debe decir que subiría ~0 ficheros:
+      # eso confirma que el estado sembrado casa con lo que la action calcula.
+      # Si lista muchos ficheros, el sembrado NO es fiable: no desplegar prod.
+      - name: Verificar el sembrado (dry-run, no sube nada)
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftp
+          local-dir: ./
+          server-dir: gestion_csa_4/
+          dry-run: true
+          exclude: |
+            **/.git*
+            **/.git*/**
+            .github/**
+            **/.idea/**
+            **/.vscode/**
+            **/.ddev/**
+            **/.claude/**
+            **/node_modules/**
+            **/tests/**
+            backup/**
+            handoff/**
+            .env.local
+            .env.test
+            .env.*.local
+            var/cache/**
+            var/log/**
+            var/sessions/**
+            CLAUDE.md
+            README.md
+            RUNBOOK.md
+            phpstan.dist.neon
+            rector.php
+            phpunit.xml*
+            package.json
+            yarn.lock
+            webpack.config.js
+            assets/**
