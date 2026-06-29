@@ -29,10 +29,7 @@ jobs:
           coverage: none
 
       # Cachea vendor/ entre runs. Si composer.lock no cambia, actions/cache
-      # restaura el directorio preservando mtimes y nos saltamos composer
-      # install entero — necesario porque incluso un install "sin cambios"
-      # toca mtimes (autoloader, vendor/composer/*) y el mirror, que compara
-      # fecha/tamaño, reuploadearía esos ficheros sin necesidad.
+      # restaura el directorio y nos saltamos composer install entero.
       - name: Cache de vendor/
         id: vendor-cache
         uses: actions/cache@v4
@@ -66,102 +63,81 @@ jobs:
           # Apache en cdmon corre como otro usuario y necesita +rX para servir.
           chmod -R u+rwX,go+rX public/bundles/app
 
-      - name: Instalar lftp
-        run: sudo apt-get update && sudo apt-get install -y lftp
+      # Subida por DELTA basada en hashes de contenido (SamKirkland/FTP-Deploy-Action).
+      # La action mantiene un .ftp-deploy-sync-state.json en el servidor con el hash de
+      # cada fichero; en cada run compara contra el estado LOCAL (calculado en el runner,
+      # sin recorrer el árbol remoto) y sube SOLO lo que cambió. Sustituye al lftp mirror,
+      # que recorría los ~21k ficheros (vendor = 71%) por FTP en secuencial y tardaba ~1h50m.
+      #
+      # PRIMER RUN: si no hay estado remoto, sube TODO (deploy largo, como antes) y siembra
+      # el estado. A partir de ahí, los deploys de solo código son ~2-3 min.
+      #
+      # Secuencial por diseño de la librería (basic-ftp, una conexión de datos viva a la
+      # vez): NO reproduce la corrupción por canales PASV concurrentes que daba lftp --parallel.
+      #
+      # Autoload de Composer acoplado por hash: el diff es por CONTENIDO, así que si vendor
+      # cambia, TODOS los ficheros del set autoload entran en el delta y se suben juntos (no
+      # hay "subo uno y me salto otro"). El orden dentro del delta no está garantizado: hay
+      # una ventana de inconsistencia de segundos SOLO cuando cambia vendor; el smoke check
+      # de abajo la caza. En deploys de solo código el autoload ni se toca.
+      - name: Subir cambios por FTP a staging (delta por hashes)
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftp
+          local-dir: ./
+          server-dir: deploy/staging/
+          # Replica los excludes del lftp anterior. OJO: si se define `exclude`, se
+          # SOBREESCRIBEN los defaults de la action (.git*, node_modules), por eso van
+          # aquí también. El assets/ de RAÍZ (entry point Encore) se excluye anclado;
+          # los assets/ anidados de los legacy (bundles/app/.../assets/) SÍ suben.
+          exclude: |
+            **/.git*
+            **/.git*/**
+            .github/**
+            **/.idea/**
+            **/.vscode/**
+            **/.ddev/**
+            **/.claude/**
+            **/node_modules/**
+            **/tests/**
+            backup/**
+            handoff/**
+            .env.local
+            .env.test
+            .env.*.local
+            var/cache/**
+            var/log/**
+            var/sessions/**
+            CLAUDE.md
+            README.md
+            RUNBOOK.md
+            phpstan.dist.neon
+            rector.php
+            phpunit.xml*
+            package.json
+            yarn.lock
+            webpack.config.js
+            assets/**
 
-      - name: Subir cambios por FTP a staging (mirror completo, compara por tamaño)
+      # Invalida el cache compilado de prod en el servidor. En prod Symfony NO recompila
+      # plantillas/config al cambiar el fuente: sirve lo que tenga en var/cache/prod (que
+      # se excluye de la subida). La action no ejecuta comandos remotos, así que el borrado
+      # va con un lftp mínimo (una sola operación, segundos). Symfony lo regenera on-demand
+      # en el primer request. -f: no falla si el dir no existe.
+      - name: Invalidar cache compilado de prod
         env:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
         run: |
-          # Excluimos solo el assets/ de RAÍZ (entry point de Webpack Encore),
-          # anclado con ^ vía --exclude (regex). Con 'exclude-glob assets/' NO se
-          # anclaba y arrastraba los assets/ anidados de los assets legacy (p.ej.
-          # bundles/app/frontend/lib/owlcarousel/assets/ → CSS del carrusel 404).
-          # OJO: este comentario va FUERA del lftp -c "...": dentro de la cadena,
-          # bash no trata # como comentario y se lo pasa a lftp, rompiendo el mirror.
+          sudo apt-get update && sudo apt-get install -y lftp
           lftp -c "
             set ssl:verify-certificate no;
             set ftp:ssl-allow no;
-            set net:max-retries 3;
-            set net:reconnect-interval-base 10;
-            set cmd:show-status yes;
-            set xfer:log yes;
-            # Sin REST/reanudación: ante un reintento, lftp re-sube el fichero
-            # ENTERO en vez de hacer append sobre la transferencia parcial. El
-            # append corrompía .twig/.php duplicando su contenido (pantalla
-            # blanca con el source repetido). clobber on fuerza sobreescritura.
-            set ftp:use-rest no;
-            set xfer:clobber on;
             open -u $FTP_USERNAME,$FTP_PASSWORD $FTP_SERVER;
-            # El set de autoload de Composer (acoplado por hash) NO se toca en el
-            # mirror: se re-sube forzado y consistente DESPUES del mirror (abajo),
-            # para no abrir ventana de caida. OJO: nada de comillas dobles en los
-            # comentarios de aquí, romperían la cadena lftp -c.
-            # --parallel=1 (secuencial) A PROPOSITO. Con paralelismo (antes =2)
-            # dos transferencias FTP concurrentes pueden cruzar su canal de datos
-            # PASV bajo reintentos de red y escribir los bytes de un fichero en el
-            # destino de otro: el 2026-06-18 src/Entity/PartnerBasketShare.php
-            # acabo conteniendo el bower.json de lightgallery -> headers already
-            # sent + MappingException + 500. Secuencial elimina la clase de bug
-            # (solo hay una transferencia de datos viva a la vez). El deploy tarda
-            # algo mas; irrelevante frente a servir la web rota.
-            mirror -R --parallel=1 --verbose=2 \
-              --exclude-glob '.git*' \
-              --exclude-glob '.github/' \
-              --exclude-glob '.idea/' \
-              --exclude-glob '.vscode/' \
-              --exclude-glob '.ddev/' \
-              --exclude-glob '.claude/' \
-              --exclude-glob 'node_modules/' \
-              --exclude-glob 'tests/' \
-              --exclude-glob 'backup/' \
-              --exclude-glob 'handoff/' \
-              --exclude-glob '.env.local' \
-              --exclude-glob '.env.test' \
-              --exclude-glob '.env.*.local' \
-              --exclude-glob 'var/cache/' \
-              --exclude-glob 'var/log/' \
-              --exclude-glob 'var/sessions/' \
-              --exclude-glob 'CLAUDE.md' \
-              --exclude-glob 'README.md' \
-              --exclude-glob 'RUNBOOK.md' \
-              --exclude-glob 'phpstan.dist.neon' \
-              --exclude-glob 'rector.php' \
-              --exclude-glob 'phpunit.xml*' \
-              --exclude-glob 'package.json' \
-              --exclude-glob 'yarn.lock' \
-              --exclude-glob 'webpack.config.js' \
-              --exclude '^assets/' \
-              . deploy/staging/;
-            # Re-sube el set de autoload de Composer FORZADO (put/mput no comparan
-            # mtime: siempre transfieren) y consistente. Los ficheros llevan un
-            # hash acoplado (vendor/autoload.php -> ComposerAutoloaderInit<hash>,
-            # autoload_real.php -> ComposerStaticInit<hash>); el mirror incremental
-            # podía subir uno y saltarse otro -> Class ComposerStaticInit<hash> not
-            # found y 500 mudo. Listamos los ficheros explícitos (vendor/composer
-            # tiene subdirs, nada de glob) y dejamos vendor/autoload.php (el entry
-            # point) el ULTIMO. El set viejo consistente sirve durante el mirror;
-            # aquí solo hay un parpadeo de ~1-2s. OJO: sin comillas dobles.
-            mput -O deploy/staging/vendor/composer \
-              vendor/composer/autoload_real.php \
-              vendor/composer/autoload_static.php \
-              vendor/composer/autoload_classmap.php \
-              vendor/composer/autoload_files.php \
-              vendor/composer/autoload_namespaces.php \
-              vendor/composer/autoload_psr4.php \
-              vendor/composer/installed.php \
-              vendor/composer/installed.json \
-              vendor/composer/InstalledVersions.php \
-              vendor/composer/platform_check.php;
-            put vendor/autoload.php -o deploy/staging/vendor/autoload.php;
-            # Invalida el cache compilado de prod. En prod Symfony NO recompila
-            # plantillas/config al cambiar el fuente: sirve lo que tenga en
-            # var/cache/prod (que se excluye del FTP). Sin esto, un deploy de
-            # código nuevo seguiría sirviendo plantillas viejas o una
-            # compilación corrupta. Symfony lo regenera on-demand en el primer
-            # request (más lento esa vez). -f: no falla si el dir no existe.
             rm -rf deploy/staging/var/cache/prod;
           "
 
