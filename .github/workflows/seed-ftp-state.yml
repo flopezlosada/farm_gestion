@@ -2,15 +2,19 @@ name: Sembrar estado FTP
 
 # Uso ÚNICO antes del primer deploy de un entorno con la action de hashes.
 # El FTP de cdmon NO aguanta subir los ~21k ficheros del tirón (se atasca: en
-# una prueba subió 2.776 en 2h y se colgó). Por eso el primer deploy no puede
-# resubir todo el árbol. Este workflow genera el .ftp-deploy-sync-state.json con
-# los hashes (sha256) del contenido que YA está en el servidor (subido por los
-# deploys lftp previos) y lo sube; así el primer deploy real sube SOLO el delta.
+# una prueba subió 2.776 en 2h y se colgó ~1h). Por eso el primer deploy no
+# puede resubir todo el árbol. Este workflow genera el .ftp-deploy-sync-state.json
+# con los hashes (sha256) del contenido que YA está en el servidor (subido por
+# los deploys lftp previos) y lo sube; así el primer deploy real sube SOLO el delta.
 #
 # CLAVE: sembrar desde el commit que está REALMENTE desplegado en ese entorno
-# (input `ref`), porque el estado le dice a la action "el servidor ya tiene esto".
+# (input `ref`, SHA COMPLETO de 40 chars — actions/checkout no acepta SHA corto).
 # Tras subir el estado, un dry-run del MISMO commit DEBE reportar 0 ficheros a
 # subir: prueba de que el estado sembrado es fiel. Si reporta muchos, NO desplegar.
+#
+# El generador del estado va EMBEBIDO (Python, sin dependencias) a propósito: el
+# step se checkoutea sobre el commit desplegado (antiguo), que NO contiene el
+# script — embeberlo lo hace independiente del commit y del Node del runner.
 #
 # Refs de partida (último deploy exitoso de cada entorno):
 #   staging    -> da27caba2b6cf6e519fe30c01b4701e033e7a057
@@ -25,7 +29,7 @@ on:
         options: [staging, production]
         default: staging
       ref:
-        description: 'Commit desplegado HOY en ese entorno (último deploy exitoso)'
+        description: 'SHA COMPLETO (40 chars) del commit desplegado HOY en ese entorno'
         required: true
 
 concurrency:
@@ -44,7 +48,7 @@ jobs:
           ref: ${{ inputs.ref }}
           # fetch-depth: 0 trae toda la historia: `ref` es un SHA suelto (el commit
           # desplegado, no la punta de una rama) y el checkout superficial por defecto
-          # (depth 1) no lo encuentra -> "git failed with exit code 1".
+          # (depth 1) no lo encuentra.
           fetch-depth: 0
 
       - name: Setup PHP 8.3
@@ -88,47 +92,85 @@ jobs:
           cp -R src/Resources/public public/bundles/app
           chmod -R u+rwX,go+rX public/bundles/app
 
-      # Lista de excludes: DEBE coincidir con el `exclude:` de deploy.yml /
-      # deploy-staging.yml. Se escribe a un fichero para el generador del estado.
-      - name: Preparar lista de excludes
-        run: |
-          cat > /tmp/ftp-exclude.txt <<'EXCLUDES'
-          **/.git*
-          **/.git*/**
-          .github/**
-          **/.idea/**
-          **/.vscode/**
-          **/.ddev/**
-          **/.claude/**
-          **/node_modules/**
-          **/tests/**
-          backup/**
-          handoff/**
-          .env.local
-          .env.test
-          .env.*.local
-          var/cache/**
-          var/log/**
-          var/sessions/**
-          CLAUDE.md
-          README.md
-          RUNBOOK.md
-          phpstan.dist.neon
-          rector.php
-          phpunit.xml*
-          package.json
-          yarn.lock
-          webpack.config.js
-          assets/**
-          EXCLUDES
-
+      # Generador EMBEBIDO (Python, ya viene en el runner; sin npm install). Recorre
+      # el árbol construido, aplica los MISMOS excludes que deploy(-staging).yml y
+      # emite el estado con el formato de @samkirkland/ftp-deploy: version "1.0.0",
+      # entradas file {type,name,size,hash} y folder {type,name}, sha256 hex, rutas
+      # relativas con '/'. Poda dirs cuyo contenido entero está excluido (node_modules…).
       - name: Generar el estado (hashes sha256 del árbol construido)
         run: |
-          npm install --no-save --no-audit --no-fund minimatch
-          node tools/ftp-seed-state.js \
-            --local-dir ./ \
-            --exclude-file /tmp/ftp-exclude.txt \
-            --out .ftp-deploy-sync-state.json
+          python3 - <<'PY'
+          import os, hashlib, json, re
+
+          EXCLUDES = [
+            "**/.git*", "**/.git*/**", ".github/**", "**/.idea/**", "**/.vscode/**",
+            "**/.ddev/**", "**/.claude/**", "**/node_modules/**", "**/tests/**",
+            "backup/**", "handoff/**", ".env.local", ".env.test", ".env.*.local",
+            "var/cache/**", "var/log/**", "var/sessions/**", "CLAUDE.md", "README.md",
+            "RUNBOOK.md", "phpstan.dist.neon", "rector.php", "phpunit.xml*",
+            "package.json", "yarn.lock", "webpack.config.js", "assets/**",
+          ]
+
+          def glob_to_regex(glob):
+              out = ["^"]; i = 0; n = len(glob)
+              while i < n:
+                  c = glob[i]
+                  if c == "*":
+                      if i + 1 < n and glob[i + 1] == "*":
+                          if i + 2 < n and glob[i + 2] == "/":
+                              out.append("(?:.*/)?"); i += 3; continue
+                          out.append(".*"); i += 2; continue
+                      out.append("[^/]*"); i += 1; continue
+                  if c == "?":
+                      out.append("[^/]")
+                  elif c in ".+()[]{}^$|\\":
+                      out.append("\\" + c)
+                  else:
+                      out.append(c)
+                  i += 1
+              out.append("$")
+              return re.compile("".join(out))
+
+          RX = [glob_to_regex(p) for p in EXCLUDES]
+          excluded = lambda rel: any(r.match(rel) for r in RX)
+          # poda un dir si él o su contenido entero están excluidos (p.ej. node_modules/**)
+          prune = lambda rel: excluded(rel) or any(r.match(rel + "/__probe__") for r in RX)
+
+          records = []
+          for root, dirs, files in os.walk("."):
+              rel_root = os.path.relpath(root, ".").replace(os.sep, "/")
+              if rel_root == ".":
+                  rel_root = ""
+              kept = []
+              for d in sorted(dirs):
+                  rel = f"{rel_root}/{d}" if rel_root else d
+                  if prune(rel):
+                      continue
+                  kept.append(d)
+                  records.append({"type": "folder", "name": rel})
+              dirs[:] = kept
+              for f in sorted(files):
+                  rel = f"{rel_root}/{f}" if rel_root else f
+                  if excluded(rel):
+                      continue
+                  p = os.path.join(root, f)
+                  with open(p, "rb") as fh:
+                      h = hashlib.sha256(fh.read()).hexdigest()
+                  records.append({"type": "file", "name": rel, "size": os.path.getsize(p), "hash": h})
+
+          state = {
+            "description": "DO NOT DELETE THIS FILE. This file is used to keep track of which files have been synced in the most recent deployment. If you delete this file a resync will need to be done (which can take a while) - read more: https://github.com/SamKirkland/FTP-Deploy-Action",
+            "version": "1.0.0",
+            "generatedTime": 0,
+            "data": records,
+          }
+          with open(".ftp-deploy-sync-state.json", "w") as fh:
+              json.dump(state, fh, separators=(",", ":"))
+
+          nf = sum(1 for r in records if r["type"] == "file")
+          nd = sum(1 for r in records if r["type"] == "folder")
+          print(f"Estado generado: {nf} ficheros, {nd} carpetas")
+          PY
 
       - name: Subir SOLO el estado al servidor
         env:
