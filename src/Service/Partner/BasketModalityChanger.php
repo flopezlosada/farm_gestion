@@ -55,28 +55,50 @@ class BasketModalityChanger
         $partner = $new->getPartner();
         $dayBefore = \DateTime::createFromInterface($effective)->modify('-1 day');
 
-        $old = $this->shareRepository->findActiveForPartner($partner, $dayBefore);
+        // La cesta a sustituir es la suscripción ACTIVA en curso del socio, no "la
+        // vigente en la víspera": si su cesta actual empieza en el futuro (cambio
+        // programado a una fecha que aún no ha llegado), la víspera no la ve y se
+        // cerraba por error una PBS antigua, dejando dos activas. Ver
+        // {@see PartnerBasketShareRepository::findLatestActiveForPartner}.
+        $old = $this->shareRepository->findLatestActiveForPartner($partner);
         if ($old === null) {
             throw new \DomainException(sprintf(
-                'El socio %d no tiene cesta vigente antes de %s; usa el alta de cesta, no el cambio de modalidad.',
+                'El socio %d no tiene cesta activa; usa el alta de cesta, no el cambio de modalidad.',
                 $partner->getId(),
-                $effective->format('Y-m-d'),
             ));
         }
+
+        // ¿La cesta que se sustituye aún no había entrado en vigor? (start futuro
+        // respecto a la fecha efectiva). Entonces no hay histórico que partir ni
+        // entregas que conservar: se retira en vez de dejarla como tramo cerrado
+        // fantasma (que además solaparía con la nueva).
+        $neverStarted = $old->getStartDate() !== null
+            && $old->getStartDate()->format('Y-m-d') >= \DateTime::createFromInterface($effective)->format('Y-m-d');
 
         $new->setStartDate(\DateTime::createFromInterface($effective));
         $new->setEndDate(null);
         $new->setIsActive(true);
 
-        $old->setEndDate($dayBefore);
-        $old->setIsActive(false);
+        // Solo se cierra (end = víspera) la cesta que SÍ había entrado en vigor.
+        // Si nunca empezó se va a eliminar abajo: cerrarla aquí escribiría una fila
+        // con end_date < start_date en el flush previo (estado corrupto si algo
+        // falla entre los dos flushes).
+        if (!$neverStarted) {
+            $old->setEndDate($dayBefore);
+            $old->setIsActive(false);
+        }
 
         // Flush previo: recordChange hace snapshot vía getId() (: int estricto),
         // que no tolera la PBS nueva aún transitoria.
         $this->em->persist($new);
         $this->em->flush();
 
+        // El snapshot del evento lee $old AQUÍ (con sus datos intactos), antes de
+        // retirarla si nunca entró en vigor.
         $this->eventRecorder->recordChange($old, $new, $effective, $actor);
+        if ($neverStarted) {
+            $this->em->remove($old);
+        }
         $this->em->flush();
 
         return $old;

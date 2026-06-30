@@ -15,6 +15,7 @@ use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Partner\BasketModalityChanger;
 use App\Service\Partner\BasketPricing;
 use App\Service\Partner\PartnerShareEventRecorder;
+use App\Service\Partner\SharedBasketCohortSync;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Form\Extension\Core\Type\DateType;
@@ -70,7 +71,7 @@ class PartnerBasketShareController extends AbstractController
      * L11/L17 sobre el clon de la batería (caso JOSE del escenario MIRIAM).
      */
     #[Route("/{id}/edit", name: "partner_basket_share_edit", methods: ["GET","POST"])]
-    public function edit(Request $request, PartnerBasketShare $partnerBasketShare, EntityManagerInterface $entityManager, CohortChoiceBuilder $cohortChoiceBuilder, WeeklyBasketGenerator $generator, BasketPricing $basketPricing): Response
+    public function edit(Request $request, PartnerBasketShare $partnerBasketShare, EntityManagerInterface $entityManager, CohortChoiceBuilder $cohortChoiceBuilder, WeeklyBasketGenerator $generator, BasketPricing $basketPricing, SharedBasketCohortSync $cohortSync): Response
     {
         if ($partnerBasketShare->getStartDate()) {
             $partnerBasketShare->setStartDate($partnerBasketShare->getStartDate()->format('Y-m-d'));
@@ -101,6 +102,16 @@ class PartnerBasketShareController extends AbstractController
                 $this->addFlash('success', sprintf(
                     'Cesta corregida. %d listado(s) ya generado(s) reconciliado(s) al patrón corregido.',
                     count($reconciled),
+                ));
+            }
+
+            // Cesta compartida: el turno/orden debe coincidir con el del par
+            // (ambos recogen la MISMA cesta el mismo día). Se propaga y reconcilia.
+            $mate = $cohortSync->syncFrom($partnerBasketShare, new \DateTime('today'));
+            if ($mate !== null) {
+                $this->addFlash('info', sprintf(
+                    'Comparte cesta con %s: se le ha aplicado el mismo turno de recogida.',
+                    $mate->getNameForDelivery(),
                 ));
             }
 
@@ -141,6 +152,7 @@ class PartnerBasketShareController extends AbstractController
         WeeklyBasketGenerator $generator,
         CohortChoiceBuilder $cohortChoiceBuilder,
         BasketPricing $basketPricing,
+        SharedBasketCohortSync $cohortSync,
     ): Response {
         $new = new PartnerBasketShare();
         $new->setPartner($partnerBasketShare->getPartner());
@@ -180,8 +192,12 @@ class PartnerBasketShareController extends AbstractController
                 return $this->redirectToRoute('partner_basket_share_change_modality', ['id' => $partnerBasketShare->getId()]);
             }
 
-            // El turno A/B sólo se conserva en quincenal sobre nodo semanal.
-            if ($nodeIsBiweekly || $new->getBasketShare()?->getId() !== BasketShare::ID_BIWEEKLY) {
+            // El turno A/B sólo aplica a modalidades QUINCENALES (normal y
+            // compartida) sobre nodo semanal. Para el resto se anula. La
+            // compartida (6) es quincenal a efectos de reparto: incluirla aquí
+            // evita que pierda el turno y caiga de los listados (mismo criterio
+            // que el JS del form, `== 2 || == 6`).
+            if ($nodeIsBiweekly || !($new->getBasketShare()?->usesBiweeklyCohort() ?? false)) {
                 $new->setDeliveryGroup(null);
             }
 
@@ -208,6 +224,16 @@ class PartnerBasketShareController extends AbstractController
                 $effective->format('d/m/Y'),
                 count($reconciled),
             ));
+
+            // Cesta compartida: propaga turno/orden al par para que sigan
+            // recogiendo la misma cesta el mismo día.
+            $mate = $cohortSync->syncFrom($new, $effective);
+            if ($mate !== null) {
+                $this->addFlash('info', sprintf(
+                    'Comparte cesta con %s: se le ha aplicado el mismo turno de recogida.',
+                    $mate->getNameForDelivery(),
+                ));
+            }
 
             return $this->redirectToRoute('partner_show', ['id' => $new->getPartner()->getId()]);
         }

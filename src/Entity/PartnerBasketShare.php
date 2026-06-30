@@ -15,6 +15,7 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Validator\Constraints as Assert;
+use Symfony\Component\Validator\Context\ExecutionContextInterface;
 use Gedmo\Mapping\Annotation as Gedmo;
 
 /**
@@ -519,6 +520,25 @@ class PartnerBasketShare
         $this->amount = $amount;
 
         return $this;
+    }
+
+    /**
+     * Una cesta COMPARTIDA (semanal/quincenal/mensual compartida: 4/6/7) es
+     * media cesta repartida entre dos familias; su cantidad es siempre 1. Pedir
+     * 2+ aquí no modela "dos compartidas" sino que dobla la entrega — es el error
+     * que dejó a Ana Villa con "2 cestas" (2026-06-30). Para una entrega puntual
+     * de más, el camino correcto es «Añadir cesta extra» (PartnerBasketExtra), no
+     * subir el amount de la suscripción. Cubre alta, edición, cambio de modalidad
+     * y el comando CLI por igual.
+     */
+    #[Assert\Callback]
+    public function validateSharedBasketAmount(ExecutionContextInterface $context): void
+    {
+        if (in_array($this->basket_share?->getId(), BasketShare::IDS_SHARED, true) && (int) $this->amount > 1) {
+            $context->buildViolation('Una cesta compartida lleva siempre 1. Si necesitas una entrega puntual de más, usa «Añadir cesta extra».')
+                ->atPath('amount')
+                ->addViolation();
+        }
     }
 
     public function getDeliveryGroup(): ?string

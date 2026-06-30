@@ -82,6 +82,39 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
     }
 
     /**
+     * La suscripción ACTIVA (is_active=1) más reciente de un socio, o null. A
+     * diferencia de {@see findActiveForPartner} (que resuelve "qué hay en vigor en
+     * tal fecha" por ventana de fechas e IGNORA is_active), esto devuelve la cesta
+     * que el socio tiene en curso AHORA mismo, aunque su start_date sea futuro.
+     *
+     * Lo usa el cambio de modalidad para cerrar la cesta correcta: con
+     * findActiveForPartner(víspera) una cesta futura (start mañana) no se veía y se
+     * cerraba por error una PBS antigua ya cerrada, dejando dos activas
+     * (bug 2026-06-30, Ana Villa: salía en las dos cohortes, todas las semanas).
+     *
+     * @param \App\Entity\Partner $partner
+     * @return PartnerBasketShare|null
+     */
+    public function findLatestActiveForPartner(\App\Entity\Partner $partner): ?PartnerBasketShare
+    {
+        return $this->createQueryBuilder('s')
+            // En MySQL los NULL van PRIMERO en DESC: sin esto, un socio legacy con
+            // start_date NULL e is_active=1 ganaría a una suscripción con fecha
+            // reciente. El CASE (HIDDEN, no sale en el resultado) empuja los NULL al
+            // final para que mande la fecha conocida más reciente. ORDER BY ... IS NULL
+            // no es DQL válido, de ahí el CASE.
+            ->addSelect('CASE WHEN s.start_date IS NULL THEN 1 ELSE 0 END AS HIDDEN start_is_null')
+            ->where('s.partner = :partner')
+            ->andWhere('s.is_active = 1')
+            ->setParameter('partner', $partner)
+            ->orderBy('start_is_null', 'ASC')
+            ->addOrderBy('s.start_date', 'DESC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
+
+    /**
      * Devuelve la lista de socios con cesta de un tipo (semanal, media, solo-huevo
      * semanal) ordenados por pueblo, candidatos a repartir en el Basket dado.
      *
