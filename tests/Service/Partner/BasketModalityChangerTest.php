@@ -37,16 +37,14 @@ class BasketModalityChangerTest extends TestCase
     {
         $partner = $this->partner(7);
         $old = $this->share($partner, 2);
+        $old->setStartDate(new \DateTime('2026-01-01')); // vigente desde el pasado
         $new = $this->share($partner, 3);
         $effective = new \DateTime('2026-06-01');
 
-        // La PBS vigente se busca en la VÍSPERA (31-may), no en la fecha efectiva.
+        // Se cierra la suscripción ACTIVA en curso (no "la vigente en la víspera").
         $this->shareRepository->expects($this->once())
-            ->method('findActiveForPartner')
-            ->with(
-                $this->identicalTo($partner),
-                $this->callback(fn (\DateTimeInterface $d) => $d->format('Y-m-d') === '2026-05-31'),
-            )
+            ->method('findLatestActiveForPartner')
+            ->with($this->identicalTo($partner))
             ->willReturn($old);
 
         $this->eventRecorder->expects($this->once())
@@ -64,6 +62,31 @@ class BasketModalityChangerTest extends TestCase
         $this->assertTrue($new->getIsActive());
     }
 
+    public function testApplyChangeSobreCestaFuturaLaRetiraEnVezDeDuplicar(): void
+    {
+        // La cesta actual empieza el MISMO día efectivo (cambio sobre una cesta que
+        // aún no ha entrado en vigor): no hay histórico que partir, se retira la vieja
+        // para no dejar dos activas (regresión Ana Villa 2026-06-30).
+        $partner = $this->partner(7);
+        $old = $this->share($partner, 6);
+        $old->setStartDate(new \DateTime('2026-07-01'));
+        $new = $this->share($partner, 6);
+        $effective = new \DateTime('2026-07-01');
+
+        $this->shareRepository->method('findLatestActiveForPartner')->willReturn($old);
+        $this->eventRecorder->method('recordChange')
+            ->willReturn(new PartnerEvent($partner, PartnerEvent::TYPE_BASKET_CHANGE, $effective));
+
+        $this->em->expects($this->once())->method('remove')->with($this->identicalTo($old));
+
+        $this->changer->applyChange($new, $effective);
+
+        $this->assertTrue($new->getIsActive());
+        $this->assertSame('2026-07-01', $new->getStartDate()->format('Y-m-d'));
+        // No se le pone end_date < start_date ni transitoriamente: se retira, no se cierra.
+        $this->assertNull($old->getEndDate(), 'Una cesta futura se retira, no se cierra con fecha invertida.');
+    }
+
     public function testApplyChangeFlusheaAntesDeEmitirElEvento(): void
     {
         $partner = $this->partner(7);
@@ -71,7 +94,7 @@ class BasketModalityChangerTest extends TestCase
         $new = $this->share($partner, 3);
         $effective = new \DateTime('2026-06-01');
 
-        $this->shareRepository->method('findActiveForPartner')->willReturn($old);
+        $this->shareRepository->method('findLatestActiveForPartner')->willReturn($old);
 
         $calls = [];
         $this->em->method('persist')->willReturnCallback(function () use (&$calls) { $calls[] = 'persist'; });
@@ -97,7 +120,7 @@ class BasketModalityChangerTest extends TestCase
     {
         $partner = $this->partner(7);
         $new = $this->share($partner, 3);
-        $this->shareRepository->method('findActiveForPartner')->willReturn(null);
+        $this->shareRepository->method('findLatestActiveForPartner')->willReturn(null);
 
         $this->expectException(\DomainException::class);
         $this->changer->applyChange($new, new \DateTime('2026-06-01'));

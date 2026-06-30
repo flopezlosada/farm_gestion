@@ -201,7 +201,12 @@
                         <i class="fa fa-plus-circle"></i> Añadir cesta extra
                     </button>
                     <dialog id="extra-basket-dialog" class="csa-modal csa-modal--info" aria-labelledby="extra-basket-title">
-                        <form method="post" action="{{ path('partner_add_extra_basket', { id: partner.id }) }}">
+                        {# Anti doble-submit: añadir cesta ACUMULA (a propósito), así que un
+                           doble clic antes de que cierre el modal sumaba dos veces. El flag
+                           corta el segundo envío; el botón se deshabilita en diferido para no
+                           cancelar el primero. #}
+                        <form method="post" action="{{ path('partner_add_extra_basket', { id: partner.id }) }}"
+                              onsubmit="if (this.dataset.sent) { return false; } this.dataset.sent = '1'; var b = this.querySelector('button[type=submit]'); setTimeout(function () { if (b) { b.disabled = true; b.textContent = 'Añadiendo…'; } }, 0);">
                             <input type="hidden" name="_csrf_token" value="{{ csrf_token('partner_extra_basket') }}">
                             <button class="csa-modal__close" type="button" aria-label="Cerrar" onclick="this.closest('dialog').close()">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l14 14M19 5L5 19"/></svg>
@@ -261,6 +266,7 @@
                         </form>
                     </dialog>
                 {% endif %}
+
 
                 {# Compartidas (alternancia entre dos hogares): el traslado de nodo está
                    bloqueado de momento (ver PickupRelocator). No se ofrece el botón. #}
@@ -695,6 +701,45 @@
 
         {# ----- COL DERECHA: Cesta + Histórico ----- #}
         <div>
+
+            {# Cestas extra puntuales puestas (semana >= hoy): tarjeta DESTACADA y
+             # arriba del todo para que no se pierda. Vía para QUITARLAS (el calendario
+             # no modela las extras y en compartidas es de solo lectura). Independiente
+             # de tener cesta activa: un no-suscriptor también puede llevar una extra. #}
+            {% if extra_active is not empty and is_granted('ROLE_GESTION_SOCIXS_EDIT') %}
+                <section class="prt-card prt-card--highlight">
+                    <header class="prt-card__head">
+                        <h2 class="prt-card__title"><span class="accent"></span>Cestas extra puntuales</h2>
+                    </header>
+                    <div class="prt-card__body">
+                        <div class="prt-extras">
+                            {% for x in extra_active %}
+                                <div class="prt-extras__row">
+                                    <span class="prt-extras__txt">
+                                        <strong>{{ x.date|date('d/m/Y') }}</strong>
+                                        {%- if x.vegetables > 0 %} · {{ x.vegetables|number_format(x.vegetables == x.vegetables|round ? 0 : 2, ',', '.') }} verdura{% endif -%}
+                                        {%- if x.eggs > 0 %} · {{ x.eggs|number_format(x.eggs == x.eggs|round ? 0 : 2, ',', '.') }} huevos{% endif -%}
+                                    </span>
+                                    <button type="button" class="prt-extras__rm" title="Quitar esta cesta extra"
+                                            onclick="document.getElementById('confirm-remove-extra-{{ x.basketId }}').showModal()">
+                                        <i class="fa fa-times"></i> Quitar
+                                    </button>
+                                </div>
+                                {{ csa.confirm_dialog('confirm-remove-extra-' ~ x.basketId, {
+                                    variant: 'warning',
+                                    eyebrow: 'Cesta extra',
+                                    title: 'Quitar la cesta extra',
+                                    body: 'Se quitará la cesta extra del ' ~ x.date|date('d/m/Y') ~ '. Podrás volver a añadirla cuando quieras.',
+                                    confirm_label: 'Quitar',
+                                    action: path('partner_remove_extra_basket', { id: partner.id }),
+                                    csrf_token: csrf_token('partner_remove_extra_basket'),
+                                    extra_fields: [{ name: 'basket_id', value: x.basketId }],
+                                }) }}
+                            {% endfor %}
+                        </div>
+                    </div>
+                </section>
+            {% endif %}
 
             {# Cesta activa #}
             {% if partner.hasActiveBasket %}

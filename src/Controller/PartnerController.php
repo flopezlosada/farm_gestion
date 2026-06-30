@@ -30,6 +30,7 @@ use App\Service\Delivery\PickupRelocator;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Partner\BasketPricing;
 use App\Service\Partner\PartnerShareEventRecorder;
+use App\Service\Partner\SharedBasketCohortSync;
 use Doctrine\ORM\EntityManagerInterface;
 use Knp\Component\Pager\PaginatorInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -241,6 +242,7 @@ class PartnerController extends AbstractController
         NodeDeliveryDate $nodeDeliveryDate,
         PickupRelocationOptions $relocationOptions,
         PartnerAccessPolicy $accessPolicy,
+        \App\Repository\PartnerBasketExtraRepository $extraRepository,
         EntityManagerInterface $em,
     ): Response {
         $events = $partnerEventRepository->findForPartner($partner);
@@ -302,6 +304,9 @@ class PartnerController extends AbstractController
             'egg_amount_names' => $toNameMap($em->getRepository(EggAmount::class)->findAll()),
             'egg_period_names' => $toNameMap($em->getRepository(EggPeriod::class)->findAll()),
             'extra_weeks' => $this->extraBasketWeeks($partner, $basketRepo, $nodeDeliveryDate),
+            // Cestas extra ya puestas (semana >= hoy) para poder QUITARLAS desde la
+            // ficha: el calendario no las modela y en compartidas es de solo lectura.
+            'extra_active' => $extraRepository->upcomingForPartner($partner, new \DateTime('today')),
             'relocate_weeks' => $relocationOptions->weeksForPartner($partner),
             'relocate_groups' => $relocationOptions->groupsForPartner($partner),
             'donated_baskets' => $donatedBaskets,
@@ -546,6 +551,49 @@ class PartnerController extends AbstractController
         }
 
         $this->addFlash('success', sprintf('Cesta extra registrada para la semana del %s.', $basket->getDate()?->format('d/m/Y')));
+        return $this->redirectToRoute('partner_show', $back);
+    }
+
+    /**
+     * Quita la cesta extra puntual de un socix en una semana, desde su ficha.
+     * Hace falta una vía propia: el calendario no modela las extras (la proyección
+     * sólo las suma al dibujar) y en cestas compartidas es de solo lectura, así que
+     * una extra puesta no se podía deshacer desde ningún sitio para esos socios.
+     * Delega en {@see ExtraBasketEditor::removeExtra} (revierte también la piedra).
+     *
+     * @param Request           $request Lleva basket_id y CSRF.
+     * @param Partner           $partner Socix (de la ruta).
+     * @param BasketRepository  $basketRepo
+     * @param ExtraBasketEditor $extraBasketEditor
+     */
+    #[Route("/{id}/extra-basket/remove", name: "partner_remove_extra_basket", methods: ["POST"])]
+    public function removeExtraBasket(
+        Request $request,
+        Partner $partner,
+        BasketRepository $basketRepo,
+        ExtraBasketEditor $extraBasketEditor,
+    ): Response {
+        $back = ['id' => $partner->getId()];
+
+        if (!$this->isCsrfTokenValid('partner_remove_extra_basket', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+            return $this->redirectToRoute('partner_show', $back);
+        }
+
+        $basket = $basketRepo->find((int) $request->request->get('basket_id'));
+        if (!$basket instanceof Basket) {
+            $this->addFlash('warning', 'Falta la semana de la que quitar la cesta extra.');
+            return $this->redirectToRoute('partner_show', $back);
+        }
+
+        $removed = $extraBasketEditor->removeExtra($partner, $basket, 'gestor:' . $this->getUser()->getId());
+        $this->addFlash(
+            $removed ? 'success' : 'warning',
+            $removed
+                ? sprintf('Cesta extra quitada de la semana del %s.', $basket->getDate()?->format('d/m/Y'))
+                : 'Esa semana no tenía ninguna cesta extra.',
+        );
+
         return $this->redirectToRoute('partner_show', $back);
     }
 
@@ -1042,7 +1090,7 @@ class PartnerController extends AbstractController
 
 
     #[Route("/{partner1_id}/{partner2_id}/add_share_partner", name: "add_share_partner", methods: ["POST"])]
-    public function addSharePartner(Request $request, $partner1_id, $partner2_id, EntityManagerInterface $entityManager): Response
+    public function addSharePartner(Request $request, $partner1_id, $partner2_id, EntityManagerInterface $entityManager, SharedBasketCohortSync $cohortSync): Response
     {
         if (!$this->isCsrfTokenValid('add_share_partner', (string) $request->request->get('_csrf_token'))) {
             $this->addFlash('warning', 'Token de seguridad inválido.');
@@ -1081,6 +1129,14 @@ class PartnerController extends AbstractController
         $entityManager->persist($partner2);
 
         $entityManager->flush();
+
+        // Comparten UNA cesta: deben recoger el mismo día. Al emparejar, el par
+        // hereda el turno/orden del socio iniciador (evita quedar cruzados desde
+        // el alta del emparejamiento, que antes solo validaba misma modalidad).
+        $source = $partner1->getActiveBasket();
+        if ($source !== null) {
+            $cohortSync->syncFrom($source, new \DateTime('today'));
+        }
 
         $session->getFlashBag()->add(
             'success',

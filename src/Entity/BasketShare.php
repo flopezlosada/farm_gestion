@@ -245,8 +245,19 @@ class BasketShare
     public const ID_ONLY_EGG = 5;
     /** Modalidades compartidas (dos familias parten una cesta física). */
     public const IDS_SHARED = [4, 6, 7];
-    /** Modalidad quincenal: única que usa la cohorte A/B (delivery_group). */
+    /** Modalidad quincenal (no compartida). */
     public const ID_BIWEEKLY = 2;
+    /**
+     * Modalidades de cadencia QUINCENAL: Quincenal (2) y Quincenal compartida
+     * (6). Ambas reparten cada dos semanas y, en un punto de cadencia semanal,
+     * usan la cohorte A/B (delivery_group) para saber qué viernes recogen. La
+     * compartida es quincenal a todos los efectos de reparto: tratarla como no
+     * quincenal le borra el turno y la saca de los listados (bug 2026-06-30,
+     * Ana Villa / Jose Carrascosa). El generador ya las une en
+     * findBasketPartnersBiweeklyNodeAware; el JS de los formularios muestra el
+     * turno para `== 2 || == 6`.
+     */
+    public const IDS_BIWEEKLY = [2, 6];
     /** Modalidad mensual (reparto una vez al mes, según day_month_order). */
     public const ID_MONTHLY = 3;
     /**
@@ -255,6 +266,23 @@ class BasketShare
      * reparte cada dos semanas.
      */
     public const IDS_WEEKLY = [1, 4];
+
+    /**
+     * ¿Esta modalidad usa la cohorte A/B (delivery_group) para repartir?
+     *
+     * Las quincenales —normal (2) y compartida (6)— reparten cada dos semanas;
+     * sobre un punto de cadencia semanal necesitan el turno A/B para saber qué
+     * viernes recogen. El resto de modalidades no lo usan (semanal cada viernes,
+     * mensual por day_month_order). Centraliza el criterio que antes vivía
+     * disperso como literal `== 2 || == 6` (server de cambio de modalidad y JS
+     * de los formularios), evitando que la compartida pierda el turno.
+     *
+     * @return bool true si la modalidad es de cadencia quincenal.
+     */
+    public function usesBiweeklyCohort(): bool
+    {
+        return in_array($this->id, self::IDS_BIWEEKLY, true);
+    }
 
     /**
      * Peso en cestas FÍSICAS que esta modalidad reparte el día de la entrega:
