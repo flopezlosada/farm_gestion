@@ -3,6 +3,7 @@
 namespace App\Service\Delivery;
 
 use App\Entity\Basket;
+use App\Entity\Node;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
 use Doctrine\ORM\EntityManagerInterface;
@@ -22,6 +23,7 @@ final class DeliveryCalendarViewBuilder
         private readonly DeliveryCalendarProjector $projector,
         private readonly WeeklyBasketGenerator $generator,
         private readonly EntityManagerInterface $em,
+        private readonly NodeDeliveryDate $nodeDeliveryDate,
     ) {
     }
 
@@ -84,11 +86,33 @@ final class DeliveryCalendarViewBuilder
         // defecto la primera entrega del mes. Solo entregas reales son seleccionables.
         $selected = $this->resolveSelectedSlot($slots, $selectedBasketId, $current->format('Y-m'));
 
+        // Si el sel pedido no cae en el mes visible pero SÍ en la rejilla extendida (una
+        // entrega recién movida a la semana del mes vecino que ya se dibuja), se selecciona
+        // desde ahí: tras mover cruzando de mes el panel muestra la entrega en su nuevo día
+        // SIN sacarte del mes que estás viendo. gridSlots ya trae los meses vecinos y está
+        // filtrado de saltadas, así que una entrega real movida está presente.
+        if ($selectedBasketId > 0 && ($selected === null || $selected['basket']->getId() !== $selectedBasketId)) {
+            foreach ($gridSlots as $gridSlot) {
+                if ($gridSlot['basket']->getId() === $selectedBasketId) {
+                    $selected = $gridSlot;
+                    break;
+                }
+            }
+        }
+
         // Una entrega se gestiona (mover / saltar / editar) hasta el DÍA ANTERIOR a su
         // recogida: si se recoge hoy o ya pasó, queda en solo lectura. De ahí el `>`
         // estricto sobre la fecha física de recogida (no `>=`).
         $today = new \DateTimeImmutable('today');
         $selectedEditable = $selected !== null && $selected['date'] > $today;
+
+        // Horizonte de la rejilla (de qué lunes a qué domingo se dibuja) y de los destinos de
+        // arrastre: las semanas naturales del mes extendidas para dejar a la vista el reparto
+        // del NODO inmediatamente anterior y posterior al mes (el hueco donde adelantar/posponer
+        // el reparto del borde). Se ancla al NODO —no al próximo reparto del socio, que si es
+        // quincenal se salta semanas— para que funcione igual en Torremocha (semanal) y en los
+        // nodos de Madrid (quincenales). Ver gridHorizon().
+        [$gridStart, $gridEnd] = $this->gridHorizon($partner->getWeeklyBasketGroup()?->getNode(), $current);
 
         // Destinos de ARRASTRE (mover una entrega a otro día): días del mes donde el nodo
         // reparte y el socio NO tiene ya una entrega real — modelo relajado (cualquier día
@@ -106,16 +130,15 @@ final class DeliveryCalendarViewBuilder
                         $occupiedReal[$s['basket']->getId()] = true;
                     }
                 }
-                // El horizonte de destinos llega hasta la PRIMERA SEMANA COMPLETA del
-                // mes siguiente, no solo a fin de mes: así el último reparto del mes (que
-                // no tiene ningún día libre por detrás) se puede posponer una semana al
-                // mes que viene. El endpoint de mover ya acepta cruzar de mes; el modelo
-                // contempla shifts que cruzan frontera (EggMonthlyConservationInvariant).
-                $rangeEnd = $this->gridHorizonEnd($current);
+                // El rango de destinos usa el MISMO horizonte que la rejilla ($gridStart..
+                // $gridEnd): así solo se ofrecen días soltables que estén realmente a la vista.
+                // Puede cruzar de mes por el borde; el endpoint de mover ya acepta cualquier
+                // sentido y el modelo contempla shifts que cruzan frontera
+                // (EggMonthlyConservationInvariant excluye ambos meses del shift).
                 $monthBaskets = $this->em->getRepository(Basket::class)->createQueryBuilder('b')
                     ->where('b.date BETWEEN :start AND :end')
-                    ->setParameter('start', $current->format('Y-m-d'))
-                    ->setParameter('end', $rangeEnd->format('Y-m-d'))
+                    ->setParameter('start', $gridStart->format('Y-m-d'))
+                    ->setParameter('end', $gridEnd->format('Y-m-d'))
                     ->orderBy('b.date', 'ASC')
                     ->getQuery()
                     ->getResult();
@@ -147,7 +170,7 @@ final class DeliveryCalendarViewBuilder
             'pickup_place' => $pickupPlace,
             'slots' => $slots,
             'tray' => $tray,
-            'weeks' => $this->buildMonthWeeks($year, $month, $gridSlots, $dropDays),
+            'weeks' => $this->buildMonthWeeks($year, $month, $gridStart, $gridEnd, $gridSlots, $dropDays),
             'selected' => $selected,
             'selected_editable' => $selectedEditable,
             // ¿Hay días libres a los que mover una entrega? Un socio semanal recoge todas
@@ -243,17 +266,20 @@ final class DeliveryCalendarViewBuilder
     }
 
     /**
-     * Construye la rejilla mensual del calendario (semanas de lunes a domingo) que
-     * pinta la pantalla, colocando cada entrega proyectada en la celda de su fecha
-     * física. Las semanas íntegramente fuera del mes se descartan.
+     * Construye la rejilla del calendario (semanas de lunes a domingo, de $gridStart a
+     * $gridEnd) que pinta la pantalla, colocando cada entrega proyectada en la celda de su
+     * fecha física. Marca como del mes (`inMonth`) las celdas del mes mostrado; el resto son
+     * días de un mes vecino que la rejilla desborda para dejar a la vista el reparto adyacente.
      *
      * @param int                                                        $year
      * @param int                                                        $month
+     * @param \DateTimeImmutable                                         $gridStart Lunes en que arranca la rejilla.
+     * @param \DateTimeImmutable                                         $gridEnd   Domingo en que termina la rejilla.
      * @param list<array{date: \DateTimeInterface, basket: Basket, ...}> $slots
      * @param array<string, int>                                         $dropDays Fecha física 'Y-m-d' → basketId destino de arrastre (día libre del nodo).
      * @return list<list<array{date: \DateTimeImmutable, inMonth: bool, slot: array|null, dropBasketId: int|null}>>
      */
-    private function buildMonthWeeks(int $year, int $month, array $slots, array $dropDays = []): array
+    private function buildMonthWeeks(int $year, int $month, \DateTimeImmutable $gridStart, \DateTimeImmutable $gridEnd, array $slots, array $dropDays = []): array
     {
         // Mapa fecha física (Y-m-d) → slot, para colocar la entrega en su celda.
         $byDay = [];
@@ -261,13 +287,8 @@ final class DeliveryCalendarViewBuilder
             $byDay[$slot['date']->format('Y-m-d')] = $slot;
         }
 
-        $first = new \DateTimeImmutable(sprintf('%04d-%02d-01', $year, $month));
-        // La rejilla se extiende hasta la primera semana completa del mes siguiente
-        // (mismo horizonte que los destinos de arrastre): da una fila de destino al
-        // último reparto del mes, que de otro modo no tendría día libre detrás.
-        $last = $this->gridHorizonEnd($first);
-        // Lunes en/antes del día 1 (N: 1=lunes .. 7=domingo).
-        $cursor = $first->modify('-' . ((int) $first->format('N') - 1) . ' days');
+        $monthYm = sprintf('%04d-%02d', $year, $month);
+        $cursor = $gridStart;
 
         $weeks = [];
         do {
@@ -275,36 +296,91 @@ final class DeliveryCalendarViewBuilder
             for ($i = 0; $i < 7; $i++) {
                 $week[] = [
                     'date' => $cursor,
-                    'inMonth' => $cursor->format('Y-m') === $first->format('Y-m'),
+                    'inMonth' => $cursor->format('Y-m') === $monthYm,
                     'slot' => $byDay[$cursor->format('Y-m-d')] ?? null,
                     'dropBasketId' => $dropDays[$cursor->format('Y-m-d')] ?? null,
                 ];
                 $cursor = $cursor->modify('+1 day');
             }
             $weeks[] = $week;
-        } while ($cursor <= $last);
+        } while ($cursor <= $gridEnd);
 
         return $weeks;
     }
 
     /**
-     * Domingo de la PRIMERA SEMANA COMPLETA (lunes-domingo) del mes siguiente al dado.
+     * Horizonte de la rejilla: de qué lunes a qué domingo se dibuja.
      *
-     * Marca el límite del calendario y de los destinos de arrastre: el mes visible más
-     * esa primera semana del siguiente. Permite mover el reparto del borde del mes una
-     * semana al mes que viene sin convertir el calendario en una vista multi-mes.
+     * Parte de las semanas NATURALES del mes (lunes en/antes del día 1 → domingo en/tras el
+     * último día) y las extiende lo justo para dejar a la vista el reparto del NODO
+     * inmediatamente ANTERIOR al mes y el inmediatamente POSTERIOR: el hueco donde adelantar
+     * o posponer el reparto del borde. Si ese reparto vecino ya cae en las semanas naturales
+     * (p. ej. nodo semanal y mes que empieza en sábado), no se extiende por ese lado.
      *
-     * @param \DateTimeImmutable $current Cualquier día del mes mostrado (se usa su mes).
-     * @return \DateTimeImmutable Domingo (00:00) que cierra esa primera semana completa.
+     * Se ancla al NODO (su día de la semana y su cadencia, vía {@see NodeDeliveryDate}), no al
+     * próximo reparto del socio: un socio quincenal salta semanas y desplazaría el borde. Así
+     * vale igual para Torremocha (semanal) y los nodos de Madrid (quincenales); en un nodo
+     * quincenal el reparto vecino puede quedar a dos semanas y la extensión es acorde.
+     *
+     * Sin nodo (dato legacy) o sin reparto vecino localizable, se queda en las semanas naturales.
+     *
+     * @param Node|null          $node    Nodo del socio (define día de reparto y cadencia).
+     * @param \DateTimeImmutable $current Día 1 del mes mostrado.
+     * @return array{0: \DateTimeImmutable, 1: \DateTimeImmutable} [lunesInicio, domingoFin]
      */
-    private function gridHorizonEnd(\DateTimeImmutable $current): \DateTimeImmutable
+    private function gridHorizon(?Node $node, \DateTimeImmutable $current): array
     {
-        $nextFirst = $current->modify('first day of next month');
-        $dow = (int) $nextFirst->format('N'); // 1=lunes .. 7=domingo
-        // Lunes de la primera semana completa del mes siguiente: el propio día 1 si ya
-        // es lunes, o el lunes inmediatamente posterior en caso contrario.
-        $firstMonday = $dow === 1 ? $nextFirst : $nextFirst->modify('+' . (8 - $dow) . ' days');
+        $monthEnd = $current->modify('last day of this month');
+        // Semanas naturales del mes (lunes-domingo que lo cubren). N: 1=lunes .. 7=domingo.
+        $naturalStart = $current->modify('-' . ((int) $current->format('N') - 1) . ' days');
+        $naturalEnd = $monthEnd->modify('+' . (7 - (int) $monthEnd->format('N')) . ' days');
 
-        return $firstMonday->modify('+6 days');
+        if ($node === null) {
+            return [$naturalStart, $naturalEnd];
+        }
+
+        // Repartos físicos del NODO en una ventana holgada alrededor del mes (±3 semanas cubre
+        // de sobra la cadencia quincenal). physicalDateFor mapea al día del nodo y aplica
+        // cadencia/excepciones; null = ese nodo no reparte esa semana.
+        $windowStart = $naturalStart->modify('-21 days');
+        $windowEnd = $naturalEnd->modify('+21 days');
+        /** @var Basket[] $baskets */
+        $baskets = $this->em->getRepository(Basket::class)->createQueryBuilder('b')
+            ->where('b.date BETWEEN :start AND :end')
+            ->setParameter('start', $windowStart->format('Y-m-d'))
+            ->setParameter('end', $windowEnd->format('Y-m-d'))
+            ->orderBy('b.date', 'ASC')
+            ->getQuery()
+            ->getResult();
+
+        // Reparto del nodo inmediatamente anterior al mes y el inmediatamente posterior.
+        $prev = null;
+        $next = null;
+        foreach ($baskets as $basket) {
+            $physical = $this->nodeDeliveryDate->physicalDateFor($basket, $node);
+            if ($physical === null) {
+                continue;
+            }
+            if ($physical < $current) {
+                if ($prev === null || $physical > $prev) {
+                    $prev = $physical;
+                }
+            } elseif ($physical > $monthEnd) {
+                if ($next === null || $physical < $next) {
+                    $next = $physical;
+                }
+            }
+        }
+
+        // Se extiende COMO MUCHO una semana por lado, y solo si el reparto del nodo vecino
+        // cae justo en esa semana inmediata (y no ya en las naturales). Así un nodo semanal
+        // enseña su reparto vecino; uno quincenal, cuyo reparto vecino queda a dos semanas, no
+        // extiende (mostrarlo colaría una semana vacía y quedaría fatal): se deja en lo natural.
+        $weekBack = $naturalStart->modify('-7 days');
+        $gridStart = ($prev !== null && $prev >= $weekBack && $prev < $naturalStart) ? $weekBack : $naturalStart;
+        $weekForward = $naturalEnd->modify('+7 days');
+        $gridEnd = ($next !== null && $next > $naturalEnd && $next <= $weekForward) ? $weekForward : $naturalEnd;
+
+        return [$gridStart, $gridEnd];
     }
 }

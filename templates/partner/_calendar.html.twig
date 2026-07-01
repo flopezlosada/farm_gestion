@@ -53,7 +53,7 @@
     </div>
 {% endif %}
 
-<div class="rcal">
+<div class="rcal" data-rcal-view-year="{{ current.format('Y') }}" data-rcal-view-month="{{ current.format('n') }}">
 
     <div class="rcal-left">
 
@@ -108,7 +108,7 @@
                            hay reparto para nadie. Gris, no arrastrable ni editable; navegable
                            para que el panel explique el cierre. #}
                         <a href="{{ path(cal.route_view, cal.idp|merge({ year: slot.basket.date.format('Y'), month: slot.basket.date.format('n'), sel: slot.basket.id })) }}"
-                           class="rcal-cell rcal-closed{{ is_sel ? ' sel' }}">
+                           class="rcal-cell rcal-closed{{ is_sel ? ' sel' }}{{ not day.inMonth ? ' out' }}">
                             <span class="n">{{ day.date.format('j') }}</span>
                             <span class="x"><i class="fa fa-lock"></i></span>
                         </a>
@@ -124,7 +124,7 @@
                            entregas del mes coincide con el visible, pero para una que se cuela
                            por fecha física desde un mes vecino es donde el panel la resuelve. #}
                         <a href="{{ path(cal.route_view, cal.idp|merge({ year: slot.basket.date.format('Y'), month: slot.basket.date.format('n'), sel: slot.basket.id })) }}"
-                           class="rcal-cell {{ no_pickup ? 'rcal-skip' : 'rcal-pick' }}{{ is_sel ? ' sel' }}{{ is_today ? ' rcal-today' }}{{ day_grab ? ' rcal-grab' }}"
+                           class="rcal-cell {{ no_pickup ? 'rcal-skip' : 'rcal-pick' }}{{ is_sel ? ' sel' }}{{ is_today ? ' rcal-today' }}{{ day_grab ? ' rcal-grab' }}{{ not day.inMonth ? ' out' }}"
                            {% if day_grab %}draggable="true" data-rcal-draggable data-rcal-kind="grid" data-rcal-skip-url="{{ path(cal.route_skip, cal.idp|merge({ basketId: slot.basket.id })) }}" data-rcal-move-url="{{ path(cal.route_move, cal.idp|merge({ basketId: slot.basket.id })) }}"{% endif %}>
                             <span class="n">{{ day.date.format('j') }}</span>
                             {% if is_today %}<span class="rcal-today-tag">hoy</span>{% endif %}
@@ -377,10 +377,14 @@
             clearHighlights();
         });
 
+        // Mes que se está viendo: lo mandamos con el cambio para que el servidor NOS DEVUELVA
+        // a este mes (y no salte al del destino) cuando el movimiento cruza de mes — el destino
+        // se dibuja en la semana vecina de esta misma vista.
+        const view = { view_year: cal.dataset.rcalViewYear, view_month: cal.dataset.rcalViewMonth };
         cal.querySelectorAll('[data-rcal-target]').forEach(function (cell) {
             wireDrop(cell, {
-                grid: function (card) { send(card.dataset.rcalMoveUrl, { to_basket_id: cell.dataset.rcalTo, _csrf_token: MOVE_CSRF }); },
-                tray: function (card) { send(card.dataset.rcalRecoverUrl, { to_basket_id: cell.dataset.rcalTo, _csrf_token: MOVE_CSRF }); },
+                grid: function (card) { send(card.dataset.rcalMoveUrl, Object.assign({ to_basket_id: cell.dataset.rcalTo, _csrf_token: MOVE_CSRF }, view)); },
+                tray: function (card) { send(card.dataset.rcalRecoverUrl, Object.assign({ to_basket_id: cell.dataset.rcalTo, _csrf_token: MOVE_CSRF }, view)); },
             });
         });
 
@@ -490,7 +494,9 @@
             f.method = 'post';
             f.action = moveUrl;
             f.innerHTML = '<input type="hidden" name="to_basket_id" value="' + target.dataset.rcalTo + '">'
-                        + '<input type="hidden" name="_csrf_token" value="' + MOVE_CSRF + '">';
+                        + '<input type="hidden" name="_csrf_token" value="' + MOVE_CSRF + '">'
+                        + '<input type="hidden" name="view_year" value="' + cal.dataset.rcalViewYear + '">'
+                        + '<input type="hidden" name="view_month" value="' + cal.dataset.rcalViewMonth + '">';
             document.body.appendChild(f);
             f.submit();
         }
