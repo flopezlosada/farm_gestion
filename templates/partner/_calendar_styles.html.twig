@@ -30,6 +30,11 @@
   .rcal-cell.out .n{font-weight:400}
   .rcal-cell.empty{background:var(--csa-surface-alt);border-color:var(--csa-rule-soft)}
   .rcal-cell.wknd.empty{background:#f0efe9}
+  /* Los días de OTRO mes son andamiaje: la celda vacía pierde el RELLENO (queda hueca) pero
+     conserva un BORDE atenuado, para que se lea como celda sin competir. Por contraste, el
+     mes actual —celdas CON relleno— destaca como el contenido real, sin cajas grises. Al
+     arrastrar, un día soltable recupera su marco (reglas .rcal-dragok/.rcal-dropok abajo). */
+  .rcal-cell.empty.out{background:transparent;border-color:var(--csa-rule)}
 
   /* hoy: aro fino azul + etiqueta */
   .rcal-cell.rcal-today{box-shadow:inset 0 0 0 1.5px var(--csa-sky)}

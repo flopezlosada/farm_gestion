@@ -216,10 +216,12 @@ class PartnerDeliveryCalendarController extends AbstractController
                 $to->getDate()->format('d/m/Y'),
             ));
 
+            [$year, $month] = $this->returnMonth($request, $to);
+
             return $this->redirectToRoute('partner_delivery_calendar', [
                 'id' => $partner->getId(),
-                'year' => $to->getDate()->format('Y'),
-                'month' => $to->getDate()->format('n'),
+                'year' => $year,
+                'month' => $month,
                 'sel' => $to->getId(),
             ]);
         }
@@ -262,13 +264,39 @@ class PartnerDeliveryCalendarController extends AbstractController
             ));
         }
 
-        // Tras mover, el día con la cesta pasa a ser el destino: se selecciona ese.
+        // Tras mover se selecciona el día destino, pero se VUELVE al mes que se estaba
+        // viendo (no al del destino): si el movimiento cruzó de mes, el destino ya se dibuja
+        // en la semana vecina de esa misma vista. Ver returnMonth().
+        [$year, $month] = $this->returnMonth($request, $to);
+
         return $this->redirectToRoute('partner_delivery_calendar', [
             'id' => $partner->getId(),
-            'year' => $to->getDate()->format('Y'),
-            'month' => $to->getDate()->format('n'),
+            'year' => $year,
+            'month' => $month,
             'sel' => $to->getId(),
         ]);
+    }
+
+    /**
+     * Mes al que volver tras un cambio (mover / recuperar): el que se estaba VIENDO en el
+     * calendario (campos view_year/view_month que manda el partial) si llega y es válido,
+     * para no saltar al mes del destino cuando el movimiento cruza de mes — el destino se
+     * dibuja en la semana vecina de esa misma vista. Si no llega (o es inválido), cae al mes
+     * del $fallback (comportamiento previo).
+     *
+     * @param Request $request
+     * @param Basket  $fallback Basket cuyo mes se usa si no llega una vista válida (el destino).
+     * @return array{0: int, 1: int} [año, mes]
+     */
+    private function returnMonth(Request $request, Basket $fallback): array
+    {
+        $year = (int) $request->request->get('view_year', 0);
+        $month = (int) $request->request->get('view_month', 0);
+        if ($year >= 2000 && $month >= 1 && $month <= 12) {
+            return [$year, $month];
+        }
+
+        return [(int) $fallback->getDate()->format('Y'), (int) $fallback->getDate()->format('n')];
     }
 
     /**
@@ -378,7 +406,16 @@ class PartnerDeliveryCalendarController extends AbstractController
             ? sprintf('Recuperada en su día: %s.', $origin->getDate()->format('d/m/Y'))
             : sprintf('Recuperada el %s.', $to->getDate()->format('d/m/Y')));
 
-        return $backToCalendar($to);
+        // Se vuelve al mes que se estaba viendo (no al del destino), igual que al mover:
+        // el día recuperado puede caer en la semana vecina dibujada. Ver returnMonth().
+        [$year, $month] = $this->returnMonth($request, $to);
+
+        return $this->redirectToRoute('partner_delivery_calendar', [
+            'id' => $partner->getId(),
+            'year' => $year,
+            'month' => $month,
+            'sel' => $to->getId(),
+        ]);
     }
 
     /**
