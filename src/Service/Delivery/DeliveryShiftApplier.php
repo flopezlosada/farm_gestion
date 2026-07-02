@@ -33,7 +33,7 @@ use Doctrine\ORM\EntityManagerInterface;
  * DeliveryShiftValidator y decidir si bloquea o sigue. El applier asume
  * que la decisión está ya tomada.
  */
-final class DeliveryShiftApplier implements ShiftReconciliationActions
+final class DeliveryShiftApplier implements ShiftReconciliationActions, PartnerDeliverySkipper
 {
     private const STATUS_PICKED = 1;
     private const STATUS_SKIPPED = 2;

@@ -8,9 +8,9 @@ use App\Entity\Partner;
 use App\Entity\PartnerDeliveryShift;
 use App\Repository\PartnerDeliveryShiftRepository;
 use App\Service\Delivery\AccumulatingMove;
-use App\Service\Delivery\DeliveryCalendarProjector;
-use App\Service\Delivery\DeliveryShiftApplier;
-use App\Service\Delivery\ExtraBasketEditor;
+use App\Service\Delivery\ExtraBasketAdder;
+use App\Service\Delivery\PartnerDeliverySkipper;
+use App\Service\Delivery\PartnerMonthProjection;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -30,7 +30,7 @@ class AccumulatingMoveTest extends TestCase
         $to = $this->basket(200, '2026-06-19');
 
         // El origen lleva 1 cesta de verdura + 1 docena de huevos.
-        $projector = $this->createMock(DeliveryCalendarProjector::class);
+        $projector = $this->createMock(PartnerMonthProjection::class);
         $projector->method('projectMonth')->with($partner, 2026, 6)->willReturn([
             ['basket' => $this->basket(99, '2026-06-01'), 'items' => [['component' => $this->component(self::ID_VEG), 'amount' => '5.00']]],
             ['basket' => $from, 'items' => [
@@ -43,7 +43,7 @@ class AccumulatingMoveTest extends TestCase
         $capturedAmounts = null;
         $capturedBasket = null;
 
-        $extraEditor = $this->createMock(ExtraBasketEditor::class);
+        $extraEditor = $this->createMock(ExtraBasketAdder::class);
         $extraEditor->method('addToDelivery')->willReturnCallback(
             function (Partner $p, Basket $b, array $amounts) use (&$calls, &$capturedAmounts, &$capturedBasket): void {
                 $calls[] = 'add';
@@ -52,7 +52,7 @@ class AccumulatingMoveTest extends TestCase
             }
         );
 
-        $applier = $this->createMock(DeliveryShiftApplier::class);
+        $applier = $this->createMock(PartnerDeliverySkipper::class);
         $applier->method('applySkipIntent')->willReturnCallback(
             function () use (&$calls): PartnerDeliveryShift {
                 $calls[] = 'skip';
@@ -81,19 +81,19 @@ class AccumulatingMoveTest extends TestCase
         $from = $this->basket(100, '2026-06-05');
         $to = $this->basket(200, '2026-06-19');
 
-        $projector = $this->createMock(DeliveryCalendarProjector::class);
+        $projector = $this->createMock(PartnerMonthProjection::class);
         $projector->method('projectMonth')->willReturn([
             ['basket' => $from, 'items' => [['component' => $this->component(self::ID_VEG), 'amount' => '1.00']]],
         ]);
 
-        $extraEditor = $this->createMock(ExtraBasketEditor::class);
+        $extraEditor = $this->createMock(ExtraBasketAdder::class);
         $extraEditor->expects($this->once())->method('addToDelivery');
 
         $incoming = $this->createStub(PartnerDeliveryShift::class);
         $shiftRepo = $this->createMock(PartnerDeliveryShiftRepository::class);
         $shiftRepo->method('findIncoming')->with($partner, $from)->willReturn($incoming);
 
-        $applier = $this->createMock(DeliveryShiftApplier::class);
+        $applier = $this->createMock(PartnerDeliverySkipper::class);
         $applier->expects($this->once())->method('skipMovedDelivery')->with($incoming);
         $applier->expects($this->never())->method('applySkipIntent');
 
@@ -106,14 +106,14 @@ class AccumulatingMoveTest extends TestCase
         $from = $this->basket(100, '2026-06-05');
         $to = $this->basket(200, '2026-06-19');
 
-        $projector = $this->createMock(DeliveryCalendarProjector::class);
+        $projector = $this->createMock(PartnerMonthProjection::class);
         $projector->method('projectMonth')->willReturn([
             ['basket' => $from, 'items' => []],
         ]);
 
-        $extraEditor = $this->createMock(ExtraBasketEditor::class);
+        $extraEditor = $this->createMock(ExtraBasketAdder::class);
         $extraEditor->expects($this->never())->method('addToDelivery');
-        $applier = $this->createMock(DeliveryShiftApplier::class);
+        $applier = $this->createMock(PartnerDeliverySkipper::class);
         $applier->expects($this->never())->method('applySkipIntent');
         $applier->expects($this->never())->method('skipMovedDelivery');
         $shiftRepo = $this->createMock(PartnerDeliveryShiftRepository::class);

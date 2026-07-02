@@ -35,7 +35,7 @@ use Doctrine\ORM\EntityManagerInterface;
  * puntuales (PartnerDeliveryShift). Ambos SÍ aparecen una vez materializados
  * (regla 1); solo faltan en la vista dry de meses futuros aún sin tocar.
  */
-final class DeliveryCalendarProjector
+final class DeliveryCalendarProjector implements PartnerMonthProjection
 {
     public function __construct(
         private readonly EntityManagerInterface $em,

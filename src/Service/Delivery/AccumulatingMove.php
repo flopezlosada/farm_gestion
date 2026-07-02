@@ -31,9 +31,9 @@ use App\Repository\PartnerDeliveryShiftRepository;
 final class AccumulatingMove
 {
     public function __construct(
-        private readonly DeliveryShiftApplier $applier,
-        private readonly ExtraBasketEditor $extraEditor,
-        private readonly DeliveryCalendarProjector $projector,
+        private readonly PartnerDeliverySkipper $applier,
+        private readonly ExtraBasketAdder $extraEditor,
+        private readonly PartnerMonthProjection $projector,
         private readonly PartnerDeliveryShiftRepository $shiftRepository,
     ) {
     }
