@@ -125,7 +125,7 @@
                            por fecha física desde un mes vecino es donde el panel la resuelve. #}
                         <a href="{{ path(cal.route_view, cal.idp|merge({ year: slot.basket.date.format('Y'), month: slot.basket.date.format('n'), sel: slot.basket.id })) }}"
                            class="rcal-cell {{ no_pickup ? 'rcal-skip' : 'rcal-pick' }}{{ is_sel ? ' sel' }}{{ is_today ? ' rcal-today' }}{{ day_grab ? ' rcal-grab' }}{{ not day.inMonth ? ' out' }}"
-                           {% if day_grab %}draggable="true" data-rcal-draggable data-rcal-kind="grid" data-rcal-skip-url="{{ path(cal.route_skip, cal.idp|merge({ basketId: slot.basket.id })) }}" data-rcal-move-url="{{ path(cal.route_move, cal.idp|merge({ basketId: slot.basket.id })) }}"{% endif %}>
+                           {% if day_grab %}draggable="true" data-rcal-draggable data-rcal-kind="grid" data-rcal-skip-url="{{ path(cal.route_skip, cal.idp|merge({ basketId: slot.basket.id })) }}" data-rcal-move-url="{{ path(cal.route_move, cal.idp|merge({ basketId: slot.basket.id })) }}" data-rcal-accumulate-to="{{ slot.basket.id }}" data-rcal-accumulate-date="{{ slot.date|format_date(pattern='EEEE d MMM', locale='es') }}"{% endif %}>
                             <span class="n">{{ day.date.format('j') }}</span>
                             {% if is_today %}<span class="rcal-today-tag">hoy</span>{% endif %}
                             {% if day_grab %}<span class="rcal-grip" title="Arrastra para mover o no recoger"><i class="fa fa-arrows"></i></span>{% endif %}
@@ -318,11 +318,54 @@
 
 </div>
 
+{# Modal de confirmación del TRASLADO SUMANDO (soltar una cesta sobre un día que ya
+   recoge). Vive FUERA de .rcal para sobrevivir al refresco AJAX (que reemplaza .rcal). #}
+{% if partner.sharePartner is null and not ro and dnd %}
+<dialog id="rcal-accumulate-modal" class="csa-modal csa-modal--warning" role="alertdialog" aria-labelledby="rcal-accumulate-title">
+    <button class="csa-modal__close" type="button" aria-label="Cerrar" onclick="this.closest('dialog').close()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l14 14M19 5L5 19"/></svg>
+    </button>
+    <header class="csa-modal__header">
+        <span class="csa-modal__icon" aria-hidden="true"><i class="fa fa-exclamation-triangle"></i></span>
+        <div class="csa-modal__heading">
+            <span class="csa-modal__eyebrow">Trasladar sumando</span>
+            <h2 class="csa-modal__title" id="rcal-accumulate-title">¿Trasladar la cesta a un día que ya recoge?</h2>
+        </div>
+    </header>
+    <div class="csa-modal__body">
+        <p>El <strong id="rcal-accumulate-day">ese día</strong> ya recoge cesta. Si continúas, ese día pasará a llevar <strong>2 cestas</strong> y el día de origen se quedará sin entrega.</p>
+        <p class="csa-muted">Para deshacerlo no bastará arrastrar la cesta de vuelta: habrá que quitar la cesta extra del destino y recuperar la del origen.</p>
+    </div>
+    <footer class="csa-modal__footer">
+        <button type="button" class="csa-modal__btn csa-modal__btn--ghost" onclick="this.closest('dialog').close()" autofocus>Cancelar</button>
+        <button type="button" class="csa-modal__btn csa-modal__btn--primary" id="rcal-accumulate-confirm">Sí, trasladar y sumar</button>
+    </footer>
+</dialog>
+{% endif %}
+
 {% if partner.sharePartner is null and not ro and dnd %}
 <script>
 (function () {
     const SKIP_CSRF = {{ cal.csrf_skip|json_encode|raw }};
     const MOVE_CSRF = {{ cal.csrf_move|json_encode|raw }};
+
+    // Traslado SUMANDO: soltar una cesta sobre un día donde el socio ya recoge no manda
+    // el cambio directo, sino que confirma primero (ese día pasa a llevar 2 cestas).
+    const accModal = document.getElementById('rcal-accumulate-modal');
+    let pendingAcc = null;
+    function openAccumulate(url, to, dateLabel, view) {
+        if (!accModal) { // sin <dialog>: respaldo con confirm nativo.
+            if (window.confirm('Ese día ya recoge. ¿Trasladar la cesta y sumar (pasará a 2 cestas)?')) {
+                send(url, Object.assign({ to_basket_id: to, accumulate: 1, _csrf_token: MOVE_CSRF }, view));
+            }
+            return;
+        }
+        pendingAcc = { url: url, to: to, view: view };
+        const dayEl = document.getElementById('rcal-accumulate-day');
+        if (dayEl) dayEl.textContent = dateLabel || 'ese día';
+        if (accConfirm) accConfirm.disabled = false; // rearmar en cada apertura.
+        accModal.showModal();
+    }
 
     let dragged = null;
 
@@ -368,6 +411,10 @@
             if (card.dataset.rcalKind === 'grid') {
                 const tray = cal.querySelector('.rcal-tray');
                 if (tray) tray.classList.add('rcal-dragok');
+                // Días donde YA recoge: destinos válidos para TRASLADAR SUMANDO (menos el propio origen).
+                cal.querySelectorAll('[data-rcal-accumulate-to]').forEach(function (el) {
+                    if (el !== card) el.classList.add('rcal-dragok');
+                });
             }
         });
 
@@ -385,6 +432,16 @@
             wireDrop(cell, {
                 grid: function (card) { send(card.dataset.rcalMoveUrl, Object.assign({ to_basket_id: cell.dataset.rcalTo, _csrf_token: MOVE_CSRF }, view)); },
                 tray: function (card) { send(card.dataset.rcalRecoverUrl, Object.assign({ to_basket_id: cell.dataset.rcalTo, _csrf_token: MOVE_CSRF }, view)); },
+            });
+        });
+
+        // Soltar una cesta sobre un día que YA recoge: confirmar y trasladar sumando.
+        cal.querySelectorAll('[data-rcal-accumulate-to]').forEach(function (cell) {
+            wireDrop(cell, {
+                grid: function (card) {
+                    if (card === cell) return; // sobre sí misma: nada que hacer.
+                    openAccumulate(card.dataset.rcalMoveUrl, cell.dataset.rcalAccumulateTo, cell.dataset.rcalAccumulateDate, view);
+                },
             });
         });
 
@@ -448,6 +505,19 @@
         const btn = e.target.closest('.csa-alert__close');
         if (btn) { const a = btn.closest('.csa-alert'); if (a) a.remove(); }
     });
+
+    // Confirmación del traslado sumando: el modal vive fuera de .rcal (no se reemplaza en
+    // los refrescos AJAX), así que su botón se engancha una sola vez aquí.
+    const accConfirm = document.getElementById('rcal-accumulate-confirm');
+    if (accConfirm) {
+        accConfirm.addEventListener('click', function () {
+            accConfirm.disabled = true; // evita doble envío por doble-click/Enter.
+            if (accModal) accModal.close();
+            if (!pendingAcc) return;
+            send(pendingAcc.url, Object.assign({ to_basket_id: pendingAcc.to, accumulate: 1, _csrf_token: MOVE_CSRF }, pendingAcc.view));
+            pendingAcc = null;
+        });
+    }
 
     const root = document.querySelector('.rcal');
     if (root) bind(root);

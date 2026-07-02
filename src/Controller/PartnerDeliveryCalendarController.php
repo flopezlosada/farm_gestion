@@ -10,6 +10,7 @@ use App\Entity\PartnerDeliveryShift;
 use App\Entity\WeeklyBasket;
 use App\Repository\BasketRepository;
 use App\Repository\PartnerDeliveryShiftRepository;
+use App\Service\Delivery\AccumulatingMove;
 use App\Service\Delivery\DeliveryCalendarProjector;
 use App\Service\Delivery\DeliveryCalendarViewBuilder;
 use App\Service\Delivery\DeliveryShiftApplier;
@@ -100,6 +101,7 @@ class PartnerDeliveryCalendarController extends AbstractController
         WeeklyBasketGenerator $generator,
         DeliveryCalendarProjector $projector,
         DeliveryShiftApplier $applier,
+        AccumulatingMove $accumulatingMove,
         EntityManagerInterface $em,
     ): Response {
         $from = $basketRepository->find($basketId);
@@ -239,9 +241,50 @@ class PartnerDeliveryCalendarController extends AbstractController
                 continue;
             }
             if ($to->getId() !== $patternOrigin->getId() && !empty($s['items'])) {
-                $this->addFlash('error', 'El socio ya tiene una entrega ese día.');
+                // El destino YA recoge. Sin confirmar, se rechaza como siempre. Con
+                // confirmación explícita (el front manda accumulate=1 tras el modal),
+                // se TRASLADA sumando: el destino pasa a llevar 2 cestas y el origen se
+                // vacía. No es un traslado reversible con un arrastre (ver AccumulatingMove).
+                if (!$request->request->getBoolean('accumulate')) {
+                    $this->addFlash('error', 'El socio ya tiene una entrega ese día.');
 
-                return $backToCalendar();
+                    return $backToCalendar();
+                }
+
+                try {
+                    // En transacción: el traslado son dos pasos (sumar al destino + vaciar el
+                    // origen) que hacen flush por separado; envolverlos hace atómico el conjunto
+                    // (si el segundo falla, rollback del primero) en vez de dejar estado parcial.
+                    $em->wrapInTransaction(fn () => $accumulatingMove->move(
+                        $partner,
+                        $from,
+                        $to,
+                        actor: 'gestor:' . $this->getUser()?->getId(),
+                    ));
+                } catch (\LogicException $e) {
+                    $this->addFlash('error', $e->getMessage());
+
+                    return $backToCalendar();
+                } catch (\Throwable $e) {
+                    $this->addFlash('error', 'No se pudo trasladar la cesta. No se ha aplicado ningún cambio; inténtalo de nuevo.');
+
+                    return $backToCalendar();
+                }
+
+                $this->addFlash('success', sprintf(
+                    'Cesta del %s trasladada al %s: se suma a lo que ya recoge ese día.',
+                    $from->getDate()->format('d/m/Y'),
+                    $to->getDate()->format('d/m/Y'),
+                ));
+
+                [$year, $month] = $this->returnMonth($request, $to);
+
+                return $this->redirectToRoute('partner_delivery_calendar', [
+                    'id' => $partner->getId(),
+                    'year' => $year,
+                    'month' => $month,
+                    'sel' => $to->getId(),
+                ]);
             }
             break;
         }
