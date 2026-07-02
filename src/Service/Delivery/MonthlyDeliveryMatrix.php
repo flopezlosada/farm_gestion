@@ -219,9 +219,18 @@ class MonthlyDeliveryMatrix
         $mods = array_values($group['mods']);
         usort($mods, static fn (array $a, array $b): int => $a['order'] <=> $b['order']);
 
-        $modalities = array_map(function (array $mod): array {
+        // El grupo de compartidas NO se reordena: sus filas ya llegan con las
+        // parejas (Partner.sharePartner) pegadas desde NodeDeliverySheet::buildShared,
+        // y reordenar por código+nombre las separaría. Se conserva el orden de
+        // inserción, que es fiable porque los dos hogares de una misma cesta
+        // comparten calendario de reparto (aparecen las mismas semanas, y por
+        // tanto entran juntos y emparejados en el acumulador).
+        $shared = $group['shared'];
+        $modalities = array_map(function (array $mod) use ($shared): array {
             $rows = array_values($mod['rows']);
-            usort($rows, $this->compareRows(...));
+            if (!$shared) {
+                usort($rows, $this->compareRows(...));
+            }
 
             return ['label' => $mod['label'], 'rows' => $rows];
         }, $mods);
