@@ -451,16 +451,25 @@
                         <span class="dlv-wbg__name">Albergue</span>
                     </div>
                     <div class="dlv-wbg__meta">
-                        <div class="m"><span class="n">{{ helper_rows|length }}</span><span class="l">voluntarios</span></div>
-                        <div class="m"><span class="n">{{ alb_cestas == alb_cestas|round ? alb_cestas|number_format(0) : alb_cestas|number_format(1, ',', '.') }}</span><span class="l">cestas</span></div>
-                        <div class="m eggs"><span class="n">{{ alb_huevos }}</span><span class="l">huevos</span></div>
+                        <div class="m"><span class="n" data-meta="socios">{{ helper_rows|length }}</span><span class="l">voluntarios</span></div>
+                        <div class="m"><span class="n" data-meta="cestas">{{ alb_cestas == alb_cestas|round ? alb_cestas|number_format(0) : alb_cestas|number_format(1, ',', '.') }}</span><span class="l">cestas</span></div>
+                        <div class="m eggs"><span class="n" data-meta="huevos">{{ alb_huevos }}</span><span class="l">huevos</span></div>
                     </div>
                 </header>
                 <div class="dlv-wbg__body">
                     <table>
                         <tbody>
                         {% for row in helper_rows %}
-                            <tr class="dlv-row">
+                            {# Mismos data-* que las filas de socix (_row.html.twig) para que el
+                               filtro de la barra las trate igual: sin data-name el buscador rompía
+                               (undefined.indexOf) y dejaba de ocultar los grupos sin coincidencias.
+                               data-modality="extra" = el filtro de modalidad nunca las oculta. #}
+                            <tr class="dlv-row"
+                                data-name="{{ row.name|lower }}"
+                                data-modality="extra"
+                                data-eggs="{{ row.dozens > 0 ? '1' : '0' }}"
+                                data-cestas="{{ row.cestas }}"
+                                data-dozens="{{ row.dozens }}">
                                 <td class="partner">{{ row.name }}</td>
                                 <td style="width: 130px;">
                                     <span class="mod mod--extra"><span class="dot"></span>Albergue</span>
@@ -617,7 +626,7 @@
         const onlyEgg = eggsOnly.classList.contains('on');
 
         rows.forEach(tr => {
-            const ok = (!q || tr.dataset.name.indexOf(q) !== -1)
+            const ok = (!q || (tr.dataset.name || '').indexOf(q) !== -1)
                 // Las cestas extra de no-suscriptores no tienen modalidad: nunca las oculta el
                 // filtro de modalidad (siempre visibles salvo búsqueda/huevos).
                 && (tr.dataset.modality === 'extra' || mods.has(tr.dataset.modality))

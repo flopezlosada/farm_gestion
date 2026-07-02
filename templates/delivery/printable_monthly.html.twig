@@ -49,6 +49,8 @@
     .grp td { border: 0; padding-top: 4px; padding-bottom: 1px; }
     .grp .g-name { font-weight: bold; font-size: 8px; }
     .shared-hd td { background: #e26b0a; color: #fff; font-weight: bold; font-size: 8px; letter-spacing: .08em; text-transform: uppercase; padding: 2px 4px; }
+    /* Borde inferior grueso: separa una pareja de cesta compartida de la siguiente (como el semanal). */
+    .pair-end td { border-bottom: 1.2px solid #555; }
     .modsub td { border: 0; padding: 2px 4px 0; font-weight: bold; font-size: 6.5px; letter-spacing: .08em; text-transform: uppercase; color: #555; }
 
     /* Filas */
@@ -120,7 +122,7 @@
                     <tr class="modsub"><td colspan="{{ ncols }}">{{ mod.label }}</td></tr>
                 {% endif %}
                 {% for row in mod.rows %}
-                    <tr>
+                    <tr class="{{ group.shared and row.pair_end ? 'pair-end' : '' }}">
                         <td class="t-loc" style="background: {{ row.color }};">{{ row.locality }}</td>
                         <td>{{ row.name }}</td>
                         <td class="t-code">{{ row.code }}</td>

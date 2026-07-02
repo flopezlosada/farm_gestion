@@ -41,7 +41,7 @@ class MonthlyDeliveryMatrix
      *     name:string,
      *     groups: list<array{
      *       name:string, color:?string, shared:bool, multi_mod:bool,
-     *       modalities: list<array{label:?string, rows: list<array{name:string, code:string, locality:string, color:?string, cells: list<?array{cestas:float, egg_spec:?string, egg_count:int}>}>}>,
+     *       modalities: list<array{label:?string, rows: list<array{name:string, code:string, locality:string, color:?string, pair_end:bool, cells: list<?array{cestas:float, egg_spec:?string, egg_count:int}>}>}>,
      *       subtotals: list<?array{cestas:float, egg_spec:?string}>
      *     }>,
      *     totals: list<?array{cestas:float, docenas:float}>
@@ -179,6 +179,11 @@ class MonthlyDeliveryMatrix
             'code' => $row['code'] ?? '',
             'locality' => $row['locality'] ?? '',
             'color' => $row['color'] ?? $groupColor,
+            // Marca de fin de pareja de cesta compartida (última fila de la pareja),
+            // heredada del semanal (NodeDeliverySheet::buildShared). Es estructural,
+            // no cambia entre semanas, así que basta capturarla al crear la fila: el
+            // template pinta un borde inferior para separar una pareja de la siguiente.
+            'pair_end' => (bool) ($row['pair_end'] ?? false),
             'cells' => array_fill(0, $weekCount, null),
         ];
 

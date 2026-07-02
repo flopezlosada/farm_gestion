@@ -135,6 +135,41 @@ class MonthlyDeliveryMatrixTest extends TestCase
         );
     }
 
+    public function testCompartidasPropaganLaMarcaDeFinDePareja(): void
+    {
+        // Las filas de compartidas llegan del semanal con pair_end en la última
+        // fila de cada pareja (Zoe cierra Ana↔Zoe, Mia cierra Nico↔Mia). El mensual
+        // debe conservar esa marca para que el template pinte el borde separador.
+        $result = $this->matrix->build([
+            $this->week('2026-06-05', [
+                [
+                    'node' => $this->node('Sierra'),
+                    'sheet' => [
+                        'groups' => [],
+                        'shared' => [
+                            'rows' => [
+                                $this->sharedRow('Ana', 10, false),
+                                $this->sharedRow('Zoe', 11, true),
+                                $this->sharedRow('Nico', 12, false),
+                                $this->sharedRow('Mia', 13, true),
+                            ],
+                            'subtotal_cestas' => 2.0,
+                            'subtotal_eggs' => null,
+                        ],
+                        'totals' => ['cestas' => 2.0, 'docenas' => 0.0],
+                    ],
+                ],
+            ]),
+        ]);
+
+        $rows = $result['nodes'][0]['groups'][0]['modalities'][0]['rows'];
+        $this->assertSame(
+            ['Ana' => false, 'Zoe' => true, 'Nico' => false, 'Mia' => true],
+            array_column($rows, 'pair_end', 'name'),
+            'la marca de fin de pareja se conserva en la última fila de cada pareja',
+        );
+    }
+
     public function testSocioQueAparecePorPrimeraVezEnSemanaTardiaTieneCeldaPreviaVacia(): void
     {
         $result = $this->matrix->build([
@@ -247,6 +282,12 @@ class MonthlyDeliveryMatrixTest extends TestCase
             'relocated_from' => null,
             'partner_id' => $partnerId,
         ];
+    }
+
+    /** Fila de cesta compartida tal como la emite NodeDeliverySheet::buildShared, con su marca pair_end. */
+    private function sharedRow(string $name, int $partnerId, bool $pairEnd): array
+    {
+        return $this->row($name, 'SC', 0.5, $partnerId) + ['pair_end' => $pairEnd];
     }
 
     private function node(string $name): Node

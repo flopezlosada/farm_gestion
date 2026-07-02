@@ -29,7 +29,7 @@ use Doctrine\ORM\EntityManagerInterface;
  * permanentes (amount=2)—, sino que ajusta las líneas de componente de esa única
  * entrega. Así no se toca el motor de generación ni los findOneBy(basket, partner).
  */
-final class ExtraBasketEditor
+final class ExtraBasketEditor implements ExtraBasketAdder
 {
     private const STATUS_PICKED = 1;
 
