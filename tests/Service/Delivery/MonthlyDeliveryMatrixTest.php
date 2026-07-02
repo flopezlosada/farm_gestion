@@ -100,6 +100,41 @@ class MonthlyDeliveryMatrixTest extends TestCase
         $this->assertCount(2, $groups[1]['modalities'][0]['rows']);
     }
 
+    public function testCompartidasConservanLasParejasPegadas(): void
+    {
+        // Las filas de compartidas llegan YA emparejadas desde NodeDeliverySheet
+        // (Ana↔Zoe, Nico↔Mia). El mensual NO debe reordenarlas por nombre, que
+        // rompería las parejas dejando [Ana, Mia, Nico, Zoe].
+        $result = $this->matrix->build([
+            $this->week('2026-06-05', [
+                [
+                    'node' => $this->node('Sierra'),
+                    'sheet' => [
+                        'groups' => [],
+                        'shared' => [
+                            'rows' => [
+                                $this->row('Ana', 'SC', 0.5, 10),
+                                $this->row('Zoe', 'SC', 0.5, 11),
+                                $this->row('Nico', 'SC', 0.5, 12),
+                                $this->row('Mia', 'SC', 0.5, 13),
+                            ],
+                            'subtotal_cestas' => 2.0,
+                            'subtotal_eggs' => null,
+                        ],
+                        'totals' => ['cestas' => 2.0, 'docenas' => 0.0],
+                    ],
+                ],
+            ]),
+        ]);
+
+        $rows = $result['nodes'][0]['groups'][0]['modalities'][0]['rows'];
+        $this->assertSame(
+            ['Ana', 'Zoe', 'Nico', 'Mia'],
+            array_column($rows, 'name'),
+            'las parejas de cesta compartida salen juntas, no reordenadas por nombre',
+        );
+    }
+
     public function testSocioQueAparecePorPrimeraVezEnSemanaTardiaTieneCeldaPreviaVacia(): void
     {
         $result = $this->matrix->build([
