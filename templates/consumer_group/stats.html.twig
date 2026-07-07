@@ -1,0 +1,140 @@
+{# ============================================================
+ # Analítica del grupo de consumo.
+ #   - global       { roundsByStatus, confirmationRate, totalMoney, orders, participants, avgTicket }
+ #   - by_producer  [{name, rounds, orders, money}]
+ #   - by_product   [{name, unit, quantity, money, rounds, avgPrice}]
+ #   - by_partner   [{name, rounds, money}]
+ #   - statuses     map status(int) => etiqueta
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% macro bar(value, max) %}
+    {% set pct = max > 0 ? (value / max * 100)|round : 0 %}
+    <span class="cg-bar"><span class="cg-bar__fill" style="width: {{ pct }}%;"></span></span>
+{% endmacro %}
+
+{% block title %}Estadísticas · Grupo de consumo{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('consumer_group_index') }}">Grupo de consumo</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Estadísticas</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    <style>
+        .cg-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--csa-sp-3); }
+        .cg-kpi { border: 1px solid var(--csa-rule); border-radius: 10px; padding: var(--csa-sp-4); background: #fff; }
+        .cg-kpi__v { font-size: 1.6rem; font-weight: 700; }
+        .cg-kpi__l { font-size: .8rem; color: var(--csa-muted); }
+        .cg-bar { display: inline-block; width: 120px; height: 8px; background: var(--csa-rule); border-radius: 4px; overflow: hidden; vertical-align: middle; }
+        .cg-bar__fill { display: block; height: 100%; background: var(--csa-accent, #5a8f3d); }
+    </style>
+{% endblock %}
+
+{% block csa_main %}
+{% import _self as m %}
+<div class="prl">
+
+    {{ csa.page_header('Grupo de consumo', 'Estadísticas', 'Cifras sobre pedidos realizados (confirmados o entregados). Los importes son informativos.') }}
+
+    {# ============ KPIs GLOBALES ============ #}
+    <div class="cg-kpis" style="margin-bottom: var(--csa-sp-5);">
+        <div class="cg-kpi"><div class="cg-kpi__v">{{ global.totalMoney|number_format(2, ',', '.') }} €</div><div class="cg-kpi__l">movido (informativo)</div></div>
+        <div class="cg-kpi"><div class="cg-kpi__v">{{ global.orders }}</div><div class="cg-kpi__l">pedidos</div></div>
+        <div class="cg-kpi"><div class="cg-kpi__v">{{ global.participants }}</div><div class="cg-kpi__l">socias participantes</div></div>
+        <div class="cg-kpi"><div class="cg-kpi__v">{{ global.avgTicket is not null ? global.avgTicket|number_format(2, ',', '.') ~ ' €' : '—' }}</div><div class="cg-kpi__l">ticket medio</div></div>
+        <div class="cg-kpi"><div class="cg-kpi__v">{{ global.confirmationRate is not null ? (global.confirmationRate * 100)|round ~ '%' : '—' }}</div><div class="cg-kpi__l">tasa de confirmación</div></div>
+    </div>
+
+    {# ============ RONDAS POR ESTADO ============ #}
+    <div class="csa-card" style="margin-bottom: var(--csa-sp-5);">
+        <h2 class="csa-card__title">Pedidos por estado</h2>
+        <div class="csa-row" style="flex-wrap: wrap; gap: var(--csa-sp-4);">
+            {% for status, label in statuses %}
+                <div><b>{{ global.roundsByStatus[status]|default(0) }}</b> <span class="csa-muted">{{ label|lower }}</span></div>
+            {% endfor %}
+            <div><b>{{ global.confirmed }}</b> <span class="csa-muted">confirmados</span></div>
+        </div>
+    </div>
+
+    {# ============ POR PRODUCTOR ============ #}
+    <div class="csa-card" style="margin-bottom: var(--csa-sp-5);">
+        <h2 class="csa-card__title">Por productor</h2>
+        {% if by_producer is empty %}
+            <p class="csa-muted">Todavía no hay pedidos realizados.</p>
+        {% else %}
+            {% set max = by_producer|map(r => r.money)|reduce((a, b) => max(a, b), 0) %}
+            <table class="prl-table">
+                <thead><tr><th>Productor</th><th class="tight">Pedidos</th><th class="tight">Pedidos</th><th class="tight">Importe</th><th></th></tr></thead>
+                <tbody>
+                    {% for r in by_producer %}
+                        <tr>
+                            <td>{{ r.name }}</td>
+                            <td class="tight">{{ r.rounds }}</td>
+                            <td class="tight">{{ r.orders }}</td>
+                            <td class="tight">{{ r.money|number_format(2, ',', '.') }} €</td>
+                            <td>{{ m.bar(r.money, max) }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+
+    {# ============ POR PRODUCTO ============ #}
+    <div class="csa-card" style="margin-bottom: var(--csa-sp-5);">
+        <h2 class="csa-card__title">Por producto</h2>
+        {% if by_product is empty %}
+            <p class="csa-muted">Todavía no hay pedidos realizados.</p>
+        {% else %}
+            {% set max = by_product|map(r => r.money)|reduce((a, b) => max(a, b), 0) %}
+            <table class="prl-table">
+                <thead><tr><th>Producto</th><th class="tight">Cantidad</th><th class="tight">Precio medio</th><th class="tight">Pedidos</th><th class="tight">Importe</th><th></th></tr></thead>
+                <tbody>
+                    {% for r in by_product %}
+                        <tr>
+                            <td>{{ r.name }} <span class="csa-muted">/ {{ r.unit }}</span></td>
+                            <td class="tight">{{ r.quantity|number_format(2, ',', '.') }}</td>
+                            <td class="tight">{{ r.avgPrice is not null ? r.avgPrice|number_format(2, ',', '.') ~ ' €' : '—' }}</td>
+                            <td class="tight">{{ r.rounds }}</td>
+                            <td class="tight">{{ r.money|number_format(2, ',', '.') }} €</td>
+                            <td>{{ m.bar(r.money, max) }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+
+    {# ============ POR SOCIA ============ #}
+    <div class="csa-card">
+        <h2 class="csa-card__title">Por socia</h2>
+        {% if by_partner is empty %}
+            <p class="csa-muted">Todavía no hay pedidos realizados.</p>
+        {% else %}
+            {% set max = by_partner|map(r => r.money)|reduce((a, b) => max(a, b), 0) %}
+            <table class="prl-table">
+                <thead><tr><th>Socia</th><th class="tight">Pedidos</th><th class="tight">Gasto acumulado</th><th></th></tr></thead>
+                <tbody>
+                    {% for r in by_partner %}
+                        <tr>
+                            <td>{{ r.name }}</td>
+                            <td class="tight">{{ r.rounds }}</td>
+                            <td class="tight">{{ r.money|number_format(2, ',', '.') }} €</td>
+                            <td>{{ m.bar(r.money, max) }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

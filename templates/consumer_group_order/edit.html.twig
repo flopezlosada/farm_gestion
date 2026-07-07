@@ -1,0 +1,33 @@
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Editar pedido · {{ round.title }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('consumer_group_index') }}">Grupo de consumo</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('consumer_group_show', { id: round.id }) }}">{{ round.title }}</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ order.partner.name }} {{ order.partner.surname }}</span>
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header('Grupo de consumo', 'Pedido de ' ~ order.partner.name ~ ' ' ~ order.partner.surname, round.title) }}
+
+    <div class="csa-card csa-form-narrow">
+        <form method="post" action="{{ path('consumer_group_order_edit', { id: order.id }) }}">
+            <input type="hidden" name="_token" value="{{ csrf_token('consumer_group_order_edit_' ~ order.id) }}">
+
+            {% include 'consumer_group_order/_quantities.html.twig' %}
+
+            <p class="csa-muted" style="margin-top: var(--csa-sp-3);">Pon 0 en un producto para quitarlo del pedido.</p>
+
+            <div class="csa-row" style="justify-content: flex-end; margin-top: var(--csa-sp-4);">
+                {{ csa.btn('Cancelar', { variant: 'ghost', href: path('consumer_group_show', { id: round.id }) }) }}
+                <button type="submit" class="csa-btn csa-btn--primary">Guardar pedido</button>
+            </div>
+        </form>
+    </div>
+{% endblock %}

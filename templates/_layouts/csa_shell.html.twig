@@ -380,6 +380,22 @@
                         </div>
                     {% endif %}
 
+                    {% if is_granted('FEATURE_GRUPO_CONSUMO') and is_granted('ROLE_GESTION_GRUPO_CONSUMO') %}
+                        <div class="csa-navgroup{{ sec_collapsed }}">
+                            <button type="button" class="csa-navgroup__head">Grupo de consumo <i class="csa-navgroup__chev fa fa-chevron-down" aria-hidden="true"></i></button>
+                            <div class="csa-navgroup__items">
+                                {{ _self.nav_link('Pedidos', path('consumer_group_index'), 'fa-shopping-basket',
+                                   route == 'consumer_group_index' or route starts with 'consumer_group_show' or route starts with 'consumer_group_new' or route starts with 'consumer_group_edit' or route starts with 'consumer_group_confirm') }}
+                                {{ _self.nav_link('Productores', path('consumer_group_producer_index'), 'fa-leaf',
+                                   route starts with 'consumer_group_producer') }}
+                                {{ _self.nav_link('Categorías', path('consumer_group_category_index'), 'fa-tags',
+                                   route starts with 'consumer_group_category') }}
+                                {{ _self.nav_link('Estadísticas', path('consumer_group_stats'), 'fa-bar-chart',
+                                   route == 'consumer_group_stats') }}
+                            </div>
+                        </div>
+                    {% endif %}
+
                 {% endblock %}
             </nav>
         </aside>

@@ -1,0 +1,84 @@
+{# ============================================================
+ # Listado de productores del grupo de consumo.
+ #   - producers  Producer[]
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Productores · Grupo de consumo{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('consumer_group_index') }}">Grupo de consumo</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Productores</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+{% endblock %}
+
+{% block csa_main %}
+<div class="prl">
+
+    {{ csa.page_header('Grupo de consumo', 'Productores', 'El catálogo de productores y sus productos, reutilizable en cada ronda.') }}
+
+    <div class="prl-toolbar">
+        <div class="counters"><b>{{ producers|length }}</b> productor{{ producers|length == 1 ? '' : 'es' }}</div>
+        <div class="spacer"></div>
+        {% if is_granted('ROLE_GESTION_GRUPO_CONSUMO_EDIT') %}
+            <a href="{{ path('consumer_group_producer_new') }}" class="prl-btn prl-btn--primary">
+                <i class="fa fa-plus"></i> Nuevo productor
+            </a>
+        {% endif %}
+    </div>
+
+    <div class="prl-table-wrap">
+        {% if producers is empty %}
+            <div class="prl-empty">Todavía no hay productores. Crea el primero con el botón de arriba.</div>
+        {% else %}
+            <table class="prl-table">
+                <thead>
+                    <tr>
+                        <th>Productor</th>
+                        <th class="tight">Gestión</th>
+                        <th class="tight">Productos</th>
+                        <th class="tight">Estado</th>
+                        <th class="actions"><span class="sr-only">Acciones</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for producer in producers %}
+                        <tr>
+                            <td>
+                                <div class="prl-person">
+                                    <span class="prl-person__avatar prl-person__avatar--sage" aria-hidden="true"><i class="fa fa-leaf"></i></span>
+                                    <div class="prl-person__body">
+                                        <a class="prl-person__name" href="{{ path('consumer_group_producer_show', { id: producer.id }) }}">{{ producer.name }}</a>
+                                        {% if producer.contactName %}<span class="prl-person__meta">{{ producer.contactName }}</span>{% endif %}
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="tight">{{ producer.selfManaged ? 'Autogestión' : 'Comisión' }}</td>
+                            <td class="tight">{{ producer.products|length }}</td>
+                            <td class="tight">
+                                {% if producer.active %}
+                                    <span class="prl-chip prl-chip--activo"><span class="dot"></span>Activo</span>
+                                {% else %}
+                                    <span class="prl-chip prl-chip--baja"><span class="dot"></span>Inactivo</span>
+                                {% endif %}
+                            </td>
+                            <td class="actions">
+                                <a href="{{ path('consumer_group_producer_show', { id: producer.id }) }}" title="Ver" aria-label="Ver"><i class="fa fa-eye"></i></a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

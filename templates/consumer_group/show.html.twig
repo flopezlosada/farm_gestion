@@ -1,0 +1,341 @@
+{# ============================================================
+ # Ficha de un pedido del grupo de consumo (gestión).
+ #   - round        ConsumerGroupRound
+ #   - aggregate    { participantCount, total, byItem: [{item, quantity, subtotal}] }
+ #   - transitions  int[] estados a los que se puede pasar ahora
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% set status_badge = {
+    0: { label: 'Abierto',    cls: 'activo'  },
+    1: { label: 'Cerrado',    cls: 'pausado' },
+    3: { label: 'Cancelado',  cls: 'baja'    },
+    4: { label: 'Entregado',  cls: 'mute'    }
+} %}
+{% set tx_labels = { 0: 'Reabrir pedido', 1: 'Cerrar pedido', 3: 'Cancelar pedido', 4: 'Marcar entregado' } %}
+{% set sb = status_badge[round.status]|default({ label: round.statusLabel, cls: 'mute' }) %}
+{% set can_edit = is_granted('ROLE_GESTION_GRUPO_CONSUMO_EDIT') %}
+{% set can_socixs = is_granted('ROLE_GESTION_SOCIXS') %}
+{% set can_reparto = is_granted('ROLE_GESTION_REPARTO') %}
+
+{% block title %}{{ round.title }} · Grupo de consumo{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('consumer_group_index') }}">Grupo de consumo</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ round.title }}</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    <div class="prt">
+        <header class="prt-hero">
+            <div>
+                <h1 class="prt-hero__title">{{ round.title }}</h1>
+                <div class="prt-hero__meta">
+                    <span class="prt-chip prt-chip--{{ sb.cls }}"><span class="dot"></span>{{ sb.label }}</span>
+                    {% if round.confirmed %}<span class="prt-chip prt-chip--mod-1"><span class="dot"></span>Confirmado</span>{% endif %}
+                    <span class="sep">·</span>
+                    <span>{{ round.producer ? round.producer.name : '' }}</span>
+                    {% if round.deliveryDate %}<span class="sep">·</span><span>Entrega {{ round.deliveryDate|date('d/m/Y') }}</span>{% endif %}
+                </div>
+            </div>
+            <div class="prt-hero__actions">
+                <a href="{{ path('consumer_group_index') }}" class="prt-btn"><i class="fa fa-arrow-left"></i> Volver</a>
+            </div>
+        </header>
+
+        <div class="cg-facts">
+            <div class="cg-fact"><span class="cg-fact__l">Cierre de apuntes</span><span class="cg-fact__v">{{ round.ordersCloseAt ? round.ordersCloseAt|date('d/m/Y H:i') : '—' }}</span></div>
+            <div class="cg-fact"><span class="cg-fact__l">Entrega</span><span class="cg-fact__v">{{ round.deliveryDate ? round.deliveryDate|date('d/m/Y') : '—' }}</span></div>
+            <div class="cg-fact"><span class="cg-fact__l">Mínimo</span><span class="cg-fact__v">{{ round.minimumCondition ?: '—' }}</span></div>
+            {% if round.confirmedAt %}<div class="cg-fact"><span class="cg-fact__l">Confirmado</span><span class="cg-fact__v">{{ round.confirmedAt|date('d/m/Y') }}</span></div>{% endif %}
+            {% if round.deliveredAt %}<div class="cg-fact"><span class="cg-fact__l">Entregado</span><span class="cg-fact__v">{{ round.deliveredAt|date('d/m/Y') }}</span></div>{% endif %}
+            {% if round.cancelledAt %}<div class="cg-fact"><span class="cg-fact__l">Cancelado</span><span class="cg-fact__v">{{ round.cancelledAt|date('d/m/Y') }}</span></div>{% endif %}
+        </div>
+
+        {% if round.description or round.providerNote or round.cancelReason %}
+            <div class="cg-notes">
+                {% if round.description %}<p>{{ round.description|nl2br }}</p>{% endif %}
+                {% if round.providerNote %}<p><b>Nota al productor:</b> {{ round.providerNote|nl2br }}</p>{% endif %}
+                {% if round.cancelReason %}<p><b>Motivo de cancelación:</b> {{ round.cancelReason|nl2br }}</p>{% endif %}
+            </div>
+        {% endif %}
+
+        {% if can_edit %}
+            <div class="prt-actionbar">
+                {% if round.canReceiveOrders %}
+                    <a href="{{ path('consumer_group_edit', { id: round.id }) }}" class="prt-btn prt-btn--primary"><i class="fa fa-pencil"></i> Editar</a>
+                    <a href="{{ path('consumer_group_items', { id: round.id }) }}" class="prt-btn"><i class="fa fa-list"></i> Productos del pedido</a>
+                {% endif %}
+                {% if can_confirm %}
+                    <a href="{{ path('consumer_group_confirm', { id: round.id }) }}" class="prt-btn prt-btn--primary"><i class="fa fa-check"></i> Confirmar pedido</a>
+                {% endif %}
+                {% for to in transitions %}
+                    <form method="post" action="{{ path('consumer_group_transition', { id: round.id }) }}" style="display:inline;"
+                          {% if to == 3 %}onsubmit="var r=prompt('Motivo de cancelación (opcional):'); if(r===null){return false;} this.reason.value=r; return true;"{% endif %}>
+                        <input type="hidden" name="_token" value="{{ csrf_token('consumer_group_transition_' ~ round.id) }}">
+                        <input type="hidden" name="to" value="{{ to }}">
+                        {% if to == 3 %}<input type="hidden" name="reason" value="">{% endif %}
+                        <button type="submit" class="prt-btn{{ to == 3 ? ' prt-btn--danger' : '' }}">{{ tx_labels[to] ?? 'Cambiar estado' }}</button>
+                    </form>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <section class="prt-card">
+            <header class="prt-card__head">
+                <h2 class="prt-card__title"><span class="accent"></span>Apuntes · {{ aggregate.participantCount }} socia{{ aggregate.participantCount == 1 ? '' : 's' }}</h2>
+                <a href="{{ path('consumer_group_export', { id: round.id }) }}" class="prt-btn"><i class="fa fa-download"></i> Exportar pedido (CSV)</a>
+            </header>
+            <div class="prt-card__body">
+            {% if round.items is empty %}
+                <p class="csa-muted">Este pedido no tiene productos.
+                    {% if can_edit and round.canReceiveOrders %}<a href="{{ path('consumer_group_items', { id: round.id }) }}">Añádelos</a>.{% endif %}
+                </p>
+            {% else %}
+                <div class="prl prl-table-wrap">
+                    <table class="prl-table">
+                        <thead>
+                            <tr><th>Producto</th><th class="tight">Precio</th><th class="tight">Cantidad total</th><th class="tight">Subtotal</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for line in aggregate.byItem %}
+                                <tr>
+                                    <td>{{ line.item.name }} <span class="csa-muted">/ {{ line.item.unit }}</span></td>
+                                    <td class="tight">{{ line.item.price|number_format(2, ',', '.') }} €</td>
+                                    <td class="tight">{{ line.quantity|number_format(2, ',', '.') }}</td>
+                                    <td class="tight">{{ line.subtotal|number_format(2, ',', '.') }} €</td>
+                                </tr>
+                            {% endfor %}
+                            <tr>
+                                <td colspan="3" style="text-align: right;"><b>Total</b></td>
+                                <td class="tight"><b>{{ aggregate.total|number_format(2, ',', '.') }} €</b></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p class="csa-muted" style="margin-top: var(--csa-sp-2);">
+                    Importes informativos: la app no cobra. La comisión decide si se supera el mínimo del productor.
+                </p>
+            {% endif %}
+            </div>
+        </section>
+
+        <section class="prt-card">
+            <header class="prt-card__head">
+                <h2 class="prt-card__title"><span class="accent"></span>Pedidos por socia</h2>
+                <div class="csa-row" style="gap: var(--csa-sp-3); align-items: center; flex-wrap: wrap;">
+                    {% if socias is not empty %}
+                        <div class="cg-pay-summary">
+                            <span class="prl-chip prl-chip--activo"><span class="dot"></span>{{ payment.paidCount }}/{{ payment.count }} pagados</span>
+                            <span class="csa-muted">Cobrado <b>{{ payment.paidTotal|number_format(2, ',', '.') }} €</b> · Pendiente <b>{{ payment.pendingTotal|number_format(2, ',', '.') }} €</b></span>
+                        </div>
+                    {% endif %}
+                    {% if can_edit and round.canManageOrders %}
+                        <a href="{{ path('consumer_group_order_new', { id: round.id }) }}" class="prt-btn"><i class="fa fa-plus"></i> Apuntar socia</a>
+                    {% endif %}
+                </div>
+            </header>
+            <div class="prt-card__body">
+            {% if socias is empty %}
+                <p class="csa-muted">Todavía no se ha apuntado ninguna socia.</p>
+            {% else %}
+                <div class="prl">
+                    <div class="prl-toolbar">
+                        <div class="prl-search">
+                            <input type="search" id="cg-socia-q" placeholder="Buscar socia…" autocomplete="off">
+                        </div>
+                        <div class="spacer"></div>
+                        <div class="cg-pago-filter" role="group" aria-label="Filtrar por pago">
+                            <button type="button" class="prl-btn prl-btn--sm is-active" data-pago="all">Todas</button>
+                            <button type="button" class="prl-btn prl-btn--sm" data-pago="pending">Pendientes</button>
+                            <button type="button" class="prl-btn prl-btn--sm" data-pago="paid">Pagadas</button>
+                        </div>
+                    </div>
+                    <div class="prl-table-wrap">
+                        <table class="prl-table" id="cg-socias">
+                            <thead>
+                                <tr>
+                                    <th>Socia</th>
+                                    <th>Pedido</th>
+                                    <th class="tight">Total</th>
+                                    <th class="tight">Pago</th>
+                                    <th class="tight" style="width: 44px;"><span class="sr-only">Acciones</span></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for order in socias %}
+                                    {% set partner = order.partner %}
+                                    <tr data-name="{{ (partner.name ~ ' ' ~ partner.surname)|lower }}" data-paid="{{ order.paid ? '1' : '0' }}">
+                                        <td>
+                                            <div class="prl-person">
+                                                <span class="prl-person__avatar prl-person__avatar--sage" aria-hidden="true"><i class="fa fa-user"></i></span>
+                                                <div class="prl-person__body">
+                                                    {% if can_edit and round.canManageOrders %}
+                                                        <a class="prl-person__name" href="{{ path('consumer_group_order_edit', { id: order.id }) }}">{{ partner.name }} {{ partner.surname }}</a>
+                                                    {% else %}
+                                                        <span class="prl-person__name">{{ partner.name }} {{ partner.surname }}</span>
+                                                    {% endif %}
+                                                    {% set contacto = partner.email ?: partner.celular %}
+                                                    {% if contacto %}<span class="prl-person__meta">{{ contacto }}</span>{% endif %}
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <ul class="cg-order__lines">
+                                                {% for oline in order.lines %}
+                                                    {% if oline.quantity > 0 %}
+                                                        <li>{{ oline.quantity|number_format(2, ',', '.') }} {{ oline.roundItem.unit }} · {{ oline.roundItem.name }}</li>
+                                                    {% endif %}
+                                                {% endfor %}
+                                            </ul>
+                                        </td>
+                                        <td class="tight"><b>{{ order.total|number_format(2, ',', '.') }} €</b></td>
+                                        <td class="tight">
+                                            {% if order.paid %}
+                                                <span class="prl-chip prl-chip--activo"><span class="dot"></span>Pagado</span>
+                                            {% else %}
+                                                <span class="prl-chip prl-chip--pausado"><span class="dot"></span>Pendiente</span>
+                                            {% endif %}
+                                            {% if can_edit %}
+                                                <form method="post" action="{{ path('consumer_group_order_toggle_paid', { id: order.id }) }}" style="display:inline; margin-left: var(--csa-sp-2);">
+                                                    <input type="hidden" name="_token" value="{{ csrf_token('consumer_group_toggle_paid_' ~ order.id) }}">
+                                                    <button type="submit" class="prl-btn prl-btn--sm">{{ order.paid ? 'Marcar pendiente' : 'Marcar pagado' }}</button>
+                                                </form>
+                                            {% endif %}
+                                        </td>
+                                        <td class="tight" style="text-align: right;">
+                                            {% if can_socixs or can_reparto %}
+                                                <button type="button" class="cg-kebab" aria-label="Acciones de la socia">
+                                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg>
+                                                </button>
+                                                <div class="cg-kebab-menu" hidden>
+                                                    {% if can_socixs %}<a href="{{ path('partner_show', { id: partner.id }) }}"><i class="fa fa-user"></i> Ver ficha del socio</a>{% endif %}
+                                                    {% if can_socixs or can_reparto %}<a href="{{ path('partner_delivery_calendar', { id: partner.id }) }}"><i class="fa fa-calendar"></i> Calendario de reparto</a>{% endif %}
+                                                </div>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                                <tr id="cg-socias-empty" hidden><td colspan="5" class="csa-muted" style="text-align:center; padding: var(--csa-sp-4);">Ninguna socia coincide con el filtro.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <script>
+                (function () {
+                    var table = document.getElementById('cg-socias');
+                    if (!table) { return; }
+                    var q = document.getElementById('cg-socia-q');
+                    var rows = Array.prototype.slice.call(table.querySelectorAll('tbody tr[data-name]'));
+                    var emptyRow = document.getElementById('cg-socias-empty');
+                    var pago = 'all';
+                    function apply() {
+                        var term = (q.value || '').trim().toLowerCase();
+                        var visible = 0;
+                        rows.forEach(function (r) {
+                            var okName = !term || r.getAttribute('data-name').indexOf(term) !== -1;
+                            var paid = r.getAttribute('data-paid') === '1';
+                            var okPago = pago === 'all' || (pago === 'paid' ? paid : !paid);
+                            var show = okName && okPago;
+                            r.hidden = !show;
+                            if (show) { visible++; }
+                        });
+                        if (emptyRow) { emptyRow.hidden = visible !== 0; }
+                    }
+                    q.addEventListener('input', apply);
+                    Array.prototype.forEach.call(document.querySelectorAll('.cg-pago-filter [data-pago]'), function (btn) {
+                        btn.addEventListener('click', function () {
+                            document.querySelectorAll('.cg-pago-filter [data-pago]').forEach(function (b) { b.classList.remove('is-active'); });
+                            btn.classList.add('is-active');
+                            pago = btn.getAttribute('data-pago');
+                            apply();
+                        });
+                    });
+                })();
+                </script>
+
+                <script>
+                (function () {
+                    var openMenu = null;
+                    function closeAll() { if (openMenu) { openMenu.hidden = true; openMenu = null; } }
+                    Array.prototype.forEach.call(document.querySelectorAll('.cg-kebab'), function (btn) {
+                        btn.addEventListener('click', function (e) {
+                            e.stopPropagation();
+                            var menu = btn.nextElementSibling;
+                            if (openMenu === menu) { closeAll(); return; }
+                            closeAll();
+                            menu.hidden = false;
+                            var r = btn.getBoundingClientRect();
+                            menu.style.top = (r.bottom + 4) + 'px';
+                            menu.style.left = Math.max(8, r.right - menu.offsetWidth) + 'px';
+                            openMenu = menu;
+                        });
+                    });
+                    document.addEventListener('click', closeAll);
+                    window.addEventListener('scroll', closeAll, true);
+                    window.addEventListener('resize', closeAll);
+                })();
+                </script>
+            {% endif %}
+            </div>
+        </section>
+
+        {% if can_edit and round.orders is empty %}
+            <div class="csa-row" style="justify-content: flex-end;">
+                <form method="post" action="{{ path('consumer_group_delete', { id: round.id }) }}"
+                      onsubmit="return confirm('¿Borrar este pedido? No tiene pedidos, así que no se pierde nada.')">
+                    <input type="hidden" name="_token" value="{{ csrf_token('consumer_group_delete_' ~ round.id) }}">
+                    <button type="submit" class="csa-btn csa-btn--ghost">Borrar pedido</button>
+                </form>
+            </div>
+        {% endif %}
+
+    </div>
+
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include '_components/partner_card_styles.html.twig' %}
+    {% include 'partner/_listing_styles.html.twig' %}
+    <style>
+        /* Tira compacta de datos del pedido (hermana de prt-pickup de la ficha). */
+        .cg-facts { display: flex; flex-wrap: wrap; gap: var(--csa-sp-5); margin-top: var(--csa-sp-4);
+            padding: var(--csa-sp-3) var(--csa-sp-4); background: var(--prt-bg, #fbfaf6); border: 1px solid var(--prt-line, #ebe7dd); border-radius: 10px; }
+        .cg-fact { display: flex; flex-direction: column; gap: 2px; }
+        .cg-fact__l { font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--prt-ink-faint, #8d8773); font-weight: 600; }
+        .cg-fact__v { font-family: 'Fraunces', serif; font-weight: 600; font-size: 15px; color: var(--prt-ink, #1d1c17); }
+        .cg-notes { margin-top: var(--csa-sp-3); color: var(--prt-ink-soft, #5a564a); }
+        .cg-notes p { margin: 0 0 var(--csa-sp-2); }
+        /* Separar y dar contraste a la barra de acciones respecto a la cabecera. */
+        .prt-actionbar { margin-top: var(--csa-sp-5); padding-top: var(--csa-sp-4); border-top: 1px solid var(--prt-line, #ebe7dd); }
+        /* Botones de acción con color de acento (verde salvia) para que contrasten
+         * sobre el fondo claro; el principal va en verde sólido, cancelar en terracota. */
+        .prt-actionbar .prt-btn:not(.prt-btn--primary):not(.prt-btn--danger) {
+            border-color: var(--prt-sage, #5b7a4c); color: var(--prt-sage-d, #2f4426);
+        }
+        .prt-actionbar .prt-btn:not(.prt-btn--primary):not(.prt-btn--danger) .fa { color: var(--prt-sage, #5b7a4c); }
+        .prt-actionbar .prt-btn:not(.prt-btn--primary):not(.prt-btn--danger):hover {
+            background: var(--prt-sage-l, #eaf0e2); border-color: var(--prt-sage-d, #2f4426); color: var(--prt-sage-d, #2f4426);
+        }
+        .prt-actionbar .prt-btn--danger { border-color: var(--prt-terra, #b45d3a); color: var(--prt-terra-d, #7d3a1f); }
+        .prt-actionbar .prt-btn--danger .fa { color: var(--prt-terra, #b45d3a); }
+        .prt-actionbar .prt-btn--danger:hover { background: var(--prt-terra-l, #fae6dc); border-color: var(--prt-terra-d, #7d3a1f); }
+        .cg-order__lines { margin: 0; padding-left: var(--csa-sp-4); font-size: .9rem; }
+        .cg-pay-summary { display: flex; align-items: center; gap: var(--csa-sp-3); flex-wrap: wrap; }
+        .cg-pago-filter { display: inline-flex; gap: var(--csa-sp-2); }
+        .cg-pago-filter .prl-btn.is-active { background: var(--prt-ink, #1d1c17); color: #fff; border-color: var(--prt-ink, #1d1c17); }
+        .cg-kebab { background: none; border: 0; cursor: pointer; color: var(--prt-ink-faint, #8d8773); padding: 4px 6px; border-radius: 6px; line-height: 0; }
+        .cg-kebab:hover { background: var(--prt-bg, #fbfaf6); color: var(--prt-ink, #1d1c17); }
+        .cg-kebab-menu { position: fixed; z-index: 100; min-width: 210px; background: #fff; border: 1px solid var(--prt-line-2, #d8d2c2); border-radius: 8px; box-shadow: 0 8px 26px rgba(0,0,0,0.16); padding: 6px; }
+        .cg-kebab-menu a { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 6px; color: var(--prt-ink, #1d1c17); text-decoration: none; font-size: 13px; }
+        .cg-kebab-menu a:hover { background: var(--prt-sage-l, #eaf0e2); }
+    </style>
+{% endblock %}
