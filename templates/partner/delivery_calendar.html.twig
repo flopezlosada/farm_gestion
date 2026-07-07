@@ -33,6 +33,8 @@
         partner ~ (pickup_place ? ' · recoge en ' ~ pickup_place : '')
     ) }}
 
+    {% include '_components/cg_calendar_panel.html.twig' %}
+
     {% include 'partner/_calendar.html.twig' with {
         cal: {
             dnd: true,

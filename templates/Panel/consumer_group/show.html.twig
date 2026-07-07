@@ -1,0 +1,117 @@
+{# ============================================================
+ # Panel del socix · ficha de un pedido del grupo de consumo.
+ # Abierto → formulario para apuntarse/editar. Cerrado/otras →
+ # resumen de su pedido y el estado.
+ #
+ # El controller pasa:
+ #   - round       ConsumerGroupRound
+ #   - order       ConsumerGroupOrder|null (el de la socia)
+ #   - quantities  array product_id => cantidad ya pedida
+ #   - can_order   bool (¿el pedido admite pedidos?)
+ # ============================================================ #}
+
+{% extends '_layouts/csa_panel.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}{{ round.title }} · Grupo de consumo{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('panel') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('panel_consumer_group_index') }}">Grupo de consumo</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ round.title }}</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header('Grupo de consumo', round.title, round.producer) }}
+
+    <div class="csa-stack-lg">
+
+        {% if round.description %}
+            <div class="csa-card"><p style="margin: 0;">{{ round.description|nl2br }}</p></div>
+        {% endif %}
+
+        {% if can_order %}
+            <div class="csa-card">
+                <p class="csa-muted" style="margin-top: 0;">
+                    Cierre de apuntes: <b>{{ round.ordersCloseAt ? round.ordersCloseAt|date('d/m/Y H:i') : '—' }}</b>.
+                    Entrega el <b>{{ round.deliveryDate ? round.deliveryDate|date('d/m/Y') : '—' }}</b> con tu cesta.
+                    Puedes cambiar tu pedido hasta el cierre; no pagas nada hasta que la comisión confirme el pedido.
+                </p>
+
+                {% if round.items is empty %}
+                    <p class="csa-muted">Este pedido todavía no tiene productos.</p>
+                {% else %}
+                    <form method="post" action="{{ path('panel_consumer_group_order', { id: round.id }) }}">
+                        <input type="hidden" name="_token" value="{{ csrf_token('panel_consumer_group_order_' ~ round.id) }}">
+                        <div class="cg-order-form">
+                            {% for item in round.items %}
+                                <div class="cg-order-line">
+                                    <label class="cg-order-line__label" for="cg-qty-{{ item.id }}">
+                                        {{ item.name }}
+                                        <span class="csa-muted">· {{ item.price|number_format(2, ',', '.') }} € / {{ item.unit }}</span>
+                                    </label>
+                                    <input type="number" min="0" step="0.01" inputmode="decimal"
+                                           id="cg-qty-{{ item.id }}"
+                                           name="quantity[{{ item.id }}]"
+                                           value="{{ quantities[item.id]|default('') }}"
+                                           class="csa-input cg-order-line__qty"
+                                           placeholder="0">
+                                    <span class="cg-order-line__unit">{{ item.unit }}</span>
+                                </div>
+                            {% endfor %}
+                        </div>
+
+                        <div class="csa-row" style="justify-content: flex-end; margin-top: var(--csa-sp-4);">
+                            {{ csa.btn('Volver', { variant: 'ghost', href: path('panel_consumer_group_index') }) }}
+                            <button type="submit" class="csa-btn csa-btn--primary">Guardar pedido</button>
+                        </div>
+                    </form>
+                {% endif %}
+            </div>
+        {% else %}
+            {# Pedido no abierto: resumen del pedido y estado. #}
+            <div class="csa-card">
+                <span class="prl-chip prl-chip--pausado"><span class="dot"></span>{{ round.statusLabel }}</span>
+                <p class="csa-muted">
+                    Este pedido ya no admite cambios. Entrega prevista el
+                    <b>{{ round.deliveryDate ? round.deliveryDate|date('d/m/Y') : '—' }}</b>.
+                </p>
+
+                {% if order and not order.empty %}
+                    <h3 style="margin-bottom: var(--csa-sp-2);">Tu pedido</h3>
+                    <ul class="cg-order-summary">
+                        {% for line in order.lines %}
+                            {% if line.quantity > 0 %}
+                                <li>{{ line.quantity|number_format(2, ',', '.') }} {{ line.roundItem.unit }} · {{ line.roundItem.name }}</li>
+                            {% endif %}
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="csa-muted">No te apuntaste a este pedido.</p>
+                {% endif %}
+
+                <div class="csa-row" style="margin-top: var(--csa-sp-4);">
+                    {{ csa.btn('Volver', { variant: 'ghost', href: path('panel_consumer_group_index') }) }}
+                </div>
+            </div>
+        {% endif %}
+
+    </div>
+
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    <style>
+        .cg-order-form { display: flex; flex-direction: column; gap: var(--csa-sp-3); }
+        .cg-order-line { display: flex; align-items: center; gap: var(--csa-sp-3); }
+        .cg-order-line__label { flex: 1; }
+        .cg-order-line__qty { flex: 0 0 7rem; }
+        .cg-order-line__unit { flex: 0 0 4rem; color: var(--csa-muted); }
+        .cg-order-summary { margin: 0; padding-left: var(--csa-sp-4); }
+    </style>
+{% endblock %}

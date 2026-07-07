@@ -57,6 +57,7 @@ class PartnerDeliveryCalendarController extends AbstractController
         Partner $partner,
         Request $request,
         DeliveryCalendarViewBuilder $viewBuilder,
+        \App\Service\ConsumerGroup\PartnerConsumerGroupDeliveries $cgDeliveryService,
     ): Response {
         // El gestor puede arrastrar (withDropTargets: true). La resolución del mes,
         // la proyección, la papelera y la rejilla viven en el builder compartido.
@@ -66,7 +67,21 @@ class PartnerDeliveryCalendarController extends AbstractController
 
         $view = $viewBuilder->build($partner, $year, $month, $selectedBasketId, withDropTargets: true);
 
-        return $this->render('partner/delivery_calendar.html.twig', $view);
+        // Entregas del grupo de consumo (pedido confirmado + pagado) de este socio, para
+        // que el gestor las vea junto a su calendario de reparto. Entrega FIJA.
+        $cgDeliveries = $this->isGranted('FEATURE_GRUPO_CONSUMO')
+            ? $cgDeliveryService->upcomingForPartner($partner)
+            : [];
+
+        // Día pinchado en la rejilla que tiene pedido pero no cesta (entrega solo-pedido):
+        // el panel se dibuja por fecha, no por Basket. El template ignora un valor que no
+        // case con ninguna entrega del socio.
+        $cgSelectedDate = $request->query->get('seld');
+
+        return $this->render('partner/delivery_calendar.html.twig', $view + [
+            'cg_deliveries' => $cgDeliveries,
+            'cg_selected_date' => $cgSelectedDate,
+        ]);
     }
 
     /**

@@ -19,6 +19,7 @@ use App\Repository\PartnerBasketShareRepository;
 use App\Repository\PartnerDeliveryShiftRepository;
 use App\Repository\WeeklyBasketGroupRepository;
 use App\Repository\WeeklyBasketRepository;
+use App\Service\ConsumerGroup\PartnerConsumerGroupDeliveries;
 use App\Service\Delivery\DeliveryCalendarProjector;
 use App\Service\Delivery\DeliveryCalendarViewBuilder;
 use App\Service\Delivery\DeliveryDeadline;
@@ -467,7 +468,7 @@ class PanelController extends AbstractController
      * @return Response
      */
     #[Route('/calendar', name: 'panel_calendar', methods: ['GET'])]
-    public function calendar(Request $request, DeliveryCalendarViewBuilder $viewBuilder): Response
+    public function calendar(Request $request, DeliveryCalendarViewBuilder $viewBuilder, PartnerConsumerGroupDeliveries $cgDeliveryService): Response
     {
         if (($redirect = $this->ensureReady()) !== null) {
             return $redirect;
@@ -489,7 +490,19 @@ class PanelController extends AbstractController
         // una entrega (los marca para el flujo de "mover por toque").
         $view = $viewBuilder->build($partner, $year, $month, $selectedBasketId, withDropTargets: $canSelfServe);
 
-        return $this->render('Panel/calendar.html.twig', $view + ['can_self_serve' => $canSelfServe]);
+        // Entregas del grupo de consumo (pedido confirmado + apunte pagado) que la
+        // socia recibirá: entrega FIJA en su calendario. Del socio LOGUEADO (los
+        // apuntes son individuales), no de basketOwner.
+        $cgDeliveries = $this->isGranted('FEATURE_GRUPO_CONSUMO')
+            ? $cgDeliveryService->upcomingForPartner($this->getUser()->getPartner())
+            : [];
+
+        return $this->render('Panel/calendar.html.twig', $view + [
+            'can_self_serve' => $canSelfServe,
+            'cg_deliveries' => $cgDeliveries,
+            // Día pinchado con pedido pero sin cesta: el panel se dibuja por fecha.
+            'cg_selected_date' => $request->query->get('seld'),
+        ]);
     }
 
     /**
