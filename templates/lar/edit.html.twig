@@ -1,0 +1,72 @@
+{# Editar proyecto LAR: ficha + galería de fotos. #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Editar · {{ project.title }} · LAR{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('lar_index') }}">LAR</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ project.title }}</span>
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header('LAR', 'Editar proyecto', project.title) }}
+
+    {{ include('lar/_form.html.twig', { submit_label: 'Guardar cambios', cancel_path: path('lar_index') }) }}
+
+    {# ---------- Galería de fotos ---------- #}
+    <div class="csa-stack-lg" style="margin-top: var(--csa-sp-8);">
+        {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Fotos', subtitle: 'Se muestran en la página pública del proyecto.' } %}
+            {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
+
+                {% if photos is empty %}
+                    {{ csa.callout('Aún no hay fotos en este proyecto.', 'info', 'image') }}
+                {% else %}
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--csa-sp-4);">
+                        {% for photo in photos %}
+                            <figure style="margin: 0; border: 1px solid var(--csa-rule); border-radius: var(--csa-radius, 8px); overflow: hidden; background: var(--csa-surface);">
+                                <img src="{{ asset(photo.webPath) }}" alt="{{ photo.title }}"
+                                     style="display: block; width: 100%; height: 120px; object-fit: cover;">
+                                <figcaption style="padding: var(--csa-sp-2) var(--csa-sp-3); display: flex; align-items: center; justify-content: space-between; gap: var(--csa-sp-2);">
+                                    <span class="csa-muted" style="font-size: .8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ photo.title }}</span>
+                                    {% if is_granted('ROLE_GESTION_LAR_EDIT') %}
+                                        <form method="post" action="{{ path('lar_photo_delete', { id: project.id, imageId: photo.id }) }}"
+                                              onsubmit="return confirm('¿Borrar esta foto?');" style="display: inline;">
+                                            <input type="hidden" name="_token" value="{{ csrf_token('delete_photo' ~ photo.id) }}">
+                                            <button type="submit" class="csa-table__action--danger" title="Borrar foto" aria-label="Borrar foto"
+                                                    style="background: none; border: 0; cursor: pointer; padding: 0;"><i class="fa fa-trash"></i></button>
+                                        </form>
+                                    {% endif %}
+                                </figcaption>
+                            </figure>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+
+                {% if is_granted('ROLE_GESTION_LAR_EDIT') %}
+                    <div style="margin-top: var(--csa-sp-5); padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                        {% form_theme photo_form 'form_div_layout.html.twig' %}
+                        {{ form_start(photo_form) }}
+                            <div class="csa-form-grid">
+                                {{ csa.field(photo_form.title, 'Título de la foto') }}
+                                {{ csa.field(photo_form.file, 'Archivo de imagen') }}
+                            </div>
+                            <div class="csa-row" style="margin-top: var(--csa-sp-4);">
+                                <button type="submit" class="csa-btn csa-btn--secondary"><i class="fa fa-upload"></i><span>Añadir foto</span></button>
+                            </div>
+                        {{ form_end(photo_form) }}
+                    </div>
+                {% endif %}
+            {% endblock %}
+        {% endembed %}
+    </div>
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    {{ tinymce_init() }}
+{% endblock %}

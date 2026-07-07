@@ -320,6 +320,16 @@
                         </div>
                     {% endif %}
 
+                    {% if is_granted('ROLE_GESTION_LAR') %}
+                        <div class="csa-navgroup{{ sec_collapsed }}">
+                            <button type="button" class="csa-navgroup__head">LAR <i class="csa-navgroup__chev fa fa-chevron-down" aria-hidden="true"></i></button>
+                            <div class="csa-navgroup__items">
+                                {{ _self.nav_link('Proyectos', path('lar_index'), 'fa-folder-open',
+                                   route starts with 'lar_') }}
+                            </div>
+                        </div>
+                    {% endif %}
+
                     {% if is_granted('ROLE_GESTION_LABORAL') and is_granted('FEATURE_LABORAL') %}
                         <div class="csa-navgroup{{ sec_collapsed }}">
                             <button type="button" class="csa-navgroup__head">Personal <i class="csa-navgroup__chev fa fa-chevron-down" aria-hidden="true"></i></button>

@@ -12,6 +12,27 @@ use Doctrine\ORM\EntityRepository;
  */
 class ImageRepository extends EntityRepository
 {
+    /**
+     * Todas las imágenes asociadas a una entidad anfitriona (media polimórfica
+     * por object_class + foreign_key), más recientes primero. Usado por el
+     * módulo LAR para la galería de un proyecto (panel y web pública).
+     *
+     * @param string $objectClass Clase lógica de la entidad (p.ej. "larproject").
+     * @param string|int $foreignKey Id de la entidad anfitriona.
+     * @return \App\Entity\Image[]
+     */
+    public function findForObject(string $objectClass, $foreignKey): array
+    {
+        return $this->createQueryBuilder('i')
+            ->andWhere('i.objectClass = :object_class')
+            ->andWhere('i.foreignKey = :foreign_key')
+            ->setParameter('object_class', $objectClass)
+            ->setParameter('foreign_key', (string) $foreignKey)
+            ->orderBy('i.created', 'DESC')
+            ->getQuery()
+            ->getResult();
+    }
+
     public function findBlogGroupedImages($id,$object_class)
     {
         $em = $this->getEntityManager();

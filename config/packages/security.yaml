@@ -66,6 +66,13 @@ security:
     #   ROLE_GESTION_LABORAL_EDIT  ESCRITURA del módulo laboral (corregir fichajes
     #                           ajenos, aprobar/rechazar vacaciones; incluye
     #                           lectura por jerarquía). Mismo modelo que albergue.
+    #   ROLE_GESTION_LAR        LECTURA del LAR (Laboratorio Agroecológico Rural):
+    #                           ver el listado y las fichas de los proyectos que
+    #                           se dinamizan desde La Cerrada. La cara pública
+    #                           (/lar) es anónima; esto es solo el panel
+    #   ROLE_GESTION_LAR_EDIT   ESCRITURA del LAR (crear/editar/borrar proyectos y
+    #                           gestionar sus fotos; incluye lectura por
+    #                           jerarquía). Mismo modelo que albergue/laboral
     #   ROLE_WORKER             panel propio del trabajador (/work): fichar,
     #                           ver/corregir lo suyo, pedir vacaciones. Se DERIVA
     #                           de tener un Worker vinculado (como ROLE_PARTNER)
@@ -80,6 +87,7 @@ security:
             - ROLE_GESTION_ENCUESTAS_EDIT
             - ROLE_GESTION_ALBERGUE_EDIT
             - ROLE_GESTION_LABORAL_EDIT
+            - ROLE_GESTION_LAR_EDIT
             - ROLE_PARTNER
             - ROLE_WORKER
         # La escritura incluye la lectura (modelo lectura/escritura por sección).
@@ -91,6 +99,8 @@ security:
             - ROLE_GESTION_ENCUESTAS
         ROLE_GESTION_LABORAL_EDIT:
             - ROLE_GESTION_LABORAL
+        ROLE_GESTION_LAR_EDIT:
+            - ROLE_GESTION_LAR
 
     providers:
         # Sin "property": Symfony delega en UserRepository::loadUserByIdentifier
@@ -217,11 +227,16 @@ security:
         # Path en inglés (convención del proyecto); "labour/labor" ya es de la
         # granja (labores agrícolas), así que el área laboral va por /gestion/staff.
         - { path: ^/gestion/staff, methods: [POST, PUT, PATCH, DELETE], roles: ROLE_GESTION_LABORAL_EDIT }
+        # LAR (mismo modelo): lectura = ver el listado y las fichas de los
+        # proyectos; la escritura (crear/editar/borrar proyectos y gestionar sus
+        # fotos, todo POST) exige _EDIT. Antes de la regla genérica ^/gestion.
+        # La cara pública del LAR vive en /lar (sin regla aquí = abierta).
+        - { path: ^/gestion/lar, methods: [POST, PUT, PATCH, DELETE], roles: ROLE_GESTION_LAR_EDIT }
         # Cualquier rol de gestión permite entrar a /gestion. Dentro,
         # cada controller filtra con #[IsGranted('ROLE_GESTION_X')] según
         # su sección.
         - { path: ^/gestion,
-            roles: [ROLE_ADMIN, ROLE_GESTION_GRANJA, ROLE_GESTION_SOCIXS, ROLE_GESTION_REPARTO, ROLE_BLOG, ROLE_GESTION_ENCUESTAS, ROLE_GESTION_ALBERGUE, ROLE_GESTION_LABORAL] }
+            roles: [ROLE_ADMIN, ROLE_GESTION_GRANJA, ROLE_GESTION_SOCIXS, ROLE_GESTION_REPARTO, ROLE_BLOG, ROLE_GESTION_ENCUESTAS, ROLE_GESTION_ALBERGUE, ROLE_GESTION_LABORAL, ROLE_GESTION_LAR] }
         # Panel del socix (lo construiremos en breve).
         - { path: ^/panel, roles: [ROLE_PARTNER, ROLE_ADMIN] }
         # Panel propio del trabajador: fichar, ver/corregir lo suyo, vacaciones.

@@ -1,0 +1,48 @@
+{% extends 'base_front.html.twig' %}
+
+{% block title %}{{ project.title }} · LAR · CSA Vega de Jarama{% endblock %}
+
+{% block content %}
+
+    <div class="container py-5">
+        <div class="row py-4">
+            <div class="col-lg-10 mx-auto px-3 px-lg-5">
+
+                <a href="{{ path('lar_public') }}" class="text-muted"><i class="fa fa-arrow-left mr-2"></i>Volver al LAR</a>
+
+                <div class="d-flex align-items-center mt-3 mb-3">
+                    <span class="badge badge-success mr-3">{{ project.typeLabel }}</span>
+                    {% if not project.active %}<span class="badge badge-secondary">Proyecto finalizado</span>{% endif %}
+                </div>
+
+                <h1 class="mb-3" style="color:#138504">{{ project.title }}</h1>
+                <p class="lead">{{ project.summary }}</p>
+
+                {% if project.content %}
+                    <div class="mt-4">{{ project.content|raw }}</div>
+                {% endif %}
+
+                {# ---------- Galería ---------- #}
+                {% if photos is not empty %}
+                    <div class="row mt-5">
+                        {% for photo in photos %}
+                            <div class="col-6 col-md-4 mb-4">
+                                <a href="{{ asset(photo.webPath) }}" target="_blank" rel="noopener">
+                                    <img src="{{ asset(photo.webPath) }}" alt="{{ photo.title }}"
+                                         class="img-fluid rounded" style="width: 100%; height: 200px; object-fit: cover;">
+                                </a>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+
+                <div class="mt-5 pt-4 border-top text-center">
+                    <p class="text-muted">¿Te interesa este proyecto o quieres organizar una visita?</p>
+                    <a href="{{ path('lar_public') }}#pide-informacion" class="btn btn-success">Pide información</a>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+{% endblock %}

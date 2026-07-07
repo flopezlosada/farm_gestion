@@ -1,0 +1,131 @@
+{% extends 'base_front.html.twig' %}
+
+{% block title %}LAR · Laboratorio Agroecológico Rural · CSA Vega de Jarama{% endblock %}
+
+{% block content %}
+
+    {# ---------- Cabecera ---------- #}
+    <div class="container py-5">
+        <div class="row py-4">
+            <div class="col-12 text-center mb-4">
+                <h1 class="mb-3" style="color:#138504">LAR · Laboratorio Agroecológico Rural</h1>
+                <p class="lead">Espacio de convivencia, encuentro, construcción y transferencia de conocimiento agroecológico.</p>
+            </div>
+        </div>
+
+        {# ---------- Descripción del proyecto ---------- #}
+        <div class="row">
+            <div class="col-lg-8 px-3 px-lg-5">
+                <p>El LAR CSA Vega de Jarama nace para dinamizar el espacio de alojamiento de <strong>La Cerrada</strong>, en Torremocha de Jarama, junto a la vega del Jarama donde se ubican nuestras fincas. Es un lugar propicio para desarrollar proyectos educativos y pedagógicos agroecológicos con distintos grupos: cuenta con aula de formación, habitaciones con 14 plazas para pernocta, aseos y duchas, cocina completa, patio interior y salón-comedor.</p>
+                <p>Ofrecemos estancias para todos los públicos, en grupos reducidos de entre 3 y 14 personas, de 2 a 5 días y estancias más prolongadas. Una inmersión pedagógica en nuestra CSA: cómo producimos y distribuimos alimentos, hortícolas y de ganadería aviar, cómo aprovechamos los residuos de la huerta y los tipos de compostaje, la elaboración y el reparto de cestas, y nuestra forma de organizarnos como comunidad.</p>
+                <p>Las tarifas están adaptadas a cada grupo y basadas en la economía de la solidaridad y la generosidad. Disponemos de <strong>becas</strong> para colectivos socialmente vulnerabilizados.</p>
+            </div>
+            <div class="col-lg-4 mt-4 mt-lg-0">
+                <div class="bg-light p-4 rounded">
+                    <h5 class="text-primary mb-3">Coordinación del LAR</h5>
+                    <p class="mb-1"><i class="fa fa-user mr-2"></i>Sara Martín Peña</p>
+                    <p class="mb-1"><i class="fa fa-phone mr-2"></i>+34 607 511 523</p>
+                    <p class="mb-0"><i class="fa fa-envelope mr-2"></i>larcsa@csavegadejarama.org</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ---------- Proyectos activos ---------- #}
+    {% if active is not empty %}
+        <div class="container py-4">
+            <h2 class="mb-4" style="color:#138504">Proyectos en marcha</h2>
+            <div class="row">
+                {% for project in active %}
+                    <div class="col-md-6 col-lg-4 mb-4">
+                        <div class="border rounded h-100 p-4 d-flex flex-column">
+                            <span class="badge badge-success mb-2 align-self-start">{{ project.typeLabel }}</span>
+                            <h4 class="mb-2">{{ project.title }}</h4>
+                            <p class="text-muted flex-grow-1">{{ project.summary }}</p>
+                            <a href="{{ path('lar_public_project', { slug: project.slug }) }}" class="btn btn-outline-success mt-2 align-self-start">Ver más</a>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
+
+    {# ---------- Proyectos anteriores (memoria) ---------- #}
+    {% if finished is not empty %}
+        <div class="container py-4">
+            <h3 class="mb-4 text-muted">Proyectos anteriores</h3>
+            <div class="row">
+                {% for project in finished %}
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="border rounded h-100 p-3">
+                            <span class="badge badge-secondary mb-2">{{ project.typeLabel }}</span>
+                            <h5 class="mb-1"><a href="{{ path('lar_public_project', { slug: project.slug }) }}" class="text-dark">{{ project.title }}</a></h5>
+                            <p class="text-muted small mb-0">{{ project.summary }}</p>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
+
+    {# ---------- Oferta formativa ---------- #}
+    <div class="container py-5">
+        <h2 class="mb-4" style="color:#138504">Formación e inmersión pedagógica</h2>
+        <div class="row">
+            <div class="col-md-4 mb-4">
+                <div class="border rounded h-100 p-4">
+                    <h5>Inmersión pedagógica</h5>
+                    <p class="text-muted mb-2"><strong>50 h</strong> · de lunes a viernes</p>
+                    <p class="small mb-0">Experiencia completa sobre el modelo CSA: parte teórica (transición socioecológica, producción y consumo cooperativos, dinamización local, compostaje) y prácticas diarias en las fincas y en las dinámicas de la comunidad.</p>
+                </div>
+            </div>
+            <div class="col-md-4 mb-4">
+                <div class="border rounded h-100 p-4">
+                    <h5>Aproximación pedagógica</h5>
+                    <p class="text-muted mb-2"><strong>15 h</strong> · de miércoles a viernes</p>
+                    <p class="small mb-0">Una aproximación a la experiencia agroecológica: fundamentos del modelo, tipos de agricultura y ganadería asociada, compostaje, y prácticas de apoyo en la huerta y en el reparto de cestas.</p>
+                </div>
+            </div>
+            <div class="col-md-4 mb-4">
+                <div class="border rounded h-100 p-4">
+                    <h5>Visita pedagógica</h5>
+                    <p class="text-muted mb-2"><strong>1 día</strong> · entre 2 y 6 h</p>
+                    <p class="small mb-0">Visita guiada a las fincas de El Sotillo y La Barca para la sensibilización hacia nuevos modelos de producción y consumo. Para todos los públicos, especialmente centros educativos y tercer sector.</p>
+                </div>
+            </div>
+        </div>
+        <p class="text-muted small mt-2">Las tarifas se adaptan a cada grupo y colectivo. Escríbenos y lo acordamos.</p>
+    </div>
+
+    {# ---------- Formulario de petición de información ---------- #}
+    <div class="container-fluid bg-light py-5 px-sm-3 px-md-5" id="pide-informacion">
+        <div class="container">
+            <div class="row justify-content-center">
+                <div class="col-lg-8">
+                    <h2 class="mb-4 text-center" style="color:#138504">Pide información</h2>
+                    <p class="text-center text-muted mb-4">¿Quieres organizar una visita pedagógica o una estancia de inmersión? Cuéntanos y la coordinación del LAR te responderá.</p>
+
+                    {% for label, messages in app.flashes(['notice', 'error']) %}
+                        {% for message in messages %}
+                            <div class="alert alert-{{ label == 'notice' ? 'success' : 'danger' }}">{{ message }}</div>
+                        {% endfor %}
+                    {% endfor %}
+
+                    {{ form_start(form) }}
+                        <div class="row">
+                            <div class="col-md-6 mb-3">{{ form_widget(form.name) }}</div>
+                            <div class="col-md-6 mb-3">{{ form_widget(form.email) }}</div>
+                            <div class="col-md-6 mb-3">{{ form_widget(form.phone) }}</div>
+                            <div class="col-md-6 mb-3">{{ form_widget(form.requestType) }}</div>
+                            <div class="col-md-6 mb-3">{{ form_widget(form.groupSize) }}</div>
+                            <div class="col-md-6 mb-3">{{ form_widget(form.preferredDates) }}</div>
+                            <div class="col-12 mb-3">{{ form_widget(form.body) }}</div>
+                        </div>
+                        {{ form_widget(form.submit) }}
+                    {{ form_end(form) }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+{% endblock %}
