@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Pedido confirmado · Grupo de consumo · CSA Vega de Jarama</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #333; max-width: 580px; margin: 0 auto; padding: 24px;">
+
+    <h2 style="color: #5a8f3d; margin-top: 0;">Hola {{ partner.name }},</h2>
+
+    <p>Tu pedido del grupo de consumo <strong>«{{ round.title }}»</strong> ({{ round.producer }})
+       está <strong>confirmado</strong>.</p>
+
+    {% if round.deliveryDate %}
+        <p>Se te entregará el <strong>{{ round.deliveryDate|format_date('full', locale='es') }}</strong>
+           junto con tu cesta.</p>
+    {% endif %}
+
+    <h3 style="color: #5a8f3d;">Tu pedido</h3>
+    <ul>
+        {% for line in order.lines %}
+            {% if line.quantity > 0 %}
+                <li>{{ line.quantity|number_format(2, ',', '.') }} {{ line.product.unit }} · {{ line.product.name }}</li>
+            {% endif %}
+        {% endfor %}
+    </ul>
+
+    <p style="text-align: center; margin: 24px 0;">
+        <a href="{{ panel_url }}"
+           style="background: #5a8f3d; color: #fff; text-decoration: none; padding: 12px 22px; border-radius: 6px; display: inline-block;">
+            Ver mis pedidos
+        </a>
+    </p>
+
+    <p style="margin-top: 32px; color: #777; font-size: 13px;">
+        Un abrazo,<br>
+        CSA Vega de Jarama<br>
+        <a href="https://csavegadejarama.org">csavegadejarama.org</a>
+    </p>
+
+</body>
+</html>
