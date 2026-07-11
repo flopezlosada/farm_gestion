@@ -5,6 +5,7 @@ namespace App\Controller;
 use App\Entity\Image;
 use App\Entity\LarProject;
 use App\Form\LarContactType;
+use App\Repository\LarPageRepository;
 use App\Repository\LarProjectRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -43,15 +44,21 @@ class LarPublicController extends AbstractController
      * @return Response
      */
     #[Route('/lar', name: 'lar_public', methods: ['GET'])]
-    public function lar(LarProjectRepository $projects): Response
+    public function lar(LarProjectRepository $projects, LarPageRepository $pages, EntityManagerInterface $em): Response
     {
         $form = $this->createForm(LarContactType::class, null, [
             'action' => $this->generateUrl('lar_public_contact'),
         ]);
 
+        $active = $projects->findPublishedByStatus(LarProject::STATUS_ACTIVE);
+        $finished = $projects->findPublishedByStatus(LarProject::STATUS_FINISHED);
+        $ids = array_map(static fn (LarProject $p) => $p->getId(), array_merge($active, $finished));
+
         return $this->render('frontend/lar.html.twig', [
-            'active' => $projects->findPublishedByStatus(LarProject::STATUS_ACTIVE),
-            'finished' => $projects->findPublishedByStatus(LarProject::STATUS_FINISHED),
+            'page' => $pages->get(),
+            'active' => $active,
+            'finished' => $finished,
+            'covers' => $em->getRepository(Image::class)->findCoversFor(LarProject::OBJECT_CLASS, $ids),
             'form' => $form->createView(),
         ]);
     }
@@ -93,6 +100,7 @@ class LarPublicController extends AbstractController
     public function contacted(
         Request $request,
         MailerInterface $mailer,
+        LarPageRepository $pages,
         #[Autowire(service: 'limiter.contact_form')]
         RateLimiterFactory $contactFormLimiter
     ): Response {
@@ -110,11 +118,13 @@ class LarPublicController extends AbstractController
             $data = $form->getData();
             $requestLabel = LarContactType::REQUESTS[$data['requestType']] ?? $data['requestType'];
 
+            $to = $pages->get()->getCoordEmail() ?: self::LAR_TO;
+
             $email = (new MimeEmail())
                 ->subject('[LAR] ' . $requestLabel . ' — ' . $data['name'])
                 ->from(self::LAR_FROM)
                 ->replyTo($data['email'])
-                ->to(self::LAR_TO)
+                ->to($to)
                 ->html($this->renderView('email/lar_contact.html.twig', [
                     'name' => $data['name'],
                     'email' => $data['email'],

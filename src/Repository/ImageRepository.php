@@ -33,6 +33,39 @@ class ImageRepository extends EntityRepository
             ->getResult();
     }
 
+    /**
+     * Foto de portada (la más reciente) de cada entidad anfitriona de una lista,
+     * en una sola consulta (evita N+1 al pintar tarjetas con miniatura). Devuelve
+     * un mapa foreignKey => Image; las entidades sin foto no aparecen en el mapa.
+     *
+     * @param string $objectClass Clase lógica de la entidad (p.ej. "larproject").
+     * @param int[] $foreignKeys Ids de las entidades anfitrionas.
+     * @return array<int, \App\Entity\Image>
+     */
+    public function findCoversFor(string $objectClass, array $foreignKeys): array
+    {
+        if (!$foreignKeys) {
+            return [];
+        }
+
+        $images = $this->createQueryBuilder('i')
+            ->andWhere('i.objectClass = :object_class')
+            ->andWhere('i.foreignKey IN (:foreign_keys)')
+            ->setParameter('object_class', $objectClass)
+            ->setParameter('foreign_keys', array_map('strval', $foreignKeys))
+            ->orderBy('i.created', 'DESC')
+            ->getQuery()
+            ->getResult();
+
+        $covers = [];
+        foreach ($images as $image) {
+            // El primero de cada foreignKey es el más reciente (orderBy created DESC).
+            $covers[$image->getForeignKey()] ??= $image;
+        }
+
+        return $covers;
+    }
+
     public function findBlogGroupedImages($id,$object_class)
     {
         $em = $this->getEntityManager();

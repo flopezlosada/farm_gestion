@@ -11,25 +11,25 @@
                 <a href="{{ path('lar_public') }}" class="text-muted"><i class="fa fa-arrow-left mr-2"></i>Volver al LAR</a>
 
                 <div class="d-flex align-items-center mt-3 mb-3">
-                    <span class="badge badge-success mr-3">{{ project.typeLabel }}</span>
+                    <span class="badge badge-success mr-3" style="font-size: 90%;">{{ project.typeLabel }}</span>
                     {% if not project.active %}<span class="badge badge-secondary">Proyecto finalizado</span>{% endif %}
                 </div>
 
-                <h1 class="mb-3" style="color:#138504">{{ project.title }}</h1>
-                <p class="lead">{{ project.summary }}</p>
+                <h1 class="display-4 mb-3" style="color: #138504">{{ project.title }}</h1>
+                <h5 class="text-muted mb-4">{{ project.summary }}</h5>
 
                 {% if project.content %}
                     <div class="mt-4">{{ project.content|raw }}</div>
                 {% endif %}
 
-                {# ---------- Galería ---------- #}
+                {# ---------- Galería (lightbox con lightGallery, cargada en base_front) ---------- #}
                 {% if photos is not empty %}
-                    <div class="row mt-5">
+                    <div class="row mt-5" id="lar-gallery-{{ project.id }}">
                         {% for photo in photos %}
                             <div class="col-6 col-md-4 mb-4">
-                                <a href="{{ asset(photo.webPath) }}" target="_blank" rel="noopener">
+                                <a href="{{ asset(photo.webPath) }}" data-sub-html="<h4>{{ photo.title|default('') }}</h4>">
                                     <img src="{{ asset(photo.webPath) }}" alt="{{ photo.title }}"
-                                         class="img-fluid rounded" style="width: 100%; height: 200px; object-fit: cover;">
+                                         class="img-fluid rounded" style="width: 100%; height: 200px; object-fit: cover; cursor: zoom-in;">
                                 </a>
                             </div>
                         {% endfor %}
@@ -45,4 +45,18 @@
         </div>
     </div>
 
+{% endblock %}
+
+{% block javascripts %}
+    {{ parent() }}
+    {% if photos is not empty %}
+        <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                var el = document.getElementById('lar-gallery-{{ project.id }}');
+                if (el && typeof lightGallery === 'function') {
+                    lightGallery(el, { selector: 'a', download: false, speed: 350 });
+                }
+            });
+        </script>
+    {% endif %}
 {% endblock %}
