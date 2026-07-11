@@ -325,7 +325,9 @@
                             <button type="button" class="csa-navgroup__head">LAR <i class="csa-navgroup__chev fa fa-chevron-down" aria-hidden="true"></i></button>
                             <div class="csa-navgroup__items">
                                 {{ _self.nav_link('Proyectos', path('lar_index'), 'fa-folder-open',
-                                   route starts with 'lar_') }}
+                                   route starts with 'lar_' and route != 'lar_page') }}
+                                {{ _self.nav_link('Portada', path('lar_page'), 'fa-file-text-o',
+                                   route == 'lar_page') }}
                             </div>
                         </div>
                     {% endif %}

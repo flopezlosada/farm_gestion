@@ -5,7 +5,9 @@ namespace App\Controller;
 use App\Entity\Image;
 use App\Entity\LarProject;
 use App\Form\ImageType;
+use App\Form\LarPageType;
 use App\Form\LarProjectType;
+use App\Repository\LarPageRepository;
 use App\Repository\LarProjectRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -13,6 +15,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
+use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 /**
  * Gestión de los proyectos del LAR (Laboratorio Agroecológico Rural) desde el
@@ -50,6 +53,37 @@ class LarController extends AbstractController
                 'published' => count(array_filter($all, static fn (LarProject $p) => $p->isPublished())),
                 'active' => count(array_filter($all, static fn (LarProject $p) => $p->isActive())),
             ],
+        ]);
+    }
+
+    /**
+     * Edición del contenido de la portada del LAR (singleton {@see LarPage}): la
+     * introducción, los datos de contacto y las tarjetas de oferta formativa. La
+     * fila se crea la primera vez que se guarda; hasta entonces se edita la
+     * instancia con el contenido de fábrica.
+     *
+     * @param Request $request
+     * @param LarPageRepository $pages
+     * @param EntityManagerInterface $em
+     * @return Response
+     */
+    #[Route('/page', name: 'lar_page', methods: ['GET', 'POST'])]
+    public function page(Request $request, LarPageRepository $pages, EntityManagerInterface $em): Response
+    {
+        $page = $pages->get();
+        $form = $this->createForm(LarPageType::class, $page);
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted() && $form->isValid()) {
+            $em->persist($page);
+            $em->flush();
+            $this->addFlash('success', 'Portada actualizada.');
+
+            return $this->redirectToRoute('lar_page');
+        }
+
+        return $this->render('lar/page.html.twig', [
+            'form' => $form->createView(),
         ]);
     }
 
@@ -199,6 +233,46 @@ class LarController extends AbstractController
             $em->remove($image);
             $em->flush();
             $this->addFlash('success', 'Foto borrada.');
+        }
+
+        return $this->redirectToRoute('lar_edit', ['id' => $project->getId()]);
+    }
+
+    /**
+     * Renombra el título de una foto del proyecto. Comprueba que la imagen
+     * pertenece de verdad a este proyecto (defensa ante ids manipulados) y valida
+     * la entidad {@see Image} antes de guardar, para respetar sus restricciones
+     * (p. ej. la longitud mínima del título) sin duplicarlas aquí.
+     *
+     * @param Request $request
+     * @param LarProject $project
+     * @param int $imageId
+     * @param EntityManagerInterface $em
+     * @param ValidatorInterface $validator
+     * @return Response
+     */
+    #[Route('/{id}/photo/{imageId}/rename', name: 'lar_photo_rename', methods: ['POST'], requirements: ['id' => '\d+', 'imageId' => '\d+'])]
+    public function renamePhoto(Request $request, LarProject $project, int $imageId, EntityManagerInterface $em, ValidatorInterface $validator): Response
+    {
+        if (!$this->isCsrfTokenValid('rename_photo' . $imageId, (string) $request->request->get('_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+
+            return $this->redirectToRoute('lar_edit', ['id' => $project->getId()]);
+        }
+
+        $image = $em->getRepository(Image::class)->find($imageId);
+        if ($image
+            && $image->getObjectClass() === LarProject::OBJECT_CLASS
+            && $image->getForeignKey() === (string) $project->getId()
+        ) {
+            $image->setTitle(trim((string) $request->request->get('title')));
+            $errors = $validator->validate($image);
+            if (count($errors) > 0) {
+                $this->addFlash('error', $errors->get(0)->getMessage());
+            } else {
+                $em->flush();
+                $this->addFlash('success', 'Título de la foto actualizado.');
+            }
         }
 
         return $this->redirectToRoute('lar_edit', ['id' => $project->getId()]);
