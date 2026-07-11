@@ -76,6 +76,13 @@ class LarPublicControllerTest extends WebTestCase
     public function testContactFormSendsEmail(): void
     {
         $client = static::createClient();
+
+        // El limiter contact_form (sliding_window) persiste entre tests en
+        // cache.app y lo comparte el contacto general; ContactFormRateLimitTest
+        // lo agota con 4 envíos desde 127.0.0.1. Lo reseteamos para esta IP para
+        // que este test sea determinista sea cual sea el orden de ejecución.
+        static::getContainer()->get('limiter.contact_form')->create('127.0.0.1')->reset();
+
         $crawler = $client->request('GET', '/lar');
         $this->assertResponseIsSuccessful();
 
