@@ -1,0 +1,43 @@
+{# ============================================================
+ # Form compartido de proyecto LAR (new + edit).
+ # Espera: form, submit_label, cancel_path.
+ # ============================================================ #}
+{% form_theme form 'form_div_layout.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{{ form_start(form, { attr: { role: 'form', class: 'csa-form-narrow', 'data-csa-dropdowns': '' } }) }}
+
+    <div class="csa-stack-lg">
+
+        {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Ficha del proyecto', subtitle: 'Lo que se muestra en la web. Las fotos se añaden al guardar.' } %}
+            {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
+                <div class="csa-form-grid">
+                    {{ csa.field(form.title, 'Título', { full: true }) }}
+                    {{ csa.field(form.type, 'Tipo') }}
+                    {{ csa.field(form.status, 'Estado') }}
+                    {{ csa.field(form.summary, 'Resumen', { full: true, widget_class: 'csa-textarea' }) }}
+                    {{ csa.field(form.content, 'Descripción', { full: true, widget_class: 'tinymce' }) }}
+                    <div class="csa-field csa-field--full">
+                        <label class="csa-toggle">
+                            {{ form_widget(form.published, { attr: { class: 'csa-toggle__input' } }) }}
+                            <span class="csa-toggle__track"><span class="csa-toggle__thumb"></span></span>
+                            <span class="csa-toggle__text">Publicado <small>Si se desactiva, el proyecto queda en borrador y no se ve en la web.</small></span>
+                        </label>
+                    </div>
+                </div>
+            {% endblock %}
+        {% endembed %}
+
+        <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+            <div></div>
+            <div class="csa-row">
+                {{ csa.btn('Cancelar', { variant: 'ghost', href: cancel_path }) }}
+                <button type="submit" class="csa-btn csa-btn--primary">{{ submit_label }}</button>
+            </div>
+        </div>
+
+    </div>
+
+    {{ form_rest(form) }}
+{{ form_end(form, { render_rest: false }) }}

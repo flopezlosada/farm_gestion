@@ -1,0 +1,24 @@
+{# Nuevo proyecto LAR — shell csa. #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Nuevo proyecto · LAR{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('lar_index') }}">LAR</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Nuevo proyecto</span>
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header('LAR', 'Nuevo proyecto', 'Crea la ficha. Al guardar podrás añadir las fotos.') }}
+
+    {{ include('lar/_form.html.twig', { submit_label: 'Crear proyecto', cancel_path: path('lar_index') }) }}
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    {{ tinymce_init() }}
+{% endblock %}

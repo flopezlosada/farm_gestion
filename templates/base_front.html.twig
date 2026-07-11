@@ -161,6 +161,7 @@
                             </div>
                         </div>
                         <a href="{{ path('somos') }}" class="nav-item nav-link{{ _route == 'somos' ? ' active' }}">Quiénes somos</a>
+                        <a href="{{ path('lar_public') }}" class="nav-item nav-link{{ _route in ['lar_public', 'lar_public_project'] ? ' active' }}">LAR</a>
                         <a href="{{ path('asambleas') }}" class="nav-item nav-link{{ _route in ['asambleas', 'evento_show'] ? ' active' }}">Agenda</a>
                         <a href="{{ path('frontend_blog') }}" class="nav-item nav-link{{ _route in ['frontend_blog', 'blog_show'] ? ' active' }}">Blog</a>
                         <a href="{{ path('blog_category_show', { id: 4 }) }}" class="nav-item nav-link{{ _route == 'blog_category_show' ? ' active' }}">Recetas</a>

@@ -1,0 +1,124 @@
+{# Editar proyecto LAR: ficha (izquierda) + galería de fotos (derecha). #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Editar · {{ project.title }} · LAR{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    <style>
+        /* Ficha a la izquierda, galería de fotos a la derecha; apiladas en móvil. */
+        .lar-edit-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--csa-sp-6); align-items: start; }
+        @media (min-width: 1024px) { .lar-edit-grid { grid-template-columns: minmax(0, 1fr) 320px; } }
+        .lar-edit-grid .csa-form-narrow { max-width: none; }
+
+        .lar-photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: var(--csa-sp-3); }
+        .lar-photo-card { margin: 0; border: 1px solid var(--csa-rule); border-radius: var(--csa-radius-md); overflow: hidden; background: var(--csa-surface); }
+        .lar-photo-card > img { display: block; width: 100%; height: 100px; object-fit: cover; }
+        .lar-photo-card__meta { padding: var(--csa-sp-2); display: flex; align-items: center; gap: var(--csa-sp-2); }
+        .lar-photo-card__rename { display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; margin: 0; }
+        .lar-photo-card__rename input[type="text"] { height: 30px; padding: 4px 8px; font-size: .8rem; }
+        .lar-photo-card__iconbtn { background: none; border: 0; cursor: pointer; padding: 2px 4px; color: var(--csa-ink-muted); }
+        .lar-photo-card__iconbtn:hover { color: var(--csa-ink); }
+        .lar-photo-card__iconbtn--danger:hover { color: var(--csa-danger, #c0392b); }
+    </style>
+{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('lar_index') }}">LAR</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ project.title }}</span>
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header('LAR', 'Editar proyecto', project.title) }}
+
+    <div class="lar-edit-grid">
+
+        {# ---------- Ficha ---------- #}
+        <div>
+            {{ include('lar/_form.html.twig', { submit_label: 'Guardar cambios', cancel_path: path('lar_index') }) }}
+        </div>
+
+        {# ---------- Galería de fotos ---------- #}
+        <aside>
+            {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Fotos', subtitle: 'Se muestran en la página pública del proyecto.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+
+                    {% if photos is empty %}
+                        {{ csa.callout('Aún no hay fotos en este proyecto.', 'info', 'image') }}
+                    {% else %}
+                        <div class="lar-photo-grid">
+                            {% for photo in photos %}
+                                <figure class="lar-photo-card">
+                                    <img src="{{ asset(photo.webPath) }}" alt="{{ photo.title }}">
+                                    <div class="lar-photo-card__meta">
+                                        {% if is_granted('ROLE_GESTION_LAR_EDIT') %}
+                                            <form method="post" action="{{ path('lar_photo_rename', { id: project.id, imageId: photo.id }) }}" class="lar-photo-card__rename">
+                                                <input type="hidden" name="_token" value="{{ csrf_token('rename_photo' ~ photo.id) }}">
+                                                <input type="text" name="title" class="csa-input" value="{{ photo.title }}" aria-label="Título de la foto">
+                                                <button type="submit" class="lar-photo-card__iconbtn" title="Guardar título" aria-label="Guardar título"><i class="fa fa-check"></i></button>
+                                            </form>
+                                            <form method="post" action="{{ path('lar_photo_delete', { id: project.id, imageId: photo.id }) }}"
+                                                  onsubmit="return confirm('¿Borrar esta foto?');" style="margin: 0;">
+                                                <input type="hidden" name="_token" value="{{ csrf_token('delete_photo' ~ photo.id) }}">
+                                                <button type="submit" class="lar-photo-card__iconbtn lar-photo-card__iconbtn--danger" title="Borrar foto" aria-label="Borrar foto"><i class="fa fa-trash"></i></button>
+                                            </form>
+                                        {% else %}
+                                            <span class="csa-muted" style="font-size: .8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ photo.title }}</span>
+                                        {% endif %}
+                                    </div>
+                                </figure>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    {% if is_granted('ROLE_GESTION_LAR_EDIT') %}
+                        <div style="margin-top: var(--csa-sp-4);">
+                            <button type="button" class="csa-btn csa-btn--secondary" onclick="document.getElementById('lar-photo-modal').showModal()">
+                                <i class="fa fa-upload"></i><span>Añadir foto</span>
+                            </button>
+                        </div>
+                    {% endif %}
+                {% endblock %}
+            {% endembed %}
+        </aside>
+
+    </div>
+
+    {# ---------- Modal de subida de foto ---------- #}
+    {% if is_granted('ROLE_GESTION_LAR_EDIT') %}
+        <dialog id="lar-photo-modal" class="csa-modal" aria-labelledby="lar-photo-modal-title">
+            {% form_theme photo_form 'form_div_layout.html.twig' %}
+            {{ form_start(photo_form) }}
+                <button class="csa-modal__close" type="button" aria-label="Cerrar" onclick="this.closest('dialog').close()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l14 14M19 5L5 19"/></svg>
+                </button>
+                <header class="csa-modal__header">
+                    <div class="csa-modal__heading">
+                        <span class="csa-modal__eyebrow">Galería</span>
+                        <h2 class="csa-modal__title" id="lar-photo-modal-title">Añadir foto</h2>
+                    </div>
+                </header>
+                <div class="csa-modal__body">
+                    <div class="csa-stack">
+                        {{ csa.field(photo_form.title, 'Título de la foto') }}
+                        {{ csa.field(photo_form.file, 'Archivo de imagen') }}
+                    </div>
+                </div>
+                <footer class="csa-modal__footer">
+                    <button type="button" class="csa-modal__btn csa-modal__btn--ghost" onclick="this.closest('dialog').close()">Cancelar</button>
+                    <button type="submit" class="csa-modal__btn csa-modal__btn--primary"><i class="fa fa-upload"></i> Añadir foto</button>
+                </footer>
+            {{ form_end(photo_form) }}
+        </dialog>
+    {% endif %}
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    {{ tinymce_init() }}
+{% endblock %}

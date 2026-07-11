@@ -1,0 +1,131 @@
+{# Listado de proyectos del LAR — al estilo del listado de socixs/encuestas
+ # (stat strip + tabla prl-*). Reutiliza partner/_listing_styles. #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}LAR · Proyectos{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">LAR</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    <style>
+        /* Acciones en una sola fila (sin envolver en la celda estrecha). */
+        .lar-actions { display: flex; align-items: center; gap: 8px; justify-content: flex-end; flex-wrap: nowrap; }
+        .lar-actions form { margin: 0; display: inline-flex; }
+    </style>
+{% endblock %}
+
+{% block csa_main %}
+<div class="prl">
+
+    {{ csa.page_header('LAR · Laboratorio Agroecológico Rural', 'Proyectos', 'Lo que se dinamiza desde La Cerrada. Solo los publicados se ven en la web.') }}
+
+    {# ============ STAT STRIP ============ #}
+    <div class="prl-stats">
+        <div class="prl-stat">
+            <div class="v">{{ stats.total }}</div>
+            <div class="l">proyectos</div>
+        </div>
+        <div class="prl-stat prl-stat--active">
+            <div class="v">{{ stats.published }}</div>
+            <div class="l">publicados</div>
+        </div>
+        <div class="prl-stat prl-stat--paused">
+            <div class="v">{{ stats.active }}</div>
+            <div class="l">en marcha</div>
+        </div>
+    </div>
+
+    {# ============ TOOLBAR ============ #}
+    <div class="prl-toolbar">
+        <div class="counters">
+            <b>{{ projects|length }}</b> proyecto{{ projects|length == 1 ? '' : 's' }}
+        </div>
+        <div class="spacer"></div>
+        {% if is_granted('ROLE_GESTION_LAR_EDIT') %}
+            <a href="{{ path('lar_page') }}" class="prl-btn"><i class="fa fa-file-text-o"></i> Editar portada</a>
+            <a href="{{ path('lar_new') }}" class="prl-btn prl-btn--primary"><i class="fa fa-plus"></i> Nuevo proyecto</a>
+        {% endif %}
+    </div>
+
+    {# ============ TABLA ============ #}
+    <div class="prl-table-wrap">
+        {% if projects is empty %}
+            <div class="prl-empty">
+                Aún no hay proyectos. Crea el primero con «Nuevo proyecto».
+            </div>
+        {% else %}
+            <table class="prl-table">
+                <thead>
+                    <tr>
+                        <th>Proyecto</th>
+                        <th class="tight">Estado</th>
+                        <th class="tight">Publicado</th>
+                        <th class="actions"><span class="sr-only">Acciones</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for project in projects %}
+                        <tr>
+                            <td>
+                                <div class="prl-person">
+                                    <span class="prl-person__avatar prl-person__avatar--ochre" aria-hidden="true">
+                                        <i class="fa fa-folder-open"></i>
+                                    </span>
+                                    <div class="prl-person__body">
+                                        <a class="prl-person__name" href="{{ path('lar_edit', { id: project.id }) }}">{{ project.title }}</a>
+                                        <span class="prl-person__meta">{{ project.typeLabel }}</span>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="tight">
+                                {% if project.active %}
+                                    <span class="prl-chip prl-chip--activo"><span class="dot"></span>Activo</span>
+                                {% else %}
+                                    <span class="prl-chip prl-chip--baja"><span class="dot"></span>Finalizado</span>
+                                {% endif %}
+                            </td>
+                            <td class="tight">
+                                {% if project.published %}
+                                    <span class="prl-chip prl-chip--activo"><span class="dot"></span>Sí</span>
+                                {% else %}
+                                    <span class="prl-chip prl-chip--pausado"><span class="dot"></span>Borrador</span>
+                                {% endif %}
+                            </td>
+                            <td class="actions">
+                                <div class="lar-actions">
+                                    {% if project.published %}
+                                        <a href="{{ path('lar_public_project', { slug: project.slug }) }}" target="_blank" rel="noopener" title="Ver en la web" aria-label="Ver en la web"><i class="fa fa-external-link"></i></a>
+                                    {% endif %}
+                                    <a href="{{ path('lar_edit', { id: project.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>
+                                    {% if is_granted('ROLE_GESTION_LAR_EDIT') %}
+                                        <button type="button" class="prl-btn prl-btn--danger prl-btn--sm" title="Borrar" aria-label="Borrar"
+                                                onclick="document.getElementById('dlg-lar-delete-{{ project.id }}').showModal()"><i class="fa fa-trash"></i></button>
+                                        {{ csa.confirm_dialog('dlg-lar-delete-' ~ project.id, {
+                                            variant: 'danger',
+                                            eyebrow: 'Acción permanente',
+                                            title: 'Borrar «' ~ project.title ~ '»',
+                                            body: 'Se borrará el proyecto y todas sus fotos. No se puede deshacer.',
+                                            confirm_label: 'Borrar',
+                                            action: path('lar_delete', { id: project.id }),
+                                            csrf_token: csrf_token('delete' ~ project.id),
+                                            csrf_name: '_token',
+                                        }) }}
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}
