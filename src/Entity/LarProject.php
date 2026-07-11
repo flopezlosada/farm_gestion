@@ -129,7 +129,11 @@ class LarProject
     private $published = false;
 
     /**
-     * Orden manual en el listado (menor = antes). Empate se rompe por fecha.
+     * Orden en el listado y en la web (menor = antes); empate por fecha (created
+     * DESC). De momento NO se edita desde el panel —el formulario no lo expone—,
+     * así que los proyectos creados a mano nacen todos con 0 y se ordenan por
+     * fecha. Se reactivará cuando el listado permita reordenar con arrastrar y
+     * soltar (deuda pendiente); por eso el campo se conserva.
      *
      * @var int
      * @ORM\Column(name="position", type="integer", options={"default": 0})

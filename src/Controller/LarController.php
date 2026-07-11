@@ -225,15 +225,16 @@ class LarController extends AbstractController
             return $this->redirectToRoute('lar_edit', ['id' => $project->getId()]);
         }
 
-        $image = $em->getRepository(Image::class)->find($imageId);
-        if ($image
-            && $image->getObjectClass() === LarProject::OBJECT_CLASS
-            && $image->getForeignKey() === (string) $project->getId()
-        ) {
-            $em->remove($image);
-            $em->flush();
-            $this->addFlash('success', 'Foto borrada.');
+        $image = $this->photoOf($project, $imageId, $em);
+        if (!$image) {
+            $this->addFlash('warning', 'La foto no existe o no pertenece a este proyecto.');
+
+            return $this->redirectToRoute('lar_edit', ['id' => $project->getId()]);
         }
+
+        $em->remove($image);
+        $em->flush();
+        $this->addFlash('success', 'Foto borrada.');
 
         return $this->redirectToRoute('lar_edit', ['id' => $project->getId()]);
     }
@@ -260,22 +261,45 @@ class LarController extends AbstractController
             return $this->redirectToRoute('lar_edit', ['id' => $project->getId()]);
         }
 
-        $image = $em->getRepository(Image::class)->find($imageId);
-        if ($image
-            && $image->getObjectClass() === LarProject::OBJECT_CLASS
-            && $image->getForeignKey() === (string) $project->getId()
-        ) {
-            $image->setTitle(trim((string) $request->request->get('title')));
-            $errors = $validator->validate($image);
-            if (count($errors) > 0) {
-                $this->addFlash('error', $errors->get(0)->getMessage());
-            } else {
-                $em->flush();
-                $this->addFlash('success', 'Título de la foto actualizado.');
-            }
+        $image = $this->photoOf($project, $imageId, $em);
+        if (!$image) {
+            $this->addFlash('warning', 'La foto no existe o no pertenece a este proyecto.');
+
+            return $this->redirectToRoute('lar_edit', ['id' => $project->getId()]);
+        }
+
+        // Solo cambia el título; Image regenera su slug Gedmo en el flush (inofensivo:
+        // el slug no se usa para rutear ni buscar imágenes).
+        $image->setTitle(trim((string) $request->request->get('title')));
+        $errors = $validator->validate($image);
+        if (count($errors) > 0) {
+            $this->addFlash('error', $errors->get(0)->getMessage());
+        } else {
+            $em->flush();
+            $this->addFlash('success', 'Título de la foto actualizado.');
         }
 
         return $this->redirectToRoute('lar_edit', ['id' => $project->getId()]);
+    }
+
+    /**
+     * Busca una foto por id verificando que pertenece de verdad a este proyecto
+     * (media polimórfica por object_class + foreign_key). Devuelve null si no
+     * existe o es de otro proyecto (defensa ante ids manipulados).
+     *
+     * @param LarProject $project
+     * @param int $imageId
+     * @param EntityManagerInterface $em
+     * @return Image|null
+     */
+    private function photoOf(LarProject $project, int $imageId, EntityManagerInterface $em): ?Image
+    {
+        $image = $em->getRepository(Image::class)->find($imageId);
+
+        return ($image
+            && $image->getObjectClass() === LarProject::OBJECT_CLASS
+            && $image->getForeignKey() === (string) $project->getId())
+            ? $image : null;
     }
 
     /**

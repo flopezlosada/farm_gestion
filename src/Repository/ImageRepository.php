@@ -60,7 +60,9 @@ class ImageRepository extends EntityRepository
         $covers = [];
         foreach ($images as $image) {
             // El primero de cada foreignKey es el más reciente (orderBy created DESC).
-            $covers[$image->getForeignKey()] ??= $image;
+            // Clave int explícita: foreignKey es string, pero las plantillas indexan
+            // por el id numérico del anfitrión (covers[project.id]).
+            $covers[(int) $image->getForeignKey()] ??= $image;
         }
 
         return $covers;

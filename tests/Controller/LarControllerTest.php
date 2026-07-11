@@ -47,7 +47,6 @@ class LarControllerTest extends AbstractAuthenticatedTest
         $form['lar_project[type]'] = 'campus_rural';
         $form['lar_project[status]'] = LarProject::STATUS_ACTIVE;
         $form['lar_project[summary]'] = 'Resumen de prueba del proyecto LAR.';
-        $form['lar_project[position]'] = '0';
         $client->submit($form);
 
         $this->assertResponseRedirects();
