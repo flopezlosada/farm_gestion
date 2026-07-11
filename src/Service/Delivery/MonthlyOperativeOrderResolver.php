@@ -112,9 +112,28 @@ class MonthlyOperativeOrderResolver
      * REALES, que renumera), esta es la consulta para EMPAREJAR mensuales
      * (day_month_order / egg_day_month_order) con su semana.
      *
+     * ÍNDICE NEGATIVO — "última semana del mes" (2026-07-11, decisión de Paco):
+     * además de las posiciones positivas (contadas desde el principio del mes),
+     * cada posición servida se devuelve TAMBIÉN como índice negativo contado
+     * desde el final: -1 = última, -2 = penúltima, etc. Así un mensual con
+     * day_month_order = -1 recoge el 4º viernes en un mes de 4 y el 5º (último)
+     * en un mes de 5, sin tocar consumidores: ambos hacen membership test
+     * (in_array / SQL IN) contra esta lista. Motivo: el equipo de reparto
+     * confirmó que el antiguo "4º viernes" siempre significó "última semana",
+     * pero el modelo sólo sabía contar desde el principio (4 ≠ última en mes
+     * de 5). El negativo lo hace una opción de primera clase, y la web de
+     * autogestión ofrecerá "última semana" apoyándose en esto.
+     *
+     * Ejemplo mes de 5 viernes, posición base 5 (última): sirve +5 y -1.
+     * Posición base 4: sirve +4 y -2. En mes de 4, la posición base 4 sirve
+     * +4 y -1 (es la última). El fallback de semanas canceladas se hereda:
+     * si la última semana se cancela, su fallback (la última operativa) sirve
+     * su posición positiva y, por tanto, también el -1.
+     *
      * @param Basket $basket Ciclo semanal global.
      * @param Node $node Nodo donde se entrega.
-     * @return int[] Posiciones 1-based que este basket sirve (vacío si no entrega).
+     * @return int[] Posiciones que este basket sirve: 1-based desde el principio
+     *               y su equivalente negativo desde el final (vacío si no entrega).
      */
     public function ordersServedBy(Basket $basket, Node $node): array
     {
@@ -157,6 +176,15 @@ class MonthlyOperativeOrderResolver
                 $orders[] = $idx + 1;
             }
         }
+
+        // Equivalente negativo de cada posición servida, contado desde el final
+        // del mes: posición p en un mes de N semanas ⇒ p - N - 1 (la última, p=N,
+        // da -1). Permite emparejar mensuales que eligieron "última semana".
+        $count = count($entries);
+        $orders = array_merge(
+            $orders,
+            array_map(static fn (int $order): int => $order - $count - 1, $orders),
+        );
 
         sort($orders);
 

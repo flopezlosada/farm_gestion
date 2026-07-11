@@ -120,18 +120,20 @@ class MonthlyOperativeOrderResolverTest extends TestCase
     }
 
     /**
-     * Sin excepciones, ordersServedBy coincide con la posición operativa:
-     * cada basket sirve exactamente su orden.
+     * Sin excepciones, ordersServedBy sirve su posición positiva (contada
+     * desde el principio) y su espejo negativo (contado desde el final del
+     * mes): en mayo (5 viernes) el 1º sirve +1/-5, el 3º +3/-3, el 5º +5/-1.
+     * El negativo es lo que permite emparejar «última semana».
      */
-    public function testOrdersServedBySinExcepcionesEsLaPosicion(): void
+    public function testOrdersServedBySinExcepcionesEsLaPosicionMasSuEspejoNegativo(): void
     {
         $baskets = $this->mayoBaskets();
         $torremocha = $this->makeNode('Torremocha', 5, Node::CADENCE_WEEKLY);
         $resolver = $this->makeResolver($baskets);
 
-        $this->assertSame([1], $resolver->ordersServedBy($baskets[0], $torremocha));
-        $this->assertSame([3], $resolver->ordersServedBy($baskets[2], $torremocha));
-        $this->assertSame([5], $resolver->ordersServedBy($baskets[4], $torremocha));
+        $this->assertSame([-5, 1], $resolver->ordersServedBy($baskets[0], $torremocha));
+        $this->assertSame([-3, 3], $resolver->ordersServedBy($baskets[2], $torremocha));
+        $this->assertSame([-1, 5], $resolver->ordersServedBy($baskets[4], $torremocha));
     }
 
     /**
@@ -151,11 +153,11 @@ class MonthlyOperativeOrderResolverTest extends TestCase
 
         $resolver = $this->makeResolverWithExceptions($baskets, [2 => $cancellation]);
 
-        $this->assertSame([1], $resolver->ordersServedBy($baskets[0], $torremocha));
-        $this->assertSame([], $resolver->ordersServedBy($baskets[1], $torremocha));      // cancelado
-        $this->assertSame([2, 3], $resolver->ordersServedBy($baskets[2], $torremocha));  // 15-may: suya + fallback
-        $this->assertSame([4], $resolver->ordersServedBy($baskets[3], $torremocha));     // 22-may NO se mueve
-        $this->assertSame([5], $resolver->ordersServedBy($baskets[4], $torremocha));     // 29-may NO se mueve
+        $this->assertSame([-5, 1], $resolver->ordersServedBy($baskets[0], $torremocha));
+        $this->assertSame([], $resolver->ordersServedBy($baskets[1], $torremocha));            // cancelado
+        $this->assertSame([-4, -3, 2, 3], $resolver->ordersServedBy($baskets[2], $torremocha)); // 15-may: suya + fallback
+        $this->assertSame([-2, 4], $resolver->ordersServedBy($baskets[3], $torremocha));       // 22-may NO se mueve
+        $this->assertSame([-1, 5], $resolver->ordersServedBy($baskets[4], $torremocha));       // 29-may NO se mueve
     }
 
     /**
@@ -174,7 +176,9 @@ class MonthlyOperativeOrderResolverTest extends TestCase
         $resolver = $this->makeResolverWithExceptions($baskets, [5 => $cancellation]);
 
         $this->assertSame([], $resolver->ordersServedBy($baskets[4], $torremocha));
-        $this->assertSame([4, 5], $resolver->ordersServedBy($baskets[3], $torremocha));  // 22-may absorbe la 5
+        // 22-may absorbe la posición 5 (y su espejo -1): un mensual «última»
+        // recogería aquí porque la última semana quedó cancelada.
+        $this->assertSame([-2, -1, 4, 5], $resolver->ordersServedBy($baskets[3], $torremocha));
     }
 
     /**
@@ -193,8 +197,64 @@ class MonthlyOperativeOrderResolverTest extends TestCase
 
         $resolver = $this->makeResolverWithExceptions($baskets, [1 => $traslado]);
 
-        $this->assertSame([1], $resolver->ordersServedBy($baskets[1], $torremocha));
-        $this->assertSame([4], $resolver->ordersServedBy($baskets[4], $torremocha));
+        // Mayo queda con 4 posiciones: el 8-may es la 1ª (+1/-4) y el 29-may
+        // la 4ª, que ahora es la ÚLTIMA del mes (+4/-1).
+        $this->assertSame([-4, 1], $resolver->ordersServedBy($baskets[1], $torremocha));
+        $this->assertSame([-1, 4], $resolver->ordersServedBy($baskets[4], $torremocha));
+    }
+
+    /**
+     * «Última semana» (day_month_order = -1) en un mes de 5 viernes recae en
+     * el 5º viernes (29-may), NO en el 4º (22-may). Es EL bug reportado por
+     * reparto: el antiguo orden 4 caía en el 4º de 5, cuando debía ser el
+     * último. Con índice negativo, el -1 sólo lo sirve la última semana.
+     */
+    public function testUltimaSemanaEnMesDe5ViernesEsElQuinto(): void
+    {
+        $baskets = $this->mayoBaskets();
+        $torremocha = $this->makeNode('Torremocha', 5, Node::CADENCE_WEEKLY);
+        $resolver = $this->makeResolver($baskets);
+
+        $this->assertContains(-1, $resolver->ordersServedBy($baskets[4], $torremocha));     // 29-may (último) SÍ
+        $this->assertNotContains(-1, $resolver->ordersServedBy($baskets[3], $torremocha));  // 22-may (4º) NO
+    }
+
+    /**
+     * El MISMO day_month_order = -1 recae en el 4º viernes cuando el mes sólo
+     * tiene 4 (junio 2026: 5, 12, 19, 26). Así una única configuración
+     * («última») sigue al último reparto sea cual sea la longitud del mes,
+     * que es justo lo que no sabía hacer el orden fijo 4.
+     */
+    public function testUltimaSemanaEnMesDe4ViernesEsElCuarto(): void
+    {
+        $baskets = $this->junioBaskets();
+        $torremocha = $this->makeNode('Torremocha', 5, Node::CADENCE_WEEKLY);
+        $resolver = $this->makeResolver($baskets);
+
+        $this->assertContains(-1, $resolver->ordersServedBy($baskets[3], $torremocha));     // 26-jun (4º y último) SÍ
+        $this->assertNotContains(-1, $resolver->ordersServedBy($baskets[2], $torremocha));  // 19-jun (3º) NO
+        // En un mes de 4, el 4º sirve +4 y -1 a la vez.
+        $this->assertSame([-1, 4], $resolver->ordersServedBy($baskets[3], $torremocha));
+    }
+
+    /**
+     * Si se cancela la última semana del mes, «última» (-1) sigue al fallback
+     * hacia atrás (la última operativa anterior), igual que el orden positivo:
+     * el mensual no se pierde ni salta de mes.
+     */
+    public function testUltimaSemanaSigueElFallbackSiSeCancelaLaUltima(): void
+    {
+        $baskets = $this->mayoBaskets();
+        $torremocha = $this->makeNode('Torremocha', 5, Node::CADENCE_WEEKLY);
+
+        $cancellation = new DeliveryException();
+        $cancellation->setBasket($baskets[4]);  // 29-may, última
+        $cancellation->setShiftedDate(null);
+
+        $resolver = $this->makeResolverWithExceptions($baskets, [5 => $cancellation]);
+
+        $this->assertNotContains(-1, $resolver->ordersServedBy($baskets[4], $torremocha)); // cancelada, no sirve
+        $this->assertContains(-1, $resolver->ordersServedBy($baskets[3], $torremocha));    // 22-may absorbe «última»
     }
 
     /**
@@ -211,6 +271,22 @@ class MonthlyOperativeOrderResolverTest extends TestCase
             2 => $this->makeBasket(3, '2026-05-15'),
             3 => $this->makeBasket(4, '2026-05-22'),
             4 => $this->makeBasket(5, '2026-05-29'),
+        ];
+    }
+
+    /**
+     * Devuelve los 4 viernes de junio 2026 (5, 12, 19, 26) indexados 0..3.
+     * Mes de 4 viernes para contrastar la semántica de «última» con mayo (5).
+     *
+     * @return Basket[]
+     */
+    private function junioBaskets(): array
+    {
+        return [
+            0 => $this->makeBasket(6, '2026-06-05'),
+            1 => $this->makeBasket(7, '2026-06-12'),
+            2 => $this->makeBasket(8, '2026-06-19'),
+            3 => $this->makeBasket(9, '2026-06-26'),
         ];
     }
 
