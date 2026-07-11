@@ -440,9 +440,11 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
      * * Ojo, aquí no se pasa el id sino el objeto basket entero
      * Directamente entiendo que se buscan solo los activos
      *
-     * LEGACY: sustituida por findBasketPartnersMonthlyNodeAware. Sólo la
-     * sigue usando SendPickupReminderCommand (deuda apuntada, email
-     * aparcado por copy). Eliminar cuando se modernice ese comando.
+     * LEGACY / CÓDIGO MUERTO: sustituida por findBasketPartnersMonthlyNodeAware.
+     * Ya NO tiene llamadores (SendPickupReminderCommand tampoco la referencia).
+     * ⚠️ Si se resucita: su filtro `b.day_month_order<=:day_order` asume orden
+     * positivo y NO entiende el índice negativo de «última semana» (-1<=N sería
+     * siempre cierto y traería a todo el mundo). Usar el resolver node-aware.
      */
     public function findBasketPartnersMonthlyAndCity($current_basket,$basket, $day_order, $only_eggs=false)
     {

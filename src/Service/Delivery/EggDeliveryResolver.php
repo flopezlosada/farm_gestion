@@ -97,7 +97,10 @@ class EggDeliveryResolver
      *  - Si la cesta es quincenal/semanal: egg_day_month_order indica la
      *    N-ésima entrega de cesta del partner en el mes que lleva huevos.
      *    Ej. quincenal B con egg_day_month_order=1 → huevos en su primer
-     *    B-viernes operativo del mes.
+     *    B-viernes operativo del mes. El orden puede ser NEGATIVO (misma
+     *    convención que day_month_order): -1 = su última cesta del mes,
+     *    -2 = la penúltima… — así "última cesta" sigue al último reparto
+     *    del socio aunque el mes tenga una entrega más de lo habitual.
      */
     private function deliversMonthly(PartnerBasketShare $share, Basket $basket): bool
     {
@@ -131,7 +134,15 @@ class EggDeliveryResolver
             return false;
         }
 
-        $designated = min($order, count($deliveries)) - 1;
+        // Índice 0-based de la entrega designada. Positivo cuenta desde el
+        // principio (N-ésima, acotado a la última); negativo desde el final
+        // (-1 = última). El bucle de fallback (adelante y luego atrás) resuelve
+        // igual en ambos casos: si la designada está cancelada, busca la
+        // siguiente operativa y, si no hay, la anterior.
+        $count = count($deliveries);
+        $designated = $order > 0
+            ? min($order, $count) - 1
+            : max($count + $order, 0);
         $resolved = null;
         for ($j = $designated, $n = count($deliveries); $j < $n; $j++) {
             if ($deliveries[$j]['operative']) {

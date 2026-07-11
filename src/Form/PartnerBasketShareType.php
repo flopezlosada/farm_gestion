@@ -72,10 +72,10 @@ class PartnerBasketShareType extends AbstractType
                     'En su 1ª cesta del mes' => 1,
                     'En su 2ª cesta del mes' => 2,
                     'En su 3ª cesta del mes' => 3,
-                    'En su 4ª cesta del mes' => 4,
+                    'En su última cesta del mes' => -1,
                 ],
                 'label' => 'En qué cesta del mes recibe los huevos',
-                'help' => 'Los huevos viajan dentro de una de las cestas del socio (nunca en un día sin cesta). Una quincenal que recoge el 1er y 3er viernes y elige «2ª cesta» recibe los huevos en su segunda cesta.',
+                'help' => 'Los huevos viajan dentro de una de las cestas del socio (nunca en un día sin cesta). Una quincenal que recoge el 1er y 3er viernes y elige «2ª cesta» recibe los huevos en su segunda cesta. «Última cesta» sigue al último reparto del mes aunque el mes tenga 5 semanas.',
             ])
             ->add('dayMonthOrder', ChoiceType::class,[
                 'choices'  => [
@@ -83,8 +83,9 @@ class PartnerBasketShareType extends AbstractType
                     'Primer viernes' => 1,
                     'Segundo viernes' => 2,
                     'Tercer viernes' => 3,
-                    'Cuarto viernes' => 4,
-                ], 'label'=>"Qué viernes del mes recoge la cesta"])
+                    'Último viernes del mes' => -1,
+                ], 'label'=>"Qué viernes del mes recoge la cesta",
+                'help' => 'La opción «Último viernes» sigue al último reparto del mes: el 4º en meses de 4 semanas y el 5º en meses de 5.'])
             ->add('deliveryGroup', ChoiceType::class, [
                 'label' => 'Turno de viernes (quincenal)',
                 'help' => 'Sólo para quincenales en puntos de reparto semanales. Cada opción muestra los viernes reales en que recoge.',

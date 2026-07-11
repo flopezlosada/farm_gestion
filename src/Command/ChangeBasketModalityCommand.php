@@ -57,8 +57,8 @@ class ChangeBasketModalityCommand extends Command
             ->addOption('partner', null, InputOption::VALUE_REQUIRED, 'ID del socio.')
             ->addOption('to-share', null, InputOption::VALUE_REQUIRED, 'ID de BasketShare destino (1 sem, 2 quin, 3 mens…).')
             ->addOption('from', null, InputOption::VALUE_REQUIRED, 'Fecha efectiva del cambio (YYYY-MM-DD).')
-            ->addOption('day-order', null, InputOption::VALUE_REQUIRED, 'day_month_order de la nueva PBS (N-ésima entrega del mes), o vacío.')
-            ->addOption('egg-day-order', null, InputOption::VALUE_REQUIRED, 'egg_day_month_order de la nueva PBS (vacío = huevo va con la cesta).')
+            ->addOption('day-order', null, InputOption::VALUE_REQUIRED, 'day_month_order de la nueva PBS (N-ésima entrega del mes; -1 = última semana), o vacío. Para el valor negativo usa la sintaxis con «=»: --day-order=-1.')
+            ->addOption('egg-day-order', null, InputOption::VALUE_REQUIRED, 'egg_day_month_order de la nueva PBS (vacío = huevo va con la cesta; -1 = última cesta, con --egg-day-order=-1).')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'No escribe; informa de lo que haría.');
     }
 

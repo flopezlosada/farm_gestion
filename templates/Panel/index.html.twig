@@ -265,7 +265,7 @@
                                     {{ bs_label }}
                                 </span>
                                 {% if bs_id == 3 and active_share.dayMonthOrder %}
-                                    <span class="prt-chip prt-chip--mute">{{ active_share.dayMonthOrder }}º viernes</span>
+                                    <span class="prt-chip prt-chip--mute">{% if active_share.dayMonthOrder == -1 %}última semana{% else %}{{ active_share.dayMonthOrder }}º viernes{% endif %}</span>
                                 {% endif %}
                                 {% if active_share.vegetablesBasketAmount and active_share.vegetablesBasketAmount > 1 %}
                                     <span class="prt-chip prt-chip--mute">×{{ active_share.vegetablesBasketAmount }} cestas</span>

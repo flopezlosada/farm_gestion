@@ -210,6 +210,33 @@ class EggDeliveryResolverTest extends TestCase
     }
 
     /**
+     * Huevo mensual con egg_day_month_order = -1 («última cesta del mes»):
+     * cae en la ÚLTIMA entrega operativa del socio, NO en la primera.
+     * Regresión del bug: la fórmula antigua (min(order,count)-1) daba índice
+     * -2 y el fallback terminaba resolviendo la primera entrega.
+     */
+    public function testHuevoMensualUltimaCestaVaEnLaUltimaEntrega(): void
+    {
+        // Cancelada la 1ª (idx 0); base [X,1,2,3], count 4 → -1 designa idx 3.
+        [$semanas, $share] = $this->mesConCierre(cerrada: 0, eggOrder: -1);
+
+        $this->assertTrue($this->resolver->delivers($share, $semanas[3]));   // última: SÍ
+        $this->assertFalse($this->resolver->delivers($share, $semanas[1]));  // primera operativa: NO (era el bug)
+    }
+
+    /**
+     * Si la última cesta del mes está cancelada, «última» (-1) cae en la
+     * operativa ANTERIOR (fallback hacia atrás), no salta de mes.
+     */
+    public function testHuevoMensualUltimaCestaCerradaHaceFallbackHaciaAtras(): void
+    {
+        [$semanas, $share] = $this->mesConCierre(cerrada: 3, eggOrder: -1);
+
+        $this->assertFalse($this->resolver->delivers($share, $semanas[3]));  // última cerrada
+        $this->assertTrue($this->resolver->delivers($share, $semanas[2]));   // anterior operativa
+    }
+
+    /**
      * Helper de los tests pegajosos: mes de 4 viernes (junio 2026) con UNA
      * semana cancelada, y un PBS semanal con huevo mensual en la entrega
      * $eggOrder. Cablea los mocks de EM (baskets del mes) y NodeDeliveryDate
