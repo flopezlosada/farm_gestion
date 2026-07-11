@@ -5,7 +5,7 @@
 {% form_theme form 'form_div_layout.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
 
-{{ form_start(form, { attr: { role: 'form', class: 'csa-form-narrow' } }) }}
+{{ form_start(form, { attr: { role: 'form', class: 'csa-form-narrow', 'data-csa-dropdowns': '' } }) }}
 
     <div class="csa-stack-lg">
 
@@ -16,10 +16,15 @@
                     {{ csa.field(form.title, 'Título', { full: true }) }}
                     {{ csa.field(form.type, 'Tipo') }}
                     {{ csa.field(form.status, 'Estado') }}
-                    {{ csa.field(form.summary, 'Resumen', { full: true }) }}
+                    {{ csa.field(form.summary, 'Resumen', { full: true, widget_class: 'csa-textarea' }) }}
                     {{ csa.field(form.content, 'Descripción', { full: true, widget_class: 'tinymce' }) }}
-                    {{ csa.field(form.position, 'Orden') }}
-                    {{ csa.field(form.published, 'Publicado') }}
+                    <div class="csa-field csa-field--full">
+                        <label class="csa-toggle">
+                            {{ form_widget(form.published, { attr: { class: 'csa-toggle__input' } }) }}
+                            <span class="csa-toggle__track"><span class="csa-toggle__thumb"></span></span>
+                            <span class="csa-toggle__text">Publicado <small>Si se desactiva, el proyecto queda en borrador y no se ve en la web.</small></span>
+                        </label>
+                    </div>
                 </div>
             {% endblock %}
         {% endembed %}

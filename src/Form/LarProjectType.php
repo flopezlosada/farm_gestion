@@ -6,7 +6,6 @@ use App\Entity\LarProject;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
-use Symfony\Component\Form\Extension\Core\Type\IntegerType;
 use Symfony\Component\Form\Extension\Core\Type\TextareaType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
@@ -48,11 +47,6 @@ class LarProjectType extends AbstractType
                     'Finalizado (memoria)' => LarProject::STATUS_FINISHED,
                 ],
                 'help' => 'Los activos se muestran destacados; los finalizados quedan como trayectoria.',
-            ])
-            ->add('position', IntegerType::class, [
-                'label' => 'Orden',
-                'attr' => ['min' => 0],
-                'help' => 'Menor número = aparece antes. Empates se ordenan por fecha.',
             ])
             ->add('published', CheckboxType::class, [
                 'label' => 'Publicado',
