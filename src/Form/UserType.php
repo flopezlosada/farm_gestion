@@ -54,6 +54,7 @@ class UserType extends AbstractType
         'encuestas' => ['label' => 'Encuestas',          'read' => 'ROLE_GESTION_ENCUESTAS', 'edit' => 'ROLE_GESTION_ENCUESTAS_EDIT'],
         'albergue'  => ['label' => 'Albergue',           'read' => 'ROLE_GESTION_ALBERGUE',  'edit' => 'ROLE_GESTION_ALBERGUE_EDIT'],
         'lar'       => ['label' => 'LAR',                'read' => 'ROLE_GESTION_LAR',       'edit' => 'ROLE_GESTION_LAR_EDIT'],
+        'laboral'   => ['label' => 'Personal',           'read' => 'ROLE_GESTION_LABORAL',   'edit' => 'ROLE_GESTION_LABORAL_EDIT'],
     ];
 
     public function buildForm(FormBuilderInterface $builder, array $options): void
