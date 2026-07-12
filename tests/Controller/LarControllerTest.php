@@ -2,6 +2,7 @@
 
 namespace App\Tests\Controller;
 
+use App\Entity\LarPage;
 use App\Entity\LarProject;
 use App\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
@@ -97,11 +98,78 @@ class LarControllerTest extends AbstractAuthenticatedTest
     }
 
     /**
+     * Editar la portada (singleton LarPage): el primer guardado crea la fila con
+     * sus ofertas; un segundo guardado con una oferta menos la borra de verdad
+     * (orphanRemoval), no la deja huérfana.
+     */
+    public function testEditPagePersistsAndOffersCascade(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->clearLarPages();
+
+        // Primer guardado: crea la fila con 3 ofertas y un email de coordinación
+        // propio (distinto del de fábrica).
+        $crawler = $client->request('GET', '/gestion/lar/page');
+        $this->assertResponseIsSuccessful();
+        $client->request('POST', '/gestion/lar/page', ['lar_page' => [
+            '_token' => $crawler->filter('input[name="lar_page[_token]"]')->attr('value'),
+            'intro' => '<p>Introducción de prueba.</p>',
+            'coordName' => 'Coordinación Test',
+            'coordPhone' => '600123123',
+            'coordEmail' => 'portada-test@ejemplo.test',
+            'offers' => [
+                ['title' => 'Oferta A', 'hours' => '10 h', 'body' => 'Cuerpo A'],
+                ['title' => 'Oferta B', 'hours' => '20 h', 'body' => 'Cuerpo B'],
+                ['title' => 'Oferta C', 'hours' => '30 h', 'body' => 'Cuerpo C'],
+            ],
+        ]]);
+        $this->assertResponseRedirects('/gestion/lar/page');
+
+        $this->em()->clear();
+        $page = $this->em()->getRepository(LarPage::class)->findOneBy([]);
+        $this->assertNotNull($page, 'La portada debería haberse creado.');
+        $this->assertSame('portada-test@ejemplo.test', $page->getCoordEmail());
+        $this->assertCount(3, $page->getOffers(), 'Deberían persistir las 3 ofertas.');
+
+        // Segundo guardado con una oferta menos: orphanRemoval deja 2.
+        $crawler = $client->request('GET', '/gestion/lar/page');
+        $client->request('POST', '/gestion/lar/page', ['lar_page' => [
+            '_token' => $crawler->filter('input[name="lar_page[_token]"]')->attr('value'),
+            'coordEmail' => 'portada-test@ejemplo.test',
+            'offers' => [
+                ['title' => 'Oferta A', 'hours' => '10 h', 'body' => 'Cuerpo A'],
+                ['title' => 'Oferta B', 'hours' => '20 h', 'body' => 'Cuerpo B'],
+            ],
+        ]]);
+        $this->assertResponseRedirects('/gestion/lar/page');
+
+        $this->em()->clear();
+        $page = $this->em()->getRepository(LarPage::class)->findOneBy([]);
+        $this->assertCount(2, $page->getOffers(), 'La oferta quitada debe borrarse (orphanRemoval).');
+
+        $this->clearLarPages();
+    }
+
+    /**
      * @return EntityManagerInterface
      */
     private function em(): EntityManagerInterface
     {
         return static::getContainer()->get('doctrine')->getManager();
+    }
+
+    /**
+     * Borra la fila de portada (y sus ofertas, por cascade) para partir/terminar
+     * limpio, ya que es un singleton compartido por los tests.
+     */
+    private function clearLarPages(): void
+    {
+        $em = $this->em();
+        foreach ($em->getRepository(LarPage::class)->findAll() as $page) {
+            $em->remove($page);
+        }
+        $em->flush();
+        $em->clear();
     }
 
     /**

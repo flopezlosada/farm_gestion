@@ -2,6 +2,7 @@
 
 namespace App\Tests\Controller;
 
+use App\Entity\LarPage;
 use App\Entity\LarProject;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
@@ -82,6 +83,8 @@ class LarPublicControllerTest extends WebTestCase
         // lo agota con 4 envíos desde 127.0.0.1. Lo reseteamos para esta IP para
         // que este test sea determinista sea cual sea el orden de ejecución.
         static::getContainer()->get('limiter.contact_form')->create('127.0.0.1')->reset();
+        // Sin portada guardada: el destino cae al buzón de fábrica (larcsa@).
+        $this->clearLarPages();
 
         $crawler = $client->request('GET', '/lar');
         $this->assertResponseIsSuccessful();
@@ -101,6 +104,41 @@ class LarPublicControllerTest extends WebTestCase
             'To',
             'larcsa@csavegadejarama.org'
         );
+    }
+
+    /**
+     * Con una portada guardada, el email del formulario va al coordEmail de BBDD,
+     * NO al fallback. Se prueba con un coordEmail DISTINTO del de fábrica para que
+     * el test detecte de verdad si el destino sigue al dato o quedó hardcodeado.
+     */
+    public function testContactEmailFollowsCoordEmailFromDb(): void
+    {
+        $client = static::createClient();
+
+        // Portada persistida con un buzón de coordinación propio.
+        $this->clearLarPages();
+        $em = $this->em();
+        $page = LarPage::createWithDefaults();
+        $page->setCoordEmail('destino-real@ejemplo.test');
+        $em->persist($page);
+        $em->flush();
+
+        static::getContainer()->get('limiter.contact_form')->create('127.0.0.1')->reset();
+
+        $crawler = $client->request('GET', '/lar');
+        $form = $crawler->selectButton('Enviar solicitud')->form([
+            'lar_contact[name]' => 'Grupo de prueba',
+            'lar_contact[email]' => 'quien@ejemplo.test',
+            'lar_contact[requestType]' => 'visita_pedagogica',
+            'lar_contact[body]' => 'Consulta de prueba con portada guardada.',
+        ]);
+        $client->submit($form);
+
+        $this->assertResponseRedirects('/lar');
+        $this->assertEmailCount(1);
+        $this->assertEmailAddressContains($this->getMailerMessage(), 'To', 'destino-real@ejemplo.test');
+
+        $this->clearLarPages();
     }
 
     /**
@@ -138,6 +176,20 @@ class LarPublicControllerTest extends WebTestCase
             $em->remove($project);
             $em->flush();
         }
+    }
+
+    /**
+     * Borra la portada (singleton LarPage) y sus ofertas por cascade, re-obtenida
+     * del manager actual para no operar sobre una referencia detached tras los
+     * requests del cliente. Deja db_test limpio de portada.
+     */
+    private function clearLarPages(): void
+    {
+        $em = $this->em();
+        foreach ($em->getRepository(LarPage::class)->findAll() as $page) {
+            $em->remove($page);
+        }
+        $em->flush();
     }
 
     /**
