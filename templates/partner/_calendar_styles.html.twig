@@ -21,9 +21,13 @@
 
   /* --- rejilla --- */
   .rcal-body{padding:var(--csa-sp-5)}
-  .rcal-dow{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-bottom:10px}
+  /* minmax(0,1fr) —no 1fr a secas— para que las 7 columnas puedan encogerse por
+     debajo de su contenido y NO desborden en pantallas estrechas (móvil). Con 1fr
+     el mínimo es el min-content de la celda (marcadores de 22px) y la rejilla se
+     salía del viewport, cortando la última columna. */
+  .rcal-dow{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;margin-bottom:10px}
   .rcal-dow span{text-align:center;font-size:var(--csa-fs-xs);font-weight:600;color:var(--csa-ink-muted);text-transform:uppercase;letter-spacing:.06em}
-  .rcal-weeks{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
+  .rcal-weeks{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
   .rcal-cell{position:relative;min-height:80px;border-radius:var(--csa-radius-md);padding:9px 10px;border:1px solid transparent;display:flex;flex-direction:column;justify-content:space-between;text-decoration:none;transition:var(--csa-t-fast)}
   .rcal-cell .n{font-size:var(--csa-fs-md);font-weight:600;color:var(--csa-ink-soft);font-variant-numeric:tabular-nums;line-height:1}
   .rcal-cell.out{opacity:.5}
@@ -163,5 +167,28 @@
   /* tarjeta-enlace (socio, sin arrastre): tocar para volver a recoger */
   .csa-app a.rcal-tray-card{text-decoration:none;cursor:pointer}
   .csa-app a.rcal-tray-card:hover{text-decoration:none;transform:translateY(-1px);box-shadow:var(--csa-shadow-sm)}
+
+  /* ============================================================
+   * Móvil. AL FINAL a propósito: las @media NO añaden especificidad, así que
+   * para pisar las reglas base de .rcal-cell / .rcal-mk__i (misma especificidad)
+   * este bloque tiene que ir DESPUÉS que ellas en el fichero. Si se sube arriba,
+   * la base gana por orden de fuente y las celdas no se encogen (los marcadores
+   * de 22px se salen por abajo del día). La rejilla sigue a 7 columnas: aquí
+   * apretamos el interior (altura, padding, huecos y tamaño de marcadores).
+   * ============================================================ */
+  @media (max-width:560px){
+    .rcal-body{padding:var(--csa-sp-3)}
+    .rcal-dow{gap:4px}
+    .rcal-weeks{gap:4px}
+    .rcal-dow span{font-size:10px;letter-spacing:.02em}
+    .rcal-cell{min-height:52px;padding:5px 4px;border-radius:var(--csa-radius-sm)}
+    .rcal-cell .n{font-size:var(--csa-fs-sm)}
+    .rcal-mk{gap:3px}
+    .rcal-mk__i{width:16px;height:16px;border-radius:5px;font-size:9px}
+    .rcal-egg{width:8px;height:10px}
+    .rcal-today-tag{top:4px;right:4px;font-size:7px}
+    .rcal-cal-hd{padding:var(--csa-sp-3) var(--csa-sp-4)}
+    .rcal-month{font-size:var(--csa-fs-lg)}
+  }
   .rcal-tray-card__ic{font-size:11px}
 </style>
