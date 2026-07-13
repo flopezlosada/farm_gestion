@@ -206,41 +206,29 @@ class PartnerProfileTypeTest extends KernelTestCase
     }
 
     /**
-     * La identidad sí se protege: nombre o apellidos en blanco invalidan (el
-     * socix no puede dejarse sin ellos). Prueba que el grupo `profile` mantiene
-     * ese NotBlank en ambos campos.
-     *
-     * @dataProvider identidadEnBlanco
+     * La identidad sí se protege: el grupo de validación `profile` mantiene el
+     * NotBlank de nombre Y apellidos, así que un refactor que quitara 'profile'
+     * de esos campos (reintroduciendo el bug inverso: socix sin nombre) lo
+     * cazaría este test. Se valida la ENTIDAD contra el grupo directamente, no
+     * vía el form: enviar '' por el form lo normaliza a null y el setter
+     * no-nullable de name reventaría con TypeError antes de validar (footgun
+     * preexistente, ajeno a este cambio).
      */
-    public function testIdentidadEnBlancoInvalida(string $name, string $surname): void
+    public function testGrupoProfileExigeNombreYApellidos(): void
     {
+        $validator = static::getContainer()->get('validator');
+
         $partner = new Partner();
-        $partner->setName('Con Nombre (test)');
-        $partner->setSurname('De Prueba (test)');
-        $partner->setIsActive(true);
-        $this->em->persist($partner);
-        $this->em->flush();
+        $partner->setName('');
+        $partner->setSurname('');
 
-        $form = $this->createProfileForm($partner);
-        $form->submit([
-            'name' => $name,
-            'surname' => $surname,
-            'DNI' => '',
-            'address' => 'X',
-            'state' => '',
-            'city' => '',
-        ]);
+        $paths = array_map(
+            static fn ($v) => $v->getPropertyPath(),
+            iterator_to_array($validator->validate($partner, null, ['profile']))
+        );
 
-        $this->assertTrue($form->isSynchronized());
-        $this->assertFalse($form->isValid(), 'Nombre o apellidos en blanco deben invalidar el form.');
-    }
-
-    public static function identidadEnBlanco(): array
-    {
-        return [
-            'sin nombre' => ['', 'De Prueba (test)'],
-            'sin apellidos' => ['Con Nombre (test)', ''],
-        ];
+        $this->assertContains('name', $paths, 'El grupo profile debe exigir el nombre.');
+        $this->assertContains('surname', $paths, 'El grupo profile debe exigir los apellidos.');
     }
 
     private function madrid(): State
