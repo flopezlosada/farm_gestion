@@ -30,14 +30,21 @@ class Partner
 
     /**
      * @ORM\Column(type="string", length=255)
+     *
+     * NotBlank en 'Default' Y 'profile': 'Default' lo usa el form de admin
+     * ({@see \App\Form\PartnerType}, que no fija validation_groups); 'profile'
+     * lo usa el autoservicio del socix ({@see \App\Form\PartnerProfileType}).
+     * NO reducir a solo 'profile': dejaría al admin guardar socios sin nombre.
      */
-    #[Assert\NotBlank]
+    #[Assert\NotBlank(groups: ['Default', 'profile'])]
     private $name;
 
     /**
      * @ORM\Column(type="string", length=255, nullable=true)
+     *
+     * Mismo motivo que $name: grupos 'Default' (admin) y 'profile' (socix).
      */
-    #[Assert\NotBlank]
+    #[Assert\NotBlank(groups: ['Default', 'profile'])]
     private $surname;
 
     /**
