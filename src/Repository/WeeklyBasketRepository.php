@@ -215,33 +215,47 @@ class WeeklyBasketRepository extends ServiceEntityRepository
     }
 
     /**
-     * Destinatarios MATERIALIZADOS del recordatorio de recogida para un Basket:
-     * las WeeklyBasket que se recogen (status 1) cuya modalidad está entre las
-     * pedidas. A diferencia de los finders legacy de PartnerBasketShare (que
-     * calculan "a quién le tocaría" por modalidad + cohorte), esto lee el modelo
-     * ya materializado, así que respeta skips, traslados y overrides: quien
-     * marcó "no recojo" tiene status 2 y no sale; quien se trasladó sigue
-     * apareciendo (su WeeklyBasket existe, sólo cambia el grupo de entrega).
+     * Destinatarios MATERIALIZADOS del recordatorio de recogida cuya fecha física
+     * de entrega ({@see WeeklyBasket::getDeliveryDate()}) cae EXACTAMENTE en
+     * $deliveryDate, de las modalidades pedidas y que se recogen (status 1).
      *
+     * Ancla en la fecha física —no en el viernes-ciclo del Basket— por diseño:
+     * así cada nodo entra el día que le toca (Madrid recoge el miércoles,
+     * Torremocha el viernes) y un reparto DESPLAZADO por festivo (p. ej. al
+     * jueves) se selecciona en su fecha real. El comando corre a diario y pasa
+     * "hoy + días de antelación": el recordatorio de un nodo se dispara los días
+     * de antelación antes de SU reparto, con la fecha correcta.
+     *
+     * A diferencia de los finders legacy de PartnerBasketShare (que calculan "a
+     * quién le tocaría" por modalidad + cohorte), lee el modelo ya materializado,
+     * así que respeta skips, traslados y overrides: quien marcó "no recojo" tiene
+     * status 2 y no sale; quien se trasladó sigue apareciendo con su nodo de
+     * entrega. Lxs semanales no se piden aquí (recogen cada semana, no necesitan
+     * aviso).
+     *
+     * @param \DateTimeInterface $deliveryDate Día físico de reparto objetivo.
      * @param int[] $basketShareIds Modalidades a incluir (p.ej. quincenal y mensual).
-     * @return WeeklyBasket[]
+     * @return WeeklyBasket[] Ordenadas por nodo y nombre del socix.
      */
-    public function findPickedForBasketByShares(Basket $basket, array $basketShareIds): array
+    public function findPickedByDeliveryDateAndShares(\DateTimeInterface $deliveryDate, array $basketShareIds): array
     {
         if ($basketShareIds === []) {
             return [];
         }
 
         return $this->createQueryBuilder('wb')
-            ->innerJoin('wb.partner', 'p')
-            ->innerJoin('wb.basket_share', 'bs')
-            ->where('wb.basket = :basket')
+            ->innerJoin('wb.partner', 'p')->addSelect('p')
+            ->innerJoin('wb.basket_share', 'bs')->addSelect('bs')
+            ->leftJoin('wb.weekly_basket_group', 'wbg')->addSelect('wbg')
+            ->leftJoin('wbg.node', 'n')->addSelect('n')
+            ->where('wb.delivery_date = :date')
             ->andWhere('wb.weekly_basket_status = :status')
             ->andWhere('bs.id IN (:shares)')
-            ->setParameter('basket', $basket)
+            ->setParameter('date', $deliveryDate->format('Y-m-d'))
             ->setParameter('status', 1)
             ->setParameter('shares', $basketShareIds)
-            ->orderBy('p.name', 'ASC')
+            ->orderBy('n.name', 'ASC')
+            ->addOrderBy('p.name', 'ASC')
             ->addOrderBy('p.surname', 'ASC')
             ->getQuery()
             ->getResult();

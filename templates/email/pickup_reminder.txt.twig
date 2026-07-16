@@ -1,9 +1,9 @@
 Hola {{ partner.name }},
 
-Te recordamos que este viernes {{ pickup_date|format_date('full', locale='es') }}
-te toca recoger tu cesta {{ modality }} en la CSA Vega de Jarama.
+Te recordamos que el {{ pickup_date|format_date('full', locale='es') }}
+te toca recoger tu cesta {{ modality }}{% if node_name %} en {{ node_name }}{% else %} en la CSA Vega de Jarama{% endif %}.
 {% if was_shifted %}
-ATENCIÓN: el reparto se ha desplazado a esta fecha (no es el viernes habitual).
+ATENCIÓN: el reparto se ha desplazado a esta fecha (no es el día habitual).
 {% endif %}
 {% set deadline_phrase %}{% if deadline %}antes del {{ deadline|format_datetime(pattern="EEEE d 'de' MMMM 'a las' HH:mm", locale='es') }}{% else %}con la debida antelación{% endif %}{% endset %}
 {% if can_act %}
