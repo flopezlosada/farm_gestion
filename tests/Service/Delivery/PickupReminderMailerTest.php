@@ -10,6 +10,7 @@ use App\Entity\WeeklyBasketGroup;
 use App\Security\PartnerAccessPolicy;
 use App\Service\AppSettings;
 use App\Service\Delivery\DeliveryDeadline;
+use App\Service\Delivery\NodeDeliveryDate;
 use App\Service\Delivery\PickupReminderMailer;
 use PHPUnit\Framework\TestCase;
 use Symfony\Bridge\Twig\Mime\TemplatedEmail;
@@ -92,9 +93,12 @@ class PickupReminderMailerTest extends TestCase
         // Links apagados: canUseActionLinks no se llega a invocar (corto-circuito).
         $settings = $this->createMock(AppSettings::class);
         $settings->method('getBool')->willReturn(false);
+        $settings->method('getInt')->willReturn(1);      // DEADLINE_DAYS_BEFORE
+        $settings->method('getTime')->willReturn('20:59'); // DEADLINE_TIME
 
-        $deadline = $this->createMock(DeliveryDeadline::class);
-        $deadline->method('fromPhysicalDate')->willReturn(new \DateTimeImmutable('2099-06-30 20:59'));
+        // DeliveryDeadline es final: no se puede mockear. Se usa una instancia real;
+        // fromPhysicalDate() solo consume $settings (no toca NodeDeliveryDate).
+        $deadline = new DeliveryDeadline($this->createMock(NodeDeliveryDate::class), $settings);
 
         $urlGenerator = $this->createMock(UrlGeneratorInterface::class);
         $urlGenerator->method('generate')->willReturn('https://csavegadejarama.org/panel/calendario');

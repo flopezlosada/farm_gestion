@@ -66,8 +66,8 @@ class SendPickupReminderCommandTest extends KernelTestCase
 
         $cascorro = (new Node())->setName('Cascorro TEST ' . $sufijo)->setDeliveryWeekday(3);
         $torremocha = (new Node())->setName('Torremocha TEST ' . $sufijo)->setDeliveryWeekday(5);
-        $grupoMadrid = (new WeeklyBasketGroup())->setName('Cascorro')->setNode($cascorro);
-        $grupoSierra = (new WeeklyBasketGroup())->setName('Bustarviejo')->setNode($torremocha);
+        $grupoMadrid = (new WeeklyBasketGroup())->setName('Cascorro')->setColor('#8fbf5a')->setNode($cascorro);
+        $grupoSierra = (new WeeklyBasketGroup())->setName('Bustarviejo')->setColor('#5a8fbf')->setNode($torremocha);
         $em->persist($cascorro);
         $em->persist($torremocha);
         $em->persist($grupoMadrid);
@@ -132,7 +132,7 @@ class SendPickupReminderCommandTest extends KernelTestCase
         $em->persist($cierre);
 
         $node = (new Node())->setName('Torremocha TEST ' . $sufijo)->setDeliveryWeekday(5);
-        $grupo = (new WeeklyBasketGroup())->setName('Bustarviejo')->setNode($node);
+        $grupo = (new WeeklyBasketGroup())->setName('Bustarviejo')->setColor('#5a8fbf')->setNode($node);
         $em->persist($node);
         $em->persist($grupo);
 
