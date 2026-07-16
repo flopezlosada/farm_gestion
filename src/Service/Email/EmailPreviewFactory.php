@@ -107,6 +107,9 @@ class EmailPreviewFactory
             'partner' => $partner,
             'modality' => 'quincenal',
             'pickup_date' => $pickupDate,
+            // Punto de recogida real del socix de ejemplo (o Torremocha por defecto),
+            // para que la preview muestre la forma del email consciente del nodo.
+            'node_name' => $partner->getWeeklyBasketGroup()?->getNode()?->getName() ?? 'Torremocha',
             'was_shifted' => false,
             'can_act' => $this->settings->getBool(AppSettings::EMAIL_PICKUP_REMINDER_LINKS),
             'calendar_url' => $this->urls->generate('panel_calendar', [], UrlGeneratorInterface::ABSOLUTE_URL),

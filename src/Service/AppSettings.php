@@ -209,7 +209,7 @@ class AppSettings
         self::EMAIL_PICKUP_REMINDER => [
             'group' => 'Emails a socixs',
             'label' => 'Recordatorio de recogida',
-            'help' => 'Email a quincenales y mensuales a los que les toca cesta el próximo viernes.',
+            'help' => 'Email a quincenales y mensuales unos días antes de su reparto, con la fecha y el punto de recogida de cada quien (Madrid el miércoles en Cascorro/Midori, la Sierra el viernes en Torremocha).',
             'default' => false,
         ],
         self::EMAIL_PICKUP_REMINDER_LINKS => [
