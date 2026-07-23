@@ -310,7 +310,7 @@
                                     <input type="hidden" name="view_year" value="{{ current.format('Y') }}">
                                     <input type="hidden" name="view_month" value="{{ current.format('n') }}">
                                     <label for="rcal-eggmove-to-{{ bid }}" class="csa-muted">Nueva fecha de los huevos</label>
-                                    <select name="to_basket_id" id="rcal-eggmove-to-{{ bid }}" required style="width: 100%; margin: var(--csa-sp-2) 0;">
+                                    <select name="to_basket_id" id="rcal-eggmove-to-{{ bid }}" class="csa-select" required style="margin: var(--csa-sp-2) 0;">
                                         <option value="">— elige fecha —</option>
                                         {% for t in egg_drop_targets|default([]) %}
                                             <option value="{{ t.basketId }}">{{ t.date|format_date(pattern='EEEE d MMM', locale='es')|capitalize }}</option>
