@@ -41,7 +41,7 @@
 {% endmacro %}
 
 {% if partner.sharePartner %}
-    {{ csa.callout('Esta cesta es compartida: su día y su contenido los marca la alternancia con el otro hogar, no se editan desde aquí.', 'info', 'info-circle') }}
+    {{ csa.callout('Esta cesta es compartida: el día de la cesta lo marca la alternancia con el otro hogar y no se cambia aquí. Los huevos sí puedes moverlos (no se comparten).', 'info', 'info-circle') }}
 {% endif %}
 
 {# Banner del modo "mover por toque" (socio, sin arrastre): aparece al pulsar
@@ -269,6 +269,38 @@
                     <div class="rcal-sect">Qué se lleva ese día</div>
 
                     {{ _self.components(selected, EGG) }}
+
+                    {# COMPARTIDAS: la cesta no se mueve (R1, alternancia con el otro hogar), pero
+                       los HUEVOS sí (cada hogar los suyos). Selector de fecha destino → mueve SOLO
+                       el componente huevos (component_id=EGG) por el endpoint de mover. Se muestra
+                       aunque el panel esté en "readonly" (que en compartidas está siempre puesto),
+                       si la entrega es futura y este día lleva huevos. #}
+                    {% if partner.sharePartner and not ro and selected_editable and has_egg_drop_targets|default(false) and cal.route_move is defined and cal.egg_move|default(false) %}
+                        {% set sel_has_eggs = false %}
+                        {% for it in selected.items %}{% if it.component.id == EGG %}{% set sel_has_eggs = true %}{% endif %}{% endfor %}
+                        {% if sel_has_eggs %}
+                            <div class="rcal-eggmove" style="margin-top: var(--csa-sp-4);">
+                                <div class="rcal-sect"><span class="rcal-mk__i egg"><span class="rcal-egg"></span></span> Mover los huevos a otra fecha</div>
+                                <p class="csa-muted">La cesta se queda en su día (es compartida); solo se mueven tus huevos.</p>
+                                <form action="{{ path(cal.route_move, cal.idp|merge({ basketId: bid })) }}" method="post" class="rcal-eggmove__form">
+                                    <input type="hidden" name="_csrf_token" value="{{ cal.csrf_move }}">
+                                    <input type="hidden" name="component_id" value="{{ EGG }}">
+                                    <input type="hidden" name="view_year" value="{{ current.format('Y') }}">
+                                    <input type="hidden" name="view_month" value="{{ current.format('n') }}">
+                                    <label for="rcal-eggmove-to-{{ bid }}" class="csa-muted">Nueva fecha de los huevos</label>
+                                    <select name="to_basket_id" id="rcal-eggmove-to-{{ bid }}" required style="width: 100%; margin: var(--csa-sp-2) 0;">
+                                        <option value="">— elige fecha —</option>
+                                        {% for t in egg_drop_targets|default([]) %}
+                                            <option value="{{ t.basketId }}">{{ t.date|format_date(pattern='EEEE d MMM', locale='es')|capitalize }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <button type="submit" class="csa-btn csa-btn--secondary csa-btn--block">
+                                        <i class="fa fa-arrows"></i><span>Mover los huevos</span>
+                                    </button>
+                                </form>
+                            </div>
+                        {% endif %}
+                    {% endif %}
 
                     {% if not readonly and dnd %}
                         <div class="rcal-hint rcal-dragonly" style="margin-top: var(--csa-sp-4);">
