@@ -87,7 +87,7 @@ final class PartnerEggScheduleEditor
             }
             foreach ($slot['items'] as $line) {
                 if ($line['component']->getId() === BasketComponent::ID_EGGS) {
-                    throw new EggScheduleException('Ya se recogen huevos ese día.');
+                    throw new EggScheduleException('Ese día ya recoge huevos. Si solo quieres no recoger los de esta semana, usa el interruptor de huevos.');
                 }
             }
             break;
