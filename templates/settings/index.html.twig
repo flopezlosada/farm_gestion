@@ -86,10 +86,14 @@
                                                 {% if s.unit %}<span class="csa-setting__unit">{{ s.unit }}</span>{% endif %}
                                             </span>
                                         {% elseif s.type == 'string' %}
+                                            {# .csa-input es width:100% y el control va con flex-shrink:0,
+                                               así que se comería toda la fila y aplastaría el texto. Se
+                                               acota a ~20rem y se le permite encoger (flex 0 1) para que la
+                                               etiqueta+ayuda conserven su columna. #}
                                             <input type="text" class="csa-input"
                                                    name="settings[{{ s.name }}]" value="{{ s.value }}"
                                                    placeholder="csa@csavegadejarama.org"
-                                                   style="min-width: 16rem;">
+                                                   style="flex: 0 1 20rem; width: 20rem; max-width: 100%;">
                                         {% else %}
                                             <span class="csa-toggle">
                                                 <input type="checkbox" class="csa-toggle__input"
