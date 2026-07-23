@@ -304,7 +304,10 @@
                             <div class="rcal-eggmove" style="margin-top: var(--csa-sp-4);">
                                 <div class="rcal-sect"><span class="rcal-mk__i egg"><span class="rcal-egg"></span></span> Mover los huevos a otra fecha</div>
                                 <p class="csa-muted">La cesta se queda en su día (es compartida); solo se mueven tus huevos.</p>
-                                <form action="{{ path(cal.route_move, cal.idp|merge({ basketId: bid })) }}" method="post" class="rcal-eggmove__form">
+                                {# data-csa-dropdowns: el enhancer csa-dropdown convierte el <select> nativo
+                                   (cuya lista desplegada la dibuja el SO y no se puede estilar) en un desplegable
+                                   con el estilo de la app. Ya está en app.js; no hace falta recompilar. #}
+                                <form action="{{ path(cal.route_move, cal.idp|merge({ basketId: bid })) }}" method="post" class="rcal-eggmove__form" data-csa-dropdowns="1">
                                     <input type="hidden" name="_csrf_token" value="{{ cal.csrf_move }}">
                                     <input type="hidden" name="component_id" value="{{ EGG }}">
                                     <input type="hidden" name="view_year" value="{{ current.format('Y') }}">
