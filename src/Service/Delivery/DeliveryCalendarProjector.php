@@ -342,6 +342,16 @@ final class DeliveryCalendarProjector implements PartnerMonthProjection
             }
             $idx = $idxByBasket[$basket->getId()] ?? null;
 
+            // Si la entrega de esa semana ya está MATERIALIZADA, su WeeklyBasket (piedra) YA
+            // lleva el extra cascadeado (ExtraBasketEditor::addToDelivery y el generador al
+            // congelar lo suman a la piedra). Re-sumarlo aquí lo DUPLICABA en el calendario y el
+            // panel (bug Antía: ½ docena de huevos extra se mostraba como 1). El extra solo se
+            // DIBUJA sobre slots proyectados (dry, sin piedra) o cuando no había entrada esa
+            // semana (idx null → se crea un slot dry más abajo).
+            if ($idx !== null && ($slots[$idx]['source'] ?? null) === 'materialized') {
+                continue;
+            }
+
             if ($idx === null) {
                 // Extra en una semana sin entrada (su patrón no le da cesta): crear el slot,
                 // con la fecha física del nodo del socio y su modalidad (para el chip), 0 cestas
