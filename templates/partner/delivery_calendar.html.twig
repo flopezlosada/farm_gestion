@@ -43,9 +43,11 @@
             route_recover: 'partner_delivery_calendar_recover',
             route_reset:   'partner_delivery_calendar_reset',
             idp: { id: partner.id },
+            route_egg_toggle: 'partner_delivery_calendar_component',
             csrf_skip:  csrf_token('calendar_skip_'  ~ partner.id),
             csrf_move:  csrf_token('calendar_move_'  ~ partner.id),
             csrf_reset: csrf_token('calendar_reset_' ~ partner.id),
+            csrf_egg_toggle: csrf_token('calendar_component_' ~ partner.id),
         }
     } %}
 

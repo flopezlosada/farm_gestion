@@ -3,9 +3,14 @@
 namespace App\Tests\Service\Delivery;
 
 use App\Entity\Basket;
+use App\Entity\BasketComponent;
 use App\Entity\BasketShare;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
+use App\Entity\PartnerDeliveryShift;
+use App\Entity\WeeklyBasket;
+use App\Entity\WeeklyBasketItem;
+use App\Entity\WeeklyBasketStatus;
 use App\Service\Delivery\EggScheduleException;
 use App\Service\Delivery\PartnerEggScheduleEditor;
 use Doctrine\ORM\EntityManagerInterface;
@@ -53,6 +58,50 @@ class PartnerEggScheduleEditorTest extends KernelTestCase
         $this->expectException(EggScheduleException::class);
         $this->expectExceptionMessage('No hay una cesta activa esa semana.');
         $this->editor->move($partner, $from, $to, 'test');
+    }
+
+    public function testToggleQuitaLosHuevosDeUnaEntregaMaterializada(): void
+    {
+        $eggs = $this->em->getRepository(BasketComponent::class)->find(2);
+        $picked = $this->em->getRepository(WeeklyBasketStatus::class)->find(1);
+        $sharedShare = $this->em->getRepository(BasketShare::class)->find(self::SHARE_BIWEEKLY_SHARED);
+
+        $partner = $this->partnerWithActiveShare();
+        $basket = $this->futureBasket('2099-10-02', 40);
+
+        // Entrega materializada con línea de huevos (semana "generada": existe el WB).
+        $wb = (new WeeklyBasket())
+            ->setBasket($basket)->setPartner($partner)->setWeeklyBasketStatus($picked)
+            ->setBasketShare($sharedShare)->setAmount(1)->setDeliveryDate($basket->getDate());
+        $this->em->persist($wb);
+        $this->em->persist((new WeeklyBasketItem())->setWeeklyBasket($wb)->setBasketComponent($eggs)->setAmount('0.50'));
+        $this->em->flush();
+
+        $result = $this->editor->toggleEggs($partner, $basket, 'test');
+
+        $this->assertSame('removed', $result, 'Con huevos presentes, el toggle los quita.');
+        $this->em->clear();
+        $reload = $this->em->getRepository(WeeklyBasket::class)->findOneBy(['basket' => $basket->getId(), 'partner' => $partner->getId()]);
+        $this->assertNotNull($reload);
+        $this->assertSame(
+            [],
+            $this->em->getRepository(WeeklyBasketItem::class)->findBy(['weeklyBasket' => $reload, 'basketComponent' => 2]),
+            'La línea de huevos debe desaparecer de la entrega.',
+        );
+    }
+
+    public function testToggleLanzaSiHayUnCambioDeDiaActivoEsaSemana(): void
+    {
+        $partner = $this->partnerWithActiveShare();
+        $from = $this->futureBasket('2099-10-09', 41);
+        $to = $this->futureBasket('2099-10-23', 43);
+        // Cambio de ENTREGA ENTERA saliendo de la semana (component null).
+        $this->em->persist(new PartnerDeliveryShift($partner, $from, $to));
+        $this->em->flush();
+
+        $this->expectException(EggScheduleException::class);
+        $this->expectExceptionMessage('Hay un cambio de día activo esa semana: gestiónalo primero.');
+        $this->editor->toggleEggs($partner, $from, 'test');
     }
 
     private function partnerWithActiveShare(): Partner

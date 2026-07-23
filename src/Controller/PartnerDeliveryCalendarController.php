@@ -730,6 +730,7 @@ class PartnerDeliveryCalendarController extends AbstractController
         PartnerDeliveryShiftRepository $shiftRepository,
         DeliveryShiftApplier $applier,
         DeliveryCalendarProjector $projector,
+        PartnerEggScheduleEditor $eggEditor,
         EntityManagerInterface $em,
     ): Response {
         if (!in_array($componentId, [BasketComponent::ID_VEGETABLES, BasketComponent::ID_EGGS], true)) {
@@ -750,6 +751,26 @@ class PartnerDeliveryCalendarController extends AbstractController
 
         if (!$this->isCsrfTokenValid('calendar_component_' . $partner->getId(), (string) $request->request->get('_csrf_token'))) {
             $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
+
+            return $backToCalendar();
+        }
+
+        // HUEVOS: el toggle (generado/sin-generar) vive en el editor compartido con el panel del
+        // socio (DRY) y SIN R1 —los huevos sí se editan en compartidas—. La verdura sigue inline
+        // más abajo con sus guardas R1 (resolveCalendarDelivery / ungeneratedEditGuard).
+        if ($componentId === BasketComponent::ID_EGGS) {
+            try {
+                $result = $eggEditor->toggleEggs($partner, $basket, 'gestor:' . $this->getUser()?->getId());
+            } catch (EggScheduleException $e) {
+                $this->addFlash('error', $e->getMessage());
+
+                return $backToCalendar();
+            }
+            match ($result) {
+                'added' => $this->addFlash('success', 'Huevos añadidos a esa entrega.'),
+                'removed' => $this->addFlash('success', 'Huevos quitados: esa semana no recoge huevos.'),
+                default => $this->addFlash('warning', 'Esa entrega no contempla huevos según la cesta del socio.'),
+            };
 
             return $backToCalendar();
         }
