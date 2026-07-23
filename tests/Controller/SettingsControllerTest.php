@@ -157,6 +157,32 @@ class SettingsControllerTest extends AbstractAuthenticatedTest
     }
 
     /**
+     * El destinatario del resumen a administración (STRING marcado 'general') se pinta en el
+     * form general y se guarda, admitiendo varias direcciones separadas por comas. Así se
+     * configura el email del digest sin tocar el cron de cdmon.
+     */
+    public function testSavePersistsAdminSummaryRecipient(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $crawler = $client->request('GET', '/gestion/settings/');
+
+        $field = sprintf('settings[%s]', AppSettings::EMAIL_ADMIN_DELIVERY_SUMMARY_TO);
+        $this->assertCount(1, $crawler->filter(sprintf('input[name="%s"]', $field)), 'Falta el campo del destinatario del resumen en el form general.');
+
+        $form = $crawler->selectButton('Guardar configuración')->form();
+        $form[$field]->setValue('csa@csavegadejarama.org, otra@csavegadejarama.org');
+        $client->submit($form);
+
+        $this->assertResponseRedirects('/gestion/settings/');
+
+        $settings = static::getContainer()->get(AppSettings::class);
+        $this->assertSame(
+            'csa@csavegadejarama.org, otra@csavegadejarama.org',
+            $settings->getString(AppSettings::EMAIL_ADMIN_DELIVERY_SUMMARY_TO),
+        );
+    }
+
+    /**
      * La sección "Tareas programadas" expone, por cada cron, su formulario de
      * ejecución manual (y el de previsualización en los que la ofrecen).
      */
