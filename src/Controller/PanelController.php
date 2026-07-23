@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use App\Entity\Basket;
+use App\Entity\BasketComponent;
 use App\Entity\City;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
@@ -24,6 +25,8 @@ use App\Service\Delivery\DeliveryCalendarViewBuilder;
 use App\Service\Delivery\DeliveryDeadline;
 use App\Service\Delivery\DeliveryShiftApplier;
 use App\Service\Delivery\DeliveryShiftValidator;
+use App\Service\Delivery\EggScheduleException;
+use App\Service\Delivery\PartnerEggScheduleEditor;
 use App\Service\Delivery\PickupRelocationOptions;
 use App\Service\Delivery\PickupRelocator;
 use App\Service\Delivery\WeeklyBasketGenerator;
@@ -654,6 +657,7 @@ class PanelController extends AbstractController
         WeeklyBasketGenerator $generator,
         DeliveryCalendarProjector $projector,
         DeliveryShiftApplier $applier,
+        PartnerEggScheduleEditor $eggEditor,
         EntityManagerInterface $em,
     ): Response {
         if (($redirect = $this->ensureReady()) !== null) {
@@ -679,11 +683,37 @@ class PanelController extends AbstractController
             return $backToFrom();
         }
 
-        // R1: la cesta compartida no cambia de día (lo marca la alternancia).
-        if ($partner->getSharePartner() !== null) {
-            $this->addFlash('warning', 'Tu cesta es compartida: el día lo marca la alternancia con el otro hogar.');
+        // Componente al que se limita el movimiento (huevos), o 0 = entrega entera.
+        $componentId = (int) $request->request->get('component_id', 0);
+
+        // R1: la cesta compartida no cambia de día (lo marca la alternancia). Los HUEVOS no se
+        // comparten (cada hogar los suyos) → mover SOLO el componente huevos sí se permite.
+        if ($partner->getSharePartner() !== null && $componentId !== BasketComponent::ID_EGGS) {
+            $this->addFlash('warning', 'Tu cesta es compartida: el día lo marca la alternancia con el otro hogar. Solo puedes mover los huevos, no la cesta.');
 
             return $backToFrom();
+        }
+
+        // HUEVOS: misma lógica que el gestor, vía el editor compartido (DRY). Mismo deadline
+        // día-anterior que el resto del move del socio (lo comprueba el handler); no aplica el
+        // plazo del jueves del "no recoge" — igual que el move de la cesta entera del socio.
+        if ($componentId === BasketComponent::ID_EGGS) {
+            $to = $basketRepository->find((int) $request->request->get('to_basket_id', 0));
+            try {
+                $eggEditor->move($partner, $from, $to, 'partner:' . $partner->getId());
+            } catch (EggScheduleException $e) {
+                $this->addFlash('error', $e->getMessage());
+
+                return $backToFrom();
+            }
+            $this->addFlash('notice', 'Listo: tus huevos ahora el ' . $to->getDate()->format('d/m/Y') . '.');
+            [$year, $month] = $this->returnMonth($request, $to);
+
+            return $this->redirectToRoute('panel_calendar', [
+                'year' => $year,
+                'month' => $month,
+                'sel' => $to->getId(),
+            ]);
         }
 
         $share = $em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner, $from->getDate());

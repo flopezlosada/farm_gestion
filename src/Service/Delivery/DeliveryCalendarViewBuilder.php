@@ -3,6 +3,7 @@
 namespace App\Service\Delivery;
 
 use App\Entity\Basket;
+use App\Entity\BasketComponent;
 use App\Entity\Node;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
@@ -120,21 +121,17 @@ final class DeliveryCalendarViewBuilder
         // 'Y-m-d' → basketId, para que la rejilla marque esas celdas como soltables. El
         // endpoint de mover revalida; esto es solo para resaltar y permitir el drop. No se
         // ofrece en compartidas (R1) ni en solo lectura ($withDropTargets = false).
+        // Destinos de ARRASTRE, en el MISMO horizonte que la rejilla ($gridStart..$gridEnd) para
+        // que solo se ofrezcan días soltables realmente a la vista. Dos variantes según el socio:
+        //  - NO compartida: mover la entrega ENTERA a un día libre del nodo ($dropDays).
+        //  - Compartida (R1): la cesta no se mueve, pero los HUEVOS sí (cada hogar los suyos)
+        //    → destinos donde el nodo reparte y el socio NO recoge ya huevos ($eggDropDays).
+        // El endpoint de mover revalida; esto es solo para resaltar y permitir el drop.
         $dropDays = [];
-        if ($withDropTargets && $partner->getSharePartner() === null) {
+        $eggDropDays = [];
+        if ($withDropTargets) {
             $activeShare = $this->em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner, $current);
             if ($activeShare !== null) {
-                $occupiedReal = [];
-                foreach ($slots as $s) {
-                    if (!empty($s['items'])) {
-                        $occupiedReal[$s['basket']->getId()] = true;
-                    }
-                }
-                // El rango de destinos usa el MISMO horizonte que la rejilla ($gridStart..
-                // $gridEnd): así solo se ofrecen días soltables que estén realmente a la vista.
-                // Puede cruzar de mes por el borde; el endpoint de mover ya acepta cualquier
-                // sentido y el modelo contempla shifts que cruzan frontera
-                // (EggMonthlyConservationInvariant excluye ambos meses del shift).
                 $monthBaskets = $this->em->getRepository(Basket::class)->createQueryBuilder('b')
                     ->where('b.date BETWEEN :start AND :end')
                     ->setParameter('start', $gridStart->format('Y-m-d'))
@@ -142,19 +139,27 @@ final class DeliveryCalendarViewBuilder
                     ->orderBy('b.date', 'ASC')
                     ->getQuery()
                     ->getResult();
-                foreach ($monthBaskets as $b) {
-                    if (isset($occupiedReal[$b->getId()])) {
-                        continue; // ya hay entrega real ese día: un hueco por día
+
+                if ($partner->getSharePartner() === null) {
+                    // Ocupado = día con entrega real (un hueco por día).
+                    $occupied = [];
+                    foreach ($slots as $s) {
+                        if (!empty($s['items'])) {
+                            $occupied[$s['basket']->getId()] = true;
+                        }
                     }
-                    $projection = $this->generator->projectShareDelivery($b, $activeShare);
-                    if ($projection === null) {
-                        continue; // el nodo no reparte esa semana
+                    $dropDays = $this->dropTargets($monthBaskets, $activeShare, $occupied, $today);
+                } elseif ($activeShare->getEggAmount() !== null) {
+                    // Compartida con huevos: destinos de HUEVOS. Ocupado = día que YA lleva huevos.
+                    $occupied = [];
+                    foreach ($slots as $s) {
+                        foreach ($s['items'] as $line) {
+                            if ($line['component']->getId() === BasketComponent::ID_EGGS) {
+                                $occupied[$s['basket']->getId()] = true;
+                            }
+                        }
                     }
-                    $physical = $projection['deliveryDate'] ?? $b->getDate();
-                    if ($physical <= $today) {
-                        continue; // mismo deadline: destino futuro
-                    }
-                    $dropDays[$physical->format('Y-m-d')] = $b->getId();
+                    $eggDropDays = $this->dropTargets($monthBaskets, $activeShare, $occupied, $today);
                 }
             }
         }
@@ -163,6 +168,13 @@ final class DeliveryCalendarViewBuilder
         // de recogida (Pedrezuela…). Fallback al grupo si un dato legacy no tiene nodo.
         $group = $partner->getWeeklyBasketGroup();
         $pickupPlace = $group?->getNode()?->getName() ?? $group?->getName();
+
+        // Lista ordenada de destinos para el selector de "mover huevos" del panel (compartidas):
+        // los mismos $eggDropDays (fecha física → basketId) como pares {basketId, date} para pintar.
+        $eggDropTargets = [];
+        foreach ($eggDropDays as $ymd => $targetBasketId) {
+            $eggDropTargets[] = ['basketId' => $targetBasketId, 'date' => new \DateTimeImmutable($ymd)];
+        }
 
         return [
             'partner' => $partner,
@@ -176,6 +188,9 @@ final class DeliveryCalendarViewBuilder
             // ¿Hay días libres a los que mover una entrega? Un socio semanal recoge todas
             // las semanas → sin destino posible; sirve para ocultar el "Mover a otra fecha".
             'has_drop_targets' => $dropDays !== [],
+            // Compartidas: ¿hay días a los que mover SOLO los huevos? (la cesta no se mueve, R1).
+            'has_egg_drop_targets' => $eggDropDays !== [],
+            'egg_drop_targets' => $eggDropTargets,
             'current' => $current,
             'prev' => $current->modify('-1 month'),
             'next' => $current->modify('+1 month'),
@@ -263,6 +278,38 @@ final class DeliveryCalendarViewBuilder
 
         // Sin futuras este mes: la primera del mes; si ninguna cae dentro, la primera del listado.
         return $firstInMonth ?? $slots[0];
+    }
+
+    /**
+     * Días destino de arrastre: de $monthBaskets, los que el nodo del socio reparte, no están
+     * ya $occupied y son futuros (mismo deadline del día anterior a la recogida). Map fecha
+     * física 'Y-m-d' → basketId. El predicado de "ocupado" lo pone el llamante: entrega entera
+     * (cualquier ítem) para no-compartidas, o presencia de huevos para el mover-huevos de las
+     * compartidas.
+     *
+     * @param Basket[]         $monthBaskets Baskets del horizonte de la rejilla.
+     * @param array<int, true> $occupied     basketId ya ocupado (no ofrecer como destino).
+     * @return array<string, int> Fecha física 'Y-m-d' → basketId destino.
+     */
+    private function dropTargets(array $monthBaskets, PartnerBasketShare $share, array $occupied, \DateTimeImmutable $today): array
+    {
+        $days = [];
+        foreach ($monthBaskets as $b) {
+            if (isset($occupied[$b->getId()])) {
+                continue;
+            }
+            $projection = $this->generator->projectShareDelivery($b, $share);
+            if ($projection === null) {
+                continue; // el nodo no reparte esa semana
+            }
+            $physical = $projection['deliveryDate'] ?? $b->getDate();
+            if ($physical <= $today) {
+                continue; // mismo deadline: destino futuro
+            }
+            $days[$physical->format('Y-m-d')] = $b->getId();
+        }
+
+        return $days;
     }
 
     /**

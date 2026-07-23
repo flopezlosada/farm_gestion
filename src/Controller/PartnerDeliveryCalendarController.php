@@ -14,7 +14,9 @@ use App\Service\Delivery\AccumulatingMove;
 use App\Service\Delivery\DeliveryCalendarProjector;
 use App\Service\Delivery\DeliveryCalendarViewBuilder;
 use App\Service\Delivery\DeliveryShiftApplier;
+use App\Service\Delivery\EggScheduleException;
 use App\Service\Delivery\ExtraBasketEditor;
+use App\Service\Delivery\PartnerEggScheduleEditor;
 use App\Service\Delivery\PartnerMonthResetter;
 use App\Service\Delivery\WeeklyBasketComponentEditor;
 use App\Service\Delivery\WeeklyBasketGenerator;
@@ -102,6 +104,7 @@ class PartnerDeliveryCalendarController extends AbstractController
         DeliveryCalendarProjector $projector,
         DeliveryShiftApplier $applier,
         AccumulatingMove $accumulatingMove,
+        PartnerEggScheduleEditor $eggEditor,
         EntityManagerInterface $em,
     ): Response {
         $from = $basketRepository->find($basketId);
@@ -122,11 +125,47 @@ class PartnerDeliveryCalendarController extends AbstractController
             return $backToCalendar();
         }
 
-        // R1: las cestas compartidas no cambian de día.
-        if ($partner->getSharePartner() !== null) {
-            $this->addFlash('warning', 'Esta cesta es compartida: su día lo marca la alternancia con el otro hogar, no se mueve aquí.');
+        // Componente al que se limita el movimiento (verdura/huevos), o 0 = entrega entera.
+        // Se resuelve ANTES de R1 porque la regla de compartidas depende de él.
+        $componentId = (int) $request->request->get('component_id', 0);
+        if (!in_array($componentId, [BasketComponent::ID_VEGETABLES, BasketComponent::ID_EGGS], true)) {
+            $componentId = 0;
+        }
+
+        // R1: en una cesta compartida el DÍA de la cesta lo marca la alternancia con el otro
+        // hogar → no se mueve la entrega entera ni la verdura. Los HUEVOS no se comparten (cada
+        // hogar los suyos), así que mover SOLO el componente huevos sí se permite.
+        if ($partner->getSharePartner() !== null && $componentId !== BasketComponent::ID_EGGS) {
+            $this->addFlash('warning', 'Esta cesta es compartida: su día lo marca la alternancia con el otro hogar. Solo puedes mover los huevos, no la cesta.');
 
             return $backToCalendar();
+        }
+
+        // HUEVOS: la lógica (invariantes + moveComponent) vive en el editor compartido con el
+        // panel del socio (DRY). Se delega aquí, ANTES de las validaciones de la entrega entera
+        // —que quedan intactas para verdura y entrega completa—.
+        if ($componentId === BasketComponent::ID_EGGS) {
+            $to = $basketRepository->find((int) $request->request->get('to_basket_id', 0));
+            try {
+                $eggEditor->move($partner, $from, $to, 'gestor:' . $this->getUser()?->getId());
+            } catch (EggScheduleException $e) {
+                $this->addFlash('error', $e->getMessage());
+
+                return $backToCalendar();
+            }
+            $this->addFlash('success', sprintf(
+                'Huevos movidos del %s al %s.',
+                $from->getDate()->format('d/m/Y'),
+                $to->getDate()->format('d/m/Y'),
+            ));
+            [$year, $month] = $this->returnMonth($request, $to);
+
+            return $this->redirectToRoute('partner_delivery_calendar', [
+                'id' => $partner->getId(),
+                'year' => $year,
+                'month' => $month,
+                'sel' => $to->getId(),
+            ]);
         }
 
         $share = $em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner, $from->getDate());
@@ -174,10 +213,7 @@ class PartnerDeliveryCalendarController extends AbstractController
         // ¿Mover SOLO un componente (verdura u huevos)? Caso SANTOS: la verdura se mueve
         // a una semana que ya tiene huevo, y el huevo de esa semana se respeta. El choque
         // es por COMPONENTE (el destino no puede llevar YA ese componente; los demás sí).
-        $componentId = (int) $request->request->get('component_id', 0);
-        if (!in_array($componentId, [BasketComponent::ID_VEGETABLES, BasketComponent::ID_EGGS], true)) {
-            $componentId = 0;
-        }
+        // ($componentId se resolvió arriba, antes de R1.)
         if ($componentId !== 0) {
             $component = $em->getRepository(BasketComponent::class)->find($componentId);
             $label = $componentId === BasketComponent::ID_EGGS ? 'huevos' : 'verdura';
