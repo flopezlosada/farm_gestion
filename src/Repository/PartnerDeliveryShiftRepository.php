@@ -28,10 +28,15 @@ class PartnerDeliveryShiftRepository extends ServiceEntityRepository
      */
     public function findOutgoing(Partner $partner, Basket $from): ?PartnerDeliveryShift
     {
+        // LIMIT 1 defensivo: la unicidad la garantiza la BBDD (component_key), pero una
+        // fila sucia HISTÓRICA (anterior a la constraint) no debe volver a tumbar el
+        // calendario con NonUniqueResultException — se devuelve una, la más antigua.
         return $this->createQueryBuilder('s')
             ->where('s.partner = :partner AND s.fromBasket = :from AND s.component IS NULL')
             ->setParameter('partner', $partner)
             ->setParameter('from', $from)
+            ->orderBy('s.id', 'ASC')
+            ->setMaxResults(1)
             ->getQuery()
             ->getOneOrNullResult();
     }
@@ -42,10 +47,13 @@ class PartnerDeliveryShiftRepository extends ServiceEntityRepository
      */
     public function findIncoming(Partner $partner, Basket $to): ?PartnerDeliveryShift
     {
+        // LIMIT 1 defensivo, misma razón que findOutgoing.
         return $this->createQueryBuilder('s')
             ->where('s.partner = :partner AND s.toBasket = :to AND s.component IS NULL')
             ->setParameter('partner', $partner)
             ->setParameter('to', $to)
+            ->orderBy('s.id', 'ASC')
+            ->setMaxResults(1)
             ->getQuery()
             ->getOneOrNullResult();
     }
