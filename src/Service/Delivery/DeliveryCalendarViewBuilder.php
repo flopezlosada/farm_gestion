@@ -151,8 +151,12 @@ final class DeliveryCalendarViewBuilder
                     $dropDays = $this->dropTargets($monthBaskets, $activeShare, $occupied, $today);
                 } elseif ($activeShare->getEggAmount() !== null) {
                     // Compartida con huevos: destinos de HUEVOS. Ocupado = día que YA lleva huevos.
+                    // Se mira en $gridSlots (mes actual + vecinos), NO solo en $slots: los destinos
+                    // llegan hasta el mes siguiente (horizonte de la rejilla), y un día de ese mes que
+                    // ya lleve huevos (p.ej. el 7-ago quincenal) debe quedar FUERA — si no, se ofrecería
+                    // y el endpoint de mover lo bloquearía ("ya se recogen huevos ese día").
                     $occupied = [];
-                    foreach ($slots as $s) {
+                    foreach ($gridSlots as $s) {
                         foreach ($s['items'] as $line) {
                             if ($line['component']->getId() === BasketComponent::ID_EGGS) {
                                 $occupied[$s['basket']->getId()] = true;
