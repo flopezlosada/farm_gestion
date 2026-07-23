@@ -303,25 +303,21 @@
                         {% if sel_has_eggs %}
                             <div class="rcal-eggmove" style="margin-top: var(--csa-sp-4);">
                                 <div class="rcal-sect"><span class="rcal-mk__i egg"><span class="rcal-egg"></span></span> Mover los huevos a otra fecha</div>
-                                <p class="csa-muted">La cesta se queda en su día (es compartida); solo se mueven tus huevos.</p>
-                                {# data-csa-dropdowns: el enhancer csa-dropdown convierte el <select> nativo
-                                   (cuya lista desplegada la dibuja el SO y no se puede estilar) en un desplegable
-                                   con el estilo de la app. Ya está en app.js; no hace falta recompilar. #}
-                                <form action="{{ path(cal.route_move, cal.idp|merge({ basketId: bid })) }}" method="post" class="rcal-eggmove__form" data-csa-dropdowns="1">
+                                <p class="csa-muted">La cesta se queda en su día (es compartida); solo se mueven tus huevos. Elige el día:</p>
+                                {# Un botón por fecha destino (son pocas): evita el <select> nativo, cuya lista
+                                   desplegada la dibuja el SO y no se puede estilar. Cada botón postea su
+                                   to_basket_id (el valor del submit pulsado). #}
+                                <form action="{{ path(cal.route_move, cal.idp|merge({ basketId: bid })) }}" method="post" class="rcal-eggmove__form">
                                     <input type="hidden" name="_csrf_token" value="{{ cal.csrf_move }}">
                                     <input type="hidden" name="component_id" value="{{ EGG }}">
                                     <input type="hidden" name="view_year" value="{{ current.format('Y') }}">
                                     <input type="hidden" name="view_month" value="{{ current.format('n') }}">
-                                    <label for="rcal-eggmove-to-{{ bid }}" class="csa-muted">Nueva fecha de los huevos</label>
-                                    <select name="to_basket_id" id="rcal-eggmove-to-{{ bid }}" class="csa-select" required style="margin: var(--csa-sp-2) 0;">
-                                        <option value="">— elige fecha —</option>
-                                        {% for t in egg_drop_targets|default([]) %}
-                                            <option value="{{ t.basketId }}">{{ t.date|format_date(pattern='EEEE d MMM', locale='es')|capitalize }}</option>
-                                        {% endfor %}
-                                    </select>
-                                    <button type="submit" class="csa-btn csa-btn--secondary csa-btn--block">
-                                        <i class="fa fa-arrows"></i><span>Mover los huevos</span>
-                                    </button>
+                                    {% for t in egg_drop_targets|default([]) %}
+                                        <button type="submit" name="to_basket_id" value="{{ t.basketId }}"
+                                                class="csa-btn csa-btn--secondary csa-btn--block" style="margin-bottom: var(--csa-sp-2);">
+                                            <i class="fa fa-arrows"></i> Mover al {{ t.date|format_date(pattern='EEEE d MMM', locale='es') }}
+                                        </button>
+                                    {% endfor %}
                                 </form>
                             </div>
                         {% endif %}
