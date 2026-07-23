@@ -85,6 +85,11 @@
                                                        min="{{ s.min }}" max="{{ s.max }}" step="1">
                                                 {% if s.unit %}<span class="csa-setting__unit">{{ s.unit }}</span>{% endif %}
                                             </span>
+                                        {% elseif s.type == 'string' %}
+                                            <input type="text" class="csa-input"
+                                                   name="settings[{{ s.name }}]" value="{{ s.value }}"
+                                                   placeholder="csa@csavegadejarama.org"
+                                                   style="min-width: 16rem;">
                                         {% else %}
                                             <span class="csa-toggle">
                                                 <input type="checkbox" class="csa-toggle__input"

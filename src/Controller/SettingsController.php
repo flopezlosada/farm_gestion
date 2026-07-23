@@ -149,6 +149,13 @@ class SettingsController extends AbstractController
                 $settings->setTime($name, sprintf('%02d:%02d', $hour, $minute));
             }
         }
+        // Solo los STRINGS marcados 'general' se editan aquí; el resto (redirección de pruebas,
+        // reply-to) viven en la pantalla de diagnóstico de envíos y no viajan en este form.
+        foreach (AppSettings::STRINGS as $name => $definition) {
+            if (($definition['general'] ?? false) && array_key_exists($name, $submitted)) {
+                $settings->setString($name, (string) $submitted[$name]);
+            }
+        }
 
         $this->addFlash('success', 'Configuración guardada.');
         return $this->redirectToRoute('settings_index');
@@ -205,6 +212,21 @@ class SettingsController extends AbstractController
                 'label' => $definition['label'],
                 'help' => $definition['help'],
                 'value' => $settings->getTime($name),
+            ];
+        }
+
+        // Solo los STRINGS marcados 'general' (p.ej. el destinatario del resumen a admin); el
+        // resto viven en pantallas específicas (diagnóstico de envíos).
+        foreach (AppSettings::STRINGS as $name => $definition) {
+            if (!($definition['general'] ?? false)) {
+                continue;
+            }
+            $groups[$definition['group']][] = [
+                'type' => 'string',
+                'name' => $name,
+                'label' => $definition['label'],
+                'help' => $definition['help'],
+                'value' => $settings->getString($name),
             ];
         }
 

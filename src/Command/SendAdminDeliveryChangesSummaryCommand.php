@@ -44,7 +44,7 @@ class SendAdminDeliveryChangesSummaryCommand extends Command
     protected function configure(): void
     {
         $this
-            ->addOption('to', null, InputOption::VALUE_REQUIRED, 'Dirección de email del admin (obligatorio si no es dry-run)')
+            ->addOption('to', null, InputOption::VALUE_REQUIRED, 'Email(s) del admin, separados por comas. Si se omite, se usa el ajuste de /gestion/settings (Destinatario del resumen a administración)')
             ->addOption('days', null, InputOption::VALUE_REQUIRED, 'Cuántos días hacia atrás incluir', self::DEFAULT_DAYS)
             ->addOption('since', null, InputOption::VALUE_REQUIRED, 'Fecha desde la que incluir (YYYY-MM-DD). Sobrescribe --days')
             ->addOption('force', null, InputOption::VALUE_NONE, 'Ignora el gate de la tarea programada (ejecución manual); no afecta a los toggles de email')
@@ -56,7 +56,12 @@ class SendAdminDeliveryChangesSummaryCommand extends Command
         $io = new SymfonyStyle($input, $output);
 
         $dryRun = (bool) $input->getOption('dry-run');
-        $to = $input->getOption('to');
+
+        // Destinatario(s): --to de la línea de comandos si se pasa; si no, el ajuste editable en
+        // /gestion/settings. Así el cron de cdmon corre sin --to (no hay que tocar el crontab) y el
+        // email se configura desde la app. Admite varias direcciones separadas por comas.
+        $to = $input->getOption('to') ?: $this->settings->getString(AppSettings::EMAIL_ADMIN_DELIVERY_SUMMARY_TO);
+        $recipients = array_values(array_filter(array_map('trim', explode(',', (string) $to))));
 
         // Gate de la tarea programada: apagada en /gestion/settings, la tarea ni
         // siquiera reúne los eventos (verde para no disparar alertas del cron).
@@ -73,8 +78,8 @@ class SendAdminDeliveryChangesSummaryCommand extends Command
             return Command::SUCCESS;
         }
 
-        if (!$dryRun && !$to) {
-            $io->error('Falta --to=email del admin (o usa --dry-run).');
+        if (!$dryRun && $recipients === []) {
+            $io->error('Falta el destinatario: pasa --to=email o configúralo en /gestion/settings (Destinatario del resumen a administración).');
             return Command::FAILURE;
         }
 
@@ -106,7 +111,7 @@ class SendAdminDeliveryChangesSummaryCommand extends Command
         }
 
         $message = (new TemplatedEmail())
-            ->to($to)
+            ->to(...$recipients)
             ->subject(sprintf('CSA Vega · Cambios de socixs desde %s', $since->format('d/m/Y')))
             ->htmlTemplate('email/admin_delivery_changes_summary.html.twig')
             ->textTemplate('email/admin_delivery_changes_summary.txt.twig')

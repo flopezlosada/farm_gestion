@@ -52,6 +52,15 @@ class AppSettings
     /** Envío del resumen de cambios a admin (app:send-admin-delivery-changes-summary). */
     public const EMAIL_ADMIN_DELIVERY_SUMMARY = 'email.admin_delivery_summary';
 
+    /**
+     * Destinatario(s) del resumen de cambios a administración: dirección(es) separadas por
+     * comas a las que {@see \App\Command\SendAdminDeliveryChangesSummaryCommand} manda el digest.
+     * Evita tener que tocar el crontab de cdmon (solo-FTP): el cron corre sin `--to` y el comando
+     * cae en este ajuste. Vacío = no se envía. La opción `--to` de la línea de comandos, si se
+     * pasa, tiene prioridad sobre este ajuste.
+     */
+    public const EMAIL_ADMIN_DELIVERY_SUMMARY_TO = 'email.admin_delivery_summary_to';
+
     /** Envío del recordatorio de llegadas/salidas del albergue al equipo (app:send-albergue-arrivals-reminder). */
     public const EMAIL_ALBERGUE_REMINDER = 'email.albergue_reminder';
 
@@ -221,7 +230,7 @@ class AppSettings
         self::EMAIL_ADMIN_DELIVERY_SUMMARY => [
             'group' => 'Emails internos',
             'label' => 'Resumen de cambios a administración',
-            'help' => 'Digest periódico con los cambios autoservicio de lxs socixs (saltar cesta, cambiar de nodo…).',
+            'help' => 'Digest periódico con los cambios autoservicio de lxs socixs (saltar cesta, mover, cambiar de nodo, huevos…). Configura la dirección de destino en el campo "Destinatario(s)" de abajo; si lo dejas vacío, no se envía.',
             'default' => true,
         ],
         self::EMAIL_ALBERGUE_REMINDER => [
@@ -376,6 +385,15 @@ class AppSettings
      * pruebas, en el diagnóstico de envíos).
      */
     public const STRINGS = [
+        self::EMAIL_ADMIN_DELIVERY_SUMMARY_TO => [
+            'group' => 'Emails internos',
+            'label' => 'Destinatario(s) del resumen a administración',
+            'help' => 'Dirección(es) de correo (separadas por comas) a las que llega el resumen de cambios de socixs. Vacío = no se envía. Ejemplo: csa@csavegadejarama.org. Así no hace falta tocar el cron del servidor.',
+            'default' => '',
+            // A diferencia del resto de STRINGS (que viven en pantallas concretas), este SÍ se
+            // pinta en el form general de ajustes, junto a su toggle "Resumen de cambios a admin".
+            'general' => true,
+        ],
         self::EMAIL_REDIRECT_TO => [
             'group' => 'Pruebas de envío',
             'label' => 'Redirigir todos los emails a',
