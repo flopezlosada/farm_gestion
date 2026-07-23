@@ -633,6 +633,73 @@ class PanelController extends AbstractController
     }
 
     /**
+     * "No recoger / volver a recoger los HUEVOS" una semana desde el calendario del socio. Los
+     * huevos no se comparten, así que esto vale también en cestas compartidas (donde la cesta no
+     * se toca, R1). Delega en el editor compartido con el gestor (DRY) y respeta el MISMO plazo
+     * de autoservicio (jueves 23:59) que el "no recoge" de la cesta entera del socio.
+     *
+     * @param int                       $basketId Semana sobre la que actuar.
+     * @param Request                   $request
+     * @param PartnerEggScheduleEditor  $eggEditor
+     * @param EntityManagerInterface    $em
+     * @return Response
+     */
+    #[Route('/calendar/eggs/{basketId}', name: 'panel_calendar_eggs', methods: ['POST'], requirements: ['basketId' => '\\d+'])]
+    #[IsGranted('FEATURE_PARTNER_SELFSERVICE')]
+    public function calendarEggs(
+        int $basketId,
+        Request $request,
+        PartnerEggScheduleEditor $eggEditor,
+        EntityManagerInterface $em,
+    ): Response {
+        if (($redirect = $this->ensureReady()) !== null) {
+            return $redirect;
+        }
+
+        $partner = $this->basketOwner($this->getUser()->getPartner());
+
+        $basket = $em->getRepository(Basket::class)->find($basketId);
+        if ($basket === null) {
+            throw $this->createNotFoundException('Semana de reparto no encontrada.');
+        }
+
+        $backToCalendar = fn (): Response => $this->redirectToRoute('panel_calendar', [
+            'year' => $basket->getDate()->format('Y'),
+            'month' => $basket->getDate()->format('n'),
+            'sel' => $basket->getId(),
+        ]);
+
+        if (!$this->isCsrfTokenValid('panel_calendar_eggs', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
+
+            return $backToCalendar();
+        }
+
+        // Mismo plazo de autoservicio (jueves 23:59) que el "no recoge" de la cesta entera.
+        if (!$this->isWithinPickupDeadlineForBasket($basket, $partner)) {
+            $this->addFlash('error', 'Ya no se puede cambiar esa semana — el plazo terminó. Si necesitas avisar, contacta con la administración.');
+
+            return $backToCalendar();
+        }
+
+        try {
+            $result = $eggEditor->toggleEggs($partner, $basket, 'partner:' . $partner->getId());
+        } catch (EggScheduleException $e) {
+            $this->addFlash('error', $e->getMessage());
+
+            return $backToCalendar();
+        }
+
+        match ($result) {
+            'added' => $this->addFlash('notice', 'Listo: vuelves a recoger los huevos esa semana.'),
+            'removed' => $this->addFlash('notice', 'Listo: esa semana no recoges los huevos.'),
+            default => $this->addFlash('warning', 'Tu cesta no lleva huevos esa semana.'),
+        };
+
+        return $backToCalendar();
+    }
+
+    /**
      * Mover una entrega a otra fecha desde el calendario del socio (cambio puntual de
      * viernes). Mismas reglas que el gestor (DeliveryShiftApplier::move) salvo el scope:
      * el socio solo mueve su propia cesta. Las invariantes físicas (cesta activa, deadline

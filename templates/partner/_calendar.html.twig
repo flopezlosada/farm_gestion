@@ -270,6 +270,28 @@
 
                     {{ _self.components(selected, EGG) }}
 
+                    {# COMPARTIDAS — NO RECOGER HUEVOS: interruptor on/off de los huevos de esa
+                       semana. Solo si el patrón contempla huevos ahí (EGG en 'available') y con la
+                       feature activa (cal.egg_move + ruta del toggle). La cesta sigue bloqueada. #}
+                    {% if partner.sharePartner and not ro and selected_editable and cal.egg_move|default(false) and cal.route_egg_toggle is defined %}
+                        {% set egg_available = false %}
+                        {% for c in selected.available|default([]) %}{% if c.id == EGG %}{% set egg_available = true %}{% endif %}{% endfor %}
+                        {% if egg_available %}
+                            {% set egg_present = false %}
+                            {% for it in selected.items %}{% if it.component.id == EGG %}{% set egg_present = true %}{% endif %}{% endfor %}
+                            <form action="{{ path(cal.route_egg_toggle, cal.idp|merge({ basketId: bid, componentId: EGG })) }}" method="post" style="margin-top: var(--csa-sp-3);">
+                                <input type="hidden" name="_csrf_token" value="{{ cal.csrf_egg_toggle }}">
+                                <button type="submit" class="rcal-switch" aria-pressed="{{ egg_present ? 'true' : 'false' }}">
+                                    <span class="rcal-switch__track"><span class="rcal-switch__knob"></span></span>
+                                    <span class="rcal-switch__txt">
+                                        <span class="rcal-switch__label">{{ egg_present ? 'Recoge los huevos esta semana' : 'No recoge los huevos esta semana' }}</span>
+                                        <span class="rcal-switch__sub">{{ egg_present ? 'Apágalo para no recoger los huevos (la cesta no cambia)' : 'Enciéndelo para volver a recogerlos' }}</span>
+                                    </span>
+                                </button>
+                            </form>
+                        {% endif %}
+                    {% endif %}
+
                     {# COMPARTIDAS: la cesta no se mueve (R1, alternancia con el otro hogar), pero
                        los HUEVOS sí (cada hogar los suyos). Selector de fecha destino → mueve SOLO
                        el componente huevos (component_id=EGG) por el endpoint de mover. Se muestra

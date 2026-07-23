@@ -6,6 +6,9 @@ use App\Entity\Basket;
 use App\Entity\BasketComponent;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
+use App\Entity\PartnerDeliveryShift;
+use App\Entity\WeeklyBasket;
+use App\Repository\PartnerDeliveryShiftRepository;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
@@ -30,6 +33,7 @@ final class PartnerEggScheduleEditor
         private readonly WeeklyBasketGenerator $generator,
         private readonly DeliveryCalendarProjector $projector,
         private readonly DeliveryShiftApplier $applier,
+        private readonly WeeklyBasketComponentEditor $componentEditor,
     ) {
     }
 
@@ -95,5 +99,94 @@ final class PartnerEggScheduleEditor
         }
 
         $this->applier->moveComponent($partner, $eggs, $from, $to, $actor);
+    }
+
+    /**
+     * Alterna los HUEVOS de una semana: si se recogen, los quita ("no recojo huevos"); si no,
+     * los devuelve. Reproduce el camino del toggle-por-componente del gestor (semana GENERADA:
+     * retira/añade la línea del WeeklyBasket vía {@see WeeklyBasketComponentEditor}; semana SIN
+     * generar: intent durable por componente que leen generador y proyector), pero SIN el gate
+     * R1 — los huevos sí se editan en compartidas. El deadline de socio (jueves) NO va aquí: lo
+     * aplica el controlador del panel antes de llamar, como con el resto de sus acciones.
+     *
+     * @param Partner $partner Socio dueño de los huevos.
+     * @param Basket  $basket  Semana sobre la que actuar.
+     * @param string  $actor   Quién origina el cambio (ver PartnerEvent::$actor).
+     * @return string 'removed' = ya no recoge huevos · 'added' = vuelve a recogerlos ·
+     *                'unavailable' = su cesta no contempla huevos esa semana (no se tocó nada).
+     * @throws EggScheduleException Con mensaje para el usuario si una invariante estructural falla.
+     */
+    public function toggleEggs(Partner $partner, Basket $basket, string $actor): string
+    {
+        if ($basket->getDate() < new \DateTimeImmutable('today')) {
+            throw new EggScheduleException('Esa entrega ya pasó: no se puede editar.');
+        }
+
+        /** @var PartnerDeliveryShiftRepository $shiftRepo */
+        $shiftRepo = $this->em->getRepository(PartnerDeliveryShift::class);
+
+        // Un cambio de DÍA de la entrega entera esa semana desincronizaría el toggle: se gestiona
+        // primero desde los cambios de día. (Los huevos no tienen su propio "mover entera".)
+        if ($shiftRepo->findOutgoing($partner, $basket) !== null) {
+            throw new EggScheduleException('Hay un cambio de día activo esa semana: gestiónalo primero.');
+        }
+
+        $share = $this->em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner, $basket->getDate());
+        if ($share === null) {
+            throw new EggScheduleException('No hay una cesta activa esa semana.');
+        }
+
+        $eggs = $this->em->getRepository(BasketComponent::class)->find(BasketComponent::ID_EGGS);
+        if ($eggs === null) {
+            throw new EggScheduleException('No se pudo resolver el componente huevos.');
+        }
+
+        // Semana GENERADA: se alterna la línea del WeeklyBasket materializado. Si la cesta vino
+        // MOVIDA aquí (shift entrante), se materializa desde el origen (los huevos viajan); si no,
+        // desde el patrón de la semana. Igual que resolveCalendarDelivery del gestor, sin R1.
+        if ($this->em->getRepository(WeeklyBasket::class)->findOneBy(['basket' => $basket]) !== null) {
+            $incoming = $shiftRepo->findIncoming($partner, $basket);
+            $wb = $incoming !== null
+                ? $this->applier->materializeShiftDestination($incoming)
+                : $this->generator->materializeShareDelivery($basket, $share);
+            if ($wb === null) {
+                throw new EggScheduleException('El nodo no reparte esa semana.');
+            }
+            $result = $this->componentEditor->toggle($wb, BasketComponent::ID_EGGS);
+            $this->em->flush();
+
+            return $result;
+        }
+
+        // Semana SIN GENERAR: intent durable. Si ya hay un "quitar huevos", se cancela (vuelven);
+        // si no, se crea — pero solo si el patrón da huevos esa semana (no se quita lo que no toca).
+        foreach ($shiftRepo->findComponentIntentsFromBasket($partner, $basket) as $intent) {
+            if ($intent->isSkip() && $intent->getComponent()?->getId() === BasketComponent::ID_EGGS) {
+                $this->applier->cancelSkipIntent($intent, $actor);
+
+                return 'added';
+            }
+        }
+
+        $delivers = false;
+        foreach ($this->projector->projectMonth($partner, (int) $basket->getDate()->format('Y'), (int) $basket->getDate()->format('n')) as $slot) {
+            if ($slot['basket']->getId() !== $basket->getId()) {
+                continue;
+            }
+            foreach ($slot['items'] as $line) {
+                if ($line['component']->getId() === BasketComponent::ID_EGGS) {
+                    $delivers = true;
+                    break;
+                }
+            }
+            break;
+        }
+        if (!$delivers) {
+            return 'unavailable';
+        }
+
+        $this->applier->applySkipIntent($partner, $basket, $eggs, $actor);
+
+        return 'removed';
     }
 }
