@@ -72,6 +72,7 @@ class BasketModalityChangerTest extends TestCase
         $partner = $this->partner(28);
         $old = $this->share($partner, 1);
         $old->setStartDate(new \DateTime('2018-05-25'));
+        $old->setIsActive(true); // es la cesta activa en curso (findLatestActiveForPartner)
         $new = $this->share($partner, 1);
         $effective = new \DateTime('2099-08-01'); // muy futura: robusto a la fecha real
 
