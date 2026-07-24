@@ -58,7 +58,10 @@
                         {% block body %}
                             <div class="csa-settings-list">
                                 {% for s in items %}
-                                    <label class="csa-setting">
+                                    {# Los campos de TEXTO (email del resumen…) van en columna: etiqueta+ayuda
+                                       arriba y el campo a lo ancho debajo, para que quepan valores largos (varios
+                                       emails). El resto (toggle/número/hora) siguen en fila, control a la izquierda. #}
+                                    <label class="csa-setting"{% if s.type == 'string' %} style="flex-direction: column; align-items: stretch; gap: var(--csa-sp-2);"{% endif %}>
                                         {% if s.type == 'time' %}
                                             {% set parts = s.value|split(':') %}
                                             <span class="csa-timefield">
@@ -86,10 +89,8 @@
                                                 {% if s.unit %}<span class="csa-setting__unit">{{ s.unit }}</span>{% endif %}
                                             </span>
                                         {% elseif s.type == 'string' %}
-                                            <input type="text" class="csa-input"
-                                                   name="settings[{{ s.name }}]" value="{{ s.value }}"
-                                                   placeholder="csa@csavegadejarama.org"
-                                                   style="min-width: 16rem;">
+                                            {# El campo de texto NO va en el slot de control: se pinta a lo ancho
+                                               DEBAJO de la etiqueta (ver tras __text), en la fila-columna. #}
                                         {% else %}
                                             <span class="csa-toggle">
                                                 <input type="checkbox" class="csa-toggle__input"
@@ -101,6 +102,10 @@
                                             <span class="csa-setting__label">{{ s.label }}</span>
                                             <span class="csa-setting__help">{{ s.help }}</span>
                                         </span>
+                                        {% if s.type == 'string' %}
+                                            <input type="text" class="csa-input"
+                                                   name="settings[{{ s.name }}]" value="{{ s.value }}">
+                                        {% endif %}
                                     </label>
                                     {# Tareas programadas: botones de ejecución manual. Los envíos van a
                                      # formularios externos (definidos tras el form de guardado), referenciados
