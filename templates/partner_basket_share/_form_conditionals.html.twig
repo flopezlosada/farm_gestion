@@ -1,0 +1,104 @@
+{# Lógica condicional del formulario de cesta, compartida por el alta (new),
+   la corrección de errata (edit) y el cambio de modalidad (change_modality).
+   Vivía triplicada en las tres plantillas; se extrae aquí para que un cambio de
+   reglas no se aplique en dos de tres sitios.
+
+   Verdura y huevos son dos calendarios independientes:
+    - dayMonthOrder    = qué entrega del mes lleva la CESTA (sólo cesta mensual).
+    - egg_period       = frecuencia de los HUEVOS (sólo si recibe huevos).
+    - eggDayMonthOrder = en cuál de las cestas del socio viajan los huevos. Sólo
+      aplica con huevos MENSUALES y cesta NO mensual; en la cesta mensual los
+      huevos van con la única cesta (el resolver lo ignora).
+    - deliveryGroup    = turno de viernes. Obligatorio en las quincenales (decide
+      qué viernes recogen) y OPCIONAL en las mensuales (ancla su orden a las
+      entregas de ese turno en vez de a los viernes del mes). #}
+<script>
+    document.querySelectorAll('.datepicker, .datepicker2, .datepicker3')
+        .forEach(function (el) { el.type = 'date'; });
+
+    // Listas de modalidades servidas desde BasketShare: el literal disperso
+    // (`== 2 || == 6`) ya provocó un bug al olvidar la compartida.
+    var SHARES_WITH_TURN = {{ constant('App\\Entity\\BasketShare::IDS_WITH_DELIVERY_GROUP')|json_encode|raw }};
+    var SHARES_BIWEEKLY  = {{ constant('App\\Entity\\BasketShare::IDS_BIWEEKLY')|json_encode|raw }};
+    var SHARES_MONTHLY   = {{ constant('App\\Entity\\BasketShare::IDS_MONTHLY')|json_encode|raw }};
+
+    function inList(list, value) {
+        return list.indexOf(parseInt(value, 10)) !== -1;
+    }
+
+    var eggOrderSelect = document.getElementById('partner_basket_share_eggDayMonthOrder');
+    var eggOrderOptions = eggOrderSelect ? Array.prototype.slice.call(eggOrderSelect.options) : [];
+
+    var turnSelect = document.getElementById('partner_basket_share_deliveryGroup');
+    var turnOptions = turnSelect ? Array.prototype.slice.call(turnSelect.options) : [];
+
+    // Cuántas cestas al mes ofrece cada modalidad: no proponer "3ª/4ª cesta" a
+    // quien no las tiene. Quincenal=2 cubre el caso normal (deuda consciente: el
+    // mes de 5 viernes con 3ª cesta quincenal es un borde raro).
+    function maxCestasForModality(basketShare) {
+        return (basketShare == 2) ? 2 : 4;
+    }
+
+    // Reconstruye las opciones del select reusando las originales (sin duplicar
+    // textos) y avisa al csa-dropdown con un 'change' para que refresque.
+    function limitEggOptions(max) {
+        if (!eggOrderSelect) return;
+        var current = eggOrderSelect.value;
+        eggOrderSelect.innerHTML = '';
+        eggOrderOptions.forEach(function (opt) {
+            if (opt.value === '' || parseInt(opt.value, 10) <= max) {
+                eggOrderSelect.appendChild(opt);
+            }
+        });
+        var stillThere = Array.prototype.some.call(eggOrderSelect.options, function (o) { return o.value === current; });
+        eggOrderSelect.value = stillThere ? current : '';
+        eggOrderSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    // "Sin turno" sólo tiene sentido en las mensuales. En una quincenal el turno
+    // es obligatorio (sin él cae de los listados), así que se retira la opción y,
+    // si estaba elegida, pasa al primer turno real.
+    function syncTurnOptions(basketShare) {
+        if (!turnSelect) return;
+        var allowBlank = inList(SHARES_MONTHLY, basketShare);
+        var current = turnSelect.value;
+        turnSelect.innerHTML = '';
+        turnOptions.forEach(function (opt) {
+            if (opt.value !== '' || allowBlank) {
+                turnSelect.appendChild(opt);
+            }
+        });
+        var stillThere = Array.prototype.some.call(turnSelect.options, function (o) { return o.value === current; });
+        turnSelect.value = stillThere ? current : (turnSelect.options[0] ? turnSelect.options[0].value : '');
+        turnSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    function syncConditionals() {
+        var basketShare = $('#partner_basket_share_basket_share').val();
+        var hasEggs = $('#partner_basket_share_egg_amount').val() !== '';
+        var eggPeriod = $('#partner_basket_share_egg_period').val();
+
+        var isMonthly = inList(SHARES_MONTHLY, basketShare);
+        var showCestaDayMonth = isMonthly;
+        var showEggPeriod = hasEggs;
+        var showEggDayMonth = hasEggs && (eggPeriod == 3) && !isMonthly;
+        var showDeliveryGroup = inList(SHARES_WITH_TURN, basketShare);
+
+        $('#day_month_order').toggleClass('hidden', !showCestaDayMonth);
+        $('#egg_period').toggleClass('hidden', !showEggPeriod);
+        $('#egg_day_month_order').toggleClass('hidden', !showEggDayMonth);
+        $('#delivery_group').toggleClass('hidden', !showDeliveryGroup);
+
+        if (showDeliveryGroup) {
+            syncTurnOptions(basketShare);
+        }
+        if (showEggDayMonth) {
+            limitEggOptions(maxCestasForModality(basketShare));
+        }
+    }
+
+    $('#partner_basket_share_basket_share').change(syncConditionals);
+    $('#partner_basket_share_egg_amount').change(syncConditionals);
+    $('#partner_basket_share_egg_period').change(syncConditionals);
+    syncConditionals();
+</script>

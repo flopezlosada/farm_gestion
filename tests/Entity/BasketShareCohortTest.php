@@ -43,6 +43,52 @@ class BasketShareCohortTest extends TestCase
         $this->assertContains(6, BasketShare::IDS_BIWEEKLY);
     }
 
+    /**
+     * `usesDeliveryGroup` es más amplio que `usesBiweeklyCohort`: las mensuales
+     * no reparten por turno, pero pueden anclarse a uno para contar su orden
+     * sobre las entregas de ese turno (caso Alcobendas). El server debe
+     * conservarles el turno al guardar.
+     *
+     * @return iterable<string, array{int, bool}>
+     */
+    public static function modalidadesConTurno(): iterable
+    {
+        yield 'Semanal (1) no guarda turno' => [1, false];
+        yield 'Quincenal (2) guarda turno' => [2, true];
+        yield 'Mensual (3) guarda turno' => [3, true];
+        yield 'Semanal compartida (4) no guarda turno' => [4, false];
+        yield 'Solo huevos (5) no guarda turno' => [5, false];
+        yield 'Quincenal compartida (6) guarda turno' => [6, true];
+        yield 'Mensual compartida (7) guarda turno' => [7, true];
+    }
+
+    /**
+     * @dataProvider modalidadesConTurno
+     */
+    public function testUsesDeliveryGroup(int $id, bool $expected): void
+    {
+        $this->assertSame($expected, $this->basketShare($id)->usesDeliveryGroup());
+    }
+
+    /**
+     * @return iterable<string, array{int, bool}>
+     */
+    public static function modalidadesMensuales(): iterable
+    {
+        yield 'Semanal (1)' => [1, false];
+        yield 'Quincenal (2)' => [2, false];
+        yield 'Mensual (3)' => [3, true];
+        yield 'Mensual compartida (7)' => [7, true];
+    }
+
+    /**
+     * @dataProvider modalidadesMensuales
+     */
+    public function testIsMonthly(int $id, bool $expected): void
+    {
+        $this->assertSame($expected, $this->basketShare($id)->isMonthly());
+    }
+
     private function basketShare(int $id): BasketShare
     {
         $basketShare = new BasketShare();
