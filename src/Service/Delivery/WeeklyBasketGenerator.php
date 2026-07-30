@@ -103,18 +103,23 @@ class WeeklyBasketGenerator
      *
      * Sub-fase 8.8e (2026-05-28): sustituye al hardcode NON_OPERATIVE_FRIDAYS.
      *
+     * Con `$cohort` las posiciones se cuentan sólo sobre los viernes de ese
+     * turno (mensuales anclados al turno de su grupo, caso Alcobendas — ver
+     * {@see MonthlyOperativeOrderResolver::ordersServedBy}).
+     *
      * @param Basket $basket
+     * @param string|null $cohort Turno A/B al que anclar el conteo, o null.
      * @return int[] Órdenes 1-based que este basket sirve (pegajoso, con
      *               fallbacks de semanas canceladas); vacío si no entrega.
      */
-    private function weeklyMonthlyOrdersFor(Basket $basket): array
+    private function weeklyMonthlyOrdersFor(Basket $basket, ?string $cohort = null): array
     {
         $weeklyNode = $this->nodeRepository->findOneBy(['cadence' => Node::CADENCE_WEEKLY]);
         if ($weeklyNode === null) {
             return [];
         }
 
-        return $this->monthlyResolver->ordersServedBy($basket, $weeklyNode);
+        return $this->monthlyResolver->ordersServedBy($basket, $weeklyNode, $cohort);
     }
 
     /**
@@ -632,13 +637,18 @@ class WeeklyBasketGenerator
 
         $cohort = $this->cohortResolver->cohortForBasket($basket);
         $weeklyMonthlyOrders = $this->weeklyMonthlyOrdersFor($basket);
+        // Mismas posiciones, pero contadas sólo sobre los viernes del turno de
+        // ESTA semana: es la lista que emparejan los mensuales anclados a un
+        // turno (delivery_group). Los anclados al OTRO turno no recogen hoy, y
+        // por eso no hace falta calcular su lista.
+        $weeklyCohortMonthlyOrders = $this->weeklyMonthlyOrdersFor($basket, $cohort);
         $activeBiweeklyNodeIds = $this->activeBiweeklyNodeIds($basket);
         $biweeklyNodeMonthlyOrders = $this->monthlyOrdersByBiweeklyNode($basket);
 
         $weekly = $shareRepo->findBasketPartnersByTypeAndCity(self::SHARE_WEEKLY, 1, $basket);
         $half = $shareRepo->findBasketPartnersByTypeAndCity(self::SHARE_HALF, 1, $basket);
         $biweekly = $shareRepo->findBasketPartnersBiweeklyNodeAware($basket, self::SHARE_BIWEEKLY, 1, $cohort, $activeBiweeklyNodeIds);
-        $monthly = $shareRepo->findBasketPartnersMonthlyNodeAware($basket, self::SHARE_MONTHLY, $weeklyMonthlyOrders, $biweeklyNodeMonthlyOrders);
+        $monthly = $shareRepo->findBasketPartnersMonthlyNodeAware($basket, self::SHARE_MONTHLY, $weeklyMonthlyOrders, $biweeklyNodeMonthlyOrders, false, $cohort, $weeklyCohortMonthlyOrders);
 
         // Quincenal/mensual COMPARTIDA (bs 6/7): misma cadencia que su no-compartida
         // (cohorte quincenal / orden operativo mensual), pero media cesta. Se buscan
@@ -646,11 +656,11 @@ class WeeklyBasketGenerator
         // el peso ½ (getDeliveredBasketWeight) y moveSharedToHalf las reubica al bloque
         // de compartidas (tienen share_partner_id). Sin esto su cesta no se materializa.
         $biweekly = array_merge($biweekly, $shareRepo->findBasketPartnersBiweeklyNodeAware($basket, self::SHARE_BIWEEKLY_SHARED, 1, $cohort, $activeBiweeklyNodeIds));
-        $monthly = array_merge($monthly, $shareRepo->findBasketPartnersMonthlyNodeAware($basket, self::SHARE_MONTHLY_SHARED, $weeklyMonthlyOrders, $biweeklyNodeMonthlyOrders));
+        $monthly = array_merge($monthly, $shareRepo->findBasketPartnersMonthlyNodeAware($basket, self::SHARE_MONTHLY_SHARED, $weeklyMonthlyOrders, $biweeklyNodeMonthlyOrders, false, $cohort, $weeklyCohortMonthlyOrders));
 
         $onlyEggWeekly = $shareRepo->findBasketPartnersByTypeAndCity(self::SHARE_ONLY_EGG, 1, $basket, true);
         $onlyEggBiweekly = $shareRepo->findBasketPartnersBiweeklyNodeAware($basket, self::SHARE_ONLY_EGG, 1, $cohort, $activeBiweeklyNodeIds, true);
-        $onlyEggMonthly = $shareRepo->findBasketPartnersMonthlyNodeAware($basket, self::SHARE_ONLY_EGG, $weeklyMonthlyOrders, $biweeklyNodeMonthlyOrders, true);
+        $onlyEggMonthly = $shareRepo->findBasketPartnersMonthlyNodeAware($basket, self::SHARE_ONLY_EGG, $weeklyMonthlyOrders, $biweeklyNodeMonthlyOrders, true, $cohort, $weeklyCohortMonthlyOrders);
         $onlyEgg = array_merge($onlyEggWeekly, $onlyEggBiweekly, $onlyEggMonthly);
 
         // Misma lógica que en reuseExisting: cualquier compartición (share_partner_id

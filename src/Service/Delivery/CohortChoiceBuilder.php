@@ -12,9 +12,11 @@ use App\Repository\BasketRepository;
  * A/B traducidas a las fechas físicas REALES de su nodo ("Viernes 19/06,
  * 26/06…") en vez del "Grupo A / Grupo B" pelado, que no informa al gestor.
  *
- * El turno A/B sólo aplica a quincenales en nodos semanales (Torremocha); en
- * nodos quincenales (Cascorro, Midori) el turno lo fija el propio punto y no se
- * elige, así que devuelve sus fechas como información.
+ * El turno A/B sólo se elige en nodos semanales (Torremocha), y ahí lo usan las
+ * quincenales (para saber qué viernes recogen) y, opcionalmente, las mensuales
+ * (para contar su orden sobre las entregas de ese turno en vez de sobre los
+ * viernes del mes). En nodos quincenales (Cascorro, Midori) el turno lo fija el
+ * propio punto y no se elige, así que devuelve sus fechas como información.
  *
  * Reutilizable por el alta de cesta, la corrección de errata y el cambio de
  * modalidad (antes la lógica vivía duplicada sólo en changeModality).
@@ -22,6 +24,13 @@ use App\Repository\BasketRepository;
 class CohortChoiceBuilder
 {
     private const DAY_NAMES = [1 => 'Lunes', 2 => 'Martes', 3 => 'Miércoles', 4 => 'Jueves', 5 => 'Viernes', 6 => 'Sábado', 7 => 'Domingo'];
+
+    /**
+     * Etiqueta de "no anclado a ningún turno". La expone el JS del formulario,
+     * que retira esta opción cuando la modalidad elegida es quincenal (allí el
+     * turno es obligatorio).
+     */
+    public const NO_COHORT_LABEL = 'Sin turno · cuenta los viernes del mes';
 
     public function __construct(
         private readonly BasketRepository $basketRepository,
@@ -83,7 +92,11 @@ class CohortChoiceBuilder
                     $byCohort[$cohort][] = $date;
                 }
             }
-            // Sin "Sin asignar": el turno es obligatorio para quincenales.
+            // "Sin turno" primero: es lo que corresponde a una MENSUAL que
+            // cuenta los viernes del mes (el turno ahí es opcional, sólo la
+            // ancla al calendario de su grupo). Para las quincenales el turno
+            // es obligatorio y el JS del formulario retira esta opción.
+            $cohortChoices[self::NO_COHORT_LABEL] = null;
             foreach ($byCohort as $cohort => $dates) {
                 if ($dates !== []) {
                     $cohortChoices[$this->labelFor($dates)] = $cohort;

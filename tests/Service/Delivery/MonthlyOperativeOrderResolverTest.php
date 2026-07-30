@@ -6,6 +6,7 @@ use App\Entity\Basket;
 use App\Entity\DeliveryException;
 use App\Entity\Node;
 use App\Repository\DeliveryExceptionRepository;
+use App\Service\Delivery\BiweeklyCohortResolver;
 use App\Service\Delivery\MonthlyOperativeOrderResolver;
 use App\Service\Delivery\NodeDeliveryDate;
 use Doctrine\ORM\AbstractQuery;
@@ -257,6 +258,124 @@ class MonthlyOperativeOrderResolverTest extends TestCase
         $this->assertContains(-1, $resolver->ordersServedBy($baskets[3], $torremocha));    // 22-may absorbe «última»
     }
 
+    // ---------------------------------------------------------------------
+    // Anclaje a un turno A/B (caso Alcobendas, 2026-07-30)
+    // ---------------------------------------------------------------------
+
+    /**
+     * Con turno, las posiciones se cuentan SÓLO sobre los viernes de ese turno.
+     * En mayo 2026 (ancla 8-may = A) el turno B recoge el 1, el 15 y el 29: son
+     * sus posiciones 1ª, 2ª y 3ª (con sus espejos -3, -2, -1). Sin turno esos
+     * mismos viernes serían la 1ª, 3ª y 5ª del mes.
+     */
+    public function testOrdersServedByConTurnoCuentaSoloLosViernesDeEseTurno(): void
+    {
+        $baskets = $this->mayoBaskets();
+        $torremocha = $this->makeNode('Torremocha', 5, Node::CADENCE_WEEKLY);
+        $resolver = $this->makeResolver($baskets);
+
+        $this->assertSame([-3, 1], $resolver->ordersServedBy($baskets[0], $torremocha, 'B'));  // 1-may
+        $this->assertSame([-2, 2], $resolver->ordersServedBy($baskets[2], $torremocha, 'B'));  // 15-may
+        $this->assertSame([-1, 3], $resolver->ordersServedBy($baskets[4], $torremocha, 'B'));  // 29-may
+        // Turno A: sólo el 8 y el 22.
+        $this->assertSame([-2, 1], $resolver->ordersServedBy($baskets[1], $torremocha, 'A'));  // 8-may
+        $this->assertSame([-1, 2], $resolver->ordersServedBy($baskets[3], $torremocha, 'A'));  // 22-may
+    }
+
+    /**
+     * Un socio anclado a un turno no recoge en las semanas del otro: el basket
+     * queda fuera de la lista filtrada y no sirve ninguna posición.
+     */
+    public function testOrdersServedByConTurnoNoSirveNadaEnLaSemanaDelOtroTurno(): void
+    {
+        $baskets = $this->mayoBaskets();
+        $torremocha = $this->makeNode('Torremocha', 5, Node::CADENCE_WEEKLY);
+        $resolver = $this->makeResolver($baskets);
+
+        $this->assertSame([], $resolver->ordersServedBy($baskets[1], $torremocha, 'B'));  // 8-may es A
+        $this->assertSame([], $resolver->ordersServedBy($baskets[0], $torremocha, 'A'));  // 1-may es B
+    }
+
+    /**
+     * EL caso Alcobendas. Julio 2026 tiene 5 viernes (3, 10, 17, 24, 31) y el
+     * turno B recoge el 10 y el 24; en agosto (7, 14, 21, 28) recoge el 7 y el
+     * 21. Un mensual "2º viernes del mes" coincidía con el grupo el 10-jul y ya
+     * no el 14-ago — el mes de 5 viernes invierte la fase. Anclado al turno B
+     * con orden 1, coincide en los dos meses sin tocar nada.
+     */
+    public function testAnclajeAlTurnoSobreviveAlMesDe5Viernes(): void
+    {
+        $baskets = array_merge($this->julioBaskets(), $this->agostoBaskets());
+        $torremocha = $this->makeNode('Torremocha', 5, Node::CADENCE_WEEKLY);
+        $resolver = $this->makeResolver($baskets);
+
+        // Sin anclaje: "2º viernes" es el 10-jul (turno B, coincide) pero en
+        // agosto es el 14, que es turno A — el mensual se descuelga del grupo.
+        $this->assertContains(2, $resolver->ordersServedBy($baskets[1], $torremocha));  // 10-jul
+        $this->assertContains(2, $resolver->ordersServedBy($baskets[6], $torremocha));  // 14-ago (turno A)
+
+        // Anclado al turno B, la 1ª entrega del turno es el 10-jul y el 7-ago:
+        // el mensual sigue al grupo los dos meses.
+        $this->assertContains(1, $resolver->ordersServedBy($baskets[1], $torremocha, 'B'));  // 10-jul
+        $this->assertContains(1, $resolver->ordersServedBy($baskets[5], $torremocha, 'B'));  // 7-ago
+        $this->assertSame([], $resolver->ordersServedBy($baskets[6], $torremocha, 'B'));     // 14-ago no es suyo
+    }
+
+    /**
+     * «Última» (-1) con turno sigue a la última entrega DEL TURNO, no del mes:
+     * en julio el turno B acaba el 24, no el 31 (que es turno A).
+     */
+    public function testUltimaConTurnoEsLaUltimaEntregaDelTurno(): void
+    {
+        $baskets = $this->julioBaskets();
+        $torremocha = $this->makeNode('Torremocha', 5, Node::CADENCE_WEEKLY);
+        $resolver = $this->makeResolver($baskets);
+
+        $this->assertContains(-1, $resolver->ordersServedBy($baskets[3], $torremocha, 'B'));  // 24-jul, última B
+        $this->assertNotContains(-1, $resolver->ordersServedBy($baskets[1], $torremocha, 'B'));
+        // Sin anclaje, «última» sería el 31-jul.
+        $this->assertContains(-1, $resolver->ordersServedBy($baskets[4], $torremocha));
+    }
+
+    /**
+     * La semántica pegajosa vale también dentro del turno: cancelada la 1ª
+     * entrega del turno B (1-may), la siguiente del MISMO turno (15-may)
+     * absorbe su posición. No se cuela el 8-may, que es del otro turno.
+     */
+    public function testAnclajeAlTurnoMantieneElFallbackPegajosoDentroDelTurno(): void
+    {
+        $baskets = $this->mayoBaskets();
+        $torremocha = $this->makeNode('Torremocha', 5, Node::CADENCE_WEEKLY);
+
+        $cancellation = new DeliveryException();
+        $cancellation->setBasket($baskets[0]);  // 1-may, 1ª del turno B
+        $cancellation->setShiftedDate(null);
+
+        $resolver = $this->makeResolverWithExceptions($baskets, [1 => $cancellation]);
+
+        $this->assertSame([], $resolver->ordersServedBy($baskets[0], $torremocha, 'B'));
+        // 15-may: su posición (2ª del turno) más la 1ª del cancelado.
+        $this->assertSame([-3, -2, 1, 2], $resolver->ordersServedBy($baskets[2], $torremocha, 'B'));
+        // El 8-may sigue siendo del turno A y no absorbe nada de B.
+        $this->assertSame([], $resolver->ordersServedBy($baskets[1], $torremocha, 'B'));
+    }
+
+    /**
+     * En un nodo de cadencia quincenal el turno se IGNORA: el propio nodo ya
+     * alterna, así que sus entregas del mes son las de su ciclo y "1ª del nodo"
+     * es lo que se pide sin más anclaje. Pasar un turno no cambia el resultado.
+     */
+    public function testNodoBiweeklyIgnoraElTurno(): void
+    {
+        $baskets = $this->mayoBaskets();
+        $cascorro = $this->makeNode('Cascorro', 3, Node::CADENCE_BIWEEKLY, '2026-05-06');
+        $resolver = $this->makeResolver($baskets);
+
+        $sinTurno = $resolver->ordersServedBy($baskets[1], $cascorro);
+        $this->assertSame($sinTurno, $resolver->ordersServedBy($baskets[1], $cascorro, 'A'));
+        $this->assertSame($sinTurno, $resolver->ordersServedBy($baskets[1], $cascorro, 'B'));
+    }
+
     /**
      * Devuelve los 5 viernes de mayo 2026 indexados 0..4 para acceso
      * conveniente en los tests.
@@ -291,6 +410,41 @@ class MonthlyOperativeOrderResolverTest extends TestCase
     }
 
     /**
+     * Los 5 viernes de julio 2026 (3, 10, 17, 24, 31) indexados 0..4. Mes de 5
+     * viernes: es el que invierte la fase del turno para el mes siguiente.
+     * Turnos (ancla 8-may = A): 3=A, 10=B, 17=A, 24=B, 31=A.
+     *
+     * @return Basket[]
+     */
+    private function julioBaskets(): array
+    {
+        return [
+            0 => $this->makeBasket(10, '2026-07-03'),
+            1 => $this->makeBasket(11, '2026-07-10'),
+            2 => $this->makeBasket(12, '2026-07-17'),
+            3 => $this->makeBasket(13, '2026-07-24'),
+            4 => $this->makeBasket(14, '2026-07-31'),
+        ];
+    }
+
+    /**
+     * Los 4 viernes de agosto 2026 (7, 14, 21, 28), pensados para concatenarse
+     * detrás de julio (índices 5..8). Turnos: 7=B, 14=A, 21=B, 28=A — la fase
+     * quedó invertida respecto a julio por el 5º viernes.
+     *
+     * @return Basket[]
+     */
+    private function agostoBaskets(): array
+    {
+        return [
+            5 => $this->makeBasket(15, '2026-08-07'),
+            6 => $this->makeBasket(16, '2026-08-14'),
+            7 => $this->makeBasket(17, '2026-08-21'),
+            8 => $this->makeBasket(18, '2026-08-28'),
+        ];
+    }
+
+    /**
      * Resolver con EM mock que siempre devuelve los baskets dados y
      * NodeDeliveryDate real sin excepciones.
      *
@@ -320,8 +474,15 @@ class MonthlyOperativeOrderResolverTest extends TestCase
         $exceptionRepo->method('findForBasketAndNode')->willReturnCallback(
             static fn (Basket $basket, Node $node) => $exceptionsByBasketId[$basket->getId()] ?? null
         );
+        // Sin cierres globales entre el ancla y las fechas de los tests: la
+        // alternancia A/B es la paridad pura de semanas desde 2026-05-08 (=A).
+        $exceptionRepo->method('countGlobalCancellationsBetween')->willReturn(0);
 
-        return new MonthlyOperativeOrderResolver($em, new NodeDeliveryDate($exceptionRepo));
+        return new MonthlyOperativeOrderResolver(
+            $em,
+            new NodeDeliveryDate($exceptionRepo),
+            new BiweeklyCohortResolver($exceptionRepo),
+        );
     }
 
     private function makeBasket(int $id, string $isoDate): Basket
