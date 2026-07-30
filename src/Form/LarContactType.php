@@ -62,7 +62,15 @@ class LarContactType extends AbstractType
                 'label' => false,
                 'placeholder' => '¿Qué te interesa?',
                 'choices' => array_flip(self::REQUESTS),
-                'attr' => ['class' => 'form-control p-3'],
+                // `custom-select` (style.css:3713), no `form-control`: es el
+                // select estilizado del tema (appearance:none + flecha SVG
+                // propia + focus naranja), con la misma altura y borde que los
+                // inputs. Con `form-control` el navegador pintaba su select
+                // nativo, y el padding vertical de `p-3` recortaba el texto
+                // (un <select> sí respeta el padding; un <input> lo ignora y
+                // centra la línea, por eso el resto de campos se ven bien).
+                // `px-3` iguala el padding horizontal al de los demás campos.
+                'attr' => ['class' => 'custom-select px-3'],
                 'constraints' => [new NotBlank(message: 'Indica qué tipo de solicitud es')],
             ])
             ->add('groupSize', IntegerType::class, [

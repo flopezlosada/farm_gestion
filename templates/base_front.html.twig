@@ -76,6 +76,19 @@
                 color: rgb(248, 177, 51);
                 font-weight: 700;
             }
+
+            /* ---- Selects de los formularios públicos ----
+               `px-3` iguala el padding horizontal al de los inputs (`p-3`),
+               pero pisa el hueco donde el tema dibuja la flecha (SVG a 0.75rem
+               del borde derecho, style.css:3723). Le devolvemos la reserva. */
+            select.custom-select.px-3 { padding-right: 1.75rem; }
+
+            /* La opción vacía de un select required es un placeholder: mismo
+               gris que los ::placeholder de los inputs (style.css:1919). Al
+               elegir una opción real el select deja de ser :invalid y el texto
+               vuelve al color normal. */
+            select.custom-select:required:invalid { color: #6c757d; }
+            select.custom-select option { color: #495057; }
         </style>
     {% endblock %}
 </head>
