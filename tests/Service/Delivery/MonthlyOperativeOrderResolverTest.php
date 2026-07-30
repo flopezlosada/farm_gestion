@@ -276,10 +276,13 @@ class MonthlyOperativeOrderResolverTest extends TestCase
 
         $this->assertSame([-3, 1], $resolver->ordersServedBy($baskets[0], $torremocha, 'B'));  // 1-may
         $this->assertSame([-2, 2], $resolver->ordersServedBy($baskets[2], $torremocha, 'B'));  // 15-may
-        $this->assertSame([-1, 3], $resolver->ordersServedBy($baskets[4], $torremocha, 'B'));  // 29-may
+        // La última entrega del turno absorbe además las posiciones que el turno
+        // no tiene ese mes (aquí la 4ª), para que nadie desaparezca por pedir una
+        // posición de más — ver testAnclajeAlTurnoAcotaLaPosicion…
+        $this->assertSame([-1, 3, 4], $resolver->ordersServedBy($baskets[4], $torremocha, 'B'));  // 29-may
         // Turno A: sólo el 8 y el 22.
         $this->assertSame([-2, 1], $resolver->ordersServedBy($baskets[1], $torremocha, 'A'));  // 8-may
-        $this->assertSame([-1, 2], $resolver->ordersServedBy($baskets[3], $torremocha, 'A'));  // 22-may
+        $this->assertSame([-1, 2, 3, 4], $resolver->ordersServedBy($baskets[3], $torremocha, 'A'));  // 22-may
     }
 
     /**
