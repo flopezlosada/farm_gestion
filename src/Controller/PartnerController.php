@@ -1047,10 +1047,18 @@ class PartnerController extends AbstractController
                 $basketPricing->applyTo($partnerBasketShare);
             }
 
-            if ($partnerBasketShare->getBasketShare()->getId() == 3) {
-
-            } else {
+            // El orden mensual sólo lo usan las modalidades mensuales (3 y 7);
+            // en el resto es ruido. El literal `== 3` de antes dejaba fuera la
+            // mensual compartida, que nacía sin orden y no materializaba.
+            if (!$partnerBasketShare->getBasketShare()->isMonthly()) {
                 $partnerBasketShare->setDayMonthOrder(null);
+            }
+
+            // Simetría con changeModality: el turno sólo se guarda donde se usa
+            // (quincenales y mensuales) y nunca en nodos de cadencia quincenal,
+            // que ya alternan por sí mismos.
+            if ($cohort['nodeIsBiweekly'] || !$partnerBasketShare->getBasketShare()->usesDeliveryGroup()) {
+                $partnerBasketShare->setDeliveryGroup(null);
             }
             $entityManager->persist($partnerBasketShare);
             $shareEventRecorder->recordStart($partnerBasketShare);

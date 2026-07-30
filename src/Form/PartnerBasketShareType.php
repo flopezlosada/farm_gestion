@@ -77,21 +77,27 @@ class PartnerBasketShareType extends AbstractType
                 'label' => 'En qué cesta del mes recibe los huevos',
                 'help' => 'Los huevos viajan dentro de una de las cestas del socio (nunca en un día sin cesta). Una quincenal que recoge el 1er y 3er viernes y elige «2ª cesta» recibe los huevos en su segunda cesta. «Última cesta» sigue al último reparto del mes aunque el mes tenga 5 semanas.',
             ])
+            // Qué entrega del mes recoge una cesta MENSUAL. Sobre qué se cuenta
+            // depende del turno: sin turno, los viernes del mes; con turno, las
+            // entregas de ese turno (ver MonthlyOperativeOrderResolver). De ahí
+            // que las etiquetas hablen de "entrega" y no de "viernes".
             ->add('dayMonthOrder', ChoiceType::class,[
                 'choices'  => [
                     'No corresponde' => null,
-                    'Primer viernes' => 1,
-                    'Segundo viernes' => 2,
-                    'Tercer viernes' => 3,
-                    'Último viernes del mes' => -1,
-                ], 'label'=>"Qué viernes del mes recoge la cesta",
-                'help' => 'La opción «Último viernes» sigue al último reparto del mes: el 4º en meses de 4 semanas y el 5º en meses de 5.'])
+                    '1ª entrega del mes' => 1,
+                    '2ª entrega del mes' => 2,
+                    '3ª entrega del mes' => 3,
+                    'Última entrega del mes' => -1,
+                ], 'label'=>"Qué entrega del mes recoge la cesta",
+                'help' => 'Sin turno asignado se cuentan los viernes del mes (1ª = primer viernes). Con turno, se cuentan las entregas de ese turno, así el socio coincide siempre con su grupo, también en los meses de 5 viernes. «Última entrega» sigue al último reparto del mes.'])
             ->add('deliveryGroup', ChoiceType::class, [
-                'label' => 'Turno de viernes (quincenal)',
-                'help' => 'Sólo para quincenales en puntos de reparto semanales. Cada opción muestra los viernes reales en que recoge.',
+                'label' => 'Turno de viernes',
+                'help' => 'Sólo en puntos de reparto semanales. En quincenales decide qué viernes recoge; en mensuales, con qué turno coincide (su orden se cuenta sobre las entregas de ese turno). Cada opción muestra los viernes reales.',
                 'choices' => $options['cohort_choices'],
-                // Sin opción vacía: el turno es obligatorio cuando aplica
-                // (quincenal en nodo semanal). Para el resto se anula en server.
+                // Sin opción vacía: el turno es obligatorio para las
+                // quincenales, y el JS del formulario añade "Sin turno" cuando
+                // la modalidad es mensual (ahí es opcional). Para el resto de
+                // modalidades se anula en server.
                 'placeholder' => false,
                 'required' => false,
             ])

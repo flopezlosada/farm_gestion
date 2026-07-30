@@ -357,6 +357,11 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
      *              vacío si éste no entrega esta semana.
      * @param array<int,int[]> $biweeklyNodeIdToOrders Mapa nodeId → órdenes servidas en ese nodo.
      * @param bool $only_eggs Filtrar a egg_period=3 (sólo huevos mensuales).
+     * @param string|null $weeklyCohort Turno A/B que reparte esta semana en el nodo weekly.
+     * @param int[] $weeklyCohortOrders Órdenes que el basket sirve contando SÓLO
+     *              los viernes de ese turno. Emparejan los mensuales anclados a
+     *              un turno (`delivery_group`); los anclados al otro turno no
+     *              recogen esta semana y quedan fuera por la condición del DQL.
      * @return PartnerBasketShare[]
      */
     public function findBasketPartnersMonthlyNodeAware(
@@ -364,13 +369,27 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
         int $basket_share_id,
         array $weeklyMonthlyOrders,
         array $biweeklyNodeIdToOrders,
-        bool $only_eggs = false
+        bool $only_eggs = false,
+        ?string $weeklyCohort = null,
+        array $weeklyCohortOrders = []
     ): array {
         $em = $this->getEntityManager();
         $eggPeriod = $only_eggs ? 3 : null;
         $results = [];
 
         if ($weeklyMonthlyOrders !== []) {
+            // Dos formas de emparejar un mensual de nodo weekly:
+            //  - Sin turno (delivery_group NULL): su orden cuenta los viernes
+            //    del mes. Comportamiento histórico.
+            //  - Anclado a un turno: su orden cuenta sólo los viernes de ESE
+            //    turno, así que sólo entra si el turno que reparte esta semana
+            //    es el suyo, y contra las órdenes de ese turno (caso Alcobendas).
+            $anchoredToCohort = $weeklyCohort !== null && $weeklyCohortOrders !== [];
+            $orderMatch = $anchoredToCohort
+                ? "((b.delivery_group IS NULL and b.day_month_order IN (:weekly_orders))
+                    or (b.delivery_group = :weekly_cohort and b.day_month_order IN (:cohort_orders)))"
+                : "(b.delivery_group IS NULL and b.day_month_order IN (:weekly_orders))";
+
             $weeklyDql = "select b from App\\Entity\\PartnerBasketShare b
                           inner join b.partner p
                           left join p.weekly_basket_group wbg
@@ -379,7 +398,7 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
                             and b.is_active = 1
                             and (b.start_date IS NULL OR b.start_date <= :date)
                             and (b.end_date IS NULL OR b.end_date >= :date)
-                            and b.day_month_order IN (:weekly_orders)
+                            and " . $orderMatch . "
                             and (n.cadence = :cadence_weekly OR n.id IS NULL)";
             if ($eggPeriod !== null) {
                 $weeklyDql .= " and b.egg_period = :egg_period ";
@@ -391,6 +410,10 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
             $weeklyQuery->setParameter("date", $current_basket->getDate());
             $weeklyQuery->setParameter("weekly_orders", $weeklyMonthlyOrders);
             $weeklyQuery->setParameter("cadence_weekly", \App\Entity\Node::CADENCE_WEEKLY);
+            if ($anchoredToCohort) {
+                $weeklyQuery->setParameter("weekly_cohort", $weeklyCohort);
+                $weeklyQuery->setParameter("cohort_orders", $weeklyCohortOrders);
+            }
             if ($eggPeriod !== null) {
                 $weeklyQuery->setParameter("egg_period", $eggPeriod);
             }

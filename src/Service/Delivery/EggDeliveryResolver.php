@@ -116,7 +116,13 @@ class EggDeliveryResolver
             // Cesta mensual: huevos con la cesta. Emparejamiento PEGAJOSO
             // (ordersServedBy): un cierre no desplaza al mensual de las
             // semanas posteriores; el de la semana cerrada hace fallback.
-            return in_array($share->getDayMonthOrder(), $this->monthlyOrder->ordersServedBy($basket, $node), true);
+            // El turno del socio, si lo tiene, ancla el conteo a las entregas
+            // de ese turno — los huevos siguen a la cesta sin más.
+            return in_array(
+                $share->getDayMonthOrder(),
+                $this->monthlyOrder->ordersServedBy($basket, $node, $share->getDeliveryGroup()),
+                true,
+            );
         }
 
         $order = $share->getEggDayMonthOrder();
@@ -194,7 +200,7 @@ class EggDeliveryResolver
             $isDelivery = match ($shareTypeId) {
                 self::SHARE_WEEKLY, self::SHARE_HALF, self::SHARE_ONLY_EGG => true,
                 self::SHARE_BIWEEKLY => $this->biweeklyCohort->cohortForBasket($b) === $share->getDeliveryGroup(),
-                self::SHARE_MONTHLY  => in_array($share->getDayMonthOrder(), $this->monthlyOrder->ordersServedBy($b, $node), true),
+                self::SHARE_MONTHLY  => in_array($share->getDayMonthOrder(), $this->monthlyOrder->ordersServedBy($b, $node, $share->getDeliveryGroup()), true),
                 default              => false,
             };
             if (!$isDelivery) {
