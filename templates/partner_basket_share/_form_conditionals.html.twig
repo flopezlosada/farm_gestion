@@ -55,6 +55,28 @@
         eggOrderSelect.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
+    // Un mensual ANCLADO a un turno cuenta sobre las entregas de ese turno, y un
+    // turno tiene 2 (a veces 3) entregas al mes: ofrecerle la "3ª" invita a
+    // configurar una posición que en la mayoría de meses no existe, y ese mes no
+    // recogería. Con turno se deja 1ª, 2ª y última; sin turno, todas.
+    var orderSelect = document.getElementById('partner_basket_share_dayMonthOrder');
+    var orderOptions = orderSelect ? Array.prototype.slice.call(orderSelect.options) : [];
+
+    function limitOrderOptions(anchoredToTurn) {
+        if (!orderSelect) return;
+        var current = orderSelect.value;
+        orderSelect.innerHTML = '';
+        orderOptions.forEach(function (opt) {
+            var n = parseInt(opt.value, 10);
+            if (!anchoredToTurn || opt.value === '' || n <= 2 || n < 0) {
+                orderSelect.appendChild(opt);
+            }
+        });
+        var stillThere = Array.prototype.some.call(orderSelect.options, function (o) { return o.value === current; });
+        orderSelect.value = stillThere ? current : '';
+        orderSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
     // "Sin turno" sólo tiene sentido en las mensuales. En una quincenal el turno
     // es obligatorio (sin él cae de los listados), así que se retira la opción y,
     // si estaba elegida, pasa al primer turno real.
@@ -73,7 +95,24 @@
         turnSelect.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
+    // Guardia de reentrada: syncTurnOptions/limitOrderOptions disparan 'change'
+    // sobre sus selects (así se enteran los csa-dropdown de la nueva lista), y el
+    // del turno vuelve a entrar aquí. Sin esto, recursión infinita.
+    var syncing = false;
+
     function syncConditionals() {
+        if (syncing) {
+            return;
+        }
+        syncing = true;
+        try {
+            doSyncConditionals();
+        } finally {
+            syncing = false;
+        }
+    }
+
+    function doSyncConditionals() {
         var basketShare = $('#partner_basket_share_basket_share').val();
         var hasEggs = $('#partner_basket_share_egg_amount').val() !== '';
         var eggPeriod = $('#partner_basket_share_egg_period').val();
@@ -92,6 +131,9 @@
         if (showDeliveryGroup) {
             syncTurnOptions(basketShare);
         }
+        if (showCestaDayMonth) {
+            limitOrderOptions(isMonthly && turnSelect !== null && turnSelect.value !== '');
+        }
         if (showEggDayMonth) {
             limitEggOptions(maxCestasForModality(basketShare));
         }
@@ -100,5 +142,7 @@
     $('#partner_basket_share_basket_share').change(syncConditionals);
     $('#partner_basket_share_egg_amount').change(syncConditionals);
     $('#partner_basket_share_egg_period').change(syncConditionals);
+    // Elegir turno cambia el significado del orden: hay que recortar sus opciones.
+    $('#partner_basket_share_deliveryGroup').change(syncConditionals);
     syncConditionals();
 </script>

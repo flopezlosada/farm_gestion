@@ -361,6 +361,57 @@ class MonthlyOperativeOrderResolverTest extends TestCase
     }
 
     /**
+     * REGRESIÓN (cazada por L17 en la batería, 2026-07-30). Un cierre global
+     * desplaza la alternancia A/B, así que un mes puede quedarse con UNA sola
+     * entrega de un turno: en agosto 2027, con el 6 cerrado, los turnos quedan
+     * 6=A, 13=A, 20=B, 27=A. Un socio anclado a la "2ª del turno B" no tenía
+     * posición y desaparecía del mes — sin acotar, 0 docenas en L17.
+     *
+     * La última entrega del turno absorbe las posiciones que se pasan de largo,
+     * así que sigue recogiendo (en el 20-ago).
+     */
+    public function testAnclajeAlTurnoAcotaLaPosicionSiElCierreDejaUnaSolaEntrega(): void
+    {
+        $baskets = $this->agosto2027Baskets();
+        $torremocha = $this->makeNode('Torremocha', 5, Node::CADENCE_WEEKLY);
+
+        $cancellation = new DeliveryException();
+        $cancellation->setBasket($baskets[0]);  // 6-ago-2027, cierre global
+        $cancellation->setShiftedDate(null);
+
+        // Un cierre global previo (2027-07-02, como el de la batería) más el del
+        // 6-ago dejan el turno B con una única entrega en el mes: los turnos
+        // pasan a 6=A, 13=A, 20=B, 27=A.
+        $resolver = $this->makeResolverWithExceptions(
+            $baskets,
+            [20 => $cancellation],
+            ['2027-07-02', '2027-08-06'],
+        );
+
+        $servedBy20 = $resolver->ordersServedBy($baskets[2], $torremocha, 'B');  // 20-ago
+        $this->assertContains(1, $servedBy20, 'Es la 1ª entrega del turno en el mes.');
+        $this->assertContains(2, $servedBy20, 'Y absorbe la 2ª, que ese mes no existe.');
+        $this->assertContains(-1, $servedBy20, 'Es también la última del turno.');
+        // Las semanas del otro turno siguen sin servir posiciones del B.
+        $this->assertSame([], $resolver->ordersServedBy($baskets[1], $torremocha, 'B'));  // 13-ago (A)
+        $this->assertSame([], $resolver->ordersServedBy($baskets[3], $torremocha, 'B'));  // 27-ago (A)
+    }
+
+    /**
+     * La acotación NO se aplica al camino sin anclaje: ahí las posiciones son
+     * los viernes del mes y el comportamiento histórico se conserva (pedir una
+     * posición que el mes no tiene sigue dejando al socio fuera).
+     */
+    public function testSinAnclajeNoSeAcotaLaPosicion(): void
+    {
+        $baskets = $this->junioBaskets();  // 4 viernes
+        $torremocha = $this->makeNode('Torremocha', 5, Node::CADENCE_WEEKLY);
+        $resolver = $this->makeResolver($baskets);
+
+        $this->assertNotContains(5, $resolver->ordersServedBy($baskets[3], $torremocha));
+    }
+
+    /**
      * En un nodo de cadencia quincenal el turno se IGNORA: el propio nodo ya
      * alterna, así que sus entregas del mes son las de su ciclo y "1ª del nodo"
      * es lo que se pide sin más anclaje. Pasar un turno no cambia el resultado.
@@ -445,6 +496,23 @@ class MonthlyOperativeOrderResolverTest extends TestCase
     }
 
     /**
+     * Los 4 viernes de agosto 2027 (6, 13, 20, 27) indexados 0..3, con ids que
+     * no chocan con los otros meses. Con un cierre global previo, los turnos
+     * quedan 6=A, 13=A, 20=B, 27=A: el B con una sola entrega.
+     *
+     * @return Basket[]
+     */
+    private function agosto2027Baskets(): array
+    {
+        return [
+            0 => $this->makeBasket(20, '2027-08-06'),
+            1 => $this->makeBasket(21, '2027-08-13'),
+            2 => $this->makeBasket(22, '2027-08-20'),
+            3 => $this->makeBasket(23, '2027-08-27'),
+        ];
+    }
+
+    /**
      * Resolver con EM mock que siempre devuelve los baskets dados y
      * NodeDeliveryDate real sin excepciones.
      *
@@ -461,8 +529,11 @@ class MonthlyOperativeOrderResolverTest extends TestCase
      * @param Basket[] $monthBaskets
      * @param array<int,DeliveryException> $exceptionsByBasketId Mapa basketId → excepción.
      */
-    private function makeResolverWithExceptions(array $monthBaskets, array $exceptionsByBasketId): MonthlyOperativeOrderResolver
-    {
+    private function makeResolverWithExceptions(
+        array $monthBaskets,
+        array $exceptionsByBasketId,
+        array $globalClosureDates = [],
+    ): MonthlyOperativeOrderResolver {
         $query = $this->createMock(AbstractQuery::class);
         $query->method('setParameter')->willReturnSelf();
         $query->method('getResult')->willReturn($monthBaskets);
@@ -474,9 +545,18 @@ class MonthlyOperativeOrderResolverTest extends TestCase
         $exceptionRepo->method('findForBasketAndNode')->willReturnCallback(
             static fn (Basket $basket, Node $node) => $exceptionsByBasketId[$basket->getId()] ?? null
         );
-        // Sin cierres globales entre el ancla y las fechas de los tests: la
-        // alternancia A/B es la paridad pura de semanas desde 2026-05-08 (=A).
-        $exceptionRepo->method('countGlobalCancellationsBetween')->willReturn(0);
+        // Cada cierre global entre el ancla (2026-05-08 = A) y la fecha objetivo
+        // desplaza la alternancia una semana. Por defecto ninguno: la cohorte es
+        // la paridad pura de semanas desde el ancla.
+        $exceptionRepo->method('countGlobalCancellationsBetween')->willReturnCallback(
+            static function (\DateTimeInterface $after, \DateTimeInterface $before) use ($globalClosureDates): int {
+                return count(array_filter(
+                    $globalClosureDates,
+                    static fn (string $date): bool => $date > $after->format('Y-m-d')
+                        && $date < $before->format('Y-m-d'),
+                ));
+            }
+        );
 
         return new MonthlyOperativeOrderResolver(
             $em,

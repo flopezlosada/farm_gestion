@@ -57,6 +57,13 @@ use Doctrine\ORM\EntityManagerInterface;
  */
 class MonthlyOperativeOrderResolver
 {
+    /**
+     * Posición máxima que puede pedir un mensual anclado a un turno. El
+     * formulario ofrece hasta la 3ª entrega (más "última"); el tope da margen
+     * y acota el desbordamiento que absorbe la última entrega del turno.
+     */
+    private const MAX_ANCHORED_ORDER = 4;
+
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly NodeDeliveryDate $nodeDeliveryDate,
@@ -173,7 +180,8 @@ class MonthlyOperativeOrderResolver
         }
 
         $entries = $this->baselineMonthDeliveries($baseline, $node);
-        if ($cohort !== null && $node->getCadence() === Node::CADENCE_WEEKLY) {
+        $anchoredToCohort = $cohort !== null && $node->getCadence() === Node::CADENCE_WEEKLY;
+        if ($anchoredToCohort) {
             $entries = $this->onlyCohort($entries, $cohort);
             // El basket puede haber quedado fuera: su semana es del otro turno,
             // así que no sirve ninguna posición de este.
@@ -219,6 +227,26 @@ class MonthlyOperativeOrderResolver
             $orders,
             array_map(static fn (int $order): int => $order - $count - 1, $orders),
         );
+
+        // ACOTACIÓN al anclar a un turno: un turno tiene 2 entregas al mes (3 en
+        // los meses largos), pero un cierre global desplaza la alternancia y
+        // puede dejarle UNA sola. Sin acotar, un socio anclado a la "2ª del
+        // turno" desaparecería ese mes, que es el peor fallo posible aquí — lo
+        // cazó L17 con el cierre del 6-ago-2027, donde el turno B se queda con
+        // el 20-ago como única entrega. La última entrega del turno absorbe
+        // cualquier posición que se pase de largo, igual que hace
+        // {@see EggDeliveryResolver} con los huevos (min($order, $count)).
+        //
+        // Va DESPUÉS del mapeo negativo a propósito: una posición desbordada no
+        // tiene espejo (su negativo saldría 0 o pisaría posiciones reales).
+        // Sólo aplica al camino anclado: el histórico (posiciones sobre los
+        // viernes del mes) se deja como estaba.
+        if ($anchoredToCohort && $lastOperativeIdx !== null
+            && $entries[$lastOperativeIdx]['basketId'] === $basket->getId()) {
+            for ($overflow = $count + 1; $overflow <= self::MAX_ANCHORED_ORDER; $overflow++) {
+                $orders[] = $overflow;
+            }
+        }
 
         sort($orders);
 
