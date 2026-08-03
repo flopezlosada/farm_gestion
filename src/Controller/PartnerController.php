@@ -234,7 +234,7 @@ class PartnerController extends AbstractController
         ]);
     }
 
-    #[Route("/{id}", name: "partner_show", methods: ["GET"])]
+    #[Route("/{id}", name: "partner_show", methods: ["GET"], requirements: ["id" => "\\d+"])]
     public function show(
         Partner $partner,
         \App\Repository\PartnerEventRepository $partnerEventRepository,
@@ -629,7 +629,7 @@ class PartnerController extends AbstractController
         ]);
     }
 
-    #[Route("/{id}", name: "partner_delete", methods: ["DELETE"])]
+    #[Route("/{id}", name: "partner_delete", methods: ["DELETE"], requirements: ["id" => "\\d+"])]
     public function delete(Request $request, Partner $partner, EntityManagerInterface $entityManager): Response
     {
         // Solo se eliminan fichas PENDIENTES de confirmar (needs_review): son
