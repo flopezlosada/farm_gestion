@@ -668,6 +668,32 @@ class PartnerControllerTest extends AbstractAuthenticatedTest
     }
 
     /**
+     * El endpoint del desplegable dependiente provincia → municipio del alta y
+     * la edición de socix responde 200 con los municipios de la provincia.
+     *
+     * Regresión doble (2026-08-03): la ruta literal `/cities` se declara DESPUÉS
+     * de `/{id}` (partner_show) en el mismo controller, así que sin requirement
+     * numérico en `{id}` el GET lo capturaba partner_show con id="cities" y
+     * devolvía 404 — el select de municipios quedaba vacío en silencio, sin
+     * error visible ni traza en el log de la app. Este test lo caza en CI.
+     */
+    public function testCitiesEndpointReturnsCitiesOfState(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        $state = $em->getRepository(\App\Entity\State::class)->findOneBy([]);
+        $this->assertNotNull($state, 'Fixtures sin ninguna provincia.');
+        $city = $em->getRepository(\App\Entity\City::class)->findOneBy(['state' => $state]);
+        $this->assertNotNull($city, 'Fixtures sin ningún municipio en esa provincia.');
+
+        $client->request('GET', '/gestion/partner/cities?state_id=' . $state->getId());
+
+        $this->assertSame(200, $client->getResponse()->getStatusCode(), 'El endpoint de municipios debe responder 200, no un 404 de partner_show.');
+        $this->assertStringContainsString($city->getName(), (string) $client->getResponse()->getContent());
+    }
+
+    /**
      * Primer valor no vacío de un select del crawler (salta el placeholder).
      */
     private static function firstOptionValue(ChoiceFormField $field): string
