@@ -3,7 +3,6 @@
 namespace App\Command;
 
 use App\Repository\UsageHitRepository;
-use App\Service\AppSettings;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -19,13 +18,12 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  * borraría sin tocar nada.
  */
 #[AsCommand(name: 'app:purge-usage-hits', description: 'Borra el rastro de uso anterior a N días (retención).')]
-class PurgeUsageHitsCommand extends Command
+class PurgeUsageHitsCommand extends AbstractCronCommand
 {
     private const DEFAULT_DAYS = 90;
 
     public function __construct(
         private readonly UsageHitRepository $repository,
-        private readonly AppSettings $settings,
     ) {
         parent::__construct();
     }
@@ -38,17 +36,9 @@ class PurgeUsageHitsCommand extends Command
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'No borra; solo informa');
     }
 
-    protected function execute(InputInterface $input, OutputInterface $output): int
+    protected function doExecute(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
-
-        // Gate de la tarea programada: apagada en /gestion/settings, no borra
-        // nada (verde para no disparar alertas del cron). El dry-run y --force
-        // (ejecución manual explícita) la saltan.
-        if (!$input->getOption('dry-run') && !$input->getOption('force') && !$this->settings->getBool(AppSettings::CRON_PURGE_USAGE_HITS)) {
-            $io->warning('La tarea programada de purga del rastro de uso está desactivada en /gestion/settings. No se ejecuta.');
-            return Command::SUCCESS;
-        }
 
         $days = (int) $input->getOption('days');
         if ($days < 1) {
@@ -72,6 +62,8 @@ class PurgeUsageHitsCommand extends Command
         $deleted = $this->repository->deleteOlderThan($before);
         $io->success(sprintf('Borradas %d filas de usage_hit anteriores a %s.', $deleted, $before->format('Y-m-d H:i')));
 
-        return Command::SUCCESS;
+        return $deleted > 0
+            ? $this->didWork(sprintf('%d filas de rastro borradas (retención de %d días)', $deleted, $days))
+            : $this->nothingToDo(sprintf('Nada anterior a %s que borrar', $before->format('Y-m-d')));
     }
 }

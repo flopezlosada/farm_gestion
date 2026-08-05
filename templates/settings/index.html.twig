@@ -56,6 +56,9 @@
                      {{ not loop.first ? 'hidden' }}>
                     {% embed '_components/csa_form_section.html.twig' with { num: loop.index, title: group } %}
                         {% block body %}
+                            {# El import de la plantilla padre no llega al contexto de un embed:
+                             # los macros hay que importarlos dentro del propio bloque. #}
+                            {% import '_macros/csa.html.twig' as csa %}
                             <div class="csa-settings-list">
                                 {% for s in items %}
                                     {# Los campos de TEXTO (email del resumen…) van en columna: etiqueta+ayuda
@@ -107,12 +110,51 @@
                                                    name="settings[{{ s.name }}]" value="{{ s.value }}">
                                         {% endif %}
                                     </label>
-                                    {# Tareas programadas: botones de ejecución manual. Los envíos van a
-                                     # formularios externos (definidos tras el form de guardado), referenciados
-                                     # por `form=`, porque no se pueden anidar formularios. #}
+                                    {# Tareas programadas: qué pasó la última vez que corrió. Es la
+                                     # razón de ser de esta sección — con sólo el interruptor a la vista,
+                                     # una tarea que lleva semanas sin ejecutarse se ve igual que una
+                                     # que funciona. #}
+                                    {% if s.last_run is defined %}
+                                        <div class="csa-setting__actions csa-cron-status">
+                                            {% if s.last_run is null %}
+                                                {{ csa.badge('Sin registro todavía', 'ochre') }}
+                                            {% elseif s.last_run.unfinished %}
+                                                {{ csa.badge('No terminó', 'terracotta') }}
+                                            {% elseif s.last_run.status == 'failed' %}
+                                                {{ csa.badge('Falló', 'terracotta') }}
+                                            {% elseif s.last_run.status == 'disabled' %}
+                                                {{ csa.badge('Apagada', 'neutral') }}
+                                            {% elseif s.last_run.status == 'nothing_to_do' %}
+                                                {{ csa.badge('Sin trabajo', 'sky') }}
+                                            {% else %}
+                                                {{ csa.badge('Hizo su trabajo', 'green') }}
+                                            {% endif %}
+
+                                            <span class="csa-setting__help">
+                                                {% if s.last_run is null %}
+                                                    Debería correr {{ s.schedule }}.
+                                                {% else %}
+                                                    {{ s.last_run.at|date('d/m/Y H:i') }}
+                                                    ({{ s.last_run.age }}){{ s.last_run.manual ? ', a mano' : '' }}
+                                                    · debería correr {{ s.schedule }}
+                                                    {%- if s.last_run.detail %} · {{ s.last_run.detail }}{% endif %}
+                                                {% endif %}
+                                            </span>
+
+                                            {% if s.overdue %}
+                                                {{ csa.badge('Fuera de plazo', 'terracotta') }}
+                                            {% endif %}
+                                            {% for dependency in s.unmet_dependencies %}
+                                                {{ csa.badge('Depende de «' ~ dependency ~ '», que está apagada', 'ochre') }}
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                    {# Botones de ejecución manual. Los envíos van a formularios externos
+                                     # (definidos tras el form de guardado), referenciados por `form=`,
+                                     # porque no se pueden anidar formularios. #}
                                     {% if s.command is defined %}
                                         {% set idsafe = s.name|replace({'.': '_'}) %}
-                                        <div class="csa-setting__actions" style="display:flex; gap:var(--csa-sp-2); padding:0 0 var(--csa-sp-2) calc(var(--csa-sp-8) + var(--csa-sp-2));">
+                                        <div class="csa-setting__actions">
                                             {% if s.confirm %}
                                                 <button type="button" class="csa-btn csa-btn--ghost csa-btn--sm"
                                                         onclick="document.getElementById('confirm-cron-{{ idsafe }}').showModal()">Ejecutar ahora</button>

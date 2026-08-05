@@ -180,21 +180,120 @@ class AppSettings
     public const CRON_STAFF_OPEN_SHIFT_ALERT = 'cron.staff_open_shift_alert';
 
     /**
-     * Mapa de tareas programadas para la ejecución manual desde la pantalla de
-     * configuración: clave del toggle => metadatos. `command` es el nombre del
-     * comando de consola que se lanza en proceso ({@see \App\Controller\SettingsController::runCron});
-     * `confirm` marca los que envían correo real (piden confirmación en la UI);
-     * `dry` los que ofrecen además un botón de previsualización (--dry-run).
-     * Es también la lista blanca: sólo se puede lanzar a mano lo declarado aquí.
+     * MANIFIESTO DE TAREAS PROGRAMADAS: la fuente única de verdad sobre qué
+     * debería ejecutarse, cuándo, y qué la inhibe. Clave del toggle =>
+     * metadatos. Lo lee {@see \App\Service\Cron\CronTaskRegistry}.
+     *
+     * Antes esta información vivía repartida en tres sitios que no se hablaban:
+     * dos `if` copiados dentro de cada comando (el gate), las líneas del crontab
+     * de un hosting sin SSH (la cadencia) y el texto de ayuda de la pantalla
+     * (las dependencias). El resultado fue que ninguna tarea corrió en
+     * producción entre el 20 de julio y el 4 de agosto de 2026 sin que nada
+     * avisara. Con el manifiesto, el sistema puede responder qué debería estar
+     * pasando y compararlo con lo que pasó ({@see \App\Entity\CronRun}).
+     *
+     * Campos:
+     *
+     * - `command`: comando de consola asociado. Es también la lista blanca:
+     *   sólo se puede lanzar a mano lo declarado aquí.
+     * - `confirm`: envía correo real, así que la UI pide confirmación.
+     * - `dry`: ofrece botón de previsualización (--dry-run).
+     * - `schedule`: CADENCIA declarada — cuándo debería correr. `freq` es
+     *   daily|weekly|monthly, con `dow` (1 = lunes) en las semanales y `dom` en
+     *   las mensuales. Hoy la cadencia real la impone el crontab del hosting y
+     *   esto es su declaración fiel; cuando exista el tick genérico, este campo
+     *   pasa a ser el que MANDA.
+     * - `max_delay_hours`: PLAZO MÁXIMO DE RETRASO. Pasado ese tiempo sin
+     *   ejecutarse, la tarea se considera caída. Se da margen sobre la cadencia
+     *   (un reloj puntual no existe): día y medio para las diarias, ocho días
+     *   para las semanales, 33 para las mensuales.
+     * - `requires`: ajustes que la habilitan APARTE de su propio interruptor.
+     *   Son los toggles de entrega (email): a diferencia del interruptor propio
+     *   de la tarea, éstos NO los salta una ejecución manual con --force —
+     *   apagar el envío tiene que apagarlo también a mano.
+     * - `depends_on`: tareas de las que depende. Sirve para detectar
+     *   incoherencias que de otro modo son invisibles: el recordatorio de
+     *   recogida sólo lee cestas ya congeladas, así que con el congelado apagado
+     *   corre en verde sin avisar a nadie.
+     *
+     * OJO: sólo las cuatro primeras están en el crontab de producción
+     * (`docs/migracion-prod/crons.txt`). Las tres de albergue y jornada laboral
+     * declaran su cadencia aquí pero HOY NADIE LAS DISPARA; se pidieron a cdmon
+     * y están sin montar.
      */
     public const CRONS = [
-        self::CRON_GENERATE_WEEKLY_DELIVERY => ['command' => 'app:generate-weekly-delivery', 'confirm' => false, 'dry' => false],
-        self::CRON_PICKUP_REMINDER => ['command' => 'app:send-pickup-reminders', 'confirm' => true, 'dry' => true],
-        self::CRON_ADMIN_DELIVERY_SUMMARY => ['command' => 'app:send-admin-delivery-changes-summary', 'confirm' => true, 'dry' => true],
-        self::CRON_PURGE_USAGE_HITS => ['command' => 'app:purge-usage-hits', 'confirm' => false, 'dry' => false],
-        self::CRON_ALBERGUE_REMINDER => ['command' => 'app:send-albergue-arrivals-reminder', 'confirm' => true, 'dry' => true],
-        self::CRON_STAFF_GAPS_DIGEST => ['command' => 'app:send-staff-gaps-digest', 'confirm' => true, 'dry' => true],
-        self::CRON_STAFF_OPEN_SHIFT_ALERT => ['command' => 'app:send-staff-open-shift-alert', 'confirm' => true, 'dry' => true],
+        self::CRON_GENERATE_WEEKLY_DELIVERY => [
+            'command' => 'app:generate-weekly-delivery',
+            'needs_recipient' => false,
+            'confirm' => false,
+            'dry' => false,
+            'schedule' => ['freq' => 'weekly', 'dow' => 1, 'hour' => 6],
+            'max_delay_hours' => 192,
+            'requires' => [],
+            'depends_on' => [],
+        ],
+        self::CRON_PICKUP_REMINDER => [
+            'command' => 'app:send-pickup-reminders',
+            'needs_recipient' => false,
+            'confirm' => true,
+            'dry' => true,
+            'schedule' => ['freq' => 'daily', 'hour' => 9],
+            'max_delay_hours' => 36,
+            'requires' => [self::EMAIL_PICKUP_REMINDER],
+            // Sin congelado no hay destinatarios: el recordatorio lee sólo
+            // cestas ya materializadas (WeeklyBasketRepository::findPickedByDeliveryDateAndShares).
+            'depends_on' => [self::CRON_GENERATE_WEEKLY_DELIVERY],
+        ],
+        self::CRON_ADMIN_DELIVERY_SUMMARY => [
+            'command' => 'app:send-admin-delivery-changes-summary',
+            'needs_recipient' => true,
+            'confirm' => true,
+            'dry' => true,
+            'schedule' => ['freq' => 'daily', 'hour' => 20],
+            'max_delay_hours' => 36,
+            'requires' => [self::EMAIL_ADMIN_DELIVERY_SUMMARY],
+            'depends_on' => [],
+        ],
+        self::CRON_PURGE_USAGE_HITS => [
+            'command' => 'app:purge-usage-hits',
+            'needs_recipient' => false,
+            'confirm' => false,
+            'dry' => false,
+            'schedule' => ['freq' => 'monthly', 'dom' => 1, 'hour' => 4],
+            'max_delay_hours' => 792,
+            'requires' => [],
+            'depends_on' => [],
+        ],
+        self::CRON_ALBERGUE_REMINDER => [
+            'command' => 'app:send-albergue-arrivals-reminder',
+            'needs_recipient' => true,
+            'confirm' => true,
+            'dry' => true,
+            'schedule' => ['freq' => 'daily', 'hour' => 7],
+            'max_delay_hours' => 36,
+            'requires' => [self::EMAIL_ALBERGUE_REMINDER],
+            'depends_on' => [],
+        ],
+        self::CRON_STAFF_GAPS_DIGEST => [
+            'command' => 'app:send-staff-gaps-digest',
+            'needs_recipient' => true,
+            'confirm' => true,
+            'dry' => true,
+            'schedule' => ['freq' => 'weekly', 'dow' => 1, 'hour' => 8],
+            'max_delay_hours' => 192,
+            'requires' => [self::EMAIL_STAFF_GAPS],
+            'depends_on' => [],
+        ],
+        self::CRON_STAFF_OPEN_SHIFT_ALERT => [
+            'command' => 'app:send-staff-open-shift-alert',
+            'needs_recipient' => true,
+            'confirm' => true,
+            'dry' => true,
+            'schedule' => ['freq' => 'daily', 'hour' => 10],
+            'max_delay_hours' => 36,
+            'requires' => [self::EMAIL_STAFF_GAPS],
+            'depends_on' => [],
+        ],
     ];
 
     /**

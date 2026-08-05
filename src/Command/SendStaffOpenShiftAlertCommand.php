@@ -2,7 +2,6 @@
 
 namespace App\Command;
 
-use App\Service\AppSettings;
 use App\Service\Staff\GapReport;
 use Symfony\Bridge\Twig\Mime\TemplatedEmail;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -27,12 +26,11 @@ use Symfony\Component\Mailer\MailerInterface;
  * trabajando); solo los de días anteriores.
  */
 #[AsCommand(name: 'app:send-staff-open-shift-alert', description: 'Avisa al supervisor de salidas abiertas (entradas sin cerrar de días anteriores).')]
-class SendStaffOpenShiftAlertCommand extends Command
+class SendStaffOpenShiftAlertCommand extends AbstractCronCommand
 {
     public function __construct(
         private readonly GapReport $gapReport,
         private readonly MailerInterface $mailer,
-        private readonly AppSettings $settings,
     ) {
         parent::__construct();
     }
@@ -45,22 +43,12 @@ class SendStaffOpenShiftAlertCommand extends Command
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Lista las salidas abiertas que avisaría sin enviar nada');
     }
 
-    protected function execute(InputInterface $input, OutputInterface $output): int
+    protected function doExecute(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
 
         $dryRun = (bool) $input->getOption('dry-run');
         $to = $input->getOption('to');
-
-        if (!$dryRun && !$input->getOption('force') && !$this->settings->getBool(AppSettings::CRON_STAFF_OPEN_SHIFT_ALERT)) {
-            $io->warning('La tarea del aviso de salida abierta está desactivada en /gestion/settings. No se ejecuta.');
-            return Command::SUCCESS;
-        }
-
-        if (!$dryRun && !$this->settings->getBool(AppSettings::EMAIL_STAFF_GAPS)) {
-            $io->warning('El aviso de huecos está desactivado en /gestion/settings. No se envía nada.');
-            return Command::SUCCESS;
-        }
 
         if (!$dryRun && !$to) {
             $io->error('Falta --to=email del supervisor (o usa --dry-run).');
@@ -74,7 +62,7 @@ class SendStaffOpenShiftAlertCommand extends Command
 
         if ($rows === []) {
             $io->success('Ninguna salida abierta. No se envía nada.');
-            return Command::SUCCESS;
+            return $this->nothingToDo('Ninguna salida abierta');
         }
 
         $io->table(
@@ -100,6 +88,6 @@ class SendStaffOpenShiftAlertCommand extends Command
         $this->mailer->send($message);
         $io->success(sprintf('Enviado a %s · %d salida(s) abierta(s).', $to, count($rows)));
 
-        return Command::SUCCESS;
+        return $this->didWork(sprintf('%d salidas abiertas avisadas a %s', count($rows), $to));
     }
 }

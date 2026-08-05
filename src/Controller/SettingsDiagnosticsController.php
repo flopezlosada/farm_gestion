@@ -4,15 +4,13 @@ namespace App\Controller;
 
 use App\Entity\User;
 use App\Service\AppSettings;
+use App\Service\Cron\CronRunMode;
+use App\Service\Cron\CronRunner;
+use App\Service\Cron\CronTaskRegistry;
 use App\Service\Email\EmailPreviewFactory;
-use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use Symfony\Component\Console\Input\ArrayInput;
-use Symfony\Component\Console\Output\BufferedOutput;
-use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpKernel\KernelInterface;
 use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Mime\Email;
@@ -40,20 +38,23 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 class SettingsDiagnosticsController extends AbstractController
 {
     /**
-     * Disparadores de cron que la pantalla puede lanzar. Whitelist por
-     * identificador → mapea al nombre real del comando, para que el form nunca
-     * pueda pedir la ejecución de un comando arbitrario.
+     * Tareas que esta pantalla ofrece lanzar, por su clave en el manifiesto
+     * {@see AppSettings::CRONS}. Antes había aquí un mapa propio de
+     * identificador → comando, que era una segunda lista blanca a mantener a
+     * mano; ahora la lista blanca es el manifiesto y esto sólo elige qué
+     * subconjunto se enseña en el diagnóstico de envíos.
      */
-    private const COMMANDS = [
-        'reminder' => 'app:send-pickup-reminders',
-        'summary' => 'app:send-admin-delivery-changes-summary',
+    private const OFFERED_TASKS = [
+        AppSettings::CRON_PICKUP_REMINDER,
+        AppSettings::CRON_ADMIN_DELIVERY_SUMMARY,
     ];
 
     public function __construct(
-        private readonly KernelInterface $kernel,
         private readonly MailerInterface $mailer,
         private readonly AppSettings $settings,
         private readonly EmailPreviewFactory $previewFactory,
+        private readonly CronRunner $cronRunner,
+        private readonly CronTaskRegistry $cronTasks,
     ) {
     }
 
@@ -74,6 +75,7 @@ class SettingsDiagnosticsController extends AbstractController
             'redirect_to' => $this->settings->getString(AppSettings::EMAIL_REDIRECT_TO),
             'reply_to' => $this->settings->getString(AppSettings::EMAIL_REPLY_TO),
             'result' => $result,
+            'offered_tasks' => $this->offeredTasks(),
         ]);
     }
 
@@ -196,9 +198,14 @@ class SettingsDiagnosticsController extends AbstractController
     }
 
     /**
-     * Lanza uno de los disparadores de cron de la whitelist y guarda su salida
-     * para mostrarla tras el redirect. En modo real (sin dry-run) el resumen a
-     * admin se dirige al email del admin logueado.
+     * Lanza una de las tareas que ofrece la pantalla y guarda su salida para
+     * mostrarla tras el redirect. La mecánica es la de {@see CronRunner}, la
+     * misma que usa /gestion/settings.
+     *
+     * OJO a la diferencia con la otra pantalla, que es deliberada: allí el botón
+     * SUSTITUYE al reloj caído y fuerza; aquí "Ejecutar" envía de verdad pero
+     * respetando el interruptor de la tarea, porque el sentido de esta pantalla
+     * es ver qué haría el cron. Los interruptores de email se respetan en ambas.
      */
     #[Route('/cron', name: 'settings_diagnostics_cron', methods: ['POST'])]
     public function cron(Request $request): Response
@@ -209,69 +216,54 @@ class SettingsDiagnosticsController extends AbstractController
         }
 
         $key = (string) $request->request->get('which');
-        $command = self::COMMANDS[$key] ?? null;
-        if ($command === null) {
+        if (!in_array($key, self::OFFERED_TASKS, true)) {
             $this->addFlash('warning', 'Disparador desconocido.');
             return $this->redirectToRoute('settings_diagnostics');
         }
 
-        $dryRun = $request->request->getBoolean('dry_run');
+        // Esta pantalla sirve para COMPROBAR qué haría el cron, así que ejecuta
+        // como lo haría el reloj: si la tarea está pausada en /gestion/settings,
+        // aquí tampoco corre. Es el comportamiento que ya tenía antes de existir
+        // el runner compartido, y no debe cambiar por un refactor.
+        $mode = $request->request->getBoolean('dry_run') ? CronRunMode::Preview : CronRunMode::AsScheduled;
 
-        $options = [];
-        if ($dryRun) {
-            $options['--dry-run'] = true;
-        }
-        // El resumen a admin exige destinatario en envío real; lo dirigimos a
-        // quien está lanzando la prueba.
-        if ($key === 'summary' && !$dryRun) {
-            $adminEmail = $this->currentUserEmail();
-            if ($adminEmail === '') {
-                $this->addFlash('warning', 'Tu cuenta no tiene email; el resumen real necesita un destinatario. Prueba en modo simulación.');
-                return $this->redirectToRoute('settings_diagnostics');
-            }
-            $options['--to'] = $adminEmail;
-        }
+        $result = $this->cronRunner->run($key, $mode, $this->currentUserEmail() ?: null);
 
-        $run = $this->runCommand($command, $options);
+        if ($result->blocked !== null) {
+            $this->addFlash('warning', $result->blocked);
+            return $this->redirectToRoute('settings_diagnostics');
+        }
 
         $request->getSession()->set('diagnostics_result', [
-            'command' => $command . ($dryRun ? ' --dry-run' : ' (envío real)'),
-            'exit' => $run['exit'],
-            'output' => $run['output'],
+            'command' => $result->command . ($result->isPreview() ? ' --dry-run' : ' (envío real)'),
+            'exit' => $result->exitCode,
+            'output' => $result->output,
             // En envío real, el destino que pinta el comando es el nominal (header To);
             // si la redirección de pruebas está activa, la entrega real fue aquí. Se lo
             // damos a la vista para que avise y no cunda el pánico al ver otro destinatario.
-            'redirect_to' => $dryRun ? '' : $this->settings->getString(AppSettings::EMAIL_REDIRECT_TO),
+            'redirect_to' => $result->isPreview() ? '' : $this->settings->getString(AppSettings::EMAIL_REDIRECT_TO),
         ]);
 
         return $this->redirectToRoute('settings_diagnostics');
     }
 
     /**
-     * Ejecuta un comando de consola en proceso y captura su salida en texto
-     * plano (sin ANSI), como la verías en una terminal.
+     * Tareas que esta pantalla ofrece lanzar, resueltas desde el manifiesto
+     * (clave, etiqueta y comando), para que la plantilla no repita ninguno de
+     * los tres.
      *
-     * @param string                $command Nombre del comando (de la whitelist).
-     * @param array<string, mixed>  $options Opciones para {@see ArrayInput}.
-     * @return array{exit: int, output: string}
+     * @return list<array{key: string, label: string, command: string}>
      */
-    private function runCommand(string $command, array $options): array
+    private function offeredTasks(): array
     {
-        $application = new Application($this->kernel);
-        $application->setAutoExit(false);
-
-        $input = new ArrayInput(['command' => $command] + $options);
-        $output = new BufferedOutput(OutputInterface::VERBOSITY_NORMAL, false);
-
-        try {
-            $exit = $application->run($input, $output);
-            $text = $output->fetch();
-        } catch (\Throwable $e) {
-            $exit = 1;
-            $text = sprintf("El comando lanzó una excepción:\n\n%s: %s", $e::class, $e->getMessage());
-        }
-
-        return ['exit' => $exit, 'output' => trim($text)];
+        return array_values(array_map(
+            fn (string $key) => [
+                'key' => $key,
+                'label' => $this->cronTasks->label($key),
+                'command' => AppSettings::CRONS[$key]['command'],
+            ],
+            self::OFFERED_TASKS
+        ));
     }
 
     /**

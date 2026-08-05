@@ -1023,6 +1023,24 @@ input[type="number"].csa-input--compact { width: 4.5rem; padding-right: 4px; }
 .csa-setting__num { display: inline-flex; align-items: center; gap: var(--csa-sp-2); }
 .csa-setting__unit { font-size: var(--csa-fs-sm); color: var(--csa-ink-muted); }
 
+/* Fila auxiliar bajo un ajuste: botones de acción o el estado de una tarea
+ * programada. Sangrada al ancho del control para que quede alineada con la
+ * etiqueta de arriba, no con el switch. */
+.csa-setting__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--csa-sp-2);
+  padding: 0 0 var(--csa-sp-2) calc(var(--csa-sp-8) + var(--csa-sp-2));
+}
+/* Estado de la última ejecución de una tarea programada: insignia + detalle en
+ * una línea. El texto no fuerza salto propio (es un dato corto junto a la
+ * insignia), a diferencia de .csa-setting__help en su uso habitual. */
+.csa-cron-status > .csa-setting__help {
+  display: inline;
+  margin-top: 0;
+}
+
 /* Entrada de hora estilo "reloj digital": dos cajas [HH] : [MM] con el número
  * grande, su etiqueta debajo y foco con acento verde. Sin desplegable (no se
  * sale de pantalla) y sin JS. El minuto/hora se teclea; el servidor valida y
