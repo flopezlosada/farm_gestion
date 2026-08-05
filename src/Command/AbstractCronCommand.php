@@ -133,6 +133,30 @@ abstract class AbstractCronCommand extends Command
      */
     final protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        // Los comandos son servicios de un solo ejemplar: si el mismo proceso
+        // ejecuta esta tarea dos veces, la segunda heredaría lo que reportó la
+        // primera y se registraría un resultado que no es el suyo. Se limpia al
+        // entrar, y el origen del disparo al salir (lo marca quien lanza, antes
+        // de llegar aquí).
+        $this->reportedStatus = null;
+        $this->reportedDetail = null;
+
+        try {
+            return $this->runTask($input, $output);
+        } finally {
+            $this->launchedByHand = false;
+        }
+    }
+
+    /**
+     * El cuerpo de {@see self::execute()}, separado sólo para que la limpieza de
+     * estado quede en un `finally` sin anidar todo el método.
+     *
+     * @param InputInterface  $input  Entrada del comando.
+     * @param OutputInterface $output Salida real.
+     */
+    private function runTask(InputInterface $input, OutputInterface $output): int
+    {
         $task = $this->cronTasks->findByCommand((string) $this->getName());
         if ($task === null) {
             throw new \LogicException(sprintf(
