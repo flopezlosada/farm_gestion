@@ -2,6 +2,7 @@
 
 namespace App\Tests\Controller;
 
+use App\Entity\CronRun;
 use App\Entity\Setting;
 use App\Service\AppSettings;
 use Doctrine\ORM\EntityManagerInterface;
@@ -21,6 +22,11 @@ class SettingsControllerTest extends AbstractAuthenticatedTest
         $em = static::getContainer()->get(EntityManagerInterface::class);
         foreach ($em->getRepository(Setting::class)->findAll() as $setting) {
             $em->remove($setting);
+        }
+        // El registro de ejecuciones también: los tests de la pantalla siembran
+        // filas a mano y las ejecuciones manuales dejan la suya.
+        foreach ($em->getRepository(CronRun::class)->findAll() as $run) {
+            $em->remove($run);
         }
         $em->flush();
 
@@ -218,6 +224,137 @@ class SettingsControllerTest extends AbstractAuthenticatedTest
         $this->assertResponseRedirects('/gestion/settings/');
         $crawler = $client->followRedirect();
         $this->assertStringContainsString('Resultado:', $crawler->text());
+    }
+
+    /**
+     * EL CRITERIO DE ACEPTACIÓN del paso 1: entrando en la pantalla se ve de un
+     * vistazo qué hizo cada tarea la última vez, y una tarea APAGADA se
+     * distingue de una que corrió SIN TRABAJO. Hasta ahora las dos salían igual
+     * (en verde y calladas), que es lo que dejó pasar dos semanas de cron caído.
+     */
+    public function testLaPantallaDistingueApagadaDeSinTrabajoYDeHechoConExito(): void
+    {
+        $this->seedRun(AppSettings::CRON_GENERATE_WEEKLY_DELIVERY, CronRun::STATUS_DONE, '-2 hours', CronRun::TRIGGER_MANUAL);
+        $this->seedRun(AppSettings::CRON_ADMIN_DELIVERY_SUMMARY, CronRun::STATUS_NOTHING_TO_DO, '-3 hours');
+        $this->seedRun(AppSettings::CRON_PURGE_USAGE_HITS, CronRun::STATUS_DISABLED, '-4 hours');
+
+        $client = $this->createAuthenticatedClient();
+        $crawler = $client->request('GET', '/gestion/settings/');
+
+        $this->assertResponseIsSuccessful();
+        $text = $crawler->text();
+        $this->assertStringContainsString('Hizo su trabajo', $text);
+        $this->assertStringContainsString('Sin trabajo', $text, 'Corrió y no había nada que hacer: es sano, y distinto de estar apagada.');
+        $this->assertStringContainsString('Apagada', $text);
+        $this->assertStringContainsString('a mano', $text, 'Una ejecución manual no debe hacerse pasar por el reloj.');
+        $this->assertStringContainsString('los lunes a las 06:00', $text, 'La cadencia declarada se pinta junto a la tarea.');
+    }
+
+    /**
+     * Una tarea sin ninguna ejecución registrada se muestra como tal, no como
+     * caída: no hay referencia desde la que medir un retraso, y una alarma el
+     * primer día tras el despliegue enseña a ignorar la pantalla.
+     */
+    public function testLaPantallaMarcaLasTareasSinRegistroComoTales(): void
+    {
+        $this->clearRuns();
+
+        $client = $this->createAuthenticatedClient();
+        $crawler = $client->request('GET', '/gestion/settings/');
+
+        $this->assertResponseIsSuccessful();
+        $this->assertStringContainsString('Sin registro todavía', $crawler->text());
+    }
+
+    /**
+     * Una tarea HABILITADA que se pasa de su plazo máximo de retraso se marca
+     * fuera de plazo. El recordatorio es diario con 36 horas de margen, así que
+     * una última ejecución de hace cinco días es una caída.
+     */
+    public function testLaPantallaMarcaFueraDePlazoLaTareaHabilitadaQueSePasaDelPlazo(): void
+    {
+        $this->seedRun(AppSettings::CRON_PICKUP_REMINDER, CronRun::STATUS_DONE, '-5 days');
+
+        $client = $this->createAuthenticatedClient();
+        $crawler = $client->request('GET', '/gestion/settings/');
+
+        $this->assertStringContainsString('Fuera de plazo', $crawler->text());
+    }
+
+    /**
+     * Una tarea apagada a propósito NO se marca fuera de plazo, aunque lleve
+     * meses sin correr: si no, la pantalla se llena de falsas alarmas y deja de
+     * servir para lo que se hizo.
+     */
+    public function testUnaTareaApagadaNoSeMarcaFueraDePlazo(): void
+    {
+        $this->clearRuns();
+
+        $settings = static::getContainer()->get(AppSettings::class);
+        $settings->setBool(AppSettings::CRON_PICKUP_REMINDER, false);
+        $this->seedRun(AppSettings::CRON_PICKUP_REMINDER, CronRun::STATUS_DISABLED, '-90 days');
+
+        $client = $this->createAuthenticatedClient();
+        $crawler = $client->request('GET', '/gestion/settings/');
+
+        $this->assertStringNotContainsString('Fuera de plazo', $crawler->text());
+    }
+
+    /**
+     * La incoherencia que de otro modo es invisible: el recordatorio depende del
+     * congelado semanal (sólo lee cestas ya congeladas), así que con el congelado
+     * apagado corre en verde sin avisar a nadie. La pantalla lo dice.
+     */
+    public function testLaPantallaAvisaDeUnaDependenciaApagada(): void
+    {
+        $settings = static::getContainer()->get(AppSettings::class);
+        $settings->setBool(AppSettings::CRON_GENERATE_WEEKLY_DELIVERY, false);
+
+        $client = $this->createAuthenticatedClient();
+        $crawler = $client->request('GET', '/gestion/settings/');
+
+        $this->assertStringContainsString('Depende de', $crawler->text());
+        $this->assertStringContainsString('Congelar el listado semanal', $crawler->text());
+    }
+
+    /**
+     * Vacía el registro de ejecuciones. Necesario en los tests que comprueban
+     * una AUSENCIA: otras clases de la suite ejecutan tareas y dejan sus filas.
+     */
+    private function clearRuns(): void
+    {
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        foreach ($em->getRepository(CronRun::class)->findAll() as $run) {
+            $em->remove($run);
+        }
+        $em->flush();
+    }
+
+    /**
+     * Siembra una ejecución ya cerrada, para poder comprobar cómo la pinta la
+     * pantalla sin tener que ejecutar la tarea de verdad.
+     *
+     * @param string $taskKey Clave de la tarea en el manifiesto.
+     * @param string $status  Uno de los CronRun::STATUS_*.
+     * @param string $ago     Desplazamiento relativo, p. ej. '-5 days'.
+     * @param string $trigger CronRun::TRIGGER_SCHEDULE o TRIGGER_MANUAL.
+     */
+    private function seedRun(string $taskKey, string $status, string $ago, string $trigger = CronRun::TRIGGER_SCHEDULE): void
+    {
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $startedAt = (new \DateTimeImmutable())->modify($ago);
+
+        $run = (new CronRun())
+            ->setTaskKey($taskKey)
+            ->setCommand(AppSettings::CRONS[$taskKey]['command'])
+            ->setStatus($status)
+            ->setTriggerSource($trigger)
+            ->setStartedAt($startedAt)
+            ->setFinishedAt($startedAt->modify('+3 seconds'))
+            ->setExitCode(0);
+
+        $em->persist($run);
+        $em->flush();
     }
 
     /**
