@@ -37,7 +37,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  * --dry-run muestra a quién, en qué nodo y qué día avisaría, sin enviar nada.
  */
 #[AsCommand(name: 'app:send-pickup-reminders', description: 'Recordatorio de recogida a quincenales/mensuales, por nodo y fecha física.')]
-class SendPickupReminderCommand extends Command
+class SendPickupReminderCommand extends AbstractCronCommand
 {
     public function __construct(
         private readonly WeeklyBasketRepository $weeklyBasketRepository,
@@ -56,25 +56,9 @@ class SendPickupReminderCommand extends Command
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'No envía, solo lista destinatarios');
     }
 
-    protected function execute(InputInterface $input, OutputInterface $output): int
+    protected function doExecute(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
-
-        // Gate de la tarea programada: apagada en /gestion/settings, la tarea ni
-        // siquiera calcula destinatarios (sale en verde para no disparar alertas
-        // del cron). El dry-run y --force (ejecución manual explícita) la saltan.
-        if (!$input->getOption('dry-run') && !$input->getOption('force') && !$this->settings->getBool(AppSettings::CRON_PICKUP_REMINDER)) {
-            $io->warning('La tarea programada del recordatorio está desactivada en /gestion/settings. No se ejecuta.');
-            return Command::SUCCESS;
-        }
-
-        // Toggle de configuración: con el envío apagado el cron no manda nada
-        // (y sale en verde para no disparar alertas). El dry-run sigue
-        // funcionando para poder probar destinatarios con el toggle apagado.
-        if (!$input->getOption('dry-run') && !$this->settings->getBool(AppSettings::EMAIL_PICKUP_REMINDER)) {
-            $io->warning('El recordatorio de recogida está desactivado en /gestion/settings. No se envía nada.');
-            return Command::SUCCESS;
-        }
 
         $target = $this->resolveTargetDate($input, $io);
         if ($target === null) {
@@ -92,7 +76,7 @@ class SendPickupReminderCommand extends Command
 
         if (empty($recipients)) {
             $io->note(sprintf('Nadie en modalidad quincenal o mensual recoge el %s. No se envía nada.', $target->format('Y-m-d')));
-            return Command::SUCCESS;
+            return $this->nothingToDo(sprintf('Nadie recoge el %s', $target->format('Y-m-d')));
         }
 
         $io->table(
@@ -118,7 +102,10 @@ class SendPickupReminderCommand extends Command
         $result = $this->reminderMailer->send($recipients);
 
         $io->success(sprintf('Enviados %d email(s). %d socixs sin email.', $result['sent'], $result['skipped']));
-        return Command::SUCCESS;
+
+        return $result['sent'] > 0
+            ? $this->didWork(sprintf('%d recordatorios enviados para el %s (%d sin email)', $result['sent'], $target->format('Y-m-d'), $result['skipped']))
+            : $this->nothingToDo(sprintf('%d destinatarios el %s, ninguno con email', $result['skipped'], $target->format('Y-m-d')));
     }
 
     /**

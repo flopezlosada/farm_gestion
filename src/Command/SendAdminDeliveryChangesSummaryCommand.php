@@ -28,7 +28,7 @@ use Symfony\Component\Mailer\MailerInterface;
  * recibe correo vacío).
  */
 #[AsCommand(name: 'app:send-admin-delivery-changes-summary', description: 'Resumen periódico al admin con los cambios autoservicio de los socixs.')]
-class SendAdminDeliveryChangesSummaryCommand extends Command
+class SendAdminDeliveryChangesSummaryCommand extends AbstractCronCommand
 {
     private const DEFAULT_DAYS = 7;
 
@@ -51,7 +51,7 @@ class SendAdminDeliveryChangesSummaryCommand extends Command
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Lista los eventos que enviaría sin enviar nada');
     }
 
-    protected function execute(InputInterface $input, OutputInterface $output): int
+    protected function doExecute(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
 
@@ -62,21 +62,6 @@ class SendAdminDeliveryChangesSummaryCommand extends Command
         // email se configura desde la app. Admite varias direcciones separadas por comas.
         $to = $input->getOption('to') ?: $this->settings->getString(AppSettings::EMAIL_ADMIN_DELIVERY_SUMMARY_TO);
         $recipients = array_values(array_filter(array_map('trim', explode(',', (string) $to))));
-
-        // Gate de la tarea programada: apagada en /gestion/settings, la tarea ni
-        // siquiera reúne los eventos (verde para no disparar alertas del cron).
-        // El dry-run y --force (ejecución manual explícita) la saltan.
-        if (!$dryRun && !$input->getOption('force') && !$this->settings->getBool(AppSettings::CRON_ADMIN_DELIVERY_SUMMARY)) {
-            $io->warning('La tarea programada del resumen a administración está desactivada en /gestion/settings. No se ejecuta.');
-            return Command::SUCCESS;
-        }
-
-        // Toggle de configuración: con el envío apagado el cron no manda nada
-        // (verde para no disparar alertas). El dry-run sigue funcionando.
-        if (!$dryRun && !$this->settings->getBool(AppSettings::EMAIL_ADMIN_DELIVERY_SUMMARY)) {
-            $io->warning('El resumen a administración está desactivado en /gestion/settings. No se envía nada.');
-            return Command::SUCCESS;
-        }
 
         if (!$dryRun && $recipients === []) {
             $io->error('Falta el destinatario: pasa --to=email o configúralo en /gestion/settings (Destinatario del resumen a administración).');
@@ -91,7 +76,7 @@ class SendAdminDeliveryChangesSummaryCommand extends Command
 
         if (empty($events)) {
             $io->note('Sin cambios en el período. No se envía nada.');
-            return Command::SUCCESS;
+            return $this->nothingToDo(sprintf('Sin cambios desde %s', $since->format('Y-m-d H:i')));
         }
 
         $rows = array_map(
@@ -123,7 +108,7 @@ class SendAdminDeliveryChangesSummaryCommand extends Command
         $this->mailer->send($message);
         $io->success(sprintf('Enviado a %s · %d evento(s).', $to, count($events)));
 
-        return Command::SUCCESS;
+        return $this->didWork(sprintf('%d cambios enviados a %s', count($events), implode(', ', $recipients)));
     }
 
     private function resolveSince(InputInterface $input): \DateTimeImmutable

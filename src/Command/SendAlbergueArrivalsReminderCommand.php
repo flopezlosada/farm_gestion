@@ -3,7 +3,6 @@
 namespace App\Command;
 
 use App\Repository\StayRepository;
-use App\Service\AppSettings;
 use Symfony\Bridge\Twig\Mime\TemplatedEmail;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -19,20 +18,19 @@ use Symfony\Component\Mailer\MailerInterface;
  * voluntarios: es un digest al buzón de gestión que se pasa en --to.
  *
  * Pensado para cron diario. Si no hay ni llegadas ni salidas en el período, no
- * envía nada (el equipo no recibe correo vacío). Mismos gates que el resto de
- * comandos de email: la tarea programada ({@see AppSettings::CRON_ALBERGUE_REMINDER})
- * y el envío ({@see AppSettings::EMAIL_ALBERGUE_REMINDER}) se gobiernan desde
- * /gestion/settings; el kill-switch general corta por encima de todo.
+ * envía nada (el equipo no recibe correo vacío). Los interruptores que lo
+ * gobiernan —la tarea programada y el envío— se declaran en el manifiesto
+ * {@see \App\Service\AppSettings::CRONS} y los aplica
+ * {@see AbstractCronCommand}; el kill-switch general corta por encima de todo.
  */
 #[AsCommand(name: 'app:send-albergue-arrivals-reminder', description: 'Recordatorio al equipo con las llegadas y salidas próximas del albergue.')]
-class SendAlbergueArrivalsReminderCommand extends Command
+class SendAlbergueArrivalsReminderCommand extends AbstractCronCommand
 {
     private const DEFAULT_DAYS = 7;
 
     public function __construct(
         private readonly StayRepository $stayRepository,
         private readonly MailerInterface $mailer,
-        private readonly AppSettings $settings,
     ) {
         parent::__construct();
     }
@@ -46,26 +44,12 @@ class SendAlbergueArrivalsReminderCommand extends Command
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Lista lo que enviaría sin enviar nada');
     }
 
-    protected function execute(InputInterface $input, OutputInterface $output): int
+    protected function doExecute(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
 
         $dryRun = (bool) $input->getOption('dry-run');
         $to = $input->getOption('to');
-
-        // Gate de la tarea programada: apagada en /gestion/settings, la tarea no
-        // hace nada (verde para no disparar alertas del cron). dry-run y --force
-        // (ejecución manual explícita) la saltan.
-        if (!$dryRun && !$input->getOption('force') && !$this->settings->getBool(AppSettings::CRON_ALBERGUE_REMINDER)) {
-            $io->warning('La tarea programada del recordatorio del albergue está desactivada en /gestion/settings. No se ejecuta.');
-            return Command::SUCCESS;
-        }
-
-        // Toggle de envío: apagado, el cron no manda nada (verde). dry-run sigue.
-        if (!$dryRun && !$this->settings->getBool(AppSettings::EMAIL_ALBERGUE_REMINDER)) {
-            $io->warning('El recordatorio del albergue está desactivado en /gestion/settings. No se envía nada.');
-            return Command::SUCCESS;
-        }
 
         if (!$dryRun && !$to) {
             $io->error('Falta --to=email del equipo (o usa --dry-run).');
@@ -84,7 +68,7 @@ class SendAlbergueArrivalsReminderCommand extends Command
 
         if ($arrivals === [] && $departures === []) {
             $io->note('Sin llegadas ni salidas en el período. No se envía nada.');
-            return Command::SUCCESS;
+            return $this->nothingToDo(sprintf('Sin llegadas ni salidas en los próximos %d días', $days));
         }
 
         if ($dryRun) {
@@ -114,6 +98,6 @@ class SendAlbergueArrivalsReminderCommand extends Command
         $this->mailer->send($message);
         $io->success(sprintf('Enviado a %s · %d llegada(s), %d salida(s).', $to, count($arrivals), count($departures)));
 
-        return Command::SUCCESS;
+        return $this->didWork(sprintf('%d llegadas y %d salidas avisadas a %s', count($arrivals), count($departures), $to));
     }
 }

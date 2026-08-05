@@ -2,7 +2,6 @@
 
 namespace App\Command;
 
-use App\Service\AppSettings;
 use App\Service\Staff\GapReport;
 use Symfony\Bridge\Twig\Mime\TemplatedEmail;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -28,14 +27,13 @@ use Symfony\Component\Mailer\MailerInterface;
  * sigue mandando por encima de todo.
  */
 #[AsCommand(name: 'app:send-staff-gaps-digest', description: 'Digest semanal al supervisor con los huecos del registro de jornada.')]
-class SendStaffGapsDigestCommand extends Command
+class SendStaffGapsDigestCommand extends AbstractCronCommand
 {
     private const DEFAULT_DAYS = 7;
 
     public function __construct(
         private readonly GapReport $gapReport,
         private readonly MailerInterface $mailer,
-        private readonly AppSettings $settings,
     ) {
         parent::__construct();
     }
@@ -49,24 +47,12 @@ class SendStaffGapsDigestCommand extends Command
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Lista los huecos que enviaría sin enviar nada');
     }
 
-    protected function execute(InputInterface $input, OutputInterface $output): int
+    protected function doExecute(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
 
         $dryRun = (bool) $input->getOption('dry-run');
         $to = $input->getOption('to');
-
-        // Gate de la tarea programada: apagada en /gestion/settings, ni se ejecuta.
-        if (!$dryRun && !$input->getOption('force') && !$this->settings->getBool(AppSettings::CRON_STAFF_GAPS_DIGEST)) {
-            $io->warning('La tarea del digest de huecos está desactivada en /gestion/settings. No se ejecuta.');
-            return Command::SUCCESS;
-        }
-
-        // Toggle de email: apagado, el cron corre pero no envía (verde para el cron).
-        if (!$dryRun && !$this->settings->getBool(AppSettings::EMAIL_STAFF_GAPS)) {
-            $io->warning('El aviso de huecos está desactivado en /gestion/settings. No se envía nada.');
-            return Command::SUCCESS;
-        }
 
         if (!$dryRun && !$to) {
             $io->error('Falta --to=email del supervisor (o usa --dry-run).');
@@ -82,7 +68,7 @@ class SendStaffGapsDigestCommand extends Command
 
         if ($rows === []) {
             $io->success('Sin huecos en el período. No se envía nada.');
-            return Command::SUCCESS;
+            return $this->nothingToDo(sprintf('Sin huecos en los últimos %d días', $days));
         }
 
         $tableRows = [];
@@ -115,6 +101,6 @@ class SendStaffGapsDigestCommand extends Command
         $this->mailer->send($message);
         $io->success(sprintf('Enviado a %s · %d trabajador(es) con huecos.', $to, count($rows)));
 
-        return Command::SUCCESS;
+        return $this->didWork(sprintf('%d trabajadores con huecos avisados a %s', count($rows), $to));
     }
 }
