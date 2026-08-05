@@ -107,12 +107,14 @@ class CronRunLoggerTest extends KernelTestCase
      */
     public function testLaSalidaLargaSeRecortaPorElPrincipio(): void
     {
-        $run = (new CronRun())->setOutput(str_repeat('a', 100) . str_repeat('b', CronRun::OUTPUT_MAX_LENGTH));
+        // El carácter del principio no puede aparecer en la marca de recorte
+        // ("…(salida recortada)"), o la comprobación se engaña a sí misma.
+        $run = (new CronRun())->setOutput(str_repeat('X', 100) . str_repeat('b', CronRun::OUTPUT_MAX_LENGTH));
 
         $output = (string) $run->getOutput();
         $this->assertStringContainsString('salida recortada', $output);
         $this->assertStringEndsWith('b', $output);
-        $this->assertStringNotContainsString('a', $output, 'El principio es lo que se descarta.');
+        $this->assertStringNotContainsString('X', $output, 'El principio es lo que se descarta.');
     }
 
     /**

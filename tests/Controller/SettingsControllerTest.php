@@ -234,11 +234,11 @@ class SettingsControllerTest extends AbstractAuthenticatedTest
      */
     public function testLaPantallaDistingueApagadaDeSinTrabajoYDeHechoConExito(): void
     {
+        $client = $this->createAuthenticatedClient();
         $this->seedRun(AppSettings::CRON_GENERATE_WEEKLY_DELIVERY, CronRun::STATUS_DONE, '-2 hours', CronRun::TRIGGER_MANUAL);
         $this->seedRun(AppSettings::CRON_ADMIN_DELIVERY_SUMMARY, CronRun::STATUS_NOTHING_TO_DO, '-3 hours');
         $this->seedRun(AppSettings::CRON_PURGE_USAGE_HITS, CronRun::STATUS_DISABLED, '-4 hours');
 
-        $client = $this->createAuthenticatedClient();
         $crawler = $client->request('GET', '/gestion/settings/');
 
         $this->assertResponseIsSuccessful();
@@ -257,9 +257,8 @@ class SettingsControllerTest extends AbstractAuthenticatedTest
      */
     public function testLaPantallaMarcaLasTareasSinRegistroComoTales(): void
     {
-        $this->clearRuns();
-
         $client = $this->createAuthenticatedClient();
+        $this->clearRuns();
         $crawler = $client->request('GET', '/gestion/settings/');
 
         $this->assertResponseIsSuccessful();
@@ -273,9 +272,8 @@ class SettingsControllerTest extends AbstractAuthenticatedTest
      */
     public function testLaPantallaMarcaFueraDePlazoLaTareaHabilitadaQueSePasaDelPlazo(): void
     {
-        $this->seedRun(AppSettings::CRON_PICKUP_REMINDER, CronRun::STATUS_DONE, '-5 days');
-
         $client = $this->createAuthenticatedClient();
+        $this->seedRun(AppSettings::CRON_PICKUP_REMINDER, CronRun::STATUS_DONE, '-5 days');
         $crawler = $client->request('GET', '/gestion/settings/');
 
         $this->assertStringContainsString('Fuera de plazo', $crawler->text());
@@ -288,13 +286,12 @@ class SettingsControllerTest extends AbstractAuthenticatedTest
      */
     public function testUnaTareaApagadaNoSeMarcaFueraDePlazo(): void
     {
+        $client = $this->createAuthenticatedClient();
         $this->clearRuns();
 
-        $settings = static::getContainer()->get(AppSettings::class);
-        $settings->setBool(AppSettings::CRON_PICKUP_REMINDER, false);
+        static::getContainer()->get(AppSettings::class)->setBool(AppSettings::CRON_PICKUP_REMINDER, false);
         $this->seedRun(AppSettings::CRON_PICKUP_REMINDER, CronRun::STATUS_DISABLED, '-90 days');
 
-        $client = $this->createAuthenticatedClient();
         $crawler = $client->request('GET', '/gestion/settings/');
 
         $this->assertStringNotContainsString('Fuera de plazo', $crawler->text());
@@ -307,10 +304,9 @@ class SettingsControllerTest extends AbstractAuthenticatedTest
      */
     public function testLaPantallaAvisaDeUnaDependenciaApagada(): void
     {
-        $settings = static::getContainer()->get(AppSettings::class);
-        $settings->setBool(AppSettings::CRON_GENERATE_WEEKLY_DELIVERY, false);
-
         $client = $this->createAuthenticatedClient();
+        static::getContainer()->get(AppSettings::class)->setBool(AppSettings::CRON_GENERATE_WEEKLY_DELIVERY, false);
+
         $crawler = $client->request('GET', '/gestion/settings/');
 
         $this->assertStringContainsString('Depende de', $crawler->text());

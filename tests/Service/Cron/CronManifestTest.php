@@ -7,6 +7,9 @@ use App\Service\AppSettings;
 use App\Service\Cron\CronTaskRegistry;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
+use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Command\LazyCommand;
 
 /**
  * Coherencia del manifiesto de tareas programadas ({@see AppSettings::CRONS}).
@@ -116,7 +119,7 @@ class CronManifestTest extends KernelTestCase
         $application = new Application(self::$kernel);
 
         foreach (AppSettings::CRONS as $key => $meta) {
-            $command = $application->find($meta['command']);
+            $command = $this->unwrap($application->find($meta['command']));
 
             $this->assertInstanceOf(
                 AbstractCronCommand::class,
@@ -143,20 +146,50 @@ class CronManifestTest extends KernelTestCase
      */
     public function testNingunComandoDeCronSeQuedaFueraDelManifiesto(): void
     {
-        self::bootKernel();
-        $application = new Application(self::$kernel);
         $declared = array_column(AppSettings::CRONS, 'command');
+        $checked = 0;
 
-        foreach ($application->all() as $name => $command) {
-            if (!$command instanceof AbstractCronCommand) {
+        // Por reflexión y no preguntando a la aplicación: `all()` devuelve los
+        // comandos envueltos en LazyCommand, y desenvolverlos instanciaría de
+        // golpe todos los comandos del proyecto sólo para mirar de qué heredan.
+        foreach (glob(\dirname(__DIR__, 3) . '/src/Command/*.php') as $file) {
+            $class = 'App\\Command\\' . basename($file, '.php');
+            if (!class_exists($class)) {
                 continue;
             }
+
+            $reflection = new \ReflectionClass($class);
+            if ($reflection->isAbstract() || !$reflection->isSubclassOf(AbstractCronCommand::class)) {
+                continue;
+            }
+
+            $attribute = $reflection->getAttributes(AsCommand::class)[0] ?? null;
+            $this->assertNotNull($attribute, sprintf('%s no declara #[AsCommand].', $class));
+
+            ++$checked;
             $this->assertContains(
-                $name,
+                $attribute->newInstance()->name,
                 $declared,
-                sprintf('El comando "%s" hereda de AbstractCronCommand pero no está en AppSettings::CRONS.', $name)
+                sprintf('%s hereda de AbstractCronCommand pero no está en AppSettings::CRONS.', $class)
             );
         }
+
+        $this->assertSame(count(AppSettings::CRONS), $checked, 'El número de comandos de cron y de entradas del manifiesto debe coincidir.');
+    }
+
+    /**
+     * El comando real detrás de un LazyCommand.
+     *
+     * Symfony registra envueltos en LazyCommand los comandos que declaran
+     * descripción en #[AsCommand] (AddConsoleCommandPass), para no instanciarlos
+     * al arrancar. Sin desenvolver, cualquier comprobación de tipo sobre la
+     * clase del comando miente.
+     *
+     * @param Command $command Comando tal y como lo devuelve la aplicación.
+     */
+    private function unwrap(Command $command): Command
+    {
+        return $command instanceof LazyCommand ? $command->getCommand() : $command;
     }
 
     /**

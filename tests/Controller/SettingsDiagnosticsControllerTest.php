@@ -122,10 +122,9 @@ class SettingsDiagnosticsControllerTest extends AbstractAuthenticatedTest
      */
     public function testEjecutarRespetaLaTareaPausada(): void
     {
-        $settings = static::getContainer()->get(AppSettings::class);
-        $settings->setBool(AppSettings::CRON_PICKUP_REMINDER, false);
-
         $client = $this->createAuthenticatedClient();
+        static::getContainer()->get(AppSettings::class)->setBool(AppSettings::CRON_PICKUP_REMINDER, false);
+
         $crawler = $client->request('GET', '/gestion/settings/diagnostics');
         $token = $crawler->filter('form[action$="/cron"] input[name="_csrf_token"]')->first()->attr('value');
 
