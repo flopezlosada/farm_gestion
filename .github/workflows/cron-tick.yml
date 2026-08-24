@@ -51,9 +51,19 @@ jobs:
           URL: ${{ secrets.CRON_TICK_URL }}
           TOKEN: ${{ secrets.CRON_TICK_TOKEN }}
         run: |
+          # Sin secretos, el reloj no está ENCENDIDO todavía: no es una avería.
+          # Misma decisión que en el endpoint, donde un token vacío responde 404
+          # en vez de romperse — "no configurado" y "roto" son cosas distintas, y
+          # confundirlas manda un correo de fallo cada hora por algo que aún no
+          # se ha puesto en marcha.
+          #
+          # Lo que sí avisa a partir de ahí es todo lo demás: si los secretos
+          # están y la llamada no sale bien, este workflow falla y GitHub manda
+          # un correo, que es justo lo que el crontab de cdmon nunca hizo.
           if [ -z "$URL" ] || [ -z "$TOKEN" ]; then
-            echo "Faltan los secretos CRON_TICK_URL o CRON_TICK_TOKEN." >&2
-            exit 1
+            echo "El reloj todavía no está configurado (faltan CRON_TICK_URL o CRON_TICK_TOKEN)."
+            echo "Créalos en Settings > Secrets and variables > Actions cuando la aplicación esté desplegada."
+            exit 0
           fi
 
           # --max-time generoso: la app contesta enseguida (el trabajo lo hace
