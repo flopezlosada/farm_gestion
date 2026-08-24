@@ -6,6 +6,7 @@ use App\DataFixtures\PartnerUserFixtures;
 use App\Entity\Basket;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketExtra;
+use App\Entity\PartnerDeliveryShift;
 use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketItem;
 use App\Entity\WeeklyBasketStatus;
@@ -98,6 +99,72 @@ class DeliveryCalendarProjectorTest extends KernelTestCase
             }
         }
         $this->assertSame(0.5, $dozens, 'La ½ docena extra ya está en la piedra; el proyector no debe duplicarla.');
+    }
+
+    /**
+     * Regresión: una cesta extra NO puede pisar el slot de PAPELERA de una semana marcada
+     * "no recoge". Antes el extra agarraba ese slot por índice, le ponía skipped=false y le
+     * sumaba su delta: la cesta aparcada se convertía en entrega normal y desaparecía de la
+     * papelera, sin forma de recuperarla. Ahora el extra se dibuja en su propio slot y la
+     * tarjeta aparcada sobrevive: son dos hechos distintos del mismo día.
+     */
+    public function testExtraNoPisaElSlotDePapeleraDeUnaSemanaSaltada(): void
+    {
+        self::bootKernel();
+        $em = $this->em();
+
+        $vegetables = $em->getRepository(BasketComponent::class)->find(BasketComponent::ID_VEGETABLES);
+        $this->assertNotNull($vegetables);
+
+        $partner = (new Partner())->setName('ProjSkipExtra ' . uniqid('', true));
+        $em->persist($partner);
+
+        $basket = (new Basket())->setDate(new \DateTime('2099-09-04'))->setWeek(36)->setAmount(1);
+        $em->persist($basket);
+
+        // "No recoge" esa semana (intent sin destino) + una cesta extra sobre el mismo día.
+        $skip = new PartnerDeliveryShift($partner, $basket, null);
+        $em->persist($skip);
+        $em->persist(new PartnerBasketExtra($partner, $basket, $vegetables, '1.00'));
+        $em->flush();
+
+        $slots = $this->makeProjector($em)->projectMonth($partner, 2099, 9);
+
+        $tray = [];
+        $grid = [];
+        foreach ($slots as $slot) {
+            if ($slot['basket']->getId() !== $basket->getId()) {
+                continue;
+            }
+            if ($slot['skipped']) {
+                $tray[] = $slot;
+            } else {
+                $grid[] = $slot;
+            }
+        }
+
+        $this->assertCount(1, $tray, 'La cesta aparcada debe seguir en la papelera (slot skipped).');
+        $this->assertSame([], $tray[0]['items'], 'La cesta aparcada no lleva nada: el extra no se le suma.');
+        $this->assertCount(1, $grid, 'La cesta extra debe dibujarse en su propio slot de rejilla.');
+        $this->assertTrue($grid[0]['extra'] ?? false, "El slot de la extra debe venir marcado con 'extra'.");
+
+        $vegAmount = null;
+        foreach ($grid[0]['items'] as $line) {
+            if ($line['component']->getId() === BasketComponent::ID_VEGETABLES) {
+                $vegAmount = (float) $line['amount'];
+            }
+        }
+        $this->assertSame(1.0, $vegAmount, 'El slot de rejilla lleva la cesta extra.');
+
+        // db_test no tiene rollback por test: se limpia lo creado aquí.
+        foreach ($em->getRepository(PartnerBasketExtra::class)->findBy(['partner' => $partner]) as $extra) {
+            $em->remove($extra);
+        }
+        $em->remove($skip);
+        $em->flush();
+        $em->remove($partner);
+        $em->remove($basket);
+        $em->flush();
     }
 
     /**

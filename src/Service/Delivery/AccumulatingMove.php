@@ -23,10 +23,11 @@ use App\Repository\PartnerDeliveryShiftRepository;
  * para que un fallo intermedio haga rollback de todo. Aun sin transacción, el orden
  * garantiza que el peor caso sea una cesta de MÁS (visible), nunca una de menos.
  *
- * DEUDA conocida: si el ORIGEN era a su vez un destino de "trasladar sumando" (tiene un
- * {@see \App\Entity\PartnerBasketExtra} colgado), vaciarlo aquí retira su WeeklyBasket pero
- * NO borra ese override, que la proyección resucitaría. Solo afecta a cadenas de acumulación
- * (acumular sobre un día ya acumulado); el caso normal (origen = cesta de patrón) no lo toca.
+ * Cadenas de acumulación (acumular sobre un día ya acumulado): la composición trasladada se
+ * lee de la proyección, así que incluye el extra que el origen ya tenía, y vaciar el origen
+ * borra su {@see \App\Entity\PartnerBasketExtra} —lo hace {@see DeliveryShiftApplier::applySkipIntent},
+ * que deja el día a cero—. Antes ese override sobrevivía y la proyección lo resucitaba,
+ * duplicando la cesta.
  */
 final class AccumulatingMove
 {

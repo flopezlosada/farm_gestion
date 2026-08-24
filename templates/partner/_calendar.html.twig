@@ -9,8 +9,9 @@
  # weeks, selected, selected_editable, current, prev, next, pickup_place)
  # y un objeto `cal` que desacopla las rutas/CSRF de cada pantalla:
  #   cal.route_view / route_skip / route_move / route_recover / route_reset
+ #                  / route_extra_remove (quitar la cesta extra de un día; solo gestor)
  #   cal.idp        hash de parámetros de id ({id: ...} en gestor, {} en panel)
- #   cal.csrf_skip / csrf_move / csrf_reset   valores de token ya calculados
+ #   cal.csrf_skip / csrf_move / csrf_reset / csrf_extra_remove   tokens ya calculados
  #   cal.readonly   true = solo lectura (sin arrastre, papelera, reset ni botones)
  #
  # R1: en cestas compartidas el día y el contenido los marca la
@@ -270,6 +271,38 @@
 
                     {{ _self.components(selected, EGG) }}
 
+                    {# CESTA EXTRA de esa semana (PartnerBasketExtra): típicamente una cesta
+                       trasladada SUMANDO desde otro día. Las cantidades de arriba ya la
+                       incluyen y no se distinguen de las de patrón, así que esta es la vía
+                       para deshacerla — antes solo existía en la ficha del socio, que además
+                       pide otro rol. Quitarla deja la cesta de patrón; la que se trasladó
+                       sigue aparcada en la papelera de su semana de origen.
+                       No usa `readonly`: en compartidas también vale, porque quitar una extra
+                       no elige el día de la cesta (lo que veta R1). #}
+                    {% if selected.extra|default(false) and not ro and selected_editable and cal.route_extra_remove is defined %}
+                        <div class="rcal-extra" style="margin-top: var(--csa-sp-4);">
+                            <div class="rcal-sect"><i class="fa fa-plus-circle"></i> Lleva una cesta extra</div>
+                            <p class="csa-muted">Parte de lo de arriba es un añadido puntual de esta semana. Si lo quitas, queda solo lo que le toca por su cesta.</p>
+                            <form id="rcal-extra-form-{{ bid }}" action="{{ path(cal.route_extra_remove, cal.idp|merge({ basketId: bid })) }}" method="post" style="margin: 0;">
+                                <input type="hidden" name="_csrf_token" value="{{ cal.csrf_extra_remove }}">
+                                <input type="hidden" name="view_year" value="{{ current.format('Y') }}">
+                                <input type="hidden" name="view_month" value="{{ current.format('n') }}">
+                                <button type="button" class="csa-btn csa-btn--secondary csa-btn--block"
+                                        onclick="document.getElementById('rcal-confirm-extra-{{ bid }}').showModal()">
+                                    <i class="fa fa-times"></i><span>Quitar la cesta extra</span>
+                                </button>
+                            </form>
+                            {{ csa.confirm_dialog('rcal-confirm-extra-' ~ bid, {
+                                variant: 'warning',
+                                eyebrow: 'Cesta extra',
+                                title: '¿Quitar la cesta extra de esa semana?',
+                                body: 'Se quita el añadido puntual del ' ~ (selected.date|date('d/m/Y')) ~ ' y queda solo lo que le toca por su cesta. Si la extra venía de un traslado, la cesta trasladada sigue aparcada en "No recoge" de su semana de origen: recupérala desde ahí al día que quieras.',
+                                confirm_label: 'Quitar la extra',
+                                external_form_id: 'rcal-extra-form-' ~ bid,
+                            }) }}
+                        </div>
+                    {% endif %}
+
                     {# COMPARTIDAS — NO RECOGER HUEVOS: interruptor on/off de los huevos de esa
                        semana. Solo si el patrón contempla huevos ahí (EGG en 'available') y con la
                        feature activa (cal.egg_move + ruta del toggle). La cesta sigue bloqueada. #}
@@ -387,7 +420,7 @@
     </header>
     <div class="csa-modal__body">
         <p>El <strong id="rcal-accumulate-day">ese día</strong> ya recoge cesta. Si continúas, ese día pasará a llevar <strong>2 cestas</strong> y el día de origen se quedará sin entrega.</p>
-        <p class="csa-muted">Para deshacerlo no bastará arrastrar la cesta de vuelta: habrá que quitar la cesta extra del destino y recuperar la del origen.</p>
+        <p class="csa-muted">Para deshacerlo no basta arrastrar la cesta de vuelta: se quita la cesta extra desde el panel de ese día y luego se recupera la del origen desde "No recoge".</p>
     </div>
     <footer class="csa-modal__footer">
         <button type="button" class="csa-modal__btn csa-modal__btn--ghost" onclick="this.closest('dialog').close()" autofocus>Cancelar</button>

@@ -9,6 +9,7 @@ use App\Entity\BasketShare;
 use App\Entity\DeliveryException;
 use App\Entity\Node;
 use App\Entity\Partner;
+use App\Entity\PartnerBasketExtra;
 use App\Entity\PartnerBasketShare;
 use App\Entity\PartnerDeliveryShift;
 use App\Entity\PartnerNodeOverride;
@@ -17,8 +18,10 @@ use App\Entity\WeeklyBasketGroup;
 use App\Entity\WeeklyBasketItem;
 use App\Repository\NodeRepository;
 use App\Repository\PartnerBasketShareRepository;
+use App\Service\Delivery\AccumulatingMove;
 use App\Service\Delivery\BiweeklyCohortResolver;
 use App\Service\Delivery\DeliveryModeResolver;
+use App\Service\Delivery\DeliveryShiftApplier;
 use App\Service\Delivery\ExtraBasketEditor;
 use App\Service\Delivery\NodeDeliveryDate;
 use App\Service\Delivery\NodeDeliverySheet;
@@ -94,6 +97,8 @@ class VerifyDeliveryBatteryCommand extends Command
         private readonly InvariantSuite $invariantSuite,
         private readonly WeekRematerializer $weekRematerializer,
         private readonly BasketPricing $basketPricing,
+        private readonly AccumulatingMove $accumulatingMove,
+        private readonly DeliveryShiftApplier $shiftApplier,
     ) {
         parent::__construct();
     }
@@ -201,6 +206,14 @@ class VerifyDeliveryBatteryCommand extends Command
         $this->extraDrawnWeekScenario();
         $this->extraNonSubscriberScenario();
         $this->removeExtraScenario();
+
+        // Cruce extra × "no recoge": trasladar sumando (día con 2 cestas) y luego no recoger
+        // ese día debe dejarlo a CERO, con las dos cestas aparcadas y recuperables.
+        $this->accumulatedThenSkipScenario();
+
+        // Cruce extra × mover: la cesta extra VIAJA con la cesta al cambiarla de día (si no,
+        // se cuenta dos veces en el listado cuando la semana ya estaba generada).
+        $this->moveCarriesExtraScenario();
 
         // Traslado puntual de lugar: un socio recoge esa semana en otro nodo.
         $this->relocateNodeScenario();
@@ -1265,6 +1278,159 @@ class VerifyDeliveryBatteryCommand extends Command
         $this->record($label, $ok, sprintf(
             'socio %d · semana %d · sección dibujo=%s · sección piedra=%s (esperado "Cestas extra")',
             $partner->getId(), $target->getId(), $drawnGroup ?? 'AUSENTE', $stoneGroup ?? 'AUSENTE',
+        ));
+    }
+
+    /**
+     * La cesta EXTRA viaja con la cesta al MOVERLA de día. Es la otra puerta del mismo
+     * agujero: el override se quedaba en el origen, así que en una semana ya GENERADA la extra
+     * viajaba dentro de la composición Y seguía dibujándose en el origen — una cesta de MÁS en
+     * el listado impreso. Se usa un quincenal para tener un día destino LIBRE (su semana off),
+     * que es el caso que la pantalla permite, y se genera el origen para ejercitar la piedra.
+     */
+    private function moveCarriesExtraScenario(): void
+    {
+        $label = 'Mover un día con cesta extra: la extra viaja con ella';
+        $partner = $this->pickPartner(self::QUINCENAL, false) ?? $this->pickPartner(self::QUINCENAL, true);
+        if ($partner === null) { $this->skip($label, 'sin quincenal libre'); return; }
+        $node = $partner->getWeeklyBasketGroup()?->getNode();
+        if ($node === null) { $this->skip($label, 'socio sin nodo'); return; }
+        $month = $this->nextMonth();
+        if ($month === null) { $this->skip($label, 'sin mes futuro sin generar'); return; }
+
+        $drawnOf = fn (Basket $b): ?float => $this->sheetDataPartnerCestas(
+            $this->sheet->shape($this->generator->projectLinesForNode($node, $b)),
+            $partner,
+        );
+
+        // Un día en el que recoge (origen) y el siguiente en el que NO (destino libre).
+        $origin = null;
+        $target = null;
+        foreach ($month['baskets'] as $i => $basket) {
+            if ($drawnOf($basket) === null) {
+                continue;
+            }
+            $next = $month['baskets'][$i + 1] ?? null;
+            if ($next !== null && $drawnOf($next) === null) {
+                $origin = $basket;
+                $target = $next;
+                break;
+            }
+        }
+        if ($origin === null || $target === null) {
+            $this->skip($label, 'sin par de semanas recoge→libre en el mes');
+
+            return;
+        }
+
+        $baseOrigin = $drawnOf($origin);
+
+        // Extra sobre el origen y CONGELAR esa semana: así el extra entra en piedra, que es
+        // donde la duplicación aparecía.
+        $this->extraBasketEditor->addToDelivery($partner, $origin, [BasketComponent::ID_VEGETABLES => '1'], 'verif move-extra', 'verif');
+        $this->generator->generateForBasket($origin);
+        $stoneWithExtra = $this->sheetPartnerCestas($node, $origin, $partner);
+
+        $this->shiftApplier->move($partner, $origin, $target, 'verif');
+
+        $originAfter = $this->sheetPartnerCestas($node, $origin, $partner);
+        $targetAfter = $drawnOf($target);
+        $extrasOrigin = $this->em->getRepository(PartnerBasketExtra::class)->findForPartnerAndBasket($partner, $origin);
+        $extrasTarget = $this->em->getRepository(PartnerBasketExtra::class)->findForPartnerAndBasket($partner, $target);
+
+        $expectedTarget = ($baseOrigin ?? 0.0) + 1;
+        $ok = $stoneWithExtra === ($baseOrigin ?? 0.0) + 1
+            && $originAfter === null
+            && $targetAfter === $expectedTarget
+            && $extrasOrigin === []
+            && count($extrasTarget) === 1;
+        $this->record($label, $ok, sprintf(
+            'socio %d · origen %d (base=%s, con extra piedra=%s) → destino libre %d · origen tras mover=%s · destino=%s (esperado %s) · overrides origen/destino=%d/%d (esperado 0/1)',
+            $partner->getId(),
+            $origin->getId(),
+            $baseOrigin === null ? 'null' : (string) $baseOrigin,
+            $stoneWithExtra === null ? 'null' : (string) $stoneWithExtra,
+            $target->getId(),
+            $originAfter === null ? 'vacío' : (string) $originAfter,
+            $targetAfter === null ? 'null' : (string) $targetAfter,
+            (string) $expectedTarget,
+            count($extrasOrigin),
+            count($extrasTarget),
+        ));
+    }
+
+    /**
+     * El lío de tres pasos que reportó administración: TRASLADAR SUMANDO una cesta a un día
+     * que ya recoge (ese día pasa a llevar 2) y marcar después "NO RECOGE" ese día.
+     *
+     * Antes solo se quitaba UNA de las dos: el override de extra sobrevivía al skip y la
+     * proyección lo resucitaba como cesta fantasma —que además ya no se podía mover, porque
+     * ese día tenía el skip saliente— y encima pisaba el slot de papelera, dejando la cesta
+     * aparcada sin forma de recuperarla. Ahora "no recoge" deja el día a CERO y las DOS cestas
+     * quedan aparcadas (dos tarjetas en la papelera), recolocables donde haga falta.
+     */
+    private function accumulatedThenSkipScenario(): void
+    {
+        $label = 'Trasladar sumando → "no recoge" deja el día a cero';
+        $partner = $this->pickPartner(self::SEMANAL, false) ?? $this->pickPartner(self::SEMANAL, true);
+        if ($partner === null) { $this->skip($label, 'sin semanal libre'); return; }
+        $node = $partner->getWeeklyBasketGroup()?->getNode();
+        if ($node === null) { $this->skip($label, 'socio sin nodo'); return; }
+        $month = $this->nextMonth();
+        if ($month === null) { $this->skip($label, 'sin mes futuro sin generar'); return; }
+        if (count($month['baskets']) < 2) { $this->skip($label, 'mes con menos de dos semanas'); return; }
+        $origin = $month['baskets'][0];
+        $target = $month['baskets'][1];
+
+        $drawnOf = fn (Basket $b): ?float => $this->sheetDataPartnerCestas(
+            $this->sheet->shape($this->generator->projectLinesForNode($node, $b)),
+            $partner,
+        );
+
+        $baseOrigin = $drawnOf($origin);
+        $baseTarget = $drawnOf($target);
+        if ($baseOrigin === null || $baseTarget === null) {
+            $this->skip($label, 'el socio no recoge en las dos primeras semanas del mes');
+
+            return;
+        }
+
+        // 1) Trasladar sumando: el destino lleva las dos cestas y el origen se queda vacío.
+        $this->accumulatingMove->move($partner, $origin, $target, 'verif');
+        $accumulated = $drawnOf($target);
+        $originEmptied = $drawnOf($origin);
+
+        // 2) "No recoge" el día acumulado. Es el camino que sigue la UI para un día con cesta
+        //    de patrón + extra (sin cambio entrante): applySkipIntent.
+        $this->shiftApplier->applySkipIntent($partner, $target, null, 'verif');
+        $afterSkip = $drawnOf($target);
+        $extrasLeft = $this->em->getRepository(PartnerBasketExtra::class)->findForPartnerAndBasket($partner, $target);
+
+        // 3) Las dos cestas quedan aparcadas: dos tarjetas en la papelera del calendario.
+        $tray = 0;
+        foreach ($this->calendarProjector->projectMonth($partner, (int) $target->getDate()->format('Y'), (int) $target->getDate()->format('n')) as $slot) {
+            if ($slot['skipped']) {
+                ++$tray;
+            }
+        }
+
+        $expectedAccumulated = $baseOrigin + $baseTarget;
+        $ok = $accumulated === $expectedAccumulated
+            && $originEmptied === null
+            && $afterSkip === null
+            && $extrasLeft === []
+            && $tray === 2;
+        $this->record($label, $ok, sprintf(
+            'socio %d · origen %d (%s cestas) → destino %d (%s) · acumulado=%s (esperado %s) · origen tras mover=%s · destino tras no-recoge=%s · extras restantes=%d · papelera=%d (esperado 2)',
+            $partner->getId(),
+            $origin->getId(), (string) $baseOrigin,
+            $target->getId(), (string) $baseTarget,
+            $accumulated === null ? 'null' : (string) $accumulated,
+            (string) $expectedAccumulated,
+            $originEmptied === null ? 'vacío' : (string) $originEmptied,
+            $afterSkip === null ? 'vacío' : (string) $afterSkip,
+            count($extrasLeft),
+            $tray,
         ));
     }
 

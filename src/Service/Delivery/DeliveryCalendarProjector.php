@@ -59,6 +59,10 @@ final class DeliveryCalendarProjector implements PartnerMonthProjection
      *    posibles: un componente presente se puede quitar, uno ausente-pero-
      *    disponible se puede añadir. Un componente que el patrón no da esa
      *    semana (p. ej. huevos en una semana sin huevo) no aparece.
+     *  - 'extra': presente y true si esa semana lleva alguna cesta extra
+     *    ({@see PartnerBasketExtra}). Las cantidades ya van sumadas en 'items' y no se
+     *    distinguen de las de patrón, así que es la única forma que tiene la pantalla de
+     *    saber que hay un extra que se puede deshacer. Ausente = sin extra.
      *
      * @param Partner $partner Socio cuyo calendario se proyecta.
      * @param int     $year    Año (p. ej. 2026).
@@ -330,8 +334,17 @@ final class DeliveryCalendarProjector implements PartnerMonthProjection
         $wbRepo = $this->em->getRepository(WeeklyBasket::class);
         $node = $partner->getWeeklyBasketGroup()?->getNode();
 
+        // El índice IGNORA los slots de PAPELERA (skipped): una cesta aparcada no es la
+        // entrega de ese día, así que un extra no se le puede sumar encima — hacerlo la
+        // resucitaba como entrega normal y la papelera perdía de vista la cesta aparcada
+        // (no había forma de recuperarla). Si el día solo tiene su slot de papelera, el
+        // extra crea su propio slot de rejilla más abajo (idx === null): el día muestra la
+        // cesta extra Y conserva su tarjeta aparcada, que son dos hechos distintos.
         $idxByBasket = [];
         foreach ($slots as $i => $slot) {
+            if ($slot['skipped'] ?? false) {
+                continue;
+            }
             $idxByBasket[$slot['basket']->getId()] = $i;
         }
 
@@ -341,6 +354,14 @@ final class DeliveryCalendarProjector implements PartnerMonthProjection
                 continue;
             }
             $idx = $idxByBasket[$basket->getId()] ?? null;
+
+            // Marca de "este día lleva cesta extra", para que la pantalla pueda ofrecer
+            // quitarla sin salir del calendario. Se pone ANTES del corte de materializadas
+            // (que sale por el continue de abajo): en piedra el extra tampoco se distingue
+            // de la cesta de patrón mirando las cantidades, y también se puede deshacer.
+            if ($idx !== null) {
+                $slots[$idx]['extra'] = true;
+            }
 
             // Si la entrega de esa semana ya está MATERIALIZADA, su WeeklyBasket (piedra) YA
             // lleva el extra cascadeado (ExtraBasketEditor::addToDelivery y el generador al
@@ -374,6 +395,7 @@ final class DeliveryCalendarProjector implements PartnerMonthProjection
                     'skipped' => false,
                     'listed' => $wbRepo->findOneBy(['basket' => $basket->getId()]) !== null,
                     'available' => [],
+                    'extra' => true,
                 ];
                 $idx = array_key_last($slots);
                 $idxByBasket[$basket->getId()] = $idx;
@@ -385,7 +407,6 @@ final class DeliveryCalendarProjector implements PartnerMonthProjection
                 if ($component === null || $delta <= 0) {
                     continue;
                 }
-                $slots[$idx]['skipped'] = false;
 
                 $merged = false;
                 foreach ($slots[$idx]['items'] as &$line) {
