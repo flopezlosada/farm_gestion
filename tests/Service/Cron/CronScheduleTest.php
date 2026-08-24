@@ -30,7 +30,7 @@ class CronScheduleTest extends TestCase
      */
     public function testSinNingunaEjecucionSiempreToca(): void
     {
-        $this->assertTrue($this->schedule()->isDue(self::DAILY, null, $this->at('2099-03-04 09:30')));
+        $this->assertTrue($this->schedule()->isDue(self::DAILY, null, $this->moment('2099-03-04 09:30')));
     }
 
     /**
@@ -40,8 +40,8 @@ class CronScheduleTest extends TestCase
     {
         $ayer = $this->run('2099-03-03 09:00');
 
-        $this->assertTrue($this->schedule()->isDue(self::DAILY, $ayer, $this->at('2099-03-04 09:00')));
-        $this->assertTrue($this->schedule()->isDue(self::DAILY, $ayer, $this->at('2099-03-04 23:59')));
+        $this->assertTrue($this->schedule()->isDue(self::DAILY, $ayer, $this->moment('2099-03-04 09:00')));
+        $this->assertTrue($this->schedule()->isDue(self::DAILY, $ayer, $this->moment('2099-03-04 23:59')));
     }
 
     /**
@@ -52,8 +52,8 @@ class CronScheduleTest extends TestCase
     {
         $hoy = $this->run('2099-03-04 09:02');
 
-        $this->assertFalse($this->schedule()->isDue(self::DAILY, $hoy, $this->at('2099-03-04 10:00')));
-        $this->assertFalse($this->schedule()->isDue(self::DAILY, $hoy, $this->at('2099-03-04 23:00')));
+        $this->assertFalse($this->schedule()->isDue(self::DAILY, $hoy, $this->moment('2099-03-04 10:00')));
+        $this->assertFalse($this->schedule()->isDue(self::DAILY, $hoy, $this->moment('2099-03-04 23:00')));
     }
 
     /**
@@ -64,7 +64,7 @@ class CronScheduleTest extends TestCase
     {
         $ayer = $this->run('2099-03-03 09:01');
 
-        $this->assertFalse($this->schedule()->isDue(self::DAILY, $ayer, $this->at('2099-03-04 08:59')));
+        $this->assertFalse($this->schedule()->isDue(self::DAILY, $ayer, $this->moment('2099-03-04 08:59')));
     }
 
     /**
@@ -79,8 +79,8 @@ class CronScheduleTest extends TestCase
         $laSemanaPasada = $this->run('2099-02-23 06:01');
 
         // Lunes 2 de marzo a las 06:00 era su momento; nadie la ejecutó.
-        $this->assertTrue($this->schedule()->isDue(self::WEEKLY, $laSemanaPasada, $this->at('2099-03-03 11:00')), 'El martes debe recuperarse.');
-        $this->assertTrue($this->schedule()->isDue(self::WEEKLY, $laSemanaPasada, $this->at('2099-03-05 20:00')), 'Y el jueves también.');
+        $this->assertTrue($this->schedule()->isDue(self::WEEKLY, $laSemanaPasada, $this->moment('2099-03-03 11:00')), 'El martes debe recuperarse.');
+        $this->assertTrue($this->schedule()->isDue(self::WEEKLY, $laSemanaPasada, $this->moment('2099-03-05 20:00')), 'Y el jueves también.');
     }
 
     /**
@@ -90,8 +90,8 @@ class CronScheduleTest extends TestCase
     {
         $esteLunes = $this->run('2099-03-02 06:03');
 
-        $this->assertFalse($this->schedule()->isDue(self::WEEKLY, $esteLunes, $this->at('2099-03-02 18:00')));
-        $this->assertFalse($this->schedule()->isDue(self::WEEKLY, $esteLunes, $this->at('2099-03-07 23:00')), 'El sábado sigue sin tocar.');
+        $this->assertFalse($this->schedule()->isDue(self::WEEKLY, $esteLunes, $this->moment('2099-03-02 18:00')));
+        $this->assertFalse($this->schedule()->isDue(self::WEEKLY, $esteLunes, $this->moment('2099-03-07 23:00')), 'El sábado sigue sin tocar.');
     }
 
     /**
@@ -102,8 +102,8 @@ class CronScheduleTest extends TestCase
     {
         $esteLunes = $this->run('2099-03-02 06:03');
 
-        $this->assertFalse($this->schedule()->isDue(self::WEEKLY, $esteLunes, $this->at('2099-03-08 23:59')));
-        $this->assertTrue($this->schedule()->isDue(self::WEEKLY, $esteLunes, $this->at('2099-03-09 06:00')), 'Y al llegar el lunes siguiente, sí.');
+        $this->assertFalse($this->schedule()->isDue(self::WEEKLY, $esteLunes, $this->moment('2099-03-08 23:59')));
+        $this->assertTrue($this->schedule()->isDue(self::WEEKLY, $esteLunes, $this->moment('2099-03-09 06:00')), 'Y al llegar el lunes siguiente, sí.');
     }
 
     /**
@@ -114,9 +114,9 @@ class CronScheduleTest extends TestCase
         $mensual = ['freq' => 'monthly', 'dom' => 1, 'hour' => 4];
         $elMesPasado = $this->run('2099-02-01 04:00');
 
-        $this->assertFalse($this->schedule()->isDue($mensual, $elMesPasado, $this->at('2099-02-28 23:00')));
-        $this->assertTrue($this->schedule()->isDue($mensual, $elMesPasado, $this->at('2099-03-01 04:00')));
-        $this->assertTrue($this->schedule()->isDue($mensual, $elMesPasado, $this->at('2099-03-15 12:00')), 'A mitad de mes sigue debiéndose.');
+        $this->assertFalse($this->schedule()->isDue($mensual, $elMesPasado, $this->moment('2099-02-28 23:00')));
+        $this->assertTrue($this->schedule()->isDue($mensual, $elMesPasado, $this->moment('2099-03-01 04:00')));
+        $this->assertTrue($this->schedule()->isDue($mensual, $elMesPasado, $this->moment('2099-03-15 12:00')), 'A mitad de mes sigue debiéndose.');
     }
 
     /**
@@ -128,8 +128,8 @@ class CronScheduleTest extends TestCase
         $cada5 = ['freq' => 'interval', 'minutes' => 5];
         $haceCuatroMinutos = $this->run('2099-03-04 09:56');
 
-        $this->assertFalse($this->schedule()->isDue($cada5, $haceCuatroMinutos, $this->at('2099-03-04 10:00')));
-        $this->assertTrue($this->schedule()->isDue($cada5, $haceCuatroMinutos, $this->at('2099-03-04 10:01')));
+        $this->assertFalse($this->schedule()->isDue($cada5, $haceCuatroMinutos, $this->moment('2099-03-04 10:00')));
+        $this->assertTrue($this->schedule()->isDue($cada5, $haceCuatroMinutos, $this->moment('2099-03-04 10:01')));
     }
 
     /**
@@ -140,7 +140,7 @@ class CronScheduleTest extends TestCase
     {
         $fallo = $this->run('2099-03-04 09:00', CronRun::STATUS_FAILED);
 
-        $this->assertTrue($this->schedule()->isDue(self::DAILY, $fallo, $this->at('2099-03-04 09:30')));
+        $this->assertTrue($this->schedule()->isDue(self::DAILY, $fallo, $this->moment('2099-03-04 09:30')));
     }
 
     /**
@@ -156,8 +156,8 @@ class CronScheduleTest extends TestCase
     {
         $fallo = $this->run('2099-03-04 09:00', CronRun::STATUS_FAILED);
 
-        $this->assertTrue($this->schedule()->isDue(self::DAILY, $fallo, $this->at('2099-03-04 10:00')));
-        $this->assertTrue($this->schedule()->isDue(self::DAILY, $fallo, $this->at('2099-03-04 23:00')));
+        $this->assertTrue($this->schedule()->isDue(self::DAILY, $fallo, $this->moment('2099-03-04 10:00')));
+        $this->assertTrue($this->schedule()->isDue(self::DAILY, $fallo, $this->moment('2099-03-04 23:00')));
     }
 
     /**
@@ -168,7 +168,7 @@ class CronScheduleTest extends TestCase
     public function testNoSeReintentaLoQueNoFallo(): void
     {
         $schedule = $this->schedule();
-        $ahora = $this->at('2099-03-04 12:00');
+        $ahora = $this->moment('2099-03-04 12:00');
 
         $this->assertFalse($schedule->isDue(self::DAILY, $this->run('2099-03-04 09:00', CronRun::STATUS_DISABLED), $ahora));
         $this->assertFalse($schedule->isDue(self::DAILY, $this->run('2099-03-04 09:00', CronRun::STATUS_NOTHING_TO_DO), $ahora));
@@ -228,16 +228,19 @@ class CronScheduleTest extends TestCase
     private function run(string $when, string $status = CronRun::STATUS_DONE): CronRun
     {
         return (new CronRun())
-            ->setStartedAt($this->at($when))
+            ->setStartedAt($this->moment($when))
             ->setStatus($status);
     }
 
     /**
      * Un instante en hora peninsular, que es en la que están escritos los casos.
      *
+     * (No se llama `at()` porque PHPUnit ya tiene un `TestCase::at()` estático,
+     * el viejo matcher de invocaciones, y redefinirlo aquí es un error fatal.)
+     *
      * @param string $when Momento "Y-m-d H:i".
      */
-    private function at(string $when): \DateTimeImmutable
+    private function moment(string $when): \DateTimeImmutable
     {
         return new \DateTimeImmutable($when, new \DateTimeZone('Europe/Madrid'));
     }
