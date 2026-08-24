@@ -490,6 +490,14 @@ ponerlo en el `.env.local` del servidor y crear los tres secretos en GitHub
 (`CRON_TICK_URL`, `CRON_TICK_TOKEN`, `CRON_HEALTH_URL`). Y falta el segundo
 reloj, un servicio gratuito apuntando al mismo endpoint.
 
+Mientras los secretos no existan, el workflow **sale en verde sin llamar a
+nadie**. Un `schedule` empieza a ejecutarse en cuanto está en la rama por
+defecto, sin esperar a que se despliegue nada, así que sin esto habría mandado un
+correo de fallo cada hora por algo que aún no se ha puesto en marcha. Misma
+decisión que en el endpoint, donde un token vacío responde 404: "no configurado"
+y "roto" son cosas distintas. En cuanto los secretos existan, cualquier problema
+con la llamada sí hace fallar el workflow, que es la vigilancia que se buscaba.
+
 Corrección sobre lo que decía este documento: el workflow va **en este
 repositorio**, no en uno aparte. GitHub deshabilita los workflows programados de
 un repositorio que pasa 60 días sin actividad, y uno dedicado sólo a hacer de
