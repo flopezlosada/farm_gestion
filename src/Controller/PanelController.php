@@ -26,6 +26,7 @@ use App\Service\Delivery\DeliveryDeadline;
 use App\Service\Delivery\DeliveryShiftApplier;
 use App\Service\Delivery\DeliveryShiftValidator;
 use App\Service\Delivery\EggScheduleException;
+use App\Service\Delivery\ExtraBasketEditor;
 use App\Service\Delivery\PartnerEggScheduleEditor;
 use App\Service\Delivery\PickupRelocationOptions;
 use App\Service\Delivery\PickupRelocator;
@@ -536,6 +537,7 @@ class PanelController extends AbstractController
         WeeklyBasketGenerator $generator,
         PartnerDeliveryShiftRepository $shiftRepository,
         DeliveryShiftApplier $applier,
+        ExtraBasketEditor $extraBasketEditor,
         EntityManagerInterface $em,
     ): Response {
         if (($redirect = $this->ensureReady()) !== null) {
@@ -600,11 +602,17 @@ class PanelController extends AbstractController
             return $backToCalendar();
         }
 
+        // "No recoge" deja el día a CERO: si gestión le había puesto una cesta extra ese día,
+        // también se va. Se dice en el mensaje para que no desaparezca en silencio.
+        $done = $extraBasketEditor->hasExtra($partner, $basket)
+            ? 'Listo: esta semana no la recoges. La cesta extra que tenías ese día también se ha quitado.'
+            : 'Listo: esta semana no la recoges.';
+
         // NO RECOGE. Si la cesta de ese día vino MOVIDA de otro (lo hizo gestión), se
         // aparca esa entrega entrante (igual que en el calendario del gestor).
         if ($incoming !== null) {
             $applier->skipMovedDelivery($incoming, $actor);
-            $this->addFlash('notice', 'Listo: esta semana no la recoges.');
+            $this->addFlash('notice', $done);
 
             return $backToCalendar();
         }
@@ -627,7 +635,7 @@ class PanelController extends AbstractController
         }
 
         $applier->applySkipIntent($partner, $basket, null, $actor);
-        $this->addFlash('notice', 'Listo: esta semana no la recoges.');
+        $this->addFlash('notice', $done);
 
         return $backToCalendar();
     }

@@ -42,6 +42,7 @@ final class DeliveryShiftApplier implements ShiftReconciliationActions, PartnerD
         private readonly EntityManagerInterface $em,
         private readonly NodeDeliveryDate $nodeDeliveryDate,
         private readonly WeeklyBasketComposer $composer,
+        private readonly ExtraBasketRemover $extraRemover,
     ) {
     }
 
@@ -341,6 +342,25 @@ final class DeliveryShiftApplier implements ShiftReconciliationActions, PartnerD
      */
     public function applySkipIntent(Partner $partner, Basket $basket, ?BasketComponent $component, ?string $actor = null): PartnerDeliveryShift
     {
+        // "No recoge" de la entrega ENTERA deja el día a CERO, y eso incluye las cestas
+        // EXTRA de esa semana ({@see PartnerBasketExtra}): son entrega igual que la de
+        // patrón. Se quitan ANTES de aparcar el patrón para que su reversión de piedra
+        // (restar el delta) opere sobre un WeeklyBasket que todavía existe. Sin esto el
+        // extra sobrevivía al skip y la proyección lo resucitaba: el día se quedaba con
+        // una cesta fantasma —imposible de mover, porque su día ya tenía el skip saliente—
+        // y encima el extra pisaba el slot de la papelera, perdiendo de vista la cesta
+        // aparcada. Aflora al "trasladar sumando" (dos cestas el mismo día) y luego marcar
+        // "no recoge". Cierra también la deuda del ORIGEN acumulado de {@see AccumulatingMove}.
+        //
+        // ASIMETRÍA deliberada: el skip se deshace (cancelSkipIntent / recoverSkipToDay) pero
+        // la extra NO vuelve — el override se borra, no se aparca. No se pierde nada en el caso
+        // que importa (una cesta trasladada sumando sigue aparcada en la papelera de su semana
+        // de ORIGEN, de donde se recupera); una extra genuina hay que volver a añadirla, y su
+        // baja queda en el histórico del socio (PartnerEvent::TYPE_BASKET_EXTRA_REMOVED).
+        if ($component === null) {
+            $this->extraRemover->removeExtra($partner, $basket, $actor);
+        }
+
         $shift = new PartnerDeliveryShift($partner, $basket, null, $component);
         $this->em->persist($shift);
 
@@ -381,6 +401,13 @@ final class DeliveryShiftApplier implements ShiftReconciliationActions, PartnerD
         $partner = $incoming->getPartner();
         $from = $incoming->getFromBasket();
         $to = $incoming->getToBasket();
+
+        // El día donde la cesta estaba ($to) queda a CERO: también sus cestas extra (mismo
+        // criterio que applySkipIntent — ver su comentario). Solo las de $to: un extra en el
+        // día de patrón ($from) es entrega propia de ese día, ajena a la cesta que se aparca.
+        if ($to !== null) {
+            $this->extraRemover->removeExtra($partner, $to, $actor);
+        }
 
         // Liberar de WeeklyBasket TODO el rastro de la cesta: el destino (donde estaba) y el
         // origen (que el move dejó en status "no recoge" como marca). Tras aparcarla, la cesta
