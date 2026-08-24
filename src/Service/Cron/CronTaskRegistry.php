@@ -3,10 +3,9 @@
 namespace App\Service\Cron;
 
 use App\Entity\CronRun;
-use App\Service\AppSettings;
 
 /**
- * Lectura del manifiesto de tareas programadas ({@see AppSettings::CRONS}).
+ * Lectura del manifiesto de tareas programadas.
  *
  * El manifiesto es la fuente única de verdad: de él salen el gate (qué
  * interruptores inhiben la tarea), la cadencia declarada, el plazo a partir del
@@ -14,6 +13,10 @@ use App\Service\AppSettings;
  * repartida entre dos `if` copiados dentro de cada comando, las líneas del
  * crontab de un servidor sin SSH y el texto de ayuda de la pantalla, así que no
  * había manera de preguntarle al sistema qué debería estar pasando.
+ *
+ * De DÓNDE salgan las tareas es cosa de {@see CronManifest}, no de aquí: esta
+ * clase no menciona ninguna pieza de este proyecto, así que se copia tal cual a
+ * otra aplicación con sólo escribirle su implementación del manifiesto.
  *
  * Este servicio sólo LEE y decide; no ejecuta nada (eso es
  * {@see \App\Command\AbstractCronCommand} y {@see CronRunner}).
@@ -32,7 +35,7 @@ class CronTaskRegistry
     ];
 
     public function __construct(
-        private readonly AppSettings $settings,
+        private readonly CronManifest $manifest,
     ) {
     }
 
@@ -45,7 +48,7 @@ class CronTaskRegistry
     public function all(): array
     {
         $tasks = [];
-        foreach (AppSettings::CRONS as $key => $meta) {
+        foreach ($this->manifest->tasks() as $key => $meta) {
             $tasks[$key] = ['key' => $key] + $meta;
         }
 
@@ -60,7 +63,9 @@ class CronTaskRegistry
      */
     public function get(string $key): ?array
     {
-        return isset(AppSettings::CRONS[$key]) ? ['key' => $key] + AppSettings::CRONS[$key] : null;
+        $tasks = $this->manifest->tasks();
+
+        return isset($tasks[$key]) ? ['key' => $key] + $tasks[$key] : null;
     }
 
     /**
@@ -73,7 +78,7 @@ class CronTaskRegistry
      */
     public function findByCommand(string $command): ?array
     {
-        foreach (AppSettings::CRONS as $key => $meta) {
+        foreach ($this->manifest->tasks() as $key => $meta) {
             if ($meta['command'] === $command) {
                 return ['key' => $key] + $meta;
             }
@@ -89,7 +94,7 @@ class CronTaskRegistry
      */
     public function isEnabled(string $key): bool
     {
-        return $this->settings->getBool($key);
+        return $this->manifest->isEnabled($key);
     }
 
     /**
@@ -116,7 +121,7 @@ class CronTaskRegistry
             return null;
         }
 
-        if (!$force && !$this->settings->getBool($key)) {
+        if (!$force && !$this->manifest->isEnabled($key)) {
             return sprintf(
                 'La tarea «%s» está desactivada en /gestion/settings. No se ejecuta.',
                 $this->label($key)
@@ -124,7 +129,7 @@ class CronTaskRegistry
         }
 
         foreach ($meta['requires'] as $requiredKey) {
-            if (!$this->settings->getBool($requiredKey)) {
+            if (!$this->manifest->isEnabled($requiredKey)) {
                 return sprintf(
                     'El ajuste «%s» está desactivado en /gestion/settings. La tarea no entrega nada.',
                     $this->label($requiredKey)
@@ -143,7 +148,7 @@ class CronTaskRegistry
      */
     public function label(string $key): string
     {
-        return AppSettings::BOOLEANS[$key]['label'] ?? $key;
+        return $this->manifest->label($key);
     }
 
     /**
@@ -188,7 +193,7 @@ class CronTaskRegistry
     public function isOverdue(string $key, ?CronRun $lastRun, ?\DateTimeImmutable $now = null): bool
     {
         $meta = $this->get($key);
-        if ($meta === null || $lastRun === null || !$this->settings->getBool($key)) {
+        if ($meta === null || $lastRun === null || !$this->manifest->isEnabled($key)) {
             return false;
         }
 
@@ -241,7 +246,7 @@ class CronTaskRegistry
 
         $unmet = [];
         foreach ($meta['depends_on'] as $dependencyKey) {
-            if (!$this->settings->getBool($dependencyKey)) {
+            if (!$this->manifest->isEnabled($dependencyKey)) {
                 $unmet[] = $this->label($dependencyKey);
             }
         }
