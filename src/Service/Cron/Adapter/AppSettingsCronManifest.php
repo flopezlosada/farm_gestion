@@ -52,4 +52,16 @@ class AppSettingsCronManifest implements CronManifest
     {
         return AppSettings::BOOLEANS[$settingKey]['label'] ?? $settingKey;
     }
+
+    /**
+     * {@inheritDoc}
+     *
+     * La CSA reparte en hora peninsular y ahí vive su gente, así que las horas
+     * del manifiesto son de Madrid. Coincide con lo que hoy tiene el hosting,
+     * pero declararlo hace que deje de depender de ello.
+     */
+    public function timezone(): string
+    {
+        return 'Europe/Madrid';
+    }
 }
