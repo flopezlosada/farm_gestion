@@ -210,7 +210,14 @@ class AppSettings
      * - `requires`: ajustes que la habilitan APARTE de su propio interruptor.
      *   Son los toggles de entrega (email): a diferencia del interruptor propio
      *   de la tarea, éstos NO los salta una ejecución manual con --force —
-     *   apagar el envío tiene que apagarlo también a mano.
+     *   apagar el envío tiene que apagarlo también a mano. Toda tarea que manda
+     *   correo declara aquí el interruptor GENERAL ({@see self::EMAIL_ENABLED})
+     *   además del suyo, por dos razones: con el general apagado
+     *   {@see \App\Mailer\KillSwitchMailer} descarta los mensajes en silencio, y
+     *   una tarea que corre entera para no entregar nada (a) se registraría como
+     *   "hizo su trabajo" mintiendo en la pantalla y (b) dejaría sus efectos
+     *   apuntados en el guardián de idempotencia, de modo que al reencender el
+     *   envío esos avisos ya constarían emitidos y no saldrían nunca.
      * - `depends_on`: tareas de las que depende. Sirve para detectar
      *   incoherencias que de otro modo son invisibles: el recordatorio de
      *   recogida sólo lee cestas ya congeladas, así que con el congelado apagado
@@ -239,7 +246,7 @@ class AppSettings
             'dry' => true,
             'schedule' => ['freq' => 'daily', 'hour' => 9],
             'max_delay_hours' => 36,
-            'requires' => [self::EMAIL_PICKUP_REMINDER],
+            'requires' => [self::EMAIL_ENABLED, self::EMAIL_PICKUP_REMINDER],
             // Sin congelado no hay destinatarios: el recordatorio lee sólo
             // cestas ya materializadas (WeeklyBasketRepository::findPickedByDeliveryDateAndShares).
             'depends_on' => [self::CRON_GENERATE_WEEKLY_DELIVERY],
@@ -251,7 +258,7 @@ class AppSettings
             'dry' => true,
             'schedule' => ['freq' => 'daily', 'hour' => 20],
             'max_delay_hours' => 36,
-            'requires' => [self::EMAIL_ADMIN_DELIVERY_SUMMARY],
+            'requires' => [self::EMAIL_ENABLED, self::EMAIL_ADMIN_DELIVERY_SUMMARY],
             'depends_on' => [],
         ],
         self::CRON_PURGE_USAGE_HITS => [
@@ -271,7 +278,7 @@ class AppSettings
             'dry' => true,
             'schedule' => ['freq' => 'daily', 'hour' => 7],
             'max_delay_hours' => 36,
-            'requires' => [self::EMAIL_ALBERGUE_REMINDER],
+            'requires' => [self::EMAIL_ENABLED, self::EMAIL_ALBERGUE_REMINDER],
             'depends_on' => [],
         ],
         self::CRON_STAFF_GAPS_DIGEST => [
@@ -281,7 +288,7 @@ class AppSettings
             'dry' => true,
             'schedule' => ['freq' => 'weekly', 'dow' => 1, 'hour' => 8],
             'max_delay_hours' => 192,
-            'requires' => [self::EMAIL_STAFF_GAPS],
+            'requires' => [self::EMAIL_ENABLED, self::EMAIL_STAFF_GAPS],
             'depends_on' => [],
         ],
         self::CRON_STAFF_OPEN_SHIFT_ALERT => [
@@ -291,7 +298,7 @@ class AppSettings
             'dry' => true,
             'schedule' => ['freq' => 'daily', 'hour' => 10],
             'max_delay_hours' => 36,
-            'requires' => [self::EMAIL_STAFF_GAPS],
+            'requires' => [self::EMAIL_ENABLED, self::EMAIL_STAFF_GAPS],
             'depends_on' => [],
         ],
     ];

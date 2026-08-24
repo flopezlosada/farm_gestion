@@ -32,6 +32,14 @@ class SendAdminDeliveryChangesSummaryCommand extends AbstractCronCommand
 {
     private const DEFAULT_DAYS = 7;
 
+    /**
+     * Clase de efecto con la que se apunta el envío: uno por día. Sin esto, dos
+     * pasadas del reloj el mismo día mandarían el mismo resumen dos veces, ya
+     * que la ventana de eventos es "los últimos N días" y no se consume al
+     * enviarla.
+     */
+    private const EFFECT_KIND = 'admin_delivery_summary';
+
     public function __construct(
         private readonly PartnerEventRepository $eventRepository,
         private readonly MailerInterface $mailer,
@@ -48,6 +56,7 @@ class SendAdminDeliveryChangesSummaryCommand extends AbstractCronCommand
             ->addOption('days', null, InputOption::VALUE_REQUIRED, 'Cuántos días hacia atrás incluir', self::DEFAULT_DAYS)
             ->addOption('since', null, InputOption::VALUE_REQUIRED, 'Fecha desde la que incluir (YYYY-MM-DD). Sobrescribe --days')
             ->addOption('force', null, InputOption::VALUE_NONE, 'Ignora el gate de la tarea programada (ejecución manual); no afecta a los toggles de email')
+            ->addOption('resend', null, InputOption::VALUE_NONE, 'Repite el envío aunque ya conste emitido hoy (para un correo que no llegó)')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Lista los eventos que enviaría sin enviar nada');
     }
 
@@ -105,7 +114,18 @@ class SendAdminDeliveryChangesSummaryCommand extends AbstractCronCommand
                 'rows' => array_map(fn (PartnerEvent $e) => $this->formatter->renderableRow($e), $events),
             ]);
 
-        $this->mailer->send($message);
+        $emitted = $this->emitOnce(
+            self::EFFECT_KIND,
+            fn () => $this->mailer->send($message),
+            $input,
+            target: implode(', ', $recipients),
+        );
+
+        if (!$emitted) {
+            $io->note('El resumen de hoy ya se había enviado. No se repite.');
+            return $this->nothingToDo('El resumen de hoy ya se había enviado');
+        }
+
         $io->success(sprintf('Enviado a %s · %d evento(s).', $to, count($events)));
 
         return $this->didWork(sprintf('%d cambios enviados a %s', count($events), implode(', ', $recipients)));

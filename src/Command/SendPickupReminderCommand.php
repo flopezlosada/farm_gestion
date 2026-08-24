@@ -53,6 +53,7 @@ class SendPickupReminderCommand extends AbstractCronCommand
         $this
             ->addOption('date', null, InputOption::VALUE_REQUIRED, 'Fecha física de reparto objetivo (YYYY-MM-DD); ignora la antelación')
             ->addOption('force', null, InputOption::VALUE_NONE, 'Ignora el gate de la tarea programada (ejecución manual); no afecta a los toggles de email')
+            ->addOption('resend', null, InputOption::VALUE_NONE, 'Reenvía aunque el aviso ya conste emitido (para correos que no llegaron)')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'No envía, solo lista destinatarios');
     }
 
@@ -99,13 +100,31 @@ class SendPickupReminderCommand extends AbstractCronCommand
             return Command::SUCCESS;
         }
 
-        $result = $this->reminderMailer->send($recipients);
+        $result = $this->reminderMailer->send($recipients, (bool) $input->getOption('resend'));
 
-        $io->success(sprintf('Enviados %d email(s). %d socixs sin email.', $result['sent'], $result['skipped']));
+        $io->success(sprintf(
+            'Enviados %d email(s). %d socixs sin email. %d ya estaban avisados.',
+            $result['sent'],
+            $result['skipped'],
+            $result['already'],
+        ));
 
-        return $result['sent'] > 0
-            ? $this->didWork(sprintf('%d recordatorios enviados para el %s (%d sin email)', $result['sent'], $target->format('Y-m-d'), $result['skipped']))
-            : $this->nothingToDo(sprintf('%d destinatarios el %s, ninguno con email', $result['skipped'], $target->format('Y-m-d')));
+        if ($result['sent'] > 0) {
+            return $this->didWork(sprintf(
+                '%d recordatorios enviados para el %s (%d sin email, %d ya avisados)',
+                $result['sent'],
+                $target->format('Y-m-d'),
+                $result['skipped'],
+                $result['already'],
+            ));
+        }
+
+        // Sin envíos nuevos la tarea corrió sana, y el motivo importa: que todos
+        // estuvieran ya avisados es el caso normal de una segunda pasada del
+        // reloj, no una avería.
+        return $this->nothingToDo($result['already'] > 0
+            ? sprintf('%d destinatarios el %s, todos avisados ya', $result['already'], $target->format('Y-m-d'))
+            : sprintf('%d destinatarios el %s, ninguno con email', $result['skipped'], $target->format('Y-m-d')));
     }
 
     /**

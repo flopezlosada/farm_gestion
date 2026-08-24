@@ -47,7 +47,7 @@ class CronRunner
      * Ejecuta una tarea del manifiesto y devuelve su resultado.
      *
      * @param string      $taskKey    Clave declarada en {@see \App\Service\AppSettings::CRONS}.
-     * @param CronRunMode $mode       Previsualizar, ejecutar como el reloj o forzar.
+     * @param CronRunMode $mode       Previsualizar, ejecutar como el reloj, forzar o reenviar.
      * @param string|null $adminEmail Email de quien lanza, para las tareas que exigen destinatario.
      * @throws \InvalidArgumentException Si la clave no está en el manifiesto.
      */
@@ -57,13 +57,34 @@ class CronRunner
             ?? throw new \InvalidArgumentException(sprintf('Tarea desconocida "%s".', $taskKey));
 
         $label = $this->tasks->label($taskKey);
-        $args = ['command' => $task['command']];
 
-        if ($mode === CronRunMode::Preview) {
-            $args['--dry-run'] = true;
-        } elseif ($mode === CronRunMode::Forced) {
-            $args['--force'] = true;
+        $application = new Application($this->kernel);
+        $application->setAutoExit(false);
+
+        // El comando se resuelve ANTES de montar los argumentos para poder
+        // preguntarle qué opciones acepta: pasarle una que no declara aborta la
+        // ejecución con una excepción de consola, y eso no debe depender de que
+        // la pantalla ofrezca el botón correcto.
+        $command = $this->resolveCommand($application, $task['command'], $taskKey);
+
+        if ($mode === CronRunMode::Resend && !$command->getDefinition()->hasOption('resend')) {
+            return new CronRunResult(
+                $taskKey,
+                $task['command'],
+                $label,
+                $mode,
+                null,
+                '',
+                'Esta tarea no produce efectos repetibles, así que no hay nada que reenviar.'
+            );
         }
+
+        $args = ['command' => $task['command']] + match ($mode) {
+            CronRunMode::Preview => ['--dry-run' => true],
+            CronRunMode::AsScheduled => [],
+            CronRunMode::Forced => ['--force' => true],
+            CronRunMode::Resend => ['--force' => true, '--resend' => true],
+        };
 
         // Las tareas que envían a una persona concreta (supervisión,
         // administración) necesitan destinatario en ejecución real: en el cron lo
@@ -88,32 +109,12 @@ class CronRunner
         // corte PHP a mitad.
         @set_time_limit(0);
 
-        $application = new Application($this->kernel);
-        $application->setAutoExit(false);
         $output = new BufferedOutput(OutputInterface::VERBOSITY_NORMAL, false);
 
         // Que la ejecución quede registrada como lanzada POR UNA PERSONA. Es un
         // eje distinto de --force (que sólo dice si se salta el interruptor):
         // diagnóstico lanza sin forzar y sigue siendo manual, y si se dedujera
         // de --force la pantalla daría por vivo un reloj parado.
-        //
-        // OJO: los comandos con descripción en #[AsCommand] se registran
-        // envueltos en LazyCommand (Symfony\Component\Console\DependencyInjection\AddConsoleCommandPass),
-        // así que hay que desenvolverlos o el instanceof falla en silencio y
-        // toda ejecución manual se registraría como si la hubiera hecho el reloj.
-        $command = $application->find($task['command']);
-        if ($command instanceof LazyCommand) {
-            $command = $command->getCommand();
-        }
-        if (!$command instanceof AbstractCronCommand) {
-            // El manifiesto sólo declara tareas que heredan de la base (lo vigila
-            // CronManifestTest); si no, es un bug y vale más que se note.
-            throw new \LogicException(sprintf(
-                'El comando "%s" de la tarea "%s" no hereda de AbstractCronCommand.',
-                $task['command'],
-                $taskKey
-            ));
-        }
         $command->markLaunchedByHand();
 
         try {
@@ -125,5 +126,38 @@ class CronRunner
         }
 
         return new CronRunResult($taskKey, $task['command'], $label, $mode, $exitCode, trim($text));
+    }
+
+    /**
+     * El comando de consola de una tarea, ya desenvuelto y comprobado.
+     *
+     * OJO: los comandos con descripción en #[AsCommand] se registran envueltos
+     * en LazyCommand (Symfony\Component\Console\DependencyInjection\AddConsoleCommandPass),
+     * así que hay que desenvolverlos o el instanceof falla en silencio y toda
+     * ejecución manual se registraría como si la hubiera hecho el reloj.
+     *
+     * @param Application $application Aplicación de consola ya construida.
+     * @param string      $commandName Nombre del comando de consola.
+     * @param string      $taskKey     Clave de la tarea, sólo para el mensaje de error.
+     * @throws \LogicException Si el comando no hereda de la base de las tareas.
+     */
+    private function resolveCommand(Application $application, string $commandName, string $taskKey): AbstractCronCommand
+    {
+        $command = $application->find($commandName);
+        if ($command instanceof LazyCommand) {
+            $command = $command->getCommand();
+        }
+
+        if (!$command instanceof AbstractCronCommand) {
+            // El manifiesto sólo declara tareas que heredan de la base (lo vigila
+            // CronManifestTest); si no, es un bug y vale más que se note.
+            throw new \LogicException(sprintf(
+                'El comando "%s" de la tarea "%s" no hereda de AbstractCronCommand.',
+                $commandName,
+                $taskKey
+            ));
+        }
+
+        return $command;
     }
 }

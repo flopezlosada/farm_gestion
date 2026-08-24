@@ -5,9 +5,9 @@ namespace App\Service\Cron;
 /**
  * Cómo se lanza una tarea programada a mano desde la web.
  *
- * Son tres modos y no dos booleanos a propósito: "previsualizar forzando" no
- * significa nada, y con dos flags sueltos esa combinación sería representable.
- * Cada pantalla elige el suyo y se lee en la llamada.
+ * Son modos y no booleanos sueltos a propósito: "previsualizar forzando" no
+ * significa nada, y con flags independientes esa combinación sería
+ * representable. Cada pantalla elige el suyo y se lee en la llamada.
  */
 enum CronRunMode
 {
@@ -28,6 +28,15 @@ enum CronRunMode
      * interruptores de entrega (`requires`).
      */
     case Forced;
+
+    /**
+     * Como {@see self::Forced} y además repite los efectos que ya constan
+     * emitidos (--resend). Es la vía de rescate para un correo que no llegó:
+     * sin ella, en un hosting sin SSH habría que borrar el apunte del guardián
+     * de idempotencia a mano por phpMyAdmin. Sólo la ofrecen las tareas que
+     * mandan correo, que son las únicas que declaran la opción.
+     */
+    case Resend;
 
     /**
      * ¿Es una previsualización sin efectos?

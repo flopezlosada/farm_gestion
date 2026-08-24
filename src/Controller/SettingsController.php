@@ -56,9 +56,10 @@ class SettingsController extends AbstractController
      * el mismo servicio que usa la pantalla de diagnóstico de envíos: antes cada
      * una tenía su copia del lanzador y su propia lista blanca.
      *
-     * `mode=dry` previsualiza (--dry-run); cualquier otro valor es ejecución
-     * real. Los interruptores de email se siguen respetando también en la
-     * ejecución manual: con el envío apagado, aquí tampoco sale correo.
+     * `mode=dry` previsualiza (--dry-run), `mode=resend` repite los avisos que
+     * ya constan emitidos (para un correo que no llegó) y cualquier otro valor
+     * es ejecución real. Los interruptores de email se siguen respetando también
+     * en la ejecución manual: con el envío apagado, aquí tampoco sale correo.
      */
     #[Route('/cron/run', name: 'settings_cron_run', methods: ['POST'])]
     public function runCron(Request $request, CronRunner $runner): Response
@@ -77,7 +78,11 @@ class SettingsController extends AbstractController
         // Esta pantalla es el SUSTITUTO del reloj mientras esté caído, así que su
         // ejecución real fuerza: congelar el listado un lunes tiene que funcionar
         // aunque la tarea programada esté pausada.
-        $mode = $request->request->get('mode') === 'dry' ? CronRunMode::Preview : CronRunMode::Forced;
+        $mode = match ($request->request->get('mode')) {
+            'dry' => CronRunMode::Preview,
+            'resend' => CronRunMode::Resend,
+            default => CronRunMode::Forced,
+        };
         $user = $this->getUser();
 
         $result = $runner->run($key, $mode, $user instanceof User ? $user->getEmail() : null);
@@ -179,6 +184,11 @@ class SettingsController extends AbstractController
                 $item['command'] = AppSettings::CRONS[$name]['command'];
                 $item['confirm'] = AppSettings::CRONS[$name]['confirm'];
                 $item['dry'] = AppSettings::CRONS[$name]['dry'];
+                // Ofrecen reenvío las que mandan correo, que son exactamente las
+                // que piden confirmación (es lo que `confirm` significa) y las
+                // únicas que declaran --resend. Que ambas cosas sigan yendo
+                // juntas lo vigila CronManifestTest.
+                $item['resend'] = AppSettings::CRONS[$name]['confirm'];
                 $item['schedule'] = $this->cronTasks->describeSchedule($name);
                 $item['unmet_dependencies'] = $this->cronTasks->unmetDependencies($name);
                 $item['overdue'] = $this->cronTasks->isOverdue($name, $lastRuns[$name] ?? null, $now);

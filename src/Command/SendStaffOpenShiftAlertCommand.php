@@ -28,6 +28,13 @@ use Symfony\Component\Mailer\MailerInterface;
 #[AsCommand(name: 'app:send-staff-open-shift-alert', description: 'Avisa al supervisor de salidas abiertas (entradas sin cerrar de días anteriores).')]
 class SendStaffOpenShiftAlertCommand extends AbstractCronCommand
 {
+    /**
+     * Clase de efecto con la que se apunta el envío: uno por día. Una salida
+     * abierta sigue abierta hasta que alguien la cierra, así que sin esto cada
+     * pasada del reloj repetiría el mismo aviso.
+     */
+    private const EFFECT_KIND = 'staff_open_shift_alert';
+
     public function __construct(
         private readonly GapReport $gapReport,
         private readonly MailerInterface $mailer,
@@ -40,6 +47,7 @@ class SendStaffOpenShiftAlertCommand extends AbstractCronCommand
         $this
             ->addOption('to', null, InputOption::VALUE_REQUIRED, 'Email del supervisor (obligatorio si no es dry-run)')
             ->addOption('force', null, InputOption::VALUE_NONE, 'Ignora el gate de la tarea programada (ejecución manual); no afecta a los toggles de email')
+            ->addOption('resend', null, InputOption::VALUE_NONE, 'Repite el envío aunque ya conste emitido hoy (para un correo que no llegó)')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Lista las salidas abiertas que avisaría sin enviar nada');
     }
 
@@ -85,7 +93,19 @@ class SendStaffOpenShiftAlertCommand extends AbstractCronCommand
                 'rows' => $rows,
             ]);
 
-        $this->mailer->send($message);
+        $emitted = $this->emitOnce(
+            self::EFFECT_KIND,
+            fn () => $this->mailer->send($message),
+            $input,
+            on: $today,
+            target: (string) $to,
+        );
+
+        if (!$emitted) {
+            $io->note('El aviso de hoy ya se había enviado. No se repite.');
+            return $this->nothingToDo('El aviso de hoy ya se había enviado');
+        }
+
         $io->success(sprintf('Enviado a %s · %d salida(s) abierta(s).', $to, count($rows)));
 
         return $this->didWork(sprintf('%d salidas abiertas avisadas a %s', count($rows), $to));
