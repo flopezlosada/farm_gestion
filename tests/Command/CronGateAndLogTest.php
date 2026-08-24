@@ -8,6 +8,7 @@ use App\Entity\UsageHit;
 use App\Repository\CronRunRepository;
 use App\Repository\UsageHitRepository;
 use App\Service\AppSettings;
+use Doctrine\DBAL\DriverManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -233,6 +234,39 @@ class CronGateAndLogTest extends KernelTestCase
         $this->assertSame(CronRun::STATUS_FAILED, $run->getStatus());
         $this->assertStringContainsString('boom de prueba', (string) $run->getDetail());
         $this->assertTrue($run->isFinished(), 'Un fallo registrado sí tiene cierre; sin cierre significa que el proceso murió.');
+    }
+
+    /**
+     * Si la misma tarea ya está corriendo en otro proceso, esta pasada se retira:
+     * sale en verde (no es una avería, es el sistema funcionando) y NO registra
+     * una ejecución, porque no ha habido ninguna — la que la pantalla debe seguir
+     * mostrando es la que está en marcha.
+     *
+     * El "otro proceso" se simula con una segunda conexión, porque los bloqueos
+     * con nombre de MySQL son reentrantes dentro de la misma.
+     */
+    public function testSiLaTareaYaEstaCorriendoLaPasadaSeRetira(): void
+    {
+        self::bootKernel();
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        $otherProcess = DriverManager::getConnection($em->getConnection()->getParams());
+        $lockName = $em->getConnection()->getDatabase() . ':' . AppSettings::CRON_PURGE_USAGE_HITS;
+
+        try {
+            $this->assertSame(1, (int) $otherProcess->fetchOne('SELECT GET_LOCK(?, 0)', [$lockName]));
+
+            $tester = $this->tester();
+            $exit = $tester->execute(self::NOTHING_OLD_ENOUGH);
+
+            $this->assertSame(Command::SUCCESS, $exit, 'Retirarse no es fallar: un error haría que el reloj avisara de una avería inexistente.');
+            $this->assertStringContainsString('ya está ejecutándose', $tester->getDisplay());
+            $this->assertNull(
+                $this->lastRun(AppSettings::CRON_PURGE_USAGE_HITS),
+                'Una pasada que se retira no es una ejecución y no debe registrarse.'
+            );
+        } finally {
+            $otherProcess->close();
+        }
     }
 
     /**

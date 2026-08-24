@@ -10,6 +10,7 @@ use App\Entity\WeeklyBasketGroup;
 use App\Security\PartnerAccessPolicy;
 use App\Service\AppSettings;
 use App\Service\Delivery\DeliveryDeadline;
+use App\Service\Cron\EffectLedger;
 use App\Service\Delivery\NodeDeliveryDate;
 use App\Service\Delivery\PickupReminderMailer;
 use PHPUnit\Framework\TestCase;
@@ -81,14 +82,57 @@ class PickupReminderMailerTest extends TestCase
 
         $result = $this->mailer($mailerMock)->send([$conEmail, $sinEmail]);
 
-        $this->assertSame(['sent' => 1, 'skipped' => 1], $result);
+        $this->assertSame(['sent' => 1, 'skipped' => 1, 'already' => 0], $result);
         $this->assertSame('ok@test.org', $captured[0]->getTo()[0]->getAddress());
         $this->assertSame('email/pickup_reminder.html.twig', $captured[0]->getHtmlTemplate());
         $this->assertSame('email/pickup_reminder.txt.twig', $captured[0]->getTextTemplate());
         $this->assertStringNotContainsStringIgnoringCase('viernes', $captured[0]->getSubject(), 'El asunto ya no fija "viernes".');
     }
 
-    private function mailer(?MailerInterface $mailerMock = null): PickupReminderMailer
+    /**
+     * Un aviso que el guardián de idempotencia ya tenía apuntado no se reenvía y
+     * se cuenta aparte: es el caso normal de una segunda pasada del reloj, y no
+     * debe confundirse con "no había a quién avisar".
+     */
+    public function testNoReenviaLoQueYaConstaEmitido(): void
+    {
+        $pickup = new \DateTimeImmutable('2099-07-01');
+        $wb = $this->weeklyBasket($this->node('Cascorro', 3), $pickup, BasketShare::ID_BIWEEKLY, 'ok@test.org');
+
+        $mailerMock = $this->createMock(MailerInterface::class);
+        $mailerMock->expects($this->never())->method('send');
+
+        $result = $this->mailer($mailerMock, $this->ledger(alreadyEmitted: true))->send([$wb]);
+
+        $this->assertSame(['sent' => 0, 'skipped' => 0, 'already' => 1], $result);
+    }
+
+    /**
+     * Guardián de idempotencia de doble uso: por defecto deja pasar el efecto (y
+     * lo ejecuta, como haría el real la primera vez); con $alreadyEmitted a true
+     * simula una clave ya apuntada y NO ejecuta nada.
+     *
+     * @param bool $alreadyEmitted ¿El efecto ya constaba emitido?
+     */
+    private function ledger(bool $alreadyEmitted = false): EffectLedger
+    {
+        $ledger = $this->createMock(EffectLedger::class);
+        $ledger->method('once')->willReturnCallback(
+            static function (string $kind, string $reference, \DateTimeInterface $on, callable $effect) use ($alreadyEmitted): bool {
+                if ($alreadyEmitted) {
+                    return false;
+                }
+
+                $effect();
+
+                return true;
+            }
+        );
+
+        return $ledger;
+    }
+
+    private function mailer(?MailerInterface $mailerMock = null, ?EffectLedger $ledger = null): PickupReminderMailer
     {
         // Links apagados: canUseActionLinks no se llega a invocar (corto-circuito).
         $settings = $this->createMock(AppSettings::class);
@@ -109,6 +153,7 @@ class PickupReminderMailerTest extends TestCase
             $this->createMock(PartnerAccessPolicy::class),
             $urlGenerator,
             $deadline,
+            $ledger ?? $this->ledger(),
         );
     }
 

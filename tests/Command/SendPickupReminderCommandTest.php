@@ -5,11 +5,15 @@ namespace App\Tests\Command;
 use App\Entity\Basket;
 use App\Entity\BasketShare;
 use App\Entity\DeliveryException;
+use App\Entity\EmittedEffect;
 use App\Entity\Node;
 use App\Entity\Partner;
+use App\Entity\Setting;
 use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketGroup;
 use App\Entity\WeeklyBasketStatus;
+use App\Service\AppSettings;
+use App\Service\Delivery\PickupReminderMailer;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -157,6 +161,78 @@ class SendPickupReminderCommandTest extends KernelTestCase
         $em->remove($node);
         $em->remove($basket);
         $em->flush();
+    }
+
+    /**
+     * EL CRITERIO DE ACEPTACIÓN de la idempotencia: lanzar el recordatorio dos
+     * veces seguidas no manda ni un correo repetido.
+     *
+     * Es lo que permite que el planificador reintente sin miedo — y sin esto, un
+     * tick horario o dos relojes en paralelo reenviarían el aviso a los mismos
+     * socixs una y otra vez. Aquí se ejecuta de verdad (no dry-run), con los dos
+     * interruptores de envío encendidos y el transporte de correo a `null` del
+     * entorno de test.
+     */
+    public function testNoReenviaEnUnaSegundaPasada(): void
+    {
+        self::bootKernel();
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $settings = static::getContainer()->get(AppSettings::class);
+
+        $fecha = '2099-09-04';
+        $sufijo = uniqid();
+        $picks = $em->getRepository(WeeklyBasketStatus::class)->find(1);
+        $biweekly = $em->getRepository(BasketShare::class)->find(BasketShare::ID_BIWEEKLY);
+
+        $basket = (new Basket())->setDate(new \DateTime($fecha))->setWeek(36)->setAmount(1);
+        $em->persist($basket);
+        $node = (new Node())->setName('Torremocha TEST ' . $sufijo)->setDeliveryWeekday(5);
+        $grupo = (new WeeklyBasketGroup())->setName('Bustarviejo')->setColor('#5a8fbf')->setNode($node);
+        $em->persist($node);
+        $em->persist($grupo);
+
+        $wb = $this->makeWeeklyBasket($em, $basket, $biweekly, $picks, $grupo, $fecha, 'IdempotenteSocix ' . $sufijo);
+        $em->flush();
+
+        $settings->setBool(AppSettings::EMAIL_ENABLED, true);
+        $settings->setBool(AppSettings::EMAIL_PICKUP_REMINDER, true);
+
+        try {
+            $tester = $this->commandTester();
+
+            $tester->execute(['--date' => $fecha]);
+            $primera = $tester->getDisplay();
+            $this->assertStringContainsString('Enviados 1 email(s)', $primera);
+
+            $tester->execute(['--date' => $fecha]);
+            $segunda = $tester->getDisplay();
+            $this->assertStringContainsString('Enviados 0 email(s)', $segunda, 'La segunda pasada no debe reenviar nada.');
+            $this->assertStringContainsString('1 ya estaban avisados', $segunda);
+
+            // La vía de rescate: --resend repite a propósito lo que ya constaba,
+            // para cuando se sabe que un correo no llegó.
+            $tester->execute(['--date' => $fecha, '--resend' => true]);
+            $this->assertStringContainsString('Enviados 1 email(s)', $tester->getDisplay(), '--resend debe repetir el aviso ya emitido.');
+        } finally {
+            $partner = $wb->getPartner();
+            $em->remove($wb);
+            $em->flush();
+            $em->remove($partner);
+            $em->remove($grupo);
+            $em->remove($node);
+            $em->remove($basket);
+            foreach ($em->getRepository(EmittedEffect::class)->findBy(['kind' => PickupReminderMailer::EFFECT_KIND]) as $effect) {
+                $em->remove($effect);
+            }
+            foreach ([AppSettings::EMAIL_ENABLED, AppSettings::EMAIL_PICKUP_REMINDER] as $key) {
+                $setting = $em->getRepository(Setting::class)->findOneBy(['name' => $key]);
+                if ($setting !== null) {
+                    $em->remove($setting);
+                }
+            }
+            $em->flush();
+        }
     }
 
     /**

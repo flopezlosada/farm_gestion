@@ -164,6 +164,14 @@
                                             {% if s.dry %}
                                                 <button type="submit" form="crondry-{{ idsafe }}" class="csa-btn csa-btn--ghost csa-btn--sm">Previsualizar</button>
                                             {% endif %}
+                                            {# Rescate para un aviso que no llegó: repite lo que ya
+                                             # consta enviado. Sin esto habría que borrar el apunte
+                                             # a mano en la base de datos, y en producción no hay
+                                             # consola. #}
+                                            {% if s.resend is defined and s.resend %}
+                                                <button type="button" class="csa-btn csa-btn--ghost csa-btn--sm"
+                                                        onclick="document.getElementById('confirm-cron-resend-{{ idsafe }}').showModal()">Reenviar</button>
+                                            {% endif %}
                                         </div>
                                     {% endif %}
                                 {% endfor %}
@@ -208,6 +216,21 @@
                         confirm_label: 'Ejecutar',
                         cancel_label: 'Cancelar',
                         external_form_id: 'cronrun-' ~ idsafe,
+                    }) }}
+                {% endif %}
+                {% if s.resend is defined and s.resend %}
+                    <form id="cronresend-{{ idsafe }}" method="post" action="{{ path('settings_cron_run') }}" hidden>
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token('settings_cron_run') }}">
+                        <input type="hidden" name="cron" value="{{ s.name }}">
+                        <input type="hidden" name="mode" value="resend">
+                    </form>
+                    {{ csa.confirm_dialog('confirm-cron-resend-' ~ idsafe, {
+                        variant: 'warning',
+                        title: 'Reenviar: ' ~ s.label,
+                        body: 'Normalmente la tarea NO repite un aviso que ya salió. Esto lo repite a propósito, así que quien ya lo recibió lo recibirá otra vez. Úsalo cuando sepas que un correo no llegó. ¿Continuar?',
+                        confirm_label: 'Reenviar',
+                        cancel_label: 'Cancelar',
+                        external_form_id: 'cronresend-' ~ idsafe,
                     }) }}
                 {% endif %}
             {% endif %}

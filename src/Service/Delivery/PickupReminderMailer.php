@@ -7,6 +7,7 @@ use App\Entity\Node;
 use App\Entity\WeeklyBasket;
 use App\Security\PartnerAccessPolicy;
 use App\Service\AppSettings;
+use App\Service\Cron\EffectLedger;
 use Symfony\Bridge\Twig\Mime\TemplatedEmail;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
@@ -24,6 +25,12 @@ use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
  */
 class PickupReminderMailer
 {
+    /**
+     * Clase de efecto con la que se apuntan estos avisos en el guardián de
+     * idempotencia ({@see EffectLedger}).
+     */
+    public const EFFECT_KIND = 'pickup_reminder';
+
     /** Etiqueta de modalidad por id de BasketShare (solo quincenal y mensual reciben aviso). */
     private const MODALITY_BY_SHARE = [
         BasketShare::ID_BIWEEKLY => 'quincenal',
@@ -36,6 +43,7 @@ class PickupReminderMailer
         private readonly PartnerAccessPolicy $accessPolicy,
         private readonly UrlGeneratorInterface $urlGenerator,
         private readonly DeliveryDeadline $deadline,
+        private readonly EffectLedger $ledger,
     ) {
     }
 
@@ -44,10 +52,21 @@ class PickupReminderMailer
      * que no tienen email se saltan en silencio (filas heredadas del dump de
      * prod). No decide destinatarios: recibe la lista ya resuelta.
      *
+     * Cada correo se emite a través del guardián de idempotencia con la clave
+     * "este socix, este día de reparto", así que repetir la tarea no reenvía
+     * nada. La clave es el SOCIX y no la cesta a propósito: quien tiene una
+     * cesta extra puntual el mismo día aparece dos veces en la lista, y con la
+     * cesta como clave recibiría dos correos idénticos.
+     *
+     * La clave se construye con el identificador del socix, lo que da por hecho
+     * que las cestas vienen de la base de datos (así las trae el finder del
+     * comando). Con entidades no persistidas la referencia no sería única.
+     *
      * @param WeeklyBasket[] $weeklyBaskets
-     * @return array{sent: int, skipped: int} Enviados y saltados por falta de email.
+     * @param bool           $resend Orden explícita de repetir avisos ya emitidos.
+     * @return array{sent: int, skipped: int, already: int} Enviados, saltados por falta de email y ya avisados antes.
      */
-    public function send(array $weeklyBaskets): array
+    public function send(array $weeklyBaskets, bool $resend = false): array
     {
         // Los enlaces de acción exigen login: solo se pintan si el master switch
         // está encendido Y el socix puede entrar (tiene cuenta, o el alta está
@@ -56,25 +75,35 @@ class PickupReminderMailer
 
         $sent = 0;
         $skipped = 0;
+        $already = 0;
         foreach ($weeklyBaskets as $wb) {
-            $email = $wb->getPartner()?->getEmail();
+            $partner = $wb->getPartner();
+            $email = $partner?->getEmail();
             if (!$email) {
                 $skipped++;
                 continue;
             }
 
-            $this->mailer->send(
-                (new TemplatedEmail())
-                    ->to($email)
-                    ->subject('Recordatorio: tu cesta de la CSA Vega de Jarama')
-                    ->htmlTemplate('email/pickup_reminder.html.twig')
-                    ->textTemplate('email/pickup_reminder.txt.twig')
-                    ->context($this->contextFor($wb, $linksEnabled))
+            $emitted = $this->ledger->once(
+                self::EFFECT_KIND,
+                sprintf('partner-%d', (int) $partner->getId()),
+                $this->pickupDate($wb),
+                fn () => $this->mailer->send(
+                    (new TemplatedEmail())
+                        ->to($email)
+                        ->subject('Recordatorio: tu cesta de la CSA Vega de Jarama')
+                        ->htmlTemplate('email/pickup_reminder.html.twig')
+                        ->textTemplate('email/pickup_reminder.txt.twig')
+                        ->context($this->contextFor($wb, $linksEnabled))
+                ),
+                $email,
+                $resend,
             );
-            $sent++;
+
+            $emitted ? $sent++ : $already++;
         }
 
-        return ['sent' => $sent, 'skipped' => $skipped];
+        return ['sent' => $sent, 'skipped' => $skipped, 'already' => $already];
     }
 
     /**

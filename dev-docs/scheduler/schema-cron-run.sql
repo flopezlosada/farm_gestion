@@ -1,0 +1,32 @@
+-- ============================================================================
+-- Planificador de tareas programadas — Paso 1: registro de ejecuciones (DDL).
+--
+-- Tabla nueva `cron_run`: una fila por ejecución de tarea programada, con su
+-- estado (disabled | nothing_to_do | done | failed), su origen (el reloj o una
+-- persona) y su salida recortada. Es lo que permite ver en /gestion/settings si
+-- una tarea corre o lleva semanas parada — la caída del 20 de julio de 2026
+-- pasó inadvertida dos semanas precisamente porque esto no existía.
+--
+-- ANTES de aplicarlo, contrástalo con lo que Doctrine espera, que no toca nada:
+--   ddev exec bin/console doctrine:schema:update --dump-sql | grep cron_run
+-- Y NUNCA `doctrine:schema:update --force`: arrastraría el drift de índices
+-- preexistente (ver CLAUDE.md / memoria schema_drift_anotaciones_vs_db).
+--
+-- Aplicar a las TRES BBDD de trabajo: db (sandbox), db_prod_snapshot (golden)
+-- y db_test.
+--   ddev mysql db               < dev-docs/scheduler/schema-cron-run.sql
+--   ddev mysql db_prod_snapshot < dev-docs/scheduler/schema-cron-run.sql   # tras esto, bin/db-backup
+--   ddev mysql db_test          < dev-docs/scheduler/schema-cron-run.sql
+--
+-- En PRODUCCIÓN se aplica a mano por phpMyAdmin. La tabla nace vacía y sin FKs.
+--
+-- ORDEN DE DESPLIEGUE: **la tabla PRIMERO, el código después.** La versión
+-- anterior de este fichero decía que el orden era indiferente, y es falso: sólo
+-- lo es para la ESCRITURA del registro (sin tabla, CronRunLogger falla en
+-- silencio y lo anota en el log de la app, y las tareas siguen funcionando). La
+-- LECTURA no está protegida — SettingsController::groupedSettings() consulta
+-- cron_run al pintar la pantalla, así que con el código desplegado y sin tabla
+-- /gestion/settings responde 500.
+-- ============================================================================
+
+CREATE TABLE cron_run (id INT AUTO_INCREMENT NOT NULL, task_key VARCHAR(100) NOT NULL, command VARCHAR(120) NOT NULL, status VARCHAR(20) NOT NULL, trigger_source VARCHAR(20) NOT NULL, started_at DATETIME NOT NULL COMMENT '(DC2Type:datetime_immutable)', finished_at DATETIME DEFAULT NULL COMMENT '(DC2Type:datetime_immutable)', exit_code INT DEFAULT NULL, detail VARCHAR(255) DEFAULT NULL, output LONGTEXT DEFAULT NULL, INDEX IDX_cron_run_task_started (task_key, started_at), PRIMARY KEY(id)) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci` ENGINE = InnoDB;

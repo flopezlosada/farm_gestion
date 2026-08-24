@@ -5,6 +5,8 @@ namespace App\Command;
 use App\Entity\CronRun;
 use App\Service\Cron\CronRunLogger;
 use App\Service\Cron\CronTaskRegistry;
+use App\Service\Cron\EffectLedger;
+use App\Service\Cron\TaskLock;
 use App\Service\Cron\TeeOutput;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -13,8 +15,9 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Contracts\Service\Attribute\Required;
 
 /**
- * Base de las tareas programadas: aplica el gate de interruptores y registra la
- * ejecución. Las clases hijas implementan sólo su trabajo, en {@see self::doExecute()}.
+ * Base de las tareas programadas: aplica el gate de interruptores, impide que
+ * la tarea se solape consigo misma y registra la ejecución. Las clases hijas
+ * implementan sólo su trabajo, en {@see self::doExecute()}.
  *
  * POR QUÉ AQUÍ Y NO EN EL RUNNER DE LA WEB. El gate y el registro tienen que
  * cubrir el camino que de verdad falla: el cron del hosting ejecuta
@@ -46,9 +49,20 @@ use Symfony\Contracts\Service\Attribute\Required;
  */
 abstract class AbstractCronCommand extends Command
 {
+    /**
+     * Referencia por defecto de {@see self::emitOnce()}: el efecto es único por
+     * ejecución y no por destinatario (un resumen a administración, un informe),
+     * así que no hay nada que referenciar más allá de la fecha.
+     */
+    protected const EFFECT_ONCE_PER_RUN = 'global';
+
     protected CronTaskRegistry $cronTasks;
 
     protected CronRunLogger $cronRunLogger;
+
+    protected TaskLock $taskLock;
+
+    protected EffectLedger $effectLedger;
 
     /** Estado reportado por la hija ({@see self::nothingToDo()} / {@see self::didWork()}). */
     private ?string $reportedStatus = null;
@@ -77,12 +91,57 @@ abstract class AbstractCronCommand extends Command
      *
      * @param CronTaskRegistry $cronTasks     Lectura del manifiesto de tareas.
      * @param CronRunLogger    $cronRunLogger Escritura del registro de ejecuciones.
+     * @param TaskLock         $taskLock      Cerrojo de no solapamiento por tarea.
+     * @param EffectLedger     $effectLedger  Guardián de idempotencia de efectos.
      */
     #[Required]
-    public function setCronScaffolding(CronTaskRegistry $cronTasks, CronRunLogger $cronRunLogger): void
-    {
+    public function setCronScaffolding(
+        CronTaskRegistry $cronTasks,
+        CronRunLogger $cronRunLogger,
+        TaskLock $taskLock,
+        EffectLedger $effectLedger,
+    ): void {
         $this->cronTasks = $cronTasks;
         $this->cronRunLogger = $cronRunLogger;
+        $this->taskLock = $taskLock;
+        $this->effectLedger = $effectLedger;
+    }
+
+    /**
+     * Produce un efecto externo una sola vez, aunque la tarea se repita.
+     *
+     * Atajo sobre {@see EffectLedger} para el caso más común en una tarea
+     * programada: el efecto es único por ejecución y por día. Cuando la unidad
+     * es más fina (un aviso por persona), se pasa su referencia.
+     *
+     * El cerrojo de la tarea y esto son cosas distintas y las dos hacen falta:
+     * el cerrojo evita que dos procesos trabajen a la vez, y esto evita que un
+     * reintento posterior repita lo que ya salió.
+     *
+     * @param string                  $kind      Clase de efecto ("admin_delivery_summary"…).
+     * @param callable                $effect    Lo que hay que hacer una sola vez.
+     * @param InputInterface|null     $input     Entrada, para leer --resend si la declara.
+     * @param string                  $reference A qué o quién se refiere.
+     * @param \DateTimeInterface|null $on        Fecha de negocio (por defecto, hoy).
+     * @param string|null             $target    Destino, para poder auditarlo.
+     * @return bool true si el efecto se ha producido ahora; false si ya constaba.
+     */
+    protected function emitOnce(
+        string $kind,
+        callable $effect,
+        ?InputInterface $input = null,
+        string $reference = self::EFFECT_ONCE_PER_RUN,
+        ?\DateTimeInterface $on = null,
+        ?string $target = null,
+    ): bool {
+        return $this->effectLedger->once(
+            $kind,
+            $reference,
+            $on ?? new \DateTimeImmutable('today'),
+            $effect,
+            $target,
+            $input !== null && $this->hasFlag($input, 'resend'),
+        );
     }
 
     /**
@@ -149,8 +208,8 @@ abstract class AbstractCronCommand extends Command
     }
 
     /**
-     * El cuerpo de {@see self::execute()}, separado sólo para que la limpieza de
-     * estado quede en un `finally` sin anidar todo el método.
+     * Resuelve la tarea en el manifiesto, aparta las previsualizaciones y toma
+     * el cerrojo de no solapamiento antes de dejar trabajar a nadie.
      *
      * @param InputInterface  $input  Entrada del comando.
      * @param OutputInterface $output Salida real.
@@ -166,12 +225,48 @@ abstract class AbstractCronCommand extends Command
         }
 
         // Una previsualización no toca nada ni cuenta como ejecución: no pasa
-        // por el gate (para poder ver qué haría con la tarea apagada) ni se
-        // registra (no debe falsear la última ejecución).
+        // por el gate (para poder ver qué haría con la tarea apagada), no se
+        // registra (no debe falsear la última ejecución) y no necesita cerrojo
+        // (no hay efecto que duplicar).
         if ($this->hasFlag($input, 'dry-run')) {
             return $this->doExecute($input, $output);
         }
 
+        // Cerrojo ANTES del gate y del registro, para que toda la ejecución real
+        // quede serializada: si un tick reintenta una tarea que la pasada
+        // anterior dejó viva, el segundo proceso se retira aquí en vez de
+        // duplicar su trabajo.
+        if (!$this->taskLock->acquire($task['key'])) {
+            (new SymfonyStyle($input, $output))->warning(sprintf(
+                'La tarea «%s» ya está ejecutándose en otro proceso. Esta pasada se retira.',
+                $this->cronTasks->label($task['key'])
+            ));
+
+            // Éxito, no fallo: el sistema está haciendo justo lo que debe. Un
+            // código de error haría que el reloj externo avisara de una avería
+            // inexistente. Y no se registra ejecución, porque no ha habido
+            // ninguna: la que sí está corriendo (o la que murió sin cerrar su
+            // fila) es la que la pantalla debe seguir mostrando.
+            return Command::SUCCESS;
+        }
+
+        try {
+            return $this->runLockedTask($task, $input, $output);
+        } finally {
+            $this->taskLock->release($task['key']);
+        }
+    }
+
+    /**
+     * El cuerpo de la ejecución una vez tomado el cerrojo: gate, registro de
+     * arranque, trabajo de la hija y cierre del registro.
+     *
+     * @param array<string, mixed> $task   Metadatos de la tarea en el manifiesto.
+     * @param InputInterface       $input  Entrada del comando.
+     * @param OutputInterface      $output Salida real.
+     */
+    private function runLockedTask(array $task, InputInterface $input, OutputInterface $output): int
+    {
         $force = $this->hasFlag($input, 'force');
         $trigger = $this->launchedByHand ? CronRun::TRIGGER_MANUAL : CronRun::TRIGGER_SCHEDULE;
 

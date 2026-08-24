@@ -31,6 +31,13 @@ class SendStaffGapsDigestCommand extends AbstractCronCommand
 {
     private const DEFAULT_DAYS = 7;
 
+    /**
+     * Clase de efecto con la que se apunta el envío: uno por día. La ventana de
+     * huecos es "los últimos N días" y no se consume al avisar, así que dos
+     * pasadas del reloj el mismo día repetirían el mismo digest.
+     */
+    private const EFFECT_KIND = 'staff_gaps_digest';
+
     public function __construct(
         private readonly GapReport $gapReport,
         private readonly MailerInterface $mailer,
@@ -44,6 +51,7 @@ class SendStaffGapsDigestCommand extends AbstractCronCommand
             ->addOption('to', null, InputOption::VALUE_REQUIRED, 'Email del supervisor (obligatorio si no es dry-run)')
             ->addOption('days', null, InputOption::VALUE_REQUIRED, 'Cuántos días hacia atrás revisar', self::DEFAULT_DAYS)
             ->addOption('force', null, InputOption::VALUE_NONE, 'Ignora el gate de la tarea programada (ejecución manual); no afecta a los toggles de email')
+            ->addOption('resend', null, InputOption::VALUE_NONE, 'Repite el envío aunque ya conste emitido hoy (para un correo que no llegó)')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Lista los huecos que enviaría sin enviar nada');
     }
 
@@ -98,7 +106,18 @@ class SendStaffGapsDigestCommand extends AbstractCronCommand
                 'rows' => $rows,
             ]);
 
-        $this->mailer->send($message);
+        $emitted = $this->emitOnce(
+            self::EFFECT_KIND,
+            fn () => $this->mailer->send($message),
+            $input,
+            target: (string) $to,
+        );
+
+        if (!$emitted) {
+            $io->note('El digest de hoy ya se había enviado. No se repite.');
+            return $this->nothingToDo('El digest de hoy ya se había enviado');
+        }
+
         $io->success(sprintf('Enviado a %s · %d trabajador(es) con huecos.', $to, count($rows)));
 
         return $this->didWork(sprintf('%d trabajadores con huecos avisados a %s', count($rows), $to));

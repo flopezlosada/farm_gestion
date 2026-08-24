@@ -63,6 +63,32 @@ class CronManifestTest extends KernelTestCase
     }
 
     /**
+     * Toda tarea que manda correo (`confirm`, que es justo lo que ese campo
+     * significa) exige el interruptor GENERAL de envíos además del suyo.
+     *
+     * Sin eso, con el interruptor general apagado la tarea corre entera,
+     * {@see \App\Mailer\KillSwitchMailer} descarta los mensajes en silencio y
+     * pasan dos cosas malas: la pantalla registra "hizo su trabajo" cuando no
+     * entregó nada, y el guardián de idempotencia se queda con esos efectos
+     * apuntados, así que al reencender el envío ya constan emitidos y no salen
+     * nunca.
+     */
+    public function testLasTareasQueMandanCorreoExigenElInterruptorGeneral(): void
+    {
+        foreach (AppSettings::CRONS as $key => $meta) {
+            if (!$meta['confirm']) {
+                continue;
+            }
+
+            $this->assertContains(
+                AppSettings::EMAIL_ENABLED,
+                $meta['requires'],
+                sprintf('La tarea "%s" manda correo y no exige el interruptor general de envíos.', $key)
+            );
+        }
+    }
+
+    /**
      * La cadencia está bien formada: frecuencia conocida, hora válida y el campo
      * que corresponda a esa frecuencia (día de la semana en las semanales, día
      * del mes en las mensuales).
@@ -135,6 +161,15 @@ class CronManifestTest extends KernelTestCase
             // que poder recibirlo: si no, el botón de ejecución manual fallaría.
             if ($meta['needs_recipient']) {
                 $this->assertTrue($definition->hasOption('to'), sprintf('El comando de "%s" dice necesitar destinatario pero no acepta --to.', $key));
+            }
+
+            // Las que mandan correo (`confirm`) tienen que aceptar --resend: sus
+            // efectos son idempotentes, y sin vía de repetición un aviso que no
+            // llegó sólo se podría rescatar borrando su apunte a mano en la base
+            // de datos. La pantalla ofrece el botón "Reenviar" a partir de ese
+            // mismo `confirm`.
+            if ($meta['confirm']) {
+                $this->assertTrue($definition->hasOption('resend'), sprintf('El comando de "%s" manda correo y no acepta --resend.', $key));
             }
         }
     }

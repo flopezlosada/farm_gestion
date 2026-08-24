@@ -28,6 +28,13 @@ class SendAlbergueArrivalsReminderCommand extends AbstractCronCommand
 {
     private const DEFAULT_DAYS = 7;
 
+    /**
+     * Clase de efecto con la que se apunta el envío: uno por día. El horizonte
+     * es "los próximos N días" y no se consume al avisar, así que dos pasadas
+     * del reloj el mismo día repetirían el mismo correo.
+     */
+    private const EFFECT_KIND = 'albergue_reminder';
+
     public function __construct(
         private readonly StayRepository $stayRepository,
         private readonly MailerInterface $mailer,
@@ -41,6 +48,7 @@ class SendAlbergueArrivalsReminderCommand extends AbstractCronCommand
             ->addOption('to', null, InputOption::VALUE_REQUIRED, 'Email del equipo (obligatorio si no es dry-run)')
             ->addOption('days', null, InputOption::VALUE_REQUIRED, 'Horizonte en días hacia adelante', self::DEFAULT_DAYS)
             ->addOption('force', null, InputOption::VALUE_NONE, 'Ignora el gate de la tarea programada (ejecución manual); no afecta a los toggles de email')
+            ->addOption('resend', null, InputOption::VALUE_NONE, 'Repite el envío aunque ya conste emitido hoy (para un correo que no llegó)')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Lista lo que enviaría sin enviar nada');
     }
 
@@ -95,7 +103,18 @@ class SendAlbergueArrivalsReminderCommand extends AbstractCronCommand
                 'departures' => $departures,
             ]);
 
-        $this->mailer->send($message);
+        $emitted = $this->emitOnce(
+            self::EFFECT_KIND,
+            fn () => $this->mailer->send($message),
+            $input,
+            target: (string) $to,
+        );
+
+        if (!$emitted) {
+            $io->note('El aviso de hoy ya se había enviado. No se repite.');
+            return $this->nothingToDo('El aviso de hoy ya se había enviado');
+        }
+
         $io->success(sprintf('Enviado a %s · %d llegada(s), %d salida(s).', $to, count($arrivals), count($departures)));
 
         return $this->didWork(sprintf('%d llegadas y %d salidas avisadas a %s', count($arrivals), count($departures), $to));
