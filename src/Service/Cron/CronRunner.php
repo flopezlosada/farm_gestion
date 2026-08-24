@@ -3,6 +3,7 @@
 namespace App\Service\Cron;
 
 use App\Command\AbstractCronCommand;
+use App\Entity\CronRun;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Component\Console\Command\LazyCommand;
 use Symfony\Component\Console\Input\ArrayInput;
@@ -49,10 +50,15 @@ class CronRunner
      * @param string      $taskKey    Clave declarada en {@see \App\Service\AppSettings::CRONS}.
      * @param CronRunMode $mode       Previsualizar, ejecutar como el reloj, forzar o reenviar.
      * @param string|null $adminEmail Email de quien lanza, para las tareas que exigen destinatario.
+     * @param string      $trigger    Quién dispara: CronRun::TRIGGER_MANUAL o TRIGGER_SCHEDULE.
      * @throws \InvalidArgumentException Si la clave no está en el manifiesto.
      */
-    public function run(string $taskKey, CronRunMode $mode, ?string $adminEmail = null): CronRunResult
-    {
+    public function run(
+        string $taskKey,
+        CronRunMode $mode,
+        ?string $adminEmail = null,
+        string $trigger = CronRun::TRIGGER_MANUAL,
+    ): CronRunResult {
         $task = $this->tasks->get($taskKey)
             ?? throw new \InvalidArgumentException(sprintf('Tarea desconocida "%s".', $taskKey));
 
@@ -87,10 +93,15 @@ class CronRunner
         };
 
         // Las tareas que envían a una persona concreta (supervisión,
-        // administración) necesitan destinatario en ejecución real: en el cron lo
-        // fija su propia configuración, y aquí se dirige a quien pulsa el botón,
-        // para no mandar correo a terceros desde una prueba.
-        if (!$mode->isPreview() && ($task['needs_recipient'] ?? false)) {
+        // administración) se dirigen a QUIEN PULSA el botón, para no mandar
+        // correo a terceros desde una prueba manual.
+        //
+        // Cuando dispara el reloj no hay nadie que pulse, y entonces no se pasa
+        // --to: cada comando resuelve su destinatario desde /gestion/settings.
+        // Por eso el aviso de "falta destinatario" es sólo para la web; en el
+        // camino del reloj lo dice el propio comando, que es quien sabe qué
+        // ajuste mira.
+        if (!$mode->isPreview() && ($task['needs_recipient'] ?? false) && $trigger === CronRun::TRIGGER_MANUAL) {
             if ($adminEmail === null || trim($adminEmail) === '') {
                 return new CronRunResult(
                     $taskKey,
@@ -111,11 +122,14 @@ class CronRunner
 
         $output = new BufferedOutput(OutputInterface::VERBOSITY_NORMAL, false);
 
-        // Que la ejecución quede registrada como lanzada POR UNA PERSONA. Es un
-        // eje distinto de --force (que sólo dice si se salta el interruptor):
+        // Que la ejecución quede registrada con su origen real. Es un eje
+        // distinto de --force (que sólo dice si se salta el interruptor):
         // diagnóstico lanza sin forzar y sigue siendo manual, y si se dedujera
-        // de --force la pantalla daría por vivo un reloj parado.
-        $command->markLaunchedByHand();
+        // de --force la pantalla daría por vivo un reloj parado. El tick pasa por
+        // aquí igual que la web, pero declarándose como el reloj que es.
+        if ($trigger === CronRun::TRIGGER_MANUAL) {
+            $command->markLaunchedByHand();
+        }
 
         try {
             $exitCode = $application->run(new ArrayInput($args), $output);
