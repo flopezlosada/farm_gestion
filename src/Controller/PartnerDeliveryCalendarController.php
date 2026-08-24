@@ -16,6 +16,7 @@ use App\Service\Delivery\DeliveryCalendarViewBuilder;
 use App\Service\Delivery\DeliveryShiftApplier;
 use App\Service\Delivery\EggScheduleException;
 use App\Service\Delivery\ExtraBasketEditor;
+use App\Service\Delivery\ExtraBasketRemover;
 use App\Service\Delivery\PartnerEggScheduleEditor;
 use App\Service\Delivery\PartnerMonthResetter;
 use App\Service\Delivery\WeeklyBasketComponentEditor;
@@ -648,6 +649,13 @@ class PartnerDeliveryCalendarController extends AbstractController
             return $backToCalendar();
         }
 
+        // "No recoge" deja el día a CERO, y eso incluye una posible cesta extra (el applier la
+        // retira). Se avisa en el mensaje: es una cesta que desaparece del día —típicamente la
+        // que se trasladó sumando— y el gestor tiene que saber que ya no está ahí.
+        $skipped = $extraBasketEditor->hasExtra($partner, $basket)
+            ? 'Marcada como NO recogida esa semana. También se ha quitado la cesta extra que llevaba ese día.'
+            : 'Marcada como NO recogida esa semana.';
+
         // La cesta MOSTRADA en este día puede haber VENIDO movida de otro (cambio entrante).
         // Eso es lo que el gestor ve y quiere no-recoger, y tiene PRIORIDAD sobre cualquier
         // shift SALIENTE de este mismo día: tras un swap (p. ej. 1↔15) ambos días son origen
@@ -655,7 +663,7 @@ class PartnerDeliveryCalendarController extends AbstractController
         // re-apunta ese movimiento entrante a un skip (O→X pasa a O→null), aparcándola.
         if ($incoming !== null) {
             $applier->skipMovedDelivery($incoming, $actor);
-            $this->addFlash('success', 'Marcada como NO recogida esa semana.');
+            $this->addFlash('success', $skipped);
 
             return $backToCalendar();
         }
@@ -678,9 +686,72 @@ class PartnerDeliveryCalendarController extends AbstractController
             return $backToCalendar();
         }
 
-        // Día normal con su cesta de patrón.
+        // Día normal con su cesta de patrón (con o sin extra encima).
         $applier->applySkipIntent($partner, $basket, null, $actor);
-        $this->addFlash('success', 'Marcada como NO recogida esa semana.');
+        $this->addFlash('success', $skipped);
+
+        return $backToCalendar();
+    }
+
+    /**
+     * Quitar la CESTA EXTRA de una semana desde el propio calendario. Es la vía para separar
+     * un día que lleva dos cestas: quitar la extra deja la de patrón, y la que se trasladó
+     * sumando sigue aparcada en la papelera de su semana de origen, lista para recolocarse
+     * donde haga falta. Hasta ahora el único sitio para deshacer una extra era la ficha del
+     * socio (`partner_remove_extra_basket`), que además exige ROLE_GESTION_SOCIXS_EDIT: quien
+     * gestiona reparto podía crear días acumulados pero no deshacerlos.
+     *
+     * NO aplica R1 (compartidas): quitar una extra no elige el día de la cesta —lo que R1
+     * protege—, igual que los huevos, que sí se editan en compartidas. Sin deadline: es el
+     * gestor. Solo se veta el pasado, como el resto de la edición del calendario.
+     *
+     * @param Partner             $partner
+     * @param int                 $basketId Semana (Basket) cuya extra se quita.
+     * @param Request             $request
+     * @param ExtraBasketRemover  $extraRemover
+     * @param EntityManagerInterface $em
+     * @return Response
+     */
+    #[Route("/{id}/calendar/extra/{basketId}/remove", name: "partner_delivery_calendar_extra_remove", methods: ["POST"], requirements: ["id" => "\\d+", "basketId" => "\\d+"])]
+    public function deliveryCalendarRemoveExtra(
+        Partner $partner,
+        int $basketId,
+        Request $request,
+        ExtraBasketRemover $extraRemover,
+        EntityManagerInterface $em,
+    ): Response {
+        $basket = $em->getRepository(Basket::class)->find($basketId);
+        if ($basket === null) {
+            throw $this->createNotFoundException('Semana de reparto no encontrada.');
+        }
+
+        [$year, $month] = $this->returnMonth($request, $basket);
+        $backToCalendar = fn (): Response => $this->redirectToRoute('partner_delivery_calendar', [
+            'id' => $partner->getId(),
+            'year' => $year,
+            'month' => $month,
+            'sel' => $basket->getId(),
+        ]);
+
+        if (!$this->isCsrfTokenValid('calendar_extra_' . $partner->getId(), (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
+
+            return $backToCalendar();
+        }
+
+        if ($basket->getDate() < new \DateTimeImmutable('today')) {
+            $this->addFlash('warning', 'Esa entrega ya pasó: no se puede editar.');
+
+            return $backToCalendar();
+        }
+
+        $removed = $extraRemover->removeExtra($partner, $basket, 'gestor:' . $this->getUser()?->getId());
+        $this->addFlash(
+            $removed ? 'success' : 'warning',
+            $removed
+                ? 'Cesta extra quitada de esa semana.'
+                : 'Esa semana no tenía ninguna cesta extra.',
+        );
 
         return $backToCalendar();
     }
