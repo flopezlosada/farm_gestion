@@ -1,7 +1,7 @@
 # Planificador de tareas programadas — diseño
 
-> Estado: **pasos 1 y 2 implementados** (paso 1 el 2026-08-05, paso 2 el
-> 2026-08-24); pasos 3 y 4 diseñados y pendientes. Fecha del diseño: 2026-08-05.
+> Estado: **pasos 1, 2 y 3 implementados** (paso 1 el 2026-08-05, pasos 2 y 3 el
+> 2026-08-24); queda el paso 4, el reloj externo. Fecha del diseño: 2026-08-05.
 > Alcance: este proyecto y, con el mismo contrato, **gestión centro** y **SGA**
 > (los tres en cdmon, mismo problema).
 >
@@ -270,9 +270,9 @@ que costó las dos semanas de ceguera.
 
 Candidatos:
 
-- **GitHub Actions** con `schedule` en un repositorio aparte. Aquí ya vive el
-  despliegue. Se retrasa entre 5 y 30 minutos; con tick horario da igual, con
-  tick de cinco minutos no sirve (ver §3).
+- **GitHub Actions** con `schedule`, en ESTE repositorio (no en uno aparte: ver
+  el paso 4). Aquí ya vive el despliegue. Se retrasa entre 5 y 30 minutos; con
+  tick horario da igual, con tick de cinco minutos no sirve (ver §3).
 - **cron-job.org / EasyCron**: gratis, panel, y avisan por correo cuando la
   llamada falla — reloj y vigilancia en la misma pieza.
 - **Cloudflare Workers** con cron triggers.
@@ -444,15 +444,57 @@ Decisiones del paso 2:
   opción sólo de línea de comandos no serviría justo cuando se necesita. El
   runner comprueba que el comando acepte la opción antes de pasarla.
 
-**Paso 3 — Tick y salud.** Endpoint de tick sin parámetros con token en cabecera,
-evaluación de cadencias contra el registro, `fastcgi_finish_request()`, y
-endpoint de salud de solo lectura. Criterio: un `curl` al tick ejecuta lo
-pendiente y nada más; el de salud responde 503 cuando una tarea habilitada se
-pasa de plazo. El evaluador de cadencias nace ya con la cadencia por intervalo
-(cada N minutos), que este proyecto no usa pero gestión de centro sí.
+**Paso 3 — Tick y salud. HECHO (2026-08-24).** Piezas:
 
-**Paso 4 — Reloj externo.** GitHub Actions más un segundo servicio gratuito
-apuntando al mismo tick. Se hace al final, cuando ya da igual cuál elijas.
+| Pieza | Dónde |
+|---|---|
+| Evaluador de cadencias (incluida la de intervalo) | `App\Service\Cron\CronSchedule` |
+| Selección y ejecución de lo que toca | `App\Service\Cron\CronTick` |
+| Endpoint del tick (token en cabecera, 404 opaco) | `App\Controller\CronTickController` |
+| Trabajo tras responder, con la conexión cerrada | `App\EventListener\CronTickListener` |
+| Chequeo de salud 200/503, sin token | `App\Controller\CronHealthController` |
+| Token del tick (vacío = apagado) | `CRON_TICK_TOKEN` en `.env` |
+
+Decisiones del paso 3:
+
+- **La regla del evaluador no es "¿son las seis de un lunes?"** sino "¿ha corrido
+  desde la última vez que le tocaba?". La primera obliga a que el reloj sea
+  puntual: si ese tick se pierde, la semana se pierde — exactamente lo de julio.
+- **Un fallo se reintenta en el siguiente tick, sin tope.** Un tope por tiempo
+  sería inoperante, porque el manifiesto exige que el plazo de retraso sea mayor
+  que el período y cualquier ventana llegaría a la ocurrencia siguiente, que
+  reactiva la tarea igual. El precio es que una tarea rota reintenta cada tick;
+  a cambio se recupera sola en cuanto se arregla la causa.
+- **La zona horaria la declara el manifiesto**, no el núcleo ni el `php.ini` del
+  hosting. Una hora sin zona está incompleta, y dónde vive la gente de una
+  aplicación es dato suyo.
+- **Las tareas apagadas ni se miran.** Dejarlas llegar al gate del comando
+  escribiría 24 filas "apagada" al día por tarea, y la pantalla dejaría de decir
+  nada útil.
+- **El trabajo va en `kernel.terminate`**, no en el controlador. Symfony ya llama
+  ahí a `fastcgi_finish_request()`, así que se contesta al instante y se trabaja
+  con la conexión cerrada.
+- **Sin token configurado el endpoint responde 404**, igual que si no existiera:
+  un despliegue que olvide la variable deja el planificador apagado, no abierto.
+- **El chequeo de salud no lleva token** y es de sólo lectura. Un chequeo que
+  cuesta configurar acaba sin configurarse.
+- **Se arregló antes un bloqueo que impedía el tick**: tres tareas exigían `--to`
+  y no tenían dónde guardar ese email, así que sólo podía venir de la línea del
+  crontab. Ahora lo leen de `/gestion/settings` (ver §4).
+
+**Paso 4 — Reloj externo. A medias (2026-08-24).** El workflow de GitHub Actions
+está escrito (`.github/workflows/cron-tick.yml`): llama al tick cada hora, falla
+si no recibe un 202 y de paso consulta el chequeo de salud. Falta encenderlo, y
+eso son tres cosas que no puede hacer nadie más que Paco: generar el token,
+ponerlo en el `.env.local` del servidor y crear los tres secretos en GitHub
+(`CRON_TICK_URL`, `CRON_TICK_TOKEN`, `CRON_HEALTH_URL`). Y falta el segundo
+reloj, un servicio gratuito apuntando al mismo endpoint.
+
+Corrección sobre lo que decía este documento: el workflow va **en este
+repositorio**, no en uno aparte. GitHub deshabilita los workflows programados de
+un repositorio que pasa 60 días sin actividad, y uno dedicado sólo a hacer de
+reloj no recibiría un commit jamás: se apagaría solo a los dos meses, en
+silencio, que es exactamente el fallo que estamos cerrando.
 
 Entre el paso 2 y el 3: **extraer las dos costuras de acoplamiento a sus propias
 interfaces** (de dónde salen las tareas y sus interruptores, y dónde se apunta lo

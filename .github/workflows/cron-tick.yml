@@ -1,0 +1,94 @@
+name: Reloj del planificador
+
+# Llama cada hora al tick de la aplicación. NO le dice qué ejecutar: la app
+# cruza su manifiesto con el registro de ejecuciones y decide ella
+# (dev-docs/scheduler/planificador-tareas.md).
+#
+# POR QUÉ AQUÍ Y NO EN UN REPOSITORIO APARTE, como decía el diseño original:
+# GitHub deshabilita los workflows programados de un repositorio que pasa 60
+# días sin actividad. Un repositorio dedicado sólo a esto no recibiría commits
+# nunca, así que se apagaría solo a los dos meses — el mismo fallo silencioso
+# que este trabajo viene a cerrar. Este repositorio tiene actividad constante.
+#
+# La puntualidad da igual: los schedule de GitHub se retrasan entre 5 y 30
+# minutos, y las tareas van dirigidas por estado, así que un tick a las 10:25 en
+# vez de las 10:00 da el mismo resultado. Lo que importa es que ESTE workflow
+# falle y avise cuando no puede llamar, que es justo lo que el crontab de cdmon
+# no hacía.
+#
+# Este NO es el único reloj previsto. El plan es tener además un servicio
+# externo gratuito llamando al mismo endpoint: dos relojes en paralelo son
+# seguros porque el tick es idempotente, y así la fiabilidad deja de depender de
+# un solo proveedor.
+#
+# Secretos que necesita (Settings > Secrets and variables > Actions):
+#   CRON_TICK_URL    - https://<host>/cron/tick
+#   CRON_TICK_TOKEN  - el mismo valor que el .env.local del servidor
+#   CRON_HEALTH_URL  - https://<host>/cron/health
+
+on:
+  schedule:
+    # En punto de cada hora (UTC; el desfase con la hora peninsular es
+    # irrelevante porque las cadencias las resuelve la aplicación en su zona).
+    - cron: '0 * * * *'
+  # Para poder dispararlo a mano desde la pestaña Actions sin esperar a la hora.
+  workflow_dispatch:
+
+# Si un tick se solapa con el anterior, el nuevo espera en vez de cancelarlo: el
+# de la app tiene su propio cerrojo, pero cancelar aquí daría un workflow en
+# rojo que parecería una avería.
+concurrency:
+  group: cron-tick
+  cancel-in-progress: false
+
+jobs:
+  tick:
+    name: Tick horario
+    runs-on: ubuntu-latest
+    steps:
+      - name: Llamar al tick
+        env:
+          URL: ${{ secrets.CRON_TICK_URL }}
+          TOKEN: ${{ secrets.CRON_TICK_TOKEN }}
+        run: |
+          if [ -z "$URL" ] || [ -z "$TOKEN" ]; then
+            echo "Faltan los secretos CRON_TICK_URL o CRON_TICK_TOKEN." >&2
+            exit 1
+          fi
+
+          # --max-time generoso: la app contesta enseguida (el trabajo lo hace
+          # después, con la conexión cerrada), pero un hosting compartido puede
+          # tardar en despertar.
+          code=$(curl -sS -o /dev/null -w '%{http_code}' \
+            --max-time 30 --retry 2 --retry-delay 5 \
+            -X POST "$URL" -H "X-Cron-Token: $TOKEN")
+
+          echo "Respuesta del tick: $code"
+
+          # 202 = aceptado. Un 404 significa casi siempre que el token no cuadra
+          # o que no hay ninguno configurado en el servidor.
+          if [ "$code" != "202" ]; then
+            echo "El tick no fue aceptado (esperado 202)." >&2
+            exit 1
+          fi
+
+      - name: Comprobar la salud del planificador
+        env:
+          URL: ${{ secrets.CRON_HEALTH_URL }}
+        # Se ejecuta aunque el paso anterior falle: si el tick no llega, saber
+        # cómo está el planificador es más útil todavía.
+        if: always() && env.URL != ''
+        run: |
+          code=$(curl -sS -o response.json -w '%{http_code}' --max-time 30 "$URL")
+          cat response.json
+          echo
+
+          if [ "$code" = "503" ]; then
+            echo "Hay tareas encendidas fuera de plazo (ver 'late' arriba)." >&2
+            exit 1
+          fi
+
+          if [ "$code" != "200" ]; then
+            echo "El chequeo de salud no responde (código $code)." >&2
+            exit 1
+          fi
