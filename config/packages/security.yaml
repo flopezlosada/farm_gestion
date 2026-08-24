@@ -190,6 +190,14 @@ security:
         # aquí a quien tenga passwordSet = false.
         - { path: ^/account, roles: IS_AUTHENTICATED_REMEMBERED }
         - { path: ^/contact$, roles: PUBLIC_ACCESS }
+        # Planificador de tareas. Los llama un reloj externo, que no tiene ni
+        # puede tener cuenta en la aplicación. Se declaran explícitamente aunque
+        # sin regla también quedarían abiertas: que una ruta sea pública tiene
+        # que verse aquí, no deducirse de una ausencia.
+        # /cron/tick se protege con su propio token en cabecera y responde 404
+        # si no cuadra (o si no hay token configurado). /cron/health es de sólo
+        # lectura, no ejecuta nada y no expone datos personales.
+        - { path: ^/cron/, roles: PUBLIC_ACCESS }
         # Socixs (modelo lectura/escritura por sección): la lectura la da
         # ROLE_GESTION_SOCIXS (vía el #[IsGranted] de clase y la regla
         # ^/gestion de abajo); la ESCRITURA se exige aquí por método HTTP.

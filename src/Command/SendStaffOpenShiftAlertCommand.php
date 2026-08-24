@@ -2,6 +2,7 @@
 
 namespace App\Command;
 
+use App\Service\AppSettings;
 use App\Service\Staff\GapReport;
 use Symfony\Bridge\Twig\Mime\TemplatedEmail;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -38,6 +39,7 @@ class SendStaffOpenShiftAlertCommand extends AbstractCronCommand
     public function __construct(
         private readonly GapReport $gapReport,
         private readonly MailerInterface $mailer,
+        private readonly AppSettings $settings,
     ) {
         parent::__construct();
     }
@@ -56,11 +58,13 @@ class SendStaffOpenShiftAlertCommand extends AbstractCronCommand
         $io = new SymfonyStyle($input, $output);
 
         $dryRun = (bool) $input->getOption('dry-run');
-        $to = $input->getOption('to');
+        // --to si se pasa; si no, el ajuste de /gestion/settings (el mismo que
+        // el digest de huecos: los dos avisos van a quien supervisa).
+        $to = $input->getOption('to') ?: $this->settings->getString(AppSettings::EMAIL_STAFF_GAPS_TO);
 
         if (!$dryRun && !$to) {
-            $io->error('Falta --to=email del supervisor (o usa --dry-run).');
-            return Command::FAILURE;
+            $io->warning('Sin destinatario configurado: rellénalo en /gestion/settings o pasa --to=email.');
+            return $this->nothingToDo('Sin destinatario configurado');
         }
 
         $madrid = new \DateTimeZone('Europe/Madrid');

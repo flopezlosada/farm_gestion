@@ -76,6 +76,20 @@ class AppSettings
      * así DEBE quedar en producción. Se edita desde la pantalla de diagnóstico
      * de envíos, no desde el form general de ajustes.
      */
+    /**
+     * Destinatario(s) del recordatorio del albergue. Su comando exige `--to`, y
+     * sin este ajuste sólo se podía indicar en la línea del crontab del hosting
+     * — que no vemos ni podemos editar. Por eso esa tarea nunca llegó a correr.
+     */
+    public const EMAIL_ALBERGUE_REMINDER_TO = 'email.albergue_reminder_to';
+
+    /**
+     * Destinatario(s) de los dos avisos de jornada (huecos y salidas sin
+     * cerrar). Uno solo para los dos, igual que comparten interruptor: los dos
+     * van a quien supervisa.
+     */
+    public const EMAIL_STAFF_GAPS_TO = 'email.staff_gaps_to';
+
     public const EMAIL_REDIRECT_TO = 'email.redirect_to';
 
     /**
@@ -498,6 +512,20 @@ class AppSettings
             'default' => '',
             // A diferencia del resto de STRINGS (que viven en pantallas concretas), este SÍ se
             // pinta en el form general de ajustes, junto a su toggle "Resumen de cambios a admin".
+            'general' => true,
+        ],
+        self::EMAIL_ALBERGUE_REMINDER_TO => [
+            'group' => 'Emails internos',
+            'label' => 'Destinatario(s) del recordatorio del albergue',
+            'help' => 'Dirección(es) de correo (separadas por comas) que reciben el aviso de llegadas y salidas próximas. Vacío = la tarea no envía nada aunque esté encendida.',
+            'default' => '',
+            'general' => true,
+        ],
+        self::EMAIL_STAFF_GAPS_TO => [
+            'group' => 'Emails internos',
+            'label' => 'Destinatario(s) de los avisos de jornada',
+            'help' => 'Dirección(es) de correo (separadas por comas) que reciben el resumen semanal de huecos y el aviso de salidas sin cerrar. Vacío = esas tareas no envían nada aunque estén encendidas.',
+            'default' => '',
             'general' => true,
         ],
         self::EMAIL_REDIRECT_TO => [

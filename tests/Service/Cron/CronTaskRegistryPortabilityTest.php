@@ -4,6 +4,7 @@ namespace App\Tests\Service\Cron;
 
 use App\Entity\CronRun;
 use App\Service\Cron\CronManifest;
+use App\Service\Cron\CronSchedule;
 use App\Service\Cron\CronTaskRegistry;
 use PHPUnit\Framework\TestCase;
 
@@ -28,7 +29,7 @@ class CronTaskRegistryPortabilityTest extends TestCase
      */
     public function testFuncionaConUnManifiestoAjeno(): void
     {
-        $registry = new CronTaskRegistry($this->manifest());
+        $registry = $this->registry();
 
         $this->assertSame(['tarea.limpieza', 'tarea.aviso'], array_keys($registry->all()));
         $this->assertSame('los miércoles a las 03:30', $registry->describeSchedule('tarea.limpieza'));
@@ -44,7 +45,7 @@ class CronTaskRegistryPortabilityTest extends TestCase
      */
     public function testElGateSeComportaIgualConCualquierManifiesto(): void
     {
-        $registry = new CronTaskRegistry($this->manifest());
+        $registry = $this->registry();
 
         // "tarea.aviso" está apagada y además exige un ajuste de entrega apagado.
         $this->assertStringContainsString('desactivada', (string) $registry->inhibitedReason('tarea.aviso'));
@@ -64,7 +65,7 @@ class CronTaskRegistryPortabilityTest extends TestCase
      */
     public function testElRetrasoSoloSeMideEnLasTareasEncendidas(): void
     {
-        $registry = new CronTaskRegistry($this->manifest());
+        $registry = $this->registry();
         $ahora = new \DateTimeImmutable('2099-03-04 12:00:00');
         $haceCuatroDias = (new CronRun())->setStartedAt(new \DateTimeImmutable('2099-02-28 12:00:00'));
 
@@ -74,8 +75,21 @@ class CronTaskRegistryPortabilityTest extends TestCase
     }
 
     /**
+     * El registro montado a mano sobre el manifiesto inventado, con su lector de
+     * cadencias. Sin contenedor: es parte de lo que se demuestra.
+     */
+    private function registry(): CronTaskRegistry
+    {
+        $manifest = $this->manifest();
+
+        return new CronTaskRegistry($manifest, new CronSchedule($manifest));
+    }
+
+    /**
      * Manifiesto inventado, de un proyecto que no existe: una tarea semanal
      * encendida y una diaria apagada que además exige un ajuste de entrega.
+     * Declara su propia zona horaria, que en este caso ni siquiera es la de la
+     * CSA — el planificador no tiene ninguna metida dentro.
      */
     private function manifest(): CronManifest
     {
@@ -120,6 +134,11 @@ class CronTaskRegistryPortabilityTest extends TestCase
                     'entrega.mensajes' => 'Envío de mensajes',
                     default => $settingKey,
                 };
+            }
+
+            public function timezone(): string
+            {
+                return 'Atlantic/Canary';
             }
         };
     }

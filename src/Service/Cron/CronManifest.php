@@ -54,4 +54,20 @@ interface CronManifest
      * @param string $settingKey Clave del ajuste.
      */
     public function label(string $settingKey): string;
+
+    /**
+     * Zona horaria en la que hay que entender las horas del manifiesto.
+     *
+     * Va aquí porque una hora declarada sin zona está incompleta: "las 06:00"
+     * no significa nada hasta saber de dónde. Y va en el manifiesto y no en el
+     * núcleo porque es un dato de la aplicación —dónde vive su gente—, no del
+     * planificador: la CSA reparte en hora peninsular, otra aplicación estará en
+     * otro sitio.
+     *
+     * Declararla también evita depender del `php.ini` del servidor, que en un
+     * hosting compartido no se controla.
+     *
+     * @return string Identificador de zona, p. ej. "Europe/Madrid".
+     */
+    public function timezone(): string;
 }

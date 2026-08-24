@@ -4,7 +4,10 @@ namespace App\Tests\Command;
 
 use App\Entity\Helper;
 use App\Entity\HelperSource;
+use App\Entity\Setting;
 use App\Entity\Stay;
+use App\Service\AppSettings;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Console\Command\Command;
@@ -33,6 +36,40 @@ class SendAlbergueArrivalsReminderCommandTest extends KernelTestCase
 
         $this->assertSame(Command::SUCCESS, $exit);
         $this->assertStringContainsString('desactivado', $tester->getDisplay());
+    }
+
+    /**
+     * Con la tarea encendida pero sin destinatario configurado, no falla: se
+     * queda en "no había nada que hacer" diciendo por qué.
+     *
+     * Importa para el tick. Esta tarea exige `--to`, que hasta ahora sólo podía
+     * venir de la línea del crontab del hosting; cuando la dispare el tick no
+     * habrá nadie que se lo pase, y un fallo la dejaría reintentándose cada hora
+     * para siempre. Con esto, la pantalla dice qué falta y no hay bucle.
+     */
+    public function testSinDestinatarioNoFallaYLoDice(): void
+    {
+        self::bootKernel();
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        $settings = self::getContainer()->get(AppSettings::class);
+        $settings->setBool(AppSettings::EMAIL_ENABLED, true);
+        $settings->setBool(AppSettings::EMAIL_ALBERGUE_REMINDER, true);
+
+        try {
+            $tester = $this->commandTester();
+            $exit = $tester->execute([]);
+
+            $this->assertSame(Command::SUCCESS, $exit, 'Falta configuración, no es una avería del sistema.');
+            $this->assertStringContainsString('Sin destinatario configurado', $tester->getDisplay());
+        } finally {
+            foreach ([AppSettings::EMAIL_ENABLED, AppSettings::EMAIL_ALBERGUE_REMINDER] as $key) {
+                $setting = $em->getRepository(Setting::class)->findOneBy(['name' => $key]);
+                if ($setting !== null) {
+                    $em->remove($setting);
+                }
+            }
+            $em->flush();
+        }
     }
 
     /**

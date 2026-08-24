@@ -23,19 +23,9 @@ use App\Entity\CronRun;
  */
 class CronTaskRegistry
 {
-    /** Días de la semana en ISO-8601 (1 = lunes), para describir cadencias. */
-    private const WEEKDAYS = [
-        1 => 'lunes',
-        2 => 'martes',
-        3 => 'miércoles',
-        4 => 'jueves',
-        5 => 'viernes',
-        6 => 'sábado',
-        7 => 'domingo',
-    ];
-
     public function __construct(
         private readonly CronManifest $manifest,
+        private readonly CronSchedule $schedule,
     ) {
     }
 
@@ -153,28 +143,35 @@ class CronTaskRegistry
 
     /**
      * Cadencia declarada en castellano, para pintarla en la pantalla ("a diario
-     * a las 09:00", "los lunes a las 06:00"…). Es la cadencia que la tarea
-     * DEBERÍA cumplir; hasta que exista el tick, la impone el crontab del
-     * hosting.
+     * a las 09:00", "los lunes a las 06:00"…).
+     *
+     * Sólo traduce; interpretar la cadencia es cosa de {@see CronSchedule}, que
+     * es también quien decide si toca ejecutarla. Dos sitios leyendo la misma
+     * estructura acabarían discrepando: la pantalla diría una hora y el tick
+     * dispararía a otra.
      *
      * @param string $key Clave de la tarea.
      */
     public function describeSchedule(string $key): string
     {
         $meta = $this->get($key);
-        if ($meta === null) {
-            return '';
-        }
 
-        $schedule = $meta['schedule'];
-        $at = sprintf('a las %02d:%02d', $schedule['hour'], $schedule['minute'] ?? 0);
+        return $meta === null ? '' : $this->schedule->describe($meta['schedule']);
+    }
 
-        return match ($schedule['freq']) {
-            'daily' => sprintf('a diario %s', $at),
-            'weekly' => sprintf('los %s %s', self::WEEKDAYS[$schedule['dow']], $at),
-            'monthly' => sprintf('el día %d de cada mes %s', $schedule['dom'], $at),
-            default => $at,
-        };
+    /**
+     * ¿Le toca correr ahora a esta tarea? La pregunta que hace el tick en cada
+     * pasada, para cada tarea habilitada.
+     *
+     * @param string       $key     Clave de la tarea.
+     * @param CronRun|null $lastRun Última ejecución registrada, si hay.
+     * @param \DateTimeImmutable|null $now Momento de referencia (inyectable en tests).
+     */
+    public function isDue(string $key, ?CronRun $lastRun, ?\DateTimeImmutable $now = null): bool
+    {
+        $meta = $this->get($key);
+
+        return $meta !== null && $this->schedule->isDue($meta['schedule'], $lastRun, $now);
     }
 
     /**
