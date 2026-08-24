@@ -2,6 +2,7 @@
 
 namespace App\Tests\Controller;
 
+use App\Entity\Basket;
 use App\Entity\Partner;
 use App\Entity\User;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
@@ -95,6 +96,38 @@ class PartnerDeliveryCalendarAccessTest extends AbstractAuthenticatedTest
         $this->loginWithRoles($client, ['ROLE_GESTION_SOCIXS']);
         $client->request('POST', $reset);
         $this->assertResponseStatusCodeSame(403, 'El solo-lectura de socixs no debería mutar el calendario.');
+    }
+
+    /**
+     * Quitar la cesta extra DESDE EL CALENDARIO arregla un desajuste de permisos: quien
+     * gestiona reparto podía crear días con dos cestas ("trasladar sumando") pero no
+     * deshacerlos, porque el único sitio para quitar una extra era la ficha del socio, que
+     * exige ROLE_GESTION_SOCIXS_EDIT. Al vivir bajo `/calendar/...` hereda la excepción de
+     * access_control del calendario. Misma frontera que el reset: 403 vs cualquier otro
+     * código (sin CSRF el controller redirige, pero eso ya no es cosa del firewall).
+     */
+    public function testRemoveExtraIsOpenToRepartoNotToReadOnlySocixs(): void
+    {
+        $client = static::createClient();
+        $doctrine = static::getContainer()->get('doctrine');
+        $partner = $doctrine->getRepository(Partner::class)->findOneBy([]);
+        $basket = $doctrine->getRepository(Basket::class)->findOneBy([]);
+        $this->assertNotNull($partner, 'Fixtures sin partners; carga PartnerFixtures en db_test.');
+        $this->assertNotNull($basket, 'Fixtures sin semanas de reparto (Basket) en db_test.');
+
+        $removeExtra = sprintf('/gestion/partner/%d/calendar/extra/%d/remove', $partner->getId(), $basket->getId());
+
+        $this->loginWithRoles($client, ['ROLE_GESTION_REPARTO']);
+        $client->request('POST', $removeExtra);
+        $this->assertNotSame(403, $client->getResponse()->getStatusCode(), 'Reparto debería poder quitar una cesta extra desde el calendario.');
+
+        $this->loginWithRoles($client, ['ROLE_GESTION_SOCIXS_EDIT']);
+        $client->request('POST', $removeExtra);
+        $this->assertNotSame(403, $client->getResponse()->getStatusCode(), 'La escritura de socixs también.');
+
+        $this->loginWithRoles($client, ['ROLE_GESTION_SOCIXS']);
+        $client->request('POST', $removeExtra);
+        $this->assertResponseStatusCodeSame(403, 'El solo-lectura de socixs no debería quitar una cesta extra.');
     }
 
     /**
