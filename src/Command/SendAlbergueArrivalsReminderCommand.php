@@ -3,6 +3,7 @@
 namespace App\Command;
 
 use App\Repository\StayRepository;
+use App\Service\AppSettings;
 use Symfony\Bridge\Twig\Mime\TemplatedEmail;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -38,6 +39,7 @@ class SendAlbergueArrivalsReminderCommand extends AbstractCronCommand
     public function __construct(
         private readonly StayRepository $stayRepository,
         private readonly MailerInterface $mailer,
+        private readonly AppSettings $settings,
     ) {
         parent::__construct();
     }
@@ -57,11 +59,17 @@ class SendAlbergueArrivalsReminderCommand extends AbstractCronCommand
         $io = new SymfonyStyle($input, $output);
 
         $dryRun = (bool) $input->getOption('dry-run');
-        $to = $input->getOption('to');
+        // Destinatario: --to si se pasa; si no, el ajuste de /gestion/settings.
+        // Así la tarea puede correr sin que nadie edite la línea del crontab del
+        // hosting, que no vemos ni podemos tocar — que es la razón por la que
+        // esta tarea llevaba meses declarada y sin ejecutarse jamás.
+        $to = $input->getOption('to') ?: $this->settings->getString(AppSettings::EMAIL_ALBERGUE_REMINDER_TO);
 
         if (!$dryRun && !$to) {
-            $io->error('Falta --to=email del equipo (o usa --dry-run).');
-            return Command::FAILURE;
+            // No es un fallo del sistema, es configuración que falta: sale en la
+            // pantalla junto a la tarea y no entra en bucle de reintentos.
+            $io->warning('Sin destinatario configurado: rellénalo en /gestion/settings o pasa --to=email.');
+            return $this->nothingToDo('Sin destinatario configurado');
         }
 
         $days = max(1, (int) $input->getOption('days'));
