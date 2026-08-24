@@ -11,19 +11,21 @@ use App\Entity\PartnerDeliveryShift;
  * ("no recoge") o se iba a otra fecha (cambio de día). El día queda dibujando una cesta
  * fantasma que la proyección resucita desde el override.
  *
- * Dos variantes, misma raíz — los overrides de extra no siguen a la cesta:
- *  - APARCADA (shift sin destino): ARREGLADO en el código. {@see \App\Service\Delivery\DeliveryShiftApplier::applySkipIntent}
- *    retira los extras al dejar el día a cero. Lo que esta ley encuentre aquí es rastro
- *    HISTÓRICO anterior al arreglo (o un extra añadido a mano DESPUÉS del "no recoge",
- *    que es legítimo).
- *  - MOVIDA (shift con destino): DEUDA VIVA. Al mover la cesta de un día que llevaba una
- *    extra, el override no viaja con ella: se queda en el origen. Si la semana estaba
- *    generada, la composición sí viajó al destino, así que la extra se CUENTA DOS VECES
- *    (una en el destino, otra dibujada en el origen) → cesta de más en el listado. Lo suyo
- *    es que el extra VIAJE con la cesta (retirar el override del origen y ponerlo en el
- *    destino, antes de leer la composición que viaja para no duplicarla).
+ * Las dos variantes están ARREGLADAS en el código, cada una en su sitio de
+ * {@see \App\Service\Delivery\DeliveryShiftApplier}:
+ *  - APARCADA (shift sin destino): applySkipIntent / skipMovedDelivery retiran los extras al
+ *    dejar el día a cero.
+ *  - MOVIDA (shift con destino): move() los hace VIAJAR con la cesta (los quita del origen y
+ *    los pone en el destino). Sin eso, en una semana ya generada la extra viajaba dentro de la
+ *    composición Y seguía dibujándose en el origen → cesta de MÁS en el listado impreso.
  *
- * WARNING, no ERROR: la primera variante también se alcanza a mano y de forma deliberada
+ * Así que lo que esta ley encuentre es rastro HISTÓRICO anterior a esos arreglos, algo hecho
+ * a mano, o un camino que todavía no arrastra los overrides: los intents POR COMPONENTE
+ * ({@see \App\Service\Delivery\DeliveryShiftApplier::moveComponent}) no cuentan aquí (miran
+ * `component IS NULL`), y el re-apuntado por cierre de semana (repointTarget) tampoco los
+ * mueve —ese caso lo vigila L25, porque una semana cerrada no reparte—.
+ *
+ * WARNING, no ERROR: la variante aparcada también se alcanza a mano y de forma deliberada
  * (marcar "no recoge" y DESPUÉS añadir una cesta extra a ese mismo día desde la ficha o
  * desde el reparto). Eso el calendario lo dibuja bien —papelera con la cesta aparcada +
  * slot con la extra—, así que no puede tumbar la batería: hay que MIRAR cada caso.

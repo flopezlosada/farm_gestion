@@ -6,6 +6,7 @@ use App\Entity\Basket;
 use App\Entity\BasketComponent;
 use App\Entity\BasketShare;
 use App\Entity\Partner;
+use App\Entity\PartnerBasketExtra;
 use App\Entity\PartnerBasketShare;
 use App\Entity\PartnerDeliveryShift;
 use App\Entity\PartnerEvent;
@@ -43,7 +44,29 @@ final class DeliveryShiftApplier implements ShiftReconciliationActions, PartnerD
         private readonly NodeDeliveryDate $nodeDeliveryDate,
         private readonly WeeklyBasketComposer $composer,
         private readonly ExtraBasketRemover $extraRemover,
+        private readonly ExtraBasketAdder $extraAdder,
     ) {
+    }
+
+    /**
+     * Cestas extra que un socio tiene en una semana, como incrementos por componente
+     * —el formato que consume {@see ExtraBasketAdder::addToDelivery}— para poder volver a
+     * ponerlas en otro día. Vacío si esa semana no lleva extras.
+     *
+     * @return array<int, string> [BasketComponent id => cantidad].
+     */
+    private function extraDeltasOf(Partner $partner, Basket $basket): array
+    {
+        $deltas = [];
+        foreach ($this->em->getRepository(PartnerBasketExtra::class)->findForPartnerAndBasket($partner, $basket) as $extra) {
+            $component = $extra->getComponent();
+            if ($component === null || (float) $extra->getAmount() <= 0) {
+                continue;
+            }
+            $deltas[$component->getId()] = $extra->getAmount();
+        }
+
+        return $deltas;
     }
 
     /**
@@ -95,6 +118,21 @@ final class DeliveryShiftApplier implements ShiftReconciliationActions, PartnerD
      *     crea uno nuevo patrón→target). El huevo viaja con la cesta porque el
      *     applier compone el destino con el origen de patrón como referencia.
      *
+     * Las cestas EXTRA de esa semana ({@see PartnerBasketExtra}) VIAJAN con la cesta: se
+     * retiran del origen y se vuelven a poner en el destino. El orden importa y es el único
+     * que conserva la cuenta en los dos mundos:
+     *   1. quitar el extra del origen — si la semana está GENERADA, eso resta su delta del
+     *      WeeklyBasket, que se queda con su cesta de patrón;
+     *   2. mover (la composición que viaja se lee AHÍ, ya sin el extra);
+     *   3. añadir el extra al destino (override + cascada a piedra si está generada).
+     * Antes el override se quedaba en el origen: en semana dibujada el día de origen seguía
+     * pintando una cesta que el gestor creía haber movido, y en semana GENERADA la extra
+     * viajaba dentro de la composición Y seguía dibujándose en el origen — una cesta de MÁS
+     * en el listado. Todo va en una transacción: si el move falla, el extra no se pierde.
+     *
+     * Los intents POR COMPONENTE ({@see moveComponent}) no arrastran extras: mueven media
+     * entrega, no el día. Queda como deuda conocida (la ley L29 solo vigila el día entero).
+     *
      * @param Partner     $partner
      * @param Basket      $current Día donde la cesta está AHORA (origen del movimiento).
      * @param Basket      $target  Día al que se mueve la cesta.
@@ -106,10 +144,51 @@ final class DeliveryShiftApplier implements ShiftReconciliationActions, PartnerD
         // y un cambio de DÍA: son contradictorios (el override queda anclado a la semana y el
         // move la lleva a otra → el listado del nodo y el calendario discrepan). Se bloquean
         // mutuamente; el guard simétrico está en PickupRelocator. Ver deuda relocate+move.
+        //
+        // Va FUERA de la transacción a propósito: es el rechazo que un gestor dispara a diario
+        // (mensaje-guía), y wrapInTransaction CIERRA el EntityManager al propagar la excepción.
+        // Aquí no hay nada que revertir todavía, así que no hace falta pagar ese precio.
         if ($this->em->getRepository(PartnerNodeOverride::class)->findForPartnerAndBasket($partner, $current) !== null) {
             throw new \LogicException('Esa semana la recoges en otro nodo (traslado puntual): quita primero el traslado de nodo si quieres cambiarla de día.');
         }
 
+        // Mover al MISMO día no toca nada (el cuerpo hace no-op), así que tampoco se menea el
+        // extra: quitarlo y volverlo a poner dejaría dos eventos espurios en el histórico.
+        $extras = $target->getId() === $current->getId()
+            ? []
+            : $this->extraDeltasOf($partner, $current);
+
+        // Sin extras (el caso normal) se mueve tal cual: la transacción solo se paga cuando hay
+        // algo que trasladar, para no cambiar de paso cómo se propagan los rechazos del move
+        // —wrapInTransaction cierra el EntityManager al re-lanzar— en el camino de siempre.
+        if ($extras === []) {
+            $this->moveWholeDelivery($partner, $current, $target, $actor);
+
+            return;
+        }
+
+        // Los tres pasos son una sola unidad: si el move falla a mitad, el extra no se queda
+        // colgado ni desaparece.
+        $this->em->wrapInTransaction(function () use ($partner, $current, $target, $actor, $extras): void {
+            $this->extraRemover->removeExtra($partner, $current, $actor);
+            $this->moveWholeDelivery($partner, $current, $target, $actor);
+            $this->extraAdder->addToDelivery(
+                $partner,
+                $target,
+                $extras,
+                'Cesta extra que viaja con la cesta movida del ' . ($current->getDate()?->format('d/m/Y') ?? '?'),
+                $actor,
+            );
+        });
+    }
+
+    /**
+     * El movimiento en sí (resolución del día de patrón, cancelar / re-apuntar / crear el
+     * cambio). Separado de {@see move} para que el traslado de las cestas extra envuelva a
+     * TODOS sus caminos de salida sin repetirse en cada return.
+     */
+    private function moveWholeDelivery(Partner $partner, Basket $current, Basket $target, ?string $actor = null): void
+    {
         /** @var PartnerDeliveryShiftRepository $shiftRepo */
         $shiftRepo = $this->em->getRepository(PartnerDeliveryShift::class);
         /** @var WeeklyBasketRepository $wbRepo */
