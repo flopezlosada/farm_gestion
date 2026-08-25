@@ -37,13 +37,14 @@
                 {% endblock %}
             {% endembed %}
 
-            {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Reparto', subtitle: 'Día de la semana, cadencia y ancla quincenal si procede.' } %}
+            {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Reparto', subtitle: 'Día de la semana, cadencia y el dato que la concreta.' } %}
                 {% block body %}
                     {% import '_macros/csa.html.twig' as csa %}
                     <div class="csa-form-grid">
                         {{ csa.field(form.deliveryWeekday, 'Día de reparto') }}
                         {{ csa.field(form.cadence, 'Cadencia') }}
-                        {{ csa.field(form.anchorDate, 'Fecha ancla (sólo quincenal)', { full: true }) }}
+                        {{ csa.field(form.anchorDate, 'Fecha ancla (sólo quincenal)') }}
+                        {{ csa.field(form.monthlyWeek, 'Semana del mes (sólo mensual)') }}
                     </div>
                 {% endblock %}
             {% endembed %}

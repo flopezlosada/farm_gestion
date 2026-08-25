@@ -22,6 +22,21 @@ class NodeType extends AbstractType
     private const CADENCE_CHOICES = [
         'Semanal'   => Node::CADENCE_WEEKLY,
         'Quincenal' => Node::CADENCE_BIWEEKLY,
+        'Mensual'   => Node::CADENCE_MONTHLY,
+    ];
+
+    /**
+     * Semanas elegibles en un punto mensual. Sin "4ª" a propósito: sólo
+     * coincide con "la última" en los meses de 4 semanas, y lo que
+     * administración quiere decir siempre es la última.
+     *
+     * @var array<string,int>
+     */
+    private const MONTHLY_WEEK_CHOICES = [
+        '1ª semana del mes'     => 1,
+        '2ª semana del mes'     => 2,
+        '3ª semana del mes'     => 3,
+        'Última semana del mes' => Node::MONTHLY_WEEK_LAST,
     ];
 
     public function buildForm(FormBuilderInterface $builder, array $options): void
@@ -46,6 +61,15 @@ class NodeType extends AbstractType
                 'widget'   => 'single_text',
                 'required' => false,
                 'help'     => 'Una fecha en la que este punto SÍ reparte, en su mismo día de la semana. A partir de ahí se alternan las semanas con reparto y sin él. En puntos semanales, déjala vacía.',
+            ])
+            // Mismo criterio que anchorDate: quién la necesita lo decide
+            // Node::validateCadenceConsistency(), no el navegador.
+            ->add('monthlyWeek', ChoiceType::class, [
+                'label'       => 'Semana del mes (obligatoria si la cadencia es mensual)',
+                'choices'     => self::MONTHLY_WEEK_CHOICES,
+                'placeholder' => 'No aplica',
+                'required'    => false,
+                'help'        => 'La semana en que abre el punto, contada sobre su día de reparto: «2ª semana» es el 2º miércoles del mes si reparte en miércoles. «Última» sigue al último del mes, tenga 4 o 5. En puntos semanales o quincenales, déjala vacía.',
             ])
             ->add('schedule', TextType::class, [
                 'label'    => 'Horario público',

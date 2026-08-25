@@ -3,6 +3,7 @@
 namespace App\Tests\Entity;
 
 use App\Entity\Node;
+use App\Entity\PartnerBasketShare;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Validator\Validation;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
@@ -85,6 +86,78 @@ class NodeCadenceValidationTest extends TestCase
     }
 
     /**
+     * Mismo agujero que el del ancla, en la otra cadencia: sin saber qué semana
+     * abre el punto no hay calendario que calcular.
+     */
+    public function testMonthlyWithoutWeekIsRejected(): void
+    {
+        $node = $this->node(Node::CADENCE_MONTHLY, 3, null);
+
+        $this->assertViolationOn($node, 'monthlyWeek', 'necesita saber qué semana del mes abre');
+    }
+
+    /**
+     * Configuración correcta de El Berrueco: mensual, 2ª semana, sin ancla.
+     */
+    public function testMonthlyWithWeekIsValid(): void
+    {
+        $node = $this->node(Node::CADENCE_MONTHLY, 3, null)->setMonthlyWeek(2);
+
+        $this->assertCount(0, $this->validator->validate($node));
+    }
+
+    /**
+     * "Última semana" es un valor de primera clase, no un 4 disfrazado.
+     */
+    public function testMonthlyWithLastWeekIsValid(): void
+    {
+        $node = $this->node(Node::CADENCE_MONTHLY, 3, null)->setMonthlyWeek(Node::MONTHLY_WEEK_LAST);
+
+        $this->assertCount(0, $this->validator->validate($node));
+    }
+
+    /**
+     * La 4ª no se ofrece: en un mes de 5 semanas no es la última, que es lo que
+     * administración quiere decir siempre.
+     */
+    public function testMonthlyWithUnsupportedWeekIsRejected(): void
+    {
+        $node = $this->node(Node::CADENCE_MONTHLY, 3, null)->setMonthlyWeek(4);
+
+        $this->assertViolationOn($node, 'monthlyWeek', 'Semana del mes no válida');
+    }
+
+    /**
+     * Cada cadencia usa su campo y sólo el suyo: una semana huérfana en un
+     * punto quincenal reaparecería al cambiarlo a mensual.
+     */
+    public function testNonMonthlyWithWeekIsRejected(): void
+    {
+        $node = $this->node(Node::CADENCE_BIWEEKLY, 3, self::WEDNESDAY)->setMonthlyWeek(2);
+
+        $this->assertViolationOn($node, 'monthlyWeek', 'sólo se usa en la cadencia mensual');
+    }
+
+    /**
+     * Un punto mensual tampoco lleva ancla: su calendario lo define la semana.
+     */
+    public function testMonthlyWithAnchorIsRejected(): void
+    {
+        $node = $this->node(Node::CADENCE_MONTHLY, 3, self::WEDNESDAY)->setMonthlyWeek(2);
+
+        $this->assertViolationOn($node, 'anchorDate', 'sólo se usa en la cadencia quincenal');
+    }
+
+    /**
+     * La semana que abre un punto mensual se copia al `day_month_order` de sus
+     * socios, así que "última" tiene que significar lo mismo en los dos sitios.
+     */
+    public function testLastWeekConstantMatchesTheOneUsedInPartnerShares(): void
+    {
+        $this->assertSame(PartnerBasketShare::DAY_MONTH_ORDER_LAST, Node::MONTHLY_WEEK_LAST);
+    }
+
+    /**
      * @param string $cadence Una de Node::CADENCE_*.
      * @param int $weekday Día ISO 1=Lunes..7=Domingo.
      * @param string|null $anchor Fecha 'Y-m-d' del ancla, o null.
@@ -106,10 +179,21 @@ class NodeCadenceValidationTest extends TestCase
      */
     private function assertViolationOnAnchor(Node $node, string $expectedFragment): void
     {
+        $this->assertViolationOn($node, 'anchorDate', $expectedFragment);
+    }
+
+    /**
+     * @param Node $node
+     * @param string $path Campo en el que debe salir el error.
+     * @param string $expectedFragment Trozo del mensaje que debe aparecer.
+     * @return void
+     */
+    private function assertViolationOn(Node $node, string $path, string $expectedFragment): void
+    {
         $violations = $this->validator->validate($node);
 
         $this->assertCount(1, $violations, 'Se esperaba exactamente una violación.');
-        $this->assertSame('anchorDate', $violations[0]->getPropertyPath());
+        $this->assertSame($path, $violations[0]->getPropertyPath());
         $this->assertStringContainsString($expectedFragment, $violations[0]->getMessage());
     }
 }

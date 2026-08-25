@@ -338,10 +338,12 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
      *    Si el nodo weekly no entrega esta semana (excepción global de
      *    cancelación o de ese nodo), `$weeklyMonthlyOrder` viene null y la
      *    rama se omite.
-     *  - Partners en nodos `biweekly` (Cascorro, Midori): se itera el mapa
+     *  - Partners en nodos con calendario propio, quincenales (Cascorro,
+     *    Midori) o mensuales (El Berrueco): se itera el mapa
      *    `nodeId => orderEnEseNodo`, donde el orden está resuelto fuera con
      *    {@see MonthlyOperativeOrderResolver::operativeOrderForNode} y sólo
-     *    aparecen los nodos que sí entregan en este Basket.
+     *    aparecen los nodos que sí entregan en este Basket. La rama filtra por
+     *    `n.id`, no por cadencia, así que sirve igual a unos y otros.
      *
      * Se ejecutan 0..1 + N queries (N = número de nodos biweekly activos
      * esta semana, hoy ≤ 2). KISS: array_merge en PHP frente a un DQL con
@@ -355,7 +357,7 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
      * @param int[] $weeklyMonthlyOrders Órdenes que el basket sirve en el nodo weekly
      *              (pegajoso, ver MonthlyOperativeOrderResolver::ordersServedBy);
      *              vacío si éste no entrega esta semana.
-     * @param array<int,int[]> $biweeklyNodeIdToOrders Mapa nodeId → órdenes servidas en ese nodo.
+     * @param array<int,int[]> $ownCalendarNodeIdToOrders Mapa nodeId → órdenes servidas en ese nodo.
      * @param bool $only_eggs Filtrar a egg_period=3 (sólo huevos mensuales).
      * @param string|null $weeklyCohort Turno A/B que reparte esta semana en el nodo weekly.
      * @param int[] $weeklyCohortOrders Órdenes que el basket sirve contando SÓLO
@@ -368,7 +370,7 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
         $current_basket,
         int $basket_share_id,
         array $weeklyMonthlyOrders,
-        array $biweeklyNodeIdToOrders,
+        array $ownCalendarNodeIdToOrders,
         bool $only_eggs = false,
         ?string $weeklyCohort = null,
         array $weeklyCohortOrders = []
@@ -421,7 +423,7 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
             $results = $weeklyQuery->getResult();
         }
 
-        foreach ($biweeklyNodeIdToOrders as $nodeId => $ordersForNode) {
+        foreach ($ownCalendarNodeIdToOrders as $nodeId => $ordersForNode) {
             if ($ordersForNode === []) {
                 continue;
             }

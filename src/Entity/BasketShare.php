@@ -280,6 +280,13 @@ class BasketShare
      * reparte cada dos semanas.
      */
     public const IDS_WEEKLY = [1, 4];
+    /**
+     * Todas las modalidades del catálogo, compuesta a partir de las listas por
+     * cadencia para que no se desincronice al añadir una. Sirve para expresar
+     * restricciones por complemento ("todas menos las semanales") sin volver a
+     * escribir la lista de ids.
+     */
+    public const IDS_ALL = [...self::IDS_WEEKLY, ...self::IDS_BIWEEKLY, ...self::IDS_MONTHLY, self::ID_ONLY_EGG];
 
     /**
      * ¿Esta modalidad usa la cohorte A/B (delivery_group) para repartir?

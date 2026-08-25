@@ -27,7 +27,26 @@ class Node
 {
     public const CADENCE_WEEKLY = 'weekly';
     public const CADENCE_BIWEEKLY = 'biweekly';
-    public const CADENCES = [self::CADENCE_WEEKLY, self::CADENCE_BIWEEKLY];
+    public const CADENCE_MONTHLY = 'monthly';
+    public const CADENCES = [self::CADENCE_WEEKLY, self::CADENCE_BIWEEKLY, self::CADENCE_MONTHLY];
+
+    /**
+     * "Última semana del mes" como valor de `monthly_week`. Negativo a
+     * propósito, igual que {@see PartnerBasketShare::$day_month_order}: la
+     * última entrega es la 4ª en un mes de 4 semanas y la 5ª en uno de 5, así
+     * que contarla desde el final es la única forma de que signifique siempre
+     * lo mismo.
+     */
+    public const MONTHLY_WEEK_LAST = -1;
+
+    /**
+     * Semanas del mes elegibles para un punto de cadencia mensual. No incluye
+     * la 4ª a propósito: "la cuarta" y "la última" sólo coinciden en los meses
+     * de 4 semanas, y lo que administración quiere decir siempre es la última.
+     *
+     * @var int[]
+     */
+    public const MONTHLY_WEEKS = [1, 2, 3, self::MONTHLY_WEEK_LAST];
 
     /**
      * Día ISO-8601 (el que devuelve DateTime::format('N')) a nombre humano.
@@ -93,6 +112,18 @@ class Node
      * @ORM\Column(name="anchor_date", type="date", nullable=true)
      */
     private ?\DateTimeInterface $anchorDate = null;
+
+    /**
+     * Sólo aplica si cadence='monthly'. Qué semana del mes abre el punto:
+     * 1, 2, 3 o {@see MONTHLY_WEEK_LAST} (la última). Se cuenta sobre las
+     * ocurrencias de `delivery_weekday` dentro del mes natural — el 2º jueves
+     * del mes es el 2º jueves, con independencia de en qué día caiga el 1.
+     *
+     * Lo garantiza {@see validateCadenceConsistency()}.
+     *
+     * @ORM\Column(name="monthly_week", type="smallint", nullable=true)
+     */
+    private ?int $monthlyWeek = null;
 
     /**
      * Horario público de recogida, texto libre que se muestra tal cual en la
@@ -201,6 +232,36 @@ class Node
     }
 
     /**
+     * @return int|null Semana del mes que abre el punto (1, 2, 3 o
+     *                  MONTHLY_WEEK_LAST), o null si la cadencia no es mensual.
+     */
+    public function getMonthlyWeek(): ?int
+    {
+        return $this->monthlyWeek;
+    }
+
+    /**
+     * @param int|null $monthlyWeek Una de Node::MONTHLY_WEEKS, o null.
+     * @return self
+     */
+    public function setMonthlyWeek(?int $monthlyWeek): self
+    {
+        $this->monthlyWeek = $monthlyWeek;
+        return $this;
+    }
+
+    /**
+     * ¿Este punto abre una sola semana al mes? Atajo legible para los
+     * consumidores, que preguntan esto mucho más que la cadencia cruda.
+     *
+     * @return bool
+     */
+    public function isMonthly(): bool
+    {
+        return $this->cadence === self::CADENCE_MONTHLY;
+    }
+
+    /**
      * @return string|null Horario público de recogida, o null si no se publica.
      */
     public function getSchedule(): ?string
@@ -247,18 +308,18 @@ class Node
     }
 
     /**
-     * Coherencia entre cadencia y fecha ancla. Sin esto se puede guardar un
-     * nodo quincenal sin ancla, y entonces cualquier pantalla que calcule
-     * fechas de reparto revienta con un 500 al resolver la alternancia
+     * Coherencia entre la cadencia y el dato que la concreta: la fecha ancla en
+     * los quincenales, la semana del mes en los mensuales.
+     *
+     * Sin esto se puede guardar un nodo quincenal sin ancla, y entonces
+     * cualquier pantalla que calcule fechas de reparto revienta con un 500 al
+     * resolver la alternancia
      * ({@see \App\Service\Delivery\NodeDeliveryDate::physicalDateFor}), que es
      * lo que pasó al dar de alta "El Berrueco" el 25-08-2026.
      *
-     * Tres reglas:
-     *  1. Quincenal exige ancla — sin ella la alternancia es incalculable.
-     *  2. El ancla debe caer en el día de reparto del nodo, o la fase se
-     *     invierte en silencio (ver {@see $anchorDate}).
-     *  3. Semanal no admite ancla — un ancla huérfana que sobrevive a un
-     *     cambio de cadencia reaparece después con una fase que nadie eligió.
+     * Cada cadencia usa un campo y sólo uno. Los campos que no le tocan deben
+     * quedar vacíos: un valor huérfano que sobrevive a un cambio de cadencia
+     * reaparece después con una configuración que nadie eligió.
      *
      * @param ExecutionContextInterface $context
      * @return void
@@ -266,17 +327,7 @@ class Node
     #[Assert\Callback]
     public function validateCadenceConsistency(ExecutionContextInterface $context): void
     {
-        $isBiweekly = $this->cadence === self::CADENCE_BIWEEKLY;
-
-        if ($isBiweekly && $this->anchorDate === null) {
-            $context->buildViolation('Un punto de reparto quincenal necesita una fecha ancla: una fecha en la que sí reparte, para saber qué semanas le tocan.')
-                ->atPath('anchorDate')
-                ->addViolation();
-
-            return;
-        }
-
-        if (!$isBiweekly && $this->anchorDate !== null) {
+        if ($this->cadence !== self::CADENCE_BIWEEKLY && $this->anchorDate !== null) {
             $context->buildViolation('La fecha ancla sólo se usa en la cadencia quincenal. Déjala vacía.')
                 ->atPath('anchorDate')
                 ->addViolation();
@@ -284,7 +335,44 @@ class Node
             return;
         }
 
-        if (!$isBiweekly || !isset($this->deliveryWeekday)) {
+        if ($this->cadence !== self::CADENCE_MONTHLY && $this->monthlyWeek !== null) {
+            $context->buildViolation('La semana del mes sólo se usa en la cadencia mensual. Déjala vacía.')
+                ->atPath('monthlyWeek')
+                ->addViolation();
+
+            return;
+        }
+
+        if ($this->cadence === self::CADENCE_BIWEEKLY) {
+            $this->validateAnchorDate($context);
+        }
+
+        if ($this->cadence === self::CADENCE_MONTHLY) {
+            $this->validateMonthlyWeek($context);
+        }
+    }
+
+    /**
+     * Reglas del ancla quincenal: existe y cae en el día de reparto del nodo.
+     * Lo segundo no es cosmético — la alineación se calcula comparando el ancla
+     * con la fecha física del nodo, así que un ancla en otro día de la semana
+     * desplaza la cuenta de semanas e invierte la fase, y el punto repartiría
+     * justo las semanas contrarias sin ningún error visible.
+     *
+     * @param ExecutionContextInterface $context
+     * @return void
+     */
+    private function validateAnchorDate(ExecutionContextInterface $context): void
+    {
+        if ($this->anchorDate === null) {
+            $context->buildViolation('Un punto de reparto quincenal necesita una fecha ancla: una fecha en la que sí reparte, para saber qué semanas le tocan.')
+                ->atPath('anchorDate')
+                ->addViolation();
+
+            return;
+        }
+
+        if (!isset($this->deliveryWeekday)) {
             return;
         }
 
@@ -296,6 +384,31 @@ class Node
                 mb_strtolower(self::WEEKDAY_NAMES[$anchorWeekday] ?? '(día no válido)'),
             ))
                 ->atPath('anchorDate')
+                ->addViolation();
+        }
+    }
+
+    /**
+     * Reglas de la semana mensual: existe y es una de las ofrecidas. Sin ella
+     * no hay forma de saber qué semana abre el punto, que es justo lo que
+     * define su calendario.
+     *
+     * @param ExecutionContextInterface $context
+     * @return void
+     */
+    private function validateMonthlyWeek(ExecutionContextInterface $context): void
+    {
+        if ($this->monthlyWeek === null) {
+            $context->buildViolation('Un punto de reparto mensual necesita saber qué semana del mes abre.')
+                ->atPath('monthlyWeek')
+                ->addViolation();
+
+            return;
+        }
+
+        if (!in_array($this->monthlyWeek, self::MONTHLY_WEEKS, true)) {
+            $context->buildViolation('Semana del mes no válida: elige la 1ª, la 2ª, la 3ª o la última.')
+                ->atPath('monthlyWeek')
                 ->addViolation();
         }
     }

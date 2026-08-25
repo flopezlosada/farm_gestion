@@ -521,6 +521,62 @@ class MonthlyOperativeOrderResolverTest extends TestCase
      *
      * @param Basket[] $monthBaskets
      */
+    /**
+     * En un punto que abre una sola semana al mes, esa entrega vale para
+     * cualquier posición que el socio tenga en ficha. Sin esto, un socio con
+     * `day_month_order` distinto de la semana del punto —porque se dio de alta
+     * antes de que administración la cambiara— desaparecería del listado sin
+     * ningún aviso, que es el peor fallo posible aquí.
+     */
+    public function testPuntoMensualSirveCualquierPosicionDelSocio(): void
+    {
+        $baskets = $this->mayoBaskets();
+        // El Berrueco: miércoles, 2ª semana del mes. En mayo 2026 los miércoles
+        // son 6, 13, 20 y 27; el 2º es el 13, que llega por el Basket del 15.
+        $berrueco = $this->makeMonthlyNode('El Berrueco', 3, 2);
+        $resolver = $this->makeResolver($baskets);
+
+        $orders = $resolver->ordersServedBy($baskets[2], $berrueco);
+
+        foreach ([1, 2, 3, -1] as $enFicha) {
+            $this->assertContains(
+                $enFicha,
+                $orders,
+                sprintf('Un socio con day_month_order=%d debe recoger igual en un punto mensual.', $enFicha)
+            );
+        }
+    }
+
+    /**
+     * El blindaje anterior no puede colarse en las semanas que el punto NO
+     * abre: ahí no recoge nadie.
+     */
+    public function testPuntoMensualNoSirveNadaFueraDeSuSemana(): void
+    {
+        $baskets = $this->mayoBaskets();
+        $berrueco = $this->makeMonthlyNode('El Berrueco', 3, 2);
+        $resolver = $this->makeResolver($baskets);
+
+        $this->assertSame([], $resolver->ordersServedBy($baskets[0], $berrueco), 'Basket 1-may → miércoles 29-abr.');
+        $this->assertSame([], $resolver->ordersServedBy($baskets[1], $berrueco), 'Basket 8-may → 1er miércoles.');
+        $this->assertSame([], $resolver->ordersServedBy($baskets[3], $berrueco), 'Basket 22-may → 3er miércoles.');
+        $this->assertSame([], $resolver->ordersServedBy($baskets[4], $berrueco), 'Basket 29-may → 4º miércoles.');
+    }
+
+    /**
+     * Un punto mensual tiene una única entrega al mes, así que su posición
+     * física es siempre la 1ª.
+     */
+    public function testPuntoMensualTieneUnaSolaEntregaEnElMes(): void
+    {
+        $baskets = $this->mayoBaskets();
+        $berrueco = $this->makeMonthlyNode('El Berrueco', 3, 2);
+        $resolver = $this->makeResolver($baskets);
+
+        $this->assertSame(1, $resolver->operativeOrderForNode($baskets[2], $berrueco));
+        $this->assertNull($resolver->operativeOrderForNode($baskets[3], $berrueco));
+    }
+
     private function makeResolver(array $monthBaskets): MonthlyOperativeOrderResolver
     {
         return $this->makeResolverWithExceptions($monthBaskets, []);
@@ -578,6 +634,18 @@ class MonthlyOperativeOrderResolverTest extends TestCase
         $ref->setValue($basket, $id);
 
         return $basket;
+    }
+
+    /**
+     * @param string $name
+     * @param int $weekday Día ISO 1=Lunes..7=Domingo.
+     * @param int $week Semana del mes: 1, 2, 3 o Node::MONTHLY_WEEK_LAST.
+     * @return Node
+     */
+    private function makeMonthlyNode(string $name, int $weekday, int $week): Node
+    {
+        return $this->makeNode($name, $weekday, Node::CADENCE_MONTHLY)
+            ->setMonthlyWeek($week);
     }
 
     private function makeNode(string $name, int $weekday, string $cadence, ?string $anchor = null): Node

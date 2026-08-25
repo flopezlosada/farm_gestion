@@ -2,6 +2,7 @@
 
 namespace App\Service\Delivery;
 
+use App\Entity\BasketShare;
 use App\Entity\Node;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
@@ -40,7 +41,7 @@ class CohortChoiceBuilder
     /**
      * Calcula los datos del turno de viernes para el nodo de un socio.
      *
-     * @return array{nodeIsBiweekly: bool, nodeName: ?string, nodeDatesLabel: ?string, cohortChoices: array<string, ?string>, excludeWeeklyShares: bool}
+     * @return array{nodeIsBiweekly: bool, nodeIsMonthly: bool, nodeName: ?string, nodeDatesLabel: ?string, cohortChoices: array<string, ?string>, allowedShareIds: ?int[], forcedMonthOrder: ?int}
      */
     public function forPartner(Partner $partner): array
     {
@@ -53,11 +54,18 @@ class CohortChoiceBuilder
      * elige en el propio formulario, y las opciones deben recalcularse para
      * el nodo del grupo elegido (no el del socio, que es NULL).
      *
-     * @return array{nodeIsBiweekly: bool, nodeName: ?string, nodeDatesLabel: ?string, cohortChoices: array<string, ?string>, excludeWeeklyShares: bool}
+     * `allowedShareIds` es la restricción de modalidades que impone el punto,
+     * o null si no impone ninguna: en un punto quincenal no caben las cestas
+     * de reparto semanal, y en uno mensual sólo caben las mensuales, porque
+     * abre una única vez al mes. `forcedMonthOrder` es la semana que recogen
+     * todos los socios de un punto mensual — allí no se elige, la fija el punto.
+     *
+     * @return array{nodeIsBiweekly: bool, nodeIsMonthly: bool, nodeName: ?string, nodeDatesLabel: ?string, cohortChoices: array<string, ?string>, allowedShareIds: ?int[], forcedMonthOrder: ?int}
      */
     public function forNode(?Node $node): array
     {
         $nodeIsBiweekly = $node !== null && $node->getCadence() === Node::CADENCE_BIWEEKLY;
+        $nodeIsMonthly = $node !== null && $node->isMonthly();
 
         $upcoming = $this->basketRepository->findBetweenDates(
             new \DateTime(),
@@ -67,7 +75,9 @@ class CohortChoiceBuilder
         $nodeDatesLabel = null;
         $cohortChoices = [];
 
-        if ($nodeIsBiweekly) {
+        if ($nodeIsBiweekly || $nodeIsMonthly) {
+            // El punto tiene calendario propio: sus fechas se informan y el
+            // turno A/B no se elige (no pinta nada en su cadencia).
             $nodeDates = [];
             foreach ($upcoming as $basket) {
                 $date = $this->nodeDeliveryDate->operativeDateFor($basket, $node);
@@ -104,13 +114,39 @@ class CohortChoiceBuilder
 
         return [
             'nodeIsBiweekly' => $nodeIsBiweekly,
+            'nodeIsMonthly' => $nodeIsMonthly,
             'nodeName' => $node?->getName(),
             'nodeDatesLabel' => $nodeDatesLabel,
             // Si no hay baskets futuros aún, un único hueco para que el
             // ChoiceType no reviente con choices vacías.
             'cohortChoices' => $cohortChoices !== [] ? $cohortChoices : ['Sin asignar' => null],
-            'excludeWeeklyShares' => $nodeIsBiweekly,
+            'allowedShareIds' => $this->allowedShareIdsFor($nodeIsBiweekly, $nodeIsMonthly),
+            'forcedMonthOrder' => $nodeIsMonthly ? $node->getMonthlyWeek() : null,
         ];
+    }
+
+    /**
+     * Modalidades de cesta que caben en el punto, o null si no lo restringe.
+     *
+     * En un punto quincenal no cabe una cesta de reparto semanal: sólo abre
+     * cada dos semanas. En uno mensual sólo caben las mensuales, y además su
+     * semana la fija el punto, no el socio.
+     *
+     * @param bool $nodeIsBiweekly
+     * @param bool $nodeIsMonthly
+     * @return int[]|null IDs de BasketShare admitidos, o null si valen todas.
+     */
+    private function allowedShareIdsFor(bool $nodeIsBiweekly, bool $nodeIsMonthly): ?array
+    {
+        if ($nodeIsMonthly) {
+            return BasketShare::IDS_MONTHLY;
+        }
+
+        if ($nodeIsBiweekly) {
+            return array_values(array_diff(BasketShare::IDS_ALL, BasketShare::IDS_WEEKLY));
+        }
+
+        return null;
     }
 
     /**

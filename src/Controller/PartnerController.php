@@ -1027,7 +1027,8 @@ class PartnerController extends AbstractController
         $cohort = $cohortChoiceBuilder->forNode($pickupGroup?->getNode());
         $form = $this->createForm(PartnerBasketShareType::class, $partnerBasketShare, [
             'cohort_choices' => $cohort['cohortChoices'],
-            'exclude_weekly_shares' => $cohort['excludeWeeklyShares'],
+            'allowed_share_ids' => $cohort['allowedShareIds'],
+            'forced_month_order' => $cohort['forcedMonthOrder'],
             'ask_pickup_group' => $askPickupGroup,
             'pickup_group' => $pickupGroup,
         ]);
@@ -1057,7 +1058,7 @@ class PartnerController extends AbstractController
             // Simetría con changeModality: el turno sólo se guarda donde se usa
             // (quincenales y mensuales) y nunca en nodos de cadencia quincenal,
             // que ya alternan por sí mismos.
-            if ($cohort['nodeIsBiweekly'] || !$partnerBasketShare->getBasketShare()->usesDeliveryGroup()) {
+            if ($cohort['nodeIsBiweekly'] || $cohort['nodeIsMonthly'] || !$partnerBasketShare->getBasketShare()->usesDeliveryGroup()) {
                 $partnerBasketShare->setDeliveryGroup(null);
             }
             $entityManager->persist($partnerBasketShare);

@@ -123,21 +123,27 @@ class WeeklyBasketGenerator
     }
 
     /**
-     * Mapa nodeId → orden operativo del Basket dentro del calendario del
-     * nodo biweekly, para los nodos biweekly que reparten esta semana.
-     * Usado por la query mensual node-aware para emparejar partners cuyo
-     * `day_month_order` se cuenta sobre las entregas reales del nodo,
-     * no sobre los viernes-ciclo.
+     * Mapa nodeId → orden operativo del Basket dentro del calendario propio del
+     * nodo, para los nodos que reparten esta semana y no siguen el calendario
+     * de viernes: los quincenales y los mensuales. Usado por la query mensual
+     * node-aware para emparejar partners cuyo `day_month_order` se cuenta sobre
+     * las entregas reales del nodo, no sobre los viernes-ciclo.
      *
-     * Sub-fase 8.8b3 (2026-05-28).
+     * Los mensuales entran por aquí sin ningún tratamiento especial: la rama
+     * correspondiente del repositorio filtra por `n.id`, no por cadencia
+     * ({@see \App\Repository\PartnerBasketShareRepository::findBasketPartnersMonthlyNodeAware}),
+     * y en un punto que abre una vez al mes ese mapa tiene una sola entrada,
+     * que es justo la semana en que recogen todos sus socios.
+     *
+     * Sub-fase 8.8b3 (2026-05-28); cadencia mensual añadida el 25-08-2026.
      *
      * @param Basket $basket
      * @return array<int,int[]> nodeId → órdenes 1-based que el basket sirve en ese nodo.
      */
-    private function monthlyOrdersByBiweeklyNode(Basket $basket): array
+    private function monthlyOrdersByOwnCalendarNode(Basket $basket): array
     {
         $map = [];
-        foreach ($this->activeBiweeklyNodes($basket) as $node) {
+        foreach ($this->activeOwnCalendarNodes($basket) as $node) {
             $orders = $this->monthlyResolver->ordersServedBy($basket, $node);
             if ($orders !== []) {
                 $map[$node->getId()] = $orders;
@@ -147,17 +153,45 @@ class WeeklyBasketGenerator
     }
 
     /**
-     * Nodos biweekly que reparten en este Basket. Helper compartido por
-     * activeBiweeklyNodeIds y monthlyOrderByBiweeklyNode.
+     * Nodos biweekly que reparten en este Basket.
      *
      * @param Basket $basket
      * @return Node[]
      */
     private function activeBiweeklyNodes(Basket $basket): array
     {
-        $biweeklyNodes = $this->nodeRepository->findByCadence(Node::CADENCE_BIWEEKLY);
+        return $this->activeNodesWithCadence($basket, [Node::CADENCE_BIWEEKLY]);
+    }
+
+    /**
+     * Nodos con calendario propio (quincenales y mensuales) que reparten en
+     * este Basket. Los semanales quedan fuera a propósito: siguen el calendario
+     * global de viernes y su rama en el generador es otra.
+     *
+     * @param Basket $basket
+     * @return Node[]
+     */
+    private function activeOwnCalendarNodes(Basket $basket): array
+    {
+        return $this->activeNodesWithCadence($basket, [Node::CADENCE_BIWEEKLY, Node::CADENCE_MONTHLY]);
+    }
+
+    /**
+     * Nodos de las cadencias dadas que reparten en este Basket.
+     *
+     * @param Basket $basket
+     * @param string[] $cadences Valores de Node::CADENCE_*.
+     * @return Node[]
+     */
+    private function activeNodesWithCadence(Basket $basket, array $cadences): array
+    {
+        $nodes = array_merge(...array_map(
+            fn (string $cadence): array => $this->nodeRepository->findByCadence($cadence),
+            $cadences,
+        ));
+
         return array_values(array_filter(
-            $biweeklyNodes,
+            $nodes,
             fn (Node $node) => $this->nodeDeliveryDate->deliversInBasket($basket, $node),
         ));
     }
@@ -643,12 +677,12 @@ class WeeklyBasketGenerator
         // por eso no hace falta calcular su lista.
         $weeklyCohortMonthlyOrders = $this->weeklyMonthlyOrdersFor($basket, $cohort);
         $activeBiweeklyNodeIds = $this->activeBiweeklyNodeIds($basket);
-        $biweeklyNodeMonthlyOrders = $this->monthlyOrdersByBiweeklyNode($basket);
+        $ownCalendarNodeMonthlyOrders = $this->monthlyOrdersByOwnCalendarNode($basket);
 
         $weekly = $shareRepo->findBasketPartnersByTypeAndCity(self::SHARE_WEEKLY, 1, $basket);
         $half = $shareRepo->findBasketPartnersByTypeAndCity(self::SHARE_HALF, 1, $basket);
         $biweekly = $shareRepo->findBasketPartnersBiweeklyNodeAware($basket, self::SHARE_BIWEEKLY, 1, $cohort, $activeBiweeklyNodeIds);
-        $monthly = $shareRepo->findBasketPartnersMonthlyNodeAware($basket, self::SHARE_MONTHLY, $weeklyMonthlyOrders, $biweeklyNodeMonthlyOrders, false, $cohort, $weeklyCohortMonthlyOrders);
+        $monthly = $shareRepo->findBasketPartnersMonthlyNodeAware($basket, self::SHARE_MONTHLY, $weeklyMonthlyOrders, $ownCalendarNodeMonthlyOrders, false, $cohort, $weeklyCohortMonthlyOrders);
 
         // Quincenal/mensual COMPARTIDA (bs 6/7): misma cadencia que su no-compartida
         // (cohorte quincenal / orden operativo mensual), pero media cesta. Se buscan
@@ -656,11 +690,11 @@ class WeeklyBasketGenerator
         // el peso ½ (getDeliveredBasketWeight) y moveSharedToHalf las reubica al bloque
         // de compartidas (tienen share_partner_id). Sin esto su cesta no se materializa.
         $biweekly = array_merge($biweekly, $shareRepo->findBasketPartnersBiweeklyNodeAware($basket, self::SHARE_BIWEEKLY_SHARED, 1, $cohort, $activeBiweeklyNodeIds));
-        $monthly = array_merge($monthly, $shareRepo->findBasketPartnersMonthlyNodeAware($basket, self::SHARE_MONTHLY_SHARED, $weeklyMonthlyOrders, $biweeklyNodeMonthlyOrders, false, $cohort, $weeklyCohortMonthlyOrders));
+        $monthly = array_merge($monthly, $shareRepo->findBasketPartnersMonthlyNodeAware($basket, self::SHARE_MONTHLY_SHARED, $weeklyMonthlyOrders, $ownCalendarNodeMonthlyOrders, false, $cohort, $weeklyCohortMonthlyOrders));
 
         $onlyEggWeekly = $shareRepo->findBasketPartnersByTypeAndCity(self::SHARE_ONLY_EGG, 1, $basket, true);
         $onlyEggBiweekly = $shareRepo->findBasketPartnersBiweeklyNodeAware($basket, self::SHARE_ONLY_EGG, 1, $cohort, $activeBiweeklyNodeIds, true);
-        $onlyEggMonthly = $shareRepo->findBasketPartnersMonthlyNodeAware($basket, self::SHARE_ONLY_EGG, $weeklyMonthlyOrders, $biweeklyNodeMonthlyOrders, true, $cohort, $weeklyCohortMonthlyOrders);
+        $onlyEggMonthly = $shareRepo->findBasketPartnersMonthlyNodeAware($basket, self::SHARE_ONLY_EGG, $weeklyMonthlyOrders, $ownCalendarNodeMonthlyOrders, true, $cohort, $weeklyCohortMonthlyOrders);
         $onlyEgg = array_merge($onlyEggWeekly, $onlyEggBiweekly, $onlyEggMonthly);
 
         // Misma lógica que en reuseExisting: cualquier compartición (share_partner_id
