@@ -102,10 +102,10 @@ class CronGateAndLogTest extends KernelTestCase
      * congelar el listado a mano con el cron caído.
      *
      * Lo que NO hace es decidir quién lanzó la ejecución. Ese es un eje distinto
-     * ({@see \App\Command\AbstractCronCommand::markLaunchedByHand()}, que llama el
-     * runner de la web), porque la pantalla de diagnóstico lanza a mano SIN
-     * forzar; si se dedujera de --force, esas ejecuciones se harían pasar por el
-     * reloj.
+     * ({@see \App\Command\AbstractCronCommand::markTriggeredBy()}, que llama el
+     * runner por donde entran la web y el tick), porque la pantalla de
+     * diagnóstico lanza a mano SIN forzar; si se dedujera de --force, esas
+     * ejecuciones se harían pasar por el reloj.
      */
     public function testForceSaltaElInterruptorPeroNoDecideElOrigen(): void
     {

@@ -41,7 +41,7 @@ use Symfony\Contracts\Service\Attribute\Required;
  *   entrega declarados en `requires`.
  *
  * Quién lanzó la ejecución es un eje DISTINTO de `--force` y no se deduce de él:
- * lo declara {@see self::markLaunchedByHand()}, que llama {@see \App\Service\Cron\CronRunner}.
+ * lo declara {@see self::markTriggeredBy()}, que llama {@see \App\Service\Cron\CronRunner}.
  * Si se dedujera de `--force`, una tarea lanzada desde la pantalla de
  * diagnóstico (que ejecuta sin forzar, como lo haría el reloj) se registraría
  * como si la hubiera disparado el reloj, y la pantalla daría por vivo un
@@ -70,17 +70,27 @@ abstract class AbstractCronCommand extends Command
     /** Resumen de una línea reportado por la hija. */
     private ?string $reportedDetail = null;
 
-    /** ¿La lanzó una persona desde la web, en vez del reloj? */
-    private bool $launchedByHand = false;
+    /**
+     * Quién ha pedido esta ejecución, uno de los CronRun::TRIGGER_*.
+     *
+     * Guarda el origen y no un booleano "¿a mano?": con tres orígenes posibles
+     * (crontab del hosting, tick horario y persona) un booleano obliga a
+     * traducirlo en el punto de uso y no sabe expresar el tercero.
+     *
+     * El valor por defecto es el crontab porque ese camino —`bin/console`
+     * ejecutado por el hosting— no pasa por ninguna pieza que pueda declararse.
+     */
+    private string $triggerSource = CronRun::TRIGGER_SCHEDULE;
 
     /**
-     * Declara que esta ejecución la ha pedido una persona. Lo llama el runner de
-     * la web antes de ejecutar; el cron por consola no lo llama, así que su
-     * ejecución queda registrada como del reloj.
+     * Declara quién pide la ejecución. Lo llama {@see \App\Service\Cron\CronRunner},
+     * que es por donde entran tanto los botones de la pantalla como el tick.
+     *
+     * @param string $trigger Uno de los CronRun::TRIGGER_*.
      */
-    public function markLaunchedByHand(): void
+    public function markTriggeredBy(string $trigger): void
     {
-        $this->launchedByHand = true;
+        $this->triggerSource = $trigger;
     }
 
     /**
@@ -203,7 +213,7 @@ abstract class AbstractCronCommand extends Command
         try {
             return $this->runTask($input, $output);
         } finally {
-            $this->launchedByHand = false;
+            $this->triggerSource = CronRun::TRIGGER_SCHEDULE;
         }
     }
 
@@ -268,7 +278,7 @@ abstract class AbstractCronCommand extends Command
     private function runLockedTask(array $task, InputInterface $input, OutputInterface $output): int
     {
         $force = $this->hasFlag($input, 'force');
-        $trigger = $this->launchedByHand ? CronRun::TRIGGER_MANUAL : CronRun::TRIGGER_SCHEDULE;
+        $trigger = $this->triggerSource;
 
         $inhibitedReason = $this->cronTasks->inhibitedReason($task['key'], $force);
         if ($inhibitedReason !== null) {

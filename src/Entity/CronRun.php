@@ -47,8 +47,24 @@ class CronRun
      */
     public const STATUS_FAILED = 'failed';
 
-    /** Lanzada por el reloj (consola / cron del hosting). */
+    /**
+     * Lanzada por el crontab del hosting, que ejecuta `bin/console` directamente.
+     * Es el valor por defecto porque ese camino no pasa por ninguna pieza nuestra
+     * que pueda declararse: llega, corre y no avisa de nada.
+     */
     public const TRIGGER_SCHEDULE = 'schedule';
+
+    /**
+     * Lanzada por el tick horario, o sea por el reloj externo llamando a
+     * `/cron/tick`.
+     *
+     * Existe separada de {@see self::TRIGGER_SCHEDULE} por una razón operativa
+     * muy concreta: durante el traspaso los DOS relojes conviven, y sin
+     * distinguirlos no hay manera de saber si el nuevo funciona — el viejo
+     * dispara en punto, llega antes y deja al tick sin trabajo que hacer, así que
+     * "no pasa nada" y "el tick está muerto" se ven exactamente igual.
+     */
+    public const TRIGGER_TICK = 'tick';
 
     /** Lanzada a mano por alguien desde /gestion/settings. */
     public const TRIGGER_MANUAL = 'manual';
