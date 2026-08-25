@@ -186,6 +186,16 @@
                                              # lunes a las 06:00 · última vez el…") donde el plan y el hecho se
                                              # confundían; con su rótulo cada uno tiene su sitio y las cifras se
                                              # alinean. #}
+                                            {# QUIÉN la lanzó tiene rótulo propio, y no es un adorno: mientras
+                                             # convivan el tick y el crontab viejo del hosting, es el único dato
+                                             # que dice si el reloj nuevo está haciendo su trabajo. El viejo
+                                             # dispara en punto, llega antes y deja al tick sin nada que hacer,
+                                             # así que "todo va bien" y "el tick está muerto" se ven igual. #}
+                                            {% set triggers = {
+                                                tick:     'el tick horario',
+                                                schedule: 'el cron del hosting',
+                                                manual:   'a mano',
+                                            } %}
                                             <dl class="csa-cron__facts">
                                                 <div class="csa-cron__fact">
                                                     <dt>Cadencia</dt>
@@ -196,12 +206,17 @@
                                                     <dd>
                                                         {%- if s.last_run -%}
                                                             {{ s.last_run.at|date('d/m/Y') }} · {{ s.last_run.at|date('H:i') }}
-                                                            {{- s.last_run.manual ? ' · a mano' : '' }}
                                                         {%- else -%}
                                                             sin registro
                                                         {%- endif -%}
                                                     </dd>
                                                 </div>
+                                                {% if s.last_run %}
+                                                    <div class="csa-cron__fact">
+                                                        <dt>La lanzó</dt>
+                                                        <dd>{{ triggers[s.last_run.trigger]|default(s.last_run.trigger) }}</dd>
+                                                    </div>
+                                                {% endif %}
                                             </dl>
 
                                             {# 4. Acciones, debajo del dato y no en la otra punta de la fila,

@@ -82,7 +82,12 @@ class CronTick
     private function runTask(string $key): string
     {
         try {
-            $result = $this->runner->run($key, CronRunMode::AsScheduled, null, CronRun::TRIGGER_SCHEDULE);
+            // TRIGGER_TICK y no TRIGGER_SCHEDULE: el registro tiene que poder
+            // decir si una tarea la hizo el tick o el crontab viejo del hosting.
+            // Mientras los dos relojes convivan es la ÚNICA forma de saber si el
+            // nuevo funciona, porque el viejo dispara en punto, llega antes y
+            // deja al tick sin nada que hacer.
+            $result = $this->runner->run($key, CronRunMode::AsScheduled, null, CronRun::TRIGGER_TICK);
 
             if ($result->blocked !== null) {
                 return $result->blocked;

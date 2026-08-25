@@ -104,8 +104,14 @@ minuto, definición de tareas en el código).
 
 Lo que se gana:
 
-- **Al hosting se le pide un cron una vez en la vida.** Nunca más un ticket a
-  cdmon para mover un horario o añadir una tarea.
+- **Al hosting deja de pedírsele NADA.** Esto se escribió como "un cron una vez
+  en la vida", cuando el reloj todavía podía ser cdmon. Al elegir GitHub Actions
+  la cuenta baja a cero: se retiran las cuatro líneas del crontab CLI y no se
+  pone nada en su lugar; el tick entra desde fuera por HTTP. Nunca más un ticket
+  a cdmon para mover un horario o añadir una tarea.
+  Y el panel de cron-por-URL de cdmon **no vale como reloj**: sólo hace un GET a
+  una URL y no sabe mandar cabeceras, así que al tick le llegaría sin token y
+  respondería 404.
 - El chequeo de salud compara contra la cadencia declarada, que ahora es la
   fuente de verdad — no una línea en un fichero de un servidor que no ves.
 - La granularidad pasa a ser la del tick. Para estas tareas es irrelevante.
