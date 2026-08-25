@@ -15,6 +15,7 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Validator\Constraints as Assert;
+use Symfony\Component\Validator\Context\ExecutionContextInterface;
 
 /**
  * App\Entity\Node
@@ -27,6 +28,23 @@ class Node
     public const CADENCE_WEEKLY = 'weekly';
     public const CADENCE_BIWEEKLY = 'biweekly';
     public const CADENCES = [self::CADENCE_WEEKLY, self::CADENCE_BIWEEKLY];
+
+    /**
+     * Día ISO-8601 (el que devuelve DateTime::format('N')) a nombre humano.
+     * Punto único: lo consumen el formulario del nodo y las etiquetas de
+     * fechas del formulario de cesta.
+     *
+     * @var array<int,string>
+     */
+    public const WEEKDAY_NAMES = [
+        1 => 'Lunes',
+        2 => 'Martes',
+        3 => 'Miércoles',
+        4 => 'Jueves',
+        5 => 'Viernes',
+        6 => 'Sábado',
+        7 => 'Domingo',
+    ];
 
     /**
      * @ORM\Id()
@@ -62,8 +80,15 @@ class Node
     private string $cadence = self::CADENCE_WEEKLY;
 
     /**
-     * Sólo aplica si cadence='biweekly'. Define un viernes-Basket de referencia
-     * que SÍ reparte; el resto de viernes-ciclo se infieren alternando.
+     * Sólo aplica si cadence='biweekly'. Fecha de una entrega REAL del nodo
+     * que SÍ reparte; el resto se infieren alternando desde ahí.
+     *
+     * Debe caer en el mismo día de la semana que `delivery_weekday`: la
+     * alineación quincenal se calcula comparando esta fecha con la fecha
+     * FÍSICA del nodo ({@see \App\Service\Delivery\NodeDeliveryDate}), así que
+     * un ancla en otro día de la semana desplaza la cuenta de semanas e
+     * invierte la fase — el nodo repartiría justo las semanas contrarias.
+     * Lo garantiza {@see validateCadenceConsistency()}.
      *
      * @ORM\Column(name="anchor_date", type="date", nullable=true)
      */
@@ -219,6 +244,60 @@ class Node
             }
         }
         return $this;
+    }
+
+    /**
+     * Coherencia entre cadencia y fecha ancla. Sin esto se puede guardar un
+     * nodo quincenal sin ancla, y entonces cualquier pantalla que calcule
+     * fechas de reparto revienta con un 500 al resolver la alternancia
+     * ({@see \App\Service\Delivery\NodeDeliveryDate::physicalDateFor}), que es
+     * lo que pasó al dar de alta "El Berrueco" el 25-08-2026.
+     *
+     * Tres reglas:
+     *  1. Quincenal exige ancla — sin ella la alternancia es incalculable.
+     *  2. El ancla debe caer en el día de reparto del nodo, o la fase se
+     *     invierte en silencio (ver {@see $anchorDate}).
+     *  3. Semanal no admite ancla — un ancla huérfana que sobrevive a un
+     *     cambio de cadencia reaparece después con una fase que nadie eligió.
+     *
+     * @param ExecutionContextInterface $context
+     * @return void
+     */
+    #[Assert\Callback]
+    public function validateCadenceConsistency(ExecutionContextInterface $context): void
+    {
+        $isBiweekly = $this->cadence === self::CADENCE_BIWEEKLY;
+
+        if ($isBiweekly && $this->anchorDate === null) {
+            $context->buildViolation('Un punto de reparto quincenal necesita una fecha ancla: una fecha en la que sí reparte, para saber qué semanas le tocan.')
+                ->atPath('anchorDate')
+                ->addViolation();
+
+            return;
+        }
+
+        if (!$isBiweekly && $this->anchorDate !== null) {
+            $context->buildViolation('La fecha ancla sólo se usa en la cadencia quincenal. Déjala vacía.')
+                ->atPath('anchorDate')
+                ->addViolation();
+
+            return;
+        }
+
+        if (!$isBiweekly || !isset($this->deliveryWeekday)) {
+            return;
+        }
+
+        $anchorWeekday = (int) $this->anchorDate->format('N');
+        if ($anchorWeekday !== $this->deliveryWeekday) {
+            $context->buildViolation(sprintf(
+                'La fecha ancla debe caer en %s, que es el día de reparto de este punto (has elegido un %s).',
+                self::WEEKDAY_NAMES[$this->deliveryWeekday] ?? '(día no válido)',
+                mb_strtolower(self::WEEKDAY_NAMES[$anchorWeekday] ?? '(día no válido)'),
+            ))
+                ->atPath('anchorDate')
+                ->addViolation();
+        }
     }
 
     public function __toString(): string

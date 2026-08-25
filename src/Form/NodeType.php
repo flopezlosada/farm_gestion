@@ -17,21 +17,6 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
 class NodeType extends AbstractType
 {
     /**
-     * Día ISO 1-7 mapeado a nombre humano.
-     *
-     * @var array<string,int>
-     */
-    private const WEEKDAY_CHOICES = [
-        'Lunes'     => 1,
-        'Martes'    => 2,
-        'Miércoles' => 3,
-        'Jueves'    => 4,
-        'Viernes'   => 5,
-        'Sábado'    => 6,
-        'Domingo'   => 7,
-    ];
-
-    /**
      * @var array<string,string>
      */
     private const CADENCE_CHOICES = [
@@ -47,17 +32,20 @@ class NodeType extends AbstractType
             ])
             ->add('deliveryWeekday', ChoiceType::class, [
                 'label'   => 'Día de reparto',
-                'choices' => self::WEEKDAY_CHOICES,
+                'choices' => array_flip(Node::WEEKDAY_NAMES),
             ])
             ->add('cadence', ChoiceType::class, [
                 'label'   => 'Cadencia',
                 'choices' => self::CADENCE_CHOICES,
             ])
+            // `required` se queda en false a propósito: el navegador lo exigiría
+            // también en los puntos semanales, donde el campo no aplica. Quién
+            // la necesita y con qué forma lo decide Node::validateCadenceConsistency().
             ->add('anchorDate', DateType::class, [
-                'label'    => 'Fecha ancla (sólo cadencia quincenal)',
+                'label'    => 'Fecha ancla (obligatoria si la cadencia es quincenal)',
                 'widget'   => 'single_text',
                 'required' => false,
-                'help'     => 'Un viernes-ciclo que SÍ reparte. A partir de aquí alternan operativos vs vacíos.',
+                'help'     => 'Una fecha en la que este punto SÍ reparte, en su mismo día de la semana. A partir de ahí se alternan las semanas con reparto y sin él. En puntos semanales, déjala vacía.',
             ])
             ->add('schedule', TextType::class, [
                 'label'    => 'Horario público',

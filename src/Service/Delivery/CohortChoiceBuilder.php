@@ -23,8 +23,6 @@ use App\Repository\BasketRepository;
  */
 class CohortChoiceBuilder
 {
-    private const DAY_NAMES = [1 => 'Lunes', 2 => 'Martes', 3 => 'Miércoles', 4 => 'Jueves', 5 => 'Viernes', 6 => 'Sábado', 7 => 'Domingo'];
-
     /**
      * Etiqueta de "no anclado a ningún turno". La expone el JS del formulario,
      * que retira esta opción cuando la modalidad elegida es quincenal (allí el
@@ -122,7 +120,7 @@ class CohortChoiceBuilder
      */
     private function labelFor(array $dates): string
     {
-        $day = self::DAY_NAMES[(int) $dates[0]->format('N')] ?? '';
+        $day = Node::WEEKDAY_NAMES[(int) $dates[0]->format('N')] ?? '';
 
         return trim($day . ' ' . implode(', ', array_map(
             static fn (\DateTimeInterface $d): string => $d->format('d/m'),
