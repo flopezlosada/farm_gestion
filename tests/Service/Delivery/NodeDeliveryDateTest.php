@@ -223,6 +223,117 @@ class NodeDeliveryDateTest extends TestCase
     }
 
     /**
+     * Un punto mensual sólo abre su semana del mes. El Berrueco (miércoles, 2ª
+     * semana) reparte el 2º miércoles y ninguno más.
+     */
+    public function testNodoMensualSoloRepartEnSuSemanaDelMes(): void
+    {
+        $node = $this->makeMonthlyNode('El Berrueco', 3, 2);
+
+        // Julio 2026 tiene miércoles 1, 8, 15, 22 y 29.
+        $this->assertNull($this->resolver->physicalDateFor($this->makeBasket('2026-07-03'), $node), '1er miércoles: no es su semana.');
+
+        $physical = $this->resolver->physicalDateFor($this->makeBasket('2026-07-10'), $node);
+        $this->assertNotNull($physical);
+        $this->assertSame('2026-07-08', $physical->format('Y-m-d'));
+
+        $this->assertNull($this->resolver->physicalDateFor($this->makeBasket('2026-07-17'), $node), '3er miércoles: no es su semana.');
+    }
+
+    /**
+     * "Última semana" es la 5ª en un mes de 5 y la 4ª en uno de 4. Es la razón
+     * de que se guarde como índice negativo y no como un 4 fijo.
+     */
+    public function testNodoMensualUltimaSemanaSigueAlMesTengaCuatroOCinco(): void
+    {
+        $node = $this->makeMonthlyNode('El Berrueco', 3, Node::MONTHLY_WEEK_LAST);
+
+        // Julio 2026: 5 miércoles, el último el 29.
+        $this->assertNull($this->resolver->physicalDateFor($this->makeBasket('2026-07-24'), $node), 'El 4º miércoles no es el último en julio.');
+        $julio = $this->resolver->physicalDateFor($this->makeBasket('2026-07-31'), $node);
+        $this->assertNotNull($julio);
+        $this->assertSame('2026-07-29', $julio->format('Y-m-d'));
+
+        // Octubre 2026: 4 miércoles, el último el 28.
+        $octubre = $this->resolver->physicalDateFor($this->makeBasket('2026-10-30'), $node);
+        $this->assertNotNull($octubre);
+        $this->assertSame('2026-10-28', $octubre->format('Y-m-d'));
+    }
+
+    /**
+     * La semana se cuenta sobre la FECHA FÍSICA del nodo, no sobre la del
+     * Basket. El ciclo del viernes 2-10-2026 se entrega el miércoles 30-09,
+     * que es el último miércoles de SEPTIEMBRE.
+     */
+    public function testNodoMensualCuentaSobreLaFechaFisicaNoLaDelBasket(): void
+    {
+        $ultima = $this->makeMonthlyNode('El Berrueco', 3, Node::MONTHLY_WEEK_LAST);
+        $physical = $this->resolver->physicalDateFor($this->makeBasket('2026-10-02'), $ultima);
+        $this->assertNotNull($physical, 'El 30-09 es el último miércoles de septiembre.');
+        $this->assertSame('2026-09-30', $physical->format('Y-m-d'));
+
+        $primera = $this->makeMonthlyNode('El Berrueco', 3, 1);
+        $this->assertNull(
+            $this->resolver->physicalDateFor($this->makeBasket('2026-10-02'), $primera),
+            'El 30-09 no es el primer miércoles de ningún mes.'
+        );
+    }
+
+    /**
+     * A diferencia de la alternancia quincenal, un cierre global NO corre la
+     * semana de un punto mensual: su posición es del calendario natural, no de
+     * una cadena que se desplace. Si esa semana cae en festivo lo resuelve una
+     * DeliveryException, no la cadencia.
+     */
+    public function testCierreGlobalNoDesplazaLaSemanaMensual(): void
+    {
+        $resolver = $this->makeResolverWithClosures(1);
+        $node = $this->makeMonthlyNode('El Berrueco', 3, 2);
+
+        $physical = $resolver->physicalDateFor($this->makeBasket('2026-07-10'), $node);
+        $this->assertNotNull($physical, 'Un cierre previo no cambia cuál es el 2º miércoles.');
+        $this->assertSame('2026-07-08', $physical->format('Y-m-d'));
+
+        $this->assertNull($resolver->physicalDateFor($this->makeBasket('2026-07-17'), $node));
+    }
+
+    /**
+     * Mismo guardián que en los quincenales sin ancla: sin semana no hay
+     * calendario que calcular, y es preferible el error explícito a repartir
+     * en una semana inventada.
+     */
+    public function testNodoMensualSinSemanaLanzaExcepcion(): void
+    {
+        $node = $this->makeNode('El Berrueco', 3, Node::CADENCE_MONTHLY);
+
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('monthly_week');
+
+        $this->resolver->physicalDateFor($this->makeBasket('2026-07-10'), $node);
+    }
+
+    /**
+     * Las otras dos lecturas del calendario (base para el orden mensual y
+     * teórica para el picker de excepciones) respetan igual la semana del mes.
+     */
+    public function testBaselineYOperativeRespetanLaSemanaMensual(): void
+    {
+        $node = $this->makeMonthlyNode('El Berrueco', 3, 2);
+
+        $this->assertNull($this->resolver->baselineDateFor($this->makeBasket('2026-07-17'), $node));
+        $this->assertSame(
+            '2026-07-08',
+            $this->resolver->baselineDateFor($this->makeBasket('2026-07-10'), $node)?->format('Y-m-d')
+        );
+
+        $this->assertNull($this->resolver->operativeDateFor($this->makeBasket('2026-07-17'), $node));
+        $this->assertSame(
+            '2026-07-08',
+            $this->resolver->operativeDateFor($this->makeBasket('2026-07-10'), $node)?->format('Y-m-d')
+        );
+    }
+
+    /**
      * Construye un NodeDeliveryDate con un repositorio de excepciones
      * simulado que siempre devuelve la excepción dada (o null si no hay).
      *
@@ -264,6 +375,18 @@ class NodeDeliveryDateTest extends TestCase
         }
 
         return $node;
+    }
+
+    /**
+     * @param string $name
+     * @param int $weekday Día ISO 1=Lunes..7=Domingo.
+     * @param int $week Semana del mes: 1, 2, 3 o Node::MONTHLY_WEEK_LAST.
+     * @return Node
+     */
+    private function makeMonthlyNode(string $name, int $weekday, int $week): Node
+    {
+        return $this->makeNode($name, $weekday, Node::CADENCE_MONTHLY)
+            ->setMonthlyWeek($week);
     }
 
     private function makeBasket(string $isoDate): Basket

@@ -18,6 +18,12 @@ use App\Repository\DeliveryExceptionRepository;
  * operativos: alternan semanas que reparten vs. semanas vacías, anclados
  * en `Node.anchor_date`.
  *
+ * Para nodos mensuales (cadence=monthly, El Berrueco) el punto abre una sola
+ * semana al mes, la que fija `Node.monthly_week` contada sobre las ocurrencias
+ * de su día de reparto en el mes natural (1ª, 2ª, 3ª o la última). A diferencia
+ * de la alternancia quincenal, esa posición no se desplaza con los cierres: el
+ * 2º jueves es el 2º jueves de cada mes.
+ *
  * Es el punto único de verdad de "¿qué día reparte realmente el nodo X en
  * el ciclo Y?". Además del calendario teórico (día + cadencia), aplica las
  * excepciones de calendario (DeliveryException): un festivo o cierre puede
@@ -46,17 +52,13 @@ class NodeDeliveryDate
      * @param Basket $basket Ciclo semanal global.
      * @param Node $node Nodo donde se entrega.
      * @return \DateTimeImmutable|null Fecha del día físico de reparto, o null si no reparte.
-     * @throws \LogicException Si el nodo es biweekly sin anchor_date.
+     * @throws \LogicException Si al nodo le falta el dato que define su cadencia.
      */
     public function physicalDateFor(Basket $basket, Node $node): ?\DateTimeImmutable
     {
         $physical = $this->naiveDate($basket, $node);
 
-        // A diferencia de operativeDateFor() (que usa semanas crudas para el
-        // picker del CRUD), aquí la alineación biweekly es OPERATIVA: descuenta
-        // los cierres globales para que un festivo desplace la cadencia del
-        // nodo una semana, igual que la cohorte A/B (cf BiweeklyCohortResolver).
-        if ($node->getCadence() === Node::CADENCE_BIWEEKLY && !$this->alignsOperatively($physical, $node)) {
+        if (!$this->deliversOperativelyOn($physical, $node)) {
             return null;
         }
 
@@ -76,13 +78,13 @@ class NodeDeliveryDate
      * @param Basket $basket Ciclo semanal global.
      * @param Node $node Nodo donde se entrega.
      * @return \DateTimeImmutable|null Fecha base, o null si la cadencia no toca.
-     * @throws \LogicException Si el nodo es biweekly sin anchor_date.
+     * @throws \LogicException Si al nodo le falta el dato que define su cadencia.
      */
     public function baselineDateFor(Basket $basket, Node $node): ?\DateTimeImmutable
     {
         $physical = $this->naiveDate($basket, $node);
 
-        if ($node->getCadence() === Node::CADENCE_BIWEEKLY && !$this->alignsOperatively($physical, $node)) {
+        if (!$this->deliversOperativelyOn($physical, $node)) {
             return null;
         }
 
@@ -111,15 +113,15 @@ class NodeDeliveryDate
      *
      * @param Basket $basket Ciclo semanal global.
      * @param Node $node Nodo donde se entrega.
-     * @return \DateTimeImmutable|null Fecha física teórica, o null si el nodo
-     *         biweekly no reparte esa semana.
-     * @throws \LogicException Si el nodo es biweekly sin anchor_date.
+     * @return \DateTimeImmutable|null Fecha física teórica, o null si la
+     *         cadencia del nodo no reparte esa semana.
+     * @throws \LogicException Si al nodo le falta el dato que define su cadencia.
      */
     public function operativeDateFor(Basket $basket, Node $node): ?\DateTimeImmutable
     {
         $physical = $this->naiveDate($basket, $node);
 
-        if ($node->getCadence() === Node::CADENCE_BIWEEKLY && !$this->basketAlignsWithAnchor($physical, $node)) {
+        if (!$this->deliversTheoreticallyOn($physical, $node)) {
             return null;
         }
 
@@ -207,6 +209,87 @@ class NodeDeliveryDate
         }
 
         return $immutable->modify(sprintf('%+d days', $diffDays));
+    }
+
+    /**
+     * ¿La cadencia del nodo hace que reparta en esta fecha física, con criterio
+     * OPERATIVO? En los quincenales la alineación descuenta los cierres
+     * globales, para que un festivo desplace la cadencia del nodo una semana
+     * igual que hace con la cohorte A/B (cf {@see BiweeklyCohortResolver}).
+     *
+     * @param \DateTimeImmutable $physical
+     * @param Node $node
+     * @return bool
+     * @throws \LogicException Si al nodo le falta el dato que define su cadencia.
+     */
+    private function deliversOperativelyOn(\DateTimeImmutable $physical, Node $node): bool
+    {
+        return match ($node->getCadence()) {
+            Node::CADENCE_BIWEEKLY => $this->alignsOperatively($physical, $node),
+            Node::CADENCE_MONTHLY  => $this->matchesMonthlyWeek($physical, $node),
+            default                => true,
+        };
+    }
+
+    /**
+     * ¿La cadencia del nodo hace que reparta en esta fecha física, con criterio
+     * TEÓRICO (semanas crudas, sin descontar cierres)? Lo usa
+     * {@see operativeDateFor()} / el picker del CRUD de excepciones, que debe
+     * ver las fechas tal cual, sin desplazamientos.
+     *
+     * En los mensuales coincide con el criterio operativo: la semana no es una
+     * alternancia que se corra, es una posición del calendario natural — el 2º
+     * jueves sigue siendo el 2º jueves aunque el mes pasado hubiera un cierre.
+     * Si esa semana concreta cae en festivo, lo resuelve una DeliveryException
+     * (cancelación o traslado), que se aplica después.
+     *
+     * @param \DateTimeImmutable $physical
+     * @param Node $node
+     * @return bool
+     * @throws \LogicException Si al nodo le falta el dato que define su cadencia.
+     */
+    private function deliversTheoreticallyOn(\DateTimeImmutable $physical, Node $node): bool
+    {
+        return match ($node->getCadence()) {
+            Node::CADENCE_BIWEEKLY => $this->basketAlignsWithAnchor($physical, $node),
+            Node::CADENCE_MONTHLY  => $this->matchesMonthlyWeek($physical, $node),
+            default                => true,
+        };
+    }
+
+    /**
+     * Para nodos monthly: ¿es esta fecha física la semana del mes en que el
+     * punto abre? Se cuenta sobre las ocurrencias del día de reparto dentro del
+     * mes natural, sin tocar BBDD: el 2º jueves es el 2º jueves con
+     * independencia de en qué día caiga el 1 del mes.
+     *
+     * Que sea aritmética pura es deliberado: {@see MonthlyOperativeOrderResolver}
+     * pregunta a este servicio qué semanas reparte el nodo, así que resolver
+     * aquí la posición mensual consultando aquel volvería circular la llamada.
+     *
+     * @param \DateTimeImmutable $physical
+     * @param Node $node
+     * @return bool
+     * @throws \LogicException Si el nodo es monthly sin monthly_week.
+     */
+    private function matchesMonthlyWeek(\DateTimeImmutable $physical, Node $node): bool
+    {
+        $week = $node->getMonthlyWeek();
+        if ($week === null) {
+            throw new \LogicException(sprintf(
+                'Node "%s" es monthly pero no tiene monthly_week.',
+                $node->getName() ?? '(sin nombre)'
+            ));
+        }
+
+        if ($week === Node::MONTHLY_WEEK_LAST) {
+            // Última ocurrencia de este día de la semana: siete días después ya
+            // estamos en otro mes.
+            return $physical->modify('+7 days')->format('m') !== $physical->format('m');
+        }
+
+        // Días 1-7 → 1ª ocurrencia del día, 8-14 → 2ª, 15-21 → 3ª…
+        return intdiv((int) $physical->format('j') - 1, 7) + 1 === $week;
     }
 
     /**

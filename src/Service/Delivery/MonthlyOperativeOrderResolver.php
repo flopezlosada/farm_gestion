@@ -64,6 +64,21 @@ class MonthlyOperativeOrderResolver
      */
     private const MAX_ANCHORED_ORDER = 4;
 
+    /**
+     * Posiciones que sirve la entrega de un punto MENSUAL. Un punto así abre
+     * una sola vez al mes, así que su única entrega vale para cualquier
+     * posición que el socio tenga en ficha: cubre todo el rango que el modelo
+     * admite en `day_month_order`, positivo y negativo.
+     *
+     * No es redundante con forzar el dato del socio al darlo de alta: si
+     * administración cambia la semana que abre el punto, los socios ya dados
+     * de alta conservan la posición anterior, y sin esto desaparecerían del
+     * listado sin ningún aviso — el peor fallo posible aquí.
+     *
+     * @var int[]
+     */
+    private const MONTHLY_NODE_ORDERS = [-3, -2, -1, 1, 2, 3, self::MAX_ANCHORED_ORDER];
+
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly NodeDeliveryDate $nodeDeliveryDate,
@@ -172,6 +187,12 @@ class MonthlyOperativeOrderResolver
     {
         if ($this->nodeDeliveryDate->physicalDateFor($basket, $node) === null) {
             return [];
+        }
+
+        // Punto mensual: si reparte esta semana, es SU semana del mes y no hay
+        // posiciones que contar. Ver MONTHLY_NODE_ORDERS.
+        if ($node->isMonthly()) {
+            return self::MONTHLY_NODE_ORDERS;
         }
 
         $baseline = $this->nodeDeliveryDate->baselineDateFor($basket, $node);

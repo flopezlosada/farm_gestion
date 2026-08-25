@@ -17,26 +17,26 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
 class NodeType extends AbstractType
 {
     /**
-     * Día ISO 1-7 mapeado a nombre humano.
-     *
-     * @var array<string,int>
-     */
-    private const WEEKDAY_CHOICES = [
-        'Lunes'     => 1,
-        'Martes'    => 2,
-        'Miércoles' => 3,
-        'Jueves'    => 4,
-        'Viernes'   => 5,
-        'Sábado'    => 6,
-        'Domingo'   => 7,
-    ];
-
-    /**
      * @var array<string,string>
      */
     private const CADENCE_CHOICES = [
         'Semanal'   => Node::CADENCE_WEEKLY,
         'Quincenal' => Node::CADENCE_BIWEEKLY,
+        'Mensual'   => Node::CADENCE_MONTHLY,
+    ];
+
+    /**
+     * Semanas elegibles en un punto mensual. Sin "4ª" a propósito: sólo
+     * coincide con "la última" en los meses de 4 semanas, y lo que
+     * administración quiere decir siempre es la última.
+     *
+     * @var array<string,int>
+     */
+    private const MONTHLY_WEEK_CHOICES = [
+        '1ª semana del mes'     => 1,
+        '2ª semana del mes'     => 2,
+        '3ª semana del mes'     => 3,
+        'Última semana del mes' => Node::MONTHLY_WEEK_LAST,
     ];
 
     public function buildForm(FormBuilderInterface $builder, array $options): void
@@ -47,17 +47,29 @@ class NodeType extends AbstractType
             ])
             ->add('deliveryWeekday', ChoiceType::class, [
                 'label'   => 'Día de reparto',
-                'choices' => self::WEEKDAY_CHOICES,
+                'choices' => array_flip(Node::WEEKDAY_NAMES),
             ])
             ->add('cadence', ChoiceType::class, [
                 'label'   => 'Cadencia',
                 'choices' => self::CADENCE_CHOICES,
             ])
+            // `required` se queda en false a propósito: el navegador lo exigiría
+            // también en los puntos semanales, donde el campo no aplica. Quién
+            // la necesita y con qué forma lo decide Node::validateCadenceConsistency().
             ->add('anchorDate', DateType::class, [
-                'label'    => 'Fecha ancla (sólo cadencia quincenal)',
+                'label'    => 'Fecha ancla (obligatoria si la cadencia es quincenal)',
                 'widget'   => 'single_text',
                 'required' => false,
-                'help'     => 'Un viernes-ciclo que SÍ reparte. A partir de aquí alternan operativos vs vacíos.',
+                'help'     => 'Una fecha en la que este punto SÍ reparte, en su mismo día de la semana. A partir de ahí se alternan las semanas con reparto y sin él. En puntos semanales, déjala vacía.',
+            ])
+            // Mismo criterio que anchorDate: quién la necesita lo decide
+            // Node::validateCadenceConsistency(), no el navegador.
+            ->add('monthlyWeek', ChoiceType::class, [
+                'label'       => 'Semana del mes (obligatoria si la cadencia es mensual)',
+                'choices'     => self::MONTHLY_WEEK_CHOICES,
+                'placeholder' => 'No aplica',
+                'required'    => false,
+                'help'        => 'La semana en que abre el punto, contada sobre su día de reparto: «2ª semana» es el 2º miércoles del mes si reparte en miércoles. «Última» sigue al último del mes, tenga 4 o 5. En puntos semanales o quincenales, déjala vacía.',
             ])
             ->add('schedule', TextType::class, [
                 'label'    => 'Horario público',

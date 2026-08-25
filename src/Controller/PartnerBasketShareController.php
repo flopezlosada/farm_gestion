@@ -80,7 +80,8 @@ class PartnerBasketShareController extends AbstractController
         $cohort = $cohortChoiceBuilder->forPartner($partnerBasketShare->getPartner());
         $form = $this->createForm(PartnerBasketShareType::class, $partnerBasketShare, [
             'cohort_choices' => $cohort['cohortChoices'],
-            'exclude_weekly_shares' => $cohort['excludeWeeklyShares'],
+            'allowed_share_ids' => $cohort['allowedShareIds'],
+            'forced_month_order' => $cohort['forcedMonthOrder'],
         ]);
         $form->handleRequest($request);
 
@@ -170,24 +171,31 @@ class PartnerBasketShareController extends AbstractController
         // nodos semanales; en nodos quincenales lo fija el punto y se informa.
         $cohort = $cohortChoiceBuilder->forPartner($partnerBasketShare->getPartner());
         $nodeIsBiweekly = $cohort['nodeIsBiweekly'];
-        if ($nodeIsBiweekly) {
-            // El turno A/B no aplica a nodos quincenales: el motor lo ignora.
+        if ($nodeIsBiweekly || $cohort['nodeIsMonthly']) {
+            // El turno A/B no aplica donde el punto tiene calendario propio:
+            // el motor lo ignora.
             $new->setDeliveryGroup(null);
         }
         $node = $partnerBasketShare->getPartner()->getWeeklyBasketGroup()?->getNode();
 
         $form = $this->createForm(PartnerBasketShareType::class, $new, [
             'cohort_choices' => $cohort['cohortChoices'],
-            'exclude_weekly_shares' => $cohort['excludeWeeklyShares'],
+            'allowed_share_ids' => $cohort['allowedShareIds'],
+            'forced_month_order' => $cohort['forcedMonthOrder'],
         ]);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            // Defensa server: una cesta semanal no cabe en un punto quincenal.
-            if ($nodeIsBiweekly && in_array($new->getBasketShare()?->getId(), BasketShare::IDS_WEEKLY, true)) {
+            // Defensa server: la modalidad elegida tiene que caber en el punto
+            // (uno quincenal no admite semanales; uno mensual sólo mensuales).
+            $allowed = $cohort['allowedShareIds'];
+            if ($allowed !== null && !in_array($new->getBasketShare()?->getId(), $allowed, true)) {
                 $this->addFlash('warning', sprintf(
-                    'No se puede asignar una cesta semanal en %s: ese punto reparte cada dos semanas.',
+                    'Esa modalidad de cesta no cabe en %s: %s',
                     $node->getName(),
+                    $cohort['nodeIsMonthly']
+                        ? 'ese punto sólo abre una semana al mes, así que allí las cestas son mensuales.'
+                        : 'ese punto reparte cada dos semanas.',
                 ));
                 return $this->redirectToRoute('partner_basket_share_change_modality', ['id' => $partnerBasketShare->getId()]);
             }
@@ -198,7 +206,7 @@ class PartnerBasketShareController extends AbstractController
             // resto se anula. El criterio vive en BasketShare, no como literal
             // disperso: tratar la quincenal compartida como no quincenal le
             // borraba el turno y la sacaba de los listados.
-            if ($nodeIsBiweekly || !($new->getBasketShare()?->usesDeliveryGroup() ?? false)) {
+            if ($nodeIsBiweekly || $cohort['nodeIsMonthly'] || !($new->getBasketShare()?->usesDeliveryGroup() ?? false)) {
                 $new->setDeliveryGroup(null);
             }
 

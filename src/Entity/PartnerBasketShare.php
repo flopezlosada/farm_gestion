@@ -196,6 +196,17 @@ class PartnerBasketShare
     public const DELIVERY_GROUPS = [self::DELIVERY_GROUP_A, self::DELIVERY_GROUP_B];
 
     /**
+     * "Última entrega del mes" como valor de `day_month_order`. Contado desde
+     * el final a propósito: la última es la 4ª en un mes de 4 semanas y la 5ª
+     * en uno de 5, así que un 4 fijo significaría cosas distintas según el mes.
+     *
+     * Mismo criterio y mismo valor que {@see Node::MONTHLY_WEEK_LAST}, que es
+     * la semana que abre un punto de cadencia mensual; la coherencia entre
+     * ambos la blinda un test.
+     */
+    public const DAY_MONTH_ORDER_LAST = -1;
+
+    /**
      * Cohorte A/B de QUINCENALES. Determina en qué viernes alternos recoge un
      * socio quincenal: es una alternancia semanal continua anclada a una fecha
      * global (ver BiweeklyCohortResolver), pensada para equilibrar la carga de

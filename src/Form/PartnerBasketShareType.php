@@ -12,11 +12,27 @@ use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
+use Symfony\Component\Form\FormEvent;
+use Symfony\Component\Form\FormEvents;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 use Symfony\Component\Validator\Constraints\NotBlank;
 
 class PartnerBasketShareType extends AbstractType
 {
+    /**
+     * Posiciones que puede ocupar una cesta mensual en el mes. El índice
+     * negativo es "la última", que no es lo mismo que "la 4ª" en los meses de
+     * 5 semanas (ver PartnerBasketShare::$day_month_order).
+     *
+     * @var array<string,int>
+     */
+    private const MONTH_ORDER_CHOICES = [
+        '1ª entrega del mes' => 1,
+        '2ª entrega del mes' => 2,
+        '3ª entrega del mes' => 3,
+        'Última entrega del mes' => PartnerBasketShare::DAY_MONTH_ORDER_LAST,
+    ];
+
     /**
      * @param FormBuilderInterface $builder
      * @param array $options
@@ -47,13 +63,16 @@ class PartnerBasketShareType extends AbstractType
                 'class' => BasketShare::class,
                 'label' => 'Tipo de cesta',
                 'required' => true,
-                // En puntos de reparto quincenal (Cascorro, Midori) no caben las
-                // cestas de reparto semanal: el nodo sólo reparte cada 2 semanas.
+                // El punto de recogida restringe las modalidades que caben en
+                // él: en uno quincenal (Cascorro, Midori) no cabe una cesta de
+                // reparto semanal, y en uno mensual (El Berrueco) sólo caben
+                // las mensuales, porque abre una única vez al mes. La lista la
+                // calcula CohortChoiceBuilder a partir de la cadencia del nodo.
                 'query_builder' => static function (EntityRepository $repo) use ($options) {
                     $qb = $repo->createQueryBuilder('bs')->orderBy('bs.id', 'ASC');
-                    if ($options['exclude_weekly_shares']) {
-                        $qb->where('bs.id NOT IN (:weekly)')
-                            ->setParameter('weekly', BasketShare::IDS_WEEKLY);
+                    if ($options['allowed_share_ids'] !== null) {
+                        $qb->where('bs.id IN (:allowed)')
+                            ->setParameter('allowed', $options['allowed_share_ids']);
                     }
                     return $qb;
                 },
@@ -81,15 +100,7 @@ class PartnerBasketShareType extends AbstractType
             // depende del turno: sin turno, los viernes del mes; con turno, las
             // entregas de ese turno (ver MonthlyOperativeOrderResolver). De ahí
             // que las etiquetas hablen de "entrega" y no de "viernes".
-            ->add('dayMonthOrder', ChoiceType::class,[
-                'choices'  => [
-                    'No corresponde' => null,
-                    '1ª entrega del mes' => 1,
-                    '2ª entrega del mes' => 2,
-                    '3ª entrega del mes' => 3,
-                    'Última entrega del mes' => -1,
-                ], 'label'=>"Qué entrega del mes recoge la cesta",
-                'help' => 'Sin turno asignado se cuentan los viernes del mes (1ª = primer viernes). Con turno, se cuentan las entregas de ese turno, así el socio coincide siempre con su grupo, también en los meses de 5 viernes. «Última entrega» sigue al último reparto del mes.'])
+            ->add('dayMonthOrder', ChoiceType::class, $this->monthOrderOptions($options['forced_month_order']))
             ->add('deliveryGroup', ChoiceType::class, [
                 'label' => 'Turno de viernes',
                 'help' => 'Sólo en puntos de reparto semanales. En quincenales decide qué viernes recoge; en mensuales, con qué turno coincide (su orden se cuenta sobre las entregas de ese turno). Cada opción muestra los viernes reales.',
@@ -111,6 +122,55 @@ class PartnerBasketShareType extends AbstractType
                 ],'label'=>'Cantidad de cestas','help'=>'Lo normal es que sea siempre 1, 
                 es sólo para casos especiales, como alguna gratuita, en que se asocian varias cestas de verdura (siempre todas iguales en periodicidad) a la misma ficha de socia/o. La cantidad total de huevos será la que pongas en el campo de huevos, no le influye este campo.', 'required'=>true))
         ;
+
+        // Punto mensual: la semana no se elige, la impone el punto. Se fija en
+        // el propio objeto para que el campo (deshabilitado) no dependa de lo
+        // que llegue del navegador, y para que un socio dado de alta antes de
+        // que administración cambiara la semana quede corregido al editarlo.
+        if ($options['forced_month_order'] !== null) {
+            $builder->addEventListener(
+                FormEvents::PRE_SET_DATA,
+                static function (FormEvent $event) use ($options): void {
+                    $share = $event->getData();
+                    if (!$share instanceof PartnerBasketShare) {
+                        return;
+                    }
+                    $share->setDayMonthOrder($options['forced_month_order']);
+                    // El turno A/B no pinta nada donde sólo hay una entrega al mes.
+                    $share->setDeliveryGroup(null);
+                }
+            );
+        }
+    }
+
+    /**
+     * Opciones del campo "qué entrega del mes recoge la cesta". Cuando el punto
+     * de recogida es mensual la posición no se elige: se muestra la única
+     * posible y el campo queda deshabilitado, porque allí todos los socios
+     * recogen la semana que abre el punto.
+     *
+     * @param int|null $forced Semana impuesta por el punto, o null si se elige.
+     * @return array<string,mixed> Opciones para el ChoiceType.
+     */
+    private function monthOrderOptions(?int $forced): array
+    {
+        if ($forced === null) {
+            return [
+                'choices' => ['No corresponde' => null] + self::MONTH_ORDER_CHOICES,
+                'label' => 'Qué entrega del mes recoge la cesta',
+                'help' => 'Sin turno asignado se cuentan los viernes del mes (1ª = primer viernes). Con turno, se cuentan las entregas de ese turno, así el socio coincide siempre con su grupo, también en los meses de 5 viernes. «Última entrega» sigue al último reparto del mes.',
+            ];
+        }
+
+        return [
+            'choices' => array_filter(
+                self::MONTH_ORDER_CHOICES,
+                static fn (int $order): bool => $order === $forced,
+            ),
+            'label' => 'Qué entrega del mes recoge la cesta',
+            'disabled' => true,
+            'help' => 'Este punto de recogida abre una sola semana al mes, así que la entrega no se elige: es la que abre el punto. Para cambiarla hay que cambiar la semana del punto de recogida.',
+        ];
     }
 
     public function configureOptions(OptionsResolver $resolver): void
@@ -124,15 +184,20 @@ class PartnerBasketShareType extends AbstractType
                 'Grupo A' => PartnerBasketShare::DELIVERY_GROUP_A,
                 'Grupo B' => PartnerBasketShare::DELIVERY_GROUP_B,
             ],
-            // Excluye las modalidades de reparto semanal del select de tipo.
-            'exclude_weekly_shares' => false,
+            // Modalidades que admite el punto de recogida, o null si no lo
+            // restringe. La calcula CohortChoiceBuilder según su cadencia.
+            'allowed_share_ids' => null,
+            // Semana del mes que impone un punto de cadencia mensual: allí no
+            // se elige, la fija el punto y todos sus socios recogen ese día.
+            'forced_month_order' => null,
             // Pide el grupo de recogida en el propio form (socio sin grupo).
             'ask_pickup_group' => false,
             // Preselección del grupo (la elección hecha antes de recargar).
             'pickup_group' => null,
         ]);
         $resolver->setAllowedTypes('cohort_choices', 'array');
-        $resolver->setAllowedTypes('exclude_weekly_shares', 'bool');
+        $resolver->setAllowedTypes('allowed_share_ids', ['null', 'int[]']);
+        $resolver->setAllowedTypes('forced_month_order', ['null', 'int']);
         $resolver->setAllowedTypes('ask_pickup_group', 'bool');
         $resolver->setAllowedTypes('pickup_group', ['null', WeeklyBasketGroup::class]);
     }
