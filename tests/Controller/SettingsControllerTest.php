@@ -254,12 +254,12 @@ class SettingsControllerTest extends AbstractAuthenticatedTest
         // un ajuste de aguas abajo. Decir "Apagada" aquí contradecía al
         // interruptor en verde de la misma fila.
         //
-        // Acotado a su bloque a propósito: en la página hay otras tareas
-        // realmente apagadas, así que buscar "Apagada" en todo el texto pasaría
-        // por casualidad y no probaría nada.
-        $blocked = $this->taskBlock($crawler, AppSettings::CRON_PURGE_USAGE_HITS);
-        $this->assertStringContainsString('No entrega', $blocked->text());
-        $this->assertStringNotContainsString('Apagada', $blocked->text());
+        // Se miran las INSIGNIAS de su bloque, no el texto: en la página hay
+        // otras tareas realmente apagadas, y además el texto de ayuda de esta
+        // misma empieza por "Apagada, el rastro se acumula sin límite".
+        $badges = $this->taskBadges($crawler, AppSettings::CRON_PURGE_USAGE_HITS);
+        $this->assertContains('No entrega', $badges);
+        $this->assertNotContains('Apagada', $badges);
     }
 
     /**
@@ -295,12 +295,13 @@ class SettingsControllerTest extends AbstractAuthenticatedTest
         $crawler = $client->request('GET', '/gestion/settings/');
 
         $this->assertResponseIsSuccessful();
-        // Acotado al bloque de ESA tarea: en la misma pantalla hay otras que sí
-        // están encendidas y sin registro, y ésas sí deben decir "sin registro".
-        $block = $this->taskBlock($crawler, AppSettings::CRON_PURGE_USAGE_HITS);
+        // Acotado a las insignias de ESA tarea: en la misma pantalla hay otras
+        // encendidas y sin registro, y ésas sí deben decir "sin registro". Y por
+        // el texto no vale, que su propia ayuda ya contiene la palabra "Apagada".
+        $badges = $this->taskBadges($crawler, AppSettings::CRON_PURGE_USAGE_HITS);
 
-        $this->assertStringContainsString('Apagada', $block->text());
-        $this->assertStringNotContainsString('Sin registro todavía', $block->text());
+        $this->assertContains('Apagada', $badges);
+        $this->assertNotContains('Sin registro todavía', $badges);
     }
 
     /**
@@ -373,6 +374,26 @@ class SettingsControllerTest extends AbstractAuthenticatedTest
         $this->assertCount(1, $block, sprintf('No se encontró el bloque de la tarea «%s».', $label));
 
         return $block;
+    }
+
+    /**
+     * Las INSIGNIAS de estado de una tarea, ya limpias.
+     *
+     * Mirar las insignias y no el texto del bloque no es quisquillosería: el
+     * texto de ayuda de un ajuste habla de sus propios estados («Apagada, el
+     * rastro se acumula sin límite»), así que buscar una palabra en todo el
+     * bloque da verde aunque la insignia diga justo lo contrario. Ya me pasó con
+     * estos dos tests.
+     *
+     * @param Crawler $crawler Página ya cargada.
+     * @param string  $taskKey Clave de la tarea en el manifiesto.
+     * @return list<string> Etiquetas de las insignias de ese bloque.
+     */
+    private function taskBadges(Crawler $crawler, string $taskKey): array
+    {
+        return $this->taskBlock($crawler, $taskKey)
+            ->filter('.csa-badge')
+            ->each(static fn (Crawler $badge): string => trim($badge->text()));
     }
 
     /**
