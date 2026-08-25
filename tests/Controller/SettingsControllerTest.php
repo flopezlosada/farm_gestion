@@ -244,7 +244,7 @@ class SettingsControllerTest extends AbstractAuthenticatedTest
         $this->assertResponseIsSuccessful();
         $text = $crawler->text();
         $this->assertStringContainsString('Hizo su trabajo', $text);
-        $this->assertStringContainsString('Sin trabajo', $text, 'Corrió y no había nada que hacer: es sano, y distinto de estar apagada.');
+        $this->assertStringContainsString('Nada que hacer', $text, 'Corrió y no había nada que hacer: es sano, y distinto de estar apagada.');
         $this->assertStringContainsString('Apagada', $text);
         $this->assertStringContainsString('a mano', $text, 'Una ejecución manual no debe hacerse pasar por el reloj.');
         $this->assertStringContainsString('los lunes a las 06:00', $text, 'La cadencia declarada se pinta junto a la tarea.');
@@ -263,6 +263,36 @@ class SettingsControllerTest extends AbstractAuthenticatedTest
 
         $this->assertResponseIsSuccessful();
         $this->assertStringContainsString('Sin registro todavía', $crawler->text());
+    }
+
+    /**
+     * …pero una tarea con su PROPIO interruptor apagado no corre nunca, así que
+     * en ella "sin registro" no es una anomalía: es lo esperado. Marcarla en
+     * ámbar la deja pidiendo atención para siempre, y una pantalla con alarmas
+     * perpetuas se deja de mirar — el mismo mecanismo por el que pasaron dos
+     * semanas de cron caído sin que nadie se enterara.
+     */
+    public function testUnaTareaApagadaNoSeMarcaComoSinRegistroSinoComoApagada(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->clearRuns();
+        // Se apaga a mano una que viene encendida por defecto: así se comprueba
+        // que el estado sale del interruptor y no del default del catálogo.
+        static::getContainer()->get(AppSettings::class)->setBool(AppSettings::CRON_PURGE_USAGE_HITS, false);
+
+        $crawler = $client->request('GET', '/gestion/settings/');
+
+        $this->assertResponseIsSuccessful();
+        // Acotado al bloque de ESA tarea: en la misma pantalla hay otras que sí
+        // están encendidas y sin registro, y ésas sí deben decir "sin registro".
+        $label = AppSettings::BOOLEANS[AppSettings::CRON_PURGE_USAGE_HITS]['label'];
+        $block = $crawler->filter('.csa-cron')->reduce(
+            static fn ($node): bool => str_contains($node->text(), $label)
+        );
+
+        $this->assertCount(1, $block, sprintf('No se encontró el bloque de la tarea «%s».', $label));
+        $this->assertStringContainsString('Apagada', $block->text());
+        $this->assertStringNotContainsString('Sin registro todavía', $block->text());
     }
 
     /**
