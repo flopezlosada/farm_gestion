@@ -198,7 +198,10 @@ class SettingsController extends AbstractController
                     'status' => $run->getStatus(),
                     'at' => $run->getStartedAt(),
                     'age' => $this->cronTasks->describeAge($run->getStartedAt(), $now),
-                    'manual' => $run->getTriggerSource() === CronRun::TRIGGER_MANUAL,
+                    // El origen crudo, no un booleano "¿a mano?": con el traspaso
+                    // de relojes en marcha, distinguir el tick del crontab del
+                    // hosting es justo el dato que hace falta.
+                    'trigger' => $run->getTriggerSource(),
                     'detail' => $run->getDetail(),
                     'unfinished' => !$run->isFinished(),
                 ];

@@ -50,7 +50,8 @@ class CronRunner
      * @param string      $taskKey    Clave declarada en {@see \App\Service\AppSettings::CRONS}.
      * @param CronRunMode $mode       Previsualizar, ejecutar como el reloj, forzar o reenviar.
      * @param string|null $adminEmail Email de quien lanza, para las tareas que exigen destinatario.
-     * @param string      $trigger    Quién dispara: CronRun::TRIGGER_MANUAL o TRIGGER_SCHEDULE.
+     * @param string      $trigger    Quién dispara: uno de los CronRun::TRIGGER_* (a mano desde
+     *                                la web, el tick horario o el crontab del hosting).
      * @throws \InvalidArgumentException Si la clave no está en el manifiesto.
      */
     public function run(
@@ -127,9 +128,7 @@ class CronRunner
         // diagnóstico lanza sin forzar y sigue siendo manual, y si se dedujera
         // de --force la pantalla daría por vivo un reloj parado. El tick pasa por
         // aquí igual que la web, pero declarándose como el reloj que es.
-        if ($trigger === CronRun::TRIGGER_MANUAL) {
-            $command->markLaunchedByHand();
-        }
+        $command->markTriggeredBy($trigger);
 
         try {
             $exitCode = $application->run(new ArrayInput($args), $output);

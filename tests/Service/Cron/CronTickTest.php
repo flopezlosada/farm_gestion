@@ -39,10 +39,17 @@ class CronTickTest extends KernelTestCase
 
     /**
      * Una tarea encendida que nunca ha corrido se ejecuta en el primer tick, y
-     * queda registrada como disparada por EL RELOJ, no a mano. Esa distinción es
-     * la que permite que la pantalla no dé por vivo un planificador parado.
+     * queda registrada como disparada por EL TICK — ni a mano, ni por el crontab
+     * del hosting.
+     *
+     * Los tres orígenes tienen que verse distintos, y el que importa ahora es el
+     * tercero. Durante el traspaso conviven los dos relojes, y el viejo dispara
+     * en punto: llega antes y deja al tick sin nada que hacer. Si ambos se
+     * registraran igual, "el tick funciona" y "el tick está muerto" serían
+     * indistinguibles en el registro, que es justo la ceguera que se quiere
+     * cerrar.
      */
-    public function testEjecutaLoQueTocaYLoRegistraComoDelReloj(): void
+    public function testEjecutaLoQueTocaYLoRegistraComoDelTick(): void
     {
         self::bootKernel();
         $this->onlyEnabled(AppSettings::CRON_PURGE_USAGE_HITS);
@@ -53,7 +60,12 @@ class CronTickTest extends KernelTestCase
 
         $run = $this->lastRun(AppSettings::CRON_PURGE_USAGE_HITS);
         $this->assertNotNull($run, 'La ejecución del tick debe quedar registrada.');
-        $this->assertSame(CronRun::TRIGGER_SCHEDULE, $run->getTriggerSource());
+        $this->assertSame(CronRun::TRIGGER_TICK, $run->getTriggerSource());
+        $this->assertNotSame(
+            CronRun::TRIGGER_SCHEDULE,
+            $run->getTriggerSource(),
+            'Confundir el tick con el crontab del hosting deja el traspaso a ciegas.'
+        );
     }
 
     /**
