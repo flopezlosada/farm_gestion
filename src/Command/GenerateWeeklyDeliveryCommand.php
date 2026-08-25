@@ -83,7 +83,7 @@ class GenerateWeeklyDeliveryCommand extends AbstractCronCommand
 
         if (empty($baskets)) {
             $io->warning('No hay Baskets que procesar. Nada que hacer.');
-            return $this->nothingToDo('Sin Baskets pendientes que congelar');
+            return $this->nothingToDo('No había ningún reparto pendiente de congelar');
         }
 
         $rows = [];
@@ -130,9 +130,22 @@ class GenerateWeeklyDeliveryCommand extends AbstractCronCommand
         // Congelar es idempotente: si los Baskets ya estaban listados (o
         // cancelados) la tarea corrió sin trabajo, que no es lo mismo que haber
         // congelado la semana.
+        //
+        // Estos dos textos NO son para la consola: son el detalle que
+        // /gestion/settings pinta bajo la tarea, así que hablan de "repartos" y
+        // no de "Baskets", y concuerdan en singular (decían "1 Baskets
+        // revisados").
+        $count = count($baskets);
+
         return $generatedCount > 0
-            ? $this->didWork(sprintf('%d cestas congeladas en %d Baskets', $generatedCount, count($baskets)))
-            : $this->nothingToDo(sprintf('%d Baskets revisados, ya estaban listados o cancelados', count($baskets)));
+            ? $this->didWork(sprintf(
+                '%d cestas congeladas en %s',
+                $generatedCount,
+                1 === $count ? 'un reparto' : sprintf('%d repartos', $count)
+            ))
+            : $this->nothingToDo(1 === $count
+                ? 'Un reparto revisado, ya estaba listado o cancelado'
+                : sprintf('%d repartos revisados, ya estaban listados o cancelados', $count));
     }
 
     /**
