@@ -142,12 +142,22 @@
                                             : (s.last_run is null
                                                 ? 'unknown'
                                                 : (s.last_run.unfinished ? 'unfinished' : s.last_run.status)) %}
+                                        {# «Apagada» sólo cuando lo está el interruptor QUE SE VE justo encima.
+                                         # El otro caso —la tarea corrió y algo aguas abajo le impidió entregar,
+                                         # típicamente el interruptor general de emails— también llega aquí como
+                                         # `disabled`, y llamarlo "apagada" se contradecía con el interruptor en
+                                         # verde dos centímetros más arriba.
+                                         #
+                                         # Y no es lo mismo: apagada no corre y no se espera nada de ella; ésta
+                                         # se ejecuta cada día y tira su trabajo. Por eso ámbar y no gris — es
+                                         # exactamente la situación que hay detrás de un "no llegan los
+                                         # correos", y se arregla con un clic. #}
                                         {% set states = {
                                             off:           { label: 'Apagada',              tone: 'neutral' },
                                             unknown:       { label: 'Sin registro todavía', tone: 'ochre' },
                                             unfinished:    { label: 'No terminó',           tone: 'terracotta' },
                                             failed:        { label: 'Falló',                tone: 'terracotta' },
-                                            disabled:      { label: 'Apagada',              tone: 'neutral' },
+                                            disabled:      { label: 'No entrega',           tone: 'ochre' },
                                             nothing_to_do: { label: 'Nada que hacer',       tone: 'sky' },
                                             done:          { label: 'Hizo su trabajo',      tone: 'green' },
                                         } %}
