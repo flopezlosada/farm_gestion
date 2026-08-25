@@ -6,6 +6,7 @@ use App\Entity\CronRun;
 use App\Entity\Setting;
 use App\Service\AppSettings;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\DomCrawler\Crawler;
 
 /**
  * Pantalla de configuración (/gestion/settings): render, guardado de
@@ -228,11 +229,12 @@ class SettingsControllerTest extends AbstractAuthenticatedTest
 
     /**
      * EL CRITERIO DE ACEPTACIÓN del paso 1: entrando en la pantalla se ve de un
-     * vistazo qué hizo cada tarea la última vez, y una tarea APAGADA se
-     * distingue de una que corrió SIN TRABAJO. Hasta ahora las dos salían igual
-     * (en verde y calladas), que es lo que dejó pasar dos semanas de cron caído.
+     * vistazo qué hizo cada tarea la última vez. Tres resultados que antes eran
+     * indistinguibles —todos salían en verde y callados, y eso es lo que dejó
+     * pasar dos semanas de cron caído— tienen que leerse distintos: hizo su
+     * trabajo, corrió y no había nada que hacer, y corrió pero no pudo entregar.
      */
-    public function testLaPantallaDistingueApagadaDeSinTrabajoYDeHechoConExito(): void
+    public function testLaPantallaDistingueTrabajoHechoDeNadaQueHacerYDeNoEntregar(): void
     {
         $client = $this->createAuthenticatedClient();
         $this->seedRun(AppSettings::CRON_GENERATE_WEEKLY_DELIVERY, CronRun::STATUS_DONE, '-2 hours', CronRun::TRIGGER_MANUAL);
@@ -245,9 +247,19 @@ class SettingsControllerTest extends AbstractAuthenticatedTest
         $text = $crawler->text();
         $this->assertStringContainsString('Hizo su trabajo', $text);
         $this->assertStringContainsString('Nada que hacer', $text, 'Corrió y no había nada que hacer: es sano, y distinto de estar apagada.');
-        $this->assertStringContainsString('Apagada', $text);
         $this->assertStringContainsString('a mano', $text, 'Una ejecución manual no debe hacerse pasar por el reloj.');
         $this->assertStringContainsString('los lunes a las 06:00', $text, 'La cadencia declarada se pinta junto a la tarea.');
+
+        // Esta tarea tiene su interruptor ENCENDIDO y corrió: lo que la frenó fue
+        // un ajuste de aguas abajo. Decir "Apagada" aquí contradecía al
+        // interruptor en verde de la misma fila.
+        //
+        // Se miran las INSIGNIAS de su bloque, no el texto: en la página hay
+        // otras tareas realmente apagadas, y además el texto de ayuda de esta
+        // misma empieza por "Apagada, el rastro se acumula sin límite".
+        $badges = $this->taskBadges($crawler, AppSettings::CRON_PURGE_USAGE_HITS);
+        $this->assertContains('No entrega', $badges);
+        $this->assertNotContains('Apagada', $badges);
     }
 
     /**
@@ -283,16 +295,13 @@ class SettingsControllerTest extends AbstractAuthenticatedTest
         $crawler = $client->request('GET', '/gestion/settings/');
 
         $this->assertResponseIsSuccessful();
-        // Acotado al bloque de ESA tarea: en la misma pantalla hay otras que sí
-        // están encendidas y sin registro, y ésas sí deben decir "sin registro".
-        $label = AppSettings::BOOLEANS[AppSettings::CRON_PURGE_USAGE_HITS]['label'];
-        $block = $crawler->filter('.csa-cron')->reduce(
-            static fn ($node): bool => str_contains($node->text(), $label)
-        );
+        // Acotado a las insignias de ESA tarea: en la misma pantalla hay otras
+        // encendidas y sin registro, y ésas sí deben decir "sin registro". Y por
+        // el texto no vale, que su propia ayuda ya contiene la palabra "Apagada".
+        $badges = $this->taskBadges($crawler, AppSettings::CRON_PURGE_USAGE_HITS);
 
-        $this->assertCount(1, $block, sprintf('No se encontró el bloque de la tarea «%s».', $label));
-        $this->assertStringContainsString('Apagada', $block->text());
-        $this->assertStringNotContainsString('Sin registro todavía', $block->text());
+        $this->assertContains('Apagada', $badges);
+        $this->assertNotContains('Sin registro todavía', $badges);
     }
 
     /**
@@ -341,6 +350,50 @@ class SettingsControllerTest extends AbstractAuthenticatedTest
 
         $this->assertStringContainsString('Depende de', $crawler->text());
         $this->assertStringContainsString('Congelar el listado semanal', $crawler->text());
+    }
+
+    /**
+     * El bloque de UNA tarea concreta dentro de la pantalla.
+     *
+     * Hace falta porque las aserciones sobre el texto de la página entera pasan
+     * por casualidad: siete tareas comparten vocabulario, así que buscar
+     * "Apagada" en todo el HTML no dice nada de la tarea que se está probando.
+     * La etiqueta se lee del catálogo y no se copia, para que renombrarla no
+     * rompa el test.
+     *
+     * @param Crawler $crawler Página ya cargada.
+     * @param string  $taskKey Clave de la tarea en el manifiesto.
+     */
+    private function taskBlock(Crawler $crawler, string $taskKey): Crawler
+    {
+        $label = AppSettings::BOOLEANS[$taskKey]['label'];
+        $block = $crawler->filter('.csa-cron')->reduce(
+            static fn (Crawler $node): bool => str_contains($node->text(), $label)
+        );
+
+        $this->assertCount(1, $block, sprintf('No se encontró el bloque de la tarea «%s».', $label));
+
+        return $block;
+    }
+
+    /**
+     * Las INSIGNIAS de estado de una tarea, ya limpias.
+     *
+     * Mirar las insignias y no el texto del bloque no es quisquillosería: el
+     * texto de ayuda de un ajuste habla de sus propios estados («Apagada, el
+     * rastro se acumula sin límite»), así que buscar una palabra en todo el
+     * bloque da verde aunque la insignia diga justo lo contrario. Ya me pasó con
+     * estos dos tests.
+     *
+     * @param Crawler $crawler Página ya cargada.
+     * @param string  $taskKey Clave de la tarea en el manifiesto.
+     * @return list<string> Etiquetas de las insignias de ese bloque.
+     */
+    private function taskBadges(Crawler $crawler, string $taskKey): array
+    {
+        return $this->taskBlock($crawler, $taskKey)
+            ->filter('.csa-badge')
+            ->each(static fn (Crawler $badge): string => trim($badge->text()));
     }
 
     /**
