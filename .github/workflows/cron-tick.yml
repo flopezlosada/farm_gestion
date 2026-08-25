@@ -21,10 +21,23 @@ name: Reloj del planificador
 # seguros porque el tick es idempotente, y así la fiabilidad deja de depender de
 # un solo proveedor.
 #
-# Secretos que necesita (Settings > Secrets and variables > Actions):
-#   CRON_TICK_URL    - https://<host>/cron/tick
-#   CRON_TICK_TOKEN  - el mismo valor que el .env.local del servidor
-#   CRON_HEALTH_URL  - https://<host>/cron/health
+# UN RELOJ, VARIOS ENTORNOS. La diferencia entre producción y staging no está en
+# el código, está en los SECRETOS: hay un juego por entorno y el workflow llama a
+# los dos. Como un entorno sin secretos se salta sin fallar (ver abajo), rellenar
+# o borrar sus secretos es el interruptor de encendido de ese entorno — se puede
+# encender staging para validar y añadir producción después, o apagar staging
+# cuando ya no haga falta, sin tocar este fichero.
+#
+# Los TOKENS de cada entorno son distintos y no se reutilizan: cada uno vale
+# para su servidor.
+#
+# Secretos (Settings > Secrets and variables > Actions):
+#   CRON_TICK_URL_PROD       - https://csavegadejarama.org/cron/tick
+#   CRON_TICK_TOKEN_PROD     - el mismo valor que el .env.local de producción
+#   CRON_HEALTH_URL_PROD     - https://csavegadejarama.org/cron/health
+#   CRON_TICK_URL_STAGING    - https://staging.csavegadejarama.org/cron/tick
+#   CRON_TICK_TOKEN_STAGING  - el mismo valor que el .env.local de staging
+#   CRON_HEALTH_URL_STAGING  - https://staging.csavegadejarama.org/cron/health
 
 on:
   schedule:
@@ -43,13 +56,20 @@ concurrency:
 
 jobs:
   tick:
-    name: Tick horario
+    name: Tick horario (${{ matrix.entorno }})
     runs-on: ubuntu-latest
+    strategy:
+      # Que un entorno caído NO cancele el tick del otro. Con fail-fast, un fallo
+      # en staging dejaría producción sin latido, que es lo contrario de lo que
+      # se busca.
+      fail-fast: false
+      matrix:
+        entorno: [PROD, STAGING]
     steps:
       - name: Llamar al tick
         env:
-          URL: ${{ secrets.CRON_TICK_URL }}
-          TOKEN: ${{ secrets.CRON_TICK_TOKEN }}
+          URL: ${{ secrets[format('CRON_TICK_URL_{0}', matrix.entorno)] }}
+          TOKEN: ${{ secrets[format('CRON_TICK_TOKEN_{0}', matrix.entorno)] }}
         run: |
           # Sin secretos, el reloj no está ENCENDIDO todavía: no es una avería.
           # Misma decisión que en el endpoint, donde un token vacío responde 404
@@ -61,8 +81,9 @@ jobs:
           # están y la llamada no sale bien, este workflow falla y GitHub manda
           # un correo, que es justo lo que el crontab de cdmon nunca hizo.
           if [ -z "$URL" ] || [ -z "$TOKEN" ]; then
-            echo "El reloj todavía no está configurado (faltan CRON_TICK_URL o CRON_TICK_TOKEN)."
-            echo "Créalos en Settings > Secrets and variables > Actions cuando la aplicación esté desplegada."
+            echo "El reloj de ${{ matrix.entorno }} todavía no está configurado."
+            echo "Faltan CRON_TICK_URL_${{ matrix.entorno }} o CRON_TICK_TOKEN_${{ matrix.entorno }}."
+            echo "Créalos en Settings > Secrets and variables > Actions cuando ese entorno esté desplegado."
             exit 0
           fi
 
@@ -84,7 +105,7 @@ jobs:
 
       - name: Comprobar la salud del planificador
         env:
-          URL: ${{ secrets.CRON_HEALTH_URL }}
+          URL: ${{ secrets[format('CRON_HEALTH_URL_{0}', matrix.entorno)] }}
         # Se ejecuta aunque el paso anterior falle: si el tick no llega, saber
         # cómo está el planificador es más útil todavía.
         if: always() && env.URL != ''

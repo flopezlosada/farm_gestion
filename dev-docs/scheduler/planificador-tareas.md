@@ -492,9 +492,26 @@ Decisiones del paso 3:
 está escrito (`.github/workflows/cron-tick.yml`): llama al tick cada hora, falla
 si no recibe un 202 y de paso consulta el chequeo de salud. Falta encenderlo, y
 eso son tres cosas que no puede hacer nadie más que Paco: generar el token,
-ponerlo en el `.env.local` del servidor y crear los tres secretos en GitHub
-(`CRON_TICK_URL`, `CRON_TICK_TOKEN`, `CRON_HEALTH_URL`). Y falta el segundo
-reloj, un servicio gratuito apuntando al mismo endpoint.
+ponerlo en el `.env.local` del servidor y crear los secretos en GitHub. Y falta
+el segundo reloj, un servicio gratuito apuntando al mismo endpoint.
+
+**Un reloj, varios entornos (2026-08-25).** La diferencia entre producción y
+staging no está en el código: está en los secretos. El workflow recorre una
+matriz `[PROD, STAGING]` y de cada vuelta lee `CRON_TICK_URL_<entorno>`,
+`CRON_TICK_TOKEN_<entorno>` y `CRON_HEALTH_URL_<entorno>`. Como un entorno sin
+secretos se salta sin fallar, **rellenar o borrar sus secretos es el interruptor
+de encendido de ese entorno**: se puede validar en staging primero y añadir
+producción después sin tocar el fichero. Va con `fail-fast: false` para que un
+entorno caído no cancele el latido del otro.
+
+Y staging es un banco de pruebas mejor que producción para esto, por una razón
+que no se había aprovechado: **en staging cdmon no tiene ningún cron**, sólo en
+producción. Allí el tick es el ÚNICO reloj, así que si funciona las tareas
+corren y si no, no corre nada. Cero ambigüedad. Con una cautela: el SMTP de
+staging **entrega de verdad** y los testers conservan su email real, así que hay
+que apagar el interruptor general de emails antes de encender el tick. Las tareas
+de correo quedan registradas como "Apagada", y eso ya demuestra que el reloj está
+vivo.
 
 Mientras los secretos no existan, el workflow **sale en verde sin llamar a
 nadie**. Un `schedule` empieza a ejecutarse en cuanto está en la rama por
