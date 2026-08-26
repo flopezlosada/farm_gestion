@@ -31,6 +31,7 @@ class VolunteerOfferChangeNotifier
     public function __construct(
         private readonly UserRepository $users,
         private readonly PushSender $push,
+        private readonly VolunteerOfferFormatter $formatter,
     ) {
     }
 
@@ -100,10 +101,10 @@ class VolunteerOfferChangeNotifier
 
         $what = [];
         if ($moved) {
-            $what[] = sprintf('ahora es el %s', $this->formatDate($offer->getStartsAt()));
+            $what[] = sprintf('ahora es el %s', $this->formatter->dateInSentence($offer->getStartsAt()));
         }
         if ($relocated) {
-            $what[] = sprintf('ahora es %s', $this->formatPlace($offer));
+            $what[] = sprintf('ahora es %s', $this->describePlace($offer));
         }
 
         return [
@@ -133,47 +134,21 @@ class VolunteerOfferChangeNotifier
     }
 
     /**
-     * La fecha en cristiano y en la zona de aquí.
-     *
-     * @param \DateTimeInterface|null $date la fecha
-     *
-     * @return string la fecha legible
-     */
-    private function formatDate(?\DateTimeInterface $date): string
-    {
-        if (null === $date) {
-            return 'sin fecha';
-        }
-
-        $formatter = new \IntlDateFormatter(
-            'es_ES',
-            \IntlDateFormatter::FULL,
-            \IntlDateFormatter::SHORT,
-            'Europe/Madrid',
-            \IntlDateFormatter::GREGORIAN,
-            "EEEE d 'de' MMMM 'a las' HH:mm"
-        );
-
-        return (string) $formatter->format($date);
-    }
-
-    /**
-     * Dónde es ahora.
+     * Dónde es ahora, dentro de una frase. "desde casa" ya se lee bien tal cual;
+     * un sitio con nombre necesita el "en" delante.
      *
      * @param VolunteerOffer $offer la tarea
      *
      * @return string el sitio, legible
      */
-    private function formatPlace(VolunteerOffer $offer): string
+    private function describePlace(VolunteerOffer $offer): string
     {
-        if ($offer->isRemote()) {
-            return 'desde casa';
+        $place = $this->formatter->place($offer);
+
+        if (null === $place) {
+            return 'en otro sitio';
         }
 
-        if (null !== $offer->getNode()) {
-            return sprintf('en %s', $offer->getNode());
-        }
-
-        return null !== $offer->getPlace() ? sprintf('en %s', $offer->getPlace()) : 'en otro sitio';
+        return $offer->isRemote() ? $place : sprintf('en %s', $place);
     }
 }

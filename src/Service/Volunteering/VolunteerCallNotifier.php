@@ -44,6 +44,7 @@ class VolunteerCallNotifier
         private readonly PushSender $push,
         private readonly EntityManagerInterface $entityManager,
         private readonly AppSettings $settings,
+        private readonly VolunteerOfferFormatter $formatter,
         private readonly LoggerInterface $logger,
     ) {
     }
@@ -168,61 +169,13 @@ class VolunteerCallNotifier
      */
     private function body(VolunteerOffer $offer): string
     {
-        $parts = [$offer->getTitle(), $this->formatDate($offer->getStartsAt())];
+        $parts = [$offer->getTitle(), $this->formatter->date($offer->getStartsAt())];
 
-        $where = $this->formatPlace($offer);
+        $where = $this->formatter->place($offer);
         if (null !== $where) {
             $parts[] = $where;
         }
 
         return implode(' · ', $parts);
-    }
-
-    /**
-     * La fecha en cristiano y en la zona de aquí: "jueves 4 de septiembre,
-     * 17:00". Con Intl y no con format(), que devolvería los días y meses en
-     * inglés.
-     *
-     * @param \DateTimeInterface|null $date la fecha
-     *
-     * @return string la fecha legible, o cadena vacía si no hay
-     */
-    private function formatDate(?\DateTimeInterface $date): string
-    {
-        if (null === $date) {
-            return '';
-        }
-
-        $formatter = new \IntlDateFormatter(
-            'es_ES',
-            \IntlDateFormatter::FULL,
-            \IntlDateFormatter::SHORT,
-            'Europe/Madrid',
-            \IntlDateFormatter::GREGORIAN,
-            "EEEE d 'de' MMMM, HH:mm"
-        );
-
-        return (string) $formatter->format($date);
-    }
-
-    /**
-     * Dónde es, si se sabe. El nodo manda sobre el texto libre: es el sitio al
-     * que esa persona ya va a ir de todas formas.
-     *
-     * @param VolunteerOffer $offer la oferta
-     *
-     * @return string|null el lugar, o null si es a distancia o no consta
-     */
-    private function formatPlace(VolunteerOffer $offer): ?string
-    {
-        if ($offer->isRemote()) {
-            return 'desde casa';
-        }
-
-        if (null !== $offer->getNode()) {
-            return (string) $offer->getNode();
-        }
-
-        return $offer->getPlace();
     }
 }

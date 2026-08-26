@@ -187,6 +187,11 @@ class AppSettings
     public const VOLUNTEERING_ESCALATION_HOURS = 'volunteering.escalation_hours';
 
     /**
+     * Con cuánta antelación se le recuerda a quien se apuntó que le toca.
+     */
+    public const VOLUNTEERING_REMINDER_HOURS = 'volunteering.reminder_hours';
+
+    /**
      * Interruptores de las tareas programadas (crons). Apagado, el comando
      * correspondiente sale sin hacer nada en cuanto arranca: como el hosting es
      * solo-FTP y no podemos tocar el crontab desde la app, el cron sigue
@@ -213,6 +218,14 @@ class AppSettings
      * para mañana" no admite esperar al día siguiente.
      */
     public const CRON_VOLUNTEER_CALLS = 'cron.volunteer_calls';
+
+    /**
+     * Recordatorio a quien ya se apuntó a una tarea de voluntariado, poco antes
+     * de que le toque. Separado del de las llamadas porque son avisos
+     * distintos: aquél pide gente, éste recuerda a quien ya dijo que sí, y se
+     * puede querer uno sin el otro.
+     */
+    public const CRON_VOLUNTEER_REMINDERS = 'cron.volunteer_reminders';
 
     /**
      * MANIFIESTO DE TAREAS PROGRAMADAS: la fuente única de verdad sobre qué
@@ -354,6 +367,18 @@ class AppSettings
             'requires' => [self::FEATURE_VOLUNTEERING],
             'depends_on' => [],
         ],
+        // También por intervalo: un recordatorio que llega tarde es peor que no
+        // mandarlo, porque gasta el canal sin traer a nadie.
+        self::CRON_VOLUNTEER_REMINDERS => [
+            'command' => 'app:send-volunteer-reminders',
+            'needs_recipient' => false,
+            'confirm' => true,
+            'dry' => true,
+            'schedule' => ['freq' => 'interval', 'minutes' => 60],
+            'max_delay_hours' => 6,
+            'requires' => [self::FEATURE_VOLUNTEERING],
+            'depends_on' => [],
+        ],
     ];
 
     /**
@@ -434,6 +459,12 @@ class AppSettings
             'help' => 'Abre el módulo de voluntariado: publicar trabajos, que lxs socixs se apunten y el bloque de su panel con lo que hace falta. Apagado, se oculta del menú, no es accesible y no se envía ningún aviso pidiendo gente.',
             'default' => false,
         ],
+        self::CRON_VOLUNTEER_REMINDERS => [
+            'group' => 'Tareas programadas',
+            'label' => 'Recordar el voluntariado a quien se apuntó',
+            'help' => 'Avisa a quien se apuntó a una tarea poco antes de que le toque, con la antelación configurada. Sin esto, alguien se apunta con dos semanas y el día que es no se acuerda. Requiere el módulo de voluntariado encendido.',
+            'default' => false,
+        ],
         self::CRON_VOLUNTEER_CALLS => [
             'group' => 'Tareas programadas',
             'label' => 'Avisar de tareas de voluntariado sin cubrir',
@@ -510,6 +541,15 @@ class AppSettings
             'min' => 0,
             'max' => 7,
             'unit' => 'días',
+        ],
+        self::VOLUNTEERING_REMINDER_HOURS => [
+            'group' => 'Funcionalidades en rodaje',
+            'label' => 'Antelación del recordatorio de voluntariado',
+            'help' => 'Cuántas horas antes se le recuerda a quien se apuntó que le toca. 24 = el día anterior. Requiere que la tarea programada de avisos corra al menos con esa frecuencia.',
+            'default' => 24,
+            'min' => 1,
+            'max' => 168,
+            'unit' => 'h',
         ],
         self::VOLUNTEERING_ESCALATION_HOURS => [
             'group' => 'Funcionalidades en rodaje',

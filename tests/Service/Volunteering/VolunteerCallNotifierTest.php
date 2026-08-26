@@ -13,6 +13,7 @@ use App\Service\Push\PushSender;
 use App\Service\Volunteering\VolunteerAudienceResolver;
 use App\Service\Volunteering\VolunteerCallEscalator;
 use App\Service\Volunteering\VolunteerCallNotifier;
+use App\Service\Volunteering\VolunteerOfferFormatter;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\TestCase;
@@ -201,6 +202,7 @@ class VolunteerCallNotifierTest extends TestCase
             $push ?? $this->createMock(PushSender::class),
             $entityManager ?? $this->createMock(EntityManagerInterface::class),
             $settings,
+            new VolunteerOfferFormatter(),
             new NullLogger()
         );
     }

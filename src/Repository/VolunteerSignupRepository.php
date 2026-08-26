@@ -144,6 +144,38 @@ class VolunteerSignupRepository extends ServiceEntityRepository
     }
 
     /**
+     * Las inscripciones vivas a tareas que empiezan dentro de la ventana dada:
+     * a esa gente hay que recordarle que se apuntó.
+     *
+     * Por barrido y no programando un aviso al apuntarse (que es como lo hace
+     * Karrot): así darse de baja no deja un recordatorio pendiente que haya que
+     * revocar — quien se dio de baja sencillamente deja de salir en esta
+     * consulta. Menos piezas y ningún aviso fantasma.
+     *
+     * La repetición la corta {@see \App\Service\Cron\EffectLedger}: el barrido
+     * corre cada hora y la misma inscripción cae en varias pasadas.
+     *
+     * @param \DateTimeInterface $from  desde cuándo (normalmente, ahora)
+     * @param \DateTimeInterface $until hasta cuándo mirar adelante
+     *
+     * @return list<VolunteerSignup> las inscripciones que toca recordar
+     */
+    public function findDueForReminder(\DateTimeInterface $from, \DateTimeInterface $until): array
+    {
+        return $this->createQueryBuilder('s')
+            ->join('s.offer', 'o')
+            ->where('s.cancelledAt IS NULL')
+            ->andWhere('o.status = :published')
+            ->andWhere('o.startsAt BETWEEN :from AND :until')
+            ->setParameter('published', VolunteerOffer::STATUS_PUBLISHED)
+            ->setParameter('from', $from)
+            ->setParameter('until', $until)
+            ->orderBy('o.startsAt', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
      * Lo que este socix se apuntó, ya ha pasado y todavía no ha dicho si hizo o
      * no. Es lo que se le pregunta en su panel.
      *

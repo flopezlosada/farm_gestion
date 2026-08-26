@@ -10,6 +10,7 @@ use App\Entity\VolunteerSignup;
 use App\Repository\UserRepository;
 use App\Service\Push\PushSender;
 use App\Service\Volunteering\VolunteerOfferChangeNotifier;
+use App\Service\Volunteering\VolunteerOfferFormatter;
 use App\Service\Volunteering\VolunteerOfferSnapshot;
 use PHPUnit\Framework\TestCase;
 
@@ -192,6 +193,6 @@ class VolunteerOfferChangeNotifierTest extends TestCase
         $users = $this->createMock(UserRepository::class);
         $users->method('findByPartners')->willReturn([new User()]);
 
-        return new VolunteerOfferChangeNotifier($users, $push);
+        return new VolunteerOfferChangeNotifier($users, $push, new VolunteerOfferFormatter());
     }
 }
