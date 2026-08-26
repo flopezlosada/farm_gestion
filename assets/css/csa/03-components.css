@@ -755,9 +755,12 @@ select.csa-input,
 }
 
 /* Grid de campos en formularios */
+/* minmax(0, 1fr) y no 1fr: con 1fr el mínimo de la columna es el min-content
+   del campo, y un campo con label + hint largo (el hint lleva flex-shrink: 0)
+   arrastraba el formulario fuera del viewport en móvil. */
 .csa-form-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--csa-sp-4);
 }
 
@@ -770,7 +773,11 @@ select.csa-input,
 .csa-form-grid--full > .csa-field { grid-column: 1 / -1; }
 .csa-field--full { grid-column: 1 / -1; }
 @media (max-width: 768px) {
-  .csa-form-grid { grid-template-columns: 1fr; }
+  .csa-form-grid { grid-template-columns: minmax(0, 1fr); }
+  /* El hint no cabe al lado de la etiqueta en un móvil: baja bajo ella.
+     El wrap va en la fila (.csa-field__label-row), que es la que es flex. */
+  .csa-field__label-row { flex-wrap: wrap; gap: 2px var(--csa-sp-2); }
+  .csa-field__hint { flex-basis: 100%; }
 }
 
 
@@ -1673,6 +1680,19 @@ a.csa-table__primary:hover {
   .csa-topbar__util i { font-size: 16px; }
   .csa-me__name { display: none; }
   .csa-me__id { padding: 1px; }
+
+  /* Aun dejando solo el crumb activo, un título largo ("Reparto semanal")
+     seguía empujando el bloque de usuario unos píxeles fuera del viewport, y
+     eso da scroll horizontal a TODA la app. El crumb es lo único que puede
+     encoger, así que se le permite (min-width: 0) y se recorta con puntos
+     suspensivos; el bloque de usuario no cede espacio. */
+  .csa-topbar__crumbs { min-width: 0; flex: 1; }
+  .csa-topbar__crumb-active {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .csa-topbar__user { flex-shrink: 0; }
 }
 
 
@@ -1893,6 +1913,17 @@ a.csa-table__primary:hover {
   background: var(--csa-ink);
   color: #fff;
   border-bottom-color: transparent;
+}
+/* Móvil: `flex-wrap: nowrap` + enlaces `white-space: nowrap` sacaban las
+   pestañas fuera de la pantalla (en Ajustes son cinco y suman >1300px).
+   Aquí se dejan envolver y el bloque ocupa el ancho disponible. */
+@media (max-width: 768px) {
+  .csa-tabs--folder {
+    flex-wrap: wrap;
+    width: 100%;
+    row-gap: 2px;
+  }
+  .csa-app .csa-tabs--folder .csa-tabs__link { padding: 10px 14px 8px; font-size: 14px; }
 }
 
 
