@@ -1,0 +1,198 @@
+{# Una tarea de voluntariado: sus datos, quién se ha apuntado y los avisos. #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Voluntariado · {{ offer.title }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('volunteering_index') }}">Voluntariado</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ offer.title }}</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include '_components/volunteering_styles.html.twig' %}
+{% endblock %}
+
+{% block csa_main %}
+    {% set status_tone = { 'draft': 'neutral', 'published': 'green', 'cancelled': 'terracotta' } %}
+    {% set status_label = { 'draft': 'Borrador', 'published': 'Publicada', 'cancelled': 'Anulada' } %}
+    {% set is_past = offer.startsAt < date() %}
+
+    {{ csa.page_header('Voluntariado', offer.title) }}
+
+    <div class="csa-kpi-row" style="margin-bottom: var(--csa-sp-6);">
+        {{ csa.kpi('Apuntadxs', offer.filledSlots, null, null, null, 'sky', 'fa-users') }}
+        {% if offer.slots %}
+            {{ csa.kpi('Faltan', offer.remainingSlots, null, null, null, offer.remainingSlots > 0 ? 'terracotta' : 'green', 'fa-user-plus') }}
+        {% endif %}
+        {% if offer.creditedMinutes %}
+            {{ csa.kpi('Computa', offer.creditedMinutes, 'min', null, null, 'ochre', 'fa-clock-o') }}
+        {% endif %}
+    </div>
+
+    {% embed '_components/csa_card.html.twig' with { title: 'La tarea', icon: 'fa-info-circle' } %}
+        {% block body %}
+            <dl class="csa-defs">
+                <dt>Estado</dt>
+                <dd>{{ csa.badge(status_label[offer.status]|default(offer.status), status_tone[offer.status]|default('neutral')) }}</dd>
+
+                <dt>Cuándo</dt>
+                <dd>{{ offer.startsAt|date('d/m/Y H:i') }}{% if offer.endsAt %} — {{ offer.endsAt|date('H:i') }}{% endif %}</dd>
+
+                <dt>Dónde</dt>
+                <dd>
+                    {%- if offer.remote %}Desde casa
+                    {%- elseif offer.node %}{{ offer.node }}
+                    {%- elseif offer.place %}{{ offer.place }}
+                    {%- else %}—{% endif -%}
+                </dd>
+
+                <dt>Tipo de trabajo</dt>
+                <dd>
+                    {% for category in offer.categories %}{{ csa.badge(category.name, 'neutral') }}{% else %}—{% endfor %}
+                </dd>
+
+                <dt>A quién se puede pedir</dt>
+                <dd>
+                    {% if offer.openToAnyone %}
+                        {{ csa.badge('A cualquiera', 'green') }}
+                    {% else %}
+                        {{ csa.badge('Sólo a quien lo tenga marcado', 'ochre') }}
+                    {% endif %}
+                </dd>
+
+                {% if offer.description %}
+                    <dt>Explicación</dt>
+                    <dd>{{ offer.description|nl2br }}</dd>
+                {% endif %}
+            </dl>
+        {% endblock %}
+    {% endembed %}
+
+    {# ============ QUIÉN SE HA APUNTADO ============ #}
+    {% embed '_components/csa_card.html.twig' with { title: 'Quién se ha apuntado', icon: 'fa-users' } %}
+        {% block body %}
+            {% if offer.signups is empty %}
+                <p>Todavía no se ha apuntado nadie.</p>
+            {% else %}
+                <form method="post" action="{{ path('volunteering_close', { id: offer.id }) }}">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_close') }}">
+
+                    <div class="csa-table-wrap">
+                        <table class="csa-table">
+                            <thead>
+                                <tr>
+                                    {% if is_past and is_granted('ROLE_GESTION_SOCIXS_EDIT') %}
+                                        <th class="csa-table__col-tight">Fue</th>
+                                    {% endif %}
+                                    <th>Socix</th>
+                                    <th class="csa-table__col-tight">Viene con</th>
+                                    <th class="csa-table__col-tight">Se apuntó</th>
+                                    <th>Nota</th>
+                                    <th class="csa-table__col-tight">Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for signup in offer.signups %}
+                                    <tr>
+                                        {% if is_past and is_granted('ROLE_GESTION_SOCIXS_EDIT') %}
+                                            <td class="csa-table__col-tight">
+                                                {% if not signup.cancelled %}
+                                                    <input type="checkbox" name="attended[]" value="{{ signup.id }}"
+                                                           {% if signup.attended %}checked{% endif %}>
+                                                {% endif %}
+                                            </td>
+                                        {% endif %}
+                                        <td>{{ signup.partner.name }} {{ signup.partner.surname }}</td>
+                                        <td class="csa-table__col-tight">{{ signup.companions > 0 ? '+' ~ signup.companions : '—' }}</td>
+                                        <td class="csa-table__col-tight">{{ signup.createdAt|date('d/m/Y') }}</td>
+                                        <td>{{ signup.notes ?: '—' }}</td>
+                                        <td class="csa-table__col-tight">
+                                            {% if signup.cancelled %}
+                                                {{ csa.badge('Se dio de baja', 'terracotta') }}
+                                            {% elseif signup.attended is same as(true) %}
+                                                {{ csa.badge('Fue · ' ~ (signup.creditedMinutes ?: 0) ~ ' min', 'green') }}
+                                            {% elseif signup.attended is same as(false) %}
+                                                {{ csa.badge('No fue', 'neutral') }}
+                                            {% else %}
+                                                {{ csa.badge('Apuntadx', 'sky') }}
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {# Cerrar sólo tiene sentido cuando la tarea ya ha pasado.
+                     # Mientras no se cierra, no computa horas a nadie: el
+                     # "no sabemos" es significativo y evita que olvidarse de
+                     # cerrar infle el contador con gente que no apareció. #}
+                    {% if is_past and is_granted('ROLE_GESTION_SOCIXS_EDIT') %}
+                        <p class="vol-help" style="margin-top: var(--csa-sp-3);">
+                            Marca quién fue de verdad. A cada persona marcada se le computan
+                            {{ offer.creditedMinutes ?: 0 }} minutos; a las demás, ninguno.
+                        </p>
+                        <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">Cerrar la tarea</button>
+                    {% endif %}
+                </form>
+            {% endif %}
+        {% endblock %}
+    {% endembed %}
+
+    {# ============ AVISOS ============ #}
+    {% embed '_components/csa_card.html.twig' with { title: 'Avisos enviados', icon: 'fa-bullhorn' } %}
+        {% block body %}
+            <ul class="csa-list">
+                <li>
+                    {% if 'matching' in sent_scopes %}<i class="fa fa-check"></i>{% else %}<i class="fa fa-circle-o"></i>{% endif %}
+                    A quien tiene marcado este tipo de trabajo
+                </li>
+                <li>
+                    {% if 'unspecified' in sent_scopes %}<i class="fa fa-check"></i>{% else %}<i class="fa fa-circle-o"></i>{% endif %}
+                    A quien no ha declarado preferencias
+                    {% if not offer.openToAnyone %}
+                        <em>(no aplica: esta tarea no es para cualquiera)</em>
+                    {% endif %}
+                </li>
+                <li>
+                    {% if everyone_sent %}<i class="fa fa-check"></i>{% else %}<i class="fa fa-circle-o"></i>{% endif %}
+                    A toda la asociación
+                </li>
+            </ul>
+
+            {% if is_granted('ROLE_GESTION_SOCIXS_EDIT') and not everyone_sent and offer.open %}
+                {#
+                 # Este botón gasta el canal push de toda la asociación, y el
+                 # permiso del navegador se pierde una vez y para siempre: quien
+                 # lo apaga no vuelve. Por eso se enseña el NÚMERO antes, se
+                 # exige confirmación, y sólo se puede una vez por tarea.
+                 #}
+                {{ csa.callout(
+                    'Avisar a toda la asociación llega a ' ~ everyone_count ~ ' socix(s), incluidxs quienes han dicho que de esto no les avisen. Sólo se puede hacer una vez por tarea. Úsalo cuando de verdad haga falta.',
+                    'warning',
+                    'exclamation-triangle'
+                ) }}
+
+                <form method="post" action="{{ path('volunteering_notify_everyone', { id: offer.id }) }}"
+                      onsubmit="return confirm('Vas a avisar a {{ everyone_count }} socix(s). Esto no se puede deshacer y sólo se puede hacer una vez. ¿Seguro?');">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_notify') }}">
+                    <button type="submit" class="csa-btn csa-btn--danger-soft csa-btn--sm">
+                        <i class="fa fa-bullhorn"></i> Avisar a toda la asociación
+                    </button>
+                </form>
+            {% endif %}
+        {% endblock %}
+    {% endembed %}
+
+    <div class="csa-row-between" style="margin-top: var(--csa-sp-6);">
+        {{ csa.btn('Volver', { variant: 'ghost', href: path('volunteering_index') }) }}
+        {% if is_granted('ROLE_GESTION_SOCIXS_EDIT') %}
+            {{ csa.btn('Editar', { variant: 'primary', icon: 'fa-pencil', href: path('volunteering_edit', { id: offer.id }) }) }}
+        {% endif %}
+    </div>
+{% endblock %}

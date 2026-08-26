@@ -1,0 +1,40 @@
+{# Edición de un tipo de trabajo del voluntariado. #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Voluntariado · {{ category.name }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('volunteering_index') }}">Voluntariado</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('volunteering_categories') }}">Tipos de trabajo</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ category.name }}</span>
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header('Voluntariado', 'Editar tipo de trabajo') }}
+
+    {% if not category.active %}
+        {{ csa.callout('Esta categoría está retirada: no se ofrece al crear tareas nuevas ni aparece en la ficha de lxs socixs. Las tareas históricas que la usaron siguen enteras.', 'info') }}
+    {% endif %}
+
+    {{ form_start(form, { attr: { class: 'csa-form-narrow' } }) }}
+        <div class="csa-form-grid">
+            {{ csa.field(form.name, 'Nombre') }}
+            {{ csa.field(form.active, 'Se sigue ofreciendo', { full: true }) }}
+            {{ csa.field(form.description, 'Qué entra aquí', {
+                full: true,
+                hint: 'se le enseña a cada socix junto a la casilla',
+                widget_class: 'csa-textarea'
+            }) }}
+        </div>
+
+        <div class="csa-row-between" style="margin-top: var(--csa-sp-6);">
+            {{ csa.btn('Volver', { variant: 'ghost', href: path('volunteering_categories') }) }}
+            <button type="submit" class="csa-btn csa-btn--primary">Guardar cambios</button>
+        </div>
+    {{ form_end(form) }}
+{% endblock %}

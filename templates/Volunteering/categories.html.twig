@@ -1,0 +1,69 @@
+{# Catálogo de tipos de trabajo del voluntariado. #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Voluntariado · Tipos de trabajo{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('volunteering_index') }}">Voluntariado</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Tipos de trabajo</span>
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header('Voluntariado', 'Tipos de trabajo', 'Cada socix marca en su ficha de qué tipos quiere que se le avise. Marcar significa "avísame de esto"; no marcar nada, "avísame de lo que sea sencillo".') }}
+
+    <div class="csa-table-wrap" style="margin-bottom: var(--csa-sp-6);">
+        <table class="csa-table">
+            <thead>
+                <tr>
+                    <th>Nombre</th>
+                    <th>Qué entra aquí</th>
+                    <th class="csa-table__col-tight">Socixs</th>
+                    <th class="csa-table__col-tight">Estado</th>
+                    <th class="csa-table__actions">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for category in categories %}
+                    <tr>
+                        <td class="csa-table__primary">{{ category.name }}</td>
+                        <td>{{ category.description ?: '—' }}</td>
+                        <td class="csa-table__col-tight">{{ category.partners|length }}</td>
+                        <td class="csa-table__col-tight">
+                            {% if category.active %}
+                                {{ csa.badge('Activa', 'green') }}
+                            {% else %}
+                                {{ csa.badge('Retirada', 'neutral') }}
+                            {% endif %}
+                        </td>
+                        <td class="csa-table__actions">
+                            <a href="{{ path('volunteering_category_edit', { id: category.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="5">Todavía no hay ningún tipo de trabajo. Crea el primero abajo.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% embed '_components/csa_card.html.twig' with { title: 'Nuevo tipo de trabajo', icon: 'fa-plus' } %}
+        {% block body %}
+            {{ form_start(form, { attr: { class: 'csa-form-narrow' } }) }}
+                <div class="csa-form-grid">
+                    {{ csa.field(form.name, 'Nombre') }}
+                    {{ csa.field(form.active, 'Se sigue ofreciendo', { full: true }) }}
+                    {{ csa.field(form.description, 'Qué entra aquí', {
+                        full: true,
+                        hint: 'se le enseña a cada socix junto a la casilla',
+                        widget_class: 'csa-textarea'
+                    }) }}
+                </div>
+                <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">Crear</button>
+            {{ form_end(form) }}
+        {% endblock %}
+    {% endembed %}
+{% endblock %}

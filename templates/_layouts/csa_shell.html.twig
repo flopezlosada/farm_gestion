@@ -302,6 +302,10 @@
                                    (route starts with 'partner_' and not (route starts with 'partner_basket_share')) and route != 'partner_evolution') }}
                                 {{ _self.nav_link('Evolución', path('partner_evolution'), 'fa-line-chart',
                                    route == 'partner_evolution') }}
+                                {% if is_granted('FEATURE_VOLUNTEERING') %}
+                                    {{ _self.nav_link('Voluntariado', path('volunteering_index'), 'fa-hand-paper-o',
+                                       route starts with 'volunteering_') }}
+                                {% endif %}
                             </div>
                         </div>
                     {% endif %}

@@ -1,0 +1,86 @@
+{# Alta y edición de una tarea de voluntariado. #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Voluntariado · {{ is_new ? 'Nueva tarea' : offer.title }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('volunteering_index') }}">Voluntariado</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ is_new ? 'Nueva tarea' : 'Editar' }}</span>
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header('Voluntariado', is_new ? 'Nueva tarea' : 'Editar tarea') }}
+
+    {{ form_start(form, { attr: { class: 'csa-form-narrow' } }) }}
+
+        {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Qué y cuándo' } %}
+            {% block body %}
+                <div class="csa-form-grid">
+                    {{ csa.field(form.title, 'Qué hay que hacer', { full: true }) }}
+                    {{ csa.field(form.description, 'Explicación', {
+                        full: true,
+                        hint: 'opcional',
+                        widget_class: 'csa-textarea'
+                    }) }}
+                    {{ csa.field(form.startsAt, 'Cuándo empieza') }}
+                    {{ csa.field(form.endsAt, 'Cuándo acaba', { hint: 'opcional' }) }}
+                </div>
+            {% endblock %}
+        {% endembed %}
+
+        {% embed '_components/csa_form_section.html.twig' with {
+            num: '2',
+            title: 'Dónde',
+            subtitle: 'Si ocurre en un punto de recogida, ponlo: a quien recoge ahí le sale la primera, porque ya va a estar allí ese día.'
+        } %}
+            {% block body %}
+                <div class="csa-form-grid">
+                    {{ csa.field(form.remote, 'Se hace desde casa', { full: true }) }}
+                    {{ csa.field(form.node, 'Punto de recogida', { hint: 'opcional', widget_class: 'csa-select' }) }}
+                    {{ csa.field(form.place, 'Lugar', { hint: 'si no es un punto de recogida' }) }}
+                </div>
+            {% endblock %}
+        {% endembed %}
+
+        {% embed '_components/csa_form_section.html.twig' with {
+            num: '3',
+            title: 'Quién y cuánto',
+            subtitle: 'De aquí depende a cuánta gente se le pide la tarea y cuántas horas se le apuntan a quien la hace.'
+        } %}
+            {% block body %}
+                <div class="csa-form-grid">
+                    {{ csa.field(form.categories, 'Tipo de trabajo', {
+                        full: true,
+                        hint: 'se avisa primero a quien lo tenga marcado en su ficha'
+                    }) }}
+                    {{ csa.field(form.slots, 'Cuánta gente hace falta', { hint: 'vacío = sin tope' }) }}
+                    {{ csa.field(form.creditedMinutes, 'Minutos que computa', { hint: '30 = media hora' }) }}
+                    {{ csa.field(form.companionsAllowed, 'Se puede venir acompañadx', { full: true }) }}
+                    {{ csa.field(form.status, 'Estado', { widget_class: 'csa-select' }) }}
+                </div>
+
+                {# Esta casilla decide a cuánta gente se molesta, y eso no se ve
+                 # al guardar. El aviso va aquí y no en un hint pequeño. #}
+                {{ csa.callout(
+                    'Marca "lo puede hacer cualquiera" sólo si no hace falta saber nada previo ni tener fuerza: recoger cestas, sí; desbrozar, no. Marcado, si sigue faltando gente el aviso se amplía a socixs que no han dicho de qué quieren que se les avise.',
+                    'warning',
+                    'bullhorn'
+                ) }}
+
+                <div class="csa-form-grid">
+                    {{ csa.field(form.openToAnyone, 'Esto lo puede hacer cualquiera', { full: true }) }}
+                </div>
+            {% endblock %}
+        {% endembed %}
+
+        <div class="csa-row-between" style="margin-top: var(--csa-sp-6);">
+            {{ csa.btn('Volver', { variant: 'ghost', href: is_new ? path('volunteering_index') : path('volunteering_show', { id: offer.id }) }) }}
+            <button type="submit" class="csa-btn csa-btn--primary">{{ is_new ? 'Crear tarea' : 'Guardar cambios' }}</button>
+        </div>
+
+    {{ form_end(form) }}
+{% endblock %}

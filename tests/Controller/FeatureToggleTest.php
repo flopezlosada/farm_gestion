@@ -106,4 +106,67 @@ class FeatureToggleTest extends WebTestCase
 
         $this->assertNotSame(403, $client->getResponse()->getStatusCode());
     }
+
+    public function testVoluntariadoDaForbiddenEnGestionConElToggleApagado(): void
+    {
+        $client = $this->clientLoggedAs('admin');
+        $client->request('GET', '/gestion/voluntariado');
+
+        $this->assertSame(403, $client->getResponse()->getStatusCode());
+    }
+
+    public function testVoluntariadoAccesibleEnGestionConElToggleEncendido(): void
+    {
+        $client = $this->clientLoggedAs('admin');
+        $this->settings()->setBool(AppSettings::FEATURE_VOLUNTEERING, true);
+
+        $client->request('GET', '/gestion/voluntariado');
+
+        $this->assertResponseIsSuccessful();
+    }
+
+    public function testVoluntariadoDaForbiddenEnElPanelConElToggleApagado(): void
+    {
+        $client = $this->clientLoggedAs(PartnerUserFixtures::USER_SOCIX_USERNAME);
+        $client->request('GET', '/panel/voluntariado');
+
+        $this->assertSame(403, $client->getResponse()->getStatusCode());
+    }
+
+    public function testVoluntariadoAccesibleEnElPanelConElToggleEncendido(): void
+    {
+        $client = $this->clientLoggedAs(PartnerUserFixtures::USER_SOCIX_USERNAME);
+        $this->settings()->setBool(AppSettings::FEATURE_VOLUNTEERING, true);
+
+        $client->request('GET', '/panel/voluntariado');
+
+        $this->assertResponseIsSuccessful();
+    }
+
+    /**
+     * Con el módulo apagado, la home del panel sigue funcionando igual: el
+     * bloque de voluntariado no debe poder tumbarla. Es la pantalla que más se
+     * usa y la que más caro sale romper.
+     */
+    public function testLaHomeDelPanelSigueCargandoConElVoluntariadoApagado(): void
+    {
+        $client = $this->clientLoggedAs(PartnerUserFixtures::USER_SOCIX_USERNAME);
+        $client->request('GET', '/panel');
+
+        $this->assertResponseIsSuccessful();
+    }
+
+    /**
+     * Y con el módulo encendido, también: aquí sí se consulta la lista de
+     * tareas y se pinta el bloque.
+     */
+    public function testLaHomeDelPanelSigueCargandoConElVoluntariadoEncendido(): void
+    {
+        $client = $this->clientLoggedAs(PartnerUserFixtures::USER_SOCIX_USERNAME);
+        $this->settings()->setBool(AppSettings::FEATURE_VOLUNTEERING, true);
+
+        $client->request('GET', '/panel');
+
+        $this->assertResponseIsSuccessful();
+    }
 }

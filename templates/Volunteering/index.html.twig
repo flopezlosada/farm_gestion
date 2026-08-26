@@ -1,0 +1,111 @@
+{# Listado de tareas de voluntariado. #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Voluntariado{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Voluntariado</span>
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header('Socios', 'Voluntariado', 'Tareas que la asociación ofrece al voluntariado, y quién se apunta a ellas.') }}
+
+    <div class="csa-row-between" style="margin-bottom: var(--csa-sp-4);">
+        {{ csa.btn('Tipos de trabajo', { variant: 'ghost', icon: 'fa-tags', href: path('volunteering_categories') }) }}
+        {% if is_granted('ROLE_GESTION_SOCIXS_EDIT') %}
+            {{ csa.btn('Nueva tarea', { variant: 'primary', icon: 'fa-plus', href: path('volunteering_new') }) }}
+        {% endif %}
+    </div>
+
+    {# Lo primero, lo que ya pasó y sigue sin cerrar: mientras no se cierra, no
+     # computa horas a nadie, así que es trabajo hecho que no cuenta. #}
+    {% if pending_closure is not empty %}
+        {{ csa.callout('Hay ' ~ pending_closure|length ~ ' tarea(s) que ya han pasado y siguen sin cerrar. Hasta que no digas quién fue, no se le computan horas a nadie.', 'warning', 'exclamation-triangle') }}
+
+        <div class="csa-table-wrap" style="margin-bottom: var(--csa-sp-6);">
+            <table class="csa-table">
+                <thead>
+                    <tr>
+                        <th>Tarea</th>
+                        <th class="csa-table__col-tight">Cuándo fue</th>
+                        <th class="csa-table__col-tight">Apuntadxs</th>
+                        <th class="csa-table__actions">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for offer in pending_closure %}
+                        <tr>
+                            <td><a class="csa-table__primary" href="{{ path('volunteering_show', { id: offer.id }) }}">{{ offer.title }}</a></td>
+                            <td class="csa-table__col-tight">{{ offer.startsAt|date('d/m/Y H:i') }}</td>
+                            <td class="csa-table__col-tight">{{ offer.filledSlots }}</td>
+                            <td class="csa-table__actions">
+                                <a href="{{ path('volunteering_show', { id: offer.id }) }}" title="Cerrar" aria-label="Cerrar"><i class="fa fa-check-square-o"></i></a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+
+    {% if upcoming is empty %}
+        {{ csa.callout('No hay ninguna tarea publicada para los próximos días.', 'info') }}
+    {% else %}
+        <div class="csa-table-wrap">
+            <table class="csa-table">
+                <thead>
+                    <tr>
+                        <th>Tarea</th>
+                        <th class="csa-table__col-tight">Cuándo</th>
+                        <th class="csa-table__col-tight">Dónde</th>
+                        <th class="csa-table__col-tight">Plazas</th>
+                        <th class="csa-table__col-tight">Aviso</th>
+                        <th class="csa-table__actions">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for offer in upcoming %}
+                        <tr>
+                            <td>
+                                <a class="csa-table__primary" href="{{ path('volunteering_show', { id: offer.id }) }}">{{ offer.title }}</a>
+                                {% for category in offer.categories %}
+                                    {{ csa.badge(category.name, 'neutral') }}
+                                {% endfor %}
+                            </td>
+                            <td class="csa-table__col-tight">{{ offer.startsAt|date('d/m/Y H:i') }}</td>
+                            <td class="csa-table__col-tight">
+                                {%- if offer.remote %}Desde casa
+                                {%- elseif offer.node %}{{ offer.node }}
+                                {%- elseif offer.place %}{{ offer.place }}
+                                {%- else %}—{% endif -%}
+                            </td>
+                            <td class="csa-table__col-tight">
+                                {% if offer.slots %}
+                                    {{ offer.filledSlots }} / {{ offer.slots }}
+                                {% else %}
+                                    {{ offer.filledSlots }}
+                                {% endif %}
+                            </td>
+                            <td class="csa-table__col-tight">
+                                {% if offer.openToAnyone %}
+                                    {{ csa.badge('Para cualquiera', 'green') }}
+                                {% else %}
+                                    {{ csa.badge('Dirigido', 'ochre') }}
+                                {% endif %}
+                            </td>
+                            <td class="csa-table__actions">
+                                <a href="{{ path('volunteering_show', { id: offer.id }) }}" title="Ver" aria-label="Ver"><i class="fa fa-eye"></i></a>
+                                {% if is_granted('ROLE_GESTION_SOCIXS_EDIT') %}
+                                    <a href="{{ path('volunteering_edit', { id: offer.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+{% endblock %}
