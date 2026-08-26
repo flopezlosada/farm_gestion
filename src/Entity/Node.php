@@ -31,6 +31,20 @@ class Node
     public const CADENCES = [self::CADENCE_WEEKLY, self::CADENCE_BIWEEKLY, self::CADENCE_MONTHLY];
 
     /**
+     * Nombre humano de cada cadencia. Punto único: lo consumen el formulario
+     * del nodo y todas las pantallas que la muestran. Antes cada plantilla
+     * llevaba su propio mapa y al añadir la cadencia mensual se quedaron
+     * cortas, enseñando "monthly" en crudo.
+     *
+     * @var array<string,string>
+     */
+    public const CADENCE_LABELS = [
+        self::CADENCE_WEEKLY   => 'Semanal',
+        self::CADENCE_BIWEEKLY => 'Quincenal',
+        self::CADENCE_MONTHLY  => 'Mensual',
+    ];
+
+    /**
      * "Última semana del mes" como valor de `monthly_week`. Negativo a
      * propósito, igual que {@see PartnerBasketShare::$day_month_order}: la
      * última entrega es la 4ª en un mes de 4 semanas y la 5ª en uno de 5, así
@@ -259,6 +273,17 @@ class Node
     public function isMonthly(): bool
     {
         return $this->cadence === self::CADENCE_MONTHLY;
+    }
+
+    /**
+     * Nombre humano de la cadencia, para pintarla en pantalla sin que cada
+     * plantilla tenga que mantener su propio mapa de traducciones.
+     *
+     * @return string
+     */
+    public function getCadenceLabel(): string
+    {
+        return self::CADENCE_LABELS[$this->cadence] ?? $this->cadence;
     }
 
     /**

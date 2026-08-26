@@ -281,7 +281,7 @@
             <h2 class="dlv-head__title">Nodo {{ node.name }} · {{ _ref|date('d/m/Y') }}</h2>
             <div class="dlv-head__sub">
                 semana {{ _ref|date('W') }} ·
-                cadencia <b>{{ node.cadence == 'weekly' ? 'semanal' : 'quincenal' }}</b> ·
+                cadencia <b>{{ node.cadenceLabel|lower }}</b> ·
                 día de reparto <b>{{ ['', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'][node.deliveryWeekday] }}</b>
             </div>
         </div>
@@ -386,8 +386,8 @@
     {% if sections is empty and helper_rows is empty %}
         <div class="empty">
             Este nodo no tiene reparto el {{ basket.date|date('d/m/Y') }}.
-            {% if node.cadence == 'biweekly' %}
-                Cadencia quincenal · próximo reparto pendiente de generar.
+            {% if node.cadence != 'weekly' %}
+                Cadencia {{ node.cadenceLabel|lower }} · próximo reparto pendiente de generar.
             {% endif %}
         </div>
     {% else %}
