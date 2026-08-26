@@ -1,9 +1,15 @@
 # Planificador de tareas programadas — diseño
 
-> Estado: **pasos 1, 2 y 3 implementados** (paso 1 el 2026-08-05, pasos 2 y 3 el
-> 2026-08-24); queda el paso 4, el reloj externo. Fecha del diseño: 2026-08-05.
+> Estado: **los cuatro pasos implementados y funcionando en producción y en
+> staging** desde el 2026-08-26 (paso 1 el 2026-08-05, pasos 2 y 3 el 08-24, el
+> reloj el 08-26). Fecha del diseño: 2026-08-05. Queda retirar el crontab viejo
+> del hosting y montar un segundo reloj.
 > Alcance: este proyecto y, con el mismo contrato, **gestión centro** y **SGA**
 > (los tres en cdmon, mismo problema).
+>
+> 👉 **Para montarlo en otro proyecto no hace falta leer esto**: hay un
+> procedimiento en [`trasplante.md`](trasplante.md). Este documento es el **por
+> qué** de cada decisión; ése es el **qué hacer**.
 >
 > Este documento vivía en `docs/scheduler/`, que está en `.gitignore` por los
 > datos personales que hay en esa carpeta, así que no estaba en el repositorio.
