@@ -2,7 +2,7 @@ name: Reloj del planificador
 
 # Llama cada hora al tick de la aplicación. NO le dice qué ejecutar: la app
 # cruza su manifiesto con el registro de ejecuciones y decide ella
-# (dev-docs/scheduler/planificador-tareas.md).
+# (docs/scheduler/planificador-tareas.md (fuera del repo)).
 #
 # POR QUÉ AQUÍ Y NO EN UN REPOSITORIO APARTE, como decía el diseño original:
 # GitHub deshabilita los workflows programados de un repositorio que pasa 60
