@@ -43,6 +43,12 @@ services:
     Doctrine\Common\Annotations\AnnotationReader: ~
     annotation_reader:
         alias: Doctrine\Common\Annotations\AnnotationReader
+
+    # El cable de los avisos push. Detrás de una interfaz para que la política
+    # de envío (PushSender: a quién se poda, qué se registra) se pueda probar
+    # sin red, sin claves VAPID y sin navegador.
+    App\Service\Push\PushTransport:
+        alias: App\Service\Push\WebPushTransport
         public: true
 
     Twig\Extra\Intl\IntlExtension:

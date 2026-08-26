@@ -23,6 +23,7 @@
         "league/oauth2-google": "^5.0",
         "liip/imagine-bundle": "^2.1",
         "mhujer/breadcrumbs-bundle": "^1.5.7",
+        "minishlink/web-push": "^10.1",
         "phpdocumentor/reflection-docblock": "^5.2",
         "phpoffice/phpspreadsheet": "^1.10",
         "stfalcon/tinymce-bundle": "^3.0",

@@ -13,5 +13,10 @@ require('../css/csa/index.css');
 // [data-csa-dropdowns]). Ver assets/js/csa-dropdown.js.
 require('./csa-dropdown.js');
 
+// Alta y baja de los avisos push (opt-in por [data-push-toggle]). No pide
+// permiso hasta que alguien pulsa: un permiso denegado no se puede volver a
+// pedir. Ver assets/js/push.js.
+require('./push.js');
+
 // Need jQuery? Install it with "yarn add jquery", then uncomment to require it.
 // const $ = require('jquery');
