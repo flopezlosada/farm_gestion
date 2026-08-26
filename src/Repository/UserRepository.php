@@ -19,6 +19,34 @@ class UserRepository extends ServiceEntityRepository implements UserLoaderInterf
     }
 
     /**
+     * Las cuentas de acceso de estxs socixs, en UNA consulta.
+     *
+     * Hace falta porque el vínculo vive en el lado User ({@see User::$partner},
+     * un OneToOne sin lado inverso): desde un Partner no se puede navegar a su
+     * User, así que hay que preguntar al revés.
+     *
+     * Devuelve menos cuentas que socixs se le pasen, y no es un error: quien
+     * todavía no tiene acceso a la web no aparece. Un aviso push necesita una
+     * sesión detrás, y esa gente se entera por otros medios.
+     *
+     * @param list<\App\Entity\Partner> $partners lxs socixs
+     *
+     * @return list<User> sus cuentas de acceso
+     */
+    public function findByPartners(array $partners): array
+    {
+        if ([] === $partners) {
+            return [];
+        }
+
+        return $this->createQueryBuilder('u')
+            ->where('u.partner IN (:partners)')
+            ->setParameter('partners', $partners)
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
      * Carga del User para el firewall. Búsqueda case-insensitive contra
      * username_canonical (campo lowercased que se mantiene en sync por
      * User::setUsername). Permite que "Admin", "ADMIN" y "admin" sean

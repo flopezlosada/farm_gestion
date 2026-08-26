@@ -208,6 +208,13 @@ class AppSettings
     public const CRON_STAFF_OPEN_SHIFT_ALERT = 'cron.staff_open_shift_alert';
 
     /**
+     * Avisos de voluntariado: la tarea que abre por pasos las llamadas pidiendo
+     * gente. Es la única de cadencia fina (por intervalo) porque un "falta gente
+     * para mañana" no admite esperar al día siguiente.
+     */
+    public const CRON_VOLUNTEER_CALLS = 'cron.volunteer_calls';
+
+    /**
      * MANIFIESTO DE TAREAS PROGRAMADAS: la fuente única de verdad sobre qué
      * debería ejecutarse, cuándo, y qué la inhibe. Clave del toggle =>
      * metadatos. Lo lee {@see \App\Service\Cron\CronTaskRegistry}.
@@ -329,6 +336,24 @@ class AppSettings
             'requires' => [self::EMAIL_ENABLED, self::EMAIL_STAFF_GAPS],
             'depends_on' => [],
         ],
+        // La única por intervalo. Las demás tienen su hora del día porque
+        // mandan correo y da igual media hora arriba o abajo; ésta abre avisos
+        // push por pasos, y con cadencia diaria el segundo paso de una tarea que
+        // es pasado mañana llegaría cuando ya no sirve de nada.
+        //
+        // OJO AL DESPLIEGUE: el intervalo sólo vale si el reloj externo dispara
+        // /cron/tick con esa frecuencia. Con el cron del hosting a diario, esto
+        // corre una vez al día por mucho que aquí ponga 60 minutos.
+        self::CRON_VOLUNTEER_CALLS => [
+            'command' => 'app:send-volunteer-calls',
+            'needs_recipient' => false,
+            'confirm' => true,
+            'dry' => true,
+            'schedule' => ['freq' => 'interval', 'minutes' => 60],
+            'max_delay_hours' => 6,
+            'requires' => [self::FEATURE_VOLUNTEERING],
+            'depends_on' => [],
+        ],
     ];
 
     /**
@@ -407,6 +432,12 @@ class AppSettings
             'group' => 'Funcionalidades en rodaje',
             'label' => 'Voluntariado',
             'help' => 'Abre el módulo de voluntariado: publicar trabajos, que lxs socixs se apunten y el bloque de su panel con lo que hace falta. Apagado, se oculta del menú, no es accesible y no se envía ningún aviso pidiendo gente.',
+            'default' => false,
+        ],
+        self::CRON_VOLUNTEER_CALLS => [
+            'group' => 'Tareas programadas',
+            'label' => 'Avisar de tareas de voluntariado sin cubrir',
+            'help' => 'Abre por pasos los avisos que piden gente: primero a quien ha marcado esa categoría en su ficha y, si sigue faltando gente pasadas unas horas, a quien no ha marcado ninguna (sólo en tareas aptas para cualquiera). Nunca llega solo a todo el mundo: eso se lanza a mano. Requiere el módulo de voluntariado encendido.',
             'default' => false,
         ],
         self::CRON_GENERATE_WEEKLY_DELIVERY => [
