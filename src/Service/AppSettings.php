@@ -181,6 +181,12 @@ class AppSettings
     public const FEATURE_VOLUNTEERING = 'feature.volunteering';
 
     /**
+     * Horas que espera el escalado antes de abrir un aviso de voluntariado a
+     * más gente ({@see \App\Service\Volunteering\VolunteerCallEscalator}).
+     */
+    public const VOLUNTEERING_ESCALATION_HOURS = 'volunteering.escalation_hours';
+
+    /**
      * Interruptores de las tareas programadas (crons). Apagado, el comando
      * correspondiente sale sin hacer nada en cuanto arranca: como el hosting es
      * solo-FTP y no podemos tocar el crontab desde la app, el cron sigue
@@ -473,6 +479,15 @@ class AppSettings
             'min' => 0,
             'max' => 7,
             'unit' => 'días',
+        ],
+        self::VOLUNTEERING_ESCALATION_HOURS => [
+            'group' => 'Funcionalidades en rodaje',
+            'label' => 'Espera antes de ampliar un aviso de voluntariado',
+            'help' => 'Cuántas horas se espera, desde el primer aviso, antes de pedir la misma tarea a socixs que no han declarado preferencias. Sólo se amplía si la tarea está marcada como apta para cualquiera y sigue faltando gente. 24 = al día siguiente.',
+            'default' => 24,
+            'min' => 1,
+            'max' => 168,
+            'unit' => 'h',
         ],
         self::BALANCE_THRESHOLD => [
             'group' => 'Cierre de reparto',

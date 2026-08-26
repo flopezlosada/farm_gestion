@@ -5,6 +5,7 @@ namespace App\Repository;
 use App\Entity\Basket;
 use App\Entity\Partner;
 use App\Entity\User;
+use App\Entity\VolunteerCategory;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
@@ -20,6 +21,68 @@ class PartnerRepository extends ServiceEntityRepository
     public function __construct(ManagerRegistry $registry)
     {
         parent::__construct($registry, Partner::class);
+    }
+
+    /**
+     * Socixs ACTIVO que han marcado alguna de estas categorías de voluntariado.
+     * Es el primer paso del escalado de avisos: a quien ha dicho que le avisen
+     * de esto.
+     *
+     * @param list<VolunteerCategory> $categories las categorías de la oferta
+     *
+     * @return list<Partner> socixs activos con al menos una de esas categorías
+     */
+    public function findActiveMatchingVolunteerCategories(array $categories): array
+    {
+        if ([] === $categories) {
+            return [];
+        }
+
+        return $this->createQueryBuilder('p')
+            ->distinct()
+            ->join('p.volunteerCategories', 'c')
+            ->where('p.status = :status')
+            ->andWhere('c IN (:categories)')
+            ->setParameter('status', Partner::STATUS_ACTIVO)
+            ->setParameter('categories', $categories)
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Socixs ACTIVO que no han marcado NINGUNA categoría de voluntariado. Es el
+     * segundo paso del escalado, y sólo para ofertas aptas para cualquiera.
+     *
+     * Quien sí marcó categorías queda fuera aunque esta oferta no sea de las
+     * suyas, y es el punto entero del diseño: haber marcado "huerta" y "cocina"
+     * es decir activamente que de obras no avisen. Colarle el aviso porque
+     * "total, es fácil" convierte la ficha de preferencias en una mentira.
+     *
+     * @return list<Partner> socixs activos sin preferencias declaradas
+     */
+    public function findActiveWithoutVolunteerPreferences(): array
+    {
+        return $this->createQueryBuilder('p')
+            ->where('p.status = :status')
+            ->andWhere('p.volunteerCategories IS EMPTY')
+            ->setParameter('status', Partner::STATUS_ACTIVO)
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Todos los socixs ACTIVO. Es el alcance del aviso general, que nunca se
+     * abre solo: lo lanza una persona que ha decidido que la cosa es seria.
+     *
+     * @return list<Partner> todos los socixs activos
+     */
+    public function findAllActive(): array
+    {
+        return $this->createQueryBuilder('p')
+            ->where('p.status = :status')
+            ->setParameter('status', Partner::STATUS_ACTIVO)
+            ->getQuery()
+            ->getResult();
     }
 
     // /**
