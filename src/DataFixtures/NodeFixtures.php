@@ -8,12 +8,13 @@ use Doctrine\Common\DataFixtures\DependentFixtureInterface;
 use Doctrine\Persistence\ObjectManager;
 
 /**
- * Carga los 3 nodos físicos de reparto:
+ * Carga los 4 nodos físicos de reparto, uno por cadencia soportada:
  * - Torremocha (semanal, viernes)
  * - Cascorro (quincenal, miércoles)
  * - Midori (quincenal, miércoles)
+ * - El Berrueco (mensual, jueves, 2ª semana del mes)
  *
- * IDs explícitos 1, 2, 3 para que los tests los localicen.
+ * IDs explícitos 1, 2, 3, 4 para que los tests los localicen.
  * Dependencia de CatalogFixtures para asegurar orden de carga.
  */
 class NodeFixtures extends Fixture implements DependentFixtureInterface
@@ -54,6 +55,19 @@ class NodeFixtures extends Fixture implements DependentFixtureInterface
             ->setSchedule('Miércoles de 18:00 a 20:00');
         $nodeIdProperty->setValue($node3, 3);
         $manager->persist($node3);
+
+        // El Berrueco: jueves (4), mensual, abre la 2ª semana de cada mes.
+        // Nace SIN grupos de recogida a propósito: así no altera los repartos
+        // ni los conteos de los tests existentes, y quien necesite socios allí
+        // se los crea (ver MonthlyNodeDeliveryTest).
+        $node4 = (new Node())
+            ->setName('El Berrueco')
+            ->setDeliveryWeekday(4)
+            ->setCadence(Node::CADENCE_MONTHLY)
+            ->setMonthlyWeek(2)
+            ->setSchedule('Segundo jueves de mes, de 18:00 a 20:00');
+        $nodeIdProperty->setValue($node4, 4);
+        $manager->persist($node4);
 
         $manager->flush();
     }

@@ -19,7 +19,7 @@ class NodeControllerTest extends AbstractAuthenticatedTest
     {
         $client = $this->createAuthenticatedClient();
 
-        foreach ([1, 2, 3] as $nodeId) {
+        foreach ([1, 2, 3, 4] as $nodeId) {
             $client->request('GET', sprintf('/gestion/node/%d', $nodeId));
             $this->assertSame(
                 200,
@@ -140,14 +140,15 @@ class NodeControllerTest extends AbstractAuthenticatedTest
     }
 
     /**
-     * GET /gestion/node/{id}/edit con admin logueado devuelve 200
-     * para los 3 nodos sembrados durante 8.8a (Torremocha, Cascorro, Midori).
+     * GET /gestion/node/{id}/edit con admin logueado devuelve 200 para los
+     * nodos sembrados, uno por cadencia: Torremocha (semanal), Cascorro y
+     * Midori (quincenales) y El Berrueco (mensual).
      */
     public function testNodeEditReturnsOkForSeededNodes(): void
     {
         $client = $this->createAuthenticatedClient();
 
-        foreach ([1, 2, 3] as $nodeId) {
+        foreach ([1, 2, 3, 4] as $nodeId) {
             $client->request('GET', sprintf('/gestion/node/%d/edit', $nodeId));
             $this->assertSame(
                 200,
