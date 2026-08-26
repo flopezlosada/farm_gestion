@@ -571,6 +571,88 @@ class PartnerBasketShare
         }
     }
 
+    /**
+     * Una cesta sólo puede pedir lo que su punto de recogida ofrece. Sin esto,
+     * el formulario deja guardar combinaciones que el motor de reparto no puede
+     * servir y el socio DESAPARECE del listado sin ningún aviso — que es
+     * exactamente lo que pasó con los dos socios de El Berrueco (2026-08-26):
+     * cesta mensual con la posición del mes en blanco, invisible desde el alta.
+     *
+     * Tres reglas, todas contra el {@see Node} del socio:
+     *  1. La modalidad tiene que caber en el punto ({@see Node::allowedShareIds}):
+     *     una cesta semanal no cabe en un punto que abre cada quince días.
+     *  2. Una cesta mensual tiene que decir QUÉ entrega del mes recoge, y tiene
+     *     que ser una de las que el punto sirve todos los meses
+     *     ({@see Node::offeredMonthOrders}).
+     *  3. Una quincenal en un punto semanal necesita turno de viernes: sin él no
+     *     entra en ninguna cohorte y cae de los listados igual que la anterior.
+     *
+     * Vive en la entidad, no en el formulario, para que valga igual al alta, a
+     * la corrección de errata y al cambio de modalidad. El socio sin grupo de
+     * recogida asignado (dato legacy) no tiene punto contra el que contrastar:
+     * ahí sólo se exige la regla 2 en su parte de "no puede quedar en blanco".
+     */
+    #[Assert\Callback]
+    public function validateAgainstNodeOffer(ExecutionContextInterface $context): void
+    {
+        $share = $this->basket_share;
+        if ($share === null) {
+            return; // sin modalidad no hay nada que contrastar; lo cubre el propio form.
+        }
+
+        $node = $this->partner?->getWeeklyBasketGroup()?->getNode();
+
+        $allowed = $node?->allowedShareIds();
+        if ($allowed !== null && !in_array($share->getId(), $allowed, true)) {
+            $context->buildViolation(sprintf(
+                'El punto de recogida %s no admite cestas de tipo "%s" (reparte con cadencia %s).',
+                $node->getName(),
+                $share->getName(),
+                strtolower($node->getCadenceLabel()),
+            ))->atPath('basket_share')->addViolation();
+        }
+
+        if ($share->isMonthly()) {
+            $this->validateMonthOrder($context, $node);
+        }
+
+        $needsTurn = $share->usesDeliveryGroup()
+            && !$share->isMonthly()
+            && ($node === null || $node->getCadence() === Node::CADENCE_WEEKLY);
+        if ($needsTurn && $this->delivery_group === null) {
+            $context->buildViolation('Indica el turno de viernes: una cesta quincenal sin turno no entra en ningún reparto.')
+                ->atPath('deliveryGroup')
+                ->addViolation();
+        }
+    }
+
+    /**
+     * Regla 2 de {@see validateAgainstNodeOffer}: la posición del mes de una
+     * cesta mensual. En blanco nunca vale; y si el socio tiene punto, tiene que
+     * ser una de las que ese punto abre todos los meses.
+     *
+     * @param ExecutionContextInterface $context
+     * @param Node|null                 $node    Punto del socio, o null si aún no tiene grupo.
+     */
+    private function validateMonthOrder(ExecutionContextInterface $context, ?Node $node): void
+    {
+        if ($this->day_month_order === null) {
+            $context->buildViolation('Indica qué entrega del mes recoge la cesta: una cesta mensual sin ese dato no aparece en ningún reparto.')
+                ->atPath('dayMonthOrder')
+                ->addViolation();
+
+            return;
+        }
+
+        $offered = $node?->offeredMonthOrders();
+        if ($offered !== null && !in_array((int) $this->day_month_order, $offered, true)) {
+            $context->buildViolation(sprintf(
+                'El punto de recogida %s no sirve esa entrega todos los meses. Elige una de las que sí abre siempre.',
+                $node->getName(),
+            ))->atPath('dayMonthOrder')->addViolation();
+        }
+    }
+
     public function getDeliveryGroup(): ?string
     {
         return $this->delivery_group;

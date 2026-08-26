@@ -81,6 +81,7 @@ class PartnerBasketShareController extends AbstractController
         $form = $this->createForm(PartnerBasketShareType::class, $partnerBasketShare, [
             'cohort_choices' => $cohort['cohortChoices'],
             'allowed_share_ids' => $cohort['allowedShareIds'],
+            'offered_month_orders' => $cohort['offeredMonthOrders'],
             'forced_month_order' => $cohort['forcedMonthOrder'],
         ]);
         $form->handleRequest($request);
@@ -181,6 +182,7 @@ class PartnerBasketShareController extends AbstractController
         $form = $this->createForm(PartnerBasketShareType::class, $new, [
             'cohort_choices' => $cohort['cohortChoices'],
             'allowed_share_ids' => $cohort['allowedShareIds'],
+            'offered_month_orders' => $cohort['offeredMonthOrders'],
             'forced_month_order' => $cohort['forcedMonthOrder'],
         ]);
         $form->handleRequest($request);
