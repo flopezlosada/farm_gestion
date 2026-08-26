@@ -220,6 +220,13 @@ class PanelVolunteeringController extends AbstractController
         $partner = $this->getUser()->getPartner();
         $chosen = array_map('intval', (array) $request->request->all('categories'));
 
+        // El "no me avises de esto" es una salida aparte y no la ausencia de
+        // categorías: no marcar ninguna significa "avísame de lo que sea
+        // sencillo", que es lo contrario. Sin esta casilla, la única forma de
+        // silenciar el voluntariado sería apagar los avisos del navegador
+        // enteros, y con ellos los que sí interesan.
+        $partner->setVolunteeringOptOut((bool) $request->request->get('opt_out'));
+
         // Se reconstruye la lista entera en vez de aplicar diferencias: son
         // media docena de casillas y así desmarcar todo funciona igual de bien
         // que marcar, sin un caso especial para la lista vacía.
@@ -234,7 +241,12 @@ class PanelVolunteeringController extends AbstractController
         }
 
         $em->flush();
-        $this->addFlash('success', 'Guardado. Te avisaremos de lo que has elegido.');
+        $this->addFlash(
+            'success',
+            $partner->isVolunteeringOptOut()
+                ? 'Guardado. No te avisaremos de voluntariado.'
+                : 'Guardado. Te avisaremos de lo que has elegido.'
+        );
 
         return $this->redirectToRoute('panel_volunteering');
     }

@@ -42,6 +42,7 @@ class PartnerRepository extends ServiceEntityRepository
             ->distinct()
             ->join('p.volunteerCategories', 'c')
             ->where('p.status = :status')
+            ->andWhere('p.volunteering_opt_out = false')
             ->andWhere('c IN (:categories)')
             ->setParameter('status', Partner::STATUS_ACTIVO)
             ->setParameter('categories', $categories)
@@ -64,6 +65,7 @@ class PartnerRepository extends ServiceEntityRepository
     {
         return $this->createQueryBuilder('p')
             ->where('p.status = :status')
+            ->andWhere('p.volunteering_opt_out = false')
             ->andWhere('p.volunteerCategories IS EMPTY')
             ->setParameter('status', Partner::STATUS_ACTIVO)
             ->getQuery()
@@ -71,15 +73,26 @@ class PartnerRepository extends ServiceEntityRepository
     }
 
     /**
-     * Todos los socixs ACTIVO. Es el alcance del aviso general, que nunca se
-     * abre solo: lo lanza una persona que ha decidido que la cosa es seria.
+     * Socixs ACTIVO a quienes se puede avisar de voluntariado. Es el alcance del
+     * aviso general, que nunca se abre solo: lo lanza una persona que ha
+     * decidido que la cosa es seria.
      *
-     * @return list<Partner> todos los socixs activos
+     * QUIEN HA PEDIDO QUE NO SE LE AVISE QUEDA FUERA TAMBIÉN AQUÍ, y ese es el
+     * punto: un "no me avises" que el aviso general se salta no es un no, es una
+     * sugerencia. En cuanto alguien lo comprueba una vez, apaga los avisos del
+     * navegador enteros —y con ellos los que sí le interesan— y ya no vuelve,
+     * porque el permiso denegado no se puede volver a pedir.
+     *
+     * El filtro vive en la consulta y no en el servicio a propósito: así ninguna
+     * vía futura puede colarse por descuido.
+     *
+     * @return list<Partner> socixs activos que admiten avisos de voluntariado
      */
     public function findAllActive(): array
     {
         return $this->createQueryBuilder('p')
             ->where('p.status = :status')
+            ->andWhere('p.volunteering_opt_out = false')
             ->setParameter('status', Partner::STATUS_ACTIVO)
             ->getQuery()
             ->getResult();

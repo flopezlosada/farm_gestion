@@ -88,6 +88,28 @@ La pantalla lo detecta y, en iOS sin instalar, en vez de pedir permiso da la
 instrucción. No intenta pedirlo y fallar, porque **un permiso denegado no se
 puede volver a pedir**.
 
+## Pantalla de ajustes de avisos: por qué no
+
+gestion-centro tiene una pantalla para elegir cómo recibir cada tipo de aviso
+(`/avisos/ajustes`), y aquí **no se ha replicado**. Allí cruza cinco temas
+—tareas, guardias, reuniones, agenda, cambios de aula— por tres canales, y una
+persona quiere razonablemente las guardias en el móvil y las tareas por correo.
+
+En csa-vega un socix recibe hoy dos cosas: el recordatorio de recogida, por
+correo y con un toggle **global** igual para todo el mundo, y los avisos de
+voluntariado, por push. Un selector de canal sería un formulario con una sola
+opción real.
+
+Lo que sí hacía falta, y está: la casilla **«No quiero que me avisen de
+voluntariado»**, porque desmarcar todas las categorías NO silencia (significa
+"avísame de lo que sea sencillo") y sin ella la única salida era apagar los
+avisos del navegador enteros, perdiendo también los útiles.
+
+Cuando se añada el correo al módulo —o un tercer tipo de aviso— entonces sí toca
+esa pantalla, y con el modelo de gestion-centro: sobre todo su
+`notificationChannelsSetAt`, que distingue "no ha contestado todavía" de "ha
+elegido esto", que son hechos distintos y se comportan distinto.
+
 ## Lo que NO incluye esta entrega
 
 - **Correo.** Los avisos van sólo por push. Quien no tiene cuenta de acceso no

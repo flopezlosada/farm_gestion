@@ -95,6 +95,12 @@ CREATE TABLE volunteer_call (
     PRIMARY KEY(id)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci` ENGINE = InnoDB;
 
+-- "De voluntariado no me avises, nunca." Salida explícita, distinta de no
+-- marcar ninguna categoría (que significa "avísame de lo que sea sencillo").
+-- Se respeta en las TRES consultas de audiencia, incluido el aviso general que
+-- se lanza a mano: un "no" que el gestor se puede saltar no es un no.
+ALTER TABLE partner ADD volunteering_opt_out TINYINT(1) DEFAULT 0 NOT NULL;
+
 ALTER TABLE volunteer_offer ADD CONSTRAINT FK_1BB85ACC460D9FD7 FOREIGN KEY (node_id) REFERENCES node (id) ON DELETE SET NULL;
 ALTER TABLE volunteer_offer ADD CONSTRAINT FK_1BB85ACCB03A8386 FOREIGN KEY (created_by_id) REFERENCES fos_user (id) ON DELETE SET NULL;
 ALTER TABLE volunteer_offer_category ADD CONSTRAINT FK_C812B06C7B1A246F FOREIGN KEY (volunteer_offer_id) REFERENCES volunteer_offer (id) ON DELETE CASCADE;

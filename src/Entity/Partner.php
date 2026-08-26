@@ -365,6 +365,43 @@ class Partner
     }
 
     /**
+     * "De voluntariado no me avises, nunca."
+     *
+     * Hace falta como salida explícita, y no basta con desmarcar todas las
+     * categorías: no marcar ninguna significa "avísame de lo que sea sencillo",
+     * que es justo lo contrario. Sin esta casilla, la única forma de dejar de
+     * recibir avisos de voluntariado sería apagar los avisos del navegador
+     * enteros — y con ellos los que sí interesan.
+     *
+     * Se respeta SIEMPRE, incluido el aviso a toda la asociación que se lanza a
+     * mano desde gestión. Un "no" que el gestor se puede saltar no es un no, es
+     * una sugerencia, y en cuanto alguien lo comprueba una vez apaga el push
+     * entero y ya no vuelve. La credibilidad de la casilla es lo que sostiene
+     * que el canal siga vivo.
+     *
+     * @ORM\Column(name="volunteering_opt_out", type="boolean", options={"default": false})
+     */
+    private bool $volunteering_opt_out = false;
+
+    /**
+     * @return bool true si ha pedido que no se le avise de voluntariado
+     */
+    public function isVolunteeringOptOut(): bool
+    {
+        return $this->volunteering_opt_out;
+    }
+
+    /**
+     * @param bool $optOut true para dejar de recibir avisos de voluntariado
+     */
+    public function setVolunteeringOptOut(bool $optOut): self
+    {
+        $this->volunteering_opt_out = $optOut;
+
+        return $this;
+    }
+
+    /**
      * @return Collection|PartnerMembershipPeriod[]
      */
     public function getMembershipPeriods(): Collection

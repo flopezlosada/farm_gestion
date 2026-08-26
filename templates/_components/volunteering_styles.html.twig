@@ -126,6 +126,20 @@
         line-height: var(--csa-lh-snug);
     }
 
+    /* Separada de las casillas de categorías: no es una más de la lista, es la
+       que las anula todas. Si se pintara como una más, se marcaría por error. */
+    .vol-optout {
+        display: flex;
+        gap: var(--csa-sp-2);
+        align-items: center;
+        margin: var(--csa-sp-3) 0;
+        padding-top: var(--csa-sp-3);
+        border-top: 1px solid var(--csa-rule-soft);
+        font-size: var(--csa-fs-sm);
+        color: var(--csa-ink-muted);
+        cursor: pointer;
+    }
+
     .vol-total {
         margin: 0 0 var(--csa-sp-2);
         font-size: var(--csa-fs-md);
