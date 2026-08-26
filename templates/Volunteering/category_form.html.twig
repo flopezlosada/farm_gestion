@@ -25,6 +25,7 @@
         <div class="csa-form-grid">
             {{ csa.field(form.name, 'Nombre') }}
             {{ csa.field(form.active, 'Se sigue ofreciendo', { full: true }) }}
+                    {{ csa.field(form.coordinators, 'Quién coordina esta área', { full: true, hint: 'pueden gestionar sólo las tareas de esta área', widget_class: 'csa-select' }) }}
             {{ csa.field(form.description, 'Qué entra aquí', {
                 full: true,
                 hint: 'se le enseña a cada socix junto a la casilla',

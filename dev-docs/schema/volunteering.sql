@@ -99,6 +99,21 @@ CREATE TABLE volunteer_call (
     PRIMARY KEY(id)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci` ENGINE = InnoDB;
 
+-- Quién coordina cada área. La coordinación es un DATO y no un rol: un rol por
+-- área obligaría a tocar security.yaml y desplegar cada vez que la asociación
+-- abre un área nueva o cambia quién la lleva. De esta tabla se DERIVA
+-- ROLE_GESTION_VOLUNTARIADO en User::getRoles().
+CREATE TABLE volunteer_category_coordinator (
+    volunteer_category_id INT NOT NULL,
+    user_id INT NOT NULL,
+    INDEX IDX_5DBDFDD6C76F2FD6 (volunteer_category_id),
+    INDEX IDX_5DBDFDD6A76ED395 (user_id),
+    PRIMARY KEY(volunteer_category_id, user_id)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci` ENGINE = InnoDB;
+
+ALTER TABLE volunteer_category_coordinator ADD CONSTRAINT FK_5DBDFDD6C76F2FD6 FOREIGN KEY (volunteer_category_id) REFERENCES volunteer_category (id) ON DELETE CASCADE;
+ALTER TABLE volunteer_category_coordinator ADD CONSTRAINT FK_5DBDFDD6A76ED395 FOREIGN KEY (user_id) REFERENCES fos_user (id) ON DELETE CASCADE;
+
 -- "De voluntariado no me avises, nunca." Salida explícita, distinta de no
 -- marcar ninguna categoría (que significa "avísame de lo que sea sencillo").
 -- Se respeta en las TRES consultas de audiencia, incluido el aviso general que

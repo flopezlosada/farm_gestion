@@ -65,7 +65,29 @@ Y antes de que sirva de algo, crear al menos un par de **tipos de trabajo** en
 `/gestion/voluntariado/categorias/listado`: sin categorías, nadie puede declarar
 preferencias y el primer paso del escalado no encuentra a nadie.
 
-## 6. ⚠️ El reloj del cron
+## 6. Roles y coordinación por áreas
+
+Dos roles nuevos, con el modelo lectura/escritura del resto del proyecto:
+
+- `ROLE_GESTION_VOLUNTARIADO` — ver las tareas y quién se apunta.
+- `ROLE_GESTION_VOLUNTARIADO_EDIT` — publicar, cerrar, pedir gente y gestionar
+  los tipos de trabajo. Incluye la lectura por jerarquía.
+
+**Están separados de `ROLE_GESTION_SOCIXS` a propósito.** Quien coordina el
+reparto de los viernes necesita saber quién viene ese viernes; darle el rol de
+socixs para eso le abriría las fichas, DNIs y domicilios de los 246 socixs. Es
+el mismo criterio con el que se separaron las encuestas.
+
+**Para acotar a alguien a un área concreta no se le da ningún rol**: se le
+nombra coordinadora de esa categoría en `/gestion/voluntariado/categorias/listado`.
+El rol de lectura se deriva solo de ese dato, igual que `ROLE_PARTNER` se deriva
+de tener un Partner vinculado, y `VolunteerOfferVoter` limita lo que puede tocar
+a las tareas de sus áreas.
+
+Es decir: **abrir un área nueva o cambiar quién la lleva no exige tocar
+`security.yaml` ni desplegar.** Es marcar una casilla.
+
+## 7. ⚠️ El reloj del cron
 
 `cron.volunteer_calls` es la primera tarea del planificador con cadencia por
 **intervalo** (cada 60 minutos). Eso sólo vale si el reloj externo dispara
@@ -78,7 +100,7 @@ que el manifiesto diga 60 minutos, y entonces el segundo paso del escalado
 Si se quiere el comportamiento real, hay que subir la frecuencia del cron de
 cdmon que llama al tick.
 
-## 7. Sobre iOS
+## 8. Sobre iOS
 
 En iPhone y iPad los avisos push **sólo funcionan si la web está instalada en la
 pantalla de inicio** (Compartir → Añadir a inicio). Una pestaña normal no vale, y

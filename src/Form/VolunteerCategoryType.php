@@ -2,7 +2,9 @@
 
 namespace App\Form;
 
+use App\Entity\User;
 use App\Entity\VolunteerCategory;
+use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
 use Symfony\Component\Form\Extension\Core\Type\TextareaType;
@@ -36,6 +38,21 @@ class VolunteerCategoryType extends AbstractType
                 'label' => 'Se sigue ofreciendo',
                 'required' => false,
                 'help' => 'Desmárcala para retirarla sin perder el histórico de tareas que la usaron.',
+            ])
+            ->add('coordinators', EntityType::class, [
+                'label' => 'Quién coordina esta área',
+                'class' => User::class,
+                'choice_label' => static fn (User $user): string => $user->getUsername(),
+                // Sólo cuentas que pueden entrar: nombrar coordinadora a una
+                // cuenta desactivada la dejaría con el rol y sin acceso.
+                'query_builder' => static fn ($repository) => $repository
+                    ->createQueryBuilder('u')
+                    ->where('u.enabled = true')
+                    ->orderBy('u.username', 'ASC'),
+                'multiple' => true,
+                'expanded' => false,
+                'required' => false,
+                'help' => 'Podrán publicar, cerrar y pedir gente para las tareas de esta área, y sólo de ésta. Con esto les basta: no hace falta darles ningún rol aparte, se deriva solo.',
             ])
         ;
     }

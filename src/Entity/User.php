@@ -185,6 +185,16 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface, LegacyP
 
     private $consumed_product;
 
+    /**
+     * Áreas de voluntariado que esta persona coordina. Lado inverso: la relación
+     * la posee {@see VolunteerCategory::$coordinators}.
+     *
+     * @ORM\ManyToMany(targetEntity="App\Entity\VolunteerCategory", mappedBy="coordinators")
+     *
+     * @var Collection<int, VolunteerCategory>
+     */
+    private $coordinatedVolunteerCategories;
+
     public function __construct()
     {
         $this->lays = new ArrayCollection();
@@ -195,6 +205,29 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface, LegacyP
         $this->egg_registry_users = new ArrayCollection();
         $this->fowls = new ArrayCollection();
         $this->tasks = new ArrayCollection();
+        $this->coordinatedVolunteerCategories = new ArrayCollection();
+    }
+
+    /**
+     * @return Collection<int, VolunteerCategory> las áreas de voluntariado que coordina
+     */
+    public function getCoordinatedVolunteerCategories(): Collection
+    {
+        return $this->coordinatedVolunteerCategories;
+    }
+
+    /**
+     * Si coordina alguna área de voluntariado.
+     *
+     * `count()` sobre la colección y no `isEmpty()` tras cargarla: Doctrine lo
+     * resuelve con un COUNT sin hidratar las categorías, que importa porque esto
+     * se pregunta en {@see getRoles()} y por tanto en cada petición.
+     *
+     * @return bool true si coordina al menos un área
+     */
+    public function coordinatesVolunteering(): bool
+    {
+        return $this->coordinatedVolunteerCategories->count() > 0;
     }
 
     public function getId()
@@ -354,6 +387,19 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface, LegacyP
         // relación en vez de duplicarlo en la columna `roles`.
         if ($this->worker !== null) {
             $roles[] = 'ROLE_WORKER';
+        }
+        // Mismo criterio para la coordinación del voluntariado: quien coordina
+        // un área es, por definición, alguien que gestiona voluntariado, así que
+        // el rol se deriva del dato. Si hubiera que asignarlo aparte serían dos
+        // sitios que mantener, y se desincronizarían: alguien nombrado
+        // coordinador que no puede entrar, o con acceso alguien que ya no
+        // coordina nada.
+        //
+        // Da sólo el rol de LECTURA. Qué puede tocar de verdad lo decide
+        // {@see \App\Security\VolunteerOfferVoter}, que sabe de qué áreas es
+        // coordinadora cada persona: sus tareas sí, las de las demás no.
+        if ($this->coordinatesVolunteering()) {
+            $roles[] = 'ROLE_GESTION_VOLUNTARIADO';
         }
         return array_unique($roles);
     }

@@ -74,9 +74,78 @@ class VolunteerCategory
      */
     private Collection $partners;
 
+    /**
+     * Quién coordina esta área: por ejemplo, quien organiza el reparto de los
+     * viernes y necesita saber quién viene.
+     *
+     * La coordinación es un DATO y no un rol, y esa es la decisión que importa.
+     * Un rol por área (ROLE_VOL_REPARTO, ROLE_VOL_HUERTA…) obligaría a tocar
+     * `security.yaml` y desplegar cada vez que la asociación crea un área nueva
+     * o cambia quién la lleva, que es justo lo que más va a pasar. Así, nombrar
+     * coordinadora a alguien es marcar una casilla.
+     *
+     * De aquí se DERIVA `ROLE_GESTION_VOLUNTARIADO` en {@see User::getRoles()},
+     * igual que ROLE_PARTNER se deriva de tener un Partner vinculado: si no se
+     * derivara, habría dos sitios que mantener —el rol y la coordinación— y se
+     * desincronizarían, dejando a alguien nombrado coordinador que no puede
+     * entrar, o con acceso alguien que ya no coordina nada.
+     *
+     * Cuelga de User y no de Partner porque quien coordina necesita una cuenta
+     * con la que entrar, y no toda persona que coordina algo es socia.
+     *
+     * @ORM\ManyToMany(targetEntity="App\Entity\User", inversedBy="coordinatedVolunteerCategories")
+     * @ORM\JoinTable(name="volunteer_category_coordinator")
+     *
+     * @var Collection<int, User>
+     */
+    private Collection $coordinators;
+
     public function __construct()
     {
         $this->partners = new ArrayCollection();
+        $this->coordinators = new ArrayCollection();
+    }
+
+    /**
+     * @return Collection<int, User> quiénes coordinan esta área
+     */
+    public function getCoordinators(): Collection
+    {
+        return $this->coordinators;
+    }
+
+    /**
+     * @param User $user quien pasa a coordinar esta área
+     */
+    public function addCoordinator(User $user): self
+    {
+        if (!$this->coordinators->contains($user)) {
+            $this->coordinators->add($user);
+        }
+
+        return $this;
+    }
+
+    /**
+     * @param User $user quien deja de coordinar esta área
+     */
+    public function removeCoordinator(User $user): self
+    {
+        $this->coordinators->removeElement($user);
+
+        return $this;
+    }
+
+    /**
+     * Si esta persona coordina esta área.
+     *
+     * @param User $user la persona
+     *
+     * @return bool true si la coordina
+     */
+    public function isCoordinatedBy(User $user): bool
+    {
+        return $this->coordinators->contains($user);
     }
 
     /**

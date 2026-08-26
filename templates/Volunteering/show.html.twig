@@ -97,7 +97,7 @@
                         <table class="csa-table">
                             <thead>
                                 <tr>
-                                    {% if is_past and is_granted('ROLE_GESTION_SOCIXS_EDIT') %}
+                                    {% if is_past and is_granted('VOLUNTEER_OFFER_EDIT', offer) %}
                                         <th class="csa-table__col-tight">Fue</th>
                                     {% endif %}
                                     <th>Socix</th>
@@ -110,7 +110,7 @@
                             <tbody>
                                 {% for signup in offer.signups %}
                                     <tr>
-                                        {% if is_past and is_granted('ROLE_GESTION_SOCIXS_EDIT') %}
+                                        {% if is_past and is_granted('VOLUNTEER_OFFER_EDIT', offer) %}
                                             <td class="csa-table__col-tight">
                                                 {% if not signup.cancelled %}
                                                     <input type="checkbox" name="attended[]" value="{{ signup.id }}"
@@ -152,7 +152,7 @@
                      # Mientras no se cierra, no computa horas a nadie: el
                      # "no sabemos" es significativo y evita que olvidarse de
                      # cerrar infle el contador con gente que no apareció. #}
-                    {% if is_past and is_granted('ROLE_GESTION_SOCIXS_EDIT') %}
+                    {% if is_past and is_granted('VOLUNTEER_OFFER_EDIT', offer) %}
                         <p class="vol-help" style="margin-top: var(--csa-sp-3);">
                             Marca quién fue de verdad. A cada persona marcada se le computan
                             {{ offer.creditedMinutes ?: 0 }} minutos; a las demás, ninguno.
@@ -185,7 +185,7 @@
                 </li>
             </ul>
 
-            {% if is_granted('ROLE_GESTION_SOCIXS_EDIT') and not everyone_sent and offer.open %}
+            {% if is_granted('VOLUNTEER_OFFER_EDIT', offer) and not everyone_sent and offer.open %}
                 {#
                  # Este botón gasta el canal push de toda la asociación, y el
                  # permiso del navegador se pierde una vez y para siempre: quien
@@ -211,7 +211,7 @@
 
     <div class="csa-row-between" style="margin-top: var(--csa-sp-6);">
         {{ csa.btn('Volver', { variant: 'ghost', href: path('volunteering_index') }) }}
-        {% if is_granted('ROLE_GESTION_SOCIXS_EDIT') %}
+        {% if is_granted('VOLUNTEER_OFFER_EDIT', offer) %}
             {{ csa.btn('Editar', { variant: 'primary', icon: 'fa-pencil', href: path('volunteering_edit', { id: offer.id }) }) }}
         {% endif %}
     </div>

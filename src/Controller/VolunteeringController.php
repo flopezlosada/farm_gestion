@@ -11,6 +11,7 @@ use App\Form\VolunteerOfferType;
 use App\Repository\VolunteerCallRepository;
 use App\Repository\VolunteerCategoryRepository;
 use App\Repository\VolunteerOfferRepository;
+use App\Security\VolunteerOfferVoter;
 use App\Service\Volunteering\VolunteerAudienceResolver;
 use App\Service\Volunteering\VolunteerCallNotifier;
 use Doctrine\ORM\EntityManagerInterface;
@@ -24,11 +25,24 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * Gestión del voluntariado: publicar tareas, ver quién se apunta, cerrarlas y
  * pedir gente.
  *
- * Lectura con ROLE_GESTION_SOCIXS y escritura con ROLE_GESTION_SOCIXS_EDIT,
- * como el resto del área de socixs. Todo bajo el toggle del módulo.
+ * ROL PROPIO Y NO EL DE SOCIXS, y es una decisión de privacidad, no de orden.
+ * Quien coordina el reparto de los viernes necesita saber quién viene ese
+ * viernes; darle `ROLE_GESTION_SOCIXS` para eso le abriría las fichas, DNIs y
+ * domicilios de los 246 socixs. Es el mismo criterio con el que las encuestas se
+ * separaron de socixs en `security.yaml`: mínimo privilegio.
+ *
+ * QUIÉN PUEDE TOCAR QUÉ lo decide {@see VolunteerOfferVoter} por tarea, no este
+ * atributo: quien coordina un área puede con las suyas y con ninguna más. El
+ * `IsGranted` de la clase sólo abre la puerta.
+ *
+ * La LECTURA sí alcanza a todas las áreas: un coordinador de huerta ve las
+ * tareas del reparto y quién se apuntó. Son nombres de socixs dentro de la
+ * asociación, no datos de contacto, y separar también la lectura obligaría a
+ * filtrar cada listado por área a cambio de que nadie pudiera ver cómo va el
+ * conjunto.
  */
 #[Route('/gestion/voluntariado')]
-#[IsGranted('ROLE_GESTION_SOCIXS')]
+#[IsGranted('ROLE_GESTION_VOLUNTARIADO')]
 #[IsGranted('FEATURE_VOLUNTEERING')]
 class VolunteeringController extends AbstractController
 {
@@ -57,9 +71,13 @@ class VolunteeringController extends AbstractController
 
     /**
      * Publicar una tarea nueva.
+     *
+     * Sin gate de rol en la ruta: quien coordina un área también publica tareas
+     * suyas, y no tiene el rol global de escritura. El permiso se comprueba
+     * DESPUÉS de rellenar el formulario, cuando ya se sabe de qué área es la
+     * tarea — antes no hay nada sobre lo que decidir.
      */
     #[Route('/nueva', name: 'volunteering_new', methods: ['GET', 'POST'])]
-    #[IsGranted('ROLE_GESTION_SOCIXS_EDIT')]
     public function new(Request $request, EntityManagerInterface $em): Response
     {
         $offer = (new VolunteerOffer())->setCreatedBy($this->getUser());
@@ -67,6 +85,11 @@ class VolunteeringController extends AbstractController
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
+            // Publicar una tarea de un área que no coordinas es lo mismo que
+            // editar la de otra persona. Se comprueba aquí porque hasta ahora la
+            // oferta no tenía categorías que mirar.
+            $this->denyAccessUnlessGranted(VolunteerOfferVoter::EDIT, $offer);
+
             $em->persist($offer);
             $em->flush();
             $this->addFlash('success', 'Tarea creada.');
@@ -107,7 +130,7 @@ class VolunteeringController extends AbstractController
      * Editar una tarea.
      */
     #[Route('/{id}/editar', name: 'volunteering_edit', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
-    #[IsGranted('ROLE_GESTION_SOCIXS_EDIT')]
+    #[IsGranted(VolunteerOfferVoter::EDIT, subject: 'offer')]
     public function edit(Request $request, VolunteerOffer $offer, EntityManagerInterface $em): Response
     {
         $form = $this->createForm(VolunteerOfferType::class, $offer);
@@ -137,7 +160,7 @@ class VolunteeringController extends AbstractController
      * plantación" de "si no vienen se pierde la cosecha".
      */
     #[Route('/{id}/avisar-a-todxs', name: 'volunteering_notify_everyone', methods: ['POST'], requirements: ['id' => '\d+'])]
-    #[IsGranted('ROLE_GESTION_SOCIXS_EDIT')]
+    #[IsGranted(VolunteerOfferVoter::EDIT, subject: 'offer')]
     public function notifyEveryone(
         Request $request,
         VolunteerOffer $offer,
@@ -173,7 +196,7 @@ class VolunteeringController extends AbstractController
      * nadie a base de gente que se apuntó y no apareció.
      */
     #[Route('/{id}/cerrar', name: 'volunteering_close', methods: ['POST'], requirements: ['id' => '\d+'])]
-    #[IsGranted('ROLE_GESTION_SOCIXS_EDIT')]
+    #[IsGranted(VolunteerOfferVoter::EDIT, subject: 'offer')]
     public function close(Request $request, VolunteerOffer $offer, EntityManagerInterface $em): Response
     {
         if (!$this->isCsrfTokenValid('volunteering_close', (string) $request->request->get('_csrf_token'))) {
@@ -220,7 +243,7 @@ class VolunteeringController extends AbstractController
      * El catálogo de tipos de trabajo.
      */
     #[Route('/categorias/listado', name: 'volunteering_categories', methods: ['GET', 'POST'])]
-    #[IsGranted('ROLE_GESTION_SOCIXS_EDIT')]
+    #[IsGranted('ROLE_GESTION_VOLUNTARIADO_EDIT')]
     public function categories(
         Request $request,
         VolunteerCategoryRepository $categories,
@@ -248,7 +271,7 @@ class VolunteeringController extends AbstractController
      * Editar una categoría.
      */
     #[Route('/categorias/{id}/editar', name: 'volunteering_category_edit', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
-    #[IsGranted('ROLE_GESTION_SOCIXS_EDIT')]
+    #[IsGranted('ROLE_GESTION_VOLUNTARIADO_EDIT')]
     public function editCategory(Request $request, VolunteerCategory $category, EntityManagerInterface $em): Response
     {
         $form = $this->createForm(VolunteerCategoryType::class, $category);

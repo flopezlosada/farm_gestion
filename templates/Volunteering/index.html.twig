@@ -14,10 +14,17 @@
     {{ csa.page_header('Socios', 'Voluntariado', 'Tareas que la asociación ofrece al voluntariado, y quién se apunta a ellas.') }}
 
     <div class="csa-row-between" style="margin-bottom: var(--csa-sp-4);">
-        {{ csa.btn('Tipos de trabajo', { variant: 'ghost', icon: 'fa-tags', href: path('volunteering_categories') }) }}
-        {% if is_granted('ROLE_GESTION_SOCIXS_EDIT') %}
-            {{ csa.btn('Nueva tarea', { variant: 'primary', icon: 'fa-plus', href: path('volunteering_new') }) }}
+        {# Crear áreas y nombrar coordinadoras es del rol global: quien coordina
+         # un área no se nombra a sí misma en otra. #}
+        {% if is_granted('ROLE_GESTION_VOLUNTARIADO_EDIT') %}
+            {{ csa.btn('Tipos de trabajo', { variant: 'ghost', icon: 'fa-tags', href: path('volunteering_categories') }) }}
+        {% else %}
+            <div></div>
         {% endif %}
+        {# Publicar sí puede quien coordina un área — de las suyas. Que la tarea
+         # sea de un área que coordina se comprueba al guardarla, cuando ya se
+         # sabe de qué área es. #}
+        {{ csa.btn('Nueva tarea', { variant: 'primary', icon: 'fa-plus', href: path('volunteering_new') }) }}
     </div>
 
     {# Lo primero, lo que ya pasó y sigue sin cerrar: mientras no se cierra, no
@@ -101,7 +108,7 @@
                             </td>
                             <td class="csa-table__actions">
                                 <a href="{{ path('volunteering_show', { id: offer.id }) }}" title="Ver" aria-label="Ver"><i class="fa fa-eye"></i></a>
-                                {% if is_granted('ROLE_GESTION_SOCIXS_EDIT') %}
+                                {% if is_granted('VOLUNTEER_OFFER_EDIT', offer) %}
                                     <a href="{{ path('volunteering_edit', { id: offer.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>
                                 {% endif %}
                             </td>

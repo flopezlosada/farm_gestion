@@ -4,6 +4,11 @@
 
 {% block title %}Voluntariado · Tipos de trabajo{% endblock %}
 
+{% block more_css %}
+    {{ parent() }}
+    {% include '_components/volunteering_styles.html.twig' %}
+{% endblock %}
+
 {% block csa_crumbs %}
     <a href="{{ path('dashboard') }}">Inicio</a>
     <span class="csa-topbar__crumbs-sep">/</span>
@@ -21,6 +26,7 @@
                 <tr>
                     <th>Nombre</th>
                     <th>Qué entra aquí</th>
+                    <th>Coordina</th>
                     <th class="csa-table__col-tight">Socixs</th>
                     <th class="csa-table__col-tight">Estado</th>
                     <th class="csa-table__actions">Acciones</th>
@@ -31,6 +37,13 @@
                     <tr>
                         <td class="csa-table__primary">{{ category.name }}</td>
                         <td>{{ category.description ?: '—' }}</td>
+                        <td>
+                            {% for coordinator in category.coordinators %}
+                                {{ csa.badge(coordinator.username, 'sky') }}
+                            {% else %}
+                                <span class="vol-help">Sin coordinar</span>
+                            {% endfor %}
+                        </td>
                         <td class="csa-table__col-tight">{{ category.partners|length }}</td>
                         <td class="csa-table__col-tight">
                             {% if category.active %}
@@ -44,7 +57,7 @@
                         </td>
                     </tr>
                 {% else %}
-                    <tr><td colspan="5">Todavía no hay ningún tipo de trabajo. Crea el primero abajo.</td></tr>
+                    <tr><td colspan="6">Todavía no hay ningún tipo de trabajo. Crea el primero abajo.</td></tr>
                 {% endfor %}
             </tbody>
         </table>
@@ -56,6 +69,7 @@
                 <div class="csa-form-grid">
                     {{ csa.field(form.name, 'Nombre') }}
                     {{ csa.field(form.active, 'Se sigue ofreciendo', { full: true }) }}
+                    {{ csa.field(form.coordinators, 'Quién coordina esta área', { full: true, hint: 'pueden gestionar sólo las tareas de esta área', widget_class: 'csa-select' }) }}
                     {{ csa.field(form.description, 'Qué entra aquí', {
                         full: true,
                         hint: 'se le enseña a cada socix junto a la casilla',
