@@ -39,6 +39,9 @@
                 {% if is_granted('FEATURE_SURVEYS') %}
                     {{ _self.nav_link('Encuestas', path('panel_survey_index'), 'fa-check-square-o', route starts with 'panel_survey') }}
                 {% endif %}
+                {% if is_granted('FEATURE_VOLUNTEERING') %}
+                    {{ _self.nav_link('Voluntariado', path('panel_volunteering'), 'fa-hand-paper-o', route starts with 'panel_volunteering') }}
+                {% endif %}
             </nav>
         </aside>
 

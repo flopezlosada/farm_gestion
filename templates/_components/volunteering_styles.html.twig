@@ -1,0 +1,182 @@
+{#
+ # Estilos propios del módulo de voluntariado. Se incluyen desde el bloque
+ # more_css de las pantallas que los usan, igual que partner_card_styles.
+ #
+ # Sólo lo que NO existe ya en el lenguaje csa: la lista de tareas y sus piezas.
+ # Todo lo demás (tarjetas, botones, badges, inputs) usa los componentes
+ # canónicos. Nada de colores a pelo: sólo tokens --csa-*.
+ #}
+<style>
+    .vol-list { list-style: none; margin: 0; padding: 0; }
+
+    .vol-item {
+        display: flex;
+        gap: var(--csa-sp-4);
+        align-items: flex-start;
+        justify-content: space-between;
+        padding: var(--csa-sp-4) 0;
+        border-bottom: 1px solid var(--csa-rule-soft);
+    }
+    .vol-item:last-child { border-bottom: 0; padding-bottom: 0; }
+    .vol-item:first-child { padding-top: 0; }
+
+    /* Lo ya comprometido baja de intensidad: la atención va a lo que sigue sin cubrir. */
+    .vol-item--signed { opacity: .72; }
+
+    .vol-item__main { min-width: 0; flex: 1 1 auto; }
+
+    .vol-item__title {
+        margin: 0 0 var(--csa-sp-1);
+        font-family: var(--csa-serif);
+        font-size: var(--csa-fs-lg);
+        line-height: var(--csa-lh-snug);
+        color: var(--csa-ink);
+    }
+
+    .vol-item__meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--csa-sp-1) var(--csa-sp-4);
+        font-size: var(--csa-fs-sm);
+        color: var(--csa-ink-muted);
+    }
+    .vol-item__meta i { margin-right: var(--csa-sp-1); opacity: .7; }
+
+    .vol-item__desc {
+        margin: var(--csa-sp-2) 0 0;
+        font-size: var(--csa-fs-sm);
+        line-height: var(--csa-lh-normal);
+        color: var(--csa-ink-soft);
+    }
+
+    .vol-item__tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--csa-sp-1);
+        margin-top: var(--csa-sp-2);
+    }
+
+    .vol-item__action {
+        flex: 0 0 auto;
+        text-align: right;
+        display: flex;
+        flex-direction: column;
+        gap: var(--csa-sp-2);
+        align-items: flex-end;
+    }
+
+    .vol-item__slots {
+        margin: 0;
+        font-size: var(--csa-fs-sm);
+        color: var(--csa-ink-muted);
+        white-space: nowrap;
+    }
+    .vol-item__slots strong { color: var(--csa-terracotta, var(--csa-ink)); }
+
+    .vol-item__signed {
+        margin: 0 0 var(--csa-sp-1);
+        font-size: var(--csa-fs-sm);
+        color: var(--csa-green);
+        white-space: nowrap;
+    }
+
+    .vol-item__companions {
+        display: block;
+        margin-bottom: var(--csa-sp-2);
+        font-size: var(--csa-fs-sm);
+        color: var(--csa-ink-muted);
+        white-space: nowrap;
+    }
+    .vol-item__companions .csa-input { width: 4.5rem; display: inline-block; margin: 0 var(--csa-sp-1); }
+
+    .vol-mine { list-style: none; margin: 0; padding: 0; }
+    .vol-mine li {
+        padding: var(--csa-sp-2) 0;
+        border-bottom: 1px solid var(--csa-rule-soft);
+    }
+    .vol-mine li:last-child { border-bottom: 0; }
+    .vol-mine__when {
+        display: block;
+        font-size: var(--csa-fs-sm);
+        color: var(--csa-ink-muted);
+    }
+
+    .vol-prefs {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+        gap: var(--csa-sp-2);
+        margin: var(--csa-sp-3) 0;
+    }
+    .vol-pref {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 0 var(--csa-sp-2);
+        align-items: start;
+        padding: var(--csa-sp-2);
+        border: 1px solid var(--csa-rule-soft);
+        border-radius: var(--csa-radius-md);
+        cursor: pointer;
+    }
+    .vol-pref:hover { background: var(--csa-sage-bg-hover); }
+    .vol-pref__name { font-size: var(--csa-fs-base); color: var(--csa-ink); }
+    .vol-pref__desc {
+        grid-column: 2;
+        font-size: var(--csa-fs-xs);
+        color: var(--csa-ink-muted);
+        line-height: var(--csa-lh-snug);
+    }
+
+    .vol-total {
+        margin: 0 0 var(--csa-sp-2);
+        font-size: var(--csa-fs-md);
+        color: var(--csa-ink);
+    }
+
+    .vol-help {
+        margin: 0 0 var(--csa-sp-2);
+        font-size: var(--csa-fs-sm);
+        line-height: var(--csa-lh-normal);
+        color: var(--csa-ink-muted);
+    }
+    .vol-help--muted { font-size: var(--csa-fs-xs); color: var(--csa-ink-soft); }
+
+    .vol-empty {
+        margin: 0;
+        font-size: var(--csa-fs-sm);
+        color: var(--csa-ink-muted);
+    }
+
+    .vol-sep {
+        border: 0;
+        border-top: 1px solid var(--csa-rule-soft);
+        margin: var(--csa-sp-4) 0;
+    }
+
+    /* Bloque compacto de la home del panel. */
+    .vol-teaser { list-style: none; margin: 0 0 var(--csa-sp-3); padding: 0; }
+    .vol-teaser li {
+        padding: var(--csa-sp-2) 0;
+        border-bottom: 1px solid var(--csa-rule-soft);
+    }
+    .vol-teaser li:last-child { border-bottom: 0; }
+    .vol-teaser__link { display: block; text-decoration: none; }
+    .vol-teaser__title {
+        display: block;
+        font-family: var(--csa-serif);
+        font-size: var(--csa-fs-base);
+        color: var(--csa-ink);
+    }
+    .vol-teaser__meta {
+        display: block;
+        font-size: var(--csa-fs-sm);
+        color: var(--csa-ink-muted);
+    }
+
+    /* En móvil la acción cae debajo y ocupa el ancho: a 360px, dos columnas
+       dejan el botón de "me apunto" en una tira de 90px. */
+    @media (max-width: 640px) {
+        .vol-item { flex-direction: column; }
+        .vol-item__action { text-align: left; align-items: stretch; width: 100%; }
+        .vol-item__slots { white-space: normal; }
+    }
+</style>

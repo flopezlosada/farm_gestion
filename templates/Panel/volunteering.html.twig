@@ -1,0 +1,258 @@
+{% extends '_layouts/csa_panel.html.twig' %}
+
+{% block title %}Voluntariado{% endblock %}
+
+{% block csa_crumbs %}
+    <span class="csa-topbar__crumb-active">Voluntariado</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include '_components/volunteering_styles.html.twig' %}
+{% endblock %}
+
+{#
+ # EL ORDEN DE ESTA PANTALLA ES EL DISEÑO, no una preferencia estética.
+ #
+ # 1. Lo que hace falta, con fecha, sitio y plazas libres. Es lo que cambia cada
+ #    semana, y lo que cambia se lee. "Llevas 0 horas" es el mismo píxel toda la
+ #    vida y a las dos semanas es mobiliario.
+ # 2. Lo que tengo comprometido.
+ # 3. De qué quiero que me avisen.
+ # 4. Lo que llevo hecho — al final y en pequeño.
+ #
+ # Poner el contador arriba convierte la pantalla en un reproche sin salida, y un
+ # reproche que no se resuelve de un clic sólo consigue que la gente deje de
+ # entrar en la web. Y con ella se pierde el canal por el que gestionan su cesta.
+ #}
+{% block csa_main %}
+
+    {% macro duration(minutes) %}
+        {%- if minutes < 60 -%}
+            {{ minutes }} min
+        {%- elseif minutes % 60 == 0 -%}
+            {{ (minutes / 60)|round }} h
+        {%- else -%}
+            {{ (minutes // 60) }} h {{ minutes % 60 }} min
+        {%- endif -%}
+    {% endmacro %}
+
+    {% import _self as fmt %}
+
+    <div class="csa-stack">
+
+        {# ============ 1. LO QUE HACE FALTA ============ #}
+        {% embed '_components/csa_card.html.twig' with {
+            title: 'Lo que hace falta',
+            subtitle: 'Tareas de las próximas semanas que siguen sin cubrir',
+            icon: 'fa-hand-paper-o',
+            accent: 'green',
+            variant: 'hero'
+        } %}
+            {% block body %}
+                {% if offers is empty %}
+                    <p class="vol-empty">
+                        Ahora mismo no hay ninguna tarea pendiente. Cuando haya algo que
+                        necesite manos, aparecerá aquí.
+                    </p>
+                {% else %}
+                    <ul class="vol-list">
+                        {% for offer in offers %}
+                            {% set signed = offer.id in my_offer_ids %}
+                            {% set mine_here = my_node_id and offer.node and offer.node.id == my_node_id %}
+
+                            <li class="vol-item{% if signed %} vol-item--signed{% endif %}">
+                                <div class="vol-item__main">
+                                    <h4 class="vol-item__title">{{ offer.title }}</h4>
+
+                                    <div class="vol-item__meta">
+                                        <span><i class="fa fa-calendar" aria-hidden="true"></i>
+                                            {{ offer.startsAt|format_datetime('full', 'short', locale='es') }}</span>
+
+                                        {% if offer.remote %}
+                                            <span><i class="fa fa-home" aria-hidden="true"></i> Desde casa</span>
+                                        {% elseif offer.node %}
+                                            <span><i class="fa fa-map-marker" aria-hidden="true"></i> {{ offer.node }}</span>
+                                        {% elseif offer.place %}
+                                            <span><i class="fa fa-map-marker" aria-hidden="true"></i> {{ offer.place }}</span>
+                                        {% endif %}
+
+                                        {% if offer.creditedMinutes %}
+                                            <span><i class="fa fa-clock-o" aria-hidden="true"></i>
+                                                Cuenta {{ fmt.duration(offer.creditedMinutes) }}</span>
+                                        {% endif %}
+                                    </div>
+
+                                    {% if offer.description %}
+                                        <p class="vol-item__desc">{{ offer.description|nl2br }}</p>
+                                    {% endif %}
+
+                                    <div class="vol-item__tags">
+                                        {% if mine_here %}
+                                            {# Lo que pasa en su punto de recogida: ya va a estar ahí ese día. #}
+                                            <span class="csa-badge csa-badge--green">En tu punto de recogida</span>
+                                        {% endif %}
+                                        {% for category in offer.categories %}
+                                            <span class="csa-badge">{{ category.name }}</span>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+
+                                <div class="vol-item__action">
+                                    {% if offer.remainingSlots is not null %}
+                                        <p class="vol-item__slots">
+                                            {% if offer.remainingSlots == 1 %}
+                                                Falta <strong>1 persona</strong>
+                                            {% else %}
+                                                Faltan <strong>{{ offer.remainingSlots }} personas</strong>
+                                            {% endif %}
+                                        </p>
+                                    {% endif %}
+
+                                    {% if signed %}
+                                        <form method="post" action="{{ path('panel_volunteering_withdraw', {id: offer.id}) }}">
+                                            <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_volunteering') }}">
+                                            <p class="vol-item__signed"><i class="fa fa-check" aria-hidden="true"></i> Estás apuntadx</p>
+                                            <button type="submit" class="csa-btn csa-btn--ghost csa-btn--sm">No voy a poder ir</button>
+                                        </form>
+                                    {% else %}
+                                        <form method="post" action="{{ path('panel_volunteering_signup', {id: offer.id}) }}">
+                                            <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_volunteering') }}">
+                                            {% if offer.companionsAllowed %}
+                                                <label class="vol-item__companions">
+                                                    Vengo con
+                                                    <input type="number" name="companions" value="0" min="0" max="10" class="csa-input csa-input--compact">
+                                                    más
+                                                </label>
+                                            {% endif %}
+                                            <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">Me apunto</button>
+                                        </form>
+                                    {% endif %}
+                                </div>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+            {% endblock %}
+        {% endembed %}
+
+        {# ============ 2. LO QUE TENGO COMPROMETIDO ============ #}
+        {% if my_signups is not empty %}
+            {% embed '_components/csa_card.html.twig' with {
+                title: 'A lo que te has apuntado',
+                icon: 'fa-check-square-o',
+                accent: 'sky'
+            } %}
+                {% block body %}
+                    <ul class="vol-mine">
+                        {% for signup in my_signups %}
+                            <li>
+                                <strong>{{ signup.offer.title }}</strong>
+                                <span class="vol-mine__when">{{ signup.offer.startsAt|format_datetime('full', 'short', locale='es') }}</span>
+                                {% if signup.companions > 0 %}
+                                    <span class="csa-badge">+{{ signup.companions }} acompañante{{ signup.companions > 1 ? 's' : '' }}</span>
+                                {% endif %}
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% endblock %}
+            {% endembed %}
+        {% endif %}
+
+        {# ============ 3. DE QUÉ AVISAR ============ #}
+        {% embed '_components/csa_card.html.twig' with {
+            title: 'De qué quieres que te avisemos',
+            icon: 'fa-bell-o'
+        } %}
+            {% block body %}
+                <form method="post" action="{{ path('panel_volunteering_preferences') }}">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_volunteering') }}">
+
+                    {#
+                     # Este texto NO es relleno: de él depende que el escalado de
+                     # avisos sea honesto. Marcar = "avísame de esto". No marcar
+                     # nada = "avísame de lo que sea sencillo". Si dijera otra
+                     # cosa, quien marca dos categorías recibiría avisos de todo
+                     # y dejaría de fiarse de esta pantalla.
+                     #}
+                    <p class="vol-help">
+                        Marca lo que te apetezca hacer y te avisaremos sólo de eso.
+                        Si no marcas nada, te avisaremos únicamente de las tareas
+                        sencillas que puede hacer cualquiera.
+                    </p>
+
+                    <div class="vol-prefs">
+                        {% for category in categories %}
+                            <label class="vol-pref">
+                                <input type="checkbox" name="categories[]" value="{{ category.id }}"
+                                       {% if category.id in my_category_ids %}checked{% endif %}>
+                                <span class="vol-pref__name">{{ category.name }}</span>
+                                {% if category.description %}
+                                    <span class="vol-pref__desc">{{ category.description }}</span>
+                                {% endif %}
+                            </label>
+                        {% endfor %}
+                    </div>
+
+                    <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">Guardar</button>
+                </form>
+
+                <hr class="vol-sep">
+
+                {#
+                 # El botón no pide permiso hasta que se pulsa, y en iOS sin
+                 # instalar ni lo intenta. Un permiso denegado no se puede volver
+                 # a pedir: el navegador ya ni enseña el diálogo.
+                 #}
+                <p class="vol-help">
+                    Si quieres, te avisamos en el móvil cuando falte gente para algo
+                    que encaje contigo.
+                </p>
+                <button type="button" class="csa-btn csa-btn--ghost csa-btn--sm" data-push-toggle>Activar avisos</button>
+            {% endblock %}
+        {% endembed %}
+
+        {# ============ 4. LO QUE LLEVAS HECHO — al final y sin dramatismo ============ #}
+        {% embed '_components/csa_card.html.twig' with {
+            title: 'Tu aportación este año',
+            icon: 'fa-heart-o'
+        } %}
+            {% block body %}
+                <p class="vol-total">
+                    {% if my_minutes > 0 %}
+                        Llevas <strong>{{ fmt.duration(my_minutes) }}</strong> de voluntariado este año.
+                    {% else %}
+                        Este año todavía no has echado una mano.
+                    {% endif %}
+                </p>
+
+                {#
+                 # La referencia se enseña SÓLO a quien va por debajo, y es la
+                 # MEDIANA de quienes participan, no la media.
+                 #
+                 # La media está contaminada por los ceros: con mucha gente que no
+                 # hace nada, se hunde, y quien fue una tarde suelta sale "por
+                 # encima de la media" cuando hace falta bastante más. Y enseñársela
+                 # a quien va sobrado es peor todavía: aprende que hace el doble de
+                 # lo normal y se relaja hasta la media. Es el efecto bumerán que
+                 # documentaron Schultz y Cialdini con el consumo eléctrico, donde
+                 # los hogares que menos gastaban SUBIERON al ver la media del
+                 # barrio. A esa gente, aquí, no se le enseña nada.
+                 #}
+                {% if show_median %}
+                    <p class="vol-help">
+                        Quien echa una mano suele dedicar unas
+                        <strong>{{ fmt.duration(median_minutes) }}</strong> al año.
+                    </p>
+                {% elseif my_minutes > 0 %}
+                    <p class="vol-help">Gracias — la asociación se sostiene con esto.</p>
+                {% endif %}
+
+                <p class="vol-help vol-help--muted">
+                    Sólo lo ves tú.
+                </p>
+            {% endblock %}
+        {% endembed %}
+
+    </div>
+{% endblock %}

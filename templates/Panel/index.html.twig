@@ -13,6 +13,9 @@
 {% block more_css %}
     {{ parent() }}
     {% include '_components/partner_card_styles.html.twig' %}
+    {% if is_granted('FEATURE_VOLUNTEERING') %}
+        {% include '_components/volunteering_styles.html.twig' %}
+    {% endif %}
 {% endblock %}
 
 {% block csa_main %}
@@ -73,6 +76,19 @@
                     <div class="prt-pickup__group">{{ group.name }}</div>
                 </div>
             </div>
+        {% endif %}
+
+        {# ============ VOLUNTARIADO: lo que hace falta ============ #}
+        {# Va arriba, entre los datos propios y las acciones, porque el objetivo
+         # del módulo es que se vea al entrar sin buscarlo. Lo que se enseña es la
+         # necesidad concreta y no el contador propio: ver "faltan 2 personas el
+         # jueves en tu punto de recogida" mueve; ver "llevas 0 horas" sólo
+         # incomoda, y sin nada que pulsar al lado, aleja. #}
+        {% if is_granted('FEATURE_VOLUNTEERING') %}
+            {% include '_components/volunteering_teaser.html.twig' with {
+                offers: volunteering_offers|default([]),
+                my_node_id: group and group.node ? group.node.id : null
+            } only %}
         {% endif %}
 
         {# ============ ACCIONES DEL SOCIX (no las de gestión) ============ #}

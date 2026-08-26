@@ -1,0 +1,45 @@
+{#
+ # Bloque de voluntariado para la home del panel.
+ #
+ # Está aquí y no en una pestaña porque una pestaña "Voluntariado" no la abre
+ # nadie: hay que estar en el camino, no al lado. Y lo que se enseña es la
+ # NECESIDAD concreta —fecha, sitio, cuánta gente falta—, no el contador propio.
+ #
+ # Lo que cambia cada semana se lee; "llevas 0 horas" es el mismo píxel toda la
+ # vida y a las dos semanas es mobiliario. Además, un déficit sin una acción al
+ # lado es un reproche sin salida, y eso lo que consigue es que la gente deje de
+ # entrar en la web — y con ella se pierde el canal de la cesta.
+ #
+ # Espera: offers (lista corta) y my_node_id (o null).
+ #}
+{% if offers is not empty %}
+    {% embed '_components/csa_card.html.twig' with {
+        title: 'Hace falta una mano',
+        icon: 'fa-hand-paper-o',
+        accent: 'ochre'
+    } %}
+        {% block body %}
+            <ul class="vol-teaser">
+                {% for offer in offers %}
+                    <li>
+                        <a href="{{ path('panel_volunteering') }}" class="vol-teaser__link">
+                            <span class="vol-teaser__title">{{ offer.title }}</span>
+                            <span class="vol-teaser__meta">
+                                {{ offer.startsAt|format_datetime('full', 'none', locale='es') }}
+                                {%- if offer.node %} · {{ offer.node }}{% elseif offer.remote %} · desde casa{% endif -%}
+                                {%- if offer.remainingSlots is not null %}
+                                    · {% if offer.remainingSlots == 1 %}falta 1 persona{% else %}faltan {{ offer.remainingSlots }} personas{% endif %}
+                                {%- endif -%}
+                            </span>
+                        </a>
+                        {% if my_node_id and offer.node and offer.node.id == my_node_id %}
+                            <span class="csa-badge csa-badge--green">En tu punto de recogida</span>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+            </ul>
+
+            <a href="{{ path('panel_volunteering') }}" class="csa-btn csa-btn--primary csa-btn--sm">Ver qué hace falta</a>
+        {% endblock %}
+    {% endembed %}
+{% endif %}

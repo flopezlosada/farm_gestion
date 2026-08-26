@@ -18,6 +18,7 @@ use App\Form\PartnerProfileType;
 use App\Repository\BasketRepository;
 use App\Repository\PartnerBasketShareRepository;
 use App\Repository\PartnerDeliveryShiftRepository;
+use App\Repository\VolunteerOfferRepository;
 use App\Repository\WeeklyBasketGroupRepository;
 use App\Repository\WeeklyBasketRepository;
 use App\Service\Delivery\DeliveryCalendarProjector;
@@ -58,9 +59,14 @@ class PanelController extends AbstractController
     ) {
     }
 
+    /** Cuántas tareas de voluntariado se asoman en la home antes de mandar a su pantalla. */
+    private const VOLUNTEERING_TEASER = 3;
+
     #[Route('', name: 'panel', methods: ['GET'])]
-    public function index(PickupRelocationOptions $relocationOptions): Response
-    {
+    public function index(
+        PickupRelocationOptions $relocationOptions,
+        VolunteerOfferRepository $volunteerOffers,
+    ): Response {
         if (($redirect = $this->ensureReady()) !== null) {
             return $redirect;
         }
@@ -91,6 +97,17 @@ class PanelController extends AbstractController
             'group' => $partner->getWeeklyBasketGroup(),
             'relocate_weeks' => $canRelocate ? $relocationOptions->weeksForPartner($owner) : [],
             'relocate_groups' => $canRelocate ? $relocationOptions->groupsForPartner($owner) : [],
+            // Las tareas de voluntariado que hacen falta, con las del punto de
+            // recogida propio primero. Sólo se consulta con el módulo encendido:
+            // apagado, la home no debe pagar una consulta por una tarjeta que no
+            // se va a pintar.
+            'volunteering_offers' => $this->isGranted('FEATURE_VOLUNTEERING')
+                ? $volunteerOffers->findUpcomingForNode(
+                    new \DateTime(),
+                    $partner->getWeeklyBasketGroup()?->getNode(),
+                    self::VOLUNTEERING_TEASER
+                )
+                : [],
         ]);
     }
 
