@@ -62,7 +62,17 @@
     var orderSelect = document.getElementById('partner_basket_share_dayMonthOrder');
     var orderOptions = orderSelect ? Array.prototype.slice.call(orderSelect.options) : [];
 
-    function limitOrderOptions(anchoredToTurn) {
+    // Texto original de la opción vacía, para restaurarlo cuando la cesta deja
+    // de ser mensual.
+    var blankOrderOption = orderOptions.filter(function (o) { return o.value === ''; })[0];
+    var blankOrderLabel = blankOrderOption ? blankOrderOption.textContent : '';
+
+    // `required`: en una cesta MENSUAL la posición del mes es obligatoria — sin
+    // ella la cesta no entra en ningún reparto (caso El Berrueco, 2026-08-26).
+    // La opción vacía NO se retira: quitarla auto-seleccionaría la 1ª entrega a
+    // espaldas del gestor. Se renombra a un aviso y se marca el campo required,
+    // que es lo que el servidor vuelve a comprobar en PartnerBasketShare.
+    function limitOrderOptions(anchoredToTurn, required) {
         if (!orderSelect) return;
         var current = orderSelect.value;
         orderSelect.innerHTML = '';
@@ -72,6 +82,10 @@
                 orderSelect.appendChild(opt);
             }
         });
+        if (blankOrderOption) {
+            blankOrderOption.textContent = required ? 'Elige la entrega del mes' : blankOrderLabel;
+        }
+        orderSelect.required = !!required;
         var stillThere = Array.prototype.some.call(orderSelect.options, function (o) { return o.value === current; });
         orderSelect.value = stillThere ? current : '';
         orderSelect.dispatchEvent(new Event('change', { bubbles: true }));
@@ -132,7 +146,9 @@
             syncTurnOptions(basketShare);
         }
         if (showCestaDayMonth) {
-            limitOrderOptions(isMonthly && turnSelect !== null && turnSelect.value !== '');
+            limitOrderOptions(isMonthly && turnSelect !== null && turnSelect.value !== '', isMonthly);
+        } else {
+            limitOrderOptions(false, false); // deja de ser obligatorio al salir de mensual
         }
         if (showEggDayMonth) {
             limitEggOptions(maxCestasForModality(basketShare));

@@ -81,6 +81,26 @@ class CohortChoiceBuilderTest extends TestCase
     }
 
     /**
+     * Las posiciones de mes que se ofrecen a una cesta mensual son sólo las que
+     * el punto abre TODOS los meses. En un punto quincenal la "3ª entrega" no
+     * está: sólo existe en los meses en que abre tres veces, y elegirla dejaría
+     * al socio sin cesta el resto (caso El Berrueco, 2026-08-26).
+     */
+    public function testLasPosicionesDeMesOfrecidasSonLasQueElPuntoAbreSiempre(): void
+    {
+        $semanal = $this->build($this->makeNode(5, Node::CADENCE_WEEKLY))['offeredMonthOrders'];
+        $this->assertContains(3, $semanal, 'Un punto semanal sí tiene 3ª entrega todos los meses.');
+
+        $quincenal = $this->makeNode(3, Node::CADENCE_BIWEEKLY)->setAnchorDate(new \DateTimeImmutable('2026-05-06'));
+        $offered = $this->build($quincenal)['offeredMonthOrders'];
+        $this->assertNotContains(3, $offered);
+        $this->assertSame([1, 2, Node::MONTHLY_WEEK_LAST], $offered);
+
+        $mensual = $this->makeNode(3, Node::CADENCE_MONTHLY)->setMonthlyWeek(2);
+        $this->assertSame([2], $this->build($mensual)['offeredMonthOrders'], 'El punto mensual sólo abre la suya.');
+    }
+
+    /**
      * Un socio sin grupo de recogida todavía: nada que restringir hasta que se
      * sepa en qué punto recoge.
      */
@@ -89,6 +109,7 @@ class CohortChoiceBuilderTest extends TestCase
         $result = $this->build(null);
 
         $this->assertNull($result['allowedShareIds']);
+        $this->assertNull($result['offeredMonthOrders']);
         $this->assertNull($result['forcedMonthOrder']);
         $this->assertFalse($result['nodeIsBiweekly']);
         $this->assertFalse($result['nodeIsMonthly']);

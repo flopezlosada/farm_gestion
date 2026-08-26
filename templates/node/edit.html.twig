@@ -24,6 +24,27 @@
         node.weeklyBasketGroups|length ~ ' grupo(s) asociado(s).'
     ) }}
 
+    {# El cambio de cadencia se ha rechazado: dejaría cestas que este punto no
+       puede repartir. Se listan para corregirlas antes de volver a intentarlo —
+       a qué modalidad pasa cada socio lo decide administración, no el sistema. #}
+    {% if orphaned_shares is defined and orphaned_shares is not empty %}
+        <div class="csa-card csa-stack" style="border-color: var(--csa-danger); margin-bottom: var(--csa-sp-5);">
+            {{ csa.callout(
+                'No se ha cambiado la cadencia' ~ (attempted_cadence ? ' a ' ~ attempted_cadence|lower : '') ~
+                ': hay ' ~ orphaned_shares|length ~ ' cesta(s) que este punto no podría repartir. Cámbiales la modalidad primero.',
+                'danger', 'exclamation-triangle'
+            ) }}
+            <ul class="csa-stack-sm" style="margin: 0; padding-left: var(--csa-sp-5);">
+                {% for share in orphaned_shares %}
+                    <li>
+                        <a href="{{ path('partner_show', { id: share.partner.id }) }}">{{ share.partner.nameForDelivery }}</a>
+                        · cesta {{ share.basketShare.name|lower }}
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
+
     {{ form_start(form, { attr: { role: 'form', class: 'csa-form-narrow', 'data-csa-dropdowns': '' } }) }}
 
         <div class="csa-stack-lg">
@@ -46,6 +67,14 @@
                         {{ csa.field(form.anchorDate, 'Fecha ancla (sólo quincenal)') }}
                         {{ csa.field(form.monthlyWeek, 'Semana del mes (sólo mensual)') }}
                     </div>
+                    {# Aviso ANTES de tocar nada: cambiar la semana del punto
+                       arrastra a sus cestas mensuales, no sólo al calendario. #}
+                    {% if monthly_share_count is defined and monthly_share_count > 0 %}
+                        {{ csa.callout(
+                            'Este punto tiene ' ~ monthly_share_count ~ ' cesta(s) mensual(es). Si cambias la semana, se les actualizará a todas y se recolocarán los listados ya generados.',
+                            'warning', 'exclamation-triangle'
+                        ) }}
+                    {% endif %}
                 {% endblock %}
             {% endembed %}
 

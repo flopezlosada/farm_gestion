@@ -276,6 +276,57 @@ class Node
     }
 
     /**
+     * Modalidades de cesta que caben en este punto, o null si no restringe
+     * ninguna. La cadencia del punto manda: en uno quincenal no cabe una cesta
+     * de reparto semanal (sólo abre cada dos semanas) y en uno mensual sólo
+     * caben las mensuales, porque abre una única vez al mes.
+     *
+     * Punto único de la regla: lo consumen el formulario de cesta (para acotar
+     * el desplegable) y la validación de {@see PartnerBasketShare}, que es la
+     * que de verdad la impone.
+     *
+     * @return int[]|null IDs de BasketShare admitidos, o null si valen todos.
+     */
+    public function allowedShareIds(): ?array
+    {
+        if ($this->isMonthly()) {
+            return BasketShare::IDS_MONTHLY;
+        }
+
+        if ($this->cadence === self::CADENCE_BIWEEKLY) {
+            return array_values(array_diff(BasketShare::IDS_ALL, BasketShare::IDS_WEEKLY));
+        }
+
+        return null;
+    }
+
+    /**
+     * Posiciones de mes (el `day_month_order` de una cesta mensual) que este
+     * punto sirve TODOS los meses. Es deliberadamente conservadora: sólo
+     * incluye las que existen en el mes más corto, porque una posición que
+     * unos meses no existe deja al socio sin cesta ese mes y sin ningún aviso.
+     *
+     * - Semanal: 4 entregas garantizadas al mes → 1ª, 2ª, 3ª y la última.
+     * - Quincenal: 2 garantizadas → 1ª, 2ª y la última (la 3ª sólo aparece en
+     *   los meses en que el punto abre tres veces, y por eso queda fuera).
+     * - Mensual: la única que abre, la que fija `monthly_week`.
+     *
+     * @return int[] Posiciones admitidas, de la primera a la última.
+     */
+    public function offeredMonthOrders(): array
+    {
+        if ($this->isMonthly()) {
+            return $this->monthlyWeek !== null ? [$this->monthlyWeek] : self::MONTHLY_WEEKS;
+        }
+
+        if ($this->cadence === self::CADENCE_BIWEEKLY) {
+            return [1, 2, self::MONTHLY_WEEK_LAST];
+        }
+
+        return [1, 2, 3, self::MONTHLY_WEEK_LAST];
+    }
+
+    /**
      * Nombre humano de la cadencia, para pintarla en pantalla sin que cada
      * plantilla tenga que mantener su propio mapa de traducciones.
      *
