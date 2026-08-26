@@ -14,6 +14,7 @@ use App\Repository\WeeklyBasketGroupRepository;
 use App\Repository\WeeklyBasketRepository;
 use App\Service\Delivery\EggDeliveryResolver;
 use App\Service\Delivery\NodeDeliveryDate;
+use App\Service\Delivery\NodeShareCoherence;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -231,20 +232,72 @@ class NodeController extends AbstractController
     }
 
     /**
+     * Editar el punto arrastra a sus socios, porque la cadencia y la semana que
+     * abre están copiadas en cada cesta. Dos comportamientos distintos según qué
+     * se toque (ver {@see NodeShareCoherence}):
+     *
+     *  - Cambiar la CADENCIA de forma que deje cestas fuera se BLOQUEA: el
+     *    cambio no se guarda y se listan los socios a corregir primero. A qué
+     *    modalidad pasa cada uno es decisión de administración, no del software.
+     *  - Cambiar la SEMANA de un punto mensual se PROPAGA: sus socios recogen la
+     *    semana que abra el punto, no hay nada que decidir. Se les estampa y se
+     *    recolocan los listados ya generados.
+     *
      * @param Request $request
      * @param Node $node
      * @param EntityManagerInterface $entityManager
+     * @param NodeShareCoherence $coherence
      * @return Response
      */
     #[Route('/{id}/edit', name: 'node_edit', methods: ['GET', 'POST'])]
-    public function edit(Request $request, Node $node, EntityManagerInterface $entityManager): Response
-    {
+    public function edit(
+        Request $request,
+        Node $node,
+        EntityManagerInterface $entityManager,
+        NodeShareCoherence $coherence,
+    ): Response {
+        $originalCadence = $node->getCadence();
+        $originalWeek = $node->getMonthlyWeek();
+
         $form = $this->createForm(NodeType::class, $node);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
+            $orphaned = $node->getCadence() !== $originalCadence
+                ? $coherence->sharesThatNoLongerFit($node)
+                : [];
+
+            if ($orphaned !== []) {
+                // Descarta el cambio en memoria: el objeto está gestionado y un
+                // flush posterior de cualquier otro punto lo persistiría.
+                $entityManager->refresh($node);
+
+                return $this->render('node/edit.html.twig', [
+                    'node' => $node,
+                    'form' => $this->createForm(NodeType::class, $node)->createView(),
+                    'orphaned_shares' => $orphaned,
+                    'attempted_cadence' => Node::CADENCE_LABELS[$form->get('cadence')->getData()] ?? null,
+                    'monthly_share_count' => count($coherence->monthlySharesOf($node)),
+                ]);
+            }
+
             $entityManager->flush();
+
+            $updated = $node->getMonthlyWeek() !== $originalWeek
+                ? $coherence->propagateMonthlyWeek($node)
+                : [];
+
             $this->addFlash('success', sprintf('Nodo "%s" actualizado.', $node->getName()));
+            if ($updated !== []) {
+                $this->addFlash('info', sprintf(
+                    'Actualizada la entrega del mes de %d cesta(s) de este punto: %s.',
+                    count($updated),
+                    implode(', ', array_map(
+                        static fn (PartnerBasketShare $s): string => $s->getPartner()?->getNameForDelivery() ?? '?',
+                        $updated,
+                    )),
+                ));
+            }
 
             return $this->redirectToRoute('node_index');
         }
@@ -252,16 +305,21 @@ class NodeController extends AbstractController
         return $this->render('node/edit.html.twig', [
             'node' => $node,
             'form' => $form->createView(),
+            // Aviso previo: cambiar la semana del punto arrastra a estas cestas.
+            'monthly_share_count' => count($coherence->monthlySharesOf($node)),
         ]);
     }
 
     /**
-     * Engancha un grupo de recogida existente (sin nodo) a este nodo.
+     * Engancha un grupo de recogida existente (sin nodo) a este nodo. Mueve de
+     * golpe a TODOS sus socios, así que se comprueba antes que sus cestas caben
+     * en el punto: si alguna no, no se engancha nada (ver {@see NodeShareCoherence}).
      *
      * @param Request $request
      * @param Node $node
      * @param WeeklyBasketGroupRepository $groupRepository
      * @param EntityManagerInterface $entityManager
+     * @param NodeShareCoherence $coherence
      * @return Response
      */
     #[Route('/{id}/grupos', name: 'node_attach_group', methods: ['POST'], requirements: ['id' => '\d+'])]
@@ -269,7 +327,8 @@ class NodeController extends AbstractController
         Request $request,
         Node $node,
         WeeklyBasketGroupRepository $groupRepository,
-        EntityManagerInterface $entityManager
+        EntityManagerInterface $entityManager,
+        NodeShareCoherence $coherence
     ): Response {
         if (!$this->isCsrfTokenValid('attach_group' . $node->getId(), (string) $request->request->get('_token'))) {
             return $this->redirectToRoute('node_show', ['id' => $node->getId()]);
@@ -278,6 +337,26 @@ class NodeController extends AbstractController
         $group = $groupRepository->find((int) $request->request->get('group_id'));
         if (!$group instanceof WeeklyBasketGroup) {
             $this->addFlash('error', 'El grupo indicado no existe.');
+
+            return $this->redirectToRoute('node_show', ['id' => $node->getId()]);
+        }
+
+        $orphaned = $coherence->groupSharesThatDoNotFit($group, $node);
+        if ($orphaned !== []) {
+            $this->addFlash('error', sprintf(
+                'No se ha asignado "%s" a "%s": %d cesta(s) no se podrían repartir ahí (%s). Cámbiales la modalidad primero.',
+                $group->getName(),
+                $node->getName(),
+                count($orphaned),
+                implode(', ', array_map(
+                    static fn (PartnerBasketShare $s): string => sprintf(
+                        '%s, %s',
+                        $s->getPartner()?->getNameForDelivery() ?? '?',
+                        $s->getBasketShare()?->getName() ?? '?',
+                    ),
+                    $orphaned,
+                )),
+            ));
 
             return $this->redirectToRoute('node_show', ['id' => $node->getId()]);
         }

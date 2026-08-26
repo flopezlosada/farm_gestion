@@ -2,8 +2,12 @@
 
 namespace App\Tests\Controller;
 
+use App\Entity\BasketShare;
 use App\Entity\Node;
+use App\Entity\Partner;
+use App\Entity\PartnerBasketShare;
 use App\Entity\WeeklyBasketGroup;
+use Doctrine\ORM\EntityManagerInterface;
 
 /**
  * Smoke tests del CRUD de nodos físicos de reparto.
@@ -156,5 +160,215 @@ class NodeControllerTest extends AbstractAuthenticatedTest
                 sprintf('Edit del nodo id=%d debería devolver 200.', $nodeId)
             );
         }
+    }
+
+    /**
+     * Cambiar la cadencia de un punto de forma que deje cestas fuera NO se
+     * guarda: se rechaza y se listan los socios a corregir primero. Pasar un
+     * punto semanal a quincenal dejaría sus cestas semanales sin poder
+     * repartirse, y a qué modalidad pasa cada socio es decisión de
+     * administración, no del sistema.
+     */
+    public function testCadenceChangeIsBlockedWhenSharesNoLongerFit(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        $surname = 'Semanal Bloqueo ' . uniqid();
+        [$nodeId, $groupId, $partnerId, $shareId] = $this->seedNodeWithShare(
+            $em,
+            (new Node())->setName('TEST Nodo bloqueo ' . uniqid())->setDeliveryWeekday(5)->setCadence(Node::CADENCE_WEEKLY),
+            BasketShare::IDS_WEEKLY[0],
+            $surname,
+        );
+
+        $crawler = $client->request('GET', sprintf('/gestion/node/%d/edit', $nodeId));
+        $form = $crawler->filter('form[name="node"]')->form();
+        $form['node[cadence]'] = Node::CADENCE_BIWEEKLY;
+        $form['node[anchorDate]'] = '2026-09-04'; // viernes, el día de reparto del punto
+        $client->submit($form);
+
+        $this->assertSame(
+            200,
+            $client->getResponse()->getStatusCode(),
+            'El cambio de cadencia con cestas incompatibles no debe redirigir: se rechaza y se repinta el form.'
+        );
+        $this->assertStringContainsString(
+            $surname,
+            (string) $client->getResponse()->getContent(),
+            'La pantalla debe listar al socio cuya cesta se quedaría fuera.'
+        );
+
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $em->clear();
+        $this->assertSame(
+            Node::CADENCE_WEEKLY,
+            $em->getRepository(Node::class)->find($nodeId)->getCadence(),
+            'La cadencia no debe haberse guardado.'
+        );
+
+        $this->cleanUpSeed($em, $nodeId, $groupId, $partnerId, $shareId);
+    }
+
+    /**
+     * Cambiar la SEMANA de un punto mensual sí se propaga: sus socios recogen
+     * la que abra el punto, no hay nada que decidir. Regresión de la
+     * incoherencia que dejaba la ficha del socio diciendo una semana y el punto
+     * abriendo otra.
+     */
+    public function testMonthlyWeekChangePropagatesToShares(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        [$nodeId, $groupId, $partnerId, $shareId] = $this->seedNodeWithShare(
+            $em,
+            (new Node())->setName('TEST Nodo mensual ' . uniqid())->setDeliveryWeekday(3)->setCadence(Node::CADENCE_MONTHLY)->setMonthlyWeek(1),
+            BasketShare::ID_MONTHLY,
+            'Mensual Propagacion ' . uniqid(),
+            1,
+        );
+
+        $crawler = $client->request('GET', sprintf('/gestion/node/%d/edit', $nodeId));
+        $form = $crawler->filter('form[name="node"]')->form();
+        $form['node[monthlyWeek]'] = '2';
+        $client->submit($form);
+        $this->assertResponseRedirects('/gestion/node/');
+
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $em->clear();
+        $this->assertSame(
+            2,
+            $em->getRepository(PartnerBasketShare::class)->find($shareId)->getDayMonthOrder(),
+            'La cesta del socio debe pasar a la entrega que ahora abre el punto.'
+        );
+
+        $this->cleanUpSeed($em, $nodeId, $groupId, $partnerId, $shareId);
+    }
+
+    /**
+     * Enganchar un grupo a un punto mueve de golpe a todos sus socios, así que
+     * se rechaza si alguna de sus cestas no se podría repartir ahí. Antes se
+     * asignaba con un setNode a pelo, sin mirar nada.
+     */
+    public function testAttachGroupIsBlockedWhenSharesDoNotFit(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        // Punto quincenal destino, y un grupo huérfano con un socio semanal.
+        $node = (new Node())
+            ->setName('TEST Nodo quincenal destino ' . uniqid())
+            ->setDeliveryWeekday(5)
+            ->setCadence(Node::CADENCE_BIWEEKLY)
+            ->setAnchorDate(new \DateTimeImmutable('2026-09-04'));
+        $group = (new WeeklyBasketGroup())
+            ->setName('TEST Grupo huérfano ' . uniqid())
+            ->setColor('#abcabc');
+        $surname = 'Semanal Huerfano ' . uniqid();
+        $partner = (new Partner())
+            ->setName('TEST')
+            ->setSurname($surname)
+            ->setStatus(Partner::STATUS_ACTIVO);
+        $partner->setWeeklyBasketGroup($group);
+
+        $share = new PartnerBasketShare();
+        $share->setPartner($partner);
+        $share->setBasketShare($em->getRepository(BasketShare::class)->find(BasketShare::IDS_WEEKLY[0]));
+        $share->setIsActive(true);
+        $share->setAmount(1);
+        $share->setMonthPrice('0.00');
+        $share->setEggMonthPrice('0.00');
+        $share->setStartDate(new \DateTime('2099-01-01'));
+
+        $em->persist($node);
+        $em->persist($group);
+        $em->persist($partner);
+        $em->persist($share);
+        $em->flush();
+        [$nodeId, $groupId, $partnerId, $shareId] = [$node->getId(), $group->getId(), $partner->getId(), $share->getId()];
+
+        $crawler = $client->request('GET', sprintf('/gestion/node/%d', $nodeId));
+        $attachForm = $crawler->filter(sprintf('form[action="/gestion/node/%d/grupos"]', $nodeId))->form();
+        $attachForm['group_id'] = (string) $groupId;
+        $client->submit($attachForm);
+        $this->assertResponseRedirects(sprintf('/gestion/node/%d', $nodeId));
+
+        $crawler = $client->followRedirect();
+        $this->assertStringContainsString(
+            'no se podrían repartir',
+            $crawler->filter('body')->text(),
+            'Debe avisar de por qué no se ha enganchado el grupo.'
+        );
+
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $em->clear();
+        $this->assertNull(
+            $em->getRepository(WeeklyBasketGroup::class)->find($groupId)->getNode(),
+            'El grupo no debe haber quedado asignado al punto quincenal.'
+        );
+
+        $this->cleanUpSeed($em, $nodeId, $groupId, $partnerId, $shareId);
+    }
+
+    /**
+     * Punto + grupo + socio + cesta activa, todo nuevo y desechable.
+     *
+     * @param EntityManagerInterface $em
+     * @param Node                   $node          Punto ya configurado (cadencia incluida).
+     * @param int                    $basketShareId Modalidad de la cesta del socio.
+     * @param string                 $surname       Apellido único, para localizarlo en el HTML.
+     * @param int|null               $dayMonthOrder Entrega del mes, sólo en las mensuales.
+     * @return int[] [nodeId, groupId, partnerId, shareId]
+     */
+    private function seedNodeWithShare(
+        EntityManagerInterface $em,
+        Node $node,
+        int $basketShareId,
+        string $surname,
+        ?int $dayMonthOrder = null,
+    ): array {
+        $group = (new WeeklyBasketGroup())
+            ->setName('TEST Grupo ' . uniqid())
+            ->setColor('#abcabc')
+            ->setNode($node);
+        $partner = (new Partner())
+            ->setName('TEST')
+            ->setSurname($surname)
+            ->setStatus(Partner::STATUS_ACTIVO);
+        $partner->setWeeklyBasketGroup($group);
+
+        $share = new PartnerBasketShare();
+        $share->setPartner($partner);
+        $share->setBasketShare($em->getRepository(BasketShare::class)->find($basketShareId));
+        $share->setIsActive(true);
+        $share->setAmount(1);
+        $share->setMonthPrice('0.00');
+        $share->setEggMonthPrice('0.00');
+        // Fecha lejana: el reconcile posterior no tiene semanas que materializar.
+        $share->setStartDate(new \DateTime('2099-01-01'));
+        $share->setDayMonthOrder($dayMonthOrder);
+
+        $em->persist($node);
+        $em->persist($group);
+        $em->persist($partner);
+        $em->persist($share);
+        $em->flush();
+
+        return [$node->getId(), $group->getId(), $partner->getId(), $share->getId()];
+    }
+
+    /**
+     * @param EntityManagerInterface $em
+     */
+    private function cleanUpSeed(EntityManagerInterface $em, int $nodeId, int $groupId, int $partnerId, int $shareId): void
+    {
+        $em->remove($em->getRepository(PartnerBasketShare::class)->find($shareId));
+        $em->flush();
+        $em->remove($em->getRepository(Partner::class)->find($partnerId));
+        $em->flush();
+        $em->remove($em->getRepository(WeeklyBasketGroup::class)->find($groupId));
+        $em->remove($em->getRepository(Node::class)->find($nodeId));
+        $em->flush();
     }
 }

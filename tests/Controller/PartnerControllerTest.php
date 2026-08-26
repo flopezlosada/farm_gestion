@@ -694,6 +694,85 @@ class PartnerControllerTest extends AbstractAuthenticatedTest
     }
 
     /**
+     * Mover a un socio a un grupo cuyo punto no puede repartir sus cestas se
+     * rechaza: no se guarda nada y se explica por qué. Es la tercera puerta por
+     * la que un socio acababa en un punto incompatible (las otras dos son el
+     * alta de cesta y enganchar un grupo entero al punto).
+     */
+    public function testEditIsBlockedWhenNewGroupCannotServeTheShares(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        // Punto quincenal con su grupo (destino) y un socio semanal en un grupo
+        // sin punto (origen), con los campos que el form de ficha exige.
+        $node = (new Node())
+            ->setName('TEST Nodo quincenal mover ' . uniqid())
+            ->setDeliveryWeekday(5)
+            ->setCadence(Node::CADENCE_BIWEEKLY)
+            ->setAnchorDate(new \DateTimeImmutable('2026-09-04'));
+        $target = (new WeeklyBasketGroup())->setName('TEST Grupo destino ' . uniqid())->setColor('#abcabc')->setNode($node);
+        $origin = (new WeeklyBasketGroup())->setName('TEST Grupo origen ' . uniqid())->setColor('#cccccc');
+
+        $state = $em->getRepository(\App\Entity\State::class)->findOneBy([]);
+        $partner = (new Partner())
+            ->setName('TEST')
+            ->setSurname('Semanal Mover ' . uniqid())
+            ->setStatus(Partner::STATUS_ACTIVO)
+            ->setState($state)
+            ->setCity($em->getRepository(\App\Entity\City::class)->findOneBy(['state' => $state]))
+            ->setSharePayment($em->getRepository(\App\Entity\SharePayment::class)->findOneBy([]));
+        $partner->setWeeklyBasketGroup($origin);
+        $partner->setInscriptionDate(new \DateTime('2020-01-01'));
+
+        $share = new PartnerBasketShare();
+        $share->setPartner($partner);
+        $share->setBasketShare($em->getRepository(BasketShare::class)->find(BasketShare::IDS_WEEKLY[0]));
+        $share->setIsActive(true);
+        $share->setAmount(1);
+        $share->setMonthPrice('0.00');
+        $share->setEggMonthPrice('0.00');
+        $share->setStartDate(new \DateTime('2099-01-01'));
+
+        foreach ([$node, $target, $origin, $partner, $share] as $entity) {
+            $em->persist($entity);
+        }
+        $em->flush();
+        [$partnerId, $originId, $targetId] = [$partner->getId(), $origin->getId(), $target->getId()];
+        [$nodeId, $shareId] = [$node->getId(), $share->getId()];
+
+        $crawler = $client->request('GET', sprintf('/gestion/partner/%d/edit', $partnerId));
+        $this->assertSame(200, $client->getResponse()->getStatusCode());
+        $form = $crawler->filter('form[name="partner"]')->form();
+        $form['partner[weekly_basket_group]'] = (string) $targetId;
+        $client->submit($form);
+
+        $this->assertSame(
+            200,
+            $client->getResponse()->getStatusCode(),
+            'Mover al socio a un punto que no puede repartir su cesta no debe guardar ni redirigir.'
+        );
+
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $em->clear();
+        $this->assertSame(
+            $originId,
+            $em->getRepository(Partner::class)->find($partnerId)->getWeeklyBasketGroup()->getId(),
+            'El socio debe seguir en su grupo de origen.'
+        );
+
+        // Limpieza.
+        $em->remove($em->getRepository(PartnerBasketShare::class)->find($shareId));
+        $em->flush();
+        $em->remove($em->getRepository(Partner::class)->find($partnerId));
+        $em->flush();
+        $em->remove($em->getRepository(WeeklyBasketGroup::class)->find($originId));
+        $em->remove($em->getRepository(WeeklyBasketGroup::class)->find($targetId));
+        $em->remove($em->getRepository(Node::class)->find($nodeId));
+        $em->flush();
+    }
+
+    /**
      * Primer valor no vacío de un select del crawler (salta el placeholder).
      */
     private static function firstOptionValue(ChoiceFormField $field): string

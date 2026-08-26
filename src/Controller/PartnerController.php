@@ -25,6 +25,7 @@ use App\Security\PartnerAccessPolicy;
 use App\Security\PartnerUserProvisioner;
 use App\Service\Delivery\ExtraBasketEditor;
 use App\Service\Delivery\NodeDeliveryDate;
+use App\Service\Delivery\NodeShareCoherence;
 use App\Service\Delivery\PickupRelocationOptions;
 use App\Service\Delivery\PickupRelocator;
 use App\Service\Delivery\WeeklyBasketGenerator;
@@ -597,15 +598,52 @@ class PartnerController extends AbstractController
         return $this->redirectToRoute('partner_show', $back);
     }
 
+    /**
+     * Editar la ficha incluye MOVER al socio de grupo de recogida, y con él a
+     * sus cestas: el grupo nuevo puede colgar de un punto que no las admita (un
+     * semanal que se va a un punto quincenal). Se comprueba antes de guardar y,
+     * si alguna no cabe, no se guarda nada — a qué modalidad pasa el socio lo
+     * decide administración. Ver {@see NodeShareCoherence}.
+     */
     #[Route("/{id}/edit", name: "partner_edit", methods: ["GET","POST"])]
-    public function edit(Request $request, Partner $partner, EntityManagerInterface $entityManager): Response
-    {
+    public function edit(
+        Request $request,
+        Partner $partner,
+        EntityManagerInterface $entityManager,
+        NodeShareCoherence $coherence
+    ): Response {
+        // Sólo se contrasta si el grupo CAMBIA: un socio que ya arrastre una
+        // cesta incoherente (dato viejo) tiene que poder seguir editándose para
+        // cualquier otra cosa — cambiarle el teléfono no empeora nada.
+        $originalGroup = $partner->getWeeklyBasketGroup();
+
         $form = $this->createForm(PartnerType::class, $partner);
 
         $form->handleRequest($request);
 
-
         if ($form->isSubmitted() && $form->isValid()) {
+            $newGroup = $partner->getWeeklyBasketGroup();
+            $orphaned = $newGroup !== $originalGroup
+                ? $coherence->partnerSharesThatDoNotFit($partner, $newGroup?->getNode())
+                : [];
+            if ($orphaned !== []) {
+                $entityManager->refresh($partner); // descarta el cambio en memoria
+                $this->addFlash('error', sprintf(
+                    'No se ha guardado: en ese grupo de recogida no se podrían repartir %d cesta(s) de este socio (%s). Cámbiale la modalidad primero.',
+                    count($orphaned),
+                    implode(', ', array_map(
+                        static fn (PartnerBasketShare $s): string => $s->getBasketShare()?->getName() ?? '?',
+                        $orphaned,
+                    )),
+                ));
+
+                return $this->render('partner/edit.html.twig', [
+                    'partner' => $partner,
+                    'entity' => $partner,
+                    'form' => $this->createForm(PartnerType::class, $partner)->createView(),
+                ]);
+            }
+
             /*
              * aquí actualizo el grupo del socio para la última cesta si es que ya ha sido creada
              */
