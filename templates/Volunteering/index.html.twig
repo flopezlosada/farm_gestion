@@ -4,6 +4,11 @@
 
 {% block title %}Voluntariado{% endblock %}
 
+{% block more_css %}
+    {{ parent() }}
+    {% include '_components/volunteering_styles.html.twig' %}
+{% endblock %}
+
 {% block csa_crumbs %}
     <a href="{{ path('dashboard') }}">Inicio</a>
     <span class="csa-topbar__crumbs-sep">/</span>
@@ -33,9 +38,17 @@
      # normal es que se cierren solas: quien fue lo dice y desaparecen de esta
      # lista. Lo que queda es lo que de verdad necesita a alguien detrás. #}
     {% if pending_closure is not empty %}
-        {{ csa.callout('Hay ' ~ pending_closure|length ~ ' tarea(s) que ya han pasado y en las que alguien no ha dicho todavía si fue. Se les pregunta en su panel; hasta que no se responda, esas horas no las tiene nadie.', 'warning', 'exclamation-triangle') }}
+        {% embed '_components/csa_card.html.twig' with {
+            title: 'Pendientes de confirmar',
+            subtitle: 'Ya pasaron y alguien no ha dicho todavía si fue.',
+            icon: 'fa-exclamation-triangle',
+            accent: 'ochre'
+        } %}
+        {% block body %}
+        {% import '_macros/csa.html.twig' as csa %}
+        {{ csa.callout('Se les pregunta en su panel; hasta que no respondan, esas horas no las tiene nadie. Si no contestan, ciérralas tú desde la tarea.', 'info') }}
 
-        <div class="csa-table-wrap" style="margin-bottom: var(--csa-sp-6);">
+        <div class="csa-table-wrap">
             <table class="csa-table">
                 <thead>
                     <tr>
@@ -59,8 +72,19 @@
                 </tbody>
             </table>
         </div>
+        {% endblock %}
+        {% endembed %}
     {% endif %}
 
+    {# Con título propio y en tarjeta: dos tablas seguidas sin encabezado —la de
+     # pendientes de cerrar y ésta— se leen como una sola de veinte filas. #}
+    {% embed '_components/csa_card.html.twig' with {
+        title: 'Próximas',
+        subtitle: 'Lo que está publicado para los días que vienen.',
+        icon: 'fa-calendar'
+    } %}
+        {% block body %}
+        {% import '_macros/csa.html.twig' as csa %}
     {% if upcoming is empty %}
         {{ csa.callout('No hay ninguna tarea publicada para los próximos días.', 'info') }}
     {% else %}
@@ -71,7 +95,7 @@
                         <th>Tarea</th>
                         <th class="csa-table__col-tight">Cuándo</th>
                         <th class="csa-table__col-tight">Dónde</th>
-                        <th class="csa-table__col-tight">Plazas</th>
+                        <th class="csa-table__col-tight">Apuntadxs</th>
                         <th class="csa-table__col-tight">Aviso</th>
                         <th class="csa-table__actions">Acciones</th>
                     </tr>
@@ -93,10 +117,12 @@
                                 {%- else %}—{% endif -%}
                             </td>
                             <td class="csa-table__col-tight">
+                                {# Sin tope, "4" a secas se lee como "hay 4
+                                 # plazas". Con tope, el par x/y sí se entiende. #}
                                 {% if offer.slots %}
                                     {{ offer.filledSlots }} / {{ offer.slots }}
                                 {% else %}
-                                    {{ offer.filledSlots }}
+                                    {{ offer.filledSlots }} <span class="vol-help">(sin tope)</span>
                                 {% endif %}
                             </td>
                             <td class="csa-table__col-tight">
@@ -118,6 +144,8 @@
             </table>
         </div>
     {% endif %}
+        {% endblock %}
+    {% endembed %}
 
     {# ============ LO QUE YA SE HA HECHO ============ #}
     {# La cara visible de que esto funciona. Sin nombres y sin ranking: lo que
@@ -132,6 +160,7 @@
             accent: 'green'
         } %}
             {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
                 <div class="csa-table-wrap">
                     <table class="csa-table">
                         <thead>

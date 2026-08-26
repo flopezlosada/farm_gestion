@@ -65,10 +65,14 @@ class PanelVolunteeringController extends AbstractController
         $median = $signups->medianCreditedMinutes($from, $to);
         $node = $this->nodeOf($partner);
         $mySignups = $signups->findUpcomingFor($partner, $now);
+        $myOfferIds = array_map(
+            static fn (VolunteerSignup $signup): ?int => $signup->getOffer()?->getId(),
+            $mySignups
+        );
 
         return $this->render('Panel/volunteering.html.twig', [
             'partner' => $partner,
-            'offers' => $offers->findUpcomingForNode($now, $node, self::MAX_OFFERS),
+            'offers' => $this->stillNeeded($offers->findUpcomingForNode($now, $node), $myOfferIds),
             // El id y no el nodo: la plantilla sólo necesita comparar, y pasarle
             // la entidad invita a navegar relaciones desde Twig.
             'my_node_id' => $node?->getId(),
@@ -80,12 +84,7 @@ class PanelVolunteeringController extends AbstractController
             // Qué hizo, no sólo cuánto: "6 h" no dice nada, "6 h: dos repartos y
             // una mañana de plantación" sí.
             'my_done' => $signups->findDoneFor($partner, $from, $to),
-            // Ids de las ofertas a las que ya estoy apuntadx, para que la lista
-            // no tenga que recorrer las inscripciones dentro de cada iteración.
-            'my_offer_ids' => array_map(
-                static fn (VolunteerSignup $signup): ?int => $signup->getOffer()?->getId(),
-                $mySignups
-            ),
+            'my_offer_ids' => $myOfferIds,
             'my_minutes' => $mine,
             // La MEDIANA de quienes participan, no la media. Con mucha gente a
             // cero la media se hunde y quien fue una tarde suelta sale "por
@@ -320,6 +319,33 @@ class PanelVolunteeringController extends AbstractController
         );
 
         return $this->redirectToRoute('panel_volunteering');
+    }
+
+    /**
+     * Deja sólo lo que de verdad hace falta: fuera lo que ya está cubierto y
+     * fuera lo que esta persona ya tiene apuntado.
+     *
+     * Las dos exclusiones salieron de mirar la pantalla renderizada. Una tarea
+     * llena bajo el título "Lo que hace falta" decía literalmente "Faltan 0
+     * personas", y una a la que ya te has apuntado salía dos veces: aquí como
+     * "Estás apuntadx" y otra vez abajo. Cada cosa en un sitio: lo que falta
+     * arriba, lo tuyo en su bloque, y el botón de darte de baja donde está lo
+     * tuyo.
+     *
+     * @param list<VolunteerOffer> $offers  las tareas próximas
+     * @param list<int|null>       $mineIds ids de las tareas a las que ya se apuntó
+     *
+     * @return list<VolunteerOffer> las que siguen necesitando gente, recortadas
+     */
+    private function stillNeeded(array $offers, array $mineIds): array
+    {
+        $needed = array_filter(
+            $offers,
+            static fn (VolunteerOffer $offer): bool => $offer->hasRoom()
+                && !\in_array($offer->getId(), $mineIds, true)
+        );
+
+        return \array_slice(array_values($needed), 0, self::MAX_OFFERS);
     }
 
     /**

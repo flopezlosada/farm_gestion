@@ -27,18 +27,7 @@
  #}
 {% block csa_main %}
 
-    {% macro duration(minutes) %}
-        {%- if minutes < 60 -%}
-            {{ minutes }} min
-        {%- elseif minutes % 60 == 0 -%}
-            {{ (minutes / 60)|round }} h
-        {%- else -%}
-            {{ (minutes // 60) }} h {{ minutes % 60 }} min
-        {%- endif -%}
-    {% endmacro %}
-
-    {% import _self as fmt %}
-
+    
     <div class="csa-stack">
 
         {# ============ 0. CONFIRMA LO QUE HICISTE ============ #}
@@ -52,6 +41,7 @@
                 accent: 'ochre'
             } %}
                 {% block body %}
+                {% import '_macros/volunteering.html.twig' as vol %}
                     <ul class="vol-list">
                         {% for signup in pending_confirmation %}
                             <li class="vol-item">
@@ -62,7 +52,7 @@
                                             {{ signup.offer.startsAt|format_datetime('full', 'short', locale='es') }}</span>
                                         {% if signup.offer.creditedMinutes %}
                                             <span><i class="fa fa-clock-o" aria-hidden="true"></i>
-                                                Cuenta {{ fmt.duration(signup.offer.creditedMinutes) }}</span>
+                                                Cuenta {{ vol.duration(signup.offer.creditedMinutes) }}</span>
                                         {% endif %}
                                     </div>
                                 </div>
@@ -70,7 +60,7 @@
                                     <form method="post" action="{{ path('panel_volunteering_confirm', {id: signup.offer.id}) }}">
                                         <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_volunteering') }}">
                                         <button type="submit" name="attended" value="1" class="csa-btn csa-btn--primary csa-btn--sm">Sí, la hice</button>
-                                        <button type="submit" name="attended" value="0" class="csa-btn csa-btn--ghost csa-btn--sm">No pude</button>
+                                        <button type="submit" name="attended" value="0" class="csa-btn csa-btn--secondary csa-btn--sm">No pude</button>
                                     </form>
                                 </div>
                             </li>
@@ -89,6 +79,7 @@
             variant: 'hero'
         } %}
             {% block body %}
+                {% import '_macros/volunteering.html.twig' as vol %}
                 {% if offers is empty %}
                     <p class="vol-empty">
                         Ahora mismo no hay ninguna tarea pendiente. Cuando haya algo que
@@ -97,10 +88,11 @@
                 {% else %}
                     <ul class="vol-list">
                         {% for offer in offers %}
-                            {% set signed = offer.id in my_offer_ids %}
+                            {# Lo que ya tienes apuntado no sale aquí: vive en su
+                             # propio bloque, con el botón de darte de baja. #}
                             {% set mine_here = my_node_id and offer.node and offer.node.id == my_node_id %}
 
-                            <li class="vol-item{% if signed %} vol-item--signed{% endif %}">
+                            <li class="vol-item">
                                 <div class="vol-item__main">
                                     <h4 class="vol-item__title">{{ offer.title }}</h4>
 
@@ -118,7 +110,7 @@
 
                                         {% if offer.creditedMinutes %}
                                             <span><i class="fa fa-clock-o" aria-hidden="true"></i>
-                                                Cuenta {{ fmt.duration(offer.creditedMinutes) }}</span>
+                                                Cuenta {{ vol.duration(offer.creditedMinutes) }}</span>
                                         {% endif %}
                                     </div>
 
@@ -148,25 +140,17 @@
                                         </p>
                                     {% endif %}
 
-                                    {% if signed %}
-                                        <form method="post" action="{{ path('panel_volunteering_withdraw', {id: offer.id}) }}">
-                                            <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_volunteering') }}">
-                                            <p class="vol-item__signed"><i class="fa fa-check" aria-hidden="true"></i> Estás apuntadx</p>
-                                            <button type="submit" class="csa-btn csa-btn--ghost csa-btn--sm">No voy a poder ir</button>
-                                        </form>
-                                    {% else %}
-                                        <form method="post" action="{{ path('panel_volunteering_signup', {id: offer.id}) }}">
-                                            <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_volunteering') }}">
-                                            {% if offer.companionsAllowed %}
-                                                <label class="vol-item__companions">
-                                                    Vengo con
-                                                    <input type="number" name="companions" value="0" min="0" max="10" class="csa-input csa-input--compact">
-                                                    más
-                                                </label>
-                                            {% endif %}
-                                            <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">Me apunto</button>
-                                        </form>
-                                    {% endif %}
+                                    <form method="post" action="{{ path('panel_volunteering_signup', {id: offer.id}) }}">
+                                        <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_volunteering') }}">
+                                        {% if offer.companionsAllowed %}
+                                            <label class="vol-item__companions">
+                                                Vengo con
+                                                <input type="number" name="companions" value="0" min="0" max="10" class="csa-input csa-input--compact">
+                                                más
+                                            </label>
+                                        {% endif %}
+                                        <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">Me apunto</button>
+                                    </form>
                                 </div>
                             </li>
                         {% endfor %}
@@ -183,14 +167,37 @@
                 accent: 'sky'
             } %}
                 {% block body %}
-                    <ul class="vol-mine">
+                {% import '_macros/volunteering.html.twig' as vol %}
+                    {# El botón de darse de baja vive AQUÍ y no arriba: es donde
+                     # está lo tuyo, y así "Lo que hace falta" habla sólo de lo
+                     # que falta. #}
+                    <ul class="vol-list">
                         {% for signup in my_signups %}
-                            <li>
-                                <strong>{{ signup.offer.title }}</strong>
-                                <span class="vol-mine__when">{{ signup.offer.startsAt|format_datetime('full', 'short', locale='es') }}</span>
-                                {% if signup.companions > 0 %}
-                                    <span class="csa-badge">+{{ signup.companions }} acompañante{{ signup.companions > 1 ? 's' : '' }}</span>
-                                {% endif %}
+                            <li class="vol-item">
+                                <div class="vol-item__main">
+                                    <h4 class="vol-item__title">{{ signup.offer.title }}</h4>
+                                    <div class="vol-item__meta">
+                                        <span><i class="fa fa-calendar" aria-hidden="true"></i>
+                                            {{ signup.offer.startsAt|format_datetime('full', 'short', locale='es') }}</span>
+                                        {% if signup.offer.remote %}
+                                            <span><i class="fa fa-home" aria-hidden="true"></i> Desde casa</span>
+                                        {% elseif signup.offer.node %}
+                                            <span><i class="fa fa-map-marker" aria-hidden="true"></i> {{ signup.offer.node }}</span>
+                                        {% elseif signup.offer.place %}
+                                            <span><i class="fa fa-map-marker" aria-hidden="true"></i> {{ signup.offer.place }}</span>
+                                        {% endif %}
+                                        {% if signup.companions > 0 %}
+                                            <span><i class="fa fa-users" aria-hidden="true"></i>
+                                                Vas con {{ signup.companions }} más</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="vol-item__action">
+                                    <form method="post" action="{{ path('panel_volunteering_withdraw', {id: signup.offer.id}) }}">
+                                        <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_volunteering') }}">
+                                        <button type="submit" class="csa-btn csa-btn--secondary csa-btn--sm">No voy a poder ir</button>
+                                    </form>
+                                </div>
                             </li>
                         {% endfor %}
                     </ul>
@@ -204,6 +211,7 @@
             icon: 'fa-bell-o'
         } %}
             {% block body %}
+                {% import '_macros/volunteering.html.twig' as vol %}
                 <form method="post" action="{{ path('panel_volunteering_preferences') }}">
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_volunteering') }}">
 
@@ -263,7 +271,7 @@
                     Si quieres, te avisamos en el móvil cuando falte gente para algo
                     que encaje contigo.
                 </p>
-                <button type="button" class="csa-btn csa-btn--ghost csa-btn--sm" data-push-toggle>Activar avisos</button>
+                <button type="button" class="csa-btn csa-btn--secondary csa-btn--sm" data-push-toggle>Activar avisos</button>
             {% endblock %}
         {% endembed %}
 
@@ -273,9 +281,10 @@
             icon: 'fa-heart-o'
         } %}
             {% block body %}
+                {% import '_macros/volunteering.html.twig' as vol %}
                 <p class="vol-total">
                     {% if my_minutes > 0 %}
-                        Llevas <strong>{{ fmt.duration(my_minutes) }}</strong> de voluntariado este año.
+                        Llevas <strong>{{ vol.duration(my_minutes) }}</strong> de voluntariado este año.
                     {% else %}
                         Este año todavía no has echado una mano.
                     {% endif %}
@@ -291,7 +300,7 @@
                                 <strong>{{ signup.offer.title }}</strong>
                                 <span class="vol-mine__when">
                                     {{ signup.offer.startsAt|format_date('long', locale='es') }}
-                                    {%- if signup.creditedMinutes %} · {{ fmt.duration(signup.creditedMinutes) }}{% endif -%}
+                                    {%- if signup.creditedMinutes %} · {{ vol.duration(signup.creditedMinutes) }}{% endif -%}
                                 </span>
                             </li>
                         {% endfor %}
@@ -314,7 +323,7 @@
                 {% if show_median %}
                     <p class="vol-help">
                         Quien echa una mano suele dedicar unas
-                        <strong>{{ fmt.duration(median_minutes) }}</strong> al año.
+                        <strong>{{ vol.duration(median_minutes) }}</strong> al año.
                     </p>
                 {% elseif my_minutes > 0 %}
                     <p class="vol-help">Gracias — la asociación se sostiene con esto.</p>

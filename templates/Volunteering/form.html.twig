@@ -4,6 +4,11 @@
 
 {% block title %}Voluntariado · {{ is_new ? 'Nueva tarea' : offer.title }}{% endblock %}
 
+{% block more_css %}
+    {{ parent() }}
+    {% include '_components/volunteering_styles.html.twig' %}
+{% endblock %}
+
 {% block csa_crumbs %}
     <a href="{{ path('dashboard') }}">Inicio</a>
     <span class="csa-topbar__crumbs-sep">/</span>
@@ -19,6 +24,8 @@
 
         {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Qué y cuándo' } %}
             {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
+                {% import '_macros/volunteering.html.twig' as vol %}
                 <div class="csa-form-grid">
                     {{ csa.field(form.title, 'Qué hay que hacer', { full: true }) }}
                     {{ csa.field(form.description, 'Explicación', {
@@ -38,8 +45,10 @@
             subtitle: 'Si ocurre en un punto de recogida, ponlo: a quien recoge ahí le sale la primera, porque ya va a estar allí ese día.'
         } %}
             {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
+                {% import '_macros/volunteering.html.twig' as vol %}
                 <div class="csa-form-grid">
-                    {{ csa.field(form.remote, 'Se hace desde casa', { full: true }) }}
+                    {{ vol.check(form.remote, 'Se hace desde casa', 'si lo marcas, se ignoran el lugar y el punto de recogida') }}
                     {{ csa.field(form.node, 'Punto de recogida', { hint: 'opcional', widget_class: 'csa-select' }) }}
                     {{ csa.field(form.place, 'Lugar', { hint: 'si no es un punto de recogida' }) }}
                 </div>
@@ -52,6 +61,8 @@
             subtitle: 'De aquí depende a cuánta gente se le pide la tarea y cuántas horas se le apuntan a quien la hace.'
         } %}
             {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
+                {% import '_macros/volunteering.html.twig' as vol %}
                 <div class="csa-form-grid">
                     {{ csa.field(form.categories, 'Tipo de trabajo', {
                         full: true,
@@ -59,7 +70,7 @@
                     }) }}
                     {{ csa.field(form.slots, 'Cuánta gente hace falta', { hint: 'vacío = sin tope' }) }}
                     {{ csa.field(form.creditedMinutes, 'Minutos que computa', { hint: '30 = media hora' }) }}
-                    {{ csa.field(form.companionsAllowed, 'Se puede venir acompañadx', { full: true }) }}
+                    {{ vol.check(form.companionsAllowed, 'Se puede venir acompañadx') }}
                     {{ csa.field(form.status, 'Estado', { widget_class: 'csa-select' }) }}
                 </div>
 
@@ -72,7 +83,7 @@
                 ) }}
 
                 <div class="csa-form-grid">
-                    {{ csa.field(form.openToAnyone, 'Esto lo puede hacer cualquiera', { full: true }) }}
+                    {{ vol.check(form.openToAnyone, 'Esto lo puede hacer cualquiera') }}
                 </div>
             {% endblock %}
         {% endembed %}

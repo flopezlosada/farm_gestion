@@ -65,10 +65,12 @@
 
     {% embed '_components/csa_card.html.twig' with { title: 'Nuevo tipo de trabajo', icon: 'fa-plus' } %}
         {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
+            {% import '_macros/volunteering.html.twig' as vol %}
             {{ form_start(form, { attr: { class: 'csa-form-narrow' } }) }}
                 <div class="csa-form-grid">
                     {{ csa.field(form.name, 'Nombre') }}
-                    {{ csa.field(form.active, 'Se sigue ofreciendo', { full: true }) }}
+                    {{ vol.check(form.active, 'Se sigue ofreciendo', 'desmárcala para retirarla sin perder el histórico') }}
                     {{ csa.field(form.coordinators, 'Quién coordina esta área', { full: true, hint: 'pueden gestionar sólo las tareas de esta área', widget_class: 'csa-select' }) }}
                     {{ csa.field(form.description, 'Qué entra aquí', {
                         full: true,

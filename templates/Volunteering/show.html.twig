@@ -29,7 +29,7 @@
      # se desincronizara. #}
     {% if offer.done %}
         {{ csa.callout('Tarea hecha: ' ~ offer.attendedCount ~ ' persona(s) confirmaron que fueron.', 'success', 'check') }}
-    {% elseif offer.missed %}
+    {% elseif offer.wasMissed %}
         {{ csa.callout('Esta tarea pasó y no fue nadie.', 'warning', 'exclamation-triangle') }}
     {% elseif is_past and not offer.settled %}
         {{ csa.callout('Ya pasó y falta gente por decir si fue o no. Se les pregunta en su panel; si no contestan, ciérrala tú abajo.', 'info') }}
@@ -47,38 +47,49 @@
 
     {% embed '_components/csa_card.html.twig' with { title: 'La tarea', icon: 'fa-info-circle' } %}
         {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
+            {# csa-defs es un grid de FILAS (.csa-defs__row), no de <dt>/<dd>
+             # sueltos: puestos sueltos, cada uno cae en una celda y la etiqueta
+             # deja de corresponderse con su valor. #}
             <dl class="csa-defs">
-                <dt>Estado</dt>
-                <dd>{{ csa.badge(status_label[offer.status]|default(offer.status), status_tone[offer.status]|default('neutral')) }}</dd>
-
-                <dt>Cuándo</dt>
-                <dd>{{ offer.startsAt|date('d/m/Y H:i') }}{% if offer.endsAt %} — {{ offer.endsAt|date('H:i') }}{% endif %}</dd>
-
-                <dt>Dónde</dt>
-                <dd>
-                    {%- if offer.remote %}Desde casa
-                    {%- elseif offer.node %}{{ offer.node }}
-                    {%- elseif offer.place %}{{ offer.place }}
-                    {%- else %}—{% endif -%}
-                </dd>
-
-                <dt>Tipo de trabajo</dt>
-                <dd>
-                    {% for category in offer.categories %}{{ csa.badge(category.name, 'neutral') }}{% else %}—{% endfor %}
-                </dd>
-
-                <dt>A quién se puede pedir</dt>
-                <dd>
-                    {% if offer.openToAnyone %}
-                        {{ csa.badge('A cualquiera', 'green') }}
-                    {% else %}
-                        {{ csa.badge('Sólo a quien lo tenga marcado', 'ochre') }}
-                    {% endif %}
-                </dd>
-
+                <div class="csa-defs__row">
+                    <dt class="csa-defs__label">Estado</dt>
+                    <dd class="csa-defs__value">{{ csa.badge(status_label[offer.status]|default(offer.status), status_tone[offer.status]|default('neutral')) }}</dd>
+                </div>
+                <div class="csa-defs__row">
+                    <dt class="csa-defs__label">Cuándo</dt>
+                    <dd class="csa-defs__value">{{ offer.startsAt|date('d/m/Y H:i') }}{% if offer.endsAt %} — {{ offer.endsAt|date('H:i') }}{% endif %}</dd>
+                </div>
+                <div class="csa-defs__row">
+                    <dt class="csa-defs__label">Dónde</dt>
+                    <dd class="csa-defs__value">
+                        {%- if offer.remote %}Desde casa
+                        {%- elseif offer.node %}{{ offer.node }}
+                        {%- elseif offer.place %}{{ offer.place }}
+                        {%- else %}—{% endif -%}
+                    </dd>
+                </div>
+                <div class="csa-defs__row">
+                    <dt class="csa-defs__label">Tipo de trabajo</dt>
+                    <dd class="csa-defs__value">
+                        {% for category in offer.categories %}{{ csa.badge(category.name, 'neutral') }}{% else %}—{% endfor %}
+                    </dd>
+                </div>
+                <div class="csa-defs__row">
+                    <dt class="csa-defs__label">A quién se puede pedir</dt>
+                    <dd class="csa-defs__value">
+                        {% if offer.openToAnyone %}
+                            {{ csa.badge('A cualquiera', 'green') }}
+                        {% else %}
+                            {{ csa.badge('Sólo a quien lo tenga marcado', 'ochre') }}
+                        {% endif %}
+                    </dd>
+                </div>
                 {% if offer.description %}
-                    <dt>Explicación</dt>
-                    <dd>{{ offer.description|nl2br }}</dd>
+                    <div class="csa-defs__row csa-defs__row--full">
+                        <dt class="csa-defs__label">Explicación</dt>
+                        <dd class="csa-defs__value">{{ offer.description|nl2br }}</dd>
+                    </div>
                 {% endif %}
             </dl>
         {% endblock %}
@@ -87,6 +98,7 @@
     {# ============ QUIÉN SE HA APUNTADO ============ #}
     {% embed '_components/csa_card.html.twig' with { title: 'Quién se ha apuntado', icon: 'fa-users' } %}
         {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
             {% if offer.signups is empty %}
                 <p>Todavía no se ha apuntado nadie.</p>
             {% else %}
@@ -176,6 +188,7 @@
             icon: 'fa-repeat'
         } %}
             {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
                 <form method="post" action="{{ path('volunteering_repeat', { id: offer.id }) }}" class="vol-repeat">
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_repeat') }}">
 
@@ -208,6 +221,7 @@
     {# ============ AVISOS ============ #}
     {% embed '_components/csa_card.html.twig' with { title: 'Avisos enviados', icon: 'fa-bullhorn' } %}
         {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
             <ul class="csa-list">
                 <li>
                     {% if 'matching' in sent_scopes %}<i class="fa fa-check"></i>{% else %}<i class="fa fa-circle-o"></i>{% endif %}

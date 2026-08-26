@@ -1,0 +1,50 @@
+{# ---------- MACROS DEL VOLUNTARIADO ----------
+ #
+ # En fichero propio y no como {% import _self %} dentro de la pantalla: dentro
+ # de un {% embed %}, `_self` apunta a la plantilla EMBEBIDA, no a la que la
+ # incluye, así que un macro local se vuelve invisible justo donde más se usa.
+ # Importándolo por nombre funciona igual en todas partes:
+ #
+ #   {% import '_macros/volunteering.html.twig' as vol %}
+ #   {{ vol.duration(90) }}   →   1 h 30 min
+ #}
+
+{# ---------- DURATION ----------
+ # Minutos en algo que se lee. Las horas viajan en minutos enteros por toda la
+ # aplicación (un decimal de Doctrine vuelve como string y acaba sumándose con
+ # floats), así que el formateo vive aquí y no en cada pantalla.
+ #}
+{% macro duration(minutes) %}
+    {%- if minutes < 60 -%}
+        {{ minutes }} min
+    {%- elseif minutes % 60 == 0 -%}
+        {{ (minutes / 60)|round }} h
+    {%- else -%}
+        {{ (minutes // 60) }} h {{ minutes % 60 }} min
+    {%- endif -%}
+{% endmacro %}
+
+{# ---------- CHECK ----------
+ # Una casilla con su etiqueta AL LADO.
+ #
+ # No usa csa.field a propósito: aquella macro le pone `csa-input` al widget,
+ # que fija alto y ancho de campo de texto, y un checkbox acaba siendo un
+ # cuadrado enorme centrado y separado de su etiqueta. Se ve así hoy en
+ # staff/_form (deuda preexistente); aquí no se replica.
+ #
+ #   {{ vol.check(form.remote, 'Se hace desde casa', 'si lo marcas se ignora el lugar') }}
+ #}
+{% macro check(field, label, hint = null) %}
+    <div class="csa-field csa-field--full">
+        <label class="vol-check" for="{{ field.vars.id }}">
+            {{ form_widget(field) }}
+            <span>
+                {{ label }}
+                {% if hint %}<span class="vol-check__hint">{{ hint }}</span>{% endif %}
+            </span>
+        </label>
+        {% if not field.vars.valid %}
+            <div class="csa-field__error">{{ form_errors(field) }}</div>
+        {% endif %}
+    </div>
+{% endmacro %}
