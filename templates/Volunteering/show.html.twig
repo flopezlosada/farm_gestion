@@ -24,6 +24,17 @@
 
     {{ csa.page_header('Voluntariado', offer.title) }}
 
+    {# El estado de la tarea se DERIVA de lo que ha confirmado la gente, no de un
+     # campo aparte que habría que mantener en sincronía y que mentiría en cuanto
+     # se desincronizara. #}
+    {% if offer.done %}
+        {{ csa.callout('Tarea hecha: ' ~ offer.attendedCount ~ ' persona(s) confirmaron que fueron.', 'success', 'check') }}
+    {% elseif offer.missed %}
+        {{ csa.callout('Esta tarea pasó y no fue nadie.', 'warning', 'exclamation-triangle') }}
+    {% elseif is_past and not offer.settled %}
+        {{ csa.callout('Ya pasó y falta gente por decir si fue o no. Se les pregunta en su panel; si no contestan, ciérrala tú abajo.', 'info') }}
+    {% endif %}
+
     <div class="csa-kpi-row" style="margin-bottom: var(--csa-sp-6);">
         {{ csa.kpi('Apuntadxs', offer.filledSlots, null, null, null, 'sky', 'fa-users') }}
         {% if offer.slots %}
@@ -119,7 +130,16 @@
                                             {% elseif signup.attended is same as(false) %}
                                                 {{ csa.badge('No fue', 'neutral') }}
                                             {% else %}
-                                                {{ csa.badge('Apuntadx', 'sky') }}
+                                                {{ csa.badge('Sin confirmar', 'sky') }}
+                                            {% endif %}
+
+                                            {# Quién lo dijo. Lo normal es que lo
+                                             # confirme quien fue desde su panel;
+                                             # que lo haya puesto gestión indica
+                                             # una tarea que hubo que cerrar a
+                                             # mano, y eso conviene verlo. #}
+                                            {% if signup.settled and not signup.selfConfirmed %}
+                                                {{ csa.badge('lo puso gestión', 'neutral') }}
                                             {% endif %}
                                         </td>
                                     </tr>

@@ -65,6 +65,32 @@ class VolunteerSignupRepository extends ServiceEntityRepository
     }
 
     /**
+     * Lo que este socix ha hecho de verdad en el periodo, de lo más reciente
+     * hacia atrás. Es lo que le da carne al contador: "6 h" no dice nada, pero
+     * "6 h: dos repartos y una mañana de plantación" sí.
+     *
+     * @param Partner            $partner el socix
+     * @param \DateTimeInterface $from    inicio del periodo, inclusive
+     * @param \DateTimeInterface $to      fin del periodo, inclusive
+     *
+     * @return list<VolunteerSignup> sus inscripciones confirmadas
+     */
+    public function findDoneFor(Partner $partner, \DateTimeInterface $from, \DateTimeInterface $to): array
+    {
+        return $this->createQueryBuilder('s')
+            ->join('s.offer', 'o')
+            ->where('s.partner = :partner')
+            ->andWhere('s.attended = true')
+            ->andWhere('o.startsAt BETWEEN :from AND :to')
+            ->setParameter('partner', $partner)
+            ->setParameter('from', $from)
+            ->setParameter('to', $to)
+            ->orderBy('o.startsAt', 'DESC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
      * La MEDIANA de minutos entre quienes han hecho algo en el periodo. No la
      * media, y no es un detalle.
      *
@@ -115,6 +141,37 @@ class VolunteerSignupRepository extends ServiceEntityRepository
         return 0 === $count % 2
             ? intdiv($totals[$middle - 1] + $totals[$middle], 2)
             : $totals[$middle];
+    }
+
+    /**
+     * Lo que este socix se apuntó, ya ha pasado y todavía no ha dicho si hizo o
+     * no. Es lo que se le pregunta en su panel.
+     *
+     * Que lo conteste quien fue —y no gestión al cerrar la tarea— es lo que
+     * quita el punto único de fallo: si el contador de horas dependiera de que
+     * administración cierre cada tarea a mano, se olvidarían y se quedaría a
+     * cero para todo el mundo sin que nadie supiera por qué.
+     *
+     * @param Partner            $partner el socix
+     * @param \DateTimeInterface $until   momento hasta el que se consideran pasadas
+     *
+     * @return list<VolunteerSignup> sus inscripciones pasadas sin responder
+     */
+    public function findPendingConfirmationFor(Partner $partner, \DateTimeInterface $until): array
+    {
+        return $this->createQueryBuilder('s')
+            ->join('s.offer', 'o')
+            ->where('s.partner = :partner')
+            ->andWhere('s.cancelledAt IS NULL')
+            ->andWhere('s.attended IS NULL')
+            ->andWhere('o.startsAt <= :until')
+            ->andWhere('o.status = :published')
+            ->setParameter('partner', $partner)
+            ->setParameter('until', $until)
+            ->setParameter('published', VolunteerOffer::STATUS_PUBLISHED)
+            ->orderBy('o.startsAt', 'DESC')
+            ->getQuery()
+            ->getResult();
     }
 
     /**

@@ -82,6 +82,37 @@ class VolunteerOfferRepository extends ServiceEntityRepository
     }
 
     /**
+     * Las tareas que ya se han hecho: pasadas y con al menos una persona que
+     * confirmó que fue. De la más reciente a la más antigua.
+     *
+     * Es la cara visible de que el voluntariado funciona, y por eso se enseña.
+     * No lleva nombres ni ranking: lo que mueve es ver que se hacen cosas, no
+     * quién las hace — un listado de quién más aporta convertiría a la
+     * asociación en una competición y expulsaría a quien no puede competir.
+     *
+     * @param \DateTimeInterface $from  desde cuándo mirar atrás
+     * @param int                $limit cuántas devolver
+     *
+     * @return list<VolunteerOffer> las tareas hechas, de la más reciente atrás
+     */
+    public function findRecentlyDone(\DateTimeInterface $from, int $limit = 5): array
+    {
+        return $this->createQueryBuilder('o')
+            ->where('o.status = :published')
+            ->andWhere('o.startsAt BETWEEN :from AND :now')
+            ->andWhere($this->createQueryBuilder('x')->expr()->exists(
+                'SELECT 1 FROM App\Entity\VolunteerSignup s WHERE s.offer = o AND s.attended = true'
+            ))
+            ->setParameter('published', VolunteerOffer::STATUS_PUBLISHED)
+            ->setParameter('from', $from)
+            ->setParameter('now', new \DateTime())
+            ->orderBy('o.startsAt', 'DESC')
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
      * Las ofertas publicadas que ya han pasado y siguen sin cerrar: nadie ha
      * dicho todavía quién fue y quién no. Son las que hay que recordar a quien
      * coordina, porque mientras no se cierren no computan horas a nadie.

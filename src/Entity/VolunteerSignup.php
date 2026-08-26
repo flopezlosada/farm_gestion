@@ -40,6 +40,18 @@ use Symfony\Component\Validator\Constraints as Assert;
 class VolunteerSignup
 {
     /**
+     * Lo dijo la propia persona desde su panel: la vía normal y la que da fe.
+     * Mismo criterio que {@see TimeEntry::SOURCE_SELF} en el módulo laboral.
+     */
+    public const SOURCE_SELF = 'self';
+
+    /** Lo registró gestión, corrigiendo o cerrando una tarea que nadie confirmó. */
+    public const SOURCE_MANAGER = 'manager';
+
+    /** Orígenes válidos de la confirmación. */
+    public const SOURCES = [self::SOURCE_SELF, self::SOURCE_MANAGER];
+
+    /**
      * @ORM\Id
      * @ORM\GeneratedValue
      * @ORM\Column(type="integer")
@@ -83,6 +95,22 @@ class VolunteerSignup
      * @ORM\Column(type="boolean", nullable=true)
      */
     private ?bool $attended = null;
+
+    /**
+     * Quién dijo si fue o no: la propia persona o gestión. Null mientras
+     * {@see $attended} siga sin responder — los dos campos van siempre juntos,
+     * y por eso sólo se tocan desde {@see confirmAttendance()} y
+     * {@see markAbsent()} y no hay setter suelto de `attended`.
+     *
+     * Lo normal es SELF: quien fue lo dice desde su panel. Que gestión tenga que
+     * cerrar cada tarea a mano sería un punto único de fallo — se olvidarían, y
+     * el contador de horas se quedaría a cero para todo el mundo sin que nadie
+     * supiera por qué.
+     *
+     * @ORM\Column(name="attendance_source", type="string", length=16, nullable=true)
+     */
+    #[Assert\Choice(choices: VolunteerSignup::SOURCES)]
+    private ?string $attendanceSource = null;
 
     /**
      * Minutos reconocidos a esta persona, congelados al dar la oferta por
@@ -149,20 +177,68 @@ class VolunteerSignup
      * Una inscripción cancelada no se puede dar por cumplida: sería contarle
      * horas a quien avisó de que no iba.
      *
+     * @param string   $source  quién lo confirma; uno de self::SOURCES
      * @param int|null $minutes minutos a reconocer; null para tomar los de la oferta
      *
      * @throws \LogicException si la inscripción está cancelada
      */
-    public function confirmAttendance(?int $minutes = null): self
+    public function confirmAttendance(string $source = self::SOURCE_SELF, ?int $minutes = null): self
     {
         if ($this->isCancelled()) {
             throw new \LogicException('No se pueden computar horas de una inscripción cancelada.');
         }
 
         $this->attended = true;
+        $this->attendanceSource = $source;
         $this->creditedMinutes = $minutes ?? $this->offer?->getCreditedMinutes();
 
         return $this;
+    }
+
+    /**
+     * Deja constancia de que finalmente no fue. No computa minutos, y borra los
+     * que hubiera: corregir un "sí fue" puesto por error tiene que quitar
+     * también las horas, o el contador se queda inflado sin que se vea.
+     *
+     * @param string $source quién lo dice; uno de self::SOURCES
+     */
+    public function markAbsent(string $source = self::SOURCE_SELF): self
+    {
+        $this->attended = false;
+        $this->attendanceSource = $source;
+        $this->creditedMinutes = null;
+
+        return $this;
+    }
+
+    /**
+     * Si ya se sabe si fue o no. Mientras sea false, esta inscripción no computa
+     * horas a nadie y la tarea sigue pendiente de confirmar.
+     *
+     * @return bool true si ya está respondida
+     */
+    public function isSettled(): bool
+    {
+        return null !== $this->attended;
+    }
+
+    /**
+     * Si lo confirmó la propia persona. Lo usa gestión para distinguir de un
+     * vistazo lo que se ha cerrado solo de lo que tuvo que cerrar alguien.
+     *
+     * @return bool true si la confirmación es de quien fue
+     */
+    public function isSelfConfirmed(): bool
+    {
+        return self::SOURCE_SELF === $this->attendanceSource;
+    }
+
+    /**
+     * @return string|null quién confirmó, o null si aún no se ha respondido
+     */
+    public function getAttendanceSource(): ?string
+    {
+        return $this->attendanceSource;
     }
 
     /**
@@ -246,21 +322,18 @@ class VolunteerSignup
     }
 
     /**
-     * @return bool|null true/false si se sabe, null si aún no se ha cerrado
+     * Si finalmente fue. Null mientras nadie lo haya dicho, y ese null es
+     * significativo: sólo computan horas las inscripciones confirmadas.
+     *
+     * Sin setter suelto a propósito: `attended` y {@see $attendanceSource} van
+     * siempre juntos, y un "fue" sin saber quién lo dijo es un estado que no
+     * significa nada. Se toca por {@see confirmAttendance()} y {@see markAbsent()}.
+     *
+     * @return bool|null true/false si se sabe, null si aún no se ha respondido
      */
     public function getAttended(): ?bool
     {
         return $this->attended;
-    }
-
-    /**
-     * @param bool|null $attended si finalmente fue; null para dejarlo sin cerrar
-     */
-    public function setAttended(?bool $attended): self
-    {
-        $this->attended = $attended;
-
-        return $this;
     }
 
     /**

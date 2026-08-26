@@ -5,6 +5,7 @@ namespace App\Controller;
 use App\Entity\VolunteerCall;
 use App\Entity\VolunteerCategory;
 use App\Entity\VolunteerOffer;
+use App\Entity\VolunteerSignup;
 use App\Form\VolunteerCategoryType;
 use App\Form\VolunteerOfferType;
 use App\Repository\VolunteerCallRepository;
@@ -31,15 +32,26 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[IsGranted('FEATURE_VOLUNTEERING')]
 class VolunteeringController extends AbstractController
 {
+    /** Cuántos días atrás se miran las tareas ya hechas en el listado. */
+    private const RECENT_DAYS = 60;
+
     /**
-     * Las tareas: primero las que vienen, después el histórico.
+     * Las tareas: lo que falta por cerrar, lo que viene y lo que ya se hizo.
      */
     #[Route('', name: 'volunteering_index', methods: ['GET'])]
     public function index(VolunteerOfferRepository $offers): Response
     {
+        $now = new \DateTime();
+
         return $this->render('Volunteering/index.html.twig', [
-            'upcoming' => $offers->findUpcoming(new \DateTime()),
-            'pending_closure' => $offers->findPendingClosure(new \DateTime()),
+            'upcoming' => $offers->findUpcoming($now),
+            // Sólo quedan aquí las que nadie ha confirmado por su cuenta: en
+            // cuanto alguien dice "sí, la hice" desde su panel, la tarea deja
+            // de ser trabajo pendiente para administración.
+            'pending_closure' => $offers->findPendingClosure($now),
+            'recently_done' => $offers->findRecentlyDone(
+                (clone $now)->modify(sprintf('-%d days', self::RECENT_DAYS))
+            ),
         ]);
     }
 
@@ -178,12 +190,24 @@ class VolunteeringController extends AbstractController
                 continue;
             }
 
-            if (\in_array($signup->getId(), $attended, true)) {
-                $signup->confirmAttendance();
+            $wentThere = \in_array($signup->getId(), $attended, true);
+
+            if ($wentThere) {
                 ++$counted;
-            } else {
-                $signup->setAttended(false);
             }
+
+            // Sólo se toca lo que cambia. Sin esto, cerrar una tarea que alguien
+            // ya había confirmado desde su panel la reescribiría como "lo puso
+            // gestión" y se perdería el rastro de que lo dijo quien fue — que es
+            // justo lo que distingue una tarea que se cerró sola de una que hubo
+            // que perseguir.
+            if ($signup->getAttended() === $wentThere) {
+                continue;
+            }
+
+            $wentThere
+                ? $signup->confirmAttendance(VolunteerSignup::SOURCE_MANAGER)
+                : $signup->markAbsent(VolunteerSignup::SOURCE_MANAGER);
         }
 
         $em->flush();

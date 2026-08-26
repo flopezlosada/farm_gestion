@@ -73,6 +73,13 @@ class PanelVolunteeringController extends AbstractController
             // la entidad invita a navegar relaciones desde Twig.
             'my_node_id' => $node?->getId(),
             'my_signups' => $mySignups,
+            // Lo que ya pasó y aún no ha dicho si hizo. Va arriba del todo en la
+            // pantalla: es una pregunta concreta, con respuesta de un clic, y
+            // hasta que no la conteste esas horas no las tiene nadie.
+            'pending_confirmation' => $signups->findPendingConfirmationFor($partner, $now),
+            // Qué hizo, no sólo cuánto: "6 h" no dice nada, "6 h: dos repartos y
+            // una mañana de plantación" sí.
+            'my_done' => $signups->findDoneFor($partner, $from, $to),
             // Ids de las ofertas a las que ya estoy apuntadx, para que la lista
             // no tenga que recorrer las inscripciones dentro de cada iteración.
             'my_offer_ids' => array_map(
@@ -191,6 +198,70 @@ class PanelVolunteeringController extends AbstractController
             $signup->cancel();
             $em->flush();
             $this->addFlash('success', 'Te hemos quitado de esa tarea. Gracias por avisar.');
+        }
+
+        return $this->redirectToRoute('panel_volunteering');
+    }
+
+    /**
+     * "Ya la he hecho" / "al final no fui": quien se apuntó confirma por su
+     * cuenta lo que pasó, y ahí es cuando se le computan las horas.
+     *
+     * Que lo diga quien fue, y no gestión al cerrar la tarea, es lo que quita el
+     * punto único de fallo. Si el contador dependiera de que administración
+     * cierre cada tarea a mano, se olvidarían —y se van a olvidar— y el contador
+     * se quedaría a cero para todo el mundo sin que nadie supiera por qué.
+     *
+     * ES AUTODECLARADO, y con eso basta hoy: el contador es privado y no da nada
+     * a cambio, así que no hay ningún incentivo para inflarlo. El día que las
+     * horas cuenten para algo (una cuota, un descuento), habrá que revisar esta
+     * decisión — y por eso queda registrado quién lo confirmó
+     * ({@see VolunteerSignup::$attendanceSource}): para poder revisarlo entonces
+     * sin tener que rehacer el histórico.
+     *
+     * Gestión puede corregirlo después desde la pantalla de la tarea.
+     */
+    #[Route('/{id}/confirmar', name: 'panel_volunteering_confirm', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function confirm(
+        Request $request,
+        VolunteerOffer $offer,
+        VolunteerSignupRepository $signups,
+        EntityManagerInterface $em,
+    ): Response {
+        if (($redirect = $this->ensureReady()) !== null) {
+            return $redirect;
+        }
+
+        if (!$this->isCsrfTokenValid('panel_volunteering', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
+
+            return $this->redirectToRoute('panel_volunteering');
+        }
+
+        $signup = $signups->findOneFor($offer, $this->getUser()->getPartner());
+
+        if (null === $signup || $signup->isCancelled()) {
+            $this->addFlash('warning', 'No constas apuntadx a esa tarea.');
+
+            return $this->redirectToRoute('panel_volunteering');
+        }
+
+        // Confirmar antes de que la tarea ocurra no significa nada, y dejaría
+        // computadas unas horas que todavía no ha hecho nadie.
+        if ($offer->getStartsAt() > new \DateTime()) {
+            $this->addFlash('warning', 'Esa tarea todavía no ha llegado.');
+
+            return $this->redirectToRoute('panel_volunteering');
+        }
+
+        if ($request->request->getBoolean('attended')) {
+            $signup->confirmAttendance(VolunteerSignup::SOURCE_SELF);
+            $em->flush();
+            $this->addFlash('success', 'Anotado. Gracias por echar una mano.');
+        } else {
+            $signup->markAbsent(VolunteerSignup::SOURCE_SELF);
+            $em->flush();
+            $this->addFlash('success', 'Anotado, gracias por decirlo.');
         }
 
         return $this->redirectToRoute('panel_volunteering');

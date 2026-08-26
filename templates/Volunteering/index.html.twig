@@ -22,8 +22,11 @@
 
     {# Lo primero, lo que ya pasó y sigue sin cerrar: mientras no se cierra, no
      # computa horas a nadie, así que es trabajo hecho que no cuenta. #}
+    {# Sólo llegan aquí las tareas que NADIE ha confirmado desde su panel. Lo
+     # normal es que se cierren solas: quien fue lo dice y desaparecen de esta
+     # lista. Lo que queda es lo que de verdad necesita a alguien detrás. #}
     {% if pending_closure is not empty %}
-        {{ csa.callout('Hay ' ~ pending_closure|length ~ ' tarea(s) que ya han pasado y siguen sin cerrar. Hasta que no digas quién fue, no se le computan horas a nadie.', 'warning', 'exclamation-triangle') }}
+        {{ csa.callout('Hay ' ~ pending_closure|length ~ ' tarea(s) que ya han pasado y en las que alguien no ha dicho todavía si fue. Se les pregunta en su panel; hasta que no se responda, esas horas no las tiene nadie.', 'warning', 'exclamation-triangle') }}
 
         <div class="csa-table-wrap" style="margin-bottom: var(--csa-sp-6);">
             <table class="csa-table">
@@ -107,5 +110,42 @@
                 </tbody>
             </table>
         </div>
+    {% endif %}
+
+    {# ============ LO QUE YA SE HA HECHO ============ #}
+    {# La cara visible de que esto funciona. Sin nombres y sin ranking: lo que
+     # mueve es ver que se hacen cosas, no quién las hace. Un listado de quién
+     # más aporta convertiría la asociación en una competición y expulsaría a
+     # quien no puede competir. #}
+    {% if recently_done is not empty %}
+        {% embed '_components/csa_card.html.twig' with {
+            title: 'Hecho últimamente',
+            subtitle: 'Tareas de los últimos dos meses que se cubrieron.',
+            icon: 'fa-check',
+            accent: 'green'
+        } %}
+            {% block body %}
+                <div class="csa-table-wrap">
+                    <table class="csa-table">
+                        <thead>
+                            <tr>
+                                <th>Tarea</th>
+                                <th class="csa-table__col-tight">Cuándo</th>
+                                <th class="csa-table__col-tight">Quiénes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for offer in recently_done %}
+                                <tr>
+                                    <td><a class="csa-table__primary" href="{{ path('volunteering_show', { id: offer.id }) }}">{{ offer.title }}</a></td>
+                                    <td class="csa-table__col-tight">{{ offer.startsAt|date('d/m/Y') }}</td>
+                                    <td class="csa-table__col-tight">{{ offer.attendedCount }} persona{{ offer.attendedCount != 1 ? 's' : '' }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endblock %}
+        {% endembed %}
     {% endif %}
 {% endblock %}

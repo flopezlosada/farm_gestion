@@ -232,6 +232,81 @@ class VolunteerOffer
     }
 
     /**
+     * Cuánta gente ha confirmado que fue.
+     *
+     * @return int inscripciones con asistencia confirmada
+     */
+    public function getAttendedCount(): int
+    {
+        $attended = 0;
+        foreach ($this->signups as $signup) {
+            if (true === $signup->getAttended()) {
+                ++$attended;
+            }
+        }
+
+        return $attended;
+    }
+
+    /**
+     * Si ya no queda nadie por responder si fue o no. Es lo que hace que la
+     * tarea deje de salir en "pendientes de confirmar", tanto en el panel de
+     * quien se apuntó como en la lista de gestión.
+     *
+     * Una tarea sin inscripciones vivas cuenta como respondida: no hay nada que
+     * preguntar.
+     *
+     * @return bool true si todas las inscripciones vivas están respondidas
+     */
+    public function isSettled(): bool
+    {
+        foreach ($this->signups as $signup) {
+            if (!$signup->isCancelled() && !$signup->isSettled()) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Si la tarea se hizo: ya pasó y al menos una persona confirmó que fue.
+     *
+     * Se DERIVA en vez de guardarse en un campo. Un `completed_at` habría que
+     * mantenerlo en sincronía cada vez que alguien confirma, se desapunta o
+     * gestión corrige, y en cuanto se desincronizara mentiría sin que se notara.
+     * Aquí la respuesta sale siempre de los mismos datos que la producen.
+     *
+     * @param \DateTimeInterface|null $now momento de referencia; por defecto, ahora
+     *
+     * @return bool true si la tarea se dio por hecha
+     */
+    public function isDone(?\DateTimeInterface $now = null): bool
+    {
+        $now ??= new \DateTime();
+
+        return $this->startsAt <= $now && $this->getAttendedCount() > 0;
+    }
+
+    /**
+     * Si la tarea pasó sin que fuera nadie. Es el dato incómodo y el que
+     * conviene tener: una tarea que nadie cubrió dice más sobre cómo va el
+     * voluntariado que cualquier contador de horas.
+     *
+     * @param \DateTimeInterface|null $now momento de referencia; por defecto, ahora
+     *
+     * @return bool true si pasó, está respondida y no fue nadie
+     */
+    public function wasMissed(?\DateTimeInterface $now = null): bool
+    {
+        $now ??= new \DateTime();
+
+        return $this->startsAt <= $now
+            && $this->isSettled()
+            && 0 === $this->getAttendedCount();
+    }
+
+    /**
      * Si la oferta está viva: publicada y sin haber empezado todavía. Sólo
      * sobre éstas se piden voluntarios y se lanzan avisos.
      *

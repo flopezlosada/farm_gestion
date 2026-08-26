@@ -41,6 +41,45 @@
 
     <div class="csa-stack">
 
+        {# ============ 0. CONFIRMA LO QUE HICISTE ============ #}
+        {# Va antes que nada porque es una pregunta concreta con respuesta de un
+         # clic, y porque hasta que no se conteste esas horas no las tiene nadie.
+         # Es lo contrario del contador: no reprocha, pregunta. #}
+        {% if pending_confirmation is not empty %}
+            {% embed '_components/csa_card.html.twig' with {
+                title: pending_confirmation|length == 1 ? '¿Pudiste ir?' : '¿Pudiste ir a estas?',
+                icon: 'fa-question-circle-o',
+                accent: 'ochre'
+            } %}
+                {% block body %}
+                    <ul class="vol-list">
+                        {% for signup in pending_confirmation %}
+                            <li class="vol-item">
+                                <div class="vol-item__main">
+                                    <h4 class="vol-item__title">{{ signup.offer.title }}</h4>
+                                    <div class="vol-item__meta">
+                                        <span><i class="fa fa-calendar" aria-hidden="true"></i>
+                                            {{ signup.offer.startsAt|format_datetime('full', 'short', locale='es') }}</span>
+                                        {% if signup.offer.creditedMinutes %}
+                                            <span><i class="fa fa-clock-o" aria-hidden="true"></i>
+                                                Cuenta {{ fmt.duration(signup.offer.creditedMinutes) }}</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="vol-item__action">
+                                    <form method="post" action="{{ path('panel_volunteering_confirm', {id: signup.offer.id}) }}">
+                                        <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_volunteering') }}">
+                                        <button type="submit" name="attended" value="1" class="csa-btn csa-btn--primary csa-btn--sm">Sí, la hice</button>
+                                        <button type="submit" name="attended" value="0" class="csa-btn csa-btn--ghost csa-btn--sm">No pude</button>
+                                    </form>
+                                </div>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% endblock %}
+            {% endembed %}
+        {% endif %}
+
         {# ============ 1. LO QUE HACE FALTA ============ #}
         {% embed '_components/csa_card.html.twig' with {
             title: 'Lo que hace falta',
@@ -241,6 +280,23 @@
                         Este año todavía no has echado una mano.
                     {% endif %}
                 </p>
+
+                {# Qué hiciste, no sólo cuánto. Un número suelto no significa
+                 # nada; la lista de lo que hay detrás sí, y además deja ver de
+                 # un vistazo si falta algo por confirmar. #}
+                {% if my_done is not empty %}
+                    <ul class="vol-mine">
+                        {% for signup in my_done %}
+                            <li>
+                                <strong>{{ signup.offer.title }}</strong>
+                                <span class="vol-mine__when">
+                                    {{ signup.offer.startsAt|format_date('long', locale='es') }}
+                                    {%- if signup.creditedMinutes %} · {{ fmt.duration(signup.creditedMinutes) }}{% endif -%}
+                                </span>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
 
                 {#
                  # La referencia se enseña SÓLO a quien va por debajo, y es la

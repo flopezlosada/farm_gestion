@@ -70,6 +70,10 @@ CREATE TABLE volunteer_signup (
     companions INT DEFAULT 0 NOT NULL,
     notes LONGTEXT DEFAULT NULL,
     attended TINYINT(1) DEFAULT NULL,
+    -- Quién dijo si fue o no: 'self' (la propia persona desde su panel, la vía
+    -- normal) o 'manager' (gestión, cerrando o corrigiendo). Va siempre junto a
+    -- `attended`: los dos nulos o los dos con valor.
+    attendance_source VARCHAR(16) DEFAULT NULL,
     credited_minutes INT DEFAULT NULL,
     cancelled_at DATETIME DEFAULT NULL,
     created_at DATETIME NOT NULL,
