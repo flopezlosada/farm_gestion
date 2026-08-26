@@ -14,6 +14,8 @@ use App\Repository\VolunteerOfferRepository;
 use App\Security\VolunteerOfferVoter;
 use App\Service\Volunteering\VolunteerAudienceResolver;
 use App\Service\Volunteering\VolunteerCallNotifier;
+use App\Service\Volunteering\VolunteerOfferChangeNotifier;
+use App\Service\Volunteering\VolunteerOfferSnapshot;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -128,17 +130,38 @@ class VolunteeringController extends AbstractController
 
     /**
      * Editar una tarea.
+     *
+     * Si el cambio afecta a quien ya se apuntó —se anula, se mueve de fecha o
+     * cambia de sitio— se le avisa. Sin eso, anular una tarea deja a alguien
+     * plantándose allí para nada, y esa persona, que es justo la que sí
+     * colabora, no vuelve.
      */
     #[Route('/{id}/editar', name: 'volunteering_edit', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
     #[IsGranted(VolunteerOfferVoter::EDIT, subject: 'offer')]
-    public function edit(Request $request, VolunteerOffer $offer, EntityManagerInterface $em): Response
-    {
+    public function edit(
+        Request $request,
+        VolunteerOffer $offer,
+        EntityManagerInterface $em,
+        VolunteerOfferChangeNotifier $changes,
+    ): Response {
+        // La foto se toma ANTES de handleRequest: después, la entidad ya lleva
+        // los valores nuevos y el original se ha perdido.
+        $before = VolunteerOfferSnapshot::of($offer);
+
         $form = $this->createForm(VolunteerOfferType::class, $offer);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
             $em->flush();
-            $this->addFlash('success', 'Tarea actualizada.');
+
+            $notified = $changes->notifyChanges($offer, $before);
+
+            $this->addFlash(
+                'success',
+                $notified > 0
+                    ? sprintf('Tarea actualizada. Se ha avisado a %d persona(s) que se habían apuntado.', $notified)
+                    : 'Tarea actualizada.'
+            );
 
             return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
         }
