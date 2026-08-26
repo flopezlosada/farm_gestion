@@ -79,6 +79,16 @@ class VolunteerCallEscalator
                 continue;
             }
 
+            // Y una oferta SIN categorías no tiene primer paso: nadie puede
+            // haber marcado "avísame de esto" si no hay ningún "esto". Sin este
+            // salto, una tarea sin categorías marcada como apta para cualquiera
+            // se quedaba encallada para siempre: el paso 1 no encontraba a
+            // nadie, luego no se registraba, luego el paso 2 nunca llegaba a
+            // proponerse — y no avisaba a nadie jamás.
+            if (VolunteerCall::SCOPE_MATCHING === $scope && $offer->getCategories()->isEmpty()) {
+                continue;
+            }
+
             // El primer paso sale en cuanto la oferta está publicada; los
             // siguientes esperan. Sin esa espera, los dos pasos saldrían en el
             // mismo tick del planificador y el escalado no habría escalado nada.

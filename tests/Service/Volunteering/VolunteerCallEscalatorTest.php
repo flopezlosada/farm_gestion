@@ -2,8 +2,11 @@
 
 namespace App\Tests\Service\Volunteering;
 
+use App\Entity\Partner;
 use App\Entity\VolunteerCall;
+use App\Entity\VolunteerCategory;
 use App\Entity\VolunteerOffer;
+use App\Entity\VolunteerSignup;
 use App\Repository\VolunteerCallRepository;
 use App\Service\AppSettings;
 use App\Service\Volunteering\VolunteerCallEscalator;
@@ -27,7 +30,7 @@ class VolunteerCallEscalatorTest extends TestCase
      */
     public function testPrimerAvisoSaleAlSocixQueLoHaPedido(): void
     {
-        $offer = $this->offer();
+        $offer = $this->offer(categorised: true);
 
         $this->assertSame(
             VolunteerCall::SCOPE_MATCHING,
@@ -89,6 +92,37 @@ class VolunteerCallEscalatorTest extends TestCase
     }
 
     /**
+     * Una tarea SIN categorías y apta para cualquiera salta directamente al
+     * segundo paso.
+     *
+     * Encalló de verdad antes de este caso: nadie puede haber marcado "avísame
+     * de esto" si la tarea no tiene ningún "esto", así que el paso 1 no
+     * encontraba destinatarios, no se registraba, y el paso 2 no llegaba nunca a
+     * proponerse. La tarea no avisaba a nadie jamás.
+     */
+    public function testUnaTareaSinCategoriasSaltaAlSegundoPaso(): void
+    {
+        $offer = $this->offer(openToAnyone: true);
+
+        $this->assertSame(
+            VolunteerCall::SCOPE_UNSPECIFIED,
+            $this->escalator([])->nextScope($offer, $this->moment('2099-03-01 10:00'))
+        );
+    }
+
+    /**
+     * Y si además no es para cualquiera, no hay a quién avisar por ninguna vía:
+     * ni categorías que cruzar ni permiso para ampliar. Esa tarea sólo se cubre
+     * a mano.
+     */
+    public function testUnaTareaSinCategoriasNiAperturaNoAvisaANadie(): void
+    {
+        $offer = $this->offer(openToAnyone: false);
+
+        $this->assertNull($this->escalator([])->nextScope($offer, $this->moment('2099-03-01 10:00')));
+    }
+
+    /**
      * El automatismo no llega nunca a "todo el mundo": ese alcance lo lanza una
      * persona que ha decidido que la cosa es seria.
      */
@@ -124,8 +158,8 @@ class VolunteerCallEscalatorTest extends TestCase
      */
     public function testUnaOfertaLlenaNoPideGente(): void
     {
-        $offer = $this->offer(slots: 1);
-        $offer->addSignup((new \App\Entity\VolunteerSignup())->setPartner(new \App\Entity\Partner()));
+        $offer = $this->offer(slots: 1, categorised: true);
+        $offer->addSignup((new VolunteerSignup())->setPartner(new Partner()));
 
         $this->assertNull($this->escalator([])->nextScope($offer, $this->moment('2099-03-01 10:00')));
     }
@@ -136,7 +170,7 @@ class VolunteerCallEscalatorTest extends TestCase
      */
     public function testUnaOfertaPasadaNoPideGente(): void
     {
-        $offer = $this->offer();
+        $offer = $this->offer(categorised: true);
 
         $this->assertNull($this->escalator([])->nextScope($offer, $this->moment('2099-03-20 10:00')));
     }
@@ -147,7 +181,7 @@ class VolunteerCallEscalatorTest extends TestCase
      */
     public function testUnBorradorNoPideGente(): void
     {
-        $offer = $this->offer();
+        $offer = $this->offer(categorised: true);
         $offer->setStatus(VolunteerOffer::STATUS_DRAFT);
 
         $this->assertNull($this->escalator([])->nextScope($offer, $this->moment('2099-03-01 10:00')));
@@ -156,17 +190,28 @@ class VolunteerCallEscalatorTest extends TestCase
     /**
      * Una oferta publicada, futura, con plazas y sin acompañantes.
      *
+     * SIN categorías por defecto, a propósito: es el caso que encalla si el
+     * escalador no lo contempla, así que conviene que sea el que hay que pedir
+     * explícitamente para NO tenerlo.
+     *
      * @param bool     $openToAnyone si se puede ampliar el aviso a quien no ha dicho nada
      * @param int|null $slots        plazas; null para sin tope
+     * @param bool     $categorised  si lleva alguna categoría marcada
      */
-    private function offer(bool $openToAnyone = true, ?int $slots = null): VolunteerOffer
+    private function offer(bool $openToAnyone = true, ?int $slots = null, bool $categorised = false): VolunteerOffer
     {
-        return (new VolunteerOffer())
+        $offer = (new VolunteerOffer())
             ->setTitle('Descargar el reparto en La Cabrera')
             ->setStartsAt(new \DateTime('2099-03-15 17:00'))
             ->setStatus(VolunteerOffer::STATUS_PUBLISHED)
             ->setOpenToAnyone($openToAnyone)
             ->setSlots($slots);
+
+        if ($categorised) {
+            $offer->addCategory((new VolunteerCategory())->setName('Reparto'));
+        }
+
+        return $offer;
     }
 
     /**
