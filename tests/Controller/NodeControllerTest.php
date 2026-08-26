@@ -193,10 +193,18 @@ class NodeControllerTest extends AbstractAuthenticatedTest
             $client->getResponse()->getStatusCode(),
             'El cambio de cadencia con cestas incompatibles no debe redirigir: se rechaza y se repinta el form.'
         );
+        // Sin el uniqid: el nombre se pinta normalizado a title case
+        // (Partner::getLegalName), y mb_convert_case trata los dígitos del
+        // uniqid como separadores de palabra, así que su caja no es estable.
         $this->assertStringContainsString(
-            $surname,
+            'Semanal Bloqueo',
             (string) $client->getResponse()->getContent(),
             'La pantalla debe listar al socio cuya cesta se quedaría fuera.'
+        );
+        $this->assertStringContainsString(
+            'no podría repartir',
+            (string) $client->getResponse()->getContent(),
+            'Y debe explicar por qué se ha rechazado el cambio.'
         );
 
         $em = static::getContainer()->get('doctrine')->getManager();
