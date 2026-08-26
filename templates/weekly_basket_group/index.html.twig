@@ -14,7 +14,6 @@
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
 
-{% set cadence_labels = { 'weekly': 'Semanal', 'biweekly': 'Quincenal' } %}
 {% set weekday_full = { 1: 'lunes', 2: 'martes', 3: 'miércoles', 4: 'jueves', 5: 'viernes', 6: 'sábado', 7: 'domingo' } %}
 
 {% block title %}Grupos de recogida{% endblock %}
@@ -291,7 +290,7 @@ a.grl-stat:hover { border-color: var(--prl-line-2); background: var(--prl-bg); }
                                 <span class="grl-nodeav grl-nodeav--n{{ group.node.id % 5 }}">{{ group.node.name|slice(0, 2)|upper }}</span>
                                 <span class="grl-nodeinfo">
                                     <span class="grl-nodeinfo__name">{{ group.node.name }}</span>
-                                    <span class="grl-nodeinfo__meta">{{ cadence_labels[group.node.cadence] ?? group.node.cadence }} · {{ weekday_full[group.node.deliveryWeekday] ?? '' }}</span>
+                                    <span class="grl-nodeinfo__meta">{{ group.node.cadenceLabel }} · {{ weekday_full[group.node.deliveryWeekday] ?? '' }}</span>
                                 </span>
                             {% else %}
                                 <span class="grl-nodeav grl-nodeav--none">—</span>

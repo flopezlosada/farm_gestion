@@ -17,13 +17,6 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
 class NodeType extends AbstractType
 {
     /**
-     * @var array<string,string>
-     */
-    private const CADENCE_CHOICES = [
-        'Semanal'   => Node::CADENCE_WEEKLY,
-        'Quincenal' => Node::CADENCE_BIWEEKLY,
-        'Mensual'   => Node::CADENCE_MONTHLY,
-    ];
 
     /**
      * Semanas elegibles en un punto mensual. Sin "4ª" a propósito: sólo
@@ -51,7 +44,7 @@ class NodeType extends AbstractType
             ])
             ->add('cadence', ChoiceType::class, [
                 'label'   => 'Cadencia',
-                'choices' => self::CADENCE_CHOICES,
+                'choices' => array_flip(Node::CADENCE_LABELS),
             ])
             // `required` se queda en false a propósito: el navegador lo exigiría
             // también en los puntos semanales, donde el campo no aplica. Quién

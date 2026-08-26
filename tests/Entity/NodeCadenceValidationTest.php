@@ -158,6 +158,38 @@ class NodeCadenceValidationTest extends TestCase
     }
 
     /**
+     * Toda cadencia debe tener nombre humano. Sin esto, al añadir la mensual
+     * las pantallas siguieron pintando el valor crudo ("monthly") porque cada
+     * plantilla llevaba su propio mapa de etiquetas y ninguna se actualizó.
+     */
+    public function testEveryCadenceHasAHumanLabel(): void
+    {
+        foreach (Node::CADENCES as $cadence) {
+            $this->assertArrayHasKey(
+                $cadence,
+                Node::CADENCE_LABELS,
+                sprintf('La cadencia "%s" no tiene etiqueta: se pintaría en crudo.', $cadence)
+            );
+        }
+    }
+
+    /**
+     * La etiqueta sale de la cadencia del propio nodo, que es lo que consumen
+     * las plantillas.
+     */
+    public function testCadenceLabelIsTakenFromTheNodeItself(): void
+    {
+        $this->assertSame(
+            'Mensual',
+            $this->node(Node::CADENCE_MONTHLY, 3, null)->setMonthlyWeek(2)->getCadenceLabel()
+        );
+        $this->assertSame(
+            'Quincenal',
+            $this->node(Node::CADENCE_BIWEEKLY, 3, self::WEDNESDAY)->getCadenceLabel()
+        );
+    }
+
+    /**
      * @param string $cadence Una de Node::CADENCE_*.
      * @param int $weekday Día ISO 1=Lunes..7=Domingo.
      * @param string|null $anchor Fecha 'Y-m-d' del ancla, o null.
