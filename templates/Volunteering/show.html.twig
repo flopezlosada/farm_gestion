@@ -164,6 +164,47 @@
         {% endblock %}
     {% endembed %}
 
+    {# ============ REPETIR ============ #}
+    {# El reparto es semanal: sin esto habría que crear la misma tarea cincuenta
+     # y dos veces a mano, y no lo haría nadie. Las copias nacen en BORRADOR para
+     # poder revisarlas —los festivos no se modelan— antes de que empiecen a
+     # pedir gente solas. #}
+    {% if is_granted('VOLUNTEER_OFFER_EDIT', offer) and offer.startsAt %}
+        {% embed '_components/csa_card.html.twig' with {
+            title: 'Repetir esta tarea',
+            subtitle: 'Crea copias en las fechas siguientes, en borrador.',
+            icon: 'fa-repeat'
+        } %}
+            {% block body %}
+                <form method="post" action="{{ path('volunteering_repeat', { id: offer.id }) }}" class="vol-repeat">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_repeat') }}">
+
+                    <label>
+                        Cada
+                        <select name="cadence" class="csa-select">
+                            <option value="weekly">semana</option>
+                            <option value="biweekly">dos semanas</option>
+                            <option value="monthly">cuatro semanas</option>
+                        </select>
+                    </label>
+
+                    <label>
+                        durante
+                        <input type="number" name="times" value="4" min="1" max="52" class="csa-input csa-input--compact">
+                        veces
+                    </label>
+
+                    <button type="submit" class="csa-btn csa-btn--secondary csa-btn--sm">Crear las copias</button>
+                </form>
+
+                <p class="vol-help">
+                    Las copias se crean como borrador y sin nadie apuntado. Revisa
+                    que ninguna cae en festivo antes de publicarlas.
+                </p>
+            {% endblock %}
+        {% endembed %}
+    {% endif %}
+
     {# ============ AVISOS ============ #}
     {% embed '_components/csa_card.html.twig' with { title: 'Avisos enviados', icon: 'fa-bullhorn' } %}
         {% block body %}

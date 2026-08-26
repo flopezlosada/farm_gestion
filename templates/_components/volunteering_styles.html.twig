@@ -140,6 +140,26 @@
         cursor: pointer;
     }
 
+    /* Una sola línea: "cada [semana] durante [4] veces [botón]". Partido en
+       varias filas se lee como un formulario largo y da más respeto del que
+       merece. */
+    .vol-repeat {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--csa-sp-3);
+        align-items: center;
+        margin-bottom: var(--csa-sp-3);
+    }
+    .vol-repeat label {
+        display: flex;
+        gap: var(--csa-sp-2);
+        align-items: center;
+        font-size: var(--csa-fs-sm);
+        color: var(--csa-ink-muted);
+    }
+    .vol-repeat .csa-input { width: 5rem; }
+    .vol-repeat .csa-select { width: auto; }
+
     .vol-total {
         margin: 0 0 var(--csa-sp-2);
         font-size: var(--csa-fs-md);

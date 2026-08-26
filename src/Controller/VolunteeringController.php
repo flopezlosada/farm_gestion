@@ -52,6 +52,16 @@ class VolunteeringController extends AbstractController
     private const RECENT_DAYS = 60;
 
     /**
+     * Cadencias que se ofrecen al repetir una tarea, en días. Las tres que usa
+     * la asociación: el reparto es semanal, hay grupos quincenales y algunas
+     * cosas son mensuales.
+     */
+    private const REPEAT_CADENCES = ['weekly' => 7, 'biweekly' => 14, 'monthly' => 28];
+
+    /** Tope de copias por repetición. Un año de reparto semanal cabe de sobra. */
+    private const REPEAT_MAX = 52;
+
+    /**
      * Las tareas: lo que falta por cerrar, lo que viene y lo que ya se hizo.
      */
     #[Route('', name: 'volunteering_index', methods: ['GET'])]
@@ -171,6 +181,63 @@ class VolunteeringController extends AbstractController
             'form' => $form->createView(),
             'is_new' => false,
         ]);
+    }
+
+    /**
+     * Repetir esta tarea en fechas siguientes.
+     *
+     * Es lo que hace el módulo usable para lo que más se repite: el reparto es
+     * SEMANAL, y crear "descargar cestas en La Cabrera" cincuenta y dos veces a
+     * mano no lo va a hacer nadie.
+     *
+     * Cadencia y número de veces, no una regla de recurrencia. Karrot modela
+     * series con RRULE de iCal, potente y caro; OpenOlitor simplemente duplica a
+     * una lista de fechas. Esto es lo segundo: las copias nacen sueltas, así que
+     * cambiar o anular una no toca a las demás — que es justo lo que hace falta
+     * cuando cae un festivo en medio.
+     */
+    #[Route('/{id}/repetir', name: 'volunteering_repeat', methods: ['POST'], requirements: ['id' => '\d+'])]
+    #[IsGranted(VolunteerOfferVoter::EDIT, subject: 'offer')]
+    public function repeat(Request $request, VolunteerOffer $offer, EntityManagerInterface $em): Response
+    {
+        if (!$this->isCsrfTokenValid('volunteering_repeat', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
+
+            return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
+        }
+
+        if (null === $offer->getStartsAt()) {
+            $this->addFlash('error', 'Esta tarea no tiene fecha, así que no se puede repetir.');
+
+            return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
+        }
+
+        $everyDays = self::REPEAT_CADENCES[$request->request->get('cadence')] ?? null;
+        $times = (int) $request->request->get('times');
+
+        if (null === $everyDays || $times < 1) {
+            $this->addFlash('error', 'Elige cada cuánto se repite y cuántas veces.');
+
+            return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
+        }
+
+        // Tope duro: un error de dedo aquí crea tareas a puñados, y borrarlas
+        // una a una es un castigo desproporcionado para un cero de más.
+        $times = min($times, self::REPEAT_MAX);
+
+        $start = \DateTimeImmutable::createFromInterface($offer->getStartsAt());
+        for ($i = 1; $i <= $times; ++$i) {
+            $em->persist($offer->copyForDate($start->modify(sprintf('+%d days', $everyDays * $i))));
+        }
+
+        $em->flush();
+
+        $this->addFlash(
+            'success',
+            sprintf('Creadas %d copias, en borrador. Revísalas —ojo a los festivos— y publícalas.', $times)
+        );
+
+        return $this->redirectToRoute('volunteering_index');
     }
 
     /**

@@ -22,6 +22,9 @@ CREATE TABLE volunteer_offer (
     id INT AUTO_INCREMENT NOT NULL,
     node_id INT DEFAULT NULL,
     created_by_id INT DEFAULT NULL,
+    -- De qué tarea salió ésta, si se creó repitiendo otra. SET NULL al borrar el
+    -- original: perder la referencia es aceptable, perder las copias no.
+    copied_from_id INT DEFAULT NULL,
     title VARCHAR(160) NOT NULL,
     description LONGTEXT DEFAULT NULL,
     starts_at DATETIME NOT NULL,
@@ -36,6 +39,7 @@ CREATE TABLE volunteer_offer (
     created_at DATETIME NOT NULL,
     INDEX IDX_1BB85ACC460D9FD7 (node_id),
     INDEX IDX_1BB85ACCB03A8386 (created_by_id),
+    INDEX IDX_1BB85ACC58B20D94 (copied_from_id),
     INDEX idx_volunteer_offer_starts_at (starts_at),
     INDEX idx_volunteer_offer_status (status),
     PRIMARY KEY(id)
@@ -121,6 +125,7 @@ ALTER TABLE volunteer_category_coordinator ADD CONSTRAINT FK_5DBDFDD6A76ED395 FO
 ALTER TABLE partner ADD volunteering_opt_out TINYINT(1) DEFAULT 0 NOT NULL;
 
 ALTER TABLE volunteer_offer ADD CONSTRAINT FK_1BB85ACC460D9FD7 FOREIGN KEY (node_id) REFERENCES node (id) ON DELETE SET NULL;
+ALTER TABLE volunteer_offer ADD CONSTRAINT FK_1BB85ACC58B20D94 FOREIGN KEY (copied_from_id) REFERENCES volunteer_offer (id) ON DELETE SET NULL;
 ALTER TABLE volunteer_offer ADD CONSTRAINT FK_1BB85ACCB03A8386 FOREIGN KEY (created_by_id) REFERENCES fos_user (id) ON DELETE SET NULL;
 ALTER TABLE volunteer_offer_category ADD CONSTRAINT FK_C812B06C7B1A246F FOREIGN KEY (volunteer_offer_id) REFERENCES volunteer_offer (id) ON DELETE CASCADE;
 ALTER TABLE volunteer_offer_category ADD CONSTRAINT FK_C812B06CC76F2FD6 FOREIGN KEY (volunteer_category_id) REFERENCES volunteer_category (id) ON DELETE CASCADE;

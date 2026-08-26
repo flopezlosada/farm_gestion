@@ -60,6 +60,10 @@ En `/gestion/settings`, grupo «Funcionalidades en rodaje»:
 1. **Voluntariado** — abre el módulo (menú, pantallas, bloque del panel).
 2. **Avisar de tareas de voluntariado sin cubrir** (grupo «Tareas programadas»)
    — enciende el escalado automático de avisos.
+3. **Recordar el voluntariado a quien se apuntó** (mismo grupo) — el aviso a
+   quien ya dijo que sí, poco antes de que le toque. Interruptor aparte porque
+   son avisos distintos: uno busca a quien no está, el otro habla con quien ya
+   está dentro.
 
 Y antes de que sirva de algo, crear al menos un par de **tipos de trabajo** en
 `/gestion/voluntariado/categorias/listado`: sin categorías, nadie puede declarar
@@ -144,3 +148,10 @@ elegido esto", que son hechos distintos y se comportan distinto.
 - **Agregado por familia.** Se apunta un socix concreto; los acompañantes van
   como número. Agregar por unidad familiar se puede hacer luego leyendo
   `parent_id` de `Partner`.
+- **Festivos.** Repetir una tarea genera copias cada 7, 14 o 28 días sin
+  consultar el calendario laboral. Por eso las copias nacen en **borrador**: hay
+  que revisarlas antes de publicarlas. El módulo laboral ya tiene una entidad
+  `Holiday`, así que cruzarlo es posible el día que moleste de verdad.
+- **Calendario suscribible (.ics).** Karrot expone las tareas de cada persona
+  por una URL con token, para que aparezcan solas en el calendario del móvil.
+  Encajaría bien con quien no entra en la web, y no está hecho.

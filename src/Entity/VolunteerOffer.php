@@ -177,6 +177,19 @@ class VolunteerOffer
     private ?User $createdBy = null;
 
     /**
+     * De qué tarea salió ésta, si se creó repitiendo otra.
+     *
+     * Sirve para poder responder "¿de dónde salieron estas doce?" cuando alguien
+     * repite el reparto de un trimestre y luego quiere entender por qué hay
+     * doce tareas iguales. `SET NULL` al borrar el original: perder la
+     * referencia es aceptable, perder las copias no.
+     *
+     * @ORM\ManyToOne(targetEntity="App\Entity\VolunteerOffer")
+     * @ORM\JoinColumn(name="copied_from_id", referencedColumnName="id", nullable=true, onDelete="SET NULL")
+     */
+    private ?VolunteerOffer $copiedFrom = null;
+
+    /**
      * @ORM\Column(name="created_at", type="datetime")
      */
     private \DateTimeInterface $createdAt;
@@ -186,6 +199,64 @@ class VolunteerOffer
         $this->categories = new ArrayCollection();
         $this->signups = new ArrayCollection();
         $this->createdAt = new \DateTime();
+    }
+
+    /**
+     * Una copia de esta tarea en otra fecha, lista para persistir.
+     *
+     * Copia lo que define el trabajo y NO lo que pasó con él: ni inscripciones,
+     * ni avisos enviados, ni fecha de creación. Repetir el reparto del viernes
+     * que viene no puede arrastrar a quien se apuntó al de la semana pasada.
+     *
+     * La duración se conserva desplazando el final lo mismo que el principio: si
+     * la tarea duraba dos horas, la copia dura dos horas. Calcularlo con el
+     * intervalo y no copiando `endsAt` tal cual evita que la copia acabe antes
+     * de empezar.
+     *
+     * Nace como BORRADOR aunque el original estuviera publicada, a propósito:
+     * doce tareas creadas de golpe deben poder revisarse —y ajustarse los
+     * festivos, que aquí no se modelan— antes de que empiecen a pedir gente
+     * solas.
+     *
+     * @param \DateTimeInterface $startsAt cuándo empieza la copia
+     *
+     * @return self la copia, sin persistir
+     */
+    public function copyForDate(\DateTimeInterface $startsAt): self
+    {
+        $copy = new self();
+        $copy->title = $this->title;
+        $copy->description = $this->description;
+        $copy->remote = $this->remote;
+        $copy->place = $this->place;
+        $copy->node = $this->node;
+        $copy->slots = $this->slots;
+        $copy->companionsAllowed = $this->companionsAllowed;
+        $copy->creditedMinutes = $this->creditedMinutes;
+        $copy->openToAnyone = $this->openToAnyone;
+        $copy->createdBy = $this->createdBy;
+        $copy->copiedFrom = $this;
+        $copy->status = self::STATUS_DRAFT;
+        $copy->startsAt = $startsAt;
+
+        foreach ($this->categories as $category) {
+            $copy->categories->add($category);
+        }
+
+        if (null !== $this->startsAt && null !== $this->endsAt) {
+            $duration = $this->startsAt->diff($this->endsAt);
+            $copy->endsAt = (\DateTimeImmutable::createFromInterface($startsAt))->add($duration);
+        }
+
+        return $copy;
+    }
+
+    /**
+     * @return self|null la tarea de la que se copió ésta, o null
+     */
+    public function getCopiedFrom(): ?self
+    {
+        return $this->copiedFrom;
     }
 
     /**
