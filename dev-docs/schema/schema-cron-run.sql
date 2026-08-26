@@ -14,9 +14,9 @@
 --
 -- Aplicar a las TRES BBDD de trabajo: db (sandbox), db_prod_snapshot (golden)
 -- y db_test.
---   ddev mysql db               < dev-docs/scheduler/schema-cron-run.sql
---   ddev mysql db_prod_snapshot < dev-docs/scheduler/schema-cron-run.sql   # tras esto, bin/db-backup
---   ddev mysql db_test          < dev-docs/scheduler/schema-cron-run.sql
+--   ddev mysql db               < dev-docs/schema/schema-cron-run.sql
+--   ddev mysql db_prod_snapshot < dev-docs/schema/schema-cron-run.sql   # tras esto, bin/db-backup
+--   ddev mysql db_test          < dev-docs/schema/schema-cron-run.sql
 --
 -- En PRODUCCIÓN se aplica a mano por phpMyAdmin. La tabla nace vacía y sin FKs.
 --

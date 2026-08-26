@@ -18,9 +18,9 @@
 --
 -- Aplicar a las TRES BBDD de trabajo: db (sandbox), db_prod_snapshot (golden)
 -- y db_test.
---   ddev mysql db               < dev-docs/scheduler/schema-emitted-effect.sql
---   ddev mysql db_prod_snapshot < dev-docs/scheduler/schema-emitted-effect.sql   # tras esto, bin/db-backup
---   ddev mysql db_test          < dev-docs/scheduler/schema-emitted-effect.sql
+--   ddev mysql db               < dev-docs/schema/schema-emitted-effect.sql
+--   ddev mysql db_prod_snapshot < dev-docs/schema/schema-emitted-effect.sql   # tras esto, bin/db-backup
+--   ddev mysql db_test          < dev-docs/schema/schema-emitted-effect.sql
 --
 -- En PRODUCCIÓN se aplica a mano por phpMyAdmin. La tabla nace vacía y sin FKs.
 -- ORDEN RESPECTO AL CÓDIGO: da igual, pero con matices que conviene conocer.
