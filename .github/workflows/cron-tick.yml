@@ -87,21 +87,64 @@ jobs:
             exit 0
           fi
 
+          # Deja escrito en el resumen de la ejecución QUÉ ha pasado y QUÉ mirar,
+          # en castellano y en dos líneas.
+          #
+          # El correo de GitHub sólo dice "el workflow ha fallado". Sin esto hay
+          # que entrar, abrir el paso rojo y bucear en un log lleno de ruido para
+          # enterarte de si el hosting no responde o el token no cuadra — y un
+          # aviso que cuesta leer se acaba ignorando, que es exactamente cómo se
+          # pierden dos semanas sin enterarse.
+          avisar() {
+            {
+              echo "### ⏰ Tick de ${{ matrix.entorno }}: $1"
+              echo
+              echo "$2"
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "$1 — $2" >&2
+          }
+
           # --max-time generoso: la app contesta enseguida (el trabajo lo hace
           # después, con la conexión cerrada), pero un hosting compartido puede
           # tardar en despertar.
+          #
+          # El código de salida de curl se captura SIN abortar (`|| rc=$?`): con
+          # `set -e`, una asignación desde un comando que falla mata el paso ahí
+          # mismo, y entonces no se llega a explicar nada. Es lo que hacía que el
+          # log del fallo del 26-ago acabara en un "exit code 28" a secas.
+          rc=0
           code=$(curl -sS -o /dev/null -w '%{http_code}' \
             --max-time 30 --retry 2 --retry-delay 5 \
-            -X POST "$URL" -H "X-Cron-Token: $TOKEN")
+            -X POST "$URL" -H "X-Cron-Token: $TOKEN") || rc=$?
+
+          if [ "$rc" -ne 0 ]; then
+            avisar "el servidor no respondió" \
+              "Tres intentos agotados, 30 s cada uno (código de curl $rc). Casi siempre es el hosting lento o dormido, no la aplicación. Si pasa suelto, el tick siguiente recupera lo que tocara. Si se repite varios días a la misma hora, el problema es del hosting."
+            exit 1
+          fi
 
           echo "Respuesta del tick: $code"
 
-          # 202 = aceptado. Un 404 significa casi siempre que el token no cuadra
-          # o que no hay ninguno configurado en el servidor.
-          if [ "$code" != "202" ]; then
-            echo "El tick no fue aceptado (esperado 202)." >&2
-            exit 1
-          fi
+          case "$code" in
+            202)
+              # Aceptado. El trabajo se hace después, con la conexión ya cerrada.
+              ;;
+            404)
+              avisar "el servidor no reconoce el token" \
+                "El endpoint responde 404 cuando el token no coincide o está vacío. Comprueba que \`CRON_TICK_TOKEN\` del \`.env.local\` del servidor y el secreto \`CRON_TICK_TOKEN_${{ matrix.entorno }}\` son idénticos. OJO: en el servidor la variable va SIN sufijo de entorno."
+              exit 1
+              ;;
+            5*)
+              avisar "la aplicación está rota (HTTP $code)" \
+                "No es el reloj: la app devuelve error. Mira si la web carga; si acabas de desplegar, puede estar a medio subir (durante el mirror por FTP hay unos minutos de 500 que se curan solos)."
+              exit 1
+              ;;
+            *)
+              avisar "respuesta inesperada (HTTP $code)" \
+                "Se esperaba 202. Revisa el log de este paso."
+              exit 1
+              ;;
+          esac
 
       - name: Comprobar la salud del planificador
         env:
@@ -110,16 +153,40 @@ jobs:
         # cómo está el planificador es más útil todavía.
         if: always() && env.URL != ''
         run: |
-          code=$(curl -sS -o response.json -w '%{http_code}' --max-time 30 "$URL")
-          cat response.json
+          avisar() {
+            {
+              echo "### 🩺 Salud del planificador en ${{ matrix.entorno }}: $1"
+              echo
+              echo "$2"
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "$1 — $2" >&2
+          }
+
+          # Los MISMOS reintentos que el tick, y por el mismo motivo. Sin ellos,
+          # un solo hipo del hosting compartido manda un correo de avería, y las
+          # falsas alarmas son lo que enseña a ignorar los avisos de verdad. Pasó
+          # el 26-ago: el tick reintentó tres veces y este paso ni uno.
+          rc=0
+          code=$(curl -sS -o response.json -w '%{http_code}' \
+            --max-time 30 --retry 2 --retry-delay 5 "$URL") || rc=$?
+
+          cat response.json 2>/dev/null || true
           echo
 
+          if [ "$rc" -ne 0 ]; then
+            avisar "no responde" \
+              "Tres intentos agotados, 30 s cada uno (código de curl $rc). Si el paso del tick también falló, es el hosting entero; si sólo falló éste, fue un hipo puntual."
+            exit 1
+          fi
+
           if [ "$code" = "503" ]; then
-            echo "Hay tareas encendidas fuera de plazo (ver 'late' arriba)." >&2
+            avisar "hay tareas fuera de plazo" \
+              "El reloj llega bien, pero alguna tarea ENCENDIDA lleva más tiempo del permitido sin ejecutarse. Las tienes en la lista \`late\` de arriba, y con detalle en /gestion/settings."
             exit 1
           fi
 
           if [ "$code" != "200" ]; then
-            echo "El chequeo de salud no responde (código $code)." >&2
+            avisar "respuesta inesperada (HTTP $code)" \
+              "Se esperaba 200 o 503. Si es 404, este entorno todavía no tiene desplegado el planificador."
             exit 1
           fi
