@@ -298,6 +298,70 @@ class Partner
         $this->weekly_baskets = new ArrayCollection();
         $this->relatives = new ArrayCollection();
         $this->membership_periods = new ArrayCollection();
+        $this->volunteerCategories = new ArrayCollection();
+    }
+
+    /**
+     * Categorías de voluntariado de las que este socix quiere que se le avise.
+     *
+     * Marcar categorías significa "avísame de esto"; no marcar ninguna significa
+     * "avísame de lo que sea sencillo". Esa lectura es la que sostiene el
+     * escalado de {@see VolunteerCall}, y el texto de la ficha tiene que decirlo
+     * con esas palabras: si alguien marca "huerta" y luego le llega un aviso de
+     * obras, la ficha de preferencias se convierte en una mentira y deja de
+     * rellenarla nadie.
+     *
+     * Sin entidad intermedia a propósito: es una lista de casillas marcadas, no
+     * tiene atributos propios y no hay nada que se vaya a consultar sobre
+     * "cuándo marcaste esto".
+     *
+     * @ORM\ManyToMany(targetEntity="App\Entity\VolunteerCategory", inversedBy="partners")
+     * @ORM\JoinTable(name="partner_volunteer_category")
+     *
+     * @var Collection<int, VolunteerCategory>
+     */
+    private $volunteerCategories;
+
+    /**
+     * @return Collection<int, VolunteerCategory> las categorías de las que quiere aviso
+     */
+    public function getVolunteerCategories(): Collection
+    {
+        return $this->volunteerCategories;
+    }
+
+    /**
+     * @param VolunteerCategory $category la categoría a marcar
+     */
+    public function addVolunteerCategory(VolunteerCategory $category): self
+    {
+        if (!$this->volunteerCategories->contains($category)) {
+            $this->volunteerCategories->add($category);
+        }
+
+        return $this;
+    }
+
+    /**
+     * @param VolunteerCategory $category la categoría a desmarcar
+     */
+    public function removeVolunteerCategory(VolunteerCategory $category): self
+    {
+        $this->volunteerCategories->removeElement($category);
+
+        return $this;
+    }
+
+    /**
+     * Si este socix no ha declarado ninguna preferencia de voluntariado. Es lo
+     * que distingue el silencio —ampliable— del "no" explícito de quien sí ha
+     * marcado categorías y esta oferta no está entre ellas.
+     *
+     * @return bool true si no ha marcado ninguna categoría
+     */
+    public function hasNoVolunteerPreferences(): bool
+    {
+        return $this->volunteerCategories->isEmpty();
     }
 
     /**

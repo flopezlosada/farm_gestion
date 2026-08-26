@@ -1,0 +1,112 @@
+<?php
+
+namespace App\Repository;
+
+use App\Entity\Node;
+use App\Entity\VolunteerOffer;
+use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
+use Doctrine\Persistence\ManagerRegistry;
+
+/**
+ * @extends ServiceEntityRepository<VolunteerOffer>
+ */
+class VolunteerOfferRepository extends ServiceEntityRepository
+{
+    public function __construct(ManagerRegistry $registry)
+    {
+        parent::__construct($registry, VolunteerOffer::class);
+    }
+
+    /**
+     * Las ofertas publicadas que aún no han empezado, de la más próxima a la más
+     * lejana. Es la lista base: de aquí sale lo que ve un socix y sobre esto
+     * trabaja el escalado de avisos.
+     *
+     * NO filtra las que ya están llenas: eso depende de las inscripciones vivas
+     * y se resuelve en {@see VolunteerOffer::hasRoom()}, que es donde vive esa
+     * regla. Filtrarlo en SQL obligaría a un GROUP BY sobre signups no
+     * cancelados y a duplicar aquí una lógica que ya está en el dominio.
+     *
+     * @param \DateTimeInterface $from momento a partir del cual se consideran futuras
+     * @param int|null           $limit número máximo de ofertas; null para todas
+     *
+     * @return list<VolunteerOffer> las ofertas abiertas, por fecha ascendente
+     */
+    public function findUpcoming(\DateTimeInterface $from, ?int $limit = null): array
+    {
+        $qb = $this->createQueryBuilder('o')
+            ->where('o.status = :published')
+            ->andWhere('o.startsAt > :from')
+            ->setParameter('published', VolunteerOffer::STATUS_PUBLISHED)
+            ->setParameter('from', $from)
+            ->orderBy('o.startsAt', 'ASC');
+
+        if (null !== $limit) {
+            $qb->setMaxResults($limit);
+        }
+
+        return $qb->getQuery()->getResult();
+    }
+
+    /**
+     * Como {@see findUpcoming()}, pero priorizando lo que ocurre en el punto de
+     * recogida de quien mira: primero lo suyo, después el resto.
+     *
+     * Es el orden del panel del socix y no es cosmético. Quien recoge su cesta
+     * en La Cabrera ya va a estar allí ese día, así que una tarea en su nodo es
+     * la de menor fricción posible; enterrarla bajo otras tres que le pillan a
+     * cuarenta kilómetros es perder la única que iba a aceptar.
+     *
+     * @param \DateTimeInterface $from momento a partir del cual se consideran futuras
+     * @param Node|null          $node el punto de recogida del socix, si tiene
+     * @param int|null           $limit número máximo de ofertas; null para todas
+     *
+     * @return list<VolunteerOffer> las ofertas abiertas, las del nodo primero
+     */
+    public function findUpcomingForNode(\DateTimeInterface $from, ?Node $node, ?int $limit = null): array
+    {
+        $offers = $this->findUpcoming($from);
+
+        if (null !== $node) {
+            // Ordenación estable en PHP y no en SQL: son unas pocas decenas de
+            // filas y un CASE WHEN en el ORDER BY obligaría a arrastrar el nodo
+            // como parámetro por toda la consulta para ganar nada medible.
+            usort($offers, static function (VolunteerOffer $a, VolunteerOffer $b) use ($node): int {
+                $mine = ($b->getNode() === $node ? 1 : 0) <=> ($a->getNode() === $node ? 1 : 0);
+
+                return 0 !== $mine ? $mine : $a->getStartsAt() <=> $b->getStartsAt();
+            });
+        }
+
+        return null === $limit ? $offers : \array_slice($offers, 0, $limit);
+    }
+
+    /**
+     * Las ofertas publicadas que ya han pasado y siguen sin cerrar: nadie ha
+     * dicho todavía quién fue y quién no. Son las que hay que recordar a quien
+     * coordina, porque mientras no se cierren no computan horas a nadie.
+     *
+     * Con EXISTS y no con un JOIN + GROUP BY: el JOIN devolvería una fila por
+     * inscripción y obligaría a agrupar por la oferta entera, que es justo el
+     * patrón que ya dio problemas con `ONLY_FULL_GROUP_BY` en este repo (#16).
+     *
+     * @param \DateTimeInterface $until momento hasta el que se consideran pasadas
+     *
+     * @return list<VolunteerOffer> las ofertas pasadas pendientes de cerrar
+     */
+    public function findPendingClosure(\DateTimeInterface $until): array
+    {
+        return $this->createQueryBuilder('o')
+            ->where('o.status = :published')
+            ->andWhere('o.startsAt <= :until')
+            ->andWhere($this->createQueryBuilder('x')->expr()->exists(
+                'SELECT 1 FROM App\Entity\VolunteerSignup s'
+                .' WHERE s.offer = o AND s.attended IS NULL AND s.cancelledAt IS NULL'
+            ))
+            ->setParameter('published', VolunteerOffer::STATUS_PUBLISHED)
+            ->setParameter('until', $until)
+            ->orderBy('o.startsAt', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+}

@@ -173,6 +173,14 @@ class AppSettings
     public const FEATURE_LABORAL = 'feature.laboral';
 
     /**
+     * ¿Está abierto el módulo de voluntariado (ofertas de trabajo, inscripción
+     * de socixs y el bloque del panel)? Apagado, se oculta del menú, sus rutas
+     * responden 403 y no sale ningún aviso. Lo resuelve
+     * {@see \App\Security\FeatureVoter} vía {@see is_granted('FEATURE_VOLUNTEERING')}.
+     */
+    public const FEATURE_VOLUNTEERING = 'feature.volunteering';
+
+    /**
      * Interruptores de las tareas programadas (crons). Apagado, el comando
      * correspondiente sale sin hacer nada en cuanto arranca: como el hosting es
      * solo-FTP y no podemos tocar el crontab desde la app, el cron sigue
@@ -387,6 +395,12 @@ class AppSettings
             'group' => 'Funcionalidades en rodaje',
             'label' => 'Control horario y vacaciones',
             'help' => 'Abre el módulo laboral: el fichaje de los trabajadores, su calendario y vacaciones, y la gestión del personal (incluidos festivos). Apagado, se oculta del menú y no es accesible.',
+            'default' => false,
+        ],
+        self::FEATURE_VOLUNTEERING => [
+            'group' => 'Funcionalidades en rodaje',
+            'label' => 'Voluntariado',
+            'help' => 'Abre el módulo de voluntariado: publicar trabajos, que lxs socixs se apunten y el bloque de su panel con lo que hace falta. Apagado, se oculta del menú, no es accesible y no se envía ningún aviso pidiendo gente.',
             'default' => false,
         ],
         self::CRON_GENERATE_WEEKLY_DELIVERY => [
