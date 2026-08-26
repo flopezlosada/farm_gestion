@@ -30,7 +30,7 @@
         {% endif %}
         {% if reloc %}<span class="reloc">de {{ reloc }}</span>{% endif %}
     </td>
-    <td style="width: 130px;">
+    <td class="dlv-cell-mod">
         {% if rbs %}
             <span class="mod mod--{{ rbs.id }}"><span class="dot"></span>{{ rbs.name }}</span>
         {% else %}
@@ -40,15 +40,15 @@
             <div class="mod-pair">con {{ wb.partner.sharePartner.nameForDelivery }}</div>
         {% endif %}
     </td>
-    <td class="num-c" style="width: 70px;">{{ wb.amount }}</td>
-    <td style="width: 110px;">
+    <td class="num-c dlv-cell-cestas">{{ wb.amount }}</td>
+    <td class="dlv-cell-eggs">
         {% if row_eggs %}
             <span class="num-c">{{ share and share.eggAmount ? share.eggAmount.name : '✓' }}</span>
         {% else %}
             <span class="no">—</span>
         {% endif %}
     </td>
-    <td class="dlv-actions" style="width: 44px;">
+    <td class="dlv-actions">
         <button type="button" class="dlv-kebab" aria-label="Acciones del socix">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg>
         </button>

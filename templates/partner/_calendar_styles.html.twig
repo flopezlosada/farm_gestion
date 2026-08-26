@@ -6,7 +6,10 @@
 <style>
   .rcal{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:var(--csa-sp-6);align-items:start}
   .rcal.rcal-busy{opacity:.55;pointer-events:none;transition:opacity .1s}
-  @media (max-width:880px){.rcal{grid-template-columns:1fr}}
+  /* minmax(0,1fr) —no 1fr a secas— por lo mismo que en la rejilla: con 1fr el
+     mínimo de la columna es el min-content de su contenido y el calendario
+     empujaba el layout fuera del viewport en pantallas estrechas. */
+  @media (max-width:880px){.rcal{grid-template-columns:minmax(0,1fr)}}
 
   /* --- tarjeta calendario --- */
   .rcal-grid{background:var(--csa-surface);border:1px solid var(--csa-rule);border-radius:var(--csa-radius-xl);box-shadow:var(--csa-shadow-md);overflow:hidden}
@@ -186,8 +189,17 @@
     .rcal-mk{gap:3px}
     .rcal-mk__i{width:16px;height:16px;border-radius:5px;font-size:9px}
     .rcal-egg{width:8px;height:10px}
-    .rcal-today-tag{top:4px;right:4px;font-size:7px}
-    .rcal-cal-hd{padding:var(--csa-sp-3) var(--csa-sp-4)}
+    /* La etiqueta "hoy" se pisaba con el número del día en celdas estrechas:
+       baja a la esquina inferior izquierda (los marcadores de producto van a
+       la derecha, así que no compiten). */
+    .rcal-today-tag{top:auto;bottom:3px;left:5px;right:auto;font-size:7px}
+    /* Cabecera: las dos flechas + "septiembre 2026" + "Resetear el mes" suman
+       más que el ancho de un móvil estrecho, y como .rcal-resetform no encoge
+       la tarjeta entera se salía por la derecha. Se permite que envuelva: el
+       reset baja a su propia línea, alineado a la derecha. */
+    .rcal-cal-hd{padding:var(--csa-sp-3) var(--csa-sp-4);flex-wrap:wrap}
+    .rcal-nav{flex:1 1 100%}
+    .rcal-resetform{margin-left:auto}
     .rcal-month{font-size:var(--csa-fs-lg)}
   }
   .rcal-tray-card__ic{font-size:11px}

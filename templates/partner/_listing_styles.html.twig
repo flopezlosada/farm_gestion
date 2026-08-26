@@ -403,4 +403,60 @@ a.prl-person__name:hover { color: var(--prl-sage-d); text-decoration: none; bord
     .prl-stats { grid-template-columns: repeat(2, 1fr); }
     .prl-person__meta { max-width: 160px; }
 }
+
+/* Tablet: los anchos fijos del thead suman ~920px, así que entre 768px y 900px
+   la tabla sigue sin caber. Deslizarla en horizontal es preferible a recortarla
+   (el wrap tenía `overflow: hidden`, que la cortaba sin dar acceso al resto). */
+.prl-table-wrap { overflow-x: auto; overflow-y: hidden; }
+
+/* ============================================================
+ * Móvil: la tabla pasa a TARJETAS.
+ * Nueve columnas no caben en 390px por mucho que se aprieten, y con
+ * `table-layout: fixed` la columna Socix se quedaba sin ancho y su cabecera
+ * se pintaba encima de la de Cesta. Aquí cada fila se apila y cada celda
+ * lleva delante su etiqueta (`data-label` en el td), así que el thead sobra.
+ * ============================================================ */
+@media (max-width: 768px) {
+    .prl-table-wrap { overflow-x: visible; }
+    .prl-table { table-layout: auto; }
+    .prl-table thead { display: none; }
+
+    /* La fila es la tarjeta. El check se saca del flujo a la esquina para que
+       no gaste una columna ni empuje el contenido. */
+    .prl-table tbody tr { display: block; position: relative; padding: 13px 14px; }
+    .prl-table tbody tr + tr { border-top: 1px solid var(--prl-line); }
+    .prl-table tbody tr:hover td { background: transparent; }
+    .prl-table tbody td { display: flex; align-items: baseline; gap: 10px; padding: 3px 0; border-bottom: 0; }
+    .prl-table tbody td.tight { white-space: normal; }
+
+    /* Etiqueta de la celda. Sin data-label (persona, check, acciones) no se pinta. */
+    .prl-table tbody td[data-label]::before {
+        content: attr(data-label);
+        flex: 0 0 76px;
+        font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+        color: var(--prl-ink-faint); font-weight: 600; line-height: 1.7;
+    }
+
+    /* Nombre: primera línea de la tarjeta, a todo el ancho y con hueco para el check. */
+    .prl-table tbody td.prl-cell-person { display: block; padding: 0 0 8px 28px; }
+    .prl-table tbody td.check { position: absolute; top: 14px; left: 14px; width: auto; padding: 0; }
+    .prl-person__meta { max-width: none; }
+
+    /* Acciones: fila propia al pie de la tarjeta, separada por una regla fina. */
+    .prl-table tbody td.actions {
+        width: auto; text-align: left; margin-top: 8px; padding-top: 8px;
+        border-top: 1px solid var(--prl-line); gap: 4px;
+    }
+    .prl-table tbody td.actions a { width: 34px; height: 34px; }
+
+    .prl-empty { padding: 40px 16px; }
+
+    /* Los desplegables de filtro se anclaban a SU botón (`left: 0` sobre
+       .prl-filt-wrap), así que los de la derecha —Modalidad, Grupo— se salían
+       de la pantalla y provocaban scroll horizontal. En móvil el ancla pasa a
+       ser la barra entera: un panel a todo su ancho, debajo de los filtros. */
+    .prl-toolbar { position: relative; }
+    .prl-filt-wrap { position: static; }
+    .prl-pop { left: 0; right: 0; max-width: none; }
+}
 </style>
