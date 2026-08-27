@@ -3,8 +3,11 @@
 namespace App\Repository;
 
 use App\Entity\Node;
+use App\Entity\VolunteerCategory;
 use App\Entity\VolunteerOffer;
+use App\Entity\VolunteerSignup;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
+use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
 
 /**
@@ -15,6 +18,108 @@ class VolunteerOfferRepository extends ServiceEntityRepository
     public function __construct(ManagerRegistry $registry)
     {
         parent::__construct($registry, VolunteerOffer::class);
+    }
+
+    /**
+     * El listado de tareas con sus filtros, como QueryBuilder para poder
+     * paginarlo igual que el de socixs.
+     *
+     * Las cuatro vistas son las cuatro preguntas que se hacen de verdad: qué
+     * viene, qué está sin confirmar, qué se hizo y qué se quedó sin cubrir. La
+     * última es la incómoda y por eso tiene su sitio: una tarea que pasó sin que
+     * fuera nadie dice más sobre cómo va el voluntariado que cualquier contador.
+     *
+     * @param string                 $scope    upcoming | pending | done | missed | all
+     * @param VolunteerCategory|null $category filtra por área
+     * @param string|null            $query    texto libre sobre título y explicación
+     * @param \DateTimeInterface|null $now     momento de referencia
+     */
+    public function listQb(
+        string $scope = 'upcoming',
+        ?VolunteerCategory $category = null,
+        ?string $query = null,
+        ?\DateTimeInterface $now = null,
+    ): QueryBuilder {
+        $now ??= new \DateTime();
+
+        $qb = $this->createQueryBuilder('o');
+
+        // EXISTS y no JOIN: con un join sobre signups la tarea saldría repetida
+        // una vez por persona apuntada.
+        $attended = $qb->expr()->exists(
+            'SELECT 1 FROM App\Entity\VolunteerSignup sa'
+            .' WHERE sa.offer = o AND sa.attended = true AND sa.role = :roleParticipant'
+        );
+        $unanswered = $qb->expr()->exists(
+            'SELECT 1 FROM App\Entity\VolunteerSignup su'
+            .' WHERE su.offer = o AND su.attended IS NULL AND su.cancelledAt IS NULL'
+        );
+
+        switch ($scope) {
+            case 'pending':
+                $qb->andWhere('o.startsAt <= :now')->andWhere($unanswered)
+                    ->setParameter('now', $now)
+                    ->orderBy('o.startsAt', 'ASC');
+                break;
+            case 'done':
+                $qb->andWhere('o.startsAt <= :now')->andWhere($attended)
+                    ->setParameter('now', $now)
+                    ->setParameter('roleParticipant', VolunteerSignup::ROLE_PARTICIPANT)
+                    ->orderBy('o.startsAt', 'DESC');
+                break;
+            case 'missed':
+                $qb->andWhere('o.startsAt <= :now')
+                    ->andWhere($qb->expr()->not($attended))
+                    ->andWhere($qb->expr()->not($unanswered))
+                    ->setParameter('now', $now)
+                    ->setParameter('roleParticipant', VolunteerSignup::ROLE_PARTICIPANT)
+                    ->orderBy('o.startsAt', 'DESC');
+                break;
+            case 'all':
+                $qb->orderBy('o.startsAt', 'DESC');
+                break;
+            default:
+                $qb->andWhere('o.startsAt > :now')
+                    ->setParameter('now', $now)
+                    ->orderBy('o.startsAt', 'ASC');
+        }
+
+        if (null !== $category) {
+            $qb->andWhere($qb->expr()->exists(
+                'SELECT 1 FROM App\Entity\VolunteerOffer of2 JOIN of2.categories c2'
+                .' WHERE of2 = o AND c2 = :category'
+            ))->setParameter('category', $category);
+        }
+
+        if (null !== $query && '' !== trim($query)) {
+            $qb->andWhere('LOWER(o.title) LIKE :q OR LOWER(o.description) LIKE :q OR LOWER(o.place) LIKE :q')
+                ->setParameter('q', '%'.mb_strtolower(trim($query)).'%');
+        }
+
+        return $qb;
+    }
+
+    /**
+     * Cuántas tareas hay en cada vista, para la tira de cifras del listado.
+     *
+     * @param \DateTimeInterface|null $now momento de referencia
+     *
+     * @return array{upcoming: int, pending: int, done: int, missed: int, all: int}
+     */
+    public function counts(?\DateTimeInterface $now = null): array
+    {
+        $count = fn (string $scope): int => (int) $this->listQb($scope, null, null, $now)
+            ->select('COUNT(DISTINCT o.id)')
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        return [
+            'upcoming' => $count('upcoming'),
+            'pending' => $count('pending'),
+            'done' => $count('done'),
+            'missed' => $count('missed'),
+            'all' => $count('all'),
+        ];
     }
 
     /**

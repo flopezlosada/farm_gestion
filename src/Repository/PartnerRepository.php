@@ -115,11 +115,20 @@ class PartnerRepository extends ServiceEntityRepository
      * @param string                 $scope    declared | silent | refused | all
      * @param VolunteerCategory|null $category filtra por un área concreta
      */
-    public function volunteeringPoolQb(string $scope = 'declared', ?VolunteerCategory $category = null): QueryBuilder
-    {
+    public function volunteeringPoolQb(
+        string $scope = 'declared',
+        ?VolunteerCategory $category = null,
+        ?string $query = null,
+    ): QueryBuilder {
         $qb = $this->createQueryBuilder('p')
             ->where('p.status = :status')
             ->setParameter('status', Partner::STATUS_ACTIVO);
+
+        // Con 246 socixs, encontrar a alguien sin buscador es imposible.
+        if (null !== $query && '' !== trim($query)) {
+            $qb->andWhere('LOWER(p.name) LIKE :q OR LOWER(p.surname) LIKE :q OR LOWER(p.display_name) LIKE :q')
+                ->setParameter('q', '%'.mb_strtolower(trim($query)).'%');
+        }
 
         if (null !== $category) {
             // Subconsulta y no un JOIN filtrado: filtrar sobre el join recortaría

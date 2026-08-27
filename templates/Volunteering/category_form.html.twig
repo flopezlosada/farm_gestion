@@ -1,9 +1,9 @@
-{# Edición de un tipo de trabajo del voluntariado. #}
+{# Alta y edición de un tipo de trabajo, en pantalla propia. #}
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
 {% import '_macros/volunteering.html.twig' as vol %}
 
-{% block title %}Voluntariado · {{ category.name }}{% endblock %}
+{% block title %}Voluntariado · {{ is_new ? 'Nuevo tipo de trabajo' : category.name }}{% endblock %}
 
 {% block more_css %}
     {{ parent() }}
@@ -17,31 +17,54 @@
     <span class="csa-topbar__crumbs-sep">/</span>
     <a href="{{ path('volunteering_categories') }}">Tipos de trabajo</a>
     <span class="csa-topbar__crumbs-sep">/</span>
-    <span class="csa-topbar__crumb-active">{{ category.name }}</span>
+    <span class="csa-topbar__crumb-active">{{ is_new ? 'Nuevo' : category.name }}</span>
 {% endblock %}
 
 {% block csa_main %}
-    {{ csa.page_header('Voluntariado', 'Editar tipo de trabajo') }}
+    {{ csa.page_header('Voluntariado', is_new ? 'Nuevo tipo de trabajo' : 'Editar tipo de trabajo') }}
 
-    {% if not category.active %}
-        {{ csa.callout('Esta categoría está retirada: no se ofrece al crear tareas nuevas ni aparece en la ficha de lxs socixs. Las tareas históricas que la usaron siguen enteras.', 'info') }}
+    {% if not is_new and not category.active %}
+        {{ csa.callout('Este tipo está retirado: no se ofrece al crear tareas nuevas ni aparece en la ficha de lxs socixs. Las tareas históricas que lo usaron siguen enteras.', 'info') }}
     {% endif %}
 
     {{ form_start(form, { attr: { class: 'csa-form-narrow' } }) }}
-        <div class="csa-form-grid">
-            {{ csa.field(form.name, 'Nombre') }}
-            {{ vol.check(form.active, 'Se sigue ofreciendo', 'desmárcala para retirarla sin perder el histórico') }}
-                    {{ csa.field(form.coordinators, 'Quién coordina esta área', { full: true, hint: 'pueden gestionar sólo las tareas de esta área', widget_class: 'csa-select' }) }}
-            {{ csa.field(form.description, 'Qué entra aquí', {
-                full: true,
-                hint: 'se le enseña a cada socix junto a la casilla',
-                widget_class: 'csa-textarea'
-            }) }}
-        </div>
+
+        {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Qué es' } %}
+            {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
+                {% import '_macros/volunteering.html.twig' as vol %}
+                <div class="csa-form-grid">
+                    {{ csa.field(form.name, 'Nombre') }}
+                    {{ csa.field(form.description, 'Qué entra aquí', {
+                        full: true,
+                        hint: 'se le enseña a cada socix junto a la casilla',
+                        widget_class: 'csa-textarea'
+                    }) }}
+                    {{ vol.check(form.active, 'Se sigue ofreciendo', 'desmárcala para retirarlo sin perder el histórico') }}
+                </div>
+            {% endblock %}
+        {% endembed %}
+
+        {% embed '_components/csa_form_section.html.twig' with {
+            num: '2',
+            title: 'Quién lo coordina',
+            subtitle: 'Podrán publicar, cerrar y pedir gente para las tareas de esta área, y sólo de ésta.'
+        } %}
+            {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
+                <div class="csa-form-grid">
+                    {{ csa.field(form.coordinators, 'Quién coordina esta área', {
+                        full: true,
+                        hint: 'con esto les basta: el permiso se deriva solo'
+                    }) }}
+                </div>
+            {% endblock %}
+        {% endembed %}
 
         <div class="csa-row-between" style="margin-top: var(--csa-sp-6);">
             {{ csa.btn('Volver', { variant: 'ghost', href: path('volunteering_categories') }) }}
-            <button type="submit" class="csa-btn csa-btn--primary">Guardar cambios</button>
+            <button type="submit" class="csa-btn csa-btn--primary">{{ is_new ? 'Crear' : 'Guardar cambios' }}</button>
         </div>
+
     {{ form_end(form) }}
 {% endblock %}

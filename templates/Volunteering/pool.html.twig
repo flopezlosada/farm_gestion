@@ -1,4 +1,8 @@
-{# La bolsa de voluntariado: quién hay para cada tipo de trabajo. #}
+{# La bolsa de voluntariado: quién hay para cada tipo de trabajo.
+ #
+ # Mismo patrón que el listado de socixs: tira de cifras, pestañas, buscador y
+ # tabla paginada. Con 246 socixs, sin buscador y sin paginar no se encuentra a
+ # nadie — la primera versión salía como una tabla de nueve mil píxeles. #}
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
 
@@ -6,7 +10,13 @@
 
 {% block more_css %}
     {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
     {% include '_components/volunteering_styles.html.twig' %}
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    {% include '_components/listing_filters_js.html.twig' %}
 {% endblock %}
 
 {% block csa_crumbs %}
@@ -18,105 +28,108 @@
 {% endblock %}
 
 {% block csa_main %}
+<div class="prl">
+
     {{ csa.page_header('Voluntariado', 'Quién hay', 'A quién puedes llamar para cada tipo de trabajo.') }}
 
-    {#
-     # Por defecto se enseña sólo a quien HA MARCADO algo. Con las cuatro vistas
-     # mezcladas salían los 246 socixs en una tabla de nueve mil píxeles, y el
-     # 95% decía "no ha dicho nada": justo el ruido que impide encontrar a quien
-     # buscas. Los otros grupos siguen a un clic, y con su número al lado, que
-     # ver que "sin decir nada" son doscientos es la mitad de la información.
-     #}
-    <div class="vol-filters">
-        <a href="{{ path('volunteering_pool') }}"
-           class="csa-btn csa-btn--sm {{ not current and scope == 'declared' ? 'csa-btn--secondary' : 'csa-btn--ghost' }}">
-            Han dicho de qué ({{ counts.declared }})
+    <div class="prl-stats">
+        <a class="prl-stat prl-stat--active" href="{{ path('volunteering_pool', { ver: 'declared' }) }}" style="text-decoration: none;">
+            <div class="v">{{ counts.declared }}</div>
+            <div class="l">han dicho de qué</div>
         </a>
-        {% for category in categories %}
-            <a href="{{ path('volunteering_pool', { tipo: category.id }) }}"
-               class="csa-btn csa-btn--sm {{ current and current.id == category.id ? 'csa-btn--secondary' : 'csa-btn--ghost' }}">
-                {{ category.name }} ({{ category.partners|length }})
-            </a>
-        {% endfor %}
-        <a href="{{ path('volunteering_pool', { ver: 'silent' }) }}"
-           class="csa-btn csa-btn--sm {{ not current and scope == 'silent' ? 'csa-btn--secondary' : 'csa-btn--ghost' }}">
-            No han dicho nada ({{ counts.silent }})
+        <a class="prl-stat prl-stat--paused" href="{{ path('volunteering_pool', { ver: 'silent' }) }}" style="text-decoration: none;">
+            <div class="v">{{ counts.silent }}</div>
+            <div class="l">no han dicho nada</div>
         </a>
-        <a href="{{ path('volunteering_pool', { ver: 'refused' }) }}"
-           class="csa-btn csa-btn--sm {{ not current and scope == 'refused' ? 'csa-btn--secondary' : 'csa-btn--ghost' }}">
-            No quieren avisos ({{ counts.refused }})
+        <a class="prl-stat prl-stat--leave" href="{{ path('volunteering_pool', { ver: 'refused' }) }}" style="text-decoration: none;">
+            <div class="v">{{ counts.refused }}</div>
+            <div class="l">no quieren avisos</div>
         </a>
     </div>
 
-    {% set heading = current
-        ? 'Quién quiere ' ~ current.name|lower
-        : { 'silent': 'No han dicho de qué', 'refused': 'No quieren avisos' }|default({})[scope]|default('Han dicho de qué quieren') %}
+    {# Pestañas por área: lo primero que hace quien coordina es mirar SU bolsa. #}
+    <nav class="prl-tabs" role="tablist">
+        <a href="{{ path('volunteering_pool') }}" class="{{ not current and scope == 'declared' ? 'active' : '' }}">
+            Han dicho de qué <span class="count">{{ counts.declared }}</span>
+        </a>
+        {% for category in categories %}
+            <a href="{{ path('volunteering_pool', { tipo: category.id }) }}"
+               class="{{ current and current.id == category.id ? 'active' : '' }}">
+                {{ category.name }} <span class="count">{{ category.partners|length }}</span>
+            </a>
+        {% endfor %}
+    </nav>
 
-    {% embed '_components/csa_card.html.twig' with { title: heading, icon: 'fa-users' } %}
-        {% block body %}
-        {% import '_macros/csa.html.twig' as csa %}
+    <form method="get" action="{{ path('volunteering_pool') }}" id="prl-filter-form">
+        {% if current %}<input type="hidden" name="tipo" value="{{ current.id }}">{% endif %}
+        <input type="hidden" name="ver" value="{{ scope }}">
 
-            {% if scope == 'silent' and not current %}
-                {{ csa.callout('No haber dicho nada NO es negarse: a esta gente se le avisa de las tareas marcadas como aptas para cualquiera.', 'info') }}
-            {% elseif scope == 'refused' and not current %}
-                {{ csa.callout('Han pedido expresamente que no se les avise de voluntariado. Se respeta siempre, también en el aviso a toda la asociación.', 'warning') }}
-            {% endif %}
-
-            {#
-             # "Veces" está aquí porque quien coordina necesita saber a quién no
-             # ha visto todavía —para acercarse, no para señalarlo— y por eso la
-             # tabla NO se puede ordenar por ese número: va por orden alfabético
-             # y punto. Un listado ordenado por aportación es un ranking.
-             #}
-            <div class="csa-table-wrap">
-                <table class="csa-table">
-                    <thead>
-                        <tr>
-                            <th>Socix</th>
-                            <th class="csa-table__col-tight">Recoge en</th>
-                            <th>De qué quiere que le avisen</th>
-                            <th class="csa-table__col-tight">Veces en {{ year }}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for partner in pagination %}
-                            {% set stats = participation[partner.id]|default(null) %}
-                            <tr>
-                                <td class="csa-table__primary">{{ partner.name }} {{ partner.surname }}</td>
-                                <td class="csa-table__col-tight">
-                                    {{ partner.weeklyBasketGroup and partner.weeklyBasketGroup.node
-                                        ? partner.weeklyBasketGroup.node.name : '—' }}
-                                </td>
-                                <td>
-                                    {% if partner.volunteeringOptOut %}
-                                        {{ csa.badge('No quiere avisos', 'terracotta') }}
-                                    {% elseif partner.volunteerCategories is empty %}
-                                        <span class="vol-help">Nada — sólo lo sencillo</span>
-                                    {% else %}
-                                        {% for category in partner.volunteerCategories %}
-                                            {{ csa.badge(category.name, 'neutral') }}
-                                        {% endfor %}
-                                    {% endif %}
-                                </td>
-                                <td class="csa-table__col-tight">
-                                    {% if stats %}
-                                        {{ stats.times }}
-                                        <span class="vol-help">últ. {{ stats.last|date('d/m/Y') }}</span>
-                                    {% else %}
-                                        <span class="vol-help">ninguna</span>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                        {% else %}
-                            <tr><td colspan="4">Aquí no hay nadie todavía.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+        <div class="prl-toolbar">
+            <div class="prl-search">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
+                <input type="search" name="q" value="{{ q }}" placeholder="Buscar por nombre…" autocomplete="off">
             </div>
+        </div>
+    </form>
 
-            <div class="csa-dt-bottom">
-                {{ knp_pagination_render(pagination) }}
-            </div>
-        {% endblock %}
-    {% endembed %}
+    {% if scope == 'silent' and not current %}
+        {{ csa.callout('No haber dicho nada NO es negarse: a esta gente se le avisa de las tareas marcadas como aptas para cualquiera.', 'info') }}
+    {% elseif scope == 'refused' and not current %}
+        {{ csa.callout('Han pedido expresamente que no se les avise de voluntariado. Se respeta siempre, también en el aviso a toda la asociación.', 'warning') }}
+    {% endif %}
+
+    {#
+     # "Veces" está aquí porque quien coordina necesita saber a quién no ha visto
+     # todavía —para acercarse, no para señalarlo— y por eso la tabla NO se puede
+     # ordenar por ese número: va por orden alfabético y punto. Un listado
+     # ordenado por aportación es un ranking.
+     #}
+    <div class="csa-table-wrap">
+        <table class="csa-table">
+            <thead>
+                <tr>
+                    <th>Socix</th>
+                    <th class="csa-table__col-tight">Recoge en</th>
+                    <th>De qué quiere que le avisen</th>
+                    <th class="csa-table__col-tight">Veces en {{ year }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for partner in pagination %}
+                    {% set stats = participation[partner.id]|default(null) %}
+                    <tr>
+                        <td class="csa-table__primary">{{ partner.name }} {{ partner.surname }}</td>
+                        <td class="csa-table__col-tight">
+                            {{ partner.weeklyBasketGroup and partner.weeklyBasketGroup.node
+                                ? partner.weeklyBasketGroup.node.name : '—' }}
+                        </td>
+                        <td>
+                            {% if partner.volunteeringOptOut %}
+                                {{ csa.badge('No quiere avisos', 'terracotta') }}
+                            {% elseif partner.volunteerCategories is empty %}
+                                <span class="vol-help">Nada — sólo lo sencillo</span>
+                            {% else %}
+                                {% for category in partner.volunteerCategories %}
+                                    {{ csa.badge(category.name, 'neutral') }}
+                                {% endfor %}
+                            {% endif %}
+                        </td>
+                        <td class="csa-table__col-tight">
+                            {% if stats %}
+                                {{ stats.times }}
+                                <span class="vol-help">últ. {{ stats.last|date('d/m/Y') }}</span>
+                            {% else %}
+                                <span class="vol-help">ninguna</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="4">Aquí no hay nadie que encaje con lo que buscas.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="csa-dt-bottom">{{ knp_pagination_render(pagination) }}</div>
+</div>
 {% endblock %}

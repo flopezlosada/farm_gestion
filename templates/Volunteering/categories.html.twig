@@ -1,4 +1,9 @@
-{# Catálogo de tipos de trabajo del voluntariado. #}
+{# Catálogo de tipos de trabajo del voluntariado.
+ #
+ # Mismo patrón que el listado de socixs. El formulario de alta ya NO vive aquí:
+ # tiene pantalla propia (volunteering_category_new). Un formulario debajo de la
+ # tabla compite con ella por la atención y alarga la página sin motivo — a un
+ # catálogo se entra a mirar mucho más a menudo que a crear. #}
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
 
@@ -6,7 +11,13 @@
 
 {% block more_css %}
     {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
     {% include '_components/volunteering_styles.html.twig' %}
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    {% include '_components/listing_filters_js.html.twig' %}
 {% endblock %}
 
 {% block csa_crumbs %}
@@ -18,9 +29,54 @@
 {% endblock %}
 
 {% block csa_main %}
-    {{ csa.page_header('Voluntariado', 'Tipos de trabajo', 'Cada socix marca en su ficha de qué tipos quiere que se le avise. Marcar significa "avísame de esto"; no marcar nada, "avísame de lo que sea sencillo".') }}
+<div class="prl">
 
-    <div class="csa-table-wrap" style="margin-bottom: var(--csa-sp-6);">
+    {{ csa.page_header(
+        'Voluntariado',
+        'Tipos de trabajo',
+        'Cada socix marca en su ficha de qué tipos quiere que se le avise. Marcar significa "avísame de esto"; no marcar nada, "avísame de lo que sea sencillo".'
+    ) }}
+
+    <div class="prl-stats">
+        <a class="prl-stat prl-stat--active" href="{{ path('volunteering_categories', { ver: 'active' }) }}" style="text-decoration: none;">
+            <div class="v">{{ counts.active }}</div>
+            <div class="l">activos</div>
+        </a>
+        <a class="prl-stat prl-stat--leave" href="{{ path('volunteering_categories', { ver: 'retired' }) }}" style="text-decoration: none;">
+            <div class="v">{{ counts.retired }}</div>
+            <div class="l">retirados</div>
+        </a>
+        <a class="prl-stat" href="{{ path('volunteering_categories', { ver: 'all' }) }}" style="text-decoration: none;">
+            <div class="v">{{ counts.all }}</div>
+            <div class="l">en total</div>
+        </a>
+    </div>
+
+    {% set tabs = { 'active': 'Activos', 'retired': 'Retirados', 'all': 'Todos' } %}
+    <nav class="prl-tabs" role="tablist">
+        {% for key, label in tabs %}
+            <a href="{{ path('volunteering_categories', { ver: key }) }}" class="{{ scope == key ? 'active' : '' }}">
+                {{ label }} <span class="count">{{ counts[key] }}</span>
+            </a>
+        {% endfor %}
+    </nav>
+
+    <form method="get" action="{{ path('volunteering_categories') }}" id="prl-filter-form">
+        <input type="hidden" name="ver" value="{{ scope }}">
+
+        <div class="prl-toolbar">
+            <div class="prl-search">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
+                <input type="search" name="q" value="{{ q }}" placeholder="Buscar por nombre o descripción…" autocomplete="off">
+            </div>
+
+            <div style="margin-left: auto;">
+                {{ csa.btn('Nuevo tipo de trabajo', { variant: 'primary', icon: 'fa-plus', href: path('volunteering_category_new') }) }}
+            </div>
+        </div>
+    </form>
+
+    <div class="csa-table-wrap">
         <table class="csa-table">
             <thead>
                 <tr>
@@ -33,13 +89,13 @@
                 </tr>
             </thead>
             <tbody>
-                {% for category in categories %}
+                {% for category in pagination %}
                     <tr>
                         <td class="csa-table__primary">{{ category.name }}</td>
                         <td>{{ category.description ?: '—' }}</td>
                         <td>
                             {% for coordinator in category.coordinators %}
-                                {{ csa.badge(coordinator.username, 'sky') }}
+                                {{ csa.badge(coordinator.displayName, 'sky') }}
                             {% else %}
                                 <span class="vol-help">Sin coordinar</span>
                             {% endfor %}
@@ -47,9 +103,9 @@
                         <td class="csa-table__col-tight">{{ category.partners|length }}</td>
                         <td class="csa-table__col-tight">
                             {% if category.active %}
-                                {{ csa.badge('Activa', 'green') }}
+                                {{ csa.badge('Activo', 'green') }}
                             {% else %}
-                                {{ csa.badge('Retirada', 'neutral') }}
+                                {{ csa.badge('Retirado', 'neutral') }}
                             {% endif %}
                         </td>
                         <td class="csa-table__actions">
@@ -57,29 +113,12 @@
                         </td>
                     </tr>
                 {% else %}
-                    <tr><td colspan="6">Todavía no hay ningún tipo de trabajo. Crea el primero abajo.</td></tr>
+                    <tr><td colspan="6">No hay ningún tipo de trabajo que encaje con lo que buscas.</td></tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
 
-    {% embed '_components/csa_card.html.twig' with { title: 'Nuevo tipo de trabajo', icon: 'fa-plus' } %}
-        {% block body %}
-                {% import '_macros/csa.html.twig' as csa %}
-            {% import '_macros/volunteering.html.twig' as vol %}
-            {{ form_start(form, { attr: { class: 'csa-form-narrow' } }) }}
-                <div class="csa-form-grid">
-                    {{ csa.field(form.name, 'Nombre') }}
-                    {{ vol.check(form.active, 'Se sigue ofreciendo', 'desmárcala para retirarla sin perder el histórico') }}
-                    {{ csa.field(form.coordinators, 'Quién coordina esta área', { full: true, hint: 'pueden gestionar sólo las tareas de esta área', widget_class: 'csa-select' }) }}
-                    {{ csa.field(form.description, 'Qué entra aquí', {
-                        full: true,
-                        hint: 'se le enseña a cada socix junto a la casilla',
-                        widget_class: 'csa-textarea'
-                    }) }}
-                </div>
-                <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">Crear</button>
-            {{ form_end(form) }}
-        {% endblock %}
-    {% endembed %}
+    <div class="csa-dt-bottom">{{ knp_pagination_render(pagination) }}</div>
+</div>
 {% endblock %}

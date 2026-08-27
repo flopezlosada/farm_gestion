@@ -42,15 +42,26 @@ class VolunteerCategoryType extends AbstractType
             ->add('coordinators', EntityType::class, [
                 'label' => 'Quién coordina esta área',
                 'class' => User::class,
-                'choice_label' => static fn (User $user): string => $user->getUsername(),
+                // Nombre de la persona, no el username: en las cuentas de socixs
+                // el username es su correo, y un desplegable que ofrece
+                // "aguilella.vicente@gmail.com" no dice quién es a nadie.
+                'choice_label' => static fn (User $user): string => $user->getDisplayName(),
                 // Sólo cuentas que pueden entrar: nombrar coordinadora a una
                 // cuenta desactivada la dejaría con el rol y sin acceso.
                 'query_builder' => static fn ($repository) => $repository
                     ->createQueryBuilder('u')
+                    ->leftJoin('u.partner', 'p')
+                    ->addSelect('p')
                     ->where('u.enabled = true')
-                    ->orderBy('u.username', 'ASC'),
+                    ->orderBy('p.name', 'ASC')
+                    ->addOrderBy('u.username', 'ASC'),
+                // Casillas y no un <select multiple>: el nativo obliga a
+                // ctrl+clic para elegir varias, no deja ver de un vistazo cuáles
+                // están marcadas y en una caja de cuatro líneas hay que buscar
+                // con scroll. Es el mismo patrón que ya usa el tipo de trabajo de
+                // una tarea, y el CSS del proyecto lo pinta como pills.
+                'expanded' => true,
                 'multiple' => true,
-                'expanded' => false,
                 'required' => false,
                 'help' => 'Podrán publicar, cerrar y pedir gente para las tareas de esta área, y sólo de ésta. Con esto les basta: no hace falta darles ningún rol aparte, se deriva solo.',
             ])

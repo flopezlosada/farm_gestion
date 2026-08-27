@@ -69,19 +69,32 @@ class VolunteeringController extends AbstractController
      * Las tareas: lo que falta por cerrar, lo que viene y lo que ya se hizo.
      */
     #[Route('', name: 'volunteering_index', methods: ['GET'])]
-    public function index(VolunteerOfferRepository $offers): Response
-    {
+    public function index(
+        Request $request,
+        VolunteerOfferRepository $offers,
+        VolunteerCategoryRepository $categories,
+        PaginatorInterface $paginator,
+    ): Response {
         $now = new \DateTime();
+        $scope = $request->query->getAlpha('ver') ?: 'upcoming';
+        $categoryId = $request->query->getInt('tipo') ?: null;
+        $category = null !== $categoryId ? $categories->find($categoryId) : null;
+        $query = trim((string) $request->query->get('q'));
+
+        $pagination = $paginator->paginate(
+            $offers->listQb($scope, $category, $query, $now)->getQuery(),
+            $request->query->getInt('page', 1),
+            25
+        );
 
         return $this->render('Volunteering/index.html.twig', [
-            'upcoming' => $offers->findUpcoming($now),
-            // Sólo quedan aquí las que nadie ha confirmado por su cuenta: en
-            // cuanto alguien dice "sí, la hice" desde su panel, la tarea deja
-            // de ser trabajo pendiente para administración.
-            'pending_closure' => $offers->findPendingClosure($now),
-            'recently_done' => $offers->findRecentlyDone(
-                (clone $now)->modify(sprintf('-%d days', self::RECENT_DAYS))
-            ),
+            'pagination' => $pagination,
+            'counts' => $offers->counts($now),
+            'categories' => $categories->findActive(),
+            'scope' => $scope,
+            'current' => $category,
+            'q' => $query,
+            'now' => $now,
         ]);
     }
 
@@ -108,13 +121,14 @@ class VolunteeringController extends AbstractController
         $filter = $request->query->getInt('tipo') ?: null;
         $category = null !== $filter ? $categories->find($filter) : null;
         $scope = $request->query->getAlpha('ver') ?: 'declared';
+        $query = trim((string) $request->query->get('q'));
 
         $year = (int) date('Y');
         $from = new \DateTime(sprintf('%d-01-01 00:00:00', $year));
         $to = new \DateTime(sprintf('%d-12-31 23:59:59', $year));
 
         $pagination = $paginator->paginate(
-            $partners->volunteeringPoolQb($scope, $category)->getQuery(),
+            $partners->volunteeringPoolQb($scope, $category, $query)->getQuery(),
             $request->query->getInt('page', 1),
             25,
             [
@@ -136,6 +150,7 @@ class VolunteeringController extends AbstractController
             // por socix sería el N+1 más caro del módulo.
             'participation' => $signups->participationByPartner($from, $to),
             'year' => $year,
+            'q' => $query,
         ]);
     }
 
@@ -461,13 +476,39 @@ class VolunteeringController extends AbstractController
     /**
      * El catálogo de tipos de trabajo.
      */
-    #[Route('/categorias/listado', name: 'volunteering_categories', methods: ['GET', 'POST'])]
+    #[Route('/categorias/listado', name: 'volunteering_categories', methods: ['GET'])]
     #[IsGranted('ROLE_GESTION_VOLUNTARIADO_EDIT')]
     public function categories(
         Request $request,
         VolunteerCategoryRepository $categories,
-        EntityManagerInterface $em,
+        PaginatorInterface $paginator,
     ): Response {
+        $scope = $request->query->getAlpha('ver') ?: 'active';
+        $query = trim((string) $request->query->get('q'));
+
+        return $this->render('Volunteering/categories.html.twig', [
+            'pagination' => $paginator->paginate(
+                $categories->listQb($scope, $query)->getQuery(),
+                $request->query->getInt('page', 1),
+                25
+            ),
+            'counts' => $categories->counts(),
+            'scope' => $scope,
+            'q' => $query,
+        ]);
+    }
+
+    /**
+     * Crear un tipo de trabajo, en su propia pantalla.
+     *
+     * Estaba pegado debajo del listado, y ahí un formulario compite con la
+     * tabla por la atención y alarga la página sin motivo: se entra a mirar
+     * mucho más a menudo que a crear.
+     */
+    #[Route('/categorias/nueva', name: 'volunteering_category_new', methods: ['GET', 'POST'])]
+    #[IsGranted('ROLE_GESTION_VOLUNTARIADO_EDIT')]
+    public function newCategory(Request $request, EntityManagerInterface $em): Response
+    {
         $category = new VolunteerCategory();
         $form = $this->createForm(VolunteerCategoryType::class, $category);
         $form->handleRequest($request);
@@ -475,14 +516,15 @@ class VolunteeringController extends AbstractController
         if ($form->isSubmitted() && $form->isValid()) {
             $em->persist($category);
             $em->flush();
-            $this->addFlash('success', 'Categoría creada.');
+            $this->addFlash('success', 'Tipo de trabajo creado.');
 
             return $this->redirectToRoute('volunteering_categories');
         }
 
-        return $this->render('Volunteering/categories.html.twig', [
-            'categories' => $categories->findBy([], ['name' => 'ASC']),
+        return $this->render('Volunteering/category_form.html.twig', [
+            'category' => $category,
             'form' => $form->createView(),
+            'is_new' => true,
         ]);
     }
 
@@ -506,6 +548,7 @@ class VolunteeringController extends AbstractController
         return $this->render('Volunteering/category_form.html.twig', [
             'category' => $category,
             'form' => $form->createView(),
+            'is_new' => false,
         ]);
     }
 }

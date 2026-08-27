@@ -209,6 +209,28 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface, LegacyP
     }
 
     /**
+     * Cómo se llama esta cuenta cuando hay que enseñársela a una persona.
+     *
+     * El nombre de verdad vive en el {@see Partner} vinculado; User sólo tiene
+     * username y email, que en las cuentas de socixs son su correo. Un
+     * desplegable que ofrece "aguilella.vicente@gmail.com" no dice quién es esa
+     * persona a nadie que no se sepa los correos de memoria.
+     *
+     * Cae al username cuando no hay socix detrás (admin, cuentas de gestión):
+     * ahí el username SÍ identifica.
+     *
+     * @return string el nombre para enseñar
+     */
+    public function getDisplayName(): string
+    {
+        if (null === $this->partner) {
+            return $this->getUsername();
+        }
+
+        return trim(sprintf('%s %s', $this->partner->getName(), $this->partner->getSurname()));
+    }
+
+    /**
      * @return Collection<int, VolunteerCategory> las áreas de voluntariado que coordina
      */
     public function getCoordinatedVolunteerCategories(): Collection
