@@ -52,10 +52,16 @@
         } %}
             {% block body %}
                 {% import '_macros/csa.html.twig' as csa %}
+                {# Sin candidatas, el campo sale vacío y nadie sabe por qué. La
+                 # lista la alimenta Usuarias, no esta pantalla. #}
+                {% if form.coordinators.vars.choices is empty %}
+                    {{ csa.callout('Todavía no hay nadie que pueda coordinar. Se habilita marcando "Voluntariado" en la ficha de cada persona, en Administración › Usuarias.', 'warning', 'exclamation-triangle') }}
+                {% endif %}
+
                 <div class="csa-form-grid">
                     {{ csa.field(form.coordinators, 'Quién coordina esta área', {
                         full: true,
-                        hint: 'con esto les basta: el permiso se deriva solo'
+                        hint: 'sólo aparece quien tenga Voluntariado marcado en Usuarias'
                     }) }}
                 </div>
             {% endblock %}

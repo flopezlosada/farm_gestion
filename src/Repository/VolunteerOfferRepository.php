@@ -29,16 +29,18 @@ class VolunteerOfferRepository extends ServiceEntityRepository
      * última es la incómoda y por eso tiene su sitio: una tarea que pasó sin que
      * fuera nadie dice más sobre cómo va el voluntariado que cualquier contador.
      *
-     * @param string                 $scope    upcoming | pending | done | missed | all
-     * @param VolunteerCategory|null $category filtra por área
-     * @param string|null            $query    texto libre sobre título y explicación
-     * @param \DateTimeInterface|null $now     momento de referencia
+     * @param string                        $scope      upcoming | pending | done | missed | all
+     * @param VolunteerCategory|null        $category   filtra por área
+     * @param string|null                   $query      texto libre sobre título y explicación
+     * @param \DateTimeInterface|null       $now        momento de referencia
+     * @param list<VolunteerCategory>|null  $restrictTo áreas a las que se limita quien mira; null = sin límite
      */
     public function listQb(
         string $scope = 'upcoming',
         ?VolunteerCategory $category = null,
         ?string $query = null,
         ?\DateTimeInterface $now = null,
+        ?array $restrictTo = null,
     ): QueryBuilder {
         $now ??= new \DateTime();
 
@@ -91,6 +93,24 @@ class VolunteerOfferRepository extends ServiceEntityRepository
             ))->setParameter('category', $category);
         }
 
+        // Restricción por áreas propias (quien coordina, no administración).
+        // Va aquí y no en el controller para que ninguna vista futura pueda
+        // saltársela por descuido: el fallo de un filtro de permisos no da
+        // error, simplemente enseña lo que no debía.
+        //
+        // Una lista VACÍA no significa "todas": significa que esta persona no
+        // coordina ninguna área, y entonces no ve ninguna tarea.
+        if (null !== $restrictTo) {
+            if ([] === $restrictTo) {
+                return $qb->andWhere('1 = 0');
+            }
+
+            $qb->andWhere($qb->expr()->exists(
+                'SELECT 1 FROM App\Entity\VolunteerOffer of3 JOIN of3.categories c3'
+                .' WHERE of3 = o AND c3 IN (:mine)'
+            ))->setParameter('mine', $restrictTo);
+        }
+
         if (null !== $query && '' !== trim($query)) {
             $qb->andWhere('LOWER(o.title) LIKE :q OR LOWER(o.description) LIKE :q OR LOWER(o.place) LIKE :q')
                 ->setParameter('q', '%'.mb_strtolower(trim($query)).'%');
@@ -102,13 +122,14 @@ class VolunteerOfferRepository extends ServiceEntityRepository
     /**
      * Cuántas tareas hay en cada vista, para la tira de cifras del listado.
      *
-     * @param \DateTimeInterface|null $now momento de referencia
+     * @param \DateTimeInterface|null      $now        momento de referencia
+     * @param list<VolunteerCategory>|null $restrictTo áreas a las que se limita quien mira
      *
      * @return array{upcoming: int, pending: int, done: int, missed: int, all: int}
      */
-    public function counts(?\DateTimeInterface $now = null): array
+    public function counts(?\DateTimeInterface $now = null, ?array $restrictTo = null): array
     {
-        $count = fn (string $scope): int => (int) $this->listQb($scope, null, null, $now)
+        $count = fn (string $scope): int => (int) $this->listQb($scope, null, null, $now, $restrictTo)
             ->select('COUNT(DISTINCT o.id)')
             ->getQuery()
             ->getSingleScalarResult();

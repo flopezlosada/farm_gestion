@@ -36,6 +36,15 @@
 
     {{ csa.page_header('Voluntariado', 'Tareas', 'Lo que la asociación ofrece al voluntariado, y quién se apunta.') }}
 
+    {# Un listado vacío tiene que explicarse. Sin esto, quien está marcada como
+     # candidata en Usuarias pero aún no coordina ningún área ve una tabla sin
+     # filas y no tiene forma de saber por qué. #}
+    {% if not coordinates_something %}
+        {{ csa.callout('No coordinas ningún tipo de trabajo todavía, así que aquí no aparece nada. Pídele a administración que te asigne un área.', 'info') }}
+    {% elseif not sees_everything %}
+        {{ csa.callout('Ves sólo las tareas de las áreas que coordinas.', 'info') }}
+    {% endif %}
+
     {# ============ TIRA DE CIFRAS ============ #}
     {# "Sin cubrir" va con borde de aviso: una tarea que pasó sin que fuera
      # nadie dice más sobre cómo va esto que cualquier contador de horas. #}

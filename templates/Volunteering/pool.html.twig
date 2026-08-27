@@ -32,6 +32,10 @@
 
     {{ csa.page_header('Voluntariado', 'Quién hay', 'A quién puedes llamar para cada tipo de trabajo.') }}
 
+    {% if not coordinates_something %}
+        {{ csa.callout('No coordinas ningún tipo de trabajo todavía, así que aquí no aparece nadie. Pídele a administración que te asigne un área.', 'info') }}
+    {% endif %}
+
     <div class="prl-stats">
         <a class="prl-stat prl-stat--active" href="{{ path('volunteering_pool', { ver: 'declared' }) }}" style="text-decoration: none;">
             <div class="v">{{ counts.declared }}</div>

@@ -119,6 +119,7 @@ class PartnerRepository extends ServiceEntityRepository
         string $scope = 'declared',
         ?VolunteerCategory $category = null,
         ?string $query = null,
+        ?array $restrictTo = null,
     ): QueryBuilder {
         $qb = $this->createQueryBuilder('p')
             ->where('p.status = :status')
@@ -144,6 +145,24 @@ class PartnerRepository extends ServiceEntityRepository
             return $qb;
         }
 
+        // Quien coordina un área sólo ve SU bolsa. Las vistas "no han dicho
+        // nada" y "no quieren avisos" NO se restringen, y no es un descuido: esa
+        // gente no tiene área ninguna que cruzar, y quien coordina necesita
+        // saber a quién puede pedirle una tarea sencilla y quién ha dicho que no
+        // le avisen. Restringirlas dejaría las dos vistas siempre vacías.
+        if (null !== $restrictTo && 'declared' === $scope) {
+            if ([] === $restrictTo) {
+                return $qb->andWhere('1 = 0');
+            }
+
+            return $qb->andWhere($qb->expr()->exists(
+                'SELECT 1 FROM App\Entity\Partner pm JOIN pm.volunteerCategories cm'
+                .' WHERE pm = p AND cm IN (:mine)'
+            ))
+                ->andWhere('p.volunteering_opt_out = false')
+                ->setParameter('mine', $restrictTo);
+        }
+
         return match ($scope) {
             'silent' => $qb->andWhere('p.volunteerCategories IS EMPTY')
                 ->andWhere('p.volunteering_opt_out = false'),
@@ -160,9 +179,9 @@ class PartnerRepository extends ServiceEntityRepository
      *
      * @return array{declared: int, silent: int, refused: int}
      */
-    public function volunteeringPoolCounts(): array
+    public function volunteeringPoolCounts(?array $restrictTo = null): array
     {
-        $count = fn (string $scope): int => (int) $this->volunteeringPoolQb($scope)
+        $count = fn (string $scope): int => (int) $this->volunteeringPoolQb($scope, null, null, $restrictTo)
             ->select('COUNT(DISTINCT p.id)')
             ->getQuery()
             ->getSingleScalarResult();

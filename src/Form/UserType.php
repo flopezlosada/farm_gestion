@@ -55,6 +55,17 @@ class UserType extends AbstractType
         'albergue'  => ['label' => 'Albergue',           'read' => 'ROLE_GESTION_ALBERGUE',  'edit' => 'ROLE_GESTION_ALBERGUE_EDIT'],
         'lar'       => ['label' => 'LAR',                'read' => 'ROLE_GESTION_LAR',       'edit' => 'ROLE_GESTION_LAR_EDIT'],
         'laboral'   => ['label' => 'Personal',           'read' => 'ROLE_GESTION_LABORAL',   'edit' => 'ROLE_GESTION_LABORAL_EDIT'],
+        // Dar la lectura aquí es lo que habilita a alguien para COORDINAR un
+        // área de voluntariado: sólo quien la tenga aparece en el desplegable de
+        // coordinadoras. Sin ese paso previo, ese desplegable ofrecería las
+        // doscientas cuentas de la asociación y sería inusable.
+        //
+        // El rol también se DERIVA de coordinar algún área ({@see
+        // \App\Entity\User::getRoles()}), y las dos vías conviven sin chocar
+        // porque la derivación SUMA: quien coordina tiene el permiso aunque
+        // nadie se lo marcara aquí, y quien lo tiene marcado sin coordinar nada
+        // es sólo una candidata.
+        'voluntariado' => ['label' => 'Voluntariado',    'read' => 'ROLE_GESTION_VOLUNTARIADO', 'edit' => 'ROLE_GESTION_VOLUNTARIADO_EDIT'],
     ];
 
     public function buildForm(FormBuilderInterface $builder, array $options): void

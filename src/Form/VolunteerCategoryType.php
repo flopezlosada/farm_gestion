@@ -46,13 +46,29 @@ class VolunteerCategoryType extends AbstractType
                 // el username es su correo, y un desplegable que ofrece
                 // "aguilella.vicente@gmail.com" no dice quién es a nadie.
                 'choice_label' => static fn (User $user): string => $user->getDisplayName(),
-                // Sólo cuentas que pueden entrar: nombrar coordinadora a una
-                // cuenta desactivada la dejaría con el rol y sin acceso.
+                // SÓLO quien tenga marcado "Voluntariado" en su ficha de
+                // Usuarias. En producción hay del orden de doscientas cuentas y
+                // un desplegable con todas es inusable: el paso previo en
+                // Usuarias es lo que lo reduce a las candidatas de verdad, y de
+                // paso evita nombrar coordinadora a una cuenta de servicio
+                // (guest, mancomunidad) por un dedazo.
+                //
+                // LIKE sobre la columna serializada, que es como ya consulta por
+                // rol UserRepository::findByRole(). Feo, pero es el formato en
+                // el que Doctrine guarda el array y no vamos a cambiarlo por
+                // esto. ROLE_ADMIN entra también: lo incluye todo.
+                //
+                // Y sólo cuentas habilitadas: nombrar coordinadora a una cuenta
+                // desactivada la dejaría con el encargo y sin poder entrar.
                 'query_builder' => static fn ($repository) => $repository
                     ->createQueryBuilder('u')
                     ->leftJoin('u.partner', 'p')
                     ->addSelect('p')
                     ->where('u.enabled = true')
+                    ->andWhere('u.roles LIKE :vol OR u.roles LIKE :volEdit OR u.roles LIKE :admin')
+                    ->setParameter('vol', '%"ROLE_GESTION_VOLUNTARIADO"%')
+                    ->setParameter('volEdit', '%"ROLE_GESTION_VOLUNTARIADO_EDIT"%')
+                    ->setParameter('admin', '%"ROLE_ADMIN"%')
                     ->orderBy('p.name', 'ASC')
                     ->addOrderBy('u.username', 'ASC'),
                 // Casillas y no un <select multiple>: el nativo obliga a

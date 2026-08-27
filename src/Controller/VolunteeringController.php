@@ -19,6 +19,7 @@ use App\Service\Volunteering\VolunteerAudienceResolver;
 use App\Service\Volunteering\VolunteerCallNotifier;
 use App\Service\Volunteering\VolunteerOfferChangeNotifier;
 use App\Service\Volunteering\VolunteerOfferSnapshot;
+use App\Service\Volunteering\VolunteerScope;
 use Doctrine\ORM\EntityManagerInterface;
 use Knp\Component\Pager\PaginatorInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -41,11 +42,14 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * atributo: quien coordina un área puede con las suyas y con ninguna más. El
  * `IsGranted` de la clase sólo abre la puerta.
  *
- * La LECTURA sí alcanza a todas las áreas: un coordinador de huerta ve las
- * tareas del reparto y quién se apuntó. Son nombres de socixs dentro de la
- * asociación, no datos de contacto, y separar también la lectura obligaría a
- * filtrar cada listado por área a cambio de que nadie pudiera ver cómo va el
- * conjunto.
+ * Y LA LECTURA TAMBIÉN VA POR ÁREAS ({@see VolunteerScope}): quien coordina
+ * huerta no ve las tareas del reparto ni su gente. "Sin mezcla" es el requisito,
+ * y el filtro vive en las consultas y no en los controllers para que ninguna
+ * vista futura pueda saltárselo por descuido — un filtro de permisos que falta
+ * no da error, simplemente enseña lo que no debía.
+ *
+ * Sólo administración (`ROLE_GESTION_VOLUNTARIADO_EDIT`, y ROLE_ADMIN por
+ * jerarquía) ve el conjunto.
  */
 #[Route('/gestion/voluntariado')]
 #[IsGranted('ROLE_GESTION_VOLUNTARIADO')]
@@ -74,27 +78,33 @@ class VolunteeringController extends AbstractController
         VolunteerOfferRepository $offers,
         VolunteerCategoryRepository $categories,
         PaginatorInterface $paginator,
+        VolunteerScope $scopeOf,
     ): Response {
         $now = new \DateTime();
         $scope = $request->query->getAlpha('ver') ?: 'upcoming';
         $categoryId = $request->query->getInt('tipo') ?: null;
         $category = null !== $categoryId ? $categories->find($categoryId) : null;
         $query = trim((string) $request->query->get('q'));
+        $mine = $scopeOf->categories();
 
         $pagination = $paginator->paginate(
-            $offers->listQb($scope, $category, $query, $now)->getQuery(),
+            $offers->listQb($scope, $category, $query, $now, $mine)->getQuery(),
             $request->query->getInt('page', 1),
             25
         );
 
         return $this->render('Volunteering/index.html.twig', [
             'pagination' => $pagination,
-            'counts' => $offers->counts($now),
-            'categories' => $categories->findActive(),
+            'counts' => $offers->counts($now, $mine),
+            // El filtro de área sólo ofrece las suyas: enseñar áreas que no
+            // puede ver es prometer un filtro que devuelve cero.
+            'categories' => $mine ?? $categories->findActive(),
             'scope' => $scope,
             'current' => $category,
             'q' => $query,
             'now' => $now,
+            'coordinates_something' => $scopeOf->coordinatesSomething(),
+            'sees_everything' => $scopeOf->seesEverything(),
         ]);
     }
 
@@ -117,18 +127,20 @@ class VolunteeringController extends AbstractController
         VolunteerCategoryRepository $categories,
         VolunteerSignupRepository $signups,
         PaginatorInterface $paginator,
+        VolunteerScope $scopeOf,
     ): Response {
         $filter = $request->query->getInt('tipo') ?: null;
         $category = null !== $filter ? $categories->find($filter) : null;
         $scope = $request->query->getAlpha('ver') ?: 'declared';
         $query = trim((string) $request->query->get('q'));
+        $mine = $scopeOf->categories();
 
         $year = (int) date('Y');
         $from = new \DateTime(sprintf('%d-01-01 00:00:00', $year));
         $to = new \DateTime(sprintf('%d-12-31 23:59:59', $year));
 
         $pagination = $paginator->paginate(
-            $partners->volunteeringPoolQb($scope, $category, $query)->getQuery(),
+            $partners->volunteeringPoolQb($scope, $category, $query, $mine)->getQuery(),
             $request->query->getInt('page', 1),
             25,
             [
@@ -142,10 +154,11 @@ class VolunteeringController extends AbstractController
 
         return $this->render('Volunteering/pool.html.twig', [
             'pagination' => $pagination,
-            'categories' => $categories->findActive(),
+            'categories' => $mine ?? $categories->findActive(),
             'current' => $category,
             'scope' => $scope,
-            'counts' => $partners->volunteeringPoolCounts(),
+            'counts' => $partners->volunteeringPoolCounts($mine),
+            'coordinates_something' => $scopeOf->coordinatesSomething(),
             // Veces que ha participado cada quien, en un solo mapa: preguntarlo
             // por socix sería el N+1 más caro del módulo.
             'participation' => $signups->participationByPartner($from, $to),
