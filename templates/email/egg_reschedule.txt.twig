@@ -1,0 +1,25 @@
+Hola {{ name }},
+
+Te escribimos por los huevos de tu cesta del {{ from_date|format_date('full', locale='es') }}.
+
+{% if to_date %}
+ESA SEMANA NO HABRÁ HUEVOS en tu punto de recogida. Los recibirás en el reparto
+del {{ to_date|format_date('full', locale='es') }}: ese día llevarás los de las dos semanas.
+
+No tienes que hacer nada. Tu cesta de verdura sigue igual, en su día de siempre.
+{% else %}
+ESA SEMANA NO HABRÁ HUEVOS en tu punto de recogida, y no se pasan a otro reparto.
+
+Tu cesta de verdura sigue igual, en su día de siempre.
+{% if not is_helper %}
+La cuota de huevos se cobra por mes completo, así que este mes no varía. Si esto
+te supone un problema, dínoslo y lo vemos.
+{% endif %}
+{% endif %}
+
+Sentimos el cambio. Las gallinas ponen lo que ponen y no siempre podemos
+ajustarlo a lo previsto.
+
+Un abrazo,
+CSA Vega de Jarama
+https://csavegadejarama.org
