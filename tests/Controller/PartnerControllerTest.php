@@ -556,6 +556,19 @@ class PartnerControllerTest extends AbstractAuthenticatedTest
             'En un punto quincenal el turno no se elige, y su hueco vale cadena vacía.'
         );
 
+        // Ninguno de los dos puede salir obligatorio del servidor: el JS los
+        // oculta según la modalidad, y un obligatorio vacío y oculto bloquea el
+        // envío del formulario entero sin que el navegador pueda enseñar su
+        // aviso en ninguna parte — el botón Guardar deja de responder y no se ve
+        // por qué. Cuando la cesta es mensual, es el JS quien marca como
+        // obligatoria la entrega del mes, que entonces sí está a la vista.
+        foreach (['dayMonthOrder', 'eggDayMonthOrder'] as $field) {
+            $this->assertNull(
+                $crawler->filter('#partner_basket_share_' . $field)->attr('required'),
+                sprintf('El campo %s no puede venir marcado como obligatorio desde el servidor.', $field)
+            );
+        }
+
         $em->remove($em->find(Partner::class, $partnerId));
         $em->remove($em->find(WeeklyBasketGroup::class, $groupId));
         $em->remove($em->find(Node::class, $nodeId));

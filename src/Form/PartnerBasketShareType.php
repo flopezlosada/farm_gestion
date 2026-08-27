@@ -140,6 +140,15 @@ class PartnerBasketShareType extends AbstractType
                 'label' => 'En qué cesta del mes recibe los huevos',
                 'help' => 'Los huevos viajan dentro de una de las cestas del socio (nunca en un día sin cesta). Una quincenal que recoge el 1er y 3er viernes y elige «2ª cesta» recibe los huevos en su segunda cesta. «Última cesta» sigue al último reparto del mes aunque el mes tenga 5 semanas.',
                 'choice_value' => self::CHOICE_VALUE,
+                // «No corresponde» es una respuesta válida: en una cesta mensual
+                // los huevos viajan con la única entrega y no hay nada que
+                // elegir, y ahí el campo va oculto. Marcado como obligatorio,
+                // el navegador bloqueaba el envío del formulario entero sin
+                // poder enseñar su aviso sobre un campo que no se ve.
+                // `placeholder: false` porque el hueco ya lo pone la lista: sin
+                // esto Symfony añadiría el suyo y habría dos opciones vacías.
+                'required' => false,
+                'placeholder' => false,
             ])
             // Qué entrega del mes recoge una cesta MENSUAL. Sobre qué se cuenta
             // depende del turno: sin turno, los viernes del mes; con turno, las
@@ -224,6 +233,14 @@ class PartnerBasketShareType extends AbstractType
                 'label' => 'Qué entrega del mes recoge la cesta',
                 'help' => 'Obligatorio en las cestas mensuales: sin este dato la cesta no aparece en ningún reparto. Sin turno asignado se cuentan los viernes del mes (1ª = primer viernes); con turno, las entregas de ese turno, así el socio coincide siempre con su grupo. «Última entrega» sigue al último reparto del mes.',
                 'choice_value' => self::CHOICE_VALUE,
+                // Obligatorio SÓLO en las mensuales, y de eso se encarga el JS
+                // del formulario, que es quien sabe la modalidad elegida sin
+                // recargar. El estado por defecto tiene que ser el inocuo: en el
+                // resto de modalidades el campo va oculto, y un obligatorio
+                // oculto y vacío bloquea el envío sin que el navegador pueda
+                // enseñar su aviso en ninguna parte.
+                'required' => false,
+                'placeholder' => false,
             ];
         }
 
