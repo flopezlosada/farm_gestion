@@ -30,6 +30,16 @@ use Doctrine\ORM\EntityManagerInterface;
  * socios cuyo PBS no cubre el mes entero o cambia a mitad, y socios con un
  * shift que cruza de mes. Los saltos (no-recoge) no distorsionan: el WB
  * saltado conserva sus ítems.
+ *
+ * RETIRADAS DE HUEVOS: un intent por componente "quitar huevos esta semana"
+ * (sin destino) es una decisión legítima —del socio desde su panel, o de
+ * gestión en lote cuando una semana no hay huevos, ver
+ * {@see \App\Service\Delivery\NodeEggRescheduler}— y por tanto se DESCUENTA de
+ * lo esperado: esas docenas no se entregan porque nadie esperaba que se
+ * entregasen. Sin esto, retirar los huevos de un punto de recogida marcaría en
+ * rojo a todos sus socios semanales. Cuando la retirada es un TRASLADO, la
+ * docena reaparece en el destino como {@see PartnerBasketExtra} y se vuelve a
+ * sumar por la otra vía: el mes cuadra solo.
  */
 final class EggMonthlyConservationInvariant extends AbstractInvariant
 {
@@ -114,6 +124,7 @@ final class EggMonthlyConservationInvariant extends AbstractInvariant
 
         $actualByPartnerMonth = $this->eggSumsByPartnerMonth($from);
         $extraByPartnerMonth = $this->extraEggsByPartnerMonth($from);
+        $removalsByPartnerMonth = $this->eggRemovalsByPartnerMonth($from);
         $crossMonthShiftPartners = $this->crossMonthShiftPartners($from);
         $overlappingPbsCount = $this->pbsOverlapCounts(
             array_unique(array_map(
@@ -180,22 +191,25 @@ final class EggMonthlyConservationInvariant extends AbstractInvariant
 
                 $dozens = $pbs->getEggAmount()->getDozens();
                 $extra = $extraByPartnerMonth[$pid][$ym] ?? 0.0;
+                // Semanas del mes en las que el socio renunció a sus huevos (o
+                // gestión se los retiró): restan una entrega cada una.
+                $withdrawn = $dozens * ($removalsByPartnerMonth[$pid][$ym] ?? 0);
                 $actual = $actualByPartnerMonth[$pid][$ym] ?? 0.0;
 
                 $matches = false;
                 foreach ($slotOptions as $slots) {
-                    if (abs($actual - ($dozens * $slots + $extra)) < self::EPSILON) {
+                    if (abs($actual - ($dozens * $slots + $extra - $withdrawn)) < self::EPSILON) {
                         $matches = true;
                         break;
                     }
                 }
                 if (!$matches) {
                     $expectedLabel = implode(' o ', array_map(
-                        static fn (int $slots): string => (string) ($dozens * $slots + $extra),
+                        static fn (int $slots): string => (string) ($dozens * $slots + $extra - $withdrawn),
                         $slotOptions
                     ));
                     $violations[] = sprintf(
-                        '%s (%d): %s suma %s docenas, esperadas %s (%s × %s entregas%s).',
+                        '%s (%d): %s suma %s docenas, esperadas %s (%s × %s entregas%s%s).',
                         $partner->getName(),
                         $pid,
                         $ym,
@@ -203,7 +217,8 @@ final class EggMonthlyConservationInvariant extends AbstractInvariant
                         $expectedLabel,
                         $dozens,
                         implode('/', $slotOptions),
-                        $extra > 0 ? sprintf(' + %s extra', $extra) : ''
+                        $extra > 0 ? sprintf(' + %s extra', $extra) : '',
+                        $withdrawn > 0 ? sprintf(' - %s retirada(s)', $withdrawn) : ''
                     );
                 }
             }
@@ -306,6 +321,37 @@ final class EggMonthlyConservationInvariant extends AbstractInvariant
         }
 
         return $sums;
+    }
+
+    /**
+     * Cuántas veces por socio y mes se retiraron los huevos de una semana
+     * (intent por componente huevos SIN destino). Cada una resta una entrega de
+     * lo esperado: el socio renunció a esa docena, o gestión se la retiró a todo
+     * el punto de recogida.
+     *
+     * Se cuentan entregas, no docenas: la cantidad la pone el PBS del socio, que
+     * es donde el llamante la multiplica.
+     *
+     * @return array<int, array<string, int>>
+     */
+    private function eggRemovalsByPartnerMonth(\DateTimeImmutable $from): array
+    {
+        $rows = $this->em->createQuery(
+            'SELECT IDENTITY(s.partner) AS pid, fb.date AS fdate
+             FROM ' . PartnerDeliveryShift::class . ' s
+             JOIN s.fromBasket fb
+             WHERE s.toBasket IS NULL AND s.component = :eggs AND fb.date >= :from'
+        )->setParameter('eggs', BasketComponent::ID_EGGS)
+         ->setParameter('from', $from)
+         ->getArrayResult();
+
+        $counts = [];
+        foreach ($rows as $r) {
+            $ym = $r['fdate']->format('Y-m');
+            $counts[$r['pid']][$ym] = ($counts[$r['pid']][$ym] ?? 0) + 1;
+        }
+
+        return $counts;
     }
 
     /**
