@@ -279,23 +279,33 @@
     {% embed '_components/csa_card.html.twig' with { title: 'Avisos enviados', icon: 'fa-bullhorn' } %}
         {% block body %}
                 {% import '_macros/csa.html.twig' as csa %}
-            <ul class="csa-list">
+            {# Un círculo vacío frente a un check no dice si eso está pendiente,
+             # descartado o si hay que hacer algo: se etiqueta con palabras. #}
+            <ul class="vol-scopes">
                 <li>
-                    {% if 'matching' in sent_scopes %}<i class="fa fa-check"></i>{% else %}<i class="fa fa-circle-o"></i>{% endif %}
-                    A quien tiene marcado este tipo de trabajo
+                    <span>A quien tiene marcado este tipo de trabajo</span>
+                    {{ 'matching' in sent_scopes ? csa.badge('Enviado', 'green') : csa.badge('Sin enviar', 'neutral') }}
                 </li>
                 <li>
-                    {% if 'unspecified' in sent_scopes %}<i class="fa fa-check"></i>{% else %}<i class="fa fa-circle-o"></i>{% endif %}
-                    A quien no ha declarado preferencias
+                    <span>
+                        A quien no ha declarado preferencias
+                        {% if not offer.openToAnyone %}
+                            <small class="vol-help--muted">no se le puede pedir: esta tarea no es para cualquiera</small>
+                        {% endif %}
+                    </span>
                     {% if not offer.openToAnyone %}
-                        <em>(no aplica: esta tarea no es para cualquiera)</em>
+                        {{ csa.badge('No aplica', 'neutral') }}
+                    {% else %}
+                        {{ 'unspecified' in sent_scopes ? csa.badge('Enviado', 'green') : csa.badge('Sin enviar', 'neutral') }}
                     {% endif %}
                 </li>
                 <li>
-                    {% if everyone_sent %}<i class="fa fa-check"></i>{% else %}<i class="fa fa-circle-o"></i>{% endif %}
-                    A toda la asociación
+                    <span>A toda la asociación</span>
+                    {{ everyone_sent ? csa.badge('Enviado', 'green') : csa.badge('Sin enviar', 'neutral') }}
                 </li>
             </ul>
+
+            <p class="vol-help--muted">Los dos primeros los manda el sistema solo, cuando se acerca la fecha y siguen faltando plazas. El último se manda a mano.</p>
 
             {% if is_granted('VOLUNTEER_OFFER_EDIT', offer) and not everyone_sent and offer.open %}
                 {#
