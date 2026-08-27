@@ -134,8 +134,9 @@ class PartnerBasketShareController extends AbstractController
      * Cambio de modalidad de cesta CON histórico: a diferencia de edit() (que
      * sobrescribe la PBS en sitio, para corregir datos), este flujo parte el
      * histórico — cierra la PBS vigente en la víspera de la fecha efectiva y
-     * abre una nueva — y emite un evento BASKET_CHANGE. Es la versión UI del
-     * comando app:change-basket-modality.
+     * abre una nueva — y emite un evento BASKET_CHANGE. Es el ÚNICO camino para
+     * cambiar de modalidad: el comando CLI que lo hacía antes se retiró, porque
+     * escribía la cesta sin pasar por la validación que aquí impone el formulario.
      *
      * El formulario reusa PartnerBasketShareType sobre una PBS NUEVA precargada
      * con los valores vigentes; su campo start_date se reinterpreta como la

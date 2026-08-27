@@ -12,8 +12,8 @@ use Doctrine\ORM\EntityManagerInterface;
  * (start_date = fecha efectiva) y las une semánticamente con un evento
  * BASKET_CHANGE.
  *
- * Centraliza la parte delicada que comparten el comando CLI
- * (app:change-basket-modality) y el formulario admin de cambio de modalidad:
+ * Centraliza la parte delicada del formulario admin de cambio de modalidad (y
+ * de los escenarios que la batería de invariantes ejercita con él):
  *  - localizar la PBS vigente en la VÍSPERA (no en la fecha efectiva, para no
  *    coger ya una PBS futura),
  *  - respetar el orden flush-antes-de-recordChange (el snapshot del evento
