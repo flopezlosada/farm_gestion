@@ -5,11 +5,14 @@ antes de encender nada.
 
 ## 1. Esquema (antes que el código)
 
-Aplicar a mano, a las **tres** bases de trabajo (`db`, `db_prod_snapshot`,
-`db_test`) y en producción por phpMyAdmin:
+Aplicar a mano:
 
 - `dev-docs/schema/volunteering.sql`
 - `dev-docs/schema/push-subscription.sql`
+
+**Ya aplicados en las tres bases locales** (`db`, `db_prod_snapshot`, `db_test`)
+el 27/08/2026, con backup del golden hecho después. **Quedan staging y
+producción**, por phpMyAdmin.
 
 Nunca con `doctrine:schema:update --force`: arrastraría el drift preexistente
 del resto del esquema y borraría índices que sólo existen a mano.
@@ -66,7 +69,7 @@ En `/gestion/settings`, grupo «Funcionalidades en rodaje»:
    está dentro.
 
 Y antes de que sirva de algo, crear al menos un par de **tipos de trabajo** en
-`/gestion/voluntariado/categorias/listado`: sin categorías, nadie puede declarar
+`/gestion/voluntariado/categorias`: sin categorías, nadie puede declarar
 preferencias y el primer paso del escalado no encuentra a nadie.
 
 ## 6. Roles y coordinación por áreas
@@ -83,7 +86,7 @@ socixs para eso le abriría las fichas, DNIs y domicilios de los 246 socixs. Es
 el mismo criterio con el que se separaron las encuestas.
 
 **Para acotar a alguien a un área concreta no se le da ningún rol**: se le
-nombra coordinadora de esa categoría en `/gestion/voluntariado/categorias/listado`.
+nombra coordinadora de esa categoría en `/gestion/voluntariado/categorias`.
 El rol de lectura se deriva solo de ese dato, igual que `ROLE_PARTNER` se deriva
 de tener un Partner vinculado, y `VolunteerOfferVoter` limita lo que puede tocar
 a las tareas de sus áreas.
@@ -91,7 +94,30 @@ a las tareas de sus áreas.
 Es decir: **abrir un área nueva o cambiar quién la lleva no exige tocar
 `security.yaml` ni desplegar.** Es marcar una casilla.
 
-## 7. ⚠️ El reloj del cron
+## 7. El rastro de eventos
+
+Todo cambio queda registrado en `volunteer_event`: crear o editar un tipo de
+trabajo, cambiar quién lo coordina, publicar o anular una tarea, apuntarse,
+darse de baja, anotar a alguien a mano, confirmar asistencia, cerrar la tarea y
+cada aviso enviado. Nada se borra al borrar el objeto: las claves foráneas son
+`SET NULL`, así que el rastro sobrevive.
+
+El actor se guarda como texto —`gestor:1`, `partner:76`, `system`, `cli`— por lo
+mismo: si la cuenta desaparece, la línea sigue diciendo quién fue. Se traduce a
+nombre al pintarlo, con el código como respaldo.
+
+Se ve en tres sitios, y **siempre filtrado por área**:
+
+- en la ficha de cada tarea y de cada tipo de trabajo, su propio historial;
+- en `/gestion/voluntariado/actividad`, el rastro completo con filtro por tipo;
+- en esa misma pantalla, filtrada por persona, entrando desde su fila en «Quién
+  hay» — que es el historial de un socix.
+
+Quien coordina un área ve lo de su área y nada más. Los eventos sin área —un
+socix cambiando sus preferencias— sólo los ve administración: no son de nadie en
+particular y no hay forma honesta de repartirlos.
+
+## 8. ⚠️ El reloj del cron
 
 `cron.volunteer_calls` es la primera tarea del planificador con cadencia por
 **intervalo** (cada 60 minutos). Eso sólo vale si el reloj externo dispara
@@ -104,7 +130,7 @@ que el manifiesto diga 60 minutos, y entonces el segundo paso del escalado
 Si se quiere el comportamiento real, hay que subir la frecuencia del cron de
 cdmon que llama al tick.
 
-## 8. Sobre iOS
+## 9. Sobre iOS
 
 En iPhone y iPad los avisos push **sólo funcionan si la web está instalada en la
 pantalla de inicio** (Compartir → Añadir a inicio). Una pestaña normal no vale, y
