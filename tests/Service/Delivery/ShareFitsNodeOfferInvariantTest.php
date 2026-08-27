@@ -35,7 +35,7 @@ class ShareFitsNodeOfferInvariantTest extends KernelTestCase
         $violations = $this->check();
 
         $this->assertNotEmpty(
-            $this->matching($violations, $surname),
+            $this->matching($violations, $partnerId),
             'La ley debe reportar la cesta semanal viva en un punto quincenal.'
         );
 
@@ -61,7 +61,7 @@ class ShareFitsNodeOfferInvariantTest extends KernelTestCase
 
         $this->assertSame(
             [],
-            $this->matching($this->check(), $surname),
+            $this->matching($this->check(), $partnerId),
             'Un tramo cerrado del histórico no es una violación.'
         );
 
@@ -80,7 +80,7 @@ class ShareFitsNodeOfferInvariantTest extends KernelTestCase
         $surname = 'Quincenal Correcta ' . uniqid();
         [$nodeId, $groupId, $partnerId, $shareId] = $this->seed($em, BasketShare::ID_BIWEEKLY, $surname);
 
-        $this->assertSame([], $this->matching($this->check(), $surname));
+        $this->assertSame([], $this->matching($this->check(), $partnerId));
 
         $this->cleanUp($em, $nodeId, $groupId, $partnerId, $shareId);
     }
@@ -108,14 +108,20 @@ class ShareFitsNodeOfferInvariantTest extends KernelTestCase
      * Las violaciones que hablan del socio sembrado, para no depender de lo que
      * las fixtures tengan sucio por su cuenta.
      *
+     * Se busca por ID y no por apellido: el nombre se pinta normalizado a title
+     * case (Partner::getLegalName) y mb_convert_case trata los dígitos como
+     * separadores de palabra, así que la caja del uniqid no es predecible.
+     *
      * @param list<string> $violations
      * @return list<string>
      */
-    private function matching(array $violations, string $surname): array
+    private function matching(array $violations, int $partnerId): array
     {
+        $needle = sprintf('(%d)', $partnerId);
+
         return array_values(array_filter(
             $violations,
-            static fn (string $line): bool => str_contains($line, $surname)
+            static fn (string $line): bool => str_contains($line, $needle)
         ));
     }
 
