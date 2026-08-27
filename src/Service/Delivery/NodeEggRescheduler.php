@@ -4,6 +4,8 @@ namespace App\Service\Delivery;
 
 use App\Entity\Basket;
 use App\Entity\BasketComponent;
+use App\Entity\Helper;
+use App\Entity\HelperBasketSkip;
 use App\Entity\Node;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
@@ -34,6 +36,12 @@ use Doctrine\ORM\EntityManagerInterface;
  *    NO se listan los socios del nodo: se listan los que ESE reparto lleva huevos,
  *    que es distinto (un quincenal fuera de turno, un mensual que no le toca o
  *    alguien que ya usó su interruptor no están).
+ *  - Los VOLUNTARIOS del albergue entran en el lote ({@see HelperDeliveryResolver::helpersWithEggs}):
+ *    si la granja no tiene huevos, no los tiene para nadie que recoja en ese
+ *    punto. A ellos sólo se les puede RETIRAR, también cuando la operación es un
+ *    traslado: su cesta se deriva de la estancia y no admite overrides ni
+ *    acumulación. No pagan cuota de huevos, así que la pérdida no es equiparable
+ *    a la de un socio, pero el resumen lo dice en voz alta en vez de esconderlo.
  *  - Quitar: intent durable por componente ({@see PartnerDeliverySkipper::applySkipIntent})
  *    + retirada de la línea si la semana ya está en piedra.
  *  - Sumar: {@see ExtraBasketAdder::addToDelivery}, que es aditivo de verdad
@@ -69,11 +77,14 @@ final class NodeEggRescheduler
         private readonly ExtraBasketAdder $extraAdder,
         private readonly WeeklyBasketComposer $composer,
         private readonly NodeDeliveryDate $nodeDeliveryDate,
+        private readonly HelperDeliveryResolver $helperResolver,
     ) {
     }
 
     /**
-     * Socios que llevan huevos en ese reparto y cuántas docenas, por nodo.
+     * Quién lleva huevos en ese reparto y cuántas docenas, por nodo. Incluye a
+     * los VOLUNTARIOS del albergue: si la granja no tiene huevos esa semana, no
+     * los tiene para nadie que recoja en ese punto.
      *
      * Es la previsualización de la pantalla y también la lista sobre la que
      * opera {@see apply}: se calcula una sola vez y de la misma forma, para que
@@ -81,21 +92,38 @@ final class NodeEggRescheduler
      *
      * @param Basket $from  Semana del reparto afectado.
      * @param Node[] $nodes Puntos de recogida seleccionados.
-     * @return list<array{partner: Partner, node: Node, dozens: float}> Ordenado
-     *         por nodo y nombre de reparto.
+     * @return list<array{kind: 'partner'|'helper', name: string, node: Node, dozens: float, partner: Partner|null, helper: Helper|null}>
+     *         Ordenado por nodo y nombre de reparto.
      */
     public function affected(Basket $from, array $nodes): array
     {
         $rows = [];
         foreach ($nodes as $node) {
             foreach ($this->eggAmountsForNode($from, $node) as $entry) {
-                $rows[] = ['partner' => $entry['partner'], 'node' => $node, 'dozens' => $entry['dozens']];
+                $rows[] = [
+                    'kind' => 'partner',
+                    'name' => $entry['partner']->getNameForDelivery() ?? '',
+                    'node' => $node,
+                    'dozens' => $entry['dozens'],
+                    'partner' => $entry['partner'],
+                    'helper' => null,
+                ];
+            }
+            foreach ($this->helperResolver->helpersWithEggs($node, $from) as $entry) {
+                $rows[] = [
+                    'kind' => 'helper',
+                    'name' => $entry['helper']->getName() ?? '',
+                    'node' => $node,
+                    'dozens' => $entry['dozens'],
+                    'partner' => null,
+                    'helper' => $entry['helper'],
+                ];
             }
         }
 
         usort($rows, static fn (array $a, array $b): int
             => ($a['node']->getName() <=> $b['node']->getName())
-            ?: strnatcasecmp($a['partner']->getNameForDelivery() ?? '', $b['partner']->getNameForDelivery() ?? ''));
+            ?: strnatcasecmp($a['name'], $b['name']));
 
         return $rows;
     }
@@ -108,9 +136,10 @@ final class NodeEggRescheduler
      * @param Basket|null $to    Semana a la que se trasladan, o null para
      *                           retirarlos sin recolocar (esas docenas se pierden).
      * @param string      $actor Quién lo origina (ver PartnerEvent::$actor).
-     * @return array{moved: int, removed: int, dozens: float, skipped: list<string>}
-     *         Cuántos socios se trasladaron / se quedaron sin huevos, el total de
-     *         docenas movidas y los casos que se dejaron intactos, con su motivo.
+     * @return array{moved: int, removed: int, helpers: int, dozens: float, skipped: list<string>, notify: list<array{kind: 'partner'|'helper', name: string, partner: Partner|null, helper: Helper|null}>}
+     *         Cuántos socios se trasladaron / se quedaron sin huevos, cuántos
+     *         voluntarios del albergue se quedaron sin ellos, el total de docenas,
+     *         los casos que se dejaron intactos con su motivo, y a quién avisar.
      * @throws \InvalidArgumentException Si el reparto de origen ya pasó, si el
      *         destino no es posterior a hoy, o si origen y destino coinciden.
      */
@@ -123,14 +152,27 @@ final class NodeEggRescheduler
             throw new \InvalidArgumentException('No se pudo resolver el componente huevos.');
         }
 
-        $result = ['moved' => 0, 'removed' => 0, 'dozens' => 0.0, 'skipped' => []];
+        $result = ['moved' => 0, 'removed' => 0, 'helpers' => 0, 'dozens' => 0.0, 'skipped' => [], 'notify' => []];
         $blockedBySemana = $this->existingShiftsFrom($from);
 
         foreach ($this->affected($from, $nodes) as $row) {
+            // VOLUNTARIOS del albergue: su cesta es derivada de la estancia y no
+            // admite overrides, así que sólo se les puede RETIRAR — también
+            // cuando la operación es un traslado. No es una pérdida equiparable
+            // a la del socio: no pagan cuota de huevos. Se cuentan aparte para
+            // poder decírselo al gestor sin disfrazarlo de traslado.
+            if ($row['kind'] === 'helper') {
+                $this->removeHelperEggs($row['helper'], $from, $row['node'], $eggs);
+                $result['helpers']++;
+                $result['dozens'] += $row['dozens'];
+                $result['notify'][] = $this->notifyEntry($row);
+                continue;
+            }
+
             $partner = $row['partner'];
             $reason = $blockedBySemana[$partner->getId()] ?? $this->destinationBlockerFor($partner, $to);
             if ($reason !== null) {
-                $result['skipped'][] = sprintf('%s: %s', $partner->getNameForDelivery(), $reason);
+                $result['skipped'][] = sprintf('%s: %s', $row['name'], $reason);
                 continue;
             }
 
@@ -152,11 +194,48 @@ final class NodeEggRescheduler
 
             $result[$to !== null ? 'moved' : 'removed']++;
             $result['dozens'] += $row['dozens'];
+            $result['notify'][] = $this->notifyEntry($row);
         }
 
         $this->em->flush();
 
         return $result;
+    }
+
+    /**
+     * Retira los huevos de la cesta de un voluntario esa semana, con una
+     * excepción por componente ({@see HelperBasketSkip}). Su cesta no se
+     * materializa, así que no hay línea que borrar: basta la fila.
+     *
+     * @param Helper          $helper Voluntario afectado.
+     * @param Basket          $from   Semana del reparto.
+     * @param Node            $node   Punto de recogida (da la fecha física).
+     * @param BasketComponent $eggs   Componente huevos.
+     */
+    private function removeHelperEggs(Helper $helper, Basket $from, Node $node, BasketComponent $eggs): void
+    {
+        $physicalDate = $this->nodeDeliveryDate->physicalDateFor($from, $node);
+        if ($physicalDate === null) {
+            return;
+        }
+
+        $this->em->persist(new HelperBasketSkip($helper, $physicalDate, $eggs));
+    }
+
+    /**
+     * Reduce una fila de afectados a lo que necesita el aviso por email.
+     *
+     * @param array{kind: 'partner'|'helper', name: string, partner: Partner|null, helper: Helper|null} $row
+     * @return array{kind: 'partner'|'helper', name: string, partner: Partner|null, helper: Helper|null}
+     */
+    private function notifyEntry(array $row): array
+    {
+        return [
+            'kind' => $row['kind'],
+            'name' => $row['name'],
+            'partner' => $row['partner'],
+            'helper' => $row['helper'],
+        ];
     }
 
     /**

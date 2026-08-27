@@ -1,0 +1,46 @@
+{# Aviso de que los huevos de un reparto se han retirado o trasladado.
+ # Contexto: name, from_date, to_date (null = no se recolocan), is_helper. #}
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>{% if to_date %}Tus huevos cambian de semana{% else %}Esta semana no hay huevos{% endif %} · CSA Vega de Jarama</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #333; max-width: 580px; margin: 0 auto; padding: 24px;">
+
+    <h2 style="color: #5a8f3d; margin-top: 0;">Hola {{ name }},</h2>
+
+    <p>Te escribimos por los <strong>huevos</strong> de tu cesta del
+       <strong>{{ from_date|format_date('full', locale='es') }}</strong>.</p>
+
+    {% if to_date %}
+        <p style="background: #fdf3e0; border-left: 3px solid #d99820; padding: 10px 14px;">
+            Esa semana <strong>no habrá huevos</strong> en tu punto de recogida.
+            Los recibirás en el reparto del
+            <strong>{{ to_date|format_date('full', locale='es') }}</strong>:
+            ese día llevarás los de las dos semanas.
+        </p>
+        <p>No tienes que hacer nada. Tu cesta de verdura sigue igual, en su día de siempre.</p>
+    {% else %}
+        <p style="background: #fae6dc; border-left: 3px solid #b45d3a; padding: 10px 14px;">
+            Esa semana <strong>no habrá huevos</strong> en tu punto de recogida y
+            <strong>no se pasan a otro reparto</strong>.
+        </p>
+        <p>Tu cesta de verdura sigue igual, en su día de siempre.</p>
+        {% if not is_helper %}
+            <p>La cuota de huevos se cobra por mes completo, así que este mes no varía.
+               Si esto te supone un problema, dínoslo y lo vemos.</p>
+        {% endif %}
+    {% endif %}
+
+    <p>Sentimos el cambio. Las gallinas ponen lo que ponen y no siempre podemos
+       ajustarlo a lo previsto.</p>
+
+    <p style="margin-top: 32px; color: #777; font-size: 13px;">
+        Un abrazo,<br>
+        CSA Vega de Jarama<br>
+        <a href="https://csavegadejarama.org">csavegadejarama.org</a>
+    </p>
+
+</body>
+</html>

@@ -107,7 +107,12 @@
                             <tbody>
                                 {% for row in affected %}
                                     <tr>
-                                        <td>{{ row.partner.nameForDelivery }}</td>
+                                        <td>
+                                            {{ row.name }}
+                                            {% if row.kind == 'helper' %}
+                                                <span class="egg-tag-helper">albergue</span>
+                                            {% endif %}
+                                        </td>
                                         <td><span class="egg-nodetag egg-nodetag--n{{ row.node.id % 5 }}">{{ row.node.name }}</span></td>
                                         <td class="egg-num">{{ csa.qty(row.dozens) }}</td>
                                     </tr>
@@ -115,7 +120,7 @@
                             </tbody>
                             <tfoot>
                                 <tr>
-                                    <td colspan="2"><strong>{{ affected|length }} socix(s)</strong></td>
+                                    <td colspan="2"><strong>{{ affected|length }} en total</strong></td>
                                     <td class="egg-num"><strong>{{ csa.qty(total_dozens) }}</strong></td>
                                 </tr>
                             </tfoot>
@@ -138,6 +143,15 @@
                         {% for nid in selected_node_ids %}
                             <input type="hidden" name="nodes[]" value="{{ nid }}">
                         {% endfor %}
+
+                        {% set _helpers = affected|filter(r => r.kind == 'helper')|length %}
+                        {% if _helpers > 0 %}
+                            {{ csa.callout(
+                                _helpers ~ ' voluntario(s) del albergue también llevan huevos ese día. A ellos SIEMPRE se les retiran, incluso si eliges trasladarlos: su cesta se deriva de la estancia y no se puede acumular en otro día.',
+                                'warning',
+                                'exclamation-triangle'
+                            ) }}
+                        {% endif %}
 
                         <p class="egg-steplabel">Pasarlos al reparto del…</p>
                         {% if destinations is empty %}
@@ -183,7 +197,7 @@
                 external_form_id: 'egg-apply',
                 eyebrow: 'Traslado de huevos',
                 title: 'Pasar los huevos al otro reparto',
-                body: affected|length ~ ' socix(s) se quedarán sin huevos ese día y los recogerán en el reparto de destino, donde llevarán los de las dos semanas. Se les verá reflejado en su calendario.',
+                body: affected|length ~ ' persona(s) se quedan sin huevos ese día y los recogen en el reparto de destino, con los de las dos semanas. Se les avisa por email y les queda reflejado en su calendario.',
                 confirm_label: 'Sí, trasladarlos',
                 cancel_label: 'Volver'
             }) }}
@@ -193,7 +207,7 @@
                 external_form_id: 'egg-apply',
                 eyebrow: 'Retirada de huevos',
                 title: 'Retirar los huevos sin recolocarlos',
-                body: affected|length ~ ' socix(s) perderán sus docenas de esa semana y no las recuperarán en otro reparto. La cuota mensual de huevos no varía: pagarán lo mismo.',
+                body: affected|length ~ ' persona(s) pierden sus docenas de esa semana y no las recuperan en otro reparto. La cuota mensual de huevos no varía: pagarán lo mismo. Se les avisa por email.',
                 confirm_label: 'Sí, retirarlos',
                 cancel_label: 'Volver'
             }) }}
@@ -251,6 +265,11 @@
 .egg-nodetag--n4 { background: var(--prl-terra-l); color: var(--prl-terra-d); }
 
 .egg-table .egg-num { text-align: right; }
+.egg-tag-helper {
+    display: inline-block; margin-left: 6px; padding: 1px 7px 2px; border-radius: 4px;
+    background: #efe6f0; color: #6b3a73; font-size: 10px; font-weight: 600;
+    letter-spacing: .04em; text-transform: uppercase;
+}
 
 /* ---- Opción de retirada (destructiva: se distingue de las fechas) ---- */
 .egg-drop {

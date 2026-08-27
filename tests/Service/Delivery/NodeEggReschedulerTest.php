@@ -5,11 +5,15 @@ namespace App\Tests\Service\Delivery;
 use App\Entity\Basket;
 use App\Entity\BasketComponent;
 use App\Entity\BasketShare;
+use App\Entity\Helper;
+use App\Entity\HelperBasketSkip;
+use App\Entity\HelperSource;
 use App\Entity\Node;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketExtra;
 use App\Entity\PartnerBasketShare;
 use App\Entity\PartnerDeliveryShift;
+use App\Entity\Stay;
 use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketGroup;
 use App\Entity\WeeklyBasketItem;
@@ -70,7 +74,7 @@ class NodeEggReschedulerTest extends KernelTestCase
         $this->em->flush();
 
         $affected = $this->rescheduler->affected($from, [$this->node]);
-        $ids = array_map(static fn (array $r): int => $r['partner']->getId(), $affected);
+        $ids = array_map(static fn (array $r): ?int => $r['partner']?->getId(), $affected);
 
         $this->assertContains($conHuevos->getId(), $ids);
         $this->assertNotContains($sinHuevos->getId(), $ids, 'Quien no lleva huevos ese día no entra en el lote.');
@@ -180,6 +184,82 @@ class NodeEggReschedulerTest extends KernelTestCase
         $this->assertSame(0, $result['removed']);
         $this->assertCount(1, $result['skipped']);
         $this->assertStringContainsString('cambio de día', $result['skipped'][0]);
+    }
+
+    /**
+     * Los voluntarios del albergue entran en el lote: si la granja no tiene
+     * huevos, tampoco los tiene para ellos. Se les retira con una excepción por
+     * componente, así que conservan su verdura.
+     */
+    public function testAlAlbergueTambienSeLeRetiranLosHuevos(): void
+    {
+        $from = $this->basket('2099-10-23', 43);
+        $this->em->flush();
+
+        $helper = $this->helperDeliveringOn($from);
+
+        $affected = $this->rescheduler->affected($from, [$this->node]);
+        $helperRows = array_values(array_filter($affected, static fn (array $r): bool => $r['kind'] === 'helper'));
+        $this->assertCount(1, $helperRows, 'El voluntario con huevos debe salir en la previsualización.');
+        $this->assertSame($helper->getName(), $helperRows[0]['name']);
+
+        $result = $this->rescheduler->apply($from, [$this->node], null, 'test');
+
+        $this->assertSame(1, $result['helpers']);
+        $this->em->clear();
+        $skips = $this->em->getRepository(HelperBasketSkip::class)->findBy(['helper' => $helper->getId()]);
+        $this->assertCount(1, $skips);
+        $this->assertSame(BasketComponent::ID_EGGS, $skips[0]->getComponent()?->getId(), 'Sólo los huevos: la verdura se queda.');
+    }
+
+    /**
+     * Aunque la operación sea un TRASLADO, al voluntario se le retiran: su cesta
+     * se deriva de la estancia y no admite acumular en otro día. Se cuenta como
+     * retirada, no como traslado, para que el resumen no lo disfrace.
+     */
+    public function testEnUnTrasladoElAlbergueTambienPierdeLosHuevos(): void
+    {
+        $from = $this->basket('2099-10-30', 44);
+        $to = $this->basket('2099-11-06', 45);
+        $this->em->flush();
+
+        $this->helperDeliveringOn($from);
+
+        $result = $this->rescheduler->apply($from, [$this->node], $to, 'test');
+
+        $this->assertSame(1, $result['helpers']);
+        $this->assertSame(0, $result['moved'], 'El voluntario no cuenta como trasladado.');
+    }
+
+    /**
+     * Voluntario con estancia confirmada que cubre el reparto y con huevos en su
+     * configuración de cesta.
+     *
+     * @param Basket $basket Semana en la que debe recoger.
+     * @return Helper
+     */
+    private function helperDeliveringOn(Basket $basket): Helper
+    {
+        $helper = (new Helper())
+            ->setName('TEST Voluntario ' . uniqid('', true))
+            ->setSource($this->em->getRepository(HelperSource::class)->findOneBy([]))
+            ->setBasketActive(true) // por defecto false, y la query de estancias lo filtra
+            ->setBasketVegBaskets(1)
+            ->setBasketEggDozens(1.0)
+            ->setBasketNode($this->node);
+        $this->em->persist($helper);
+
+        // La estancia debe cubrir el día del reparto: arrival < día+1 y departure > día.
+        $day = new \DateTimeImmutable($basket->getDate()->format('Y-m-d'));
+        $stay = (new Stay())
+            ->setHelper($helper)
+            ->setArrivalDate($day->modify('-3 days'))
+            ->setDepartureDate($day->modify('+3 days'))
+            ->setStatus(Stay::STATUS_CONFIRMED);
+        $this->em->persist($stay);
+        $this->em->flush();
+
+        return $helper;
     }
 
     /**

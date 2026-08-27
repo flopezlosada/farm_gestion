@@ -6,6 +6,7 @@ use App\Entity\Basket;
 use App\Entity\Node;
 use App\Repository\BasketRepository;
 use App\Repository\NodeRepository;
+use App\Service\Delivery\EggRescheduleNotifier;
 use App\Service\Delivery\NodeDeliveryDate;
 use App\Service\Delivery\NodeEggRescheduler;
 use Doctrine\ORM\EntityManagerInterface;
@@ -93,6 +94,7 @@ class NodeEggRescheduleController extends AbstractController
      * @param BasketRepository       $basketRepo
      * @param NodeEggRescheduler     $rescheduler
      * @param EntityManagerInterface $em          Para envolver el lote en una transacción.
+     * @param EggRescheduleNotifier  $notifier    Avisa por email a los afectados.
      * @return Response Redirección a la pantalla con el resultado en flashes.
      */
     #[Route('/aplicar', name: 'egg_reschedule_apply', methods: ['POST'])]
@@ -102,6 +104,7 @@ class NodeEggRescheduleController extends AbstractController
         BasketRepository $basketRepo,
         NodeEggRescheduler $rescheduler,
         EntityManagerInterface $em,
+        EggRescheduleNotifier $notifier,
     ): Response {
         $basketId = (int) $request->request->get('basket');
         $nodeIds = array_map('intval', (array) $request->request->all('nodes'));
@@ -136,21 +139,28 @@ class NodeEggRescheduleController extends AbstractController
             return $this->redirectToRoute('egg_reschedule_index', $this->backParams($basket, $nodes));
         }
 
-        $this->reportResult($result, $to);
+        // El aviso va FUERA de la transacción: un SMTP caído no debe deshacer un
+        // cambio de reparto ya aplicado. Al revés sí importaría (avisar de algo
+        // que luego se revierte), y por eso se envía después del commit.
+        $sent = $notifier->notify($result['notify'], $basket, $to);
+
+        $this->reportResult($result, $to, $sent);
 
         return $this->redirectToRoute('egg_reschedule_index', $this->backParams($basket, $nodes));
     }
 
     /**
      * Resume en flashes lo que ha hecho el lote: cuántos socios, cuántas
-     * docenas, y qué casos se han dejado intactos y por qué.
+     * docenas, cuántos avisos han salido, y qué casos se han dejado intactos y
+     * por qué.
      *
-     * @param array{moved: int, removed: int, dozens: float, skipped: list<string>} $result
-     * @param Basket|null $to Semana destino, o null si se retiraron sin recolocar.
+     * @param array{moved: int, removed: int, helpers: int, dozens: float, skipped: list<string>, notify: list<array<string,mixed>>} $result
+     * @param Basket|null $to   Semana destino, o null si se retiraron sin recolocar.
+     * @param int         $sent Avisos por email efectivamente enviados.
      */
-    private function reportResult(array $result, ?Basket $to): void
+    private function reportResult(array $result, ?Basket $to, int $sent): void
     {
-        $touched = $result['moved'] + $result['removed'];
+        $touched = $result['moved'] + $result['removed'] + $result['helpers'];
         if ($touched === 0 && $result['skipped'] === []) {
             $this->addFlash('warning', 'Nadie llevaba huevos en ese reparto: no se ha cambiado nada.');
 
@@ -160,17 +170,34 @@ class NodeEggRescheduleController extends AbstractController
         $dozens = rtrim(rtrim(number_format($result['dozens'], 2, ',', '.'), '0'), ',');
         if ($to !== null) {
             $this->addFlash('success', sprintf(
-                'Trasladadas %s docenas de %d socio(s) al reparto del %s. Ese día recogerán los huevos de las dos semanas.',
+                'Trasladadas %s docenas al reparto del %s: %d socio(s) las recogerán ese día, con los huevos de las dos semanas.',
                 $dozens,
-                $result['moved'],
                 $to->getDate()?->format('d/m/Y') ?? '?',
+                $result['moved'],
             ));
-        } elseif ($touched > 0) {
+        } elseif ($result['removed'] > 0) {
             $this->addFlash('success', sprintf(
                 'Retiradas %s docenas de %d socio(s). No se han recolocado: esas docenas no se entregarán y la cuota del mes no varía.',
                 $dozens,
                 $result['removed'],
             ));
+        }
+
+        // Los voluntarios del albergue van SIEMPRE por retirada, también cuando
+        // la operación es un traslado: su cesta se deriva de la estancia y no
+        // admite acumular. Se dice aparte para no venderlo como un traslado.
+        if ($result['helpers'] > 0) {
+            $this->addFlash('warning', sprintf(
+                '%d voluntario(s) del albergue se quedan sin huevos esa semana%s: su cesta no admite trasladarlos a otro día.',
+                $result['helpers'],
+                $to !== null ? ' y no los recuperan' : '',
+            ));
+        }
+
+        if ($sent > 0) {
+            $this->addFlash('success', sprintf('Se ha avisado por email a %d persona(s).', $sent));
+        } elseif ($result['notify'] !== []) {
+            $this->addFlash('warning', 'No ha salido ningún aviso por email: comprueba el interruptor general de correo y que haya emails en las fichas.');
         }
 
         if ($result['skipped'] !== []) {
