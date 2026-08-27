@@ -114,6 +114,10 @@
     // del turno vuelve a entrar aquí. Sin esto, recursión infinita.
     var syncing = false;
 
+    // Modalidad de la pasada anterior, para distinguir "el gestor ha cambiado la
+    // modalidad" de "se está cargando el formulario". Null en la primera pasada.
+    var lastModality = null;
+
     function syncConditionals() {
         if (syncing) {
             return;
@@ -144,7 +148,24 @@
 
         if (showDeliveryGroup) {
             syncTurnOptions(basketShare);
+
+            // Pasar a MENSUAL no arrastra el turno de la modalidad anterior. En
+            // una quincenal el turno decide qué viernes recoge; en una mensual
+            // cambia el SIGNIFICADO de su orden, que pasa a contarse sobre las
+            // entregas de ese turno y no sobre los viernes del mes ("1ª entrega"
+            // deja de ser el primer viernes). Heredarlo le movía la entrega de
+            // sitio sin que nadie lo eligiera: el anclaje a un turno (caso
+            // Alcobendas) tiene que ser una decisión, no una herencia.
+            //
+            // Sólo al cambiar la modalidad a mano: al abrir la ficha de un
+            // mensual que YA está anclado a propósito, su turno se respeta.
+            if (turnSelect && lastModality !== null
+                && inList(SHARES_MONTHLY, basketShare) && !inList(SHARES_MONTHLY, lastModality)) {
+                turnSelect.value = '';
+                turnSelect.dispatchEvent(new Event('change', { bubbles: true }));
+            }
         }
+        lastModality = basketShare;
         if (showCestaDayMonth) {
             limitOrderOptions(isMonthly && turnSelect !== null && turnSelect.value !== '', isMonthly);
         } else {
