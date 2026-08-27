@@ -34,6 +34,33 @@ class PartnerBasketShareType extends AbstractType
     ];
 
     /**
+     * `value` del `<option>` para los desplegables que ofrecen una opción vacía:
+     * el propio valor de negocio, y cadena vacía para el hueco.
+     *
+     * Sin esto Symfony NO usa los valores como `value`: en cuanto una opción
+     * vale `null` (y las tres de este formulario la tienen — «No corresponde»,
+     * «Sin turno») deja de poder convertirlos a string y cae en su fallback,
+     * que son ÍNDICES POSICIONALES. El `<select>` acababa con value 0, 1, 2, 3,
+     * 4 mientras el JS de _form_conditionals razona con 1, 2, 3, -1 y con la
+     * cadena vacía. Consecuencias reales (2026-08-27): al pasar una cesta a
+     * mensual el desplegable perdía «3ª» y «Última» (índices 3 y 4, descartados
+     * por el recorte `n <= 2`); el JS creía que SIEMPRE había turno, porque
+     * «Sin turno» valía "0" y no ""; y el `required` del navegador no impedía
+     * enviar «No corresponde» por lo mismo. La regla no puede vivir en el JS:
+     * es el HTML el que tiene que hablar el idioma del dominio.
+     */
+    private const CHOICE_VALUE = [self::class, 'choiceValue'];
+
+    /**
+     * @param int|string|null $choice Valor de negocio de la opción.
+     * @return string Su `value` en el HTML.
+     */
+    public static function choiceValue(int|string|null $choice): string
+    {
+        return $choice === null ? '' : (string) $choice;
+    }
+
+    /**
      * @param FormBuilderInterface $builder
      * @param array $options
      */
@@ -112,6 +139,16 @@ class PartnerBasketShareType extends AbstractType
                 ],
                 'label' => 'En qué cesta del mes recibe los huevos',
                 'help' => 'Los huevos viajan dentro de una de las cestas del socio (nunca en un día sin cesta). Una quincenal que recoge el 1er y 3er viernes y elige «2ª cesta» recibe los huevos en su segunda cesta. «Última cesta» sigue al último reparto del mes aunque el mes tenga 5 semanas.',
+                'choice_value' => self::CHOICE_VALUE,
+                // «No corresponde» es una respuesta válida: en una cesta mensual
+                // los huevos viajan con la única entrega y no hay nada que
+                // elegir, y ahí el campo va oculto. Marcado como obligatorio,
+                // el navegador bloqueaba el envío del formulario entero sin
+                // poder enseñar su aviso sobre un campo que no se ve.
+                // `placeholder: false` porque el hueco ya lo pone la lista: sin
+                // esto Symfony añadiría el suyo y habría dos opciones vacías.
+                'required' => false,
+                'placeholder' => false,
             ])
             // Qué entrega del mes recoge una cesta MENSUAL. Sobre qué se cuenta
             // depende del turno: sin turno, los viernes del mes; con turno, las
@@ -131,6 +168,7 @@ class PartnerBasketShareType extends AbstractType
                 // modalidades se anula en server.
                 'placeholder' => false,
                 'required' => false,
+                'choice_value' => self::CHOICE_VALUE,
             ])
             ->add('isFreeBasket', CheckboxType::class, array('label'=>'Marca esta casilla si es una cesta gratuita', 'required'=>false))
             ->add('amount',ChoiceType::class,array(
@@ -194,6 +232,15 @@ class PartnerBasketShareType extends AbstractType
                 'choices' => ['No corresponde' => null] + $choices,
                 'label' => 'Qué entrega del mes recoge la cesta',
                 'help' => 'Obligatorio en las cestas mensuales: sin este dato la cesta no aparece en ningún reparto. Sin turno asignado se cuentan los viernes del mes (1ª = primer viernes); con turno, las entregas de ese turno, así el socio coincide siempre con su grupo. «Última entrega» sigue al último reparto del mes.',
+                'choice_value' => self::CHOICE_VALUE,
+                // Obligatorio SÓLO en las mensuales, y de eso se encarga el JS
+                // del formulario, que es quien sabe la modalidad elegida sin
+                // recargar. El estado por defecto tiene que ser el inocuo: en el
+                // resto de modalidades el campo va oculto, y un obligatorio
+                // oculto y vacío bloquea el envío sin que el navegador pueda
+                // enseñar su aviso en ninguna parte.
+                'required' => false,
+                'placeholder' => false,
             ];
         }
 
@@ -203,6 +250,7 @@ class PartnerBasketShareType extends AbstractType
                 static fn (int $order): bool => $order === $forced,
             ),
             'label' => 'Qué entrega del mes recoge la cesta',
+            'choice_value' => self::CHOICE_VALUE,
             'disabled' => true,
             'help' => 'Este punto de recogida abre una sola semana al mes, así que la entrega no se elige: es la que abre el punto. Para cambiarla hay que cambiar la semana del punto de recogida.',
         ];

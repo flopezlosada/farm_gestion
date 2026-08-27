@@ -1,0 +1,333 @@
+{# ============================================================
+ # Huevos de un reparto: retirarlos o trasladarlos en lote, para
+ # uno o varios puntos de recogida.
+ #
+ # Recibe: weeks (Basket[]), basket (Basket|null), all_nodes (Node[]),
+ #         node_dates (id => fecha física|null), selected_node_ids (int[]),
+ #         affected (list<{partner, node, dozens}>), total_dozens (float),
+ #         destinations (list<{basket, dates}>).
+ #
+ # Tres pasos encadenados por GET (semana → puntos → previsualización).
+ # La acción sólo aparece cuando ya hay nombres en pantalla: nadie
+ # confirma un lote a ciegas.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Huevos de un reparto{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Huevos de un reparto</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {% set _dow = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'] %}
+    {% set _mon = ['', 'ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'] %}
+
+    {{ csa.page_header(
+        'Socixs · Reparto',
+        'Huevos de un reparto',
+        'Cuando una semana no hay huevos: quítalos de un punto de recogida entero, o pásalos al reparto siguiente.'
+    ) }}
+
+    <div class="egg">
+    <form method="get" action="{{ path('egg_reschedule_index') }}" data-egg-pick>
+
+        {% embed '_components/csa_form_section.html.twig' with { num: '1', title: '¿Qué reparto?', subtitle: 'La semana en la que faltan los huevos.' } %}
+            {% block body %}
+                {% set _dow = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'] %}
+                {% set _mon = ['', 'ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'] %}
+                <div class="egg-dates">
+                    {% for w in weeks %}
+                        <label class="egg-date{{ basket and w.id == basket.id ? ' egg-date--checked' : '' }}">
+                            <input type="radio" name="basket" value="{{ w.id }}"
+                                   {{ basket and w.id == basket.id ? 'checked' : '' }} hidden>
+                            <span class="dow">{{ _dow[w.date|date('w')] }}</span>
+                            <span class="num">{{ w.date|date('d') }}</span>
+                            <span class="mon">{{ _mon[w.date|date('n')] }} {{ w.date|date('y') }}</span>
+                        </label>
+                    {% else %}
+                        <p class="egg-empty">No hay repartos futuros configurados.</p>
+                    {% endfor %}
+                </div>
+            {% endblock %}
+        {% endembed %}
+
+        {% embed '_components/csa_form_section.html.twig' with { num: '2', title: '¿Qué puntos de recogida?', subtitle: 'Puedes marcar varios. Sólo se ofrecen los que reparten esa semana.' } %}
+            {% block body %}
+                <div class="egg-nodes">
+                    {% for n in all_nodes %}
+                        {% set _date = node_dates[n.id] %}
+                        {% if _date %}
+                            <label class="egg-nodechip egg-nodechip--n{{ n.id % 5 }}{{ n.id in selected_node_ids ? ' egg-nodechip--checked' : '' }}">
+                                <input type="checkbox" name="nodes[]" value="{{ n.id }}"
+                                       {{ n.id in selected_node_ids ? 'checked' : '' }} hidden>
+                                <strong>{{ n.name }}</strong>
+                                <span class="sub">reparte el {{ _date|date('d/m') }}</span>
+                            </label>
+                        {% else %}
+                            <span class="egg-nodechip egg-nodechip--off" title="Este punto no reparte esa semana">
+                                <strong>{{ n.name }}</strong>
+                                <span class="sub">no reparte esa semana</span>
+                            </span>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+                <noscript>
+                    <div style="margin-top: var(--csa-sp-4);">
+                        <button type="submit" class="csa-btn csa-btn--secondary">Ver a quién afecta</button>
+                    </div>
+                </noscript>
+            {% endblock %}
+        {% endembed %}
+
+    </form>
+
+    {% if basket and selected_node_ids is not empty %}
+
+        {% embed '_components/csa_form_section.html.twig' with { num: '3', title: 'A quién afecta', subtitle: 'Sólo salen quienes llevan huevos ese día, no todo el punto de recogida.' } %}
+            {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
+                {% if affected is empty %}
+                    {{ csa.callout('Nadie lleva huevos en ese reparto. No hay nada que retirar ni trasladar.', 'info') }}
+                {% else %}
+                    <div class="csa-table-wrap">
+                        <table class="csa-table egg-table">
+                            <thead>
+                                <tr>
+                                    <th>Socix</th>
+                                    <th>Punto de recogida</th>
+                                    <th class="egg-num">Docenas</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in affected %}
+                                    <tr>
+                                        <td>
+                                            {{ row.name }}
+                                            {% if row.kind == 'helper' %}
+                                                <span class="egg-tag-helper">albergue</span>
+                                            {% endif %}
+                                        </td>
+                                        <td><span class="egg-nodetag egg-nodetag--n{{ row.node.id % 5 }}">{{ row.node.name }}</span></td>
+                                        <td class="egg-num">{{ csa.qty(row.dozens) }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <td colspan="2"><strong>{{ affected|length }} en total</strong></td>
+                                    <td class="egg-num"><strong>{{ csa.qty(total_dozens) }}</strong></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                {% endif %}
+            {% endblock %}
+        {% endembed %}
+
+        {% if affected is not empty %}
+            {% embed '_components/csa_form_section.html.twig' with { num: '4', title: '¿Qué se hace con esos huevos?', subtitle: 'Trasladarlos conserva lo que cada hogar tiene contratado; retirarlos, no.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    {% set _dow = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'] %}
+                    {% set _mon = ['', 'ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'] %}
+
+                    <form method="post" action="{{ path('egg_reschedule_apply') }}" id="egg-apply" data-egg-apply>
+                        <input type="hidden" name="_token" value="{{ csrf_token('egg_reschedule') }}">
+                        <input type="hidden" name="basket" value="{{ basket.id }}">
+                        {% for nid in selected_node_ids %}
+                            <input type="hidden" name="nodes[]" value="{{ nid }}">
+                        {% endfor %}
+
+                        {% set _helpers = affected|filter(r => r.kind == 'helper')|length %}
+                        {% if _helpers > 0 %}
+                            {{ csa.callout(
+                                _helpers ~ ' voluntario(s) del albergue también llevan huevos ese día. A ellos SIEMPRE se les retiran, incluso si eliges trasladarlos: su cesta se deriva de la estancia y no se puede acumular en otro día.',
+                                'warning',
+                                'exclamation-triangle'
+                            ) }}
+                        {% endif %}
+
+                        <p class="egg-steplabel">Pasarlos al reparto del…</p>
+                        {% if destinations is empty %}
+                            {{ csa.callout(
+                                'No hay ninguna semana futura en la que repartan todos los puntos marcados a la vez. Marca menos puntos, o retira los huevos sin recolocarlos.',
+                                'warning'
+                            ) }}
+                        {% else %}
+                            <div class="egg-dates">
+                                {% for d in destinations %}
+                                    <label class="egg-date" data-egg-dest>
+                                        <input type="radio" name="to" value="{{ d.basket.id }}" hidden>
+                                        <span class="dow">{{ _dow[d.basket.date|date('w')] }}</span>
+                                        <span class="num">{{ d.basket.date|date('d') }}</span>
+                                        <span class="mon">{{ _mon[d.basket.date|date('n')] }} {{ d.basket.date|date('y') }}</span>
+                                    </label>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+
+                        <p class="egg-steplabel" style="margin-top: var(--csa-sp-5);">…o no recolocarlos</p>
+                        <label class="egg-drop" data-egg-dest>
+                            <input type="radio" name="to" value="0" hidden>
+                            <span class="egg-drop__title">Retirar sin recolocar</span>
+                            <span class="egg-drop__txt">
+                                Esas docenas no se entregarán. La cuota de huevos se cobra por mes completo,
+                                así que quien las pierda pagará igual.
+                            </span>
+                        </label>
+
+                        <div class="csa-row-between" style="margin-top: var(--csa-sp-6); padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                            <div></div>
+                            <button type="button" class="csa-btn csa-btn--primary" data-egg-go disabled>
+                                <span>Aplicar</span>
+                            </button>
+                        </div>
+                    </form>
+                {% endblock %}
+            {% endembed %}
+
+            {{ csa.confirm_dialog('egg-confirm-move', {
+                variant: 'info',
+                external_form_id: 'egg-apply',
+                eyebrow: 'Traslado de huevos',
+                title: 'Pasar los huevos al otro reparto',
+                body: affected|length ~ ' persona(s) se quedan sin huevos ese día y los recogen en el reparto de destino, con los de las dos semanas. Se les avisa por email y les queda reflejado en su calendario.',
+                confirm_label: 'Sí, trasladarlos',
+                cancel_label: 'Volver'
+            }) }}
+
+            {{ csa.confirm_dialog('egg-confirm-drop', {
+                variant: 'danger',
+                external_form_id: 'egg-apply',
+                eyebrow: 'Retirada de huevos',
+                title: 'Retirar los huevos sin recolocarlos',
+                body: affected|length ~ ' persona(s) pierden sus docenas de esa semana y no las recuperan en otro reparto. La cuota mensual de huevos no varía: pagarán lo mismo. Se les avisa por email.',
+                confirm_label: 'Sí, retirarlos',
+                cancel_label: 'Volver'
+            }) }}
+        {% endif %}
+
+    {% endif %}
+    </div>
+
+<style>
+.egg {
+    --prl-line-2: #d8d2c2; --prl-ink: #1d1c17; --prl-ink-soft: #5a564a; --prl-ink-faint: #8d8773;
+    --prl-ochre: #c89a3a; --prl-ochre-d: #8c6919; --prl-ochre-l: #faf1d8;
+    --prl-terra: #b45d3a; --prl-terra-d: #7d3a1f; --prl-terra-l: #fae6dc;
+    --prl-sage-d: #2f4426; --prl-sage-l: #eaf0e2; --prl-sky-d: #2e6f8e;
+    font-variant-numeric: tabular-nums;
+}
+
+.egg-steplabel { font-family: 'Fraunces', serif; font-weight: 600; font-size: 13.5px; color: var(--prl-ink); margin: 0 0 10px; }
+
+/* ---- Tiles de fecha (mismo lenguaje que las excepciones de reparto) ---- */
+.egg-dates { display: flex; flex-wrap: wrap; gap: 8px; }
+.egg-date {
+    width: 78px; text-align: center; border-radius: 7px; padding: 7px 4px 8px;
+    background: #ece5d6; border: 1px solid var(--prl-line-2); cursor: pointer;
+    line-height: 1.15; transition: border-color .12s, background .12s, box-shadow .12s;
+}
+.egg-date:hover { border-color: var(--prl-ochre-d); }
+.egg-date--checked { border-color: var(--prl-ochre); background: var(--prl-ochre-l); box-shadow: inset 0 0 0 1px var(--prl-ochre); }
+.egg-date .dow { display: block; font-size: 9.5px; color: var(--prl-ink-soft); letter-spacing: .1em; text-transform: uppercase; font-weight: 600; }
+.egg-date .num { display: block; font-family: 'Fraunces', serif; font-weight: 600; font-size: 17px; color: var(--prl-ink); }
+.egg-date .mon { display: block; font-size: 9.5px; color: var(--prl-ink-soft); letter-spacing: .04em; text-transform: uppercase; font-weight: 600; }
+
+/* ---- Chips de punto de recogida ---- */
+.egg-nodes { display: flex; flex-wrap: wrap; gap: 8px; }
+.egg-nodechip {
+    display: flex; flex-direction: column; gap: 1px; padding: 8px 14px; border-radius: 6px;
+    border: 1px solid transparent; cursor: pointer; text-align: left; transition: box-shadow .12s;
+}
+.egg-nodechip strong { font-size: 12.5px; font-weight: 600; }
+.egg-nodechip .sub { font-size: 10.5px; opacity: .8; }
+.egg-nodechip--checked { box-shadow: inset 0 0 0 2px currentColor; }
+.egg-nodechip--off { background: #f2efe8; color: var(--prl-ink-faint); cursor: not-allowed; }
+.egg-nodechip--n0 { background: #e7eef2; color: var(--prl-sky-d); }
+.egg-nodechip--n1 { background: var(--prl-sage-l); color: var(--prl-sage-d); }
+.egg-nodechip--n2 { background: var(--prl-ochre-l); color: var(--prl-ochre-d); }
+.egg-nodechip--n3 { background: #efe6f0; color: #6b3a73; }
+.egg-nodechip--n4 { background: var(--prl-terra-l); color: var(--prl-terra-d); }
+
+/* ---- Etiqueta de nodo dentro de la tabla ---- */
+.egg-nodetag { display: inline-block; padding: 2px 8px 3px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+.egg-nodetag--n0 { background: #e7eef2; color: var(--prl-sky-d); }
+.egg-nodetag--n1 { background: var(--prl-sage-l); color: var(--prl-sage-d); }
+.egg-nodetag--n2 { background: var(--prl-ochre-l); color: var(--prl-ochre-d); }
+.egg-nodetag--n3 { background: #efe6f0; color: #6b3a73; }
+.egg-nodetag--n4 { background: var(--prl-terra-l); color: var(--prl-terra-d); }
+
+.egg-table .egg-num { text-align: right; }
+.egg-tag-helper {
+    display: inline-block; margin-left: 6px; padding: 1px 7px 2px; border-radius: 4px;
+    background: #efe6f0; color: #6b3a73; font-size: 10px; font-weight: 600;
+    letter-spacing: .04em; text-transform: uppercase;
+}
+
+/* ---- Opción de retirada (destructiva: se distingue de las fechas) ---- */
+.egg-drop {
+    display: flex; flex-direction: column; gap: 4px; max-width: 520px;
+    padding: 12px 14px; border-radius: 8px; cursor: pointer;
+    background: #fff; border: 1px solid var(--prl-line-2);
+    transition: border-color .12s, background .12s, box-shadow .12s;
+}
+.egg-drop:hover { border-color: var(--prl-terra); }
+.egg-drop--checked { border-color: var(--prl-terra); background: var(--prl-terra-l); box-shadow: inset 0 0 0 1px var(--prl-terra); }
+.egg-drop__title { font-size: 13px; font-weight: 600; color: var(--prl-terra-d); }
+.egg-drop__txt { font-size: 12px; color: var(--prl-ink-soft); line-height: 1.45; }
+
+.egg-empty { font-size: 12px; color: var(--prl-ink-faint); font-style: italic; margin: 0; }
+</style>
+
+<script>
+    (function () {
+        // Paso 1-2: cualquier cambio en la selección recarga la previsualización.
+        // Sin JS el <noscript> deja un botón de envío, así que la pantalla sigue
+        // siendo usable.
+        var pick = document.querySelector('[data-egg-pick]');
+        if (pick) {
+            pick.addEventListener('change', function () { pick.submit(); });
+        }
+
+        // Paso 4: elegir destino (una fecha o "retirar") habilita el botón y
+        // decide cuál de los dos diálogos de confirmación se abre.
+        var apply = document.querySelector('[data-egg-apply]');
+        if (!apply) { return; }
+
+        var options = apply.querySelectorAll('[data-egg-dest]');
+        var go = apply.querySelector('[data-egg-go]');
+
+        function selected() {
+            return apply.querySelector('input[name="to"]:checked');
+        }
+
+        options.forEach(function (opt) {
+            opt.addEventListener('click', function () {
+                var input = opt.querySelector('input[name="to"]');
+                input.checked = true;
+                options.forEach(function (o) {
+                    var on = o === opt;
+                    o.classList.toggle('egg-date--checked', on && o.classList.contains('egg-date'));
+                    o.classList.toggle('egg-drop--checked', on && o.classList.contains('egg-drop'));
+                });
+                go.disabled = false;
+            });
+        });
+
+        go.addEventListener('click', function () {
+            var input = selected();
+            if (!input) { return; }
+            var id = input.value === '0' ? 'egg-confirm-drop' : 'egg-confirm-move';
+            document.getElementById(id).showModal();
+        });
+    })();
+</script>
+
+{% endblock %}

@@ -43,6 +43,7 @@ class HelperDeliveryResolverTest extends TestCase
 
         $skipRepo = $this->createMock(HelperBasketSkipRepository::class);
         $skipRepo->method('helperIdsSkippingDate')->with([7], $date)->willReturn([]);
+        $skipRepo->method('helperIdsSkippingComponent')->willReturn([]);
 
         $lines = $this->resolver($nodeDate, $stayRepo, $skipRepo)->forNodeAndBasket($node, $basket);
 
@@ -116,10 +117,70 @@ class HelperDeliveryResolverTest extends TestCase
 
         $skipRepo = $this->createMock(HelperBasketSkipRepository::class);
         $skipRepo->method('helperIdsSkippingDate')->willReturn([7]); // 7 salta
+        $skipRepo->method('helperIdsSkippingComponent')->willReturn([]);
 
         $lines = $this->resolver($nodeDate, $stayRepo, $skipRepo)->forNodeAndBasket($node, $basket);
 
         self::assertSame([], $lines);
+    }
+
+    /**
+     * Retirada SÓLO de huevos (la granja no los tiene esa semana): el voluntario
+     * sigue en el listado con su verdura y las docenas a cero. Distinto del
+     * salto de cesta entera, que le saca del reparto.
+     */
+    public function testEggRemovalKeepsTheHelperWithoutDozens(): void
+    {
+        $node = $this->node('Torremocha');
+        $basket = new Basket();
+        $date = new \DateTimeImmutable(self::DELIVERY_DATE);
+
+        $nodeDate = $this->createMock(NodeDeliveryDate::class);
+        $nodeDate->method('physicalDateFor')->willReturn($date);
+
+        $stayRepo = $this->createMock(StayRepository::class);
+        $stayRepo->method('findConfirmedDeliveringOn')->willReturn([$this->stayFor($this->helper(7, 'Germán', 1, 1.0))]);
+
+        $skipRepo = $this->createMock(HelperBasketSkipRepository::class);
+        $skipRepo->method('helperIdsSkippingDate')->willReturn([]);
+        $skipRepo->method('helperIdsSkippingComponent')->willReturn([7]); // a 7 le retiran los huevos
+
+        $lines = $this->resolver($nodeDate, $stayRepo, $skipRepo)->forNodeAndBasket($node, $basket);
+
+        self::assertCount(1, $lines, 'Sigue recogiendo: la verdura no se toca.');
+        self::assertSame(1.0, $lines[0]->cestas);
+        self::assertSame(0.0, $lines[0]->dozens);
+        self::assertTrue($lines[0]->subscribedToEggs, 'Sigue siendo de los que llevan huevos; es esta semana la que va sin ellos.');
+    }
+
+    /**
+     * Los voluntarios que llevan huevos ese día, para el lote de retirada. Quien
+     * ya no los lleva (config a 0, o retirados antes) no vuelve a entrar.
+     */
+    public function testHelpersWithEggsListsOnlyThoseCarryingThem(): void
+    {
+        $node = $this->node('Torremocha');
+        $basket = new Basket();
+        $date = new \DateTimeImmutable(self::DELIVERY_DATE);
+
+        $nodeDate = $this->createMock(NodeDeliveryDate::class);
+        $nodeDate->method('physicalDateFor')->willReturn($date);
+
+        $stayRepo = $this->createMock(StayRepository::class);
+        $stayRepo->method('findConfirmedDeliveringOn')->willReturn([
+            $this->stayFor($this->helper(7, 'Germán', 1, 1.0)),
+            $this->stayFor($this->helper(8, 'Sin huevos', 1, 0.0)),
+            $this->stayFor($this->helper(9, 'Ya retirados', 1, 1.0)),
+        ]);
+
+        $skipRepo = $this->createMock(HelperBasketSkipRepository::class);
+        $skipRepo->method('helperIdsSkippingDate')->willReturn([]);
+        $skipRepo->method('helperIdsSkippingComponent')->willReturn([9]);
+
+        $withEggs = $this->resolver($nodeDate, $stayRepo, $skipRepo)->helpersWithEggs($node, $basket);
+
+        self::assertSame([7], array_keys($withEggs));
+        self::assertSame(1.0, $withEggs[7]['dozens']);
     }
 
     /**
@@ -168,6 +229,7 @@ class HelperDeliveryResolverTest extends TestCase
 
         $skipRepo = $this->createMock(HelperBasketSkipRepository::class);
         $skipRepo->method('helperIdsSkippingDate')->willReturn([]);
+        $skipRepo->method('helperIdsSkippingComponent')->willReturn([]);
 
         $lines = $this->resolver($nodeDate, $stayRepo, $skipRepo)->forNodeAndBasket($node, $basket);
 
@@ -192,6 +254,7 @@ class HelperDeliveryResolverTest extends TestCase
 
         $skipRepo = $this->createMock(HelperBasketSkipRepository::class);
         $skipRepo->method('helperIdsSkippingDate')->willReturn([]);
+        $skipRepo->method('helperIdsSkippingComponent')->willReturn([]);
 
         $lines = $this->resolver($nodeDate, $stayRepo, $skipRepo)->forNodeAndBasket($node, $basket);
 

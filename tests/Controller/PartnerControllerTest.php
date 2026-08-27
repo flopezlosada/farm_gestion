@@ -535,6 +535,40 @@ class PartnerControllerTest extends AbstractAuthenticatedTest
             );
         }
 
+        // El `value` del <option> tiene que ser el valor de negocio y no el índice
+        // posicional que Symfony genera en cuanto una opción vale null: el JS del
+        // formulario recorta y decide leyendo esos values. Con índices, al pasar
+        // una cesta a mensual el desplegable perdía «3ª» y «Última», y el turno
+        // «Sin turno» (índice "0") se leía como un turno de verdad (2026-08-27).
+        $this->assertSame(
+            ['', '1', '2', '-1'],
+            $form['partner_basket_share[dayMonthOrder]']->availableOptionValues(),
+            'La entrega del mes debe ofrecer con sus valores reales las que el punto quincenal abre siempre.'
+        );
+        $this->assertSame(
+            ['', '1', '2', '3', '-1'],
+            $form['partner_basket_share[eggDayMonthOrder]']->availableOptionValues(),
+            'La cesta del mes en que viajan los huevos, igual: valores de negocio.'
+        );
+        $this->assertSame(
+            [''],
+            $form['partner_basket_share[deliveryGroup]']->availableOptionValues(),
+            'En un punto quincenal el turno no se elige, y su hueco vale cadena vacía.'
+        );
+
+        // Ninguno de los dos puede salir obligatorio del servidor: el JS los
+        // oculta según la modalidad, y un obligatorio vacío y oculto bloquea el
+        // envío del formulario entero sin que el navegador pueda enseñar su
+        // aviso en ninguna parte — el botón Guardar deja de responder y no se ve
+        // por qué. Cuando la cesta es mensual, es el JS quien marca como
+        // obligatoria la entrega del mes, que entonces sí está a la vista.
+        foreach (['dayMonthOrder', 'eggDayMonthOrder'] as $field) {
+            $this->assertNull(
+                $crawler->filter('#partner_basket_share_' . $field)->attr('required'),
+                sprintf('El campo %s no puede venir marcado como obligatorio desde el servidor.', $field)
+            );
+        }
+
         $em->remove($em->find(Partner::class, $partnerId));
         $em->remove($em->find(WeeklyBasketGroup::class, $groupId));
         $em->remove($em->find(Node::class, $nodeId));
