@@ -1202,15 +1202,20 @@ input[type="number"].csa-input--compact { width: 4.5rem; padding-right: 4px; }
  * el lenguaje del combobox. */
 .csa-dropdown { position: relative; }
 
+/* Invisible, pero OCUPANDO el sitio del control que se ve. Reducido a 1x1 con
+ * clip —como se ocultaba antes— el navegador no tiene dónde anclar el aviso de
+ * un campo `required` sin rellenar: el globo salía fuera de la vista y el
+ * formulario parecía no responder al pulsar Guardar. Superpuesto al trigger, el
+ * aviso nativo aparece donde el usuario está mirando. */
 .csa-dropdown__native {
   position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   opacity: 0;
-  width: 1px; height: 1px;
-  margin: -1px;
+  margin: 0;
   padding: 0;
   border: 0;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
   pointer-events: none;
 }
 
@@ -1242,6 +1247,12 @@ input[type="number"].csa-input--compact { width: 4.5rem; padding-right: 4px; }
 .csa-dropdown--open .csa-dropdown__trigger {
   border-color: var(--csa-ink);
   background: white;
+}
+/* Campo obligatorio sin rellenar: el aviso del navegador sale sobre el <select>
+ * invisible, así que el control visible tiene que decirlo por su cuenta. */
+.csa-dropdown__trigger--invalid,
+.csa-dropdown__trigger--invalid:focus-visible {
+  border-color: var(--csa-terracotta);
 }
 .csa-dropdown__trigger:disabled {
   opacity: 0.55;
