@@ -3,8 +3,10 @@
 namespace App\Controller;
 
 use App\Entity\Partner;
+use App\Entity\User;
 use App\Entity\VolunteerCall;
 use App\Entity\VolunteerCategory;
+use App\Entity\VolunteerEvent;
 use App\Entity\VolunteerOffer;
 use App\Entity\VolunteerSignup;
 use App\Form\VolunteerCategoryType;
@@ -12,11 +14,13 @@ use App\Form\VolunteerOfferType;
 use App\Repository\PartnerRepository;
 use App\Repository\VolunteerCallRepository;
 use App\Repository\VolunteerCategoryRepository;
+use App\Repository\VolunteerEventRepository;
 use App\Repository\VolunteerOfferRepository;
 use App\Repository\VolunteerSignupRepository;
 use App\Security\VolunteerOfferVoter;
 use App\Service\Volunteering\VolunteerAudienceResolver;
 use App\Service\Volunteering\VolunteerCallNotifier;
+use App\Service\Volunteering\VolunteerEventRecorder;
 use App\Service\Volunteering\VolunteerOfferChangeNotifier;
 use App\Service\Volunteering\VolunteerOfferSnapshot;
 use App\Service\Volunteering\VolunteerScope;
@@ -168,6 +172,35 @@ class VolunteeringController extends AbstractController
     }
 
     /**
+     * El rastro de actividad: qué ha pasado en el voluntariado y quién lo hizo.
+     *
+     * Filtrado por área, que es el requisito: quien coordina el reparto ve lo
+     * que pasa en el reparto y nada más. Sólo administración ve el conjunto.
+     */
+    #[Route('/actividad', name: 'volunteering_activity', methods: ['GET'])]
+    public function activity(
+        Request $request,
+        VolunteerEventRepository $events,
+        PaginatorInterface $paginator,
+        VolunteerScope $scopeOf,
+    ): Response {
+        $type = $request->query->getAlpha('tipo') ?: null;
+        $type = null !== $type && isset(VolunteerEvent::LABELS[$type]) ? $type : null;
+
+        return $this->render('Volunteering/activity.html.twig', [
+            'pagination' => $paginator->paginate(
+                $events->feedQb($scopeOf->categories(), $type)->getQuery(),
+                $request->query->getInt('page', 1),
+                30
+            ),
+            'labels' => VolunteerEvent::LABELS,
+            'type' => $type,
+            'coordinates_something' => $scopeOf->coordinatesSomething(),
+            'sees_everything' => $scopeOf->seesEverything(),
+        ]);
+    }
+
+    /**
      * Publicar una tarea nueva.
      *
      * Sin gate de rol en la ruta: quien coordina un área también publica tareas
@@ -176,7 +209,7 @@ class VolunteeringController extends AbstractController
      * tarea — antes no hay nada sobre lo que decidir.
      */
     #[Route('/nueva', name: 'volunteering_new', methods: ['GET', 'POST'])]
-    public function new(Request $request, EntityManagerInterface $em): Response
+    public function new(Request $request, EntityManagerInterface $em, VolunteerEventRecorder $events): Response
     {
         $offer = (new VolunteerOffer())->setCreatedBy($this->getUser());
         $form = $this->createForm(VolunteerOfferType::class, $offer);
@@ -189,6 +222,7 @@ class VolunteeringController extends AbstractController
             $this->denyAccessUnlessGranted(VolunteerOfferVoter::EDIT, $offer);
 
             $em->persist($offer);
+            $events->forOffer($offer, VolunteerEvent::TYPE_OFFER_CREATED, ['status' => $offer->getStatus()]);
             $em->flush();
             $this->addFlash('success', 'Tarea creada.');
 
@@ -245,6 +279,7 @@ class VolunteeringController extends AbstractController
         VolunteerOffer $offer,
         EntityManagerInterface $em,
         VolunteerOfferChangeNotifier $changes,
+        VolunteerEventRecorder $events,
     ): Response {
         // La foto se toma ANTES de handleRequest: después, la entidad ya lleva
         // los valores nuevos y el original se ha perdido.
@@ -254,6 +289,19 @@ class VolunteeringController extends AbstractController
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
+            // Anular se registra aparte de editar: no es el mismo hecho y en el
+            // rastro se busca de forma distinta.
+            $events->forOffer(
+                $offer,
+                $before->wasCancelledIn($offer)
+                    ? VolunteerEvent::TYPE_OFFER_CANCELLED
+                    : VolunteerEvent::TYPE_OFFER_UPDATED,
+                [
+                    'moved' => $before->movedIn($offer),
+                    'relocated' => $before->relocatedIn($offer),
+                ]
+            );
+
             $em->flush();
 
             $notified = $changes->notifyChanges($offer, $before);
@@ -290,7 +338,7 @@ class VolunteeringController extends AbstractController
      */
     #[Route('/{id}/repetir', name: 'volunteering_repeat', methods: ['POST'], requirements: ['id' => '\d+'])]
     #[IsGranted(VolunteerOfferVoter::EDIT, subject: 'offer')]
-    public function repeat(Request $request, VolunteerOffer $offer, EntityManagerInterface $em): Response
+    public function repeat(Request $request, VolunteerOffer $offer, EntityManagerInterface $em, VolunteerEventRecorder $events): Response
     {
         if (!$this->isCsrfTokenValid('volunteering_repeat', (string) $request->request->get('_csrf_token'))) {
             $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
@@ -322,6 +370,13 @@ class VolunteeringController extends AbstractController
             $em->persist($offer->copyForDate($start->modify(sprintf('+%d days', $everyDays * $i))));
         }
 
+        // Un evento por la repetición, no uno por copia: cincuenta y dos filas
+        // diciendo lo mismo enterrarían el resto del rastro.
+        $events->forOffer($offer, VolunteerEvent::TYPE_OFFER_REPEATED, [
+            'times' => $times,
+            'cadence' => (string) $request->request->get('cadence'),
+        ]);
+
         $em->flush();
 
         $this->addFlash(
@@ -347,6 +402,8 @@ class VolunteeringController extends AbstractController
         Request $request,
         VolunteerOffer $offer,
         VolunteerCallNotifier $notifier,
+        VolunteerEventRecorder $events,
+        EntityManagerInterface $em,
     ): Response {
         if (!$this->isCsrfTokenValid('volunteering_notify', (string) $request->request->get('_csrf_token'))) {
             $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
@@ -364,6 +421,12 @@ class VolunteeringController extends AbstractController
         if (null === $call) {
             $this->addFlash('warning', 'No se ha avisado a nadie: o ya se avisó a todo el mundo por esta tarea, o no queda nadie a quien avisar.');
         } else {
+            $events->forOffer($offer, VolunteerEvent::TYPE_CALL_SENT, [
+                'scope' => $call->getScope(),
+                'recipients' => $call->getRecipients(),
+            ]);
+            $em->flush();
+
             $this->addFlash('success', sprintf('Aviso enviado a %d socix(s).', $call->getRecipients()));
         }
 
@@ -393,6 +456,7 @@ class VolunteeringController extends AbstractController
         PartnerRepository $partners,
         VolunteerSignupRepository $signups,
         EntityManagerInterface $em,
+        VolunteerEventRecorder $events,
     ): Response {
         if (!$this->isCsrfTokenValid('volunteering_add_person', (string) $request->request->get('_csrf_token'))) {
             $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
@@ -423,6 +487,10 @@ class VolunteeringController extends AbstractController
             ->confirmAttendance(VolunteerSignup::SOURCE_MANAGER, $minutes);
 
         $em->persist($signup);
+        $events->forOffer($offer, VolunteerEvent::TYPE_PERSON_ADDED, [
+            'role' => $signup->getRole(),
+            'minutes' => $signup->getCreditedMinutes(),
+        ], $partner);
         $em->flush();
 
         $this->addFlash('success', sprintf(
@@ -444,7 +512,7 @@ class VolunteeringController extends AbstractController
      */
     #[Route('/{id}/cerrar', name: 'volunteering_close', methods: ['POST'], requirements: ['id' => '\d+'])]
     #[IsGranted(VolunteerOfferVoter::EDIT, subject: 'offer')]
-    public function close(Request $request, VolunteerOffer $offer, EntityManagerInterface $em): Response
+    public function close(Request $request, VolunteerOffer $offer, EntityManagerInterface $em, VolunteerEventRecorder $events): Response
     {
         if (!$this->isCsrfTokenValid('volunteering_close', (string) $request->request->get('_csrf_token'))) {
             $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
@@ -478,6 +546,16 @@ class VolunteeringController extends AbstractController
             $wentThere
                 ? $signup->confirmAttendance(VolunteerSignup::SOURCE_MANAGER)
                 : $signup->markAbsent(VolunteerSignup::SOURCE_MANAGER);
+
+            // Un evento por persona y no uno por cierre: el rastro tiene que
+            // poder responder "¿a quién se le computaron horas y quién lo
+            // dijo?", y un único evento del cierre no lo responde.
+            $events->forOffer(
+                $offer,
+                $wentThere ? VolunteerEvent::TYPE_ATTENDED : VolunteerEvent::TYPE_ABSENT,
+                ['minutes' => $signup->getCreditedMinutes(), 'role' => $signup->getRole()],
+                $signup->getPartner()
+            );
         }
 
         $em->flush();
@@ -520,7 +598,7 @@ class VolunteeringController extends AbstractController
      */
     #[Route('/categorias/nueva', name: 'volunteering_category_new', methods: ['GET', 'POST'])]
     #[IsGranted('ROLE_GESTION_VOLUNTARIADO_EDIT')]
-    public function newCategory(Request $request, EntityManagerInterface $em): Response
+    public function newCategory(Request $request, EntityManagerInterface $em, VolunteerEventRecorder $events): Response
     {
         $category = new VolunteerCategory();
         $form = $this->createForm(VolunteerCategoryType::class, $category);
@@ -528,6 +606,10 @@ class VolunteeringController extends AbstractController
 
         if ($form->isSubmitted() && $form->isValid()) {
             $em->persist($category);
+            $events->forCategory($category, VolunteerEvent::TYPE_CATEGORY_CREATED, [
+                'name' => $category->getName(),
+                'coordinators' => $this->coordinatorNames($category),
+            ]);
             $em->flush();
             $this->addFlash('success', 'Tipo de trabajo creado.');
 
@@ -546,14 +628,31 @@ class VolunteeringController extends AbstractController
      */
     #[Route('/categorias/{id}/editar', name: 'volunteering_category_edit', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
     #[IsGranted('ROLE_GESTION_VOLUNTARIADO_EDIT')]
-    public function editCategory(Request $request, VolunteerCategory $category, EntityManagerInterface $em): Response
+    public function editCategory(Request $request, VolunteerCategory $category, EntityManagerInterface $em, VolunteerEventRecorder $events): Response
     {
+        // Quién coordinaba ANTES: cambiar la coordinación de un área es el
+        // cambio que más conviene tener registrado, y después del submit ya no
+        // se puede saber quién estaba.
+        $before = $this->coordinatorNames($category);
+
         $form = $this->createForm(VolunteerCategoryType::class, $category);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
+            $after = $this->coordinatorNames($category);
+
+            $events->forCategory(
+                $category,
+                $before === $after
+                    ? VolunteerEvent::TYPE_CATEGORY_UPDATED
+                    : VolunteerEvent::TYPE_COORDINATORS_CHANGED,
+                $before === $after
+                    ? ['name' => $category->getName(), 'active' => $category->isActive()]
+                    : ['before' => $before, 'after' => $after]
+            );
+
             $em->flush();
-            $this->addFlash('success', 'Categoría actualizada.');
+            $this->addFlash('success', 'Tipo de trabajo actualizado.');
 
             return $this->redirectToRoute('volunteering_categories');
         }
@@ -563,5 +662,67 @@ class VolunteeringController extends AbstractController
             'form' => $form->createView(),
             'is_new' => false,
         ]);
+    }
+
+    /**
+     * Retirar o volver a ofrecer un tipo de trabajo, desde el propio listado.
+     *
+     * El estado se veía pero no había cómo cambiarlo sin entrar a editar y
+     * buscar una casilla. Es la acción más frecuente sobre un catálogo y merece
+     * estar a un clic.
+     *
+     * No se borra nunca: un tipo borrado se llevaría por delante el histórico de
+     * tareas que lo usaron y las preferencias de quien lo tuviera marcado.
+     */
+    #[Route('/categorias/{id}/estado', name: 'volunteering_category_toggle', methods: ['POST'], requirements: ['id' => '\d+'])]
+    #[IsGranted('ROLE_GESTION_VOLUNTARIADO_EDIT')]
+    public function toggleCategory(
+        Request $request,
+        VolunteerCategory $category,
+        EntityManagerInterface $em,
+        VolunteerEventRecorder $events,
+    ): Response {
+        if (!$this->isCsrfTokenValid('volunteering_category_toggle', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
+
+            return $this->redirectToRoute('volunteering_categories');
+        }
+
+        $category->setActive(!$category->isActive());
+
+        $events->forCategory($category, VolunteerEvent::TYPE_CATEGORY_UPDATED, [
+            'name' => $category->getName(),
+            'active' => $category->isActive(),
+        ]);
+
+        $em->flush();
+
+        $this->addFlash('success', $category->isActive()
+            ? sprintf('"%s" vuelve a ofrecerse.', $category->getName())
+            : sprintf('"%s" queda retirado. El histórico se conserva.', $category->getName()));
+
+        return $this->redirectToRoute('volunteering_categories');
+    }
+
+    /**
+     * Los nombres de quienes coordinan un área, para dejarlos en el rastro.
+     *
+     * Nombres y no ids: un registro tiene que poder leerse dentro de dos años,
+     * cuando esa cuenta a lo mejor ya no existe.
+     *
+     * @param VolunteerCategory $category el área
+     *
+     * @return list<string> los nombres, ordenados para poder comparar antes y después
+     */
+    private function coordinatorNames(VolunteerCategory $category): array
+    {
+        $names = array_map(
+            static fn (User $user): string => $user->getDisplayName(),
+            $category->getCoordinators()->toArray()
+        );
+
+        sort($names);
+
+        return $names;
     }
 }

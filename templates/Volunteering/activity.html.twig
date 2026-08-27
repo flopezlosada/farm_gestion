@@ -1,0 +1,116 @@
+{# El rastro de actividad del voluntariado.
+ #
+ # Filtrado por área: quien coordina el reparto ve lo del reparto y nada más.
+ # Mismo patrón de listado que el resto (estilos de Partner/_listing_styles). #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Voluntariado · Actividad{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    {% include '_components/volunteering_styles.html.twig' %}
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    {% include '_components/listing_filters_js.html.twig' %}
+{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('volunteering_index') }}">Voluntariado</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Actividad</span>
+{% endblock %}
+
+{% block csa_main %}
+<div class="prl">
+
+    {{ csa.page_header('Voluntariado', 'Actividad', 'Qué ha pasado, cuándo y quién lo hizo.') }}
+
+    {% if not coordinates_something %}
+        {{ csa.callout('No coordinas ningún tipo de trabajo todavía, así que aquí no aparece nada.', 'info') }}
+    {% elseif not sees_everything %}
+        {{ csa.callout('Ves sólo la actividad de las áreas que coordinas.', 'info') }}
+    {% endif %}
+
+    <form method="get" action="{{ path('volunteering_activity') }}" id="prl-filter-form">
+        <div class="prl-toolbar">
+            <div class="prl-filt-wrap">
+                <button type="button" class="prl-filt {{ type ? 'has' : '' }}" data-pop-trigger="pop-tipo">
+                    {{ type ? labels[type] : 'Todo lo que pasa' }}
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+                <div class="prl-pop" id="pop-tipo" hidden>
+                    <label><input type="radio" name="tipo" value="" {{ type is null ? 'checked' }}> Todo</label>
+                    {% for key, label in labels %}
+                        <label><input type="radio" name="tipo" value="{{ key }}" {{ type == key ? 'checked' }}> {{ label }}</label>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </form>
+
+    <div class="csa-table-wrap">
+        <table class="csa-table">
+            <thead>
+                <tr>
+                    <th class="csa-table__col-tight">Cuándo</th>
+                    <th class="csa-table__col-tight">Qué</th>
+                    <th>Sobre</th>
+                    <th>Detalle</th>
+                    <th class="csa-table__col-tight">Quién</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for event in pagination %}
+                    <tr>
+                        <td class="csa-table__col-tight">{{ event.occurredAt|date('d/m/Y H:i') }}</td>
+                        <td class="csa-table__col-tight">{{ csa.badge(event.label, 'neutral') }}</td>
+                        <td>
+                            {% if event.offer %}
+                                <a class="csa-table__primary" href="{{ path('volunteering_show', { id: event.offer.id }) }}">{{ event.offer.title }}</a>
+                            {% elseif event.category %}
+                                {{ event.category.name }}
+                            {% else %}
+                                —
+                            {% endif %}
+                            {% if event.partner %}
+                                <span class="vol-help">{{ event.partner.name }} {{ event.partner.surname }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {# El payload cambia según el tipo, así que se pinta
+                             # genérico: enumerar cada forma aquí sería repetir el
+                             # catálogo de tipos en la plantilla y olvidarse de
+                             # actualizarlo al añadir uno. #}
+                            {% if event.payload %}
+                                <span class="vol-help">
+                                    {%- for key, value in event.payload -%}
+                                        {%- if value is not null and value is not same as(false) -%}
+                                            {{ key }}:
+                                            {%- if value is iterable %} {{ value|join(', ') }}
+                                            {%- elseif value is same as(true) %} sí
+                                            {%- else %} {{ value }}{% endif %}{{ not loop.last ? ' · ' }}
+                                        {%- endif -%}
+                                    {%- endfor -%}
+                                </span>
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                        <td class="csa-table__col-tight"><span class="vol-help">{{ event.actor ?: '—' }}</span></td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="5">Todavía no hay actividad registrada.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="csa-dt-bottom">{{ knp_pagination_render(pagination) }}</div>
+</div>
+{% endblock %}

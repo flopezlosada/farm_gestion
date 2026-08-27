@@ -124,6 +124,36 @@ CREATE TABLE volunteer_category_coordinator (
 ALTER TABLE volunteer_category_coordinator ADD CONSTRAINT FK_5DBDFDD6C76F2FD6 FOREIGN KEY (volunteer_category_id) REFERENCES volunteer_category (id) ON DELETE CASCADE;
 ALTER TABLE volunteer_category_coordinator ADD CONSTRAINT FK_5DBDFDD6A76ED395 FOREIGN KEY (user_id) REFERENCES fos_user (id) ON DELETE CASCADE;
 
+-- El rastro de actividad del módulo: qué pasó, cuándo, sobre qué y quién lo
+-- hizo. Mismo patrón que partner_event (type + payload json + actor con la
+-- convención "gestor:{id}" / "partner:{id}" / "system" / "cli").
+--
+-- `category_id` existe ADEMÁS de `offer_id` porque hay eventos sin tarea
+-- —crear un tipo de trabajo, cambiar quién lo coordina— y quien coordina un
+-- área tiene que poder ver su actividad sin mezcla.
+--
+-- Todas las claves ajenas con SET NULL: el rastro de que algo ocurrió tiene que
+-- sobrevivir a que la tarea, el área o la ficha desaparezcan.
+CREATE TABLE volunteer_event (
+    id INT AUTO_INCREMENT NOT NULL,
+    offer_id INT DEFAULT NULL,
+    category_id INT DEFAULT NULL,
+    partner_id INT DEFAULT NULL,
+    type VARCHAR(40) NOT NULL,
+    actor VARCHAR(80) DEFAULT NULL,
+    payload JSON DEFAULT NULL,
+    occurred_at DATETIME NOT NULL,
+    INDEX IDX_9C0D7559393F8FE (partner_id),
+    INDEX idx_volunteer_event_occurred (occurred_at),
+    INDEX idx_volunteer_event_offer (offer_id),
+    INDEX idx_volunteer_event_category (category_id),
+    PRIMARY KEY(id)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci` ENGINE = InnoDB;
+
+ALTER TABLE volunteer_event ADD CONSTRAINT FK_9C0D75553C674EE FOREIGN KEY (offer_id) REFERENCES volunteer_offer (id) ON DELETE SET NULL;
+ALTER TABLE volunteer_event ADD CONSTRAINT FK_9C0D75512469DE2 FOREIGN KEY (category_id) REFERENCES volunteer_category (id) ON DELETE SET NULL;
+ALTER TABLE volunteer_event ADD CONSTRAINT FK_9C0D7559393F8FE FOREIGN KEY (partner_id) REFERENCES partner (id) ON DELETE SET NULL;
+
 -- "De voluntariado no me avises, nunca." Salida explícita, distinta de no
 -- marcar ninguna categoría (que significa "avísame de lo que sea sencillo").
 -- Se respeta en las TRES consultas de audiencia, incluido el aviso general que

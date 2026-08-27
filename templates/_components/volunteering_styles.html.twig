@@ -195,6 +195,20 @@
         margin-bottom: var(--csa-sp-4);
     }
 
+    /* Un botón de acción dentro de una tabla tiene que parecer los enlaces de
+       al lado: la columna de acciones ya son iconos y un <button> nativo mete
+       fondo, borde y su propia tipografía. */
+    .csa-table__iconbtn {
+        background: none;
+        border: 0;
+        padding: 0;
+        cursor: pointer;
+        color: inherit;
+        font: inherit;
+        line-height: 1;
+    }
+    .csa-table__iconbtn:hover { color: var(--csa-ink); }
+
     .vol-total {
         margin: 0 0 var(--csa-sp-2);
         font-size: var(--csa-fs-md);

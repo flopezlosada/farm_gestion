@@ -110,6 +110,20 @@
                         </td>
                         <td class="csa-table__actions">
                             <a href="{{ path('volunteering_category_edit', { id: category.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>
+                            {# Cambiar el estado a un clic: es la acción más
+                             # frecuente sobre un catálogo y antes obligaba a
+                             # entrar a editar y buscar una casilla. Nunca se
+                             # borra: un tipo borrado se llevaría el histórico
+                             # de tareas y las preferencias de quien lo marcó. #}
+                            <form method="post" action="{{ path('volunteering_category_toggle', { id: category.id }) }}" style="display: inline;"
+                                  onsubmit="return confirm('{{ category.active ? 'Se retira de las tareas nuevas y de la ficha de socixs. El histórico se conserva. ¿Seguimos?' : '¿Volver a ofrecer este tipo de trabajo?' }}');">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_category_toggle') }}">
+                                <button type="submit" class="csa-table__iconbtn"
+                                        title="{{ category.active ? 'Retirar' : 'Volver a ofrecer' }}"
+                                        aria-label="{{ category.active ? 'Retirar' : 'Volver a ofrecer' }}">
+                                    <i class="fa {{ category.active ? 'fa-archive' : 'fa-undo' }}"></i>
+                                </button>
+                            </form>
                         </td>
                     </tr>
                 {% else %}

@@ -4,11 +4,13 @@ namespace App\Controller;
 
 use App\Entity\Node;
 use App\Entity\Partner;
+use App\Entity\VolunteerEvent;
 use App\Entity\VolunteerOffer;
 use App\Entity\VolunteerSignup;
 use App\Repository\VolunteerCategoryRepository;
 use App\Repository\VolunteerOfferRepository;
 use App\Repository\VolunteerSignupRepository;
+use App\Service\Volunteering\VolunteerEventRecorder;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -116,6 +118,7 @@ class PanelVolunteeringController extends AbstractController
         VolunteerOffer $offer,
         VolunteerSignupRepository $signups,
         EntityManagerInterface $em,
+        VolunteerEventRecorder $events,
     ): Response {
         if (($redirect = $this->ensureReady()) !== null) {
             return $redirect;
@@ -145,6 +148,7 @@ class PanelVolunteeringController extends AbstractController
         $existing = $signups->findOneFor($offer, $partner);
         if (null !== $existing) {
             $existing->reopen()->setCompanions($companions);
+            $events->forOffer($offer, VolunteerEvent::TYPE_SIGNUP, ['companions' => $companions, 'again' => true], $partner);
             $em->flush();
             $this->addFlash('success', 'Apuntadx otra vez. Gracias.');
 
@@ -159,6 +163,7 @@ class PanelVolunteeringController extends AbstractController
                     ->setCompanions($companions)
                     ->setNotes(trim((string) $request->request->get('notes')) ?: null)
             );
+            $events->forOffer($offer, VolunteerEvent::TYPE_SIGNUP, ['companions' => $companions], $partner);
             $em->flush();
             $this->addFlash('success', 'Apuntadx. Gracias por echar una mano.');
         } catch (UniqueConstraintViolationException) {
@@ -180,6 +185,7 @@ class PanelVolunteeringController extends AbstractController
         VolunteerOffer $offer,
         VolunteerSignupRepository $signups,
         EntityManagerInterface $em,
+        VolunteerEventRecorder $events,
     ): Response {
         if (($redirect = $this->ensureReady()) !== null) {
             return $redirect;
@@ -195,6 +201,7 @@ class PanelVolunteeringController extends AbstractController
 
         if (null !== $signup && !$signup->isCancelled()) {
             $signup->cancel();
+            $events->forOffer($offer, VolunteerEvent::TYPE_WITHDRAW, null, $signup->getPartner());
             $em->flush();
             $this->addFlash('success', 'Te hemos quitado de esa tarea. Gracias por avisar.');
         }
@@ -226,6 +233,7 @@ class PanelVolunteeringController extends AbstractController
         VolunteerOffer $offer,
         VolunteerSignupRepository $signups,
         EntityManagerInterface $em,
+        VolunteerEventRecorder $events,
     ): Response {
         if (($redirect = $this->ensureReady()) !== null) {
             return $redirect;
@@ -255,10 +263,12 @@ class PanelVolunteeringController extends AbstractController
 
         if ($request->request->getBoolean('attended')) {
             $signup->confirmAttendance(VolunteerSignup::SOURCE_SELF);
+            $events->forOffer($offer, VolunteerEvent::TYPE_ATTENDED, ['minutes' => $signup->getCreditedMinutes(), 'role' => $signup->getRole()], $signup->getPartner());
             $em->flush();
             $this->addFlash('success', 'Anotado. Gracias por echar una mano.');
         } else {
             $signup->markAbsent(VolunteerSignup::SOURCE_SELF);
+            $events->forOffer($offer, VolunteerEvent::TYPE_ABSENT, null, $signup->getPartner());
             $em->flush();
             $this->addFlash('success', 'Anotado, gracias por decirlo.');
         }
@@ -276,6 +286,7 @@ class PanelVolunteeringController extends AbstractController
         Request $request,
         VolunteerCategoryRepository $categories,
         EntityManagerInterface $em,
+        VolunteerEventRecorder $events,
     ): Response {
         if (($redirect = $this->ensureReady()) !== null) {
             return $redirect;
@@ -310,6 +321,7 @@ class PanelVolunteeringController extends AbstractController
             }
         }
 
+        $events->forPartner($partner, VolunteerEvent::TYPE_PREFERENCES_CHANGED, ['areas' => $chosen, 'opt_out' => $partner->isVolunteeringOptOut()]);
         $em->flush();
         $this->addFlash(
             'success',
