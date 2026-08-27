@@ -72,6 +72,12 @@ CREATE TABLE volunteer_signup (
     offer_id INT NOT NULL,
     partner_id INT NOT NULL,
     companions INT DEFAULT 0 NOT NULL,
+    -- En calidad de qué: 'participant' (fue a trabajar) o 'coordinator' (lo
+    -- organizó). Coordinar computa horas igual, y tiene que hacerlo: quien monta
+    -- el reparto todos los viernes no se apunta a las tareas, así que sin esto
+    -- la gente que más sostiene el voluntariado salía con cero. Quien coordina
+    -- NO ocupa plaza.
+    role VARCHAR(16) DEFAULT 'participant' NOT NULL,
     notes LONGTEXT DEFAULT NULL,
     attended TINYINT(1) DEFAULT NULL,
     -- Quién dijo si fue o no: 'self' (la propia persona desde su panel, la vía

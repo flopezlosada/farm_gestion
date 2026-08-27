@@ -298,6 +298,11 @@
                         {% for signup in my_done %}
                             <li>
                                 <strong>{{ signup.offer.title }}</strong>
+                                {% if signup.coordination %}
+                                    {# Organizar también es trabajo, y quien lo
+                                     # hace merece verlo nombrado. #}
+                                    <span class="csa-badge">lo organizaste</span>
+                                {% endif %}
                                 <span class="vol-mine__when">
                                     {{ signup.offer.startsAt|format_date('long', locale='es') }}
                                     {%- if signup.creditedMinutes %} · {{ vol.duration(signup.creditedMinutes) }}{% endif -%}

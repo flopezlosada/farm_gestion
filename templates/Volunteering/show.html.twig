@@ -130,7 +130,12 @@
                                                 {% endif %}
                                             </td>
                                         {% endif %}
-                                        <td>{{ signup.partner.name }} {{ signup.partner.surname }}</td>
+                                        <td>
+                                            {{ signup.partner.name }} {{ signup.partner.surname }}
+                                            {% if signup.coordination %}
+                                                {{ csa.badge('lo organizó', 'plum') }}
+                                            {% endif %}
+                                        </td>
                                         <td class="csa-table__col-tight">{{ signup.companions > 0 ? '+' ~ signup.companions : '—' }}</td>
                                         <td class="csa-table__col-tight">{{ signup.createdAt|date('d/m/Y') }}</td>
                                         <td>{{ signup.notes ?: '—' }}</td>
@@ -175,6 +180,58 @@
             {% endif %}
         {% endblock %}
     {% endembed %}
+
+    {# ============ ANOTAR A ALGUIEN ============ #}
+    {# Dos huecos que se notan en cuanto esto se usa de verdad: quien ORGANIZA
+     # la tarea no se apunta a ella, así que su contador salía a cero — y es la
+     # gente que más sostiene el voluntariado. Y quien aparece sin haberse
+     # apuntado tampoco constaba, que pasa constantemente. #}
+    {% if is_granted('VOLUNTEER_OFFER_EDIT', offer) %}
+        {% embed '_components/csa_card.html.twig' with {
+            title: 'Anotar a alguien',
+            subtitle: 'Quien organizó esta tarea, o quien vino sin apuntarse.',
+            icon: 'fa-user-plus'
+        } %}
+            {% block body %}
+            {% import '_macros/csa.html.twig' as csa %}
+                <form method="post" action="{{ path('volunteering_add_person', { id: offer.id }) }}" class="vol-repeat">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_add_person') }}">
+
+                    <label>
+                        Quién
+                        <select name="partner" class="csa-select" required>
+                            <option value="">— elige —</option>
+                            {% for partner in all_partners %}
+                                <option value="{{ partner.id }}">{{ partner.name }} {{ partner.surname }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+
+                    <label>
+                        En calidad de
+                        <select name="role" class="csa-select">
+                            <option value="participant">vino a trabajar</option>
+                            <option value="coordinator">lo organizó</option>
+                        </select>
+                    </label>
+
+                    <label>
+                        Minutos
+                        <input type="number" name="minutes" min="0" max="1440"
+                               placeholder="{{ offer.creditedMinutes ?: 0 }}" class="csa-input csa-input--compact">
+                    </label>
+
+                    <button type="submit" class="csa-btn csa-btn--secondary csa-btn--sm">Anotar</button>
+                </form>
+
+                <p class="vol-help">
+                    Se anota como hecho: si lo estás registrando a mano es porque
+                    sabes que ocurrió. Si dejas los minutos en blanco se usan los
+                    de la tarea ({{ offer.creditedMinutes ?: 0 }}). Quien lo organizó no ocupa plaza.
+                </p>
+            {% endblock %}
+        {% endembed %}
+    {% endif %}
 
     {# ============ REPETIR ============ #}
     {# El reparto es semanal: sin esto habría que crear la misma tarea cincuenta

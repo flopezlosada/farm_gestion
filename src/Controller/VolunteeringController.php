@@ -2,6 +2,7 @@
 
 namespace App\Controller;
 
+use App\Entity\Partner;
 use App\Entity\VolunteerCall;
 use App\Entity\VolunteerCategory;
 use App\Entity\VolunteerOffer;
@@ -182,12 +183,18 @@ class VolunteeringController extends AbstractController
         VolunteerOffer $offer,
         VolunteerCallRepository $calls,
         VolunteerAudienceResolver $audience,
+        PartnerRepository $partners,
     ): Response {
         $sent = $calls->sentScopes($offer);
 
         return $this->render('Volunteering/show.html.twig', [
             'offer' => $offer,
             'sent_scopes' => $sent,
+            // Para anotar a mano a quien organizó la tarea o vino sin apuntarse.
+            'all_partners' => $partners->findBy(
+                ['status' => Partner::STATUS_ACTIVO],
+                ['name' => 'ASC', 'surname' => 'ASC']
+            ),
             // Cuánta gente recibiría el aviso general, para que quien pulsa el
             // botón vea el número ANTES de molestar a media asociación.
             'everyone_count' => $audience->count($offer, VolunteerCall::SCOPE_EVERYONE),
@@ -331,6 +338,71 @@ class VolunteeringController extends AbstractController
         } else {
             $this->addFlash('success', sprintf('Aviso enviado a %d socix(s).', $call->getRecipients()));
         }
+
+        return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
+    }
+
+    /**
+     * Anotar a alguien en una tarea: quien la organizó, o quien vino sin
+     * haberse apuntado.
+     *
+     * Resuelve dos huecos que se notan en cuanto se usa esto de verdad:
+     *
+     *  - COORDINAR NO COMPUTABA NADA. Quien organiza el reparto todos los
+     *    viernes no se apunta a las tareas, las monta, así que su contador
+     *    salía a cero. La gente que más sostiene el voluntariado era
+     *    precisamente la que no aparecía.
+     *  - Quien apareció sin apuntarse tampoco constaba, y eso pasa constantemente.
+     *
+     * Se anota ya como asistido: si alguien lo está registrando a mano después,
+     * es porque sabe que ocurrió.
+     */
+    #[Route('/{id}/anotar', name: 'volunteering_add_person', methods: ['POST'], requirements: ['id' => '\d+'])]
+    #[IsGranted(VolunteerOfferVoter::EDIT, subject: 'offer')]
+    public function addPerson(
+        Request $request,
+        VolunteerOffer $offer,
+        PartnerRepository $partners,
+        VolunteerSignupRepository $signups,
+        EntityManagerInterface $em,
+    ): Response {
+        if (!$this->isCsrfTokenValid('volunteering_add_person', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
+
+            return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
+        }
+
+        $partner = $partners->find($request->request->getInt('partner'));
+        if (null === $partner) {
+            $this->addFlash('error', 'No he encontrado a esa persona.');
+
+            return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
+        }
+
+        $coordinated = 'coordinator' === $request->request->get('role');
+        $minutes = $request->request->getInt('minutes') ?: null;
+
+        // Reutiliza la inscripción si ya existía: el UNIQUE (offer, partner) no
+        // admite dos, y quien se apuntó y además acabó coordinando es un caso
+        // normal, no un error.
+        $signup = $signups->findOneFor($offer, $partner) ?? (new VolunteerSignup())
+            ->setOffer($offer)
+            ->setPartner($partner);
+
+        $signup
+            ->reopen()
+            ->setRole($coordinated ? VolunteerSignup::ROLE_COORDINATOR : VolunteerSignup::ROLE_PARTICIPANT)
+            ->confirmAttendance(VolunteerSignup::SOURCE_MANAGER, $minutes);
+
+        $em->persist($signup);
+        $em->flush();
+
+        $this->addFlash('success', sprintf(
+            '%s %s anotadx%s.',
+            $partner->getName(),
+            $partner->getSurname(),
+            $coordinated ? ' como quien lo organizó' : ''
+        ));
 
         return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
     }

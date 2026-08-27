@@ -271,7 +271,11 @@ class VolunteerOffer
         $filled = 0;
         foreach ($this->signups as $signup) {
             if (!$signup->isCancelled()) {
-                $filled += 1 + $signup->getCompanions();
+                // Vía getHeadcount() y no sumando acompañantes aquí: es ese
+                // método el que sabe que quien coordina no cuenta como brazo.
+                // Duplicar la cuenta haría que una tarea de dos plazas se diera
+                // por llena con una sola persona trabajando.
+                $filled += $signup->getHeadcount();
             }
         }
 
@@ -303,15 +307,22 @@ class VolunteerOffer
     }
 
     /**
-     * Cuánta gente ha confirmado que fue.
+     * Cuánta gente ha confirmado que fue A TRABAJAR.
      *
-     * @return int inscripciones con asistencia confirmada
+     * Quien sólo organizó la tarea no cuenta aquí, y de ahí depende que
+     * {@see isDone()} diga la verdad: una tarea en la que consta la persona que
+     * la montó pero no fue nadie a hacerla NO se hizo, y darla por hecha
+     * escondería justo el dato que hay que ver.
+     *
+     * Sus horas sí se le computan; eso es otra cosa y vive en la inscripción.
+     *
+     * @return int inscripciones de participación con asistencia confirmada
      */
     public function getAttendedCount(): int
     {
         $attended = 0;
         foreach ($this->signups as $signup) {
-            if (true === $signup->getAttended()) {
+            if (true === $signup->getAttended() && !$signup->isCoordination()) {
                 ++$attended;
             }
         }

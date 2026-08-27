@@ -150,6 +150,65 @@ class VolunteerAttendanceTest extends TestCase
     }
 
     /**
+     * Coordinar computa horas como cualquier otra aportación. Sin esto, quien
+     * monta el reparto todos los viernes —que no se apunta a las tareas, las
+     * organiza— salía con el contador a cero.
+     */
+    public function testCoordinarComputaHoras(): void
+    {
+        $offer = $this->offer(60);
+        $signup = $this->signupOn($offer)->setRole(VolunteerSignup::ROLE_COORDINATOR);
+
+        $signup->confirmAttendance(VolunteerSignup::SOURCE_MANAGER, 45);
+
+        $this->assertSame(45, $signup->getCreditedMinutes());
+        $this->assertTrue($signup->isCoordination());
+    }
+
+    /**
+     * Pero NO ocupa plaza: organizar el reparto no es estar allí descargando
+     * cajas, y contarlo como brazo daría por llena una tarea de dos plazas con
+     * una sola persona trabajando.
+     */
+    public function testCoordinarNoOcupaPlaza(): void
+    {
+        $offer = $this->offer(60)->setSlots(2);
+        $this->signupOn($offer)->setRole(VolunteerSignup::ROLE_COORDINATOR);
+
+        $this->assertSame(0, $offer->getFilledSlots());
+        $this->assertSame(2, $offer->getRemainingSlots());
+    }
+
+    /**
+     * Y una tarea en la que sólo consta quien la organizó NO está hecha: nadie
+     * fue a hacerla. Darla por hecha escondería justo el dato que hay que ver.
+     */
+    public function testUnaTareaConSoloCoordinacionNoEstaHecha(): void
+    {
+        $offer = $this->offer(60);
+        $this->signupOn($offer)
+            ->setRole(VolunteerSignup::ROLE_COORDINATOR)
+            ->confirmAttendance(VolunteerSignup::SOURCE_MANAGER);
+
+        $this->assertFalse($offer->isDone(new \DateTime('2099-03-16 10:00')));
+        $this->assertSame(0, $offer->getAttendedCount());
+    }
+
+    /**
+     * Reapuntarse tras una baja reabre la inscripción. Método propio y no un
+     * setter a null: el `setCancelledAt()` que no existía reventaba este camino
+     * y el de anotar a alguien a mano.
+     */
+    public function testReabrirUnaInscripcionCancelada(): void
+    {
+        $signup = $this->signupOn($this->offer(60))->cancel();
+
+        $signup->reopen();
+
+        $this->assertFalse($signup->isCancelled());
+    }
+
+    /**
      * @param int $creditedMinutes minutos que computa la tarea
      */
     private function offer(int $creditedMinutes): VolunteerOffer

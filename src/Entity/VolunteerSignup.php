@@ -51,6 +51,28 @@ class VolunteerSignup
     /** Orígenes válidos de la confirmación. */
     public const SOURCES = [self::SOURCE_SELF, self::SOURCE_MANAGER];
 
+    /** Fue a hacer el trabajo. Lo normal. */
+    public const ROLE_PARTICIPANT = 'participant';
+
+    /**
+     * Organizó la tarea: buscó gente, la cuadró, avisó, estuvo pendiente.
+     *
+     * Computa horas como cualquier otra aportación, y tiene que hacerlo:
+     * coordinar el reparto todos los viernes es de lo más trabajoso que hay en
+     * la asociación, y hasta ahora no contaba nada porque quien coordina no se
+     * apunta a las tareas, las organiza. Si el contador ignora eso, la gente que
+     * más sostiene el voluntariado sale con cero.
+     *
+     * Va como rol de la inscripción y no como entidad aparte porque es
+     * exactamente lo mismo que ya se guarda —una persona, una tarea, unos
+     * minutos reconocidos— con distinto motivo. Los minutos suelen ser otros, y
+     * para eso `creditedMinutes` ya es por inscripción.
+     */
+    public const ROLE_COORDINATOR = 'coordinator';
+
+    /** Roles válidos. */
+    public const ROLES = [self::ROLE_PARTICIPANT, self::ROLE_COORDINATOR];
+
     /**
      * @ORM\Id
      * @ORM\GeneratedValue
@@ -69,6 +91,14 @@ class VolunteerSignup
      * @ORM\JoinColumn(name="partner_id", referencedColumnName="id", nullable=false, onDelete="CASCADE")
      */
     private ?Partner $partner = null;
+
+    /**
+     * En calidad de qué: fue a trabajar, o lo organizó.
+     *
+     * @ORM\Column(type="string", length=16, options={"default": "participant"})
+     */
+    #[Assert\Choice(choices: VolunteerSignup::ROLES)]
+    private string $role = self::ROLE_PARTICIPANT;
 
     /**
      * Personas que vienen además de quien se apunta. Cero es lo normal.
@@ -141,11 +171,48 @@ class VolunteerSignup
     /**
      * Personas que aporta esta inscripción: quien se apunta más acompañantes.
      *
-     * @return int cabezas comprometidas
+     * Quien coordina NO cuenta como brazo: organizar el reparto no es lo mismo
+     * que estar allí descargando cajas, y contarlo como plaza cubierta haría
+     * que una tarea con dos plazas se diera por llena con una sola persona
+     * trabajando.
+     *
+     * @return int cabezas comprometidas para hacer el trabajo
      */
     public function getHeadcount(): int
     {
+        if (self::ROLE_COORDINATOR === $this->role) {
+            return 0;
+        }
+
         return 1 + $this->companions;
+    }
+
+    /**
+     * Si esta inscripción es de quien organizó la tarea.
+     *
+     * @return bool true si coordinó
+     */
+    public function isCoordination(): bool
+    {
+        return self::ROLE_COORDINATOR === $this->role;
+    }
+
+    /**
+     * @return string el rol: participant o coordinator
+     */
+    public function getRole(): string
+    {
+        return $this->role;
+    }
+
+    /**
+     * @param string $role el rol; uno de self::ROLES
+     */
+    public function setRole(string $role): self
+    {
+        $this->role = $role;
+
+        return $this;
     }
 
     /**
@@ -166,6 +233,20 @@ class VolunteerSignup
     public function cancel(?\DateTimeInterface $when = null): self
     {
         $this->cancelledAt = $when ?? new \DateTime();
+
+        return $this;
+    }
+
+    /**
+     * Vuelve a dar la inscripción por viva, después de una baja.
+     *
+     * Método propio y no un `setCancelledAt(null)`: reapuntarse es un hecho con
+     * nombre, y un setter que sólo se llama con null es un setter que invita a
+     * llamarse con cualquier otra cosa.
+     */
+    public function reopen(): self
+    {
+        $this->cancelledAt = null;
 
         return $this;
     }

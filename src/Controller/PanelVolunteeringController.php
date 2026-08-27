@@ -144,7 +144,7 @@ class PanelVolunteeringController extends AbstractController
         // acabaría en un 500 en vez de en un "vale".
         $existing = $signups->findOneFor($offer, $partner);
         if (null !== $existing) {
-            $existing->setCancelledAt(null)->setCompanions($companions);
+            $existing->reopen()->setCompanions($companions);
             $em->flush();
             $this->addFlash('success', 'Apuntadx otra vez. Gracias.');
 
