@@ -4,6 +4,7 @@
  # Mismo patrón de listado que el resto (estilos de Partner/_listing_styles). #}
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
+{% import '_macros/volunteering.html.twig' as vol %}
 
 {% block title %}Voluntariado · Actividad{% endblock %}
 
@@ -83,26 +84,15 @@
                             {% endif %}
                         </td>
                         <td>
-                            {# El payload cambia según el tipo, así que se pinta
-                             # genérico: enumerar cada forma aquí sería repetir el
-                             # catálogo de tipos en la plantilla y olvidarse de
-                             # actualizarlo al añadir uno. #}
                             {% if event.payload %}
-                                <span class="vol-help">
-                                    {%- for key, value in event.payload -%}
-                                        {%- if value is not null and value is not same as(false) -%}
-                                            {{ key }}:
-                                            {%- if value is iterable %} {{ value|join(', ') }}
-                                            {%- elseif value is same as(true) %} sí
-                                            {%- else %} {{ value }}{% endif %}{{ not loop.last ? ' · ' }}
-                                        {%- endif -%}
-                                    {%- endfor -%}
-                                </span>
+                                <span class="vol-help">{{ vol.detail(event.payload) }}</span>
                             {% else %}
                                 —
                             {% endif %}
                         </td>
-                        <td class="csa-table__col-tight"><span class="vol-help">{{ event.actor ?: '—' }}</span></td>
+                        <td class="csa-table__col-tight">
+                            <span class="vol-help">{{ vol.actor(event.actor, actor_names) }}</span>
+                        </td>
                     </tr>
                 {% else %}
                     <tr><td colspan="5">Todavía no hay actividad registrada.</td></tr>

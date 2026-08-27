@@ -73,4 +73,23 @@
         </div>
 
     {{ form_end(form) }}
+
+    {# Sólo en edición: un objeto que no existe todavía no tiene historial, y un
+     # bloque vacío en el alta sólo estorba. #}
+    {% if not is_new %}
+        <div class="csa-form-narrow" style="margin-top: var(--csa-sp-6);">
+            {% embed '_components/csa_card.html.twig' with {
+                title: 'Qué ha pasado con este tipo de trabajo',
+                icon: 'fa-history'
+            } %}
+                {% block body %}
+                    {% include '_components/volunteering_history.html.twig' with {
+                        events: history,
+                        actor_names: actor_names,
+                        empty_text: 'Todavía no consta nada. Los cambios y los relevos de coordinación quedan registrados aquí.'
+                    } only %}
+                {% endblock %}
+            {% endembed %}
+        </div>
+    {% endif %}
 {% endblock %}

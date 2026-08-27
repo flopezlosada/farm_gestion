@@ -321,6 +321,20 @@
         {% endblock %}
     {% endembed %}
 
+    {# ============ HISTORIAL ============ #}
+    {% embed '_components/csa_card.html.twig' with {
+        title: 'Qué ha pasado con esta tarea',
+        icon: 'fa-history'
+    } %}
+        {% block body %}
+            {% include '_components/volunteering_history.html.twig' with {
+                events: history,
+                actor_names: actor_names,
+                empty_text: 'Todavía no consta nada. Los cambios, las inscripciones y los avisos quedan registrados aquí.'
+            } only %}
+        {% endblock %}
+    {% endembed %}
+
     <div class="csa-row-between" style="margin-top: var(--csa-sp-6);">
         {{ csa.btn('Volver', { variant: 'ghost', href: path('volunteering_index') }) }}
         {% if is_granted('VOLUNTEER_OFFER_EDIT', offer) %}

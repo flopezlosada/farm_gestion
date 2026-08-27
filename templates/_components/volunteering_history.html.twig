@@ -1,0 +1,33 @@
+{#
+ # El historial de un objeto del voluntariado, en línea de tiempo.
+ #
+ # Formato distinto al del listado global de actividad, y a propósito: aquí ya
+ # sabes de qué tarea o de qué área estás viendo el historial, así que la columna
+ # "sobre qué" sobra y una tabla de cinco columnas para dos datos es ruido.
+ #
+ # Espera: events (lista de VolunteerEvent), actor_names (mapa código => nombre)
+ # y opcionalmente empty_text.
+ #}
+{% import '_macros/volunteering.html.twig' as vol %}
+
+{% if events is empty %}
+    <p class="vol-help">{{ empty_text|default('Todavía no ha pasado nada aquí.') }}</p>
+{% else %}
+    <ol class="vol-history">
+        {% for event in events %}
+            <li>
+                <span class="vol-history__when">{{ event.occurredAt|date('d/m/Y H:i') }}</span>
+                <span class="vol-history__what">
+                    <strong>{{ event.label }}</strong>
+                    {% if event.partner %}
+                        · {{ event.partner.name }} {{ event.partner.surname }}
+                    {% endif %}
+                    {% if event.payload %}
+                        <span class="vol-history__detail">{{ vol.detail(event.payload) }}</span>
+                    {% endif %}
+                </span>
+                <span class="vol-history__who">{{ vol.actor(event.actor, actor_names|default({})) }}</span>
+            </li>
+        {% endfor %}
+    </ol>
+{% endif %}

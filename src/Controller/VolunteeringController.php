@@ -187,12 +187,17 @@ class VolunteeringController extends AbstractController
         $type = $request->query->getAlpha('tipo') ?: null;
         $type = null !== $type && isset(VolunteerEvent::LABELS[$type]) ? $type : null;
 
+        $pagination = $paginator->paginate(
+            $events->feedQb($scopeOf->categories(), $type)->getQuery(),
+            $request->query->getInt('page', 1),
+            30
+        );
+
         return $this->render('Volunteering/activity.html.twig', [
-            'pagination' => $paginator->paginate(
-                $events->feedQb($scopeOf->categories(), $type)->getQuery(),
-                $request->query->getInt('page', 1),
-                30
-            ),
+            'pagination' => $pagination,
+            // Los nombres sólo de la página visible: resolver los de toda la
+            // tabla sería traer cuentas que no se van a pintar.
+            'actor_names' => $events->actorNames(iterator_to_array($pagination)),
             'labels' => VolunteerEvent::LABELS,
             'type' => $type,
             'coordinates_something' => $scopeOf->coordinatesSomething(),
@@ -246,8 +251,10 @@ class VolunteeringController extends AbstractController
         VolunteerCallRepository $calls,
         VolunteerAudienceResolver $audience,
         PartnerRepository $partners,
+        VolunteerEventRepository $events,
     ): Response {
         $sent = $calls->sentScopes($offer);
+        $history = $events->historyFor($offer);
 
         return $this->render('Volunteering/show.html.twig', [
             'offer' => $offer,
@@ -261,6 +268,11 @@ class VolunteeringController extends AbstractController
             // botón vea el número ANTES de molestar a media asociación.
             'everyone_count' => $audience->count($offer, VolunteerCall::SCOPE_EVERYONE),
             'everyone_sent' => \in_array(VolunteerCall::SCOPE_EVERYONE, $sent, true),
+            // El historial de ESTA tarea. Sin él, el rastro sólo se podía
+            // consultar en el listado global, que es justo donde no estás
+            // cuando quieres saber qué le ha pasado a una tarea concreta.
+            'history' => $history,
+            'actor_names' => $events->actorNames($history),
         ]);
     }
 
@@ -567,7 +579,7 @@ class VolunteeringController extends AbstractController
     /**
      * El catálogo de tipos de trabajo.
      */
-    #[Route('/categorias/listado', name: 'volunteering_categories', methods: ['GET'])]
+    #[Route('/categorias', name: 'volunteering_categories', methods: ['GET'])]
     #[IsGranted('ROLE_GESTION_VOLUNTARIADO_EDIT')]
     public function categories(
         Request $request,
@@ -628,12 +640,19 @@ class VolunteeringController extends AbstractController
      */
     #[Route('/categorias/{id}/editar', name: 'volunteering_category_edit', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
     #[IsGranted('ROLE_GESTION_VOLUNTARIADO_EDIT')]
-    public function editCategory(Request $request, VolunteerCategory $category, EntityManagerInterface $em, VolunteerEventRecorder $events): Response
+    public function editCategory(
+        Request $request,
+        VolunteerCategory $category,
+        EntityManagerInterface $em,
+        VolunteerEventRecorder $events,
+        VolunteerEventRepository $eventLog,
+    ): Response
     {
         // Quién coordinaba ANTES: cambiar la coordinación de un área es el
         // cambio que más conviene tener registrado, y después del submit ya no
         // se puede saber quién estaba.
         $before = $this->coordinatorNames($category);
+        $history = $eventLog->historyForCategory($category);
 
         $form = $this->createForm(VolunteerCategoryType::class, $category);
         $form->handleRequest($request);
@@ -661,6 +680,8 @@ class VolunteeringController extends AbstractController
             'category' => $category,
             'form' => $form->createView(),
             'is_new' => false,
+            'history' => $history,
+            'actor_names' => $eventLog->actorNames($history),
         ]);
     }
 

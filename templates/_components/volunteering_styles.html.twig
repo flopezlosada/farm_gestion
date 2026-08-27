@@ -209,6 +209,30 @@
     }
     .csa-table__iconbtn:hover { color: var(--csa-ink); }
 
+    /* Historial de un objeto: tres columnas fijas —cuándo, qué, quién— para que
+       la vista salte por la columna de fechas sin leer cada línea entera. */
+    .vol-history { list-style: none; margin: 0; padding: 0; }
+    .vol-history li {
+        display: grid;
+        grid-template-columns: 10rem 1fr auto;
+        gap: var(--csa-sp-3);
+        align-items: baseline;
+        padding: var(--csa-sp-2) 0;
+        border-bottom: 1px solid var(--csa-rule-soft);
+        font-size: var(--csa-fs-sm);
+    }
+    .vol-history li:last-child { border-bottom: 0; }
+    .vol-history__when { color: var(--csa-ink-muted); font-variant-numeric: tabular-nums; }
+    .vol-history__what { color: var(--csa-ink); }
+    .vol-history__detail { display: block; font-size: var(--csa-fs-xs); color: var(--csa-ink-muted); }
+    .vol-history__who { color: var(--csa-ink-muted); font-size: var(--csa-fs-xs); white-space: nowrap; }
+
+    /* En móvil las tres columnas no caben: se apilan y la fecha encabeza. */
+    @media (max-width: 640px) {
+        .vol-history li { grid-template-columns: 1fr; gap: var(--csa-sp-1); }
+        .vol-history__who { white-space: normal; }
+    }
+
     .vol-total {
         margin: 0 0 var(--csa-sp-2);
         font-size: var(--csa-fs-md);
