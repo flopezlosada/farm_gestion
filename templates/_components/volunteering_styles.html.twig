@@ -233,6 +233,27 @@
         .vol-history__who { white-space: normal; }
     }
 
+    /* Filtro que no se puso desde la barra sino entrando desde otra pantalla:
+       se ve qué recorta y se quita de un clic. */
+    .vol-chip {
+        display: inline-flex;
+        gap: var(--csa-sp-2);
+        align-items: center;
+        padding: var(--csa-sp-1) var(--csa-sp-3);
+        border: 1px solid var(--csa-rule-soft);
+        border-radius: var(--csa-radius-pill, 999px);
+        background: var(--csa-sage-bg);
+        font-size: var(--csa-fs-sm);
+        color: var(--csa-ink);
+    }
+    .vol-chip a {
+        text-decoration: none;
+        color: var(--csa-ink-muted);
+        font-size: var(--csa-fs-md);
+        line-height: 1;
+    }
+    .vol-chip a:hover { color: var(--csa-ink); }
+
     /* Los tres avisos posibles de una tarea y en cuál está cada uno. */
     .vol-scopes { list-style: none; margin: 0 0 var(--csa-sp-2); padding: 0; }
     .vol-scopes li {

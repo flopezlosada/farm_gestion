@@ -2,6 +2,7 @@
 
 namespace App\Repository;
 
+use App\Entity\Partner;
 use App\Entity\VolunteerCategory;
 use App\Entity\VolunteerEvent;
 use App\Entity\VolunteerOffer;
@@ -128,8 +129,9 @@ class VolunteerEventRepository extends ServiceEntityRepository
      *
      * @param list<VolunteerCategory>|null $restrictTo áreas de quien mira; null = ve todo
      * @param string|null                  $type       filtra por tipo de evento
+     * @param Partner|null                 $partner    filtra por socix
      */
-    public function feedQb(?array $restrictTo = null, ?string $type = null): QueryBuilder
+    public function feedQb(?array $restrictTo = null, ?string $type = null, ?Partner $partner = null): QueryBuilder
     {
         $qb = $this->createQueryBuilder('e')
             ->leftJoin('e.offer', 'o')
@@ -141,6 +143,13 @@ class VolunteerEventRepository extends ServiceEntityRepository
 
         if (null !== $type) {
             $qb->andWhere('e.type = :type')->setParameter('type', $type);
+        }
+
+        // Una persona no tiene ficha propia en el módulo, así que su historial
+        // es esta pantalla filtrada por ella. El filtro por área sigue encima:
+        // quien coordina el reparto ve de esa persona lo del reparto y nada más.
+        if (null !== $partner) {
+            $qb->andWhere('e.partner = :who')->setParameter('who', $partner);
         }
 
         if (null !== $restrictTo) {

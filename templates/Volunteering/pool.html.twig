@@ -102,7 +102,11 @@
                 {% for partner in pagination %}
                     {% set stats = participation[partner.id]|default(null) %}
                     <tr>
-                        <td class="csa-table__primary">{{ partner.name }} {{ partner.surname }}</td>
+                        {# Lleva a su historial: el rastro filtrado por esta
+                         # persona, que es lo más parecido a su ficha aquí. #}
+                        <td>
+                            <a class="csa-table__primary" href="{{ path('volunteering_activity', { socix: partner.id }) }}">{{ partner.name }} {{ partner.surname }}</a>
+                        </td>
                         <td class="csa-table__col-tight">
                             {{ partner.weeklyBasketGroup and partner.weeklyBasketGroup.node
                                 ? partner.weeklyBasketGroup.node.name : '—' }}

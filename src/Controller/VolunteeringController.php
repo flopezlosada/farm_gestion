@@ -183,18 +183,25 @@ class VolunteeringController extends AbstractController
         VolunteerEventRepository $events,
         PaginatorInterface $paginator,
         VolunteerScope $scopeOf,
+        PartnerRepository $partners,
     ): Response {
         $type = $request->query->getAlpha('tipo') ?: null;
         $type = null !== $type && isset(VolunteerEvent::LABELS[$type]) ? $type : null;
 
+        // El historial de una persona: no hay ficha de socix dentro del módulo,
+        // así que se entra aquí desde su fila en "Quién hay".
+        $who = $request->query->getInt('socix') ?: null;
+        $who = null !== $who ? $partners->find($who) : null;
+
         $pagination = $paginator->paginate(
-            $events->feedQb($scopeOf->categories(), $type)->getQuery(),
+            $events->feedQb($scopeOf->categories(), $type, $who)->getQuery(),
             $request->query->getInt('page', 1),
             30
         );
 
         return $this->render('Volunteering/activity.html.twig', [
             'pagination' => $pagination,
+            'who' => $who,
             // Los nombres sólo de la página visible: resolver los de toda la
             // tabla sería traer cuentas que no se van a pintar.
             'actor_names' => $events->actorNames(iterator_to_array($pagination)),

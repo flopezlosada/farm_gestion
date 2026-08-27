@@ -39,6 +39,10 @@
     {% endif %}
 
     <form method="get" action="{{ path('volunteering_activity') }}" id="prl-filter-form">
+        {# El socix viaja escondido: se entra filtrado desde "Quién hay" y no
+         # tendría sentido un desplegable con toda la asociación dentro. Se
+         # quita con la X del chip, no desde aquí. #}
+        {% if who %}<input type="hidden" name="socix" value="{{ who.id }}">{% endif %}
         <div class="prl-toolbar">
             <div class="prl-filt-wrap">
                 <button type="button" class="prl-filt {{ type ? 'has' : '' }}" data-pop-trigger="pop-tipo">
@@ -52,6 +56,13 @@
                     {% endfor %}
                 </div>
             </div>
+
+            {% if who %}
+                <span class="vol-chip">
+                    {{ who.name }} {{ who.surname }}
+                    <a href="{{ path('volunteering_activity', { tipo: type }) }}" title="Ver la actividad de todo el mundo">&times;</a>
+                </span>
+            {% endif %}
         </div>
     </form>
 
