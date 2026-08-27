@@ -98,6 +98,73 @@ class PartnerRepository extends ServiceEntityRepository
             ->getResult();
     }
 
+    /**
+     * La bolsa de voluntariado, como QueryBuilder para poder paginarla.
+     *
+     * Son 246 socixs: sin paginar, la pantalla salía como un muro de nueve mil
+     * píxeles en el que no se encuentra a nadie.
+     *
+     * Cuatro vistas, y la que importa es la primera:
+     *  - `declared` (por defecto): quien ha marcado algún tipo de trabajo. Es a
+     *    quien se puede llamar, y es lo que quien coordina viene a ver.
+     *  - un área concreta: la bolsa de esa área.
+     *  - `silent`: quien no ha dicho nada — la reserva para lo sencillo.
+     *  - `refused`: quien ha pedido que no le avisen. Se enseña para que el
+     *    cuadro esté completo y nadie los cuente como disponibles.
+     *
+     * @param string                 $scope    declared | silent | refused | all
+     * @param VolunteerCategory|null $category filtra por un área concreta
+     */
+    public function volunteeringPoolQb(string $scope = 'declared', ?VolunteerCategory $category = null): QueryBuilder
+    {
+        $qb = $this->createQueryBuilder('p')
+            ->where('p.status = :status')
+            ->setParameter('status', Partner::STATUS_ACTIVO);
+
+        if (null !== $category) {
+            // Subconsulta y no un JOIN filtrado: filtrar sobre el join recortaría
+            // también las categorías que se traen, y cada socix aparecería con
+            // una sola —la del filtro— en vez de con todas las suyas.
+            $qb->andWhere($qb->expr()->exists(
+                'SELECT 1 FROM App\Entity\Partner pf JOIN pf.volunteerCategories cf'
+                .' WHERE pf = p AND cf = :category'
+            ))
+                ->andWhere('p.volunteering_opt_out = false')
+                ->setParameter('category', $category);
+
+            return $qb;
+        }
+
+        return match ($scope) {
+            'silent' => $qb->andWhere('p.volunteerCategories IS EMPTY')
+                ->andWhere('p.volunteering_opt_out = false'),
+            'refused' => $qb->andWhere('p.volunteering_opt_out = true'),
+            'all' => $qb,
+            default => $qb->andWhere('p.volunteerCategories IS NOT EMPTY')
+                ->andWhere('p.volunteering_opt_out = false'),
+        };
+    }
+
+    /**
+     * Cuánta gente hay en cada vista de la bolsa, para pintarlo en los filtros:
+     * ver que "sin decir nada" son doscientos es la mitad de la información.
+     *
+     * @return array{declared: int, silent: int, refused: int}
+     */
+    public function volunteeringPoolCounts(): array
+    {
+        $count = fn (string $scope): int => (int) $this->volunteeringPoolQb($scope)
+            ->select('COUNT(DISTINCT p.id)')
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        return [
+            'declared' => $count('declared'),
+            'silent' => $count('silent'),
+            'refused' => $count('refused'),
+        ];
+    }
+
     // /**
     //  * @return Partner[] Returns an array of Partner objects
     //  */

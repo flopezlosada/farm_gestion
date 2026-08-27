@@ -8,15 +8,18 @@ use App\Entity\VolunteerOffer;
 use App\Entity\VolunteerSignup;
 use App\Form\VolunteerCategoryType;
 use App\Form\VolunteerOfferType;
+use App\Repository\PartnerRepository;
 use App\Repository\VolunteerCallRepository;
 use App\Repository\VolunteerCategoryRepository;
 use App\Repository\VolunteerOfferRepository;
+use App\Repository\VolunteerSignupRepository;
 use App\Security\VolunteerOfferVoter;
 use App\Service\Volunteering\VolunteerAudienceResolver;
 use App\Service\Volunteering\VolunteerCallNotifier;
 use App\Service\Volunteering\VolunteerOfferChangeNotifier;
 use App\Service\Volunteering\VolunteerOfferSnapshot;
 use Doctrine\ORM\EntityManagerInterface;
+use Knp\Component\Pager\PaginatorInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -78,6 +81,60 @@ class VolunteeringController extends AbstractController
             'recently_done' => $offers->findRecentlyDone(
                 (clone $now)->modify(sprintf('-%d days', self::RECENT_DAYS))
             ),
+        ]);
+    }
+
+    /**
+     * La bolsa: quién hay para cada tipo de trabajo.
+     *
+     * Es lo primero que echa en falta quien coordina un área, y hasta ahora no
+     * estaba: la aplicación sabía decir quién se apuntó a UNA tarea, pero no a
+     * quién se puede llamar para huerta. Sin eso, coordinar obliga a salirse de
+     * la herramienta y tirar del grupo de WhatsApp.
+     *
+     * Enseña también a quien no ha declarado nada y a quien ha pedido que no le
+     * avisen, cada uno en su sitio: el cuadro completo es lo que permite ver si
+     * un área está sostenida por dos personas.
+     */
+    #[Route('/gente', name: 'volunteering_pool', methods: ['GET'])]
+    public function pool(
+        Request $request,
+        PartnerRepository $partners,
+        VolunteerCategoryRepository $categories,
+        VolunteerSignupRepository $signups,
+        PaginatorInterface $paginator,
+    ): Response {
+        $filter = $request->query->getInt('tipo') ?: null;
+        $category = null !== $filter ? $categories->find($filter) : null;
+        $scope = $request->query->getAlpha('ver') ?: 'declared';
+
+        $year = (int) date('Y');
+        $from = new \DateTime(sprintf('%d-01-01 00:00:00', $year));
+        $to = new \DateTime(sprintf('%d-12-31 23:59:59', $year));
+
+        $pagination = $paginator->paginate(
+            $partners->volunteeringPoolQb($scope, $category)->getQuery(),
+            $request->query->getInt('page', 1),
+            25,
+            [
+                // Por nombre y NO por lo que ha hecho cada quien: una tabla
+                // ordenada por aportación es un ranking, y un ranking expulsa a
+                // quien no puede competir. Por eso tampoco es ordenable.
+                'defaultSortFieldName' => 'p.name+p.surname',
+                'defaultSortDirection' => 'asc',
+            ]
+        );
+
+        return $this->render('Volunteering/pool.html.twig', [
+            'pagination' => $pagination,
+            'categories' => $categories->findActive(),
+            'current' => $category,
+            'scope' => $scope,
+            'counts' => $partners->volunteeringPoolCounts(),
+            // Veces que ha participado cada quien, en un solo mapa: preguntarlo
+            // por socix sería el N+1 más caro del módulo.
+            'participation' => $signups->participationByPartner($from, $to),
+            'year' => $year,
         ]);
     }
 

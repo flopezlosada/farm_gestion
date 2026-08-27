@@ -91,6 +91,47 @@ class VolunteerSignupRepository extends ServiceEntityRepository
     }
 
     /**
+     * Cuántas veces ha participado cada socix en el periodo y cuándo fue la
+     * última, en UNA consulta, indexado por id de socix.
+     *
+     * Devuelto como mapa y no como lista de entidades porque lo consume una
+     * tabla de doscientas y pico filas: preguntar por cada socix sería el N+1
+     * más caro de todo el módulo.
+     *
+     * Sólo aparece quien ha participado alguna vez; el resto no está en el mapa
+     * y la pantalla lo interpreta como cero. Distinguir "cero" de "no consta" no
+     * aporta nada aquí y ahorra recorrer los 246.
+     *
+     * @param \DateTimeInterface $from inicio del periodo, inclusive
+     * @param \DateTimeInterface $to   fin del periodo, inclusive
+     *
+     * @return array<int, array{times: int, last: string}> id de socix => veces y última fecha
+     */
+    public function participationByPartner(\DateTimeInterface $from, \DateTimeInterface $to): array
+    {
+        $rows = $this->createQueryBuilder('s')
+            ->select('IDENTITY(s.partner) AS pid, COUNT(s.id) AS times, MAX(o.startsAt) AS last')
+            ->join('s.offer', 'o')
+            ->where('s.attended = true')
+            ->andWhere('o.startsAt BETWEEN :from AND :to')
+            ->setParameter('from', $from)
+            ->setParameter('to', $to)
+            ->groupBy('s.partner')
+            ->getQuery()
+            ->getScalarResult();
+
+        $byPartner = [];
+        foreach ($rows as $row) {
+            $byPartner[(int) $row['pid']] = [
+                'times' => (int) $row['times'],
+                'last' => (string) $row['last'],
+            ];
+        }
+
+        return $byPartner;
+    }
+
+    /**
      * La MEDIANA de minutos entre quienes han hecho algo en el periodo. No la
      * media, y no es un detalle.
      *

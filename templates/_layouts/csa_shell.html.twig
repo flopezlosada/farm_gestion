@@ -315,7 +315,9 @@
                             <button type="button" class="csa-navgroup__head">Voluntariado <i class="csa-navgroup__chev fa fa-chevron-down" aria-hidden="true"></i></button>
                             <div class="csa-navgroup__items">
                                 {{ _self.nav_link('Tareas', path('volunteering_index'), 'fa-hand-paper-o',
-                                   route starts with 'volunteering_' and route != 'volunteering_categories' and route != 'volunteering_category_edit') }}
+                                   route starts with 'volunteering_' and route not in ['volunteering_categories', 'volunteering_category_edit', 'volunteering_pool']) }}
+                                {{ _self.nav_link('Quién hay', path('volunteering_pool'), 'fa-users',
+                                   route == 'volunteering_pool') }}
                                 {% if is_granted('ROLE_GESTION_VOLUNTARIADO_EDIT') %}
                                     {{ _self.nav_link('Tipos de trabajo', path('volunteering_categories'), 'fa-tags',
                                        route == 'volunteering_categories' or route == 'volunteering_category_edit') }}
