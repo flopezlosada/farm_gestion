@@ -209,4 +209,56 @@ class DeliveryCalendarProjectorTest extends KernelTestCase
             "'available' debe ser una lista de BasketComponent (el universo de toggles).",
         );
     }
+
+    /**
+     * La próxima entrega que anuncia el panel del socix ignora las semanas que
+     * dejó sin recoger, y sí ve la cesta extra que puso ese mismo día.
+     *
+     * Las dos caras del mismo montaje: un "no recoge" deja en el calendario un
+     * slot de papelera (skipped) que NO es una entrega. Anunciarlo como "tu
+     * próxima cesta" mandaría a alguien al punto de recogida un día en el que
+     * nadie le va a dar nada — y es fácil que vuelva, porque el slot existe y
+     * tiene fecha.
+     */
+    public function testLaProximaEntregaIgnoraLaPapeleraYVeLaCestaExtra(): void
+    {
+        self::bootKernel();
+        $em = $this->em();
+
+        $vegetables = $em->getRepository(BasketComponent::class)->find(BasketComponent::ID_VEGETABLES);
+        $this->assertNotNull($vegetables);
+
+        $partner = (new Partner())->setName('ProjNext ' . uniqid('', true));
+        $em->persist($partner);
+
+        $basket = (new Basket())->setDate(new \DateTime('2099-10-02'))->setWeek(40)->setAmount(1);
+        $em->persist($basket);
+
+        // Sólo un "no recoge": ese día no hay nada que recoger.
+        $em->persist(new PartnerDeliveryShift($partner, $basket, null));
+        $em->flush();
+
+        $projector = $this->makeProjector($em);
+        $desde = new \DateTime('2099-10-01');
+
+        $this->assertNull(
+            $projector->nextDelivery($partner, $desde, 2),
+            'Una semana aparcada en la papelera no es una entrega: no puede anunciarse como la próxima cesta.',
+        );
+
+        // Ahora sí hay algo ese día: una cesta extra puntual.
+        $em->persist(new PartnerBasketExtra($partner, $basket, $vegetables, '1.00'));
+        $em->flush();
+        $em->clear();
+
+        $next = $this->makeProjector($this->em())->nextDelivery(
+            $this->em()->getRepository(Partner::class)->find($partner->getId()),
+            $desde,
+            2
+        );
+
+        $this->assertNotNull($next, 'La cesta extra de ese día sí es una entrega y debe anunciarse.');
+        $this->assertSame($basket->getId(), $next['basket']->getId());
+        $this->assertFalse($next['skipped']);
+    }
 }

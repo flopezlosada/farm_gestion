@@ -1,0 +1,74 @@
+{#
+ # Quién prepara la cesta de esta semana en el punto de recogida del socix.
+ #
+ # Va pegado a la franja de la próxima cesta porque habla de ESA entrega, no del
+ # voluntariado en general. Y es el sitio donde pedir ayuda sale más barato: a
+ # quien ya va a estar allí el viernes.
+ #
+ # DOS ESTADOS, Y LOS DOS LOS ENCIENDE LA TAREA, NO LA FALTA DE GENTE. Si el nodo
+ # no organiza el montaje como tarea de voluntariado no llega ninguna oferta y
+ # esto no se pinta: ni nombres ni aviso. Es lo que evita que los puntos donde
+ # todavía no se hace así aparezcan gritando que nadie se ha apuntado.
+ #
+ # Espera: offers (las tareas de montaje de esa entrega), partner (quien mira),
+ # place (nombre del punto) y delivery_date (el día de la recogida).
+ #}
+{% if offers is not empty %}
+
+    {% set signups = [] %}
+    {% set faltan = 0 %}
+    {% for offer in offers %}
+        {% set signups = signups|merge(offer.committedSignups) %}
+        {% set faltan = faltan + (offer.remainingSlots|default(0)) %}
+    {% endfor %}
+
+    {% set is_today = delivery_date|date('Y-m-d') == 'now'|date('Y-m-d') %}
+    {% set is_tomorrow = delivery_date|date('Y-m-d') == 'tomorrow'|date('Y-m-d') %}
+    {% set when = is_today ? 'hoy' : (is_tomorrow ? 'mañana' : 'el ' ~ delivery_date|format_date(pattern="EEEE d", locale='es')) %}
+
+    {% if signups is not empty %}
+        <div class="vol-prep">
+            {# Cuatro caras como mucho: a partir de ahí es una fila de puntos y los
+             # nombres ya están en el texto. #}
+            <div class="vol-prep__faces" aria-hidden="true">
+                {% for signup in signups|slice(0, 4) %}
+                    <span class="vol-prep__face">{{ signup.partner.name|first|upper }}</span>
+                {% endfor %}
+            </div>
+            <p class="vol-prep__text">
+                {%- if is_today or is_tomorrow %}Tu cesta de {{ when }} la preparan
+                {%- else %}Las cestas de {{ place }} {{ when }} las preparan{% endif %}
+                {%- for signup in signups %}
+                    {%- if not loop.first %}{{ loop.last ? ' y' : ',' }}{% endif %}
+                    <strong class="vol-prep__name">{{ signup.partner.id == partner.id ? 'tú' : signup.partner.name|lower }}</strong>
+                    {%- if signup.companions > 0 %} <span class="vol-prep__plus">+{{ signup.companions }}</span>{% endif %}
+                {%- endfor %}.
+                {% if faltan > 0 %}
+                    <span class="vol-prep__gap">Aún {{ faltan == 1 ? 'falta 1 persona' : 'faltan ' ~ faltan ~ ' personas' }} —
+                        <a href="{{ path('panel_volunteering') }}">échales una mano</a>.</span>
+                {% endif %}
+            </p>
+        </div>
+    {% else %}
+        <div class="vol-prep vol-prep--empty">
+            <span class="vol-prep__icon" aria-hidden="true"><i class="fa fa-exclamation-triangle"></i></span>
+            <div class="vol-prep__body">
+                <p class="vol-prep__text">
+                    <strong>Nadie se ha apuntado todavía a montar las cestas de {{ place }} {{ when }}.</strong>
+                    Si no va nadie, no hay cestas que recoger.
+                </p>
+                {# El endpoint de apuntarse es el mismo que el de la pantalla de
+                 # voluntariado: aquí sólo cambia desde dónde se pulsa, y lleva allí
+                 # después, que es donde se ve la tarea entera y se puede decir quién
+                 # viene contigo. #}
+                <form method="post" action="{{ path('panel_volunteering_signup', { id: (offers|first).id }) }}">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_volunteering') }}">
+                    <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">
+                        <i class="fa fa-hand-paper-o"></i> Me apunto
+                    </button>
+                </form>
+            </div>
+        </div>
+    {% endif %}
+
+{% endif %}

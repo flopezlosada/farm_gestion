@@ -306,6 +306,28 @@
                         </div>
                     {% endif %}
 
+                    {# Grupo propio y NO dentro de Socios: quien coordina un área
+                     # de voluntariado no tiene ROLE_GESTION_SOCIXS —a propósito,
+                     # para no darle las fichas de los 246 socixs— así que dentro
+                     # de aquel grupo no vería nunca su propio módulo. #}
+                    {% if is_granted('ROLE_GESTION_VOLUNTARIADO') and is_granted('FEATURE_VOLUNTEERING') %}
+                        <div class="csa-navgroup{{ sec_collapsed }}">
+                            <button type="button" class="csa-navgroup__head">Voluntariado <i class="csa-navgroup__chev fa fa-chevron-down" aria-hidden="true"></i></button>
+                            <div class="csa-navgroup__items">
+                                {{ _self.nav_link('Tareas', path('volunteering_index'), 'fa-hand-paper-o',
+                                   route starts with 'volunteering_' and route not in ['volunteering_categories', 'volunteering_category_edit', 'volunteering_pool']) }}
+                                {{ _self.nav_link('Quién hay', path('volunteering_pool'), 'fa-users',
+                                   route == 'volunteering_pool') }}
+                                {{ _self.nav_link('Actividad', path('volunteering_activity'), 'fa-history',
+                                   route == 'volunteering_activity') }}
+                                {% if is_granted('ROLE_GESTION_VOLUNTARIADO_EDIT') %}
+                                    {{ _self.nav_link('Tipos de trabajo', path('volunteering_categories'), 'fa-tags',
+                                       route == 'volunteering_categories' or route == 'volunteering_category_edit') }}
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endif %}
+
                     {% if is_granted('ROLE_GESTION_ALBERGUE') %}
                         <div class="csa-navgroup{{ sec_collapsed }}">
                             <button type="button" class="csa-navgroup__head">Albergue <i class="csa-navgroup__chev fa fa-chevron-down" aria-hidden="true"></i></button>

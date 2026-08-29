@@ -73,6 +73,26 @@ security:
     #   ROLE_GESTION_LAR_EDIT   ESCRITURA del LAR (crear/editar/borrar proyectos y
     #                           gestionar sus fotos; incluye lectura por
     #                           jerarquía). Mismo modelo que albergue/laboral
+    #   ROLE_GESTION_VOLUNTARIADO  LECTURA del voluntariado: ver las tareas y
+    #                           quién se ha apuntado a ellas. Separado de
+    #                           ROLE_GESTION_SOCIXS a propósito y por el mismo
+    #                           motivo que las encuestas: quien coordina el
+    #                           reparto de los viernes necesita saber quién viene
+    #                           ese viernes, no acceso a las fichas, DNIs y
+    #                           domicilios de los 246 socixs. Mínimo privilegio
+    #   ROLE_GESTION_VOLUNTARIADO_EDIT  ESCRITURA del voluntariado (publicar
+    #                           tareas, cerrarlas, pedir gente; incluye lectura
+    #                           por jerarquía). Mismo modelo que albergue
+    #
+    #                           OJO: tener el rol da acceso a TODAS las áreas.
+    #                           Para acotar a un área concreta ("Marta coordina
+    #                           Reparto") NO se crea un rol nuevo: se le asigna
+    #                           como coordinadora de esa categoría, y el rol se
+    #                           DERIVA del dato igual que ROLE_PARTNER. Quien
+    #                           coordina sólo puede tocar las tareas de sus
+    #                           áreas, y eso lo decide VolunteerOfferVoter.
+    #                           Añadir un área nueva no debe exigir tocar este
+    #                           fichero ni desplegar
     #   ROLE_WORKER             panel propio del trabajador (/work): fichar,
     #                           ver/corregir lo suyo, pedir vacaciones. Se DERIVA
     #                           de tener un Worker vinculado (como ROLE_PARTNER)
@@ -88,6 +108,7 @@ security:
             - ROLE_GESTION_ALBERGUE_EDIT
             - ROLE_GESTION_LABORAL_EDIT
             - ROLE_GESTION_LAR_EDIT
+            - ROLE_GESTION_VOLUNTARIADO_EDIT
             - ROLE_PARTNER
             - ROLE_WORKER
         # La escritura incluye la lectura (modelo lectura/escritura por sección).
@@ -99,6 +120,8 @@ security:
             - ROLE_GESTION_ENCUESTAS
         ROLE_GESTION_LABORAL_EDIT:
             - ROLE_GESTION_LABORAL
+        ROLE_GESTION_VOLUNTARIADO_EDIT:
+            - ROLE_GESTION_VOLUNTARIADO
         ROLE_GESTION_LAR_EDIT:
             - ROLE_GESTION_LAR
 
@@ -240,11 +263,20 @@ security:
         # fotos, todo POST) exige _EDIT. Antes de la regla genérica ^/gestion.
         # La cara pública del LAR vive en /lar (sin regla aquí = abierta).
         - { path: ^/gestion/lar, methods: [POST, PUT, PATCH, DELETE], roles: ROLE_GESTION_LAR_EDIT }
+        # Voluntariado: la LECTURA la da el rol base (regla genérica ^/gestion de
+        # abajo); la ESCRITURA exige _EDIT. Antes de la regla genérica.
+        #
+        # OJO: quien coordina un área concreta NO tiene _EDIT y aun así debe
+        # poder cerrar y avisar de SUS tareas, así que aquí se admite también el
+        # rol base y el alcance real lo decide VolunteerOfferVoter, que es quien
+        # sabe de qué áreas es coordinadora cada persona. Un gateo por método a
+        # secas dejaría fuera a quien más usa el módulo.
+        - { path: ^/gestion/voluntariado, methods: [POST, PUT, PATCH, DELETE], roles: ROLE_GESTION_VOLUNTARIADO }
         # Cualquier rol de gestión permite entrar a /gestion. Dentro,
         # cada controller filtra con #[IsGranted('ROLE_GESTION_X')] según
         # su sección.
         - { path: ^/gestion,
-            roles: [ROLE_ADMIN, ROLE_GESTION_GRANJA, ROLE_GESTION_SOCIXS, ROLE_GESTION_REPARTO, ROLE_BLOG, ROLE_GESTION_ENCUESTAS, ROLE_GESTION_ALBERGUE, ROLE_GESTION_LABORAL, ROLE_GESTION_LAR] }
+            roles: [ROLE_ADMIN, ROLE_GESTION_GRANJA, ROLE_GESTION_SOCIXS, ROLE_GESTION_REPARTO, ROLE_BLOG, ROLE_GESTION_ENCUESTAS, ROLE_GESTION_ALBERGUE, ROLE_GESTION_LABORAL, ROLE_GESTION_LAR, ROLE_GESTION_VOLUNTARIADO] }
         # Panel del socix (lo construiremos en breve).
         - { path: ^/panel, roles: [ROLE_PARTNER, ROLE_ADMIN] }
         # Panel propio del trabajador: fichar, ver/corregir lo suyo, vacaciones.

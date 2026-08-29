@@ -20,6 +20,27 @@
     {% block more_css %}
     {% endblock %}
     <link rel="icon" type="image/x-icon" href="{{ asset('favicon.ico') }}"/>
+
+    {# ---------- Instalación en el móvil (requisito de los avisos push) ----------
+     # NO es un capricho de "app nativa": en iOS el push SÓLO existe si la web
+     # está añadida a la pantalla de inicio Y se abre en modo standalone. Sin
+     # manifest, iOS la añade pero la abre como pestaña de Safari, donde la API
+     # de push no está — y el botón "Activar avisos" del panel decía "añade la
+     # web a tu pantalla de inicio" para algo que luego no funcionaba.
+     #
+     # apple-mobile-web-app-capable va ADEMÁS del manifest, no en su lugar: iOS
+     # sólo respeta el display:standalone del manifest desde 16.4, y quien tenga
+     # un iPhone más viejo se queda sin push si falta esta meta.
+     #
+     # start_url apunta a /post-login (no a /panel) porque es el dispatcher por
+     # rol: lleva a cada cual a su sitio y no deja a gestión aterrizando en un
+     # panel de socix que no le corresponde. #}
+    <link rel="manifest" href="{{ asset('manifest.json') }}"/>
+    <meta name="theme-color" content="#4a7c3a"/>
+    <meta name="apple-mobile-web-app-capable" content="yes"/>
+    <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+    <meta name="apple-mobile-web-app-title" content="CSA Vega"/>
+    <link rel="apple-touch-icon" href="{{ asset('apple-touch-icon.png') }}"/>
 </head>
 <body>
 {% block body %}{% endblock %}

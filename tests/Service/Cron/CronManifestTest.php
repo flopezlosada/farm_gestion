@@ -63,8 +63,8 @@ class CronManifestTest extends KernelTestCase
     }
 
     /**
-     * Toda tarea que manda correo (`confirm`, que es justo lo que ese campo
-     * significa) exige el interruptor GENERAL de envíos además del suyo.
+     * Toda tarea que SÓLO manda correo exige el interruptor GENERAL de envíos
+     * además del suyo.
      *
      * Sin eso, con el interruptor general apagado la tarea corre entera,
      * {@see \App\Mailer\KillSwitchMailer} descarta los mensajes en silencio y
@@ -72,11 +72,24 @@ class CronManifestTest extends KernelTestCase
      * entregó nada, y el guardián de idempotencia se queda con esos efectos
      * apuntados, así que al reencender el envío ya constan emitidos y no salen
      * nunca.
+     *
+     * SE MIRA `channels` Y NO `confirm`. `confirm` significaba "manda correo"
+     * cuando el correo era el único canal, y desde que hay avisos push ya sólo
+     * quiere decir "entrega algo real, pregunta antes". Seguir usándolo aquí
+     * exigía un interruptor de email a tareas que no mandan un solo correo.
+     *
+     * Las que entregan por VARIOS canales quedan fuera, y no por indulgencia:
+     * `requires` inhibe la tarea entera —ni --force lo salta—, así que apagar el
+     * correo dejaría también sin avisar a quien lo tiene activado en el móvil.
+     * La regla no desaparece, se muda: esas tareas tienen que leer el
+     * interruptor ANTES de llamar al mailer, y por tanto antes de que se apunte
+     * ningún efecto. Es lo que hace
+     * {@see \App\Command\SendPickupReminderCommand::doExecute()}.
      */
-    public function testLasTareasQueMandanCorreoExigenElInterruptorGeneral(): void
+    public function testLasTareasQueSoloMandanCorreoExigenElInterruptorGeneral(): void
     {
         foreach (AppSettings::CRONS as $key => $meta) {
-            if (!$meta['confirm']) {
+            if (['email'] !== $meta['channels']) {
                 continue;
             }
 
@@ -85,6 +98,30 @@ class CronManifestTest extends KernelTestCase
                 $meta['requires'],
                 sprintf('La tarea "%s" manda correo y no exige el interruptor general de envíos.', $key)
             );
+        }
+    }
+
+    /**
+     * Los canales declarados son conocidos, y una tarea que entrega algo
+     * (`confirm`) declara por dónde. Es lo que sostiene la regla de arriba: sin
+     * este test, olvidar el campo en una tarea nueva la dejaría exenta en
+     * silencio en vez de romper.
+     */
+    public function testCadaTareaDeclaraSusCanales(): void
+    {
+        foreach (AppSettings::CRONS as $key => $meta) {
+            $this->assertArrayHasKey('channels', $meta, sprintf('La tarea "%s" no declara canales.', $key));
+
+            foreach ($meta['channels'] as $channel) {
+                $this->assertContains($channel, ['email', 'push'], sprintf('Canal desconocido en "%s".', $key));
+            }
+
+            if ($meta['confirm']) {
+                $this->assertNotEmpty(
+                    $meta['channels'],
+                    sprintf('La tarea "%s" pide confirmación porque entrega algo, pero no dice por dónde.', $key)
+                );
+            }
         }
     }
 
@@ -98,7 +135,18 @@ class CronManifestTest extends KernelTestCase
         foreach (AppSettings::CRONS as $key => $meta) {
             $schedule = $meta['schedule'];
 
-            $this->assertContains($schedule['freq'], ['daily', 'weekly', 'monthly'], sprintf('Frecuencia desconocida en "%s".', $key));
+            $this->assertContains($schedule['freq'], ['daily', 'weekly', 'monthly', 'interval'], sprintf('Frecuencia desconocida en "%s".', $key));
+
+            // Las de intervalo no tienen hora del día: corren cada N minutos. Es
+            // lo que necesitan los avisos que se abren por pasos, donde el
+            // segundo paso de algo que es pasado mañana llegaría tarde con una
+            // cadencia diaria.
+            if ($schedule['freq'] === 'interval') {
+                $this->assertArrayHasKey('minutes', $schedule, sprintf('La tarea por intervalo "%s" no dice cada cuánto.', $key));
+                $this->assertGreaterThan(0, $schedule['minutes'], sprintf('Intervalo no positivo en "%s".', $key));
+                continue;
+            }
+
             $this->assertGreaterThanOrEqual(0, $schedule['hour'], sprintf('Hora fuera de rango en "%s".', $key));
             $this->assertLessThanOrEqual(23, $schedule['hour'], sprintf('Hora fuera de rango en "%s".', $key));
 
@@ -126,8 +174,18 @@ class CronManifestTest extends KernelTestCase
         $minimumByFreq = ['daily' => 24, 'weekly' => 168, 'monthly' => 744];
 
         foreach (AppSettings::CRONS as $key => $meta) {
+            $schedule = $meta['schedule'];
+
+            // En las de intervalo el mínimo sale del propio intervalo, no de una
+            // tabla: una tarea cada 60 minutos con un plazo de una hora se
+            // marcaría como caída en cuanto el reloj se retrase cinco minutos, y
+            // los schedule de GitHub Actions se retrasan de serie.
+            $minimum = $schedule['freq'] === 'interval'
+                ? $schedule['minutes'] / 60
+                : $minimumByFreq[$schedule['freq']];
+
             $this->assertGreaterThan(
-                $minimumByFreq[$meta['schedule']['freq']],
+                $minimum,
                 $meta['max_delay_hours'],
                 sprintf('El plazo de "%s" es más corto que su propia cadencia: daría falsas alarmas.', $key)
             );
@@ -163,12 +221,20 @@ class CronManifestTest extends KernelTestCase
                 $this->assertTrue($definition->hasOption('to'), sprintf('El comando de "%s" dice necesitar destinatario pero no acepta --to.', $key));
             }
 
-            // Las que mandan correo (`confirm`) tienen que aceptar --resend: sus
-            // efectos son idempotentes, y sin vía de repetición un aviso que no
-            // llegó sólo se podría rescatar borrando su apunte a mano en la base
-            // de datos. La pantalla ofrece el botón "Reenviar" a partir de ese
-            // mismo `confirm`.
-            if ($meta['confirm']) {
+            // Las que mandan CORREO tienen que aceptar --resend: sus efectos son
+            // idempotentes vía EffectLedger, y sin vía de repetición un correo
+            // que no llegó sólo se podría rescatar borrando su apunte a mano en
+            // la base de datos. La pantalla ofrece el botón "Reenviar".
+            //
+            // Se mira el canal y no `confirm` porque no todo lo que entrega algo
+            // se rescata igual. app:send-volunteer-calls es push y su repetición
+            // NO la gobierna un apunte sino el UNIQUE (offer, scope) del
+            // dominio: que un aviso salga dos veces es peor que perderlo —el
+            // permiso de notificaciones se gasta una sola vez—, así que ahí
+            // repetir es una decisión de negocio y no un rescate técnico. El
+            // otro cron de push, el de recordatorios, sí usa el ledger y sí
+            // acepta --resend.
+            if (\in_array('email', $meta['channels'], true)) {
                 $this->assertTrue($definition->hasOption('resend'), sprintf('El comando de "%s" manda correo y no acepta --resend.', $key));
             }
         }

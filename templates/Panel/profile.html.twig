@@ -61,6 +61,58 @@
             {{ form_rest(profile_form) }}
         {{ form_end(profile_form, { render_rest: false }) }}
 
+        {# ============ AVISOS EN EL MÓVIL ============
+         # AQUÍ Y NO SÓLO EN VOLUNTARIADO. El interruptor vivía dentro de la
+         # pantalla de voluntariado, que va detrás de FEATURE_VOLUNTEERING: con
+         # el módulo apagado no había NINGÚN sitio donde activar los avisos, y
+         # el recordatorio de la cesta —que no tiene nada que ver con el
+         # voluntariado— se quedaba sin canal.
+         #
+         # Fuera del formulario de datos a propósito: esto no se guarda con
+         # "Guardar mis datos". Es una decisión del navegador, se aplica al
+         # pulsar y afecta sólo a ESTE dispositivo; meterlo dentro del form
+         # haría pensar que viaja con el resto del perfil. #}
+        {% if app_vapid_public_key is not empty %}
+        <div class="csa-form-narrow" style="padding-top: var(--csa-sp-5);">
+            {% embed '_components/csa_card.html.twig' with {
+                title: 'Avisos en este dispositivo',
+                icon: 'fa-bell-o'
+            } %}
+                {% block body %}
+                    {# Un solo interruptor para todo el canal, a propósito: partirlo
+                     # en una casilla por tipo de aviso es justo la pantalla que no
+                     # se entiende. La única salida que hace falta —no querer saber
+                     # nada del voluntariado— ya existe en su sitio, y se enlaza
+                     # desde aquí en vez de duplicarla. #}
+                    <p class="csa-muted">
+                        Te avisamos en el móvil cuando toque recoger tu cesta y,
+                        si te interesa el voluntariado, cuando falte gente para
+                        algo que encaje contigo. Se activa en cada dispositivo por
+                        separado: si quieres los avisos en el móvil y en el
+                        ordenador, hay que darle en los dos.
+                        {% if is_granted('FEATURE_VOLUNTEERING') %}
+                            Si sólo quieres lo de tu cesta, dilo en
+                            <a href="{{ path('panel_volunteering') }}">Voluntariado</a>
+                            y no te avisaremos de eso.
+                        {% endif %}
+                    </p>
+
+                    {# El botón se pinta siempre pero se explica solo: push.js le
+                     # cambia el texto al estado real (no admitido, bloqueado, ya
+                     # activado…) antes de que nadie lo toque. #}
+                    <button type="button" class="csa-btn csa-btn--secondary csa-btn--sm" data-push-toggle>Activar avisos</button>
+
+                    <p class="csa-muted" style="margin-top: var(--csa-sp-3);">
+                        En iPhone o iPad hay un paso más: abre esta web en Safari,
+                        pulsa Compartir → «Añadir a pantalla de inicio» y ábrela
+                        desde el icono que aparece. Sólo así deja Apple activar los
+                        avisos.
+                    </p>
+                {% endblock %}
+            {% endembed %}
+        </div>
+        {% endif %}
+
     </div>
 
     <script>

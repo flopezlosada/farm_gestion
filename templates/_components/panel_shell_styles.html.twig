@@ -1,0 +1,88 @@
+{#
+ # Estilos del shell del panel del socix: la barra de pestañas de abajo y la hoja
+ # «Más». Sólo los usa este shell, así que viven aquí y no en el CSS global —
+ # el shell de gestión no tiene barra de pestañas ni la quiere.
+ #
+ # EL BREAKPOINT ES 900px Y NO ES ARBITRARIO: es exactamente donde
+ # 03-components.css saca el sidebar de la pantalla. Con la barra apareciendo más
+ # tarde (a 640, que es lo que pide el ojo) quedaba una franja entre 640 y 900
+ # —una tablet en vertical, sin ir más lejos— con el sidebar ya escondido y la
+ # barra todavía sin salir: sin ninguna navegación.
+ #}
+<style>
+    .csa-tabbar { display: none; }
+
+    @media (max-width: 900px) {
+        .csa-tabbar {
+            position: fixed; bottom: 0; left: 0; right: 0; z-index: 90;
+            display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
+            background: color-mix(in srgb, var(--csa-surface) 94%, transparent);
+            backdrop-filter: blur(12px);
+            border-top: 1px solid var(--csa-rule);
+            /* El hueco de la barra de gestos del iPhone: sin esto, la última
+               pestaña queda debajo de ella y no se puede pulsar. */
+            padding-bottom: env(safe-area-inset-bottom, 0);
+        }
+        .csa-tabbar__item {
+            /* 52px mínimo: por debajo de 44 un pulgar falla, y el pulgar es el
+               único dedo disponible cuando se sostiene el móvil con una mano. */
+            min-height: 52px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            gap: 3px; padding: 6px 2px;
+            background: none; border: none; cursor: pointer;
+            font-family: var(--csa-sans); font-size: 10.5px; font-weight: 500;
+            color: var(--csa-ink-muted); text-decoration: none;
+        }
+        .csa-tabbar__item i { font-size: 17px; }
+        .csa-tabbar__item--active { color: var(--csa-green); font-weight: 700; }
+        .csa-tabbar__item--active i { color: var(--csa-green); }
+
+        /* Sitio para la barra al final del scroll: sin esto, el último botón de
+           cualquier pantalla queda tapado y parece que no existe. */
+        .csa-shell--tabbed .csa-content {
+            padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+        }
+    }
+
+    /* ---- Hoja «Más» ---- */
+    .csa-sheet { position: fixed; inset: 0; z-index: 120; }
+    .csa-sheet[hidden] { display: none; }
+    .csa-sheet__scrim { position: absolute; inset: 0; background: rgba(28, 29, 26, 0.38); }
+    .csa-sheet__panel {
+        position: absolute; left: 0; right: 0; bottom: 0;
+        max-height: 82%; overflow: auto;
+        background: var(--csa-bg);
+        border-radius: var(--csa-radius-xl) var(--csa-radius-xl) 0 0;
+        box-shadow: 0 -8px 32px rgba(28, 29, 26, 0.18);
+        padding: var(--csa-sp-2) var(--csa-sp-4) calc(var(--csa-sp-6) + env(safe-area-inset-bottom, 0px));
+    }
+    .csa-sheet__grip {
+        width: 36px; height: 4px; margin: var(--csa-sp-2) auto var(--csa-sp-3);
+        border-radius: var(--csa-radius-pill); background: var(--csa-rule);
+    }
+    .csa-sheet__title {
+        margin: 0 0 var(--csa-sp-3); font-family: var(--csa-serif);
+        font-size: var(--csa-fs-lg); font-weight: 400; color: var(--csa-ink);
+    }
+    .csa-sheet__list { display: flex; flex-direction: column; gap: var(--csa-sp-2); }
+    .csa-sheet__area {
+        display: flex; align-items: center; gap: var(--csa-sp-3);
+        min-height: 60px; padding: var(--csa-sp-3) var(--csa-sp-4);
+        background: var(--csa-surface); border: 1px solid var(--csa-rule-soft);
+        border-radius: var(--csa-radius-lg); text-decoration: none;
+    }
+    .csa-sheet__area--active { border-color: var(--csa-green); }
+    .csa-sheet__area--quiet { background: transparent; }
+    .csa-sheet__icon {
+        width: 38px; height: 38px; flex-shrink: 0;
+        display: inline-flex; align-items: center; justify-content: center;
+        border-radius: var(--csa-radius-md);
+        background: var(--csa-green-soft); color: var(--csa-green);
+    }
+    .csa-sheet__area--quiet .csa-sheet__icon { background: var(--csa-surface-alt); color: var(--csa-ink-muted); }
+    .csa-sheet__body { flex: 1; min-width: 0; }
+    .csa-sheet__label { display: block; font-size: var(--csa-fs-base); font-weight: 600; color: var(--csa-ink); }
+    /* La explicación no es adorno: "Encuestas" no dice qué te van a preguntar. */
+    .csa-sheet__hint { display: block; font-size: var(--csa-fs-xs); color: var(--csa-ink-muted); margin-top: 2px; }
+    .csa-sheet__chevron { color: var(--csa-ink-muted); }
+</style>

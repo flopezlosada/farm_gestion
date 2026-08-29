@@ -18,6 +18,8 @@ use App\Form\PartnerProfileType;
 use App\Repository\BasketRepository;
 use App\Repository\PartnerBasketShareRepository;
 use App\Repository\PartnerDeliveryShiftRepository;
+use App\Repository\VolunteerOfferRepository;
+use App\Repository\VolunteerSignupRepository;
 use App\Repository\WeeklyBasketGroupRepository;
 use App\Repository\WeeklyBasketRepository;
 use App\Service\Delivery\DeliveryCalendarProjector;
@@ -32,6 +34,7 @@ use App\Service\Delivery\PickupRelocationOptions;
 use App\Service\Delivery\PickupRelocator;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Delivery\WeeklyBasketSkipper;
+use App\Service\Volunteering\VolunteerContributions;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -58,9 +61,17 @@ class PanelController extends AbstractController
     ) {
     }
 
+    /** Cuántas tareas de voluntariado se asoman en la home antes de mandar a su pantalla. */
+    private const VOLUNTEERING_TEASER = 3;
+
     #[Route('', name: 'panel', methods: ['GET'])]
-    public function index(PickupRelocationOptions $relocationOptions): Response
-    {
+    public function index(
+        PickupRelocationOptions $relocationOptions,
+        VolunteerOfferRepository $volunteerOffers,
+        VolunteerSignupRepository $volunteerSignups,
+        VolunteerContributions $contributions,
+        DeliveryCalendarProjector $projector,
+    ): Response {
         if (($redirect = $this->ensureReady()) !== null) {
             return $redirect;
         }
@@ -70,6 +81,25 @@ class PanelController extends AbstractController
         // El traslado de nodo opera sobre la cesta de la FAMILIA (el principal), igual que
         // el calendario: un secundario tramita el traslado de la cesta de su hogar.
         $owner = $this->basketOwner($partner);
+
+        $nextDelivery = $projector->nextDelivery($owner);
+
+        // Todo lo que sigue necesitando gente, SIN recortar. No cuesta una consulta
+        // más: findStillNeededFor ya se trae las futuras publicadas y filtra en PHP,
+        // así que el límite sólo decidía cuántas se tiraban a la basura. Traerlas
+        // enteras es lo que permite decir "y hay otras seis" en vez de enseñar tres
+        // y callar que hay nueve, que es lo que hacía pensar que apenas hace falta
+        // nada.
+        $stillNeeded = $this->isGranted('FEATURE_VOLUNTEERING')
+            ? $volunteerOffers->findStillNeededFor(
+                new \DateTime(),
+                $partner->getWeeklyBasketGroup()?->getNode(),
+                array_map(
+                    static fn ($signup) => $signup->getOffer()?->getId(),
+                    $volunteerSignups->findUpcomingFor($partner, new \DateTime())
+                )
+            )
+            : [];
 
         // Las cestas COMPARTIDAS (alternancia entre dos hogares) no se trasladan de nodo de
         // momento (lo bloquea PickupRelocator): no ofrecer el atajo. Vacío → modal sin pintar.
@@ -87,10 +117,51 @@ class PanelController extends AbstractController
         // calendario de recogida.
         return $this->render('Panel/index.html.twig', [
             'partner' => $partner,
-            'active_share' => $this->activeShare($partner),
-            'group' => $partner->getWeeklyBasketGroup(),
+            // La cesta del DUEÑO, no la de esta ficha: en una familia el
+            // PartnerBasketShare cuelga del principal, así que a un secundario el
+            // panel le decía "no tienes una cesta activa registrada" mientras
+            // recogía la de su casa todas las semanas. El calendario y el
+            // traslado ya operaban sobre el dueño; sólo esta pantalla no.
+            'active_share' => $this->activeShare($owner),
+            // Para decir de quién es la cesta cuando no es suya propia.
+            'basket_owner' => $owner,
+            'group' => $partner->getWeeklyBasketGroup() ?? $owner->getWeeklyBasketGroup(),
             'relocate_weeks' => $canRelocate ? $relocationOptions->weeksForPartner($owner) : [],
             'relocate_groups' => $canRelocate ? $relocationOptions->groupsForPartner($owner) : [],
+            // La próxima entrega: es a lo que se entra al panel. Antes había que
+            // abrir el calendario para saber qué día toca, y el sitio se anunciaba
+            // en un banner que repetía el nodo tres veces en la misma pantalla.
+            'next_delivery' => $nextDelivery,
+            // Quién le está montando la cesta de esa semana en su punto de recogida.
+            // Es la cara amable del voluntariado —gente con nombre, no un contador— y
+            // a la vez el sitio donde más barato sale pedir ayuda: a quien va a ir de
+            // todos modos ese viernes. Vacío cuando ese nodo no organiza el montaje
+            // como tarea de voluntariado, que hoy es todos menos Torremocha.
+            'basket_prep' => $this->basketPrepFor($owner, $partner, $nextDelivery, $volunteerOffers),
+            // Las tareas que hacen falta DE VERDAD, con lo destacado primero y
+            // después lo del punto de recogida propio: sin las que ya están
+            // cubiertas y sin aquellas a las que ya se apuntó. Con
+            // findUpcomingForNode() a secas, la tarjeta llegó a anunciar "faltan 0
+            // personas" bajo el título "Hace falta una mano".
+            //
+            // En la home se asoman unas pocas: una lista larga se lee como un muro
+            // y no se lee.
+            'volunteering_offers' => \array_slice($stillNeeded, 0, self::VOLUNTEERING_TEASER),
+            // Cuántas hay en total. Enseñar tres y callar que hay nueve deja la
+            // impresión de que apenas hace falta ayuda, que es lo contrario de lo
+            // que pasa.
+            'volunteering_total' => \count($stillNeeded),
+            // Lo que lleva aportado, para pintarlo junto a lo que hace falta y no
+            // en una pantalla aparte: un contador solo es mobiliario, y un déficit
+            // sin una acción al lado es un reproche sin salida. Va junto al bloque
+            // de tareas por eso, no por ahorrar espacio.
+            //
+            // El objeto y no los números sueltos: lleva consigo la regla de a quién
+            // se le enseña la mediana, que es lo que no se puede perder por el
+            // camino ({@see VolunteerContribution}).
+            'my_contribution' => $this->isGranted('FEATURE_VOLUNTEERING')
+                ? $contributions->forPartner($partner)
+                : null,
         ]);
     }
 
@@ -512,6 +583,52 @@ class PanelController extends AbstractController
             return $parent;
         }
         return $partner;
+    }
+
+    /**
+     * El montaje del reparto de la próxima entrega del socix: quién se ha
+     * comprometido a preparar las cestas de SU punto de recogida esa semana.
+     *
+     * El nodo se toma de la entrega y no de la ficha: si esa semana ha trasladado
+     * la recogida a otro punto, quien le monta la cesta es la gente de ESE punto,
+     * y enseñarle la de su nodo de casa sería decirle nombres de personas que no
+     * va a ver. El proyector marca el traslado en el slot ({@see DeliveryCalendarProjector}).
+     *
+     * Devuelve lista vacía —y la home no pinta nada— cuando el módulo está apagado,
+     * cuando no hay una próxima entrega o cuando ese nodo no organiza el montaje
+     * como tarea de voluntariado. Lo último es la situación normal en casi todos
+     * los puntos, y por eso el disparador es que EXISTA la tarea: si el aviso
+     * dependiera de que falta gente, todos los nodos sin tarea estarían gritando
+     * que nadie se ha apuntado.
+     *
+     * @param Partner                 $owner    dueñx de la cesta (en familias, el principal)
+     * @param Partner                 $partner  quien mira el panel
+     * @param array|null              $next     el slot de la próxima entrega, o null
+     * @param VolunteerOfferRepository $offers
+     *
+     * @return list<\App\Entity\VolunteerOffer> el montaje de ese reparto
+     */
+    private function basketPrepFor(
+        Partner $owner,
+        Partner $partner,
+        ?array $next,
+        VolunteerOfferRepository $offers,
+    ): array {
+        if ($next === null || !$this->isGranted('FEATURE_VOLUNTEERING')) {
+            return [];
+        }
+
+        // El nodo del traslado si esa semana recoge en otro sitio; si no, el de casa.
+        // Se mira primero el grupo propio y luego el del dueño de la cesta, igual que
+        // hace la plantilla: en una familia el secundario puede no tener grupo propio.
+        $node = $next['pickup_node']
+            ?? ($partner->getWeeklyBasketGroup() ?? $owner->getWeeklyBasketGroup())?->getNode();
+
+        if ($node === null) {
+            return [];
+        }
+
+        return $offers->findDeliveryPrepFor($node, $next['date']);
     }
 
     /**

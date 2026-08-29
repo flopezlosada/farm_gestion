@@ -5,6 +5,7 @@ namespace App\Repository;
 use App\Entity\Basket;
 use App\Entity\Partner;
 use App\Entity\User;
+use App\Entity\VolunteerCategory;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
@@ -20,6 +21,176 @@ class PartnerRepository extends ServiceEntityRepository
     public function __construct(ManagerRegistry $registry)
     {
         parent::__construct($registry, Partner::class);
+    }
+
+    /**
+     * Socixs ACTIVO que han marcado alguna de estas categorías de voluntariado.
+     * Es el primer paso del escalado de avisos: a quien ha dicho que le avisen
+     * de esto.
+     *
+     * @param list<VolunteerCategory> $categories las categorías de la oferta
+     *
+     * @return list<Partner> socixs activos con al menos una de esas categorías
+     */
+    public function findActiveMatchingVolunteerCategories(array $categories): array
+    {
+        if ([] === $categories) {
+            return [];
+        }
+
+        return $this->createQueryBuilder('p')
+            ->distinct()
+            ->join('p.volunteerCategories', 'c')
+            ->where('p.status = :status')
+            ->andWhere('p.volunteering_opt_out = false')
+            ->andWhere('c IN (:categories)')
+            ->setParameter('status', Partner::STATUS_ACTIVO)
+            ->setParameter('categories', $categories)
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Socixs ACTIVO que no han marcado NINGUNA categoría de voluntariado. Es el
+     * segundo paso del escalado, y sólo para ofertas aptas para cualquiera.
+     *
+     * Quien sí marcó categorías queda fuera aunque esta oferta no sea de las
+     * suyas, y es el punto entero del diseño: haber marcado "huerta" y "cocina"
+     * es decir activamente que de obras no avisen. Colarle el aviso porque
+     * "total, es fácil" convierte la ficha de preferencias en una mentira.
+     *
+     * @return list<Partner> socixs activos sin preferencias declaradas
+     */
+    public function findActiveWithoutVolunteerPreferences(): array
+    {
+        return $this->createQueryBuilder('p')
+            ->where('p.status = :status')
+            ->andWhere('p.volunteering_opt_out = false')
+            ->andWhere('p.volunteerCategories IS EMPTY')
+            ->setParameter('status', Partner::STATUS_ACTIVO)
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Socixs ACTIVO a quienes se puede avisar de voluntariado. Es el alcance del
+     * aviso general, que nunca se abre solo: lo lanza una persona que ha
+     * decidido que la cosa es seria.
+     *
+     * QUIEN HA PEDIDO QUE NO SE LE AVISE QUEDA FUERA TAMBIÉN AQUÍ, y ese es el
+     * punto: un "no me avises" que el aviso general se salta no es un no, es una
+     * sugerencia. En cuanto alguien lo comprueba una vez, apaga los avisos del
+     * navegador enteros —y con ellos los que sí le interesan— y ya no vuelve,
+     * porque el permiso denegado no se puede volver a pedir.
+     *
+     * El filtro vive en la consulta y no en el servicio a propósito: así ninguna
+     * vía futura puede colarse por descuido.
+     *
+     * @return list<Partner> socixs activos que admiten avisos de voluntariado
+     */
+    public function findAllActive(): array
+    {
+        return $this->createQueryBuilder('p')
+            ->where('p.status = :status')
+            ->andWhere('p.volunteering_opt_out = false')
+            ->setParameter('status', Partner::STATUS_ACTIVO)
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * La bolsa de voluntariado, como QueryBuilder para poder paginarla.
+     *
+     * Son 246 socixs: sin paginar, la pantalla salía como un muro de nueve mil
+     * píxeles en el que no se encuentra a nadie.
+     *
+     * Cuatro vistas, y la que importa es la primera:
+     *  - `declared` (por defecto): quien ha marcado algún tipo de trabajo. Es a
+     *    quien se puede llamar, y es lo que quien coordina viene a ver.
+     *  - un área concreta: la bolsa de esa área.
+     *  - `silent`: quien no ha dicho nada — la reserva para lo sencillo.
+     *  - `refused`: quien ha pedido que no le avisen. Se enseña para que el
+     *    cuadro esté completo y nadie los cuente como disponibles.
+     *
+     * @param string                 $scope    declared | silent | refused | all
+     * @param VolunteerCategory|null $category filtra por un área concreta
+     */
+    public function volunteeringPoolQb(
+        string $scope = 'declared',
+        ?VolunteerCategory $category = null,
+        ?string $query = null,
+        ?array $restrictTo = null,
+    ): QueryBuilder {
+        $qb = $this->createQueryBuilder('p')
+            ->where('p.status = :status')
+            ->setParameter('status', Partner::STATUS_ACTIVO);
+
+        // Con 246 socixs, encontrar a alguien sin buscador es imposible.
+        if (null !== $query && '' !== trim($query)) {
+            $qb->andWhere('LOWER(p.name) LIKE :q OR LOWER(p.surname) LIKE :q OR LOWER(p.display_name) LIKE :q')
+                ->setParameter('q', '%'.mb_strtolower(trim($query)).'%');
+        }
+
+        if (null !== $category) {
+            // Subconsulta y no un JOIN filtrado: filtrar sobre el join recortaría
+            // también las categorías que se traen, y cada socix aparecería con
+            // una sola —la del filtro— en vez de con todas las suyas.
+            $qb->andWhere($qb->expr()->exists(
+                'SELECT 1 FROM App\Entity\Partner pf JOIN pf.volunteerCategories cf'
+                .' WHERE pf = p AND cf = :category'
+            ))
+                ->andWhere('p.volunteering_opt_out = false')
+                ->setParameter('category', $category);
+
+            return $qb;
+        }
+
+        // Quien coordina un área sólo ve SU bolsa. Las vistas "no han dicho
+        // nada" y "no quieren avisos" NO se restringen, y no es un descuido: esa
+        // gente no tiene área ninguna que cruzar, y quien coordina necesita
+        // saber a quién puede pedirle una tarea sencilla y quién ha dicho que no
+        // le avisen. Restringirlas dejaría las dos vistas siempre vacías.
+        if (null !== $restrictTo && 'declared' === $scope) {
+            if ([] === $restrictTo) {
+                return $qb->andWhere('1 = 0');
+            }
+
+            return $qb->andWhere($qb->expr()->exists(
+                'SELECT 1 FROM App\Entity\Partner pm JOIN pm.volunteerCategories cm'
+                .' WHERE pm = p AND cm IN (:mine)'
+            ))
+                ->andWhere('p.volunteering_opt_out = false')
+                ->setParameter('mine', $restrictTo);
+        }
+
+        return match ($scope) {
+            'silent' => $qb->andWhere('p.volunteerCategories IS EMPTY')
+                ->andWhere('p.volunteering_opt_out = false'),
+            'refused' => $qb->andWhere('p.volunteering_opt_out = true'),
+            'all' => $qb,
+            default => $qb->andWhere('p.volunteerCategories IS NOT EMPTY')
+                ->andWhere('p.volunteering_opt_out = false'),
+        };
+    }
+
+    /**
+     * Cuánta gente hay en cada vista de la bolsa, para pintarlo en los filtros:
+     * ver que "sin decir nada" son doscientos es la mitad de la información.
+     *
+     * @return array{declared: int, silent: int, refused: int}
+     */
+    public function volunteeringPoolCounts(?array $restrictTo = null): array
+    {
+        $count = fn (string $scope): int => (int) $this->volunteeringPoolQb($scope, null, null, $restrictTo)
+            ->select('COUNT(DISTINCT p.id)')
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        return [
+            'declared' => $count('declared'),
+            'silent' => $count('silent'),
+            'refused' => $count('refused'),
+        ];
     }
 
     // /**

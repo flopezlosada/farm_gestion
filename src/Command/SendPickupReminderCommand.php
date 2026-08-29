@@ -8,6 +8,7 @@ use App\Repository\DeliveryExceptionRepository;
 use App\Repository\WeeklyBasketRepository;
 use App\Service\AppSettings;
 use App\Service\Delivery\PickupReminderMailer;
+use App\Service\Delivery\PickupReminderPusher;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -44,6 +45,7 @@ class SendPickupReminderCommand extends AbstractCronCommand
         private readonly DeliveryExceptionRepository $exceptionRepository,
         private readonly AppSettings $settings,
         private readonly PickupReminderMailer $reminderMailer,
+        private readonly PickupReminderPusher $reminderPusher,
     ) {
         parent::__construct();
     }
@@ -64,6 +66,25 @@ class SendPickupReminderCommand extends AbstractCronCommand
         $target = $this->resolveTargetDate($input, $io);
         if ($target === null) {
             return Command::FAILURE;
+        }
+
+        // Los interruptores del correo se leen AQUÍ, antes de tocar nada, y no
+        // en el `requires` del manifiesto. Allí inhibían la tarea ENTERA sin que
+        // --force lo saltara, y desde que este aviso también sale por push eso
+        // dejaba sin avisar a quien lo tenía activado en el móvil, que no ha
+        // pedido nada de eso.
+        //
+        // SE MIRAN LOS DOS, incluido el general, y ésta es la parte que no se
+        // puede delegar en el KillSwitchMailer aunque él corte la entrega: el
+        // guardián de idempotencia APUNTA EL EFECTO ANTES DE ENVIAR, así que un
+        // correo descartado en silencio dejaría el apunte puesto y al reencender
+        // los envíos ese recordatorio ya constaría emitido y no saldría nunca.
+        // No llamar al mailer es lo único que evita el apunte.
+        $emailOn = $this->settings->getBool(AppSettings::EMAIL_ENABLED)
+            && $this->settings->getBool(AppSettings::EMAIL_PICKUP_REMINDER);
+
+        if (!$emailOn) {
+            $io->note('El recordatorio por email está desactivado en /gestion/settings: no se envía ningún correo ni se apunta como enviado. El aviso al móvil no depende de ese ajuste y sigue su curso.');
         }
 
         $recipients = $this->withoutCancelled(
@@ -100,7 +121,19 @@ class SendPickupReminderCommand extends AbstractCronCommand
             return Command::SUCCESS;
         }
 
-        $result = $this->reminderMailer->send($recipients, (bool) $input->getOption('resend'));
+        $resend = (bool) $input->getOption('resend');
+
+        $result = $emailOn
+            ? $this->reminderMailer->send($recipients, $resend)
+            : ['sent' => 0, 'skipped' => 0, 'already' => 0];
+
+        // El push va DESPUÉS del correo y con su propio apunte de idempotencia:
+        // son dos canales independientes, así que quien acaba de activar los
+        // avisos en el móvil los recibe aunque el correo de ese día ya se
+        // hubiera mandado, y un fallo del push no puede deshacer un correo que
+        // ya salió. Quien no tenga ningún navegador suscrito no cuenta como
+        // fallo: el push es un extra sobre el correo, no su sustituto.
+        $pushed = $this->reminderPusher->send($recipients, $resend);
 
         $io->success(sprintf(
             'Enviados %d email(s). %d socixs sin email. %d ya estaban avisados.',
@@ -109,13 +142,28 @@ class SendPickupReminderCommand extends AbstractCronCommand
             $result['already'],
         ));
 
-        if ($result['sent'] > 0) {
+        if ($pushed['sent'] > 0 || $pushed['devices'] > 0) {
+            $io->success(sprintf(
+                'Avisos al móvil: %d socix(s), %d navegador(es). %d ya estaban avisados.',
+                $pushed['sent'],
+                $pushed['devices'],
+                $pushed['already'],
+            ));
+        }
+
+        // Un push mandado también es trabajo hecho: si sólo se mira el correo,
+        // el día en que todos los emails ya constaban pero el push salió por
+        // primera vez, el planificador lo apuntaría como "nada que hacer" y el
+        // registro de /gestion/settings mentiría sobre lo que de verdad se
+        // envió.
+        if ($result['sent'] > 0 || $pushed['sent'] > 0) {
             return $this->didWork(sprintf(
-                '%d recordatorios enviados para el %s (%d sin email, %d ya avisados)',
+                '%d recordatorios enviados para el %s (%d sin email, %d ya avisados) · %d aviso(s) al móvil',
                 $result['sent'],
                 $target->format('Y-m-d'),
                 $result['skipped'],
                 $result['already'],
+                $pushed['sent'],
             ));
         }
 

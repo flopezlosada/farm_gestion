@@ -185,6 +185,16 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface, LegacyP
 
     private $consumed_product;
 
+    /**
+     * Áreas de voluntariado que esta persona coordina. Lado inverso: la relación
+     * la posee {@see VolunteerCategory::$coordinators}.
+     *
+     * @ORM\ManyToMany(targetEntity="App\Entity\VolunteerCategory", mappedBy="coordinators")
+     *
+     * @var Collection<int, VolunteerCategory>
+     */
+    private $coordinatedVolunteerCategories;
+
     public function __construct()
     {
         $this->lays = new ArrayCollection();
@@ -195,6 +205,51 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface, LegacyP
         $this->egg_registry_users = new ArrayCollection();
         $this->fowls = new ArrayCollection();
         $this->tasks = new ArrayCollection();
+        $this->coordinatedVolunteerCategories = new ArrayCollection();
+    }
+
+    /**
+     * Cómo se llama esta cuenta cuando hay que enseñársela a una persona.
+     *
+     * El nombre de verdad vive en el {@see Partner} vinculado; User sólo tiene
+     * username y email, que en las cuentas de socixs son su correo. Un
+     * desplegable que ofrece "aguilella.vicente@gmail.com" no dice quién es esa
+     * persona a nadie que no se sepa los correos de memoria.
+     *
+     * Cae al username cuando no hay socix detrás (admin, cuentas de gestión):
+     * ahí el username SÍ identifica.
+     *
+     * @return string el nombre para enseñar
+     */
+    public function getDisplayName(): string
+    {
+        if (null === $this->partner) {
+            return $this->getUsername();
+        }
+
+        return trim(sprintf('%s %s', $this->partner->getName(), $this->partner->getSurname()));
+    }
+
+    /**
+     * @return Collection<int, VolunteerCategory> las áreas de voluntariado que coordina
+     */
+    public function getCoordinatedVolunteerCategories(): Collection
+    {
+        return $this->coordinatedVolunteerCategories;
+    }
+
+    /**
+     * Si coordina alguna área de voluntariado.
+     *
+     * `count()` sobre la colección y no `isEmpty()` tras cargarla: Doctrine lo
+     * resuelve con un COUNT sin hidratar las categorías, que importa porque esto
+     * se pregunta en {@see getRoles()} y por tanto en cada petición.
+     *
+     * @return bool true si coordina al menos un área
+     */
+    public function coordinatesVolunteering(): bool
+    {
+        return $this->coordinatedVolunteerCategories->count() > 0;
     }
 
     public function getId()
@@ -354,6 +409,19 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface, LegacyP
         // relación en vez de duplicarlo en la columna `roles`.
         if ($this->worker !== null) {
             $roles[] = 'ROLE_WORKER';
+        }
+        // Mismo criterio para la coordinación del voluntariado: quien coordina
+        // un área es, por definición, alguien que gestiona voluntariado, así que
+        // el rol se deriva del dato. Si hubiera que asignarlo aparte serían dos
+        // sitios que mantener, y se desincronizarían: alguien nombrado
+        // coordinador que no puede entrar, o con acceso alguien que ya no
+        // coordina nada.
+        //
+        // Da sólo el rol de LECTURA. Qué puede tocar de verdad lo decide
+        // {@see \App\Security\VolunteerOfferVoter}, que sabe de qué áreas es
+        // coordinadora cada persona: sus tareas sí, las de las demás no.
+        if ($this->coordinatesVolunteering()) {
+            $roles[] = 'ROLE_GESTION_VOLUNTARIADO';
         }
         return array_unique($roles);
     }

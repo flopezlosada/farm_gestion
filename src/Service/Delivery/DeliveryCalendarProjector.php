@@ -271,6 +271,47 @@ final class DeliveryCalendarProjector implements PartnerMonthProjection
     }
 
     /**
+     * La próxima entrega del socix: la primera de hoy en adelante que de verdad
+     * va a recoger.
+     *
+     * Se saltan las semanas que ha dejado sin recoger ('skipped') y aquellas en
+     * las que su punto no abre ('closed'): anunciar "tu próxima cesta" con una
+     * fecha en la que nadie le va a dar nada es peor que no decir nada.
+     *
+     * Recorre mes a mes en vez de consultar un rango porque la proyección se
+     * calcula por mes: el patrón de cada socix (quincenal, mensual, turnos) sólo
+     * se resuelve dentro de {@see projectMonth()}. Con seis meses de margen cubre
+     * hasta el caso más espaciado; quien no tenga nada en medio año no tiene
+     * cesta activa y devuelve null.
+     *
+     * @param Partner                 $partner     socix (o el principal de su familia: la cesta cuelga de él)
+     * @param \DateTimeInterface|null $from        desde cuándo mirar; por defecto, hoy
+     * @param int                     $monthsAhead cuántos meses mirar hacia delante
+     *
+     * @return array{date: \DateTimeInterface, basket: Basket, ...}|null el slot, o null si no hay ninguna
+     */
+    public function nextDelivery(Partner $partner, ?\DateTimeInterface $from = null, int $monthsAhead = 6): ?array
+    {
+        $today = null !== $from
+            ? \DateTimeImmutable::createFromInterface($from)
+            : new \DateTimeImmutable('today');
+
+        $base = $today->modify('first day of this month');
+
+        for ($i = 0; $i < $monthsAhead; ++$i) {
+            $cursor = $base->modify(sprintf('+%d months', $i));
+
+            foreach ($this->projectMonth($partner, (int) $cursor->format('Y'), (int) $cursor->format('n')) as $slot) {
+                if ($slot['date'] >= $today && !$slot['skipped'] && !($slot['closed'] ?? false)) {
+                    return $slot;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Refleja en los slots los traslados puntuales de NODO ({@see PartnerNodeOverride}): la
      * semana se recoge en otro nodo. Recalcula la fecha física con el nodo destino (para que
      * la rejilla mueva el día — clave en semanas DIBUJADAS, donde la proyección usó el nodo de
@@ -309,6 +350,12 @@ final class DeliveryCalendarProjector implements PartnerMonthProjection
             foreach ($idxsByBasket[$basket->getId()] ?? [] as $idx) {
                 $slots[$idx]['date'] = $date;
                 $slots[$idx]['pickup_place'] = $destNode->getName();
+                // El nodo y no sólo su nombre: quien consume el slot puede
+                // necesitar consultar algo de ESE nodo (el montaje del reparto
+                // de la semana, sin ir más lejos), y resolverlo por nombre
+                // obligaría a una búsqueda de texto para recuperar lo que aquí
+                // ya se tiene en la mano.
+                $slots[$idx]['pickup_node'] = $destNode;
                 $slots[$idx]['relocated'] = true;
             }
         }
