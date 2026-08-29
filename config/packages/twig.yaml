@@ -4,5 +4,13 @@ twig:
     strict_variables: '%kernel.debug%'
     globals:
       dozen_price: 3.5
+      # Si el servidor tiene configurados los avisos push. VACÍA = la app no
+      # puede firmar ningún aviso, así que las pantallas que ofrecen activarlos
+      # no deben pintar el botón: sin claves sólo puede fallar, y un botón que
+      # promete algo y no lo da enseña a no fiarse de esta pantalla.
+      #
+      # Sólo la PÚBLICA: es la que el navegador necesita para suscribirse y no
+      # es secreta. La privada no sale del servidor.
+      app_vapid_public_key: '%env(VAPID_PUBLIC_KEY)%'
     paths:
       '%kernel.project_dir%/vendor/knplabs/knp-paginator-bundle/templates': KnpPaginator

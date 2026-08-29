@@ -9,6 +9,13 @@
  * enseñar el diálogo y hay que entrar a mano en los ajustes del sitio, cosa que
  * no hace nadie. Se gasta una vez.
  *
+ * NAVEGACIÓN PRIVADA: el push NO existe ahí, en ninguna forma. Chrome de
+ * incógnito devuelve el permiso como denegado sin llegar a enseñar el diálogo,
+ * y Firefox privado ni siquiera expone PushManager. No es algo que se pueda
+ * desbloquear en los ajustes: hay que abrir la web en una ventana normal. Se
+ * dice en el texto de ayuda porque, si no, "avisos bloqueados" se lee como una
+ * avería de la web y se pierde media tarde buscando el ajuste que no existe.
+ *
  * EN iOS hay un muro añadido: el push sólo funciona si la web está instalada en
  * la pantalla de inicio (Compartir → Añadir a inicio). Una pestaña normal no
  * vale, y Apple no implementa el banner de instalación, así que hay que
@@ -75,12 +82,47 @@
         });
     }
 
+    /**
+     * La salida del callejón, cuando la hay. Un botón que dice "bloqueado" y se
+     * deshabilita deja a la persona sin nada que hacer, y esto no se arregla
+     * volviendo a pulsar: el permiso denegado no se puede volver a pedir desde
+     * la web NUNCA, sólo desde los ajustes del navegador. Quien no sepa que eso
+     * existe da por hecho que la web está rota.
+     */
+    var HINTS = {
+        blocked: 'Este navegador tiene bloqueados los avisos de esta web, y desde aquí no se pueden volver a pedir. Para desbloquearlos: pulsa el icono que hay a la izquierda de la dirección (un candado o unos deslizadores), busca «Notificaciones», ponlo en «Permitir» y recarga esta página. Si estás en una ventana de incógnito o privada, no hay nada que desbloquear: ahí los avisos no se pueden activar nunca. Abre la web en una ventana normal.'
+    };
+
+    /**
+     * El sitio donde se explica el estado. Se crea al vuelo junto al botón en
+     * vez de pedirlo en cada plantilla: así cualquier pantalla que ponga un
+     * [data-push-toggle] hereda la explicación sin tener que acordarse.
+     */
+    function hintFor(button) {
+        var hint = button.nextElementSibling;
+        if (hint && hint.hasAttribute('data-push-hint')) {
+            return hint;
+        }
+
+        hint = document.createElement('p');
+        hint.setAttribute('data-push-hint', '');
+        hint.className = 'csa-muted';
+        hint.hidden = true;
+        button.insertAdjacentElement('afterend', hint);
+
+        return hint;
+    }
+
     function setState(button, state, message) {
         button.dataset.pushState = state;
         if (message) {
             button.textContent = message;
         }
         button.disabled = (state === 'working' || state === 'blocked' || state === 'unsupported');
+
+        var hint = hintFor(button);
+        hint.textContent = HINTS[state] || '';
+        hint.hidden = !HINTS[state];
     }
 
     /** Suscribe este navegador y lo registra en el servidor. */
