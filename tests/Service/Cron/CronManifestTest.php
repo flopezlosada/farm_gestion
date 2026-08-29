@@ -76,7 +76,7 @@ class CronManifestTest extends KernelTestCase
     public function testLasTareasQueMandanCorreoExigenElInterruptorGeneral(): void
     {
         foreach (AppSettings::CRONS as $key => $meta) {
-            if (!$meta['confirm']) {
+            if (!$meta['confirm'] || \in_array($key, self::MULTICANAL, true)) {
                 continue;
             }
 
@@ -89,6 +89,26 @@ class CronManifestTest extends KernelTestCase
     }
 
     /**
+     * Tareas que entregan por más de un canal, y que por eso NO pueden llevar en
+     * `requires` el interruptor de uno solo: `requires` inhibe la tarea entera
+     * (ni --force lo salta), así que apagar el correo dejaría también sin avisar
+     * a quien lo tiene activado en el móvil.
+     *
+     * Entrar en esta lista NO exime de la regla de arriba, la muda de sitio: la
+     * tarea tiene que leer el interruptor general ANTES de llamar al mailer, y
+     * por tanto antes de que el guardián de idempotencia apunte nada. Es lo que
+     * hace {@see \App\Command\SendPickupReminderCommand::doExecute()}, y el
+     * motivo está en el javadoc del test de arriba: un correo descartado con el
+     * apunte ya puesto no se manda nunca más.
+     *
+     * Si algún día hay tres o cuatro tareas aquí, deja de compensar la lista y
+     * toca declarar los canales en el propio manifiesto.
+     */
+    private const MULTICANAL = [
+        AppSettings::CRON_PICKUP_REMINDER,
+    ];
+
+    /**
      * La cadencia está bien formada: frecuencia conocida, hora válida y el campo
      * que corresponda a esa frecuencia (día de la semana en las semanales, día
      * del mes en las mensuales).
@@ -98,7 +118,18 @@ class CronManifestTest extends KernelTestCase
         foreach (AppSettings::CRONS as $key => $meta) {
             $schedule = $meta['schedule'];
 
-            $this->assertContains($schedule['freq'], ['daily', 'weekly', 'monthly'], sprintf('Frecuencia desconocida en "%s".', $key));
+            $this->assertContains($schedule['freq'], ['daily', 'weekly', 'monthly', 'interval'], sprintf('Frecuencia desconocida en "%s".', $key));
+
+            // Las de intervalo no tienen hora del día: corren cada N minutos. Es
+            // lo que necesitan los avisos que se abren por pasos, donde el
+            // segundo paso de algo que es pasado mañana llegaría tarde con una
+            // cadencia diaria.
+            if ($schedule['freq'] === 'interval') {
+                $this->assertArrayHasKey('minutes', $schedule, sprintf('La tarea por intervalo "%s" no dice cada cuánto.', $key));
+                $this->assertGreaterThan(0, $schedule['minutes'], sprintf('Intervalo no positivo en "%s".', $key));
+                continue;
+            }
+
             $this->assertGreaterThanOrEqual(0, $schedule['hour'], sprintf('Hora fuera de rango en "%s".', $key));
             $this->assertLessThanOrEqual(23, $schedule['hour'], sprintf('Hora fuera de rango en "%s".', $key));
 
@@ -126,8 +157,18 @@ class CronManifestTest extends KernelTestCase
         $minimumByFreq = ['daily' => 24, 'weekly' => 168, 'monthly' => 744];
 
         foreach (AppSettings::CRONS as $key => $meta) {
+            $schedule = $meta['schedule'];
+
+            // En las de intervalo el mínimo sale del propio intervalo, no de una
+            // tabla: una tarea cada 60 minutos con un plazo de una hora se
+            // marcaría como caída en cuanto el reloj se retrase cinco minutos, y
+            // los schedule de GitHub Actions se retrasan de serie.
+            $minimum = $schedule['freq'] === 'interval'
+                ? $schedule['minutes'] / 60
+                : $minimumByFreq[$schedule['freq']];
+
             $this->assertGreaterThan(
-                $minimumByFreq[$meta['schedule']['freq']],
+                $minimum,
                 $meta['max_delay_hours'],
                 sprintf('El plazo de "%s" es más corto que su propia cadencia: daría falsas alarmas.', $key)
             );

@@ -68,6 +68,25 @@ class SendPickupReminderCommand extends AbstractCronCommand
             return Command::FAILURE;
         }
 
+        // Los interruptores del correo se leen AQUÍ, antes de tocar nada, y no
+        // en el `requires` del manifiesto. Allí inhibían la tarea ENTERA sin que
+        // --force lo saltara, y desde que este aviso también sale por push eso
+        // dejaba sin avisar a quien lo tenía activado en el móvil, que no ha
+        // pedido nada de eso.
+        //
+        // SE MIRAN LOS DOS, incluido el general, y ésta es la parte que no se
+        // puede delegar en el KillSwitchMailer aunque él corte la entrega: el
+        // guardián de idempotencia APUNTA EL EFECTO ANTES DE ENVIAR, así que un
+        // correo descartado en silencio dejaría el apunte puesto y al reencender
+        // los envíos ese recordatorio ya constaría emitido y no saldría nunca.
+        // No llamar al mailer es lo único que evita el apunte.
+        $emailOn = $this->settings->getBool(AppSettings::EMAIL_ENABLED)
+            && $this->settings->getBool(AppSettings::EMAIL_PICKUP_REMINDER);
+
+        if (!$emailOn) {
+            $io->note('El recordatorio por email está desactivado en /gestion/settings: no se envía ningún correo ni se apunta como enviado. El aviso al móvil no depende de ese ajuste y sigue su curso.');
+        }
+
         $recipients = $this->withoutCancelled(
             $this->weeklyBasketRepository->findPickedByDeliveryDateAndShares(
                 $target,
@@ -104,18 +123,9 @@ class SendPickupReminderCommand extends AbstractCronCommand
 
         $resend = (bool) $input->getOption('resend');
 
-        // El ajuste del correo se comprueba AQUÍ y no en el `requires` de la
-        // tarea: allí inhibía la ejecución entera y se llevaba por delante el
-        // aviso al móvil, que tiene su propio canal y su propio público. Apagado
-        // el correo, la tarea sigue corriendo y el push sale igual.
-        $emailOn = $this->settings->getBool(AppSettings::EMAIL_PICKUP_REMINDER);
         $result = $emailOn
             ? $this->reminderMailer->send($recipients, $resend)
             : ['sent' => 0, 'skipped' => 0, 'already' => 0];
-
-        if (!$emailOn) {
-            $io->note('El recordatorio por email está desactivado en /gestion/settings: no se envía ningún correo. El aviso al móvil no depende de ese ajuste y sigue su curso.');
-        }
 
         // El push va DESPUÉS del correo y con su propio apunte de idempotencia:
         // son dos canales independientes, así que quien acaba de activar los
