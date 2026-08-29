@@ -174,10 +174,17 @@ elegido esto", que son hechos distintos y se comportan distinto.
 - **Agregado por familia.** Se apunta un socix concreto; los acompañantes van
   como número. Agregar por unidad familiar se puede hacer luego leyendo
   `parent_id` de `Partner`.
-- **Festivos.** Repetir una tarea genera copias cada 7, 14 o 28 días sin
-  consultar el calendario laboral. Por eso las copias nacen en **borrador**: hay
-  que revisarlas antes de publicarlas. El módulo laboral ya tiene una entidad
-  `Holiday`, así que cruzarlo es posible el día que moleste de verdad.
+- **Festivos, en las cadencias fijas.** Repetir cada semana, cada dos o una vez
+  al mes no consulta el calendario laboral, así que las copias nacen en
+  **borrador**: hay que revisarlas antes de publicarlas. El módulo laboral ya
+  tiene una entidad `Holiday`, así que cruzarlo es posible el día que moleste de
+  verdad.
+
+  Lo que sí está resuelto es el caso que más se repite: cuando la tarea ocurre en
+  un punto de recogida se puede elegir **«los días que haya reparto»**, y
+  entonces las fechas salen del calendario de ese nodo —el mismo que manda en el
+  reparto de cestas—, ya sin las semanas que no abre y con los cierres y
+  traslados aplicados.
 - **Calendario suscribible (.ics).** Karrot expone las tareas de cada persona
   por una URL con token, para que aparezcan solas en el calendario del móvil.
   Encajaría bien con quien no entra en la web, y no está hecho.
