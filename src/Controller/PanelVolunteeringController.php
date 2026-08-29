@@ -10,6 +10,7 @@ use App\Entity\VolunteerSignup;
 use App\Repository\VolunteerCategoryRepository;
 use App\Repository\VolunteerOfferRepository;
 use App\Repository\VolunteerSignupRepository;
+use App\Service\Volunteering\VolunteerContributions;
 use App\Service\Volunteering\VolunteerEventRecorder;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
@@ -54,6 +55,7 @@ class PanelVolunteeringController extends AbstractController
         VolunteerOfferRepository $offers,
         VolunteerSignupRepository $signups,
         VolunteerCategoryRepository $categories,
+        VolunteerContributions $contributions,
     ): Response {
         if (($redirect = $this->ensureReady()) !== null) {
             return $redirect;
@@ -61,10 +63,9 @@ class PanelVolunteeringController extends AbstractController
 
         $partner = $this->getUser()->getPartner();
         $now = new \DateTime();
-        [$from, $to] = $this->currentYear();
+        [$from, $to] = $contributions->period();
 
-        $mine = $signups->sumCreditedMinutes($partner, $from, $to);
-        $median = $signups->medianCreditedMinutes($from, $to);
+        $mine = $contributions->forPartner($partner);
         $node = $this->nodeOf($partner);
         $mySignups = $signups->findUpcomingFor($partner, $now);
         $myOfferIds = array_map(
@@ -74,7 +75,7 @@ class PanelVolunteeringController extends AbstractController
 
         return $this->render('Panel/volunteering.html.twig', [
             'partner' => $partner,
-            'offers' => $this->stillNeeded($offers->findUpcomingForNode($now, $node), $myOfferIds),
+            'offers' => $offers->findStillNeededFor($now, $node, $myOfferIds, self::MAX_OFFERS),
             // El id y no el nodo: la plantilla sólo necesita comparar, y pasarle
             // la entidad invita a navegar relaciones desde Twig.
             'my_node_id' => $node?->getId(),
@@ -87,16 +88,13 @@ class PanelVolunteeringController extends AbstractController
             // una mañana de plantación" sí.
             'my_done' => $signups->findDoneFor($partner, $from, $to),
             'my_offer_ids' => $myOfferIds,
-            'my_minutes' => $mine,
-            // La MEDIANA de quienes participan, no la media. Con mucha gente a
-            // cero la media se hunde y quien fue una tarde suelta sale "por
-            // encima", que es el mensaje contrario al que hace falta.
-            'median_minutes' => $median,
-            // Sólo se enseña la referencia a quien va por debajo. A quien va
-            // sobrado, saber que hace el doble de lo normal es una invitación a
-            // relajarse hasta la media: es el efecto bumerán documentado en los
-            // estudios de normas sociales, y se evita no enseñando el dato.
-            'show_median' => $median > 0 && $mine < $median,
+            'my_minutes' => $mine->minutes,
+            // La mediana de quienes participan (no la media) y a quién se le
+            // enseña. Las dos reglas viven en VolunteerContribution, que es
+            // también quien las explica: aquí sólo se consultan, para que la home
+            // y esta pantalla no puedan divergir.
+            'median_minutes' => $mine->medianMinutes,
+            'show_median' => $mine->showMedian(),
             'categories' => $categories->findActive(),
             // Ids y no entidades: comparar objetos Doctrine con el operador `in`
             // de Twig depende de la identidad de instancia y falla en cuanto una
@@ -334,33 +332,6 @@ class PanelVolunteeringController extends AbstractController
     }
 
     /**
-     * Deja sólo lo que de verdad hace falta: fuera lo que ya está cubierto y
-     * fuera lo que esta persona ya tiene apuntado.
-     *
-     * Las dos exclusiones salieron de mirar la pantalla renderizada. Una tarea
-     * llena bajo el título "Lo que hace falta" decía literalmente "Faltan 0
-     * personas", y una a la que ya te has apuntado salía dos veces: aquí como
-     * "Estás apuntadx" y otra vez abajo. Cada cosa en un sitio: lo que falta
-     * arriba, lo tuyo en su bloque, y el botón de darte de baja donde está lo
-     * tuyo.
-     *
-     * @param list<VolunteerOffer> $offers  las tareas próximas
-     * @param list<int|null>       $mineIds ids de las tareas a las que ya se apuntó
-     *
-     * @return list<VolunteerOffer> las que siguen necesitando gente, recortadas
-     */
-    private function stillNeeded(array $offers, array $mineIds): array
-    {
-        $needed = array_filter(
-            $offers,
-            static fn (VolunteerOffer $offer): bool => $offer->hasRoom()
-                && !\in_array($offer->getId(), $mineIds, true)
-        );
-
-        return \array_slice(array_values($needed), 0, self::MAX_OFFERS);
-    }
-
-    /**
      * El punto de recogida del socix, si lo tiene. De ahí sale el orden de la
      * lista.
      *
@@ -369,25 +340,6 @@ class PanelVolunteeringController extends AbstractController
     private function nodeOf(Partner $partner): ?Node
     {
         return $partner->getWeeklyBasketGroup()?->getNode();
-    }
-
-    /**
-     * El año natural en curso, que es el periodo sobre el que se cuentan horas.
-     *
-     * Año natural y no "temporada" porque no hay ninguna temporada definida en
-     * el sistema; el día que la asamblea acuerde una, este método es el único
-     * sitio que hay que tocar.
-     *
-     * @return array{0: \DateTimeInterface, 1: \DateTimeInterface} inicio y fin del periodo
-     */
-    private function currentYear(): array
-    {
-        $year = (int) date('Y');
-
-        return [
-            new \DateTime(sprintf('%d-01-01 00:00:00', $year)),
-            new \DateTime(sprintf('%d-12-31 23:59:59', $year)),
-        ];
     }
 
     /**

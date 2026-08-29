@@ -212,6 +212,27 @@
         } %}
             {% block body %}
                 {% import '_macros/volunteering.html.twig' as vol %}
+
+                {# Esto se contesta UNA vez y luego se mira cero veces, pero ocupaba
+                 # media pantalla en cada visita, por delante de lo único que cambia
+                 # cada semana. Ahora el estado se dice en una frase y el formulario
+                 # se abre sólo si se va a cambiar. El bloque no se mueve de sitio:
+                 # el orden de la pantalla está pensado y sigue igual. #}
+                {% set my_categories = categories|filter(c => c.id in my_category_ids) %}
+                <p class="vol-total">
+                    {% if partner.volunteeringOptOut %}
+                        No quieres que te avisemos de voluntariado.
+                    {% elseif my_categories is not empty %}
+                        Te avisamos de:
+                        {% for category in my_categories %}{{ category.name }}{% if not loop.last %}, {% endif %}{% endfor %}.
+                    {% else %}
+                        Te avisamos sólo de las tareas sencillas que puede hacer cualquiera.
+                    {% endif %}
+                </p>
+
+                <details class="vol-details">
+                    <summary>Cambiar de qué me avisan</summary>
+
                 <form method="post" action="{{ path('panel_volunteering_preferences') }}">
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_volunteering') }}">
 
@@ -259,19 +280,27 @@
 
                     <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">Guardar</button>
                 </form>
-
-                <hr class="vol-sep">
+                </details>
 
                 {#
                  # El botón no pide permiso hasta que se pulsa, y en iOS sin
                  # instalar ni lo intenta. Un permiso denegado no se puede volver
                  # a pedir: el navegador ya ni enseña el diálogo.
+                 #
+                 # Y no se pinta si el servidor no tiene claves VAPID: sin ellas
+                 # sólo puede fallar. El mismo guard está en «Mi perfil», que es
+                 # el sitio donde este interruptor vive de verdad —aquí es un
+                 # atajo para quien ya está en esta pantalla—.
                  #}
-                <p class="vol-help">
-                    Si quieres, te avisamos en el móvil cuando falte gente para algo
-                    que encaje contigo.
-                </p>
-                <button type="button" class="csa-btn csa-btn--secondary csa-btn--sm" data-push-toggle>Activar avisos</button>
+                {% if app_vapid_public_key is not empty %}
+                    <hr class="vol-sep">
+
+                    <p class="vol-help">
+                        Si quieres, te avisamos en el móvil cuando falte gente para algo
+                        que encaje contigo.
+                    </p>
+                    <button type="button" class="csa-btn csa-btn--secondary csa-btn--sm" data-push-toggle>Activar avisos</button>
+                {% endif %}
             {% endblock %}
         {% endembed %}
 

@@ -1,0 +1,65 @@
+{#
+ # Lo que llevas aportado, en la home. Va PEGADO a lo que hace falta —nunca
+ # solo— porque un déficit sin una acción al lado es un reproche sin salida, y
+ # quien recibe un reproche al entrar deja de entrar.
+ #
+ # TRES ESTADOS, Y EL PRIMERO ES EL QUE IMPORTA:
+ #
+ #   1. Aún no ha empezado. Ni barra ni referencia: a quien entra por primera vez
+ #      —o a cualquiera en enero, cuando el periodo se reinicia— una barra vacía
+ #      con la marca de la mediana le dice "vas 9 h por debajo" antes de haber
+ #      tenido ocasión de hacer nada.
+ #   2. Ha empezado y va por debajo. Barra con la marca de la mediana: es el único
+ #      caso en el que la referencia moviliza en vez de desanimar.
+ #   3. Ha empezado y va al ritmo o por encima. Barra sin marca y gracias. Ver
+ #      VolunteerContribution: enseñarle la mediana a quien va sobrado le enseña
+ #      que hace el doble de lo normal, y se relaja hasta la media.
+ #
+ # Espera: contribution (VolunteerContribution).
+ #}
+{% import '_macros/volunteering.html.twig' as vol %}
+
+<div class="vol-gauge">
+
+    {% if not contribution.hasStarted %}
+
+        <p class="vol-gauge__lead">
+            <strong>Este año todavía no has echado una mano.</strong>
+            No es obligatorio y no lleva cuenta atrás: cuando puedas, aquí abajo tienes lo que hace falta.
+        </p>
+
+    {% else %}
+
+        {# La escala deja sitio por encima de la mediana para que ir bien no sature
+         # la barra, y por encima de lo propio para que nunca se vea llena del todo:
+         # una barra al 100% se lee como "ya está", y esto no se acaba. #}
+        {% set escala = max(contribution.medianMinutes * 1.7, contribution.minutes * 1.15) %}
+        {% set pct = escala > 0 ? min(100, (contribution.minutes / escala) * 100) : 0 %}
+        {% set pct_mediana = escala > 0 ? (contribution.medianMinutes / escala) * 100 : 0 %}
+
+        <div class="vol-gauge__head">
+            <span class="vol-gauge__label">Tu aportación este año</span>
+            <span class="vol-gauge__value">{{ vol.duration(contribution.minutes) }}</span>
+        </div>
+
+        <div class="vol-gauge__track{% if contribution.showMedian %} vol-gauge__track--marked{% endif %}">
+            <span class="vol-gauge__fill{% if contribution.showMedian %} vol-gauge__fill--behind{% endif %}"
+                  style="width: {{ pct|round }}%"></span>
+            {% if contribution.showMedian %}
+                <span class="vol-gauge__mark" style="left: {{ pct_mediana|round }}%" aria-hidden="true"></span>
+            {% endif %}
+        </div>
+
+        <p class="vol-gauge__lead">
+            {% if contribution.showMedian %}
+                Quien echa una mano suele dedicar unas <strong>{{ vol.duration(contribution.medianMinutes) }}</strong> al año.
+                No es una cuota: es lo que sale de sumar lo que hace la gente.
+            {% else %}
+                <strong>Gracias</strong> — la asociación se sostiene con esto.
+            {% endif %}
+        </p>
+
+    {% endif %}
+
+    <p class="vol-gauge__note">Sólo lo ves tú.</p>
+</div>
