@@ -103,16 +103,29 @@ class VolunteerOfferStillNeededTest extends KernelTestCase
         $llena = $this->makeOffer($em, 'StillNeeded tope llena', slots: 1, inDays: 1);
         $this->makeSignup($em, $llena, $this->makePartner($em, 'StillNeeded Ocupante'), companions: 0);
 
-        $primera = $this->makeOffer($em, 'StillNeeded tope primera', slots: 5, inDays: 2);
-        $segunda = $this->makeOffer($em, 'StillNeeded tope segunda', slots: 5, inDays: 3);
+        $this->makeOffer($em, 'StillNeeded tope primera', slots: 5, inDays: 2);
+        $this->makeOffer($em, 'StillNeeded tope segunda', slots: 5, inDays: 3);
         $em->flush();
 
-        $needed = $this->repository($em)->findStillNeededFor(new \DateTime(), null, [], 2);
+        $repository = $this->repository($em);
 
-        $this->assertCount(2, $needed);
-        $this->assertNotContains($llena, $needed);
-        $this->assertContains($primera, $needed);
-        $this->assertContains($segunda, $needed);
+        // Contra lo que de verdad hay, no contra dos tareas concretas: el
+        // repositorio NO filtra por nodo (sólo ordena por él), así que la consulta
+        // ve TODAS las tareas publicadas y futuras de db_test. Fijar aquí que el
+        // top-2 global son las dos de este test lo dejaba a merced de que otro
+        // fichero creara una tarea más próxima — y ese acoplamiento no es lo que
+        // se quiere proteger.
+        $todas = $repository->findStillNeededFor(new \DateTime(), null);
+        $dos = $repository->findStillNeededFor(new \DateTime(), null, [], 2);
+
+        $this->assertNotContains($llena, $todas, 'Una tarea llena no hace falta, con límite o sin él.');
+        $this->assertNotContains($llena, $dos);
+
+        // La regla: el recorte se aplica DESPUÉS de descartar las llenas. Si
+        // fuera antes, el cupo se gastaría en tareas que luego se descartan y
+        // saldrían menos de las que caben.
+        $this->assertCount(min(2, \count($todas)), $dos, 'El límite recorta lo que hace falta, no lo que había antes de filtrar.');
+        $this->assertSame(\array_slice($todas, 0, 2), $dos, 'Recortar no puede cambiar el orden.');
     }
 
     private function repository(EntityManagerInterface $em): VolunteerOfferRepository

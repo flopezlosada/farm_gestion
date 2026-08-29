@@ -110,10 +110,15 @@ class VolunteerOfferRepeatFieldsTest extends KernelTestCase
      */
     private function submit(array $repeat): FormInterface
     {
+        // Sin CSRF: aquí se prueba la validación del formulario, no la del token,
+        // y submit() no pasa por una petición real que lo traiga. Con la
+        // protección puesta el error cae en la RAÍZ del formulario, así que los
+        // casos que cuentan errores de un campo concreto pasaban igual y sólo lo
+        // acusaba el que espera un formulario válido.
         $form = $this->factory()->create(
             VolunteerOfferType::class,
             (new VolunteerOffer()),
-            ['with_repeat' => true]
+            ['with_repeat' => true, 'csrf_protection' => false]
         );
 
         $form->submit(array_merge([
