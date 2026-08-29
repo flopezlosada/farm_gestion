@@ -18,6 +18,7 @@ use App\Repository\VolunteerEventRepository;
 use App\Repository\VolunteerOfferRepository;
 use App\Repository\VolunteerSignupRepository;
 use App\Security\VolunteerOfferVoter;
+use App\Service\Volunteering\OfferRepeatDates;
 use App\Service\Volunteering\VolunteerAudienceResolver;
 use App\Service\Volunteering\VolunteerCallNotifier;
 use App\Service\Volunteering\VolunteerEventRecorder;
@@ -27,6 +28,7 @@ use App\Service\Volunteering\VolunteerScope;
 use Doctrine\ORM\EntityManagerInterface;
 use Knp\Component\Pager\PaginatorInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\FormInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -62,16 +64,6 @@ class VolunteeringController extends AbstractController
 {
     /** Cuántos días atrás se miran las tareas ya hechas en el listado. */
     private const RECENT_DAYS = 60;
-
-    /**
-     * Cadencias que se ofrecen al repetir una tarea, en días. Las tres que usa
-     * la asociación: el reparto es semanal, hay grupos quincenales y algunas
-     * cosas son mensuales.
-     */
-    private const REPEAT_CADENCES = ['weekly' => 7, 'biweekly' => 14, 'monthly' => 28];
-
-    /** Tope de copias por repetición. Un año de reparto semanal cabe de sobra. */
-    private const REPEAT_MAX = 52;
 
     /**
      * Las tareas: lo que falta por cerrar, lo que viene y lo que ya se hizo.
@@ -221,10 +213,14 @@ class VolunteeringController extends AbstractController
      * tarea — antes no hay nada sobre lo que decidir.
      */
     #[Route('/nueva', name: 'volunteering_new', methods: ['GET', 'POST'])]
-    public function new(Request $request, EntityManagerInterface $em, VolunteerEventRecorder $events): Response
-    {
+    public function new(
+        Request $request,
+        EntityManagerInterface $em,
+        VolunteerEventRecorder $events,
+        OfferRepeatDates $repeatDates,
+    ): Response {
         $offer = (new VolunteerOffer())->setCreatedBy($this->getUser());
-        $form = $this->createForm(VolunteerOfferType::class, $offer);
+        $form = $this->createForm(VolunteerOfferType::class, $offer, ['with_repeat' => true]);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
@@ -235,10 +231,20 @@ class VolunteeringController extends AbstractController
 
             $em->persist($offer);
             $events->forOffer($offer, VolunteerEvent::TYPE_OFFER_CREATED, ['status' => $offer->getStatus()]);
-            $em->flush();
-            $this->addFlash('success', 'Tarea creada.');
 
-            return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
+            // Repetir en el mismo paso que crear: "voy a dar de alta el reparto
+            // de los viernes" es una sola decisión, y obligar a guardar primero y
+            // repetir después desde la ficha la parte en dos sin motivo.
+            $copies = $this->repeatOnCreate($offer, $form, $em, $events, $repeatDates);
+
+            $em->flush();
+            $this->addFlash('success', 0 === $copies
+                ? 'Tarea creada.'
+                : sprintf('Tarea creada, con %d copias más en borrador. Revísalas y publícalas.', $copies));
+
+            return 0 === $copies
+                ? $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()])
+                : $this->redirectToRoute('volunteering_index');
         }
 
         return $this->render('Volunteering/form.html.twig', [
@@ -246,6 +252,53 @@ class VolunteeringController extends AbstractController
             'form' => $form->createView(),
             'is_new' => true,
         ]);
+    }
+
+    /**
+     * Crea las copias que pida el formulario de alta, si pide alguna.
+     *
+     * No valida nada: la coherencia de los dos campos —que haya fecha final, y
+     * que la cadencia del reparto sólo se use con punto de recogida— la
+     * comprueba {@see VolunteerOfferType}, así que aquí ya llegan bien o no se
+     * llega.
+     *
+     * @param VolunteerOffer         $offer       la tarea recién creada
+     * @param FormInterface          $form        el formulario de alta, ya validado
+     * @param EntityManagerInterface $em          para persistir las copias
+     * @param VolunteerEventRecorder $events      para dejar rastro de la repetición
+     * @param OfferRepeatDates       $repeatDates quién sabe en qué fechas copiar
+     *
+     * @return int cuántas copias se han creado
+     */
+    private function repeatOnCreate(
+        VolunteerOffer $offer,
+        FormInterface $form,
+        EntityManagerInterface $em,
+        VolunteerEventRecorder $events,
+        OfferRepeatDates $repeatDates,
+    ): int {
+        $cadence = $form->get('repeatCadence')->getData();
+        $until = $form->get('repeatUntil')->getData();
+
+        if (null === $cadence || !$until instanceof \DateTimeInterface) {
+            return 0;
+        }
+
+        $dates = $repeatDates->compute($offer, $cadence, $until);
+
+        foreach ($dates as $date) {
+            $em->persist($offer->copyForDate($date));
+        }
+
+        if ([] !== $dates) {
+            $events->forOffer($offer, VolunteerEvent::TYPE_OFFER_REPEATED, [
+                'times' => \count($dates),
+                'cadence' => $cadence,
+                'until' => $until->format('Y-m-d'),
+            ]);
+        }
+
+        return \count($dates);
     }
 
     /**
@@ -259,6 +312,7 @@ class VolunteeringController extends AbstractController
         VolunteerAudienceResolver $audience,
         PartnerRepository $partners,
         VolunteerEventRepository $events,
+        OfferRepeatDates $repeatDates,
     ): Response {
         $sent = $calls->sentScopes($offer);
         $history = $events->historyFor($offer);
@@ -266,6 +320,9 @@ class VolunteeringController extends AbstractController
         return $this->render('Volunteering/show.html.twig', [
             'offer' => $offer,
             'sent_scopes' => $sent,
+            // Qué cadencias admite ESTA tarea: la del calendario de reparto sólo
+            // existe si ocurre en un punto de recogida.
+            'repeat_cadences' => $repeatDates->cadencesFor($offer),
             // Para anotar a mano a quien organizó la tarea o vino sin apuntarse.
             'all_partners' => $partners->findBy(
                 ['status' => Partner::STATUS_ACTIVO],
@@ -343,22 +400,32 @@ class VolunteeringController extends AbstractController
     }
 
     /**
-     * Repetir esta tarea en fechas siguientes.
+     * Repetir esta tarea hasta una fecha.
      *
      * Es lo que hace el módulo usable para lo que más se repite: el reparto es
      * SEMANAL, y crear "descargar cestas en La Cabrera" cincuenta y dos veces a
      * mano no lo va a hacer nadie.
      *
-     * Cadencia y número de veces, no una regla de recurrencia. Karrot modela
-     * series con RRULE de iCal, potente y caro; OpenOlitor simplemente duplica a
-     * una lista de fechas. Esto es lo segundo: las copias nacen sueltas, así que
+     * Cadencia y fecha final, no una regla de recurrencia. Karrot modela series
+     * con RRULE de iCal, potente y caro; OpenOlitor simplemente duplica a una
+     * lista de fechas. Esto es lo segundo: las copias nacen sueltas, así que
      * cambiar o anular una no toca a las demás — que es justo lo que hace falta
-     * cuando cae un festivo en medio.
+     * cuando cae un festivo en medio. Por eso tampoco se guarda aquí nada de la
+     * serie: {@see OfferRepeatDates} sólo devuelve fechas.
+     *
+     * Las fechas las calcula ese servicio, no este método. Cuando la tarea
+     * ocurre en un punto de recogida puede pedir las del calendario de reparto
+     * de verdad, y eso ya no es "sumar días" ni cabe en un controller.
      */
     #[Route('/{id}/repetir', name: 'volunteering_repeat', methods: ['POST'], requirements: ['id' => '\d+'])]
     #[IsGranted(VolunteerOfferVoter::EDIT, subject: 'offer')]
-    public function repeat(Request $request, VolunteerOffer $offer, EntityManagerInterface $em, VolunteerEventRecorder $events): Response
-    {
+    public function repeat(
+        Request $request,
+        VolunteerOffer $offer,
+        EntityManagerInterface $em,
+        VolunteerEventRecorder $events,
+        OfferRepeatDates $repeatDates,
+    ): Response {
         if (!$this->isCsrfTokenValid('volunteering_repeat', (string) $request->request->get('_csrf_token'))) {
             $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
 
@@ -371,36 +438,45 @@ class VolunteeringController extends AbstractController
             return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
         }
 
-        $everyDays = self::REPEAT_CADENCES[$request->request->get('cadence')] ?? null;
-        $times = (int) $request->request->get('times');
+        $cadence = (string) $request->request->get('cadence');
+        $until = \DateTimeImmutable::createFromFormat('Y-m-d', (string) $request->request->get('until'));
 
-        if (null === $everyDays || $times < 1) {
-            $this->addFlash('error', 'Elige cada cuánto se repite y cuántas veces.');
+        if (false === $until || !\in_array($cadence, $repeatDates->cadencesFor($offer), true)) {
+            $this->addFlash('error', 'Elige cada cuánto se repite y hasta cuándo.');
 
             return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
         }
 
-        // Tope duro: un error de dedo aquí crea tareas a puñados, y borrarlas
-        // una a una es un castigo desproporcionado para un cero de más.
-        $times = min($times, self::REPEAT_MAX);
+        $dates = $repeatDates->compute($offer, $cadence, $until);
 
-        $start = \DateTimeImmutable::createFromInterface($offer->getStartsAt());
-        for ($i = 1; $i <= $times; ++$i) {
-            $em->persist($offer->copyForDate($start->modify(sprintf('+%d days', $everyDays * $i))));
+        if ([] === $dates) {
+            // Sin fechas no es un error: puede que la fecha final sea anterior a
+            // la tarea, o que el punto de recogida no vuelva a repartir en ese
+            // plazo. Decirlo es más útil que crear cero copias en silencio.
+            $this->addFlash('warning', 'No hay ninguna fecha que repetir en ese plazo. Revisa hasta cuándo la quieres.');
+
+            return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
+        }
+
+        foreach ($dates as $date) {
+            $em->persist($offer->copyForDate($date));
         }
 
         // Un evento por la repetición, no uno por copia: cincuenta y dos filas
         // diciendo lo mismo enterrarían el resto del rastro.
         $events->forOffer($offer, VolunteerEvent::TYPE_OFFER_REPEATED, [
-            'times' => $times,
-            'cadence' => (string) $request->request->get('cadence'),
+            'times' => \count($dates),
+            'cadence' => $cadence,
+            'until' => $until->format('Y-m-d'),
         ]);
 
         $em->flush();
 
         $this->addFlash(
             'success',
-            sprintf('Creadas %d copias, en borrador. Revísalas —ojo a los festivos— y publícalas.', $times)
+            OfferRepeatDates::CADENCE_DELIVERY === $cadence
+                ? sprintf('Creadas %d copias en borrador, en los días que ese punto reparte. Revísalas y publícalas.', \count($dates))
+                : sprintf('Creadas %d copias, en borrador. Revísalas —ojo a los festivos— y publícalas.', \count($dates))
         );
 
         return $this->redirectToRoute('volunteering_index');

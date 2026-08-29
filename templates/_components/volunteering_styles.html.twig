@@ -295,6 +295,45 @@
         margin: var(--csa-sp-4) 0;
     }
 
+    /* Celda de la tira cuyo valor NO es una cifra.
+       El componente pinta el valor en Fraunces 600 a 18px, que es lo correcto
+       para un número —la fecha, cuánta gente viene, los minutos— y demasiado
+       para un texto: "Torremocha" con ese peso pesa como un titular y hace que
+       la pantalla parezca escrita en dos fuentes distintas. Regla del proyecto:
+       la serif se reserva a la cifra destacada. */
+    .prt-mini__value--text {
+        font-family: 'Inter', sans-serif;
+        font-size: 14px;
+        font-weight: 500;
+        letter-spacing: 0;
+    }
+
+    /* Ajustes que se contestan una vez: el estado se lee en una frase y el
+       formulario vive detrás de este desplegable. Nativo (<details>), sin JS y
+       sin caja gris — sólo el texto y su flecha. */
+    .vol-details > summary {
+        display: inline-flex;
+        gap: var(--csa-sp-2);
+        align-items: center;
+        margin-bottom: var(--csa-sp-2);
+        font-size: var(--csa-fs-sm);
+        color: var(--csa-ink-muted);
+        cursor: pointer;
+        list-style: none;
+    }
+    .vol-details > summary::-webkit-details-marker { display: none; }
+    .vol-details > summary::before {
+        content: '';
+        width: 0.4rem;
+        height: 0.4rem;
+        border-right: 1.5px solid currentColor;
+        border-bottom: 1.5px solid currentColor;
+        transform: rotate(-45deg);
+        transition: transform 0.15s ease;
+    }
+    .vol-details[open] > summary::before { transform: rotate(45deg); }
+    .vol-details > summary:hover { color: var(--csa-ink); }
+
     /* Bloque compacto de la home del panel. */
     .vol-teaser { list-style: none; margin: 0 0 var(--csa-sp-3); padding: 0; }
     .vol-teaser li {
@@ -315,11 +354,114 @@
         color: var(--csa-ink-muted);
     }
 
+    /* ---- Quién prepara tu cesta (home del socix) ----
+       Una banda baja, no una tarjeta: cuelga de la franja de la próxima cesta y
+       habla de esa misma entrega. Con el peso de una tarjeta competiría con ella. */
+    .vol-prep {
+        display: flex;
+        align-items: center;
+        gap: var(--csa-sp-3);
+        margin-top: var(--csa-sp-2);
+        padding: var(--csa-sp-3) var(--csa-sp-4);
+        background: var(--csa-surface);
+        border: 1px solid var(--csa-rule-soft);
+        border-radius: var(--csa-radius-lg);
+    }
+    .vol-prep__faces { display: flex; flex-shrink: 0; }
+    .vol-prep__face {
+        width: 28px; height: 28px;
+        display: inline-flex; align-items: center; justify-content: center;
+        border-radius: var(--csa-radius-pill);
+        background: var(--csa-green-soft); color: var(--csa-green);
+        border: 2px solid var(--csa-surface);
+        font-size: var(--csa-fs-xs); font-weight: 700;
+    }
+    .vol-prep__face + .vol-prep__face { margin-left: -8px; }
+    .vol-prep__text {
+        margin: 0;
+        font-size: var(--csa-fs-sm);
+        line-height: var(--csa-lh-normal);
+        color: var(--csa-ink-soft);
+    }
+    /* En la BBDD los nombres están en mayúsculas: se bajan y se recapitalizan por
+       CSS, que respeta los compuestos ("MARIA JOSE" → "Maria Jose"). El filtro
+       capitalize de Twig sólo tocaría la primera palabra. */
+    .vol-prep__name { color: var(--csa-ink); font-weight: 600; text-transform: capitalize; }
+    .vol-prep__plus { color: var(--csa-ink-muted); font-size: var(--csa-fs-xs); }
+    .vol-prep__gap { color: var(--csa-ink-muted); }
+
+    /* Sin nadie apuntadx: ocre, no rojo. Es una petición, no un error — y falta
+       tiempo para resolverlo. El rojo aquí sería alarma sin causa. */
+    .vol-prep--empty {
+        align-items: flex-start;
+        background: color-mix(in srgb, var(--csa-ochre-soft) 40%, var(--csa-surface));
+        border-color: var(--csa-ochre-soft);
+    }
+    .vol-prep--empty .vol-prep__text { color: var(--csa-ink); }
+    .vol-prep--empty .vol-prep__text strong { display: block; }
+    .vol-prep__icon { color: var(--csa-ochre); flex-shrink: 0; line-height: 1.6; }
+    .vol-prep__body { display: flex; flex-direction: column; gap: var(--csa-sp-3); align-items: flex-start; }
+
+    /* ---- Tu aportación (home del socix) ----
+       Fondo ocre muy suave: es el bloque cálido de la pantalla, no una alerta.
+       Con el mismo blanco que las tarjetas se perdía dentro del listado de tareas. */
+    .vol-gauge {
+        padding: var(--csa-sp-4);
+        margin-bottom: var(--csa-sp-4);
+        background: color-mix(in srgb, var(--csa-ochre-soft) 28%, var(--csa-surface));
+        border: 1px solid var(--csa-ochre-soft);
+        border-radius: var(--csa-radius-lg);
+    }
+    .vol-gauge__head {
+        display: flex; align-items: baseline; justify-content: space-between;
+        gap: var(--csa-sp-3); margin-bottom: var(--csa-sp-3);
+    }
+    .vol-gauge__label {
+        font-size: var(--csa-fs-xs); font-weight: 600;
+        letter-spacing: 0.08em; text-transform: uppercase;
+        color: var(--csa-ink-muted);
+    }
+    .vol-gauge__value {
+        font-family: var(--csa-serif); font-size: var(--csa-fs-xl);
+        color: var(--csa-ink); line-height: 1;
+    }
+
+    /* La marca de la mediana necesita aire por debajo para no comerse el texto:
+       sobresale del carril a propósito, para que se lea como una referencia
+       externa y no como un tramo más de la barra. */
+    .vol-gauge__track {
+        position: relative; height: 10px; border-radius: var(--csa-radius-pill);
+        background: var(--csa-surface-alt); border: 1px solid var(--csa-rule-soft);
+    }
+    .vol-gauge__track--marked { margin-bottom: var(--csa-sp-2); }
+    .vol-gauge__fill {
+        display: block; height: 100%; border-radius: var(--csa-radius-pill);
+        background: var(--csa-green);
+    }
+    .vol-gauge__fill--behind { background: var(--csa-ochre); }
+    .vol-gauge__mark {
+        position: absolute; top: -4px; width: 2px; height: 18px;
+        margin-left: -1px; border-radius: 1px; background: var(--csa-ink);
+    }
+
+    .vol-gauge__lead {
+        margin: var(--csa-sp-3) 0 0;
+        font-size: var(--csa-fs-sm); line-height: var(--csa-lh-normal);
+        color: var(--csa-ink-soft);
+    }
+    .vol-gauge__lead strong { color: var(--csa-ink); }
+    .vol-gauge__note {
+        margin: var(--csa-sp-2) 0 0;
+        font-size: var(--csa-fs-xs); color: var(--csa-ink-muted);
+    }
+
     /* En móvil la acción cae debajo y ocupa el ancho: a 360px, dos columnas
        dejan el botón de "me apunto" en una tira de 90px. */
     @media (max-width: 640px) {
         .vol-item { flex-direction: column; }
         .vol-item__action { text-align: left; align-items: stretch; width: 100%; }
         .vol-item__slots { white-space: normal; }
+        .vol-prep__body { width: 100%; }
+        .vol-prep__body .csa-btn { width: 100%; justify-content: center; }
     }
 </style>

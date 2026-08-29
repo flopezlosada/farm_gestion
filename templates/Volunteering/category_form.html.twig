@@ -41,6 +41,10 @@
                         widget_class: 'csa-textarea'
                     }) }}
                     {{ vol.check(form.active, 'Se sigue ofreciendo', 'desmárcala para retirarlo sin perder el histórico') }}
+                    {# Sólo el área de montar cestas. De aquí sale el "quién te prepara la
+                     # cesta" del panel del socix; marcarla en dos áreas haría que la home
+                     # señalara a gente que ese día está haciendo otra cosa. #}
+                    {{ vol.check(form.deliveryPrep, 'Es el montaje del reparto', 'con ella, cada socix ve en su panel quién le prepara la cesta en su punto — y el aviso si no hay nadie') }}
                 </div>
             {% endblock %}
         {% endembed %}

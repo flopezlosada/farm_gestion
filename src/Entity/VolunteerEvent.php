@@ -154,7 +154,7 @@ class VolunteerEvent
      *   - OFFER_UPDATED:        {"moved":true,"relocated":false}
      *   - CALL_SENT:            {"scope":"matching","recipients":12}
      *   - ATTENDED:             {"minutes":30,"role":"participant"}
-     *   - OFFER_REPEATED:       {"times":4,"cadence":"weekly"}
+     *   - OFFER_REPEATED:       {"times":4,"cadence":"weekly","until":"2026-12-31"}
      *   - COORDINATORS_CHANGED: {"names":["Laura Tierno"]}
      *
      * @ORM\Column(type="json", nullable=true)

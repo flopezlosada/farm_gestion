@@ -143,6 +143,10 @@
                     <tr>
                         <td>
                             <a class="csa-table__primary" href="{{ path('volunteering_show', { id: offer.id }) }}">{{ offer.title }}</a>
+                            {# Lo destacado se ve DESDE AQUÍ o no se puede desmarcar:
+                             # marcar algo que luego no aparece en ninguna lista es
+                             # una casilla que se queda encendida para siempre. #}
+                            {% if offer.featured %}{{ csa.badge('Destacada', 'ochre') }}{% endif %}
                             {% for category in offer.categories %}{{ csa.badge(category.name, 'neutral') }}{% endfor %}
                         </td>
                         <td class="csa-table__col-tight">{{ offer.startsAt|date('d/m/Y H:i') }}</td>

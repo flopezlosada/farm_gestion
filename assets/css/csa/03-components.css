@@ -1937,6 +1937,32 @@ a.csa-table__primary:hover {
   .csa-app .csa-tabs--folder .csa-tabs__link { padding: 10px 14px 8px; font-size: 14px; }
 }
 
+/* Paneles de pestaña. Van dentro de un contenedor [data-csa-tabs] junto a la
+   lista .csa-tabs; los conmuta assets/js/csa-tabs.js.
+
+   Sin JavaScript NO se esconde nada: los paneles se ven uno detrás de otro y
+   los enlaces saltan a cada uno por su ancla. Sólo cuando el script arranca y
+   marca el contenedor .is-ready empieza a mostrarse uno cada vez — así un fallo
+   del JS deja la ficha larga, que es molesta, y no vacía, que es una pantalla
+   rota. */
+[data-csa-tabs] .csa-tabpanel + .csa-tabpanel {
+  margin-top: var(--csa-sp-6);
+}
+[data-csa-tabs].is-ready .csa-tabpanel {
+  display: none;
+  margin-top: 0;
+}
+[data-csa-tabs].is-ready .csa-tabpanel.is-active {
+  display: block;
+}
+/* El contador de cada pestaña ("Quién viene · 3"): mismo tamaño, menos peso. */
+.csa-tabs__count {
+  margin-left: var(--csa-sp-2);
+  font-variant-numeric: tabular-nums;
+  color: var(--csa-ink-muted);
+}
+.csa-tabs__item.active .csa-tabs__count { color: inherit; opacity: 0.75; }
+
 
 /* ============================================================
  * ADAPTACIÓN DataTables → csa

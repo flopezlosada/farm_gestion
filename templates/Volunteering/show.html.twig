@@ -1,4 +1,15 @@
-{# Una tarea de voluntariado: sus datos, quién se ha apuntado y los avisos. #}
+{# ============================================================
+ # Una tarea de voluntariado.
+ #
+ # Mismo lenguaje visual que la ficha de socix (reusa partner_card_styles: hero
+ # + avatar + chips + tarjetas + mini-stats), porque es el mismo gesto: abrir la
+ # ficha de algo y ver de un vistazo qué es y en qué estado está.
+ #
+ # Lo que SIEMPRE se mira —qué es, cuándo, dónde, cuánta gente hay— va arriba y
+ # sin abrir nada. Lo que se consulta a ratos —el listado nominal, los avisos, el
+ # rastro— vive en pestañas. Antes eran seis tarjetas apiladas: para saber si
+ # alguien se había apuntado había que bajar por encima de dos formularios.
+ # ============================================================ #}
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
 
@@ -14,341 +25,429 @@
 
 {% block more_css %}
     {{ parent() }}
+    {% include '_components/partner_card_styles.html.twig' %}
     {% include '_components/volunteering_styles.html.twig' %}
 {% endblock %}
 
 {% block csa_main %}
-    {% set status_tone = { 'draft': 'neutral', 'published': 'green', 'cancelled': 'terracotta' } %}
-    {% set status_label = { 'draft': 'Borrador', 'published': 'Publicada', 'cancelled': 'Anulada' } %}
+    {% set can_edit = is_granted('VOLUNTEER_OFFER_EDIT', offer) %}
     {% set is_past = offer.startsAt < date() %}
+    {% set signup_count = offer.signups|filter(s => not s.cancelled)|length %}
 
-    {{ csa.page_header('Voluntariado', offer.title) }}
+    {# Estado → chip de la ficha de socix. Una tarea anulada se apaga entera,
+     # igual que un socix de baja. #}
+    {% set status_chip = {
+        'draft':     { label: 'Borrador',  cls: 'warn'   },
+        'published': { label: 'Publicada', cls: 'activo' },
+        'cancelled': { label: 'Anulada',   cls: 'baja'   }
+    } %}
+    {% set sc = status_chip[offer.status]|default({ label: offer.status, cls: 'mute' }) %}
 
-    {# El estado de la tarea se DERIVA de lo que ha confirmado la gente, no de un
-     # campo aparte que habría que mantener en sincronía y que mentiría en cuanto
-     # se desincronizara. #}
-    {% if offer.done %}
-        {{ csa.callout('Tarea hecha: ' ~ offer.attendedCount ~ ' persona(s) confirmaron que fueron.', 'success', 'check') }}
-    {% elseif offer.wasMissed %}
-        {{ csa.callout('Esta tarea pasó y no fue nadie.', 'warning', 'exclamation-triangle') }}
-    {% elseif is_past and not offer.settled %}
-        {{ csa.callout('Ya pasó y falta gente por decir si fue o no. Se les pregunta en su panel; si no contestan, ciérrala tú abajo.', 'info') }}
-    {% endif %}
+    {% set avatar_palette = ['sage', 'ochre', 'terra', 'ink'] %}
+    {% set avatar_tone = offer.status == 'cancelled' ? 'muted' : avatar_palette[(offer.id|default(0)) % 4] %}
 
-    <div class="csa-kpi-row" style="margin-bottom: var(--csa-sp-6);">
-        {{ csa.kpi('Apuntadxs', offer.filledSlots, null, null, null, 'sky', 'fa-users') }}
-        {% if offer.slots %}
-            {{ csa.kpi('Faltan', offer.remainingSlots, null, null, null, offer.remainingSlots > 0 ? 'terracotta' : 'green', 'fa-user-plus') }}
-        {% endif %}
-        {% if offer.creditedMinutes %}
-            {{ csa.kpi('Computa', offer.creditedMinutes, 'min', null, null, 'ochre', 'fa-clock-o') }}
-        {% endif %}
-    </div>
+    <div class="prt">
 
-    {% embed '_components/csa_card.html.twig' with { title: 'La tarea', icon: 'fa-info-circle' } %}
-        {% block body %}
-                {% import '_macros/csa.html.twig' as csa %}
-            {# csa-defs es un grid de FILAS (.csa-defs__row), no de <dt>/<dd>
-             # sueltos: puestos sueltos, cada uno cae en una celda y la etiqueta
-             # deja de corresponderse con su valor. #}
-            <dl class="csa-defs">
-                <div class="csa-defs__row">
-                    <dt class="csa-defs__label">Estado</dt>
-                    <dd class="csa-defs__value">{{ csa.badge(status_label[offer.status]|default(offer.status), status_tone[offer.status]|default('neutral')) }}</dd>
+        {# ============ HERO ============ #}
+        <header class="prt-hero">
+            <span class="prt-avatar prt-avatar--{{ avatar_tone }}" aria-hidden="true"><i class="fa fa-hand-paper-o"></i></span>
+
+            <div>
+                <h1 class="prt-hero__title">{{ offer.title }}</h1>
+                <div class="prt-hero__meta">
+                    <span class="prt-chip prt-chip--{{ sc.cls }}"><span class="dot"></span>{{ sc.label }}</span>
+
+                    {% for category in offer.categories %}
+                        <span class="prt-chip prt-chip--mute">{{ category.name }}</span>
+                    {% endfor %}
+
+                    {# Quién puede recibir el aviso es una propiedad de la tarea que
+                     # cambia a quién llega, no un detalle: se ve sin abrir nada. #}
+                    {% if not offer.openToAnyone %}
+                        <span class="prt-chip prt-chip--warn">Sólo a quien lo tenga marcado</span>
+                    {% endif %}
                 </div>
-                <div class="csa-defs__row">
-                    <dt class="csa-defs__label">Cuándo</dt>
-                    <dd class="csa-defs__value">{{ offer.startsAt|date('d/m/Y H:i') }}{% if offer.endsAt %} — {{ offer.endsAt|date('H:i') }}{% endif %}</dd>
+            </div>
+
+            <div class="prt-hero__actions">
+                {% if can_edit %}
+                    {{ csa.btn('Editar', { variant: 'secondary', href: path('volunteering_edit', { id: offer.id }), icon: 'fa-pencil' }) }}
+                    {% if offer.startsAt %}
+                        <button type="button" class="csa-btn csa-btn--ghost" onclick="document.getElementById('volunteering-repeat-dialog').showModal()">
+                            <i class="fa fa-repeat"></i><span>Repetir</span>
+                        </button>
+                    {% endif %}
+                {% endif %}
+                {{ csa.btn('Volver', { variant: 'ghost', href: path('volunteering_index') }) }}
+            </div>
+        </header>
+
+        {# El estado de la tarea se DERIVA de lo que ha confirmado la gente, no de
+         # un campo aparte que habría que mantener en sincronía y que mentiría en
+         # cuanto se desincronizara. #}
+        {% if offer.done %}
+            {{ csa.callout('Tarea hecha: ' ~ offer.attendedCount ~ ' persona(s) confirmaron que fueron.', 'success', 'check') }}
+        {% elseif offer.wasMissed %}
+            {{ csa.callout('Esta tarea pasó y no fue nadie.', 'warning', 'exclamation-triangle') }}
+        {% elseif is_past and not offer.settled %}
+            {{ csa.callout('Ya pasó y falta gente por decir si fue o no. Se les pregunta en su panel; si no contestan, ciérrala tú en «Quién viene».', 'info') }}
+        {% endif %}
+
+        {# ============ LOS CUATRO DATOS ============
+         # Cuándo, dónde, cuánta gente y cuánto computa. Es lo que se viene a
+         # mirar; antes estaban repartidos entre tres KPIs y una lista de
+         # definiciones que además repetía el estado y el tipo de trabajo (que
+         # ahora son chips del hero). #}
+        <div class="prt-mini">
+            <div class="prt-mini__cell">
+                <div class="prt-mini__label">Cuándo</div>
+                <div class="prt-mini__value">
+                    {{ offer.startsAt|date('d/m/Y') }}
+                    <small>{{ offer.startsAt|date('H:i') }}{% if offer.endsAt %} — {{ offer.endsAt|date('H:i') }}{% endif %}</small>
                 </div>
-                <div class="csa-defs__row">
-                    <dt class="csa-defs__label">Dónde</dt>
-                    <dd class="csa-defs__value">
+            </div>
+
+            <div class="prt-mini__cell">
+                <div class="prt-mini__label">Dónde</div>
+                {# Texto, no cifra: en Inter. Ver .prt-mini__value--text. #}
+                {% if offer.remote or offer.node or offer.place %}
+                    <div class="prt-mini__value prt-mini__value--text">
                         {%- if offer.remote %}Desde casa
                         {%- elseif offer.node %}{{ offer.node }}
-                        {%- elseif offer.place %}{{ offer.place }}
-                        {%- else %}—{% endif -%}
-                    </dd>
-                </div>
-                <div class="csa-defs__row">
-                    <dt class="csa-defs__label">Tipo de trabajo</dt>
-                    <dd class="csa-defs__value">
-                        {% for category in offer.categories %}{{ csa.badge(category.name, 'neutral') }}{% else %}—{% endfor %}
-                    </dd>
-                </div>
-                <div class="csa-defs__row">
-                    <dt class="csa-defs__label">A quién se puede pedir</dt>
-                    <dd class="csa-defs__value">
-                        {% if offer.openToAnyone %}
-                            {{ csa.badge('A cualquiera', 'green') }}
-                        {% else %}
-                            {{ csa.badge('Sólo a quien lo tenga marcado', 'ochre') }}
-                        {% endif %}
-                    </dd>
-                </div>
-                {% if offer.description %}
-                    <div class="csa-defs__row csa-defs__row--full">
-                        <dt class="csa-defs__label">Explicación</dt>
-                        <dd class="csa-defs__value">{{ offer.description|nl2br }}</dd>
+                        {%- else %}{{ offer.place }}{% endif -%}
                     </div>
+                {% else %}
+                    <div class="prt-mini__value prt-mini__value--muted">Sin indicar</div>
                 {% endif %}
-            </dl>
-        {% endblock %}
-    {% endembed %}
+            </div>
 
-    {# ============ QUIÉN SE HA APUNTADO ============ #}
-    {% embed '_components/csa_card.html.twig' with { title: 'Quién se ha apuntado', icon: 'fa-users' } %}
-        {% block body %}
-                {% import '_macros/csa.html.twig' as csa %}
-            {% if offer.signups is empty %}
-                <p>Todavía no se ha apuntado nadie.</p>
-            {% else %}
-                <form method="post" action="{{ path('volunteering_close', { id: offer.id }) }}">
-                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_close') }}">
-
-                    <div class="csa-table-wrap">
-                        <table class="csa-table">
-                            <thead>
-                                <tr>
-                                    {% if is_past and is_granted('VOLUNTEER_OFFER_EDIT', offer) %}
-                                        <th class="csa-table__col-tight">Fue</th>
-                                    {% endif %}
-                                    <th>Socix</th>
-                                    <th class="csa-table__col-tight">Viene con</th>
-                                    <th class="csa-table__col-tight">Se apuntó</th>
-                                    <th>Nota</th>
-                                    <th class="csa-table__col-tight">Estado</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for signup in offer.signups %}
-                                    <tr>
-                                        {% if is_past and is_granted('VOLUNTEER_OFFER_EDIT', offer) %}
-                                            <td class="csa-table__col-tight">
-                                                {% if not signup.cancelled %}
-                                                    <input type="checkbox" name="attended[]" value="{{ signup.id }}"
-                                                           {% if signup.attended %}checked{% endif %}>
-                                                {% endif %}
-                                            </td>
-                                        {% endif %}
-                                        <td>
-                                            {{ signup.partner.name }} {{ signup.partner.surname }}
-                                            {% if signup.coordination %}
-                                                {{ csa.badge('lo organizó', 'plum') }}
-                                            {% endif %}
-                                        </td>
-                                        <td class="csa-table__col-tight">{{ signup.companions > 0 ? '+' ~ signup.companions : '—' }}</td>
-                                        <td class="csa-table__col-tight">{{ signup.createdAt|date('d/m/Y') }}</td>
-                                        <td>{{ signup.notes ?: '—' }}</td>
-                                        <td class="csa-table__col-tight">
-                                            {% if signup.cancelled %}
-                                                {{ csa.badge('Se dio de baja', 'terracotta') }}
-                                            {% elseif signup.attended is same as(true) %}
-                                                {{ csa.badge('Fue · ' ~ (signup.creditedMinutes ?: 0) ~ ' min', 'green') }}
-                                            {% elseif signup.attended is same as(false) %}
-                                                {{ csa.badge('No fue', 'neutral') }}
-                                            {% else %}
-                                                {{ csa.badge('Sin confirmar', 'sky') }}
-                                            {% endif %}
-
-                                            {# Quién lo dijo. Lo normal es que lo
-                                             # confirme quien fue desde su panel;
-                                             # que lo haya puesto gestión indica
-                                             # una tarea que hubo que cerrar a
-                                             # mano, y eso conviene verlo. #}
-                                            {% if signup.settled and not signup.selfConfirmed %}
-                                                {{ csa.badge('lo puso gestión', 'neutral') }}
-                                            {% endif %}
-                                        </td>
-                                    </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-
-                    {# Cerrar sólo tiene sentido cuando la tarea ya ha pasado.
-                     # Mientras no se cierra, no computa horas a nadie: el
-                     # "no sabemos" es significativo y evita que olvidarse de
-                     # cerrar infle el contador con gente que no apareció. #}
-                    {% if is_past and is_granted('VOLUNTEER_OFFER_EDIT', offer) %}
-                        <p class="vol-help" style="margin-top: var(--csa-sp-3);">
-                            Marca quién fue de verdad. A cada persona marcada se le computan
-                            {{ offer.creditedMinutes ?: 0 }} minutos; a las demás, ninguno.
-                        </p>
-                        <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">Cerrar la tarea</button>
+            <div class="prt-mini__cell">
+                <div class="prt-mini__label">Quién viene</div>
+                <div class="prt-mini__value">
+                    {{ offer.filledSlots }}{% if offer.slots %} de {{ offer.slots }}{% endif %}
+                    {% if offer.slots and offer.remainingSlots > 0 %}
+                        <small>faltan {{ offer.remainingSlots }}</small>
+                    {% elseif offer.slots %}
+                        <small>completa</small>
                     {% endif %}
-                </form>
-            {% endif %}
-        {% endblock %}
-    {% endembed %}
+                </div>
+            </div>
 
-    {# ============ ANOTAR A ALGUIEN ============ #}
-    {# Dos huecos que se notan en cuanto esto se usa de verdad: quien ORGANIZA
-     # la tarea no se apunta a ella, así que su contador salía a cero — y es la
-     # gente que más sostiene el voluntariado. Y quien aparece sin haberse
-     # apuntado tampoco constaba, que pasa constantemente. #}
-    {% if is_granted('VOLUNTEER_OFFER_EDIT', offer) %}
-        {% embed '_components/csa_card.html.twig' with {
-            title: 'Anotar a alguien',
-            subtitle: 'Quien organizó esta tarea, o quien vino sin apuntarse.',
-            icon: 'fa-user-plus'
-        } %}
-            {% block body %}
-            {% import '_macros/csa.html.twig' as csa %}
-                <form method="post" action="{{ path('volunteering_add_person', { id: offer.id }) }}" class="vol-repeat">
-                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_add_person') }}">
+            <div class="prt-mini__cell">
+                <div class="prt-mini__label">Computa</div>
+                {% if offer.creditedMinutes %}
+                    <div class="prt-mini__value">{{ offer.creditedMinutes }} <small>min por persona</small></div>
+                {% else %}
+                    <div class="prt-mini__value prt-mini__value--muted">No computa horas</div>
+                {% endif %}
+            </div>
+        </div>
 
-                    <label>
-                        Quién
-                        <select name="partner" class="csa-select" required>
-                            <option value="">— elige —</option>
-                            {% for partner in all_partners %}
-                                <option value="{{ partner.id }}">{{ partner.name }} {{ partner.surname }}</option>
-                            {% endfor %}
-                        </select>
-                    </label>
+        {% if offer.description %}
+            <section class="prt-card">
+                <div class="prt-card__head"><h2 class="prt-card__title"><span class="accent"></span>Qué hay que hacer</h2></div>
+                <div class="prt-card__body">{{ offer.description|nl2br }}</div>
+            </section>
+        {% endif %}
 
-                    <label>
-                        En calidad de
-                        <select name="role" class="csa-select">
-                            <option value="participant">vino a trabajar</option>
-                            <option value="coordinator">lo organizó</option>
-                        </select>
-                    </label>
-
-                    <label>
-                        Minutos
-                        <input type="number" name="minutes" min="0" max="1440"
-                               placeholder="{{ offer.creditedMinutes ?: 0 }}" class="csa-input csa-input--compact">
-                    </label>
-
-                    <button type="submit" class="csa-btn csa-btn--secondary csa-btn--sm">Anotar</button>
-                </form>
-
-                <p class="vol-help">
-                    Se anota como hecho: si lo estás registrando a mano es porque
-                    sabes que ocurrió. Si dejas los minutos en blanco se usan los
-                    de la tarea ({{ offer.creditedMinutes ?: 0 }}). Quien lo organizó no ocupa plaza.
-                </p>
-            {% endblock %}
-        {% endembed %}
-    {% endif %}
-
-    {# ============ REPETIR ============ #}
-    {# El reparto es semanal: sin esto habría que crear la misma tarea cincuenta
-     # y dos veces a mano, y no lo haría nadie. Las copias nacen en BORRADOR para
-     # poder revisarlas —los festivos no se modelan— antes de que empiecen a
-     # pedir gente solas. #}
-    {% if is_granted('VOLUNTEER_OFFER_EDIT', offer) and offer.startsAt %}
-        {% embed '_components/csa_card.html.twig' with {
-            title: 'Repetir esta tarea',
-            subtitle: 'Crea copias en las fechas siguientes, en borrador.',
-            icon: 'fa-repeat'
-        } %}
-            {% block body %}
-                {% import '_macros/csa.html.twig' as csa %}
-                <form method="post" action="{{ path('volunteering_repeat', { id: offer.id }) }}" class="vol-repeat">
-                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_repeat') }}">
-
-                    <label>
-                        Cada
-                        <select name="cadence" class="csa-select">
-                            <option value="weekly">semana</option>
-                            <option value="biweekly">dos semanas</option>
-                            <option value="monthly">cuatro semanas</option>
-                        </select>
-                    </label>
-
-                    <label>
-                        durante
-                        <input type="number" name="times" value="4" min="1" max="52" class="csa-input csa-input--compact">
-                        veces
-                    </label>
-
-                    <button type="submit" class="csa-btn csa-btn--secondary csa-btn--sm">Crear las copias</button>
-                </form>
-
-                <p class="vol-help">
-                    Las copias se crean como borrador y sin nadie apuntado. Revisa
-                    que ninguna cae en festivo antes de publicarlas.
-                </p>
-            {% endblock %}
-        {% endembed %}
-    {% endif %}
-
-    {# ============ AVISOS ============ #}
-    {% embed '_components/csa_card.html.twig' with { title: 'Avisos enviados', icon: 'fa-bullhorn' } %}
-        {% block body %}
-                {% import '_macros/csa.html.twig' as csa %}
-            {# Un círculo vacío frente a un check no dice si eso está pendiente,
-             # descartado o si hay que hacer algo: se etiqueta con palabras. #}
-            <ul class="vol-scopes">
-                <li>
-                    <span>A quien tiene marcado este tipo de trabajo</span>
-                    {{ 'matching' in sent_scopes ? csa.badge('Enviado', 'green') : csa.badge('Sin enviar', 'neutral') }}
+        {# ============ PESTAÑAS ============
+         # Sin JavaScript los tres paneles se ven seguidos: la ficha queda larga,
+         # que es lo que era antes, pero nunca vacía. Ver assets/js/csa-tabs.js. #}
+        <div data-csa-tabs style="margin-top: var(--csa-sp-6);">
+            <ul class="csa-tabs" role="tablist">
+                <li class="csa-tabs__item active">
+                    <a class="csa-tabs__link" href="#gente" role="tab" aria-selected="true">
+                        Quién viene{% if signup_count %}<span class="csa-tabs__count">{{ signup_count }}</span>{% endif %}
+                    </a>
                 </li>
-                <li>
-                    <span>
-                        A quien no ha declarado preferencias
-                        {% if not offer.openToAnyone %}
-                            <small class="vol-help--muted">no se le puede pedir: esta tarea no es para cualquiera</small>
-                        {% endif %}
-                    </span>
-                    {% if not offer.openToAnyone %}
-                        {{ csa.badge('No aplica', 'neutral') }}
-                    {% else %}
-                        {{ 'unspecified' in sent_scopes ? csa.badge('Enviado', 'green') : csa.badge('Sin enviar', 'neutral') }}
-                    {% endif %}
+                <li class="csa-tabs__item">
+                    <a class="csa-tabs__link" href="#avisos" role="tab" aria-selected="false">Avisos</a>
                 </li>
-                <li>
-                    <span>A toda la asociación</span>
-                    {{ everyone_sent ? csa.badge('Enviado', 'green') : csa.badge('Sin enviar', 'neutral') }}
+                <li class="csa-tabs__item">
+                    <a class="csa-tabs__link" href="#historial" role="tab" aria-selected="false">
+                        Historial{% if history|length %}<span class="csa-tabs__count">{{ history|length }}</span>{% endif %}
+                    </a>
                 </li>
             </ul>
 
-            <p class="vol-help--muted">Los dos primeros los manda el sistema solo, cuando se acerca la fecha y siguen faltando plazas. El último se manda a mano.</p>
+            {# ---------- QUIÉN VIENE ---------- #}
+            <section class="csa-tabpanel is-active" id="gente" role="tabpanel">
+                <div class="prt-card">
+                    <div class="prt-card__body">
+                        {% if offer.signups is empty %}
+                            <p class="vol-empty">Todavía no se ha apuntado nadie.</p>
+                        {% else %}
+                            <form method="post" action="{{ path('volunteering_close', { id: offer.id }) }}">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_close') }}">
 
-            {% if is_granted('VOLUNTEER_OFFER_EDIT', offer) and not everyone_sent and offer.open %}
-                {#
-                 # Este botón gasta el canal push de toda la asociación, y el
-                 # permiso del navegador se pierde una vez y para siempre: quien
-                 # lo apaga no vuelve. Por eso se enseña el NÚMERO antes, se
-                 # exige confirmación, y sólo se puede una vez por tarea.
-                 #}
-                {{ csa.callout(
-                    'Avisar a toda la asociación llega a ' ~ everyone_count ~ ' socix(s), incluidxs quienes han dicho que de esto no les avisen. Sólo se puede hacer una vez por tarea. Úsalo cuando de verdad haga falta.',
-                    'warning',
-                    'exclamation-triangle'
-                ) }}
+                                <div class="csa-table-wrap">
+                                    <table class="csa-table">
+                                        <thead>
+                                            <tr>
+                                                {% if is_past and can_edit %}
+                                                    <th class="csa-table__col-tight">Fue</th>
+                                                {% endif %}
+                                                <th>Socix</th>
+                                                <th class="csa-table__col-tight">Viene con</th>
+                                                <th class="csa-table__col-tight">Se apuntó</th>
+                                                <th>Nota</th>
+                                                <th class="csa-table__col-tight">Estado</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for signup in offer.signups %}
+                                                <tr>
+                                                    {% if is_past and can_edit %}
+                                                        <td class="csa-table__col-tight">
+                                                            {% if not signup.cancelled %}
+                                                                <input type="checkbox" name="attended[]" value="{{ signup.id }}"
+                                                                       {% if signup.attended %}checked{% endif %}>
+                                                            {% endif %}
+                                                        </td>
+                                                    {% endif %}
+                                                    <td>
+                                                        {{ signup.partner.name }} {{ signup.partner.surname }}
+                                                        {% if signup.coordination %}
+                                                            {{ csa.badge('lo organizó', 'plum') }}
+                                                        {% endif %}
+                                                    </td>
+                                                    <td class="csa-table__col-tight">{{ signup.companions > 0 ? '+' ~ signup.companions : '—' }}</td>
+                                                    <td class="csa-table__col-tight">{{ signup.createdAt|date('d/m/Y') }}</td>
+                                                    <td>{{ signup.notes ?: '—' }}</td>
+                                                    <td class="csa-table__col-tight">
+                                                        {% if signup.cancelled %}
+                                                            {{ csa.badge('Se dio de baja', 'terracotta') }}
+                                                        {% elseif signup.attended is same as(true) %}
+                                                            {{ csa.badge('Fue · ' ~ (signup.creditedMinutes ?: 0) ~ ' min', 'green') }}
+                                                        {% elseif signup.attended is same as(false) %}
+                                                            {{ csa.badge('No fue', 'neutral') }}
+                                                        {% else %}
+                                                            {{ csa.badge('Sin confirmar', 'sky') }}
+                                                        {% endif %}
 
-                <form method="post" action="{{ path('volunteering_notify_everyone', { id: offer.id }) }}"
-                      onsubmit="return confirm('Vas a avisar a {{ everyone_count }} socix(s). Esto no se puede deshacer y sólo se puede hacer una vez. ¿Seguro?');">
-                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_notify') }}">
-                    <button type="submit" class="csa-btn csa-btn--danger-soft csa-btn--sm">
-                        <i class="fa fa-bullhorn"></i> Avisar a toda la asociación
-                    </button>
-                </form>
-            {% endif %}
-        {% endblock %}
-    {% endembed %}
+                                                        {# Quién lo dijo. Lo normal es que lo confirme quien
+                                                         # fue desde su panel; que lo haya puesto gestión
+                                                         # indica una tarea que hubo que cerrar a mano, y eso
+                                                         # conviene verlo. #}
+                                                        {% if signup.settled and not signup.selfConfirmed %}
+                                                            {{ csa.badge('lo puso gestión', 'neutral') }}
+                                                        {% endif %}
+                                                    </td>
+                                                </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
 
-    {# ============ HISTORIAL ============ #}
-    {% embed '_components/csa_card.html.twig' with {
-        title: 'Qué ha pasado con esta tarea',
-        icon: 'fa-history'
-    } %}
-        {% block body %}
-            {% include '_components/volunteering_history.html.twig' with {
-                events: history,
-                actor_names: actor_names,
-                empty_text: 'Todavía no consta nada. Los cambios, las inscripciones y los avisos quedan registrados aquí.'
-            } only %}
-        {% endblock %}
-    {% endembed %}
+                                {# Cerrar sólo tiene sentido cuando la tarea ya ha pasado. Mientras
+                                 # no se cierra, no computa horas a nadie: el "no sabemos" es
+                                 # significativo y evita que olvidarse de cerrar infle el contador
+                                 # con gente que no apareció. #}
+                                {% if is_past and can_edit %}
+                                    <p class="vol-help" style="margin-top: var(--csa-sp-3);">
+                                        Marca quién fue de verdad. A cada persona marcada se le computan
+                                        {{ offer.creditedMinutes ?: 0 }} minutos; a las demás, ninguno.
+                                    </p>
+                                    <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">Cerrar la tarea</button>
+                                {% endif %}
+                            </form>
+                        {% endif %}
 
-    <div class="csa-row-between" style="margin-top: var(--csa-sp-6);">
-        {{ csa.btn('Volver', { variant: 'ghost', href: path('volunteering_index') }) }}
-        {% if is_granted('VOLUNTEER_OFFER_EDIT', offer) %}
-            {{ csa.btn('Editar', { variant: 'primary', icon: 'fa-pencil', href: path('volunteering_edit', { id: offer.id }) }) }}
-        {% endif %}
+                        {# ---- Anotar a alguien ----
+                         # Dos huecos que se notan en cuanto esto se usa de verdad: quien ORGANIZA
+                         # la tarea no se apunta a ella, así que su contador salía a cero — y es la
+                         # gente que más sostiene el voluntariado. Y quien aparece sin haberse
+                         # apuntado tampoco constaba, que pasa constantemente. #}
+                        {% if can_edit %}
+                            <hr class="vol-sep">
+
+                            {# Sin título propio en serif: la pestaña ya dice de qué va el
+                             # panel, y un cuarto titular Fraunces aquí abajo competía con
+                             # el del hero por la misma atención. #}
+                            <p class="vol-help">
+                                Anotar a quien organizó esta tarea, o a quien vino sin apuntarse.
+                            </p>
+
+                            <form method="post" action="{{ path('volunteering_add_person', { id: offer.id }) }}" class="vol-repeat">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_add_person') }}">
+
+                                <label>
+                                    Quién
+                                    <select name="partner" class="csa-select" required>
+                                        <option value="">— elige —</option>
+                                        {% for partner in all_partners %}
+                                            <option value="{{ partner.id }}">{{ partner.name }} {{ partner.surname }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </label>
+
+                                <label>
+                                    En calidad de
+                                    <select name="role" class="csa-select">
+                                        <option value="participant">vino a trabajar</option>
+                                        <option value="coordinator">lo organizó</option>
+                                    </select>
+                                </label>
+
+                                <label>
+                                    Minutos
+                                    <input type="number" name="minutes" min="0" max="1440"
+                                           placeholder="{{ offer.creditedMinutes ?: 0 }}" class="csa-input csa-input--compact">
+                                </label>
+
+                                <button type="submit" class="csa-btn csa-btn--secondary csa-btn--sm">Anotar</button>
+                            </form>
+
+                            <p class="vol-help">
+                                Se anota como hecho: si lo estás registrando a mano es porque
+                                sabes que ocurrió. Si dejas los minutos en blanco se usan los
+                                de la tarea ({{ offer.creditedMinutes ?: 0 }}). Quien lo organizó no ocupa plaza.
+                            </p>
+                        {% endif %}
+                    </div>
+                </div>
+            </section>
+
+            {# ---------- AVISOS ---------- #}
+            <section class="csa-tabpanel" id="avisos" role="tabpanel">
+                <div class="prt-card">
+                    <div class="prt-card__body">
+                        {# Un círculo vacío frente a un check no dice si eso está pendiente,
+                         # descartado o si hay que hacer algo: se etiqueta con palabras. #}
+                        <ul class="vol-scopes">
+                            <li>
+                                <span>A quien tiene marcado este tipo de trabajo</span>
+                                {{ 'matching' in sent_scopes ? csa.badge('Enviado', 'green') : csa.badge('Sin enviar', 'neutral') }}
+                            </li>
+                            <li>
+                                <span>
+                                    A quien no ha declarado preferencias
+                                    {% if not offer.openToAnyone %}
+                                        <small class="vol-help--muted">no se le puede pedir: esta tarea no es para cualquiera</small>
+                                    {% endif %}
+                                </span>
+                                {% if not offer.openToAnyone %}
+                                    {{ csa.badge('No aplica', 'neutral') }}
+                                {% else %}
+                                    {{ 'unspecified' in sent_scopes ? csa.badge('Enviado', 'green') : csa.badge('Sin enviar', 'neutral') }}
+                                {% endif %}
+                            </li>
+                            <li>
+                                <span>A toda la asociación</span>
+                                {{ everyone_sent ? csa.badge('Enviado', 'green') : csa.badge('Sin enviar', 'neutral') }}
+                            </li>
+                        </ul>
+
+                        <p class="vol-help--muted">Los dos primeros los manda el sistema solo, cuando se acerca la fecha y siguen faltando plazas. El último se manda a mano.</p>
+
+                        {% if can_edit and not everyone_sent and offer.open %}
+                            {#
+                             # Este botón gasta el canal push de toda la asociación, y el
+                             # permiso del navegador se pierde una vez y para siempre: quien
+                             # lo apaga no vuelve. Por eso se enseña el NÚMERO antes, se
+                             # exige confirmación, y sólo se puede una vez por tarea.
+                             #}
+                            {{ csa.callout(
+                                'Avisar a toda la asociación llega a ' ~ everyone_count ~ ' socix(s), incluidxs quienes han dicho que de esto no les avisen. Sólo se puede hacer una vez por tarea. Úsalo cuando de verdad haga falta.',
+                                'warning',
+                                'exclamation-triangle'
+                            ) }}
+
+                            <form method="post" action="{{ path('volunteering_notify_everyone', { id: offer.id }) }}"
+                                  onsubmit="return confirm('Vas a avisar a {{ everyone_count }} socix(s). Esto no se puede deshacer y sólo se puede hacer una vez. ¿Seguro?');">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_notify') }}">
+                                <button type="submit" class="csa-btn csa-btn--danger-soft csa-btn--sm">
+                                    <i class="fa fa-bullhorn"></i> Avisar a toda la asociación
+                                </button>
+                            </form>
+                        {% endif %}
+                    </div>
+                </div>
+            </section>
+
+            {# ---------- HISTORIAL ---------- #}
+            <section class="csa-tabpanel" id="historial" role="tabpanel">
+                <div class="prt-card">
+                    <div class="prt-card__body">
+                        {% include '_components/volunteering_history.html.twig' with {
+                            events: history,
+                            actor_names: actor_names,
+                            empty_text: 'Todavía no consta nada. Los cambios, las inscripciones y los avisos quedan registrados aquí.'
+                        } only %}
+                    </div>
+                </div>
+            </section>
+        </div>
     </div>
+
+    {# ============ REPETIR ============
+     # El reparto es semanal: sin esto habría que crear la misma tarea cincuenta y
+     # dos veces a mano, y no lo haría nadie. Las copias nacen en BORRADOR para
+     # poder revisarlas antes de que empiecen a pedir gente solas.
+     #
+     # Si la tarea ocurre en un punto de recogida, las fechas pueden salir del
+     # calendario de reparto de verdad y entonces ya vienen con los cierres y
+     # traslados aplicados. Con las cadencias fijas no: ahí sigue habiendo que
+     # mirar los festivos a mano.
+     #
+     # En un diálogo y no como tarjeta fija: se usa una vez al crear la serie y
+     # luego estorba el resto de la vida de la tarea. #}
+    {% if can_edit and offer.startsAt %}
+        <dialog id="volunteering-repeat-dialog" class="csa-modal csa-modal--info" aria-labelledby="volunteering-repeat-title">
+            <form method="post" action="{{ path('volunteering_repeat', { id: offer.id }) }}">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_repeat') }}">
+                <button class="csa-modal__close" type="button" aria-label="Cerrar" onclick="this.closest('dialog').close()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l14 14M19 5L5 19"/></svg>
+                </button>
+                <header class="csa-modal__header">
+                    <div class="csa-modal__heading">
+                        <span class="csa-modal__eyebrow">Copias en borrador</span>
+                        <h2 class="csa-modal__title" id="volunteering-repeat-title">Repetir esta tarea</h2>
+                    </div>
+                </header>
+                <div class="csa-modal__body">
+                    <div class="vol-repeat">
+                        <label>
+                            Se repite
+                            <select name="cadence" class="csa-select">
+                                {% for cadence in repeat_cadences %}
+                                    <option value="{{ cadence }}">
+                                        {{- {
+                                            'delivery': 'los días que haya reparto',
+                                            'weekly': 'cada semana',
+                                            'biweekly': 'cada dos semanas',
+                                            'monthly': 'una vez al mes'
+                                        }[cadence] -}}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </label>
+
+                        {# Hasta cuándo y no cuántas veces: "hasta fin de año" es como
+                         # se piensa; "17 veces" obliga a contar semanas a mano. #}
+                        <label>
+                            hasta el
+                            <input type="date" name="until" class="csa-input"
+                                   min="{{ offer.startsAt|date('Y-m-d') }}"
+                                   value="{{ offer.startsAt|date_modify('+3 months')|date('Y-m-d') }}">
+                        </label>
+                    </div>
+
+                    <p class="vol-help">
+                        {% if offer.node %}
+                            Con «los días que haya reparto» las fechas salen del calendario
+                            de {{ offer.node.name }}: ya vienen sin las semanas que no
+                            reparte y con los traslados aplicados.
+                        {% endif %}
+                        Las copias se crean como borrador y sin nadie apuntado, y nacen
+                        sueltas: anular una no toca a las demás.
+                    </p>
+                </div>
+                <footer class="csa-modal__footer">
+                    <button type="button" class="csa-modal__btn csa-modal__btn--ghost" onclick="this.closest('dialog').close()">Cancelar</button>
+                    <button type="submit" class="csa-modal__btn csa-modal__btn--primary">Crear las copias</button>
+                </footer>
+            </form>
+        </dialog>
+    {% endif %}
 {% endblock %}

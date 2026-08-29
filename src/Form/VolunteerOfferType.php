@@ -5,15 +5,20 @@ namespace App\Form;
 use App\Entity\Node;
 use App\Entity\VolunteerCategory;
 use App\Entity\VolunteerOffer;
+use App\Service\Volunteering\OfferRepeatDates;
 use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\DateTimeType;
+use Symfony\Component\Form\Extension\Core\Type\DateType;
 use Symfony\Component\Form\Extension\Core\Type\IntegerType;
 use Symfony\Component\Form\Extension\Core\Type\TextareaType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
+use Symfony\Component\Form\FormError;
+use Symfony\Component\Form\FormEvent;
+use Symfony\Component\Form\FormEvents;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 
 /**
@@ -100,6 +105,11 @@ class VolunteerOfferType extends AbstractType
                 'required' => false,
                 'help' => 'Márcalo sólo si no hace falta saber nada previo ni tener fuerza: recoger cestas, sí; desbrozar, no. Marcado, si sigue faltando gente el aviso se amplía a socixs que no han dicho de qué quieren que se les avise.',
             ])
+            ->add('featured', CheckboxType::class, [
+                'label' => 'Destacar en el panel de socixs',
+                'required' => false,
+                'help' => 'Sube esta tarea a lo alto del panel de cada socix, por delante del orden normal. Es para la semana en la que una cosa importa más que las demás: si se destaca todo, no destaca nada.',
+            ])
             ->add('status', ChoiceType::class, [
                 'label' => 'Estado',
                 'choices' => [
@@ -109,12 +119,93 @@ class VolunteerOfferType extends AbstractType
                 ],
             ])
         ;
+
+        if ($options['with_repeat']) {
+            $this->addRepeatFields($builder);
+        }
+    }
+
+    /**
+     * Cada cuánto se repite la tarea, al darla de alta.
+     *
+     * SIN MAPEAR Y SÓLO EN EL ALTA. No son datos de la tarea: se leen una vez
+     * para crear las copias y no se guardan en ninguna parte. Si cada copia
+     * llevara escrita la receta de la serie, anular una por un festivo dejaría a
+     * las demás afirmando algo que ya no es cierto. Y en la edición no pintan
+     * nada: repetir una tarea que ya existe se hace desde su ficha, donde además
+     * se ve lo que ya tiene.
+     *
+     * La cadencia del calendario de reparto se ofrece siempre, aunque sólo valga
+     * con punto de recogida: el nodo se elige en ESTE mismo formulario, así que
+     * al construirlo todavía no se sabe. La incoherencia se caza al enviar
+     * ({@see self::validateRepeat()}), que es cuando ya hay algo que mirar.
+     *
+     * @param FormBuilderInterface $builder el constructor del formulario
+     */
+    private function addRepeatFields(FormBuilderInterface $builder): void
+    {
+        $builder
+            ->add('repeatCadence', ChoiceType::class, [
+                'label' => 'Se repite',
+                'mapped' => false,
+                'required' => false,
+                'placeholder' => 'No se repite',
+                'choices' => [
+                    'Los días que haya reparto' => OfferRepeatDates::CADENCE_DELIVERY,
+                    'Cada semana' => OfferRepeatDates::CADENCE_WEEKLY,
+                    'Cada dos semanas' => OfferRepeatDates::CADENCE_BIWEEKLY,
+                    'Una vez al mes' => OfferRepeatDates::CADENCE_MONTHLY,
+                ],
+                'help' => 'Con «los días que haya reparto» las fechas salen del calendario del punto de recogida: ya vienen sin las semanas que no reparte y con los traslados aplicados.',
+            ])
+            ->add('repeatUntil', DateType::class, [
+                'label' => 'Hasta el',
+                'mapped' => false,
+                'required' => false,
+                'widget' => 'single_text',
+                'help' => 'Las copias se crean en borrador y sueltas: anular una no toca a las demás.',
+            ])
+            ->addEventListener(FormEvents::POST_SUBMIT, $this->validateRepeat(...))
+        ;
+    }
+
+    /**
+     * Comprueba que lo de repetir tiene sentido, ya con el formulario enviado.
+     *
+     * Va aquí y no en el controller para que `isValid()` diga la verdad: si la
+     * comprobación viviera después, habría que deshacer una tarea ya creada, o
+     * peor, dejarla creada sin sus copias y sin que nadie lo dijera.
+     *
+     * @param FormEvent $event el envío del formulario
+     */
+    private function validateRepeat(FormEvent $event): void
+    {
+        $form = $event->getForm();
+        $cadence = $form->get('repeatCadence')->getData();
+
+        if (null === $cadence) {
+            return;
+        }
+
+        if (null === $form->get('repeatUntil')->getData()) {
+            $form->get('repeatUntil')->addError(new FormError('Si la tarea se repite, dime hasta cuándo.'));
+        }
+
+        if (OfferRepeatDates::CADENCE_DELIVERY === $cadence && null === $form->get('node')->getData()) {
+            $form->get('repeatCadence')->addError(new FormError(
+                'Para repetirla los días de reparto, la tarea tiene que ocurrir en un punto de recogida.'
+            ));
+        }
     }
 
     public function configureOptions(OptionsResolver $resolver): void
     {
         $resolver->setDefaults([
             'data_class' => VolunteerOffer::class,
+            // Los campos de repetición sólo en el alta: ver addRepeatFields().
+            'with_repeat' => false,
         ]);
+
+        $resolver->setAllowedTypes('with_repeat', 'bool');
     }
 }

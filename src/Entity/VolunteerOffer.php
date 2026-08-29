@@ -158,6 +158,27 @@ class VolunteerOffer
     private bool $openToAnyone = false;
 
     /**
+     * Quien coordina ha decidido que esta tarea sube a lo alto del panel de cada
+     * socix. Es el control editorial sobre la portada: hay semanas en las que una
+     * cosa importa más que el orden natural de fechas.
+     *
+     * DESTACAR NO ES FILTRAR, y ésa es la decisión. Una portada que enseñara
+     * ÚNICAMENTE lo destacado quedaría muda el día —seguro— en que nadie se
+     * acuerde de marcar nada, y quedaría muda justo en la pantalla por la que
+     * pasa todo el mundo. Así, cuando hay marcas mandan las marcas, y cuando no
+     * las hay sigue funcionando el orden de siempre: lo del punto de recogida
+     * propio primero, después por fecha.
+     *
+     * NO SE COPIA AL REPETIR UNA TAREA ({@see $copiedFrom}). Destacar es una
+     * decisión sobre una semana concreta; arrastrarla a las doce copias de un
+     * trimestre dejaría la portada con doce tareas destacadas, que es lo mismo
+     * que ninguna. Quien copie una oferta deja este campo en false.
+     *
+     * @ORM\Column(type="boolean", options={"default": false})
+     */
+    private bool $featured = false;
+
+    /**
      * @ORM\Column(type="string", length=16, options={"default": "draft"})
      */
     #[Assert\Choice(choices: [self::STATUS_DRAFT, self::STATUS_PUBLISHED, self::STATUS_CANCELLED])]
@@ -280,6 +301,31 @@ class VolunteerOffer
         }
 
         return $filled;
+    }
+
+    /**
+     * Quién está comprometidx ahora mismo: las inscripciones vivas, sin las
+     * canceladas. Incluye a quien coordina — en el sitio va a estar, y es
+     * justo eso lo que se cuenta cuando se dice quién hay.
+     *
+     * Ojo con confundirlo con {@see getFilledSlots()}: aquél cuenta BRAZOS
+     * (con acompañantes, sin coordinación) para decidir si falta gente; éste
+     * cuenta PERSONAS con nombre para poder decir quiénes son.
+     *
+     * @return list<VolunteerSignup> las inscripciones que siguen en pie
+     */
+    public function getCommittedSignups(): array
+    {
+        $committed = [];
+        foreach ($this->signups as $signup) {
+            // Sin persona no hay nombre que enseñar, y quien consume esto es una
+            // pantalla que va a pedirle el nombre. La columna es nullable.
+            if (!$signup->isCancelled() && null !== $signup->getPartner()) {
+                $committed[] = $signup;
+            }
+        }
+
+        return $committed;
     }
 
     /**
@@ -647,6 +693,24 @@ class VolunteerOffer
     public function setOpenToAnyone(bool $openToAnyone): self
     {
         $this->openToAnyone = $openToAnyone;
+
+        return $this;
+    }
+
+    /**
+     * @return bool true si sube a lo alto del panel de cada socix
+     */
+    public function isFeatured(): bool
+    {
+        return $this->featured;
+    }
+
+    /**
+     * @param bool $featured true para subirla a lo alto del panel de cada socix
+     */
+    public function setFeatured(bool $featured): self
+    {
+        $this->featured = $featured;
 
         return $this;
     }

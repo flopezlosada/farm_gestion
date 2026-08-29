@@ -65,6 +65,26 @@ class VolunteerCategory
     private bool $active = true;
 
     /**
+     * Esta categoría es el MONTAJE DEL REPARTO en un punto de recogida: las
+     * tareas que la llevan son las de preparar las cestas que ese día recoge
+     * la gente de ese nodo.
+     *
+     * Existe para que la home del socix pueda decirle quién le está montando
+     * su cesta, y avisar cuando no hay nadie. Sin la marca habría que inferirlo
+     * de que la tarea tenga nodo y caiga el día del reparto, y esa inferencia
+     * se rompe en cuanto exista cualquier otra tarea de nodo —limpiar el local,
+     * por ejemplo—: la home diría "tu cesta la han preparado X e Y" señalando a
+     * quien está fregando el suelo.
+     *
+     * Va en la categoría y no en cada oferta porque es una propiedad del tipo de
+     * trabajo, no de la convocatoria concreta: se marca una vez y vale para
+     * todas las semanas, en vez de tener que acordarse cada viernes.
+     *
+     * @ORM\Column(name="delivery_prep", type="boolean", options={"default": false})
+     */
+    private bool $deliveryPrep = false;
+
+    /**
      * Socixs que han pedido que se les avise de esta categoría. Lado inverso:
      * la relación la posee {@see Partner::$volunteerCategories}.
      *
@@ -214,6 +234,24 @@ class VolunteerCategory
     public function setActive(bool $active): self
     {
         $this->active = $active;
+
+        return $this;
+    }
+
+    /**
+     * @return bool true si las tareas de esta categoría son el montaje del reparto en un nodo
+     */
+    public function isDeliveryPrep(): bool
+    {
+        return $this->deliveryPrep;
+    }
+
+    /**
+     * @param bool $deliveryPrep true si esta categoría es la del montaje del reparto
+     */
+    public function setDeliveryPrep(bool $deliveryPrep): self
+    {
+        $this->deliveryPrep = $deliveryPrep;
 
         return $this;
     }
