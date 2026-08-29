@@ -46,7 +46,7 @@ class VolunteerOfferStillNeededTest extends KernelTestCase
         $this->makeSignup($em, $llena, $this->makePartner($em, 'StillNeeded Apuntada'), companions: 1);
         $em->flush();
 
-        $needed = $this->repository($em)->findStillNeededFor(new \DateTime());
+        $needed = $this->repository($em)->findStillNeededFor(new \DateTime(), null);
 
         $this->assertNotContains($llena, $needed);
         $this->assertContains($libre, $needed);
@@ -85,7 +85,7 @@ class VolunteerOfferStillNeededTest extends KernelTestCase
         $this->makeSignup($em, $abierta, $this->makePartner($em, 'StillNeeded Voluntaria'), companions: 3);
         $em->flush();
 
-        $this->assertContains($abierta, $this->repository($em)->findStillNeededFor(new \DateTime()));
+        $this->assertContains($abierta, $this->repository($em)->findStillNeededFor(new \DateTime(), null));
     }
 
     /**

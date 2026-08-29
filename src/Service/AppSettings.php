@@ -244,7 +244,15 @@ class AppSettings
      *
      * - `command`: comando de consola asociado. Es también la lista blanca:
      *   sólo se puede lanzar a mano lo declarado aquí.
-     * - `confirm`: envía correo real, así que la UI pide confirmación.
+     * - `confirm`: ENTREGA ALGO REAL A PERSONAS, así que la UI pide
+     *   confirmación. Significaba "envía correo" cuando el correo era el único
+     *   canal; desde que hay avisos push la confirmación la pide el efecto, no
+     *   el medio. Para saber POR DÓNDE entrega, está `channels`.
+     * - `channels`: por qué canales entrega ('email', 'push'). Vacío en las
+     *   tareas que no avisan a nadie. Existe porque `confirm` dejó de servir
+     *   para distinguirlo: las reglas de los toggles de correo sólo pueden
+     *   exigirse a quien manda correo, y un aviso push no tiene interruptor
+     *   general de email que declarar ni un correo que reenviar.
      * - `dry`: ofrece botón de previsualización (--dry-run).
      * - `schedule`: CADENCIA declarada — cuándo debería correr. `freq` es
      *   daily|weekly|monthly, con `dow` (1 = lunes) en las semanales y `dom` en
@@ -279,6 +287,7 @@ class AppSettings
     public const CRONS = [
         self::CRON_GENERATE_WEEKLY_DELIVERY => [
             'command' => 'app:generate-weekly-delivery',
+            'channels' => [],
             'needs_recipient' => false,
             'confirm' => false,
             'dry' => false,
@@ -289,6 +298,7 @@ class AppSettings
         ],
         self::CRON_PICKUP_REMINDER => [
             'command' => 'app:send-pickup-reminders',
+            'channels' => ['email', 'push'],
             'needs_recipient' => false,
             'confirm' => true,
             'dry' => true,
@@ -315,6 +325,7 @@ class AppSettings
         ],
         self::CRON_ADMIN_DELIVERY_SUMMARY => [
             'command' => 'app:send-admin-delivery-changes-summary',
+            'channels' => ['email'],
             'needs_recipient' => true,
             'confirm' => true,
             'dry' => true,
@@ -325,6 +336,7 @@ class AppSettings
         ],
         self::CRON_PURGE_USAGE_HITS => [
             'command' => 'app:purge-usage-hits',
+            'channels' => [],
             'needs_recipient' => false,
             'confirm' => false,
             'dry' => false,
@@ -335,6 +347,7 @@ class AppSettings
         ],
         self::CRON_ALBERGUE_REMINDER => [
             'command' => 'app:send-albergue-arrivals-reminder',
+            'channels' => ['email'],
             'needs_recipient' => true,
             'confirm' => true,
             'dry' => true,
@@ -345,6 +358,7 @@ class AppSettings
         ],
         self::CRON_STAFF_GAPS_DIGEST => [
             'command' => 'app:send-staff-gaps-digest',
+            'channels' => ['email'],
             'needs_recipient' => true,
             'confirm' => true,
             'dry' => true,
@@ -355,6 +369,7 @@ class AppSettings
         ],
         self::CRON_STAFF_OPEN_SHIFT_ALERT => [
             'command' => 'app:send-staff-open-shift-alert',
+            'channels' => ['email'],
             'needs_recipient' => true,
             'confirm' => true,
             'dry' => true,
@@ -373,6 +388,7 @@ class AppSettings
         // corre una vez al día por mucho que aquí ponga 60 minutos.
         self::CRON_VOLUNTEER_CALLS => [
             'command' => 'app:send-volunteer-calls',
+            'channels' => ['push'],
             'needs_recipient' => false,
             'confirm' => true,
             'dry' => true,
@@ -385,6 +401,7 @@ class AppSettings
         // mandarlo, porque gasta el canal sin traer a nadie.
         self::CRON_VOLUNTEER_REMINDERS => [
             'command' => 'app:send-volunteer-reminders',
+            'channels' => ['push'],
             'needs_recipient' => false,
             'confirm' => true,
             'dry' => true,

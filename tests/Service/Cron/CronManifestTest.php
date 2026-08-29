@@ -63,8 +63,8 @@ class CronManifestTest extends KernelTestCase
     }
 
     /**
-     * Toda tarea que manda correo (`confirm`, que es justo lo que ese campo
-     * significa) exige el interruptor GENERAL de envíos además del suyo.
+     * Toda tarea que SÓLO manda correo exige el interruptor GENERAL de envíos
+     * además del suyo.
      *
      * Sin eso, con el interruptor general apagado la tarea corre entera,
      * {@see \App\Mailer\KillSwitchMailer} descarta los mensajes en silencio y
@@ -72,11 +72,24 @@ class CronManifestTest extends KernelTestCase
      * entregó nada, y el guardián de idempotencia se queda con esos efectos
      * apuntados, así que al reencender el envío ya constan emitidos y no salen
      * nunca.
+     *
+     * SE MIRA `channels` Y NO `confirm`. `confirm` significaba "manda correo"
+     * cuando el correo era el único canal, y desde que hay avisos push ya sólo
+     * quiere decir "entrega algo real, pregunta antes". Seguir usándolo aquí
+     * exigía un interruptor de email a tareas que no mandan un solo correo.
+     *
+     * Las que entregan por VARIOS canales quedan fuera, y no por indulgencia:
+     * `requires` inhibe la tarea entera —ni --force lo salta—, así que apagar el
+     * correo dejaría también sin avisar a quien lo tiene activado en el móvil.
+     * La regla no desaparece, se muda: esas tareas tienen que leer el
+     * interruptor ANTES de llamar al mailer, y por tanto antes de que se apunte
+     * ningún efecto. Es lo que hace
+     * {@see \App\Command\SendPickupReminderCommand::doExecute()}.
      */
-    public function testLasTareasQueMandanCorreoExigenElInterruptorGeneral(): void
+    public function testLasTareasQueSoloMandanCorreoExigenElInterruptorGeneral(): void
     {
         foreach (AppSettings::CRONS as $key => $meta) {
-            if (!$meta['confirm'] || \in_array($key, self::MULTICANAL, true)) {
+            if (['email'] !== $meta['channels']) {
                 continue;
             }
 
@@ -89,24 +102,28 @@ class CronManifestTest extends KernelTestCase
     }
 
     /**
-     * Tareas que entregan por más de un canal, y que por eso NO pueden llevar en
-     * `requires` el interruptor de uno solo: `requires` inhibe la tarea entera
-     * (ni --force lo salta), así que apagar el correo dejaría también sin avisar
-     * a quien lo tiene activado en el móvil.
-     *
-     * Entrar en esta lista NO exime de la regla de arriba, la muda de sitio: la
-     * tarea tiene que leer el interruptor general ANTES de llamar al mailer, y
-     * por tanto antes de que el guardián de idempotencia apunte nada. Es lo que
-     * hace {@see \App\Command\SendPickupReminderCommand::doExecute()}, y el
-     * motivo está en el javadoc del test de arriba: un correo descartado con el
-     * apunte ya puesto no se manda nunca más.
-     *
-     * Si algún día hay tres o cuatro tareas aquí, deja de compensar la lista y
-     * toca declarar los canales en el propio manifiesto.
+     * Los canales declarados son conocidos, y una tarea que entrega algo
+     * (`confirm`) declara por dónde. Es lo que sostiene la regla de arriba: sin
+     * este test, olvidar el campo en una tarea nueva la dejaría exenta en
+     * silencio en vez de romper.
      */
-    private const MULTICANAL = [
-        AppSettings::CRON_PICKUP_REMINDER,
-    ];
+    public function testCadaTareaDeclaraSusCanales(): void
+    {
+        foreach (AppSettings::CRONS as $key => $meta) {
+            $this->assertArrayHasKey('channels', $meta, sprintf('La tarea "%s" no declara canales.', $key));
+
+            foreach ($meta['channels'] as $channel) {
+                $this->assertContains($channel, ['email', 'push'], sprintf('Canal desconocido en "%s".', $key));
+            }
+
+            if ($meta['confirm']) {
+                $this->assertNotEmpty(
+                    $meta['channels'],
+                    sprintf('La tarea "%s" pide confirmación porque entrega algo, pero no dice por dónde.', $key)
+                );
+            }
+        }
+    }
 
     /**
      * La cadencia está bien formada: frecuencia conocida, hora válida y el campo
@@ -204,12 +221,20 @@ class CronManifestTest extends KernelTestCase
                 $this->assertTrue($definition->hasOption('to'), sprintf('El comando de "%s" dice necesitar destinatario pero no acepta --to.', $key));
             }
 
-            // Las que mandan correo (`confirm`) tienen que aceptar --resend: sus
-            // efectos son idempotentes, y sin vía de repetición un aviso que no
-            // llegó sólo se podría rescatar borrando su apunte a mano en la base
-            // de datos. La pantalla ofrece el botón "Reenviar" a partir de ese
-            // mismo `confirm`.
-            if ($meta['confirm']) {
+            // Las que mandan CORREO tienen que aceptar --resend: sus efectos son
+            // idempotentes vía EffectLedger, y sin vía de repetición un correo
+            // que no llegó sólo se podría rescatar borrando su apunte a mano en
+            // la base de datos. La pantalla ofrece el botón "Reenviar".
+            //
+            // Se mira el canal y no `confirm` porque no todo lo que entrega algo
+            // se rescata igual. app:send-volunteer-calls es push y su repetición
+            // NO la gobierna un apunte sino el UNIQUE (offer, scope) del
+            // dominio: que un aviso salga dos veces es peor que perderlo —el
+            // permiso de notificaciones se gasta una sola vez—, así que ahí
+            // repetir es una decisión de negocio y no un rescate técnico. El
+            // otro cron de push, el de recordatorios, sí usa el ledger y sí
+            // acepta --resend.
+            if (\in_array('email', $meta['channels'], true)) {
                 $this->assertTrue($definition->hasOption('resend'), sprintf('El comando de "%s" manda correo y no acepta --resend.', $key));
             }
         }

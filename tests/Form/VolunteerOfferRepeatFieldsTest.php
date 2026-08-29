@@ -64,7 +64,30 @@ class VolunteerOfferRepeatFieldsTest extends KernelTestCase
     {
         $form = $this->submit(['repeatCadence' => '', 'repeatUntil' => '']);
 
-        $this->assertTrue($form->isValid());
+        // Con el motivo, no con un "false is true" a secas: los otros dos casos
+        // cuentan errores de UN campo, así que un error en cualquier otro sólo
+        // se ve aquí — y sin el mensaje no hay forma de saber en cuál.
+        $this->assertTrue($form->isValid(), $this->errorsOf($form));
+    }
+
+    /**
+     * Todos los errores del formulario, campo a campo, en una línea legible.
+     *
+     * @param FormInterface $form el formulario enviado
+     *
+     * @return string los errores, o un aviso de que no hay ninguno
+     */
+    private function errorsOf(FormInterface $form): string
+    {
+        $messages = [];
+        foreach ($form->getErrors(true) as $error) {
+            $origin = $error->getOrigin();
+            $messages[] = sprintf('%s: %s', $origin?->getName() ?? '(raíz)', $error->getMessage());
+        }
+
+        return [] === $messages
+            ? 'El formulario no es válido pero no declara ningún error.'
+            : implode(' | ', $messages);
     }
 
     /**
