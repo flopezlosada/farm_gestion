@@ -294,7 +294,21 @@ class AppSettings
             'dry' => true,
             'schedule' => ['freq' => 'daily', 'hour' => 9],
             'max_delay_hours' => 36,
-            'requires' => [self::EMAIL_ENABLED, self::EMAIL_PICKUP_REMINDER],
+            // SIN `requires` DE EMAIL, y no es un olvido. Esta tarea avisa por
+            // DOS canales (correo y push), y `requires` inhibe la tarea entera
+            // —ni siquiera --force lo salta—, así que apagar el correo del
+            // recordatorio dejaría también sin aviso a quien lo tiene activado
+            // en el móvil, que no ha pedido nada de eso.
+            //
+            // Lo que cada canal entrega se decide DENTRO, en su canal:
+            //   - el interruptor general (email.enabled) lo corta el
+            //     {@see \App\Mailer\KillSwitchMailer}, a nivel de transporte, así
+            //     que ningún correo sale aunque la tarea se ejecute;
+            //   - el ajuste propio del recordatorio lo comprueba el comando
+            //     antes de llamar al mailer.
+            // El contrato "apagado el envío, no se entrega" se mantiene entero;
+            // lo que deja de arrastrar es el otro canal.
+            'requires' => [],
             // Sin congelado no hay destinatarios: el recordatorio lee sólo
             // cestas ya materializadas (WeeklyBasketRepository::findPickedByDeliveryDateAndShares).
             'depends_on' => [self::CRON_GENERATE_WEEKLY_DELIVERY],
