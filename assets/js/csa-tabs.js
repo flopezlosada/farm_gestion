@@ -73,10 +73,51 @@
         }
     }
 
+    /*
+     * Un enlace a #panel desde FUERA de la barra de pestañas también abre esa
+     * pestaña. Sin esto, un "ver los avisos" puesto en cualquier otro punto de
+     * la página cambiaría el hash y no pasaría nada visible: el panel destino
+     * sigue oculto y el enlace parece roto.
+     *
+     * Delegado en document y no enganchado enlace a enlace: la página puede
+     * pintar esos enlaces dentro de bloques condicionales, y un listener por
+     * elemento obligaría a re-inicializar cada vez que cambia el DOM. Sólo actúa
+     * si el destino es de verdad un panel de pestaña; cualquier otro ancla sigue
+     * comportándose como un ancla normal.
+     */
+    function followExternalLink(event) {
+        var link = event.target.closest ? event.target.closest('a[href^="#"]') : null;
+        if (!link || link.classList.contains('csa-tabs__link')) {
+            return;
+        }
+
+        var id = (link.getAttribute('href') || '').replace('#', '');
+        if (!id) {
+            return;
+        }
+
+        var panel = document.getElementById(id);
+        if (!panel || !panel.classList.contains('csa-tabpanel')) {
+            return;
+        }
+
+        var root = panel.closest('[data-csa-tabs]');
+        var trigger = root && root.querySelector('.csa-tabs__link[href="#' + id + '"]');
+        if (!trigger) {
+            return;
+        }
+
+        event.preventDefault();
+        trigger.click();
+        panel.scrollIntoView({ block: 'nearest' });
+    }
+
     function boot() {
         Array.prototype.slice
             .call(document.querySelectorAll('[data-csa-tabs]'))
             .forEach(init);
+
+        document.addEventListener('click', followExternalLink);
     }
 
     if (document.readyState === 'loading') {

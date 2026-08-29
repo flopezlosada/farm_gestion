@@ -102,15 +102,22 @@ class VolunteerSignupRepository extends ServiceEntityRepository
      * y la pantalla lo interpreta como cero. Distinguir "cero" de "no consta" no
      * aporta nada aquí y ahorra recorrer los 246.
      *
+     * Los MINUTOS viajan en el mismo mapa aunque casi ninguna pantalla los
+     * pinte: son el criterio con el que la ficha de una tarea ordena a quién
+     * pedirle que venga —primero quien menos lleva— y sacarlos en otra consulta
+     * sería recorrer las mismas filas dos veces para agregarlas igual. `SUM`
+     * sobre una columna nullable devuelve null si no hay nada que sumar, de ahí
+     * el cast.
+     *
      * @param \DateTimeInterface $from inicio del periodo, inclusive
      * @param \DateTimeInterface $to   fin del periodo, inclusive
      *
-     * @return array<int, array{times: int, last: string}> id de socix => veces y última fecha
+     * @return array<int, array{times: int, last: string, minutes: int}> id de socix => veces, última fecha y minutos
      */
     public function participationByPartner(\DateTimeInterface $from, \DateTimeInterface $to): array
     {
         $rows = $this->createQueryBuilder('s')
-            ->select('IDENTITY(s.partner) AS pid, COUNT(s.id) AS times, MAX(o.startsAt) AS last')
+            ->select('IDENTITY(s.partner) AS pid, COUNT(s.id) AS times, MAX(o.startsAt) AS last, SUM(s.creditedMinutes) AS minutes')
             ->join('s.offer', 'o')
             ->where('s.attended = true')
             ->andWhere('o.startsAt BETWEEN :from AND :to')
@@ -125,6 +132,7 @@ class VolunteerSignupRepository extends ServiceEntityRepository
             $byPartner[(int) $row['pid']] = [
                 'times' => (int) $row['times'],
                 'last' => (string) $row['last'],
+                'minutes' => (int) $row['minutes'],
             ];
         }
 
