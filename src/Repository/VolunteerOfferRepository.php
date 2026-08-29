@@ -175,36 +175,136 @@ class VolunteerOfferRepository extends ServiceEntityRepository
     }
 
     /**
-     * Como {@see findUpcoming()}, pero priorizando lo que ocurre en el punto de
-     * recogida de quien mira: primero lo suyo, después el resto.
+     * Como {@see findUpcoming()}, pero con el orden del panel del socix: lo
+     * destacado por quien coordina, después lo que ocurre en su punto de recogida
+     * y después por fecha.
      *
-     * Es el orden del panel del socix y no es cosmético. Quien recoge su cesta
-     * en La Cabrera ya va a estar allí ese día, así que una tarea en su nodo es
-     * la de menor fricción posible; enterrarla bajo otras tres que le pillan a
-     * cuarenta kilómetros es perder la única que iba a aceptar.
+     * Ese orden no es cosmético. Quien recoge su cesta en La Cabrera ya va a
+     * estar allí ese día, así que una tarea en su nodo es la de menor fricción
+     * posible; enterrarla bajo otras tres que le pillan a cuarenta kilómetros es
+     * perder la única que iba a aceptar. Y por encima queda lo destacado, que es
+     * el único modo que tiene quien coordina de decir "esta semana, esto".
      *
      * @param \DateTimeInterface $from momento a partir del cual se consideran futuras
      * @param Node|null          $node el punto de recogida del socix, si tiene
      * @param int|null           $limit número máximo de ofertas; null para todas
      *
-     * @return list<VolunteerOffer> las ofertas abiertas, las del nodo primero
+     * @return list<VolunteerOffer> las ofertas abiertas: destacadas, del nodo, y por fecha
      */
     public function findUpcomingForNode(\DateTimeInterface $from, ?Node $node, ?int $limit = null): array
     {
         $offers = $this->findUpcoming($from);
 
-        if (null !== $node) {
-            // Ordenación estable en PHP y no en SQL: son unas pocas decenas de
-            // filas y un CASE WHEN en el ORDER BY obligaría a arrastrar el nodo
-            // como parámetro por toda la consulta para ganar nada medible.
-            usort($offers, static function (VolunteerOffer $a, VolunteerOffer $b) use ($node): int {
-                $mine = ($b->getNode() === $node ? 1 : 0) <=> ($a->getNode() === $node ? 1 : 0);
+        // Ordenación en PHP y no en SQL: son unas pocas decenas de filas y un
+        // CASE WHEN en el ORDER BY obligaría a arrastrar el nodo como parámetro
+        // por toda la consulta para ganar nada medible.
+        //
+        // TRES CRITERIOS, EN ESTE ORDEN. Primero lo que ha destacado quien
+        // coordina: es una decisión deliberada sobre una semana concreta y tiene
+        // que poder ganarle al orden automático, o destacar no sirve de nada.
+        // Después lo del punto de recogida propio, que es la fricción más baja
+        // que existe. Y por último la fecha. Como destacar es escaso por
+        // naturaleza, en la práctica esto son una o dos tareas arriba y el orden
+        // de siempre debajo.
+        usort($offers, static function (VolunteerOffer $a, VolunteerOffer $b) use ($node): int {
+            $destacada = ($b->isFeatured() ? 1 : 0) <=> ($a->isFeatured() ? 1 : 0);
+            if (0 !== $destacada) {
+                return $destacada;
+            }
 
-                return 0 !== $mine ? $mine : $a->getStartsAt() <=> $b->getStartsAt();
-            });
-        }
+            if (null !== $node) {
+                $mine = ($b->getNode() === $node ? 1 : 0) <=> ($a->getNode() === $node ? 1 : 0);
+                if (0 !== $mine) {
+                    return $mine;
+                }
+            }
+
+            return $a->getStartsAt() <=> $b->getStartsAt();
+        });
 
         return null === $limit ? $offers : \array_slice($offers, 0, $limit);
+    }
+
+    /**
+     * Lo que de verdad le hace falta a quien mira: como
+     * {@see findUpcomingForNode()}, pero quitando las tareas que ya están llenas
+     * y aquellas a las que esa persona ya se ha apuntado.
+     *
+     * Existe porque el filtro vivía suelto en el panel de voluntariado mientras
+     * la home del panel llamaba a findUpcomingForNode() a pelo, y acabó
+     * anunciando bajo el título «Hace falta una mano» una tarea con las dos
+     * plazas cubiertas ("faltan 0 personas") — y podía ofrecerle apuntarse a
+     * algo a lo que ya iba. Con una sola definición, las dos pantallas no pueden
+     * volver a discrepar.
+     *
+     * El límite se aplica DESPUÉS de filtrar, que es la otra mitad del fallo:
+     * pedir tres a la consulta y descartar dos después dejaba la home con una
+     * sola tarea habiendo más disponibles.
+     *
+     * @param \DateTimeInterface $from            momento a partir del cual se consideran futuras
+     * @param Node|null          $node            el punto de recogida de quien mira, si tiene
+     * @param list<int|null>     $excludeOfferIds ids de tareas a las que ya se apuntó
+     * @param int|null           $limit           número máximo de ofertas; null para todas
+     *
+     * @return list<VolunteerOffer> lo que sigue sin cubrir, las de su nodo primero
+     */
+    public function findStillNeededFor(
+        \DateTimeInterface $from,
+        ?Node $node,
+        array $excludeOfferIds = [],
+        ?int $limit = null,
+    ): array {
+        $needed = array_values(array_filter(
+            $this->findUpcomingForNode($from, $node),
+            static fn (VolunteerOffer $offer): bool => $offer->hasRoom()
+                && !\in_array($offer->getId(), $excludeOfferIds, true)
+        ));
+
+        return null === $limit ? $needed : \array_slice($needed, 0, $limit);
+    }
+
+    /**
+     * El montaje del reparto de un nodo para una entrega concreta: las tareas
+     * publicadas de una categoría marcada como {@see VolunteerCategory::isDeliveryPrep()},
+     * de ese nodo, que caen en la víspera o el mismo día de la recogida.
+     *
+     * Sirve para contarle a cada socix quién le prepara su cesta esa semana, y
+     * para avisarle cuando no se ha apuntado nadie. Que el disparador sea LA
+     * TAREA y no la falta de gente es lo que hace que el aviso no aparezca en
+     * los nodos donde el montaje todavía no se organiza así: sin tarea no hay
+     * tarjeta, ni de nombres ni de aviso. Hoy sólo Torremocha, y el día que otro
+     * punto empiece funciona solo, sin tocar esto.
+     *
+     * LA VENTANA ES DE DOS DÍAS porque las cestas se montan a veces la tarde
+     * anterior. Ensancharla es seguro justamente porque el filtro de categoría
+     * ya excluye cualquier otra tarea del nodo —limpiar el local, por ejemplo—,
+     * que es lo que rompería la lectura si esto se infiriera de "hay tarea en tu
+     * nodo ese día".
+     *
+     * @param Node               $node         el punto de recogida donde recoge esa semana
+     * @param \DateTimeInterface $deliveryDate el día en que recoge la cesta
+     *
+     * @return list<VolunteerOffer> el montaje de ese reparto, de lo más temprano en adelante
+     */
+    public function findDeliveryPrepFor(Node $node, \DateTimeInterface $deliveryDate): array
+    {
+        $day = \DateTimeImmutable::createFromInterface($deliveryDate);
+
+        return $this->createQueryBuilder('o')
+            ->where('o.status = :published')
+            ->andWhere('o.node = :node')
+            ->andWhere('o.startsAt BETWEEN :from AND :to')
+            ->andWhere($this->createQueryBuilder('x')->expr()->exists(
+                'SELECT 1 FROM App\Entity\VolunteerOffer op JOIN op.categories cp'
+                .' WHERE op = o AND cp.deliveryPrep = true'
+            ))
+            ->setParameter('published', VolunteerOffer::STATUS_PUBLISHED)
+            ->setParameter('node', $node)
+            ->setParameter('from', $day->modify('-1 day')->setTime(0, 0))
+            ->setParameter('to', $day->setTime(23, 59, 59))
+            ->orderBy('o.startsAt', 'ASC')
+            ->getQuery()
+            ->getResult();
     }
 
     /**

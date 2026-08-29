@@ -10,11 +10,13 @@
  # lado es un reproche sin salida, y eso lo que consigue es que la gente deje de
  # entrar en la web — y con ella se pierde el canal de la cesta.
  #
- # Espera: offers (lista corta) y my_node_id (o null).
+ # Espera: offers (lista corta), total (cuántas hay en realidad) y my_node_id.
  #}
 {% if offers is not empty %}
     {% embed '_components/csa_card.html.twig' with {
-        title: 'Hace falta una mano',
+        title: total|default(offers|length) > offers|length
+            ? 'Hace falta una mano · ' ~ total ~ ' tareas'
+            : 'Hace falta una mano',
         icon: 'fa-hand-paper-o',
         accent: 'ochre'
     } %}
@@ -39,7 +41,12 @@
                 {% endfor %}
             </ul>
 
-            <a href="{{ path('panel_volunteering') }}" class="csa-btn csa-btn--primary csa-btn--sm">Ver qué hace falta</a>
+            {# Con el número, el botón deja de ser "ver más" y pasa a decir cuánto
+             # queda fuera: es la diferencia entre curiosear y saber que faltan seis. #}
+            <a href="{{ path('panel_volunteering') }}" class="csa-btn csa-btn--primary csa-btn--sm">
+                {%- if total|default(0) > offers|length %}Ver las {{ total }} tareas
+                {%- else %}Ver qué hace falta{% endif -%}
+            </a>
         {% endblock %}
     {% endembed %}
 {% endif %}

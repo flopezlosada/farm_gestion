@@ -6,16 +6,62 @@
     <span class="csa-topbar__crumb-active">Inicio</span>
 {% endblock %}
 
-{# Reutiliza el aspecto de la ficha admin (tokens y componentes .prt-*),
- # extraído a un partial compartido. El panel del socix es la misma ficha en
- # SOLO LECTURA: sin las acciones de gestión (pausar, baja, cambiar cesta,
- # quitar familiares). El autoservicio va por sus propios enlaces. #}
+{# ============================================================
+ # La home del socix. Reutiliza el aspecto de la ficha admin (componentes
+ # .prt-*), pero NO su contenido ni su orden: la ficha admin contesta "qué datos
+ # tenemos de esta persona" y esta pantalla contesta "qué me toca ahora".
+ #
+ # El orden es el diseño:
+ #   1. Cuándo y dónde es mi próxima cesta — es a lo que se entra.
+ #   2. Qué llevo en ella.
+ #   3. En qué puedo echar una mano.
+ #   4. Mi familia.
+ #   5. Mis datos, plegados: DNI, dirección y fecha de alta son papeleo que se
+ #      mira una vez al año, y ocupaban media pantalla con el mismo peso que la
+ #      cesta.
+ #
+ # El nodo y el grupo salían CUATRO veces en la misma pantalla (banner ×2 y
+ # datos ×2). Ahora se dicen una vez, arriba, y el grupo sólo si no se llama
+ # igual que el punto.
+ # ============================================================ #}
 {% block more_css %}
     {{ parent() }}
     {% include '_components/partner_card_styles.html.twig' %}
     {% if is_granted('FEATURE_VOLUNTEERING') %}
         {% include '_components/volunteering_styles.html.twig' %}
     {% endif %}
+    <style>
+        /* La franja de la próxima cesta manda en la pantalla: es el único dato
+           que cambia cada semana. Hereda el bloque .prt-pickup (mismo lenguaje
+           que la ficha admin) y sólo sube el tamaño de la fecha. */
+        .prt-pickup__when {
+            font-family: 'Fraunces', serif; font-weight: 600; font-size: 19px;
+            letter-spacing: -0.01em; color: var(--prt-ink); line-height: 1.2;
+        }
+        .prt-pickup__soon {
+            display: inline-block; margin-left: 8px; padding: 2px 8px;
+            border-radius: 999px; background: var(--prt-sage-d); color: #fff;
+            font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em;
+            text-transform: uppercase; vertical-align: 2px;
+        }
+
+        /* Papeleo: se abre cuando hace falta y no antes. */
+        .prt-fold { margin-top: 18px; }
+        .prt-fold > summary {
+            display: inline-flex; gap: 8px; align-items: center;
+            font-size: 13px; color: var(--prt-ink-faint);
+            cursor: pointer; list-style: none;
+        }
+        .prt-fold > summary::-webkit-details-marker { display: none; }
+        .prt-fold > summary::before {
+            content: ''; width: 6px; height: 6px;
+            border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+            transform: rotate(-45deg); transition: transform .15s ease;
+        }
+        .prt-fold[open] > summary::before { transform: rotate(45deg); }
+        .prt-fold > summary:hover { color: var(--prt-ink); }
+        .prt-fold__body { margin-top: 12px; }
+    </style>
 {% endblock %}
 
 {% block csa_main %}
@@ -34,13 +80,23 @@
     {% set bs_id = active_share ? active_share.basketShare.id : null %}
     {% set bs_label = active_share ? active_share.basketShare.name : null %}
 
+    {# El punto de recogida de la próxima entrega: el de siempre, salvo que esa
+     # semana la haya trasladado a otro (el proyector lo marca en el slot). #}
+    {% set home_place = group and group.node ? group.node.name : null %}
+    {% set next_place = next_delivery ? (next_delivery.pickup_place|default(home_place)) : home_place %}
+    {# El grupo sólo aporta cuando NO se llama igual que el punto: en la mayoría
+     # de los sitios coinciden y repetirlo era ruido. #}
+    {% set show_group = group and (home_place is null or group.name != home_place) %}
+
     <div class="prt">
 
-        {# ============ HERO ============ #}
+        {# ============ HERO ============
+         # El nombre, en capital y no a gritos: en la BBDD está en mayúsculas y
+         # aquí se lee su nombre, no una fila de un listado. #}
         <header class="prt-hero">
             <span class="prt-avatar prt-avatar--{{ avatar_tone }}" aria-hidden="true">{{ initials }}</span>
             <div>
-                <h1 class="prt-hero__title">{{ partner.name }} {{ partner.surname }}</h1>
+                <h1 class="prt-hero__title" style="text-transform: capitalize;">{{ (partner.name ~ ' ' ~ partner.surname)|lower }}</h1>
                 <div class="prt-hero__meta">
                     <span class="prt-chip prt-chip--{{ sc.cls }}"><span class="dot"></span>{{ sc.label }}</span>
                     {% if active_share %}
@@ -59,39 +115,65 @@
             </div>
         </header>
 
-        {# ============ PICKUP CARD (nodo + grupo) ============ #}
-        {% if group %}
-            {% set pickup_palette = ['sage', 'ochre', 'terra'] %}
-            {% set node_id = group.node ? group.node.id : 0 %}
-            {% set pickup_tone = pickup_palette[node_id % 3] %}
-            <div class="prt-pickup prt-pickup--{{ pickup_tone }}">
+        {# ============ 1. LA PRÓXIMA CESTA ============
+         # Lo que se venía a mirar. Antes no estaba en la pantalla: había que
+         # abrir el calendario para saber qué día tocaba. #}
+        {% if next_delivery %}
+            {% set is_today = next_delivery.date|date('Y-m-d') == 'now'|date('Y-m-d') %}
+            {% set is_tomorrow = next_delivery.date|date('Y-m-d') == 'tomorrow'|date('Y-m-d') %}
+            <div class="prt-pickup prt-pickup--sage">
+                <span class="prt-pickup__icon" aria-hidden="true"><i class="fa fa-shopping-basket"></i></span>
+                <div class="prt-pickup__body">
+                    <div class="prt-pickup__label">Tu próxima cesta</div>
+                    <div class="prt-pickup__when">
+                        {{ next_delivery.date|format_date(pattern="EEEE d 'de' MMMM", locale='es')|capitalize }}
+                        {%- if is_today %}<span class="prt-pickup__soon">Es hoy</span>
+                        {%- elseif is_tomorrow %}<span class="prt-pickup__soon">Es mañana</span>{% endif %}
+                    </div>
+                </div>
+                {% if next_place %}
+                    <span class="prt-pickup__sep"></span>
+                    <div class="prt-pickup__body">
+                        <div class="prt-pickup__label">{{ next_delivery.relocated|default(false) ? 'Esa semana, en' : 'La recoges en' }}</div>
+                        <div class="prt-pickup__group">
+                            {{ next_place }}{% if show_group and not next_delivery.relocated|default(false) %} · {{ group.name }}{% endif %}
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        {% elseif group %}
+            {# Sin entregas por delante (sin cesta activa, o pausadx): al menos,
+             # dónde recoge cuando la tenga. #}
+            <div class="prt-pickup prt-pickup--ochre">
                 <span class="prt-pickup__icon" aria-hidden="true"><i class="fa fa-map-marker"></i></span>
                 <div class="prt-pickup__body">
                     <div class="prt-pickup__label">Recoges en</div>
-                    <div class="prt-pickup__node">{% if group.node %}{{ group.node.name }}{% else %}Sin nodo asignado{% endif %}</div>
+                    <div class="prt-pickup__node">{{ home_place ?: 'Sin punto asignado' }}</div>
                 </div>
-                <span class="prt-pickup__sep"></span>
-                <div class="prt-pickup__body">
-                    <div class="prt-pickup__label">Grupo</div>
-                    <div class="prt-pickup__group">{{ group.name }}</div>
-                </div>
+                {% if show_group %}
+                    <span class="prt-pickup__sep"></span>
+                    <div class="prt-pickup__body">
+                        <div class="prt-pickup__label">Grupo</div>
+                        <div class="prt-pickup__group">{{ group.name }}</div>
+                    </div>
+                {% endif %}
             </div>
         {% endif %}
 
-        {# ============ VOLUNTARIADO: lo que hace falta ============ #}
-        {# Va arriba, entre los datos propios y las acciones, porque el objetivo
-         # del módulo es que se vea al entrar sin buscarlo. Lo que se enseña es la
-         # necesidad concreta y no el contador propio: ver "faltan 2 personas el
-         # jueves en tu punto de recogida" mueve; ver "llevas 0 horas" sólo
-         # incomoda, y sin nada que pulsar al lado, aleja. #}
-        {% if is_granted('FEATURE_VOLUNTEERING') %}
-            {% include '_components/volunteering_teaser.html.twig' with {
-                offers: volunteering_offers|default([]),
-                my_node_id: group and group.node ? group.node.id : null
+        {# Quién le monta la cesta esa semana en su punto, o el aviso de que no se
+         # ha apuntado nadie. Pegado a la franja porque habla de ESA entrega. Sólo
+         # se pinta donde el montaje se organiza como tarea de voluntariado. #}
+        {% if next_delivery and basket_prep|default([]) is not empty %}
+            {% include '_components/basket_prep_card.html.twig' with {
+                offers: basket_prep,
+                partner: partner,
+                place: next_place,
+                delivery_date: next_delivery.date
             } only %}
         {% endif %}
 
-        {# ============ ACCIONES DEL SOCIX (no las de gestión) ============ #}
+        {# Acciones de la recogida, pegadas a la recogida. "Editar mis datos" ya
+         # no vive aquí: se ha ido con los datos, al final. #}
         <div class="prt-actionbar">
             <a href="{{ path('panel_calendar') }}" class="prt-btn prt-btn--primary">
                 <i class="fa fa-calendar"></i> Mi calendario de recogida
@@ -105,62 +187,161 @@
                     <i class="fa fa-exchange"></i> Recoger en otro nodo
                 </button>
             {% endif %}
-            <a href="{{ path('panel_profile') }}" class="prt-btn">
-                <i class="fa fa-pencil"></i> Editar mis datos
-            </a>
         </div>
 
-        {# ============ MODAL: RECOGER EN OTRO NODO (traslado puntual) ============ #}
-        {% if active_share and relocate_weeks is not empty and relocate_groups is not empty %}
-            <dialog id="panel-relocate-dialog" class="csa-modal csa-modal--info" aria-labelledby="panel-relocate-title">
-                <form method="post" action="{{ path('panel_basket_change_group') }}" data-csa-dropdowns="1">
-                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_basket_change_group') }}">
-                    <button class="csa-modal__close" type="button" aria-label="Cerrar" onclick="this.closest('dialog').close()">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l14 14M19 5L5 19"/></svg>
-                    </button>
-                    <header class="csa-modal__header">
-                        <div class="csa-modal__heading">
-                            <span class="csa-modal__eyebrow">Solo esa semana</span>
-                            <h2 class="csa-modal__title" id="panel-relocate-title">Recoger en otro nodo</h2>
-                        </div>
-                    </header>
-                    <div class="csa-modal__body">
-                        <p>Tu punto de recogida habitual es <strong>{% if group and group.node %}{{ group.node.name }}{% else %}el de siempre{% endif %}</strong>. Si una semana concreta te viene mejor recogerla en otro sitio, elígelo aquí. Solo cambia esa semana.</p>
-                        <label class="csa-field">
-                            <span class="csa-field__label">¿Qué semana?</span>
-                            <select name="basket_id" required>
-                                {% for w in relocate_weeks %}
-                                    <option value="{{ w.basketId }}">{{ w.date|format_date('full', locale='es')|capitalize }}</option>
-                                {% endfor %}
-                            </select>
-                        </label>
-                        <label class="csa-field">
-                            <span class="csa-field__label">¿Dónde la recoges?</span>
-                            <select name="group_id" required>
-                                {% for g in relocate_groups %}
-                                    <option value="{{ g.id }}">{{ g.label }}</option>
-                                {% endfor %}
-                            </select>
-                        </label>
+        {# ============ 2. QUÉ LLEVO ============ #}
+        {% if active_share %}
+            {# En una familia la cesta cuelga del principal: si no es la suya
+             # propia, se dice de quién es en vez de negársela. #}
+            {% set owner = basket_owner|default(partner) %}
+            {% set is_family_basket = owner.id != partner.id %}
+            <section class="prt-card prt-card--terra">
+                <header class="prt-card__head">
+                    <h2 class="prt-card__title"><span class="accent"></span>{{ is_family_basket ? 'La cesta de casa' : 'Mi cesta' }}</h2>
+                    {% if active_share.startDate %}
+                        <span class="prt-card__head-meta">desde {{ active_share.startDate|date('d/m/Y') }}</span>
+                    {% endif %}
+                </header>
+                <div class="prt-card__body">
+
+                    <div class="prt-basket__chips">
+                        <span class="prt-chip prt-chip--mod-{{ bs_id }}">
+                            {% if bs_id != 4 %}<span class="dot"></span>{% endif %}
+                            {{ bs_label }}
+                        </span>
+                        {% if bs_id == 3 and active_share.dayMonthOrder %}
+                            <span class="prt-chip prt-chip--mute">{% if active_share.dayMonthOrder == -1 %}última semana{% else %}{{ active_share.dayMonthOrder }}º viernes{% endif %}</span>
+                        {% endif %}
+                        {% if active_share.vegetablesBasketAmount and active_share.vegetablesBasketAmount > 1 %}
+                            <span class="prt-chip prt-chip--mute">×{{ active_share.vegetablesBasketAmount }} cestas</span>
+                        {% endif %}
                     </div>
-                    <footer class="csa-modal__footer">
-                        <button type="button" class="csa-modal__btn csa-modal__btn--ghost" onclick="this.closest('dialog').close()">Cancelar</button>
-                        <button type="submit" class="csa-modal__btn csa-modal__btn--primary">Trasladar</button>
-                    </footer>
-                </form>
-            </dialog>
+
+                    <div class="prt-mini">
+                        <div class="prt-mini__cell">
+                            <div class="prt-mini__label">Huevos</div>
+                            {% if active_share.eggAmount %}
+                                <div class="prt-mini__value prt-mini__value--ochre">
+                                    {{ active_share.eggAmount.amount|default(active_share.eggAmount) }}
+                                    {% if active_share.eggPeriod %}<small>· {{ active_share.eggPeriod.name|default(active_share.eggPeriod) }}</small>{% endif %}
+                                </div>
+                            {% else %}
+                                <div class="prt-mini__value prt-mini__value--muted">Sin huevos</div>
+                            {% endif %}
+                        </div>
+                        <div class="prt-mini__cell">
+                            <div class="prt-mini__label">Precio mensual</div>
+                            <div class="prt-mini__value prt-mini__value--sage">
+                                {% if active_share.eggAmount and active_share.eggMonthPrice %}
+                                    {{ (active_share.monthPrice + active_share.eggMonthPrice)|number_format(2, ',', '.') }}<small>€</small>
+                                {% elseif active_share.monthPrice %}
+                                    {{ active_share.monthPrice|number_format(2, ',', '.') }}<small>€</small>
+                                {% else %}
+                                    <span class="prt-mini__value--muted">—</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {# La fecha de fin sólo se enseña si existe: "Sin fecha" en una
+                         # caja propia era una caja entera para decir que no pasa nada. #}
+                        {% if active_share.endDate %}
+                            <div class="prt-mini__cell">
+                                <div class="prt-mini__label">Hasta</div>
+                                <div class="prt-mini__value">{{ active_share.endDate|date('d/m/Y') }}</div>
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    {% if is_family_basket %}
+                        <div class="prt-share">
+                            <i class="fa fa-home"></i>
+                            <span>Es la cesta de {{ owner.name|lower|capitalize }} {{ owner.surname|lower|capitalize }}, de tu familia. La recogéis juntxs.</span>
+                        </div>
+                    {% endif %}
+
+                    {% if owner.sharePartner and bs_id in [4, 6, 7] %}
+                        <div class="prt-share">
+                            <i class="fa fa-handshake-o"></i>
+                            <span>Compartes cesta con {{ owner.sharePartner.name|lower|capitalize }} {{ owner.sharePartner.surname|lower|capitalize }}</span>
+                        </div>
+                    {% endif %}
+
+                </div>
+            </section>
+        {% else %}
+            <section class="prt-card prt-card--terra">
+                <header class="prt-card__head">
+                    <h2 class="prt-card__title"><span class="accent"></span>Mi cesta</h2>
+                </header>
+                <div class="prt-card__body">
+                    <p class="prt-family__intro">No tienes una cesta activa registrada. Si crees que es un error, escribe a <a href="mailto:info@csavegadejarama.org">info@csavegadejarama.org</a>.</p>
+                </div>
+            </section>
         {% endif %}
 
-        {# ============ CUERPO 2 COLUMNAS ============ #}
-        <div class="prt-cols">
+        {# ============ 3. ECHAR UNA MANO ============
+         # Después de lo suyo y no en medio: antes partía la pantalla entre su
+         # punto de recogida y sus datos, y se leía como parte de su ficha. Sigue
+         # arriba —hay que estar en el camino, no al lado— pero como lo que es,
+         # una petición de la asociación. #}
+        {% if is_granted('FEATURE_VOLUNTEERING') %}
+            {# Lo que llevas hecho, encima de lo que hace falta. Nunca al revés:
+             # el contador arriba y solo es un reproche, con las tareas debajo es
+             # una petición que se puede atender de un clic.
+             #
+             # A quien aún no ha empezado sólo se le pinta si HAY algo que ofrecer:
+             # "todavía no has echado una mano" sin una sola tarea al lado es
+             # exactamente el reproche sin salida que se quiere evitar. #}
+            {% if my_contribution and (my_contribution.hasStarted or volunteering_offers|default([]) is not empty) %}
+                {% include '_components/volunteering_gauge.html.twig' with {
+                    contribution: my_contribution
+                } only %}
+            {% endif %}
 
-            {# ----- COL IZQUIERDA: Datos + Familia ----- #}
-            <div>
+            {% include '_components/volunteering_teaser.html.twig' with {
+                offers: volunteering_offers|default([]),
+                total: volunteering_total|default(0),
+                my_node_id: group and group.node ? group.node.id : null
+            } only %}
+        {% endif %}
 
-                {# Datos personales (solo lectura) #}
+        {# ============ 4. MI FAMILIA ============
+         # Sólo cuando hay algo que contar. A quien no tiene familia vinculada le
+         # salía una tarjeta para decirle que no tiene familia vinculada. #}
+        {% if partner.parent is not null or partner.relatives|length > 0 %}
+            <section class="prt-card prt-card--ochre">
+                <header class="prt-card__head">
+                    <h2 class="prt-card__title"><span class="accent"></span>Mi familia</h2>
+                    {% if partner.parent is null and partner.relatives|length > 0 %}
+                        <span class="prt-card__head-meta">{{ partner.relatives|length }} vinculadx{{ partner.relatives|length == 1 ? '' : 's' }}</span>
+                    {% endif %}
+                </header>
+                <div class="prt-card__body">
+                    {% if partner.parent is null %}
+                        <ul class="prt-relatives">
+                            {% for relative in partner.relatives %}
+                                <li class="prt-relative">
+                                    <span class="prt-relative__dot"><i class="fa fa-user"></i></span>
+                                    <span class="prt-relative__name">{{ relative.name }} {{ relative.surname }}</span>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="prt-family__intro">
+                            Estás vinculadx a la familia de <strong>{{ partner.parent.name }} {{ partner.parent.surname }}</strong>.
+                        </p>
+                    {% endif %}
+                </div>
+            </section>
+        {% endif %}
+
+        {# ============ 5. EL PAPELEO ============ #}
+        <details class="prt-fold">
+            <summary>Mis datos personales</summary>
+            <div class="prt-fold__body">
                 <section class="prt-card">
                     <header class="prt-card__head">
                         <h2 class="prt-card__title"><span class="accent"></span>Mis datos</h2>
+                        <a href="{{ path('panel_profile') }}" class="prt-btn"><i class="fa fa-pencil"></i> Editar</a>
                     </header>
                     <div class="prt-card__body">
                         <dl class="prt-defs">
@@ -204,149 +385,52 @@
                                     <dd class="prt-defs__value">{{ partner.sharePayment.name }}</dd>
                                 </div>
                             {% endif %}
-                            {% if group and group.node %}
-                                <div class="prt-defs__row">
-                                    <dt class="prt-defs__label">Nodo de recogida</dt>
-                                    <dd class="prt-defs__value">{{ group.node.name }}</dd>
-                                </div>
-                            {% endif %}
-                            {% if group %}
-                                <div class="prt-defs__row">
-                                    <dt class="prt-defs__label">Grupo de recogida</dt>
-                                    <dd class="prt-defs__value">{{ group.name }}</dd>
-                                </div>
-                            {% endif %}
                         </dl>
                     </div>
                 </section>
+            </div>
+        </details>
 
-                {# Familia (solo lectura: sin quitar relaciones) #}
-                <section class="prt-card prt-card--ochre">
-                    <header class="prt-card__head">
-                        <h2 class="prt-card__title"><span class="accent"></span>Mi familia</h2>
-                        {% if partner.parent is null and partner.relatives|length > 0 %}
-                            <span class="prt-card__head-meta">{{ partner.relatives|length }} vinculadx{{ partner.relatives|length == 1 ? '' : 's' }}</span>
-                        {% endif %}
+        {# ============ MODAL: RECOGER EN OTRO NODO (traslado puntual) ============ #}
+        {% if active_share and relocate_weeks is not empty and relocate_groups is not empty %}
+            <dialog id="panel-relocate-dialog" class="csa-modal csa-modal--info" aria-labelledby="panel-relocate-title">
+                <form method="post" action="{{ path('panel_basket_change_group') }}" data-csa-dropdowns="1">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_basket_change_group') }}">
+                    <button class="csa-modal__close" type="button" aria-label="Cerrar" onclick="this.closest('dialog').close()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l14 14M19 5L5 19"/></svg>
+                    </button>
+                    <header class="csa-modal__header">
+                        <div class="csa-modal__heading">
+                            <span class="csa-modal__eyebrow">Solo esa semana</span>
+                            <h2 class="csa-modal__title" id="panel-relocate-title">Recoger en otro nodo</h2>
+                        </div>
                     </header>
-                    <div class="prt-card__body">
-                        {% if partner.parent is null %}
-                            <p class="prt-family__intro">
-                                Eres familiar principal{% if partner.relatives|length == 0 %}, sin familiares vinculados{% endif %}.
-                            </p>
-                            {% if partner.relatives|length > 0 %}
-                                <ul class="prt-relatives">
-                                    {% for relative in partner.relatives %}
-                                        <li class="prt-relative">
-                                            <span class="prt-relative__dot"><i class="fa fa-user"></i></span>
-                                            <span class="prt-relative__name">{{ relative.name }} {{ relative.surname }}</span>
-                                        </li>
-                                    {% endfor %}
-                                </ul>
-                            {% endif %}
-                        {% else %}
-                            <p class="prt-family__intro">
-                                Estás vinculadx a la familia de <strong>{{ partner.parent.name }} {{ partner.parent.surname }}</strong>.
-                            </p>
-                        {% endif %}
-
-                        {# Compartidas: semanal (4), quincenal (6) y mensual (7). #}
-                        {% if active_share and bs_id in [4, 6, 7] and partner.sharePartner %}
-                            <div class="prt-share">
-                                <i class="fa fa-handshake-o"></i>
-                                <span><strong>Compartes cesta con</strong> {{ partner.sharePartner.name }} {{ partner.sharePartner.surname }}</span>
-                            </div>
-                        {% endif %}
+                    <div class="csa-modal__body">
+                        <p>Tu punto de recogida habitual es <strong>{{ home_place ?: 'el de siempre' }}</strong>. Si una semana concreta te viene mejor recogerla en otro sitio, elígelo aquí. Solo cambia esa semana.</p>
+                        <label class="csa-field">
+                            <span class="csa-field__label">¿Qué semana?</span>
+                            <select name="basket_id" required>
+                                {% for w in relocate_weeks %}
+                                    <option value="{{ w.basketId }}">{{ w.date|format_date('full', locale='es')|capitalize }}</option>
+                                {% endfor %}
+                            </select>
+                        </label>
+                        <label class="csa-field">
+                            <span class="csa-field__label">¿Dónde la recoges?</span>
+                            <select name="group_id" required>
+                                {% for g in relocate_groups %}
+                                    <option value="{{ g.id }}">{{ g.label }}</option>
+                                {% endfor %}
+                            </select>
+                        </label>
                     </div>
-                </section>
-
-            </div>
-
-            {# ----- COL DERECHA: Cesta ----- #}
-            <div>
-
-                {# Cesta actual (solo lectura; gestionar va a /panel/cesta) #}
-                {% if active_share %}
-                    <section class="prt-card prt-card--terra">
-                        <header class="prt-card__head">
-                            <h2 class="prt-card__title"><span class="accent"></span>Mi cesta</h2>
-                            {% if active_share.startDate %}
-                                <span class="prt-card__head-meta">desde {{ active_share.startDate|date('d/m/Y') }}</span>
-                            {% endif %}
-                        </header>
-                        <div class="prt-card__body">
-
-                            <div class="prt-basket__chips">
-                                <span class="prt-chip prt-chip--mod-{{ bs_id }}">
-                                    {% if bs_id != 4 %}<span class="dot"></span>{% endif %}
-                                    {{ bs_label }}
-                                </span>
-                                {% if bs_id == 3 and active_share.dayMonthOrder %}
-                                    <span class="prt-chip prt-chip--mute">{% if active_share.dayMonthOrder == -1 %}última semana{% else %}{{ active_share.dayMonthOrder }}º viernes{% endif %}</span>
-                                {% endif %}
-                                {% if active_share.vegetablesBasketAmount and active_share.vegetablesBasketAmount > 1 %}
-                                    <span class="prt-chip prt-chip--mute">×{{ active_share.vegetablesBasketAmount }} cestas</span>
-                                {% endif %}
-                            </div>
-
-                            <div class="prt-mini">
-                                <div class="prt-mini__cell">
-                                    <div class="prt-mini__label">Huevos</div>
-                                    {% if active_share.eggAmount %}
-                                        <div class="prt-mini__value prt-mini__value--ochre">
-                                            {{ active_share.eggAmount.amount|default(active_share.eggAmount) }}
-                                            {% if active_share.eggPeriod %}<small>· {{ active_share.eggPeriod.name|default(active_share.eggPeriod) }}</small>{% endif %}
-                                        </div>
-                                    {% else %}
-                                        <div class="prt-mini__value prt-mini__value--muted">Sin huevos</div>
-                                    {% endif %}
-                                </div>
-                                <div class="prt-mini__cell">
-                                    <div class="prt-mini__label">Precio mensual</div>
-                                    <div class="prt-mini__value prt-mini__value--sage">
-                                        {% if active_share.eggAmount and active_share.eggMonthPrice %}
-                                            {{ (active_share.monthPrice + active_share.eggMonthPrice)|number_format(2, ',', '.') }}<small>€</small>
-                                        {% elseif active_share.monthPrice %}
-                                            {{ active_share.monthPrice|number_format(2, ',', '.') }}<small>€</small>
-                                        {% else %}
-                                            <span class="prt-mini__value--muted">—</span>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                                <div class="prt-mini__cell">
-                                    <div class="prt-mini__label">Inicio</div>
-                                    <div class="prt-mini__value">{{ active_share.startDate ? active_share.startDate|date('d/m/Y') : '—' }}</div>
-                                </div>
-                                <div class="prt-mini__cell">
-                                    <div class="prt-mini__label">Fin</div>
-                                    {% if active_share.endDate %}
-                                        <div class="prt-mini__value">{{ active_share.endDate|date('d/m/Y') }}</div>
-                                    {% else %}
-                                        <div class="prt-mini__value prt-mini__value--muted">Sin fecha</div>
-                                    {% endif %}
-                                </div>
-                            </div>
-
-                        </div>
-                        <footer class="prt-card__foot">
-                            <a href="{{ path('panel_calendar') }}" class="prt-btn">
-                                <i class="fa fa-calendar"></i> Ver mi calendario de recogida
-                            </a>
-                        </footer>
-                    </section>
-                {% else %}
-                    <section class="prt-card prt-card--terra">
-                        <header class="prt-card__head">
-                            <h2 class="prt-card__title"><span class="accent"></span>Mi cesta</h2>
-                        </header>
-                        <div class="prt-card__body">
-                            <p class="prt-family__intro">No tienes una cesta activa registrada. Si crees que es un error, escribe a <a href="mailto:info@csavegadejarama.org">info@csavegadejarama.org</a>.</p>
-                        </div>
-                    </section>
-                {% endif %}
-
-            </div>
-
-        </div>
+                    <footer class="csa-modal__footer">
+                        <button type="button" class="csa-modal__btn csa-modal__btn--ghost" onclick="this.closest('dialog').close()">Cancelar</button>
+                        <button type="submit" class="csa-modal__btn csa-modal__btn--primary">Trasladar</button>
+                    </footer>
+                </form>
+            </dialog>
+        {% endif %}
 
     </div>
 

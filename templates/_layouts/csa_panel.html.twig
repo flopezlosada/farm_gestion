@@ -9,6 +9,7 @@
 {% block more_css %}
     {{ parent() }}
     {{ encore_entry_link_tags('app') }}
+    {% include '_components/panel_shell_styles.html.twig' %}
 {% endblock %}
 
 {% block more_js %}
@@ -18,11 +19,54 @@
 
 {% block body %}
 <div class="csa-app">
-    <div class="csa-shell">
+    <div class="csa-shell csa-shell--tabbed">
 
         {% set route = app.request.attributes.get('_route') %}
 
-        {# ---------- SIDEBAR ---------- #}
+        {# ---------- REGISTRO DE ÁREAS ----------
+         # UNA sola definición para los dos menús: el sidebar del escritorio y la
+         # barra de abajo del móvil. Antes la navegación era una lista de enlaces
+         # escrita a mano; con dos menús, escribirla dos veces significa que un día
+         # se añade un área a uno y no al otro, y nadie se entera hasta que un socix
+         # dice que en el móvil no le sale.
+         #
+         # `tab` marca lo que baja a la barra del móvil, donde sólo caben tres sin
+         # que los objetivos bajen de los 44px que necesita un pulgar. El resto vive
+         # en «Más», que es una pantalla completa y no un menú diminuto.
+         #
+         # Para añadir un área —Grupo de consumo, Actividades…— se añade aquí una
+         # entrada y aparece en los dos sitios. Con `soon: true` se enseña atenuada
+         # y sin enlace, para anunciar lo que viene sin prometer una fecha. #}
+        {% set panel_areas = [
+            { label: 'Inicio', short: 'Inicio', icon: 'fa-home',
+              url: path('panel'), active: route == 'panel', tab: true },
+            { label: 'Mi calendario', short: 'Calendario', icon: 'fa-calendar',
+              url: path('panel_calendar'), active: route starts with 'panel_calendar', tab: true,
+              hint: 'Cuándo y dónde recoges' },
+        ]
+        |merge(is_granted('FEATURE_VOLUNTEERING') ? [
+            { label: 'Voluntariado', short: 'Echar mano', icon: 'fa-hand-paper-o',
+              url: path('panel_volunteering'), active: route starts with 'panel_volunteering', tab: true,
+              hint: 'Lo que hace falta y lo que llevas hecho' },
+        ] : [])
+        |merge(is_granted('FEATURE_SURVEYS') ? [
+            { label: 'Encuestas', short: 'Encuestas', icon: 'fa-check-square-o',
+              url: path('panel_survey_index'), active: route starts with 'panel_survey', tab: false,
+              hint: 'Lo que la asociación te pregunta' },
+        ] : [])
+        |merge([
+            { label: 'Mi perfil', short: 'Perfil', icon: 'fa-user',
+              url: path('panel_profile'), active: route starts with 'panel_profile', tab: false,
+              hint: 'Tus datos y tu contraseña' },
+        ]) %}
+
+        {# En el móvil sólo bajan las tres primeras marcadas como `tab`; lo demás va
+         # a «Más» junto a lo que nunca baja. Así, añadir un área nueva no rompe la
+         # barra: se coloca sola en el sitio que le toque. #}
+        {% set tab_areas = panel_areas|filter(a => a.tab|default(false))|slice(0, 3) %}
+        {% set more_areas = panel_areas|filter(a => a not in tab_areas) %}
+
+        {# ---------- SIDEBAR (escritorio) ---------- #}
         <aside class="csa-sidebar" id="csa-sidebar">
             <div class="csa-sidebar__brand">
                 <div class="csa-sidebar__brand-name">CSA Vega de Jarama</div>
@@ -31,28 +75,22 @@
 
             <nav class="csa-sidebar__nav">
                 <div class="csa-sidebar__group">Mi área</div>
-                {{ _self.nav_link('Inicio', path('panel'), 'fa-home', route == 'panel') }}
-                {{ _self.nav_link('Mi perfil', path('panel_profile'), 'fa-user', route starts with 'panel_profile') }}
-                {{ _self.nav_link('Mi calendario', path('panel_calendar'), 'fa-calendar', route starts with 'panel_calendar') }}
                 {# "Mi familia" (panel_family) fuera del menú: la página es aún un placeholder
                    "en construcción". Ruta y plantilla siguen vivas para retomarla más adelante. #}
-                {% if is_granted('FEATURE_SURVEYS') %}
-                    {{ _self.nav_link('Encuestas', path('panel_survey_index'), 'fa-check-square-o', route starts with 'panel_survey') }}
-                {% endif %}
-                {% if is_granted('FEATURE_VOLUNTEERING') %}
-                    {{ _self.nav_link('Voluntariado', path('panel_volunteering'), 'fa-hand-paper-o', route starts with 'panel_volunteering') }}
-                {% endif %}
+                {% for area in panel_areas %}
+                    {{ _self.nav_link(area.label, area.url, area.icon, area.active) }}
+                {% endfor %}
             </nav>
         </aside>
 
         {# ---------- MAIN ---------- #}
         <div class="csa-main">
             <header class="csa-topbar">
-                <button type="button" class="csa-btn csa-btn--ghost csa-btn--sm csa-sidebar-toggle"
-                        aria-label="Abrir navegación" aria-controls="csa-sidebar" aria-expanded="false">
-                    <i class="fa fa-bars"></i>
-                </button>
-
+                {# Sin hamburguesa: en móvil la navegación está abajo, en la barra de
+                 # pestañas, al alcance del pulgar. Un menú escondido detrás de tres
+                 # rayas arriba a la izquierda es el sitio donde peor se llega y donde
+                 # menos se busca. En escritorio el sidebar está siempre abierto, así
+                 # que tampoco hacía falta allí. #}
                 <nav class="csa-topbar__crumbs" aria-label="Migas de pan">
                     {% block csa_crumbs %}
                         <a href="{{ path('panel') }}">Inicio</a>
@@ -101,7 +139,77 @@
 
     </div>
 
-    {% include '_components/sidebar_drawer.html.twig' %}
+    {# ---------- BARRA DE PESTAÑAS (móvil) ----------
+     # Fija abajo, generada del mismo registro que el sidebar. Sólo se ve por
+     # debajo de 640px; en escritorio manda el sidebar. #}
+    <nav class="csa-tabbar" aria-label="Secciones de mi panel">
+        {% for area in tab_areas %}
+            <a href="{{ area.url }}" class="csa-tabbar__item{% if area.active %} csa-tabbar__item--active{% endif %}"
+               {% if area.active %}aria-current="page"{% endif %}>
+                <i class="fa {{ area.icon }}" aria-hidden="true"></i>
+                <span>{{ area.short }}</span>
+            </a>
+        {% endfor %}
+        <button type="button" class="csa-tabbar__item" data-tabbar-more
+                aria-controls="csa-more-sheet" aria-expanded="false">
+            <i class="fa fa-ellipsis-h" aria-hidden="true"></i>
+            <span>Más</span>
+        </button>
+    </nav>
+
+    {# ---------- HOJA «MÁS» ----------
+     # Pantalla completa por abajo y no un menú diminuto: cada área lleva su
+     # explicación, que es lo que hace falta cuando el nombre no basta ("Encuestas"
+     # no dice qué te van a preguntar). Cierra sola al tocar fuera o con Escape. #}
+    <div class="csa-sheet" id="csa-more-sheet" hidden>
+        <div class="csa-sheet__scrim" data-tabbar-close></div>
+        <div class="csa-sheet__panel" role="dialog" aria-modal="true" aria-labelledby="csa-more-title">
+            <div class="csa-sheet__grip" aria-hidden="true"></div>
+            <h2 class="csa-sheet__title" id="csa-more-title">Todas mis áreas</h2>
+
+            <div class="csa-sheet__list">
+                {% for area in more_areas %}
+                    <a href="{{ area.url }}" class="csa-sheet__area{% if area.active %} csa-sheet__area--active{% endif %}">
+                        <span class="csa-sheet__icon"><i class="fa {{ area.icon }}" aria-hidden="true"></i></span>
+                        <span class="csa-sheet__body">
+                            <span class="csa-sheet__label">{{ area.label }}</span>
+                            {% if area.hint is defined %}<span class="csa-sheet__hint">{{ area.hint }}</span>{% endif %}
+                        </span>
+                        <i class="fa fa-angle-right csa-sheet__chevron" aria-hidden="true"></i>
+                    </a>
+                {% endfor %}
+
+                <a href="{{ path('homepage') }}" class="csa-sheet__area" target="_blank" rel="noopener">
+                    <span class="csa-sheet__icon"><i class="fa fa-globe" aria-hidden="true"></i></span>
+                    <span class="csa-sheet__body">
+                        <span class="csa-sheet__label">Ver la web</span>
+                        <span class="csa-sheet__hint">La página pública de la asociación</span>
+                    </span>
+                </a>
+                <a href="{{ path('app_logout') }}" class="csa-sheet__area csa-sheet__area--quiet">
+                    <span class="csa-sheet__icon"><i class="fa fa-sign-out" aria-hidden="true"></i></span>
+                    <span class="csa-sheet__body"><span class="csa-sheet__label">Cerrar sesión</span></span>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            var sheet = document.getElementById('csa-more-sheet');
+            var toggle = document.querySelector('[data-tabbar-more]');
+            if (!sheet || !toggle) { return; }
+
+            function open() { sheet.hidden = false; toggle.setAttribute('aria-expanded', 'true'); }
+            function close() { sheet.hidden = true; toggle.setAttribute('aria-expanded', 'false'); }
+
+            toggle.addEventListener('click', function () { sheet.hidden ? open() : close(); });
+            // Tocar fuera y Escape: sin las dos salidas, una hoja abierta en un móvil
+            // sin botón "atrás" visible deja al socix atrapado en el menú.
+            sheet.querySelector('[data-tabbar-close]').addEventListener('click', close);
+            document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { close(); } });
+        }());
+    </script>
 </div>
 {% endblock %}
 
