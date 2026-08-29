@@ -25,6 +25,7 @@ use App\Service\Volunteering\VolunteerEventRecorder;
 use App\Service\Volunteering\VolunteerOfferChangeNotifier;
 use App\Service\Volunteering\VolunteerOfferSnapshot;
 use App\Service\Volunteering\VolunteerScope;
+use App\Service\Volunteering\VolunteerSuggester;
 use Doctrine\ORM\EntityManagerInterface;
 use Knp\Component\Pager\PaginatorInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -304,6 +305,12 @@ class VolunteeringController extends AbstractController
     /**
      * Una tarea: sus datos, quién se ha apuntado y los avisos que se han
      * mandado por ella.
+     *
+     * La pantalla se organiza por la FASE de la tarea ({@see VolunteerOffer::getPhase()}),
+     * porque los tres momentos piden trabajos distintos: antes se persiguen
+     * plazas, el día se pasa lista, después se imputan horas. Aquí eso se nota
+     * en que hay datos que sólo se cargan cuando sirven para algo — las
+     * sugerencias de a quién pedirle no se calculan para una tarea que ya pasó.
      */
     #[Route('/{id}', name: 'volunteering_show', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function show(
@@ -313,16 +320,34 @@ class VolunteeringController extends AbstractController
         PartnerRepository $partners,
         VolunteerEventRepository $events,
         OfferRepeatDates $repeatDates,
+        VolunteerSignupRepository $signups,
+        VolunteerSuggester $suggester,
     ): Response {
         $sent = $calls->sentScopes($offer);
         $history = $events->historyFor($offer);
+        $phase = $offer->getPhase();
+
+        $year = (int) date('Y');
 
         return $this->render('Volunteering/show.html.twig', [
             'offer' => $offer,
+            'phase' => $phase,
             'sent_scopes' => $sent,
             // Qué cadencias admite ESTA tarea: la del calendario de reparto sólo
             // existe si ocurre en un punto de recogida.
             'repeat_cadences' => $repeatDates->cadencesFor($offer),
+            // Lo que cada persona lleva hecho, en UNA consulta para toda la
+            // tabla: preguntarlo fila a fila sería un N+1 con tantas consultas
+            // como gente apuntada.
+            'participation' => $signups->participationByPartner(
+                new \DateTime(sprintf('%d-01-01 00:00:00', $year)),
+                new \DateTime(sprintf('%d-12-31 23:59:59', $year))
+            ),
+            // A quién pedírselo. Sólo mientras siga faltando gente: en una tarea
+            // pasada la lista no serviría para nada y costaría dos consultas.
+            'suggested' => VolunteerOffer::PHASE_OPEN === $phase && $offer->hasRoom()
+                ? $suggester->forOffer($offer)
+                : [],
             // Para anotar a mano a quien organizó la tarea o vino sin apuntarse.
             'all_partners' => $partners->findBy(
                 ['status' => Partner::STATUS_ACTIVO],
@@ -599,11 +624,20 @@ class VolunteeringController extends AbstractController
     }
 
     /**
-     * Cerrar una tarea ya pasada: decir quién fue y quién no.
+     * Cerrar una tarea ya pasada: decir quién fue, quién no, y cuánto se le
+     * computa a cada cual.
      *
      * Mientras no se cierra, no computa horas a nadie: el `attended` a null es
      * significativo, y así olvidarse de cerrar una tarea no infla el contador de
      * nadie a base de gente que se apuntó y no apareció.
+     *
+     * LOS MINUTOS VAN POR PERSONA y no por tarea, porque la realidad es ésa:
+     * alguien se queda media hora menos, alguien llega tarde, y quien la
+     * organizó suele computar otra cosa. El modelo ya lo contemplaba
+     * ({@see VolunteerSignup::$creditedMinutes} se congela por inscripción) y el
+     * formulario de anotar a mano ya los pedía; era este cierre el que aplicaba
+     * a todo el mundo los de la tarea sin dejar corregirlo. Dejar el campo en
+     * blanco sigue usando los de la tarea, que es el caso normal.
      */
     #[Route('/{id}/cerrar', name: 'volunteering_close', methods: ['POST'], requirements: ['id' => '\d+'])]
     #[IsGranted(VolunteerOfferVoter::EDIT, subject: 'offer')]
@@ -616,6 +650,7 @@ class VolunteeringController extends AbstractController
         }
 
         $attended = array_map('intval', (array) $request->request->all('attended'));
+        $minutes = (array) $request->request->all('minutes');
         $counted = 0;
 
         foreach ($offer->getSignups() as $signup) {
@@ -625,29 +660,51 @@ class VolunteeringController extends AbstractController
 
             $wentThere = \in_array($signup->getId(), $attended, true);
 
-            if ($wentThere) {
-                ++$counted;
-            }
+            if (!$wentThere) {
+                // Sólo se toca lo que cambia. Sin esto, cerrar una tarea que
+                // alguien ya había confirmado desde su panel la reescribiría
+                // como "lo puso gestión" y se perdería el rastro de que lo dijo
+                // quien fue — que es justo lo que distingue una tarea que se
+                // cerró sola de una que hubo que perseguir.
+                if (false === $signup->getAttended()) {
+                    continue;
+                }
 
-            // Sólo se toca lo que cambia. Sin esto, cerrar una tarea que alguien
-            // ya había confirmado desde su panel la reescribiría como "lo puso
-            // gestión" y se perdería el rastro de que lo dijo quien fue — que es
-            // justo lo que distingue una tarea que se cerró sola de una que hubo
-            // que perseguir.
-            if ($signup->getAttended() === $wentThere) {
+                $signup->markAbsent(VolunteerSignup::SOURCE_MANAGER);
+
+                // Un evento por persona y no uno por cierre: el rastro tiene que
+                // poder responder "¿a quién se le computaron horas y quién lo
+                // dijo?", y un único evento del cierre no lo responde.
+                $events->forOffer(
+                    $offer,
+                    VolunteerEvent::TYPE_ABSENT,
+                    ['minutes' => null, 'role' => $signup->getRole()],
+                    $signup->getPartner()
+                );
+
                 continue;
             }
 
-            $wentThere
-                ? $signup->confirmAttendance(VolunteerSignup::SOURCE_MANAGER)
-                : $signup->markAbsent(VolunteerSignup::SOURCE_MANAGER);
+            ++$counted;
 
-            // Un evento por persona y no uno por cierre: el rastro tiene que
-            // poder responder "¿a quién se le computaron horas y quién lo
-            // dijo?", y un único evento del cierre no lo responde.
+            $wanted = $this->minutesFor($minutes, $signup->getId()) ?? $offer->getCreditedMinutes();
+
+            if (true !== $signup->getAttended()) {
+                $signup->confirmAttendance(VolunteerSignup::SOURCE_MANAGER, $wanted);
+            } elseif ($signup->getCreditedMinutes() !== $wanted) {
+                // Corregir los minutos de quien ya había confirmado NO le
+                // arrebata la autoría: lo que gestión cambia es cuánto vale,
+                // no quién dijo que fue. Por eso se toca el campo suelto y no
+                // se pasa por confirmAttendance(), que reescribiría la fuente
+                // a "lo puso gestión".
+                $signup->setCreditedMinutes($wanted);
+            } else {
+                continue;
+            }
+
             $events->forOffer(
                 $offer,
-                $wentThere ? VolunteerEvent::TYPE_ATTENDED : VolunteerEvent::TYPE_ABSENT,
+                VolunteerEvent::TYPE_ATTENDED,
                 ['minutes' => $signup->getCreditedMinutes(), 'role' => $signup->getRole()],
                 $signup->getPartner()
             );
@@ -657,6 +714,30 @@ class VolunteeringController extends AbstractController
         $this->addFlash('success', sprintf('Tarea cerrada: %d persona(s) con horas computadas.', $counted));
 
         return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
+    }
+
+    /**
+     * Los minutos que el formulario pide para una inscripción, o null si lo dejó
+     * en blanco (que significa "los de la tarea").
+     *
+     * En blanco y cero son cosas distintas y por eso no vale un `?: null`: cero
+     * es una respuesta legítima —vino pero esto no le computa— y convertirla en
+     * null le devolvería los minutos de la tarea, justo lo contrario de lo que
+     * se pidió. El tope es el mismo que el del formulario de anotar a mano; un
+     * día tiene 1440 minutos y todo lo que pase de ahí es un dedo torcido.
+     *
+     * @param array<mixed> $minutes lo que llegó en el POST, indexado por id de inscripción
+     * @param int|null     $id      la inscripción
+     *
+     * @return int|null los minutos pedidos, o null si no se pidió nada
+     */
+    private function minutesFor(array $minutes, ?int $id): ?int
+    {
+        if (null === $id || !isset($minutes[$id]) || '' === trim((string) $minutes[$id])) {
+            return null;
+        }
+
+        return max(0, min(1440, (int) $minutes[$id]));
     }
 
     /**

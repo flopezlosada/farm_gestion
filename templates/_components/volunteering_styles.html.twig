@@ -334,6 +334,167 @@
     .vol-details[open] > summary::before { transform: rotate(45deg); }
     .vol-details > summary:hover { color: var(--csa-ink); }
 
+    /* ---- Qué toca hacer con esta tarea ----
+       La franja que abre la ficha. Va antes que los datos porque cuándo y dónde
+       ya lo sabe quien abre una tarea suya; lo que no sabe es si queda algo
+       pendiente. El tono lo pone la fase, y son los mismos cuatro colores que
+       usa el resto del sistema — nada de una paleta propia para esta pantalla. */
+    .vol-phase {
+        display: flex;
+        gap: var(--csa-sp-4);
+        align-items: center;
+        margin-bottom: var(--csa-sp-4);
+        padding: var(--csa-sp-4) var(--csa-sp-5);
+        border: 1px solid var(--csa-rule-soft);
+        border-radius: var(--csa-radius-lg);
+        background: var(--csa-surface);
+    }
+    .vol-phase__icon { flex-shrink: 0; font-size: var(--csa-fs-lg); line-height: 1.2; }
+    .vol-phase__body { flex: 1 1 auto; min-width: 0; }
+    .vol-phase__title {
+        margin: 0;
+        font-size: var(--csa-fs-md);
+        font-weight: 600;
+        color: var(--csa-ink);
+    }
+    .vol-phase__note {
+        margin: var(--csa-sp-1) 0 0;
+        font-size: var(--csa-fs-sm);
+        line-height: var(--csa-lh-normal);
+        color: var(--csa-ink-soft);
+    }
+    .vol-phase__actions { flex-shrink: 0; }
+
+    /* La cifra de la franja: en serif, como el resto de cifras destacadas. */
+    .vol-phase__figure { flex-shrink: 0; text-align: right; }
+    .vol-phase__figure-value {
+        display: block;
+        font-family: var(--csa-serif);
+        font-size: var(--csa-fs-xl);
+        line-height: var(--csa-lh-tight);
+        color: var(--csa-ink);
+    }
+    .vol-phase__figure-label {
+        display: block;
+        font-size: var(--csa-fs-xs);
+        color: var(--csa-ink-muted);
+    }
+
+    /* Ocre y no rojo cuando faltan plazas: es una petición, no un error, y
+       normalmente queda tiempo de sobra para resolverla. */
+    .vol-phase--warn { background: color-mix(in srgb, var(--csa-ochre-soft) 35%, var(--csa-surface)); border-color: var(--csa-ochre-soft); }
+    .vol-phase--warn .vol-phase__icon { color: var(--csa-ochre); }
+    .vol-phase--ok { background: color-mix(in srgb, var(--csa-green-soft) 35%, var(--csa-surface)); border-color: var(--csa-green-soft); }
+    .vol-phase--ok .vol-phase__icon { color: var(--csa-green); }
+    .vol-phase--info { background: color-mix(in srgb, var(--csa-sky-soft) 30%, var(--csa-surface)); border-color: var(--csa-sky-soft); }
+    .vol-phase--info .vol-phase__icon { color: var(--csa-sky); }
+    .vol-phase--quiet { background: var(--csa-surface-alt); }
+    .vol-phase--quiet .vol-phase__icon { color: var(--csa-ink-muted); }
+
+    /* El día de la tarea es el único momento con un trabajo que hacer AHÍ, con
+       el móvil en la mano: es la única franja con el verde entero. */
+    .vol-phase--today { background: var(--csa-green); border-color: var(--csa-green); }
+    .vol-phase--today .vol-phase__icon,
+    .vol-phase--today .vol-phase__title,
+    .vol-phase--today .vol-phase__figure-value { color: #fff; }
+    .vol-phase--today .vol-phase__note,
+    .vol-phase--today .vol-phase__figure-label { color: rgba(255, 255, 255, 0.85); }
+
+    @media (max-width: 640px) {
+        .vol-phase { flex-wrap: wrap; }
+        .vol-phase__figure { text-align: left; }
+        .vol-phase__actions { width: 100%; }
+        .vol-phase__actions .csa-btn { width: 100%; justify-content: center; }
+    }
+
+    /* ---- Las plazas, una a una ----
+       "4 de 6" hay que leerlo y restar; seis casillas con dos huecos se ven sin
+       leer. Decorativas: el dato ya está escrito encima, así que van con
+       aria-hidden y no se anuncian dos veces. */
+    .vol-slots { display: flex; gap: 3px; margin-top: var(--csa-sp-2); }
+    .vol-slots__pip {
+        width: 14px;
+        height: 6px;
+        border-radius: var(--csa-radius-pill);
+        background: var(--csa-rule);
+    }
+    .vol-slots__pip.is-filled { background: var(--csa-green); }
+
+    /* Cuánto lleva hecho cada quien, bajo su nombre. Terciario a propósito: es
+       contexto para quien coordina, no una nota en su expediente. */
+    .vol-track {
+        display: block;
+        margin-top: 2px;
+        font-size: var(--csa-fs-xs);
+        color: var(--csa-ink-muted);
+    }
+
+    /* Teléfono y correo en la fila. Iconos sueltos, sin caja: la columna de
+       estado ya lleva badges y un botón más la volvería ilegible. */
+    .vol-contact { display: inline-flex; gap: var(--csa-sp-2); margin-left: var(--csa-sp-2); }
+    .vol-contact a { color: var(--csa-ink-muted); text-decoration: none; }
+    .vol-contact a:hover { color: var(--csa-green); }
+
+    /* Quien se dio de baja sigue en la lista —hace falta saber que se descolgó—
+       pero baja de intensidad para que no compita con quien sí viene. */
+    .vol-row--out { opacity: .55; }
+
+    /* Minutos por persona en el cierre. Estrecho y con la unidad al lado: es un
+       número de dos o tres cifras, no un campo de texto. */
+    .vol-minutes { width: 4.5rem; display: inline-block; text-align: right; }
+    .vol-minutes__unit { margin-left: var(--csa-sp-1); font-size: var(--csa-fs-xs); color: var(--csa-ink-muted); }
+
+    /* El cierre: el total, la explicación y el botón, juntos y separados de la
+       tabla. Cerrar suma horas a gente real y no se deshace solo, así que el
+       total se ve ANTES de pulsar. */
+    .vol-close {
+        margin-top: var(--csa-sp-4);
+        padding-top: var(--csa-sp-4);
+        border-top: 1px solid var(--csa-rule-soft);
+    }
+    .vol-close__sum {
+        margin: 0 0 var(--csa-sp-2);
+        font-size: var(--csa-fs-sm);
+        color: var(--csa-ink-soft);
+    }
+    .vol-close__sum strong {
+        font-family: var(--csa-serif);
+        font-size: var(--csa-fs-lg);
+        font-weight: 500;
+        color: var(--csa-ink);
+    }
+
+    /* ---- A quién pedírselo ----
+       Una lista para leer y coger el teléfono, no una tabla. Sin cifras de
+       aportación a propósito: el orden ya reparte la carga y publicar el
+       contador de cada cual convertiría esto en el marcador que se quiere
+       evitar. */
+    .vol-suggest { list-style: none; margin: 0 0 var(--csa-sp-3); padding: 0; }
+    .vol-suggest li {
+        display: flex;
+        gap: var(--csa-sp-4);
+        align-items: center;
+        justify-content: space-between;
+        padding: var(--csa-sp-3) 0;
+        border-bottom: 1px solid var(--csa-rule-soft);
+    }
+    .vol-suggest li:last-child { border-bottom: 0; }
+    .vol-suggest__who { min-width: 0; }
+    .vol-suggest__name { display: block; font-size: var(--csa-fs-base); color: var(--csa-ink); }
+    .vol-suggest__why {
+        display: block;
+        margin-top: 2px;
+        font-size: var(--csa-fs-xs);
+        color: var(--csa-ink-muted);
+    }
+    .vol-suggest__contact { display: flex; gap: var(--csa-sp-2); flex-shrink: 0; }
+
+    @media (max-width: 640px) {
+        .vol-suggest li { flex-direction: column; align-items: stretch; }
+        .vol-suggest__contact { width: 100%; }
+        .vol-suggest__contact .csa-btn { flex: 1; justify-content: center; }
+    }
+
     /* Bloque compacto de la home del panel. */
     .vol-teaser { list-style: none; margin: 0 0 var(--csa-sp-3); padding: 0; }
     .vol-teaser li {

@@ -47,6 +47,24 @@ class VolunteerOffer
     /** Anulada: se conserva con sus inscripciones, pero ya no se pide gente. */
     public const STATUS_CANCELLED = 'cancelled';
 
+    /** Redactándose. No la ve nadie fuera de gestión: no hay trabajo pendiente. */
+    public const PHASE_DRAFT = 'draft';
+
+    /** Anulada. Se conserva para consultarla, pero ya no hay nada que hacer. */
+    public const PHASE_CANCELLED = 'cancelled';
+
+    /** Publicada y aún por llegar: el trabajo es llenar las plazas. */
+    public const PHASE_OPEN = 'open';
+
+    /** Empezó hoy mismo: el trabajo es pasar lista. */
+    public const PHASE_TODAY = 'today';
+
+    /** Pasó y falta gente por decir si fue: el trabajo es cerrarla. */
+    public const PHASE_TO_CLOSE = 'to_close';
+
+    /** Pasó y está todo respondido: sólo queda consultar lo imputado. */
+    public const PHASE_CLOSED = 'closed';
+
     /**
      * @ORM\Id
      * @ORM\GeneratedValue
@@ -432,6 +450,109 @@ class VolunteerOffer
         return $this->startsAt <= $now
             && $this->isSettled()
             && 0 === $this->getAttendedCount();
+    }
+
+    /**
+     * En qué momento de su vida está esta tarea, que es lo mismo que decir QUÉ
+     * TRABAJO TOCA HACER con ella.
+     *
+     * Existe porque los tres momentos de una tarea piden cosas distintas de
+     * quien la gestiona —antes se persiguen plazas, el día se pasa lista,
+     * después se imputan horas— y la pantalla los trataba igual: el formulario
+     * de cerrar colgaba debajo de la tabla estuviera la tarea a cuatro días o
+     * cerrada hace un mes.
+     *
+     * Se DERIVA, como {@see isDone()} y por el mismo motivo: un campo `phase`
+     * habría que moverlo con un cron a medianoche y cada vez que alguien
+     * confirma, y en cuanto se desincronizara mentiría en silencio.
+     *
+     * El orden de las comprobaciones no es cosmético:
+     *
+     *  - Borrador y anulada ganan a todo. Una tarea anulada que ya pasó no está
+     *    "por cerrar": no hay nada que cerrar. El mockup del rediseño sólo
+     *    contemplaba cuatro fases y se dejaba estas dos fuera.
+     *  - La fecha decide antes que {@see isSettled()}, que es true de forma
+     *    vacía cuando no hay nadie apuntado. Sin ese orden, una tarea de la
+     *    semana que viene sin inscripciones saldría "cerrada".
+     *  - TODAY abarca desde que empieza hasta el final del día natural, no sólo
+     *    su franja horaria: quien pasa lista lo hace en el nodo mientras
+     *    descarga, y a veces cuando ya ha recogido.
+     *
+     * @param \DateTimeInterface|null $now momento de referencia; por defecto, ahora
+     *
+     * @return string una de las constantes self::PHASE_*
+     */
+    public function getPhase(?\DateTimeInterface $now = null): string
+    {
+        if (self::STATUS_DRAFT === $this->status) {
+            return self::PHASE_DRAFT;
+        }
+
+        if (self::STATUS_CANCELLED === $this->status) {
+            return self::PHASE_CANCELLED;
+        }
+
+        $now ??= new \DateTime();
+
+        if (null === $this->startsAt || $this->startsAt > $now) {
+            return self::PHASE_OPEN;
+        }
+
+        // Ya respondida es "cerrada" aunque sea hoy: si todo el mundo confirmó
+        // desde su panel esta misma tarde, no queda lista que pasar.
+        if ($this->isSettled()) {
+            return self::PHASE_CLOSED;
+        }
+
+        return $this->startsAt->format('Y-m-d') === $now->format('Y-m-d')
+            ? self::PHASE_TODAY
+            : self::PHASE_TO_CLOSE;
+    }
+
+    /**
+     * Los minutos ya imputados por esta tarea, sumando lo de todo el mundo.
+     *
+     * Es el dato que faltaba en la ficha, y no es un adorno: es lo que esta
+     * tarea aporta a la cuenta de horas de la asociación, y quien la cierra
+     * tiene que poder verlo ANTES de darle al botón. Sale de
+     * `VolunteerSignup::creditedMinutes` —lo congelado en cada inscripción— y no
+     * de multiplicar plazas por lo que vale la tarea, que es otra cosa: hay
+     * quien se queda media hora menos y quien la organizó y computa distinto.
+     *
+     * Los acompañantes NO multiplican. Las horas cuelgan de un socix con ficha,
+     * y quien viene con su criatura no ha trabajado el doble.
+     *
+     * @return int minutos imputados; 0 si no se ha cerrado nada todavía
+     */
+    public function getCreditedMinutesTotal(): int
+    {
+        $total = 0;
+        foreach ($this->signups as $signup) {
+            if (!$signup->isCancelled() && true === $signup->getAttended()) {
+                $total += $signup->getCreditedMinutes() ?? 0;
+            }
+        }
+
+        return $total;
+    }
+
+    /**
+     * Cuánta gente sigue sin decir si fue o no. Es el tamaño exacto del trabajo
+     * pendiente en la fase de cierre, y lo que decide si merece la pena
+     * perseguirlo o cerrar la tarea a mano.
+     *
+     * @return int inscripciones vivas sin responder
+     */
+    public function getPendingConfirmationCount(): int
+    {
+        $pending = 0;
+        foreach ($this->signups as $signup) {
+            if (!$signup->isCancelled() && !$signup->isSettled()) {
+                ++$pending;
+            }
+        }
+
+        return $pending;
     }
 
     /**
