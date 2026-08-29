@@ -9,10 +9,17 @@ Aplicar a mano:
 
 - `dev-docs/schema/volunteering.sql`
 - `dev-docs/schema/push-subscription.sql`
+- `dev-docs/schema/volunteer-delivery-prep.sql`
+- `dev-docs/schema/volunteer-featured.sql`
 
 **Ya aplicados en las tres bases locales** (`db`, `db_prod_snapshot`, `db_test`)
-el 27/08/2026, con backup del golden hecho después. **Quedan staging y
-producción**, por phpMyAdmin.
+—los dos primeros el 27/08/2026 y los dos últimos el 29/08/2026—, con backup del
+golden hecho después. **Quedan staging y producción**, por phpMyAdmin.
+
+Las dos columnas nuevas (`volunteer_category.delivery_prep` y
+`volunteer_offer.featured`) las MAPEA el código: si se despliega antes de
+aplicarlas, Doctrine las espera y revienta cualquier pantalla de voluntariado,
+incluida la home del panel del socix.
 
 Nunca con `doctrine:schema:update --force`: arrastraría el drift preexistente
 del resto del esquema y borraría índices que sólo existen a mano.
@@ -71,6 +78,23 @@ En `/gestion/settings`, grupo «Funcionalidades en rodaje»:
 Y antes de que sirva de algo, crear al menos un par de **tipos de trabajo** en
 `/gestion/voluntariado/categorias`: sin categorías, nadie puede declarar
 preferencias y el primer paso del escalado no encuentra a nadie.
+
+### Quién prepara la cesta (opcional, un paso a mano)
+
+En el panel de cada socix puede salir quién le está montando la cesta esa
+semana en su punto de recogida —y el aviso de que no se ha apuntado nadie—,
+pero sólo si se dan las dos cosas:
+
+1. Marcar **«Es el montaje del reparto»** en el tipo de trabajo que
+   corresponda (Voluntariado › Áreas). Sólo en ése: marcarlo en dos áreas haría
+   que el panel señalara como "quien te prepara la cesta" a gente que ese día
+   está haciendo otra cosa.
+2. Que las tareas de montaje lleven puesto el **punto de recogida** cuyas cestas
+   se montan, y caigan en la víspera o el mismo día del reparto.
+
+Sin eso no se pinta nada: ni nombres ni aviso. Es lo que hace que los puntos
+donde el montaje todavía no se organiza así —hoy, todos menos Torremocha— no
+aparezcan avisando de que nadie se ha apuntado a una tarea que no existe.
 
 ## 6. Roles y coordinación por áreas
 
