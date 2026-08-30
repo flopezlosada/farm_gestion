@@ -54,14 +54,10 @@
               url: path('panel_survey_index'), active: route starts with 'panel_survey', tab: false,
               hint: 'Lo que la asociación te pregunta' },
         ] : [])
-        |merge([
-            { label: 'Mi perfil', short: 'Perfil', icon: 'fa-user',
-              url: path('panel_profile'), active: route starts with 'panel_profile', tab: false,
-              hint: 'Tus datos y tu contraseña' },
-            { label: 'Avisos', short: 'Avisos', icon: 'fa-bell-o',
-              url: path('panel_notifications'), active: route == 'panel_notifications', tab: false,
-              hint: 'Qué te avisamos y por dónde' },
-        ]) %}
+        %}
+        {# «Mi perfil» y «Avisos» NO están aquí: son ajustes de la cuenta y viven
+         # en el menú del avatar, arriba a la derecha. Este menú es para lo que se
+         # hace cada semana. #}
 
         {# En el móvil sólo bajan las tres primeras marcadas como `tab`; lo demás va
          # a «Más» junto a lo que nunca baja. Así, añadir un área nueva no rompe la
@@ -115,15 +111,41 @@
                          # no tiene Partner vinculado (caso de fallback). #}
                         {% set me_partner = app.user.partner %}
                         {% set me_name = me_partner ? me_partner.name|capitalize : app.user.userIdentifier %}
-                        <div class="csa-me">
-                            <a href="{{ path('panel_profile') }}" class="csa-me__id" title="Editar mis datos">
+                        {# LA CUENTA CUELGA DEL AVATAR, no del menú lateral. El
+                         # lateral es para lo que se HACE cada semana —la cesta, el
+                         # calendario, el voluntariado— y meter ahí los ajustes lo
+                         # llenaba de cosas que se tocan una vez al año. Que quede
+                         # corto no es un problema: es la señal de que sólo tiene lo
+                         # que se usa.
+                         #
+                         # Con <details> y sin JS a propósito: un menú de cuenta que
+                         # depende de un script es un menú que un día no abre y deja
+                         # a alguien sin poder salir de su sesión. Se cierra al
+                         # pulsar fuera gracias al listener de abajo, pero si ese JS
+                         # no llega, sigue abriéndose y cerrándose al pulsarlo. #}
+                        <details class="csa-me" data-account-menu>
+                            <summary class="csa-me__id" title="Mi cuenta" aria-label="Mi cuenta">
                                 <span class="csa-avatar">{{- me_name|first|upper -}}</span>
                                 <span class="csa-me__name">{{ me_name }}</span>
-                            </a>
-                            <a href="{{ path('app_logout') }}" class="csa-me__logout" title="Cerrar sesión" aria-label="Cerrar sesión">
-                                <i class="fa fa-sign-out" aria-hidden="true"></i>
-                            </a>
-                        </div>
+                                <i class="fa fa-caret-down" aria-hidden="true" style="margin-left:4px;"></i>
+                            </summary>
+
+                            <div class="csa-account-menu" role="menu">
+                                <div class="csa-account-menu__group">Mi cuenta</div>
+                                <a href="{{ path('panel_profile') }}" role="menuitem">
+                                    <i class="fa fa-user" aria-hidden="true"></i> Mis datos
+                                </a>
+                                <a href="{{ path('panel_notifications') }}" role="menuitem">
+                                    <i class="fa fa-bell-o" aria-hidden="true"></i> Avisos
+                                </a>
+                                <a href="{{ path('panel_password') }}" role="menuitem">
+                                    <i class="fa fa-key" aria-hidden="true"></i> Contraseña
+                                </a>
+                                <a href="{{ path('app_logout') }}" role="menuitem" class="csa-account-menu__out">
+                                    <i class="fa fa-sign-out" aria-hidden="true"></i> Cerrar sesión
+                                </a>
+                            </div>
+                        </details>
                     {% endif %}
                 </div>
             </header>

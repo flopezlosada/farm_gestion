@@ -85,4 +85,46 @@
     /* La explicación no es adorno: "Encuestas" no dice qué te van a preguntar. */
     .csa-sheet__hint { display: block; font-size: var(--csa-fs-xs); color: var(--csa-ink-muted); margin-top: 2px; }
     .csa-sheet__chevron { color: var(--csa-ink-muted); }
+
+    /* ---------- MENÚ DE CUENTA (avatar de la topbar) ----------
+       El <summary> pierde su triángulo nativo y se comporta como el enlace que
+       era: mismo aspecto, ahora desplegable. */
+    .csa-me[data-account-menu] { position: relative; }
+    .csa-me[data-account-menu] > summary { list-style: none; cursor: pointer; }
+    .csa-me[data-account-menu] > summary::-webkit-details-marker { display: none; }
+
+    .csa-account-menu {
+        position: absolute; top: calc(100% + 6px); right: 0; z-index: 40;
+        min-width: 208px; padding: var(--csa-sp-2);
+        background: var(--csa-surface); border: 1px solid var(--csa-rule);
+        border-radius: var(--csa-radius-md); box-shadow: 0 8px 24px rgba(0,0,0,.12);
+    }
+    .csa-account-menu__group {
+        font-size: var(--csa-fs-xs); text-transform: uppercase; letter-spacing: .04em;
+        color: var(--csa-ink-muted); padding: var(--csa-sp-2) var(--csa-sp-3) var(--csa-sp-1);
+    }
+    .csa-account-menu a {
+        display: flex; align-items: center; gap: var(--csa-sp-3);
+        padding: var(--csa-sp-2) var(--csa-sp-3);
+        border-radius: var(--csa-radius-sm);
+        color: var(--csa-ink); font-size: var(--csa-fs-sm);
+        text-decoration: none; border-bottom: 0;
+    }
+    /* Se fija el color también en :visited: el reset de Bootstrap 3 lo pisa y
+       los enlaces ya visitados salían morados dentro del menú. */
+    .csa-account-menu a:visited { color: var(--csa-ink); }
+    .csa-account-menu a:hover { background: var(--csa-surface-alt); color: var(--csa-ink); text-decoration: none; }
+    .csa-account-menu a i { width: 16px; text-align: center; color: var(--csa-ink-muted); }
+
+    /* Cerrar sesión, separada y sin estridencias: es la única acción del menú
+       que no se deshace sola volviendo atrás. */
+    .csa-account-menu__out {
+        margin-top: var(--csa-sp-2); padding-top: var(--csa-sp-3);
+        border-top: 1px solid var(--csa-rule);
+    }
+
+    /* En móvil el menú se pega al borde y no se sale de la pantalla. */
+    @media (max-width: 600px) {
+        .csa-account-menu { right: -8px; min-width: 190px; }
+    }
 </style>

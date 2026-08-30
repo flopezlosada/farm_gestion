@@ -25,6 +25,11 @@ require('./csa-validate.js');
 // voluntariado (opt-in por [data-vol-total]). Ver assets/js/vol-close-total.js.
 require('./vol-close-total.js');
 
+// Menú de la cuenta en la topbar (opt-in por [data-account-menu]). Sin JS el
+// menú abre y cierra igual; esto sólo añade cerrarlo al pulsar fuera.
+// Ver assets/js/csa-account-menu.js.
+require('./csa-account-menu.js');
+
 // Alta y baja de los avisos push (opt-in por [data-push-toggle]). No pide
 // permiso hasta que alguien pulsa: un permiso denegado no se puede volver a
 // pedir. Ver assets/js/push.js.
