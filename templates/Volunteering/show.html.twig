@@ -302,11 +302,11 @@
                     <div class="prt-mini__label">Horas {{ phase == 'closed' ? 'imputadas' : 'ya imputadas' }}</div>
                     <div class="prt-mini__value">
                         {{ csa.qty(credited_total / 60) }} h
-                        {% if offer.creditedMinutes %}<small>{{ offer.creditedMinutes }} min por persona</small>{% endif %}
+                        {% if offer.creditedMinutes %}<small>{{ csa.qty(offer.creditedMinutes / 60) }} h por persona</small>{% endif %}
                     </div>
                 {% elseif offer.creditedMinutes %}
                     <div class="prt-mini__label">Computa</div>
-                    <div class="prt-mini__value">{{ offer.creditedMinutes }} <small>min por persona</small></div>
+                    <div class="prt-mini__value">{{ csa.qty(offer.creditedMinutes / 60) }} h <small>por persona</small></div>
                 {% else %}
                     <div class="prt-mini__label">Computa</div>
                     <div class="prt-mini__value prt-mini__value--muted">No computa horas</div>
@@ -364,7 +364,7 @@
                             {% set closing_form = is_closing and can_edit %}
 
                             <form method="post" action="{{ path('volunteering_close', { id: offer.id }) }}"
-                                  {% if closing_form %}data-vol-total="{{ offer.creditedMinutes ?: 0 }}"{% endif %}>
+                                  {% if closing_form %}data-vol-total="{{ csa.qty((offer.creditedMinutes ?: 0) / 60)|replace({',': '.'}) }}"{% endif %}>
                                 <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_close') }}">
 
                                 <div class="csa-table-wrap">
@@ -425,23 +425,23 @@
                                                     <td class="csa-table__col-tight">{{ signup.companions > 0 ? '+' ~ signup.companions : '—' }}</td>
 
                                                     {% if closing_form %}
-                                                        {# Los minutos, por persona. El modelo siempre los
+                                                        {# Las horas, por persona. El modelo siempre las
                                                          # guardó por inscripción; era este formulario el que
-                                                         # aplicaba los de la tarea a todo el mundo sin dejar
-                                                         # corregir a quien se fue antes. En blanco = los de
+                                                         # aplicaba las de la tarea a todo el mundo sin dejar
+                                                         # corregir a quien se fue antes. En blanco = las de
                                                          # la tarea, que es el caso normal. #}
                                                         <td class="csa-table__col-tight">
                                                             {% if signup.cancelled %}
                                                                 —
                                                             {% else %}
-                                                                <input type="number" name="minutes[{{ signup.id }}]"
+                                                                <input type="number" name="hours[{{ signup.id }}]"
                                                                        class="csa-input csa-input--compact vol-minutes"
-                                                                       min="0" max="1440" step="5"
+                                                                       min="0" max="24" step="0.5"
                                                                        data-vol-minutes
-                                                                       value="{{ signup.creditedMinutes }}"
-                                                                       placeholder="{{ offer.creditedMinutes ?: 0 }}"
-                                                                       aria-label="Minutos que computan a {{ signup.partner.name }} {{ signup.partner.surname }}">
-                                                                <span class="vol-minutes__unit">min</span>
+                                                                       value="{{ signup.creditedMinutes ? csa.qty(signup.creditedMinutes / 60)|replace({',': '.'}) : '' }}"
+                                                                       placeholder="{{ csa.qty((offer.creditedMinutes ?: 0) / 60)|replace({',': '.'}) }}"
+                                                                       aria-label="Horas que computan a {{ signup.partner.name }} {{ signup.partner.surname }}">
+                                                                <span class="vol-minutes__unit">h</span>
                                                             {% endif %}
                                                         </td>
                                                     {% else %}
@@ -453,7 +453,7 @@
                                                         {% if signup.cancelled %}
                                                             {{ csa.badge('Se dio de baja', 'terracotta') }}
                                                         {% elseif signup.attended is same as(true) %}
-                                                            {{ csa.badge('Fue · ' ~ (signup.creditedMinutes ?: 0) ~ ' min', 'green') }}
+                                                            {{ csa.badge('Fue · ' ~ csa.qty((signup.creditedMinutes ?: 0) / 60) ~ ' h', 'green') }}
                                                         {% elseif signup.attended is same as(false) %}
                                                             {{ csa.badge('No fue', 'neutral') }}
                                                         {% elseif is_past %}
@@ -510,9 +510,9 @@
                                             en total
                                         </p>
                                         <p class="vol-help">
-                                            Marca quién fue de verdad. Los minutos en blanco toman los de la tarea
-                                            ({{ offer.creditedMinutes ?: 0 }}); cámbialos a quien se fue antes o vino a otra cosa.
-                                            Quien no esté marcadx no computa nada.
+                                            Marca quién fue de verdad. Las horas en blanco toman las de la tarea
+                                            ({{ csa.qty((offer.creditedMinutes ?: 0) / 60) }} h); cámbialas a quien se fue antes
+                                            o vino a otra cosa. Quien no esté marcadx no computa nada.
                                         </p>
                                         <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">
                                             <i class="fa fa-lock"></i><span>Cerrar e imputar</span>
@@ -537,7 +537,13 @@
                                 Anotar a quien organizó esta tarea, o a quien vino sin apuntarse.
                             </p>
 
-                            <form method="post" action="{{ path('volunteering_add_person', { id: offer.id }) }}" class="vol-repeat">
+                            {# data-csa-dropdowns: sin él caen los <select> nativos del sistema
+                             # —fondo gris oscuro, tipografía del SO— en medio de una pantalla
+                             # csa. Y con 246 socixs el menú nativo es inusable: hay que
+                             # arrastrar hasta el apellido. El componente añade buscador solo
+                             # cuando la lista es larga. Ver assets/js/csa-dropdown.js. #}
+                            <form method="post" action="{{ path('volunteering_add_person', { id: offer.id }) }}"
+                                  class="vol-repeat" data-csa-dropdowns>
                                 <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_add_person') }}">
 
                                 <label>
@@ -550,18 +556,23 @@
                                     </select>
                                 </label>
 
+                                {# "En calidad de" era jerga. Lo que se pregunta es qué hizo esa
+                                 # persona, y la diferencia importa: quien organiza computa horas
+                                 # pero NO ocupa plaza, así que anotarlo mal da por llena una
+                                 # tarea en la que falta gente. #}
                                 <label>
-                                    En calidad de
+                                    Qué hizo
                                     <select name="role" class="csa-select">
                                         <option value="participant">vino a trabajar</option>
-                                        <option value="coordinator">lo organizó</option>
+                                        <option value="coordinator">organizó la tarea</option>
                                     </select>
                                 </label>
 
                                 <label>
-                                    Minutos
-                                    <input type="number" name="minutes" min="0" max="1440"
-                                           placeholder="{{ offer.creditedMinutes ?: 0 }}" class="csa-input csa-input--compact">
+                                    Horas
+                                    <input type="number" name="hours" min="0" max="24" step="0.5"
+                                           placeholder="{{ csa.qty((offer.creditedMinutes ?: 0) / 60) }}"
+                                           class="csa-input csa-input--compact">
                                 </label>
 
                                 <button type="submit" class="csa-btn csa-btn--secondary csa-btn--sm">Anotar</button>
@@ -569,8 +580,9 @@
 
                             <p class="vol-help">
                                 Se anota como hecho: si lo estás registrando a mano es porque
-                                sabes que ocurrió. Si dejas los minutos en blanco se usan los
-                                de la tarea ({{ offer.creditedMinutes ?: 0 }}). Quien lo organizó no ocupa plaza.
+                                sabes que ocurrió. Si dejas las horas en blanco se usan las
+                                de la tarea ({{ csa.qty((offer.creditedMinutes ?: 0) / 60) }} h).
+                                Quien organizó la tarea computa horas pero no ocupa plaza.
                             </p>
                         {% endif %}
                     </div>

@@ -5,14 +5,17 @@ namespace App\Form;
 use App\Entity\Node;
 use App\Entity\VolunteerCategory;
 use App\Entity\VolunteerOffer;
+use App\Service\Volunteering\CreditedTime;
 use App\Service\Volunteering\OfferRepeatDates;
 use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
+use Symfony\Component\Form\CallbackTransformer;
 use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\DateTimeType;
 use Symfony\Component\Form\Extension\Core\Type\DateType;
 use Symfony\Component\Form\Extension\Core\Type\IntegerType;
+use Symfony\Component\Form\Extension\Core\Type\NumberType;
 use Symfony\Component\Form\Extension\Core\Type\TextareaType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
@@ -95,10 +98,16 @@ class VolunteerOfferType extends AbstractType
                 'label' => 'Se puede venir acompañadx',
                 'required' => false,
             ])
-            ->add('creditedMinutes', IntegerType::class, [
-                'label' => 'Minutos que computa',
+            // En HORAS aunque la entidad guarde minutos. Nadie piensa "esto vale
+            // 240 minutos": piensa "cuatro horas". El transformer de abajo hace
+            // la traducción; ver CreditedTime para por qué se guardan minutos.
+            ->add('creditedMinutes', NumberType::class, [
+                'label' => 'Horas que computa',
                 'required' => false,
-                'help' => 'Lo que la asociación decide que vale este trabajo, que no tiene por qué ser lo que dura. 30 = media hora.',
+                'html5' => true,
+                'scale' => 2,
+                'attr' => ['step' => '0.5', 'min' => 0, 'max' => 24],
+                'help' => 'Lo que la asociación decide que vale este trabajo, que no tiene por qué ser lo que dura. Se puede poner media hora (0,5) o un cuarto (0,25).',
             ])
             ->add('openToAnyone', CheckboxType::class, [
                 'label' => 'Esto lo puede hacer cualquiera',
@@ -167,6 +176,15 @@ class VolunteerOfferType extends AbstractType
             ])
             ->addEventListener(FormEvents::POST_SUBMIT, $this->validateRepeat(...))
         ;
+
+        // Horas arriba, minutos abajo. Un transformer y no dos campos ni un
+        // `mapped => false` con copia a mano: así la entidad no se entera de en
+        // qué unidad se escribió y no hay un segundo sitio donde se pueda
+        // olvidar la conversión.
+        $builder->get('creditedMinutes')->addModelTransformer(new CallbackTransformer(
+            static fn (?int $minutes): ?float => CreditedTime::hoursFromMinutes($minutes),
+            static fn ($hours): ?int => CreditedTime::minutesFromHours($hours),
+        ));
     }
 
     /**

@@ -19,6 +19,7 @@ use App\Repository\VolunteerOfferRepository;
 use App\Repository\VolunteerSignupRepository;
 use App\Security\VolunteerOfferVoter;
 use App\Service\Volunteering\OfferRepeatDates;
+use App\Service\Volunteering\CreditedTime;
 use App\Service\Volunteering\VolunteerAudienceResolver;
 use App\Service\Volunteering\VolunteerCallNotifier;
 use App\Service\Volunteering\VolunteerEventRecorder;
@@ -592,7 +593,12 @@ class VolunteeringController extends AbstractController
         }
 
         $coordinated = 'coordinator' === $request->request->get('role');
-        $minutes = $request->request->getInt('minutes') ?: null;
+
+        // Con getInt() esto reventaba con un 400: `filter_var('', FILTER_VALIDATE_INT)`
+        // falla y InputBag lo convierte en BadRequestException. Es decir, dejar
+        // el campo en blanco —lo que el propio texto de ayuda invita a hacer—
+        // tumbaba la página en vez de tomar lo que vale la tarea.
+        $minutes = CreditedTime::minutesFromHours($request->request->get('hours'));
 
         // Reutiliza la inscripción si ya existía: el UNIQUE (offer, partner) no
         // admite dos, y quien se apuntó y además acabó coordinando es un caso
@@ -650,7 +656,7 @@ class VolunteeringController extends AbstractController
         }
 
         $attended = array_map('intval', (array) $request->request->all('attended'));
-        $minutes = (array) $request->request->all('minutes');
+        $hours = (array) $request->request->all('hours');
         $counted = 0;
 
         foreach ($offer->getSignups() as $signup) {
@@ -687,7 +693,8 @@ class VolunteeringController extends AbstractController
 
             ++$counted;
 
-            $wanted = $this->minutesFor($minutes, $signup->getId()) ?? $offer->getCreditedMinutes();
+            $wanted = CreditedTime::minutesFromHours($hours[$signup->getId()] ?? null)
+                ?? $offer->getCreditedMinutes();
 
             if (true !== $signup->getAttended()) {
                 $signup->confirmAttendance(VolunteerSignup::SOURCE_MANAGER, $wanted);
@@ -714,30 +721,6 @@ class VolunteeringController extends AbstractController
         $this->addFlash('success', sprintf('Tarea cerrada: %d persona(s) con horas computadas.', $counted));
 
         return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
-    }
-
-    /**
-     * Los minutos que el formulario pide para una inscripción, o null si lo dejó
-     * en blanco (que significa "los de la tarea").
-     *
-     * En blanco y cero son cosas distintas y por eso no vale un `?: null`: cero
-     * es una respuesta legítima —vino pero esto no le computa— y convertirla en
-     * null le devolvería los minutos de la tarea, justo lo contrario de lo que
-     * se pidió. El tope es el mismo que el del formulario de anotar a mano; un
-     * día tiene 1440 minutos y todo lo que pase de ahí es un dedo torcido.
-     *
-     * @param array<mixed> $minutes lo que llegó en el POST, indexado por id de inscripción
-     * @param int|null     $id      la inscripción
-     *
-     * @return int|null los minutos pedidos, o null si no se pidió nada
-     */
-    private function minutesFor(array $minutes, ?int $id): ?int
-    {
-        if (null === $id || !isset($minutes[$id]) || '' === trim((string) $minutes[$id])) {
-            return null;
-        }
-
-        return max(0, min(1440, (int) $minutes[$id]));
     }
 
     /**
