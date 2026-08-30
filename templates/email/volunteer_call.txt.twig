@@ -1,0 +1,22 @@
+{{ title }}
+
+{{ offer.title }}
+{{ when }}{% if where %} · {{ where }}{% endif %}
+
+{% if offer.description %}
+{{ offer.description }}
+
+{% endif %}
+{% if can_act %}
+Para apuntarte: {{ url }}
+{% else %}
+Si puedes venir, responde a este correo o escribe a info@csavegadejarama.org.
+{% endif %}
+
+--
+Recibes este correo porque en tus avisos tienes activado el voluntariado.
+{% if can_act %}
+Puedes cambiarlo aquí: {{ notifications_url }}
+{% else %}
+Si no quieres recibirlos, dínoslo y lo quitamos.
+{% endif %}

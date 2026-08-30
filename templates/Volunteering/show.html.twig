@@ -379,7 +379,7 @@
                             {% set has_settled = offer.signups|filter(s => not s.cancelled and s.attended is not null)|length > 0 %}
                             {% set closing_form = can_edit and (is_closing or has_settled) %}
 
-                            <form method="post" action="{{ path('volunteering_close', { id: offer.id }) }}"
+                            <form method="post" action="{{ path('volunteering_close', { id: offer.id }) }}" data-csa-validate
                                   {% if closing_form %}data-vol-total="{{ csa.qty((offer.creditedMinutes ?: 0) / 60)|replace({',': '.'}) }}"{% endif %}>
                                 <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_close') }}">
 
@@ -479,7 +479,12 @@
                                                             {% else %}
                                                                 <input type="number" name="hours[{{ signup.id }}]"
                                                                        class="csa-input csa-input--compact vol-minutes"
-                                                                       min="0" max="24" step="0.5"
+                                                                       {# step libre: por dentro esto son minutos, así que 4,2 h
+                                                                        # son 252 minutos y no hay razón para rechazarlo. Con
+                                                                        # step=0.5 el navegador saltaba con "los dos valores
+                                                                        # válidos más cercanos son 4 y 4,5" por escribir un
+                                                                        # número que el modelo aguanta perfectamente. #}
+                                                                       min="0" max="24" step="any"
                                                                        data-vol-minutes
                                                                        value="{{ signup.creditedMinutes ? csa.qty(signup.creditedMinutes / 60)|replace({',': '.'}) : '' }}"
                                                                        aria-label="Horas que computan a {{ signup.partner.name }} {{ signup.partner.surname }}">
@@ -634,7 +639,7 @@
                                  # entero de este formulario. #}
                                 <label>
                                     Horas
-                                    <input type="number" name="hours" min="0.5" max="24" step="0.5" required
+                                    <input type="number" name="hours" min="0.25" max="24" step="any" required
                                            class="csa-input csa-input--compact">
                                 </label>
 

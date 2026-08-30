@@ -101,32 +101,36 @@ class VolunteerCallNotifier
         ?User $triggeredBy,
         \DateTimeImmutable $now,
     ): ?VolunteerCall {
-        // Quiénes encajan con la tarea…
+        // Quiénes encajan con la tarea. Es una pregunta del dominio —a quién le
+        // sirve— y no de canal.
         $partners = $this->audience->resolve($offer, $scope);
-
-        // …y de esos, quiénes quieren que se les avise por aquí. Son dos
-        // preguntas distintas y conviene que se lean como tales: la audiencia
-        // dice a quién le sirve la tarea, la preferencia si quiere enterarse.
-        $partners = $this->preferences->filter(
-            $partners,
-            NotificationTopic::VOLUNTEERING,
-            NotificationTopic::CHANNEL_PUSH,
-        );
-
         if ([] === $partners) {
             return null;
         }
 
-        $recipients = $this->users->findByPartners($partners);
-        if ([] === $recipients) {
+        // Y de esos, quiénes quieren enterarse por cada vía. Son listas
+        // distintas a propósito: hay quien sólo quiere el correo y quien sólo
+        // quiere el móvil, y mandar a la unión de ambas es exactamente lo que
+        // hace que la gente apague los avisos.
+        $byPush = $this->preferences->filter($partners, NotificationTopic::VOLUNTEERING, NotificationTopic::CHANNEL_PUSH);
+        $byEmail = $this->emailEnabled()
+            ? $this->preferences->filter($partners, NotificationTopic::VOLUNTEERING, NotificationTopic::CHANNEL_EMAIL)
+            : [];
+
+        if ([] === $byPush && [] === $byEmail) {
             return null;
         }
+
+        $recipients = $this->users->findByPartners($byPush);
 
         $call = (new VolunteerCall())
             ->setOffer($offer)
             ->setScope($scope)
             ->setTriggeredBy($triggeredBy)
-            ->setRecipients(\count($recipients));
+            // Cuenta PERSONAS avisadas por cualquier vía, no envíos: quien
+            // recibe correo y push es una sola persona a la que se ha pedido
+            // ayuda, y es lo que la pantalla de gestión enseña.
+            ->setRecipients(\count($this->union($byPush, $byEmail)));
 
         try {
             $this->entityManager->persist($call);
@@ -149,6 +153,8 @@ class VolunteerCallNotifier
             $this->body($offer),
             '/panel/voluntariado'
         );
+
+        $this->email($offer, $byEmail);
 
         return $call;
     }

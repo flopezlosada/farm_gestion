@@ -108,7 +108,9 @@ class VolunteerOfferType extends AbstractType
                 'required' => false,
                 'html5' => true,
                 'scale' => 2,
-                'attr' => ['step' => '0.5', 'min' => 0, 'max' => 24],
+                // step libre: por dentro son minutos, así que 4,2 h son 252 y no
+                // hay motivo para que el navegador lo rechace.
+                'attr' => ['step' => 'any', 'min' => 0, 'max' => 24],
                 'help' => 'Lo que la asociación decide que vale este trabajo, que no tiene por qué ser lo que dura. Se puede poner media hora (0,5) o un cuarto (0,25).',
             ])
             // Se pregunta AQUÍ y no al cerrar la tarea. Es una propiedad del

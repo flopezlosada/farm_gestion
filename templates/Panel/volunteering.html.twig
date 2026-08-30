@@ -205,10 +205,15 @@
             {% endembed %}
         {% endif %}
 
-        {# ============ 3. DE QUÉ AVISAR ============ #}
+        {# ============ 3. QUÉ TAREAS TE INTERESAN ============
+         # AQUÍ Y NO EN «AVISOS», aunque de esto salga a quién se avisa. Lo que
+         # se elige es en qué quiere participar cada cual —su voluntariado—, no
+         # por qué canal quiere enterarse; eso último es lo que vive en Avisos.
+         # Puestas juntas, las dos cosas se leían como la misma y ninguna se
+         # entendía: una habla de huerta y reparto, la otra de correo y móvil. #}
         {% embed '_components/csa_card.html.twig' with {
-            title: 'De qué quieres que te avisemos',
-            icon: 'fa-bell-o'
+            title: 'Qué tareas te interesan',
+            icon: 'fa-hand-paper-o'
         } %}
             {% block body %}
                 {% import '_macros/volunteering.html.twig' as vol %}
@@ -230,17 +235,57 @@
                     {% endif %}
                 </p>
 
-                {# El formulario se fue a «Avisos», que es donde el socix busca
-                 # cómo silenciar algo: se contesta una vez y aquí ocupaba media
-                 # pantalla en cada visita, por delante de lo único que cambia cada
-                 # semana. Se queda el ESTADO —que sí conviene ver desde aquí, para
-                 # entender por qué llega lo que llega— y el enlace para cambiarlo.
-                 #
-                 # Y con él se fue el segundo botón de activar avisos, que estaba
-                 # duplicado con el de la otra pantalla. #}
-                <p>
-                    <a href="{{ path('panel_notifications') }}" class="csa-btn csa-btn--secondary csa-btn--sm">Cambiar de qué me avisan</a>
-                </p>
+                {# Tras un <details> y no a la vista: se contesta una vez y luego
+                 # se mira cero veces, pero abierto ocupaba media pantalla en cada
+                 # visita por delante de lo único que cambia cada semana. #}
+                <details class="vol-details">
+                    <summary>Cambiar qué tareas me interesan</summary>
+
+                    <form method="post" action="{{ path('panel_volunteering_preferences') }}">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_volunteering') }}">
+
+                        {#
+                         # Este texto NO es relleno: de él depende que el escalado de
+                         # avisos sea honesto. Marcar = "avísame de esto". No marcar
+                         # nada = "avísame de lo que sea sencillo". Si dijera otra
+                         # cosa, quien marca dos categorías recibiría avisos de todo
+                         # y dejaría de fiarse de esta pantalla.
+                         #}
+                        <p class="vol-help">
+                            Marca lo que te apetezca hacer y te avisaremos sólo de eso.
+                            Si no marcas nada, te avisaremos únicamente de las tareas
+                            sencillas que puede hacer cualquiera.
+                        </p>
+
+                        <div class="vol-prefs">
+                            {% for category in categories %}
+                                <label class="vol-pref">
+                                    <input type="checkbox" name="categories[]" value="{{ category.id }}"
+                                           {% if category.id in my_category_ids %}checked{% endif %}>
+                                    <span class="vol-pref__name">{{ category.name }}</span>
+                                    {% if category.description %}
+                                        <span class="vol-pref__desc">{{ category.description }}</span>
+                                    {% endif %}
+                                </label>
+                            {% endfor %}
+                        </div>
+
+                        {#
+                         # La salida explícita. NO es lo mismo que no marcar nada:
+                         # no marcar nada significa "avísame de lo sencillo". Y NO es
+                         # lo mismo que apagar el voluntariado en «Avisos»: aquello
+                         # calla los canales, esto saca a la persona de las
+                         # audiencias — no se la cuenta ni para el aviso general.
+                         #}
+                        <label class="vol-optout">
+                            <input type="checkbox" name="opt_out" value="1"
+                                   {% if partner.volunteeringOptOut %}checked{% endif %}>
+                            <span>No quiero que me avisen de voluntariado</span>
+                        </label>
+
+                        <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">Guardar</button>
+                    </form>
+                </details>
             {% endblock %}
         {% endembed %}
 

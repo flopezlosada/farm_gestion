@@ -61,6 +61,13 @@
        está leyendo. Se le quita el texto de los controles que lleve dentro para
        que no salga "Horas 4" ni el contenido de un desplegable. */
     function labelOf(field) {
+        // aria-label primero: en una tabla los campos no van envueltos en un
+        // <label> —la cabecera de la columna hace ese papel— y sin esto el aviso
+        // diría "hours[11]", que no le dice nada a nadie.
+        if (field.getAttribute('aria-label')) {
+            return field.getAttribute('aria-label');
+        }
+
         var label = field.closest('label');
 
         if (!label) {
