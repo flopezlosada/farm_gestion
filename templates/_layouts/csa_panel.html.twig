@@ -58,6 +58,9 @@
             { label: 'Mi perfil', short: 'Perfil', icon: 'fa-user',
               url: path('panel_profile'), active: route starts with 'panel_profile', tab: false,
               hint: 'Tus datos y tu contraseña' },
+            { label: 'Avisos', short: 'Avisos', icon: 'fa-bell-o',
+              url: path('panel_notifications'), active: route == 'panel_notifications', tab: false,
+              hint: 'Qué te avisamos y por dónde' },
         ]) %}
 
         {# En el móvil sólo bajan las tres primeras marcadas como `tab`; lo demás va

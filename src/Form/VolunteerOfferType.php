@@ -3,8 +3,10 @@
 namespace App\Form;
 
 use App\Entity\Node;
+use App\Entity\Partner;
 use App\Entity\VolunteerCategory;
 use App\Entity\VolunteerOffer;
+use App\Repository\PartnerRepository;
 use App\Service\Volunteering\CreditedTime;
 use App\Service\Volunteering\OfferRepeatDates;
 use Symfony\Bridge\Doctrine\Form\Type\EntityType;
@@ -109,6 +111,25 @@ class VolunteerOfferType extends AbstractType
                 'attr' => ['step' => '0.5', 'min' => 0, 'max' => 24],
                 'help' => 'Lo que la asociación decide que vale este trabajo, que no tiene por qué ser lo que dura. Se puede poner media hora (0,5) o un cuarto (0,25).',
             ])
+            // Se pregunta AQUÍ y no al cerrar la tarea. Es una propiedad del
+            // trabajo, como el sitio o la hora, y preguntarlo después —mientras
+            // se pasa lista— era pedir una decisión de configuración en medio de
+            // otra faena. Como no se preguntaba en ningún sitio obligatorio, lo
+            // normal era que no constara nadie.
+            ->add('coordinator', EntityType::class, [
+                'label' => 'Quién la coordina',
+                'class' => Partner::class,
+                'choice_label' => fn (Partner $p): string => trim($p->getName().' '.$p->getSurname()),
+                'query_builder' => static fn (PartnerRepository $r) => $r->createQueryBuilder('p')
+                    ->where('p.status = :activo')
+                    ->setParameter('activo', Partner::STATUS_ACTIVO)
+                    ->orderBy('p.name', 'ASC')
+                    ->addOrderBy('p.surname', 'ASC'),
+                'required' => false,
+                'placeholder' => '— Nadie en concreto —',
+                'attr' => ['data-placeholder' => 'Escribe un nombre…'],
+                'help' => 'Quien monta esta tarea: busca gente, la cuadra y está pendiente. Se le computan las horas aunque no venga a trabajar, y NO ocupa plaza. No es lo mismo que quien coordina el área.',
+            ])
             ->add('openToAnyone', CheckboxType::class, [
                 'label' => 'Esto lo puede hacer cualquiera',
                 'required' => false,
@@ -128,6 +149,16 @@ class VolunteerOfferType extends AbstractType
                 ],
             ])
         ;
+
+        // Horas arriba, minutos abajo. Un transformer y no dos campos ni un
+        // `mapped => false` con copia a mano: así la entidad no se entera de en
+        // qué unidad se escribió y no hay un segundo sitio donde se pueda
+        // olvidar la conversión. En buildForm y no en addRepeatFields, que sólo
+        // corre en el alta: ahí quedaba la edición pidiendo minutos.
+        $builder->get('creditedMinutes')->addModelTransformer(new CallbackTransformer(
+            static fn (?int $minutes): ?float => CreditedTime::hoursFromMinutes($minutes),
+            static fn ($hours): ?int => CreditedTime::minutesFromHours($hours),
+        ));
 
         if ($options['with_repeat']) {
             $this->addRepeatFields($builder);
@@ -176,15 +207,6 @@ class VolunteerOfferType extends AbstractType
             ])
             ->addEventListener(FormEvents::POST_SUBMIT, $this->validateRepeat(...))
         ;
-
-        // Horas arriba, minutos abajo. Un transformer y no dos campos ni un
-        // `mapped => false` con copia a mano: así la entidad no se entera de en
-        // qué unidad se escribió y no hay un segundo sitio donde se pueda
-        // olvidar la conversión.
-        $builder->get('creditedMinutes')->addModelTransformer(new CallbackTransformer(
-            static fn (?int $minutes): ?float => CreditedTime::hoursFromMinutes($minutes),
-            static fn ($hours): ?int => CreditedTime::minutesFromHours($hours),
-        ));
     }
 
     /**

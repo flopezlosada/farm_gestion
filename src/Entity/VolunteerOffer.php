@@ -216,6 +216,30 @@ class VolunteerOffer
     private ?User $createdBy = null;
 
     /**
+     * Quién monta ESTA tarea: busca gente, la cuadra, avisa y está pendiente.
+     *
+     * NO ES EL COORDINADOR DEL ÁREA, y confundirlos era el error. Un área tiene
+     * varias personas coordinándola ({@see VolunteerCategory::$coordinators} es
+     * ManyToMany) y el reparto son cincuenta y dos tareas al año: saber quién
+     * lleva "Reparto" no dice quién montó el del 31 de agosto. Además aquéllos
+     * son `User` —hay quien coordina sin ser socix— y las horas se le computan a
+     * un `Partner`, así que no se puede derivar el uno del otro.
+     *
+     * SE DICE AL CREAR LA TAREA y no al cerrarla. Es una propiedad del trabajo,
+     * como el sitio o la hora; preguntarlo después, mientras se pasa lista, era
+     * pedir una decisión de configuración en medio de otra faena — y como no se
+     * preguntaba en ningún sitio obligatorio, lo normal era que no constara
+     * nadie y quien más sostiene el voluntariado saliera con el contador a cero.
+     *
+     * Nullable porque no toda tarea tiene a alguien al mando: una llamada
+     * abierta a plantar puede no tenerlo.
+     *
+     * @ORM\ManyToOne(targetEntity="App\Entity\Partner")
+     * @ORM\JoinColumn(name="coordinator_id", referencedColumnName="id", nullable=true, onDelete="SET NULL")
+     */
+    private ?Partner $coordinator = null;
+
+    /**
      * De qué tarea salió ésta, si se creó repitiendo otra.
      *
      * Sirve para poder responder "¿de dónde salieron estas doce?" cuando alguien
@@ -273,6 +297,10 @@ class VolunteerOffer
         $copy->companionsAllowed = $this->companionsAllowed;
         $copy->creditedMinutes = $this->creditedMinutes;
         $copy->openToAnyone = $this->openToAnyone;
+        // Quien monta el reparto de los viernes lo monta todos los viernes: la
+        // copia hereda coordinación porque es parte de cómo se hace este
+        // trabajo, no de lo que pasó en una fecha concreta.
+        $copy->coordinator = $this->coordinator;
         $copy->createdBy = $this->createdBy;
         $copy->copiedFrom = $this;
         $copy->status = self::STATUS_DRAFT;
@@ -871,6 +899,24 @@ class VolunteerOffer
             $this->signups->add($signup);
             $signup->setOffer($this);
         }
+
+        return $this;
+    }
+
+    /**
+     * @return Partner|null quién monta esta tarea, o null si no hay nadie al mando
+     */
+    public function getCoordinator(): ?Partner
+    {
+        return $this->coordinator;
+    }
+
+    /**
+     * @param Partner|null $coordinator quién monta esta tarea
+     */
+    public function setCoordinator(?Partner $coordinator): self
+    {
+        $this->coordinator = $coordinator;
 
         return $this;
     }

@@ -279,6 +279,10 @@ class PanelVolunteeringController extends AbstractController
      * marcar ninguna, "avísame de lo que sea sencillo". El texto de la pantalla
      * tiene que decirlo con esas palabras o el escalado de avisos miente.
      */
+    // El formulario que llega aquí vive en «Avisos» ({@see \App\Controller\PanelController::notifications()}),
+    // no en esta pantalla, así que se vuelve allí. La ruta se queda bajo
+    // /panel/voluntariado y con el IsGranted del módulo: son preferencias DE
+    // voluntariado y no deben poder tocarse con el módulo apagado.
     #[Route('/preferencias', name: 'panel_volunteering_preferences', methods: ['POST'])]
     public function preferences(
         Request $request,
@@ -293,7 +297,7 @@ class PanelVolunteeringController extends AbstractController
         if (!$this->isCsrfTokenValid('panel_volunteering', (string) $request->request->get('_csrf_token'))) {
             $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
 
-            return $this->redirectToRoute('panel_volunteering');
+            return $this->redirectToRoute('panel_notifications');
         }
 
         $partner = $this->getUser()->getPartner();
@@ -328,7 +332,7 @@ class PanelVolunteeringController extends AbstractController
                 : 'Guardado. Te avisaremos de lo que has elegido.'
         );
 
-        return $this->redirectToRoute('panel_volunteering');
+        return $this->redirectToRoute('panel_notifications');
     }
 
     /**

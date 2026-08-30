@@ -81,6 +81,15 @@
                     {% if not offer.openToAnyone %}
                         <span class="prt-chip prt-chip--warn">Sólo a quien lo tenga marcado</span>
                     {% endif %}
+
+                    {# Quien monta la tarea, arriba: es a quien hay que llamar si algo
+                     # pasa, y saberlo sin abrir pestañas es la mitad de coordinar. #}
+                    {% if offer.coordinator %}
+                        <span class="prt-chip prt-chip--mute">
+                            <i class="fa fa-star-o"></i>
+                            La coordina {{ offer.coordinator.name }} {{ offer.coordinator.surname }}
+                        </span>
+                    {% endif %}
                 </div>
             </div>
 
@@ -439,7 +448,6 @@
                                                                        min="0" max="24" step="0.5"
                                                                        data-vol-minutes
                                                                        value="{{ signup.creditedMinutes ? csa.qty(signup.creditedMinutes / 60)|replace({',': '.'}) : '' }}"
-                                                                       placeholder="{{ csa.qty((offer.creditedMinutes ?: 0) / 60)|replace({',': '.'}) }}"
                                                                        aria-label="Horas que computan a {{ signup.partner.name }} {{ signup.partner.surname }}">
                                                                 <span class="vol-minutes__unit">h</span>
                                                             {% endif %}
@@ -523,10 +531,11 @@
                         {% endif %}
 
                         {# ---- Anotar a alguien ----
-                         # Dos huecos que se notan en cuanto esto se usa de verdad: quien ORGANIZA
-                         # la tarea no se apunta a ella, así que su contador salía a cero — y es la
-                         # gente que más sostiene el voluntariado. Y quien aparece sin haberse
-                         # apuntado tampoco constaba, que pasa constantemente. #}
+                         # Sólo para quien apareció sin haberse apuntado, que pasa
+                         # constantemente. Quien coordina YA NO se anota aquí: se dice al crear
+                         # la tarea y su inscripción se pone sola, porque preguntarlo en medio
+                         # de pasar lista era pedir una decisión de configuración durante otra
+                         # faena — y así no lo ponía nadie. #}
                         {% if can_edit %}
                             <hr class="vol-sep">
 
@@ -534,7 +543,7 @@
                              # panel, y un cuarto titular Fraunces aquí abajo competía con
                              # el del hero por la misma atención. #}
                             <p class="vol-help">
-                                Anotar a quien organizó esta tarea, o a quien vino sin apuntarse.
+                                Anotar a alguien que vino sin apuntarse.
                             </p>
 
                             {# data-csa-dropdowns: sin él caen los <select> nativos del sistema
@@ -548,7 +557,8 @@
 
                                 <label>
                                     Quién
-                                    <select name="partner" class="csa-select" required>
+                                    <select name="partner" class="csa-select" required
+                                            data-placeholder="Escribe un nombre…">
                                         <option value="">— elige —</option>
                                         {% for partner in all_partners %}
                                             <option value="{{ partner.id }}">{{ partner.name }} {{ partner.surname }}</option>
@@ -556,23 +566,15 @@
                                     </select>
                                 </label>
 
-                                {# "En calidad de" era jerga. Lo que se pregunta es qué hizo esa
-                                 # persona, y la diferencia importa: quien organiza computa horas
-                                 # pero NO ocupa plaza, así que anotarlo mal da por llena una
-                                 # tarea en la que falta gente. #}
-                                <label>
-                                    Qué hizo
-                                    <select name="role" class="csa-select">
-                                        <option value="participant">vino a trabajar</option>
-                                        <option value="coordinator">organizó la tarea</option>
-                                    </select>
-                                </label>
-
+                                {# Sin placeholder con las horas de la tarea: puesto ahí parece un
+                                 # valor ya escrito, y "0" sería peor porque diría que dejarlo en
+                                 # blanco no computa nada — cuando es justo al revés. Lo que pasa
+                                 # si se deja vacío se explica debajo, en prosa. #}
                                 <label>
                                     Horas
-                                    <input type="number" name="hours" min="0" max="24" step="0.5"
-                                           placeholder="{{ csa.qty((offer.creditedMinutes ?: 0) / 60) }}"
-                                           class="csa-input csa-input--compact">
+                                    <input type="number" name="hours" min="0.5" max="24" step="0.5"
+                                           class="csa-input csa-input--compact"
+                                           {% if not offer.creditedMinutes %}required{% endif %}>
                                 </label>
 
                                 <button type="submit" class="csa-btn csa-btn--secondary csa-btn--sm">Anotar</button>
@@ -582,7 +584,6 @@
                                 Se anota como hecho: si lo estás registrando a mano es porque
                                 sabes que ocurrió. Si dejas las horas en blanco se usan las
                                 de la tarea ({{ csa.qty((offer.creditedMinutes ?: 0) / 60) }} h).
-                                Quien organizó la tarea computa horas pero no ocupa plaza.
                             </p>
                         {% endif %}
                     </div>

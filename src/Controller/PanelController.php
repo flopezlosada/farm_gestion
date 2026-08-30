@@ -18,6 +18,7 @@ use App\Form\PartnerProfileType;
 use App\Repository\BasketRepository;
 use App\Repository\PartnerBasketShareRepository;
 use App\Repository\PartnerDeliveryShiftRepository;
+use App\Repository\VolunteerCategoryRepository;
 use App\Repository\VolunteerOfferRepository;
 use App\Repository\VolunteerSignupRepository;
 use App\Repository\WeeklyBasketGroupRepository;
@@ -162,6 +163,52 @@ class PanelController extends AbstractController
             'my_contribution' => $this->isGranted('FEATURE_VOLUNTEERING')
                 ? $contributions->forPartner($partner)
                 : null,
+        ]);
+    }
+
+    /**
+     * Cómo te avisamos: el único sitio donde el socix configura sus avisos.
+     *
+     * EXISTE PORQUE ESTABA REPARTIDO. El interruptor del dispositivo vivía en
+     * «Mi perfil» y de qué te avisan, dentro de la pantalla de voluntariado —con
+     * un segundo botón de activar avisos duplicado allí—. Configurar lo mismo en
+     * dos sitios, uno de ellos detrás de un módulo que se puede apagar, no lo
+     * entiende nadie: quien busca cómo silenciar algo va a sus ajustes, no a la
+     * pantalla del tema.
+     *
+     * Se llama «Avisos» y no «Configuración» porque es lo que hay que
+     * configurar. El día que haya otras opciones de la cuenta, esto pasa a ser
+     * una sección de una pantalla de ajustes; hoy sería una carpeta con un solo
+     * papel dentro.
+     *
+     * NO lleva `IsGranted` de voluntariado: el interruptor del dispositivo
+     * gobierna TODOS los avisos —empezando por el de la cesta—, así que la
+     * pantalla tiene que existir con el módulo apagado. Lo que se esconde es el
+     * bloque de preferencias, que sí es suyo.
+     */
+    #[Route('/avisos', name: 'panel_notifications', methods: ['GET'])]
+    public function notifications(VolunteerCategoryRepository $categories): Response
+    {
+        if (($redirect = $this->ensureReady()) !== null) {
+            return $redirect;
+        }
+
+        $partner = $this->getUser()->getPartner();
+        $volunteering = $this->isGranted('FEATURE_VOLUNTEERING');
+
+        return $this->render('Panel/notifications.html.twig', [
+            'partner' => $partner,
+            'volunteering' => $volunteering,
+            // Sólo con el módulo encendido: apagado, la pantalla no pinta el
+            // bloque y no hay por qué pagar la consulta.
+            'categories' => $volunteering ? $categories->findActive() : [],
+            // Ids y no entidades: comparar objetos Doctrine con el operador `in`
+            // de Twig depende de la identidad de instancia y falla en cuanto una
+            // de las dos listas viene de otra consulta.
+            'my_category_ids' => array_map(
+                static fn ($category) => $category->getId(),
+                $partner->getVolunteerCategories()->toArray()
+            ),
         ]);
     }
 

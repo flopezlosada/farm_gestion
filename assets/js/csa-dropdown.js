@@ -9,23 +9,41 @@
  * Activación opt-in: sólo se aplica a los <select> dentro de un contenedor con
  * el atributo [data-csa-dropdowns], para no afectar a pantallas no preparadas.
  *
+ * DOS MODOS, y los decide el tamaño de la lista:
+ *
+ *  · Pocas opciones → un botón que abre el menú. Es lo de siempre.
+ *  · Muchas (más de UMBRAL_BUSCADOR) → el control ES el campo donde se escribe,
+ *    y la lista se filtra mientras tecleas.
+ *
+ * El segundo modo existe porque elegir entre 246 socixs arrastrando un menú es
+ * inusable, y en un <select> nativo lo único que hay es saltar a la inicial.
+ * Se escribe DENTRO del propio control y no en una caja dentro del menú: la
+ * caja heredaba el ancho del control —a menudo estrecho— y quedaba un cajón
+ * donde no cabía ni el texto de ayuda.
+ *
  * Sincronización bidireccional: si el <select> cambia por código (p.ej. un
  * reset condicional), basta con disparar un evento 'change' nativo sobre él y
  * el dropdown refleja el nuevo valor.
- *
- * BUSCADOR AUTOMÁTICO en las listas largas. Elegir entre 246 socixs arrastrando
- * un menú es inusable, y en un <select> nativo lo único que hay es saltar a la
- * inicial. A partir de UMBRAL_BUSCADOR opciones aparece un campo de filtro; por
- * debajo no, porque sobre tres opciones un buscador es una caja vacía que
- * estorba. Sin configurar nada: el componente lo decide por el tamaño de la
- * lista.
  */
 (function () {
     'use strict';
 
-    /* A partir de cuántas opciones aparece el buscador. Doce entran de un
-       vistazo en el menú; más que eso ya obliga a desplazarse. */
+    /* A partir de cuántas opciones el control pasa a ser un campo de búsqueda.
+       Doce entran de un vistazo en el menú; más que eso ya obliga a desplazarse. */
     var UMBRAL_BUSCADOR = 12;
+
+    /* Cuántas letras hay que escribir antes de que aparezca la lista. Sin esto,
+       enfocar el campo desplegaba los 246 nombres de golpe y tapaba media
+       pantalla — y con la lista completa delante, el campo de búsqueda no sirve
+       de nada porque no has escrito todavía. Tres letras dejan un puñado de
+       resultados, que es lo que se puede leer de un vistazo. */
+    var MIN_CARACTERES = 3;
+
+    /* Tope de alto del menú, en píxeles. Tiene que coincidir con el max-height
+       de .csa-dropdown__menu: al colocarlo se calcula el hueco disponible, y sin
+       este tope un control al final de la página abría hacia arriba un menú de
+       mil píxeles que tapaba la ficha entera. */
+    var ALTO_MAXIMO = 280;
 
     /* Sin acentos y en minúsculas, para que "agustin" encuentre a "Agustín" y
        "jose" a "JOSÉ" — en la base de datos muchos nombres están en mayúsculas.
@@ -44,22 +62,38 @@
         }
         select.dataset.csaEnhanced = '1';
 
-        var wrap = document.createElement('div');
-        wrap.className = 'csa-dropdown';
+        // El modo se fija al montar: una lista que crece a mitad de página no
+        // cambia de control bajo los dedos de quien la está usando.
+        var searchable = select.options.length > UMBRAL_BUSCADOR;
 
-        var trigger = document.createElement('button');
-        trigger.type = 'button';
-        trigger.className = 'csa-dropdown__trigger';
+        var wrap = document.createElement('div');
+        wrap.className = 'csa-dropdown' + (searchable ? ' csa-dropdown--search' : '');
+
+        var trigger;
+        var value = null;
+
+        if (searchable) {
+            trigger = document.createElement('input');
+            trigger.type = 'text';
+            trigger.className = 'csa-dropdown__trigger csa-dropdown__trigger--search';
+            // Que el navegador no ofrezca aquí direcciones ni nombres guardados:
+            // esto filtra una lista, no rellena un dato libre.
+            trigger.setAttribute('autocomplete', 'off');
+        } else {
+            trigger = document.createElement('button');
+            trigger.type = 'button';
+            trigger.className = 'csa-dropdown__trigger';
+            value = document.createElement('span');
+            value.className = 'csa-dropdown__value';
+            trigger.appendChild(value);
+        }
+
         trigger.setAttribute('role', 'combobox');
         trigger.setAttribute('aria-haspopup', 'listbox');
         trigger.setAttribute('aria-expanded', 'false');
         if (select.disabled) {
             trigger.disabled = true;
         }
-
-        var value = document.createElement('span');
-        value.className = 'csa-dropdown__value';
-        trigger.appendChild(value);
 
         var menu = document.createElement('ul');
         menu.className = 'csa-dropdown__menu';
@@ -74,28 +108,15 @@
 
         var activeIndex = -1;
 
-        // El buscador sólo existe si la lista lo pide. Se crea una vez y se
-        // reutiliza: recrearlo en cada apertura perdería el foco a medias.
-        var searchable = select.options.length > UMBRAL_BUSCADOR;
-        var searchRow = null;
-        var search = null;
-
+        /* Qué se lee en el campo vacío. La pantalla puede decirlo con
+           data-placeholder, porque "— elige —" sirve de etiqueta en un botón
+           pero no dice nada en un campo donde hay que escribir: ahí lo útil es
+           "Escribe un nombre…". */
         if (searchable) {
-            searchRow = document.createElement('li');
-            searchRow.className = 'csa-dropdown__searchrow';
-            // role=presentation: es una fila del <ul> pero NO una opción, y sin
-            // esto un lector de pantalla la anunciaría como una más de la lista.
-            searchRow.setAttribute('role', 'presentation');
-
-            search = document.createElement('input');
-            search.type = 'text';
-            search.className = 'csa-dropdown__search';
-            search.placeholder = 'Escribe para buscar…';
-            search.setAttribute('aria-label', 'Buscar en la lista');
-            // Que el navegador no ofrezca aquí direcciones ni nombres guardados:
-            // esto filtra una lista, no rellena un dato.
-            search.setAttribute('autocomplete', 'off');
-            searchRow.appendChild(search);
+            var emptyOption = select.querySelector('option[value=""]');
+            trigger.placeholder = select.dataset.placeholder
+                || (emptyOption ? emptyOption.textContent.trim().replace(/^[—–-]\s*|\s*[—–-]$/g, '') : '')
+                || 'Escribe para buscar…';
         }
 
         function optionItems() {
@@ -106,7 +127,7 @@
 
         function visibleItems() {
             return optionItems().filter(function (li) {
-                return !li.hidden;
+                return !li.hidden && !li.classList.contains('csa-dropdown__option--disabled');
             });
         }
 
@@ -114,23 +135,37 @@
             return menu.querySelector('.csa-dropdown__option[data-index="' + i + '"]');
         }
 
+        function selectedLabel() {
+            var opt = select.options[select.selectedIndex];
+
+            return opt && '' !== opt.value ? opt.textContent.trim() : '';
+        }
+
         function syncValueLabel() {
+            if (searchable) {
+                trigger.value = selectedLabel();
+
+                return;
+            }
+
             var opt = select.options[select.selectedIndex];
             value.textContent = opt ? opt.textContent.trim() : '';
             value.classList.toggle(
                 'csa-dropdown__value--placeholder',
-                !opt || opt.value === ''
+                !opt || '' === opt.value
             );
         }
 
         function buildMenu() {
             menu.innerHTML = '';
 
-            if (searchRow) {
-                menu.appendChild(searchRow);
-            }
-
             Array.prototype.forEach.call(select.options, function (opt, i) {
+                // En modo búsqueda la opción vacía no se ofrece: ya vive en el
+                // placeholder, y vaciar la elección se hace borrando el texto.
+                if (searchable && '' === opt.value) {
+                    return;
+                }
+
                 var li = document.createElement('li');
                 li.className = 'csa-dropdown__option';
                 li.setAttribute('role', 'option');
@@ -143,10 +178,12 @@
                 if (opt.disabled) {
                     li.classList.add('csa-dropdown__option--disabled');
                 } else {
-                    li.addEventListener('click', function () {
+                    // mousedown y no click: el 'blur' del campo llega antes que
+                    // el click y cerraría el menú antes de que se registrara.
+                    li.addEventListener('mousedown', function (e) {
+                        e.preventDefault();
                         commit(i);
                         close();
-                        trigger.focus();
                     });
                 }
                 menu.appendChild(li);
@@ -165,7 +202,7 @@
             optionItems().forEach(function (li) {
                 var haystack = fold(li.textContent);
                 var match = terms.every(function (term) {
-                    return haystack.indexOf(term) !== -1;
+                    return -1 !== haystack.indexOf(term);
                 });
                 li.hidden = !match;
                 if (match) {
@@ -173,7 +210,7 @@
                 }
             });
 
-            // Sin resultados se dice; una lista vacía sin explicación parece el
+            // Sin resultados se dice: una lista vacía sin explicación parece el
             // componente roto y no "no hay nadie que se llame así".
             var empty = menu.querySelector('.csa-dropdown__empty');
             if (0 === shown && !empty) {
@@ -186,8 +223,8 @@
                 empty.remove();
             }
 
-            // Si lo que estaba marcado se ha ocultado, la marca salta a lo
-            // primero que queda: así Enter siempre elige algo que se ve.
+            // Si lo marcado se ha ocultado, la marca salta a lo primero que
+            // queda: así Enter siempre elige algo que se está viendo.
             var current = itemFor(activeIndex);
             if (!current || current.hidden) {
                 var vis = visibleItems();
@@ -203,8 +240,11 @@
         }
 
         function markSelected() {
-            Array.prototype.forEach.call(menu.children, function (li, i) {
-                li.setAttribute('aria-selected', i === select.selectedIndex ? 'true' : 'false');
+            optionItems().forEach(function (li) {
+                li.setAttribute(
+                    'aria-selected',
+                    Number(li.dataset.index) === select.selectedIndex ? 'true' : 'false'
+                );
             });
         }
 
@@ -229,9 +269,7 @@
          * pantalla.
          */
         function moveActive(delta) {
-            var vis = visibleItems().filter(function (li) {
-                return !li.classList.contains('csa-dropdown__option--disabled');
-            });
+            var vis = visibleItems();
 
             if (!vis.length) {
                 return;
@@ -253,29 +291,59 @@
         }
 
         function onDocClick(e) {
-            if (!wrap.contains(e.target)) {
+            if (!wrap.contains(e.target) && !menu.contains(e.target)) {
                 close();
             }
         }
 
+        /**
+         * Le da sitio al menú en coordenadas de ventana.
+         *
+         * Hace falta porque el menú va `position: fixed`, y va fixed porque
+         * cualquier ancestro con `overflow: hidden` —una tarjeta con esquinas
+         * redondeadas, sin ir más lejos— recortaba el desplegable por el borde.
+         *
+         * Se abre hacia abajo salvo que no quepa y arriba haya más hueco: en una
+         * fila al final de la página, un menú que sale hacia abajo queda fuera
+         * de la pantalla y hay que hacer scroll a ciegas.
+         */
+        function placeMenu() {
+            var r = trigger.getBoundingClientRect();
+            var margen = 12;
+            var debajo = window.innerHeight - r.bottom - margen;
+            var encima = r.top - margen;
+            var abajo = debajo >= 180 || debajo >= encima;
+
+            menu.style.left = r.left + 'px';
+            menu.style.minWidth = r.width + 'px';
+
+            if (abajo) {
+                menu.style.top = (r.bottom + 2) + 'px';
+                menu.style.bottom = 'auto';
+                menu.style.maxHeight = Math.min(ALTO_MAXIMO, Math.max(120, debajo)) + 'px';
+            } else {
+                menu.style.top = 'auto';
+                menu.style.bottom = (window.innerHeight - r.top + 2) + 'px';
+                menu.style.maxHeight = Math.min(ALTO_MAXIMO, Math.max(120, encima)) + 'px';
+            }
+        }
+
         function open() {
-            if (trigger.disabled) {
+            if (trigger.disabled || !menu.hidden) {
                 return;
             }
             buildMenu();
             menu.hidden = false;
+            placeMenu();
             trigger.setAttribute('aria-expanded', 'true');
             wrap.classList.add('csa-dropdown--open');
             setActive(select.selectedIndex);
             document.addEventListener('click', onDocClick, true);
-
-            // El foco al buscador y no al menú: quien abre una lista de
-            // doscientos nombres viene a escribir, no a bajar con la flecha.
-            if (search) {
-                search.value = '';
-                filterMenu('');
-                search.focus();
-            }
+            // En coordenadas de ventana, cualquier desplazamiento deja el menú
+            // flotando lejos de su control. `true` para capturar también el
+            // scroll de contenedores internos, no sólo el de la página.
+            window.addEventListener('scroll', placeMenu, true);
+            window.addEventListener('resize', placeMenu);
         }
 
         function close() {
@@ -284,69 +352,87 @@
             wrap.classList.remove('csa-dropdown--open');
             activeIndex = -1;
             document.removeEventListener('click', onDocClick, true);
+            window.removeEventListener('scroll', placeMenu, true);
+            window.removeEventListener('resize', placeMenu);
         }
 
-        trigger.addEventListener('click', function () {
-            menu.hidden ? open() : close();
-        });
+        /**
+         * El campo vuelve a enseñar lo que hay elegido de verdad. Sin esto
+         * quedaría escrito "ana lo" sin nadie seleccionado, y el formulario se
+         * enviaría vacío pareciendo relleno.
+         *
+         * Va aparte de close() y NO dentro: el menú también se cierra al borrar
+         * letras por debajo del mínimo, y ahí restaurar el texto borraría lo que
+         * se está escribiendo. Sólo se restaura al soltar el campo.
+         */
+        function restoreLabel() {
+            if (searchable) {
+                syncValueLabel();
+            }
+        }
 
-        if (search) {
-            search.addEventListener('input', function () {
-                filterMenu(search.value);
+        if (searchable) {
+            // Enfocar NO abre la lista. Con 246 nombres, desplegarlos al entrar
+            // en el campo tapa media pantalla y estorba justo cuando vienes a
+            // escribir. Sólo se selecciona el texto, para que teclear reemplace
+            // a quien hubiera elegido.
+            trigger.addEventListener('focus', function () {
+                trigger.select();
             });
 
-            // El teclado del buscador es el mismo que el del trigger: escribir,
-            // bajar y Enter tiene que ser un gesto seguido, sin tener que salir
-            // del campo para elegir.
-            search.addEventListener('keydown', function (e) {
-                switch (e.key) {
-                    case 'ArrowDown':
-                        e.preventDefault();
-                        moveActive(1);
-                        break;
-                    case 'ArrowUp':
-                        e.preventDefault();
-                        moveActive(-1);
-                        break;
-                    case 'Enter':
-                        // Siempre, haya marca o no: sin esto, Enter dentro de un
-                        // campo de texto ENVÍA el formulario, y anotar a alguien
-                        // acabaría a medio rellenar.
-                        e.preventDefault();
-                        if (activeIndex >= 0) {
-                            commit(activeIndex);
-                            close();
-                            trigger.focus();
-                        }
-                        break;
-                    case 'Escape':
-                        e.preventDefault();
+            // La lista aparece cuando hay algo que buscar, y desaparece si se
+            // borra por debajo del mínimo: dejarla abierta con dos letras es
+            // volver a enseñar media asociación.
+            trigger.addEventListener('input', function () {
+                if (trigger.value.trim().length < MIN_CARACTERES) {
+                    if (!menu.hidden) {
                         close();
-                        trigger.focus();
-                        break;
+                    }
+
+                    return;
                 }
+
+                open();
+                filterMenu(trigger.value);
             });
 
-            // Un clic en el campo no debe cerrar el menú por el listener de
-            // documento ni reabrirlo por el del trigger.
-            search.addEventListener('click', function (e) {
-                e.stopPropagation();
+            trigger.addEventListener('blur', function () {
+                close();
+                restoreLabel();
+            });
+        } else {
+            trigger.addEventListener('click', function () {
+                menu.hidden ? open() : close();
             });
         }
 
         trigger.addEventListener('keydown', function (e) {
             switch (e.key) {
+                // La flecha abre la lista aunque no se haya escrito nada: es la
+                // salida para quien prefiere mirar el listado entero en vez de
+                // buscar, y para las listas cortas es el gesto de siempre.
                 case 'ArrowDown':
                     e.preventDefault();
-                    menu.hidden ? open() : moveActive(1);
+                    if (menu.hidden) {
+                        open();
+                        if (searchable && trigger.value.trim()) {
+                            filterMenu(trigger.value);
+                        }
+                    } else {
+                        moveActive(1);
+                    }
                     break;
                 case 'ArrowUp':
                     e.preventDefault();
                     menu.hidden ? open() : moveActive(-1);
                     break;
                 case 'Enter':
-                case ' ':
-                    e.preventDefault();
+                    // Se come el evento SIEMPRE en modo búsqueda: sin esto, un
+                    // Enter dentro de un campo de texto envía el formulario y
+                    // anotar a alguien acabaría a medio rellenar.
+                    if (searchable || !menu.hidden) {
+                        e.preventDefault();
+                    }
                     if (menu.hidden) {
                         open();
                     } else if (activeIndex >= 0) {
@@ -358,10 +444,12 @@
                     if (!menu.hidden) {
                         e.preventDefault();
                         close();
+                        restoreLabel();
                     }
                     break;
                 case 'Tab':
                     close();
+                    restoreLabel();
                     break;
             }
         });
