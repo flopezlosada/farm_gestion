@@ -558,7 +558,8 @@
                                 <label>
                                     Quién
                                     <select name="partner" class="csa-select" required
-                                            data-placeholder="Escribe un nombre…">
+                                            data-placeholder="Escribe un nombre…"
+                                            data-invalid-message="Escribe un nombre y elígelo de la lista.">
                                         <option value="">— elige —</option>
                                         {% for partner in all_partners %}
                                             <option value="{{ partner.id }}">{{ partner.name }} {{ partner.surname }}</option>
@@ -566,15 +567,18 @@
                                     </select>
                                 </label>
 
-                                {# Sin placeholder con las horas de la tarea: puesto ahí parece un
-                                 # valor ya escrito, y "0" sería peor porque diría que dejarlo en
-                                 # blanco no computa nada — cuando es justo al revés. Lo que pasa
-                                 # si se deja vacío se explica debajo, en prosa. #}
+                                {# Con las horas de la tarea YA ESCRITAS, no de placeholder: un
+                                 # placeholder con una cifra parece un valor puesto sin serlo, y
+                                 # dejarlo vacío para que el servidor "adivine" es magia que no se
+                                 # ve. Así se lee lo que se va a imputar y sólo se toca a quien se
+                                 # fue antes. Obligatorio: anotar a alguien sin horas no significa
+                                 # nada, y en una tarea que aún no tiene fijado lo que vale el
+                                 # campo sale vacío y hay que rellenarlo. #}
                                 <label>
                                     Horas
-                                    <input type="number" name="hours" min="0.5" max="24" step="0.5"
-                                           class="csa-input csa-input--compact"
-                                           {% if not offer.creditedMinutes %}required{% endif %}>
+                                    <input type="number" name="hours" min="0.5" max="24" step="0.5" required
+                                           value="{{ offer.creditedMinutes ? csa.qty(offer.creditedMinutes / 60)|replace({',': '.'}) : '' }}"
+                                           class="csa-input csa-input--compact">
                                 </label>
 
                                 <button type="submit" class="csa-btn csa-btn--secondary csa-btn--sm">Anotar</button>
@@ -582,8 +586,8 @@
 
                             <p class="vol-help">
                                 Se anota como hecho: si lo estás registrando a mano es porque
-                                sabes que ocurrió. Si dejas las horas en blanco se usan las
-                                de la tarea ({{ csa.qty((offer.creditedMinutes ?: 0) / 60) }} h).
+                                sabes que ocurrió. Vienen puestas las horas de la tarea; cámbialas
+                                si esa persona estuvo otro rato.
                             </p>
                         {% endif %}
                     </div>
