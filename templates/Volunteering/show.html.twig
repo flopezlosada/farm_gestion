@@ -149,7 +149,7 @@
                 <div class="vol-phase__body">
                     <p class="vol-phase__title">
                         {%- if full %}Las plazas están cubiertas
-                        {%- elseif offer.slots %}Faltan {{ offer.remainingSlots }} {{ offer.remainingSlots == 1 ? 'persona' : 'personas' }} por cubrir
+                        {%- elseif offer.slots %}Falta{{ offer.remainingSlots == 1 ? '' : 'n' }} {{ offer.remainingSlots }} {{ offer.remainingSlots == 1 ? 'persona' : 'personas' }} por cubrir
                         {%- else %}Sigue abierta a quien quiera venir{% endif -%}
                     </p>
                     <p class="vol-phase__note">
@@ -189,7 +189,7 @@
                 <span class="vol-phase__icon"><i class="fa fa-hourglass-half"></i></span>
                 <div class="vol-phase__body">
                     <p class="vol-phase__title">
-                        Falta{{ pending == 1 ? '' : 'n' }} {{ pending }} {{ pending == 1 ? 'persona' : 'personas' }} por decir si fueron
+                        Falta{{ pending == 1 ? '' : 'n' }} {{ pending }} {{ pending == 1 ? 'persona' : 'personas' }} por decir si {{ pending == 1 ? 'fue' : 'fueron' }}
                     </p>
                     <p class="vol-phase__note">
                         Se les pregunta en su panel. Si no contestan, ciérrala tú abajo: al hacerlo, estas
