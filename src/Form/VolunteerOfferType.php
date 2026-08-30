@@ -132,6 +132,20 @@ class VolunteerOfferType extends AbstractType
                 'attr' => ['data-placeholder' => 'Escribe un nombre…'],
                 'help' => 'Quien monta esta tarea: busca gente, la cuadra y está pendiente. Se le computan las horas aunque no venga a trabajar, y NO ocupa plaza. No es lo mismo que quien coordina el área.',
             ])
+            // Gente que viene sin ser socix y sin acompañar a nadie. Va en la
+            // tarea y no en una inscripción porque no tiene de quién colgar:
+            // `companions` cuelga siempre de un socix.
+            ->add('guests', IntegerType::class, [
+                'label' => 'Gente de fuera',
+                'required' => false,
+                'attr' => ['min' => 0, 'max' => 99],
+                'help' => 'Personas que vienen a echar una mano sin ser socixs y sin acompañar a nadie. Ocupan plaza —si vienen tres, la tarea ya sólo pide el resto— pero no se les computan horas.',
+            ])
+            ->add('guestsNote', TextType::class, [
+                'label' => 'Quiénes son',
+                'required' => false,
+                'help' => 'Para acordarse dentro de tres meses: «3 estudiantes del IES», «la gente de la cooperativa».',
+            ])
             ->add('openToAnyone', CheckboxType::class, [
                 'label' => 'Esto lo puede hacer cualquiera',
                 'required' => false,

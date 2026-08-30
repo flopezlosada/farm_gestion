@@ -356,6 +356,14 @@
                 {% endif %}
             {% endfor %}
 
+            {# La gente de fuera ocupa sus fichas al final: no tienen nombre en el
+             # sistema, así que llevan icono y se identifican por la nota. #}
+            {% if offer.guests > 0 %}
+                {% for i in 1..offer.guests %}
+                    {% set pips = pips|merge([{ ini: null, name: offer.guestsNote ?: 'Alguien de fuera' }]) %}
+                {% endfor %}
+            {% endif %}
+
             {% set companions_total = offer.signups|filter(s => not s.cancelled)|reduce((acc, s) => acc + s.companions, 0) %}
 
             <div class="vol-occupancy">
@@ -365,27 +373,40 @@
                     <span class="vol-occupancy__of">de {{ offer.slots }} plazas</span>
                 </div>
 
+                {# Se pintan TODAS las personas y luego los huecos que falten. Si
+                 # se recorriera 1..plazas, con más gente que plazas —que pasa:
+                 # alguien trae acompañante de más, o vienen cuatro de fuera para
+                 # tres sitios— desaparecerían fichas sin decir nada. #}
                 <div class="vol-occupancy__pips">
-                    {% for i in 1..offer.slots %}
-                        {% set pip = pips[i - 1]|default(null) %}
-                        {% if pip %}
-                            <span class="vol-pip vol-pip--filled" title="{{ pip.name }}">
-                                {%- if pip.ini %}{{ pip.ini }}{% else %}<i class="fa fa-user-o"></i>{% endif -%}
-                            </span>
-                        {% else %}
-                            <span class="vol-pip vol-pip--empty" aria-hidden="true">+</span>
-                        {% endif %}
+                    {% for pip in pips %}
+                        <span class="vol-pip vol-pip--filled" title="{{ pip.name }}">
+                            {%- if pip.ini %}{{ pip.ini }}{% else %}<i class="fa fa-user-o"></i>{% endif -%}
+                        </span>
                     {% endfor %}
+                    {% if offer.slots > pips|length %}
+                        {% for i in 1..(offer.slots - pips|length) %}
+                            <span class="vol-pip vol-pip--empty" aria-hidden="true">+</span>
+                        {% endfor %}
+                    {% endif %}
                 </div>
 
+                {% set de_mas = offer.filledSlots - offer.slots %}
                 <p class="vol-occupancy__note">
                     {%- if offer.remainingSlots > 0 -%}
                         Quedan <strong>{{ offer.remainingSlots }}</strong> {{ offer.remainingSlots == 1 ? 'plaza libre' : 'plazas libres' }}.
+                    {%- elseif de_mas > 0 -%}
+                        {# remainingSlots nunca baja de cero, así que "completas" tapaba
+                         # que viene MÁS gente de la que cabe — y eso hay que verlo: o
+                         # sobra gente, o las plazas estaban mal puestas. #}
+                        Hay <strong>{{ de_mas }}</strong> {{ de_mas == 1 ? 'persona más' : 'personas más' }} de las plazas previstas.
                     {%- else -%}
                         Plazas completas.
                     {%- endif -%}
                     {% if companions_total > 0 %}
                         {{ companions_total == 1 ? 'Alguien trae acompañante, que ocupa plaza.' : 'Hay ' ~ companions_total ~ ' acompañantes, y ocupan plaza.' }}
+                    {% endif %}
+                    {% if offer.guests > 0 %}
+                        {{ offer.guests }} {{ offer.guests == 1 ? 'persona viene' : 'personas vienen' }} de fuera{% if offer.guestsNote %} ({{ offer.guestsNote }}){% endif %}.
                     {% endif %}
                 </p>
             </div>

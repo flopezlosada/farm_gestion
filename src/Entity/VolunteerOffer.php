@@ -197,6 +197,35 @@ class VolunteerOffer
     private bool $featured = false;
 
     /**
+     * Gente de fuera que viene a echar una mano: un grupo de estudiantes, gente
+     * de otra asociación, quien pasaba por allí.
+     *
+     * NO CABEN EN `VolunteerSignup::$companions`, que es lo primero que se
+     * piensa: aquello cuelga siempre de la inscripción de un socix, y esta gente
+     * no tiene de quién colgar.
+     *
+     * Un número y no filas, por lo mismo que los acompañantes: no son personas
+     * del sistema —no tienen ficha, ni cuenta, ni horas— y darles una les
+     * inventaría una identidad que no existe. Lo único que hace falta saber es
+     * cuántos brazos son, para que la tarea deje de pedir gente que ya está
+     * cubierta.
+     *
+     * @ORM\Column(type="integer", options={"default": 0})
+     */
+    #[Assert\PositiveOrZero(message: 'La gente de fuera no puede ser un número negativo.')]
+    private int $guests = 0;
+
+    /**
+     * Quiénes son esos de fuera ("3 estudiantes del IES", "la gente de la
+     * cooperativa"). Sin esto, dentro de tres meses nadie entiende por qué esa
+     * tarea salió adelante con dos socixs.
+     *
+     * @ORM\Column(name="guests_note", type="string", length=160, nullable=true)
+     */
+    #[Assert\Length(max: 160)]
+    private ?string $guestsNote = null;
+
+    /**
      * @ORM\Column(type="string", length=16, options={"default": "draft"})
      */
     #[Assert\Choice(choices: [self::STATUS_DRAFT, self::STATUS_PUBLISHED, self::STATUS_CANCELLED])]
@@ -301,6 +330,9 @@ class VolunteerOffer
         // copia hereda coordinación porque es parte de cómo se hace este
         // trabajo, no de lo que pasó en una fecha concreta.
         $copy->coordinator = $this->coordinator;
+        // La gente de fuera NO se copia, por lo contrario: que un martes
+        // vinieran tres estudiantes no dice nada del martes siguiente, y
+        // arrastrarlo daría por cubiertas unas plazas que están vacías.
         $copy->createdBy = $this->createdBy;
         $copy->copiedFrom = $this;
         $copy->status = self::STATUS_DRAFT;
@@ -335,7 +367,11 @@ class VolunteerOffer
      */
     public function getFilledSlots(): int
     {
-        $filled = 0;
+        // La gente de fuera cuenta como brazos aunque no tenga inscripción: si
+        // vienen tres estudiantes, una tarea de seis ya sólo necesita tres
+        // socixs, y seguir pidiendo seis traería gente para nada.
+        $filled = $this->guests;
+
         foreach ($this->signups as $signup) {
             if (!$signup->isCancelled()) {
                 // Vía getHeadcount() y no sumando acompañantes aquí: es ese
@@ -899,6 +935,42 @@ class VolunteerOffer
             $this->signups->add($signup);
             $signup->setOffer($this);
         }
+
+        return $this;
+    }
+
+    /**
+     * @return int cuánta gente de fuera viene
+     */
+    public function getGuests(): int
+    {
+        return $this->guests;
+    }
+
+    /**
+     * @param int $guests cuánta gente de fuera viene
+     */
+    public function setGuests(int $guests): self
+    {
+        $this->guests = max(0, $guests);
+
+        return $this;
+    }
+
+    /**
+     * @return string|null quiénes son los de fuera, o null
+     */
+    public function getGuestsNote(): ?string
+    {
+        return $this->guestsNote;
+    }
+
+    /**
+     * @param string|null $guestsNote quiénes son los de fuera
+     */
+    public function setGuestsNote(?string $guestsNote): self
+    {
+        $this->guestsNote = $guestsNote;
 
         return $this;
     }
