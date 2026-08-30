@@ -38,53 +38,97 @@
                 icon: 'fa-bell-o'
             } %}
                 {% block body %}
+                    {# UNA línea antes del botón. Lo demás lo dice el propio botón
+                     # según el estado en que esté (push.js): qué hacer en iPhone,
+                     # cómo desbloquearlo si está bloqueado, o qué mirar si no
+                     # llega nada. Puesto todo aquí a la vez eran cuatro párrafos
+                     # de advertencias antes de haber probado siquiera. #}
                     <p class="csa-muted">
-                        Te avisamos cuando toque recoger tu cesta y, si te interesa
-                        el voluntariado, cuando falte gente para algo que encaje
-                        contigo.
+                        Se activa en cada dispositivo por separado: si los quieres
+                        en el móvil y en el ordenador, hay que darle en los dos.
                     </p>
 
-                    {# Se dice aquí y no en la ayuda de ningún sitio: es la causa
-                     # número uno de "lo activé y no me llega nada". La suscripción
-                     # vive en el navegador, no en la cuenta. #}
-                    <p class="csa-muted">
-                        Se activa <strong>en cada dispositivo por separado</strong>:
-                        si los quieres en el móvil y en el ordenador, hay que darle
-                        en los dos.
-                    </p>
-
-                    {# El botón se explica solo: push.js le cambia el texto al
-                     # estado real (no admitido, bloqueado, ya activado…) antes de
-                     # que nadie lo toque, y en el estado «bloqueado» añade debajo
-                     # cómo salir. #}
                     <button type="button" class="csa-btn csa-btn--secondary csa-btn--sm" data-push-toggle>Activar avisos</button>
-
-                    <p class="csa-muted" style="margin-top: var(--csa-sp-4);">
-                        <strong>En iPhone o iPad hay un paso más</strong>: abre esta
-                        web en Safari, pulsa Compartir → «Añadir a pantalla de
-                        inicio» y ábrela desde el icono que aparece. Sólo así deja
-                        Apple activar los avisos.
-                    </p>
-
-                    {# Un aviso que parece pesimismo y es lo contrario: cuando el
-                     # sistema tiene los avisos apagados, la web NO se entera —el
-                     # navegador responde que todo ha ido bien—, así que aquí
-                     # seguiría diciendo «activados» sin que llegue nada. Sin esta
-                     # línea, ese callejón no tiene salida desde dentro. #}
-                    <p class="csa-muted">
-                        Si los activas y aun así no te llega nada, míralo en los
-                        ajustes de tu móvil u ordenador: los avisos del navegador
-                        se apagan solos a veces, y desde aquí no hay forma de
-                        saberlo.
-                    </p>
                 {% endblock %}
             {% endembed %}
         {% endif %}
 
-        {# ============ 2. DE QUÉ ============ #}
+        {# ============ 2. QUÉ AVISOS Y POR DÓNDE ============
+         # Una fila por tema y una casilla por canal, en vez de un interruptor
+         # único: quien quiere saber cuándo recoge su cesta pero no que le pidan
+         # gente para la huerta no tenía forma de decirlo, y quien no quiere
+         # correos no tenía ninguna en absoluto.
+         #
+         # Sólo se pintan los temas de módulos encendidos, y de cada tema sólo
+         # los canales por los que de verdad se manda algo: el voluntariado hoy
+         # no envía correo, así que esa casilla sería un interruptor que no apaga
+         # nada. Lo resuelve NotificationPreferences::forPartner(). #}
+        {% embed '_components/csa_card.html.twig' with {
+            title: 'Qué avisos quieres recibir',
+            icon: 'fa-envelope-o'
+        } %}
+            {% block body %}
+                <form method="post" action="{{ path('panel_notifications_save') }}">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_notifications') }}">
+
+                    <div class="csa-table-wrap">
+                        <table class="csa-table">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Aviso</th>
+                                    <th scope="col" style="text-align:center;">Email</th>
+                                    <th scope="col" style="text-align:center;">Móvil</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for topic in topics %}
+                                    <tr>
+                                        <td>
+                                            <strong>{{ topic.label }}</strong>
+                                            <div class="csa-muted">{{ topic.help }}</div>
+                                        </td>
+                                        {# Una celda por canal. Cuando el tema no usa ese canal se
+                                         # pone una raya y no una casilla desmarcada: una casilla
+                                         # que no se puede marcar se lee como "esto está apagado"
+                                         # y manda a la gente a buscar por qué. #}
+                                        {% for channel in ['email', 'push'] %}
+                                            <td style="text-align:center;">
+                                                {% if topic.channels[channel] is defined %}
+                                                    <input type="checkbox"
+                                                           name="topics[{{ topic.key }}][]"
+                                                           value="{{ channel }}"
+                                                           aria-label="{{ topic.label }} por {{ channel == 'email' ? 'email' : 'móvil' }}"
+                                                           {% if topic.channels[channel] %}checked{% endif %}>
+                                                {% else %}
+                                                    <span class="csa-muted" aria-label="No se manda por este canal">—</span>
+                                                {% endif %}
+                                            </td>
+                                        {% endfor %}
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <p class="csa-muted" style="margin-top: var(--csa-sp-4);">
+                        Lo que apagues aquí deja de llegarte, pero sigue estando en
+                        la web cuando entres.
+                    </p>
+
+                    <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">Guardar</button>
+                </form>
+            {% endblock %}
+        {% endembed %}
+
+        {# ============ 3. DE QUÉ TAREAS (sólo voluntariado) ============
+         # OJO AL VOCABULARIO: esto NO son secciones de la web, son tipos de
+         # trabajo —Huerta, Reparto, Comunicación—. «Reparto» aquí es descargar
+         # cestas en un punto de recogida, no la sección Reparto. Va en su propia
+         # tarjeta y después de la tabla, justo para que no se lean como lo
+         # mismo: arriba se elige POR DÓNDE avisar, aquí DE QUÉ tareas. #}
         {% if volunteering %}
             {% embed '_components/csa_card.html.twig' with {
-                title: 'De qué quieres que te avisemos',
+                title: 'De qué tareas de voluntariado',
                 icon: 'fa-hand-paper-o'
             } %}
                 {% block body %}

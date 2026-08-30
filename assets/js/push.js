@@ -90,7 +90,24 @@
      * existe da por hecho que la web está rota.
      */
     var HINTS = {
-        blocked: 'Este navegador tiene bloqueados los avisos de esta web, y desde aquí no se pueden volver a pedir. Para desbloquearlos: pulsa el icono que hay a la izquierda de la dirección (un candado o unos deslizadores), busca «Notificaciones», ponlo en «Permitir» y recarga esta página. Si estás en una ventana de incógnito o privada, no hay nada que desbloquear: ahí los avisos no se pueden activar nunca. Abre la web en una ventana normal.'
+        blocked: 'Este navegador tiene bloqueados los avisos de esta web, y desde aquí no se pueden volver a pedir. Para desbloquearlos: pulsa el icono que hay a la izquierda de la dirección (un candado o unos deslizadores), busca «Notificaciones», ponlo en «Permitir» y recarga esta página. Si estás en una ventana de incógnito o privada, no hay nada que desbloquear: ahí los avisos no se pueden activar nunca. Abre la web en una ventana normal.',
+
+        // Va en el estado ACTIVADO y no en la pantalla, porque sólo le sirve a
+        // quien ya los tiene puestos: al que aún no los ha activado le sobra, y
+        // en la tarjeta se leía como una pega antes siquiera de probar.
+        //
+        // Y hace falta decirlo porque este fallo es MUDO: si el sistema tiene
+        // apagados los avisos del navegador, la web no se entera de nada
+        // —Notification.permission sigue diciendo «granted» y showNotification()
+        // resuelve como si los hubiera pintado—, así que aquí seguiría poniendo
+        // «activados» sin que llegue nunca nada.
+        on: 'Si no te llega ninguno, revisa los ajustes de notificaciones de tu móvil u ordenador: desde aquí no hay forma de saber si el sistema los tiene apagados.',
+
+        // Estado propio para iOS sin instalar, separado de «este navegador no
+        // admite avisos»: aquí SÍ se puede, pero hay que dar un paso más, y
+        // decirle a alguien que su iPhone no admite avisos es mentira y le hace
+        // abandonar.
+        ios: 'En iPhone y iPad, Apple sólo permite los avisos si la web está añadida a la pantalla de inicio: pulsa Compartir (el cuadrado con la flecha hacia arriba), elige «Añadir a pantalla de inicio», y abre la web desde el icono que aparezca. Desde ahí ya podrás activarlos.'
     };
 
     /**
@@ -118,7 +135,7 @@
         if (message) {
             button.textContent = message;
         }
-        button.disabled = (state === 'working' || state === 'blocked' || state === 'unsupported');
+        button.disabled = (state === 'working' || state === 'blocked' || state === 'unsupported' || state === 'ios');
 
         var hint = hintFor(button);
         hint.textContent = HINTS[state] || '';
@@ -197,8 +214,11 @@
         }
 
         if (isIos() && !isStandalone()) {
-            // Nada que hacer desde una pestaña: la API no existe aquí.
-            setState(button, 'unsupported', 'Para recibir avisos, añade la web a tu pantalla de inicio');
+            // Estado propio, no 'unsupported': desde esta pestaña la API no
+            // existe, pero en el mismo aparato SÍ funciona una vez instalada. El
+            // hint de abajo explica cómo, que es la diferencia entre "no puedo" y
+            // "no sé cómo".
+            setState(button, 'ios', 'Añade la web a tu pantalla de inicio');
             return;
         }
 

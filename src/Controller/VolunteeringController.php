@@ -623,18 +623,17 @@ class VolunteeringController extends AbstractController
         }
 
         // Con getInt() esto reventaba con un 400: `filter_var('', FILTER_VALIDATE_INT)`
-        // falla y InputBag lo convierte en BadRequestException. Es decir, dejar
-        // el campo en blanco —lo que el propio texto de ayuda invita a hacer—
-        // tumbaba la página en vez de tomar lo que vale la tarea.
-        $minutes = CreditedTime::minutesFromHours($request->request->get('hours'))
-            ?? $offer->getCreditedMinutes();
+        // falla y InputBag lo convierte en BadRequestException — la página se
+        // caía al dejar el campo vacío.
+        $minutes = CreditedTime::minutesFromHours($request->request->get('hours'));
 
-        // Anotar a alguien con cero horas no significa nada: si se registra a
-        // mano es porque hizo algo. Y pasaba solo, sin escribir un cero: basta
-        // con dejar el campo en blanco en una tarea que todavía no tiene fijado
-        // lo que vale, y la persona quedaba anotada aportando nada.
+        // Las horas se dicen, NO se deducen de la tarea. Anotar a alguien a mano
+        // es un acto deliberado —quien lo hace sabe cuánto estuvo esa persona— y
+        // rellenar el hueco por él escondía dos cosas: cuánto se estaba
+        // imputando, y que en una tarea sin fijar lo que vale se anotaba a
+        // alguien aportando cero.
         if (null === $minutes || $minutes <= 0) {
-            $this->addFlash('error', 'Pon cuántas horas computa: esta tarea no lo tiene fijado, así que no se puede deducir.');
+            $this->addFlash('error', 'Pon cuántas horas se le computan: sin eso no se puede anotar a nadie.');
 
             return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
         }
@@ -658,6 +657,72 @@ class VolunteeringController extends AbstractController
             '%s %s anotadx.',
             $partner->getName(),
             $partner->getSurname()
+        ));
+
+        return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
+    }
+
+    /**
+     * Quitar una inscripción de la tarea.
+     *
+     * NO ES LO MISMO QUE "no fue", y por eso es un gesto aparte. Que alguien se
+     * apuntara y no apareciera es un hecho que conviene conservar: dice que la
+     * plaza se quedó sin cubrir y es el dato que explica por qué una tarea salió
+     * mal. Esto otro es para cuando la inscripción NO DEBERÍA EXISTIR —se anotó
+     * a quien no era, o por duplicado—, y ahí guardarla sería guardar una
+     * mentira.
+     *
+     * Borra de verdad en vez de cancelar, por lo mismo: una baja deja constancia
+     * de que alguien se descolgó, y quien nunca estuvo no se descolgó de nada.
+     *
+     * Comparte el token del formulario de cierre porque el botón vive DENTRO de
+     * ese formulario, como una acción alternativa de la misma fila; pedir un
+     * token propio obligaría a un campo oculto por inscripción para no ganar
+     * nada.
+     */
+    #[Route('/{id}/quitar/{signup}', name: 'volunteering_remove_person', methods: ['POST'], requirements: ['id' => '\d+', 'signup' => '\d+'])]
+    #[IsGranted(VolunteerOfferVoter::EDIT, subject: 'offer')]
+    public function removePerson(
+        Request $request,
+        VolunteerOffer $offer,
+        int $signup,
+        VolunteerSignupRepository $signups,
+        EntityManagerInterface $em,
+        VolunteerEventRecorder $events,
+    ): Response {
+        if (!$this->isCsrfTokenValid('volunteering_close', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
+
+            return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
+        }
+
+        $found = $signups->find($signup);
+
+        // Que la inscripción sea DE ESTA TAREA se comprueba a mano: el voter ha
+        // dado permiso sobre la oferta de la URL, no sobre una inscripción que
+        // podría ser de otra y colarse cambiando el número.
+        if (null === $found || $found->getOffer() !== $offer) {
+            $this->addFlash('error', 'Esa inscripción no es de esta tarea.');
+
+            return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
+        }
+
+        $partner = $found->getPartner();
+
+        // Queda el rastro aunque la fila se vaya: si desaparecen las horas de
+        // alguien, tiene que poder saberse quién las quitó y cuándo.
+        $events->forOffer($offer, VolunteerEvent::TYPE_WITHDRAW, [
+            'removed_by_manager' => true,
+            'minutes' => $found->getCreditedMinutes(),
+        ], $partner);
+
+        $em->remove($found);
+        $em->flush();
+
+        $this->addFlash('success', sprintf(
+            '%s %s ya no consta en esta tarea.',
+            $partner?->getName(),
+            $partner?->getSurname()
         ));
 
         return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
@@ -693,6 +758,12 @@ class VolunteeringController extends AbstractController
         $hours = (array) $request->request->all('hours');
         $counted = 0;
 
+        // Cerrar de verdad, o sólo corregir lo ya anotado. La diferencia está en
+        // qué significa una casilla sin marcar: al cerrar, "no fue"; mientras la
+        // tarea no ha pasado, "todavía no ha pasado nada" — y darle por ausente
+        // a quien está apuntado esperando el día sería inventarse un hecho.
+        $closingAll = $request->request->getBoolean('close_all');
+
         foreach ($offer->getSignups() as $signup) {
             if ($signup->isCancelled()) {
                 continue;
@@ -701,6 +772,12 @@ class VolunteeringController extends AbstractController
             $wentThere = \in_array($signup->getId(), $attended, true);
 
             if (!$wentThere) {
+                // Corrigiendo, quien no ha respondido se queda como está: la
+                // casilla vacía no dice "no fue", dice "aún no se sabe".
+                if (!$closingAll && null === $signup->getAttended()) {
+                    continue;
+                }
+
                 // Sólo se toca lo que cambia. Sin esto, cerrar una tarea que
                 // alguien ya había confirmado desde su panel la reescribiría
                 // como "lo puso gestión" y se perdería el rastro de que lo dijo

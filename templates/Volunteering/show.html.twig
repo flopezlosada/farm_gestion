@@ -369,12 +369,26 @@
                         {% else %}
                             {# Por FASE y no por "ya pasó la fecha". Una tarea anulada la semana
                              # pasada también es pasada, y ofrecer ahí "cerrar e imputar horas" es
-                             # invitar a computarle horas a gente por una tarea que se canceló. #}
-                            {% set closing_form = is_closing and can_edit %}
+                             # invitar a computarle horas a gente por una tarea que se canceló.
+                             #
+                             # Pero TAMBIÉN si ya consta alguien: anotar a mano funciona en
+                             # cualquier fase, así que en una tarea futura se podía dejar a
+                             # alguien anotado con las horas equivocadas y no había dónde
+                             # corregirlo — la lista sólo aparecía al llegar la fecha. Equivocarse
+                             # de persona era irreversible desde la pantalla. #}
+                            {% set has_settled = offer.signups|filter(s => not s.cancelled and s.attended is not null)|length > 0 %}
+                            {% set closing_form = can_edit and (is_closing or has_settled) %}
 
                             <form method="post" action="{{ path('volunteering_close', { id: offer.id }) }}"
                                   {% if closing_form %}data-vol-total="{{ csa.qty((offer.creditedMinutes ?: 0) / 60)|replace({',': '.'}) }}"{% endif %}>
                                 <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_close') }}">
+
+                                {# Cerrar de verdad SÓLO cuando la tarea ha pasado. Sin esta
+                                 # marca, corregir a alguien en una tarea futura daba por ausente
+                                 # a todo el que estuviera apuntado esperando el día: en un cierre
+                                 # "no marcado" significa "no fue", pero aquí significa "todavía
+                                 # no ha pasado nada". #}
+                                {% if is_closing %}<input type="hidden" name="close_all" value="1">{% endif %}
 
                                 <div class="csa-table-wrap">
                                     <table class="csa-table">
@@ -383,18 +397,25 @@
                                                 {% if closing_form %}
                                                     <th class="csa-table__col-tight">Fue</th>
                                                 {% endif %}
+                                                {# Acompañantes y nota NO tienen columna propia: las
+                                                 # rellena quien se apunta desde su panel y casi
+                                                 # siempre están vacías, así que eran dos columnas de
+                                                 # guiones. Cuando hay algo, va bajo el nombre —que es
+                                                 # donde se lee sin cruzar la fila con la vista. #}
                                                 <th>Socix</th>
-                                                <th class="csa-table__col-tight">Viene con</th>
                                                 {# Antes de la tarea interesa desde cuándo cuentas con
-                                                 # alguien; después ya no, y ese hueco lo necesitan los
-                                                 # minutos, que es donde está el trabajo. #}
+                                                 # alguien; después ya no, y ese hueco lo necesitan las
+                                                 # horas, que es donde está el trabajo. #}
                                                 {% if closing_form %}
                                                     <th class="csa-table__col-tight">Computa</th>
                                                 {% else %}
                                                     <th class="csa-table__col-tight">Se apuntó</th>
                                                 {% endif %}
-                                                <th>Nota</th>
                                                 <th class="csa-table__col-tight">Estado</th>
+                                                {% if can_edit %}
+                                                    {# Columna de acciones: sin título, el icono se explica solo. #}
+                                                    <th class="csa-table__col-tight" aria-label="Quitar"></th>
+                                                {% endif %}
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -430,8 +451,21 @@
                                                                 primera vez este año
                                                             {%- endif -%}
                                                         </span>
+
+                                                        {# Sólo si hay algo que decir. Los acompañantes ocupan
+                                                         # plaza, así que quien coordina necesita verlos; y la
+                                                         # nota es lo que esa persona quiso avisar ("llego
+                                                         # tarde", "llevo furgoneta"). Vacíos no se pintan. #}
+                                                        {% if signup.companions > 0 or signup.notes %}
+                                                            <span class="vol-track">
+                                                                {%- if signup.companions > 0 -%}
+                                                                    viene con {{ signup.companions }} más
+                                                                {%- endif -%}
+                                                                {%- if signup.companions > 0 and signup.notes %} · {% endif -%}
+                                                                {%- if signup.notes %}<em>«{{ signup.notes }}»</em>{% endif -%}
+                                                            </span>
+                                                        {% endif %}
                                                     </td>
-                                                    <td class="csa-table__col-tight">{{ signup.companions > 0 ? '+' ~ signup.companions : '—' }}</td>
 
                                                     {% if closing_form %}
                                                         {# Las horas, por persona. El modelo siempre las
@@ -456,7 +490,6 @@
                                                         <td class="csa-table__col-tight">{{ signup.createdAt|date('d/m/Y') }}</td>
                                                     {% endif %}
 
-                                                    <td>{{ signup.notes ?: '—' }}</td>
                                                     <td class="csa-table__col-tight">
                                                         {% if signup.cancelled %}
                                                             {{ csa.badge('Se dio de baja', 'terracotta') }}
@@ -494,6 +527,24 @@
                                                             </span>
                                                         {% endif %}
                                                     </td>
+
+                                                    {# Quitar la fila entera, para cuando la inscripción NO
+                                                     # DEBERÍA EXISTIR: se anotó a quien no era, o dos veces.
+                                                     # No es lo mismo que "no fue", que es un hecho que
+                                                     # conviene conservar —dice que la plaza se quedó sin
+                                                     # cubrir—. Por eso son dos gestos distintos y éste pide
+                                                     # confirmación: borra, no corrige. #}
+                                                    {% if can_edit %}
+                                                        <td class="csa-table__col-tight">
+                                                            <button type="submit" class="csa-table__iconbtn vol-remove"
+                                                                    formaction="{{ path('volunteering_remove_person', { id: offer.id, signup: signup.id }) }}"
+                                                                    formnovalidate
+                                                                    title="Quitar a {{ signup.partner.name }} de esta tarea"
+                                                                    onclick="return confirm('¿Quitar a {{ signup.partner.name }} {{ signup.partner.surname }} de esta tarea? Se borra su inscripción y las horas que tuviera. Para decir que no fue, desmarca la casilla en vez de esto.');">
+                                                                <i class="fa fa-trash-o"></i>
+                                                            </button>
+                                                        </td>
+                                                    {% endif %}
                                                 </tr>
                                             {% endfor %}
                                         </tbody>
@@ -518,12 +569,21 @@
                                             en total
                                         </p>
                                         <p class="vol-help">
-                                            Marca quién fue de verdad. Las horas en blanco toman las de la tarea
-                                            ({{ csa.qty((offer.creditedMinutes ?: 0) / 60) }} h); cámbialas a quien se fue antes
-                                            o vino a otra cosa. Quien no esté marcadx no computa nada.
+                                            {% if is_closing %}
+                                                Marca quién fue de verdad. Las horas en blanco toman las de la tarea
+                                                ({{ csa.qty((offer.creditedMinutes ?: 0) / 60) }} h); cámbialas a quien se fue antes
+                                                o vino a otra cosa. Quien no esté marcadx no computa nada.
+                                            {% else %}
+                                                La tarea todavía no ha pasado, pero ya consta gente anotada a mano:
+                                                aquí se le corrigen las horas, o se le quita la marca si fue un error.
+                                            {% endif %}
                                         </p>
                                         <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">
-                                            <i class="fa fa-lock"></i><span>Cerrar e imputar</span>
+                                            {% if is_closing %}
+                                                <i class="fa fa-lock"></i><span>Cerrar e imputar</span>
+                                            {% else %}
+                                                <i class="fa fa-pencil"></i><span>Corregir lo anotado</span>
+                                            {% endif %}
                                         </button>
                                     </div>
                                 {% endif %}
@@ -552,7 +612,7 @@
                              # arrastrar hasta el apellido. El componente añade buscador solo
                              # cuando la lista es larga. Ver assets/js/csa-dropdown.js. #}
                             <form method="post" action="{{ path('volunteering_add_person', { id: offer.id }) }}"
-                                  class="vol-repeat" data-csa-dropdowns>
+                                  class="vol-repeat" data-csa-dropdowns data-csa-validate>
                                 <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_add_person') }}">
 
                                 <label>
@@ -567,17 +627,14 @@
                                     </select>
                                 </label>
 
-                                {# Con las horas de la tarea YA ESCRITAS, no de placeholder: un
-                                 # placeholder con una cifra parece un valor puesto sin serlo, y
-                                 # dejarlo vacío para que el servidor "adivine" es magia que no se
-                                 # ve. Así se lee lo que se va a imputar y sólo se toca a quien se
-                                 # fue antes. Obligatorio: anotar a alguien sin horas no significa
-                                 # nada, y en una tarea que aún no tiene fijado lo que vale el
-                                 # campo sale vacío y hay que rellenarlo. #}
+                                {# VACÍO y obligatorio. Ni placeholder con una cifra —parece un
+                                 # valor puesto sin serlo— ni valor por defecto —se envía sin
+                                 # mirarlo—. Anotar a alguien a mano es un acto deliberado: quien
+                                 # lo hace sabe cuánto estuvo esa persona, y decirlo es el trabajo
+                                 # entero de este formulario. #}
                                 <label>
                                     Horas
                                     <input type="number" name="hours" min="0.5" max="24" step="0.5" required
-                                           value="{{ offer.creditedMinutes ? csa.qty(offer.creditedMinutes / 60)|replace({',': '.'}) : '' }}"
                                            class="csa-input csa-input--compact">
                                 </label>
 

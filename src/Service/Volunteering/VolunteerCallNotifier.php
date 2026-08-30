@@ -8,6 +8,8 @@ use App\Entity\VolunteerOffer;
 use App\Repository\UserRepository;
 use App\Repository\VolunteerOfferRepository;
 use App\Service\AppSettings;
+use App\Service\Notification\NotificationPreferences;
+use App\Service\Notification\NotificationTopic;
 use App\Service\Push\PushSender;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
@@ -42,6 +44,7 @@ class VolunteerCallNotifier
         private readonly VolunteerAudienceResolver $audience,
         private readonly VolunteerCallEscalator $escalator,
         private readonly PushSender $push,
+        private readonly NotificationPreferences $preferences,
         private readonly EntityManagerInterface $entityManager,
         private readonly AppSettings $settings,
         private readonly VolunteerOfferFormatter $formatter,
@@ -98,7 +101,18 @@ class VolunteerCallNotifier
         ?User $triggeredBy,
         \DateTimeImmutable $now,
     ): ?VolunteerCall {
+        // Quiénes encajan con la tarea…
         $partners = $this->audience->resolve($offer, $scope);
+
+        // …y de esos, quiénes quieren que se les avise por aquí. Son dos
+        // preguntas distintas y conviene que se lean como tales: la audiencia
+        // dice a quién le sirve la tarea, la preferencia si quiere enterarse.
+        $partners = $this->preferences->filter(
+            $partners,
+            NotificationTopic::VOLUNTEERING,
+            NotificationTopic::CHANNEL_PUSH,
+        );
+
         if ([] === $partners) {
             return null;
         }

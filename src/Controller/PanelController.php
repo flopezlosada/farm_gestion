@@ -35,6 +35,7 @@ use App\Service\Delivery\PickupRelocationOptions;
 use App\Service\Delivery\PickupRelocator;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Delivery\WeeklyBasketSkipper;
+use App\Service\Notification\NotificationPreferences;
 use App\Service\Volunteering\VolunteerContributions;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -187,8 +188,10 @@ class PanelController extends AbstractController
      * bloque de preferencias, que sí es suyo.
      */
     #[Route('/avisos', name: 'panel_notifications', methods: ['GET'])]
-    public function notifications(VolunteerCategoryRepository $categories): Response
-    {
+    public function notifications(
+        VolunteerCategoryRepository $categories,
+        NotificationPreferences $preferences,
+    ): Response {
         if (($redirect = $this->ensureReady()) !== null) {
             return $redirect;
         }
@@ -199,6 +202,10 @@ class PanelController extends AbstractController
         return $this->render('Panel/notifications.html.twig', [
             'partner' => $partner,
             'volunteering' => $volunteering,
+            // Qué avisos existen HOY para este socix y cómo los tiene: ya sin
+            // los de módulos apagados y sin los canales por los que ese tema no
+            // manda nada. La plantilla sólo pinta.
+            'topics' => $preferences->forPartner($partner),
             // Sólo con el módulo encendido: apagado, la pantalla no pinta el
             // bloque y no hay por qué pagar la consulta.
             'categories' => $volunteering ? $categories->findActive() : [],
@@ -210,6 +217,37 @@ class PanelController extends AbstractController
                 $partner->getVolunteerCategories()->toArray()
             ),
         ]);
+    }
+
+    /**
+     * Guarda qué avisos quiere recibir el socix y por dónde.
+     *
+     * Recibe lo MARCADO y no lo apagado, que es como funciona un formulario de
+     * casillas: una desmarcada sencillamente no viaja. Deducir los apagados es
+     * cosa de {@see NotificationPreferences::save()}, que además ignora lo que
+     * no esté disponible de verdad —un tema de un módulo apagado, o un canal por
+     * el que ese tema no manda— en vez de fiarse de lo que llegue.
+     */
+    #[Route('/avisos', name: 'panel_notifications_save', methods: ['POST'])]
+    public function saveNotifications(Request $request, NotificationPreferences $preferences): Response
+    {
+        if (($redirect = $this->ensureReady()) !== null) {
+            return $redirect;
+        }
+
+        if (!$this->isCsrfTokenValid('panel_notifications', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
+
+            return $this->redirectToRoute('panel_notifications');
+        }
+
+        /** @var array<string, list<string>> $wanted */
+        $wanted = $request->request->all('topics');
+        $preferences->save($this->getUser()->getPartner(), $wanted);
+
+        $this->addFlash('success', 'Guardado. Te avisaremos sólo por donde has dicho.');
+
+        return $this->redirectToRoute('panel_notifications');
     }
 
     #[Route('/perfil', name: 'panel_profile', methods: ['GET', 'POST'])]

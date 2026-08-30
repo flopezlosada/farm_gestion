@@ -8,6 +8,8 @@ use App\Entity\WeeklyBasket;
 use App\Security\PartnerAccessPolicy;
 use App\Service\AppSettings;
 use App\Service\Cron\EffectLedger;
+use App\Service\Notification\NotificationPreferences;
+use App\Service\Notification\NotificationTopic;
 use Symfony\Bridge\Twig\Mime\TemplatedEmail;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
@@ -44,6 +46,7 @@ class PickupReminderMailer
         private readonly UrlGeneratorInterface $urlGenerator,
         private readonly DeliveryDeadline $deadline,
         private readonly EffectLedger $ledger,
+        private readonly NotificationPreferences $preferences,
     ) {
     }
 
@@ -80,6 +83,15 @@ class PickupReminderMailer
             $partner = $wb->getPartner();
             $email = $partner?->getEmail();
             if (!$email) {
+                $skipped++;
+                continue;
+            }
+
+            // Quien ha dicho que no quiere este aviso por correo no lo recibe, y
+            // se cuenta como saltado y no como enviado. Antes esta comprobación
+            // no existía: si eras quincenal o mensual y tenías email, te llegaba,
+            // y la única forma de pararlo era pedírselo a administración.
+            if (!$this->preferences->wants($partner, NotificationTopic::PICKUP, NotificationTopic::CHANNEL_EMAIL)) {
                 $skipped++;
                 continue;
             }
