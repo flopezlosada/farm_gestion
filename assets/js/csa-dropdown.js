@@ -468,34 +468,18 @@
         function clearError() {
             trigger.classList.remove('csa-dropdown__trigger--invalid');
             trigger.removeAttribute('aria-invalid');
-            var msg = wrap.querySelector('.csa-dropdown__error');
-            if (msg) {
-                msg.remove();
-            }
         }
 
-        // El <select> real es invisible, así que el aviso de "campo obligatorio"
-        // del navegador ni se ve bien ni dice nada útil: sale en el idioma del
-        // NAVEGADOR ("Please select an item in the list") y señala a un control
-        // que no está en pantalla. Se corta el globo nativo con preventDefault y
-        // se dice lo mismo en castellano, debajo del control que sí se ve.
+        // El <select> real es invisible, así que el globo de "campo obligatorio"
+        // del navegador aparece flotando sobre nada. Se corta aquí y se marca el
+        // control que SÍ se ve; el texto de lo que falta lo escribe
+        // csa-validate.js al final del formulario, para no empujar la fila.
         select.addEventListener('invalid', function (e) {
             e.preventDefault();
 
             var first = !document.querySelector('.csa-dropdown__trigger--invalid');
             trigger.classList.add('csa-dropdown__trigger--invalid');
             trigger.setAttribute('aria-invalid', 'true');
-
-            if (!wrap.querySelector('.csa-dropdown__error')) {
-                var msg = document.createElement('p');
-                msg.className = 'csa-dropdown__error';
-                // role=alert para que un lector de pantalla lo cante: sin el
-                // globo del navegador, quien no ve la marca roja no se entera
-                // de por qué no se ha enviado el formulario.
-                msg.setAttribute('role', 'alert');
-                msg.textContent = select.dataset.invalidMessage || 'Elige una opción de la lista.';
-                wrap.appendChild(msg);
-            }
 
             if (first) {
                 trigger.focus();

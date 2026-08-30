@@ -17,6 +17,10 @@ require('./csa-dropdown.js');
 // los paneles se ven todos. Ver assets/js/csa-tabs.js.
 require('./csa-tabs.js');
 
+// Avisos de "falta esto" en castellano y dentro del diseño, en lugar del globo
+// del navegador (opt-in por [data-csa-validate]). Ver assets/js/csa-validate.js.
+require('./csa-validate.js');
+
 // Suma en vivo de las horas que se van a imputar al cerrar una tarea de
 // voluntariado (opt-in por [data-vol-total]). Ver assets/js/vol-close-total.js.
 require('./vol-close-total.js');

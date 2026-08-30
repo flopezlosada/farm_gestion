@@ -1353,15 +1353,34 @@ input[type="number"].csa-input--compact { width: 4.5rem; padding-right: 4px; }
    heredaba una columna donde no cabía un nombre y dos apellidos. */
 .csa-dropdown--search .csa-dropdown__menu { min-width: 18rem; }
 
-/* El "falta esto" propio, en castellano y bajo el control que sí se ve. El
-   globo nativo del navegador sale en su idioma y apunta al <select> oculto. */
-.csa-dropdown__error {
-  margin: var(--csa-sp-1) 0 0;
-  font-size: var(--csa-fs-xs);
+/* Lo que falta por rellenar, en castellano y al final del formulario. Al final
+   y no bajo cada campo: en una fila en línea, un párrafo bajo un control empuja
+   a los demás y descoloca la fila entera. Ver assets/js/csa-validate.js. */
+.csa-form-errors {
+  flex-basis: 100%;
+  margin-top: var(--csa-sp-2);
+}
+.csa-form-errors p {
+  margin: 0;
+  font-size: var(--csa-fs-sm);
   font-weight: 400;
   line-height: var(--csa-lh-snug);
   color: var(--csa-terracotta);
 }
+.csa-input.is-invalid,
+.csa-select.is-invalid,
+.csa-textarea.is-invalid {
+  border-color: var(--csa-terracotta);
+}
+
+/* El spinner de un input[type=number] estrecho se come la mitad del hueco y
+   deja el número pegado al borde. En los campos compactos no cabe. */
+.csa-input--compact::-webkit-outer-spin-button,
+.csa-input--compact::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.csa-input--compact[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
 /* Lo que se dice cuando el filtro no deja nada: una lista vacía sin explicación
    parece el componente roto. */
