@@ -1295,6 +1295,46 @@ input[type="number"].csa-input--compact { width: 4.5rem; padding-right: 4px; }
 }
 .csa-dropdown__menu[hidden] { display: none; }
 
+/* Buscador de las listas largas (lo añade el JS a partir de 12 opciones).
+   Sticky y no fijo: vive dentro del <ul>, que es el que tiene el scroll, así
+   que pegándolo arriba se queda a la vista mientras la lista corre por debajo.
+   El -4px compensa el padding superior del menú, para que no asome una franja
+   de fondo por encima al desplazar. */
+.csa-dropdown__searchrow {
+  position: sticky;
+  top: -4px;
+  z-index: 1;
+  padding: var(--csa-sp-2);
+  background: var(--csa-surface);
+  border-bottom: 1px solid var(--csa-rule-soft);
+}
+.csa-dropdown__search {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px var(--csa-sp-3);
+  font-family: var(--csa-sans);
+  font-size: var(--csa-fs-base);
+  color: var(--csa-ink);
+  background: var(--csa-surface-alt);
+  border: 1px solid var(--csa-rule-soft);
+  border-radius: var(--csa-radius-sm);
+}
+.csa-dropdown__search:focus {
+  outline: none;
+  border-color: var(--csa-green);
+  background: var(--csa-surface);
+}
+.csa-dropdown__search::placeholder { color: var(--csa-ink-muted); }
+
+/* Lo que se dice cuando el filtro no deja nada: una lista vacía sin explicación
+   parece el componente roto. */
+.csa-dropdown__empty {
+  padding: var(--csa-sp-3);
+  font-size: var(--csa-fs-sm);
+  font-style: italic;
+  color: var(--csa-ink-muted);
+}
+
 .csa-dropdown__option {
   padding: 8px var(--csa-sp-3);
   font-size: var(--csa-fs-base);
