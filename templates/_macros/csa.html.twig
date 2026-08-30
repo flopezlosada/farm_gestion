@@ -297,6 +297,28 @@
     </dialog>
 {% endmacro %}
 
+{# ---------- PISTA EN EL SITIO ----------
+ # «?» que despliega una explicación corta AHÍ MISMO:
+ #
+ #   {{ csa.hint('Se activa en cada dispositivo por separado.') }}
+ #
+ # NO es {{ csa.help() }}: aquél es un enlace a la guía y lo abre el modal del
+ # shell de gestión, que el panel del socix no tiene. Y la guía está escrita
+ # para administración, así que mandar allí a un socix es peor que no explicar
+ # nada.
+ #
+ # Con <details> y sin JS a propósito: funciona en cualquier pantalla del panel
+ # sin depender de un script, y lo que despliega queda debajo en vez de tapar la
+ # pantalla con una ventana. Estilo inline por la misma razón que el «?» de la
+ # guía: así no hay que recompilar Encore para usarlo en una plantilla nueva. #}
+{% macro hint(text, label = 'Más información') %}
+    <details style="display:inline-block;vertical-align:middle;">
+        <summary title="{{ label }}" aria-label="{{ label }}"
+                 style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,.07);color:#5a564a;font-size:11px;font-weight:700;line-height:1;cursor:pointer;list-style:none;">?</summary>
+        <div style="display:block;margin-top:8px;font-size:14px;color:#6b675c;font-weight:400;max-width:52ch;">{{ text }}</div>
+    </details>
+{% endmacro %}
+
 {# ---------- AYUDA CONTEXTUAL ----------
  # «?» discreto que enlaza a la guía de ayuda, directo a la tarjeta de una
  # tarea concreta. Abre en pestaña nueva para no perder un formulario a medias.

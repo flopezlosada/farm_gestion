@@ -82,14 +82,6 @@
                         <span class="prt-chip prt-chip--warn">Sólo a quien lo tenga marcado</span>
                     {% endif %}
 
-                    {# Quien monta la tarea, arriba: es a quien hay que llamar si algo
-                     # pasa, y saberlo sin abrir pestañas es la mitad de coordinar. #}
-                    {% if offer.coordinator %}
-                        <span class="prt-chip prt-chip--mute">
-                            <i class="fa fa-star-o"></i>
-                            La coordina {{ offer.coordinator.name }} {{ offer.coordinator.surname }}
-                        </span>
-                    {% endif %}
                 </div>
             </div>
 
@@ -285,21 +277,6 @@
                     {% endif %}
                 </div>
 
-                {# Las plazas, una a una. Una cifra ("4 de 6") hay que leerla y
-                 # restar; seis casillas de las que dos están vacías se ven sin
-                 # leer, que es lo que hace falta cuando lo que se pregunta es
-                 # "¿me falta gente?".
-                 #
-                 # Sólo con tope: una tarea sin número de plazas no tiene
-                 # casillas que pintar, y llenarlas de huecos infinitos diría que
-                 # falta gente cuando lo que pasa es que cabe la que venga. #}
-                {% if offer.slots and offer.slots <= 12 %}
-                    <div class="vol-slots" aria-hidden="true">
-                        {% for i in 1..offer.slots %}
-                            <span class="vol-slots__pip {{ i <= offer.filledSlots ? 'is-filled' : '' }}"></span>
-                        {% endfor %}
-                    </div>
-                {% endif %}
             </div>
 
             {# Cuánto vale el trabajo es CONFIGURACIÓN de la tarea, y hasta que
@@ -323,11 +300,95 @@
             </div>
         </div>
 
-        {% if offer.description %}
+        {% if offer.description or offer.coordinator %}
             <section class="prt-card">
                 <div class="prt-card__head"><h2 class="prt-card__title"><span class="accent"></span>Qué hay que hacer</h2></div>
-                <div class="prt-card__body">{{ offer.description|nl2br }}</div>
+                <div class="prt-card__body">
+                    {% if offer.description %}{{ offer.description|nl2br }}{% endif %}
+
+                    {# Quien está al mando, al pie de lo que hay que hacer y con su
+                     # teléfono: es la persona a la que se llama si algo pasa ese día,
+                     # y tenerla aquí ahorra buscarla en la ficha de socixs —que quien
+                     # coordina un área ni siquiera puede abrir. #}
+                    {% if offer.coordinator %}
+                        <div class="vol-owner{% if not offer.description %} vol-owner--alone{% endif %}">
+                            <span class="vol-owner__avatar" aria-hidden="true">
+                                {{ (offer.coordinator.name|first ~ offer.coordinator.surname|first)|upper }}
+                            </span>
+                            <div class="vol-owner__who">
+                                <span class="vol-owner__role">Quien coordina la tarea</span>
+                                <span class="vol-owner__name">{{ offer.coordinator.name }} {{ offer.coordinator.surname }}</span>
+                            </div>
+                            <div class="vol-owner__contact">
+                                {% if offer.coordinator.celular %}
+                                    <a class="csa-table__iconbtn" href="tel:{{ offer.coordinator.celular|replace({' ': ''}) }}"
+                                       title="Llamar a {{ offer.coordinator.name }}"><i class="fa fa-phone"></i></a>
+                                {% endif %}
+                                {% if offer.coordinator.email %}
+                                    <a class="csa-table__iconbtn" href="mailto:{{ offer.coordinator.email }}"
+                                       title="Escribir a {{ offer.coordinator.name }}"><i class="fa fa-envelope-o"></i></a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
             </section>
+        {% endif %}
+
+        {# ============ OCUPACIÓN ============
+         # Quiénes son las plazas, no cuántas. "4 de 6" hay que leerlo y restar;
+         # cuatro fichas con iniciales y dos huecos se ven sin leer, y además
+         # dicen QUIÉN viene sin bajar a la pestaña. Los acompañantes salen con
+         # icono en vez de iniciales porque no son socixs: ocupan plaza pero no
+         # tienen nombre en el sistema.
+         #
+         # Sólo con tope de plazas: sin número no hay huecos que dibujar, y
+         # llenar la fila de sitios vacíos diría que falta gente cuando lo que
+         # pasa es que cabe la que venga. #}
+        {% if offer.slots and offer.slots <= 20 %}
+            {% set pips = [] %}
+            {% for s in offer.signups|filter(s => not s.cancelled and not s.coordination) %}
+                {% set pips = pips|merge([{ ini: (s.partner.name|first ~ s.partner.surname|first)|upper, name: s.partner.name ~ ' ' ~ s.partner.surname }]) %}
+                {% if s.companions > 0 %}
+                    {% for i in 1..s.companions %}
+                        {% set pips = pips|merge([{ ini: null, name: 'Acompañante de ' ~ s.partner.name }]) %}
+                    {% endfor %}
+                {% endif %}
+            {% endfor %}
+
+            {% set companions_total = offer.signups|filter(s => not s.cancelled)|reduce((acc, s) => acc + s.companions, 0) %}
+
+            <div class="vol-occupancy">
+                <div class="vol-occupancy__count">
+                    <span class="vol-occupancy__label">Ocupación</span>
+                    <span class="vol-occupancy__value">{{ offer.filledSlots }}</span>
+                    <span class="vol-occupancy__of">de {{ offer.slots }} plazas</span>
+                </div>
+
+                <div class="vol-occupancy__pips">
+                    {% for i in 1..offer.slots %}
+                        {% set pip = pips[i - 1]|default(null) %}
+                        {% if pip %}
+                            <span class="vol-pip vol-pip--filled" title="{{ pip.name }}">
+                                {%- if pip.ini %}{{ pip.ini }}{% else %}<i class="fa fa-user-o"></i>{% endif -%}
+                            </span>
+                        {% else %}
+                            <span class="vol-pip vol-pip--empty" aria-hidden="true">+</span>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+
+                <p class="vol-occupancy__note">
+                    {%- if offer.remainingSlots > 0 -%}
+                        Quedan <strong>{{ offer.remainingSlots }}</strong> {{ offer.remainingSlots == 1 ? 'plaza libre' : 'plazas libres' }}.
+                    {%- else -%}
+                        Plazas completas.
+                    {%- endif -%}
+                    {% if companions_total > 0 %}
+                        {{ companions_total == 1 ? 'Alguien trae acompañante, que ocupa plaza.' : 'Hay ' ~ companions_total ~ ' acompañantes, y ocupan plaza.' }}
+                    {% endif %}
+                </p>
+            </div>
         {% endif %}
 
         {# ============ PESTAÑAS ============

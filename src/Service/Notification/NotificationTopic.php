@@ -51,10 +51,14 @@ final class NotificationTopic
         ],
         self::VOLUNTEERING => [
             'label' => 'Voluntariado',
-            'help' => 'Cuando falta gente para algo que encaja contigo, y cuando se acerca una tarea a la que te has apuntado.',
+            'help' => 'Cuando falta gente para algo que encaja contigo. El recordatorio de una tarea a la que ya te has apuntado llega siempre al móvil.',
             'feature' => AppSettings::FEATURE_VOLUNTEERING,
-            // Sin correo: hoy el voluntariado sólo avisa por push.
-            'channels' => [self::CHANNEL_PUSH],
+            // Los dos, pero OJO: el correo sólo sale de los avisos que piden
+            // gente, y además exige que administración lo encienda
+            // (AppSettings::EMAIL_VOLUNTEERING, apagado por defecto). El
+            // recordatorio de «te toca mañana» sigue siendo sólo push: quien se
+            // apuntó ya sabe que va, y ahí un correo más es ruido.
+            'channels' => [self::CHANNEL_EMAIL, self::CHANNEL_PUSH],
         ],
     ];
 

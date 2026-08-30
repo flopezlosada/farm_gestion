@@ -407,18 +407,102 @@
         .vol-phase__actions .csa-btn { width: 100%; justify-content: center; }
     }
 
-    /* ---- Las plazas, una a una ----
-       "4 de 6" hay que leerlo y restar; seis casillas con dos huecos se ven sin
-       leer. Decorativas: el dato ya está escrito encima, así que van con
-       aria-hidden y no se anuncian dos veces. */
-    .vol-slots { display: flex; gap: 3px; margin-top: var(--csa-sp-2); }
-    .vol-slots__pip {
-        width: 14px;
-        height: 6px;
-        border-radius: var(--csa-radius-pill);
-        background: var(--csa-rule);
+    /* ---- Quien coordina, al pie de lo que hay que hacer ----
+       Con su teléfono: es a quien se llama si algo pasa ese día. */
+    .vol-owner {
+        display: flex;
+        align-items: center;
+        gap: var(--csa-sp-3);
+        margin-top: var(--csa-sp-4);
+        padding-top: var(--csa-sp-4);
+        border-top: 1px solid var(--csa-rule-soft);
     }
-    .vol-slots__pip.is-filled { background: var(--csa-green); }
+    /* Sin descripción no hay nada de lo que separarse: la línea sobra. */
+    .vol-owner--alone { margin-top: 0; padding-top: 0; border-top: 0; }
+    .vol-owner__avatar {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        width: 34px;
+        height: 34px;
+        border-radius: var(--csa-radius-pill);
+        background: var(--csa-ochre-soft);
+        color: var(--csa-amber);
+        font-size: var(--csa-fs-xs);
+        font-weight: 700;
+        letter-spacing: 0.02em;
+    }
+    .vol-owner__who { display: flex; flex-direction: column; min-width: 0; }
+    .vol-owner__role { font-size: var(--csa-fs-xs); color: var(--csa-ink-muted); }
+    .vol-owner__name { font-size: var(--csa-fs-base); font-weight: 600; color: var(--csa-ink); }
+    .vol-owner__contact { display: flex; gap: var(--csa-sp-3); margin-left: auto; }
+
+    /* ---- Ocupación ----
+       Quiénes son las plazas, no cuántas: "4 de 6" hay que leerlo y restar,
+       cuatro fichas con iniciales y dos huecos se ven sin leer. */
+    .vol-occupancy {
+        display: flex;
+        align-items: center;
+        gap: var(--csa-sp-5);
+        flex-wrap: wrap;
+        margin-bottom: var(--csa-sp-4);
+        padding: var(--csa-sp-4) var(--csa-sp-5);
+        background: var(--csa-surface);
+        border: 1px solid var(--csa-rule-soft);
+        border-radius: var(--csa-radius-lg);
+    }
+    .vol-occupancy__count { display: flex; align-items: baseline; gap: var(--csa-sp-2); flex-wrap: wrap; }
+    .vol-occupancy__label {
+        flex-basis: 100%;
+        font-size: var(--csa-fs-xs);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--csa-ink-muted);
+    }
+    .vol-occupancy__value {
+        font-family: var(--csa-serif);
+        font-size: var(--csa-fs-2xl);
+        line-height: 1;
+        color: var(--csa-ink);
+    }
+    .vol-occupancy__of { font-size: var(--csa-fs-sm); color: var(--csa-ink-soft); white-space: nowrap; }
+
+    .vol-occupancy__pips { display: flex; gap: var(--csa-sp-2); flex-wrap: wrap; }
+    .vol-pip {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 38px;
+        height: 38px;
+        border-radius: var(--csa-radius-md);
+        font-size: var(--csa-fs-xs);
+        font-weight: 700;
+        letter-spacing: 0.02em;
+    }
+    .vol-pip--filled { background: var(--csa-green-soft); color: #3a5c2a; }
+    /* El hueco va punteado y no relleno: se lee como "aquí falta alguien" y no
+       como una ficha apagada. */
+    .vol-pip--empty {
+        border: 1.5px dashed var(--csa-rule);
+        color: var(--csa-rule);
+        font-weight: 400;
+        font-size: var(--csa-fs-md);
+    }
+
+    .vol-occupancy__note {
+        flex: 1 1 12rem;
+        margin: 0;
+        font-size: var(--csa-fs-sm);
+        line-height: var(--csa-lh-normal);
+        color: var(--csa-ink-soft);
+    }
+    .vol-occupancy__note strong { color: var(--csa-terracotta); font-weight: 600; }
+
+    @media (max-width: 640px) {
+        .vol-occupancy { gap: var(--csa-sp-3); }
+        .vol-occupancy__note { flex-basis: 100%; }
+    }
 
     /* Cuánto lleva hecho cada quien, bajo su nombre. Terciario a propósito: es
        contexto para quien coordina, no una nota en su expediente. */

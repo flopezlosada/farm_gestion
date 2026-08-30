@@ -38,17 +38,16 @@
                 icon: 'fa-bell-o'
             } %}
                 {% block body %}
-                    {# UNA línea antes del botón. Lo demás lo dice el propio botón
-                     # según el estado en que esté (push.js): qué hacer en iPhone,
-                     # cómo desbloquearlo si está bloqueado, o qué mirar si no
-                     # llega nada. Puesto todo aquí a la vez eran cuatro párrafos
-                     # de advertencias antes de haber probado siquiera. #}
-                    <p class="csa-muted">
-                        Se activa en cada dispositivo por separado: si los quieres
-                        en el móvil y en el ordenador, hay que darle en los dos.
+                    {% import '_macros/csa.html.twig' as csa %}
+                    {# La explicación va en el «?» y no delante del botón: aquí sólo
+                     # se viene a pulsar, y un párrafo de advertencias antes de haber
+                     # probado nada se lee como una pega. Lo específico de cada
+                     # situación —iPhone, bloqueado, activado pero sin llegar— lo
+                     # dice el propio botón según su estado (push.js). #}
+                    <p>
+                        <button type="button" class="csa-btn csa-btn--secondary csa-btn--sm" data-push-toggle>Activar avisos</button>
+                        {{ csa.hint('Se activa en cada dispositivo por separado: si los quieres en el móvil y en el ordenador, hay que darle en los dos. El móvil no hereda lo que actives aquí.') }}
                     </p>
-
-                    <button type="button" class="csa-btn csa-btn--secondary csa-btn--sm" data-push-toggle>Activar avisos</button>
                 {% endblock %}
             {% endembed %}
         {% endif %}
@@ -60,14 +59,15 @@
          # correos no tenía ninguna en absoluto.
          #
          # Sólo se pintan los temas de módulos encendidos, y de cada tema sólo
-         # los canales por los que de verdad se manda algo: el voluntariado hoy
-         # no envía correo, así que esa casilla sería un interruptor que no apaga
-         # nada. Lo resuelve NotificationPreferences::forPartner(). #}
+         # los canales por los que de verdad se manda algo: una casilla que no
+         # apaga nada es peor que no tenerla. Lo resuelve
+         # NotificationPreferences::forPartner(). #}
         {% embed '_components/csa_card.html.twig' with {
             title: 'Qué avisos quieres recibir',
             icon: 'fa-envelope-o'
         } %}
             {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
                 <form method="post" action="{{ path('panel_notifications_save') }}">
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_notifications') }}">
 
@@ -110,12 +110,10 @@
                         </table>
                     </div>
 
-                    <p class="csa-muted" style="margin-top: var(--csa-sp-4);">
-                        Lo que apagues aquí deja de llegarte, pero sigue estando en
-                        la web cuando entres.
+                    <p style="margin-top: var(--csa-sp-4);">
+                        <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">Guardar</button>
+                        {{ csa.hint('Lo que apagues aquí deja de llegarte, pero sigue estando en la web cuando entres: no te pierdes nada, sólo dejamos de darte el toque.') }}
                     </p>
-
-                    <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">Guardar</button>
                 </form>
             {% endblock %}
         {% endembed %}
