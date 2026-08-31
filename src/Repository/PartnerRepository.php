@@ -99,6 +99,29 @@ class PartnerRepository extends ServiceEntityRepository
     }
 
     /**
+     * Socixs activxs con correo, para elegir a quién mandarle cosas.
+     *
+     * Sin correo no hay nada que elegir: ofrecer una ficha sin dirección sólo
+     * sirve para asignarla y que luego el envío la descarte en silencio. El
+     * filtro va en la consulta y no en la plantilla para que ninguna pantalla
+     * futura se lo salte por descuido.
+     *
+     * @return list<Partner> ordenadxs por nombre, que es como se les busca
+     */
+    public function findActiveWithEmail(): array
+    {
+        return $this->createQueryBuilder('p')
+            ->where('p.status = :status')
+            ->andWhere('p.email IS NOT NULL')
+            ->andWhere("TRIM(p.email) <> ''")
+            ->setParameter('status', Partner::STATUS_ACTIVO)
+            ->orderBy('p.name', 'ASC')
+            ->addOrderBy('p.surname', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
      * La bolsa de voluntariado, como QueryBuilder para poder paginarla.
      *
      * Son 246 socixs: sin paginar, la pantalla salía como un muro de nueve mil
