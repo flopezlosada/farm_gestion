@@ -28,9 +28,21 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * sigue contando lo que de verdad no se ha mirado: pasar por delante de una lista
  * no es haber leído nada, y con lo contrario bastaría entrar una vez para que el
  * contador se vaciara y el aviso se perdiera de vista sin haberse leído.
+ *
+ * `IS_AUTHENTICATED_REMEMBERED` Y NO `_FULLY`, y no es una relajación por comodidad:
+ * con `_FULLY`, quien vuelve con la cookie de sesión recordada no abría la bandeja
+ * sino que rebotaba al panel. El camino era invisible: `/avisos` deniega → el
+ * firewall manda a `/login` → `SecurityController::login()` ve `getUser()` y
+ * redirige a `/post-login` → y ése reparte a `dashboard` o `panel` según el rol.
+ * Resultado: pulsar la campanita te llevaba a la pantalla de inicio. Los tests no
+ * lo veían porque `loginUser()` crea siempre una sesión PLENA.
+ *
+ * Es la misma trampa que `security.yaml` ya documenta para `^/post-login` y
+ * `^/account`, y aquí se puede bajar el requisito sin regalar nada: la bandeja
+ * sólo enseña los avisos de quien entra, y abrir uno comprueba que es suyo.
  */
 #[Route('/avisos')]
-#[IsGranted('IS_AUTHENTICATED_FULLY')]
+#[IsGranted('IS_AUTHENTICATED_REMEMBERED')]
 class NotificationController extends AbstractController
 {
     /**
