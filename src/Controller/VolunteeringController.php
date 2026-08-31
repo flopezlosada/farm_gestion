@@ -18,9 +18,9 @@ use App\Repository\VolunteerEventRepository;
 use App\Repository\VolunteerOfferRepository;
 use App\Repository\VolunteerSignupRepository;
 use App\Security\VolunteerOfferVoter;
-use App\Service\Volunteering\OfferRepeatDates;
-use App\Service\Volunteering\CoordinatorSignup;
 use App\Service\Volunteering\CreditedTime;
+use App\Service\Volunteering\OfferRepeatDates;
+use App\Service\Volunteering\TaskCoordinator;
 use App\Service\Volunteering\VolunteerAudienceResolver;
 use App\Service\Volunteering\VolunteerCallNotifier;
 use App\Service\Volunteering\VolunteerEventRecorder;
@@ -221,7 +221,7 @@ class VolunteeringController extends AbstractController
         EntityManagerInterface $em,
         VolunteerEventRecorder $events,
         OfferRepeatDates $repeatDates,
-        CoordinatorSignup $coordination,
+        TaskCoordinator $coordination,
     ): Response {
         $offer = (new VolunteerOffer())->setCreatedBy($this->getUser());
         $form = $this->createForm(VolunteerOfferType::class, $offer, ['with_repeat' => true]);
@@ -233,11 +233,12 @@ class VolunteeringController extends AbstractController
             // oferta no tenía categorías que mirar.
             $this->denyAccessUnlessGranted(VolunteerOfferVoter::EDIT, $offer);
 
+            // Si el área tiene una sola persona coordinándola, ya sabemos quién
+            // monta esto y no hace falta preguntarlo. Con varias, se eligió en
+            // el formulario y esto no toca nada.
+            $coordination->assignIfObvious($offer);
+
             $em->persist($offer);
-            // Quien coordina consta desde el principio: sale en "quién viene"
-            // con su etiqueta, y al cerrar se le imputan las horas como a todo
-            // el mundo, sin que nadie tenga que acordarse de anotarlo.
-            $coordination->sync($offer);
             $events->forOffer($offer, VolunteerEvent::TYPE_OFFER_CREATED, ['status' => $offer->getStatus()]);
 
             // Repetir en el mismo paso que crear: "voy a dar de alta el reparto
@@ -388,7 +389,7 @@ class VolunteeringController extends AbstractController
         EntityManagerInterface $em,
         VolunteerOfferChangeNotifier $changes,
         VolunteerEventRecorder $events,
-        CoordinatorSignup $coordination,
+        TaskCoordinator $coordination,
     ): Response {
         // La foto se toma ANTES de handleRequest: después, la entidad ya lleva
         // los valores nuevos y el original se ha perdido.
@@ -411,9 +412,9 @@ class VolunteeringController extends AbstractController
                 ]
             );
 
-            // Cambiar de coordinador se refleja en las inscripciones, con el
-            // cuidado de no quitarle las horas a quien ya consta que las hizo.
-            $coordination->sync($offer);
+            // Al cambiarle el área a una tarea que no tenía coordinador, puede
+            // que ahora sí se sepa quién la lleva.
+            $coordination->assignIfObvious($offer);
 
             $em->flush();
 
