@@ -126,6 +126,17 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface, LegacyP
     private ?Worker $worker = null;
 
     /**
+     * Vínculo opcional con un productor del grupo de consumo. Tercera faceta, espejo
+     * de {@see User::$partner} y {@see User::$worker}: una persona puede ser
+     * productor autogestionado (Producer) además de —o en vez de— socix/trabajador.
+     * Si se elimina el Producer, este campo queda a NULL en lugar de borrar el User.
+     *
+     * @ORM\OneToOne(targetEntity="App\Entity\Producer")
+     * @ORM\JoinColumn(name="producer_id", referencedColumnName="id", nullable=true, onDelete="SET NULL")
+     */
+    private ?Producer $producer = null;
+
+    /**
      * @var \DateTime $created
      *
      * @Gedmo\Timestampable(on="create")
@@ -410,6 +421,11 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface, LegacyP
         if ($this->worker !== null) {
             $roles[] = 'ROLE_WORKER';
         }
+        // Faceta de productor del grupo de consumo: un User vinculado a un Producer
+        // autogestiona sus rondas. Mismo criterio que Partner/Worker.
+        if ($this->producer !== null) {
+            $roles[] = 'ROLE_PRODUCER';
+        }
         // Mismo criterio para la coordinación del voluntariado: quien coordina
         // un área es, por definición, alguien que gestiona voluntariado, así que
         // el rol se deriva del dato. Si hubiera que asignarlo aparte serían dos
@@ -451,6 +467,17 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface, LegacyP
     public function setWorker(?Worker $worker): self
     {
         $this->worker = $worker;
+        return $this;
+    }
+
+    public function getProducer(): ?Producer
+    {
+        return $this->producer;
+    }
+
+    public function setProducer(?Producer $producer): self
+    {
+        $this->producer = $producer;
         return $this;
     }
 

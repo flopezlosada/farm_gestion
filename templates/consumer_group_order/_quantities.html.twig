@@ -1,0 +1,22 @@
+{# Inputs de cantidad por producto del pedido. Espera: round, quantities (map). #}
+<div class="cgo-lines">
+    {% for item in round.items %}
+        <div class="cgo-line">
+            <label class="cgo-line__label" for="cgo-q-{{ item.id }}">
+                {{ item.name }} <span class="csa-muted">· {{ item.price|number_format(2, ',', '.') }} € / {{ item.unit }}</span>
+            </label>
+            <input type="number" min="0" step="0.01" inputmode="decimal" id="cgo-q-{{ item.id }}"
+                   name="quantity[{{ item.id }}]" value="{{ quantities[item.id]|default('') }}"
+                   class="csa-input cgo-line__qty" placeholder="0">
+            <span class="cgo-line__unit">{{ item.unit }}</span>
+        </div>
+    {% endfor %}
+</div>
+
+<style>
+    .cgo-lines { display: flex; flex-direction: column; gap: var(--csa-sp-3); }
+    .cgo-line { display: flex; align-items: center; gap: var(--csa-sp-3); }
+    .cgo-line__label { flex: 1; }
+    .cgo-line__qty { flex: 0 0 7rem; }
+    .cgo-line__unit { flex: 0 0 4rem; color: var(--csa-muted); }
+</style>

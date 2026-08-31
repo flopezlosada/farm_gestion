@@ -1,0 +1,60 @@
+{# Categorías de producto del grupo de consumo: listado + alta inline. #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Categorías · Grupo de consumo{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('consumer_group_index') }}">Grupo de consumo</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Categorías</span>
+{% endblock %}
+
+{% block more_css %}{{ parent() }}{% include 'partner/_listing_styles.html.twig' %}{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header('Grupo de consumo', 'Categorías de producto', 'Organiza el catálogo (verdura, fruta, aceite…). Añade las que necesites.') }}
+
+    <div class="csa-stack-lg">
+        {% if is_granted('ROLE_GESTION_GRUPO_CONSUMO_EDIT') %}
+            <div class="csa-card csa-form-narrow">
+                {{ form_start(form) }}
+                    <div class="csa-row" style="align-items: flex-end; gap: var(--csa-sp-3);">
+                        <div style="flex: 1;">{{ csa.field(form.name, 'Nueva categoría') }}</div>
+                        <label class="cg-flag" style="display:inline-flex; align-items:center; gap: var(--csa-sp-2);">{{ form_widget(form.active) }} <span>Activa</span></label>
+                        <button type="submit" class="csa-btn csa-btn--primary">Añadir</button>
+                    </div>
+                {{ form_end(form) }}
+            </div>
+        {% endif %}
+
+        <div class="prl prl-table-wrap">
+            {% if categories is empty %}
+                <div class="prl-empty">Todavía no hay categorías.</div>
+            {% else %}
+                <table class="prl-table">
+                    <thead><tr><th>Categoría</th><th class="tight">Estado</th><th class="actions"></th></tr></thead>
+                    <tbody>
+                        {% for c in categories %}
+                            <tr>
+                                <td>{{ c.name }}</td>
+                                <td class="tight">{{ c.active ? 'Activa' : 'Inactiva' }}</td>
+                                <td class="actions">
+                                    {% if is_granted('ROLE_GESTION_GRUPO_CONSUMO_EDIT') %}
+                                        <a href="{{ path('consumer_group_category_edit', { id: c.id }) }}" title="Editar"><i class="fa fa-pencil"></i></a>
+                                        <form method="post" action="{{ path('consumer_group_category_delete', { id: c.id }) }}" style="display:inline;" onsubmit="return confirm('¿Borrar la categoría? Los productos que la usen quedarán sin categoría.')">
+                                            <input type="hidden" name="_token" value="{{ csrf_token('consumer_group_category_delete_' ~ c.id) }}">
+                                            <button type="submit" class="prl-btn prl-btn--sm" title="Borrar"><i class="fa fa-trash"></i></button>
+                                        </form>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% endif %}
+        </div>
+    </div>
+{% endblock %}

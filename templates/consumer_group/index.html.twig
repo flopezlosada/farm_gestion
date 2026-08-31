@@ -1,0 +1,128 @@
+{# ============================================================
+ # Listado de pedidos del grupo de consumo — estilo listado prl-*.
+ #
+ # El controller pasa:
+ #   - rounds        ConsumerGroupRound[] (más recientes por entrega arriba)
+ #   - order_counts  array round_id => nº de pedidos
+ #   - statuses      array status(int) => etiqueta
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% set status_chip = {
+    0: { label: 'Abierto',    cls: 'activo'   },
+    1: { label: 'Cerrado',    cls: 'pausado'  },
+    3: { label: 'Cancelado',  cls: 'baja'     },
+    4: { label: 'Entregado',  cls: 'pausado'  }
+} %}
+
+{% block title %}Grupo de consumo{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Grupo de consumo</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+{% endblock %}
+
+{% block csa_main %}
+
+<div class="prl">
+
+    {{ csa.page_header(
+        'Grupo de consumo',
+        'Pedidos',
+        'Pedidos colectivos de productos de terceros que se reparten con la cesta. Abre un pedido, las socias se apuntan y, al superar el mínimo del productor, se confirma.'
+    ) }}
+
+    {# ============ STAT STRIP ============ #}
+    <div class="prl-stats">
+        <div class="prl-stat prl-stat--active">
+            <div class="v">{{ rounds|filter(r => r.status == 0)|length }}</div>
+            <div class="l">abiertos</div>
+        </div>
+        <div class="prl-stat prl-stat--paused">
+            <div class="v">{{ rounds|filter(r => r.status == 1)|length }}</div>
+            <div class="l">cerrados</div>
+        </div>
+        <div class="prl-stat prl-stat--active">
+            <div class="v">{{ rounds|filter(r => r.confirmed)|length }}</div>
+            <div class="l">confirmados</div>
+        </div>
+        <div class="prl-stat prl-stat--leave">
+            <div class="v">{{ rounds|filter(r => r.status == 3)|length }}</div>
+            <div class="l">cancelados</div>
+        </div>
+    </div>
+
+    {# ============ TOOLBAR ============ #}
+    <div class="prl-toolbar">
+        <div class="counters">
+            <b>{{ rounds|length }}</b> pedido{{ rounds|length == 1 ? '' : 's' }}
+        </div>
+        <div class="spacer"></div>
+        {% if is_granted('ROLE_GESTION_GRUPO_CONSUMO_EDIT') %}
+            <a href="{{ path('consumer_group_new') }}" class="prl-btn prl-btn--primary">
+                <i class="fa fa-plus"></i> Nuevo pedido
+            </a>
+        {% endif %}
+    </div>
+
+    {# ============ TABLA ============ #}
+    <div class="prl-table-wrap">
+        {% if rounds is empty %}
+            <div class="prl-empty">
+                Todavía no hay ningun pedido. Crea la primera con el botón de arriba.
+            </div>
+        {% else %}
+            <table class="prl-table">
+                <thead>
+                    <tr>
+                        <th>Pedido</th>
+                        <th class="tight">Estado</th>
+                        <th class="tight">Entrega</th>
+                        <th class="tight">Pedidos</th>
+                        <th class="actions"><span class="sr-only">Acciones</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for round in rounds %}
+                        {% set sc = status_chip[round.status]|default({ label: round.statusLabel, cls: 'baja' }) %}
+                        <tr>
+                            <td>
+                                <div class="prl-person">
+                                    <span class="prl-person__avatar prl-person__avatar--sage" aria-hidden="true">
+                                        <i class="fa fa-shopping-basket"></i>
+                                    </span>
+                                    <div class="prl-person__body">
+                                        <a class="prl-person__name" href="{{ path('consumer_group_show', { id: round.id }) }}">
+                                            {{ round.title }}
+                                        </a>
+                                        <span class="prl-person__meta">{{ round.producer ? round.producer.name : '—' }}</span>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="tight">
+                                <span class="prl-chip prl-chip--{{ sc.cls }}"><span class="dot"></span>{{ sc.label }}</span>
+                                {% if round.confirmed %}<span class="prl-chip prl-chip--activo"><span class="dot"></span>Confirmado</span>{% endif %}
+                            </td>
+                            <td class="tight">{{ round.deliveryDate ? round.deliveryDate|date('d/m/Y') : '—' }}</td>
+                            <td class="tight">{{ order_counts[round.id] ?? 0 }}</td>
+                            <td class="actions">
+                                <a href="{{ path('consumer_group_show', { id: round.id }) }}" title="Ver" aria-label="Ver"><i class="fa fa-eye"></i></a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+
+</div>
+
+{% endblock %}

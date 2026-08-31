@@ -1,0 +1,31 @@
+{# ============================================================
+ # Editar pedido del grupo de consumo — shell csa. Solo mientras
+ # está abierto (lo garantiza el controller).
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Editar pedido · Grupo de consumo{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('consumer_group_index') }}">Grupo de consumo</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('consumer_group_show', { id: round.id }) }}">{{ round.title }}</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Editar</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Grupo de consumo',
+        'Editar pedido',
+        'Cambia el catálogo o las fechas. Al cerrar el pedido ya no se podrá editar.'
+    ) }}
+
+    {% include 'consumer_group/_form.html.twig' with { submit_label: 'Guardar cambios' } %}
+
+{% endblock %}

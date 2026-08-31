@@ -1,0 +1,23 @@
+{% import '_macros/csa.html.twig' as csa %}
+{% form_theme form 'form_div_layout.html.twig' %}
+
+<div class="csa-card csa-form-narrow">
+    {{ form_start(form, { attr: { 'data-csa-dropdowns': '1' } }) }}
+        <div class="csa-form-grid">
+            {{ csa.field(form.name, 'Producto', { full: true }) }}
+            {{ csa.field(form.category, 'Categoría') }}
+            {{ csa.field(form.unit, 'Unidad de venta') }}
+            {{ csa.field(form.referencePrice, 'Precio de referencia (€ / unidad)') }}
+            {{ csa.field(form.description, 'Descripción', { full: true }) }}
+        </div>
+        <div style="margin-top: var(--csa-sp-4);">
+            <label class="csa-check" style="display:inline-flex; align-items:center; gap: var(--csa-sp-2);">
+                {{ form_widget(form.active) }} <span>Producto activo (disponible para las rondas)</span>
+            </label>
+        </div>
+        <div class="csa-row" style="justify-content: flex-end; margin-top: var(--csa-sp-4);">
+            {{ csa.btn('Cancelar', { variant: 'ghost', href: cancel_url }) }}
+            <button type="submit" class="csa-btn csa-btn--primary">{{ submit_label|default('Guardar') }}</button>
+        </div>
+    {{ form_end(form) }}
+</div>

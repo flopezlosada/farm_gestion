@@ -1,0 +1,41 @@
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Apuntar socia · {{ round.title }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('consumer_group_index') }}">Grupo de consumo</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('consumer_group_show', { id: round.id }) }}">{{ round.title }}</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Apuntar socia</span>
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header('Grupo de consumo', 'Apuntar socia', round.title) }}
+
+    <div class="csa-card csa-form-narrow">
+        <form method="post" action="{{ path('consumer_group_order_new', { id: round.id }) }}" data-csa-dropdowns="1">
+            <input type="hidden" name="_token" value="{{ csrf_token('consumer_group_order_new_' ~ round.id) }}">
+
+            <div class="csa-field" style="margin-bottom: var(--csa-sp-4);">
+                <div class="csa-field__label-row"><label class="csa-field__label" for="cgo-partner">Socia</label></div>
+                <select name="partner" id="cgo-partner" class="csa-input" required>
+                    <option value="">Elige una socia…</option>
+                    {% for p in partners %}
+                        <option value="{{ p.id }}">{{ p.name }} {{ p.surname }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            {% include 'consumer_group_order/_quantities.html.twig' with { quantities: {} } %}
+
+            <div class="csa-row" style="justify-content: flex-end; margin-top: var(--csa-sp-4);">
+                {{ csa.btn('Cancelar', { variant: 'ghost', href: path('consumer_group_show', { id: round.id }) }) }}
+                <button type="submit" class="csa-btn csa-btn--primary">Apuntar pedido</button>
+            </div>
+        </form>
+    </div>
+{% endblock %}
