@@ -6,9 +6,11 @@ use App\Entity\Node;
 use App\Entity\Partner;
 use App\Entity\VolunteerEvent;
 use App\Entity\VolunteerOffer;
+use App\Entity\VolunteerCoordinationLog;
 use App\Entity\VolunteerSignup;
 use App\Repository\VolunteerCategoryRepository;
 use App\Repository\VolunteerOfferRepository;
+use App\Repository\VolunteerCoordinationLogRepository;
 use App\Repository\VolunteerSignupRepository;
 use App\Service\Volunteering\CreditedTime;
 use App\Service\Volunteering\VolunteerContributions;
@@ -56,6 +58,7 @@ class PanelVolunteeringController extends AbstractController
         VolunteerOfferRepository $offers,
         VolunteerSignupRepository $signups,
         VolunteerCategoryRepository $categories,
+        VolunteerCoordinationLogRepository $coordinationLog,
         VolunteerContributions $contributions,
     ): Response {
         if (($redirect = $this->ensureReady()) !== null) {
@@ -105,6 +108,13 @@ class PanelVolunteeringController extends AbstractController
                 $partner->getVolunteerCategories()->toArray()
             ),
             'has_preferences' => !$partner->hasNoVolunteerPreferences(),
+            // Las áreas que coordina esta persona, si coordina alguna. Sólo a
+            // quien coordina se le ofrece apuntar horas de coordinación: al
+            // resto no le dice nada y sería una caja más en una pantalla que ya
+            // tiene bastantes.
+            'coordinated' => $this->getUser()->getCoordinatedVolunteerCategories()->toArray(),
+            // Lo que lleva apuntado este año, para que no lo apunte dos veces.
+            'coordination_log' => $coordinationLog->findFor($partner, $from, $to),
         ]);
     }
 
@@ -261,28 +271,89 @@ class PanelVolunteeringController extends AbstractController
         }
 
         if ($request->request->getBoolean('attended')) {
-            // QUIEN COORDINA DICE CUÁNTAS HORAS le llevó; quien va a trabajar, no.
-            // La diferencia no es un capricho: una tarea vale lo que la asociación
-            // decidió que vale y eso es igual para todo el mundo, pero coordinarla
-            // —buscar gente, cuadrarla, avisar, estar pendiente toda la semana— no
-            // se parece a la media hora de bajar cajas, y sólo quien lo hizo sabe
-            // cuánto le llevó. En blanco toma las de la tarea, como siempre.
-            $minutes = $signup->isCoordination()
-                ? CreditedTime::minutesFromHours($request->request->get('hours'))
-                : null;
-
-            $signup->confirmAttendance(VolunteerSignup::SOURCE_SELF, $minutes);
+            $signup->confirmAttendance(VolunteerSignup::SOURCE_SELF);
             $events->forOffer($offer, VolunteerEvent::TYPE_ATTENDED, ['minutes' => $signup->getCreditedMinutes(), 'role' => $signup->getRole()], $signup->getPartner());
             $em->flush();
-            $this->addFlash('success', $signup->isCoordination()
-                ? 'Anotado. Gracias por sacarla adelante.'
-                : 'Anotado. Gracias por echar una mano.');
+            $this->addFlash('success', 'Anotado. Gracias por echar una mano.');
         } else {
             $signup->markAbsent(VolunteerSignup::SOURCE_SELF);
             $events->forOffer($offer, VolunteerEvent::TYPE_ABSENT, null, $signup->getPartner());
             $em->flush();
             $this->addFlash('success', 'Anotado, gracias por decirlo.');
         }
+
+        return $this->redirectToRoute('panel_volunteering');
+    }
+
+    /**
+     * Apuntar horas de coordinar un área.
+     *
+     * COORDINAR NO ES UNA TAREA y por eso no se cierra como tal: no ocurre un
+     * día concreto ni tiene plazas ni gente que se apunte. Es buscar gente,
+     * cuadrarla, avisar y estar pendiente, repartido por la semana. Lo único que
+     * se puede hacer es que quien lo hace diga cuánto le ha llevado.
+     *
+     * LO APUNTA ELLA MISMA, como quien va a una tarea dice si fue. Nadie más
+     * sabe ese número, y que lo pusiera gestión sería inventárselo.
+     *
+     * Sólo sobre áreas que coordina de verdad: sin esa comprobación, cualquiera
+     * con cuenta podría apuntarse horas de cualquier área cambiando un id en el
+     * formulario.
+     */
+    #[Route('/coordinacion', name: 'panel_volunteering_log_coordination', methods: ['POST'])]
+    public function logCoordination(
+        Request $request,
+        VolunteerCategoryRepository $categories,
+        EntityManagerInterface $em,
+    ): Response {
+        if (($redirect = $this->ensureReady()) !== null) {
+            return $redirect;
+        }
+
+        if (!$this->isCsrfTokenValid('panel_volunteering', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
+
+            return $this->redirectToRoute('panel_volunteering');
+        }
+
+        $user = $this->getUser();
+        $category = $categories->find($request->request->getInt('category'));
+
+        if (null === $category || !$category->isCoordinatedBy($user)) {
+            $this->addFlash('error', 'No coordinas esa área.');
+
+            return $this->redirectToRoute('panel_volunteering');
+        }
+
+        $minutes = CreditedTime::minutesFromHours($request->request->get('hours'));
+
+        if (null === $minutes || $minutes <= 0) {
+            $this->addFlash('error', 'Pon cuántas horas le has dedicado.');
+
+            return $this->redirectToRoute('panel_volunteering');
+        }
+
+        // La fecha se puede echar atrás —"esto fue de la semana pasada"— pero no
+        // adelante: apuntar horas de un trabajo que aún no se ha hecho es
+        // apuntarse horas que no existen.
+        $when = \DateTime::createFromFormat('Y-m-d', (string) $request->request->get('happened_on'))
+            ?: new \DateTime();
+
+        if ($when > new \DateTime()) {
+            $when = new \DateTime();
+        }
+
+        $entry = (new VolunteerCoordinationLog())
+            ->setPartner($user->getPartner())
+            ->setCategory($category)
+            ->setHappenedOn($when)
+            ->setMinutes($minutes)
+            ->setNotes(trim((string) $request->request->get('notes')) ?: null);
+
+        $em->persist($entry);
+        $em->flush();
+
+        $this->addFlash('success', 'Anotado. Gracias por llevar esto adelante.');
 
         return $this->redirectToRoute('panel_volunteering');
     }

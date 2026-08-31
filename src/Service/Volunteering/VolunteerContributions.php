@@ -3,6 +3,7 @@
 namespace App\Service\Volunteering;
 
 use App\Entity\Partner;
+use App\Repository\VolunteerCoordinationLogRepository;
 use App\Repository\VolunteerSignupRepository;
 
 /**
@@ -21,6 +22,7 @@ class VolunteerContributions
 {
     public function __construct(
         private readonly VolunteerSignupRepository $signups,
+        private readonly VolunteerCoordinationLogRepository $coordination,
     ) {
     }
 
@@ -35,8 +37,15 @@ class VolunteerContributions
     {
         [$from, $to] = $this->period();
 
+        // Las horas de coordinar un área se suman a las de las tareas: para
+        // quien mira lo suyo es todo lo mismo —tiempo que le ha dedicado a la
+        // asociación— y partirlo en dos cifras le obligaría a sumarlas de
+        // cabeza. La mediana NO las incluye a propósito: es la referencia de
+        // "lo que hace quien echa una mano", y meter ahí a las cuatro personas
+        // que coordinan la subiría por encima de lo que hace cualquiera.
         return new VolunteerContribution(
-            $this->signups->sumCreditedMinutes($partner, $from, $to),
+            $this->signups->sumCreditedMinutes($partner, $from, $to)
+                + $this->coordination->sumMinutes($partner, $from, $to),
             $this->signups->medianCreditedMinutes($from, $to),
         );
     }
