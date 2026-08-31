@@ -10,6 +10,7 @@ use App\Entity\Basket;
 use App\Entity\PartnerBasketShare;
 use App\Repository\BasketRepository;
 use App\Repository\NodeRepository;
+use App\Repository\PartnerRepository;
 use App\Repository\WeeklyBasketGroupRepository;
 use App\Repository\WeeklyBasketRepository;
 use App\Service\Delivery\EggDeliveryResolver;
@@ -101,7 +102,8 @@ class NodeController extends AbstractController
         WeeklyBasketGroupRepository $groupRepository,
         WeeklyBasketGenerator $generator,
         WeeklyBasketRepository $weeklyBasketRepository,
-        EggDeliveryResolver $eggResolver
+        EggDeliveryResolver $eggResolver,
+        PartnerRepository $partnerRepository
     ): Response {
         // Próximos repartos: estimación (proyección sin persistir) de cuánto
         // se va a repartir en cada viernes operativo del nodo, huevos incluidos.
@@ -155,6 +157,10 @@ class NodeController extends AbstractController
             'group_stats' => $groupStats,
             'active_partners' => $totalActive,
             'unassigned_groups' => $groupRepository->findBy(['node' => null], ['name' => 'ASC']),
+            // Candidatxs a recibir el listado: cualquier socix activx con correo.
+            // Son cuatrocientas, así que el selector es un desplegable con
+            // buscador y no una lista de casillas.
+            'sheet_recipient_candidates' => $partnerRepository->findActiveWithEmail(),
         ]);
     }
 
@@ -465,6 +471,83 @@ class NodeController extends AbstractController
         }
 
         return null;
+    }
+
+    /**
+     * Añade a alguien a quienes reciben el listado de este nodo.
+     *
+     * De uno en uno y desde la ficha, no como campo del formulario de edición:
+     * son cuatrocientas fichas con correo, y cuatrocientas casillas no se pueden
+     * usar. Es el mismo patrón con el que este nodo engancha sus grupos de
+     * recogida, y aprovecha el desplegable con buscador.
+     *
+     * @param Request           $request           Petición con el token y el socix.
+     * @param Node              $node              Nodo al que se añade.
+     * @param PartnerRepository $partnerRepository Para resolver el socix.
+     * @param EntityManagerInterface $entityManager Para persistir.
+     */
+    #[Route('/{id}/listado/destinatarios', name: 'node_attach_sheet_recipient', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function attachSheetRecipient(
+        Request $request,
+        Node $node,
+        PartnerRepository $partnerRepository,
+        EntityManagerInterface $entityManager,
+    ): Response {
+        if (!$this->isCsrfTokenValid('attach_sheet_recipient' . $node->getId(), (string) $request->request->get('_token'))) {
+            return $this->redirectToRoute('node_show', ['id' => $node->getId()]);
+        }
+
+        $partner = $partnerRepository->find((int) $request->request->get('partner_id'));
+        if (!$partner instanceof Partner) {
+            $this->addFlash('error', 'La persona indicada no existe.');
+
+            return $this->redirectToRoute('node_show', ['id' => $node->getId()]);
+        }
+
+        // Sin correo no hay envío posible: mejor decirlo aquí que asignarla y que
+        // el listado la descarte en silencio cada semana.
+        if (!$partner->getEmail()) {
+            $this->addFlash('error', sprintf('%s no tiene correo en su ficha: no se le puede mandar el listado.', $partner->getNameForDelivery()));
+
+            return $this->redirectToRoute('node_show', ['id' => $node->getId()]);
+        }
+
+        $node->addSheetRecipient($partner);
+        $entityManager->flush();
+        $this->addFlash('success', sprintf('%s recibirá el listado de "%s".', $partner->getNameForDelivery(), $node->getName()));
+
+        return $this->redirectToRoute('node_show', ['id' => $node->getId()]);
+    }
+
+    /**
+     * Deja de mandarle a alguien el listado de este nodo.
+     *
+     * @param Request           $request           Petición con el token.
+     * @param Node              $node              Nodo del que se quita.
+     * @param int               $partnerId         Socix que deja de recibirlo.
+     * @param PartnerRepository $partnerRepository Para resolver el socix.
+     * @param EntityManagerInterface $entityManager Para persistir.
+     */
+    #[Route('/{id}/listado/destinatarios/{partnerId}/quitar', name: 'node_detach_sheet_recipient', methods: ['POST'], requirements: ['id' => '\d+', 'partnerId' => '\d+'])]
+    public function detachSheetRecipient(
+        Request $request,
+        Node $node,
+        int $partnerId,
+        PartnerRepository $partnerRepository,
+        EntityManagerInterface $entityManager,
+    ): Response {
+        if (!$this->isCsrfTokenValid('detach_sheet_recipient' . $partnerId, (string) $request->request->get('_token'))) {
+            return $this->redirectToRoute('node_show', ['id' => $node->getId()]);
+        }
+
+        $partner = $partnerRepository->find($partnerId);
+        if ($partner instanceof Partner) {
+            $node->removeSheetRecipient($partner);
+            $entityManager->flush();
+            $this->addFlash('success', sprintf('%s ya no recibe el listado de "%s".', $partner->getNameForDelivery(), $node->getName()));
+        }
+
+        return $this->redirectToRoute('node_show', ['id' => $node->getId()]);
     }
 
     /**

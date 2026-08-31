@@ -3,19 +3,23 @@
 namespace App\Tests\Entity;
 
 use App\Entity\Node;
-use App\Entity\User;
+use App\Entity\Partner;
 use PHPUnit\Framework\TestCase;
 
 /**
  * Unit de a qué direcciones va el listado de un nodo.
  *
- * Lista vacía y null son cosas distintas aquí: vacía significa "este nodo no
- * tiene a nadie asignado, cae al ajuste general", y esa distinción es la que
- * decide si el listado sale o no sale.
+ * Lista vacía y lista con gente son cosas distintas aquí: vacía significa "este
+ * punto no tiene a nadie asignado, cae al ajuste general", y esa distinción es
+ * la que decide si el listado sale o no sale.
+ *
+ * Con Partner de verdad y no con dobles: el getter del correo se llama
+ * `getemail()` en minúsculas (herencia del código viejo) y configurar un mock
+ * con el nombre canónico es pedir un fallo raro.
  */
 class NodeSheetRecipientsTest extends TestCase
 {
-    public function testUnNodoNuevoNoTieneDestinatarios(): void
+    public function testUnPuntoNuevoNoTieneDestinatarios(): void
     {
         $this->assertSame([], (new Node())->sheetRecipientEmails());
     }
@@ -23,8 +27,8 @@ class NodeSheetRecipientsTest extends TestCase
     public function testDevuelveElCorreoDeCadaPersonaAsignada(): void
     {
         $node = (new Node())
-            ->addSheetRecipient($this->user('coordina@csavegadejarama.org'))
-            ->addSheetRecipient($this->user('reparto@csavegadejarama.org'));
+            ->addSheetRecipient($this->partner('coordina@csavegadejarama.org'))
+            ->addSheetRecipient($this->partner('reparto@csavegadejarama.org'));
 
         $this->assertSame(
             ['coordina@csavegadejarama.org', 'reparto@csavegadejarama.org'],
@@ -33,56 +37,56 @@ class NodeSheetRecipientsTest extends TestCase
     }
 
     /**
-     * Una cuenta sin correo se descarta en vez de tumbar el envío: es un dato que
+     * Una ficha sin correo se descarta en vez de tumbar el envío: es un dato que
      * puede faltar, y quien sí lo tiene debe recibir su listado igual.
      */
-    public function testUnaCuentaSinCorreoNoRompeElResto(): void
+    public function testUnaFichaSinCorreoNoRompeElResto(): void
     {
         $node = (new Node())
-            ->addSheetRecipient($this->user(null))
-            ->addSheetRecipient($this->user('reparto@csavegadejarama.org'));
+            ->addSheetRecipient(new Partner())
+            ->addSheetRecipient($this->partner('reparto@csavegadejarama.org'));
 
         $this->assertSame(['reparto@csavegadejarama.org'], $node->sheetRecipientEmails());
     }
 
     /**
-     * Si TODAS las cuentas asignadas están sin correo, el nodo se queda como si
-     * no tuviera a nadie y el listado cae al ajuste general. Lo contrario —una
-     * lista con huecos— haría creer al comando que ya tiene destinatarios.
+     * Si NINGUNA de las personas asignadas tiene correo, el punto se queda como
+     * si no tuviera a nadie y el listado cae al ajuste general. Lo contrario
+     * —una lista con huecos— haría creer al comando que ya tiene destinatarios.
      */
-    public function testSiNingunaTieneCorreoElNodoSeQuedaSinDestinatarios(): void
+    public function testSiNingunaTieneCorreoElPuntoSeQuedaSinDestinatarios(): void
     {
-        $node = (new Node())->addSheetRecipient($this->user(null));
+        $node = (new Node())->addSheetRecipient(new Partner());
 
         $this->assertSame([], $node->sheetRecipientEmails());
     }
 
     public function testAsignarDosVecesALaMismaPersonaNoLaDuplica(): void
     {
-        $user = $this->user('coordina@csavegadejarama.org');
-        $node = (new Node())->addSheetRecipient($user)->addSheetRecipient($user);
+        $partner = $this->partner('coordina@csavegadejarama.org');
+        $node = (new Node())->addSheetRecipient($partner)->addSheetRecipient($partner);
 
         $this->assertCount(1, $node->sheetRecipientEmails());
     }
 
     public function testSeLePuedeQuitarElListadoAAlguien(): void
     {
-        $user = $this->user('coordina@csavegadejarama.org');
-        $node = (new Node())->addSheetRecipient($user);
+        $partner = $this->partner('coordina@csavegadejarama.org');
+        $node = (new Node())->addSheetRecipient($partner);
 
-        $node->removeSheetRecipient($user);
+        $node->removeSheetRecipient($partner);
 
         $this->assertSame([], $node->sheetRecipientEmails());
     }
 
     /**
-     * @param string|null $email Correo de la cuenta, o null si no tiene.
+     * @param string $email Correo de la ficha.
      */
-    private function user(?string $email): User
+    private function partner(string $email): Partner
     {
-        $user = $this->createMock(User::class);
-        $user->method('getEmail')->willReturn($email);
+        $partner = new Partner();
+        $partner->setemail($email);
 
-        return $user;
+        return $partner;
     }
 }

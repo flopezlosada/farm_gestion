@@ -169,18 +169,26 @@ class Node
      * ROLE_GESTION_VOLUNTARIADO): se acabaría dando acceso a gestión a alguien
      * sólo para que reciba un adjunto. Aquí no se deriva ningún rol.
      *
-     * Cuelga de User, no de Partner: quien recibe el listado maneja datos de
-     * todas las personas del nodo, así que tiene que ser alguien con cuenta en la
-     * casa, y no toda persona que ayuda en un reparto es socia.
+     * CUELGA DE Partner Y NO DE User, y esto se cambió con datos delante: hay 402
+     * socixs con correo y sólo 43 cuentas en toda la casa, de las que 12 tienen
+     * permisos de gestión. Colgando de User, quien monta el reparto —que casi
+     * nunca tiene cuenta— era literalmente inseleccionable, y la funcionalidad
+     * sólo servía para las doce personas del equipo. Recibir un correo no exige
+     * poder entrar en la web.
      *
      * Vacío = el listado de este nodo cae al ajuste general
      * ({@see \App\Service\AppSettings::EMAIL_DELIVERY_SHEET_TO}), que sigue
      * sirviendo de respaldo mientras los nodos no tengan a nadie asignado.
      *
-     * @ORM\ManyToMany(targetEntity="App\Entity\User")
+     * ⚠️ Queda abierto que el listado lleva nombre, localidad y lo que recibe
+     * cada persona del punto, así que esto permite mandárselo a cualquier socix.
+     * Decisión consciente de la asociación, y provisional: cuando haya un criterio
+     * de a quién puede llegar, se acota aquí.
+     *
+     * @ORM\ManyToMany(targetEntity="App\Entity\Partner")
      * @ORM\JoinTable(name="node_sheet_recipient")
      *
-     * @var Collection<int, User>
+     * @var Collection<int, Partner>
      */
     private Collection $sheetRecipients;
 
@@ -191,7 +199,7 @@ class Node
     }
 
     /**
-     * @return Collection<int, User> quiénes reciben el listado de este nodo
+     * @return Collection<int, Partner> quiénes reciben el listado de este nodo
      */
     public function getSheetRecipients(): Collection
     {
@@ -199,23 +207,23 @@ class Node
     }
 
     /**
-     * @param User $user Quien pasa a recibir el listado de este nodo.
+     * @param Partner $partner Quien pasa a recibir el listado de este nodo.
      */
-    public function addSheetRecipient(User $user): self
+    public function addSheetRecipient(Partner $partner): self
     {
-        if (!$this->sheetRecipients->contains($user)) {
-            $this->sheetRecipients->add($user);
+        if (!$this->sheetRecipients->contains($partner)) {
+            $this->sheetRecipients->add($partner);
         }
 
         return $this;
     }
 
     /**
-     * @param User $user Quien deja de recibir el listado de este nodo.
+     * @param Partner $partner Quien deja de recibir el listado de este nodo.
      */
-    public function removeSheetRecipient(User $user): self
+    public function removeSheetRecipient(Partner $partner): self
     {
-        $this->sheetRecipients->removeElement($user);
+        $this->sheetRecipients->removeElement($partner);
 
         return $this;
     }
@@ -223,7 +231,7 @@ class Node
     /**
      * Direcciones a las que mandar el listado de este nodo.
      *
-     * Descarta a quien no tenga correo en su cuenta en vez de fallar: es un dato
+     * Descarta a quien no tenga correo en su ficha en vez de fallar: es un dato
      * que puede faltar y no debe tumbar el envío a los demás. Devuelve lista
      * vacía si el nodo no tiene a nadie asignado, que es la señal de que hay que
      * caer al ajuste general.
@@ -233,8 +241,8 @@ class Node
     public function sheetRecipientEmails(): array
     {
         $emails = [];
-        foreach ($this->sheetRecipients as $user) {
-            $email = $user->getEmail();
+        foreach ($this->sheetRecipients as $partner) {
+            $email = $partner->getEmail();
             if ($email) {
                 $emails[] = $email;
             }
