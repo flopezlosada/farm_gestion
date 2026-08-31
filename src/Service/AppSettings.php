@@ -388,7 +388,15 @@ class AppSettings
         self::CRON_DELIVERY_SHEET => [
             'command' => 'app:send-delivery-sheets',
             'channels' => ['email'],
-            'needs_recipient' => true,
+            // FALSE, y no es un descuido. `needs_recipient` significa "esta tarea
+            // va a UNA persona concreta", y entonces {@see \App\Service\Cron\CronRunner}
+            // le pasa --to con el correo de quien pulsa "Ejecutar ahora" para no
+            // escribir a terceros desde una prueba. Aquí eso hacía daño: --to pisa
+            // los destinatarios de cada punto, así que el listado le llegaba a
+            // quien pulsó y —lo grave— el apunte de idempotencia quedaba puesto,
+            // de modo que el envío de verdad de esa mañana ya no salía a nadie.
+            // Esta tarea no tiene un destinatario, tiene los suyos por nodo.
+            'needs_recipient' => false,
             'confirm' => true,
             'dry' => true,
             // A las 7:00 y a diario: cada nodo cierra su plazo la noche anterior a
