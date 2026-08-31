@@ -25,6 +25,7 @@ use App\Security\PartnerAccessPolicy;
 use App\Security\PartnerUserProvisioner;
 use App\Service\Delivery\ExtraBasketEditor;
 use App\Service\Delivery\NodeDeliveryDate;
+use App\Service\Delivery\NodeShareCoherence;
 use App\Service\Delivery\PickupRelocationOptions;
 use App\Service\Delivery\PickupRelocator;
 use App\Service\Delivery\WeeklyBasketGenerator;
@@ -234,7 +235,7 @@ class PartnerController extends AbstractController
         ]);
     }
 
-    #[Route("/{id}", name: "partner_show", methods: ["GET"])]
+    #[Route("/{id}", name: "partner_show", methods: ["GET"], requirements: ["id" => "\\d+"])]
     public function show(
         Partner $partner,
         \App\Repository\PartnerEventRepository $partnerEventRepository,
@@ -597,15 +598,52 @@ class PartnerController extends AbstractController
         return $this->redirectToRoute('partner_show', $back);
     }
 
+    /**
+     * Editar la ficha incluye MOVER al socio de grupo de recogida, y con él a
+     * sus cestas: el grupo nuevo puede colgar de un punto que no las admita (un
+     * semanal que se va a un punto quincenal). Se comprueba antes de guardar y,
+     * si alguna no cabe, no se guarda nada — a qué modalidad pasa el socio lo
+     * decide administración. Ver {@see NodeShareCoherence}.
+     */
     #[Route("/{id}/edit", name: "partner_edit", methods: ["GET","POST"])]
-    public function edit(Request $request, Partner $partner, EntityManagerInterface $entityManager): Response
-    {
+    public function edit(
+        Request $request,
+        Partner $partner,
+        EntityManagerInterface $entityManager,
+        NodeShareCoherence $coherence
+    ): Response {
+        // Sólo se contrasta si el grupo CAMBIA: un socio que ya arrastre una
+        // cesta incoherente (dato viejo) tiene que poder seguir editándose para
+        // cualquier otra cosa — cambiarle el teléfono no empeora nada.
+        $originalGroup = $partner->getWeeklyBasketGroup();
+
         $form = $this->createForm(PartnerType::class, $partner);
 
         $form->handleRequest($request);
 
-
         if ($form->isSubmitted() && $form->isValid()) {
+            $newGroup = $partner->getWeeklyBasketGroup();
+            $orphaned = $newGroup !== $originalGroup
+                ? $coherence->partnerSharesThatDoNotFit($partner, $newGroup?->getNode())
+                : [];
+            if ($orphaned !== []) {
+                $entityManager->refresh($partner); // descarta el cambio en memoria
+                $this->addFlash('error', sprintf(
+                    'No se ha guardado: en ese grupo de recogida no se podrían repartir %d cesta(s) de este socio (%s). Cámbiale la modalidad primero.',
+                    count($orphaned),
+                    implode(', ', array_map(
+                        static fn (PartnerBasketShare $s): string => $s->getBasketShare()?->getName() ?? '?',
+                        $orphaned,
+                    )),
+                ));
+
+                return $this->render('partner/edit.html.twig', [
+                    'partner' => $partner,
+                    'entity' => $partner,
+                    'form' => $this->createForm(PartnerType::class, $partner)->createView(),
+                ]);
+            }
+
             /*
              * aquí actualizo el grupo del socio para la última cesta si es que ya ha sido creada
              */
@@ -629,7 +667,7 @@ class PartnerController extends AbstractController
         ]);
     }
 
-    #[Route("/{id}", name: "partner_delete", methods: ["DELETE"])]
+    #[Route("/{id}", name: "partner_delete", methods: ["DELETE"], requirements: ["id" => "\\d+"])]
     public function delete(Request $request, Partner $partner, EntityManagerInterface $entityManager): Response
     {
         // Solo se eliminan fichas PENDIENTES de confirmar (needs_review): son
@@ -1027,7 +1065,9 @@ class PartnerController extends AbstractController
         $cohort = $cohortChoiceBuilder->forNode($pickupGroup?->getNode());
         $form = $this->createForm(PartnerBasketShareType::class, $partnerBasketShare, [
             'cohort_choices' => $cohort['cohortChoices'],
-            'exclude_weekly_shares' => $cohort['excludeWeeklyShares'],
+            'allowed_share_ids' => $cohort['allowedShareIds'],
+            'offered_month_orders' => $cohort['offeredMonthOrders'],
+            'forced_month_order' => $cohort['forcedMonthOrder'],
             'ask_pickup_group' => $askPickupGroup,
             'pickup_group' => $pickupGroup,
         ]);
@@ -1047,10 +1087,18 @@ class PartnerController extends AbstractController
                 $basketPricing->applyTo($partnerBasketShare);
             }
 
-            if ($partnerBasketShare->getBasketShare()->getId() == 3) {
-
-            } else {
+            // El orden mensual sólo lo usan las modalidades mensuales (3 y 7);
+            // en el resto es ruido. El literal `== 3` de antes dejaba fuera la
+            // mensual compartida, que nacía sin orden y no materializaba.
+            if (!$partnerBasketShare->getBasketShare()->isMonthly()) {
                 $partnerBasketShare->setDayMonthOrder(null);
+            }
+
+            // Simetría con changeModality: el turno sólo se guarda donde se usa
+            // (quincenales y mensuales) y nunca en nodos de cadencia quincenal,
+            // que ya alternan por sí mismos.
+            if ($cohort['nodeIsBiweekly'] || $cohort['nodeIsMonthly'] || !$partnerBasketShare->getBasketShare()->usesDeliveryGroup()) {
+                $partnerBasketShare->setDeliveryGroup(null);
             }
             $entityManager->persist($partnerBasketShare);
             $shareEventRecorder->recordStart($partnerBasketShare);

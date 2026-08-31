@@ -70,8 +70,18 @@ class PartnerBasketShare
     protected $basket_share;
 
     /**
-     * Este valor guarda el orden de la semana en que recibe. Sólo para los mensuales. Si la primera semana (que hay cesta) del mes, la
-     * segunda, la tercera o la cuarta. Realmente se hace referencia al viernes correspondiente.
+     * Orden de la entrega del mes en que recibe. Sólo para los mensuales.
+     * Positivo cuenta desde el principio (1 = primera) y -1 = la última, que
+     * sigue al último reparto del mes tenga éste 4 o 5 semanas.
+     *
+     * SOBRE QUÉ se cuenta depende de {@see $delivery_group}:
+     *  - Sin turno: sobre las entregas del NODO en el mes (en Torremocha, los
+     *    viernes; en Cascorro/Midori, las semanas de su ciclo quincenal).
+     *  - Con turno: sobre las entregas de ESE TURNO en el mes, para que el
+     *    mensual coincida siempre con su grupo (caso Alcobendas).
+     *
+     * Resuelto en runtime por {@see \App\Service\Delivery\MonthlyOperativeOrderResolver}.
+     *
      * @var smallint $day_month_order
      * @ORM\Column(type="smallint",nullable=true)
      */
@@ -186,18 +196,38 @@ class PartnerBasketShare
     public const DELIVERY_GROUPS = [self::DELIVERY_GROUP_A, self::DELIVERY_GROUP_B];
 
     /**
+     * "Última entrega del mes" como valor de `day_month_order`. Contado desde
+     * el final a propósito: la última es la 4ª en un mes de 4 semanas y la 5ª
+     * en uno de 5, así que un 4 fijo significaría cosas distintas según el mes.
+     *
+     * Mismo criterio y mismo valor que {@see Node::MONTHLY_WEEK_LAST}, que es
+     * la semana que abre un punto de cadencia mensual; la coherencia entre
+     * ambos la blinda un test.
+     */
+    public const DAY_MONTH_ORDER_LAST = -1;
+
+    /**
      * Cohorte A/B de QUINCENALES. Determina en qué viernes alternos recoge un
      * socio quincenal: es una alternancia semanal continua anclada a una fecha
      * global (ver BiweeklyCohortResolver), pensada para equilibrar la carga de
      * cosecha viernes a viernes.
      *
-     * Solo aplica a quincenales: el generador (WeeklyBasketGenerator) consulta
-     * la cohorte únicamente para SHARE_BIWEEKLY. Los mensuales se resuelven por
-     * day_month_order (qué entrega del mes), NO por A/B; los semanales reciben
-     * todos los viernes. Null para semanales y para casos puntuales sin grupo
-     * asignado. Ojo: como la alternancia es continua, en meses de 5 viernes una
-     * cohorte recoge 3 veces y la otra 2, y la fase se invierte al mes siguiente
-     * — A/B NO mapea a viernes ordinales fijos (1º/3º vs 2º/4º).
+     * Para un QUINCENAL decide en qué viernes recoge, y es obligatorio en nodos
+     * de cadencia semanal (sin turno cae de los listados). Los semanales reciben
+     * todos los viernes y no lo usan.
+     *
+     * Para un MENSUAL es OPCIONAL y no decide si recoge, sino sobre qué
+     * calendario se cuenta su {@see $day_month_order}: con turno, sobre las
+     * entregas de ese turno en el mes; sin turno, sobre los viernes del mes.
+     * Es lo que permite a un mensual coincidir siempre con el reparto de su
+     * grupo (caso Alcobendas, 2026-07-30) sin retocarlo a mano cada mes de 5
+     * viernes. Ver {@see \App\Entity\BasketShare::usesDeliveryGroup}.
+     *
+     * Null en semanales, en nodos de cadencia quincenal (donde el turno lo fija
+     * el propio punto) y en mensuales no anclados. Ojo: como la alternancia es
+     * continua, en meses de 5 viernes una cohorte recoge 3 veces y la otra 2, y
+     * la fase se invierte al mes siguiente — A/B NO mapea a viernes ordinales
+     * fijos (1º/3º vs 2º/4º). Ése es justamente el motivo del anclaje.
      *
      * @ORM\Column(name="delivery_group", type="string", length=1, nullable=true)
      */
@@ -538,6 +568,88 @@ class PartnerBasketShare
             $context->buildViolation('Una cesta compartida lleva siempre 1. Si necesitas una entrega puntual de más, usa «Añadir cesta extra».')
                 ->atPath('amount')
                 ->addViolation();
+        }
+    }
+
+    /**
+     * Una cesta sólo puede pedir lo que su punto de recogida ofrece. Sin esto,
+     * el formulario deja guardar combinaciones que el motor de reparto no puede
+     * servir y el socio DESAPARECE del listado sin ningún aviso — que es
+     * exactamente lo que pasó con los dos socios de El Berrueco (2026-08-26):
+     * cesta mensual con la posición del mes en blanco, invisible desde el alta.
+     *
+     * Tres reglas, todas contra el {@see Node} del socio:
+     *  1. La modalidad tiene que caber en el punto ({@see Node::allowedShareIds}):
+     *     una cesta semanal no cabe en un punto que abre cada quince días.
+     *  2. Una cesta mensual tiene que decir QUÉ entrega del mes recoge, y tiene
+     *     que ser una de las que el punto sirve todos los meses
+     *     ({@see Node::offeredMonthOrders}).
+     *  3. Una quincenal en un punto semanal necesita turno de viernes: sin él no
+     *     entra en ninguna cohorte y cae de los listados igual que la anterior.
+     *
+     * Vive en la entidad, no en el formulario, para que valga igual al alta, a
+     * la corrección de errata y al cambio de modalidad. El socio sin grupo de
+     * recogida asignado (dato legacy) no tiene punto contra el que contrastar:
+     * ahí sólo se exige la regla 2 en su parte de "no puede quedar en blanco".
+     */
+    #[Assert\Callback]
+    public function validateAgainstNodeOffer(ExecutionContextInterface $context): void
+    {
+        $share = $this->basket_share;
+        if ($share === null) {
+            return; // sin modalidad no hay nada que contrastar; lo cubre el propio form.
+        }
+
+        $node = $this->partner?->getWeeklyBasketGroup()?->getNode();
+
+        $allowed = $node?->allowedShareIds();
+        if ($allowed !== null && !in_array($share->getId(), $allowed, true)) {
+            $context->buildViolation(sprintf(
+                'El punto de recogida %s no admite cestas de tipo "%s" (reparte con cadencia %s).',
+                $node->getName(),
+                $share->getName(),
+                strtolower($node->getCadenceLabel()),
+            ))->atPath('basket_share')->addViolation();
+        }
+
+        if ($share->isMonthly()) {
+            $this->validateMonthOrder($context, $node);
+        }
+
+        $needsTurn = $share->usesDeliveryGroup()
+            && !$share->isMonthly()
+            && ($node === null || $node->getCadence() === Node::CADENCE_WEEKLY);
+        if ($needsTurn && $this->delivery_group === null) {
+            $context->buildViolation('Indica el turno de viernes: una cesta quincenal sin turno no entra en ningún reparto.')
+                ->atPath('deliveryGroup')
+                ->addViolation();
+        }
+    }
+
+    /**
+     * Regla 2 de {@see validateAgainstNodeOffer}: la posición del mes de una
+     * cesta mensual. En blanco nunca vale; y si el socio tiene punto, tiene que
+     * ser una de las que ese punto abre todos los meses.
+     *
+     * @param ExecutionContextInterface $context
+     * @param Node|null                 $node    Punto del socio, o null si aún no tiene grupo.
+     */
+    private function validateMonthOrder(ExecutionContextInterface $context, ?Node $node): void
+    {
+        if ($this->day_month_order === null) {
+            $context->buildViolation('Indica qué entrega del mes recoge la cesta: una cesta mensual sin ese dato no aparece en ningún reparto.')
+                ->atPath('dayMonthOrder')
+                ->addViolation();
+
+            return;
+        }
+
+        $offered = $node?->offeredMonthOrders();
+        if ($offered !== null && !in_array((int) $this->day_month_order, $offered, true)) {
+            $context->buildViolation(sprintf(
+                'El punto de recogida %s no sirve esa entrega todos los meses. Elige una de las que sí abre siempre.',
+                $node->getName(),
+            ))->atPath('dayMonthOrder')->addViolation();
         }
     }
 

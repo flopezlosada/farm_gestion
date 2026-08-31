@@ -1,0 +1,40 @@
+-- ============================================================================
+-- Planificador de tareas programadas — Paso 2: idempotencia (DDL).
+--
+-- Tabla nueva `emitted_effect`: una fila por efecto externo ya producido (un
+-- aviso enviado, un cobro emitido, un fichero depositado), con índice ÚNICO
+-- sobre (kind, reference, occurred_on). Ese índice es el mecanismo: el que va a
+-- producir un efecto lo apunta antes, y si el apunte choca, es que ya se hizo.
+--
+-- Hace falta porque el planificador va a reintentar. Hoy el reloj dispara una
+-- vez por día o por semana; con el tick horario —y con dos relojes en paralelo,
+-- que es el plan para no depender de un proveedor— una tarea que murió a mitad
+-- del envío se reintenta sola, y sin esto repetiría los correos ya enviados.
+--
+-- ANTES de aplicarlo, contrástalo con lo que Doctrine espera, que no toca nada:
+--   ddev exec bin/console doctrine:schema:update --dump-sql | grep emitted_effect
+-- Y NUNCA `doctrine:schema:update --force`: arrastraría el drift de índices
+-- preexistente (ver CLAUDE.md / memoria schema_drift_anotaciones_vs_db).
+--
+-- Aplicar a las TRES BBDD de trabajo: db (sandbox), db_prod_snapshot (golden)
+-- y db_test.
+--   ddev mysql db               < dev-docs/schema/schema-emitted-effect.sql
+--   ddev mysql db_prod_snapshot < dev-docs/schema/schema-emitted-effect.sql   # tras esto, bin/db-backup
+--   ddev mysql db_test          < dev-docs/schema/schema-emitted-effect.sql
+--
+-- En PRODUCCIÓN se aplica a mano por phpMyAdmin. La tabla nace vacía y sin FKs.
+-- ORDEN RESPECTO AL CÓDIGO: da igual, pero con matices que conviene conocer.
+-- Sin tabla, el guardián no puede apuntar los efectos: lo anota en el log de la
+-- app y los produce igual, así que las tareas siguen enviando exactamente como
+-- hoy, sólo que sin protección contra duplicados. Con la tabla y sin código, no
+-- se escribe nada. Lo que NO da igual es el orden de la otra tabla del
+-- planificador: `cron_run` tiene que existir ANTES de desplegar su código,
+-- porque /gestion/settings la consulta al pintar la pantalla.
+--
+-- Nota: la primera fila que se apunte para una clave que YA se envió antes de
+-- este despliegue provocará un envío repetido de ese aviso concreto (el sistema
+-- no puede saber lo que se mandó cuando no había registro). Es un único aviso
+-- por clave y sólo en la transición.
+-- ============================================================================
+
+CREATE TABLE emitted_effect (id INT AUTO_INCREMENT NOT NULL, kind VARCHAR(60) NOT NULL, reference VARCHAR(100) NOT NULL, occurred_on DATE NOT NULL COMMENT '(DC2Type:date_immutable)', target VARCHAR(255) DEFAULT NULL, emitted_at DATETIME NOT NULL COMMENT '(DC2Type:datetime_immutable)', UNIQUE INDEX UNIQ_emitted_effect_key (kind, reference, occurred_on), INDEX IDX_emitted_effect_emitted_at (emitted_at), PRIMARY KEY(id)) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci` ENGINE = InnoDB;

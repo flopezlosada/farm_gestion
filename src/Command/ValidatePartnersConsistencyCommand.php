@@ -2,6 +2,8 @@
 
 namespace App\Command;
 
+use App\Entity\BasketShare;
+use App\Entity\Node;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
 use Doctrine\ORM\EntityManagerInterface;
@@ -30,12 +32,9 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 )]
 class ValidatePartnersConsistencyCommand extends Command
 {
-    /** ID de BasketShare semanal en el catálogo. */
+    /** ID de BasketShare semanal en el catálogo. Las listas de modalidades
+     * quincenales y mensuales viven en {@see BasketShare}. */
     private const SHARE_WEEKLY = 1;
-    /** ID de BasketShare quincenal. */
-    private const SHARE_BIWEEKLY = 2;
-    /** ID de BasketShare mensual. */
-    private const SHARE_MONTHLY = 3;
 
     public function __construct(
         private readonly EntityManagerInterface $em,
@@ -110,8 +109,17 @@ class ValidatePartnersConsistencyCommand extends Command
     }
 
     /**
-     * delivery_group (cohorte A/B) sólo tiene sentido en cestas quincenales.
-     * Una semanal o mensual con cohorte asignada es incoherente.
+     * Una cesta SEMANAL con cohorte asignada es incoherente: recoge todos los
+     * viernes, el turno no significa nada.
+     *
+     * Una MENSUAL con cohorte SÍ es válida desde 2026-07-30: ancla su
+     * `day_month_order` a las entregas de ese turno para coincidir con su grupo
+     * (caso Alcobendas, ver PartnerBasketShare::$delivery_group). Antes se
+     * marcaba como incoherencia; dejarlo así invitaba a "arreglarlo" borrando el
+     * turno y descolgando al socio de su grupo.
+     *
+     * Solo-huevos (5) queda fuera a propósito: con huevos quincenales usa el
+     * turno igual que una quincenal de verdura.
      *
      * @param PartnerBasketShare[] $shares Suscripciones activas.
      * @return string[]
@@ -122,7 +130,7 @@ class ValidatePartnersConsistencyCommand extends Command
         foreach ($shares as $share) {
             $modality = $share->getBasketShare()?->getId();
             if ($share->getDeliveryGroup() !== null
-                && in_array($modality, [self::SHARE_WEEKLY, self::SHARE_MONTHLY], true)) {
+                && in_array($modality, [self::SHARE_WEEKLY], true)) {
                 $problems[] = sprintf(
                     '%s (id %d): modalidad %s con cohorte "%s".',
                     $this->name($share->getPartner()),
@@ -137,8 +145,15 @@ class ValidatePartnersConsistencyCommand extends Command
     }
 
     /**
-     * Un PBS quincenal activo sin delivery_group no encaja en la
-     * alternancia A/B y nunca recibiría cesta de forma estable.
+     * Un PBS quincenal activo sin delivery_group no encaja en la alternancia
+     * A/B y nunca recibiría cesta de forma estable... salvo en un nodo de
+     * cadencia QUINCENAL (Cascorro, Midori), donde la alternancia la marca el
+     * propio punto y el turno se anula a propósito. Sin esa exclusión, los 12
+     * quincenales de Madrid salían siempre como incoherencia y ahogaban la
+     * señal de los casos reales.
+     *
+     * Cubre las dos modalidades quincenales (normal y compartida) vía
+     * BasketShare::IDS_BIWEEKLY: la compartida también necesita turno.
      *
      * @param PartnerBasketShare[] $shares Suscripciones activas.
      * @return string[]
@@ -147,7 +162,10 @@ class ValidatePartnersConsistencyCommand extends Command
     {
         $problems = [];
         foreach ($shares as $share) {
-            if ($share->getBasketShare()?->getId() === self::SHARE_BIWEEKLY
+            $nodeIsBiweekly = $share->getPartner()?->getWeeklyBasketGroup()?->getNode()?->getCadence()
+                === Node::CADENCE_BIWEEKLY;
+            if (in_array($share->getBasketShare()?->getId(), BasketShare::IDS_BIWEEKLY, true)
+                && !$nodeIsBiweekly
                 && $share->getDeliveryGroup() === null) {
                 $problems[] = sprintf(
                     '%s (id %d): quincenal sin cohorte asignada.',
@@ -161,30 +179,63 @@ class ValidatePartnersConsistencyCommand extends Command
     }
 
     /**
-     * Cada socio debería tener como mucho una suscripción activa.
+     * Un socio no debe tener dos PBS activos cuyos rangos [start_date, end_date]
+     * SE SOLAPEN. Tener dos activos con rangos DISJUNTOS es legítimo y esperado:
+     * un cambio de modalidad a fecha futura deja el viejo acotado (…→víspera) y
+     * activo hasta que expire, y el nuevo activo desde la efectiva; ambos siguen
+     * is_active=1 hasta que finalizeExpiredShares cierra el viejo. Contar activos
+     * a secas daba falso positivo en esa cola. Misma semántica que el invariante
+     * L28 ({@see ActiveShareOverlapInvariant}).
      *
      * @param PartnerBasketShare[] $shares Suscripciones activas.
      * @return string[]
      */
     private function checkSingleActiveShare(array $shares): array
     {
-        $countByPartner = [];
-        $nameByPartner = [];
+        $sharesByPartner = [];
         foreach ($shares as $share) {
-            $partner = $share->getPartner();
-            $id = $partner->getId();
-            $countByPartner[$id] = ($countByPartner[$id] ?? 0) + 1;
-            $nameByPartner[$id] = $this->name($partner);
+            $sharesByPartner[$share->getPartner()->getId()][] = $share;
         }
 
         $problems = [];
-        foreach ($countByPartner as $id => $count) {
-            if ($count > 1) {
-                $problems[] = sprintf('%s (id %d): %d PBS activos.', $nameByPartner[$id], $id, $count);
+        foreach ($sharesByPartner as $partnerShares) {
+            $count = count($partnerShares);
+            for ($i = 0; $i < $count; $i++) {
+                for ($j = $i + 1; $j < $count; $j++) {
+                    if ($this->rangesOverlap($partnerShares[$i], $partnerShares[$j])) {
+                        $partner = $partnerShares[$i]->getPartner();
+                        $problems[] = sprintf(
+                            '%s (id %d): PBS %d y PBS %d activos con rangos solapados.',
+                            $this->name($partner),
+                            $partner->getId(),
+                            $partnerShares[$i]->getId(),
+                            $partnerShares[$j]->getId(),
+                        );
+                    }
+                }
             }
         }
 
         return $problems;
+    }
+
+    /**
+     * ¿Se solapan los rangos [start_date, end_date] de dos PBS? NULL = extremo
+     * abierto (start NULL = desde siempre; end NULL = sin fin). Mismo criterio
+     * que {@see ActiveShareOverlapInvariant}: solapan si el inicio de cada uno
+     * no supera el fin del otro.
+     */
+    private function rangesOverlap(PartnerBasketShare $a, PartnerBasketShare $b): bool
+    {
+        $aStart = $a->getStartDate();
+        $aEnd = $a->getEndDate();
+        $bStart = $b->getStartDate();
+        $bEnd = $b->getEndDate();
+
+        $aStartsBeforeBEnds = $aStart === null || $bEnd === null || $aStart <= $bEnd;
+        $bStartsBeforeAEnds = $bStart === null || $aEnd === null || $bStart <= $aEnd;
+
+        return $aStartsBeforeBEnds && $bStartsBeforeAEnds;
     }
 
     /**

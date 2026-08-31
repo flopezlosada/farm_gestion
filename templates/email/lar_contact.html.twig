@@ -1,0 +1,13 @@
+<p>Nueva petición de información sobre el LAR desde la web.</p>
+
+<ul>
+    <li><strong>Nombre / entidad:</strong> {{ name }}</li>
+    <li><strong>Correo:</strong> {{ email }}</li>
+    {% if phone %}<li><strong>Teléfono:</strong> {{ phone }}</li>{% endif %}
+    <li><strong>Tipo de solicitud:</strong> {{ request_type }}</li>
+    {% if group_size %}<li><strong>Nº de personas:</strong> {{ group_size }}</li>{% endif %}
+    {% if preferred_dates %}<li><strong>Fechas aproximadas:</strong> {{ preferred_dates }}</li>{% endif %}
+</ul>
+
+<p><strong>Mensaje:</strong></p>
+<p>{{ body|nl2br }}</p>

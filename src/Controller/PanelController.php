@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use App\Entity\Basket;
+use App\Entity\BasketComponent;
 use App\Entity\City;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
@@ -17,6 +18,8 @@ use App\Form\PartnerProfileType;
 use App\Repository\BasketRepository;
 use App\Repository\PartnerBasketShareRepository;
 use App\Repository\PartnerDeliveryShiftRepository;
+use App\Repository\VolunteerOfferRepository;
+use App\Repository\VolunteerSignupRepository;
 use App\Repository\WeeklyBasketGroupRepository;
 use App\Repository\WeeklyBasketRepository;
 use App\Service\ConsumerGroup\PartnerConsumerGroupDeliveries;
@@ -25,10 +28,14 @@ use App\Service\Delivery\DeliveryCalendarViewBuilder;
 use App\Service\Delivery\DeliveryDeadline;
 use App\Service\Delivery\DeliveryShiftApplier;
 use App\Service\Delivery\DeliveryShiftValidator;
+use App\Service\Delivery\EggScheduleException;
+use App\Service\Delivery\ExtraBasketEditor;
+use App\Service\Delivery\PartnerEggScheduleEditor;
 use App\Service\Delivery\PickupRelocationOptions;
 use App\Service\Delivery\PickupRelocator;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Delivery\WeeklyBasketSkipper;
+use App\Service\Volunteering\VolunteerContributions;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -55,9 +62,17 @@ class PanelController extends AbstractController
     ) {
     }
 
+    /** Cuántas tareas de voluntariado se asoman en la home antes de mandar a su pantalla. */
+    private const VOLUNTEERING_TEASER = 3;
+
     #[Route('', name: 'panel', methods: ['GET'])]
-    public function index(PickupRelocationOptions $relocationOptions): Response
-    {
+    public function index(
+        PickupRelocationOptions $relocationOptions,
+        VolunteerOfferRepository $volunteerOffers,
+        VolunteerSignupRepository $volunteerSignups,
+        VolunteerContributions $contributions,
+        DeliveryCalendarProjector $projector,
+    ): Response {
         if (($redirect = $this->ensureReady()) !== null) {
             return $redirect;
         }
@@ -67,6 +82,25 @@ class PanelController extends AbstractController
         // El traslado de nodo opera sobre la cesta de la FAMILIA (el principal), igual que
         // el calendario: un secundario tramita el traslado de la cesta de su hogar.
         $owner = $this->basketOwner($partner);
+
+        $nextDelivery = $projector->nextDelivery($owner);
+
+        // Todo lo que sigue necesitando gente, SIN recortar. No cuesta una consulta
+        // más: findStillNeededFor ya se trae las futuras publicadas y filtra en PHP,
+        // así que el límite sólo decidía cuántas se tiraban a la basura. Traerlas
+        // enteras es lo que permite decir "y hay otras seis" en vez de enseñar tres
+        // y callar que hay nueve, que es lo que hacía pensar que apenas hace falta
+        // nada.
+        $stillNeeded = $this->isGranted('FEATURE_VOLUNTEERING')
+            ? $volunteerOffers->findStillNeededFor(
+                new \DateTime(),
+                $partner->getWeeklyBasketGroup()?->getNode(),
+                array_map(
+                    static fn ($signup) => $signup->getOffer()?->getId(),
+                    $volunteerSignups->findUpcomingFor($partner, new \DateTime())
+                )
+            )
+            : [];
 
         // Las cestas COMPARTIDAS (alternancia entre dos hogares) no se trasladan de nodo de
         // momento (lo bloquea PickupRelocator): no ofrecer el atajo. Vacío → modal sin pintar.
@@ -84,10 +118,51 @@ class PanelController extends AbstractController
         // calendario de recogida.
         return $this->render('Panel/index.html.twig', [
             'partner' => $partner,
-            'active_share' => $this->activeShare($partner),
-            'group' => $partner->getWeeklyBasketGroup(),
+            // La cesta del DUEÑO, no la de esta ficha: en una familia el
+            // PartnerBasketShare cuelga del principal, así que a un secundario el
+            // panel le decía "no tienes una cesta activa registrada" mientras
+            // recogía la de su casa todas las semanas. El calendario y el
+            // traslado ya operaban sobre el dueño; sólo esta pantalla no.
+            'active_share' => $this->activeShare($owner),
+            // Para decir de quién es la cesta cuando no es suya propia.
+            'basket_owner' => $owner,
+            'group' => $partner->getWeeklyBasketGroup() ?? $owner->getWeeklyBasketGroup(),
             'relocate_weeks' => $canRelocate ? $relocationOptions->weeksForPartner($owner) : [],
             'relocate_groups' => $canRelocate ? $relocationOptions->groupsForPartner($owner) : [],
+            // La próxima entrega: es a lo que se entra al panel. Antes había que
+            // abrir el calendario para saber qué día toca, y el sitio se anunciaba
+            // en un banner que repetía el nodo tres veces en la misma pantalla.
+            'next_delivery' => $nextDelivery,
+            // Quién le está montando la cesta de esa semana en su punto de recogida.
+            // Es la cara amable del voluntariado —gente con nombre, no un contador— y
+            // a la vez el sitio donde más barato sale pedir ayuda: a quien va a ir de
+            // todos modos ese viernes. Vacío cuando ese nodo no organiza el montaje
+            // como tarea de voluntariado, que hoy es todos menos Torremocha.
+            'basket_prep' => $this->basketPrepFor($owner, $partner, $nextDelivery, $volunteerOffers),
+            // Las tareas que hacen falta DE VERDAD, con lo destacado primero y
+            // después lo del punto de recogida propio: sin las que ya están
+            // cubiertas y sin aquellas a las que ya se apuntó. Con
+            // findUpcomingForNode() a secas, la tarjeta llegó a anunciar "faltan 0
+            // personas" bajo el título "Hace falta una mano".
+            //
+            // En la home se asoman unas pocas: una lista larga se lee como un muro
+            // y no se lee.
+            'volunteering_offers' => \array_slice($stillNeeded, 0, self::VOLUNTEERING_TEASER),
+            // Cuántas hay en total. Enseñar tres y callar que hay nueve deja la
+            // impresión de que apenas hace falta ayuda, que es lo contrario de lo
+            // que pasa.
+            'volunteering_total' => \count($stillNeeded),
+            // Lo que lleva aportado, para pintarlo junto a lo que hace falta y no
+            // en una pantalla aparte: un contador solo es mobiliario, y un déficit
+            // sin una acción al lado es un reproche sin salida. Va junto al bloque
+            // de tareas por eso, no por ahorrar espacio.
+            //
+            // El objeto y no los números sueltos: lleva consigo la regla de a quién
+            // se le enseña la mediana, que es lo que no se puede perder por el
+            // camino ({@see VolunteerContribution}).
+            'my_contribution' => $this->isGranted('FEATURE_VOLUNTEERING')
+                ? $contributions->forPartner($partner)
+                : null,
         ]);
     }
 
@@ -524,6 +599,52 @@ class PanelController extends AbstractController
     }
 
     /**
+     * El montaje del reparto de la próxima entrega del socix: quién se ha
+     * comprometido a preparar las cestas de SU punto de recogida esa semana.
+     *
+     * El nodo se toma de la entrega y no de la ficha: si esa semana ha trasladado
+     * la recogida a otro punto, quien le monta la cesta es la gente de ESE punto,
+     * y enseñarle la de su nodo de casa sería decirle nombres de personas que no
+     * va a ver. El proyector marca el traslado en el slot ({@see DeliveryCalendarProjector}).
+     *
+     * Devuelve lista vacía —y la home no pinta nada— cuando el módulo está apagado,
+     * cuando no hay una próxima entrega o cuando ese nodo no organiza el montaje
+     * como tarea de voluntariado. Lo último es la situación normal en casi todos
+     * los puntos, y por eso el disparador es que EXISTA la tarea: si el aviso
+     * dependiera de que falta gente, todos los nodos sin tarea estarían gritando
+     * que nadie se ha apuntado.
+     *
+     * @param Partner                 $owner    dueñx de la cesta (en familias, el principal)
+     * @param Partner                 $partner  quien mira el panel
+     * @param array|null              $next     el slot de la próxima entrega, o null
+     * @param VolunteerOfferRepository $offers
+     *
+     * @return list<\App\Entity\VolunteerOffer> el montaje de ese reparto
+     */
+    private function basketPrepFor(
+        Partner $owner,
+        Partner $partner,
+        ?array $next,
+        VolunteerOfferRepository $offers,
+    ): array {
+        if ($next === null || !$this->isGranted('FEATURE_VOLUNTEERING')) {
+            return [];
+        }
+
+        // El nodo del traslado si esa semana recoge en otro sitio; si no, el de casa.
+        // Se mira primero el grupo propio y luego el del dueño de la cesta, igual que
+        // hace la plantilla: en una familia el secundario puede no tener grupo propio.
+        $node = $next['pickup_node']
+            ?? ($partner->getWeeklyBasketGroup() ?? $owner->getWeeklyBasketGroup())?->getNode();
+
+        if ($node === null) {
+            return [];
+        }
+
+        return $offers->findDeliveryPrepFor($node, $next['date']);
+    }
+
+    /**
      * "No recoger" / "volver a recoger" una semana desde el calendario del socio.
      * Es el mismo modelo de intents que usa el gestor (DeliveryShiftApplier), pero
      * con DEADLINE de autoservicio (el gestor no lo tiene) y resuelto desde la sesión.
@@ -546,6 +667,7 @@ class PanelController extends AbstractController
         WeeklyBasketGenerator $generator,
         PartnerDeliveryShiftRepository $shiftRepository,
         DeliveryShiftApplier $applier,
+        ExtraBasketEditor $extraBasketEditor,
         EntityManagerInterface $em,
     ): Response {
         if (($redirect = $this->ensureReady()) !== null) {
@@ -610,11 +732,17 @@ class PanelController extends AbstractController
             return $backToCalendar();
         }
 
+        // "No recoge" deja el día a CERO: si gestión le había puesto una cesta extra ese día,
+        // también se va. Se dice en el mensaje para que no desaparezca en silencio.
+        $done = $extraBasketEditor->hasExtra($partner, $basket)
+            ? 'Listo: esta semana no la recoges. La cesta extra que tenías ese día también se ha quitado.'
+            : 'Listo: esta semana no la recoges.';
+
         // NO RECOGE. Si la cesta de ese día vino MOVIDA de otro (lo hizo gestión), se
         // aparca esa entrega entrante (igual que en el calendario del gestor).
         if ($incoming !== null) {
             $applier->skipMovedDelivery($incoming, $actor);
-            $this->addFlash('notice', 'Listo: esta semana no la recoges.');
+            $this->addFlash('notice', $done);
 
             return $backToCalendar();
         }
@@ -637,7 +765,74 @@ class PanelController extends AbstractController
         }
 
         $applier->applySkipIntent($partner, $basket, null, $actor);
-        $this->addFlash('notice', 'Listo: esta semana no la recoges.');
+        $this->addFlash('notice', $done);
+
+        return $backToCalendar();
+    }
+
+    /**
+     * "No recoger / volver a recoger los HUEVOS" una semana desde el calendario del socio. Los
+     * huevos no se comparten, así que esto vale también en cestas compartidas (donde la cesta no
+     * se toca, R1). Delega en el editor compartido con el gestor (DRY) y respeta el MISMO plazo
+     * de autoservicio (jueves 23:59) que el "no recoge" de la cesta entera del socio.
+     *
+     * @param int                       $basketId Semana sobre la que actuar.
+     * @param Request                   $request
+     * @param PartnerEggScheduleEditor  $eggEditor
+     * @param EntityManagerInterface    $em
+     * @return Response
+     */
+    #[Route('/calendar/eggs/{basketId}', name: 'panel_calendar_eggs', methods: ['POST'], requirements: ['basketId' => '\\d+'])]
+    #[IsGranted('FEATURE_PARTNER_SELFSERVICE')]
+    public function calendarEggs(
+        int $basketId,
+        Request $request,
+        PartnerEggScheduleEditor $eggEditor,
+        EntityManagerInterface $em,
+    ): Response {
+        if (($redirect = $this->ensureReady()) !== null) {
+            return $redirect;
+        }
+
+        $partner = $this->basketOwner($this->getUser()->getPartner());
+
+        $basket = $em->getRepository(Basket::class)->find($basketId);
+        if ($basket === null) {
+            throw $this->createNotFoundException('Semana de reparto no encontrada.');
+        }
+
+        $backToCalendar = fn (): Response => $this->redirectToRoute('panel_calendar', [
+            'year' => $basket->getDate()->format('Y'),
+            'month' => $basket->getDate()->format('n'),
+            'sel' => $basket->getId(),
+        ]);
+
+        if (!$this->isCsrfTokenValid('panel_calendar_eggs', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
+
+            return $backToCalendar();
+        }
+
+        // Mismo plazo de autoservicio (jueves 23:59) que el "no recoge" de la cesta entera.
+        if (!$this->isWithinPickupDeadlineForBasket($basket, $partner)) {
+            $this->addFlash('error', 'Ya no se puede cambiar esa semana — el plazo terminó. Si necesitas avisar, contacta con la administración.');
+
+            return $backToCalendar();
+        }
+
+        try {
+            $result = $eggEditor->toggleEggs($partner, $basket, 'partner:' . $partner->getId());
+        } catch (EggScheduleException $e) {
+            $this->addFlash('error', $e->getMessage());
+
+            return $backToCalendar();
+        }
+
+        match ($result) {
+            'added' => $this->addFlash('notice', 'Listo: vuelves a recoger los huevos esa semana.'),
+            'removed' => $this->addFlash('notice', 'Listo: esa semana no recoges los huevos.'),
+            default => $this->addFlash('warning', 'Tu cesta no lleva huevos esa semana.'),
+        };
 
         return $backToCalendar();
     }
@@ -667,6 +862,7 @@ class PanelController extends AbstractController
         WeeklyBasketGenerator $generator,
         DeliveryCalendarProjector $projector,
         DeliveryShiftApplier $applier,
+        PartnerEggScheduleEditor $eggEditor,
         EntityManagerInterface $em,
     ): Response {
         if (($redirect = $this->ensureReady()) !== null) {
@@ -692,11 +888,37 @@ class PanelController extends AbstractController
             return $backToFrom();
         }
 
-        // R1: la cesta compartida no cambia de día (lo marca la alternancia).
-        if ($partner->getSharePartner() !== null) {
-            $this->addFlash('warning', 'Tu cesta es compartida: el día lo marca la alternancia con el otro hogar.');
+        // Componente al que se limita el movimiento (huevos), o 0 = entrega entera.
+        $componentId = (int) $request->request->get('component_id', 0);
+
+        // R1: la cesta compartida no cambia de día (lo marca la alternancia). Los HUEVOS no se
+        // comparten (cada hogar los suyos) → mover SOLO el componente huevos sí se permite.
+        if ($partner->getSharePartner() !== null && $componentId !== BasketComponent::ID_EGGS) {
+            $this->addFlash('warning', 'Tu cesta es compartida: el día lo marca la alternancia con el otro hogar. Solo puedes mover los huevos, no la cesta.');
 
             return $backToFrom();
+        }
+
+        // HUEVOS: misma lógica que el gestor, vía el editor compartido (DRY). Mismo deadline
+        // día-anterior que el resto del move del socio (lo comprueba el handler); no aplica el
+        // plazo del jueves del "no recoge" — igual que el move de la cesta entera del socio.
+        if ($componentId === BasketComponent::ID_EGGS) {
+            $to = $basketRepository->find((int) $request->request->get('to_basket_id', 0));
+            try {
+                $eggEditor->move($partner, $from, $to, 'partner:' . $partner->getId());
+            } catch (EggScheduleException $e) {
+                $this->addFlash('error', $e->getMessage());
+
+                return $backToFrom();
+            }
+            $this->addFlash('notice', 'Listo: tus huevos ahora el ' . $to->getDate()->format('d/m/Y') . '.');
+            [$year, $month] = $this->returnMonth($request, $to);
+
+            return $this->redirectToRoute('panel_calendar', [
+                'year' => $year,
+                'month' => $month,
+                'sel' => $to->getId(),
+            ]);
         }
 
         $share = $em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner, $from->getDate());

@@ -9,8 +9,9 @@
  # weeks, selected, selected_editable, current, prev, next, pickup_place)
  # y un objeto `cal` que desacopla las rutas/CSRF de cada pantalla:
  #   cal.route_view / route_skip / route_move / route_recover / route_reset
+ #                  / route_extra_remove (quitar la cesta extra de un día; solo gestor)
  #   cal.idp        hash de parámetros de id ({id: ...} en gestor, {} en panel)
- #   cal.csrf_skip / csrf_move / csrf_reset   valores de token ya calculados
+ #   cal.csrf_skip / csrf_move / csrf_reset / csrf_extra_remove   tokens ya calculados
  #   cal.readonly   true = solo lectura (sin arrastre, papelera, reset ni botones)
  #
  # R1: en cestas compartidas el día y el contenido los marca la
@@ -90,7 +91,7 @@
 {% endmacro %}
 
 {% if partner.sharePartner %}
-    {{ csa.callout('Esta cesta es compartida: su día y su contenido los marca la alternancia con el otro hogar, no se editan desde aquí.', 'info', 'info-circle') }}
+    {{ csa.callout('Esta cesta es compartida: el día de la cesta lo marca la alternancia con el otro hogar y no se cambia aquí. Los huevos sí puedes moverlos (no se comparten).', 'info', 'info-circle') }}
 {% endif %}
 
 {# Banner del modo "mover por toque" (socio, sin arrastre): aparece al pulsar
@@ -360,6 +361,91 @@
                     {# El pedido se lista aquí, como una fila más después de los huevos. #}
                     {{ _self.cg_rows(cg_today, CG_ICONS, CG_ICON_DEFAULT, false) }}
 
+                    {# CESTA EXTRA de esa semana (PartnerBasketExtra): típicamente una cesta
+                       trasladada SUMANDO desde otro día. Las cantidades de arriba ya la
+                       incluyen y no se distinguen de las de patrón, así que esta es la vía
+                       para deshacerla — antes solo existía en la ficha del socio, que además
+                       pide otro rol. Quitarla deja la cesta de patrón; la que se trasladó
+                       sigue aparcada en la papelera de su semana de origen.
+                       No usa `readonly`: en compartidas también vale, porque quitar una extra
+                       no elige el día de la cesta (lo que veta R1). #}
+                    {% if selected.extra|default(false) and not ro and selected_editable and cal.route_extra_remove is defined %}
+                        <div class="rcal-extra" style="margin-top: var(--csa-sp-4);">
+                            <div class="rcal-sect"><i class="fa fa-plus-circle"></i> Lleva una cesta extra</div>
+                            <p class="csa-muted">Parte de lo de arriba es un añadido puntual de esta semana. Si lo quitas, queda solo lo que le toca por su cesta.</p>
+                            <form id="rcal-extra-form-{{ bid }}" action="{{ path(cal.route_extra_remove, cal.idp|merge({ basketId: bid })) }}" method="post" style="margin: 0;">
+                                <input type="hidden" name="_csrf_token" value="{{ cal.csrf_extra_remove }}">
+                                <input type="hidden" name="view_year" value="{{ current.format('Y') }}">
+                                <input type="hidden" name="view_month" value="{{ current.format('n') }}">
+                                <button type="button" class="csa-btn csa-btn--secondary csa-btn--block"
+                                        onclick="document.getElementById('rcal-confirm-extra-{{ bid }}').showModal()">
+                                    <i class="fa fa-times"></i><span>Quitar la cesta extra</span>
+                                </button>
+                            </form>
+                            {{ csa.confirm_dialog('rcal-confirm-extra-' ~ bid, {
+                                variant: 'warning',
+                                eyebrow: 'Cesta extra',
+                                title: '¿Quitar la cesta extra de esa semana?',
+                                body: 'Se quita el añadido puntual del ' ~ (selected.date|date('d/m/Y')) ~ ' y queda solo lo que le toca por su cesta. Si la extra venía de un traslado, la cesta trasladada sigue aparcada en "No recoge" de su semana de origen: recupérala desde ahí al día que quieras.',
+                                confirm_label: 'Quitar la extra',
+                                external_form_id: 'rcal-extra-form-' ~ bid,
+                            }) }}
+                        </div>
+                    {% endif %}
+
+                    {# COMPARTIDAS — NO RECOGER HUEVOS: interruptor on/off de los huevos de esa
+                       semana. Solo si el patrón contempla huevos ahí (EGG en 'available') y con la
+                       feature activa (cal.egg_move + ruta del toggle). La cesta sigue bloqueada. #}
+                    {% if partner.sharePartner and not ro and selected_editable and cal.egg_move|default(false) and cal.route_egg_toggle is defined %}
+                        {% set egg_available = false %}
+                        {% for c in selected.available|default([]) %}{% if c.id == EGG %}{% set egg_available = true %}{% endif %}{% endfor %}
+                        {% if egg_available %}
+                            {% set egg_present = false %}
+                            {% for it in selected.items %}{% if it.component.id == EGG %}{% set egg_present = true %}{% endif %}{% endfor %}
+                            <form action="{{ path(cal.route_egg_toggle, cal.idp|merge({ basketId: bid, componentId: EGG })) }}" method="post" style="margin-top: var(--csa-sp-3);">
+                                <input type="hidden" name="_csrf_token" value="{{ cal.csrf_egg_toggle }}">
+                                <button type="submit" class="rcal-switch" aria-pressed="{{ egg_present ? 'true' : 'false' }}">
+                                    <span class="rcal-switch__track"><span class="rcal-switch__knob"></span></span>
+                                    <span class="rcal-switch__txt">
+                                        <span class="rcal-switch__label">{{ egg_present ? 'Recoge los huevos esta semana' : 'No recoge los huevos esta semana' }}</span>
+                                        <span class="rcal-switch__sub">{{ egg_present ? 'Apágalo para no recoger los huevos (la cesta no cambia)' : 'Enciéndelo para volver a recogerlos' }}</span>
+                                    </span>
+                                </button>
+                            </form>
+                        {% endif %}
+                    {% endif %}
+
+                    {# COMPARTIDAS: la cesta no se mueve (R1, alternancia con el otro hogar), pero
+                       los HUEVOS sí (cada hogar los suyos). Selector de fecha destino → mueve SOLO
+                       el componente huevos (component_id=EGG) por el endpoint de mover. Se muestra
+                       aunque el panel esté en "readonly" (que en compartidas está siempre puesto),
+                       si la entrega es futura y este día lleva huevos. #}
+                    {% if partner.sharePartner and not ro and selected_editable and has_egg_drop_targets|default(false) and cal.route_move is defined and cal.egg_move|default(false) %}
+                        {% set sel_has_eggs = false %}
+                        {% for it in selected.items %}{% if it.component.id == EGG %}{% set sel_has_eggs = true %}{% endif %}{% endfor %}
+                        {% if sel_has_eggs %}
+                            <div class="rcal-eggmove" style="margin-top: var(--csa-sp-4);">
+                                <div class="rcal-sect"><span class="rcal-mk__i egg"><span class="rcal-egg"></span></span> Mover los huevos a otra fecha</div>
+                                <p class="csa-muted">La cesta se queda en su día (es compartida); solo se mueven tus huevos. Elige el día:</p>
+                                {# Un botón por fecha destino (son pocas): evita el <select> nativo, cuya lista
+                                   desplegada la dibuja el SO y no se puede estilar. Cada botón postea su
+                                   to_basket_id (el valor del submit pulsado). #}
+                                <form action="{{ path(cal.route_move, cal.idp|merge({ basketId: bid })) }}" method="post" class="rcal-eggmove__form">
+                                    <input type="hidden" name="_csrf_token" value="{{ cal.csrf_move }}">
+                                    <input type="hidden" name="component_id" value="{{ EGG }}">
+                                    <input type="hidden" name="view_year" value="{{ current.format('Y') }}">
+                                    <input type="hidden" name="view_month" value="{{ current.format('n') }}">
+                                    {% for t in egg_drop_targets|default([]) %}
+                                        <button type="submit" name="to_basket_id" value="{{ t.basketId }}"
+                                                class="csa-btn csa-btn--secondary csa-btn--block" style="margin-bottom: var(--csa-sp-2);">
+                                            <i class="fa fa-arrows"></i> Mover al {{ t.date|format_date(pattern='EEEE d MMM', locale='es') }}
+                                        </button>
+                                    {% endfor %}
+                                </form>
+                            </div>
+                        {% endif %}
+                    {% endif %}
+
                     {% if not readonly and dnd %}
                         <div class="rcal-hint rcal-dragonly" style="margin-top: var(--csa-sp-4);">
                             <i class="fa fa-arrows"></i> Arrastra este día en el calendario para moverlo a otra fecha o a "No recoge".
@@ -433,7 +519,7 @@
     </header>
     <div class="csa-modal__body">
         <p>El <strong id="rcal-accumulate-day">ese día</strong> ya recoge cesta. Si continúas, ese día pasará a llevar <strong>2 cestas</strong> y el día de origen se quedará sin entrega.</p>
-        <p class="csa-muted">Para deshacerlo no bastará arrastrar la cesta de vuelta: habrá que quitar la cesta extra del destino y recuperar la del origen.</p>
+        <p class="csa-muted">Para deshacerlo no basta arrastrar la cesta de vuelta: se quita la cesta extra desde el panel de ese día y luego se recupera la del origen desde "No recoge".</p>
     </div>
     <footer class="csa-modal__footer">
         <button type="button" class="csa-modal__btn csa-modal__btn--ghost" onclick="this.closest('dialog').close()" autofocus>Cancelar</button>

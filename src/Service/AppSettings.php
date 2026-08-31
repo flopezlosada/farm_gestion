@@ -52,11 +52,26 @@ class AppSettings
     /** Envío del resumen de cambios a admin (app:send-admin-delivery-changes-summary). */
     public const EMAIL_ADMIN_DELIVERY_SUMMARY = 'email.admin_delivery_summary';
 
+    /**
+     * Destinatario(s) del resumen de cambios a administración: dirección(es) separadas por
+     * comas a las que {@see \App\Command\SendAdminDeliveryChangesSummaryCommand} manda el digest.
+     * Evita tener que tocar el crontab de cdmon (solo-FTP): el cron corre sin `--to` y el comando
+     * cae en este ajuste. Vacío = no se envía. La opción `--to` de la línea de comandos, si se
+     * pasa, tiene prioridad sobre este ajuste.
+     */
+    public const EMAIL_ADMIN_DELIVERY_SUMMARY_TO = 'email.admin_delivery_summary_to';
+
     /** Envío del recordatorio de llegadas/salidas del albergue al equipo (app:send-albergue-arrivals-reminder). */
     public const EMAIL_ALBERGUE_REMINDER = 'email.albergue_reminder';
 
     /** Envío de los avisos de huecos del registro de jornada al supervisor (digest semanal + salida abierta). */
     public const EMAIL_STAFF_GAPS = 'email.staff_gaps';
+
+    /** Envío del listado de reparto en PDF al cerrarse el plazo de cada nodo (app:send-delivery-sheets). */
+    public const EMAIL_DELIVERY_SHEET = 'email.delivery_sheet';
+
+    /** Confirmación a cada socix de su cesta al cerrarse el plazo de su nodo (app:send-delivery-confirmations). */
+    public const EMAIL_DELIVERY_CONFIRMATION = 'email.delivery_confirmation';
 
     /**
      * Red de seguridad para entornos de prueba: si tiene valor, TODOS los emails
@@ -67,6 +82,29 @@ class AppSettings
      * así DEBE quedar en producción. Se edita desde la pantalla de diagnóstico
      * de envíos, no desde el form general de ajustes.
      */
+    /**
+     * Destinatario(s) del recordatorio del albergue. Su comando exige `--to`, y
+     * sin este ajuste sólo se podía indicar en la línea del crontab del hosting
+     * — que no vemos ni podemos editar. Por eso esa tarea nunca llegó a correr.
+     */
+    public const EMAIL_ALBERGUE_REMINDER_TO = 'email.albergue_reminder_to';
+
+    /**
+     * Destinatario(s) de los dos avisos de jornada (huecos y salidas sin
+     * cerrar). Uno solo para los dos, igual que comparten interruptor: los dos
+     * van a quien supervisa.
+     */
+    public const EMAIL_STAFF_GAPS_TO = 'email.staff_gaps_to';
+
+    /**
+     * Destinatario(s) del listado de reparto que sale al cerrar el plazo de cada
+     * nodo. Hoy es quien monta las cestas y abre el punto de recogida — la misma
+     * gente que ya lo imprime—, y por eso es una lista de direcciones y no una
+     * audiencia calculada: a quién debe llegar el listado es una decisión de la
+     * asociación, no del código, y mientras no esté tomada se rellena a mano.
+     */
+    public const EMAIL_DELIVERY_SHEET_TO = 'email.delivery_sheet_to';
+
     public const EMAIL_REDIRECT_TO = 'email.redirect_to';
 
     /**
@@ -150,6 +188,25 @@ class AppSettings
     public const FEATURE_LABORAL = 'feature.laboral';
 
     /**
+     * ¿Está abierto el módulo de voluntariado (ofertas de trabajo, inscripción
+     * de socixs y el bloque del panel)? Apagado, se oculta del menú, sus rutas
+     * responden 403 y no sale ningún aviso. Lo resuelve
+     * {@see \App\Security\FeatureVoter} vía {@see is_granted('FEATURE_VOLUNTEERING')}.
+     */
+    public const FEATURE_VOLUNTEERING = 'feature.volunteering';
+
+    /**
+     * Horas que espera el escalado antes de abrir un aviso de voluntariado a
+     * más gente ({@see \App\Service\Volunteering\VolunteerCallEscalator}).
+     */
+    public const VOLUNTEERING_ESCALATION_HOURS = 'volunteering.escalation_hours';
+
+    /**
+     * Con cuánta antelación se le recuerda a quien se apuntó que le toca.
+     */
+    public const VOLUNTEERING_REMINDER_HOURS = 'volunteering.reminder_hours';
+
+    /**
      * ¿Está abierto el módulo del grupo de consumo (productores, rondas de pedido
      * colectivo y apuntes de socixs)? Apagado, se oculta del menú (gestión y panel)
      * y sus rutas responden 403. Lo resuelve {@see \App\Security\FeatureVoter} vía
@@ -179,21 +236,263 @@ class AppSettings
     public const CRON_STAFF_OPEN_SHIFT_ALERT = 'cron.staff_open_shift_alert';
 
     /**
-     * Mapa de tareas programadas para la ejecución manual desde la pantalla de
-     * configuración: clave del toggle => metadatos. `command` es el nombre del
-     * comando de consola que se lanza en proceso ({@see \App\Controller\SettingsController::runCron});
-     * `confirm` marca los que envían correo real (piden confirmación en la UI);
-     * `dry` los que ofrecen además un botón de previsualización (--dry-run).
-     * Es también la lista blanca: sólo se puede lanzar a mano lo declarado aquí.
+     * Envío del listado de reparto en cuanto se cierra el plazo de cambios de
+     * cada nodo (app:send-delivery-sheets). Cadencia diaria y no semanal porque
+     * cada nodo cierra su propio día: Madrid el martes por la noche y la Sierra
+     * el jueves, así que un disparo semanal sólo podría servir a uno de los dos.
+     */
+    public const CRON_DELIVERY_SHEET = 'cron.delivery_sheet';
+
+    /**
+     * Confirmación a lxs socixs de su cesta en cuanto cierra el plazo de su nodo
+     * (app:send-delivery-confirmations). Comparte disparador con el listado pero
+     * es tarea aparte: van a destinatarios distintos, y apagar el listado interno
+     * no debe callar el aviso a lxs socixs ni al revés.
+     */
+    public const CRON_DELIVERY_CONFIRMATION = 'cron.delivery_confirmation';
+
+    /**
+     * Avisos de voluntariado: la tarea que abre por pasos las llamadas pidiendo
+     * gente. Es la única de cadencia fina (por intervalo) porque un "falta gente
+     * para mañana" no admite esperar al día siguiente.
+     */
+    public const CRON_VOLUNTEER_CALLS = 'cron.volunteer_calls';
+
+    /**
+     * Recordatorio a quien ya se apuntó a una tarea de voluntariado, poco antes
+     * de que le toque. Separado del de las llamadas porque son avisos
+     * distintos: aquél pide gente, éste recuerda a quien ya dijo que sí, y se
+     * puede querer uno sin el otro.
+     */
+    public const CRON_VOLUNTEER_REMINDERS = 'cron.volunteer_reminders';
+
+    /**
+     * MANIFIESTO DE TAREAS PROGRAMADAS: la fuente única de verdad sobre qué
+     * debería ejecutarse, cuándo, y qué la inhibe. Clave del toggle =>
+     * metadatos. Lo lee {@see \App\Service\Cron\CronTaskRegistry}.
+     *
+     * Antes esta información vivía repartida en tres sitios que no se hablaban:
+     * dos `if` copiados dentro de cada comando (el gate), las líneas del crontab
+     * de un hosting sin SSH (la cadencia) y el texto de ayuda de la pantalla
+     * (las dependencias). El resultado fue que ninguna tarea corrió en
+     * producción entre el 20 de julio y el 4 de agosto de 2026 sin que nada
+     * avisara. Con el manifiesto, el sistema puede responder qué debería estar
+     * pasando y compararlo con lo que pasó ({@see \App\Entity\CronRun}).
+     *
+     * Campos:
+     *
+     * - `command`: comando de consola asociado. Es también la lista blanca:
+     *   sólo se puede lanzar a mano lo declarado aquí.
+     * - `confirm`: ENTREGA ALGO REAL A PERSONAS, así que la UI pide
+     *   confirmación. Significaba "envía correo" cuando el correo era el único
+     *   canal; desde que hay avisos push la confirmación la pide el efecto, no
+     *   el medio. Para saber POR DÓNDE entrega, está `channels`.
+     * - `channels`: por qué canales entrega ('email', 'push'). Vacío en las
+     *   tareas que no avisan a nadie. Existe porque `confirm` dejó de servir
+     *   para distinguirlo: las reglas de los toggles de correo sólo pueden
+     *   exigirse a quien manda correo, y un aviso push no tiene interruptor
+     *   general de email que declarar ni un correo que reenviar.
+     * - `dry`: ofrece botón de previsualización (--dry-run).
+     * - `schedule`: CADENCIA declarada — cuándo debería correr. `freq` es
+     *   daily|weekly|monthly, con `dow` (1 = lunes) en las semanales y `dom` en
+     *   las mensuales. Hoy la cadencia real la impone el crontab del hosting y
+     *   esto es su declaración fiel; cuando exista el tick genérico, este campo
+     *   pasa a ser el que MANDA.
+     * - `max_delay_hours`: PLAZO MÁXIMO DE RETRASO. Pasado ese tiempo sin
+     *   ejecutarse, la tarea se considera caída. Se da margen sobre la cadencia
+     *   (un reloj puntual no existe): día y medio para las diarias, ocho días
+     *   para las semanales, 33 para las mensuales.
+     * - `requires`: ajustes que la habilitan APARTE de su propio interruptor.
+     *   Son los toggles de entrega (email): a diferencia del interruptor propio
+     *   de la tarea, éstos NO los salta una ejecución manual con --force —
+     *   apagar el envío tiene que apagarlo también a mano. Toda tarea que manda
+     *   correo declara aquí el interruptor GENERAL ({@see self::EMAIL_ENABLED})
+     *   además del suyo, por dos razones: con el general apagado
+     *   {@see \App\Mailer\KillSwitchMailer} descarta los mensajes en silencio, y
+     *   una tarea que corre entera para no entregar nada (a) se registraría como
+     *   "hizo su trabajo" mintiendo en la pantalla y (b) dejaría sus efectos
+     *   apuntados en el guardián de idempotencia, de modo que al reencender el
+     *   envío esos avisos ya constarían emitidos y no saldrían nunca.
+     * - `depends_on`: tareas de las que depende. Sirve para detectar
+     *   incoherencias que de otro modo son invisibles: el recordatorio de
+     *   recogida sólo lee cestas ya congeladas, así que con el congelado apagado
+     *   corre en verde sin avisar a nadie.
+     *
+     * OJO: sólo las cuatro primeras están en el crontab de producción
+     * (`docs/migracion-prod/crons.txt`). Las tres de albergue y jornada laboral
+     * declaran su cadencia aquí pero HOY NADIE LAS DISPARA; se pidieron a cdmon
+     * y están sin montar.
      */
     public const CRONS = [
-        self::CRON_GENERATE_WEEKLY_DELIVERY => ['command' => 'app:generate-weekly-delivery', 'confirm' => false, 'dry' => false],
-        self::CRON_PICKUP_REMINDER => ['command' => 'app:send-pickup-reminders', 'confirm' => true, 'dry' => true],
-        self::CRON_ADMIN_DELIVERY_SUMMARY => ['command' => 'app:send-admin-delivery-changes-summary', 'confirm' => true, 'dry' => true],
-        self::CRON_PURGE_USAGE_HITS => ['command' => 'app:purge-usage-hits', 'confirm' => false, 'dry' => false],
-        self::CRON_ALBERGUE_REMINDER => ['command' => 'app:send-albergue-arrivals-reminder', 'confirm' => true, 'dry' => true],
-        self::CRON_STAFF_GAPS_DIGEST => ['command' => 'app:send-staff-gaps-digest', 'confirm' => true, 'dry' => true],
-        self::CRON_STAFF_OPEN_SHIFT_ALERT => ['command' => 'app:send-staff-open-shift-alert', 'confirm' => true, 'dry' => true],
+        self::CRON_GENERATE_WEEKLY_DELIVERY => [
+            'command' => 'app:generate-weekly-delivery',
+            'channels' => [],
+            'needs_recipient' => false,
+            'confirm' => false,
+            'dry' => false,
+            'schedule' => ['freq' => 'weekly', 'dow' => 1, 'hour' => 6],
+            'max_delay_hours' => 192,
+            'requires' => [],
+            'depends_on' => [],
+        ],
+        self::CRON_PICKUP_REMINDER => [
+            'command' => 'app:send-pickup-reminders',
+            'channels' => ['email', 'push'],
+            'needs_recipient' => false,
+            'confirm' => true,
+            'dry' => true,
+            'schedule' => ['freq' => 'daily', 'hour' => 9],
+            'max_delay_hours' => 36,
+            // SIN `requires` DE EMAIL, y no es un olvido. Esta tarea avisa por
+            // DOS canales (correo y push), y `requires` inhibe la tarea entera
+            // —ni siquiera --force lo salta—, así que apagar el correo del
+            // recordatorio dejaría también sin aviso a quien lo tiene activado
+            // en el móvil, que no ha pedido nada de eso.
+            //
+            // Lo que cada canal entrega se decide DENTRO, en su canal:
+            //   - el interruptor general (email.enabled) lo corta el
+            //     {@see \App\Mailer\KillSwitchMailer}, a nivel de transporte, así
+            //     que ningún correo sale aunque la tarea se ejecute;
+            //   - el ajuste propio del recordatorio lo comprueba el comando
+            //     antes de llamar al mailer.
+            // El contrato "apagado el envío, no se entrega" se mantiene entero;
+            // lo que deja de arrastrar es el otro canal.
+            'requires' => [],
+            // Sin congelado no hay destinatarios: el recordatorio lee sólo
+            // cestas ya materializadas (WeeklyBasketRepository::findPickedByDeliveryDateAndShares).
+            'depends_on' => [self::CRON_GENERATE_WEEKLY_DELIVERY],
+        ],
+        self::CRON_DELIVERY_SHEET => [
+            'command' => 'app:send-delivery-sheets',
+            'channels' => ['email'],
+            'needs_recipient' => true,
+            'confirm' => true,
+            'dry' => true,
+            // A las 7:00 y a diario: cada nodo cierra su plazo la noche anterior a
+            // su reparto, así que la tarea mira cada mañana quién cerró y manda
+            // sólo ese listado. Un disparo semanal serviría a un nodo y no al otro.
+            'schedule' => ['freq' => 'daily', 'hour' => 7],
+            'max_delay_hours' => 36,
+            // El canal es UNO (correo con el PDF adjunto), así que sus ajustes sí
+            // pueden inhibir la tarea entera sin dejar a nadie a medias. En cuanto
+            // este listado salga también por otra vía, esto tiene que vaciarse y
+            // comprobarse dentro del comando.
+            'requires' => [self::EMAIL_ENABLED, self::EMAIL_DELIVERY_SHEET],
+            // El listado que se manda tras el cierre tiene que ser el CONGELADO: si
+            // la semana no se materializó, el documento se dibujaría al vuelo y
+            // podría no coincidir con lo que quien reparte se encuentre el día del
+            // reparto.
+            'depends_on' => [self::CRON_GENERATE_WEEKLY_DELIVERY],
+        ],
+        self::CRON_DELIVERY_CONFIRMATION => [
+            'command' => 'app:send-delivery-confirmations',
+            'channels' => ['email'],
+            // Cada socix recibe la suya: no hay destinatario que configurar.
+            'needs_recipient' => false,
+            'confirm' => true,
+            'dry' => true,
+            // A las 7:00, como el listado y por lo mismo: cada nodo cierra su
+            // propio día. Va después en el manifiesto para que el listado interno
+            // salga primero si ambos corren en la misma pasada.
+            'schedule' => ['freq' => 'daily', 'hour' => 7],
+            'max_delay_hours' => 36,
+            // Canal único, así que sus ajustes pueden inhibir la tarea entera. EN
+            // CUANTO ESTA CONFIRMACIÓN SALGA TAMBIÉN POR PUSH hay que vaciar esto
+            // y comprobar el toggle del correo DENTRO del comando: `requires`
+            // inhibe la tarea completa —ni --force lo salta— y apagar el correo
+            // dejaría sin aviso a quien lo tiene activado en el móvil.
+            'requires' => [self::EMAIL_ENABLED, self::EMAIL_DELIVERY_CONFIRMATION],
+            // Confirma lo que hay en el listado congelado; sin congelar, confirmaría
+            // un dibujo que todavía puede moverse.
+            'depends_on' => [self::CRON_GENERATE_WEEKLY_DELIVERY],
+        ],
+        self::CRON_ADMIN_DELIVERY_SUMMARY => [
+            'command' => 'app:send-admin-delivery-changes-summary',
+            'channels' => ['email'],
+            'needs_recipient' => true,
+            'confirm' => true,
+            'dry' => true,
+            'schedule' => ['freq' => 'daily', 'hour' => 20],
+            'max_delay_hours' => 36,
+            'requires' => [self::EMAIL_ENABLED, self::EMAIL_ADMIN_DELIVERY_SUMMARY],
+            'depends_on' => [],
+        ],
+        self::CRON_PURGE_USAGE_HITS => [
+            'command' => 'app:purge-usage-hits',
+            'channels' => [],
+            'needs_recipient' => false,
+            'confirm' => false,
+            'dry' => false,
+            'schedule' => ['freq' => 'monthly', 'dom' => 1, 'hour' => 4],
+            'max_delay_hours' => 792,
+            'requires' => [],
+            'depends_on' => [],
+        ],
+        self::CRON_ALBERGUE_REMINDER => [
+            'command' => 'app:send-albergue-arrivals-reminder',
+            'channels' => ['email'],
+            'needs_recipient' => true,
+            'confirm' => true,
+            'dry' => true,
+            'schedule' => ['freq' => 'daily', 'hour' => 7],
+            'max_delay_hours' => 36,
+            'requires' => [self::EMAIL_ENABLED, self::EMAIL_ALBERGUE_REMINDER],
+            'depends_on' => [],
+        ],
+        self::CRON_STAFF_GAPS_DIGEST => [
+            'command' => 'app:send-staff-gaps-digest',
+            'channels' => ['email'],
+            'needs_recipient' => true,
+            'confirm' => true,
+            'dry' => true,
+            'schedule' => ['freq' => 'weekly', 'dow' => 1, 'hour' => 8],
+            'max_delay_hours' => 192,
+            'requires' => [self::EMAIL_ENABLED, self::EMAIL_STAFF_GAPS],
+            'depends_on' => [],
+        ],
+        self::CRON_STAFF_OPEN_SHIFT_ALERT => [
+            'command' => 'app:send-staff-open-shift-alert',
+            'channels' => ['email'],
+            'needs_recipient' => true,
+            'confirm' => true,
+            'dry' => true,
+            'schedule' => ['freq' => 'daily', 'hour' => 10],
+            'max_delay_hours' => 36,
+            'requires' => [self::EMAIL_ENABLED, self::EMAIL_STAFF_GAPS],
+            'depends_on' => [],
+        ],
+        // La única por intervalo. Las demás tienen su hora del día porque
+        // mandan correo y da igual media hora arriba o abajo; ésta abre avisos
+        // push por pasos, y con cadencia diaria el segundo paso de una tarea que
+        // es pasado mañana llegaría cuando ya no sirve de nada.
+        //
+        // OJO AL DESPLIEGUE: el intervalo sólo vale si el reloj externo dispara
+        // /cron/tick con esa frecuencia. Con el cron del hosting a diario, esto
+        // corre una vez al día por mucho que aquí ponga 60 minutos.
+        self::CRON_VOLUNTEER_CALLS => [
+            'command' => 'app:send-volunteer-calls',
+            'channels' => ['push'],
+            'needs_recipient' => false,
+            'confirm' => true,
+            'dry' => true,
+            'schedule' => ['freq' => 'interval', 'minutes' => 60],
+            'max_delay_hours' => 6,
+            'requires' => [self::FEATURE_VOLUNTEERING],
+            'depends_on' => [],
+        ],
+        // También por intervalo: un recordatorio que llega tarde es peor que no
+        // mandarlo, porque gasta el canal sin traer a nadie.
+        self::CRON_VOLUNTEER_REMINDERS => [
+            'command' => 'app:send-volunteer-reminders',
+            'channels' => ['push'],
+            'needs_recipient' => false,
+            'confirm' => true,
+            'dry' => true,
+            'schedule' => ['freq' => 'interval', 'minutes' => 60],
+            'max_delay_hours' => 6,
+            'requires' => [self::FEATURE_VOLUNTEERING],
+            'depends_on' => [],
+        ],
     ];
 
     /**
@@ -217,7 +516,7 @@ class AppSettings
         self::EMAIL_PICKUP_REMINDER => [
             'group' => 'Emails a socixs',
             'label' => 'Recordatorio de recogida',
-            'help' => 'Email a quincenales y mensuales a los que les toca cesta el próximo viernes.',
+            'help' => 'Email a quincenales y mensuales unos días antes de su reparto, con la fecha y el punto de recogida de cada quien (Madrid el miércoles en Cascorro/Midori, la Sierra el viernes en Torremocha).',
             'default' => false,
         ],
         self::EMAIL_PICKUP_REMINDER_LINKS => [
@@ -229,7 +528,7 @@ class AppSettings
         self::EMAIL_ADMIN_DELIVERY_SUMMARY => [
             'group' => 'Emails internos',
             'label' => 'Resumen de cambios a administración',
-            'help' => 'Digest periódico con los cambios autoservicio de lxs socixs (saltar cesta, cambiar de nodo…).',
+            'help' => 'Digest periódico con los cambios autoservicio de lxs socixs (saltar cesta, mover, cambiar de nodo, huevos…). Configura la dirección de destino en el campo "Destinatario(s)" de abajo; si lo dejas vacío, no se envía.',
             'default' => true,
         ],
         self::EMAIL_ALBERGUE_REMINDER => [
@@ -242,6 +541,18 @@ class AppSettings
             'group' => 'Emails internos',
             'label' => 'Avisos de huecos del registro de jornada',
             'help' => 'Cubre los dos avisos al supervisor del control horario: el digest semanal con los días laborables sin fichar de cada trabajador, y el aviso de “salida abierta” cuando alguien se deja una entrada sin cerrar de un día anterior. Se envían a la dirección configurada en cada cron.',
+            'default' => false,
+        ],
+        self::EMAIL_DELIVERY_SHEET => [
+            'group' => 'Emails internos',
+            'label' => 'Listado de reparto al cerrarse el plazo',
+            'help' => 'Manda el listado del reparto en PDF en cuanto se cierra el plazo de cambios de cada nodo, a la dirección configurada más abajo. Es el mismo documento que se descarga desde Reparto, generado solo. Apagado, hay que seguir generándolo a mano.',
+            'default' => false,
+        ],
+        self::EMAIL_DELIVERY_CONFIRMATION => [
+            'group' => 'Emails a socixs',
+            'label' => 'Confirmación de la cesta al cerrarse el plazo',
+            'help' => 'Cuando cierra el plazo de cambios de cada nodo, escribe a cada socix diciéndole si esta semana recoge y qué día, o si no recoge porque pidió un cambio. Sirve para que quien creyó haber cambiado algo se entere a tiempo.',
             'default' => false,
         ],
         self::FEATURE_PARTNER_LOGIN => [
@@ -274,6 +585,24 @@ class AppSettings
             'help' => 'Abre el módulo del grupo de consumo: productores, rondas de pedido colectivo y los apuntes de lxs socixs. Apagado, se oculta del menú (gestión y panel) y no es accesible.',
             'default' => false,
         ],
+        self::FEATURE_VOLUNTEERING => [
+            'group' => 'Funcionalidades en rodaje',
+            'label' => 'Voluntariado',
+            'help' => 'Abre el módulo de voluntariado: publicar trabajos, que lxs socixs se apunten y el bloque de su panel con lo que hace falta. Apagado, se oculta del menú, no es accesible y no se envía ningún aviso pidiendo gente.',
+            'default' => false,
+        ],
+        self::CRON_VOLUNTEER_REMINDERS => [
+            'group' => 'Tareas programadas',
+            'label' => 'Recordar el voluntariado a quien se apuntó',
+            'help' => 'Avisa a quien se apuntó a una tarea poco antes de que le toque, con la antelación configurada. Sin esto, alguien se apunta con dos semanas y el día que es no se acuerda. Requiere el módulo de voluntariado encendido.',
+            'default' => false,
+        ],
+        self::CRON_VOLUNTEER_CALLS => [
+            'group' => 'Tareas programadas',
+            'label' => 'Avisar de tareas de voluntariado sin cubrir',
+            'help' => 'Abre por pasos los avisos que piden gente: primero a quien ha marcado esa categoría en su ficha y, si sigue faltando gente pasadas unas horas, a quien no ha marcado ninguna (sólo en tareas aptas para cualquiera). Nunca llega solo a todo el mundo: eso se lanza a mano. Requiere el módulo de voluntariado encendido.',
+            'default' => false,
+        ],
         self::CRON_GENERATE_WEEKLY_DELIVERY => [
             'group' => 'Tareas programadas',
             'label' => 'Congelar el listado semanal',
@@ -282,38 +611,50 @@ class AppSettings
         ],
         self::CRON_PICKUP_REMINDER => [
             'group' => 'Tareas programadas',
-            'label' => 'Tarea del recordatorio de recogida',
-            'help' => 'Ejecuta a diario el comando que avisa a quincenales y mensuales del próximo reparto (app:send-pickup-reminders). Es independiente del email: apagada aquí, la tarea ni se ejecuta; si la dejas encendida pero apagas el email del recordatorio, corre pero no envía.',
+            'label' => 'Avisar a socixs de su recogida',
+            'help' => 'Avisa a quincenales y mensuales del próximo reparto (app:send-pickup-reminders). Independiente del email del recordatorio: apagada aquí, la tarea ni se ejecuta.',
             'default' => true,
+        ],
+        self::CRON_DELIVERY_SHEET => [
+            'group' => 'Tareas programadas',
+            'label' => 'Enviar el listado al cerrar el reparto',
+            'help' => 'Cada mañana comprueba qué nodos cerraron su plazo de cambios la noche anterior y manda su listado en PDF (app:send-delivery-sheets). Independiente del email del listado: apagada aquí, la tarea ni se ejecuta.',
+            'default' => false,
+        ],
+        self::CRON_DELIVERY_CONFIRMATION => [
+            'group' => 'Tareas programadas',
+            'label' => 'Confirmar la cesta a lxs socixs',
+            'help' => 'Cada mañana, para los nodos que cerraron su plazo la noche anterior, escribe a cada socix con lo que le queda registrado (app:send-delivery-confirmations). Independiente del email de la confirmación: apagada aquí, la tarea ni se ejecuta.',
+            'default' => false,
         ],
         self::CRON_ADMIN_DELIVERY_SUMMARY => [
             'group' => 'Tareas programadas',
-            'label' => 'Tarea del resumen a administración',
-            'help' => 'Ejecuta el comando del digest periódico de cambios a administración (app:send-admin-delivery-changes-summary). Independiente del email del resumen, igual que el recordatorio.',
+            'label' => 'Enviar el resumen a administración',
+            'help' => 'Manda a administración el resumen periódico de cambios en el reparto (app:send-admin-delivery-changes-summary). Independiente del email del resumen.',
             'default' => true,
         ],
         self::CRON_PURGE_USAGE_HITS => [
             'group' => 'Tareas programadas',
-            'label' => 'Purga del rastro de uso',
+            'label' => 'Purgar el rastro de uso',
             'help' => 'Borra periódicamente la telemetría de uso anterior al período de retención (app:purge-usage-hits), por minimización de datos. Apagada, el rastro se acumula sin límite.',
             'default' => true,
         ],
         self::CRON_ALBERGUE_REMINDER => [
             'group' => 'Tareas programadas',
-            'label' => 'Recordatorio de llegadas/salidas del albergue',
-            'help' => 'Ejecuta a diario el comando que avisa al equipo de las llegadas y salidas próximas del albergue (app:send-albergue-arrivals-reminder). Independiente del email: apagada aquí, la tarea ni se ejecuta; encendida pero con el email apagado, corre pero no envía.',
+            'label' => 'Avisar de llegadas y salidas del albergue',
+            'help' => 'Avisa al equipo de las llegadas y salidas próximas del albergue, para preparar camas (app:send-albergue-arrivals-reminder). Independiente del email del albergue.',
             'default' => true,
         ],
         self::CRON_STAFF_GAPS_DIGEST => [
             'group' => 'Tareas programadas',
-            'label' => 'Digest semanal de huecos de jornada',
-            'help' => 'Ejecuta una vez por semana el comando que envía al supervisor el resumen de días laborables sin fichar de cada trabajador (app:send-staff-gaps-digest). No hay aviso diario, para no saturar. Independiente del email: apagada aquí, la tarea ni se ejecuta; encendida pero con el email apagado, corre pero no envía.',
+            'label' => 'Enviar el resumen de huecos de jornada',
+            'help' => 'Manda al supervisor el resumen de días laborables sin fichar de cada trabajador (app:send-staff-gaps-digest). Semanal a propósito, para no saturar. Independiente del email de jornada.',
             'default' => false,
         ],
         self::CRON_STAFF_OPEN_SHIFT_ALERT => [
             'group' => 'Tareas programadas',
-            'label' => 'Aviso de salida abierta',
-            'help' => 'Ejecuta a diario el comando que avisa al supervisor si algún trabajador se dejó una entrada sin cerrar de un día anterior (app:send-staff-open-shift-alert). Solo envía cuando hay alguna salida abierta. Independiente del email: apagada aquí, la tarea ni se ejecuta.',
+            'label' => 'Avisar de salidas abiertas',
+            'help' => 'Avisa al supervisor si algún trabajador se dejó una entrada sin cerrar de un día anterior (app:send-staff-open-shift-alert). Solo envía si hay alguna. Independiente del email de jornada.',
             'default' => false,
         ],
     ];
@@ -344,6 +685,24 @@ class AppSettings
             'min' => 0,
             'max' => 7,
             'unit' => 'días',
+        ],
+        self::VOLUNTEERING_REMINDER_HOURS => [
+            'group' => 'Funcionalidades en rodaje',
+            'label' => 'Antelación del recordatorio de voluntariado',
+            'help' => 'Cuántas horas antes se le recuerda a quien se apuntó que le toca. 24 = el día anterior. Requiere que la tarea programada de avisos corra al menos con esa frecuencia.',
+            'default' => 24,
+            'min' => 1,
+            'max' => 168,
+            'unit' => 'h',
+        ],
+        self::VOLUNTEERING_ESCALATION_HOURS => [
+            'group' => 'Funcionalidades en rodaje',
+            'label' => 'Espera antes de ampliar un aviso de voluntariado',
+            'help' => 'Cuántas horas se espera, desde el primer aviso, antes de pedir la misma tarea a socixs que no han declarado preferencias. Sólo se amplía si la tarea está marcada como apta para cualquiera y sigue faltando gente. 24 = al día siguiente.',
+            'default' => 24,
+            'min' => 1,
+            'max' => 168,
+            'unit' => 'h',
         ],
         self::BALANCE_THRESHOLD => [
             'group' => 'Cierre de reparto',
@@ -390,6 +749,36 @@ class AppSettings
      * pruebas, en el diagnóstico de envíos).
      */
     public const STRINGS = [
+        self::EMAIL_ADMIN_DELIVERY_SUMMARY_TO => [
+            'group' => 'Emails internos',
+            'label' => 'Destinatario(s) del resumen a administración',
+            'help' => 'Dirección(es) de correo (separadas por comas) a las que llega el resumen de cambios de socixs. Vacío = no se envía. Ejemplo: csa@csavegadejarama.org. Así no hace falta tocar el cron del servidor.',
+            'default' => '',
+            // A diferencia del resto de STRINGS (que viven en pantallas concretas), este SÍ se
+            // pinta en el form general de ajustes, junto a su toggle "Resumen de cambios a admin".
+            'general' => true,
+        ],
+        self::EMAIL_ALBERGUE_REMINDER_TO => [
+            'group' => 'Emails internos',
+            'label' => 'Destinatario(s) del recordatorio del albergue',
+            'help' => 'Dirección(es) de correo (separadas por comas) que reciben el aviso de llegadas y salidas próximas. Vacío = la tarea no envía nada aunque esté encendida.',
+            'default' => '',
+            'general' => true,
+        ],
+        self::EMAIL_STAFF_GAPS_TO => [
+            'group' => 'Emails internos',
+            'label' => 'Destinatario(s) de los avisos de jornada',
+            'help' => 'Dirección(es) de correo (separadas por comas) que reciben el resumen semanal de huecos y el aviso de salidas sin cerrar. Vacío = esas tareas no envían nada aunque estén encendidas.',
+            'default' => '',
+            'general' => true,
+        ],
+        self::EMAIL_DELIVERY_SHEET_TO => [
+            'group' => 'Emails internos',
+            'label' => 'Destinatario(s) del listado de reparto',
+            'help' => 'Dirección(es) de correo (separadas por comas) que reciben el listado del reparto en PDF al cerrarse el plazo de cada nodo. Vacío = la tarea no envía nada aunque esté encendida.',
+            'default' => '',
+            'general' => true,
+        ],
         self::EMAIL_REDIRECT_TO => [
             'group' => 'Pruebas de envío',
             'label' => 'Redirigir todos los emails a',

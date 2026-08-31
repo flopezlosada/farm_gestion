@@ -56,9 +56,22 @@
                      {{ not loop.first ? 'hidden' }}>
                     {% embed '_components/csa_form_section.html.twig' with { num: loop.index, title: group } %}
                         {% block body %}
+                            {# El import de la plantilla padre no llega al contexto de un embed:
+                             # los macros hay que importarlos dentro del propio bloque. #}
+                            {% import '_macros/csa.html.twig' as csa %}
                             <div class="csa-settings-list">
                                 {% for s in items %}
-                                    <label class="csa-setting">
+                                    {# Una tarea programada no es un ajuste suelto: es el interruptor MÁS su
+                                     # estado y sus acciones. Los tres se envuelven en .csa-cron para que se
+                                     # lean como un bloque y se vea dónde acaba una tarea y empieza la
+                                     # siguiente. El envoltorio va aquí, y no en una plantilla aparte, para no
+                                     # duplicar el marcado del switch y del texto. #}
+                                    {% set is_task = s.last_run is defined %}
+                                    {% if is_task %}<div class="csa-cron">{% endif %}
+                                    {# Los campos de TEXTO (email del resumen…) van en columna: etiqueta+ayuda
+                                       arriba y el campo a lo ancho debajo, para que quepan valores largos (varios
+                                       emails). El resto (toggle/número/hora) siguen en fila, control a la izquierda. #}
+                                    <label class="csa-setting"{% if s.type == 'string' %} style="flex-direction: column; align-items: stretch; gap: var(--csa-sp-2);"{% endif %}>
                                         {% if s.type == 'time' %}
                                             {% set parts = s.value|split(':') %}
                                             <span class="csa-timefield">
@@ -85,6 +98,9 @@
                                                        min="{{ s.min }}" max="{{ s.max }}" step="1">
                                                 {% if s.unit %}<span class="csa-setting__unit">{{ s.unit }}</span>{% endif %}
                                             </span>
+                                        {% elseif s.type == 'string' %}
+                                            {# El campo de texto NO va en el slot de control: se pinta a lo ancho
+                                               DEBAJO de la etiqueta (ver tras __text), en la fila-columna. #}
                                         {% else %}
                                             <span class="csa-toggle">
                                                 <input type="checkbox" class="csa-toggle__input"
@@ -96,23 +112,151 @@
                                             <span class="csa-setting__label">{{ s.label }}</span>
                                             <span class="csa-setting__help">{{ s.help }}</span>
                                         </span>
+                                        {% if s.type == 'string' %}
+                                            <input type="text" class="csa-input"
+                                                   name="settings[{{ s.name }}]" value="{{ s.value }}">
+                                        {% endif %}
                                     </label>
-                                    {# Tareas programadas: botones de ejecución manual. Los envíos van a
-                                     # formularios externos (definidos tras el form de guardado), referenciados
-                                     # por `form=`, porque no se pueden anidar formularios. #}
-                                    {% if s.command is defined %}
+                                    {# Qué pasó la última vez que corrió, y con qué se puede hacer algo. Es
+                                     # la razón de ser de esta sección: con sólo el interruptor a la vista,
+                                     # una tarea que lleva semanas sin ejecutarse se ve igual que una que
+                                     # funciona.
+                                     #
+                                     # Jerarquía deliberada, de arriba abajo: primero el estado y la
+                                     # ANTIGÜEDAD (el "hace 16 días" es lo que delata un reloj caído),
+                                     # luego lo que hizo, después la cadencia y la fecha exacta con su
+                                     # rótulo, y al final las acciones. #}
+                                    {% if is_task %}
                                         {% set idsafe = s.name|replace({'.': '_'}) %}
-                                        <div class="csa-setting__actions" style="display:flex; gap:var(--csa-sp-2); padding:0 0 var(--csa-sp-2) calc(var(--csa-sp-8) + var(--csa-sp-2));">
-                                            {% if s.confirm %}
-                                                <button type="button" class="csa-btn csa-btn--ghost csa-btn--sm"
-                                                        onclick="document.getElementById('confirm-cron-{{ idsafe }}').showModal()">Ejecutar ahora</button>
-                                            {% else %}
-                                                <button type="submit" form="cronrun-{{ idsafe }}" class="csa-btn csa-btn--ghost csa-btn--sm">Ejecutar ahora</button>
+                                        {# Estado -> etiqueta + tono de color, resuelto en UN solo sitio. Antes
+                                         # era una escalera de seis `elseif` con la etiqueta y el tono metidos
+                                         # dentro de cada rama, y el tono hace falta dos veces (la insignia y el
+                                         # espinazo del bloque). #}
+                                        {# Con su propio interruptor apagado la tarea no corre nunca, así que
+                                         # "sin registro" no es una anomalía que atender: es lo esperado. Sin
+                                         # esto, una tarea apagada a propósito se queda en ámbar para siempre
+                                         # llamando la atención — el tipo de falsa alarma que acaba con que
+                                         # nadie mire la pantalla. #}
+                                        {% set state = not s.value
+                                            ? 'off'
+                                            : (s.last_run is null
+                                                ? 'unknown'
+                                                : (s.last_run.unfinished ? 'unfinished' : s.last_run.status)) %}
+                                        {# «Apagada» sólo cuando lo está el interruptor QUE SE VE justo encima.
+                                         # El otro caso —la tarea corrió y algo aguas abajo le impidió entregar,
+                                         # típicamente el interruptor general de emails— también llega aquí como
+                                         # `disabled`, y llamarlo "apagada" se contradecía con el interruptor en
+                                         # verde dos centímetros más arriba.
+                                         #
+                                         # Y no es lo mismo: apagada no corre y no se espera nada de ella; ésta
+                                         # se ejecuta cada día y tira su trabajo. Por eso ámbar y no gris — es
+                                         # exactamente la situación que hay detrás de un "no llegan los
+                                         # correos", y se arregla con un clic. #}
+                                        {% set states = {
+                                            off:           { label: 'Apagada',              tone: 'neutral' },
+                                            unknown:       { label: 'Sin registro todavía', tone: 'ochre' },
+                                            unfinished:    { label: 'No terminó',           tone: 'terracotta' },
+                                            failed:        { label: 'Falló',                tone: 'terracotta' },
+                                            disabled:      { label: 'No entrega',           tone: 'ochre' },
+                                            nothing_to_do: { label: 'Nada que hacer',       tone: 'sky' },
+                                            done:          { label: 'Hizo su trabajo',      tone: 'green' },
+                                        } %}
+                                        {# Un estado que no esté en el mapa se pinta CRUDO y en neutro, no
+                                         # cayendo en `done`: si mañana se añade un estado a CronRun y nadie
+                                         # toca esta plantilla, es mucho peor decir "hizo su trabajo" en verde
+                                         # que enseñar un nombre raro en gris que delate el olvido. #}
+                                        {% set st = states[state]|default({ label: state, tone: 'neutral' }) %}
+                                        {# Fuera de plazo tiñe el bloque de rojo aunque la última ejecución
+                                         # fuera buena: lo que importa entonces no es cómo acabó, es que lleva
+                                         # demasiado sin volver. #}
+                                        <div class="csa-cron__panel csa-cron__panel--{{ s.overdue ? 'terracotta' : st.tone }}">
+                                            {# 1. El veredicto. La antigüedad va aquí, en serif y grande, porque
+                                             # es la cifra que delata un reloj caído: lo que salta a la vista de
+                                             # un cron muerto no es la fecha, es el "hace 16 días". #}
+                                            <p class="csa-cron__verdict">
+                                                {{ csa.badge(st.label, st.tone) }}
+                                                {% if s.last_run %}
+                                                    <span class="csa-cron__age">{{ s.last_run.age }}</span>
+                                                {% endif %}
+                                                {% if s.overdue %}
+                                                    {{ csa.badge('Fuera de plazo', 'terracotta') }}
+                                                {% endif %}
+                                                {% for dependency in s.unmet_dependencies %}
+                                                    {{ csa.badge('Depende de «' ~ dependency ~ '», que está apagada', 'ochre') }}
+                                                {% endfor %}
+                                            </p>
+
+                                            {# 2. Qué hizo. Es la carga útil del bloque, así que va en cuerpo de
+                                             # texto normal y no en letra de ayuda. #}
+                                            {% if s.last_run and s.last_run.detail %}
+                                                <p class="csa-cron__detail">{{ s.last_run.detail }}</p>
                                             {% endif %}
-                                            {% if s.dry %}
-                                                <button type="submit" form="crondry-{{ idsafe }}" class="csa-btn csa-btn--ghost csa-btn--sm">Previsualizar</button>
-                                            {% endif %}
+
+                                            {# 3. Los datos, con rótulo. Iban en una frase corrida ("Corre los
+                                             # lunes a las 06:00 · última vez el…") donde el plan y el hecho se
+                                             # confundían; con su rótulo cada uno tiene su sitio y las cifras se
+                                             # alinean. #}
+                                            {# QUIÉN la lanzó tiene rótulo propio, y no es un adorno: mientras
+                                             # convivan el tick y el crontab viejo del hosting, es el único dato
+                                             # que dice si el reloj nuevo está haciendo su trabajo. El viejo
+                                             # dispara en punto, llega antes y deja al tick sin nada que hacer,
+                                             # así que "todo va bien" y "el tick está muerto" se ven igual. #}
+                                            {% set triggers = {
+                                                tick:     'el tick horario',
+                                                schedule: 'el cron del hosting',
+                                                manual:   'a mano',
+                                            } %}
+                                            <dl class="csa-cron__facts">
+                                                <div class="csa-cron__fact">
+                                                    <dt>Cadencia</dt>
+                                                    <dd>{{ s.schedule }}</dd>
+                                                </div>
+                                                <div class="csa-cron__fact">
+                                                    <dt>Última ejecución</dt>
+                                                    <dd>
+                                                        {%- if s.last_run -%}
+                                                            {{ s.last_run.at|date('d/m/Y') }} · {{ s.last_run.at|date('H:i') }}
+                                                        {%- else -%}
+                                                            sin registro
+                                                        {%- endif -%}
+                                                    </dd>
+                                                </div>
+                                                {% if s.last_run %}
+                                                    <div class="csa-cron__fact">
+                                                        <dt>La lanzó</dt>
+                                                        <dd>{{ triggers[s.last_run.trigger]|default(s.last_run.trigger) }}</dd>
+                                                    </div>
+                                                {% endif %}
+                                            </dl>
+
+                                            {# 4. Acciones, debajo del dato y no en la otra punta de la fila,
+                                             # que obliga a relacionar dos extremos separados. Sólo la principal
+                                             # lleva chrome de botón; las de rescate quedan en segundo plano.
+                                             #
+                                             # Los envíos van a formularios externos (definidos tras el form de
+                                             # guardado), referenciados por `form=`, porque no se pueden anidar
+                                             # formularios. #}
+                                            <div class="csa-cron__actions">
+                                                {% if s.confirm %}
+                                                    <button type="button" class="csa-btn csa-btn--secondary csa-btn--sm"
+                                                            onclick="document.getElementById('confirm-cron-{{ idsafe }}').showModal()">Ejecutar ahora</button>
+                                                {% else %}
+                                                    <button type="submit" form="cronrun-{{ idsafe }}" class="csa-btn csa-btn--secondary csa-btn--sm">Ejecutar ahora</button>
+                                                {% endif %}
+                                                {% if s.dry %}
+                                                    <button type="submit" form="crondry-{{ idsafe }}" class="csa-btn csa-btn--ghost csa-btn--sm">Previsualizar</button>
+                                                {% endif %}
+                                                {# Rescate para un aviso que no llegó: repite lo que ya
+                                                 # consta enviado. Sin esto habría que borrar el apunte
+                                                 # a mano en la base de datos, y en producción no hay
+                                                 # consola. #}
+                                                {% if s.resend is defined and s.resend %}
+                                                    <button type="button" class="csa-btn csa-btn--ghost csa-btn--sm"
+                                                            onclick="document.getElementById('confirm-cron-resend-{{ idsafe }}').showModal()">Reenviar</button>
+                                                {% endif %}
+                                            </div>
                                         </div>
+                                        </div>{# /.csa-cron #}
                                     {% endif %}
                                 {% endfor %}
                             </div>
@@ -156,6 +300,21 @@
                         confirm_label: 'Ejecutar',
                         cancel_label: 'Cancelar',
                         external_form_id: 'cronrun-' ~ idsafe,
+                    }) }}
+                {% endif %}
+                {% if s.resend is defined and s.resend %}
+                    <form id="cronresend-{{ idsafe }}" method="post" action="{{ path('settings_cron_run') }}" hidden>
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token('settings_cron_run') }}">
+                        <input type="hidden" name="cron" value="{{ s.name }}">
+                        <input type="hidden" name="mode" value="resend">
+                    </form>
+                    {{ csa.confirm_dialog('confirm-cron-resend-' ~ idsafe, {
+                        variant: 'warning',
+                        title: 'Reenviar: ' ~ s.label,
+                        body: 'Normalmente la tarea NO repite un aviso que ya salió. Esto lo repite a propósito, así que quien ya lo recibió lo recibirá otra vez. Úsalo cuando sepas que un correo no llegó. ¿Continuar?',
+                        confirm_label: 'Reenviar',
+                        cancel_label: 'Cancelar',
+                        external_form_id: 'cronresend-' ~ idsafe,
                     }) }}
                 {% endif %}
             {% endif %}

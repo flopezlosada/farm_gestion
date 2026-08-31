@@ -70,16 +70,35 @@ class ValidatePartnersConsistencyCommandTest extends TestCase
         $this->assertSame(Command::FAILURE, $tester->getStatusCode());
     }
 
-    public function testDetectaMultiplesPbsActivos(): void
+    public function testDetectaMultiplesPbsActivosConRangosSolapados(): void
     {
         $partner = $this->partner(1, 'Doble');
-        $shareA = $this->share($partner, self::MODALITY_BIWEEKLY, 'A');
-        $shareB = $this->share($partner, self::MODALITY_BIWEEKLY, 'A');
+        // Sin fechas: ambos rangos abiertos → se solapan → incoherencia.
+        $shareA = $this->withId($this->share($partner, self::MODALITY_BIWEEKLY, 'A'), 10);
+        $shareB = $this->withId($this->share($partner, self::MODALITY_BIWEEKLY, 'A'), 11);
 
         $tester = $this->runWith([$partner], [$shareA, $shareB]);
 
         $this->assertSame(Command::FAILURE, $tester->getStatusCode());
-        $this->assertStringContainsString('PBS activos', $tester->getDisplay());
+        $this->assertStringContainsString('rangos solapados', $tester->getDisplay());
+    }
+
+    public function testDosPbsActivosConRangosDisjuntosNoEsProblema(): void
+    {
+        // Cambio de modalidad a futuro: la vieja queda acotada (…→31-jul) y activa
+        // hasta expirar, la nueva activa desde 1-ago. Rangos disjuntos → legítimo,
+        // NO es incoherencia (caso socios 28/52/96, jul-2026).
+        $partner = $this->partner(1, 'Disjunto');
+        $old = $this->withId($this->share($partner, self::MODALITY_WEEKLY, null), 10);
+        $old->setStartDate(new \DateTime('2018-05-25'));
+        $old->setEndDate(new \DateTime('2026-07-31'));
+        $new = $this->withId($this->share($partner, self::MODALITY_WEEKLY, null), 11);
+        $new->setStartDate(new \DateTime('2026-08-01'));
+
+        $tester = $this->runWith([$partner], [$old, $new]);
+
+        $this->assertSame(Command::SUCCESS, $tester->getStatusCode());
+        $this->assertStringContainsString('Sin incoherencias', $tester->getDisplay());
     }
 
     public function testFamiliarSinGrupoNoEsProblema(): void

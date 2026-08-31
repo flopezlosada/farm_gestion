@@ -19,15 +19,22 @@ use Symfony\Component\Mailer\MailerInterface;
  * voluntarios: es un digest al buzón de gestión que se pasa en --to.
  *
  * Pensado para cron diario. Si no hay ni llegadas ni salidas en el período, no
- * envía nada (el equipo no recibe correo vacío). Mismos gates que el resto de
- * comandos de email: la tarea programada ({@see AppSettings::CRON_ALBERGUE_REMINDER})
- * y el envío ({@see AppSettings::EMAIL_ALBERGUE_REMINDER}) se gobiernan desde
- * /gestion/settings; el kill-switch general corta por encima de todo.
+ * envía nada (el equipo no recibe correo vacío). Los interruptores que lo
+ * gobiernan —la tarea programada y el envío— se declaran en el manifiesto
+ * {@see \App\Service\AppSettings::CRONS} y los aplica
+ * {@see AbstractCronCommand}; el kill-switch general corta por encima de todo.
  */
 #[AsCommand(name: 'app:send-albergue-arrivals-reminder', description: 'Recordatorio al equipo con las llegadas y salidas próximas del albergue.')]
-class SendAlbergueArrivalsReminderCommand extends Command
+class SendAlbergueArrivalsReminderCommand extends AbstractCronCommand
 {
     private const DEFAULT_DAYS = 7;
+
+    /**
+     * Clase de efecto con la que se apunta el envío: uno por día. El horizonte
+     * es "los próximos N días" y no se consume al avisar, así que dos pasadas
+     * del reloj el mismo día repetirían el mismo correo.
+     */
+    private const EFFECT_KIND = 'albergue_reminder';
 
     public function __construct(
         private readonly StayRepository $stayRepository,
@@ -43,33 +50,26 @@ class SendAlbergueArrivalsReminderCommand extends Command
             ->addOption('to', null, InputOption::VALUE_REQUIRED, 'Email del equipo (obligatorio si no es dry-run)')
             ->addOption('days', null, InputOption::VALUE_REQUIRED, 'Horizonte en días hacia adelante', self::DEFAULT_DAYS)
             ->addOption('force', null, InputOption::VALUE_NONE, 'Ignora el gate de la tarea programada (ejecución manual); no afecta a los toggles de email')
+            ->addOption('resend', null, InputOption::VALUE_NONE, 'Repite el envío aunque ya conste emitido hoy (para un correo que no llegó)')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Lista lo que enviaría sin enviar nada');
     }
 
-    protected function execute(InputInterface $input, OutputInterface $output): int
+    protected function doExecute(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
 
         $dryRun = (bool) $input->getOption('dry-run');
-        $to = $input->getOption('to');
-
-        // Gate de la tarea programada: apagada en /gestion/settings, la tarea no
-        // hace nada (verde para no disparar alertas del cron). dry-run y --force
-        // (ejecución manual explícita) la saltan.
-        if (!$dryRun && !$input->getOption('force') && !$this->settings->getBool(AppSettings::CRON_ALBERGUE_REMINDER)) {
-            $io->warning('La tarea programada del recordatorio del albergue está desactivada en /gestion/settings. No se ejecuta.');
-            return Command::SUCCESS;
-        }
-
-        // Toggle de envío: apagado, el cron no manda nada (verde). dry-run sigue.
-        if (!$dryRun && !$this->settings->getBool(AppSettings::EMAIL_ALBERGUE_REMINDER)) {
-            $io->warning('El recordatorio del albergue está desactivado en /gestion/settings. No se envía nada.');
-            return Command::SUCCESS;
-        }
+        // Destinatario: --to si se pasa; si no, el ajuste de /gestion/settings.
+        // Así la tarea puede correr sin que nadie edite la línea del crontab del
+        // hosting, que no vemos ni podemos tocar — que es la razón por la que
+        // esta tarea llevaba meses declarada y sin ejecutarse jamás.
+        $to = $input->getOption('to') ?: $this->settings->getString(AppSettings::EMAIL_ALBERGUE_REMINDER_TO);
 
         if (!$dryRun && !$to) {
-            $io->error('Falta --to=email del equipo (o usa --dry-run).');
-            return Command::FAILURE;
+            // No es un fallo del sistema, es configuración que falta: sale en la
+            // pantalla junto a la tarea y no entra en bucle de reintentos.
+            $io->warning('Sin destinatario configurado: rellénalo en /gestion/settings o pasa --to=email.');
+            return $this->nothingToDo('Sin destinatario configurado');
         }
 
         $days = max(1, (int) $input->getOption('days'));
@@ -84,7 +84,7 @@ class SendAlbergueArrivalsReminderCommand extends Command
 
         if ($arrivals === [] && $departures === []) {
             $io->note('Sin llegadas ni salidas en el período. No se envía nada.');
-            return Command::SUCCESS;
+            return $this->nothingToDo(sprintf('Sin llegadas ni salidas en los próximos %d días', $days));
         }
 
         if ($dryRun) {
@@ -111,9 +111,20 @@ class SendAlbergueArrivalsReminderCommand extends Command
                 'departures' => $departures,
             ]);
 
-        $this->mailer->send($message);
+        $emitted = $this->emitOnce(
+            self::EFFECT_KIND,
+            fn () => $this->mailer->send($message),
+            $input,
+            target: (string) $to,
+        );
+
+        if (!$emitted) {
+            $io->note('El aviso de hoy ya se había enviado. No se repite.');
+            return $this->nothingToDo('El aviso de hoy ya se había enviado');
+        }
+
         $io->success(sprintf('Enviado a %s · %d llegada(s), %d salida(s).', $to, count($arrivals), count($departures)));
 
-        return Command::SUCCESS;
+        return $this->didWork(sprintf('%d llegadas y %d salidas avisadas a %s', count($arrivals), count($departures), $to));
     }
 }

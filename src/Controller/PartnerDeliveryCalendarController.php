@@ -14,7 +14,10 @@ use App\Service\Delivery\AccumulatingMove;
 use App\Service\Delivery\DeliveryCalendarProjector;
 use App\Service\Delivery\DeliveryCalendarViewBuilder;
 use App\Service\Delivery\DeliveryShiftApplier;
+use App\Service\Delivery\EggScheduleException;
 use App\Service\Delivery\ExtraBasketEditor;
+use App\Service\Delivery\ExtraBasketRemover;
+use App\Service\Delivery\PartnerEggScheduleEditor;
 use App\Service\Delivery\PartnerMonthResetter;
 use App\Service\Delivery\WeeklyBasketComponentEditor;
 use App\Service\Delivery\WeeklyBasketGenerator;
@@ -117,6 +120,7 @@ class PartnerDeliveryCalendarController extends AbstractController
         DeliveryCalendarProjector $projector,
         DeliveryShiftApplier $applier,
         AccumulatingMove $accumulatingMove,
+        PartnerEggScheduleEditor $eggEditor,
         EntityManagerInterface $em,
     ): Response {
         $from = $basketRepository->find($basketId);
@@ -137,11 +141,47 @@ class PartnerDeliveryCalendarController extends AbstractController
             return $backToCalendar();
         }
 
-        // R1: las cestas compartidas no cambian de día.
-        if ($partner->getSharePartner() !== null) {
-            $this->addFlash('warning', 'Esta cesta es compartida: su día lo marca la alternancia con el otro hogar, no se mueve aquí.');
+        // Componente al que se limita el movimiento (verdura/huevos), o 0 = entrega entera.
+        // Se resuelve ANTES de R1 porque la regla de compartidas depende de él.
+        $componentId = (int) $request->request->get('component_id', 0);
+        if (!in_array($componentId, [BasketComponent::ID_VEGETABLES, BasketComponent::ID_EGGS], true)) {
+            $componentId = 0;
+        }
+
+        // R1: en una cesta compartida el DÍA de la cesta lo marca la alternancia con el otro
+        // hogar → no se mueve la entrega entera ni la verdura. Los HUEVOS no se comparten (cada
+        // hogar los suyos), así que mover SOLO el componente huevos sí se permite.
+        if ($partner->getSharePartner() !== null && $componentId !== BasketComponent::ID_EGGS) {
+            $this->addFlash('warning', 'Esta cesta es compartida: su día lo marca la alternancia con el otro hogar. Solo puedes mover los huevos, no la cesta.');
 
             return $backToCalendar();
+        }
+
+        // HUEVOS: la lógica (invariantes + moveComponent) vive en el editor compartido con el
+        // panel del socio (DRY). Se delega aquí, ANTES de las validaciones de la entrega entera
+        // —que quedan intactas para verdura y entrega completa—.
+        if ($componentId === BasketComponent::ID_EGGS) {
+            $to = $basketRepository->find((int) $request->request->get('to_basket_id', 0));
+            try {
+                $eggEditor->move($partner, $from, $to, 'gestor:' . $this->getUser()?->getId());
+            } catch (EggScheduleException $e) {
+                $this->addFlash('error', $e->getMessage());
+
+                return $backToCalendar();
+            }
+            $this->addFlash('success', sprintf(
+                'Huevos movidos del %s al %s.',
+                $from->getDate()->format('d/m/Y'),
+                $to->getDate()->format('d/m/Y'),
+            ));
+            [$year, $month] = $this->returnMonth($request, $to);
+
+            return $this->redirectToRoute('partner_delivery_calendar', [
+                'id' => $partner->getId(),
+                'year' => $year,
+                'month' => $month,
+                'sel' => $to->getId(),
+            ]);
         }
 
         $share = $em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner, $from->getDate());
@@ -189,10 +229,7 @@ class PartnerDeliveryCalendarController extends AbstractController
         // ¿Mover SOLO un componente (verdura u huevos)? Caso SANTOS: la verdura se mueve
         // a una semana que ya tiene huevo, y el huevo de esa semana se respeta. El choque
         // es por COMPONENTE (el destino no puede llevar YA ese componente; los demás sí).
-        $componentId = (int) $request->request->get('component_id', 0);
-        if (!in_array($componentId, [BasketComponent::ID_VEGETABLES, BasketComponent::ID_EGGS], true)) {
-            $componentId = 0;
-        }
+        // ($componentId se resolvió arriba, antes de R1.)
         if ($componentId !== 0) {
             $component = $em->getRepository(BasketComponent::class)->find($componentId);
             $label = $componentId === BasketComponent::ID_EGGS ? 'huevos' : 'verdura';
@@ -627,6 +664,13 @@ class PartnerDeliveryCalendarController extends AbstractController
             return $backToCalendar();
         }
 
+        // "No recoge" deja el día a CERO, y eso incluye una posible cesta extra (el applier la
+        // retira). Se avisa en el mensaje: es una cesta que desaparece del día —típicamente la
+        // que se trasladó sumando— y el gestor tiene que saber que ya no está ahí.
+        $skipped = $extraBasketEditor->hasExtra($partner, $basket)
+            ? 'Marcada como NO recogida esa semana. También se ha quitado la cesta extra que llevaba ese día.'
+            : 'Marcada como NO recogida esa semana.';
+
         // La cesta MOSTRADA en este día puede haber VENIDO movida de otro (cambio entrante).
         // Eso es lo que el gestor ve y quiere no-recoger, y tiene PRIORIDAD sobre cualquier
         // shift SALIENTE de este mismo día: tras un swap (p. ej. 1↔15) ambos días son origen
@@ -634,7 +678,7 @@ class PartnerDeliveryCalendarController extends AbstractController
         // re-apunta ese movimiento entrante a un skip (O→X pasa a O→null), aparcándola.
         if ($incoming !== null) {
             $applier->skipMovedDelivery($incoming, $actor);
-            $this->addFlash('success', 'Marcada como NO recogida esa semana.');
+            $this->addFlash('success', $skipped);
 
             return $backToCalendar();
         }
@@ -657,9 +701,72 @@ class PartnerDeliveryCalendarController extends AbstractController
             return $backToCalendar();
         }
 
-        // Día normal con su cesta de patrón.
+        // Día normal con su cesta de patrón (con o sin extra encima).
         $applier->applySkipIntent($partner, $basket, null, $actor);
-        $this->addFlash('success', 'Marcada como NO recogida esa semana.');
+        $this->addFlash('success', $skipped);
+
+        return $backToCalendar();
+    }
+
+    /**
+     * Quitar la CESTA EXTRA de una semana desde el propio calendario. Es la vía para separar
+     * un día que lleva dos cestas: quitar la extra deja la de patrón, y la que se trasladó
+     * sumando sigue aparcada en la papelera de su semana de origen, lista para recolocarse
+     * donde haga falta. Hasta ahora el único sitio para deshacer una extra era la ficha del
+     * socio (`partner_remove_extra_basket`), que además exige ROLE_GESTION_SOCIXS_EDIT: quien
+     * gestiona reparto podía crear días acumulados pero no deshacerlos.
+     *
+     * NO aplica R1 (compartidas): quitar una extra no elige el día de la cesta —lo que R1
+     * protege—, igual que los huevos, que sí se editan en compartidas. Sin deadline: es el
+     * gestor. Solo se veta el pasado, como el resto de la edición del calendario.
+     *
+     * @param Partner             $partner
+     * @param int                 $basketId Semana (Basket) cuya extra se quita.
+     * @param Request             $request
+     * @param ExtraBasketRemover  $extraRemover
+     * @param EntityManagerInterface $em
+     * @return Response
+     */
+    #[Route("/{id}/calendar/extra/{basketId}/remove", name: "partner_delivery_calendar_extra_remove", methods: ["POST"], requirements: ["id" => "\\d+", "basketId" => "\\d+"])]
+    public function deliveryCalendarRemoveExtra(
+        Partner $partner,
+        int $basketId,
+        Request $request,
+        ExtraBasketRemover $extraRemover,
+        EntityManagerInterface $em,
+    ): Response {
+        $basket = $em->getRepository(Basket::class)->find($basketId);
+        if ($basket === null) {
+            throw $this->createNotFoundException('Semana de reparto no encontrada.');
+        }
+
+        [$year, $month] = $this->returnMonth($request, $basket);
+        $backToCalendar = fn (): Response => $this->redirectToRoute('partner_delivery_calendar', [
+            'id' => $partner->getId(),
+            'year' => $year,
+            'month' => $month,
+            'sel' => $basket->getId(),
+        ]);
+
+        if (!$this->isCsrfTokenValid('calendar_extra_' . $partner->getId(), (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
+
+            return $backToCalendar();
+        }
+
+        if ($basket->getDate() < new \DateTimeImmutable('today')) {
+            $this->addFlash('warning', 'Esa entrega ya pasó: no se puede editar.');
+
+            return $backToCalendar();
+        }
+
+        $removed = $extraRemover->removeExtra($partner, $basket, 'gestor:' . $this->getUser()?->getId());
+        $this->addFlash(
+            $removed ? 'success' : 'warning',
+            $removed
+                ? 'Cesta extra quitada de esa semana.'
+                : 'Esa semana no tenía ninguna cesta extra.',
+        );
 
         return $backToCalendar();
     }
@@ -709,6 +816,7 @@ class PartnerDeliveryCalendarController extends AbstractController
         PartnerDeliveryShiftRepository $shiftRepository,
         DeliveryShiftApplier $applier,
         DeliveryCalendarProjector $projector,
+        PartnerEggScheduleEditor $eggEditor,
         EntityManagerInterface $em,
     ): Response {
         if (!in_array($componentId, [BasketComponent::ID_VEGETABLES, BasketComponent::ID_EGGS], true)) {
@@ -729,6 +837,26 @@ class PartnerDeliveryCalendarController extends AbstractController
 
         if (!$this->isCsrfTokenValid('calendar_component_' . $partner->getId(), (string) $request->request->get('_csrf_token'))) {
             $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
+
+            return $backToCalendar();
+        }
+
+        // HUEVOS: el toggle (generado/sin-generar) vive en el editor compartido con el panel del
+        // socio (DRY) y SIN R1 —los huevos sí se editan en compartidas—. La verdura sigue inline
+        // más abajo con sus guardas R1 (resolveCalendarDelivery / ungeneratedEditGuard).
+        if ($componentId === BasketComponent::ID_EGGS) {
+            try {
+                $result = $eggEditor->toggleEggs($partner, $basket, 'gestor:' . $this->getUser()?->getId());
+            } catch (EggScheduleException $e) {
+                $this->addFlash('error', $e->getMessage());
+
+                return $backToCalendar();
+            }
+            match ($result) {
+                'added' => $this->addFlash('success', 'Huevos añadidos a esa entrega.'),
+                'removed' => $this->addFlash('success', 'Huevos quitados: esa semana no recoge huevos.'),
+                default => $this->addFlash('warning', 'Esa entrega no contempla huevos según la cesta del socio.'),
+            };
 
             return $backToCalendar();
         }

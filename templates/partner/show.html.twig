@@ -760,7 +760,7 @@
                                 {{ bs_label }}
                             </span>
                             {% if bs_id == 3 %}
-                                <span class="prt-chip prt-chip--mute">{{ partner.getActiveBasket.dayMonthOrder }}º viernes</span>
+                                <span class="prt-chip prt-chip--mute">{% if partner.getActiveBasket.dayMonthOrder == -1 %}última semana{% else %}{{ partner.getActiveBasket.dayMonthOrder }}º viernes{% endif %}</span>
                             {% endif %}
                             {% if partner.activeBasket.amount > 1 %}
                                 <span class="prt-chip prt-chip--mute">×{{ partner.activeBasket.amount }} cestas</span>
@@ -774,7 +774,7 @@
                                     <div class="prt-mini__value prt-mini__value--ochre">
                                         {{ partner.activeBasket.eggAmount }}
                                         {% if bs_id == 5 %}
-                                            <small>· {{ partner.activeBasket.eggPeriod }}{% if partner.activeBasket.eggPeriod.id is defined and partner.activeBasket.eggPeriod.id == 3 %} ({{ partner.getActiveBasket.dayMonthOrder }}º viernes){% endif %}</small>
+                                            <small>· {{ partner.activeBasket.eggPeriod }}{% if partner.activeBasket.eggPeriod.id is defined and partner.activeBasket.eggPeriod.id == 3 %} ({% if partner.getActiveBasket.dayMonthOrder == -1 %}última semana{% else %}{{ partner.getActiveBasket.dayMonthOrder }}º viernes{% endif %}){% endif %}</small>
                                         {% endif %}
                                     </div>
                                 {% else %}

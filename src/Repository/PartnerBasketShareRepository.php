@@ -338,10 +338,12 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
      *    Si el nodo weekly no entrega esta semana (excepción global de
      *    cancelación o de ese nodo), `$weeklyMonthlyOrder` viene null y la
      *    rama se omite.
-     *  - Partners en nodos `biweekly` (Cascorro, Midori): se itera el mapa
+     *  - Partners en nodos con calendario propio, quincenales (Cascorro,
+     *    Midori) o mensuales (El Berrueco): se itera el mapa
      *    `nodeId => orderEnEseNodo`, donde el orden está resuelto fuera con
      *    {@see MonthlyOperativeOrderResolver::operativeOrderForNode} y sólo
-     *    aparecen los nodos que sí entregan en este Basket.
+     *    aparecen los nodos que sí entregan en este Basket. La rama filtra por
+     *    `n.id`, no por cadencia, así que sirve igual a unos y otros.
      *
      * Se ejecutan 0..1 + N queries (N = número de nodos biweekly activos
      * esta semana, hoy ≤ 2). KISS: array_merge en PHP frente a un DQL con
@@ -355,22 +357,41 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
      * @param int[] $weeklyMonthlyOrders Órdenes que el basket sirve en el nodo weekly
      *              (pegajoso, ver MonthlyOperativeOrderResolver::ordersServedBy);
      *              vacío si éste no entrega esta semana.
-     * @param array<int,int[]> $biweeklyNodeIdToOrders Mapa nodeId → órdenes servidas en ese nodo.
+     * @param array<int,int[]> $ownCalendarNodeIdToOrders Mapa nodeId → órdenes servidas en ese nodo.
      * @param bool $only_eggs Filtrar a egg_period=3 (sólo huevos mensuales).
+     * @param string|null $weeklyCohort Turno A/B que reparte esta semana en el nodo weekly.
+     * @param int[] $weeklyCohortOrders Órdenes que el basket sirve contando SÓLO
+     *              los viernes de ese turno. Emparejan los mensuales anclados a
+     *              un turno (`delivery_group`); los anclados al otro turno no
+     *              recogen esta semana y quedan fuera por la condición del DQL.
      * @return PartnerBasketShare[]
      */
     public function findBasketPartnersMonthlyNodeAware(
         $current_basket,
         int $basket_share_id,
         array $weeklyMonthlyOrders,
-        array $biweeklyNodeIdToOrders,
-        bool $only_eggs = false
+        array $ownCalendarNodeIdToOrders,
+        bool $only_eggs = false,
+        ?string $weeklyCohort = null,
+        array $weeklyCohortOrders = []
     ): array {
         $em = $this->getEntityManager();
         $eggPeriod = $only_eggs ? 3 : null;
         $results = [];
 
         if ($weeklyMonthlyOrders !== []) {
+            // Dos formas de emparejar un mensual de nodo weekly:
+            //  - Sin turno (delivery_group NULL): su orden cuenta los viernes
+            //    del mes. Comportamiento histórico.
+            //  - Anclado a un turno: su orden cuenta sólo los viernes de ESE
+            //    turno, así que sólo entra si el turno que reparte esta semana
+            //    es el suyo, y contra las órdenes de ese turno (caso Alcobendas).
+            $anchoredToCohort = $weeklyCohort !== null && $weeklyCohortOrders !== [];
+            $orderMatch = $anchoredToCohort
+                ? "((b.delivery_group IS NULL and b.day_month_order IN (:weekly_orders))
+                    or (b.delivery_group = :weekly_cohort and b.day_month_order IN (:cohort_orders)))"
+                : "(b.delivery_group IS NULL and b.day_month_order IN (:weekly_orders))";
+
             $weeklyDql = "select b from App\\Entity\\PartnerBasketShare b
                           inner join b.partner p
                           left join p.weekly_basket_group wbg
@@ -379,7 +400,7 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
                             and b.is_active = 1
                             and (b.start_date IS NULL OR b.start_date <= :date)
                             and (b.end_date IS NULL OR b.end_date >= :date)
-                            and b.day_month_order IN (:weekly_orders)
+                            and " . $orderMatch . "
                             and (n.cadence = :cadence_weekly OR n.id IS NULL)";
             if ($eggPeriod !== null) {
                 $weeklyDql .= " and b.egg_period = :egg_period ";
@@ -391,6 +412,10 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
             $weeklyQuery->setParameter("date", $current_basket->getDate());
             $weeklyQuery->setParameter("weekly_orders", $weeklyMonthlyOrders);
             $weeklyQuery->setParameter("cadence_weekly", \App\Entity\Node::CADENCE_WEEKLY);
+            if ($anchoredToCohort) {
+                $weeklyQuery->setParameter("weekly_cohort", $weeklyCohort);
+                $weeklyQuery->setParameter("cohort_orders", $weeklyCohortOrders);
+            }
             if ($eggPeriod !== null) {
                 $weeklyQuery->setParameter("egg_period", $eggPeriod);
             }
@@ -398,7 +423,7 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
             $results = $weeklyQuery->getResult();
         }
 
-        foreach ($biweeklyNodeIdToOrders as $nodeId => $ordersForNode) {
+        foreach ($ownCalendarNodeIdToOrders as $nodeId => $ordersForNode) {
             if ($ordersForNode === []) {
                 continue;
             }
@@ -440,9 +465,11 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
      * * Ojo, aquí no se pasa el id sino el objeto basket entero
      * Directamente entiendo que se buscan solo los activos
      *
-     * LEGACY: sustituida por findBasketPartnersMonthlyNodeAware. Sólo la
-     * sigue usando SendPickupReminderCommand (deuda apuntada, email
-     * aparcado por copy). Eliminar cuando se modernice ese comando.
+     * LEGACY / CÓDIGO MUERTO: sustituida por findBasketPartnersMonthlyNodeAware.
+     * Ya NO tiene llamadores (SendPickupReminderCommand tampoco la referencia).
+     * ⚠️ Si se resucita: su filtro `b.day_month_order<=:day_order` asume orden
+     * positivo y NO entiende el índice negativo de «última semana» (-1<=N sería
+     * siempre cierto y traería a todo el mundo). Usar el resolver node-aware.
      */
     public function findBasketPartnersMonthlyAndCity($current_basket,$basket, $day_order, $only_eggs=false)
     {

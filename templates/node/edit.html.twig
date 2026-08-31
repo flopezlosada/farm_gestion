@@ -24,7 +24,28 @@
         node.weeklyBasketGroups|length ~ ' grupo(s) asociado(s).'
     ) }}
 
-    {{ form_start(form, { attr: { role: 'form', class: 'csa-form-narrow' } }) }}
+    {# El cambio de cadencia se ha rechazado: dejaría cestas que este punto no
+       puede repartir. Se listan para corregirlas antes de volver a intentarlo —
+       a qué modalidad pasa cada socio lo decide administración, no el sistema. #}
+    {% if orphaned_shares is defined and orphaned_shares is not empty %}
+        <div class="csa-card csa-stack" style="border-color: var(--csa-danger); margin-bottom: var(--csa-sp-5);">
+            {{ csa.callout(
+                'No se ha cambiado la cadencia' ~ (attempted_cadence ? ' a ' ~ attempted_cadence|lower : '') ~
+                ': hay ' ~ orphaned_shares|length ~ ' cesta(s) que este punto no podría repartir. Cámbiales la modalidad primero.',
+                'danger', 'exclamation-triangle'
+            ) }}
+            <ul class="csa-stack-sm" style="margin: 0; padding-left: var(--csa-sp-5);">
+                {% for share in orphaned_shares %}
+                    <li>
+                        <a href="{{ path('partner_show', { id: share.partner.id }) }}">{{ share.partner.nameForDelivery }}</a>
+                        · cesta {{ share.basketShare.name|lower }}
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
+
+    {{ form_start(form, { attr: { role: 'form', class: 'csa-form-narrow', 'data-csa-dropdowns': '' } }) }}
 
         <div class="csa-stack-lg">
 
@@ -37,14 +58,23 @@
                 {% endblock %}
             {% endembed %}
 
-            {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Reparto', subtitle: 'Día de la semana, cadencia y ancla quincenal si procede.' } %}
+            {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Reparto', subtitle: 'Día de la semana, cadencia y el dato que la concreta.' } %}
                 {% block body %}
                     {% import '_macros/csa.html.twig' as csa %}
                     <div class="csa-form-grid">
                         {{ csa.field(form.deliveryWeekday, 'Día de reparto') }}
                         {{ csa.field(form.cadence, 'Cadencia') }}
-                        {{ csa.field(form.anchorDate, 'Fecha ancla (sólo quincenal)', { full: true }) }}
+                        {{ csa.field(form.anchorDate, 'Fecha ancla (sólo quincenal)') }}
+                        {{ csa.field(form.monthlyWeek, 'Semana del mes (sólo mensual)') }}
                     </div>
+                    {# Aviso ANTES de tocar nada: cambiar la semana del punto
+                       arrastra a sus cestas mensuales, no sólo al calendario. #}
+                    {% if monthly_share_count is defined and monthly_share_count > 0 %}
+                        {{ csa.callout(
+                            'Este punto tiene ' ~ monthly_share_count ~ ' cesta(s) mensual(es). Si cambias la semana, se les actualizará a todas y se recolocarán los listados ya generados.',
+                            'warning', 'exclamation-triangle'
+                        ) }}
+                    {% endif %}
                 {% endblock %}
             {% endembed %}
 
@@ -53,6 +83,28 @@
                     {% import '_macros/csa.html.twig' as csa %}
                     <div class="csa-form-grid">
                         {{ csa.field(form.schedule, 'Horario público', { full: true }) }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            {% embed '_components/csa_form_section.html.twig' with {
+                num: '4',
+                title: 'Quién recibe el listado',
+                subtitle: 'A quién le llega por correo el listado de este punto en cuanto cierra su plazo de cambios.'
+            } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    {# Sin candidatas el campo sale vacío y nadie sabe por qué: la
+                     # lista la alimenta Usuarias, no esta pantalla. #}
+                    {% if form.sheetRecipients.vars.choices is empty %}
+                        {{ csa.callout('Todavía no hay ninguna cuenta del equipo a la que mandárselo. Se habilita dando permisos de gestión en Administración › Usuarias.', 'warning', 'exclamation-triangle') }}
+                    {% endif %}
+
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.sheetRecipients, 'Quién recibe el listado de este punto', {
+                            full: true,
+                            hint: 'si no marcas a nadie, se manda a la dirección general de Ajustes'
+                        }) }}
                     </div>
                 {% endblock %}
             {% endembed %}

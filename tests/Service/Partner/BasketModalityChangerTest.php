@@ -62,6 +62,34 @@ class BasketModalityChangerTest extends TestCase
         $this->assertTrue($new->getIsActive());
     }
 
+    public function testApplyChangeConFechaEfectivaFuturaMantieneLaAntiguaActiva(): void
+    {
+        // Cambio PROGRAMADO a futuro: la cesta vieja sigue vigente hasta su end_date
+        // (víspera de la efectiva). Debe quedar is_active=1 —la cierra
+        // finalizeExpiredShares al expirar—; desactivarla ya la sacaría de los finders
+        // de reparto (exigen is_active=1) durante su cola aún válida y el socio se
+        // caería del listado (bug ANTONIO MONTORO, socio 28, jul-2026).
+        $partner = $this->partner(28);
+        $old = $this->share($partner, 1);
+        $old->setStartDate(new \DateTime('2018-05-25'));
+        $old->setIsActive(true); // es la cesta activa en curso (findLatestActiveForPartner)
+        $new = $this->share($partner, 1);
+        $effective = new \DateTime('2099-08-01'); // muy futura: robusto a la fecha real
+
+        $this->shareRepository->method('findLatestActiveForPartner')->willReturn($old);
+        $this->eventRecorder->method('recordChange')
+            ->willReturn(new PartnerEvent($partner, PartnerEvent::TYPE_BASKET_CHANGE, $effective));
+
+        $this->changer->applyChange($new, $effective);
+
+        $this->assertSame('2099-07-31', $old->getEndDate()->format('Y-m-d'));
+        $this->assertTrue(
+            $old->getIsActive(),
+            'Un cierre futuro deja la cesta vieja activa hasta que expire; la desactiva finalizeExpiredShares.',
+        );
+        $this->assertTrue($new->getIsActive());
+    }
+
     public function testApplyChangeSobreCestaFuturaLaRetiraEnVezDeDuplicar(): void
     {
         // La cesta actual empieza el MISMO día efectivo (cambio sobre una cesta que

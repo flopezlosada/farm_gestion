@@ -28,9 +28,16 @@ use Symfony\Component\Mailer\MailerInterface;
  * sigue mandando por encima de todo.
  */
 #[AsCommand(name: 'app:send-staff-gaps-digest', description: 'Digest semanal al supervisor con los huecos del registro de jornada.')]
-class SendStaffGapsDigestCommand extends Command
+class SendStaffGapsDigestCommand extends AbstractCronCommand
 {
     private const DEFAULT_DAYS = 7;
+
+    /**
+     * Clase de efecto con la que se apunta el envío: uno por día. La ventana de
+     * huecos es "los últimos N días" y no se consume al avisar, así que dos
+     * pasadas del reloj el mismo día repetirían el mismo digest.
+     */
+    private const EFFECT_KIND = 'staff_gaps_digest';
 
     public function __construct(
         private readonly GapReport $gapReport,
@@ -46,31 +53,22 @@ class SendStaffGapsDigestCommand extends Command
             ->addOption('to', null, InputOption::VALUE_REQUIRED, 'Email del supervisor (obligatorio si no es dry-run)')
             ->addOption('days', null, InputOption::VALUE_REQUIRED, 'Cuántos días hacia atrás revisar', self::DEFAULT_DAYS)
             ->addOption('force', null, InputOption::VALUE_NONE, 'Ignora el gate de la tarea programada (ejecución manual); no afecta a los toggles de email')
+            ->addOption('resend', null, InputOption::VALUE_NONE, 'Repite el envío aunque ya conste emitido hoy (para un correo que no llegó)')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Lista los huecos que enviaría sin enviar nada');
     }
 
-    protected function execute(InputInterface $input, OutputInterface $output): int
+    protected function doExecute(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
 
         $dryRun = (bool) $input->getOption('dry-run');
-        $to = $input->getOption('to');
-
-        // Gate de la tarea programada: apagada en /gestion/settings, ni se ejecuta.
-        if (!$dryRun && !$input->getOption('force') && !$this->settings->getBool(AppSettings::CRON_STAFF_GAPS_DIGEST)) {
-            $io->warning('La tarea del digest de huecos está desactivada en /gestion/settings. No se ejecuta.');
-            return Command::SUCCESS;
-        }
-
-        // Toggle de email: apagado, el cron corre pero no envía (verde para el cron).
-        if (!$dryRun && !$this->settings->getBool(AppSettings::EMAIL_STAFF_GAPS)) {
-            $io->warning('El aviso de huecos está desactivado en /gestion/settings. No se envía nada.');
-            return Command::SUCCESS;
-        }
+        // --to si se pasa; si no, el ajuste de /gestion/settings, para no
+        // depender de la línea del crontab del hosting (que no vemos).
+        $to = $input->getOption('to') ?: $this->settings->getString(AppSettings::EMAIL_STAFF_GAPS_TO);
 
         if (!$dryRun && !$to) {
-            $io->error('Falta --to=email del supervisor (o usa --dry-run).');
-            return Command::FAILURE;
+            $io->warning('Sin destinatario configurado: rellénalo en /gestion/settings o pasa --to=email.');
+            return $this->nothingToDo('Sin destinatario configurado');
         }
 
         $madrid = new \DateTimeZone('Europe/Madrid');
@@ -82,7 +80,7 @@ class SendStaffGapsDigestCommand extends Command
 
         if ($rows === []) {
             $io->success('Sin huecos en el período. No se envía nada.');
-            return Command::SUCCESS;
+            return $this->nothingToDo(sprintf('Sin huecos en los últimos %d días', $days));
         }
 
         $tableRows = [];
@@ -112,9 +110,20 @@ class SendStaffGapsDigestCommand extends Command
                 'rows' => $rows,
             ]);
 
-        $this->mailer->send($message);
+        $emitted = $this->emitOnce(
+            self::EFFECT_KIND,
+            fn () => $this->mailer->send($message),
+            $input,
+            target: (string) $to,
+        );
+
+        if (!$emitted) {
+            $io->note('El digest de hoy ya se había enviado. No se repite.');
+            return $this->nothingToDo('El digest de hoy ya se había enviado');
+        }
+
         $io->success(sprintf('Enviado a %s · %d trabajador(es) con huecos.', $to, count($rows)));
 
-        return Command::SUCCESS;
+        return $this->didWork(sprintf('%d trabajadores con huecos avisados a %s', count($rows), $to));
     }
 }

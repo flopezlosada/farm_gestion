@@ -42,6 +42,15 @@
 .npick__name { font-weight: 600; color: var(--csa-ink); }
 .mpick-actions { display: flex; gap: 10px; align-items: center; margin-top: 22px; }
 .mpick-label { font-size: var(--csa-fs-xs); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--csa-ink-muted); margin: 18px 0 8px; }
+
+/* Móvil: tres tarjetas de mes ("septiembre 2026") no caben en una fila, y la
+   botonera de abajo tampoco: ambas sacaban la página del viewport. */
+@media (max-width: 768px) {
+    .mpick { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .mpick__card { padding: 12px; }
+    .mpick__month { font-size: var(--csa-fs-base); }
+    .mpick-actions { flex-wrap: wrap; }
+}
 </style>
 {% endblock %}
 

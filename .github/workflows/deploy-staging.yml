@@ -54,6 +54,18 @@ jobs:
           npm install --no-audit --no-fund
           npm run build || npm run dev
 
+      # SIEMPRE (no gated por la cache de vendor): genera public/bundles/<bundle> para los
+      # bundles registrados (adesignscalendar, ckeditor, fos_js_routing…). Antes solo corría
+      # vía el post-cmd de `composer install`, que se SALTA cuando la cache de vendor acierta;
+      # en esos runs public/bundles/adesignscalendar NO se generaba y el delta por hashes lo
+      # marcaba para BORRAR → FTP 550 al hacer RMD de una carpeta que en el servidor existe
+      # (y no está vacía). Correrlo siempre mantiene el árbol del runner coherente con el server.
+      - name: Instalar assets de bundles (assets:install)
+        env:
+          APP_ENV: prod
+          APP_DEBUG: '0'
+        run: php bin/console assets:install public --no-interaction
+
       - name: Copiar assets legacy (FTP no transmite symlinks)
         run: |
           mkdir -p public/bundles

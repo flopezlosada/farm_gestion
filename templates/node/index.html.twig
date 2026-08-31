@@ -10,7 +10,6 @@
     1: 'Lunes', 2: 'Martes', 3: 'Miércoles', 4: 'Jueves',
     5: 'Viernes', 6: 'Sábado', 7: 'Domingo'
 } %}
-{% set cadence_labels = { 'weekly': 'Semanal', 'biweekly': 'Quincenal' } %}
 {% set weekday_short = { 1: 'lun', 2: 'mar', 3: 'mié', 4: 'jue', 5: 'vie', 6: 'sáb', 7: 'dom' } %}
 {% set month_short = {
     1: 'ene', 2: 'feb', 3: 'mar', 4: 'abr', 5: 'may', 6: 'jun',
@@ -38,6 +37,7 @@
     --dlv-sage-d: #2f4426;
     --dlv-ochre: #c89a3a;
     --dlv-ochre-d: #8c6919;
+    --dlv-sky: #4e8ba8;
     --dlv-sky-d: #2e6f8e;
     --dlv-bg: #fbfaf6;
     --dlv-surface: #ffffff;
@@ -57,12 +57,14 @@
 .nodi-card { display: block; background: var(--dlv-surface); border: 1px solid var(--dlv-line); border-left: 4px solid var(--dlv-line-2); border-radius: 10px; padding: 18px 22px; text-decoration: none; color: inherit; transition: 0.14s; }
 .nodi-card--weekly { border-left-color: var(--dlv-sage); }
 .nodi-card--biweekly { border-left-color: var(--dlv-ochre); }
+.nodi-card--monthly { border-left-color: var(--dlv-sky); }
 .nodi-card:hover { box-shadow: 0 6px 20px rgba(40,36,24,0.08); transform: translateY(-1px); }
 .nodi-card__head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .nodi-card__name { font-family: var(--csa-serif); font-weight: 600; font-size: 19px; letter-spacing: -0.01em; color: var(--dlv-ink); }
 .nodi-card__cad { font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600; white-space: nowrap; }
 .nodi-card--weekly .nodi-card__cad { color: var(--dlv-sage-d); }
 .nodi-card--biweekly .nodi-card__cad { color: var(--dlv-ochre-d); }
+.nodi-card--monthly .nodi-card__cad { color: var(--dlv-sky-d); }
 .nodi-card__sub { font-size: 12px; color: var(--dlv-ink-faint); margin-top: 3px; }
 .nodi-card__sub b { color: var(--dlv-ink-soft); font-weight: 600; }
 .nodi-card__row { display: flex; gap: 22px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--dlv-line); }
@@ -114,10 +116,10 @@
         <div class="nodi-grid">
             {% for node in nodes %}
                 {% set st = node_stats[node.id] %}
-                <a class="nodi-card nodi-card--{{ node.cadence == 'weekly' ? 'weekly' : 'biweekly' }}" href="{{ path('node_show', { id: node.id }) }}">
+                <a class="nodi-card nodi-card--{{ node.cadence }}" href="{{ path('node_show', { id: node.id }) }}">
                     <div class="nodi-card__head">
                         <span class="nodi-card__name">{{ node.name }}</span>
-                        <span class="nodi-card__cad">{{ cadence_labels[node.cadence] ?? node.cadence }}</span>
+                        <span class="nodi-card__cad">{{ node.cadenceLabel }}</span>
                     </div>
                     <div class="nodi-card__sub">
                         Reparto los <b>{{ (weekday_labels[node.deliveryWeekday] ?? node.deliveryWeekday)|lower }}</b>

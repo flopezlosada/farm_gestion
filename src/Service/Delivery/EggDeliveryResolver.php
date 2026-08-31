@@ -97,7 +97,10 @@ class EggDeliveryResolver
      *  - Si la cesta es quincenal/semanal: egg_day_month_order indica la
      *    N-ésima entrega de cesta del partner en el mes que lleva huevos.
      *    Ej. quincenal B con egg_day_month_order=1 → huevos en su primer
-     *    B-viernes operativo del mes.
+     *    B-viernes operativo del mes. El orden puede ser NEGATIVO (misma
+     *    convención que day_month_order): -1 = su última cesta del mes,
+     *    -2 = la penúltima… — así "última cesta" sigue al último reparto
+     *    del socio aunque el mes tenga una entrega más de lo habitual.
      */
     private function deliversMonthly(PartnerBasketShare $share, Basket $basket): bool
     {
@@ -113,7 +116,13 @@ class EggDeliveryResolver
             // Cesta mensual: huevos con la cesta. Emparejamiento PEGAJOSO
             // (ordersServedBy): un cierre no desplaza al mensual de las
             // semanas posteriores; el de la semana cerrada hace fallback.
-            return in_array($share->getDayMonthOrder(), $this->monthlyOrder->ordersServedBy($basket, $node), true);
+            // El turno del socio, si lo tiene, ancla el conteo a las entregas
+            // de ese turno — los huevos siguen a la cesta sin más.
+            return in_array(
+                $share->getDayMonthOrder(),
+                $this->monthlyOrder->ordersServedBy($basket, $node, $share->getDeliveryGroup()),
+                true,
+            );
         }
 
         $order = $share->getEggDayMonthOrder();
@@ -131,7 +140,15 @@ class EggDeliveryResolver
             return false;
         }
 
-        $designated = min($order, count($deliveries)) - 1;
+        // Índice 0-based de la entrega designada. Positivo cuenta desde el
+        // principio (N-ésima, acotado a la última); negativo desde el final
+        // (-1 = última). El bucle de fallback (adelante y luego atrás) resuelve
+        // igual en ambos casos: si la designada está cancelada, busca la
+        // siguiente operativa y, si no hay, la anterior.
+        $count = count($deliveries);
+        $designated = $order > 0
+            ? min($order, $count) - 1
+            : max($count + $order, 0);
         $resolved = null;
         for ($j = $designated, $n = count($deliveries); $j < $n; $j++) {
             if ($deliveries[$j]['operative']) {
@@ -183,7 +200,7 @@ class EggDeliveryResolver
             $isDelivery = match ($shareTypeId) {
                 self::SHARE_WEEKLY, self::SHARE_HALF, self::SHARE_ONLY_EGG => true,
                 self::SHARE_BIWEEKLY => $this->biweeklyCohort->cohortForBasket($b) === $share->getDeliveryGroup(),
-                self::SHARE_MONTHLY  => in_array($share->getDayMonthOrder(), $this->monthlyOrder->ordersServedBy($b, $node), true),
+                self::SHARE_MONTHLY  => in_array($share->getDayMonthOrder(), $this->monthlyOrder->ordersServedBy($b, $node, $share->getDeliveryGroup()), true),
                 default              => false,
             };
             if (!$isDelivery) {

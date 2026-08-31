@@ -29,14 +29,18 @@ use Gedmo\Mapping\Annotation as Gedmo;
  * aquí. Si admin/socix lo cancela, la fila se borra; los PartnerEvent quedan
  * como histórico inmutable.
  *
- * NOTA unicidad: el unique incluye `component_id`, pero MySQL trata los NULL
- * como distintos, así que NO impide dos intents de entrega-entera (component
- * null) con el mismo `from`. Esa unicidad la garantiza el código (el applier
- * comprueba findOutgoing/findIncoming antes de crear).
+ * NOTA unicidad: el unique NO puede ir sobre `component_id` directamente porque
+ * MySQL trata los NULL como distintos, así que no impediría dos intents de
+ * entrega-entera (component null) con el mismo `from`/`to` — la carrera de doble
+ * submit que reventaba findOutgoing/findIncoming con NonUniqueResultException. Se
+ * resuelve con la columna GENERADA `component_key` = COALESCE(component_id, 0):
+ * los intents de entrega entera comparten clave 0 y colisionan; los de componente
+ * (verdura=1, huevos=2) siguen distintos. Así el estado ilegal es irrepresentable
+ * a nivel de BBDD, no solo por convención del código.
  *
  * @ORM\Table(name="partner_delivery_shift", uniqueConstraints={
- *     @ORM\UniqueConstraint(name="uniq_partner_from_basket", columns={"partner_id", "from_basket_id", "component_id"}),
- *     @ORM\UniqueConstraint(name="uniq_partner_to_basket", columns={"partner_id", "to_basket_id", "component_id"})
+ *     @ORM\UniqueConstraint(name="uniq_partner_from_basket", columns={"partner_id", "from_basket_id", "component_key"}),
+ *     @ORM\UniqueConstraint(name="uniq_partner_to_basket", columns={"partner_id", "to_basket_id", "component_key"})
  * }, indexes={
  *     @ORM\Index(name="idx_from_basket", columns={"from_basket_id"}),
  *     @ORM\Index(name="idx_to_basket", columns={"to_basket_id"}),
@@ -84,6 +88,17 @@ class PartnerDeliveryShift
      * @ORM\JoinColumn(name="component_id", nullable=true, onDelete="CASCADE")
      */
     private ?BasketComponent $component = null;
+
+    /**
+     * Columna GENERADA por la BBDD (no se escribe desde PHP): COALESCE(component_id, 0).
+     * Existe solo para que los índices únicos muerdan también los intents de entrega
+     * ENTERA (component_id NULL) — ver la NOTA de unicidad en el docblock de la clase. Es
+     * de solo lectura (insertable/updatable=false); Doctrine la hidrata pero nunca la
+     * incluye en INSERT/UPDATE (MySQL rechaza escribir una columna generada).
+     *
+     * @ORM\Column(type="integer", insertable=false, updatable=false, columnDefinition="INT AS (COALESCE(component_id, 0)) VIRTUAL")
+     */
+    private ?int $componentKey = null;
 
     /**
      * Motivo o nota opcional (la administración puede dejar comentario).

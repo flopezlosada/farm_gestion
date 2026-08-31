@@ -2,9 +2,11 @@
 
 namespace App\Tests\Controller;
 
+use App\Entity\CronRun;
 use App\Entity\Setting;
 use App\Service\AppSettings;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\DomCrawler\Crawler;
 
 /**
  * Pantalla de configuración (/gestion/settings): render, guardado de
@@ -21,6 +23,11 @@ class SettingsControllerTest extends AbstractAuthenticatedTest
         $em = static::getContainer()->get(EntityManagerInterface::class);
         foreach ($em->getRepository(Setting::class)->findAll() as $setting) {
             $em->remove($setting);
+        }
+        // El registro de ejecuciones también: los tests de la pantalla siembran
+        // filas a mano y las ejecuciones manuales dejan la suya.
+        foreach ($em->getRepository(CronRun::class)->findAll() as $run) {
+            $em->remove($run);
         }
         $em->flush();
 
@@ -157,6 +164,32 @@ class SettingsControllerTest extends AbstractAuthenticatedTest
     }
 
     /**
+     * El destinatario del resumen a administración (STRING marcado 'general') se pinta en el
+     * form general y se guarda, admitiendo varias direcciones separadas por comas. Así se
+     * configura el email del digest sin tocar el cron de cdmon.
+     */
+    public function testSavePersistsAdminSummaryRecipient(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $crawler = $client->request('GET', '/gestion/settings/');
+
+        $field = sprintf('settings[%s]', AppSettings::EMAIL_ADMIN_DELIVERY_SUMMARY_TO);
+        $this->assertCount(1, $crawler->filter(sprintf('input[name="%s"]', $field)), 'Falta el campo del destinatario del resumen en el form general.');
+
+        $form = $crawler->selectButton('Guardar configuración')->form();
+        $form[$field]->setValue('csa@csavegadejarama.org, otra@csavegadejarama.org');
+        $client->submit($form);
+
+        $this->assertResponseRedirects('/gestion/settings/');
+
+        $settings = static::getContainer()->get(AppSettings::class);
+        $this->assertSame(
+            'csa@csavegadejarama.org, otra@csavegadejarama.org',
+            $settings->getString(AppSettings::EMAIL_ADMIN_DELIVERY_SUMMARY_TO),
+        );
+    }
+
+    /**
      * La sección "Tareas programadas" expone, por cada cron, su formulario de
      * ejecución manual (y el de previsualización en los que la ofrecen).
      */
@@ -192,6 +225,215 @@ class SettingsControllerTest extends AbstractAuthenticatedTest
         $this->assertResponseRedirects('/gestion/settings/');
         $crawler = $client->followRedirect();
         $this->assertStringContainsString('Resultado:', $crawler->text());
+    }
+
+    /**
+     * EL CRITERIO DE ACEPTACIÓN del paso 1: entrando en la pantalla se ve de un
+     * vistazo qué hizo cada tarea la última vez. Tres resultados que antes eran
+     * indistinguibles —todos salían en verde y callados, y eso es lo que dejó
+     * pasar dos semanas de cron caído— tienen que leerse distintos: hizo su
+     * trabajo, corrió y no había nada que hacer, y corrió pero no pudo entregar.
+     */
+    public function testLaPantallaDistingueTrabajoHechoDeNadaQueHacerYDeNoEntregar(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->seedRun(AppSettings::CRON_GENERATE_WEEKLY_DELIVERY, CronRun::STATUS_DONE, '-2 hours', CronRun::TRIGGER_MANUAL);
+        $this->seedRun(AppSettings::CRON_ADMIN_DELIVERY_SUMMARY, CronRun::STATUS_NOTHING_TO_DO, '-3 hours');
+        $this->seedRun(AppSettings::CRON_PURGE_USAGE_HITS, CronRun::STATUS_DISABLED, '-4 hours');
+
+        $crawler = $client->request('GET', '/gestion/settings/');
+
+        $this->assertResponseIsSuccessful();
+        $text = $crawler->text();
+        $this->assertStringContainsString('Hizo su trabajo', $text);
+        $this->assertStringContainsString('Nada que hacer', $text, 'Corrió y no había nada que hacer: es sano, y distinto de estar apagada.');
+        $this->assertStringContainsString('a mano', $text, 'Una ejecución manual no debe hacerse pasar por el reloj.');
+        $this->assertStringContainsString('los lunes a las 06:00', $text, 'La cadencia declarada se pinta junto a la tarea.');
+
+        // Esta tarea tiene su interruptor ENCENDIDO y corrió: lo que la frenó fue
+        // un ajuste de aguas abajo. Decir "Apagada" aquí contradecía al
+        // interruptor en verde de la misma fila.
+        //
+        // Se miran las INSIGNIAS de su bloque, no el texto: en la página hay
+        // otras tareas realmente apagadas, y además el texto de ayuda de esta
+        // misma empieza por "Apagada, el rastro se acumula sin límite".
+        $badges = $this->taskBadges($crawler, AppSettings::CRON_PURGE_USAGE_HITS);
+        $this->assertContains('No entrega', $badges);
+        $this->assertNotContains('Apagada', $badges);
+    }
+
+    /**
+     * Una tarea sin ninguna ejecución registrada se muestra como tal, no como
+     * caída: no hay referencia desde la que medir un retraso, y una alarma el
+     * primer día tras el despliegue enseña a ignorar la pantalla.
+     */
+    public function testLaPantallaMarcaLasTareasSinRegistroComoTales(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->clearRuns();
+        $crawler = $client->request('GET', '/gestion/settings/');
+
+        $this->assertResponseIsSuccessful();
+        $this->assertStringContainsString('Sin registro todavía', $crawler->text());
+    }
+
+    /**
+     * …pero una tarea con su PROPIO interruptor apagado no corre nunca, así que
+     * en ella "sin registro" no es una anomalía: es lo esperado. Marcarla en
+     * ámbar la deja pidiendo atención para siempre, y una pantalla con alarmas
+     * perpetuas se deja de mirar — el mismo mecanismo por el que pasaron dos
+     * semanas de cron caído sin que nadie se enterara.
+     */
+    public function testUnaTareaApagadaNoSeMarcaComoSinRegistroSinoComoApagada(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->clearRuns();
+        // Se apaga a mano una que viene encendida por defecto: así se comprueba
+        // que el estado sale del interruptor y no del default del catálogo.
+        static::getContainer()->get(AppSettings::class)->setBool(AppSettings::CRON_PURGE_USAGE_HITS, false);
+
+        $crawler = $client->request('GET', '/gestion/settings/');
+
+        $this->assertResponseIsSuccessful();
+        // Acotado a las insignias de ESA tarea: en la misma pantalla hay otras
+        // encendidas y sin registro, y ésas sí deben decir "sin registro". Y por
+        // el texto no vale, que su propia ayuda ya contiene la palabra "Apagada".
+        $badges = $this->taskBadges($crawler, AppSettings::CRON_PURGE_USAGE_HITS);
+
+        $this->assertContains('Apagada', $badges);
+        $this->assertNotContains('Sin registro todavía', $badges);
+    }
+
+    /**
+     * Una tarea HABILITADA que se pasa de su plazo máximo de retraso se marca
+     * fuera de plazo. El recordatorio es diario con 36 horas de margen, así que
+     * una última ejecución de hace cinco días es una caída.
+     */
+    public function testLaPantallaMarcaFueraDePlazoLaTareaHabilitadaQueSePasaDelPlazo(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->seedRun(AppSettings::CRON_PICKUP_REMINDER, CronRun::STATUS_DONE, '-5 days');
+        $crawler = $client->request('GET', '/gestion/settings/');
+
+        $this->assertStringContainsString('Fuera de plazo', $crawler->text());
+    }
+
+    /**
+     * Una tarea apagada a propósito NO se marca fuera de plazo, aunque lleve
+     * meses sin correr: si no, la pantalla se llena de falsas alarmas y deja de
+     * servir para lo que se hizo.
+     */
+    public function testUnaTareaApagadaNoSeMarcaFueraDePlazo(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->clearRuns();
+
+        static::getContainer()->get(AppSettings::class)->setBool(AppSettings::CRON_PICKUP_REMINDER, false);
+        $this->seedRun(AppSettings::CRON_PICKUP_REMINDER, CronRun::STATUS_DISABLED, '-90 days');
+
+        $crawler = $client->request('GET', '/gestion/settings/');
+
+        $this->assertStringNotContainsString('Fuera de plazo', $crawler->text());
+    }
+
+    /**
+     * La incoherencia que de otro modo es invisible: el recordatorio depende del
+     * congelado semanal (sólo lee cestas ya congeladas), así que con el congelado
+     * apagado corre en verde sin avisar a nadie. La pantalla lo dice.
+     */
+    public function testLaPantallaAvisaDeUnaDependenciaApagada(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        static::getContainer()->get(AppSettings::class)->setBool(AppSettings::CRON_GENERATE_WEEKLY_DELIVERY, false);
+
+        $crawler = $client->request('GET', '/gestion/settings/');
+
+        $this->assertStringContainsString('Depende de', $crawler->text());
+        $this->assertStringContainsString('Congelar el listado semanal', $crawler->text());
+    }
+
+    /**
+     * El bloque de UNA tarea concreta dentro de la pantalla.
+     *
+     * Hace falta porque las aserciones sobre el texto de la página entera pasan
+     * por casualidad: siete tareas comparten vocabulario, así que buscar
+     * "Apagada" en todo el HTML no dice nada de la tarea que se está probando.
+     * La etiqueta se lee del catálogo y no se copia, para que renombrarla no
+     * rompa el test.
+     *
+     * @param Crawler $crawler Página ya cargada.
+     * @param string  $taskKey Clave de la tarea en el manifiesto.
+     */
+    private function taskBlock(Crawler $crawler, string $taskKey): Crawler
+    {
+        $label = AppSettings::BOOLEANS[$taskKey]['label'];
+        $block = $crawler->filter('.csa-cron')->reduce(
+            static fn (Crawler $node): bool => str_contains($node->text(), $label)
+        );
+
+        $this->assertCount(1, $block, sprintf('No se encontró el bloque de la tarea «%s».', $label));
+
+        return $block;
+    }
+
+    /**
+     * Las INSIGNIAS de estado de una tarea, ya limpias.
+     *
+     * Mirar las insignias y no el texto del bloque no es quisquillosería: el
+     * texto de ayuda de un ajuste habla de sus propios estados («Apagada, el
+     * rastro se acumula sin límite»), así que buscar una palabra en todo el
+     * bloque da verde aunque la insignia diga justo lo contrario. Ya me pasó con
+     * estos dos tests.
+     *
+     * @param Crawler $crawler Página ya cargada.
+     * @param string  $taskKey Clave de la tarea en el manifiesto.
+     * @return list<string> Etiquetas de las insignias de ese bloque.
+     */
+    private function taskBadges(Crawler $crawler, string $taskKey): array
+    {
+        return $this->taskBlock($crawler, $taskKey)
+            ->filter('.csa-badge')
+            ->each(static fn (Crawler $badge): string => trim($badge->text()));
+    }
+
+    /**
+     * Vacía el registro de ejecuciones. Necesario en los tests que comprueban
+     * una AUSENCIA: otras clases de la suite ejecutan tareas y dejan sus filas.
+     */
+    private function clearRuns(): void
+    {
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        foreach ($em->getRepository(CronRun::class)->findAll() as $run) {
+            $em->remove($run);
+        }
+        $em->flush();
+    }
+
+    /**
+     * Siembra una ejecución ya cerrada, para poder comprobar cómo la pinta la
+     * pantalla sin tener que ejecutar la tarea de verdad.
+     *
+     * @param string $taskKey Clave de la tarea en el manifiesto.
+     * @param string $status  Uno de los CronRun::STATUS_*.
+     * @param string $ago     Desplazamiento relativo, p. ej. '-5 days'.
+     * @param string $trigger CronRun::TRIGGER_SCHEDULE o TRIGGER_MANUAL.
+     */
+    private function seedRun(string $taskKey, string $status, string $ago, string $trigger = CronRun::TRIGGER_SCHEDULE): void
+    {
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $startedAt = (new \DateTimeImmutable())->modify($ago);
+
+        $run = (new CronRun())
+            ->setTaskKey($taskKey)
+            ->setCommand(AppSettings::CRONS[$taskKey]['command'])
+            ->setStatus($status)
+            ->setTriggerSource($trigger)
+            ->setStartedAt($startedAt)
+            ->setFinishedAt($startedAt->modify('+3 seconds'))
+            ->setExitCode(0);
+
+        $em->persist($run);
+        $em->flush();
     }
 
     /**

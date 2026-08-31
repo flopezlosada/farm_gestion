@@ -465,7 +465,7 @@
                                                aria-label="Seleccionar {{ partner.name }} {{ partner.surname }}">
                                     </td>
                                 {% endif %}
-                                <td>
+                                <td class="prl-cell-person">
                                     <div class="prl-person">
                                         <span class="prl-person__avatar prl-person__avatar--{{ avatar_tone }}" aria-hidden="true">{{ initials }}</span>
                                         <div class="prl-person__body">
@@ -482,11 +482,11 @@
                                     </div>
                                 </td>
                                 {% if status_filter is null %}
-                                    <td class="tight">
+                                    <td class="tight" data-label="Estado">
                                         <span class="prl-chip prl-chip--{{ sc.cls }}"><span class="dot"></span>{{ sc.label }}</span>
                                     </td>
                                 {% endif %}
-                                <td class="tight">
+                                <td class="tight" data-label="Cesta">
                                     {% if ab %}
                                         {% set base_id = base_mod[bs_id] ?? bs_id %}
                                         <span class="prl-chip prl-chip--mod-{{ base_id }}">
@@ -500,7 +500,7 @@
                                         <span class="prl-cell-muted">sin cesta</span>
                                     {% endif %}
                                 </td>
-                                <td class="tight">
+                                <td class="tight" data-label="Huevos">
                                     {# Huevos de la cesta activa (mismas clases que Recogida
                                      # para no duplicar CSS: línea fuerte + sublínea gris). #}
                                     {% if ab and ab.eggAmount %}
@@ -510,7 +510,7 @@
                                         <span class="prl-cell-muted">—</span>
                                     {% endif %}
                                 </td>
-                                <td>
+                                <td data-label="Recogida">
                                     {% if partner.weeklyBasketGroup %}
                                         <div class="prl-pickup__name">{{ partner.weeklyBasketGroup.name }}</div>
                                         {% if partner.weeklyBasketGroup.node %}
@@ -520,8 +520,8 @@
                                         <span class="prl-cell-muted">—</span>
                                     {% endif %}
                                 </td>
-                                <td class="tight">{{ partner.celular ?: '—' }}</td>
-                                <td class="tight">
+                                <td class="tight" data-label="Teléfono">{{ partner.celular ?: '—' }}</td>
+                                <td class="tight" data-label="Alta">
                                     {% if partner.inscriptionDate %}{{ partner.inscriptionDate|date('d/m/Y') }}{% else %}—{% endif %}
                                 </td>
                                 <td class="actions">

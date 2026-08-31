@@ -30,7 +30,7 @@ class VerifyDeliveryInvariantsCommandTest extends KernelTestCase
 
         $this->assertContains($exitCode, [0, 1], 'El comando debe terminar en SUCCESS o FAILURE, no crashear.');
         $display = $tester->getDisplay();
-        foreach (['L1', 'L5', 'L5F', 'L6', 'L8', 'L9', 'L10', 'L11', 'L12', 'L15', 'L16', 'L17', 'L18', 'L19', 'L20', 'L21', 'L22', 'L23', 'L25', 'L26'] as $code) {
+        foreach (['L1', 'L5', 'L5F', 'L6', 'L8', 'L9', 'L10', 'L11', 'L12', 'L15', 'L16', 'L17', 'L18', 'L19', 'L20', 'L21', 'L22', 'L23', 'L25', 'L26', 'L30'] as $code) {
             $this->assertStringContainsString($code, $display, sprintf('La ley %s debe aparecer en el informe.', $code));
         }
     }

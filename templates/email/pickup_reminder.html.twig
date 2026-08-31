@@ -8,12 +8,12 @@
 
     <h2 style="color: #5a8f3d; margin-top: 0;">Hola {{ partner.name }},</h2>
 
-    <p>Te recordamos que <strong>este viernes {{ pickup_date|format_date('full', locale='es') }}</strong>
-       te toca recoger tu cesta {{ modality }} en la CSA Vega de Jarama.</p>
+    <p>Te recordamos que <strong>el {{ pickup_date|format_date('full', locale='es') }}</strong>
+       te toca recoger tu cesta {{ modality }}{% if node_name %} en <strong>{{ node_name }}</strong>{% else %} en la CSA Vega de Jarama{% endif %}.</p>
 
     {% if was_shifted %}
         <p style="background: #fdf3e0; border-left: 3px solid #d99820; padding: 10px 14px;">
-            <strong>Atención:</strong> el reparto se ha desplazado a esta fecha (no es el viernes habitual).
+            <strong>Atención:</strong> el reparto se ha desplazado a esta fecha (no es el día habitual).
         </p>
     {% endif %}
 

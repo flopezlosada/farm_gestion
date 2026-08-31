@@ -176,6 +176,14 @@
 
 /* table */
 .dlv table { width: 100%; border-collapse: collapse; }
+/* Anchos de columna. Estaban en `style="width: …"` dentro de cada <td>, donde
+   ninguna media query podía tocarlos: en móvil sumaban 354px de 356 y la
+   columna del nombre se quedaba sin sitio (los nombres se partían letra a
+   letra). Aquí son clases, así que el bloque móvil de abajo puede ajustarlos. */
+.dlv-cell-mod    { width: 130px; }
+.dlv-cell-cestas { width: 70px; }
+.dlv-cell-eggs   { width: 110px; }
+.dlv-actions    { width: 44px; }
 .dlv tbody td { padding: 11px 14px; font-size: 12.5px; color: var(--dlv-ink); border-bottom: 1px solid var(--dlv-line); vertical-align: middle; }
 .dlv tbody tr:last-child td { border-bottom: 0; }
 .dlv tbody tr:hover { background: var(--dlv-sage-l); cursor: pointer; }
@@ -245,6 +253,31 @@
     .dlv-stats { grid-template-columns: repeat(2, 1fr); }
     .dlv-stat { padding: 12px 14px; }
     .dlv-stat .v { font-size: 24px; }
+
+    /* La tira de NODOS tenía el mismo problema que la de semanas y se había
+       quedado sin arreglar: cuatro pestañas con 22px de padding no caben y el
+       último nodo se salía de la pantalla. Mismo remedio: deslizable. */
+    .dlv-nodes { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .dlv-nodes a { padding: 11px 14px 9px; white-space: nowrap; flex-shrink: 0; }
+    .dlv-nodes a .ntitle { font-size: 15px; }
+
+    /* Cabecera de grupo: el bloque de cifras (socios/cestas/huevos) no cabe al
+       lado del nombre —la columna `auto` no encoge y `.dlv-wbg` lo recortaba—,
+       así que baja a una segunda línea bajo el nombre. */
+    .dlv-wbg__head { grid-template-columns: 16px 1fr; gap: 6px 12px; padding: 12px 14px; }
+    .dlv-wbg__meta { grid-column: 2; gap: 16px; flex-wrap: wrap; }
+    .dlv-wbg__meta .m .n { font-size: 15px; }
+    .dlv-wbg__name small { margin-left: 0; display: block; }
+
+    /* Filas de socix: la modalidad se cae (ya la dice la cabecera del subgrupo,
+       "SEMANAL", justo encima) y el resto se aprieta para dejar respirar al nombre. */
+    .dlv-mod { padding: 7px 14px 5px; }
+    .dlv tbody td { padding: 10px 8px; }
+    .dlv tbody td:first-child { padding-left: 14px; }
+    .dlv-cell-mod { display: none; }
+    .dlv-cell-cestas { width: 46px; }
+    .dlv-cell-eggs { width: 86px; }
+    .dlv .partner { font-size: 13.5px; }
 }
 </style>
 {% endblock %}
@@ -281,7 +314,7 @@
             <h2 class="dlv-head__title">Nodo {{ node.name }} · {{ _ref|date('d/m/Y') }}</h2>
             <div class="dlv-head__sub">
                 semana {{ _ref|date('W') }} ·
-                cadencia <b>{{ node.cadence == 'weekly' ? 'semanal' : 'quincenal' }}</b> ·
+                cadencia <b>{{ node.cadenceLabel|lower }}</b> ·
                 día de reparto <b>{{ ['', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'][node.deliveryWeekday] }}</b>
             </div>
         </div>
@@ -386,8 +419,8 @@
     {% if sections is empty and helper_rows is empty %}
         <div class="empty">
             Este nodo no tiene reparto el {{ basket.date|date('d/m/Y') }}.
-            {% if node.cadence == 'biweekly' %}
-                Cadencia quincenal · próximo reparto pendiente de generar.
+            {% if node.cadence != 'weekly' %}
+                Cadencia {{ node.cadenceLabel|lower }} · próximo reparto pendiente de generar.
             {% endif %}
         </div>
     {% else %}
@@ -471,18 +504,18 @@
                                 data-cestas="{{ row.cestas }}"
                                 data-dozens="{{ row.dozens }}">
                                 <td class="partner">{{ row.name }}</td>
-                                <td style="width: 130px;">
+                                <td class="dlv-cell-mod">
                                     <span class="mod mod--extra"><span class="dot"></span>Albergue</span>
                                 </td>
-                                <td class="num-c" style="width: 70px;">{{ row.cestas == row.cestas|round ? row.cestas|number_format(0) : row.cestas|number_format(1, ',', '.') }}</td>
-                                <td style="width: 110px;">
+                                <td class="num-c dlv-cell-cestas">{{ row.cestas == row.cestas|round ? row.cestas|number_format(0) : row.cestas|number_format(1, ',', '.') }}</td>
+                                <td class="dlv-cell-eggs">
                                     {% if row.dozens > 0 %}
                                         <span class="num-c">{{ row.dozens == row.dozens|round ? row.dozens|number_format(0) : row.dozens|number_format(1, ',', '.') }} doc.</span>
                                     {% else %}
                                         <span class="no">—</span>
                                     {% endif %}
                                 </td>
-                                <td class="dlv-actions" style="width: 44px;"></td>
+                                <td class="dlv-actions"></td>
                             </tr>
                         {% endfor %}
                         </tbody>
@@ -572,6 +605,17 @@
     'use strict';
     const root = document.querySelector('.dlv');
     if (!root) { return; }
+
+    // Móvil: la tira de nodos es deslizable (no caben cuatro pestañas en
+    // 390px) y el nodo activo puede quedar fuera de la vista, dando la falsa
+    // impresión de que se está mirando otro nodo. Se trae al centro al cargar.
+    const activeNode = root.querySelector('.dlv-nodes a.active');
+    if (activeNode) {
+        const strip = activeNode.parentElement;
+        if (strip.scrollWidth > strip.clientWidth) {
+            strip.scrollLeft = activeNode.offsetLeft - (strip.clientWidth - activeNode.offsetWidth) / 2;
+        }
+    }
 
     // Navegación de la tira por AJAX: las flechas repintan SOLO .dlv-weeks,
     // sin recargar la página (el listado no cambia). Delegación en root para

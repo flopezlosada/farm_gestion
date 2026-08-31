@@ -535,6 +535,40 @@ class PartnerControllerTest extends AbstractAuthenticatedTest
             );
         }
 
+        // El `value` del <option> tiene que ser el valor de negocio y no el índice
+        // posicional que Symfony genera en cuanto una opción vale null: el JS del
+        // formulario recorta y decide leyendo esos values. Con índices, al pasar
+        // una cesta a mensual el desplegable perdía «3ª» y «Última», y el turno
+        // «Sin turno» (índice "0") se leía como un turno de verdad (2026-08-27).
+        $this->assertSame(
+            ['', '1', '2', '-1'],
+            $form['partner_basket_share[dayMonthOrder]']->availableOptionValues(),
+            'La entrega del mes debe ofrecer con sus valores reales las que el punto quincenal abre siempre.'
+        );
+        $this->assertSame(
+            ['', '1', '2', '3', '-1'],
+            $form['partner_basket_share[eggDayMonthOrder]']->availableOptionValues(),
+            'La cesta del mes en que viajan los huevos, igual: valores de negocio.'
+        );
+        $this->assertSame(
+            [''],
+            $form['partner_basket_share[deliveryGroup]']->availableOptionValues(),
+            'En un punto quincenal el turno no se elige, y su hueco vale cadena vacía.'
+        );
+
+        // Ninguno de los dos puede salir obligatorio del servidor: el JS los
+        // oculta según la modalidad, y un obligatorio vacío y oculto bloquea el
+        // envío del formulario entero sin que el navegador pueda enseñar su
+        // aviso en ninguna parte — el botón Guardar deja de responder y no se ve
+        // por qué. Cuando la cesta es mensual, es el JS quien marca como
+        // obligatoria la entrega del mes, que entonces sí está a la vista.
+        foreach (['dayMonthOrder', 'eggDayMonthOrder'] as $field) {
+            $this->assertNull(
+                $crawler->filter('#partner_basket_share_' . $field)->attr('required'),
+                sprintf('El campo %s no puede venir marcado como obligatorio desde el servidor.', $field)
+            );
+        }
+
         $em->remove($em->find(Partner::class, $partnerId));
         $em->remove($em->find(WeeklyBasketGroup::class, $groupId));
         $em->remove($em->find(Node::class, $nodeId));
@@ -664,6 +698,111 @@ class PartnerControllerTest extends AbstractAuthenticatedTest
         self::assertStringContainsString('PENDIENTE FILTRO TEST', (string) $client->getResponse()->getContent());
 
         $em->remove($em->getRepository(Partner::class)->find($id));
+        $em->flush();
+    }
+
+    /**
+     * El endpoint del desplegable dependiente provincia → municipio del alta y
+     * la edición de socix responde 200 con los municipios de la provincia.
+     *
+     * Regresión doble (2026-08-03): la ruta literal `/cities` se declara DESPUÉS
+     * de `/{id}` (partner_show) en el mismo controller, así que sin requirement
+     * numérico en `{id}` el GET lo capturaba partner_show con id="cities" y
+     * devolvía 404 — el select de municipios quedaba vacío en silencio, sin
+     * error visible ni traza en el log de la app. Este test lo caza en CI.
+     */
+    public function testCitiesEndpointReturnsCitiesOfState(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        $state = $em->getRepository(\App\Entity\State::class)->findOneBy([]);
+        $this->assertNotNull($state, 'Fixtures sin ninguna provincia.');
+        $city = $em->getRepository(\App\Entity\City::class)->findOneBy(['state' => $state]);
+        $this->assertNotNull($city, 'Fixtures sin ningún municipio en esa provincia.');
+
+        $client->request('GET', '/gestion/partner/cities?state_id=' . $state->getId());
+
+        $this->assertSame(200, $client->getResponse()->getStatusCode(), 'El endpoint de municipios debe responder 200, no un 404 de partner_show.');
+        $this->assertStringContainsString($city->getName(), (string) $client->getResponse()->getContent());
+    }
+
+    /**
+     * Mover a un socio a un grupo cuyo punto no puede repartir sus cestas se
+     * rechaza: no se guarda nada y se explica por qué. Es la tercera puerta por
+     * la que un socio acababa en un punto incompatible (las otras dos son el
+     * alta de cesta y enganchar un grupo entero al punto).
+     */
+    public function testEditIsBlockedWhenNewGroupCannotServeTheShares(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        // Punto quincenal con su grupo (destino) y un socio semanal en un grupo
+        // sin punto (origen), con los campos que el form de ficha exige.
+        $node = (new Node())
+            ->setName('TEST Nodo quincenal mover ' . uniqid())
+            ->setDeliveryWeekday(5)
+            ->setCadence(Node::CADENCE_BIWEEKLY)
+            ->setAnchorDate(new \DateTimeImmutable('2026-09-04'));
+        $target = (new WeeklyBasketGroup())->setName('TEST Grupo destino ' . uniqid())->setColor('#abcabc')->setNode($node);
+        $origin = (new WeeklyBasketGroup())->setName('TEST Grupo origen ' . uniqid())->setColor('#cccccc');
+
+        $state = $em->getRepository(\App\Entity\State::class)->findOneBy([]);
+        $partner = (new Partner())
+            ->setName('TEST')
+            ->setSurname('Semanal Mover ' . uniqid())
+            ->setStatus(Partner::STATUS_ACTIVO)
+            ->setState($state)
+            ->setCity($em->getRepository(\App\Entity\City::class)->findOneBy(['state' => $state]))
+            ->setSharePayment($em->getRepository(\App\Entity\SharePayment::class)->findOneBy([]));
+        $partner->setWeeklyBasketGroup($origin);
+        $partner->setInscriptionDate(new \DateTime('2020-01-01'));
+
+        $share = new PartnerBasketShare();
+        $share->setPartner($partner);
+        $share->setBasketShare($em->getRepository(BasketShare::class)->find(BasketShare::IDS_WEEKLY[0]));
+        $share->setIsActive(true);
+        $share->setAmount(1);
+        $share->setMonthPrice('0.00');
+        $share->setEggMonthPrice('0.00');
+        $share->setStartDate(new \DateTime('2099-01-01'));
+
+        foreach ([$node, $target, $origin, $partner, $share] as $entity) {
+            $em->persist($entity);
+        }
+        $em->flush();
+        [$partnerId, $originId, $targetId] = [$partner->getId(), $origin->getId(), $target->getId()];
+        [$nodeId, $shareId] = [$node->getId(), $share->getId()];
+
+        $crawler = $client->request('GET', sprintf('/gestion/partner/%d/edit', $partnerId));
+        $this->assertSame(200, $client->getResponse()->getStatusCode());
+        $form = $crawler->filter('form[name="partner"]')->form();
+        $form['partner[weekly_basket_group]'] = (string) $targetId;
+        $client->submit($form);
+
+        $this->assertSame(
+            200,
+            $client->getResponse()->getStatusCode(),
+            'Mover al socio a un punto que no puede repartir su cesta no debe guardar ni redirigir.'
+        );
+
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $em->clear();
+        $this->assertSame(
+            $originId,
+            $em->getRepository(Partner::class)->find($partnerId)->getWeeklyBasketGroup()->getId(),
+            'El socio debe seguir en su grupo de origen.'
+        );
+
+        // Limpieza.
+        $em->remove($em->getRepository(PartnerBasketShare::class)->find($shareId));
+        $em->flush();
+        $em->remove($em->getRepository(Partner::class)->find($partnerId));
+        $em->flush();
+        $em->remove($em->getRepository(WeeklyBasketGroup::class)->find($originId));
+        $em->remove($em->getRepository(WeeklyBasketGroup::class)->find($targetId));
+        $em->remove($em->getRepository(Node::class)->find($nodeId));
         $em->flush();
     }
 

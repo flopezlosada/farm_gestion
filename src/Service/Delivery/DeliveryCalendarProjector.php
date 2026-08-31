@@ -59,6 +59,10 @@ final class DeliveryCalendarProjector implements PartnerMonthProjection
      *    posibles: un componente presente se puede quitar, uno ausente-pero-
      *    disponible se puede añadir. Un componente que el patrón no da esa
      *    semana (p. ej. huevos en una semana sin huevo) no aparece.
+     *  - 'extra': presente y true si esa semana lleva alguna cesta extra
+     *    ({@see PartnerBasketExtra}). Las cantidades ya van sumadas en 'items' y no se
+     *    distinguen de las de patrón, así que es la única forma que tiene la pantalla de
+     *    saber que hay un extra que se puede deshacer. Ausente = sin extra.
      *
      * @param Partner $partner Socio cuyo calendario se proyecta.
      * @param int     $year    Año (p. ej. 2026).
@@ -267,6 +271,47 @@ final class DeliveryCalendarProjector implements PartnerMonthProjection
     }
 
     /**
+     * La próxima entrega del socix: la primera de hoy en adelante que de verdad
+     * va a recoger.
+     *
+     * Se saltan las semanas que ha dejado sin recoger ('skipped') y aquellas en
+     * las que su punto no abre ('closed'): anunciar "tu próxima cesta" con una
+     * fecha en la que nadie le va a dar nada es peor que no decir nada.
+     *
+     * Recorre mes a mes en vez de consultar un rango porque la proyección se
+     * calcula por mes: el patrón de cada socix (quincenal, mensual, turnos) sólo
+     * se resuelve dentro de {@see projectMonth()}. Con seis meses de margen cubre
+     * hasta el caso más espaciado; quien no tenga nada en medio año no tiene
+     * cesta activa y devuelve null.
+     *
+     * @param Partner                 $partner     socix (o el principal de su familia: la cesta cuelga de él)
+     * @param \DateTimeInterface|null $from        desde cuándo mirar; por defecto, hoy
+     * @param int                     $monthsAhead cuántos meses mirar hacia delante
+     *
+     * @return array{date: \DateTimeInterface, basket: Basket, ...}|null el slot, o null si no hay ninguna
+     */
+    public function nextDelivery(Partner $partner, ?\DateTimeInterface $from = null, int $monthsAhead = 6): ?array
+    {
+        $today = null !== $from
+            ? \DateTimeImmutable::createFromInterface($from)
+            : new \DateTimeImmutable('today');
+
+        $base = $today->modify('first day of this month');
+
+        for ($i = 0; $i < $monthsAhead; ++$i) {
+            $cursor = $base->modify(sprintf('+%d months', $i));
+
+            foreach ($this->projectMonth($partner, (int) $cursor->format('Y'), (int) $cursor->format('n')) as $slot) {
+                if ($slot['date'] >= $today && !$slot['skipped'] && !($slot['closed'] ?? false)) {
+                    return $slot;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Refleja en los slots los traslados puntuales de NODO ({@see PartnerNodeOverride}): la
      * semana se recoge en otro nodo. Recalcula la fecha física con el nodo destino (para que
      * la rejilla mueva el día — clave en semanas DIBUJADAS, donde la proyección usó el nodo de
@@ -305,6 +350,12 @@ final class DeliveryCalendarProjector implements PartnerMonthProjection
             foreach ($idxsByBasket[$basket->getId()] ?? [] as $idx) {
                 $slots[$idx]['date'] = $date;
                 $slots[$idx]['pickup_place'] = $destNode->getName();
+                // El nodo y no sólo su nombre: quien consume el slot puede
+                // necesitar consultar algo de ESE nodo (el montaje del reparto
+                // de la semana, sin ir más lejos), y resolverlo por nombre
+                // obligaría a una búsqueda de texto para recuperar lo que aquí
+                // ya se tiene en la mano.
+                $slots[$idx]['pickup_node'] = $destNode;
                 $slots[$idx]['relocated'] = true;
             }
         }
@@ -330,8 +381,17 @@ final class DeliveryCalendarProjector implements PartnerMonthProjection
         $wbRepo = $this->em->getRepository(WeeklyBasket::class);
         $node = $partner->getWeeklyBasketGroup()?->getNode();
 
+        // El índice IGNORA los slots de PAPELERA (skipped): una cesta aparcada no es la
+        // entrega de ese día, así que un extra no se le puede sumar encima — hacerlo la
+        // resucitaba como entrega normal y la papelera perdía de vista la cesta aparcada
+        // (no había forma de recuperarla). Si el día solo tiene su slot de papelera, el
+        // extra crea su propio slot de rejilla más abajo (idx === null): el día muestra la
+        // cesta extra Y conserva su tarjeta aparcada, que son dos hechos distintos.
         $idxByBasket = [];
         foreach ($slots as $i => $slot) {
+            if ($slot['skipped'] ?? false) {
+                continue;
+            }
             $idxByBasket[$slot['basket']->getId()] = $i;
         }
 
@@ -341,6 +401,24 @@ final class DeliveryCalendarProjector implements PartnerMonthProjection
                 continue;
             }
             $idx = $idxByBasket[$basket->getId()] ?? null;
+
+            // Marca de "este día lleva cesta extra", para que la pantalla pueda ofrecer
+            // quitarla sin salir del calendario. Se pone ANTES del corte de materializadas
+            // (que sale por el continue de abajo): en piedra el extra tampoco se distingue
+            // de la cesta de patrón mirando las cantidades, y también se puede deshacer.
+            if ($idx !== null) {
+                $slots[$idx]['extra'] = true;
+            }
+
+            // Si la entrega de esa semana ya está MATERIALIZADA, su WeeklyBasket (piedra) YA
+            // lleva el extra cascadeado (ExtraBasketEditor::addToDelivery y el generador al
+            // congelar lo suman a la piedra). Re-sumarlo aquí lo DUPLICABA en el calendario y el
+            // panel (bug Antía: ½ docena de huevos extra se mostraba como 1). El extra solo se
+            // DIBUJA sobre slots proyectados (dry, sin piedra) o cuando no había entrada esa
+            // semana (idx null → se crea un slot dry más abajo).
+            if ($idx !== null && ($slots[$idx]['source'] ?? null) === 'materialized') {
+                continue;
+            }
 
             if ($idx === null) {
                 // Extra en una semana sin entrada (su patrón no le da cesta): crear el slot,
@@ -364,6 +442,7 @@ final class DeliveryCalendarProjector implements PartnerMonthProjection
                     'skipped' => false,
                     'listed' => $wbRepo->findOneBy(['basket' => $basket->getId()]) !== null,
                     'available' => [],
+                    'extra' => true,
                 ];
                 $idx = array_key_last($slots);
                 $idxByBasket[$basket->getId()] = $idx;
@@ -375,7 +454,6 @@ final class DeliveryCalendarProjector implements PartnerMonthProjection
                 if ($component === null || $delta <= 0) {
                     continue;
                 }
-                $slots[$idx]['skipped'] = false;
 
                 $merged = false;
                 foreach ($slots[$idx]['items'] as &$line) {

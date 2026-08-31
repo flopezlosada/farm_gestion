@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Tu cesta de esta semana · CSA Vega de Jarama</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #333; max-width: 720px; margin: 0 auto; padding: 24px;">
+
+    <h2 style="color: #5a8f3d; margin-top: 0;">Hola{% if partner.name %} {{ partner.name }}{% endif %},</h2>
+
+    {% if picks %}
+        {# Patrón explícito y no format_date('full'): éste mete una coma
+           ("miércoles, 26 de agosto de 2026") que dentro de la frase queda como
+           un tropiezo. Mismo patrón que el recordatorio de recogida. #}
+        <p>
+            Esta semana <strong>sí recoges cesta</strong> el
+            <strong>{{ pickup_date|format_datetime(pattern="EEEE d 'de' MMMM", locale='es') }}</strong>{% if node_name %}, en {{ node_name }}{% endif %}.
+        </p>
+
+        {% if was_shifted %}
+            <p style="background: #fff4d6; border-left: 4px solid #e0a800; padding: 10px 14px;">
+                <strong>Ojo, no es el día habitual.</strong> Este reparto se ha movido de día,
+                así que apunta la fecha de arriba.
+            </p>
+        {% endif %}
+    {% else %}
+        <p>
+            Esta semana <strong>no recoges cesta</strong>. El cambio que pediste quedó
+            registrado, así que no tienes que hacer nada más.
+        </p>
+    {% endif %}
+
+    <p>
+        El plazo para pedir cambios en este reparto ya se ha cerrado. Si esto no es lo
+        que esperabas, escribe a administración: todavía se puede arreglar a mano.
+    </p>
+
+    <p style="color: #777; font-size: 13px; margin-top: 28px;">
+        Este correo lo manda sola la web de la CSA Vega de Jarama.
+    </p>
+
+</body>
+</html>

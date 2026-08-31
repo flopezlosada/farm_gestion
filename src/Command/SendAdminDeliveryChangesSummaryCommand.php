@@ -28,9 +28,17 @@ use Symfony\Component\Mailer\MailerInterface;
  * recibe correo vacío).
  */
 #[AsCommand(name: 'app:send-admin-delivery-changes-summary', description: 'Resumen periódico al admin con los cambios autoservicio de los socixs.')]
-class SendAdminDeliveryChangesSummaryCommand extends Command
+class SendAdminDeliveryChangesSummaryCommand extends AbstractCronCommand
 {
     private const DEFAULT_DAYS = 7;
+
+    /**
+     * Clase de efecto con la que se apunta el envío: uno por día. Sin esto, dos
+     * pasadas del reloj el mismo día mandarían el mismo resumen dos veces, ya
+     * que la ventana de eventos es "los últimos N días" y no se consume al
+     * enviarla.
+     */
+    private const EFFECT_KIND = 'admin_delivery_summary';
 
     public function __construct(
         private readonly PartnerEventRepository $eventRepository,
@@ -44,37 +52,28 @@ class SendAdminDeliveryChangesSummaryCommand extends Command
     protected function configure(): void
     {
         $this
-            ->addOption('to', null, InputOption::VALUE_REQUIRED, 'Dirección de email del admin (obligatorio si no es dry-run)')
+            ->addOption('to', null, InputOption::VALUE_REQUIRED, 'Email(s) del admin, separados por comas. Si se omite, se usa el ajuste de /gestion/settings (Destinatario del resumen a administración)')
             ->addOption('days', null, InputOption::VALUE_REQUIRED, 'Cuántos días hacia atrás incluir', self::DEFAULT_DAYS)
             ->addOption('since', null, InputOption::VALUE_REQUIRED, 'Fecha desde la que incluir (YYYY-MM-DD). Sobrescribe --days')
             ->addOption('force', null, InputOption::VALUE_NONE, 'Ignora el gate de la tarea programada (ejecución manual); no afecta a los toggles de email')
+            ->addOption('resend', null, InputOption::VALUE_NONE, 'Repite el envío aunque ya conste emitido hoy (para un correo que no llegó)')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Lista los eventos que enviaría sin enviar nada');
     }
 
-    protected function execute(InputInterface $input, OutputInterface $output): int
+    protected function doExecute(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
 
         $dryRun = (bool) $input->getOption('dry-run');
-        $to = $input->getOption('to');
 
-        // Gate de la tarea programada: apagada en /gestion/settings, la tarea ni
-        // siquiera reúne los eventos (verde para no disparar alertas del cron).
-        // El dry-run y --force (ejecución manual explícita) la saltan.
-        if (!$dryRun && !$input->getOption('force') && !$this->settings->getBool(AppSettings::CRON_ADMIN_DELIVERY_SUMMARY)) {
-            $io->warning('La tarea programada del resumen a administración está desactivada en /gestion/settings. No se ejecuta.');
-            return Command::SUCCESS;
-        }
+        // Destinatario(s): --to de la línea de comandos si se pasa; si no, el ajuste editable en
+        // /gestion/settings. Así el cron de cdmon corre sin --to (no hay que tocar el crontab) y el
+        // email se configura desde la app. Admite varias direcciones separadas por comas.
+        $to = $input->getOption('to') ?: $this->settings->getString(AppSettings::EMAIL_ADMIN_DELIVERY_SUMMARY_TO);
+        $recipients = array_values(array_filter(array_map('trim', explode(',', (string) $to))));
 
-        // Toggle de configuración: con el envío apagado el cron no manda nada
-        // (verde para no disparar alertas). El dry-run sigue funcionando.
-        if (!$dryRun && !$this->settings->getBool(AppSettings::EMAIL_ADMIN_DELIVERY_SUMMARY)) {
-            $io->warning('El resumen a administración está desactivado en /gestion/settings. No se envía nada.');
-            return Command::SUCCESS;
-        }
-
-        if (!$dryRun && !$to) {
-            $io->error('Falta --to=email del admin (o usa --dry-run).');
+        if (!$dryRun && $recipients === []) {
+            $io->error('Falta el destinatario: pasa --to=email o configúralo en /gestion/settings (Destinatario del resumen a administración).');
             return Command::FAILURE;
         }
 
@@ -86,7 +85,7 @@ class SendAdminDeliveryChangesSummaryCommand extends Command
 
         if (empty($events)) {
             $io->note('Sin cambios en el período. No se envía nada.');
-            return Command::SUCCESS;
+            return $this->nothingToDo(sprintf('Sin cambios desde %s', $since->format('Y-m-d H:i')));
         }
 
         $rows = array_map(
@@ -106,7 +105,7 @@ class SendAdminDeliveryChangesSummaryCommand extends Command
         }
 
         $message = (new TemplatedEmail())
-            ->to($to)
+            ->to(...$recipients)
             ->subject(sprintf('CSA Vega · Cambios de socixs desde %s', $since->format('d/m/Y')))
             ->htmlTemplate('email/admin_delivery_changes_summary.html.twig')
             ->textTemplate('email/admin_delivery_changes_summary.txt.twig')
@@ -115,10 +114,21 @@ class SendAdminDeliveryChangesSummaryCommand extends Command
                 'rows' => array_map(fn (PartnerEvent $e) => $this->formatter->renderableRow($e), $events),
             ]);
 
-        $this->mailer->send($message);
+        $emitted = $this->emitOnce(
+            self::EFFECT_KIND,
+            fn () => $this->mailer->send($message),
+            $input,
+            target: implode(', ', $recipients),
+        );
+
+        if (!$emitted) {
+            $io->note('El resumen de hoy ya se había enviado. No se repite.');
+            return $this->nothingToDo('El resumen de hoy ya se había enviado');
+        }
+
         $io->success(sprintf('Enviado a %s · %d evento(s).', $to, count($events)));
 
-        return Command::SUCCESS;
+        return $this->didWork(sprintf('%d cambios enviados a %s', count($events), implode(', ', $recipients)));
     }
 
     private function resolveSince(InputInterface $input): \DateTimeImmutable

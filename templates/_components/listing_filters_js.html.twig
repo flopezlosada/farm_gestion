@@ -1,0 +1,63 @@
+{#
+ # JS de la barra de filtros de un listado: popovers, auto-envío al cambiar un
+ # filtro y búsqueda con retardo.
+ #
+ # Extraído de Partner/index para no copiarlo en cada listado nuevo. Es el mismo
+ # comportamiento y las mismas clases (.prl-pop, #prl-filter-form), así que los
+ # estilos salen de `partner/_listing_styles.html.twig` sin tocar nada.
+ #
+ # Lo que NO trae, a propósito: la barra de acciones masivas del listado de
+ # socixs. Eso es suyo y no de todos los listados.
+ #}
+<script>
+    (function () {
+        // ---------- popovers de filtro ----------
+        document.querySelectorAll('[data-pop-trigger]').forEach(function (btn) {
+            btn.addEventListener('click', function (ev) {
+                ev.stopPropagation();
+                var pop = document.getElementById(btn.getAttribute('data-pop-trigger'));
+                if (!pop) { return; }
+                var isOpen = !pop.hidden;
+                document.querySelectorAll('.prl-pop').forEach(function (p) { p.hidden = true; });
+                pop.hidden = isOpen;
+            });
+        });
+
+        document.addEventListener('click', function (ev) {
+            document.querySelectorAll('.prl-pop').forEach(function (pop) {
+                if (pop.hidden || pop.contains(ev.target)) { return; }
+                var trigger = document.querySelector('[data-pop-trigger="' + pop.id + '"]');
+                if (trigger && trigger.contains(ev.target)) { return; }
+                pop.hidden = true;
+            });
+        });
+
+        var form = document.getElementById('prl-filter-form');
+        if (!form) { return; }
+
+        // ---------- auto-envío al cambiar un filtro ----------
+        form.querySelectorAll('input[type="checkbox"], input[type="radio"], select').forEach(function (el) {
+            el.addEventListener('change', function () { form.submit(); });
+        });
+
+        // ---------- búsqueda con retardo ----------
+        // Server-side y no filtrando en cliente: busca en toda la base y no sólo
+        // en la página visible, que con paginación es la diferencia entre
+        // encontrar a alguien y no encontrarlo.
+        var search = form.querySelector('input[name="q"]');
+        if (!search) { return; }
+
+        var debounce = null;
+        search.addEventListener('input', function () {
+            clearTimeout(debounce);
+            debounce = setTimeout(function () { form.submit(); }, 350);
+        });
+
+        // El submit recarga y el foco se pierde: si veníamos de una búsqueda, se
+        // devuelve al campo con el cursor al final para poder seguir escribiendo.
+        if (search.value) {
+            search.focus();
+            search.setSelectionRange(search.value.length, search.value.length);
+        }
+    }());
+</script>

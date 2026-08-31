@@ -5,7 +5,6 @@ namespace App\Command;
 use App\Entity\Basket;
 use App\Entity\WeeklyBasket;
 use App\Repository\DeliveryExceptionRepository;
-use App\Service\AppSettings;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -41,7 +40,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  * de abrir una pantalla.
  */
 #[AsCommand(name: 'app:generate-weekly-delivery', description: 'Congela el listado de la semana que entra en operación (cron lunes).')]
-class GenerateWeeklyDeliveryCommand extends Command
+class GenerateWeeklyDeliveryCommand extends AbstractCronCommand
 {
     /** Por defecto solo la semana que entra en operación (materialización tardía). */
     private const DEFAULT_WEEKS = 1;
@@ -50,7 +49,6 @@ class GenerateWeeklyDeliveryCommand extends Command
         private readonly EntityManagerInterface $em,
         private readonly WeeklyBasketGenerator $generator,
         private readonly DeliveryExceptionRepository $exceptionRepository,
-        private readonly AppSettings $settings,
     ) {
         parent::__construct();
     }
@@ -64,21 +62,13 @@ class GenerateWeeklyDeliveryCommand extends Command
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Lista los Baskets que tocaría sin persistir nada');
     }
 
-    protected function execute(InputInterface $input, OutputInterface $output): int
+    protected function doExecute(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
 
         $weeks = max(1, (int) $input->getOption('weeks'));
         $dryRun = (bool) $input->getOption('dry-run');
         $basketId = $input->getOption('basket-id');
-
-        // Gate de la tarea programada: apagada en /gestion/settings, NO congela
-        // nada (verde para no disparar alertas del cron). El dry-run y --force
-        // (ejecución manual explícita) la saltan.
-        if (!$dryRun && !$input->getOption('force') && !$this->settings->getBool(AppSettings::CRON_GENERATE_WEEKLY_DELIVERY)) {
-            $io->warning('La tarea programada del congelado semanal está desactivada en /gestion/settings. No se ejecuta.');
-            return Command::SUCCESS;
-        }
 
         if ($basketId !== null) {
             $basket = $this->em->getRepository(Basket::class)->find((int) $basketId);
@@ -93,7 +83,7 @@ class GenerateWeeklyDeliveryCommand extends Command
 
         if (empty($baskets)) {
             $io->warning('No hay Baskets que procesar. Nada que hacer.');
-            return Command::SUCCESS;
+            return $this->nothingToDo('No había ningún reparto pendiente de congelar');
         }
 
         $rows = [];
@@ -132,11 +122,30 @@ class GenerateWeeklyDeliveryCommand extends Command
 
         if ($dryRun) {
             $io->success('Dry-run: sin cambios en BBDD.');
-        } else {
-            $io->success(sprintf('Procesados %d Baskets. Cestas materializadas en esta ejecución: %d.', count($baskets), $generatedCount));
+            return Command::SUCCESS;
         }
 
-        return Command::SUCCESS;
+        $io->success(sprintf('Procesados %d Baskets. Cestas materializadas en esta ejecución: %d.', count($baskets), $generatedCount));
+
+        // Congelar es idempotente: si los Baskets ya estaban listados (o
+        // cancelados) la tarea corrió sin trabajo, que no es lo mismo que haber
+        // congelado la semana.
+        //
+        // Estos dos textos NO son para la consola: son el detalle que
+        // /gestion/settings pinta bajo la tarea, así que hablan de "repartos" y
+        // no de "Baskets", y concuerdan en singular (decían "1 Baskets
+        // revisados").
+        $count = count($baskets);
+
+        return $generatedCount > 0
+            ? $this->didWork(sprintf(
+                '%d cestas congeladas en %s',
+                $generatedCount,
+                1 === $count ? 'un reparto' : sprintf('%d repartos', $count)
+            ))
+            : $this->nothingToDo(1 === $count
+                ? 'Un reparto revisado, ya estaba listado o cancelado'
+                : sprintf('%d repartos revisados, ya estaban listados o cancelados', $count));
     }
 
     /**

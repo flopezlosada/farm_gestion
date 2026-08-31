@@ -1,0 +1,114 @@
+{# ---------- MACROS DEL VOLUNTARIADO ----------
+ #
+ # En fichero propio y no como {% import _self %} dentro de la pantalla: dentro
+ # de un {% embed %}, `_self` apunta a la plantilla EMBEBIDA, no a la que la
+ # incluye, así que un macro local se vuelve invisible justo donde más se usa.
+ # Importándolo por nombre funciona igual en todas partes:
+ #
+ #   {% import '_macros/volunteering.html.twig' as vol %}
+ #   {{ vol.duration(90) }}   →   1 h 30 min
+ #}
+
+{# ---------- DURATION ----------
+ # Minutos en algo que se lee. Las horas viajan en minutos enteros por toda la
+ # aplicación (un decimal de Doctrine vuelve como string y acaba sumándose con
+ # floats), así que el formateo vive aquí y no en cada pantalla.
+ #}
+{% macro duration(minutes) %}
+    {%- if minutes < 60 -%}
+        {{ minutes }} min
+    {%- elseif minutes % 60 == 0 -%}
+        {{ (minutes / 60)|round }} h
+    {%- else -%}
+        {{ (minutes // 60) }} h {{ minutes % 60 }} min
+    {%- endif -%}
+{% endmacro %}
+
+{# ---------- ACTOR ----------
+ # Quién hizo algo, con nombre si se ha podido resolver.
+ #
+ # El actor se guarda como texto ("gestor:1") para que el rastro sobreviva al
+ # borrado de la cuenta; aquí se traduce a nombre y, si no se pudo, se enseña el
+ # código crudo — que es lo honesto cuando esa cuenta ya no existe.
+ #
+ #   {{ vol.actor(event.actor, actor_names) }}
+ #}
+{% macro actor(actor, names = {}) %}
+    {%- if actor is null or actor == '' -%}
+        —
+    {%- elseif actor == 'system' -%}
+        automático
+    {%- elseif actor == 'cli' -%}
+        comando
+    {%- else -%}
+        {{ names[actor]|default(actor) }}
+    {%- endif -%}
+{% endmacro %}
+
+{# ---------- DETAIL ----------
+ # El payload de un evento, en cristiano.
+ #
+ # Diccionario de CLAVES y no de tipos de evento: las claves son pocas y se
+ # repiten entre tipos, mientras que enumerar aquí cada tipo sería duplicar el
+ # catálogo de VolunteerEvent en una plantilla y olvidarse de tocarlo al añadir
+ # uno. Lo que no está en el diccionario se pinta tal cual, que es mejor que
+ # esconderlo.
+ #
+ #   {{ vol.detail(event.payload) }}
+ #}
+{% macro detail(payload) %}
+    {%- set labels = {
+        'role': 'en calidad de', 'minutes': 'minutos', 'companions': 'acompañantes',
+        'scope': 'alcance', 'recipients': 'destinatarixs', 'times': 'veces',
+        'cadence': 'cada', 'active': 'se ofrece', 'name': 'nombre',
+        'moved': 'cambia de fecha', 'relocated': 'cambia de sitio',
+        'before': 'antes', 'after': 'ahora', 'again': 'de nuevo',
+        'areas': 'áreas', 'opt_out': 'no quiere avisos', 'status': 'estado'
+    } -%}
+    {%- set values = {
+        'coordinator': 'lo organizó', 'participant': 'fue a trabajar',
+        'matching': 'a quien lo tiene marcado', 'unspecified': 'a quien no dijo nada',
+        'everyone': 'a toda la asociación', 'weekly': 'semana',
+        'biweekly': 'dos semanas', 'monthly': 'cuatro semanas',
+        'draft': 'borrador', 'published': 'publicada', 'cancelled': 'anulada'
+    } -%}
+    {%- set parts = [] -%}
+    {%- for key, value in payload -%}
+        {%- if value is not null and value is not same as(false) -%}
+            {%- if value is iterable -%}
+                {%- set shown = value is empty ? 'nadie' : value|join(', ') -%}
+            {%- elseif value is same as(true) -%}
+                {%- set shown = 'sí' -%}
+            {%- else -%}
+                {%- set shown = values[value]|default(value) -%}
+            {%- endif -%}
+            {%- set parts = parts|merge([(labels[key]|default(key)) ~ ': ' ~ shown]) -%}
+        {%- endif -%}
+    {%- endfor -%}
+    {{- parts|join(' · ') -}}
+{% endmacro %}
+
+{# ---------- CHECK ----------
+ # Una casilla con su etiqueta AL LADO.
+ #
+ # No usa csa.field a propósito: aquella macro le pone `csa-input` al widget,
+ # que fija alto y ancho de campo de texto, y un checkbox acaba siendo un
+ # cuadrado enorme centrado y separado de su etiqueta. Se ve así hoy en
+ # staff/_form (deuda preexistente); aquí no se replica.
+ #
+ #   {{ vol.check(form.remote, 'Se hace desde casa', 'si lo marcas se ignora el lugar') }}
+ #}
+{% macro check(field, label, hint = null) %}
+    <div class="csa-field csa-field--full">
+        <label class="vol-check" for="{{ field.vars.id }}">
+            {{ form_widget(field) }}
+            <span>
+                {{ label }}
+                {% if hint %}<span class="vol-check__hint">{{ hint }}</span>{% endif %}
+            </span>
+        </label>
+        {% if not field.vars.valid %}
+            <div class="csa-field__error">{{ form_errors(field) }}</div>
+        {% endif %}
+    </div>
+{% endmacro %}

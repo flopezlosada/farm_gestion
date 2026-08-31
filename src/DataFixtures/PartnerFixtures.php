@@ -150,7 +150,8 @@ class PartnerFixtures extends Fixture implements DependentFixtureInterface
      * Reglas:
      * - "Solo huevos": obligatoriamente egg_amount + egg_period; precio cesta verduras 0.
      * - Otras: cesta de verduras con su precio; huevos opcionales (50%).
-     * - "Mensual": además, day_month_order obligatorio (1-4).
+     * - "Mensual": además, day_month_order obligatorio (1, 2, 3 o -1 = última
+     *   semana del mes; ver MonthlyOperativeOrderResolver::ordersServedBy).
      *
      * @param Generator    $faker
      * @param Partner      $partner
@@ -190,7 +191,10 @@ class PartnerFixtures extends Fixture implements DependentFixtureInterface
         $this->basketPricing->applyTo($partnerBasketShare);
 
         if ($basketShare->getName() === 'Mensual') {
-            $partnerBasketShare->setDayMonthOrder($faker->numberBetween(1, 4));
+            // -1 en vez de 4: la última semana del mes es una opción de primera
+            // clase (índice negativo), no un ordinal fijo. Así las fixtures
+            // ejercitan el emparejamiento «última» que arregla los meses de 5.
+            $partnerBasketShare->setDayMonthOrder($faker->randomElement([1, 2, 3, -1]));
         }
 
         return $partnerBasketShare;

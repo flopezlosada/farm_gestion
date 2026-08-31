@@ -186,6 +186,23 @@
                 syncValueLabel();
                 markSelected();
             }
+            if (select.checkValidity()) {
+                trigger.classList.remove('csa-dropdown__trigger--invalid');
+                trigger.removeAttribute('aria-invalid');
+            }
+        });
+
+        // El <select> real es invisible, así que el aviso de "campo obligatorio"
+        // del navegador no se ve y el formulario parece no responder al enviarlo.
+        // Se marca el control que SÍ se ve y se le lleva el foco — al primero de
+        // los inválidos, que es donde el navegador habría llevado al usuario.
+        select.addEventListener('invalid', function () {
+            var first = !document.querySelector('.csa-dropdown__trigger--invalid');
+            trigger.classList.add('csa-dropdown__trigger--invalid');
+            trigger.setAttribute('aria-invalid', 'true');
+            if (first) {
+                trigger.focus();
+            }
         });
 
         syncValueLabel();

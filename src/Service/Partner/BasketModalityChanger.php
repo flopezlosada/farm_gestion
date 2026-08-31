@@ -12,8 +12,8 @@ use Doctrine\ORM\EntityManagerInterface;
  * (start_date = fecha efectiva) y las une semánticamente con un evento
  * BASKET_CHANGE.
  *
- * Centraliza la parte delicada que comparten el comando CLI
- * (app:change-basket-modality) y el formulario admin de cambio de modalidad:
+ * Centraliza la parte delicada del formulario admin de cambio de modalidad (y
+ * de los escenarios que la batería de invariantes ejercita con él):
  *  - localizar la PBS vigente en la VÍSPERA (no en la fecha efectiva, para no
  *    coger ya una PBS futura),
  *  - respetar el orden flush-antes-de-recordChange (el snapshot del evento
@@ -85,7 +85,18 @@ class BasketModalityChanger
         // falla entre los dos flushes).
         if (!$neverStarted) {
             $old->setEndDate($dayBefore);
-            $old->setIsActive(false);
+            // Solo desactivar (is_active=0) si el cierre YA es pasado. Si la cesta
+            // vieja sigue vigente hasta una end_date FUTURA (cambio programado a
+            // futuro), se deja is_active=1 y la cerrará finalizeExpiredShares cuando
+            // expire, igual que una baja programada. Desactivarla YA la sacaría de
+            // los finders de reparto —cesta (findBasketPartnersByTypeAndCity) y
+            // huevo (findActiveSharesWithEggsForBasket), ambos exigen is_active=1—
+            // durante su cola aún válida, y el socio se caería del listado (y en el
+            // calendario aparecería un huevo suelto sin verdura, porque projectExtraEgg
+            // resuelve el huevo con findActiveForPartner, que ignora is_active).
+            if ($dayBefore->format('Y-m-d') < (new \DateTime('today'))->format('Y-m-d')) {
+                $old->setIsActive(false);
+            }
         }
 
         // Flush previo: recordChange hace snapshot vía getId() (: int estricto),

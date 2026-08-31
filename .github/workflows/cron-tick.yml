@@ -1,0 +1,192 @@
+name: Reloj del planificador
+
+# Llama cada hora al tick de la aplicación. NO le dice qué ejecutar: la app
+# cruza su manifiesto con el registro de ejecuciones y decide ella
+# (docs/scheduler/planificador-tareas.md (fuera del repo)).
+#
+# POR QUÉ AQUÍ Y NO EN UN REPOSITORIO APARTE, como decía el diseño original:
+# GitHub deshabilita los workflows programados de un repositorio que pasa 60
+# días sin actividad. Un repositorio dedicado sólo a esto no recibiría commits
+# nunca, así que se apagaría solo a los dos meses — el mismo fallo silencioso
+# que este trabajo viene a cerrar. Este repositorio tiene actividad constante.
+#
+# La puntualidad da igual: los schedule de GitHub se retrasan entre 5 y 30
+# minutos, y las tareas van dirigidas por estado, así que un tick a las 10:25 en
+# vez de las 10:00 da el mismo resultado. Lo que importa es que ESTE workflow
+# falle y avise cuando no puede llamar, que es justo lo que el crontab de cdmon
+# no hacía.
+#
+# Este NO es el único reloj previsto. El plan es tener además un servicio
+# externo gratuito llamando al mismo endpoint: dos relojes en paralelo son
+# seguros porque el tick es idempotente, y así la fiabilidad deja de depender de
+# un solo proveedor.
+#
+# UN RELOJ, VARIOS ENTORNOS. La diferencia entre producción y staging no está en
+# el código, está en los SECRETOS: hay un juego por entorno y el workflow llama a
+# los dos. Como un entorno sin secretos se salta sin fallar (ver abajo), rellenar
+# o borrar sus secretos es el interruptor de encendido de ese entorno — se puede
+# encender staging para validar y añadir producción después, o apagar staging
+# cuando ya no haga falta, sin tocar este fichero.
+#
+# Los TOKENS de cada entorno son distintos y no se reutilizan: cada uno vale
+# para su servidor.
+#
+# Secretos (Settings > Secrets and variables > Actions):
+#   CRON_TICK_URL_PROD       - https://csavegadejarama.org/cron/tick
+#   CRON_TICK_TOKEN_PROD     - el mismo valor que el .env.local de producción
+#   CRON_HEALTH_URL_PROD     - https://csavegadejarama.org/cron/health
+#   CRON_TICK_URL_STAGING    - https://staging.csavegadejarama.org/cron/tick
+#   CRON_TICK_TOKEN_STAGING  - el mismo valor que el .env.local de staging
+#   CRON_HEALTH_URL_STAGING  - https://staging.csavegadejarama.org/cron/health
+
+on:
+  schedule:
+    # En punto de cada hora (UTC; el desfase con la hora peninsular es
+    # irrelevante porque las cadencias las resuelve la aplicación en su zona).
+    - cron: '0 * * * *'
+  # Para poder dispararlo a mano desde la pestaña Actions sin esperar a la hora.
+  workflow_dispatch:
+
+# Si un tick se solapa con el anterior, el nuevo espera en vez de cancelarlo: el
+# de la app tiene su propio cerrojo, pero cancelar aquí daría un workflow en
+# rojo que parecería una avería.
+concurrency:
+  group: cron-tick
+  cancel-in-progress: false
+
+jobs:
+  tick:
+    name: Tick horario (${{ matrix.entorno }})
+    runs-on: ubuntu-latest
+    strategy:
+      # Que un entorno caído NO cancele el tick del otro. Con fail-fast, un fallo
+      # en staging dejaría producción sin latido, que es lo contrario de lo que
+      # se busca.
+      fail-fast: false
+      matrix:
+        entorno: [PROD, STAGING]
+    steps:
+      - name: Llamar al tick
+        env:
+          URL: ${{ secrets[format('CRON_TICK_URL_{0}', matrix.entorno)] }}
+          TOKEN: ${{ secrets[format('CRON_TICK_TOKEN_{0}', matrix.entorno)] }}
+        run: |
+          # Sin secretos, el reloj no está ENCENDIDO todavía: no es una avería.
+          # Misma decisión que en el endpoint, donde un token vacío responde 404
+          # en vez de romperse — "no configurado" y "roto" son cosas distintas, y
+          # confundirlas manda un correo de fallo cada hora por algo que aún no
+          # se ha puesto en marcha.
+          #
+          # Lo que sí avisa a partir de ahí es todo lo demás: si los secretos
+          # están y la llamada no sale bien, este workflow falla y GitHub manda
+          # un correo, que es justo lo que el crontab de cdmon nunca hizo.
+          if [ -z "$URL" ] || [ -z "$TOKEN" ]; then
+            echo "El reloj de ${{ matrix.entorno }} todavía no está configurado."
+            echo "Faltan CRON_TICK_URL_${{ matrix.entorno }} o CRON_TICK_TOKEN_${{ matrix.entorno }}."
+            echo "Créalos en Settings > Secrets and variables > Actions cuando ese entorno esté desplegado."
+            exit 0
+          fi
+
+          # Deja escrito en el resumen de la ejecución QUÉ ha pasado y QUÉ mirar,
+          # en castellano y en dos líneas.
+          #
+          # El correo de GitHub sólo dice "el workflow ha fallado". Sin esto hay
+          # que entrar, abrir el paso rojo y bucear en un log lleno de ruido para
+          # enterarte de si el hosting no responde o el token no cuadra — y un
+          # aviso que cuesta leer se acaba ignorando, que es exactamente cómo se
+          # pierden dos semanas sin enterarse.
+          avisar() {
+            {
+              echo "### ⏰ Tick de ${{ matrix.entorno }}: $1"
+              echo
+              echo "$2"
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "$1 — $2" >&2
+          }
+
+          # --max-time generoso: la app contesta enseguida (el trabajo lo hace
+          # después, con la conexión cerrada), pero un hosting compartido puede
+          # tardar en despertar.
+          #
+          # El código de salida de curl se captura SIN abortar (`|| rc=$?`): con
+          # `set -e`, una asignación desde un comando que falla mata el paso ahí
+          # mismo, y entonces no se llega a explicar nada. Es lo que hacía que el
+          # log del fallo del 26-ago acabara en un "exit code 28" a secas.
+          rc=0
+          code=$(curl -sS -o /dev/null -w '%{http_code}' \
+            --max-time 30 --retry 2 --retry-delay 5 \
+            -X POST "$URL" -H "X-Cron-Token: $TOKEN") || rc=$?
+
+          if [ "$rc" -ne 0 ]; then
+            avisar "el servidor no respondió" \
+              "Tres intentos agotados, 30 s cada uno (código de curl $rc). Casi siempre es el hosting lento o dormido, no la aplicación. Si pasa suelto, el tick siguiente recupera lo que tocara. Si se repite varios días a la misma hora, el problema es del hosting."
+            exit 1
+          fi
+
+          echo "Respuesta del tick: $code"
+
+          case "$code" in
+            202)
+              # Aceptado. El trabajo se hace después, con la conexión ya cerrada.
+              ;;
+            404)
+              avisar "el servidor no reconoce el token" \
+                "El endpoint responde 404 cuando el token no coincide o está vacío. Comprueba que \`CRON_TICK_TOKEN\` del \`.env.local\` del servidor y el secreto \`CRON_TICK_TOKEN_${{ matrix.entorno }}\` son idénticos. OJO: en el servidor la variable va SIN sufijo de entorno."
+              exit 1
+              ;;
+            5*)
+              avisar "la aplicación está rota (HTTP $code)" \
+                "No es el reloj: la app devuelve error. Mira si la web carga; si acabas de desplegar, puede estar a medio subir (durante el mirror por FTP hay unos minutos de 500 que se curan solos)."
+              exit 1
+              ;;
+            *)
+              avisar "respuesta inesperada (HTTP $code)" \
+                "Se esperaba 202. Revisa el log de este paso."
+              exit 1
+              ;;
+          esac
+
+      - name: Comprobar la salud del planificador
+        env:
+          URL: ${{ secrets[format('CRON_HEALTH_URL_{0}', matrix.entorno)] }}
+        # Se ejecuta aunque el paso anterior falle: si el tick no llega, saber
+        # cómo está el planificador es más útil todavía.
+        if: always() && env.URL != ''
+        run: |
+          avisar() {
+            {
+              echo "### 🩺 Salud del planificador en ${{ matrix.entorno }}: $1"
+              echo
+              echo "$2"
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "$1 — $2" >&2
+          }
+
+          # Los MISMOS reintentos que el tick, y por el mismo motivo. Sin ellos,
+          # un solo hipo del hosting compartido manda un correo de avería, y las
+          # falsas alarmas son lo que enseña a ignorar los avisos de verdad. Pasó
+          # el 26-ago: el tick reintentó tres veces y este paso ni uno.
+          rc=0
+          code=$(curl -sS -o response.json -w '%{http_code}' \
+            --max-time 30 --retry 2 --retry-delay 5 "$URL") || rc=$?
+
+          cat response.json 2>/dev/null || true
+          echo
+
+          if [ "$rc" -ne 0 ]; then
+            avisar "no responde" \
+              "Tres intentos agotados, 30 s cada uno (código de curl $rc). Si el paso del tick también falló, es el hosting entero; si sólo falló éste, fue un hipo puntual."
+            exit 1
+          fi
+
+          if [ "$code" = "503" ]; then
+            avisar "hay tareas fuera de plazo" \
+              "El reloj llega bien, pero alguna tarea ENCENDIDA lleva más tiempo del permitido sin ejecutarse. Las tienes en la lista \`late\` de arriba, y con detalle en /gestion/settings."
+            exit 1
+          fi
+
+          if [ "$code" != "200" ]; then
+            avisar "respuesta inesperada (HTTP $code)" \
+              "Se esperaba 200 o 503. Si es 404, este entorno todavía no tiene desplegado el planificador."
+            exit 1
+          fi

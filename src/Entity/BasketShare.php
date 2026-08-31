@@ -261,11 +261,32 @@ class BasketShare
     /** Modalidad mensual (reparto una vez al mes, según day_month_order). */
     public const ID_MONTHLY = 3;
     /**
+     * Modalidades de cadencia MENSUAL: Mensual (3) y Mensual compartida (7).
+     * Reparten una vez al mes en la entrega que marca `day_month_order`.
+     */
+    public const IDS_MONTHLY = [3, 7];
+    /**
+     * Modalidades que conservan `delivery_group` (el turno de viernes), cada
+     * una por un motivo distinto:
+     *  - Quincenales (2, 6): el turno decide QUÉ viernes recogen.
+     *  - Mensuales (3, 7): el turno decide SOBRE QUÉ calendario se cuenta
+     *    `day_month_order` — las entregas de ese turno en el mes en vez de los
+     *    viernes del mes. Es opcional: sin turno, se cuentan los viernes.
+     */
+    public const IDS_WITH_DELIVERY_GROUP = [2, 3, 6, 7];
+    /**
      * Modalidades de reparto SEMANAL (cada semana): Semanal (1) y Semanal
      * compartida (4). No caben en un punto de cadencia quincenal, que sólo
      * reparte cada dos semanas.
      */
     public const IDS_WEEKLY = [1, 4];
+    /**
+     * Todas las modalidades del catálogo, compuesta a partir de las listas por
+     * cadencia para que no se desincronice al añadir una. Sirve para expresar
+     * restricciones por complemento ("todas menos las semanales") sin volver a
+     * escribir la lista de ids.
+     */
+    public const IDS_ALL = [...self::IDS_WEEKLY, ...self::IDS_BIWEEKLY, ...self::IDS_MONTHLY, self::ID_ONLY_EGG];
 
     /**
      * ¿Esta modalidad usa la cohorte A/B (delivery_group) para repartir?
@@ -282,6 +303,33 @@ class BasketShare
     public function usesBiweeklyCohort(): bool
     {
         return in_array($this->id, self::IDS_BIWEEKLY, true);
+    }
+
+    /**
+     * ¿Esta modalidad conserva el turno A/B (`delivery_group`) al guardar?
+     *
+     * Más amplio que {@see usesBiweeklyCohort}: incluye las mensuales, que no
+     * reparten por turno pero pueden ANCLARSE a uno para contar su orden
+     * mensual sobre las entregas de ese turno (caso Alcobendas: el grupo
+     * recoge en turno B y el mensual quiere coincidir con él sin retocarlo a
+     * mano cada mes de 5 viernes). Ver
+     * {@see \App\Service\Delivery\MonthlyOperativeOrderResolver::ordersServedBy}.
+     *
+     * @return bool true si el turno debe conservarse para esta modalidad.
+     */
+    public function usesDeliveryGroup(): bool
+    {
+        return in_array($this->id, self::IDS_WITH_DELIVERY_GROUP, true);
+    }
+
+    /**
+     * ¿Es una modalidad mensual (una entrega al mes por `day_month_order`)?
+     *
+     * @return bool
+     */
+    public function isMonthly(): bool
+    {
+        return in_array($this->id, self::IDS_MONTHLY, true);
     }
 
     /**

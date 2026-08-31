@@ -1,0 +1,628 @@
+{#
+ # Estilos propios del módulo de voluntariado. Se incluyen desde el bloque
+ # more_css de las pantallas que los usan, igual que partner_card_styles.
+ #
+ # Sólo lo que NO existe ya en el lenguaje csa: la lista de tareas y sus piezas.
+ # Todo lo demás (tarjetas, botones, badges, inputs) usa los componentes
+ # canónicos. Nada de colores a pelo: sólo tokens --csa-*.
+ #}
+<style>
+    .vol-list { list-style: none; margin: 0; padding: 0; }
+
+    .vol-item {
+        display: flex;
+        gap: var(--csa-sp-4);
+        align-items: flex-start;
+        justify-content: space-between;
+        padding: var(--csa-sp-4) 0;
+        border-bottom: 1px solid var(--csa-rule-soft);
+    }
+    .vol-item:last-child { border-bottom: 0; padding-bottom: 0; }
+    .vol-item:first-child { padding-top: 0; }
+
+    /* Lo ya comprometido baja de intensidad: la atención va a lo que sigue sin cubrir. */
+    .vol-item--signed { opacity: .72; }
+
+    .vol-item__main { min-width: 0; flex: 1 1 auto; }
+
+    .vol-item__title {
+        margin: 0 0 var(--csa-sp-1);
+        font-family: var(--csa-serif);
+        font-size: var(--csa-fs-lg);
+        line-height: var(--csa-lh-snug);
+        color: var(--csa-ink);
+    }
+
+    .vol-item__meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--csa-sp-1) var(--csa-sp-4);
+        font-size: var(--csa-fs-sm);
+        color: var(--csa-ink-muted);
+    }
+    .vol-item__meta i { margin-right: var(--csa-sp-1); opacity: .7; }
+
+    .vol-item__desc {
+        margin: var(--csa-sp-2) 0 0;
+        font-size: var(--csa-fs-sm);
+        line-height: var(--csa-lh-normal);
+        color: var(--csa-ink-soft);
+    }
+
+    .vol-item__tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--csa-sp-1);
+        margin-top: var(--csa-sp-2);
+    }
+
+    .vol-item__action {
+        flex: 0 0 auto;
+        text-align: right;
+        display: flex;
+        flex-direction: column;
+        gap: var(--csa-sp-2);
+        align-items: flex-end;
+    }
+
+    .vol-item__slots {
+        margin: 0;
+        font-size: var(--csa-fs-sm);
+        color: var(--csa-ink-muted);
+        white-space: nowrap;
+    }
+    .vol-item__slots strong { color: var(--csa-terracotta, var(--csa-ink)); }
+
+    .vol-item__signed {
+        margin: 0 0 var(--csa-sp-1);
+        font-size: var(--csa-fs-sm);
+        color: var(--csa-green);
+        white-space: nowrap;
+    }
+
+    .vol-item__companions {
+        display: block;
+        margin-bottom: var(--csa-sp-2);
+        font-size: var(--csa-fs-sm);
+        color: var(--csa-ink-muted);
+        white-space: nowrap;
+    }
+    .vol-item__companions .csa-input { width: 4.5rem; display: inline-block; margin: 0 var(--csa-sp-1); }
+
+    .vol-mine { list-style: none; margin: 0; padding: 0; }
+    .vol-mine li {
+        padding: var(--csa-sp-2) 0;
+        border-bottom: 1px solid var(--csa-rule-soft);
+    }
+    .vol-mine li:last-child { border-bottom: 0; }
+    .vol-mine__when {
+        display: block;
+        font-size: var(--csa-fs-sm);
+        color: var(--csa-ink-muted);
+    }
+
+    .vol-prefs {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+        gap: var(--csa-sp-2);
+        margin: var(--csa-sp-3) 0;
+    }
+    .vol-pref {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 0 var(--csa-sp-2);
+        align-items: start;
+        padding: var(--csa-sp-2);
+        border: 1px solid var(--csa-rule-soft);
+        border-radius: var(--csa-radius-md);
+        cursor: pointer;
+    }
+    .vol-pref:hover { background: var(--csa-sage-bg-hover); }
+    .vol-pref__name { font-size: var(--csa-fs-base); color: var(--csa-ink); }
+    .vol-pref__desc {
+        grid-column: 2;
+        font-size: var(--csa-fs-xs);
+        color: var(--csa-ink-muted);
+        line-height: var(--csa-lh-snug);
+    }
+
+    /* Separada de las casillas de categorías: no es una más de la lista, es la
+       que las anula todas. Si se pintara como una más, se marcaría por error. */
+    .vol-optout {
+        display: flex;
+        gap: var(--csa-sp-2);
+        align-items: center;
+        margin: var(--csa-sp-3) 0;
+        padding-top: var(--csa-sp-3);
+        border-top: 1px solid var(--csa-rule-soft);
+        font-size: var(--csa-fs-sm);
+        color: var(--csa-ink-muted);
+        cursor: pointer;
+    }
+
+    /* Una sola línea: "cada [semana] durante [4] veces [botón]". Partido en
+       varias filas se lee como un formulario largo y da más respeto del que
+       merece. */
+    .vol-repeat {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--csa-sp-3);
+        align-items: center;
+        margin-bottom: var(--csa-sp-3);
+    }
+    .vol-repeat label {
+        display: flex;
+        gap: var(--csa-sp-2);
+        align-items: center;
+        font-size: var(--csa-fs-sm);
+        color: var(--csa-ink-muted);
+    }
+    .vol-repeat .csa-input { width: 5rem; }
+    .vol-repeat .csa-select { width: auto; }
+
+    /* Casilla con etiqueta al lado. Ver la macro vol.check: la macro csa.field
+       le pone csa-input al widget y un checkbox acaba como un cuadrado enorme
+       centrado, sin relación visual con lo que dice. */
+    .vol-check {
+        display: flex;
+        gap: var(--csa-sp-2);
+        align-items: flex-start;
+        cursor: pointer;
+        font-size: var(--csa-fs-base);
+        color: var(--csa-ink);
+    }
+    .vol-check input[type="checkbox"] {
+        width: 1rem;
+        height: 1rem;
+        margin: 0;
+        flex: 0 0 auto;
+        /* Alineado con la primera línea del texto, no con el centro del bloque. */
+        margin-top: 0.2em;
+    }
+    .vol-check__hint {
+        display: block;
+        font-size: var(--csa-fs-xs);
+        color: var(--csa-ink-muted);
+        line-height: var(--csa-lh-snug);
+    }
+
+    /* Filtro por área de la bolsa. En línea y envolviendo: son media docena de
+       áreas y un desplegable escondería justo lo que hay que ver de un vistazo. */
+    .vol-filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--csa-sp-2);
+        margin-bottom: var(--csa-sp-4);
+    }
+
+    /* Un botón de acción dentro de una tabla tiene que parecer los enlaces de
+       al lado: la columna de acciones ya son iconos y un <button> nativo mete
+       fondo, borde y su propia tipografía. */
+    .csa-table__iconbtn {
+        background: none;
+        border: 0;
+        padding: 0;
+        cursor: pointer;
+        color: inherit;
+        font: inherit;
+        line-height: 1;
+    }
+    .csa-table__iconbtn:hover { color: var(--csa-ink); }
+
+    /* Historial de un objeto: tres columnas fijas —cuándo, qué, quién— para que
+       la vista salte por la columna de fechas sin leer cada línea entera. */
+    .vol-history { list-style: none; margin: 0; padding: 0; }
+    .vol-history li {
+        display: grid;
+        grid-template-columns: 10rem 1fr auto;
+        gap: var(--csa-sp-3);
+        align-items: baseline;
+        padding: var(--csa-sp-2) 0;
+        border-bottom: 1px solid var(--csa-rule-soft);
+        font-size: var(--csa-fs-sm);
+    }
+    .vol-history li:last-child { border-bottom: 0; }
+    .vol-history__when { color: var(--csa-ink-muted); font-variant-numeric: tabular-nums; }
+    .vol-history__what { color: var(--csa-ink); }
+    .vol-history__detail { display: block; font-size: var(--csa-fs-xs); color: var(--csa-ink-muted); }
+    .vol-history__who { color: var(--csa-ink-muted); font-size: var(--csa-fs-xs); white-space: nowrap; }
+
+    /* En móvil las tres columnas no caben: se apilan y la fecha encabeza. */
+    @media (max-width: 640px) {
+        .vol-history li { grid-template-columns: 1fr; gap: var(--csa-sp-1); }
+        .vol-history__who { white-space: normal; }
+    }
+
+    /* Filtro que no se puso desde la barra sino entrando desde otra pantalla:
+       se ve qué recorta y se quita de un clic. */
+    .vol-chip {
+        display: inline-flex;
+        gap: var(--csa-sp-2);
+        align-items: center;
+        padding: var(--csa-sp-1) var(--csa-sp-3);
+        border: 1px solid var(--csa-rule-soft);
+        border-radius: var(--csa-radius-pill, 999px);
+        background: var(--csa-sage-bg);
+        font-size: var(--csa-fs-sm);
+        color: var(--csa-ink);
+    }
+    .vol-chip a {
+        text-decoration: none;
+        color: var(--csa-ink-muted);
+        font-size: var(--csa-fs-md);
+        line-height: 1;
+    }
+    .vol-chip a:hover { color: var(--csa-ink); }
+
+    /* Los tres avisos posibles de una tarea y en cuál está cada uno. */
+    .vol-scopes { list-style: none; margin: 0 0 var(--csa-sp-2); padding: 0; }
+    .vol-scopes li {
+        display: flex;
+        gap: var(--csa-sp-3);
+        align-items: baseline;
+        justify-content: space-between;
+        padding: var(--csa-sp-2) 0;
+        border-bottom: 1px solid var(--csa-rule-soft);
+        font-size: var(--csa-fs-sm);
+        color: var(--csa-ink);
+    }
+    .vol-scopes li:last-child { border-bottom: 0; }
+    .vol-scopes .vol-help--muted { display: block; margin: 0; }
+
+    .vol-total {
+        margin: 0 0 var(--csa-sp-2);
+        font-size: var(--csa-fs-md);
+        color: var(--csa-ink);
+    }
+
+    .vol-help {
+        margin: 0 0 var(--csa-sp-2);
+        font-size: var(--csa-fs-sm);
+        line-height: var(--csa-lh-normal);
+        color: var(--csa-ink-muted);
+    }
+    .vol-help--muted { font-size: var(--csa-fs-xs); color: var(--csa-ink-soft); }
+
+    .vol-empty {
+        margin: 0;
+        font-size: var(--csa-fs-sm);
+        color: var(--csa-ink-muted);
+    }
+
+    .vol-sep {
+        border: 0;
+        border-top: 1px solid var(--csa-rule-soft);
+        margin: var(--csa-sp-4) 0;
+    }
+
+    /* Celda de la tira cuyo valor NO es una cifra.
+       El componente pinta el valor en Fraunces 600 a 18px, que es lo correcto
+       para un número —la fecha, cuánta gente viene, los minutos— y demasiado
+       para un texto: "Torremocha" con ese peso pesa como un titular y hace que
+       la pantalla parezca escrita en dos fuentes distintas. Regla del proyecto:
+       la serif se reserva a la cifra destacada. */
+    .prt-mini__value--text {
+        font-family: 'Inter', sans-serif;
+        font-size: 14px;
+        font-weight: 500;
+        letter-spacing: 0;
+    }
+
+    /* Ajustes que se contestan una vez: el estado se lee en una frase y el
+       formulario vive detrás de este desplegable. Nativo (<details>), sin JS y
+       sin caja gris — sólo el texto y su flecha. */
+    .vol-details > summary {
+        display: inline-flex;
+        gap: var(--csa-sp-2);
+        align-items: center;
+        margin-bottom: var(--csa-sp-2);
+        font-size: var(--csa-fs-sm);
+        color: var(--csa-ink-muted);
+        cursor: pointer;
+        list-style: none;
+    }
+    .vol-details > summary::-webkit-details-marker { display: none; }
+    .vol-details > summary::before {
+        content: '';
+        width: 0.4rem;
+        height: 0.4rem;
+        border-right: 1.5px solid currentColor;
+        border-bottom: 1.5px solid currentColor;
+        transform: rotate(-45deg);
+        transition: transform 0.15s ease;
+    }
+    .vol-details[open] > summary::before { transform: rotate(45deg); }
+    .vol-details > summary:hover { color: var(--csa-ink); }
+
+    /* ---- Qué toca hacer con esta tarea ----
+       La franja que abre la ficha. Va antes que los datos porque cuándo y dónde
+       ya lo sabe quien abre una tarea suya; lo que no sabe es si queda algo
+       pendiente. El tono lo pone la fase, y son los mismos cuatro colores que
+       usa el resto del sistema — nada de una paleta propia para esta pantalla. */
+    .vol-phase {
+        display: flex;
+        gap: var(--csa-sp-4);
+        align-items: center;
+        margin-bottom: var(--csa-sp-4);
+        padding: var(--csa-sp-4) var(--csa-sp-5);
+        border: 1px solid var(--csa-rule-soft);
+        border-radius: var(--csa-radius-lg);
+        background: var(--csa-surface);
+    }
+    .vol-phase__icon { flex-shrink: 0; font-size: var(--csa-fs-lg); line-height: 1.2; }
+    .vol-phase__body { flex: 1 1 auto; min-width: 0; }
+    .vol-phase__title {
+        margin: 0;
+        font-size: var(--csa-fs-md);
+        font-weight: 600;
+        color: var(--csa-ink);
+    }
+    .vol-phase__note {
+        margin: var(--csa-sp-1) 0 0;
+        font-size: var(--csa-fs-sm);
+        line-height: var(--csa-lh-normal);
+        color: var(--csa-ink-soft);
+    }
+    .vol-phase__actions { flex-shrink: 0; }
+
+    /* La cifra de la franja: en serif, como el resto de cifras destacadas. */
+    .vol-phase__figure { flex-shrink: 0; text-align: right; }
+    .vol-phase__figure-value {
+        display: block;
+        font-family: var(--csa-serif);
+        font-size: var(--csa-fs-xl);
+        line-height: var(--csa-lh-tight);
+        color: var(--csa-ink);
+    }
+    .vol-phase__figure-label {
+        display: block;
+        font-size: var(--csa-fs-xs);
+        color: var(--csa-ink-muted);
+    }
+
+    /* Ocre y no rojo cuando faltan plazas: es una petición, no un error, y
+       normalmente queda tiempo de sobra para resolverla. */
+    .vol-phase--warn { background: color-mix(in srgb, var(--csa-ochre-soft) 35%, var(--csa-surface)); border-color: var(--csa-ochre-soft); }
+    .vol-phase--warn .vol-phase__icon { color: var(--csa-ochre); }
+    .vol-phase--ok { background: color-mix(in srgb, var(--csa-green-soft) 35%, var(--csa-surface)); border-color: var(--csa-green-soft); }
+    .vol-phase--ok .vol-phase__icon { color: var(--csa-green); }
+    .vol-phase--info { background: color-mix(in srgb, var(--csa-sky-soft) 30%, var(--csa-surface)); border-color: var(--csa-sky-soft); }
+    .vol-phase--info .vol-phase__icon { color: var(--csa-sky); }
+    .vol-phase--quiet { background: var(--csa-surface-alt); }
+    .vol-phase--quiet .vol-phase__icon { color: var(--csa-ink-muted); }
+
+    /* El día de la tarea es el único momento con un trabajo que hacer AHÍ, con
+       el móvil en la mano: es la única franja con el verde entero. */
+    .vol-phase--today { background: var(--csa-green); border-color: var(--csa-green); }
+    .vol-phase--today .vol-phase__icon,
+    .vol-phase--today .vol-phase__title,
+    .vol-phase--today .vol-phase__figure-value { color: #fff; }
+    .vol-phase--today .vol-phase__note,
+    .vol-phase--today .vol-phase__figure-label { color: rgba(255, 255, 255, 0.85); }
+
+    @media (max-width: 640px) {
+        .vol-phase { flex-wrap: wrap; }
+        .vol-phase__figure { text-align: left; }
+        .vol-phase__actions { width: 100%; }
+        .vol-phase__actions .csa-btn { width: 100%; justify-content: center; }
+    }
+
+    /* ---- Las plazas, una a una ----
+       "4 de 6" hay que leerlo y restar; seis casillas con dos huecos se ven sin
+       leer. Decorativas: el dato ya está escrito encima, así que van con
+       aria-hidden y no se anuncian dos veces. */
+    .vol-slots { display: flex; gap: 3px; margin-top: var(--csa-sp-2); }
+    .vol-slots__pip {
+        width: 14px;
+        height: 6px;
+        border-radius: var(--csa-radius-pill);
+        background: var(--csa-rule);
+    }
+    .vol-slots__pip.is-filled { background: var(--csa-green); }
+
+    /* Cuánto lleva hecho cada quien, bajo su nombre. Terciario a propósito: es
+       contexto para quien coordina, no una nota en su expediente. */
+    .vol-track {
+        display: block;
+        margin-top: 2px;
+        font-size: var(--csa-fs-xs);
+        color: var(--csa-ink-muted);
+    }
+
+    /* Teléfono y correo en la fila. Iconos sueltos, sin caja: la columna de
+       estado ya lleva badges y un botón más la volvería ilegible. */
+    .vol-contact { display: inline-flex; gap: var(--csa-sp-2); margin-left: var(--csa-sp-2); }
+    .vol-contact a { color: var(--csa-ink-muted); text-decoration: none; }
+    .vol-contact a:hover { color: var(--csa-green); }
+
+    /* Quien se dio de baja sigue en la lista —hace falta saber que se descolgó—
+       pero baja de intensidad para que no compita con quien sí viene. */
+    .vol-row--out { opacity: .55; }
+
+    /* Minutos por persona en el cierre. Estrecho y con la unidad al lado: es un
+       número de dos o tres cifras, no un campo de texto. */
+    .vol-minutes { width: 4.5rem; display: inline-block; text-align: right; }
+    .vol-minutes__unit { margin-left: var(--csa-sp-1); font-size: var(--csa-fs-xs); color: var(--csa-ink-muted); }
+
+    /* El cierre: el total, la explicación y el botón, juntos y separados de la
+       tabla. Cerrar suma horas a gente real y no se deshace solo, así que el
+       total se ve ANTES de pulsar. */
+    .vol-close {
+        margin-top: var(--csa-sp-4);
+        padding-top: var(--csa-sp-4);
+        border-top: 1px solid var(--csa-rule-soft);
+    }
+    .vol-close__sum {
+        margin: 0 0 var(--csa-sp-2);
+        font-size: var(--csa-fs-sm);
+        color: var(--csa-ink-soft);
+    }
+    .vol-close__sum strong {
+        font-family: var(--csa-serif);
+        font-size: var(--csa-fs-lg);
+        font-weight: 500;
+        color: var(--csa-ink);
+    }
+
+    /* ---- A quién pedírselo ----
+       Una lista para leer y coger el teléfono, no una tabla. Sin cifras de
+       aportación a propósito: el orden ya reparte la carga y publicar el
+       contador de cada cual convertiría esto en el marcador que se quiere
+       evitar. */
+    .vol-suggest { list-style: none; margin: 0 0 var(--csa-sp-3); padding: 0; }
+    .vol-suggest li {
+        display: flex;
+        gap: var(--csa-sp-4);
+        align-items: center;
+        justify-content: space-between;
+        padding: var(--csa-sp-3) 0;
+        border-bottom: 1px solid var(--csa-rule-soft);
+    }
+    .vol-suggest li:last-child { border-bottom: 0; }
+    .vol-suggest__who { min-width: 0; }
+    .vol-suggest__name { display: block; font-size: var(--csa-fs-base); color: var(--csa-ink); }
+    .vol-suggest__why {
+        display: block;
+        margin-top: 2px;
+        font-size: var(--csa-fs-xs);
+        color: var(--csa-ink-muted);
+    }
+    .vol-suggest__contact { display: flex; gap: var(--csa-sp-2); flex-shrink: 0; }
+
+    @media (max-width: 640px) {
+        .vol-suggest li { flex-direction: column; align-items: stretch; }
+        .vol-suggest__contact { width: 100%; }
+        .vol-suggest__contact .csa-btn { flex: 1; justify-content: center; }
+    }
+
+    /* Bloque compacto de la home del panel. */
+    .vol-teaser { list-style: none; margin: 0 0 var(--csa-sp-3); padding: 0; }
+    .vol-teaser li {
+        padding: var(--csa-sp-2) 0;
+        border-bottom: 1px solid var(--csa-rule-soft);
+    }
+    .vol-teaser li:last-child { border-bottom: 0; }
+    .vol-teaser__link { display: block; text-decoration: none; }
+    .vol-teaser__title {
+        display: block;
+        font-family: var(--csa-serif);
+        font-size: var(--csa-fs-base);
+        color: var(--csa-ink);
+    }
+    .vol-teaser__meta {
+        display: block;
+        font-size: var(--csa-fs-sm);
+        color: var(--csa-ink-muted);
+    }
+
+    /* ---- Quién prepara tu cesta (home del socix) ----
+       Una banda baja, no una tarjeta: cuelga de la franja de la próxima cesta y
+       habla de esa misma entrega. Con el peso de una tarjeta competiría con ella. */
+    .vol-prep {
+        display: flex;
+        align-items: center;
+        gap: var(--csa-sp-3);
+        margin-top: var(--csa-sp-2);
+        padding: var(--csa-sp-3) var(--csa-sp-4);
+        background: var(--csa-surface);
+        border: 1px solid var(--csa-rule-soft);
+        border-radius: var(--csa-radius-lg);
+    }
+    .vol-prep__faces { display: flex; flex-shrink: 0; }
+    .vol-prep__face {
+        width: 28px; height: 28px;
+        display: inline-flex; align-items: center; justify-content: center;
+        border-radius: var(--csa-radius-pill);
+        background: var(--csa-green-soft); color: var(--csa-green);
+        border: 2px solid var(--csa-surface);
+        font-size: var(--csa-fs-xs); font-weight: 700;
+    }
+    .vol-prep__face + .vol-prep__face { margin-left: -8px; }
+    .vol-prep__text {
+        margin: 0;
+        font-size: var(--csa-fs-sm);
+        line-height: var(--csa-lh-normal);
+        color: var(--csa-ink-soft);
+    }
+    /* En la BBDD los nombres están en mayúsculas: se bajan y se recapitalizan por
+       CSS, que respeta los compuestos ("MARIA JOSE" → "Maria Jose"). El filtro
+       capitalize de Twig sólo tocaría la primera palabra. */
+    .vol-prep__name { color: var(--csa-ink); font-weight: 600; text-transform: capitalize; }
+    .vol-prep__plus { color: var(--csa-ink-muted); font-size: var(--csa-fs-xs); }
+    .vol-prep__gap { color: var(--csa-ink-muted); }
+
+    /* Sin nadie apuntadx: ocre, no rojo. Es una petición, no un error — y falta
+       tiempo para resolverlo. El rojo aquí sería alarma sin causa. */
+    .vol-prep--empty {
+        align-items: flex-start;
+        background: color-mix(in srgb, var(--csa-ochre-soft) 40%, var(--csa-surface));
+        border-color: var(--csa-ochre-soft);
+    }
+    .vol-prep--empty .vol-prep__text { color: var(--csa-ink); }
+    .vol-prep--empty .vol-prep__text strong { display: block; }
+    .vol-prep__icon { color: var(--csa-ochre); flex-shrink: 0; line-height: 1.6; }
+    .vol-prep__body { display: flex; flex-direction: column; gap: var(--csa-sp-3); align-items: flex-start; }
+
+    /* ---- Tu aportación (home del socix) ----
+       Fondo ocre muy suave: es el bloque cálido de la pantalla, no una alerta.
+       Con el mismo blanco que las tarjetas se perdía dentro del listado de tareas. */
+    .vol-gauge {
+        padding: var(--csa-sp-4);
+        margin-bottom: var(--csa-sp-4);
+        background: color-mix(in srgb, var(--csa-ochre-soft) 28%, var(--csa-surface));
+        border: 1px solid var(--csa-ochre-soft);
+        border-radius: var(--csa-radius-lg);
+    }
+    .vol-gauge__head {
+        display: flex; align-items: baseline; justify-content: space-between;
+        gap: var(--csa-sp-3); margin-bottom: var(--csa-sp-3);
+    }
+    .vol-gauge__label {
+        font-size: var(--csa-fs-xs); font-weight: 600;
+        letter-spacing: 0.08em; text-transform: uppercase;
+        color: var(--csa-ink-muted);
+    }
+    .vol-gauge__value {
+        font-family: var(--csa-serif); font-size: var(--csa-fs-xl);
+        color: var(--csa-ink); line-height: 1;
+    }
+
+    /* La marca de la mediana necesita aire por debajo para no comerse el texto:
+       sobresale del carril a propósito, para que se lea como una referencia
+       externa y no como un tramo más de la barra. */
+    .vol-gauge__track {
+        position: relative; height: 10px; border-radius: var(--csa-radius-pill);
+        background: var(--csa-surface-alt); border: 1px solid var(--csa-rule-soft);
+    }
+    .vol-gauge__track--marked { margin-bottom: var(--csa-sp-2); }
+    .vol-gauge__fill {
+        display: block; height: 100%; border-radius: var(--csa-radius-pill);
+        background: var(--csa-green);
+    }
+    .vol-gauge__fill--behind { background: var(--csa-ochre); }
+    .vol-gauge__mark {
+        position: absolute; top: -4px; width: 2px; height: 18px;
+        margin-left: -1px; border-radius: 1px; background: var(--csa-ink);
+    }
+
+    .vol-gauge__lead {
+        margin: var(--csa-sp-3) 0 0;
+        font-size: var(--csa-fs-sm); line-height: var(--csa-lh-normal);
+        color: var(--csa-ink-soft);
+    }
+    .vol-gauge__lead strong { color: var(--csa-ink); }
+    .vol-gauge__note {
+        margin: var(--csa-sp-2) 0 0;
+        font-size: var(--csa-fs-xs); color: var(--csa-ink-muted);
+    }
+
+    /* En móvil la acción cae debajo y ocupa el ancho: a 360px, dos columnas
+       dejan el botón de "me apunto" en una tira de 90px. */
+    @media (max-width: 640px) {
+        .vol-item { flex-direction: column; }
+        .vol-item__action { text-align: left; align-items: stretch; width: 100%; }
+        .vol-item__slots { white-space: normal; }
+        .vol-prep__body { width: 100%; }
+        .vol-prep__body .csa-btn { width: 100%; justify-content: center; }
+    }
+</style>

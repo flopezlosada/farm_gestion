@@ -2,25 +2,38 @@
 
 namespace App\Controller;
 
+use App\Entity\CronRun;
+use App\Entity\User;
+use App\Repository\CronRunRepository;
 use App\Service\AppSettings;
-use Symfony\Bundle\FrameworkBundle\Console\Application;
+use App\Service\Cron\CronRunMode;
+use App\Service\Cron\CronRunner;
+use App\Service\Cron\CronTaskRegistry;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use Symfony\Component\Console\Input\ArrayInput;
-use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpKernel\KernelInterface;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * Pantalla de configuración de la app: los toggles declarados en
  * {@see AppSettings::BOOLEANS}, agrupados. Sólo administración.
+ *
+ * Las tareas programadas se pintan además con su última ejecución y su estado,
+ * porque hasta agosto de 2026 esta pantalla mostraba interruptores pero no si
+ * las tareas corrían: dos semanas sin ejecutarse ninguna se vieron igual que dos
+ * semanas de normalidad.
  */
 #[Route('/gestion/settings')]
 #[IsGranted('ROLE_ADMIN')]
 class SettingsController extends AbstractController
 {
+    public function __construct(
+        private readonly CronTaskRegistry $cronTasks,
+        private readonly CronRunRepository $cronRuns,
+    ) {
+    }
+
     /**
      * Lista los ajustes con su valor efectivo (override o default), agrupados
      * tal y como los declara el catálogo.
@@ -39,18 +52,17 @@ class SettingsController extends AbstractController
     }
 
     /**
-     * Lanza un cron a mano, en proceso (sin depender de exec/proc_open, que el
-     * hosting compartido puede tener deshabilitados): usa la API de consola de
-     * Symfony y captura la salida para mostrársela a la administración.
+     * Lanza un cron a mano. Toda la mecánica vive en {@see CronRunner}, que es
+     * el mismo servicio que usa la pantalla de diagnóstico de envíos: antes cada
+     * una tenía su copia del lanzador y su propia lista blanca.
      *
-     * Sólo se puede lanzar lo declarado en {@see AppSettings::CRONS} (lista
-     * blanca: el `cron` del POST se valida contra ese mapa). `mode=dry` añade
-     * --dry-run; cualquier otro valor es ejecución real y pasa --force para
-     * saltar el gate de la tarea programada (no los toggles de email, que se
-     * respetan: con el email apagado, un envío manual tampoco sale).
+     * `mode=dry` previsualiza (--dry-run), `mode=resend` repite los avisos que
+     * ya constan emitidos (para un correo que no llegó) y cualquier otro valor
+     * es ejecución real. Los interruptores de email se siguen respetando también
+     * en la ejecución manual: con el envío apagado, aquí tampoco sale correo.
      */
     #[Route('/cron/run', name: 'settings_cron_run', methods: ['POST'])]
-    public function runCron(Request $request, KernelInterface $kernel): Response
+    public function runCron(Request $request, CronRunner $runner): Response
     {
         if (!$this->isCsrfTokenValid('settings_cron_run', (string) $request->request->get('_csrf_token'))) {
             $this->addFlash('warning', 'Token de seguridad inválido.');
@@ -58,57 +70,37 @@ class SettingsController extends AbstractController
         }
 
         $key = (string) $request->request->get('cron');
-        $meta = AppSettings::CRONS[$key] ?? null;
-        if ($meta === null) {
+        if ($this->cronTasks->get($key) === null) {
             $this->addFlash('warning', 'Tarea desconocida.');
             return $this->redirectToRoute('settings_index');
         }
 
-        $dryRun = $request->request->get('mode') === 'dry';
+        // Esta pantalla es el SUSTITUTO del reloj mientras esté caído, así que su
+        // ejecución real fuerza: congelar el listado un lunes tiene que funcionar
+        // aunque la tarea programada esté pausada.
+        $mode = match ($request->request->get('mode')) {
+            'dry' => CronRunMode::Preview,
+            'resend' => CronRunMode::Resend,
+            default => CronRunMode::Forced,
+        };
+        $user = $this->getUser();
 
-        $args = ['command' => $meta['command']];
-        if ($dryRun) {
-            $args['--dry-run'] = true;
-        } else {
-            $args['--force'] = true;
+        $result = $runner->run($key, $mode, $user instanceof User ? $user->getEmail() : null);
+
+        if ($result->blocked !== null) {
+            $this->addFlash('warning', $result->blocked);
+            return $this->redirectToRoute('settings_index');
         }
 
-        // Estas tareas necesitan un destinatario en ejecución real (el supervisor o
-        // admin): se lo mandamos a quien pulsa (el admin de la sesión). En dry-run no
-        // hace falta (no envían nada). En el cron real el --to lo fija la línea del cron.
-        $needsRecipient = [
-            AppSettings::CRON_ADMIN_DELIVERY_SUMMARY,
-            AppSettings::CRON_STAFF_GAPS_DIGEST,
-            AppSettings::CRON_STAFF_OPEN_SHIFT_ALERT,
-        ];
-        if (in_array($key, $needsRecipient, true) && !$dryRun) {
-            $adminEmail = $this->getUser()?->getEmail();
-            if (!$adminEmail) {
-                $this->addFlash('warning', 'Tu usuario no tiene email configurado; no se puede enviar. Usa la previsualización o configura tu email.');
-                return $this->redirectToRoute('settings_index');
-            }
-            $args['--to'] = $adminEmail;
-        }
-
-        // Estos comandos son cortos (volúmenes pequeños), pero el envío por SMTP
-        // puede tardar: levantamos el límite de tiempo para que no lo corte PHP.
-        @set_time_limit(0);
-
-        $application = new Application($kernel);
-        $application->setAutoExit(false);
-        $output = new BufferedOutput();
-        $exitCode = $application->run(new ArrayInput($args), $output);
-
-        $label = AppSettings::BOOLEANS[$key]['label'] ?? $meta['command'];
         $request->getSession()->set('cron_last_output', [
-            'label' => $label . ($dryRun ? ' (previsualización)' : ''),
-            'command' => $meta['command'],
-            'output' => trim($output->fetch()),
-            'ok' => $exitCode === 0,
+            'label' => $result->label . ($result->isPreview() ? ' (previsualización)' : ''),
+            'command' => $result->command,
+            'output' => $result->output,
+            'ok' => $result->isSuccessful(),
         ]);
         $this->addFlash(
-            $exitCode === 0 ? 'success' : 'error',
-            sprintf('Tarea «%s» ejecutada (código %d). Salida abajo.', $label, $exitCode)
+            $result->isSuccessful() ? 'success' : 'error',
+            sprintf('Tarea «%s» ejecutada (código %d). Salida abajo.', $result->label, (int) $result->exitCode)
         );
 
         return $this->redirectToRoute('settings_index');
@@ -149,6 +141,13 @@ class SettingsController extends AbstractController
                 $settings->setTime($name, sprintf('%02d:%02d', $hour, $minute));
             }
         }
+        // Solo los STRINGS marcados 'general' se editan aquí; el resto (redirección de pruebas,
+        // reply-to) viven en la pantalla de diagnóstico de envíos y no viajan en este form.
+        foreach (AppSettings::STRINGS as $name => $definition) {
+            if (($definition['general'] ?? false) && array_key_exists($name, $submitted)) {
+                $settings->setString($name, (string) $submitted[$name]);
+            }
+        }
 
         $this->addFlash('success', 'Configuración guardada.');
         return $this->redirectToRoute('settings_index');
@@ -166,6 +165,9 @@ class SettingsController extends AbstractController
     private function groupedSettings(AppSettings $settings): array
     {
         $groups = [];
+        // Una sola query para las últimas ejecuciones de las siete tareas.
+        $lastRuns = $this->cronRuns->findLastRunPerTask();
+        $now = new \DateTimeImmutable();
 
         foreach (AppSettings::BOOLEANS as $name => $definition) {
             $item = [
@@ -176,11 +178,33 @@ class SettingsController extends AbstractController
                 'value' => $settings->getBool($name),
             ];
             // Los toggles de cron llevan además su comando para el botón
-            // "Ejecutar ahora" (y si piden confirmación / ofrecen dry-run).
+            // "Ejecutar ahora" (y si piden confirmación / ofrecen dry-run), su
+            // cadencia declarada y qué pasó la última vez que corrieron.
             if (isset(AppSettings::CRONS[$name])) {
                 $item['command'] = AppSettings::CRONS[$name]['command'];
                 $item['confirm'] = AppSettings::CRONS[$name]['confirm'];
                 $item['dry'] = AppSettings::CRONS[$name]['dry'];
+                // Ofrecen reenvío las que mandan correo, que son exactamente las
+                // que piden confirmación (es lo que `confirm` significa) y las
+                // únicas que declaran --resend. Que ambas cosas sigan yendo
+                // juntas lo vigila CronManifestTest.
+                $item['resend'] = AppSettings::CRONS[$name]['confirm'];
+                $item['schedule'] = $this->cronTasks->describeSchedule($name);
+                $item['unmet_dependencies'] = $this->cronTasks->unmetDependencies($name);
+                $item['overdue'] = $this->cronTasks->isOverdue($name, $lastRuns[$name] ?? null, $now);
+
+                $run = $lastRuns[$name] ?? null;
+                $item['last_run'] = $run === null ? null : [
+                    'status' => $run->getStatus(),
+                    'at' => $run->getStartedAt(),
+                    'age' => $this->cronTasks->describeAge($run->getStartedAt(), $now),
+                    // El origen crudo, no un booleano "¿a mano?": con el traspaso
+                    // de relojes en marcha, distinguir el tick del crontab del
+                    // hosting es justo el dato que hace falta.
+                    'trigger' => $run->getTriggerSource(),
+                    'detail' => $run->getDetail(),
+                    'unfinished' => !$run->isFinished(),
+                ];
             }
             $groups[$definition['group']][] = $item;
         }
@@ -205,6 +229,21 @@ class SettingsController extends AbstractController
                 'label' => $definition['label'],
                 'help' => $definition['help'],
                 'value' => $settings->getTime($name),
+            ];
+        }
+
+        // Solo los STRINGS marcados 'general' (p.ej. el destinatario del resumen a admin); el
+        // resto viven en pantallas específicas (diagnóstico de envíos).
+        foreach (AppSettings::STRINGS as $name => $definition) {
+            if (!($definition['general'] ?? false)) {
+                continue;
+            }
+            $groups[$definition['group']][] = [
+                'type' => 'string',
+                'name' => $name,
+                'label' => $definition['label'],
+                'help' => $definition['help'],
+                'value' => $settings->getString($name),
             ];
         }
 

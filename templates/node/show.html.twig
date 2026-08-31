@@ -11,7 +11,6 @@
 
 {% set _dow_full = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'] %}
 {% set _month_abbr = ['', 'ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'] %}
-{% set cadence_labels = { 'weekly': 'Semanal', 'biweekly': 'Quincenal' } %}
 
 {# ---- macro: lista de repartos (chip de fecha + estimado + enlace) ---- #}
 {% macro delivery_list(rows, node_id, upcoming) %}
@@ -155,8 +154,9 @@
     <div class="nod-head">
         <div class="nod-head__sub">
             día de reparto <b>{{ _dow_full[node.deliveryWeekday % 7] }}</b> ·
-            cadencia <b>{{ node.cadence == 'weekly' ? 'semanal' : 'quincenal' }}</b>
+            cadencia <b>{{ node.cadenceLabel|lower }}</b>
             {% if node.anchorDate %} · ancla <b>{{ node.anchorDate|date('d/m/Y') }}</b>{% endif %}
+            {% if node.monthlyWeek %} · abre la <b>{{ node.monthlyWeek == -1 ? 'última semana' : node.monthlyWeek ~ 'ª semana' }}</b> del mes{% endif %}
             {% if node.schedule %} · horario público <b>{{ node.schedule }}</b>{% endif %}
         </div>
         <div class="nod-head__actions">
@@ -198,7 +198,7 @@
             {% endif %}
         </div>
         <div class="nod-stat">
-            <div class="v" style="font-size: 20px;">{{ cadence_labels[node.cadence] ?? node.cadence }}</div>
+            <div class="v" style="font-size: 20px;">{{ node.cadenceLabel }}</div>
             <div class="l">Cadencia</div>
         </div>
     </div>
@@ -210,9 +210,13 @@
             {% if upcoming|length > 0 %}
                 {{ helper.delivery_list(upcoming, node.id, true) }}
             {% else %}
+                {# El aviso "sin fecha ancla definida" que había aquí era inalcanzable:
+                 # NodeController::show resuelve las fechas con NodeDeliveryDate antes
+                 # de renderizar, y un punto sin el dato de su cadencia lanza allí una
+                 # excepción. Ahora, además, Node::validateCadenceConsistency impide
+                 # llegar a guardarlo. #}
                 <div class="nod-empty">
-                    Este nodo no tiene repartos en las próximas semanas
-                    {% if node.cadence == 'biweekly' and not node.anchorDate %}(cadencia quincenal sin fecha ancla definida){% endif %}.
+                    Este nodo no tiene repartos en las próximas semanas.
                 </div>
             {% endif %}
         </div>

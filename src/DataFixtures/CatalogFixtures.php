@@ -10,6 +10,7 @@ use App\Entity\EggPeriod;
 use App\Entity\HelperSource;
 use App\Entity\SharePayment;
 use App\Entity\State;
+use App\Entity\VolunteerCategory;
 use App\Entity\WeeklyBasketGroup;
 use App\Entity\WeeklyBasketStatus;
 use Doctrine\Bundle\FixturesBundle\Fixture;
@@ -206,6 +207,29 @@ class CatalogFixtures extends Fixture
             $source = (new HelperSource())->setName($sourceName);
             $manager->persist($source);
             $this->addReference(self::REF_HELPER_SOURCE_PREFIX . $sourceName, $source);
+        }
+
+        // Tipos de trabajo del voluntariado. Catálogo como DATO, sin id forzado:
+        // ningún código referencia una categoría concreta.
+        //
+        // La descripción no es decorativa: se le enseña a cada socix junto a la
+        // casilla de su ficha, y de que entienda qué está marcando depende que
+        // el aviso dirigido llegue a gente que de verdad puede ir.
+        $volunteerCategories = [
+            'Huerta' => 'Plantar, escardar, recolectar. Al aire libre y de pie; no hace falta saber nada previo.',
+            'Reparto' => 'Preparar y descargar las cestas en los puntos de recogida. Suele ser un rato corto, en el sitio y el día en el que ya recoges la tuya.',
+            'Obras y mantenimiento' => 'Arreglos, desbroce, vallados, riego. Requiere alguna fuerza y a veces manejar herramienta.',
+            'Cocina y eventos' => 'Comidas comunes, fiestas, mercados, jornadas de puertas abiertas.',
+            'Oficina' => 'Cuentas, listados, papeleo, atención a socixs. Se puede hacer sentadx.',
+            'Comunicación' => 'Boletín, redes, fotos, web. En buena parte se puede hacer desde casa.',
+        ];
+
+        foreach ($volunteerCategories as $categoryName => $categoryDescription) {
+            $manager->persist(
+                (new VolunteerCategory())
+                    ->setName($categoryName)
+                    ->setDescription($categoryDescription)
+            );
         }
 
         $manager->flush();

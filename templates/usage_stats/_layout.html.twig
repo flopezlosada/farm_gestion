@@ -71,8 +71,10 @@
                        class="csa-btn csa-btn--sm {{ (from == p.from and to == p.to) ? 'csa-btn--primary' : 'csa-btn--ghost' }}">{{ p.label }}</a>
                 {% endfor %}
                 <span class="csa-muted" style="margin: 0 var(--csa-sp-1);">·</span>
+                {# flex-wrap: dos <input type="date"> más el botón no caben en una línea
+                   de móvil y sacaban la página entera del viewport. #}
                 <form method="get" action="{{ path(current) }}"
-                      style="display: flex; align-items: center; gap: var(--csa-sp-2);">
+                      style="display: flex; align-items: center; gap: var(--csa-sp-2); flex-wrap: wrap;">
                     <input type="hidden" name="area" value="{{ area }}">
                     <input type="date" name="from" value="{{ from }}" class="csa-input csa-input--compact" aria-label="Desde">
                     <span class="csa-muted">–</span>

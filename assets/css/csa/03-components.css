@@ -755,9 +755,12 @@ select.csa-input,
 }
 
 /* Grid de campos en formularios */
+/* minmax(0, 1fr) y no 1fr: con 1fr el mínimo de la columna es el min-content
+   del campo, y un campo con label + hint largo (el hint lleva flex-shrink: 0)
+   arrastraba el formulario fuera del viewport en móvil. */
 .csa-form-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--csa-sp-4);
 }
 
@@ -770,7 +773,11 @@ select.csa-input,
 .csa-form-grid--full > .csa-field { grid-column: 1 / -1; }
 .csa-field--full { grid-column: 1 / -1; }
 @media (max-width: 768px) {
-  .csa-form-grid { grid-template-columns: 1fr; }
+  .csa-form-grid { grid-template-columns: minmax(0, 1fr); }
+  /* El hint no cabe al lado de la etiqueta en un móvil: baja bajo ella.
+     El wrap va en la fila (.csa-field__label-row), que es la que es flex. */
+  .csa-field__label-row { flex-wrap: wrap; gap: 2px var(--csa-sp-2); }
+  .csa-field__hint { flex-basis: 100%; }
 }
 
 
@@ -1023,6 +1030,134 @@ input[type="number"].csa-input--compact { width: 4.5rem; padding-right: 4px; }
 .csa-setting__num { display: inline-flex; align-items: center; gap: var(--csa-sp-2); }
 .csa-setting__unit { font-size: var(--csa-fs-sm); color: var(--csa-ink-muted); }
 
+/* Fila auxiliar bajo un ajuste: botones de acción o el estado de una tarea
+ * programada. Sangrada al ancho del control para que quede alineada con la
+ * etiqueta de arriba, no con el switch. */
+.csa-setting__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--csa-sp-2);
+  padding: 0 0 var(--csa-sp-2) calc(var(--csa-sp-8) + var(--csa-sp-2));
+}
+/* ============================================================
+ * TAREA PROGRAMADA — fila de ajuste + estado de su última ejecución
+ * ============================================================
+ * Una tarea no es un ajuste suelto: es el interruptor, lo que pasó la última
+ * vez que corrió y lo que puedes hacer al respecto. Se agrupan en un bloque
+ * con su propia regla de separación, porque sueltos (insignia, texto y
+ * botones como hermanos del ajuste) no se distinguía dónde acababa una tarea
+ * y empezaba la siguiente. */
+/* El aire ENTRE tareas tiene que ser mucho mayor que el aire DENTRO de una
+ * (que es de 8px): si se parecen, siete tareas se leen como una lista de
+ * veintiuna cosas. De ahí sp-6 arriba y abajo — 48px entre tareas contra 8px
+ * entre las piezas de cada una. Y la regla horizontal es AHORA LA ÚNICA de la
+ * lista, así que sólo puede significar "aquí acaba una tarea". */
+.csa-cron { padding: var(--csa-sp-6) 0; }
+.csa-cron:first-child { padding-top: 0; }
+.csa-cron:last-child { padding-bottom: 0; }
+.csa-cron + .csa-cron { border-top: 1px solid var(--csa-rule); }
+/* El ajuste ya está dentro del bloque: el espacio y la regla los pone .csa-cron. */
+.csa-cron > .csa-setting { padding: 0; border-top: 0; }
+
+/* El nombre de la tarea es el ARRANQUE del bloque, así que lleva algo de peso.
+ * Un ajuste suelto no lo necesita (es una frase con su switch), pero en una
+ * lista de siete tareas el nombre es lo que ancla la vista: sin él, el bloque
+ * empieza en un párrafo gris de ayuda. Acotado a .csa-cron para no tocar el
+ * resto de la pantalla de configuración. */
+.csa-cron .csa-setting__label { font-weight: 500; }
+
+/* Panel del estado. NO es una caja de relleno gris: es un ESPINAZO de 2px cuyo
+ * color es el del estado. Así, bajando la vista por la columna, se lee la salud
+ * de todas las tareas de un golpe —y una en rojo salta sola— sin meter siete
+ * rectángulos grises en la pantalla. Sangrado al ancho del switch para que
+ * cuelgue de la etiqueta y no del interruptor. */
+.csa-cron__panel {
+  margin: var(--csa-sp-3) 0 0 calc(var(--csa-sp-8) + var(--csa-sp-2));
+  padding: 2px 0 0 var(--csa-sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--csa-sp-2);
+  border-left: 2px solid var(--csa-rule);
+}
+.csa-cron__panel--green       { border-left-color: var(--csa-green); }
+.csa-cron__panel--sky         { border-left-color: var(--csa-sky); }
+.csa-cron__panel--ochre       { border-left-color: var(--csa-ochre); }
+.csa-cron__panel--terracotta  { border-left-color: var(--csa-terracotta); }
+.csa-cron__panel--neutral     { border-left-color: var(--csa-rule); }
+
+/* 1 · Veredicto: insignia + antigüedad. */
+.csa-cron__verdict {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--csa-sp-2);
+}
+/* La antigüedad es LA cifra del bloque: es lo que delata un reloj caído (de un
+ * cron muerto no salta la fecha, salta el "hace 16 días"). De ahí la serif, que
+ * en este sistema está reservada justo a eso. Cifras tabulares para que la
+ * columna cuadre al bajar la vista. */
+.csa-cron__age {
+  font-family: var(--csa-serif);
+  font-variation-settings: "opsz" 30;
+  font-variant-numeric: lining-nums tabular-nums;
+  font-size: var(--csa-fs-md);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--csa-ink);
+}
+
+/* 2 · Lo que hizo: la carga útil. Cuerpo de texto normal en ink, un escalón por
+ * encima de la letra de ayuda del ajuste. */
+.csa-cron__detail {
+  margin: 0;
+  font-family: var(--csa-sans);
+  font-size: var(--csa-fs-base);
+  line-height: var(--csa-lh-snug);
+  color: var(--csa-ink);
+}
+
+/* 3 · Los datos, con rótulo. En una frase corrida el plan ("corre los lunes")
+ * y el hecho ("última vez el 25/08") se confundían; con su rótulo cada uno
+ * tiene sitio propio y las cifras se alinean. */
+.csa-cron__facts {
+  margin: var(--csa-sp-1) 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--csa-sp-2) var(--csa-sp-6);
+}
+.csa-cron__facts dt {
+  font-family: var(--csa-sans);
+  font-size: var(--csa-fs-xs);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--csa-ink-muted);
+}
+.csa-cron__facts dd {
+  margin: 2px 0 0;
+  font-family: var(--csa-sans);
+  font-size: var(--csa-fs-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--csa-ink-soft);
+}
+
+/* 4 · Acciones. Debajo del dato y no en la otra punta de la fila: así no hay
+ * que relacionar dos extremos separados.
+ *
+ * SIN línea de separación a propósito. La tenía, y era el motivo de que no se
+ * distinguieran unas tareas de otras: quedaban dos rayas horizontales casi
+ * idénticas (--csa-rule y --csa-rule-soft no se distinguen a ojo) a 50px una de
+ * otra, una dentro de la tarea y otra entre tareas, y el ojo no sabía cuál
+ * cerraba qué. Los botones ya se separan solos: tienen su propio contorno. */
+.csa-cron__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--csa-sp-2);
+  margin-top: var(--csa-sp-2);
+}
+
 /* Entrada de hora estilo "reloj digital": dos cajas [HH] : [MM] con el número
  * grande, su etiqueta debajo y foco con acento verde. Sin desplegable (no se
  * sale de pantalla) y sin JS. El minuto/hora se teclea; el servidor valida y
@@ -1067,15 +1202,20 @@ input[type="number"].csa-input--compact { width: 4.5rem; padding-right: 4px; }
  * el lenguaje del combobox. */
 .csa-dropdown { position: relative; }
 
+/* Invisible, pero OCUPANDO el sitio del control que se ve. Reducido a 1x1 con
+ * clip —como se ocultaba antes— el navegador no tiene dónde anclar el aviso de
+ * un campo `required` sin rellenar: el globo salía fuera de la vista y el
+ * formulario parecía no responder al pulsar Guardar. Superpuesto al trigger, el
+ * aviso nativo aparece donde el usuario está mirando. */
 .csa-dropdown__native {
   position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   opacity: 0;
-  width: 1px; height: 1px;
-  margin: -1px;
+  margin: 0;
   padding: 0;
   border: 0;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
   pointer-events: none;
 }
 
@@ -1107,6 +1247,12 @@ input[type="number"].csa-input--compact { width: 4.5rem; padding-right: 4px; }
 .csa-dropdown--open .csa-dropdown__trigger {
   border-color: var(--csa-ink);
   background: white;
+}
+/* Campo obligatorio sin rellenar: el aviso del navegador sale sobre el <select>
+ * invisible, así que el control visible tiene que decirlo por su cuenta. */
+.csa-dropdown__trigger--invalid,
+.csa-dropdown__trigger--invalid:focus-visible {
+  border-color: var(--csa-terracotta);
 }
 .csa-dropdown__trigger:disabled {
   opacity: 0.55;
@@ -1545,6 +1691,19 @@ a.csa-table__primary:hover {
   .csa-topbar__util i { font-size: 16px; }
   .csa-me__name { display: none; }
   .csa-me__id { padding: 1px; }
+
+  /* Aun dejando solo el crumb activo, un título largo ("Reparto semanal")
+     seguía empujando el bloque de usuario unos píxeles fuera del viewport, y
+     eso da scroll horizontal a TODA la app. El crumb es lo único que puede
+     encoger, así que se le permite (min-width: 0) y se recorta con puntos
+     suspensivos; el bloque de usuario no cede espacio. */
+  .csa-topbar__crumbs { min-width: 0; flex: 1; }
+  .csa-topbar__crumb-active {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .csa-topbar__user { flex-shrink: 0; }
 }
 
 
@@ -1766,6 +1925,43 @@ a.csa-table__primary:hover {
   color: #fff;
   border-bottom-color: transparent;
 }
+/* Móvil: `flex-wrap: nowrap` + enlaces `white-space: nowrap` sacaban las
+   pestañas fuera de la pantalla (en Ajustes son cinco y suman >1300px).
+   Aquí se dejan envolver y el bloque ocupa el ancho disponible. */
+@media (max-width: 768px) {
+  .csa-tabs--folder {
+    flex-wrap: wrap;
+    width: 100%;
+    row-gap: 2px;
+  }
+  .csa-app .csa-tabs--folder .csa-tabs__link { padding: 10px 14px 8px; font-size: 14px; }
+}
+
+/* Paneles de pestaña. Van dentro de un contenedor [data-csa-tabs] junto a la
+   lista .csa-tabs; los conmuta assets/js/csa-tabs.js.
+
+   Sin JavaScript NO se esconde nada: los paneles se ven uno detrás de otro y
+   los enlaces saltan a cada uno por su ancla. Sólo cuando el script arranca y
+   marca el contenedor .is-ready empieza a mostrarse uno cada vez — así un fallo
+   del JS deja la ficha larga, que es molesta, y no vacía, que es una pantalla
+   rota. */
+[data-csa-tabs] .csa-tabpanel + .csa-tabpanel {
+  margin-top: var(--csa-sp-6);
+}
+[data-csa-tabs].is-ready .csa-tabpanel {
+  display: none;
+  margin-top: 0;
+}
+[data-csa-tabs].is-ready .csa-tabpanel.is-active {
+  display: block;
+}
+/* El contador de cada pestaña ("Quién viene · 3"): mismo tamaño, menos peso. */
+.csa-tabs__count {
+  margin-left: var(--csa-sp-2);
+  font-variant-numeric: tabular-nums;
+  color: var(--csa-ink-muted);
+}
+.csa-tabs__item.active .csa-tabs__count { color: inherit; opacity: 0.75; }
 
 
 /* ============================================================
