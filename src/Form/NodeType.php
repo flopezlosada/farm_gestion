@@ -3,6 +3,8 @@
 namespace App\Form;
 
 use App\Entity\Node;
+use App\Entity\User;
+use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\DateType;
@@ -68,6 +70,41 @@ class NodeType extends AbstractType
                 'label'    => 'Horario público',
                 'required' => false,
                 'help'     => 'Se muestra tal cual en la web pública (Hazte socix), p. ej. «Miércoles de 18:00 a 20:00». Vacío = no se publica.',
+            ])
+            ->add('sheetRecipients', EntityType::class, [
+                'label' => 'Quién recibe el listado de este punto',
+                'class' => User::class,
+                // El nombre de la persona, no el username: en las cuentas de
+                // socixs el username es su correo, y un desplegable que ofrece
+                // "aguilella.vicente@gmail.com" no dice quién es a nadie.
+                'choice_label' => static fn (User $user): string => $user->getDisplayName(),
+                // Sólo cuentas del EQUIPO y habilitadas. El listado lleva nombre,
+                // localidad y lo que recibe cada persona del punto, así que quien
+                // lo recibe tiene que ser alguien con encargo en la casa, no
+                // cualquier cuenta. Si hay que dárselo a alguien de fuera de esta
+                // lista, la decisión consciente es darle su rol; para un envío
+                // suelto está el ajuste general de /gestion/settings.
+                //
+                // LIKE sobre la columna serializada, que es como ya consulta por
+                // rol UserRepository::findByRole(). Feo, pero es el formato en el
+                // que Doctrine guarda el array y no vamos a cambiarlo por esto.
+                'query_builder' => static fn ($repository) => $repository
+                    ->createQueryBuilder('u')
+                    ->leftJoin('u.partner', 'p')
+                    ->addSelect('p')
+                    ->where('u.enabled = true')
+                    ->andWhere('u.roles LIKE :gestion OR u.roles LIKE :admin')
+                    ->setParameter('gestion', '%ROLE_GESTION%')
+                    ->setParameter('admin', '%"ROLE_ADMIN"%')
+                    ->orderBy('p.name', 'ASC')
+                    ->addOrderBy('u.username', 'ASC'),
+                // Casillas y no un <select multiple>: el nativo obliga a ctrl+clic
+                // para elegir varias y no deja ver de un vistazo cuáles están
+                // marcadas. Mismo patrón que el selector de coordinación.
+                'expanded' => true,
+                'multiple' => true,
+                'required' => false,
+                'help' => 'Recibirán por correo el listado de este punto en cuanto cierre su plazo de cambios. Pueden ser varias personas: quien coordina, quien monta el reparto… Vacío = se manda a la dirección general de /gestion/settings.',
             ])
         ;
     }
