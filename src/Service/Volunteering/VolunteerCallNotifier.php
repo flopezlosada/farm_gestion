@@ -2,6 +2,7 @@
 
 namespace App\Service\Volunteering;
 
+use App\Entity\Notification;
 use App\Entity\Partner;
 use App\Entity\User;
 use App\Entity\VolunteerCall;
@@ -9,6 +10,8 @@ use App\Entity\VolunteerOffer;
 use App\Repository\UserRepository;
 use App\Repository\VolunteerOfferRepository;
 use App\Service\AppSettings;
+use App\Service\Notification\NotificationInbox;
+use App\Service\Notification\NotificationLink;
 use App\Service\Notification\NotificationPreferences;
 use App\Service\Notification\NotificationTopic;
 use App\Security\PartnerAccessPolicy;
@@ -29,11 +32,11 @@ use Psr\Log\LoggerInterface;
  * {@see VolunteerAudienceResolver} y el envío de {@see PushSender}. Aquí sólo
  * se orquesta, se redacta el mensaje y se deja constancia.
  *
- * SÓLO PUSH, DE MOMENTO. Quien no tiene cuenta de acceso a la web no recibe
- * nada por aquí, y es una decisión consciente: el canal universal del módulo es
- * el panel, donde lo que hace falta está siempre a la vista. Añadir correo es un
- * bloque aparte con su propio toggle, y conviene ver antes si la gente se
- * apunta — si no se apunta, mandar lo mismo por dos canales no lo arregla.
+ * TRES VÍAS: la copia en la bandeja de avisos, el push y el correo. La bandeja no
+ * es un canal más sino el suelo de los otros dos —se escribe sin mirar
+ * preferencias y antes de intentar ningún envío—, y quien no tiene cuenta de
+ * acceso a la web no recibe nada por ninguna: para esa gente el canal sigue siendo
+ * el panel del nodo y el boca a boca.
  *
  * EL REGISTRO SE ESCRIBE ANTES DE ENVIAR. Si se escribiera después, un fallo a
  * mitad del lote dejaría el aviso mandado a media asociación y sin constancia,
@@ -49,6 +52,8 @@ class VolunteerCallNotifier
         private readonly VolunteerAudienceResolver $audience,
         private readonly VolunteerCallEscalator $escalator,
         private readonly PushSender $push,
+        private readonly NotificationInbox $inbox,
+        private readonly NotificationLink $link,
         private readonly NotificationPreferences $preferences,
         private readonly EntityManagerInterface $entityManager,
         private readonly AppSettings $settings,
@@ -125,7 +130,21 @@ class VolunteerCallNotifier
             ? $this->preferences->filter($partners, NotificationTopic::VOLUNTEERING, NotificationTopic::CHANNEL_EMAIL)
             : [];
 
-        if ([] === $byPush && [] === $byEmail) {
+        // La copia de la bandeja va a TODA la audiencia que tenga cuenta, sin
+        // pasar por las preferencias: es el suelo del aviso, y quien ha apagado el
+        // móvil es justo quien más necesita encontrarlo al entrar. Quien no tiene
+        // cuenta queda fuera porque no tiene bandeja donde mirar.
+        $inboxRecipients = $this->users->findByPartners($partners);
+
+        // SE REGISTRA LA LLAMADA SI HAY ALGUIEN A QUIEN AVISAR POR CUALQUIER VÍA,
+        // Y LA BANDEJA CUENTA COMO UNA. Antes, con toda la audiencia sin push ni
+        // correo, esto devolvía null y no registraba nada para que el alcance
+        // siguiera disponible; ahora ese caso SÍ avisa —la copia se escribe— y
+        // registrarlo es lo único que impide que el tick de la hora siguiente
+        // vuelva a dejar la misma fila en la bandeja de todo el mundo. Sin
+        // destinatarios de ninguna vía se sigue devolviendo null, que es el caso
+        // de una audiencia sin cuentas de acceso.
+        if ([] === $byPush && [] === $byEmail && [] === $inboxRecipients) {
             return null;
         }
 
@@ -135,9 +154,12 @@ class VolunteerCallNotifier
             ->setOffer($offer)
             ->setScope($scope)
             ->setTriggeredBy($triggeredBy)
-            // Cuenta PERSONAS avisadas por cualquier vía, no envíos: quien
-            // recibe correo y push es una sola persona a la que se ha pedido
-            // ayuda, y es lo que la pantalla de gestión enseña.
+            // Cuenta PERSONAS EMPUJADAS y no filas escritas: quien recibe correo y
+            // push es una sola persona a la que se ha pedido ayuda, y es lo que la
+            // pantalla de gestión enseña. La bandeja NO suma aquí a propósito: una
+            // copia esperando en la web no es haber pedido nada a nadie, y este
+            // número es el que se mira para decidir si hace falta escalar el
+            // aviso a más gente.
             ->setRecipients(\count($this->union($byPush, $byEmail)));
 
         try {
@@ -155,11 +177,26 @@ class VolunteerCallNotifier
             return null;
         }
 
+        // La copia de la bandeja se escribe ANTES de los dos empujones: es la que
+        // no se pierde, así que no puede depender de que el push o el correo
+        // salgan bien. El registro ya está escrito, de modo que ni ésta ni los
+        // envíos pueden repetirse.
+        $this->inbox->deliver(
+            $inboxRecipients,
+            Notification::KIND_VOLUNTEERING_CALL,
+            $this->title($offer),
+            $this->body($offer),
+        );
+
         $this->push->sendToMany(
             $recipients,
             $this->title($offer),
             $this->body($offer),
-            '/panel/voluntariado'
+            // El destino ya no va escrito a mano aquí: sale de NotificationLink,
+            // el mismo sitio del que sale el de la fila de la bandeja. Esa cadena
+            // '/panel/voluntariado' estaba copiada en dos ficheros, y era
+            // exactamente la forma de que un día llevaran a sitios distintos.
+            $this->link->pathForKind(Notification::KIND_VOLUNTEERING_CALL),
         );
 
         $this->email($offer, $byEmail);

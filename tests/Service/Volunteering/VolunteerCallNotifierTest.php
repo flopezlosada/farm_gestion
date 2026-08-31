@@ -2,6 +2,7 @@
 
 namespace App\Tests\Service\Volunteering;
 
+use App\Entity\Notification;
 use App\Entity\Partner;
 use App\Entity\User;
 use App\Entity\VolunteerCall;
@@ -11,6 +12,8 @@ use App\Repository\VolunteerOfferRepository;
 use App\Service\AppSettings;
 use App\Service\Push\PushSender;
 use App\Security\PartnerAccessPolicy;
+use App\Service\Notification\NotificationInbox;
+use App\Service\Notification\NotificationLink;
 use App\Service\Notification\NotificationPreferences;
 use App\Service\Volunteering\VolunteerAudienceResolver;
 use App\Service\Volunteering\VolunteerCallEscalator;
@@ -26,10 +29,15 @@ use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 /**
  * La orquestación del aviso: qué pasa entre "toca avisar" y "avisado".
  *
- * Lo que se fija aquí son las tres formas de NO mandar: con el módulo apagado,
- * sin nadie a quien avisar, y cuando otro proceso se ha adelantado. Las tres
- * acaban en un aviso no enviado, que es siempre el error barato; el caro es el
- * aviso repetido.
+ * Lo que se fija aquí son las formas de NO mandar: con el módulo apagado, sin
+ * nadie a quien avisar por ninguna vía, y cuando otro proceso se ha adelantado.
+ * Todas acaban en un aviso no enviado, que es siempre el error barato; el caro es
+ * el aviso repetido.
+ *
+ * Y desde la bandeja de avisos, la frontera de "nadie a quien avisar" se ha
+ * movido: la copia in-app llega a quien ha apagado el push y el correo, así que
+ * ese caso ya NO es un no-aviso y tiene que registrarse igual. Está cubierto en
+ * {@see testConTodosLosCanalesApagadosSigueAvisandoEnLaBandejaYRegistra()}.
  */
 class VolunteerCallNotifierTest extends TestCase
 {
@@ -105,11 +113,17 @@ class VolunteerCallNotifierTest extends TestCase
             }
         );
 
+        // Y tampoco copia en la bandeja: sin cuenta no hay bandeja donde mirar, y
+        // escribirla sería una fila que nadie puede abrir.
+        $inbox = $this->createMock(NotificationInbox::class);
+        $inbox->expects($this->never())->method('deliver');
+
         $notifier = $this->notifier(
             audience: $this->audienceReturning([$this->partner(1)]),
             users: $users,
             entityManager: $entityManager,
-            push: $push
+            push: $push,
+            inbox: $inbox
         );
 
         $call = $notifier->dispatch(
@@ -122,6 +136,84 @@ class VolunteerCallNotifierTest extends TestCase
         $this->assertNotNull($call, 'Se registra la llamada: al socix se le avisa por correo.');
         $this->assertSame(1, $call->getRecipients());
         $this->assertSame([], $destinatariosPush ?? [], 'Sin cuenta no hay push, sólo correo.');
+    }
+
+    /**
+     * CAMBIO DE COMPORTAMIENTO CON LA BANDEJA, y el caso que más importa de este
+     * fichero. Antes, si toda la audiencia tenía el push y el correo apagados,
+     * esto devolvía null y no registraba nada: no había aviso posible. Ahora la
+     * copia de la bandeja SÍ sale —es el suelo— y por eso hay que registrar la
+     * llamada: sin la fila, el tick de la hora siguiente volvería a dejar la misma
+     * fila en la bandeja de todo el mundo, y el de la siguiente otra vez.
+     */
+    public function testConTodosLosCanalesApagadosSigueAvisandoEnLaBandejaYRegistra(): void
+    {
+        $entityManager = $this->createMock(EntityManagerInterface::class);
+        $entityManager->expects($this->once())->method('persist');
+        $entityManager->expects($this->once())->method('flush');
+
+        $push = $this->createMock(PushSender::class);
+        $push->expects($this->never())->method('sendToMany');
+
+        $escritas = [];
+        $inbox = $this->createMock(NotificationInbox::class);
+        $inbox->method('deliver')->willReturnCallback(
+            static function (array $users, string $kind, string $title) use (&$escritas): int {
+                $escritas[] = ['kind' => $kind, 'title' => $title, 'users' => \count($users)];
+
+                return \count($users);
+            }
+        );
+
+        $users = $this->createMock(UserRepository::class);
+        $users->method('findByPartners')->willReturn([new User(), new User()]);
+
+        $call = $this->notifier(
+            audience: $this->audienceReturning([$this->partner(1), $this->partner(2)]),
+            users: $users,
+            entityManager: $entityManager,
+            push: $push,
+            inbox: $inbox,
+            // Nadie quiere el aviso por ningún canal configurable.
+            preferences: $this->preferences([]),
+        )->dispatch($this->offer(), VolunteerCall::SCOPE_MATCHING, null, new \DateTimeImmutable('2099-03-01 10:00'));
+
+        $this->assertNotNull($call, 'La llamada se registra: el aviso salió, aunque sólo a la bandeja.');
+        $this->assertCount(1, $escritas);
+        $this->assertSame(Notification::KIND_VOLUNTEERING_CALL, $escritas[0]['kind']);
+        $this->assertSame(2, $escritas[0]['users'], 'La copia va a toda la audiencia con cuenta.');
+        // El contador de la llamada cuenta gente EMPUJADA, y no hubo ninguna: es el
+        // número que se mira para decidir si escalar, y una copia esperando en la
+        // web no es haber pedido ayuda a nadie.
+        $this->assertSame(0, $call->getRecipients());
+    }
+
+    /**
+     * El caso de verdad en que no hay nada que hacer: nadie con cuenta (ni push ni
+     * bandeja) y nadie que quiera el correo. Ahí no se registra, para que el
+     * alcance siga disponible si más adelante entra gente que sí encaje.
+     */
+    public function testSinNadieAQuienAvisarPorNingunaViaNoRegistra(): void
+    {
+        $entityManager = $this->createMock(EntityManagerInterface::class);
+        $entityManager->expects($this->never())->method('persist');
+
+        $users = $this->createMock(UserRepository::class);
+        $users->method('findByPartners')->willReturn([]);
+
+        $notifier = $this->notifier(
+            audience: $this->audienceReturning([$this->partner(1)]),
+            users: $users,
+            entityManager: $entityManager,
+            preferences: $this->preferences([]),
+        );
+
+        $this->assertNull($notifier->dispatch(
+            $this->offer(),
+            VolunteerCall::SCOPE_MATCHING,
+            null,
+            new \DateTimeImmutable('2099-03-01 10:00')
+        ));
     }
 
     /**
@@ -190,6 +282,28 @@ class VolunteerCallNotifierTest extends TestCase
         $this->assertFalse($call->isManual(), 'Sin persona detrás, la llamada es automática.');
     }
 
+    /**
+     * Preferencias dobladas: por defecto todo el mundo quiere todo, que es el
+     * estado real de la asociación (sin fila de opt-out, el aviso se quiere).
+     *
+     * Estos casos comprueban a quién se le manda y cuándo, no la política de
+     * preferencias, que tiene sus propios tests.
+     *
+     * @param list<Partner>|null $wanted quiénes lo quieren; null = todxs
+     */
+    private function preferences(?array $wanted = null): NotificationPreferences
+    {
+        $preferences = $this->createMock(NotificationPreferences::class);
+        $preferences->method('wants')->willReturn(true);
+        // filter() es el que usan de verdad estos servicios —una consulta para
+        // toda la lista en vez de una por socix—.
+        $preferences->method('filter')->willReturnCallback(
+            static fn (array $partners): array => $wanted ?? $partners
+        );
+
+        return $preferences;
+    }
+
     private function offer(): VolunteerOffer
     {
         return (new VolunteerOffer())
@@ -230,6 +344,8 @@ class VolunteerCallNotifierTest extends TestCase
         ?VolunteerAudienceResolver $audience = null,
         ?EntityManagerInterface $entityManager = null,
         ?PushSender $push = null,
+        ?NotificationInbox $inbox = null,
+        ?NotificationPreferences $preferences = null,
     ): VolunteerCallNotifier {
         $settings = $this->createMock(AppSettings::class);
         $settings->method('getBool')->willReturn($enabled);
@@ -237,13 +353,8 @@ class VolunteerCallNotifierTest extends TestCase
         $defaultUsers = $this->createMock(UserRepository::class);
         $defaultUsers->method('findByPartners')->willReturn([new User()]);
 
-        // Todo el mundo quiere el aviso: estos casos comprueban a quién se le
-        // manda y cuándo, no la política de preferencias, que tiene los suyos.
-        $preferences = $this->createMock(NotificationPreferences::class);
-        $preferences->method('wants')->willReturn(true);
-        // filter() es el que usan de verdad estos servicios —una consulta para
-        // toda la lista en vez de una por socix—: devuelve a todo el mundo.
-        $preferences->method('filter')->willReturnArgument(0);
+        $link = $this->createMock(NotificationLink::class);
+        $link->method('pathForKind')->willReturn('/panel/voluntariado');
 
         $urlGenerator = $this->createMock(UrlGeneratorInterface::class);
         $urlGenerator->method('generate')->willReturn('/panel/voluntariado');
@@ -254,7 +365,9 @@ class VolunteerCallNotifierTest extends TestCase
             $audience ?? $this->audienceReturning([]),
             $this->createMock(VolunteerCallEscalator::class),
             $push ?? $this->createMock(PushSender::class),
-            $preferences,
+            $inbox ?? $this->createMock(NotificationInbox::class),
+            $link,
+            $preferences ?? $this->preferences(),
             $entityManager ?? $this->createMock(EntityManagerInterface::class),
             $settings,
             new VolunteerOfferFormatter(),

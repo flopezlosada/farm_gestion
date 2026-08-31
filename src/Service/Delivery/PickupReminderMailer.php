@@ -24,6 +24,14 @@ use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
  *
  * La lógica de contenido vive aquí (no en el comando) para poder inspeccionarla
  * en el dry-run y en los tests sin enviar correo.
+ *
+ * NO ESCRIBE LA COPIA DE LA BANDEJA, y no es un olvido. La copia es UNA por
+ * aviso, no una por canal: el correo y el push son dos formas de empujar el MISMO
+ * recordatorio, y si los dos la escribieran, quien tiene los dos activados
+ * encontraría la misma fila dos veces. La escribe
+ * {@see PickupReminderPusher::recordInbox()}, donde ya viven el texto corto y la
+ * resolución de socix a cuenta de acceso, y el comando la llama antes que a este
+ * mailer para que un correo que no sale no cueste el aviso.
  */
 class PickupReminderMailer
 {

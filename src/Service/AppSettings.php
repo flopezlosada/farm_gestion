@@ -297,11 +297,16 @@ class AppSettings
      *   confirmación. Significaba "envía correo" cuando el correo era el único
      *   canal; desde que hay avisos push la confirmación la pide el efecto, no
      *   el medio. Para saber POR DÓNDE entrega, está `channels`.
-     * - `channels`: por qué canales entrega ('email', 'push'). Vacío en las
-     *   tareas que no avisan a nadie. Existe porque `confirm` dejó de servir
+     * - `channels`: por qué canales entrega ('email', 'push', 'inbox'). Vacío en
+     *   las tareas que no avisan a nadie. Existe porque `confirm` dejó de servir
      *   para distinguirlo: las reglas de los toggles de correo sólo pueden
      *   exigirse a quien manda correo, y un aviso push no tiene interruptor
      *   general de email que declarar ni un correo que reenviar.
+     *   `inbox` es la copia en la bandeja de avisos, y se declara aunque no tenga
+     *   interruptor ninguno —es el suelo, siempre activa— porque es justo lo que
+     *   hay que saber antes de meter algo en `requires`: una tarea que entrega
+     *   también por la bandeja NUNCA puede llevar ahí el ajuste de un canal
+     *   suelto, o apagar el correo dejaría sin escribir la copia.
      * - `dry`: ofrece botón de previsualización (--dry-run).
      * - `schedule`: CADENCIA declarada — cuándo debería correr. `freq` es
      *   daily|weekly|monthly, con `dow` (1 = lunes) en las semanales y `dom` en
@@ -347,7 +352,7 @@ class AppSettings
         ],
         self::CRON_PICKUP_REMINDER => [
             'command' => 'app:send-pickup-reminders',
-            'channels' => ['email', 'push'],
+            'channels' => ['email', 'push', 'inbox'],
             'needs_recipient' => false,
             'confirm' => true,
             'dry' => true,
@@ -484,7 +489,8 @@ class AppSettings
             // Multicanal desde que el aviso también sale por correo. Por eso NO
             // lleva el interruptor de email en `requires`: allí inhibiría la
             // tarea entera y dejaría sin aviso a quien lo quiere en el móvil.
-            'channels' => ['email', 'push'],
+            // `inbox` es la copia de la bandeja, que sale siempre y sin toggle.
+            'channels' => ['email', 'push', 'inbox'],
             'needs_recipient' => false,
             'confirm' => true,
             'dry' => true,
@@ -497,7 +503,10 @@ class AppSettings
         // mandarlo, porque gasta el canal sin traer a nadie.
         self::CRON_VOLUNTEER_REMINDERS => [
             'command' => 'app:send-volunteer-reminders',
-            'channels' => ['push'],
+            // El push respeta la preferencia del socix; la copia de la bandeja
+            // sale siempre, que es lo que hace que apagar el móvil no signifique
+            // no enterarse de una tarea a la que uno mismo se apuntó.
+            'channels' => ['push', 'inbox'],
             'needs_recipient' => false,
             'confirm' => true,
             'dry' => true,

@@ -123,6 +123,14 @@ class SendPickupReminderCommand extends AbstractCronCommand
 
         $resend = (bool) $input->getOption('resend');
 
+        // LA COPIA DE LA BANDEJA VA PRIMERA, antes del correo y del push, y no
+        // depende de ningún toggle ni de las preferencias del socix. Es el suelo
+        // del aviso: lo que queda cuando alguien ha apagado los otros dos canales,
+        // y lo que permite que la pantalla de avisos prometa que apagarlos no
+        // pierde información. Escribirla antes es lo que impide que un correo que
+        // no sale o un push que se cae se lleven el aviso por delante.
+        $inbox = $this->reminderPusher->recordInbox($recipients, $resend);
+
         $result = $emailOn
             ? $this->reminderMailer->send($recipients, $resend)
             : ['sent' => 0, 'skipped' => 0, 'already' => 0];
@@ -151,19 +159,30 @@ class SendPickupReminderCommand extends AbstractCronCommand
             ));
         }
 
-        // Un push mandado también es trabajo hecho: si sólo se mira el correo,
-        // el día en que todos los emails ya constaban pero el push salió por
-        // primera vez, el planificador lo apuntaría como "nada que hacer" y el
-        // registro de /gestion/settings mentiría sobre lo que de verdad se
-        // envió.
-        if ($result['sent'] > 0 || $pushed['sent'] > 0) {
+        if ($inbox['written'] > 0) {
+            $io->success(sprintf(
+                'Bandeja de avisos: %d copia(s) dejadas. %d ya la tenían.',
+                $inbox['written'],
+                $inbox['already'],
+            ));
+        }
+
+        // Un push mandado también es trabajo hecho, y una copia en la bandeja
+        // también: si sólo se mira el correo, el día en que todos los emails ya
+        // constaran pero la copia se escribiera por primera vez, el planificador
+        // lo apuntaría como "nada que hacer" y el registro de /gestion/settings
+        // mentiría sobre lo que de verdad pasó. Con el correo apagado, la copia es
+        // además lo ÚNICO que se hace, y sin contarla la tarea saldría siempre en
+        // "nada que hacer".
+        if ($result['sent'] > 0 || $pushed['sent'] > 0 || $inbox['written'] > 0) {
             return $this->didWork(sprintf(
-                '%d recordatorios enviados para el %s (%d sin email, %d ya avisados) · %d aviso(s) al móvil',
+                '%d recordatorios enviados para el %s (%d sin email, %d ya avisados) · %d aviso(s) al móvil · %d en la bandeja',
                 $result['sent'],
                 $target->format('Y-m-d'),
                 $result['skipped'],
                 $result['already'],
                 $pushed['sent'],
+                $inbox['written'],
             ));
         }
 
