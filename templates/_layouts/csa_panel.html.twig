@@ -54,6 +54,11 @@
               url: path('panel_survey_index'), active: route starts with 'panel_survey', tab: false,
               hint: 'Lo que la asociación te pregunta' },
         ] : [])
+        |merge(is_granted('FEATURE_GRUPO_CONSUMO') ? [
+            { label: 'Grupo de consumo', short: 'Pedidos', icon: 'fa-shopping-basket',
+              url: path('panel_consumer_group_index'), active: route starts with 'panel_consumer_group', tab: false,
+              hint: 'Pedidos de despensa y productoras aliadas' },
+        ] : [])
         %}
         {# «Mi perfil» y «Avisos» NO están aquí: son ajustes de la cuenta y viven
          # en el menú del avatar, arriba a la derecha. Este menú es para lo que se

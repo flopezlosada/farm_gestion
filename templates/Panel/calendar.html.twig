@@ -28,6 +28,8 @@
         'Cuándo y dónde recoges tu cesta' ~ (pickup_place ? ' · ' ~ pickup_place : '')
     ) }}
 
+    {% include '_components/cg_calendar_panel.html.twig' %}
+
     {# Ayuda breve: para quien no tiene soltura con apps, explicar de un vistazo
        cómo se lee y se usa el calendario. Los marcadores son los mismos que en la rejilla. #}
     {# Mensaje de ayuda distinto según el dispositivo (se muestra uno u otro por CSS):

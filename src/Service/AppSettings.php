@@ -217,6 +217,14 @@ class AppSettings
     public const VOLUNTEERING_REMINDER_HOURS = 'volunteering.reminder_hours';
 
     /**
+     * ¿Está abierto el módulo del grupo de consumo (productores, rondas de pedido
+     * colectivo y apuntes de socixs)? Apagado, se oculta del menú (gestión y panel)
+     * y sus rutas responden 403. Lo resuelve {@see \App\Security\FeatureVoter} vía
+     * {@see is_granted('FEATURE_GRUPO_CONSUMO')}. Arranca OFF (rodaje).
+     */
+    public const FEATURE_GRUPO_CONSUMO = 'feature.grupo_consumo';
+
+    /**
      * Interruptores de las tareas programadas (crons). Apagado, el comando
      * correspondiente sale sin hacer nada en cuanto arranca: como el hosting es
      * solo-FTP y no podemos tocar el crontab desde la app, el cron sigue
@@ -588,6 +596,12 @@ class AppSettings
             'group' => 'Funcionalidades en rodaje',
             'label' => 'Control horario y vacaciones',
             'help' => 'Abre el módulo laboral: el fichaje de los trabajadores, su calendario y vacaciones, y la gestión del personal (incluidos festivos). Apagado, se oculta del menú y no es accesible.',
+            'default' => false,
+        ],
+        self::FEATURE_GRUPO_CONSUMO => [
+            'group' => 'Funcionalidades en rodaje',
+            'label' => 'Grupo de consumo',
+            'help' => 'Abre el módulo del grupo de consumo: productores, rondas de pedido colectivo y los apuntes de lxs socixs. Apagado, se oculta del menú (gestión y panel) y no es accesible.',
             'default' => false,
         ],
         self::FEATURE_VOLUNTEERING => [

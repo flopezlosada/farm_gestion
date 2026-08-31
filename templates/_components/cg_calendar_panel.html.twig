@@ -1,0 +1,48 @@
+{# ============================================================
+ # Panel de entregas del grupo de consumo para el calendario (socio y gestor).
+ # Espera: cg_deliveries = [{order, withBasket}]. Entrega FIJA (el socio no la mueve).
+ # ============================================================ #}
+{# Solo las entregas cuyo día NO es una celda seleccionable del calendario (el socio no
+   recoge esa semana): no hay panel del día donde mostrarlas. Las que caen en un día con
+   entrega (cesta o saltada) se ven en el panel del día ("qué se lleva ese día"). #}
+{% set standalone = cg_deliveries is defined ? cg_deliveries|filter(d => not d.hasSlot) : [] %}
+{% if standalone is not empty %}
+    <div class="cgcal-orders">
+        <h2 class="cgcal-orders__title"><i class="fa fa-shopping-basket"></i> Pedido del grupo de consumo</h2>
+        {% for d in standalone %}
+            {% set r = d.order.round %}
+            <div class="cgcal-order">
+                <div class="cgcal-order__date">
+                    <span class="cgcal-order__day">{{ r.deliveryDate|date('d') }}</span>
+                    <span class="cgcal-order__mon">{{ r.deliveryDate|date('M')|upper }}</span>
+                </div>
+                <div class="cgcal-order__body">
+                    <div class="cgcal-order__head">{{ r.title }} <span class="csa-muted">· {{ r.producer ? r.producer.name : '' }}</span></div>
+                    <ul class="cgcal-order__lines">
+                        {% for line in d.order.lines %}{% if line.quantity > 0 %}<li>{{ line.quantity|number_format(2, ',', '.') }} {{ line.roundItem.unit }} · {{ line.roundItem.name }}</li>{% endif %}{% endfor %}
+                    </ul>
+                    <div class="cgcal-order__note">
+                        {% if d.withBasket %}
+                            Se entrega el <b>{{ r.deliveryDate|date('d/m/Y') }}</b> junto a la cesta.
+                        {% else %}
+                            Se entrega el <b>{{ r.deliveryDate|date('d/m/Y') }}</b> en el punto de recogida.
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+
+    <style>
+        .cgcal-orders { border: 1px solid #c89a3a; background: #faf1d8; border-radius: 10px; padding: 14px 16px; margin-bottom: 18px; }
+        .cgcal-orders__title { font-family: 'Fraunces', serif; font-weight: 600; font-size: 16px; color: #8c6919; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+        .cgcal-order { display: flex; gap: 14px; align-items: flex-start; padding: 8px 0; border-top: 1px solid rgba(140,105,25,0.2); }
+        .cgcal-order:first-of-type { border-top: 0; }
+        .cgcal-order__date { flex: 0 0 46px; text-align: center; background: #fff; border: 1px solid #e6c98a; border-radius: 8px; padding: 4px 0 5px; line-height: 1.1; }
+        .cgcal-order__day { display: block; font-family: 'Fraunces', serif; font-weight: 600; font-size: 18px; color: #1d1c17; }
+        .cgcal-order__mon { display: block; font-size: 9.5px; letter-spacing: .08em; color: #8c6919; font-weight: 600; }
+        .cgcal-order__head { font-weight: 600; }
+        .cgcal-order__lines { margin: 4px 0 4px; padding-left: 18px; font-size: 13.5px; }
+        .cgcal-order__note { font-size: 13px; color: #5a564a; }
+    </style>
+{% endif %}

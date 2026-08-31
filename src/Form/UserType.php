@@ -66,6 +66,10 @@ class UserType extends AbstractType
         // nadie se lo marcara aquí, y quien lo tiene marcado sin coordinar nada
         // es sólo una candidata.
         'voluntariado' => ['label' => 'Voluntariado',    'read' => 'ROLE_GESTION_VOLUNTARIADO', 'edit' => 'ROLE_GESTION_VOLUNTARIADO_EDIT'],
+        // La comisión del grupo de consumo es gente distinta de quien gestiona
+        // socixs, y por eso tiene sección propia: lectura para ver rondas,
+        // catálogo y apuntes; escritura para llevarlas.
+        'grupo_consumo' => ['label' => 'Grupo de consumo', 'read' => 'ROLE_GESTION_GRUPO_CONSUMO', 'edit' => 'ROLE_GESTION_GRUPO_CONSUMO_EDIT'],
     ];
 
     public function buildForm(FormBuilderInterface $builder, array $options): void

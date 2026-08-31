@@ -28,6 +28,7 @@ class FeatureVoter extends Voter
         'FEATURE_SURVEYS' => AppSettings::FEATURE_SURVEYS,
         'FEATURE_LABORAL' => AppSettings::FEATURE_LABORAL,
         'FEATURE_VOLUNTEERING' => AppSettings::FEATURE_VOLUNTEERING,
+        'FEATURE_GRUPO_CONSUMO' => AppSettings::FEATURE_GRUPO_CONSUMO,
     ];
 
     public function __construct(private readonly AppSettings $settings)

@@ -1,0 +1,28 @@
+{# ============================================================
+ # Nuevo pedido del grupo de consumo — shell csa.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Nuevo pedido · Grupo de consumo{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('consumer_group_index') }}">Grupo de consumo</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Nuevo pedido</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Grupo de consumo',
+        'Nuevo pedido',
+        'Abre el pedido con su catálogo. Nace abierto: las socias podrán apuntarse hasta el cierre.'
+    ) }}
+
+    {% include 'consumer_group/_form.html.twig' with { submit_label: 'Crear pedido', create_hint: true } %}
+
+{% endblock %}

@@ -1,0 +1,107 @@
+{# ============================================================
+ # Panel del socix · Grupo de consumo — pedidos abiertos + pedidos
+ # confirmados que se le entregarán con la cesta.
+ #
+ # El controller pasa:
+ #   - open_rounds     ConsumerGroupRound[] abiertos
+ #   - order_by_round  array round_id => ConsumerGroupOrder de la socia
+ #   - confirmed       ConsumerGroupOrder[] en pedidos confirmados
+ # ============================================================ #}
+
+{% extends '_layouts/csa_panel.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Grupo de consumo{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('panel') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Grupo de consumo</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Mi área · Grupo de consumo',
+        'Pedidos colectivos',
+        'Productos de temporada de productores cercanos que se reparten con tu cesta. Apúntate mientras el pedido esté abierto.'
+    ) }}
+
+    <div class="csa-stack-lg">
+
+        {# ============ RONDAS ABIERTAS ============ #}
+        <section>
+            <h2 class="csa-section-title">Pedidos abiertos</h2>
+            {% if open_rounds is empty %}
+                <p class="csa-muted">Ahora mismo no hay ningun pedido abierto. Cuando la comisión abra una, aparecerá aquí.</p>
+            {% else %}
+                <div class="csa-stack">
+                    {% for round in open_rounds %}
+                        {% set mine = order_by_round[round.id] ?? null %}
+                        <a class="cg-round-card" href="{{ path('panel_consumer_group_show', { id: round.id }) }}">
+                            <div class="cg-round-card__body">
+                                <div class="cg-round-card__title">{{ round.title }}</div>
+                                <div class="cg-round-card__meta">{{ round.producer ? round.producer.name : '' }}</div>
+                                <div class="cg-round-card__meta">
+                                    Cierre: {{ round.ordersCloseAt ? round.ordersCloseAt|date('d/m/Y H:i') : '—' }}
+                                    · Entrega: {{ round.deliveryDate ? round.deliveryDate|date('d/m/Y') : '—' }}
+                                </div>
+                            </div>
+                            <div class="cg-round-card__cta">
+                                {% if mine and not mine.empty %}
+                                    <span class="prl-chip prl-chip--activo"><span class="dot"></span>Ya apuntada</span>
+                                {% else %}
+                                    <span class="csa-btn csa-btn--primary csa-btn--sm">Apuntarme</span>
+                                {% endif %}
+                            </div>
+                        </a>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </section>
+
+        {# ============ PEDIDOS CONFIRMADOS ============ #}
+        {% if confirmed is not empty %}
+            <section>
+                <h2 class="csa-section-title">Se te entregará con la cesta</h2>
+                <div class="csa-stack">
+                    {% for order in confirmed %}
+                        {% set round = order.round %}
+                        <div class="cg-round-card">
+                            <div class="cg-round-card__body">
+                                <div class="cg-round-card__title">{{ round.title }}</div>
+                                <div class="cg-round-card__meta">
+                                    Entrega el {{ round.deliveryDate ? round.deliveryDate|date('d/m/Y') : '—' }} con tu cesta
+                                </div>
+                                <ul class="cg-round-card__lines">
+                                    {% for line in order.lines %}
+                                        {% if line.quantity > 0 %}
+                                            <li>{{ line.quantity|number_format(2, ',', '.') }} {{ line.roundItem.unit }} · {{ line.roundItem.name }}</li>
+                                        {% endif %}
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </section>
+        {% endif %}
+
+    </div>
+
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    <style>
+        .csa-section-title { font-size: 1.05rem; margin: 0 0 var(--csa-sp-3); }
+        .cg-round-card { display: flex; align-items: center; justify-content: space-between; gap: var(--csa-sp-4);
+            padding: var(--csa-sp-4); border: 1px solid var(--csa-rule); border-radius: 10px; background: #fff;
+            text-decoration: none; color: inherit; }
+        a.cg-round-card:hover { border-color: var(--csa-accent, #6b8f4e); }
+        .cg-round-card__title { font-weight: 600; }
+        .cg-round-card__meta { font-size: .85rem; color: var(--csa-muted); }
+        .cg-round-card__lines { margin: var(--csa-sp-2) 0 0; padding-left: var(--csa-sp-4); font-size: .9rem; }
+    </style>
+{% endblock %}
