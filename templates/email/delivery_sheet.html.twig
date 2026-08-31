@@ -10,7 +10,7 @@
 
     <p>
         Va adjunto el listado del reparto del
-        <strong>{{ pickup_date|format_date('full', locale='es') }}</strong>.
+        <strong>{{ pickup_date|format_datetime(pattern="EEEE d 'de' MMMM", locale='es') }}</strong>.
     </p>
 
     <p>
