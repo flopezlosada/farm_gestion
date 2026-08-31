@@ -77,6 +77,12 @@ class AppSettings
     /** Envío de los avisos de huecos del registro de jornada al supervisor (digest semanal + salida abierta). */
     public const EMAIL_STAFF_GAPS = 'email.staff_gaps';
 
+    /** Envío del listado de reparto en PDF al cerrarse el plazo de cada nodo (app:send-delivery-sheets). */
+    public const EMAIL_DELIVERY_SHEET = 'email.delivery_sheet';
+
+    /** Confirmación a cada socix de su cesta al cerrarse el plazo de su nodo (app:send-delivery-confirmations). */
+    public const EMAIL_DELIVERY_CONFIRMATION = 'email.delivery_confirmation';
+
     /**
      * Red de seguridad para entornos de prueba: si tiene valor, TODOS los emails
      * que envía la app se entregan SOLO a esa(s) dirección(es) — separadas por
@@ -99,6 +105,15 @@ class AppSettings
      * van a quien supervisa.
      */
     public const EMAIL_STAFF_GAPS_TO = 'email.staff_gaps_to';
+
+    /**
+     * Destinatario(s) del listado de reparto que sale al cerrar el plazo de cada
+     * nodo. Hoy es quien monta las cestas y abre el punto de recogida — la misma
+     * gente que ya lo imprime—, y por eso es una lista de direcciones y no una
+     * audiencia calculada: a quién debe llegar el listado es una decisión de la
+     * asociación, no del código, y mientras no esté tomada se rellena a mano.
+     */
+    public const EMAIL_DELIVERY_SHEET_TO = 'email.delivery_sheet_to';
 
     public const EMAIL_REDIRECT_TO = 'email.redirect_to';
 
@@ -223,6 +238,22 @@ class AppSettings
     public const CRON_STAFF_OPEN_SHIFT_ALERT = 'cron.staff_open_shift_alert';
 
     /**
+     * Envío del listado de reparto en cuanto se cierra el plazo de cambios de
+     * cada nodo (app:send-delivery-sheets). Cadencia diaria y no semanal porque
+     * cada nodo cierra su propio día: Madrid el martes por la noche y la Sierra
+     * el jueves, así que un disparo semanal sólo podría servir a uno de los dos.
+     */
+    public const CRON_DELIVERY_SHEET = 'cron.delivery_sheet';
+
+    /**
+     * Confirmación a lxs socixs de su cesta en cuanto cierra el plazo de su nodo
+     * (app:send-delivery-confirmations). Comparte disparador con el listado pero
+     * es tarea aparte: van a destinatarios distintos, y apagar el listado interno
+     * no debe callar el aviso a lxs socixs ni al revés.
+     */
+    public const CRON_DELIVERY_CONFIRMATION = 'cron.delivery_confirmation';
+
+    /**
      * Avisos de voluntariado: la tarea que abre por pasos las llamadas pidiendo
      * gente. Es la única de cadencia fina (por intervalo) porque un "falta gente
      * para mañana" no admite esperar al día siguiente.
@@ -331,6 +362,50 @@ class AppSettings
             'requires' => [],
             // Sin congelado no hay destinatarios: el recordatorio lee sólo
             // cestas ya materializadas (WeeklyBasketRepository::findPickedByDeliveryDateAndShares).
+            'depends_on' => [self::CRON_GENERATE_WEEKLY_DELIVERY],
+        ],
+        self::CRON_DELIVERY_SHEET => [
+            'command' => 'app:send-delivery-sheets',
+            'channels' => ['email'],
+            'needs_recipient' => true,
+            'confirm' => true,
+            'dry' => true,
+            // A las 7:00 y a diario: cada nodo cierra su plazo la noche anterior a
+            // su reparto, así que la tarea mira cada mañana quién cerró y manda
+            // sólo ese listado. Un disparo semanal serviría a un nodo y no al otro.
+            'schedule' => ['freq' => 'daily', 'hour' => 7],
+            'max_delay_hours' => 36,
+            // El canal es UNO (correo con el PDF adjunto), así que sus ajustes sí
+            // pueden inhibir la tarea entera sin dejar a nadie a medias. En cuanto
+            // este listado salga también por otra vía, esto tiene que vaciarse y
+            // comprobarse dentro del comando.
+            'requires' => [self::EMAIL_ENABLED, self::EMAIL_DELIVERY_SHEET],
+            // El listado que se manda tras el cierre tiene que ser el CONGELADO: si
+            // la semana no se materializó, el documento se dibujaría al vuelo y
+            // podría no coincidir con lo que quien reparte se encuentre el día del
+            // reparto.
+            'depends_on' => [self::CRON_GENERATE_WEEKLY_DELIVERY],
+        ],
+        self::CRON_DELIVERY_CONFIRMATION => [
+            'command' => 'app:send-delivery-confirmations',
+            'channels' => ['email'],
+            // Cada socix recibe la suya: no hay destinatario que configurar.
+            'needs_recipient' => false,
+            'confirm' => true,
+            'dry' => true,
+            // A las 7:00, como el listado y por lo mismo: cada nodo cierra su
+            // propio día. Va después en el manifiesto para que el listado interno
+            // salga primero si ambos corren en la misma pasada.
+            'schedule' => ['freq' => 'daily', 'hour' => 7],
+            'max_delay_hours' => 36,
+            // Canal único, así que sus ajustes pueden inhibir la tarea entera. EN
+            // CUANTO ESTA CONFIRMACIÓN SALGA TAMBIÉN POR PUSH hay que vaciar esto
+            // y comprobar el toggle del correo DENTRO del comando: `requires`
+            // inhibe la tarea completa —ni --force lo salta— y apagar el correo
+            // dejaría sin aviso a quien lo tiene activado en el móvil.
+            'requires' => [self::EMAIL_ENABLED, self::EMAIL_DELIVERY_CONFIRMATION],
+            // Confirma lo que hay en el listado congelado; sin congelar, confirmaría
+            // un dibujo que todavía puede moverse.
             'depends_on' => [self::CRON_GENERATE_WEEKLY_DELIVERY],
         ],
         self::CRON_ADMIN_DELIVERY_SUMMARY => [
@@ -479,6 +554,18 @@ class AppSettings
             'help' => 'Cubre los dos avisos al supervisor del control horario: el digest semanal con los días laborables sin fichar de cada trabajador, y el aviso de “salida abierta” cuando alguien se deja una entrada sin cerrar de un día anterior. Se envían a la dirección configurada en cada cron.',
             'default' => false,
         ],
+        self::EMAIL_DELIVERY_SHEET => [
+            'group' => 'Emails internos',
+            'label' => 'Listado de reparto al cerrarse el plazo',
+            'help' => 'Manda el listado del reparto en PDF en cuanto se cierra el plazo de cambios de cada nodo, a la dirección configurada más abajo. Es el mismo documento que se descarga desde Reparto, generado solo. Apagado, hay que seguir generándolo a mano.',
+            'default' => false,
+        ],
+        self::EMAIL_DELIVERY_CONFIRMATION => [
+            'group' => 'Emails a socixs',
+            'label' => 'Confirmación de la cesta al cerrarse el plazo',
+            'help' => 'Cuando cierra el plazo de cambios de cada nodo, escribe a cada socix diciéndole si esta semana recoge y qué día, o si no recoge porque pidió un cambio. Sirve para que quien creyó haber cambiado algo se entere a tiempo.',
+            'default' => false,
+        ],
         self::FEATURE_PARTNER_LOGIN => [
             'group' => 'Funcionalidades en rodaje',
             'label' => 'Acceso de socixs a la web',
@@ -532,6 +619,18 @@ class AppSettings
             'label' => 'Avisar a socixs de su recogida',
             'help' => 'Avisa a quincenales y mensuales del próximo reparto (app:send-pickup-reminders). Independiente del email del recordatorio: apagada aquí, la tarea ni se ejecuta.',
             'default' => true,
+        ],
+        self::CRON_DELIVERY_SHEET => [
+            'group' => 'Tareas programadas',
+            'label' => 'Enviar el listado al cerrar el reparto',
+            'help' => 'Cada mañana comprueba qué nodos cerraron su plazo de cambios la noche anterior y manda su listado en PDF (app:send-delivery-sheets). Independiente del email del listado: apagada aquí, la tarea ni se ejecuta.',
+            'default' => false,
+        ],
+        self::CRON_DELIVERY_CONFIRMATION => [
+            'group' => 'Tareas programadas',
+            'label' => 'Confirmar la cesta a lxs socixs',
+            'help' => 'Cada mañana, para los nodos que cerraron su plazo la noche anterior, escribe a cada socix con lo que le queda registrado (app:send-delivery-confirmations). Independiente del email de la confirmación: apagada aquí, la tarea ni se ejecuta.',
+            'default' => false,
         ],
         self::CRON_ADMIN_DELIVERY_SUMMARY => [
             'group' => 'Tareas programadas',
@@ -675,6 +774,13 @@ class AppSettings
             'group' => 'Emails internos',
             'label' => 'Destinatario(s) de los avisos de jornada',
             'help' => 'Dirección(es) de correo (separadas por comas) que reciben el resumen semanal de huecos y el aviso de salidas sin cerrar. Vacío = esas tareas no envían nada aunque estén encendidas.',
+            'default' => '',
+            'general' => true,
+        ],
+        self::EMAIL_DELIVERY_SHEET_TO => [
+            'group' => 'Emails internos',
+            'label' => 'Destinatario(s) del listado de reparto',
+            'help' => 'Dirección(es) de correo (separadas por comas) que reciben el listado del reparto en PDF al cerrarse el plazo de cada nodo. Vacío = la tarea no envía nada aunque esté encendida.',
             'default' => '',
             'general' => true,
         ],
