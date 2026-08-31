@@ -61,6 +61,25 @@ class SendDeliveryConfirmationsCommand extends AbstractCronCommand
             return $this->nothingToDo('Ningún nodo con el plazo recién cerrado');
         }
 
+        // Sin congelar NO se confirma nada, y aquí es más grave que en el listado:
+        // la audiencia se lee del modelo materializado, así que sobre una semana
+        // sin congelar sólo saldrían quienes movieron algo y el resto del nodo se
+        // quedaría sin noticia. Escribir a tres de sesenta es peor que no escribir.
+        $thawed = array_values(array_filter($pending, static fn (array $row): bool => !$row['frozen']));
+        $pending = array_values(array_filter($pending, static fn (array $row): bool => $row['frozen']));
+
+        foreach ($thawed as $row) {
+            $io->warning(sprintf(
+                'El reparto de %s del %s ha cerrado su plazo pero su semana NO está congelada: no se confirma nada.',
+                $row['node']->getName(),
+                $row['physical_date']->format('Y-m-d'),
+            ));
+        }
+
+        if ($pending === []) {
+            return $this->nothingToDo(sprintf('%d reparto(s) cerrados pero sin congelar', count($thawed)));
+        }
+
         $rows = [];
         $audiences = [];
         foreach ($pending as $delivery) {

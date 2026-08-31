@@ -40,6 +40,7 @@ class DeliverySheetSchedule
         private readonly NodeRepository $nodeRepository,
         private readonly NodeDeliveryDate $nodeDeliveryDate,
         private readonly DeliveryDeadline $deadline,
+        private readonly DeliveryModeResolver $modeResolver,
         private readonly AppSettings $settings,
         private readonly ClockInterface $clock,
     ) {
@@ -57,8 +58,13 @@ class DeliverySheetSchedule
      * Con $target se pide una fecha física concreta y se ignora el plazo, que es
      * lo que permite reenviar un listado o probar el correo sin esperar al cierre.
      *
+     * Cada reparto viene con `frozen`: si su semana está CONGELADA o todavía se
+     * dibujaría al vuelo. Importa porque lo que sale tras el cierre se anuncia
+     * como definitivo, y un dibujo todavía se puede mover; quien lo consume
+     * decide, pero tiene que saberlo.
+     *
      * @param \DateTimeImmutable|null $target Fecha física forzada, o null para el camino normal.
-     * @return list<array{node: Node, basket: Basket, physical_date: \DateTimeImmutable, deadline: \DateTimeImmutable}>
+     * @return list<array{node: Node, basket: Basket, physical_date: \DateTimeImmutable, deadline: \DateTimeImmutable, frozen: bool}>
      */
     public function pending(?\DateTimeImmutable $target = null): array
     {
@@ -87,6 +93,12 @@ class DeliverySheetSchedule
                     'basket' => $basket,
                     'physical_date' => $physicalDate,
                     'deadline' => $deadline,
+                    // Si la semana está CONGELADA o todavía se dibuja al vuelo. Se
+                    // informa en vez de filtrar aquí para que cada tarea lo diga en
+                    // su registro: descartar en silencio un nodo que ha cerrado su
+                    // plazo se leería como "no había nada que hacer", que es
+                    // exactamente lo contrario de lo que pasa.
+                    'frozen' => $this->modeResolver->mode($node, $basket) === DeliveryModeResolver::STONE,
                 ];
             }
         }

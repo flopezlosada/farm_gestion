@@ -8,6 +8,7 @@ use App\Repository\BasketRepository;
 use App\Repository\NodeRepository;
 use App\Service\AppSettings;
 use App\Service\Delivery\DeliveryDeadline;
+use App\Service\Delivery\DeliveryModeResolver;
 use App\Service\Delivery\DeliverySheetSchedule;
 use App\Service\Delivery\NodeDeliveryDate;
 use PHPUnit\Framework\TestCase;
@@ -120,12 +121,32 @@ class DeliverySheetScheduleTest extends TestCase
     }
 
     /**
+     * Un reparto cuya semana todavía no se ha congelado se devuelve igual, pero
+     * marcado: quien lo consume tiene que poder DECIRLO en su registro. Filtrarlo
+     * aquí en silencio se leería como "no había nada que hacer", que es justo lo
+     * contrario de lo que pasa.
+     *
+     * Se cazó ejecutando contra datos reales: el listado se dibujaba al vuelo y
+     * salía completo, pero la confirmación —que lee el modelo materializado— sólo
+     * encontraba a quienes habían movido algo, y el resto del nodo se quedaba sin
+     * noticia.
+     */
+    public function testUnRepartoSinCongelarSeDevuelveMarcado(): void
+    {
+        $pending = $this->scheduleAt('2026-09-02 07:00:00', DeliveryModeResolver::DRAW)->pending();
+
+        $this->assertCount(1, $pending);
+        $this->assertFalse($pending[0]['frozen']);
+    }
+
+    /**
      * Monta la regla con los dos nodos de siempre y un ciclo cuyo reparto cae el
      * miércoles en Madrid y el viernes en la Sierra.
      *
-     * @param string $now Instante al que se fija el reloj.
+     * @param string $now  Instante al que se fija el reloj.
+     * @param string $mode Modo de reparto que devuelve el resolutor.
      */
-    private function scheduleAt(string $now): DeliverySheetSchedule
+    private function scheduleAt(string $now, string $mode = DeliveryModeResolver::STONE): DeliverySheetSchedule
     {
         $madrid = $this->node('Madrid');
         $sierra = $this->node('Sierra');
@@ -137,7 +158,7 @@ class DeliverySheetScheduleTest extends TestCase
             ),
         );
 
-        return $this->schedule($now, [$madrid, $sierra], [$this->createMock(Basket::class)], $nodeDeliveryDate);
+        return $this->schedule($now, [$madrid, $sierra], [$this->createMock(Basket::class)], $nodeDeliveryDate, $mode);
     }
 
     /**
@@ -145,9 +166,15 @@ class DeliverySheetScheduleTest extends TestCase
      * @param Node[]  $nodes            Nodos que devuelve el repositorio.
      * @param Basket[] $baskets         Ciclos que devuelve el repositorio.
      * @param NodeDeliveryDate $nodeDeliveryDate Resolución de la fecha física.
+     * @param string  $mode             Modo de reparto que devuelve el resolutor.
      */
-    private function schedule(string $now, array $nodes, array $baskets, NodeDeliveryDate $nodeDeliveryDate): DeliverySheetSchedule
-    {
+    private function schedule(
+        string $now,
+        array $nodes,
+        array $baskets,
+        NodeDeliveryDate $nodeDeliveryDate,
+        string $mode = DeliveryModeResolver::STONE,
+    ): DeliverySheetSchedule {
         $nodeRepository = $this->createMock(NodeRepository::class);
         $nodeRepository->method('findBy')->willReturn($nodes);
 
@@ -161,11 +188,15 @@ class DeliverySheetScheduleTest extends TestCase
         $settings->method('getTime')->willReturn('23:59');
         $deadline = new DeliveryDeadline($nodeDeliveryDate, $settings);
 
+        $modeResolver = $this->createMock(DeliveryModeResolver::class);
+        $modeResolver->method('mode')->willReturn($mode);
+
         return new DeliverySheetSchedule(
             $basketRepository,
             $nodeRepository,
             $nodeDeliveryDate,
             $deadline,
+            $modeResolver,
             $settings,
             new MockClock(new \DateTimeImmutable($now)),
         );
