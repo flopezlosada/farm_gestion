@@ -26,6 +26,7 @@ use App\Service\Delivery\DeliveryLine;
 use App\Service\Delivery\DeliveryModeResolver;
 use App\Service\Delivery\DeliveryShiftApplier;
 use App\Service\Delivery\DeliveryShiftValidator;
+use App\Service\Delivery\DeliverySheetPdf;
 use App\Service\Delivery\ExtraBasketEditor;
 use App\Service\Delivery\HelperDeliveryResolver;
 use App\Service\Delivery\MonthlyDeliveryMatrix;
@@ -34,8 +35,6 @@ use App\Service\Delivery\NodeDeliveryDate;
 use App\Service\Delivery\PickupRelocator;
 use App\Service\Delivery\NodeDeliverySheet;
 use App\Service\Delivery\WeeklyBasketGenerator;
-use Dompdf\Dompdf;
-use Dompdf\Options;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bridge\Doctrine\Attribute\MapEntity;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -1378,74 +1377,38 @@ class DeliveryController extends AbstractController
     }
 
     /**
-     * Listado imprimible (PDF descargable vía dompdf) de un día para los nodos
-     * elegidos (?nodes[]=). Cada nodo va en su(s) hoja(s), aislado por salto de
-     * página. Reutiliza {@see NodeDeliverySheet}: si la semana está materializada
-     * la lee de piedra ({@see NodeDeliverySheet::build}); si no, la DIBUJA al vuelo
-     * desde la proyección ({@see NodeDeliverySheet::shape} sobre
-     * {@see WeeklyBasketGenerator::projectLinesForNode}) sin congelarla, igual que
-     * la pantalla v2.
+     * Descarga del listado imprimible de un día para los nodos elegidos
+     * (?nodes[]=). Un nodo por hoja, aislado por salto de página.
+     *
+     * El documento lo construye {@see DeliverySheetPdf::renderWeekly} —el mismo que
+     * adjunta la tarea programada al cerrar el reparto, para que lo que se imprime
+     * y lo que se envía no puedan divergir—; aquí sólo quedan la selección de nodos
+     * y las cabeceras de descarga.
      */
     #[Route('/imprimible/{basketId}/pdf', name: 'delivery_printable_pdf', methods: ['GET'], requirements: ['basketId' => '\d+'])]
     public function printablePdf(
         #[MapEntity(id: 'basketId')] Basket $basket,
         Request $request,
         NodeRepository $nodeRepo,
-        NodeDeliverySheet $sheetBuilder,
-        NodeDeliveryDate $nodeDeliveryDate,
-        WeeklyBasketGenerator $generator,
-        DeliveryModeResolver $deliveryModeResolver,
+        DeliverySheetPdf $sheetPdf,
     ): Response {
         $nodeIds = array_values(array_filter(array_map('intval', (array) $request->query->all('nodes'))));
 
-        // Piedra vs dibujo idéntico a byNode y POR NODO (vía DeliveryModeResolver): cada
-        // nodo se lee de su piedra (STONE) si la tiene materializada; si no y le toca, se
-        // dibuja al vuelo desde la proyección (DRAW) sin congelarla; EMPTY no imprime
-        // hoja. La decisión no es global del basket: un cierre que desplaza la cadencia
-        // de un nodo quincenal lo deja sin piedra en la semana nueva aunque otro nodo sí
-        // esté materializado.
-        $sheets = [];
-        foreach ($nodeRepo->findBy(['id' => $nodeIds ?: [0]], ['name' => 'ASC']) as $node) {
-            $sheet = $this->nodeSheet($node, $basket, $deliveryModeResolver, $sheetBuilder, $generator);
-            if ($sheet === null) {
-                continue; // EMPTY: no reparte, cancelado, o pasado sin materializar
-            }
-            $sheets[] = [
-                'node' => $node,
-                'physical_date' => $nodeDeliveryDate->physicalDateFor($basket, $node),
-                'sheet' => $sheet,
-            ];
-        }
+        $pdf = $sheetPdf->renderWeekly($basket, $nodeRepo->findBy(['id' => $nodeIds ?: [0]], ['name' => 'ASC']));
 
         // Ninguno de los nodos elegidos reparte ese día: no tiene sentido un PDF
         // de cero hojas. Volvemos al selector con un aviso. Cubre tanto el caso
         // de que ningún nodo reparta como el de forzar la URL con nodos que no
         // reparten.
-        if ($sheets === []) {
+        if ($pdf === null) {
             $this->addFlash('warning', 'Ningún nodo reparte ese día: no hay listado que generar.');
 
             return $this->redirectToRoute('delivery_printable_select', ['basketId' => $basket->getId()]);
         }
 
-        $html = $this->renderView('delivery/printable.html.twig', [
-            'basket' => $basket,
-            'sheets' => $sheets,
-        ]);
-
-        // DejaVu Sans: dompdf necesita una fuente con cobertura latina completa
-        // para acentos y la ñ (la fuente por defecto los rompe).
-        $options = new Options();
-        $options->set('defaultFont', 'DejaVu Sans');
-        $dompdf = new Dompdf($options);
-        $dompdf->loadHtml($html);
-        $dompdf->setPaper('A4', 'portrait');
-        $dompdf->render();
-
-        $filename = sprintf('reparto-%s.pdf', $basket->getDate()->format('Y-m-d'));
-
-        return new Response($dompdf->output(), Response::HTTP_OK, [
+        return new Response($pdf, Response::HTTP_OK, [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => sprintf('attachment; filename="%s"', $filename),
+            'Content-Disposition' => sprintf('attachment; filename="%s"', $sheetPdf->weeklyFilename($basket)),
         ]);
     }
 
@@ -1491,10 +1454,8 @@ class DeliveryController extends AbstractController
         Request $request,
         BasketRepository $basketRepo,
         NodeRepository $nodeRepo,
-        NodeDeliverySheet $sheetBuilder,
-        DeliveryModeResolver $deliveryModeResolver,
-        WeeklyBasketGenerator $generator,
         MonthlyDeliveryMatrix $matrixBuilder,
+        DeliverySheetPdf $sheetPdf,
     ): Response {
         // ym = "YYYY-MM" del selector. Ausente o mal formado → de vuelta al selector.
         if (preg_match('/^(\d{4})-(\d{2})$/', (string) $request->query->get('ym', ''), $mt) !== 1) {
@@ -1526,7 +1487,7 @@ class DeliveryController extends AbstractController
         foreach ($baskets as $basket) {
             $nodeSheets = [];
             foreach ($nodes as $node) {
-                $sheet = $this->nodeSheet($node, $basket, $deliveryModeResolver, $sheetBuilder, $generator);
+                $sheet = $sheetPdf->sheetFor($node, $basket);
                 if ($sheet !== null) {
                     $nodeSheets[] = ['node' => $node, 'sheet' => $sheet];
                 }
@@ -1534,50 +1495,13 @@ class DeliveryController extends AbstractController
             $weeks[] = ['date' => $basket->getDate(), 'nodes' => $nodeSheets];
         }
 
-        $html = $this->renderView('delivery/printable_monthly.html.twig', [
-            'matrix' => $matrixBuilder->build($weeks),
-            'year' => $year,
-            'month' => $month,
-        ]);
-
-        $options = new Options();
-        $options->set('defaultFont', 'DejaVu Sans');
-        $dompdf = new Dompdf($options);
-        $dompdf->loadHtml($html);
-        $dompdf->setPaper('A4', 'landscape');
-        $dompdf->render();
-
-        $filename = sprintf('reparto-mensual-%04d-%02d.pdf', $year, $month);
-
-        return new Response($dompdf->output(), Response::HTTP_OK, [
-            'Content-Type' => 'application/pdf',
-            'Content-Disposition' => sprintf('attachment; filename="%s"', $filename),
-        ]);
-    }
-
-    /**
-     * Hoja de reparto de un nodo en un viernes (Basket): de PIEDRA si la semana
-     * está materializada ({@see NodeDeliverySheet::build}); DIBUJADA al vuelo
-     * desde la proyección si al nodo le toca pero no está materializada; o null
-     * (EMPTY) si ese nodo no reparte ese día. Pieza común del listado semanal
-     * ({@see printablePdf}) y del mensual ({@see monthlyPrintablePdf}).
-     *
-     * @return array|null Estructura de {@see NodeDeliverySheet}, o null si EMPTY.
-     */
-    private function nodeSheet(
-        Node $node,
-        Basket $basket,
-        DeliveryModeResolver $modeResolver,
-        NodeDeliverySheet $sheetBuilder,
-        WeeklyBasketGenerator $generator,
-    ): ?array {
-        return match ($modeResolver->mode($node, $basket)) {
-            DeliveryModeResolver::STONE => $sheetBuilder->build($node, $basket),
-            DeliveryModeResolver::DRAW => $sheetBuilder->shape(array_merge(
-                $generator->projectLinesForNode($node, $basket),
-                $sheetBuilder->helperLines($node, $basket),
-            )),
-            default => null,
-        };
+        return new Response(
+            $sheetPdf->renderMonthly($matrixBuilder->build($weeks), $year, $month),
+            Response::HTTP_OK,
+            [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => sprintf('attachment; filename="%s"', $sheetPdf->monthlyFilename($year, $month)),
+            ],
+        );
     }
 }
