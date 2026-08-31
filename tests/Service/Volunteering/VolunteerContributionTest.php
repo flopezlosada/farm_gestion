@@ -72,4 +72,48 @@ class VolunteerContributionTest extends TestCase
         $this->assertTrue($sinEmpezar->showMedian(), 'La regla de la mediana no mira si ha empezado.');
         $this->assertFalse($sinEmpezar->hasStarted(), 'Y la home distingue ese caso con esto.');
     }
+
+    /**
+     * El caso que hace falta proteger: quien lleva media temporada a cero SÍ ve
+     * su cero. Callárselo le confirma que no hace falta que haga nada.
+     */
+    public function testAQuienLlevaTiempoACeroSiSeLeDice(): void
+    {
+        $veterana = new VolunteerContribution(minutes: 0, medianMinutes: 360, isNewcomer: false);
+
+        $this->assertFalse($veterana->hasHadNoChance());
+        $this->assertTrue($veterana->showMedian(), 'Y con la referencia al lado, que es lo que le dice cuánto es lo normal.');
+    }
+
+    /**
+     * Y el que lo limita: a quien acaba de entrar, bienvenida. Su cero no habla
+     * de esa persona, habla de que aún no ha pasado nada.
+     */
+    public function testAQuienAcabaDeLlegarNoSeLeEnsenaElCero(): void
+    {
+        $recienLlegada = new VolunteerContribution(minutes: 0, medianMinutes: 360, isNewcomer: true);
+
+        $this->assertTrue($recienLlegada->hasHadNoChance());
+    }
+
+    /**
+     * Acabar de llegar deja de importar en cuanto ha hecho algo: entonces hay un
+     * dato suyo que enseñar, y lo que toca es enseñarlo.
+     */
+    public function testAcabarDeLlegarNoTapaLoQueYaHaHecho(): void
+    {
+        $estrenada = new VolunteerContribution(minutes: 120, medianMinutes: 360, isNewcomer: true);
+
+        $this->assertFalse($estrenada->hasHadNoChance());
+        $this->assertTrue($estrenada->showMedian());
+    }
+
+    /**
+     * El defecto del constructor es el prudente. Quien añada una tercera
+     * pantalla y no piense en esto no va a reñir a nadie por descuido.
+     */
+    public function testPorDefectoNoSeRineACualquiera(): void
+    {
+        $this->assertTrue((new VolunteerContribution(0, 360))->hasHadNoChance());
+    }
 }

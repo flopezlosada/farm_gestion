@@ -19,6 +19,15 @@ use App\Repository\VolunteerSignupRepository;
  */
 class VolunteerContributions
 {
+    /**
+     * Cuántos días se considera que alguien "acaba de llegar".
+     *
+     * Tres meses y no uno porque las faenas se convocan sueltas: en cuatro
+     * semanas puede no haberse publicado ni una sola en su punto de recogida, y
+     * entonces su cero no habla de esa persona sino del calendario.
+     */
+    public const NEWCOMER_DAYS = 90;
+
     public function __construct(
         private readonly VolunteerSignupRepository $signups,
     ) {
@@ -38,7 +47,31 @@ class VolunteerContributions
         return new VolunteerContribution(
             $this->signups->sumCreditedMinutes($partner, $from, $to),
             $this->signups->medianCreditedMinutes($from, $to),
+            $this->isNewcomer($partner),
         );
+    }
+
+    /**
+     * Si lleva menos de {@see NEWCOMER_DAYS} en la asociación.
+     *
+     * SIN FECHA DE ALTA CUENTA COMO RECIÉN LLEGADA (21 de los socixs activos no
+     * la tienen, vienen del histórico en papel). No es que se crea que acaban de
+     * entrar: es que equivocarse por no darle el empujón a una veterana cuesta un
+     * empujón, y equivocarse riñendo a quien acaba de entrar cuesta la persona.
+     *
+     * @param Partner $partner el socix
+     *
+     * @return bool true si acaba de entrar, o si no consta cuándo entró
+     */
+    private function isNewcomer(Partner $partner): bool
+    {
+        $since = $partner->getInscriptionDate();
+
+        if (!$since instanceof \DateTimeInterface) {
+            return true;
+        }
+
+        return $since > new \DateTimeImmutable(sprintf('-%d days', self::NEWCOMER_DAYS));
     }
 
     /**

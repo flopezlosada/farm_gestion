@@ -24,27 +24,47 @@ namespace App\Service\Volunteering;
  * vez de metido dentro de {@see showMedian()}: las dos pantallas no lo tratan
  * igual, y unificarlas cambiaría una de las dos en silencio.
  *
- * En la pantalla de voluntariado la referencia se le enseña también a quien no
- * ha empezado: allí el bloque va al final, en pequeño y después de todo lo que
- * hace falta, así que se lee como un dato ("quien echa una mano suele dedicar
- * unas 9 h al año"). En la HOME no: allí el bloque le da la bienvenida a todo el
- * mundo, y a quien entra por primera vez —o a cualquiera en enero, cuando el
- * periodo se reinicia y todo el mundo está a cero— una barra vacía con la marca
- * de la mediana le dice "vas 9 h por debajo" antes de haber tenido ocasión de
- * hacer nada. Eso es un reproche, y quien recibe un reproche al entrar deja de
- * entrar — y con él se pierde el canal por el que gestiona su cesta, que es el
- * activo de verdad.
+ * ESTAR A CERO SÍ SE DICE, salvo a quien acaba de llegar. Un cero callado no
+ * moviliza a nadie: quien lleva media temporada sin haber echado una mano y ve
+ * una bienvenida entiende que no hace falta. La excepción es quien todavía no ha
+ * tenido ocasión —ver {@see hasHadNoChance()}—, porque a esa persona el cero no
+ * le informa de nada que dependa de ella.
+ *
+ * En enero no hace falta regla ninguna: cuando el periodo se reinicia y todo el
+ * mundo está a cero, la mediana también es 0 y {@see showMedian()} se apaga sola.
  */
 final class VolunteerContribution
 {
     /**
-     * @param int $minutes       minutos acreditados a este socix en el periodo
-     * @param int $medianMinutes mediana de minutos entre quienes han participado
+     * @param int  $minutes       minutos acreditados a este socix en el periodo
+     * @param int  $medianMinutes mediana de minutos entre quienes han participado
+     * @param bool $isNewcomer    si acaba de entrar en la asociación
+     *                            ({@see VolunteerContributions::NEWCOMER_DAYS}).
+     *                            Por defecto SÍ: quien construya esto sin pensarlo
+     *                            se queda en el lado que no riñe a nadie, que es
+     *                            el error barato de los dos.
      */
     public function __construct(
         public readonly int $minutes,
         public readonly int $medianMinutes,
+        public readonly bool $isNewcomer = true,
     ) {
+    }
+
+    /**
+     * Si todavía no ha tenido ocasión de echar una mano: está a cero y acaba de
+     * entrar. Es el único caso en el que el cero no se le enseña.
+     *
+     * A quien recibe un reproche el primer día se le pierde el canal por el que
+     * gestiona su cesta, que es el activo de verdad; y el cero de alguien que
+     * lleva tres semanas no dice nada de esa persona, sólo dice que aún no ha
+     * pasado nada.
+     *
+     * @return bool true si toca darle la bienvenida en vez del dato
+     */
+    public function hasHadNoChance(): bool
+    {
+        return !$this->hasStarted() && $this->isNewcomer;
     }
 
     /**
