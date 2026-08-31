@@ -507,14 +507,14 @@ class NodeController extends AbstractController
         // Sin correo no hay envío posible: mejor decirlo aquí que asignarla y que
         // el listado la descarte en silencio cada semana.
         if (!$partner->getEmail()) {
-            $this->addFlash('error', sprintf('%s no tiene correo en su ficha: no se le puede mandar el listado.', $partner->getNameForDelivery()));
+            $this->addFlash('error', sprintf('%s no tiene correo en su ficha: no se le puede mandar el listado.', $partner->getLegalName()));
 
             return $this->redirectToRoute('node_show', ['id' => $node->getId()]);
         }
 
         $node->addSheetRecipient($partner);
         $entityManager->flush();
-        $this->addFlash('success', sprintf('%s recibirá el listado de "%s".', $partner->getNameForDelivery(), $node->getName()));
+        $this->addFlash('success', sprintf('%s recibirá el listado de "%s".', $partner->getLegalName(), $node->getName()));
 
         return $this->redirectToRoute('node_show', ['id' => $node->getId()]);
     }
@@ -544,7 +544,7 @@ class NodeController extends AbstractController
         if ($partner instanceof Partner) {
             $node->removeSheetRecipient($partner);
             $entityManager->flush();
-            $this->addFlash('success', sprintf('%s ya no recibe el listado de "%s".', $partner->getNameForDelivery(), $node->getName()));
+            $this->addFlash('success', sprintf('%s ya no recibe el listado de "%s".', $partner->getLegalName(), $node->getName()));
         }
 
         return $this->redirectToRoute('node_show', ['id' => $node->getId()]);

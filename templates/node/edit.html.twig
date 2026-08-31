@@ -101,7 +101,7 @@
                     {% if node.sheetRecipients|length > 0 %}
                         <p style="margin: 0 0 var(--csa-sp-3);">
                             {% for recipient in node.sheetRecipients %}
-                                {{ recipient.nameForDelivery }}{% if not loop.last %} · {% endif %}
+                                {{ recipient.legalName }}{% if not loop.last %} · {% endif %}
                             {% endfor %}
                         </p>
                     {% else %}

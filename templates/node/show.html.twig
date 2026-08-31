@@ -305,7 +305,9 @@
                 <tbody>
                     {% for recipient in node.sheetRecipients %}
                         <tr>
-                            <td>{{ recipient.nameForDelivery }}</td>
+                            {# El nombre legal, por lo mismo que en el selector: aquí
+                               se mira a una persona, no una línea del listado. #}
+                            <td>{{ recipient.legalName }}</td>
                             <td><small>{{ recipient.email }}</small></td>
                             <td style="text-align: right;">
                                 <form method="post" action="{{ path('node_detach_sheet_recipient', { id: node.id, partnerId: recipient.id }) }}" style="display:inline;">
@@ -339,8 +341,19 @@
                             data-placeholder="Escribe un nombre…"
                             data-invalid-message="Escribe un nombre y elígelo de la lista.">
                         <option value="">— elige —</option>
+                        {# NOMBRE LEGAL, no `nameForDelivery`: ése devuelve el
+                         # display_name, que es el APODO DE REPARTO y lo tienen 115
+                         # de las 146 fichas con correo. Muchos son de pareja
+                         # ("Jessica y Ronald"), así que buscando a Patricia por su
+                         # nombre no aparecía. El apodo se añade detrás cuando
+                         # difiere: aquí se busca a una persona, pero en la casa a
+                         # mucha gente se la conoce por como sale en el listado, y
+                         # el buscador filtra por el texto visible. #}
                         {% for partner in sheet_recipient_candidates %}
-                            <option value="{{ partner.id }}">{{ partner.nameForDelivery }}</option>
+                            <option value="{{ partner.id }}">
+                                {{- partner.legalName -}}
+                                {%- if partner.displayName and partner.displayName != partner.legalName %} ({{ partner.displayName }}){% endif -%}
+                            </option>
                         {% endfor %}
                     </select>
                 </div>
