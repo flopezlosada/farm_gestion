@@ -248,52 +248,60 @@
                 </header>
                 <div class="prt-card__body">
 
-                    <div class="prt-basket__chips">
-                        <span class="prt-chip prt-chip--mod-{{ bs_id }}">
-                            {% if bs_id != 4 %}<span class="dot"></span>{% endif %}
-                            {{ bs_label }}
-                        </span>
-                        {% if bs_id == 3 and active_share.dayMonthOrder %}
-                            <span class="prt-chip prt-chip--mute">{% if active_share.dayMonthOrder == -1 %}última semana{% else %}{{ active_share.dayMonthOrder }}º viernes{% endif %}</span>
-                        {% endif %}
-                        {% if active_share.vegetablesBasketAmount and active_share.vegetablesBasketAmount > 1 %}
-                            <span class="prt-chip prt-chip--mute">×{{ active_share.vegetablesBasketAmount }} cestas</span>
-                        {% endif %}
-                    </div>
-
-                    <div class="prt-mini">
-                        <div class="prt-mini__cell">
-                            <div class="prt-mini__label">Huevos</div>
-                            {% if active_share.eggAmount %}
-                                <div class="prt-mini__value prt-mini__value--ochre">
-                                    {{ active_share.eggAmount.amount|default(active_share.eggAmount) }}
-                                    {% if active_share.eggPeriod %}<small>· {{ active_share.eggPeriod.name|default(active_share.eggPeriod) }}</small>{% endif %}
-                                </div>
-                            {% else %}
-                                <div class="prt-mini__value prt-mini__value--muted">Sin huevos</div>
-                            {% endif %}
-                        </div>
-                        <div class="prt-mini__cell">
-                            <div class="prt-mini__label">Precio mensual</div>
-                            <div class="prt-mini__value prt-mini__value--sage">
-                                {% if active_share.eggAmount and active_share.eggMonthPrice %}
-                                    {{ (active_share.monthPrice + active_share.eggMonthPrice)|number_format(2, ',', '.') }}<small>€</small>
-                                {% elseif active_share.monthPrice %}
-                                    {{ active_share.monthPrice|number_format(2, ',', '.') }}<small>€</small>
-                                {% else %}
-                                    <span class="prt-mini__value--muted">—</span>
+                    {# Filas etiqueta → valor en vez de celdas en rejilla. A 390px
+                     # las celdas caían a una columna igual, pero sin alinear: el
+                     # ojo tenía que buscar a qué etiqueta pertenecía cada cifra.
+                     # Así se lee de un vistazo y en voz alta.
+                     #
+                     # Cada fila admite una segunda línea con el matiz (cada cuándo,
+                     # qué viernes), que antes vivía en chips sueltos encima y
+                     # obligaba a relacionarlos con la caja de abajo. #}
+                    <dl class="pnl-rows">
+                        <div class="pnl-rows__row">
+                            <dt class="pnl-rows__label">Modalidad</dt>
+                            <dd class="pnl-rows__value">
+                                {{ bs_label }}
+                                {% if bs_id == 3 and active_share.dayMonthOrder %}
+                                    <span class="pnl-rows__sub">{% if active_share.dayMonthOrder == -1 %}la última semana del mes{% else %}el {{ active_share.dayMonthOrder }}º viernes del mes{% endif %}</span>
+                                {% elseif active_share.vegetablesBasketAmount and active_share.vegetablesBasketAmount > 1 %}
+                                    <span class="pnl-rows__sub">{{ active_share.vegetablesBasketAmount }} cestas cada vez</span>
                                 {% endif %}
-                            </div>
+                            </dd>
+                        </div>
+                        <div class="pnl-rows__row">
+                            <dt class="pnl-rows__label">Huevos</dt>
+                            <dd class="pnl-rows__value{% if not active_share.eggAmount %} pnl-rows__value--muted{% endif %}">
+                                {% if active_share.eggAmount %}
+                                    {{ active_share.eggAmount.amount|default(active_share.eggAmount) }}
+                                    {% if active_share.eggPeriod %}<span class="pnl-rows__sub">{{ active_share.eggPeriod.name|default(active_share.eggPeriod) }}</span>{% endif %}
+                                {% else %}
+                                    No llevas
+                                {% endif %}
+                            </dd>
+                        </div>
+                        <div class="pnl-rows__row">
+                            <dt class="pnl-rows__label">Cuota mensual</dt>
+                            <dd class="pnl-rows__value">
+                                {% if active_share.eggAmount and active_share.eggMonthPrice %}
+                                    {{ (active_share.monthPrice + active_share.eggMonthPrice)|number_format(2, ',', '.') }} €
+                                    <span class="pnl-rows__sub">cesta y huevos</span>
+                                {% elseif active_share.monthPrice %}
+                                    {{ active_share.monthPrice|number_format(2, ',', '.') }} €
+                                {% else %}
+                                    <span class="pnl-rows__value--muted">—</span>
+                                {% endif %}
+                                {% if partner.sharePayment %}<span class="pnl-rows__sub">{{ partner.sharePayment.name|lower }}</span>{% endif %}
+                            </dd>
                         </div>
                         {# La fecha de fin sólo se enseña si existe: "Sin fecha" en una
-                         # caja propia era una caja entera para decir que no pasa nada. #}
+                         # fila propia era una fila entera para decir que no pasa nada. #}
                         {% if active_share.endDate %}
-                            <div class="prt-mini__cell">
-                                <div class="prt-mini__label">Hasta</div>
-                                <div class="prt-mini__value">{{ active_share.endDate|date('d/m/Y') }}</div>
+                            <div class="pnl-rows__row">
+                                <dt class="pnl-rows__label">Hasta</dt>
+                                <dd class="pnl-rows__value">{{ active_share.endDate|date('d/m/Y') }}</dd>
                             </div>
                         {% endif %}
-                    </div>
+                    </dl>
 
                     {% if is_family_basket %}
                         <div class="prt-share">

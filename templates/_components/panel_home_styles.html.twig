@@ -164,4 +164,35 @@
     @media (min-width: 640px) {
         .csa-app .pnl-block__title { font-size: var(--csa-fs-xl); }
     }
+
+    /* ---------- filas etiqueta → valor ----------
+     * Para datos que se consultan, no que se comparan: la etiqueta a la
+     * izquierda y el valor a la derecha, una debajo de otra y separadas por una
+     * línea. En un móvil se lee de arriba abajo sin buscar a qué pertenece cada
+     * cifra, que es lo que pasaba con las celdas en rejilla al caer a una
+     * columna. */
+    .pnl-rows { margin: 0; }
+    .pnl-rows__row {
+        display: flex; align-items: baseline; justify-content: space-between;
+        gap: var(--csa-sp-4);
+        padding: var(--csa-sp-3) 0;
+        border-bottom: 1px solid var(--csa-rule-soft);
+    }
+    .pnl-rows__row:last-child { border-bottom: 0; padding-bottom: 0; }
+    .pnl-rows__row:first-child { padding-top: 0; }
+    .pnl-rows__label {
+        flex-shrink: 0;
+        font-size: var(--csa-fs-sm); color: var(--csa-ink-soft);
+    }
+    .pnl-rows__value {
+        margin: 0; text-align: right;
+        font-size: var(--csa-fs-md); font-weight: 600; color: var(--csa-ink);
+    }
+    .pnl-rows__value--muted { font-weight: 400; color: var(--csa-ink-muted); }
+    /* El matiz debajo del valor y no al lado: "cada semana" o "domiciliación"
+     * explican el dato, no lo compiten. */
+    .pnl-rows__sub {
+        display: block; margin-top: 2px;
+        font-size: var(--csa-fs-xs); font-weight: 400; color: var(--csa-ink-muted);
+    }
 </style>
