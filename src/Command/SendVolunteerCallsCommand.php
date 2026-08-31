@@ -50,6 +50,16 @@ class SendVolunteerCallsCommand extends AbstractCronCommand
     {
         $this
             ->addOption('force', null, InputOption::VALUE_NONE, 'Ignora el gate de la tarea programada (ejecución manual)')
+            // Desde que este aviso también sale por correo, entra en el contrato
+            // de todo lo que manda email: sin vía de repetición, un correo que no
+            // llegó sólo se rescataría borrando su apunte a mano en la base.
+            //
+            // OJO con usarlo: el mismo aviso lleva push, y repetir un push no es
+            // gratis — el permiso del navegador se gasta una vez y quien lo apaga
+            // no vuelve. Por eso el gobierno de la repetición sigue siendo el
+            // UNIQUE (offer, scope) del dominio y esto es la salida de
+            // emergencia, no el camino normal.
+            ->addOption('resend', null, InputOption::VALUE_NONE, 'Repite el envío aunque ya conste emitido (para un correo que no llegó). Cuidado: repite también el push')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Lista los avisos que saldrían, sin enviar ni registrar nada');
     }
 

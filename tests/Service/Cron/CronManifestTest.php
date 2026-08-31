@@ -227,13 +227,15 @@ class CronManifestTest extends KernelTestCase
             // la base de datos. La pantalla ofrece el botón "Reenviar".
             //
             // Se mira el canal y no `confirm` porque no todo lo que entrega algo
-            // se rescata igual. app:send-volunteer-calls es push y su repetición
-            // NO la gobierna un apunte sino el UNIQUE (offer, scope) del
-            // dominio: que un aviso salga dos veces es peor que perderlo —el
-            // permiso de notificaciones se gasta una sola vez—, así que ahí
-            // repetir es una decisión de negocio y no un rescate técnico. El
-            // otro cron de push, el de recordatorios, sí usa el ledger y sí
-            // acepta --resend.
+            // se rescata igual: lo que sale por push se gobierna por el dominio
+            // —el UNIQUE (offer, scope) de los avisos de voluntariado— y no por
+            // un apunte, porque que un aviso salga dos veces es peor que
+            // perderlo: el permiso de notificaciones se gasta una sola vez.
+            //
+            // app:send-volunteer-calls manda las dos cosas desde que el aviso
+            // también sale por correo, así que acepta --resend por la mitad de
+            // email, con el aviso escrito en el propio comando de que repetirlo
+            // repite también el push.
             if (\in_array('email', $meta['channels'], true)) {
                 $this->assertTrue($definition->hasOption('resend'), sprintf('El comando de "%s" manda correo y no acepta --resend.', $key));
             }

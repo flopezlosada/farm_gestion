@@ -15,6 +15,7 @@ use App\Service\Cron\EffectLedger;
 use App\Service\Delivery\DeliveryDeadline;
 use App\Service\Delivery\NodeDeliveryDate;
 use App\Service\Delivery\PickupReminderMailer;
+use App\Service\Notification\NotificationPreferences;
 use App\Service\Delivery\PickupReminderPusher;
 use App\Service\Push\PushSender;
 use PHPUnit\Framework\TestCase;
@@ -199,12 +200,19 @@ class PickupReminderPusherTest extends TestCase
         $urlGenerator = $this->createMock(UrlGeneratorInterface::class);
         $urlGenerator->method('generate')->willReturn('/panel');
 
+        $preferences = $this->createMock(NotificationPreferences::class);
+        $preferences->method('wants')->willReturn(true);
+        // filter() es el que usan de verdad estos servicios —una consulta para
+        // toda la lista en vez de una por socix—: devuelve a todo el mundo.
+        $preferences->method('filter')->willReturnArgument(0);
+
         return new PickupReminderPusher(
             $push,
             $repository,
             $this->mailer(),
             $ledger ?? $this->ledger(),
             $urlGenerator,
+            $preferences,
         );
     }
 
@@ -223,6 +231,14 @@ class PickupReminderPusherTest extends TestCase
         // consume $settings.
         $deadline = new DeliveryDeadline($this->createMock(NodeDeliveryDate::class), $settings);
 
+        // Todo el mundo quiere el aviso: aquí se comprueba el push, no la
+        // política de preferencias, que tiene sus propios tests.
+        $preferences = $this->createMock(NotificationPreferences::class);
+        $preferences->method('wants')->willReturn(true);
+        // filter() es el que usan de verdad estos servicios —una consulta para
+        // toda la lista en vez de una por socix—: devuelve a todo el mundo.
+        $preferences->method('filter')->willReturnArgument(0);
+
         return new PickupReminderMailer(
             $this->createMock(MailerInterface::class),
             $settings,
@@ -230,6 +246,7 @@ class PickupReminderPusherTest extends TestCase
             $this->createMock(UrlGeneratorInterface::class),
             $deadline,
             $this->ledger(),
+            $preferences,
         );
     }
 
