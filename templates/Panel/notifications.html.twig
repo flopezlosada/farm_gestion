@@ -91,7 +91,17 @@
 
                     <p style="margin-top: var(--csa-sp-4);">
                         <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">Guardar</button>
-                        {{ csa.hint('Lo que apagues aquí deja de llegarte, pero sigue estando en la web cuando entres: no te pierdes nada, sólo dejamos de darte el toque.') }}
+                        {#
+                         # OJO CON LO QUE SE PROMETE AQUÍ. Antes ponía «sigue
+                         # estando en la web cuando entres», dando por hecha una
+                         # bandeja de avisos que NO existe todavía. Con eso, quien
+                         # apagase los dos canales de su cesta se quedaba sin
+                         # enterarse por ningún sitio creyendo lo contrario.
+                         #
+                         # El día que haya campanita, esta frase vuelve —y entonces
+                         # será verdad—. Hasta entonces se dice lo que hay.
+                         #}
+                        {{ csa.hint('Lo que apagues deja de llegarte. Tu cesta y las tareas siguen estando en tu panel, pero tendrás que entrar tú a mirarlas.') }}
                     </p>
                 </form>
             {% endblock %}
