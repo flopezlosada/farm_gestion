@@ -1,0 +1,139 @@
+{# ============================================================
+ # Estilos de la HOME del panel del socix.
+ #
+ # Aparte de partner_card_styles (.prt-*) a propósito: aquello viste la FICHA
+ # de un socix —la que mira gestión— y la comparten dos pantallas. Lo de aquí
+ # es el portal de quien entra a ver su cesta, y mezclarlos significaría que
+ # retocar el portal mueve la ficha de administración sin querer.
+ #
+ # MÓVIL PRIMERO. La medida base es la de un teléfono; el escritorio se
+ # construye añadiendo en el @media, nunca al revés. Casi todo el mundo entra
+ # aquí desde el móvil el viernes por la mañana, de pie.
+ #
+ # Colores SIEMPRE por token --csa-*, sin hex suelto. El blanco literal sí:
+ # aquí es "el color del papel sobre el verde", no un color del sistema.
+ # ============================================================ #}
+<style>
+    /* ---------- saludo ----------
+     * La fecha de hoy encima del nombre, y no de adorno: es lo que da sentido
+     * al "es hoy" de la tarjeta de abajo. Sin ella, "es hoy" obliga a mirar el
+     * móvil por otro lado para saber qué día es hoy. */
+    .pnl-greet { margin-bottom: var(--csa-sp-4); }
+    .pnl-greet__date {
+        font-size: var(--csa-fs-sm); color: var(--csa-ink-muted);
+        text-transform: capitalize;
+    }
+    .csa-app .pnl-greet__title {
+        font-family: var(--csa-serif); font-weight: 500; font-size: 27px;
+        letter-spacing: -0.025em; line-height: var(--csa-lh-tight);
+        color: var(--csa-ink); margin: var(--csa-sp-1) 0 0;
+        text-transform: capitalize;
+    }
+    .pnl-greet__chips {
+        display: flex; flex-wrap: wrap; align-items: center;
+        gap: var(--csa-sp-2); margin-top: var(--csa-sp-2);
+    }
+    /* En el móvil el avatar sobra: ya está arriba en la barra, y aquí se comería
+     * el ancho que necesita el saludo. */
+    .pnl-greet__avatar { display: none; }
+
+    /* ---------- la próxima cesta ----------
+     * Verde sólido y no un aviso suave: es el único bloque de la pantalla que
+     * cambia cada semana y a lo que se entra. Todo lo demás de esta home es
+     * consulta; esto es la cita. */
+    .pnl-next {
+        background: var(--csa-green); color: #fff;
+        border-radius: var(--csa-radius-xl);
+        padding: var(--csa-sp-5) var(--csa-sp-5) var(--csa-sp-4);
+        margin-bottom: var(--csa-sp-3);
+    }
+    .pnl-next--quiet {
+        background: var(--csa-surface); color: var(--csa-ink);
+        border: 1px solid var(--csa-rule);
+    }
+    .pnl-next__head {
+        display: flex; align-items: center; gap: var(--csa-sp-2);
+        font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase;
+        font-weight: 600; opacity: 0.9;
+    }
+    .pnl-next--quiet .pnl-next__head { opacity: 1; color: var(--csa-ink-muted); }
+    .pnl-next__soon {
+        margin-left: auto; padding: 3px 9px; border-radius: var(--csa-radius-pill);
+        background: #fff; color: var(--csa-green);
+        font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+    }
+    .csa-app .pnl-next__when {
+        font-family: var(--csa-serif); font-weight: 500; font-size: 24px;
+        letter-spacing: -0.015em; line-height: 1.15;
+        margin: var(--csa-sp-3) 0 0; text-transform: capitalize;
+    }
+    /* Sitio y horario en columna en el móvil: en una sola línea, "Torremocha ·
+     * Viernes de 18:00 a 20:00" se parte por donde le da la gana. */
+    .pnl-next__facts {
+        list-style: none; margin: var(--csa-sp-2) 0 0; padding: 0;
+        display: flex; flex-direction: column; gap: var(--csa-sp-1);
+        font-size: var(--csa-fs-sm);
+    }
+    .pnl-next__facts li { display: flex; align-items: baseline; gap: var(--csa-sp-2); }
+    .pnl-next__facts i { width: 13px; text-align: center; opacity: 0.85; }
+    .pnl-next__actions {
+        display: flex; gap: var(--csa-sp-2); margin-top: var(--csa-sp-4);
+    }
+    /* 44px de alto: es el mínimo que acierta un pulgar sin apuntar. */
+    .pnl-next__btn {
+        flex: 1; min-height: 44px; border-radius: var(--csa-radius-md);
+        display: inline-flex; align-items: center; justify-content: center;
+        gap: var(--csa-sp-2); cursor: pointer;
+        font-family: var(--csa-sans); font-size: var(--csa-fs-sm); font-weight: 600;
+        background: rgba(255, 255, 255, 0.18); color: #fff;
+        border: 1px solid rgba(255, 255, 255, 0.4);
+        text-decoration: none; text-align: center;
+    }
+    .pnl-next__btn:hover { background: rgba(255, 255, 255, 0.28); color: #fff; }
+    .pnl-next__btn--solid {
+        background: #fff; color: var(--csa-green); border-color: #fff;
+    }
+    .pnl-next__btn--solid:hover { background: #fff; color: var(--csa-green); opacity: 0.92; }
+    /* En la variante clara (sin entrega por delante) los botones no pueden ser
+     * blancos sobre blanco. */
+    .pnl-next--quiet .pnl-next__btn {
+        background: var(--csa-surface-alt); color: var(--csa-ink);
+        border-color: var(--csa-rule);
+    }
+    .pnl-next--quiet .pnl-next__btn--solid {
+        background: var(--csa-green); color: #fff; border-color: var(--csa-green);
+    }
+
+    @media (min-width: 640px) {
+        /* En escritorio el saludo recupera el avatar y el nombre entero: hay
+         * sitio, y ahí la pantalla también hace de "mi ficha". */
+        .pnl-greet {
+            display: grid; grid-template-columns: auto 1fr; align-items: center;
+            gap: var(--csa-sp-5);
+            padding-bottom: var(--csa-sp-5); margin-bottom: var(--csa-sp-5);
+            border-bottom: 1px solid var(--csa-rule);
+        }
+        .pnl-greet__date { grid-column: 2; }
+        .csa-app .pnl-greet__title { font-size: 31px; }
+        .pnl-greet__avatar { display: grid; grid-row: 1 / span 3; }
+
+        /* La cita, en una línea: fecha a la izquierda, datos y botones a la
+         * derecha. El mismo contenido, sin scroll. */
+        .pnl-next {
+            display: flex; align-items: center; flex-wrap: wrap;
+            gap: var(--csa-sp-4) var(--csa-sp-6);
+            padding: var(--csa-sp-5) var(--csa-sp-6);
+        }
+        .pnl-next__main { flex: 1; min-width: 220px; }
+        .pnl-next__head { opacity: 0.85; }
+        .pnl-next__soon { margin-left: var(--csa-sp-3); }
+        .csa-app .pnl-next__when { font-size: 25px; margin-top: var(--csa-sp-1); }
+        .pnl-next__facts { flex-direction: row; gap: var(--csa-sp-5); margin-top: 0; }
+        .pnl-next__actions { margin-top: 0; }
+        .pnl-next__btn { flex: 0 0 auto; padding: 0 var(--csa-sp-4); min-height: 40px; }
+    }
+
+    {# "Quién te la prepara" NO se estila aquí: ya existe .vol-prep en
+     # volunteering_styles, resuelve las caras y el texto, y encima cubre el caso
+     # que el diseño no contempla —que no se haya apuntado nadie todavía—. #}
+</style>
