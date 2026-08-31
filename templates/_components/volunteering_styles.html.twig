@@ -407,18 +407,29 @@
         .vol-phase__actions .csa-btn { width: 100%; justify-content: center; }
     }
 
-    /* ---- Quien coordina, al pie de lo que hay que hacer ----
-       Con su teléfono: es a quien se llama si algo pasa ese día. */
+    /* La tira de datos viene a dos columnas de la ficha de socix, donde son
+       muchos más datos. Aquí son tres —cuándo, dónde, cuánto computa— y en 2×2
+       dejaban una fila coja y un palmo de aire. Override local: la ficha de
+       socix no se toca. */
+    .prt .prt-mini { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    @media (max-width: 900px) {
+        .prt .prt-mini { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 560px) {
+        .prt .prt-mini { grid-template-columns: 1fr; }
+    }
+
+    /* ---- Quien coordina ----
+       Dentro de la banda de ocupación y no en tarjeta propia: es una línea, y
+       abrirle una sección con titular dejaba media pantalla en blanco. */
     .vol-owner {
         display: flex;
         align-items: center;
         gap: var(--csa-sp-3);
-        margin-top: var(--csa-sp-4);
-        padding-top: var(--csa-sp-4);
-        border-top: 1px solid var(--csa-rule-soft);
+        flex: 0 0 auto;
+        padding-left: var(--csa-sp-5);
+        border-left: 1px solid var(--csa-rule-soft);
     }
-    /* Sin descripción no hay nada de lo que separarse: la línea sobra. */
-    .vol-owner--alone { margin-top: 0; padding-top: 0; border-top: 0; }
     .vol-owner__avatar {
         display: inline-flex;
         align-items: center;
@@ -500,6 +511,17 @@
     }
     .vol-occupancy__note strong { color: var(--csa-terracotta); font-weight: 600; }
 
+    @media (max-width: 900px) {
+        /* Apilado, el separador vertical de quien coordina no separa nada: pasa
+           a ser una línea por encima. */
+        .vol-owner {
+            flex-basis: 100%;
+            padding: var(--csa-sp-3) 0 0;
+            border-left: 0;
+            border-top: 1px solid var(--csa-rule-soft);
+        }
+        .vol-owner__contact { margin-left: auto; }
+    }
     @media (max-width: 640px) {
         .vol-occupancy { gap: var(--csa-sp-3); }
         .vol-occupancy__note { flex-basis: 100%; }

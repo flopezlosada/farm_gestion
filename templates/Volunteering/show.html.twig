@@ -268,18 +268,10 @@
                 {% endif %}
             </div>
 
-            <div class="prt-mini__cell">
-                <div class="prt-mini__label">Quién viene</div>
-                <div class="prt-mini__value">
-                    {{ offer.filledSlots }}{% if offer.slots %} de {{ offer.slots }}{% endif %}
-                    {% if offer.slots and offer.remainingSlots > 0 %}
-                        <small>faltan {{ offer.remainingSlots }}</small>
-                    {% elseif offer.slots %}
-                        <small>completa</small>
-                    {% endif %}
-                </div>
-
-            </div>
+            {# "Quién viene" ya no está aquí: la banda de ocupación lo dice mejor
+             # —con nombres y huecos— y en la tira sólo repetía la cifra. Además
+             # decía "completa" cuando venía MÁS gente que plazas, porque
+             # remainingSlots no baja de cero. #}
 
             {# Cuánto vale el trabajo es CONFIGURACIÓN de la tarea, y hasta que
              # se cierra es lo único que hay sobre horas. En cuanto se imputa
@@ -302,48 +294,13 @@
             </div>
         </div>
 
-        {% if offer.description or offer.coordinator %}
+        {# La tarjeta sólo si hay algo que contar. Un titular con un icono para una
+         # sola línea debajo es media pantalla de aire por nada; quien coordina se
+         # ha ido a la banda de ocupación, donde cabe sin abrir una sección. #}
+        {% if offer.description %}
             <section class="prt-card">
                 <div class="prt-card__head"><h2 class="prt-card__title"><span class="accent"></span>Qué hay que hacer</h2></div>
-                <div class="prt-card__body">
-                    {% if offer.description %}{{ offer.description|nl2br }}{% endif %}
-
-                    {# Quien está al mando, al pie de lo que hay que hacer y con su
-                     # teléfono: es la persona a la que se llama si algo pasa ese día,
-                     # y tenerla aquí ahorra buscarla en la ficha de socixs —que quien
-                     # coordina un área ni siquiera puede abrir. #}
-                    {% if offer.coordinator %}
-                        <div class="vol-owner{% if not offer.description %} vol-owner--alone{% endif %}">
-                            <span class="vol-owner__avatar" aria-hidden="true">
-                                {{ (offer.coordinator.name|first ~ offer.coordinator.surname|first)|upper }}
-                            </span>
-                            <div class="vol-owner__who">
-                                <span class="vol-owner__role">Quien coordina la tarea</span>
-                                <span class="vol-owner__name">{{ offer.coordinator.name }} {{ offer.coordinator.surname }}</span>
-                                {# Sus horas se dicen AQUÍ porque no está en la lista de quién
-                                 # viene: coordinar no es asistir, y lo normal es que no vaya. Sin
-                                 # esto, sacarlo de la tabla dejaría sin rastro visible lo que se
-                                 # le computa. #}
-                                {% set coord_signup = offer.signups|filter(s => s.coordination)|first %}
-                                {% if coord_signup and coord_signup.attended %}
-                                    <span class="vol-owner__hours">Se le han computado {{ csa.qty((coord_signup.creditedMinutes ?: 0) / 60) }} h</span>
-                                {% elseif offer.creditedMinutes %}
-                                    <span class="vol-owner__hours">Se le computarán {{ csa.qty(offer.creditedMinutes / 60) }} h al cerrar la tarea</span>
-                                {% endif %}
-                            </div>
-                            <div class="vol-owner__contact">
-                                {% if offer.coordinator.celular %}
-                                    <a class="csa-table__iconbtn" href="tel:{{ offer.coordinator.celular|replace({' ': ''}) }}"
-                                       title="Llamar a {{ offer.coordinator.name }}"><i class="fa fa-phone"></i></a>
-                                {% endif %}
-                                {% if offer.coordinator.email %}
-                                    <a class="csa-table__iconbtn" href="mailto:{{ offer.coordinator.email }}"
-                                       title="Escribir a {{ offer.coordinator.name }}"><i class="fa fa-envelope-o"></i></a>
-                                {% endif %}
-                            </div>
-                        </div>
-                    {% endif %}
-                </div>
+                <div class="prt-card__body">{{ offer.description|nl2br }}</div>
             </section>
         {% endif %}
 
@@ -421,6 +378,40 @@
                         {{ offer.guests }} {{ offer.guests == 1 ? 'persona viene' : 'personas vienen' }} de fuera{% if offer.guestsNote %} ({{ offer.guestsNote }}){% endif %}.
                     {% endif %}
                 </p>
+
+                {# Quien coordina, en la misma banda y no en una tarjeta propia: es
+                 # una línea de información y abrirle una sección con titular dejaba
+                 # media pantalla en blanco. Aquí va junto a las plazas, que es de lo
+                 # que responde. #}
+                {% if offer.coordinator %}
+                    {% set coord_signup = offer.signups|filter(s => s.coordination)|first %}
+                    <div class="vol-owner">
+                        <span class="vol-owner__avatar" aria-hidden="true">
+                            {{ (offer.coordinator.name|first ~ offer.coordinator.surname|first)|upper }}
+                        </span>
+                        <div class="vol-owner__who">
+                            <span class="vol-owner__role">Coordina</span>
+                            <span class="vol-owner__name">{{ offer.coordinator.name }} {{ offer.coordinator.surname }}</span>
+                            {# Sus horas se dicen AQUÍ porque no está en la lista de quién
+                             # viene: coordinar no es asistir, y lo normal es que no vaya. #}
+                            {% if coord_signup and coord_signup.attended %}
+                                <span class="vol-owner__hours">{{ csa.qty((coord_signup.creditedMinutes ?: 0) / 60) }} h computadas</span>
+                            {% elseif offer.creditedMinutes %}
+                                <span class="vol-owner__hours">{{ csa.qty(offer.creditedMinutes / 60) }} h al cerrar</span>
+                            {% endif %}
+                        </div>
+                        <div class="vol-owner__contact">
+                            {% if offer.coordinator.celular %}
+                                <a class="vol-actions__btn" href="tel:{{ offer.coordinator.celular|replace({' ': ''}) }}"
+                                   title="Llamar a {{ offer.coordinator.name }}"><i class="fa fa-phone"></i></a>
+                            {% endif %}
+                            {% if offer.coordinator.email %}
+                                <a class="vol-actions__btn" href="mailto:{{ offer.coordinator.email }}"
+                                   title="Escribir a {{ offer.coordinator.name }}"><i class="fa fa-envelope-o"></i></a>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endif %}
             </div>
         {% endif %}
 
@@ -581,8 +572,14 @@
                          # constantemente. Quien coordina YA NO se anota aquí: se dice al crear
                          # la tarea y su inscripción se pone sola, porque preguntarlo en medio
                          # de pasar lista era pedir una decisión de configuración durante otra
-                         # faena — y así no lo ponía nadie. #}
-                        {% if can_edit %}
+                         # faena — y así no lo ponía nadie.
+                         #
+                         # SÓLO CUANDO LA TAREA YA HA PASADO. Antes salía siempre, y anotar a
+                         # alguien "que vino" a algo que es dentro de seis días no significa
+                         # nada: pedía horas por un trabajo que no ha ocurrido, y encima la
+                         # lista no tenía dónde enseñarlas. Quien quiera venir se apunta desde
+                         # su panel; esto es para arreglar la lista después. #}
+                        {% if can_edit and is_closing %}
                             <hr class="vol-sep">
 
                             {# Sin título propio en serif: la pestaña ya dice de qué va el
