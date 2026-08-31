@@ -82,7 +82,7 @@ class SendDeliverySheetsCommand extends AbstractCronCommand
             return $this->nothingToDo('Sin destinatario configurado');
         }
 
-        $target = $this->resolveTargetDate($input, $io);
+        $target = $this->optionalDate($input, $io);
         if ($target === false) {
             return Command::FAILURE;
         }
@@ -194,32 +194,4 @@ class SendDeliverySheetsCommand extends AbstractCronCommand
     }
 
 
-    /**
-     * Fecha física forzada por --date, null si no se pasó (camino normal), o
-     * false si la fecha es inválida.
-     *
-     * Parseo estricto: `new \DateTimeImmutable('2026-02-30')` haría rollover
-     * silencioso a marzo y mandaría el listado del día equivocado.
-     *
-     * @param InputInterface $input Entrada del comando.
-     * @param SymfonyStyle   $io    Salida, para reportar la fecha inválida.
-     * @return \DateTimeImmutable|null|false
-     */
-    private function resolveTargetDate(InputInterface $input, SymfonyStyle $io): \DateTimeImmutable|null|false
-    {
-        $date = $input->getOption('date');
-        if ($date === null) {
-            return null;
-        }
-
-        $parsed = \DateTimeImmutable::createFromFormat('!Y-m-d', $date);
-        $errors = \DateTimeImmutable::getLastErrors();
-        if ($parsed === false || ($errors !== false && ($errors['warning_count'] > 0 || $errors['error_count'] > 0))) {
-            $io->error(sprintf('Fecha inválida en --date: "%s". Formato esperado YYYY-MM-DD.', $date));
-
-            return false;
-        }
-
-        return $parsed;
-    }
 }

@@ -155,6 +155,37 @@ abstract class AbstractCronCommand extends Command
     }
 
     /**
+     * Lee una opción de fecha del tipo `--date=YYYY-MM-DD`, que varias tareas
+     * ofrecen para apuntar a un día concreto en pruebas y reenvíos.
+     *
+     * Parseo ESTRICTO y no `new \DateTimeImmutable($valor)`: éste acepta
+     * "2026-02-30" y hace rollover silencioso a marzo, así que la tarea trabajaría
+     * sobre el día equivocado sin decir nada.
+     *
+     * @param InputInterface $input  Entrada del comando.
+     * @param SymfonyStyle   $io     Salida, para reportar la fecha inválida.
+     * @param string         $option Nombre de la opción.
+     * @return \DateTimeImmutable|null|false La fecha, null si no se pasó, false si es inválida.
+     */
+    protected function optionalDate(InputInterface $input, SymfonyStyle $io, string $option = 'date'): \DateTimeImmutable|null|false
+    {
+        $date = $input->getOption($option);
+        if ($date === null) {
+            return null;
+        }
+
+        $parsed = \DateTimeImmutable::createFromFormat('!Y-m-d', $date);
+        $errors = \DateTimeImmutable::getLastErrors();
+        if ($parsed === false || ($errors !== false && ($errors['warning_count'] > 0 || $errors['error_count'] > 0))) {
+            $io->error(sprintf('Fecha inválida en --%s: "%s". Formato esperado YYYY-MM-DD.', $option, $date));
+
+            return false;
+        }
+
+        return $parsed;
+    }
+
+    /**
      * El trabajo de la tarea. Debe devolver un código de salida de consola;
      * cuando no había nada que hacer, devolver {@see self::nothingToDo()} para
      * que el registro lo distinga de haber trabajado.
