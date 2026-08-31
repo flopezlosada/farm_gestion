@@ -66,6 +66,50 @@ class NotificationInboxTest extends AbstractPartnerAuthenticatedTest
         self::assertSelectorTextContains('.csa-page-header h1', 'Mis avisos');
     }
 
+    /**
+     * EL SHELL SE ELIGE POR LA FICHA DE SOCIX, NO POR EL ROL, y este par de casos
+     * existe porque hacerlo por el rol estaba MAL: la jerarquía de security.yaml
+     * cuelga ROLE_PARTNER de ROLE_ADMIN, así que `is_granted('ROLE_PARTNER')` es
+     * verdadero para cualquier admin y la bandeja le salía con el shell del panel
+     * del socix —«Mi panel», «Mi calendario», «Voluntariado»— teniendo partner_id a
+     * NULL: un panel personal sin nada personal que enseñar.
+     *
+     * Se comprueba por una marca del lateral del socix y no por el nombre del
+     * layout: es lo que de verdad ve quien entra.
+     */
+    public function testUnaCuentaDeGestionSinFichaVeElShellDeGestion(): void
+    {
+        $client = static::createClient();
+
+        $user = static::getContainer()->get('doctrine')->getRepository(User::class)
+            ->loadUserByIdentifier('admin');
+        self::assertNotNull($user, 'Fixtures sin User admin; carga UserFixtures en db_test.');
+        self::assertNull($user->getPartner(), 'El admin de las fixtures no debe tener ficha de socix.');
+
+        $client->loginUser($user);
+        $client->request('GET', '/avisos');
+
+        self::assertResponseIsSuccessful();
+        self::assertSelectorTextNotContains('body', 'Mi calendario');
+        self::assertSelectorTextContains('.csa-page-header', 'Mi cuenta');
+        // Y sin el enlace a las preferencias, que vive en /panel y sin ficha rebota.
+        self::assertSelectorTextNotContains('body', 'Cómo te avisamos');
+    }
+
+    /**
+     * La contrapartida: a quien SÍ tiene ficha no se le cambia nada.
+     */
+    public function testUnSocixSigueViendoElShellDeSuPanel(): void
+    {
+        $client = $this->createPartnerAuthenticatedClient();
+        $client->request('GET', '/avisos');
+
+        self::assertResponseIsSuccessful();
+        self::assertSelectorTextContains('body', 'Mi calendario');
+        self::assertSelectorTextContains('.csa-page-header', 'Mi área');
+        self::assertSelectorTextContains('body', 'Cómo te avisamos');
+    }
+
     public function testUnAvisoSinLeerSaleMarcadoComoNuevo(): void
     {
         $client = $this->createPartnerAuthenticatedClient();
