@@ -1,0 +1,61 @@
+{# ============================================================
+ # Paso intermedio de confirmación de pedido: recuento de socias a
+ # avisar + interruptor para enviar el email. Al confirmar, la
+ # pedido pasa a CONFIRMED.
+ #
+ # El controller pasa:
+ #   - round  ConsumerGroupRound
+ #   - stats  { total, withEmail }
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Confirmar pedido · Grupo de consumo{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('consumer_group_index') }}">Grupo de consumo</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('consumer_group_show', { id: round.id }) }}">{{ round.title }}</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Confirmar</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header('Grupo de consumo', 'Confirmar pedido', round.title) }}
+
+    <div class="csa-card csa-form-narrow">
+        <p>
+            Vas a <strong>confirmar</strong> este pedido. Hazlo cuando el pedido supere el mínimo del
+            productor{% if round.minimumCondition %} (<em>{{ round.minimumCondition }}</em>){% endif %}.
+            A partir de aquí el pedido de las socias es firme y se les puede pedir el pago.
+        </p>
+
+        <p>
+            Hay <strong>{{ stats.total }}</strong> socia{{ stats.total == 1 ? '' : 's' }} apuntada{{ stats.total == 1 ? '' : 's' }},
+            de las cuales <strong>{{ stats.withEmail }}</strong> tiene{{ stats.withEmail == 1 ? '' : 'n' }} email.
+        </p>
+
+        <form method="post" action="{{ path('consumer_group_confirm', { id: round.id }) }}">
+            <input type="hidden" name="_token" value="{{ csrf_token('consumer_group_confirm_' ~ round.id) }}">
+
+            <label class="cg-check" style="display: inline-flex; align-items: center; gap: var(--csa-sp-2); margin: var(--csa-sp-3) 0;">
+                <input type="checkbox" name="send_email" value="1" checked>
+                <span>Avisar por email a las {{ stats.withEmail }} socia{{ stats.withEmail == 1 ? '' : 's' }} con correo</span>
+            </label>
+
+            <p class="csa-muted" style="margin-top: 0;">
+                Si el interruptor general de correo está apagado, el pedido se confirma igual pero no se envía el email.
+            </p>
+
+            <div class="csa-row" style="justify-content: flex-end; margin-top: var(--csa-sp-4);">
+                {{ csa.btn('Cancelar', { variant: 'ghost', href: path('consumer_group_show', { id: round.id }) }) }}
+                <button type="submit" class="csa-btn csa-btn--primary">Confirmar pedido</button>
+            </div>
+        </form>
+    </div>
+
+{% endblock %}

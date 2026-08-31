@@ -1,0 +1,110 @@
+{# ============================================================
+ # Ficha de un productor + su catálogo.
+ #   - producer  Producer
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% set can_edit = is_granted('ROLE_GESTION_GRUPO_CONSUMO_EDIT') %}
+
+{% block title %}{{ producer.name }} · Productores{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('consumer_group_index') }}">Grupo de consumo</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('consumer_group_producer_index') }}">Productores</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ producer.name }}</span>
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header('Grupo de consumo', producer.name, producer.selfManaged ? 'Autogestiona sus pedidos' : 'Gestionado por la comisión') }}
+
+    <div class="csa-stack-lg">
+
+        <div class="csa-card">
+            <div class="csa-row-between" style="align-items: flex-start; gap: var(--csa-sp-4);">
+                <dl class="cg-meta">
+                    {% if producer.contactName %}<div><dt>Contacto</dt><dd>{{ producer.contactName }}</dd></div>{% endif %}
+                    {% if producer.email %}<div><dt>Email</dt><dd>{{ producer.email }}</dd></div>{% endif %}
+                    {% if producer.phone %}<div><dt>Teléfono</dt><dd>{{ producer.phone }}</dd></div>{% endif %}
+                    {% if producer.web %}<div><dt>Web</dt><dd>{{ producer.web }}</dd></div>{% endif %}
+                    {% if producer.minimumNote %}<div><dt>Pedido mínimo</dt><dd>{{ producer.minimumNote }}</dd></div>{% endif %}
+                </dl>
+                {% if can_edit %}
+                    <div class="csa-row" style="gap: var(--csa-sp-2);">
+                        {{ csa.btn('Editar', { variant: 'ghost', href: path('consumer_group_producer_edit', { id: producer.id }) }) }}
+                    </div>
+                {% endif %}
+            </div>
+            {% if producer.notes %}<p class="cg-desc">{{ producer.notes|nl2br }}</p>{% endif %}
+        </div>
+
+        <div class="csa-card">
+            <div class="csa-row-between" style="margin-bottom: var(--csa-sp-3);">
+                <h2 class="csa-card__title" style="margin: 0;">Catálogo</h2>
+                {% if can_edit %}
+                    <a href="{{ path('consumer_group_product_new', { id: producer.id }) }}" class="csa-btn csa-btn--primary csa-btn--sm">
+                        <i class="fa fa-plus"></i> Añadir producto
+                    </a>
+                {% endif %}
+            </div>
+            {% if producer.products is empty %}
+                <p class="csa-muted">Sin productos en el catálogo. {% if can_edit %}Añade el primero con el botón de arriba.{% endif %}</p>
+            {% else %}
+                <div class="prl prl-table-wrap">
+                <table class="prl-table">
+                    <thead>
+                        <tr><th>Producto</th><th class="tight">Categoría</th><th class="tight">Unidad</th><th class="tight">Precio ref.</th><th class="tight">Estado</th><th class="actions"></th></tr>
+                    </thead>
+                    <tbody>
+                        {% for product in producer.products %}
+                            <tr>
+                                <td>{{ product.name }}{% if product.description %} <span class="csa-muted">— {{ product.description }}</span>{% endif %}</td>
+                                <td class="tight">{{ product.category ? product.category.name : '—' }}</td>
+                                <td class="tight">{{ product.unit }}</td>
+                                <td class="tight">{{ product.referencePrice is not null ? product.referencePrice|number_format(2, ',', '.') ~ ' €' : '—' }}</td>
+                                <td class="tight">{{ product.active ? 'Activo' : 'Inactivo' }}</td>
+                                <td class="actions">
+                                    {% if can_edit %}
+                                        <a href="{{ path('consumer_group_product_edit', { id: product.id }) }}" title="Editar"><i class="fa fa-pencil"></i></a>
+                                        <form method="post" action="{{ path('consumer_group_product_delete', { id: product.id }) }}" style="display:inline;" onsubmit="return confirm('¿Borrar “{{ product.name }}” del catálogo?')">
+                                            <input type="hidden" name="_token" value="{{ csrf_token('consumer_group_product_delete_' ~ product.id) }}">
+                                            <button type="submit" class="prl-btn prl-btn--sm" title="Borrar"><i class="fa fa-trash"></i></button>
+                                        </form>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                </div>
+            {% endif %}
+        </div>
+
+        {% if can_edit %}
+            <div class="csa-row" style="justify-content: flex-end;">
+                <form method="post" action="{{ path('consumer_group_producer_delete', { id: producer.id }) }}"
+                      onsubmit="return confirm('¿Borrar este productor? Si tiene rondas no se podrá; márcalo inactivo en su lugar.')">
+                    <input type="hidden" name="_token" value="{{ csrf_token('consumer_group_producer_delete_' ~ producer.id) }}">
+                    <button type="submit" class="csa-btn csa-btn--ghost">Borrar productor</button>
+                </form>
+            </div>
+        {% endif %}
+
+    </div>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    <style>
+        .cg-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--csa-sp-3); margin: 0; }
+        .cg-meta dt { font-size: .8rem; color: var(--csa-muted); }
+        .cg-meta dd { margin: 0; font-weight: 600; }
+        .cg-desc { margin-top: var(--csa-sp-3); }
+    </style>
+{% endblock %}

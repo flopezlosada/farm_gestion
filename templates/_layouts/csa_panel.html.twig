@@ -54,6 +54,11 @@
               url: path('panel_survey_index'), active: route starts with 'panel_survey', tab: false,
               hint: 'Lo que la asociación te pregunta' },
         ] : [])
+        |merge(is_granted('FEATURE_GRUPO_CONSUMO') ? [
+            { label: 'Grupo de consumo', short: 'Pedidos', icon: 'fa-shopping-basket',
+              url: path('panel_consumer_group_index'), active: route starts with 'panel_consumer_group', tab: false,
+              hint: 'Pedidos de despensa y productoras aliadas' },
+        ] : [])
         |merge([
             { label: 'Mi perfil', short: 'Perfil', icon: 'fa-user',
               url: path('panel_profile'), active: route starts with 'panel_profile', tab: false,

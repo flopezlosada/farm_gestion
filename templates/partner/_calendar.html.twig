@@ -23,6 +23,12 @@
    el socio (móvil) edita por toques con los botones del panel, sin arrastre. #}
 {% set ro = cal.readonly|default(false) %}
 {% set dnd = cal.dnd|default(false) %}
+{% set cg_all = cg_deliveries is defined ? cg_deliveries : [] %}
+{# Icono por categoría del producto del pedido (FontAwesome 4). Categoría nueva sin
+   entrada → cesta genérica. Mapa fijo: escalar = añadir aquí (o migrar a un campo en
+   la categoría si crecen mucho). Clave = nombre de la categoría en minúsculas. #}
+{% set CG_ICONS = {'aceite': 'fa-tint', 'verdura': 'fa-leaf', 'fruta': 'fa-lemon-o', 'legumbre': 'fa-circle-o', 'legumbres': 'fa-circle-o'} %}
+{% set CG_ICON_DEFAULT = 'fa-shopping-basket' %}
 
 {# Lista (solo lectura) de lo que lleva una entrega ese día. El contenido del día ya no
    se edita por componente: el modelo es "todo junto por día". #}
@@ -39,6 +45,49 @@
     {% else %}
         <p class="csa-muted">Sin componentes.</p>
     {% endfor %}
+{% endmacro %}
+
+{# Filas del/los pedido(s) del grupo de consumo de un día, en el MISMO formato que la
+   cesta/huevos (icono redondo por categoría + producto + cantidad·productor). Se pintan
+   dentro de "Qué se lleva ese día", después de los huevos. `with_header` pone el
+   encabezado cuando el día no tiene cesta (saltado/cerrado/solo-pedido) y por tanto no
+   lo puso ya la lista de la cesta. #}
+{% macro cg_rows(cg_today, icons, icon_default, with_header) %}
+    {% if cg_today is not empty %}
+        {% if with_header %}<div class="rcal-sect">Qué se lleva ese día</div>{% endif %}
+        {% for d in cg_today %}
+            {% for line in d.order.lines %}
+                {% if line.quantity > 0 %}
+                    {% set cat = line.product and line.product.category ? line.product.category.name|lower : '' %}
+                    <div class="rcal-comp">
+                        <span class="rcal-comp__ic cg"><i class="fa {{ icons[cat]|default(icon_default) }}"></i></span>
+                        <span class="rcal-comp__t">
+                            <span class="rcal-comp__name">{{ line.roundItem.name }}</span>
+                            <span class="rcal-comp__sub">{{ line.quantity|number_format(2, ',', '.') }} {{ line.roundItem.unit }}{% if d.order.round.producer %} · {{ d.order.round.producer.name }}{% endif %}</span>
+                        </span>
+                    </div>
+                {% endif %}
+            {% endfor %}
+        {% endfor %}
+        <p class="csa-muted rcal-cgnote">
+            {{ (cg_today|first).withBasket ? 'Pedido del grupo de consumo, se entrega junto a tu cesta.' : 'Pedido del grupo de consumo, se entrega en tu punto de recogida.' }}
+            La fecha la fija el grupo y no se puede cambiar.
+        </p>
+    {% endif %}
+{% endmacro %}
+
+{# Marcadores de pedido para una celda de la rejilla: un iconito por pedido, con el icono
+   de la categoría de su primer producto (distinto por tipo). #}
+{% macro cg_cell_marks(cg_here, icons, icon_default) %}
+    {% if cg_here is not empty %}
+        <span class="rcal-mk rcal-mk--cg">
+            {% for d in cg_here %}
+                {% set fl = d.order.lines|filter(l => l.quantity > 0)|first %}
+                {% set cat = fl and fl.product and fl.product.category ? fl.product.category.name|lower : '' %}
+                <span class="rcal-mk__i cg" title="Pedido del grupo de consumo{% if d.order.round.producer %} · {{ d.order.round.producer.name }}{% endif %}"><i class="fa {{ icons[cat]|default(icon_default) }}"></i></span>
+            {% endfor %}
+        </span>
+    {% endif %}
 {% endmacro %}
 
 {% if partner.sharePartner %}
@@ -104,6 +153,7 @@
                     {% set is_sel = slot and selected and slot.basket.id == selected.basket.id %}
                     {% set wknd = day.date.format('N') in [6, 7] %}
                     {% set is_today = day.date.format('Y-m-d') == date('today').format('Y-m-d') %}
+                    {% set cg_here = cg_all|filter(d => d.order.round.deliveryDate and d.order.round.deliveryDate|date('Y-m-d') == day.date|date('Y-m-d')) %}
                     {% if slot and slot.closed|default(false) %}
                         {# Semana CERRADA (excepción de cancelación: festivo/vacaciones). No
                            hay reparto para nadie. Gris, no arrastrable ni editable; navegable
@@ -145,15 +195,36 @@
                                     {% endfor %}
                                 </span>
                             {% endif %}
+                            {{ _self.cg_cell_marks(cg_here, CG_ICONS, CG_ICON_DEFAULT) }}
                         </a>
                     {% else %}
                         {# Celda libre. Si el nodo reparte ese día (dropBasketId) y no es solo
-                           lectura, es destino válido para soltar una entrega arrastrada (mover). #}
-                        <div class="rcal-cell empty{{ not day.inMonth ? ' out' }}{{ wknd ? ' wknd' }}{{ is_today ? ' rcal-today' }}"
-                             {% if day.dropBasketId and not ro %}data-rcal-target data-rcal-to="{{ day.dropBasketId }}"{% endif %}>
-                            <span class="n">{{ day.date.format('j') }}</span>
-                            {% if is_today %}<span class="rcal-today-tag">hoy</span>{% endif %}
-                        </div>
+                           lectura, es destino válido para soltar una entrega arrastrada (mover).
+                           Si además hay pedido del grupo de consumo ese día, se marca con su
+                           iconito; y si el día es una entrega SALTADA (papelera), se hace
+                           navegable para poder ver el pedido en el panel. #}
+                        {# Un día sin cesta pero CON pedido también debe poder pincharse para ver
+                           "qué se lleva ese día". Dos vías según por qué no hay cesta:
+                           (a) la entrega está SALTADA (en la papelera) → sigue teniendo Basket,
+                               se navega por `sel` a su slot saltado;
+                           (b) la socia no recibe cesta esa semana → no hay slot, se navega por
+                               fecha (`seld`) y el panel dibuja un panel solo-pedido. #}
+                        {% set cg_skip = cg_here is not empty ? (tray|default([])|filter(t => t.date|date('Y-m-d') == day.date|date('Y-m-d'))|first) : null %}
+                        {% set cg_day_sel = cg_selected_date is defined and cg_selected_date and cg_selected_date == day.date|date('Y-m-d') %}
+                        {% if cg_here is not empty %}
+                            <a href="{{ path(cal.route_view, cal.idp|merge(cg_skip ? { year: day.date.format('Y'), month: day.date.format('n'), sel: cg_skip.basket.id } : { year: day.date.format('Y'), month: day.date.format('n'), seld: day.date|date('Y-m-d') })) }}"
+                               class="rcal-cell empty rcal-cg-day{{ cg_day_sel ? ' sel' }}{{ not day.inMonth ? ' out' }}{{ wknd ? ' wknd' }}{{ is_today ? ' rcal-today' }}">
+                                <span class="n">{{ day.date.format('j') }}</span>
+                                {% if is_today %}<span class="rcal-today-tag">hoy</span>{% endif %}
+                                {{ _self.cg_cell_marks(cg_here, CG_ICONS, CG_ICON_DEFAULT) }}
+                            </a>
+                        {% else %}
+                            <div class="rcal-cell empty{{ not day.inMonth ? ' out' }}{{ wknd ? ' wknd' }}{{ is_today ? ' rcal-today' }}"
+                                 {% if day.dropBasketId and not ro %}data-rcal-target data-rcal-to="{{ day.dropBasketId }}"{% endif %}>
+                                <span class="n">{{ day.date.format('j') }}</span>
+                                {% if is_today %}<span class="rcal-today-tag">hoy</span>{% endif %}
+                            </div>
+                        {% endif %}
                     {% endif %}
                 {% endfor %}
             {% endfor %}
@@ -161,6 +232,7 @@
         <div class="rcal-legend">
             <span class="lg"><span class="rcal-mk__i veg"><i class="fa fa-leaf"></i></span>Verdura</span>
             <span class="lg"><span class="rcal-mk__i egg"><span class="rcal-egg"></span></span>Huevos</span>
+            {% if cg_all is not empty %}<span class="lg"><span class="rcal-mk__i cg"><i class="fa fa-shopping-basket"></i></span>Pedido</span>{% endif %}
         </div>
         </div>{# /.rcal-body #}
     </div>{# /.rcal-grid #}
@@ -201,8 +273,24 @@
 
     {# ===== PANEL DEL DÍA SELECCIONADO ===== #}
     <div class="rcal-panel">
-        {% if selected %}
+        {% set cg_day = cg_selected_date is defined and cg_selected_date
+            ? cg_all|filter(d => d.order.round.deliveryDate and d.order.round.deliveryDate|date('Y-m-d') == cg_selected_date)
+            : [] %}
+        {% if cg_day is not empty %}
+            {# Día SIN cesta pero con pedido: panel solo-pedido (se llegó pinchando el día,
+               por `seld`). La entrega es fija; no hay acciones de cesta. #}
+            <div class="rcal-panel__hd">
+                <div class="rcal-panel__eyebrow"><i class="fa fa-shopping-basket"></i> Recoges</div>
+                <div class="rcal-panel__day">{{ date(cg_selected_date)|format_date('full', locale='es')|capitalize }}</div>
+                {% if pickup_place %}<div class="rcal-panel__where"><i class="fa fa-map-marker"></i>Recoge en {{ pickup_place }}</div>{% endif %}
+            </div>
+            <div class="rcal-panel__bd">
+                {{ _self.cg_rows(cg_day, CG_ICONS, CG_ICON_DEFAULT, true) }}
+            </div>
+        {% elseif selected %}
             {% set bid = selected.basket.id %}
+            {# Pedido(s) del grupo de consumo que se entregan el día seleccionado. #}
+            {% set cg_today = cg_all|filter(d => d.order.round.deliveryDate and d.order.round.deliveryDate|date('Y-m-d') == selected.date|date('Y-m-d')) %}
             {# Vacío = sin componentes y no saltada explícitamente: no recoge nada. #}
             {% set is_empty = not selected.skipped and selected.items is empty %}
             {% set is_closed = selected.closed|default(false) %}
@@ -270,6 +358,8 @@
                     <div class="rcal-sect">Qué se lleva ese día</div>
 
                     {{ _self.components(selected, EGG) }}
+                    {# El pedido se lista aquí, como una fila más después de los huevos. #}
+                    {{ _self.cg_rows(cg_today, CG_ICONS, CG_ICON_DEFAULT, false) }}
 
                     {# CESTA EXTRA de esa semana (PartnerBasketExtra): típicamente una cesta
                        trasladada SUMANDO desde otro día. Las cantidades de arriba ya la
@@ -393,6 +483,15 @@
                         <div class="rcal-hint" style="text-align: center;"><i class="fa fa-lock"></i> Se recoge hoy o ya pasó · solo lectura</div>
                     </div>
                 {% endif %}
+            {% endif %}
+
+            {# En día SALTADO o CERRADO no hay lista de cesta arriba, pero el pedido llega
+               igual (entrega fija e independiente): se muestra en su propia sección. En día
+               activo ya va integrado en "Qué se lleva ese día". #}
+            {% if (selected.skipped or selected.closed|default(false)) and cg_today is not empty %}
+                <div class="rcal-panel__bd">
+                    {{ _self.cg_rows(cg_today, CG_ICONS, CG_ICON_DEFAULT, true) }}
+                </div>
             {% endif %}
         {% else %}
             <div class="rcal-empty">

@@ -1,0 +1,77 @@
+{# ============================================================
+ # Productos del pedido: elegir qué productos del catálogo del
+ # productor entran y su precio de pedido.
+ #   - round          ConsumerGroupRound
+ #   - catalog        ConsumerGroupProduct[] (activos + los ya en el pedido)
+ #   - current_price  map product_id => precio de pedido actual
+ #   - included       map product_id => true (si está en el pedido)
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Productos del pedido · Grupo de consumo{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('consumer_group_index') }}">Grupo de consumo</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('consumer_group_show', { id: round.id }) }}">{{ round.title }}</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Productos</span>
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header('Grupo de consumo', 'Productos del pedido', round.producer ? round.producer.name : '') }}
+
+    <div class="csa-card csa-form-narrow">
+        {% if catalog is empty %}
+            <p class="csa-muted">
+                El productor no tiene productos activos en su catálogo.
+                <a href="{{ path('consumer_group_producer_show', { id: round.producer.id }) }}">Añádelos primero</a>.
+            </p>
+        {% else %}
+            <p class="csa-muted" style="margin-top: 0;">
+                Marca los productos que entran en este pedido y ajusta su precio. El precio es de este pedido; el del catálogo es solo de referencia.
+            </p>
+            <form method="post" action="{{ path('consumer_group_items', { id: round.id }) }}">
+                <input type="hidden" name="_token" value="{{ csrf_token('consumer_group_items_' ~ round.id) }}">
+                <div class="cg-items">
+                    {% for product in catalog %}
+                        <div class="cg-item-row">
+                            <label class="cg-item-row__inc">
+                                <input type="checkbox" name="include[{{ product.id }}]" value="1" {{ included[product.id]|default(false) ? 'checked' : '' }}>
+                                <span>{{ product.name }} <span class="csa-muted">/ {{ product.unit }}</span></span>
+                            </label>
+                            <div class="cg-item-row__price">
+                                <input type="number" min="0" step="0.01" inputmode="decimal"
+                                       name="price[{{ product.id }}]"
+                                       value="{{ current_price[product.id]|default(product.referencePrice) }}"
+                                       class="csa-input" placeholder="0,00">
+                                <span class="csa-muted">€ / {{ product.unit }}</span>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+
+                <div class="csa-row" style="justify-content: flex-end; margin-top: var(--csa-sp-4);">
+                    {{ csa.btn('Volver', { variant: 'ghost', href: path('consumer_group_show', { id: round.id }) }) }}
+                    <button type="submit" class="csa-btn csa-btn--primary">Guardar productos</button>
+                </div>
+            </form>
+        {% endif %}
+    </div>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    <style>
+        .cg-items { display: flex; flex-direction: column; gap: var(--csa-sp-2); }
+        .cg-item-row { display: flex; align-items: center; justify-content: space-between; gap: var(--csa-sp-3); padding: var(--csa-sp-2) 0; border-bottom: 1px solid var(--csa-rule); }
+        .cg-item-row__inc { display: inline-flex; align-items: center; gap: var(--csa-sp-2); font-weight: 400; }
+        .cg-item-row__inc input { width: auto; height: auto; }
+        .cg-item-row__price { display: inline-flex; align-items: center; gap: var(--csa-sp-2); }
+        .cg-item-row__price .csa-input { width: 7rem; }
+    </style>
+{% endblock %}

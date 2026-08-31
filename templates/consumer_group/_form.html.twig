@@ -1,0 +1,42 @@
+{# ============================================================
+ # Cabecera del pedido: productor + datos. Los productos de la
+ # pedido se eligen aparte (pantalla "Productos del pedido").
+ # ============================================================ #}
+{% import '_macros/csa.html.twig' as csa %}
+{% form_theme form 'form_div_layout.html.twig' %}
+
+{{ form_start(form, { attr: { class: 'csa-form-narrow', 'data-csa-dropdowns': '1' } }) }}
+
+    <div class="csa-stack-lg">
+
+        {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Pedido', subtitle: 'Productor, plazo de apuntes y día de entrega.' } %}
+            {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
+                <div class="csa-form-grid">
+                    {{ csa.field(form.title, 'Título', { full: true }) }}
+                    {{ csa.field(form.producer, 'Productor') }}
+                    {{ csa.field(form.ordersCloseAt, 'Cierre de apuntes') }}
+                    {{ csa.field(form.deliveryDate, 'Fecha de entrega') }}
+                    {{ csa.field(form.minimumCondition, 'Condición de mínimo (informativa)') }}
+                    {{ csa.field(form.description, 'Descripción para las socias', { full: true }) }}
+                </div>
+                {% if create_hint|default(false) %}
+                    <p class="csa-muted" style="margin-top: var(--csa-sp-3);">
+                        Al crear el pedido se añadirán los productos activos del catálogo del productor, a su precio de referencia. Luego podrás ajustar cuáles entran y a qué precio.
+                    </p>
+                {% endif %}
+            {% endblock %}
+        {% endembed %}
+
+        <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+            <div></div>
+            <div class="csa-row">
+                {{ csa.btn('Cancelar', { variant: 'ghost', href: path('consumer_group_index') }) }}
+                <button type="submit" class="csa-btn csa-btn--primary">{{ submit_label|default('Guardar') }}</button>
+            </div>
+        </div>
+
+    </div>
+
+    {{ form_rest(form) }}
+{{ form_end(form, { render_rest: false }) }}

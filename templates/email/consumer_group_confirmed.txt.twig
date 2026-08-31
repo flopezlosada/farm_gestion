@@ -1,0 +1,14 @@
+Hola {{ partner.name }},
+
+Tu pedido del grupo de consumo «{{ round.title }}» ({{ round.producer }}) está CONFIRMADO.
+{% if round.deliveryDate %}
+Se te entregará el {{ round.deliveryDate|format_date('full', locale='es') }} junto con tu cesta.
+{% endif %}
+Tu pedido:
+{% for line in order.lines %}{% if line.quantity > 0 %}- {{ line.quantity|number_format(2, ',', '.') }} {{ line.product.unit }} · {{ line.product.name }}
+{% endif %}{% endfor %}
+Puedes ver tus pedidos aquí: {{ panel_url }}
+
+Un abrazo,
+CSA Vega de Jarama
+https://csavegadejarama.org
