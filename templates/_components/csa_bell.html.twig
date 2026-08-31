@@ -1,0 +1,42 @@
+{# ---------- CAMPANITA — la bandeja de avisos en la topbar ----------
+ #
+ # Componente compartido por los dos shells que la llevan, el del socix y el de
+ # gestión. Escrita una vez a propósito: la bandeja es de la CUENTA y no de una
+ # sección, y con el bloque copiado en cada layout un día se arregla en uno y el
+ # otro se queda con el contador viejo.
+ #
+ # ESTÁ EN LOS DOS SHELLES PORQUE HAY AVISOS QUE VAN A CUENTAS DE GESTIÓN: el de
+ # "hay fichas de socix con datos sin rellenar" va a quien coordina socixs, que
+ # puede no ser socix. Sin campanita en el shell de gestión, ese aviso se escribiría
+ # y su destinatario no tendría dónde verlo.
+ #
+ # VA FUERA DEL MENÚ DE LA CUENTA Y A SU IZQUIERDA, no como una entrada dentro. Un
+ # contador escondido detrás de un desplegable no avisa: hay que abrirlo para
+ # descubrir que había algo, y entonces el número ya no sirve de nada. Fuera es lo
+ # único de la barra que puede reclamar atención por sí solo.
+ #
+ # El número se calcula en cada carga (unread_notifications(), un COUNT sobre el
+ # índice). Cachearlo en sesión sería más rápido y peor: la campana se quedaría
+ # marcando avisos ya leídos, o sin marcar uno recién llegado.
+ #}
+{% if app.user %}
+    {% set unread = unread_notifications() %}
+    {#- El estado va en el aria-label del enlace y no en un texto oculto junto al
+        globo: el globo dice "9+" y quien lo escucha necesita el número, así que la
+        cuenta exacta se dice una vez, entera, en la etiqueta del enlace. -#}
+    {% set bell_label = unread > 0 ? 'Mis avisos: ' ~ unread ~ ' sin leer' : 'Mis avisos' %}
+
+    <a href="{{ path('notification_inbox') }}"
+       class="csa-topbar__util csa-topbar__bell{% if unread > 0 %} csa-topbar__bell--unread{% endif %}"
+       title="{{ bell_label }}" aria-label="{{ bell_label }}">
+        <i class="fa {{ unread > 0 ? 'fa-bell' : 'fa-bell-o' }}" aria-hidden="true"></i>
+        <span class="csa-topbar__util-label">Avisos</span>
+        {# El globo sólo si hay algo: un "0" permanente es ruido que enseña a no
+         # mirar la campana. A partir de 10 se corta en "9+" —el globo tiene el
+         # ancho de dos cifras—, y da igual el número exacto: lo que se decide
+         # viéndolo es si entrar o no. #}
+        {% if unread > 0 %}
+            <span class="csa-topbar__bell-count" aria-hidden="true">{{ unread > 9 ? '9+' : unread }}</span>
+        {% endif %}
+    </a>
+{% endif %}

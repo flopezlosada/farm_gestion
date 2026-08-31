@@ -466,6 +466,13 @@
                         <span class="csa-topbar__util-label">Ver web</span>
                     </a>
 
+                    {# La campanita también aquí, y no sólo en el panel del socix: hay
+                     # avisos que van a cuentas de GESTIÓN —"hay fichas de socix con
+                     # datos sin rellenar" va a quien coordina socixs, que puede no ser
+                     # socix—. Sin esto, ese aviso se escribiría y su destinataria no
+                     # tendría dónde verlo. Mismo componente que el panel. #}
+                    {% include '_components/csa_bell.html.twig' %}
+
                     {% if app.user %}
                         <div class="csa-me">
                             <span class="csa-me__id csa-me__id--static">

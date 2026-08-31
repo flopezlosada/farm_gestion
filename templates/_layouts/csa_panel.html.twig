@@ -110,47 +110,14 @@
                         <span class="csa-topbar__util-label">Ver web</span>
                     </a>
 
-                    {% if app.user %}
-                        {# ---------- CAMPANITA ----------
-                         # FUERA DEL MENÚ DEL AVATAR Y A SU IZQUIERDA, aunque el menú
-                         # de la cuenta esté justo al lado y "Avisos" también aparezca
-                         # dentro. Un contador escondido detrás de un desplegable no
-                         # avisa: hay que abrirlo para descubrir que había algo, y para
-                         # entonces el número ya no sirve de nada. Fuera es la única
-                         # cosa de la barra que puede reclamar atención por sí sola.
-                         #
-                         # La entrada del menú se queda igualmente: es donde se busca
-                         # "mis avisos" cuando no hay ninguno nuevo y la campana está
-                         # apagada y muda.
-                         #
-                         # El número se calcula en cada carga (unread_notifications()),
-                         # que es un COUNT sobre un índice. Cachearlo en sesión sería
-                         # más rápido y peor: la campana se quedaría marcando avisos ya
-                         # leídos, o sin marcar uno recién llegado. #}
-                        {% set unread = unread_notifications() %}
-                        {#- El estado va en el aria-label del enlace y no en un texto
-                            oculto junto al globo: el globo dice "9+" y quien lo escucha
-                            necesita el número, así que la cuenta exacta se dice una vez,
-                            entera, en la etiqueta del enlace. -#}
-                        {% set bell_label = unread > 0
-                            ? 'Mis avisos: ' ~ unread ~ ' sin leer'
-                            : 'Mis avisos' %}
-                        <a href="{{ path('notification_inbox') }}"
-                           class="csa-topbar__util csa-topbar__bell{% if unread > 0 %} csa-topbar__bell--unread{% endif %}"
-                           title="{{ bell_label }}" aria-label="{{ bell_label }}">
-                            <i class="fa {{ unread > 0 ? 'fa-bell' : 'fa-bell-o' }}" aria-hidden="true"></i>
-                            <span class="csa-topbar__util-label">Avisos</span>
-                            {# Se pinta el globo sólo si hay algo. Un "0" permanente es
-                             # ruido que enseña a no mirar la campana.
-                             #
-                             # A partir de 10 se corta en "9+": el globo tiene el ancho
-                             # de dos cifras y con tres se deforma. Y da igual el número
-                             # exacto: lo que se decide viéndolo es si entrar o no. #}
-                            {% if unread > 0 %}
-                                <span class="csa-topbar__bell-count" aria-hidden="true">{{ unread > 9 ? '9+' : unread }}</span>
-                            {% endif %}
-                        </a>
+                    {# La campanita va ANTES del menú del avatar y fuera de él: un
+                     # contador escondido detrás de un desplegable no avisa de nada.
+                     # La entrada "Mis avisos" del menú se queda igualmente, que es
+                     # donde se buscan cuando no hay ninguno nuevo y la campana está
+                     # apagada y muda. Componente compartido con el shell de gestión. #}
+                    {% include '_components/csa_bell.html.twig' %}
 
+                    {% if app.user %}
                         {# ---------- MENÚ DE LA CUENTA ---------- #}
                         {# En el panel del socix mostramos el nombre del Partner
                          # cuando existe. Caer al userIdentifier solo si el User
