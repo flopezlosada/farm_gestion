@@ -288,9 +288,9 @@
                                 {# Sus horas se dicen AQUÍ porque no está en la lista de quién
                                  # viene: coordinar no es asistir, y lo normal es que no vaya. #}
                                 {% if coord_signup and coord_signup.attended %}
-                                    <span class="vol-owner__hours">{{ csa.qty((coord_signup.creditedMinutes ?: 0) / 60) }} h computadas</span>
+                                    <span class="vol-owner__hours">Se le han computado {{ csa.qty((coord_signup.creditedMinutes ?: 0) / 60) }} h por coordinarla</span>
                                 {% elseif offer.creditedMinutes %}
-                                    <span class="vol-owner__hours">{{ csa.qty(offer.creditedMinutes / 60) }} h al cerrar</span>
+                                    <span class="vol-owner__hours">Al cerrar la tarea se le computarán {{ csa.qty(offer.creditedMinutes / 60) }} h</span>
                                 {% endif %}
                             </div>
                             <div class="vol-owner__contact">
@@ -432,39 +432,6 @@
                     {% endif %}
                 </p>
 
-                {# Quien coordina, en la misma banda y no en una tarjeta propia: es
-                 # una línea de información y abrirle una sección con titular dejaba
-                 # media pantalla en blanco. Aquí va junto a las plazas, que es de lo
-                 # que responde. #}
-                {% if offer.coordinator %}
-                    {% set coord_signup = offer.signups|filter(s => s.coordination)|first %}
-                    <div class="vol-owner">
-                        <span class="vol-owner__avatar" aria-hidden="true">
-                            {{ (offer.coordinator.name|first ~ offer.coordinator.surname|first)|upper }}
-                        </span>
-                        <div class="vol-owner__who">
-                            <span class="vol-owner__role">Coordina</span>
-                            <span class="vol-owner__name">{{ offer.coordinator.name }} {{ offer.coordinator.surname }}</span>
-                            {# Sus horas se dicen AQUÍ porque no está en la lista de quién
-                             # viene: coordinar no es asistir, y lo normal es que no vaya. #}
-                            {% if coord_signup and coord_signup.attended %}
-                                <span class="vol-owner__hours">{{ csa.qty((coord_signup.creditedMinutes ?: 0) / 60) }} h computadas</span>
-                            {% elseif offer.creditedMinutes %}
-                                <span class="vol-owner__hours">{{ csa.qty(offer.creditedMinutes / 60) }} h al cerrar</span>
-                            {% endif %}
-                        </div>
-                        <div class="vol-owner__contact">
-                            {% if offer.coordinator.celular %}
-                                <a class="vol-actions__btn" href="tel:{{ offer.coordinator.celular|replace({' ': ''}) }}"
-                                   title="Llamar a {{ offer.coordinator.name }}"><i class="fa fa-phone"></i></a>
-                            {% endif %}
-                            {% if offer.coordinator.email %}
-                                <a class="vol-actions__btn" href="mailto:{{ offer.coordinator.email }}"
-                                   title="Escribir a {{ offer.coordinator.name }}"><i class="fa fa-envelope-o"></i></a>
-                            {% endif %}
-                        </div>
-                    </div>
-                {% endif %}
             </div>
         {% endif %}
 

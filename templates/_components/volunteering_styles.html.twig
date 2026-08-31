@@ -439,11 +439,11 @@
         font-size: var(--csa-fs-base);
         font-weight: 600;
         color: var(--csa-ink);
-        /* Las fechas salen del filtro de Twig en minúscula ("lun 31 de agosto"):
-           la mayúscula inicial por CSS, que no fuerza a formatear a mano. */
-        text-transform: capitalize;
     }
-    .vol-fact__value--muted { font-weight: 500; color: var(--csa-ink-muted); text-transform: none; }
+    /* Sólo la PRIMERA letra. Con `text-transform: capitalize` se ponía en
+       mayúscula cada palabra y salía "Lunes, 31 De Agosto De 2026" y "0,5 H". */
+    .vol-fact__value::first-letter { text-transform: uppercase; }
+    .vol-fact__value--muted { font-weight: 500; color: var(--csa-ink-muted); }
     .vol-fact__sub {
         display: block;
         font-size: var(--csa-fs-sm);
