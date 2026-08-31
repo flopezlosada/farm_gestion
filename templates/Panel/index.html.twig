@@ -290,7 +290,16 @@
                                 {% else %}
                                     <span class="pnl-rows__value--muted">—</span>
                                 {% endif %}
-                                {% if partner.sharePayment %}<span class="pnl-rows__sub">{{ partner.sharePayment.name|lower }}</span>{% endif %}
+                                {# La periodicidad del cobro NO se pinta aquí. `share_payment`
+                                 # no es el método de pago sino cada cuánto se cobra
+                                 # (Mensual/Trimestral/Anual), así que bajo "Cuota mensual"
+                                 # decía "mensual". Y hoy sólo la tienen 15 socixs activos,
+                                 # todos mensuales; los otros 162 la tienen a NULL.
+                                 #
+                                 # El día que haya alguien que pague por trimestres, lo que
+                                 # hay que cambiar es la ETIQUETA —"Cuota mensual: 55 €" a
+                                 # quien paga 660 al año le está mintiendo—, no añadir una
+                                 # línea debajo. #}
                             </dd>
                         </div>
                         {# La fecha de fin sólo se enseña si existe: "Sin fecha" en una
