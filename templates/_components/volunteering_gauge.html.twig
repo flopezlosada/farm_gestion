@@ -3,15 +3,16 @@
  # solo— porque un déficit sin una acción al lado es un reproche sin salida, y
  # quien recibe un reproche al entrar deja de entrar.
  #
- # TRES ESTADOS, Y EL PRIMERO ES EL QUE IMPORTA:
+ # CUATRO ESTADOS, Y EL PRIMERO ES EL QUE IMPORTA:
  #
- #   1. Aún no ha empezado. Ni barra ni referencia: a quien entra por primera vez
- #      —o a cualquiera en enero, cuando el periodo se reinicia— una barra vacía
- #      con la marca de la mediana le dice "vas 9 h por debajo" antes de haber
- #      tenido ocasión de hacer nada.
- #   2. Ha empezado y va por debajo. Barra con la marca de la mediana: es el único
+ #   1. Aún no ha tenido ocasión: está a cero y acaba de entrar. Ni barra ni
+ #      referencia — una barra vacía con la marca de la mediana le diría "vas 9 h
+ #      por debajo" antes de que se haya convocado nada a lo que apuntarse.
+ #   2. A cero llevando ya tiempo. Barra vacía y se le dice: callarle el cero a
+ #      quien lleva media temporada sin aparecer le confirma que no hace falta.
+ #   3. Ha empezado y va por debajo. Barra con la marca de la mediana: es el único
  #      caso en el que la referencia moviliza en vez de desanimar.
- #   3. Ha empezado y va al ritmo o por encima. Barra sin marca y gracias. Ver
+ #   4. Ha empezado y va al ritmo o por encima. Barra sin marca y gracias. Ver
  #      VolunteerContribution: enseñarle la mediana a quien va sobrado le enseña
  #      que hace el doble de lo normal, y se relaja hasta la media.
  #
@@ -21,7 +22,7 @@
 
 <div class="vol-gauge">
 
-    {% if not contribution.hasStarted %}
+    {% if contribution.hasHadNoChance %}
 
         <p class="vol-gauge__lead">
             <strong>Este año todavía no has echado una mano.</strong>
@@ -38,8 +39,22 @@
         {% set pct_mediana = escala > 0 ? (contribution.medianMinutes / escala) * 100 : 0 %}
 
         <div class="vol-gauge__head">
-            <span class="vol-gauge__label">Tu aportación este año</span>
-            <span class="vol-gauge__value">{{ vol.duration(contribution.minutes) }}</span>
+            <div>
+                <span class="vol-gauge__label">Tu aportación este año</span>
+                {# A cero se dice "0 h" y no "0 min", que es lo que sale del macro y se
+                 # lee como una precisión de cronómetro sobre algo que no ha pasado. #}
+                <span class="vol-gauge__value">{{ contribution.hasStarted ? vol.duration(contribution.minutes) : '0 h' }}</span>
+            </div>
+            {# La referencia del colectivo, al lado de la cifra propia y no sólo
+             # como una marca en la barra: es lo que convierte "6 h" en un dato
+             # con escala. Sólo a quien la puede ver —showMedian()—, que es quien
+             # va por debajo; a quien va sobrado se le callaría igual aquí. #}
+            {% if contribution.showMedian %}
+                <div class="vol-gauge__ref">
+                    <span class="vol-gauge__ref-label">colectivo</span>
+                    <span class="vol-gauge__ref-value">{{ vol.duration(contribution.medianMinutes) }}</span>
+                </div>
+            {% endif %}
         </div>
 
         <div class="vol-gauge__track{% if contribution.showMedian %} vol-gauge__track--marked{% endif %}">
@@ -51,7 +66,13 @@
         </div>
 
         <p class="vol-gauge__lead">
-            {% if contribution.showMedian %}
+            {% if not contribution.hasStarted %}
+                <strong>Este año todavía no has echado una mano.</strong>
+                {% if contribution.showMedian %}
+                    Quien la echa suele dedicar unas {{ vol.duration(contribution.medianMinutes) }} al año.
+                {% endif %}
+                No es una cuota y no lleva cuenta atrás: aquí abajo tienes lo que hace falta.
+            {% elseif contribution.showMedian %}
                 Quien echa una mano suele dedicar unas <strong>{{ vol.duration(contribution.medianMinutes) }}</strong> al año.
                 No es una cuota: es lo que sale de sumar lo que hace la gente.
             {% else %}

@@ -786,17 +786,33 @@
         border-radius: var(--csa-radius-lg);
     }
     .vol-gauge__head {
-        display: flex; align-items: baseline; justify-content: space-between;
-        gap: var(--csa-sp-3); margin-bottom: var(--csa-sp-3);
+        display: flex; align-items: flex-end; justify-content: space-between;
+        gap: var(--csa-sp-3); margin-bottom: var(--csa-sp-4);
     }
     .vol-gauge__label {
+        display: block;
         font-size: var(--csa-fs-xs); font-weight: 600;
         letter-spacing: 0.08em; text-transform: uppercase;
         color: var(--csa-ink-muted);
     }
+    /* La cifra es el ancla del bloque y por eso pesa: a tamaño de subtítulo se
+       leía como una etiqueta más y la barra de debajo se quedaba sin sujeto. */
     .vol-gauge__value {
-        font-family: var(--csa-serif); font-size: var(--csa-fs-xl);
-        color: var(--csa-ink); line-height: 1;
+        display: block; margin-top: var(--csa-sp-1);
+        font-family: var(--csa-serif); font-size: 34px; font-weight: 500;
+        letter-spacing: -0.02em; color: var(--csa-ink); line-height: 1;
+    }
+    /* La referencia del colectivo: presente pero en segundo plano. Compite con
+       la cifra propia si se le da el mismo peso, y el sujeto de la frase es lo
+       que ha hecho esta persona, no lo que hace el resto. */
+    .vol-gauge__ref { text-align: right; flex-shrink: 0; }
+    .vol-gauge__ref-label {
+        display: block; font-size: var(--csa-fs-xs); color: var(--csa-ink-muted);
+    }
+    .vol-gauge__ref-value {
+        display: block; margin-top: 2px;
+        font-family: var(--csa-serif); font-size: var(--csa-fs-lg);
+        color: var(--csa-ink-soft); line-height: 1.1;
     }
 
     /* La marca de la mediana necesita aire por debajo para no comerse el texto:

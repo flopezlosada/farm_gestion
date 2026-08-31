@@ -13,8 +13,12 @@
  #
  # El orden es el diseño:
  #   1. Cuándo y dónde es mi próxima cesta — es a lo que se entra.
- #   2. Qué llevo en ella.
- #   3. En qué puedo echar una mano.
+ #   2. Sostener la huerta: lo que llevo aportado y lo que hace falta. Va antes
+ #      que mi cesta porque se lee mejor justo detrás de lo que la huerta me da,
+ #      y porque una petición al final de la página no la ve nadie. La condición
+ #      para que pueda estar tan arriba es que el contador NUNCA vaya solo: las
+ #      tareas concretas van debajo, siempre.
+ #   3. Qué llevo en la cesta.
  #   4. Mi familia.
  #   5. Mis datos, plegados: DNI, dirección y fecha de alta son papeleo que se
  #      mira una vez al año, y ocupaban media pantalla con el mismo peso que la
@@ -27,24 +31,11 @@
 {% block more_css %}
     {{ parent() }}
     {% include '_components/partner_card_styles.html.twig' %}
+    {% include '_components/panel_home_styles.html.twig' %}
     {% if is_granted('FEATURE_VOLUNTEERING') %}
         {% include '_components/volunteering_styles.html.twig' %}
     {% endif %}
     <style>
-        /* La franja de la próxima cesta manda en la pantalla: es el único dato
-           que cambia cada semana. Hereda el bloque .prt-pickup (mismo lenguaje
-           que la ficha admin) y sólo sube el tamaño de la fecha. */
-        .prt-pickup__when {
-            font-family: 'Fraunces', serif; font-weight: 600; font-size: 19px;
-            letter-spacing: -0.01em; color: var(--prt-ink); line-height: 1.2;
-        }
-        .prt-pickup__soon {
-            display: inline-block; margin-left: 8px; padding: 2px 8px;
-            border-radius: 999px; background: var(--prt-sage-d); color: #fff;
-            font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em;
-            text-transform: uppercase; vertical-align: 2px;
-        }
-
         /* Papeleo: se abre cuando hace falta y no antes. */
         .prt-fold { margin-top: 18px; }
         .prt-fold > summary {
@@ -90,74 +81,109 @@
 
     <div class="prt">
 
-        {# ============ HERO ============
-         # El nombre, en capital y no a gritos: en la BBDD está en mayúsculas y
-         # aquí se lee su nombre, no una fila de un listado. #}
-        <header class="prt-hero">
-            <span class="prt-avatar prt-avatar--{{ avatar_tone }}" aria-hidden="true">{{ initials }}</span>
-            <div>
-                <h1 class="prt-hero__title" style="text-transform: capitalize;">{{ (partner.name ~ ' ' ~ partner.surname)|lower }}</h1>
-                <div class="prt-hero__meta">
-                    <span class="prt-chip prt-chip--{{ sc.cls }}"><span class="dot"></span>{{ sc.label }}</span>
-                    {% if active_share %}
-                        <span class="prt-chip prt-chip--mod-{{ bs_id }}">
-                            {% if bs_id != 4 %}<span class="dot"></span>{% endif %}
-                            {{ bs_label }}
-                        </span>
-                    {% else %}
-                        <span class="prt-chip prt-chip--warn"><span class="dot"></span>Sin cesta</span>
-                    {% endif %}
-                    {% if partner.inscriptionDate %}
-                        <span class="sep">·</span>
-                        <span>Socix desde {{ partner.inscriptionDate|format_date('long', locale='es') }}</span>
-                    {% endif %}
-                </div>
+        {# ============ SALUDO ============
+         # "Hola, Inés" y no "INÉS BAUTISTA CAMPOS": esto no es su ficha, es su
+         # casa. El nombre entero y el papeleo están más abajo, plegados, para
+         # quien venga a comprobar un dato.
+         #
+         # La fecha de hoy encima no es decoración: es lo que hace legible el
+         # "es hoy" de la tarjeta siguiente sin tener que salir a mirar el
+         # calendario del teléfono. #}
+        <header class="pnl-greet">
+            <span class="prt-avatar prt-avatar--{{ avatar_tone }} pnl-greet__avatar" aria-hidden="true">{{ initials }}</span>
+            <div class="pnl-greet__date">{{ 'now'|format_date(pattern="EEEE d 'de' MMMM", locale='es') }}</div>
+            <h1 class="pnl-greet__title">Hola, {{ partner.name|lower }}</h1>
+            <div class="pnl-greet__chips">
+                <span class="prt-chip prt-chip--{{ sc.cls }}"><span class="dot"></span>{{ sc.label }}</span>
+                {% if active_share %}
+                    <span class="prt-chip prt-chip--mod-{{ bs_id }}">
+                        {% if bs_id != 4 %}<span class="dot"></span>{% endif %}
+                        {{ bs_label }}
+                    </span>
+                {% else %}
+                    <span class="prt-chip prt-chip--warn"><span class="dot"></span>Sin cesta</span>
+                {% endif %}
             </div>
         </header>
 
         {# ============ 1. LA PRÓXIMA CESTA ============
-         # Lo que se venía a mirar. Antes no estaba en la pantalla: había que
-         # abrir el calendario para saber qué día tocaba. #}
+         # Lo que se venía a mirar, y por eso es lo único de la pantalla en verde
+         # sólido: el resto de la home es consulta, y esto es la cita.
+         #
+         # El horario sale del NODO donde se recoge esa semana —que no siempre es
+         # el de casa: si hay traslado puntual, el proyector deja el nodo destino
+         # en el slot—. Es texto libre ("Viernes de 18:00 a 20:00") y hay nodos
+         # que no lo tienen, así que se pinta si existe y tal cual. #}
         {% if next_delivery %}
             {% set is_today = next_delivery.date|date('Y-m-d') == 'now'|date('Y-m-d') %}
             {% set is_tomorrow = next_delivery.date|date('Y-m-d') == 'tomorrow'|date('Y-m-d') %}
-            <div class="prt-pickup prt-pickup--sage">
-                <span class="prt-pickup__icon" aria-hidden="true"><i class="fa fa-shopping-basket"></i></span>
-                <div class="prt-pickup__body">
-                    <div class="prt-pickup__label">Tu próxima cesta</div>
-                    <div class="prt-pickup__when">
-                        {{ next_delivery.date|format_date(pattern="EEEE d 'de' MMMM", locale='es')|capitalize }}
-                        {%- if is_today %}<span class="prt-pickup__soon">Es hoy</span>
-                        {%- elseif is_tomorrow %}<span class="prt-pickup__soon">Es mañana</span>{% endif %}
+            {% set relocated = next_delivery.relocated|default(false) %}
+            {% set pickup_node = next_delivery.pickup_node|default(group ? group.node : null) %}
+            <section class="pnl-next">
+                <div class="pnl-next__main">
+                    <div class="pnl-next__head">
+                        <i class="fa fa-shopping-basket" aria-hidden="true"></i>
+                        <span>Tu próxima cesta</span>
+                        {% if is_today %}<span class="pnl-next__soon">Es hoy</span>
+                        {% elseif is_tomorrow %}<span class="pnl-next__soon">Es mañana</span>{% endif %}
                     </div>
+                    <p class="pnl-next__when">{{ next_delivery.date|format_date(pattern="EEEE d 'de' MMMM", locale='es') }}</p>
+                    <ul class="pnl-next__facts">
+                        {% if next_place %}
+                            <li>
+                                <i class="fa fa-map-marker" aria-hidden="true"></i>
+                                <span>{% if relocated %}Esa semana, en {{ next_place }}{% else %}{{ next_place }}{% if show_group %} · {{ group.name }}{% endif %}{% endif %}</span>
+                            </li>
+                        {% endif %}
+                        {% if pickup_node and pickup_node.schedule %}
+                            <li>
+                                <i class="fa fa-clock-o" aria-hidden="true"></i>
+                                <span>{{ pickup_node.schedule }}</span>
+                            </li>
+                        {% endif %}
+                    </ul>
                 </div>
-                {% if next_place %}
-                    <span class="prt-pickup__sep"></span>
-                    <div class="prt-pickup__body">
-                        <div class="prt-pickup__label">{{ next_delivery.relocated|default(false) ? 'Esa semana, en' : 'La recoges en' }}</div>
-                        <div class="prt-pickup__group">
-                            {{ next_place }}{% if show_group and not next_delivery.relocated|default(false) %} · {{ group.name }}{% endif %}
-                        </div>
-                    </div>
-                {% endif %}
-            </div>
+                <div class="pnl-next__actions">
+                    <a href="{{ path('panel_calendar') }}" class="pnl-next__btn pnl-next__btn--solid">
+                        <i class="fa fa-calendar" aria-hidden="true"></i> Mi calendario
+                    </a>
+                    {# Traslado puntual de nodo: sólo con cesta activa, semanas futuras
+                       con entrega y algún otro nodo al que ir. El mismo cambio se puede
+                       hacer también desde el calendario. #}
+                    {% if active_share and relocate_weeks is not empty and relocate_groups is not empty %}
+                        <button type="button" class="pnl-next__btn"
+                                onclick="document.getElementById('panel-relocate-dialog').showModal()">
+                            <i class="fa fa-exchange" aria-hidden="true"></i> Recoger en otro sitio
+                        </button>
+                    {% endif %}
+                </div>
+            </section>
         {% elseif group %}
             {# Sin entregas por delante (sin cesta activa, o pausadx): al menos,
-             # dónde recoge cuando la tenga. #}
-            <div class="prt-pickup prt-pickup--ochre">
-                <span class="prt-pickup__icon" aria-hidden="true"><i class="fa fa-map-marker"></i></span>
-                <div class="prt-pickup__body">
-                    <div class="prt-pickup__label">Recoges en</div>
-                    <div class="prt-pickup__node">{{ home_place ?: 'Sin punto asignado' }}</div>
-                </div>
-                {% if show_group %}
-                    <span class="prt-pickup__sep"></span>
-                    <div class="prt-pickup__body">
-                        <div class="prt-pickup__label">Grupo</div>
-                        <div class="prt-pickup__group">{{ group.name }}</div>
+             # dónde recoge cuando la tenga. En claro y no en verde: no hay cita a
+             # la que ir, y pintarlo igual que una entrega sería mentir. #}
+            <section class="pnl-next pnl-next--quiet">
+                <div class="pnl-next__main">
+                    <div class="pnl-next__head">
+                        <i class="fa fa-map-marker" aria-hidden="true"></i>
+                        <span>Tu punto de recogida</span>
                     </div>
-                {% endif %}
-            </div>
+                    <p class="pnl-next__when">{{ home_place ?: 'Sin punto asignado' }}</p>
+                    <ul class="pnl-next__facts">
+                        {% if show_group %}
+                            <li><i class="fa fa-users" aria-hidden="true"></i> <span>{{ group.name }}</span></li>
+                        {% endif %}
+                        {% if group.node and group.node.schedule %}
+                            <li><i class="fa fa-clock-o" aria-hidden="true"></i> <span>{{ group.node.schedule }}</span></li>
+                        {% endif %}
+                    </ul>
+                </div>
+                <div class="pnl-next__actions">
+                    <a href="{{ path('panel_calendar') }}" class="pnl-next__btn pnl-next__btn--solid">
+                        <i class="fa fa-calendar" aria-hidden="true"></i> Mi calendario
+                    </a>
+                </div>
+            </section>
         {% endif %}
 
         {# Quién le monta la cesta esa semana en su punto, o el aviso de que no se
@@ -172,24 +198,42 @@
             } only %}
         {% endif %}
 
-        {# Acciones de la recogida, pegadas a la recogida. "Editar mis datos" ya
-         # no vive aquí: se ha ido con los datos, al final. #}
-        <div class="prt-actionbar">
-            <a href="{{ path('panel_calendar') }}" class="prt-btn prt-btn--primary">
-                <i class="fa fa-calendar"></i> Mi calendario de recogida
-            </a>
-            {# Atajo del traslado puntual de nodo: solo si tiene cesta activa, semanas
-               futuras con entrega y existe algún otro nodo al que ir. El mismo cambio se
-               puede hacer también desde el calendario. #}
-            {% if active_share and relocate_weeks is not empty and relocate_groups is not empty %}
-                <button type="button" class="prt-btn"
-                        onclick="document.getElementById('panel-relocate-dialog').showModal()">
-                    <i class="fa fa-exchange"></i> Recoger en otro nodo
-                </button>
-            {% endif %}
-        </div>
+        {# ============ 2. SOSTENER LA HUERTA ============
+         # Sube por delante de "mi cesta" a propósito. Estaba después de todo lo
+         # suyo, donde se leía como un anexo de su ficha; aquí, justo detrás de la
+         # cita de la semana, se lee como lo que es: lo que la huerta necesita de
+         # quien acaba de mirar lo que la huerta le da.
+         #
+         # LO QUE LLEVAS HECHO VA ENCIMA DE LO QUE HACE FALTA, nunca al revés. Un
+         # contador solo es un reproche; con las tareas concretas debajo es una
+         # petición que se atiende de un clic. Ese orden es la condición de que
+         # esto pueda estar arriba.
+         #
+         # A quien aún no ha empezado sólo se le pinta si HAY algo que ofrecer:
+         # "todavía no has echado una mano" sin una sola tarea al lado es
+         # exactamente el reproche sin salida que se quiere evitar. Y a quién se
+         # le enseña el cero, y a quién no, lo decide VolunteerContribution. #}
+        {% if is_granted('FEATURE_VOLUNTEERING') and (
+            my_contribution or volunteering_offers|default([]) is not empty
+        ) %}
+            <section class="pnl-block">
+                <h2 class="pnl-block__title">Sostener la huerta</h2>
 
-        {# ============ 2. QUÉ LLEVO ============ #}
+                {% if my_contribution and (my_contribution.hasStarted or volunteering_offers|default([]) is not empty) %}
+                    {% include '_components/volunteering_gauge.html.twig' with {
+                        contribution: my_contribution
+                    } only %}
+                {% endif %}
+
+                {% include '_components/volunteering_teaser.html.twig' with {
+                    offers: volunteering_offers|default([]),
+                    total: volunteering_total|default(0),
+                    my_node_id: group and group.node ? group.node.id : null
+                } only %}
+            </section>
+        {% endif %}
+
+        {# ============ 3. QUÉ LLEVO ============ #}
         {% if active_share %}
             {# En una familia la cesta cuelga del principal: si no es la suya
              # propia, se dice de quién es en vez de negársela. #}
@@ -204,52 +248,60 @@
                 </header>
                 <div class="prt-card__body">
 
-                    <div class="prt-basket__chips">
-                        <span class="prt-chip prt-chip--mod-{{ bs_id }}">
-                            {% if bs_id != 4 %}<span class="dot"></span>{% endif %}
-                            {{ bs_label }}
-                        </span>
-                        {% if bs_id == 3 and active_share.dayMonthOrder %}
-                            <span class="prt-chip prt-chip--mute">{% if active_share.dayMonthOrder == -1 %}última semana{% else %}{{ active_share.dayMonthOrder }}º viernes{% endif %}</span>
-                        {% endif %}
-                        {% if active_share.vegetablesBasketAmount and active_share.vegetablesBasketAmount > 1 %}
-                            <span class="prt-chip prt-chip--mute">×{{ active_share.vegetablesBasketAmount }} cestas</span>
-                        {% endif %}
-                    </div>
-
-                    <div class="prt-mini">
-                        <div class="prt-mini__cell">
-                            <div class="prt-mini__label">Huevos</div>
-                            {% if active_share.eggAmount %}
-                                <div class="prt-mini__value prt-mini__value--ochre">
-                                    {{ active_share.eggAmount.amount|default(active_share.eggAmount) }}
-                                    {% if active_share.eggPeriod %}<small>· {{ active_share.eggPeriod.name|default(active_share.eggPeriod) }}</small>{% endif %}
-                                </div>
-                            {% else %}
-                                <div class="prt-mini__value prt-mini__value--muted">Sin huevos</div>
-                            {% endif %}
-                        </div>
-                        <div class="prt-mini__cell">
-                            <div class="prt-mini__label">Precio mensual</div>
-                            <div class="prt-mini__value prt-mini__value--sage">
-                                {% if active_share.eggAmount and active_share.eggMonthPrice %}
-                                    {{ (active_share.monthPrice + active_share.eggMonthPrice)|number_format(2, ',', '.') }}<small>€</small>
-                                {% elseif active_share.monthPrice %}
-                                    {{ active_share.monthPrice|number_format(2, ',', '.') }}<small>€</small>
-                                {% else %}
-                                    <span class="prt-mini__value--muted">—</span>
+                    {# Filas etiqueta → valor en vez de celdas en rejilla. A 390px
+                     # las celdas caían a una columna igual, pero sin alinear: el
+                     # ojo tenía que buscar a qué etiqueta pertenecía cada cifra.
+                     # Así se lee de un vistazo y en voz alta.
+                     #
+                     # Cada fila admite una segunda línea con el matiz (cada cuándo,
+                     # qué viernes), que antes vivía en chips sueltos encima y
+                     # obligaba a relacionarlos con la caja de abajo. #}
+                    <dl class="pnl-rows">
+                        <div class="pnl-rows__row">
+                            <dt class="pnl-rows__label">Modalidad</dt>
+                            <dd class="pnl-rows__value">
+                                {{ bs_label }}
+                                {% if bs_id == 3 and active_share.dayMonthOrder %}
+                                    <span class="pnl-rows__sub">{% if active_share.dayMonthOrder == -1 %}la última semana del mes{% else %}el {{ active_share.dayMonthOrder }}º viernes del mes{% endif %}</span>
+                                {% elseif active_share.vegetablesBasketAmount and active_share.vegetablesBasketAmount > 1 %}
+                                    <span class="pnl-rows__sub">{{ active_share.vegetablesBasketAmount }} cestas cada vez</span>
                                 {% endif %}
-                            </div>
+                            </dd>
+                        </div>
+                        <div class="pnl-rows__row">
+                            <dt class="pnl-rows__label">Huevos</dt>
+                            <dd class="pnl-rows__value{% if not active_share.eggAmount %} pnl-rows__value--muted{% endif %}">
+                                {% if active_share.eggAmount %}
+                                    {{ active_share.eggAmount.amount|default(active_share.eggAmount) }}
+                                    {% if active_share.eggPeriod %}<span class="pnl-rows__sub">{{ active_share.eggPeriod.name|default(active_share.eggPeriod) }}</span>{% endif %}
+                                {% else %}
+                                    No llevas
+                                {% endif %}
+                            </dd>
+                        </div>
+                        <div class="pnl-rows__row">
+                            <dt class="pnl-rows__label">Cuota mensual</dt>
+                            <dd class="pnl-rows__value">
+                                {% if active_share.eggAmount and active_share.eggMonthPrice %}
+                                    {{ (active_share.monthPrice + active_share.eggMonthPrice)|number_format(2, ',', '.') }} €
+                                    <span class="pnl-rows__sub">cesta y huevos</span>
+                                {% elseif active_share.monthPrice %}
+                                    {{ active_share.monthPrice|number_format(2, ',', '.') }} €
+                                {% else %}
+                                    <span class="pnl-rows__value--muted">—</span>
+                                {% endif %}
+                                {% if partner.sharePayment %}<span class="pnl-rows__sub">{{ partner.sharePayment.name|lower }}</span>{% endif %}
+                            </dd>
                         </div>
                         {# La fecha de fin sólo se enseña si existe: "Sin fecha" en una
-                         # caja propia era una caja entera para decir que no pasa nada. #}
+                         # fila propia era una fila entera para decir que no pasa nada. #}
                         {% if active_share.endDate %}
-                            <div class="prt-mini__cell">
-                                <div class="prt-mini__label">Hasta</div>
-                                <div class="prt-mini__value">{{ active_share.endDate|date('d/m/Y') }}</div>
+                            <div class="pnl-rows__row">
+                                <dt class="pnl-rows__label">Hasta</dt>
+                                <dd class="pnl-rows__value">{{ active_share.endDate|date('d/m/Y') }}</dd>
                             </div>
                         {% endif %}
-                    </div>
+                    </dl>
 
                     {% if is_family_basket %}
                         <div class="prt-share">
@@ -276,32 +328,6 @@
                     <p class="prt-family__intro">No tienes una cesta activa registrada. Si crees que es un error, escribe a <a href="mailto:info@csavegadejarama.org">info@csavegadejarama.org</a>.</p>
                 </div>
             </section>
-        {% endif %}
-
-        {# ============ 3. ECHAR UNA MANO ============
-         # Después de lo suyo y no en medio: antes partía la pantalla entre su
-         # punto de recogida y sus datos, y se leía como parte de su ficha. Sigue
-         # arriba —hay que estar en el camino, no al lado— pero como lo que es,
-         # una petición de la asociación. #}
-        {% if is_granted('FEATURE_VOLUNTEERING') %}
-            {# Lo que llevas hecho, encima de lo que hace falta. Nunca al revés:
-             # el contador arriba y solo es un reproche, con las tareas debajo es
-             # una petición que se puede atender de un clic.
-             #
-             # A quien aún no ha empezado sólo se le pinta si HAY algo que ofrecer:
-             # "todavía no has echado una mano" sin una sola tarea al lado es
-             # exactamente el reproche sin salida que se quiere evitar. #}
-            {% if my_contribution and (my_contribution.hasStarted or volunteering_offers|default([]) is not empty) %}
-                {% include '_components/volunteering_gauge.html.twig' with {
-                    contribution: my_contribution
-                } only %}
-            {% endif %}
-
-            {% include '_components/volunteering_teaser.html.twig' with {
-                offers: volunteering_offers|default([]),
-                total: volunteering_total|default(0),
-                my_node_id: group and group.node ? group.node.id : null
-            } only %}
         {% endif %}
 
         {# ============ 4. MI FAMILIA ============
