@@ -60,6 +60,20 @@
         width: 36px; height: 4px; margin: var(--csa-sp-2) auto var(--csa-sp-3);
         border-radius: var(--csa-radius-pill); background: var(--csa-rule);
     }
+    .csa-sheet__head {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: var(--csa-sp-3);
+    }
+    /* 44px porque es una SALIDA: si se falla el toque, la persona se queda
+       dentro de una hoja que tapa la barra de navegación entera. */
+    .csa-sheet__close {
+        width: 44px; height: 44px; flex-shrink: 0;
+        display: inline-flex; align-items: center; justify-content: center;
+        border: 1px solid var(--csa-rule); border-radius: var(--csa-radius-pill);
+        background: var(--csa-surface); color: var(--csa-ink-soft);
+        font-size: var(--csa-fs-md); cursor: pointer;
+    }
+    .csa-sheet__close:hover { background: var(--csa-surface-alt); color: var(--csa-ink); }
     .csa-sheet__title {
         margin: 0 0 var(--csa-sp-3); font-family: var(--csa-serif);
         font-size: var(--csa-fs-lg); font-weight: 400; color: var(--csa-ink);

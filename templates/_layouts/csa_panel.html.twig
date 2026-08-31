@@ -197,49 +197,63 @@
                 <span>{{ area.short }}</span>
             </a>
         {% endfor %}
-        <button type="button" class="csa-tabbar__item" data-tabbar-more
-                aria-controls="csa-more-sheet" aria-expanded="false">
-            <i class="fa fa-ellipsis-h" aria-hidden="true"></i>
-            <span>Más</span>
-        </button>
+        {# «Más» SÓLO si hay algo detrás. Con las tres áreas de hoy cabiendo en la
+         # barra, `more_areas` está vacío y el botón abría una pantalla titulada
+         # «Todas mis áreas» sin una sola área dentro: nada más que un enlace a la
+         # web y cerrar sesión, que ya están arriba en el avatar. Un cuarto de la
+         # barra ocupado por una puerta que no lleva a ningún sitio. #}
+        {% if more_areas is not empty %}
+            <button type="button" class="csa-tabbar__item" data-tabbar-more
+                    aria-controls="csa-more-sheet" aria-expanded="false">
+                <i class="fa fa-ellipsis-h" aria-hidden="true"></i>
+                <span>Más</span>
+            </button>
+        {% endif %}
     </nav>
 
     {# ---------- HOJA «MÁS» ----------
      # Pantalla completa por abajo y no un menú diminuto: cada área lleva su
      # explicación, que es lo que hace falta cuando el nombre no basta ("Encuestas"
      # no dice qué te van a preguntar). Cierra sola al tocar fuera o con Escape. #}
-    <div class="csa-sheet" id="csa-more-sheet" hidden>
-        <div class="csa-sheet__scrim" data-tabbar-close></div>
-        <div class="csa-sheet__panel" role="dialog" aria-modal="true" aria-labelledby="csa-more-title">
-            <div class="csa-sheet__grip" aria-hidden="true"></div>
-            <h2 class="csa-sheet__title" id="csa-more-title">Todas mis áreas</h2>
+    {% if more_areas is not empty %}
+        <div class="csa-sheet" id="csa-more-sheet" hidden>
+            <div class="csa-sheet__scrim" data-tabbar-close></div>
+            <div class="csa-sheet__panel" role="dialog" aria-modal="true" aria-labelledby="csa-more-title">
+                <div class="csa-sheet__grip" aria-hidden="true"></div>
 
-            <div class="csa-sheet__list">
-                {% for area in more_areas %}
-                    <a href="{{ area.url }}" class="csa-sheet__area{% if area.active %} csa-sheet__area--active{% endif %}">
-                        <span class="csa-sheet__icon"><i class="fa {{ area.icon }}" aria-hidden="true"></i></span>
-                        <span class="csa-sheet__body">
-                            <span class="csa-sheet__label">{{ area.label }}</span>
-                            {% if area.hint is defined %}<span class="csa-sheet__hint">{{ area.hint }}</span>{% endif %}
-                        </span>
-                        <i class="fa fa-angle-right csa-sheet__chevron" aria-hidden="true"></i>
-                    </a>
-                {% endfor %}
+                <div class="csa-sheet__head">
+                    <h2 class="csa-sheet__title" id="csa-more-title">Más áreas</h2>
+                    {# CERRAR, VISIBLE Y GRANDE. La hoja se dibuja por encima de la
+                     # barra (z-index 120 contra 90), así que TAPA el botón «Más»
+                     # que la abrió: quien la abría se quedaba sin la salida obvia.
+                     # Quedaban tocar la franja oscura de arriba —que puede ser una
+                     # quinta parte de la pantalla, y nadie lo adivina— y la tecla
+                     # Escape, que en un móvil no existe. #}
+                    <button type="button" class="csa-sheet__close" data-tabbar-close aria-label="Cerrar">
+                        <i class="fa fa-times" aria-hidden="true"></i>
+                    </button>
+                </div>
 
-                <a href="{{ path('homepage') }}" class="csa-sheet__area" target="_blank" rel="noopener">
-                    <span class="csa-sheet__icon"><i class="fa fa-globe" aria-hidden="true"></i></span>
-                    <span class="csa-sheet__body">
-                        <span class="csa-sheet__label">Ver la web</span>
-                        <span class="csa-sheet__hint">La página pública de la asociación</span>
-                    </span>
-                </a>
-                <a href="{{ path('app_logout') }}" class="csa-sheet__area csa-sheet__area--quiet">
-                    <span class="csa-sheet__icon"><i class="fa fa-sign-out" aria-hidden="true"></i></span>
-                    <span class="csa-sheet__body"><span class="csa-sheet__label">Cerrar sesión</span></span>
-                </a>
+                {# «Ver la web» y «Cerrar sesión» NO están aquí: viven en el menú del
+                 # avatar, y en móvil ese avatar sigue visible arriba (sólo se le
+                 # oculta el nombre). Tenerlos en los dos sitios es enseñar dos
+                 # puertas a la misma habitación y, peor, dejarlos en una hoja que
+                 # ya no siempre existe. #}
+                <div class="csa-sheet__list">
+                    {% for area in more_areas %}
+                        <a href="{{ area.url }}" class="csa-sheet__area{% if area.active %} csa-sheet__area--active{% endif %}">
+                            <span class="csa-sheet__icon"><i class="fa {{ area.icon }}" aria-hidden="true"></i></span>
+                            <span class="csa-sheet__body">
+                                <span class="csa-sheet__label">{{ area.label }}</span>
+                                {% if area.hint is defined %}<span class="csa-sheet__hint">{{ area.hint }}</span>{% endif %}
+                            </span>
+                            <i class="fa fa-angle-right csa-sheet__chevron" aria-hidden="true"></i>
+                        </a>
+                    {% endfor %}
+                </div>
             </div>
         </div>
-    </div>
+    {% endif %}
 
     <script>
         (function () {
@@ -251,9 +265,12 @@
             function close() { sheet.hidden = true; toggle.setAttribute('aria-expanded', 'false'); }
 
             toggle.addEventListener('click', function () { sheet.hidden ? open() : close(); });
-            // Tocar fuera y Escape: sin las dos salidas, una hoja abierta en un móvil
-            // sin botón "atrás" visible deja al socix atrapado en el menú.
-            sheet.querySelector('[data-tabbar-close]').addEventListener('click', close);
+            // TODAS las salidas, no la primera: el scrim y la X son dos elementos
+            // con [data-tabbar-close] y querySelector a secas sólo enganchaba el
+            // scrim, que es justo el que nadie encuentra.
+            sheet.querySelectorAll('[data-tabbar-close]').forEach(function (el) {
+                el.addEventListener('click', close);
+            });
             document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { close(); } });
         }());
     </script>
