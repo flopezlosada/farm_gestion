@@ -13,6 +13,7 @@ use App\Service\Delivery\DeliveryDeadline;
 use App\Service\Cron\EffectLedger;
 use App\Service\Delivery\NodeDeliveryDate;
 use App\Service\Delivery\PickupReminderMailer;
+use App\Service\Notification\NotificationPreferences;
 use PHPUnit\Framework\TestCase;
 use Symfony\Bridge\Twig\Mime\TemplatedEmail;
 use Symfony\Component\Mailer\MailerInterface;
@@ -147,6 +148,12 @@ class PickupReminderMailerTest extends TestCase
         $urlGenerator = $this->createMock(UrlGeneratorInterface::class);
         $urlGenerator->method('generate')->willReturn('https://csavegadejarama.org/panel/calendario');
 
+        // Todo el mundo quiere el aviso salvo que un test diga lo contrario:
+        // estos casos comprueban a quién se le manda y qué dice, no la política
+        // de preferencias, que tiene sus propios tests.
+        $preferences = $this->createMock(NotificationPreferences::class);
+        $preferences->method('wants')->willReturn(true);
+
         return new PickupReminderMailer(
             $mailerMock ?? $this->createMock(MailerInterface::class),
             $settings,
@@ -154,6 +161,7 @@ class PickupReminderMailerTest extends TestCase
             $urlGenerator,
             $deadline,
             $ledger ?? $this->ledger(),
+            $preferences,
         );
     }
 
