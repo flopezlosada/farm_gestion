@@ -10,6 +10,8 @@ use App\Repository\UserRepository;
 use App\Repository\VolunteerOfferRepository;
 use App\Service\AppSettings;
 use App\Service\Push\PushSender;
+use App\Security\PartnerAccessPolicy;
+use App\Service\Notification\NotificationPreferences;
 use App\Service\Volunteering\VolunteerAudienceResolver;
 use App\Service\Volunteering\VolunteerCallEscalator;
 use App\Service\Volunteering\VolunteerCallNotifier;
@@ -18,6 +20,8 @@ use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
+use Symfony\Component\Mailer\MailerInterface;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 /**
  * La orquestación del aviso: qué pasa entre "toca avisar" y "avisado".
@@ -194,16 +198,28 @@ class VolunteerCallNotifierTest extends TestCase
         $defaultUsers = $this->createMock(UserRepository::class);
         $defaultUsers->method('findByPartners')->willReturn([new User()]);
 
+        // Todo el mundo quiere el aviso: estos casos comprueban a quién se le
+        // manda y cuándo, no la política de preferencias, que tiene los suyos.
+        $preferences = $this->createMock(NotificationPreferences::class);
+        $preferences->method('wants')->willReturn(true);
+
+        $urlGenerator = $this->createMock(UrlGeneratorInterface::class);
+        $urlGenerator->method('generate')->willReturn('/panel/voluntariado');
+
         return new VolunteerCallNotifier(
             $offers ?? $this->createMock(VolunteerOfferRepository::class),
             $users ?? $defaultUsers,
             $audience ?? $this->audienceReturning([]),
             $this->createMock(VolunteerCallEscalator::class),
             $push ?? $this->createMock(PushSender::class),
+            $preferences,
             $entityManager ?? $this->createMock(EntityManagerInterface::class),
             $settings,
             new VolunteerOfferFormatter(),
-            new NullLogger()
+            new NullLogger(),
+            $this->createMock(MailerInterface::class),
+            $this->createMock(PartnerAccessPolicy::class),
+            $urlGenerator
         );
     }
 }

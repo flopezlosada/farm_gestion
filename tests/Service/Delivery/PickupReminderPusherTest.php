@@ -200,12 +200,16 @@ class PickupReminderPusherTest extends TestCase
         $urlGenerator = $this->createMock(UrlGeneratorInterface::class);
         $urlGenerator->method('generate')->willReturn('/panel');
 
+        $preferences = $this->createMock(NotificationPreferences::class);
+        $preferences->method('wants')->willReturn(true);
+
         return new PickupReminderPusher(
             $push,
             $repository,
             $this->mailer(),
             $ledger ?? $this->ledger(),
             $urlGenerator,
+            $preferences,
         );
     }
 
