@@ -156,9 +156,91 @@ class Node
      */
     private $weeklyBasketGroups;
 
+    /**
+     * Quién recibe por correo el listado de reparto de este nodo cuando se
+     * cierra su plazo de cambios.
+     *
+     * SE LLAMA POR LO QUE ES Y NO "COORDINADORES", y esa es la decisión que
+     * importa. El listado no lo necesita sólo quien coordina: también quien monta
+     * el reparto ese día, y mañana alguien más. Si esto fuera la coordinación del
+     * nodo, para que a esa gente le llegara el correo habría que nombrarla
+     * coordinadora —que es falso— y en este proyecto de la coordinación se
+     * DERIVAN permisos ({@see VolunteerCategory::$coordinators} concede
+     * ROLE_GESTION_VOLUNTARIADO): se acabaría dando acceso a gestión a alguien
+     * sólo para que reciba un adjunto. Aquí no se deriva ningún rol.
+     *
+     * Cuelga de User, no de Partner: quien recibe el listado maneja datos de
+     * todas las personas del nodo, así que tiene que ser alguien con cuenta en la
+     * casa, y no toda persona que ayuda en un reparto es socia.
+     *
+     * Vacío = el listado de este nodo cae al ajuste general
+     * ({@see \App\Service\AppSettings::EMAIL_DELIVERY_SHEET_TO}), que sigue
+     * sirviendo de respaldo mientras los nodos no tengan a nadie asignado.
+     *
+     * @ORM\ManyToMany(targetEntity="App\Entity\User")
+     * @ORM\JoinTable(name="node_sheet_recipient")
+     *
+     * @var Collection<int, User>
+     */
+    private Collection $sheetRecipients;
+
     public function __construct()
     {
         $this->weeklyBasketGroups = new ArrayCollection();
+        $this->sheetRecipients = new ArrayCollection();
+    }
+
+    /**
+     * @return Collection<int, User> quiénes reciben el listado de este nodo
+     */
+    public function getSheetRecipients(): Collection
+    {
+        return $this->sheetRecipients;
+    }
+
+    /**
+     * @param User $user Quien pasa a recibir el listado de este nodo.
+     */
+    public function addSheetRecipient(User $user): self
+    {
+        if (!$this->sheetRecipients->contains($user)) {
+            $this->sheetRecipients->add($user);
+        }
+
+        return $this;
+    }
+
+    /**
+     * @param User $user Quien deja de recibir el listado de este nodo.
+     */
+    public function removeSheetRecipient(User $user): self
+    {
+        $this->sheetRecipients->removeElement($user);
+
+        return $this;
+    }
+
+    /**
+     * Direcciones a las que mandar el listado de este nodo.
+     *
+     * Descarta a quien no tenga correo en su cuenta en vez de fallar: es un dato
+     * que puede faltar y no debe tumbar el envío a los demás. Devuelve lista
+     * vacía si el nodo no tiene a nadie asignado, que es la señal de que hay que
+     * caer al ajuste general.
+     *
+     * @return string[]
+     */
+    public function sheetRecipientEmails(): array
+    {
+        $emails = [];
+        foreach ($this->sheetRecipients as $user) {
+            $email = $user->getEmail();
+            if ($email) {
+                $emails[] = $email;
+            }
+        }
+
+        return $emails;
     }
 
     /**

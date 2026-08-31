@@ -70,18 +70,12 @@ class SendDeliverySheetsCommand extends AbstractCronCommand
 
         $dryRun = (bool) $input->getOption('dry-run');
 
+        // Respaldo para los nodos que no tengan a nadie asignado. --to lo pisa
+        // todo, incluidos los destinatarios propios de cada nodo: quien lo pasa a
+        // mano quiere el listado en SU buzón, normalmente para probar.
         $to = $input->getOption('to') ?: $this->settings->getString(AppSettings::EMAIL_DELIVERY_SHEET_TO);
-        $recipients = array_values(array_filter(array_map('trim', explode(',', (string) $to))));
-
-        // Sin destinatario la tarea no falla: sale sana y sin trabajo. Un fallo
-        // aquí dejaría el registro en rojo cada mañana y el reloj externo avisando
-        // de una avería que no lo es — basta con que nadie haya rellenado el
-        // ajuste todavía.
-        if (!$dryRun && $recipients === []) {
-            $io->warning('Sin destinatario configurado: rellena «Destinatario(s) del listado de reparto» en /gestion/settings o pasa --to. No se envía nada.');
-
-            return $this->nothingToDo('Sin destinatario configurado');
-        }
+        $fallback = array_values(array_filter(array_map('trim', explode(',', (string) $to))));
+        $forced = (bool) $input->getOption('to');
 
         $target = $this->optionalDate($input, $io);
         if ($target === false) {
@@ -101,13 +95,18 @@ class SendDeliverySheetsCommand extends AbstractCronCommand
         }
 
         $io->table(
-            ['Nodo', 'Reparto', 'Cierre del plazo', 'Congelado'],
-            array_map(static fn (array $row): array => [
-                $row['node']->getName(),
-                $row['physical_date']->format('Y-m-d'),
-                $row['deadline']->format('Y-m-d H:i'),
-                $row['frozen'] ? 'sí' : 'NO, no se manda',
-            ], $pending),
+            ['Nodo', 'Reparto', 'Cierre del plazo', 'Congelado', 'Destinatarios'],
+            array_map(function (array $row) use ($fallback, $forced): array {
+                $to = $this->recipientsFor($row['node'], $fallback, $forced);
+
+                return [
+                    $row['node']->getName(),
+                    $row['physical_date']->format('Y-m-d'),
+                    $row['deadline']->format('Y-m-d H:i'),
+                    $row['frozen'] ? 'sí' : 'NO, no se manda',
+                    $to === [] ? '(nadie)' : implode(', ', $to),
+                ];
+            }, $pending),
         );
 
         // Sin congelar no se manda, aunque el listado se pudiera dibujar al vuelo:
@@ -137,8 +136,23 @@ class SendDeliverySheetsCommand extends AbstractCronCommand
         $sent = 0;
         $already = 0;
         $empty = 0;
+        $orphan = 0;
 
         foreach ($pending as $row) {
+            $recipients = $this->recipientsFor($row['node'], $fallback, $forced);
+
+            // Un nodo sin nadie a quien mandárselo no es un fallo de la tarea: es
+            // configuración que falta. Se avisa por nodo y se sigue con los demás,
+            // que sí tienen a quién.
+            if ($recipients === []) {
+                $io->warning(sprintf(
+                    'Nadie recibe el listado de %s: asígnale destinatarios en su ficha o rellena el ajuste general.',
+                    $row['node']->getName(),
+                ));
+                ++$orphan;
+                continue;
+            }
+
             $pdf = $this->sheetPdf->renderWeekly($row['basket'], [$row['node']]);
 
             // null = ese nodo no aporta hoja (reparto cancelado por una excepción
@@ -160,6 +174,11 @@ class SendDeliverySheetsCommand extends AbstractCronCommand
 
             if ($emitted) {
                 ++$sent;
+                $io->success(sprintf(
+                    'Listado de %s enviado a %s.',
+                    $row['node']->getName(),
+                    implode(', ', $recipients),
+                ));
             } else {
                 ++$already;
             }
@@ -169,21 +188,40 @@ class SendDeliverySheetsCommand extends AbstractCronCommand
             $io->note('Nada nuevo que enviar.');
 
             return $this->nothingToDo(sprintf(
-                '%d listado(s) ya enviados, %d sin reparto',
+                '%d listado(s) ya enviados, %d sin reparto, %d sin destinatario',
                 $already,
                 $empty,
+                $orphan,
             ));
         }
 
-        $io->success(sprintf('Enviados %d listado(s) a %s.', $sent, implode(', ', $recipients)));
-
         return $this->didWork(sprintf(
-            '%d listado(s) enviados a %s (%d ya enviados, %d sin reparto)',
+            '%d listado(s) enviados (%d ya enviados, %d sin reparto, %d sin destinatario)',
             $sent,
-            implode(', ', $recipients),
             $already,
             $empty,
+            $orphan,
         ));
+    }
+
+    /**
+     * A quién se le manda el listado de este nodo: los suyos propios y, si no
+     * tiene ninguno, el ajuste general de respaldo.
+     *
+     * @param Node     $node     Nodo del reparto.
+     * @param string[] $fallback Direcciones de respaldo (ajuste general o --to).
+     * @param bool     $forced   Si el destinatario venía impuesto por --to.
+     * @return string[]
+     */
+    private function recipientsFor(Node $node, array $fallback, bool $forced): array
+    {
+        if ($forced) {
+            return $fallback;
+        }
+
+        $own = $node->sheetRecipientEmails();
+
+        return $own !== [] ? $own : $fallback;
     }
 
     /**
