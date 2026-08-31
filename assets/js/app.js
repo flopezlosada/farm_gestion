@@ -17,9 +17,18 @@ require('./csa-dropdown.js');
 // los paneles se ven todos. Ver assets/js/csa-tabs.js.
 require('./csa-tabs.js');
 
+// Avisos de "falta esto" en castellano y dentro del diseño, en lugar del globo
+// del navegador (opt-in por [data-csa-validate]). Ver assets/js/csa-validate.js.
+require('./csa-validate.js');
+
 // Suma en vivo de las horas que se van a imputar al cerrar una tarea de
 // voluntariado (opt-in por [data-vol-total]). Ver assets/js/vol-close-total.js.
 require('./vol-close-total.js');
+
+// Menú de la cuenta en la topbar (opt-in por [data-account-menu]). Sin JS el
+// menú abre y cierra igual; esto sólo añade cerrarlo al pulsar fuera.
+// Ver assets/js/csa-account-menu.js.
+require('./csa-account-menu.js');
 
 // Alta y baja de los avisos push (opt-in por [data-push-toggle]). No pide
 // permiso hasta que alguien pulsa: un permiso denegado no se puede volver a

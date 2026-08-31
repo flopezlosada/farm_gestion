@@ -18,6 +18,7 @@ use App\Form\PartnerProfileType;
 use App\Repository\BasketRepository;
 use App\Repository\PartnerBasketShareRepository;
 use App\Repository\PartnerDeliveryShiftRepository;
+use App\Repository\VolunteerCategoryRepository;
 use App\Repository\VolunteerOfferRepository;
 use App\Repository\VolunteerSignupRepository;
 use App\Repository\WeeklyBasketGroupRepository;
@@ -35,6 +36,7 @@ use App\Service\Delivery\PickupRelocationOptions;
 use App\Service\Delivery\PickupRelocator;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Delivery\WeeklyBasketSkipper;
+use App\Service\Notification\NotificationPreferences;
 use App\Service\Volunteering\VolunteerContributions;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -164,6 +166,89 @@ class PanelController extends AbstractController
                 ? $contributions->forPartner($partner)
                 : null,
         ]);
+    }
+
+    /**
+     * Cómo te avisamos: el único sitio donde el socix configura sus avisos.
+     *
+     * EXISTE PORQUE ESTABA REPARTIDO. El interruptor del dispositivo vivía en
+     * «Mi perfil» y de qué te avisan, dentro de la pantalla de voluntariado —con
+     * un segundo botón de activar avisos duplicado allí—. Configurar lo mismo en
+     * dos sitios, uno de ellos detrás de un módulo que se puede apagar, no lo
+     * entiende nadie: quien busca cómo silenciar algo va a sus ajustes, no a la
+     * pantalla del tema.
+     *
+     * Se llama «Avisos» y no «Configuración» porque es lo que hay que
+     * configurar. El día que haya otras opciones de la cuenta, esto pasa a ser
+     * una sección de una pantalla de ajustes; hoy sería una carpeta con un solo
+     * papel dentro.
+     *
+     * NO lleva `IsGranted` de voluntariado: el interruptor del dispositivo
+     * gobierna TODOS los avisos —empezando por el de la cesta—, así que la
+     * pantalla tiene que existir con el módulo apagado. Lo que se esconde es el
+     * bloque de preferencias, que sí es suyo.
+     */
+    #[Route('/avisos', name: 'panel_notifications', methods: ['GET'])]
+    public function notifications(
+        VolunteerCategoryRepository $categories,
+        NotificationPreferences $preferences,
+    ): Response {
+        if (($redirect = $this->ensureReady()) !== null) {
+            return $redirect;
+        }
+
+        $partner = $this->getUser()->getPartner();
+        $volunteering = $this->isGranted('FEATURE_VOLUNTEERING');
+
+        return $this->render('Panel/notifications.html.twig', [
+            'partner' => $partner,
+            'volunteering' => $volunteering,
+            // Qué avisos existen HOY para este socix y cómo los tiene: ya sin
+            // los de módulos apagados y sin los canales por los que ese tema no
+            // manda nada. La plantilla sólo pinta.
+            'topics' => $preferences->forPartner($partner),
+            // Sólo con el módulo encendido: apagado, la pantalla no pinta el
+            // bloque y no hay por qué pagar la consulta.
+            'categories' => $volunteering ? $categories->findActive() : [],
+            // Ids y no entidades: comparar objetos Doctrine con el operador `in`
+            // de Twig depende de la identidad de instancia y falla en cuanto una
+            // de las dos listas viene de otra consulta.
+            'my_category_ids' => array_map(
+                static fn ($category) => $category->getId(),
+                $partner->getVolunteerCategories()->toArray()
+            ),
+        ]);
+    }
+
+    /**
+     * Guarda qué avisos quiere recibir el socix y por dónde.
+     *
+     * Recibe lo MARCADO y no lo apagado, que es como funciona un formulario de
+     * casillas: una desmarcada sencillamente no viaja. Deducir los apagados es
+     * cosa de {@see NotificationPreferences::save()}, que además ignora lo que
+     * no esté disponible de verdad —un tema de un módulo apagado, o un canal por
+     * el que ese tema no manda— en vez de fiarse de lo que llegue.
+     */
+    #[Route('/avisos', name: 'panel_notifications_save', methods: ['POST'])]
+    public function saveNotifications(Request $request, NotificationPreferences $preferences): Response
+    {
+        if (($redirect = $this->ensureReady()) !== null) {
+            return $redirect;
+        }
+
+        if (!$this->isCsrfTokenValid('panel_notifications', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
+
+            return $this->redirectToRoute('panel_notifications');
+        }
+
+        /** @var array<string, list<string>> $wanted */
+        $wanted = $request->request->all('topics');
+        $preferences->save($this->getUser()->getPartner(), $wanted);
+
+        $this->addFlash('success', 'Guardado. Te avisaremos sólo por donde has dicho.');
+
+        return $this->redirectToRoute('panel_notifications');
     }
 
     #[Route('/perfil', name: 'panel_profile', methods: ['GET', 'POST'])]

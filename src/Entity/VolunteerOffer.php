@@ -197,6 +197,35 @@ class VolunteerOffer
     private bool $featured = false;
 
     /**
+     * Gente de fuera que viene a echar una mano: un grupo de estudiantes, gente
+     * de otra asociación, quien pasaba por allí.
+     *
+     * NO CABEN EN `VolunteerSignup::$companions`, que es lo primero que se
+     * piensa: aquello cuelga siempre de la inscripción de un socix, y esta gente
+     * no tiene de quién colgar.
+     *
+     * Un número y no filas, por lo mismo que los acompañantes: no son personas
+     * del sistema —no tienen ficha, ni cuenta, ni horas— y darles una les
+     * inventaría una identidad que no existe. Lo único que hace falta saber es
+     * cuántos brazos son, para que la tarea deje de pedir gente que ya está
+     * cubierta.
+     *
+     * @ORM\Column(type="integer", options={"default": 0})
+     */
+    #[Assert\PositiveOrZero(message: 'La gente de fuera no puede ser un número negativo.')]
+    private int $guests = 0;
+
+    /**
+     * Quiénes son esos de fuera ("3 estudiantes del IES", "la gente de la
+     * cooperativa"). Sin esto, dentro de tres meses nadie entiende por qué esa
+     * tarea salió adelante con dos socixs.
+     *
+     * @ORM\Column(name="guests_note", type="string", length=160, nullable=true)
+     */
+    #[Assert\Length(max: 160)]
+    private ?string $guestsNote = null;
+
+    /**
      * @ORM\Column(type="string", length=16, options={"default": "draft"})
      */
     #[Assert\Choice(choices: [self::STATUS_DRAFT, self::STATUS_PUBLISHED, self::STATUS_CANCELLED])]
@@ -214,6 +243,30 @@ class VolunteerOffer
      * @ORM\JoinColumn(name="created_by_id", referencedColumnName="id", nullable=true, onDelete="SET NULL")
      */
     private ?User $createdBy = null;
+
+    /**
+     * Quién monta ESTA tarea: busca gente, la cuadra, avisa y está pendiente.
+     *
+     * NO ES EL COORDINADOR DEL ÁREA, y confundirlos era el error. Un área tiene
+     * varias personas coordinándola ({@see VolunteerCategory::$coordinators} es
+     * ManyToMany) y el reparto son cincuenta y dos tareas al año: saber quién
+     * lleva "Reparto" no dice quién montó el del 31 de agosto. Además aquéllos
+     * son `User` —hay quien coordina sin ser socix— y las horas se le computan a
+     * un `Partner`, así que no se puede derivar el uno del otro.
+     *
+     * SE DICE AL CREAR LA TAREA y no al cerrarla. Es una propiedad del trabajo,
+     * como el sitio o la hora; preguntarlo después, mientras se pasa lista, era
+     * pedir una decisión de configuración en medio de otra faena — y como no se
+     * preguntaba en ningún sitio obligatorio, lo normal era que no constara
+     * nadie y quien más sostiene el voluntariado saliera con el contador a cero.
+     *
+     * Nullable porque no toda tarea tiene a alguien al mando: una llamada
+     * abierta a plantar puede no tenerlo.
+     *
+     * @ORM\ManyToOne(targetEntity="App\Entity\Partner")
+     * @ORM\JoinColumn(name="coordinator_id", referencedColumnName="id", nullable=true, onDelete="SET NULL")
+     */
+    private ?Partner $coordinator = null;
 
     /**
      * De qué tarea salió ésta, si se creó repitiendo otra.
@@ -273,6 +326,13 @@ class VolunteerOffer
         $copy->companionsAllowed = $this->companionsAllowed;
         $copy->creditedMinutes = $this->creditedMinutes;
         $copy->openToAnyone = $this->openToAnyone;
+        // Quien monta el reparto de los viernes lo monta todos los viernes: la
+        // copia hereda coordinación porque es parte de cómo se hace este
+        // trabajo, no de lo que pasó en una fecha concreta.
+        $copy->coordinator = $this->coordinator;
+        // La gente de fuera NO se copia, por lo contrario: que un martes
+        // vinieran tres estudiantes no dice nada del martes siguiente, y
+        // arrastrarlo daría por cubiertas unas plazas que están vacías.
         $copy->createdBy = $this->createdBy;
         $copy->copiedFrom = $this;
         $copy->status = self::STATUS_DRAFT;
@@ -307,7 +367,11 @@ class VolunteerOffer
      */
     public function getFilledSlots(): int
     {
-        $filled = 0;
+        // La gente de fuera cuenta como brazos aunque no tenga inscripción: si
+        // vienen tres estudiantes, una tarea de seis ya sólo necesita tres
+        // socixs, y seguir pidiendo seis traería gente para nada.
+        $filled = $this->guests;
+
         foreach ($this->signups as $signup) {
             if (!$signup->isCancelled()) {
                 // Vía getHeadcount() y no sumando acompañantes aquí: es ese
@@ -871,6 +935,65 @@ class VolunteerOffer
             $this->signups->add($signup);
             $signup->setOffer($this);
         }
+
+        return $this;
+    }
+
+    /**
+     * @return int cuánta gente de fuera viene
+     */
+    public function getGuests(): int
+    {
+        return $this->guests;
+    }
+
+    /**
+     * Acepta null aunque la columna no lo admita: el campo del formulario es
+     * opcional, y dejarlo vacío llega aquí como null. Sin esto, guardar una
+     * tarea sin gente de fuera —el caso normal— revienta con "Expected argument
+     * of type int, null given".
+     *
+     * @param int|null $guests cuánta gente de fuera viene; null es ninguna
+     */
+    public function setGuests(?int $guests): self
+    {
+        $this->guests = max(0, $guests ?? 0);
+
+        return $this;
+    }
+
+    /**
+     * @return string|null quiénes son los de fuera, o null
+     */
+    public function getGuestsNote(): ?string
+    {
+        return $this->guestsNote;
+    }
+
+    /**
+     * @param string|null $guestsNote quiénes son los de fuera
+     */
+    public function setGuestsNote(?string $guestsNote): self
+    {
+        $this->guestsNote = $guestsNote;
+
+        return $this;
+    }
+
+    /**
+     * @return Partner|null quién monta esta tarea, o null si no hay nadie al mando
+     */
+    public function getCoordinator(): ?Partner
+    {
+        return $this->coordinator;
+    }
+
+    /**
+     * @param Partner|null $coordinator quién monta esta tarea
+     */
+    public function setCoordinator(?Partner $coordinator): self
+    {
+        $this->coordinator = $coordinator;
 
         return $this;
     }

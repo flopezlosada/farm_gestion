@@ -2,10 +2,13 @@
 
 namespace App\Service\Delivery;
 
+use App\Entity\Partner;
 use App\Entity\User;
 use App\Entity\WeeklyBasket;
 use App\Repository\UserRepository;
 use App\Service\Cron\EffectLedger;
+use App\Service\Notification\NotificationPreferences;
+use App\Service\Notification\NotificationTopic;
 use App\Service\Push\PushSender;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
@@ -50,6 +53,7 @@ class PickupReminderPusher
         private readonly PickupReminderMailer $mailer,
         private readonly EffectLedger $ledger,
         private readonly UrlGeneratorInterface $urlGenerator,
+        private readonly NotificationPreferences $preferences,
     ) {
     }
 
@@ -68,6 +72,23 @@ class PickupReminderPusher
      */
     public function send(array $weeklyBaskets, bool $resend = false): array
     {
+        // Quien ha apagado este aviso en el móvil queda fuera antes de nada. Se
+        // filtra por socix y no por cesta: la lista puede traer dos entregas del
+        // mismo día para la misma persona (una cesta extra puntual).
+        $wanted = [];
+        foreach ($this->preferences->filter(
+            $this->partnersOf($weeklyBaskets),
+            NotificationTopic::PICKUP,
+            NotificationTopic::CHANNEL_PUSH,
+        ) as $partner) {
+            $wanted[(int) $partner->getId()] = true;
+        }
+
+        $weeklyBaskets = array_values(array_filter(
+            $weeklyBaskets,
+            static fn (WeeklyBasket $wb): bool => isset($wanted[(int) $wb->getPartner()?->getId()])
+        ));
+
         $usersByPartner = $this->usersByPartner($weeklyBaskets);
 
         // Agrupado por texto del mensaje: dentro de un grupo el aviso es
@@ -138,6 +159,26 @@ class PickupReminderPusher
     }
 
     /**
+     * Lxs socixs de la lista, sin repetir y sin los que no estén persistidos.
+     *
+     * @param WeeklyBasket[] $weeklyBaskets las cestas
+     *
+     * @return list<Partner> lxs socixs
+     */
+    private function partnersOf(array $weeklyBaskets): array
+    {
+        $partners = [];
+        foreach ($weeklyBaskets as $wb) {
+            $partner = $wb->getPartner();
+            if (null !== $partner && null !== $partner->getId()) {
+                $partners[$partner->getId()] = $partner;
+            }
+        }
+
+        return array_values($partners);
+    }
+
+    /**
      * Las cuentas de acceso de cada socix de la lista, indexadas por id de
      * socix.
      *
@@ -151,16 +192,10 @@ class PickupReminderPusher
      */
     private function usersByPartner(array $weeklyBaskets): array
     {
-        $partners = [];
-        foreach ($weeklyBaskets as $wb) {
-            $partner = $wb->getPartner();
-            if (null !== $partner && null !== $partner->getId()) {
-                $partners[$partner->getId()] = $partner;
-            }
-        }
+        $partners = $this->partnersOf($weeklyBaskets);
 
         $byPartner = [];
-        foreach ($this->users->findByPartners(array_values($partners)) as $user) {
+        foreach ($this->users->findByPartners($partners) as $user) {
             $partnerId = $user->getPartner()?->getId();
             if (null !== $partnerId) {
                 $byPartner[$partnerId][] = $user;

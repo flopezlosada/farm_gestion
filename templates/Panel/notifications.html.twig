@@ -1,0 +1,156 @@
+{% extends '_layouts/csa_panel.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Avisos{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('panel') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Avisos</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Mi área · Avisos',
+        'Cómo te avisamos',
+        'Tú decides qué te llega y por dónde.'
+    ) }}
+
+    {#
+     # EL ORDEN NO ES CASUAL, y es el contrario al que tuvo un rato: primero se
+     # elige QUÉ se quiere y por dónde, y sólo después aparece el requisito
+     # técnico de la columna «Móvil». Al revés, lo primero que veía alguien que
+     # entra a silenciar un correo era un botón para activar otra cosa.
+     #
+     # CUIDADO CON LA PALABRA «AVISOS»: es el género de todo lo de esta pantalla,
+     # así que NO puede nombrar además a uno de los canales. El push se llama
+     # «Móvil» en la tabla y se llama «Móvil» abajo; llamarlo «avisos» en la
+     # tarjeta del dispositivo hacía que la misma cosa tuviera dos nombres en la
+     # misma pantalla.
+     #}
+    <div class="csa-stack-lg csa-form-narrow">
+
+        {# ============ 2. QUÉ AVISOS Y POR DÓNDE ============
+         # Una fila por tema y una casilla por canal, en vez de un interruptor
+         # único: quien quiere saber cuándo recoge su cesta pero no que le pidan
+         # gente para la huerta no tenía forma de decirlo, y quien no quiere
+         # correos no tenía ninguna en absoluto.
+         #
+         # Sólo se pintan los temas de módulos encendidos, y de cada tema sólo
+         # los canales por los que de verdad se manda algo: una casilla que no
+         # apaga nada es peor que no tenerla. Lo resuelve
+         # NotificationPreferences::forPartner(). #}
+        {% embed '_components/csa_card.html.twig' with {
+            title: 'Qué avisos quieres recibir',
+            icon: 'fa-envelope-o'
+        } %}
+            {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                <form method="post" action="{{ path('panel_notifications_save') }}">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_notifications') }}">
+
+                    <div class="csa-table-wrap">
+                        <table class="csa-table">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Aviso</th>
+                                    <th scope="col" style="text-align:center;">Email</th>
+                                    <th scope="col" style="text-align:center;">Móvil</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for topic in topics %}
+                                    <tr>
+                                        <td>
+                                            <strong>{{ topic.label }}</strong>
+                                            <div class="csa-muted">{{ topic.help }}</div>
+                                        </td>
+                                        {# Una celda por canal. Cuando el tema no usa ese canal se
+                                         # pone una raya y no una casilla desmarcada: una casilla
+                                         # que no se puede marcar se lee como "esto está apagado"
+                                         # y manda a la gente a buscar por qué. #}
+                                        {% for channel in ['email', 'push'] %}
+                                            <td style="text-align:center;">
+                                                {% if topic.channels[channel] is defined %}
+                                                    <input type="checkbox"
+                                                           name="topics[{{ topic.key }}][]"
+                                                           value="{{ channel }}"
+                                                           aria-label="{{ topic.label }} por {{ channel == 'email' ? 'email' : 'móvil' }}"
+                                                           {% if topic.channels[channel] %}checked{% endif %}>
+                                                {% else %}
+                                                    <span class="csa-muted" aria-label="No se manda por este canal">—</span>
+                                                {% endif %}
+                                            </td>
+                                        {% endfor %}
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <p style="margin-top: var(--csa-sp-4);">
+                        <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">Guardar</button>
+                        {#
+                         # OJO CON LO QUE SE PROMETE AQUÍ. Antes ponía «sigue
+                         # estando en la web cuando entres», dando por hecha una
+                         # bandeja de avisos que NO existe todavía. Con eso, quien
+                         # apagase los dos canales de su cesta se quedaba sin
+                         # enterarse por ningún sitio creyendo lo contrario.
+                         #
+                         # El día que haya campanita, esta frase vuelve —y entonces
+                         # será verdad—. Hasta entonces se dice lo que hay.
+                         #}
+                        {{ csa.hint('Lo que apagues deja de llegarte. Tu cesta y las tareas siguen estando en tu panel, pero tendrás que entrar tú a mirarlas.') }}
+                    </p>
+                </form>
+            {% endblock %}
+        {% endembed %}
+
+
+
+        {# ============ EL REQUISITO DE LA COLUMNA «MÓVIL» ============
+         # No es un tercer canal ni una preferencia: es el permiso que el
+         # navegador de ESTE dispositivo tiene que dar para que lo marcado arriba en
+         # «Móvil» pueda llegar. Por eso va después de la tabla y se llama por lo
+         # que hace.
+         #
+         # Sin claves VAPID no se pinta: ahí activar es imposible y el botón sólo
+         # podría fallar. Se puede ocultar sin dejar a nadie tirado porque sin
+         # claves nunca hubo suscripción posible. #}
+        {% if app_vapid_public_key is not empty %}
+            {% embed '_components/csa_card.html.twig' with {
+                title: 'Recibir avisos en este dispositivo',
+                icon: 'fa-mobile'
+            } %}
+                {% block body %}
+                    {# ESTRUCTURA FIJA, rellenada por push.js. Antes el botón cargaba
+                     # con todo —era a la vez la acción y el estado— y push.js se
+                     # inventaba un <p> con la explicación insertándolo DENTRO del
+                     # <p> del botón: un <p> no puede contener otro, el navegador
+                     # cerraba el primero y la maquetación se deshacía.
+                     #
+                     # Ahora cada cosa tiene su sitio: el estado se lee arriba, el
+                     # botón dice sólo lo que va a hacer y la explicación aparece
+                     # debajo cuando hay algo que explicar. #}
+                    {# El estado arranca VACÍO y no en «Comprobando…»: ese texto
+                     # sólo es cierto mientras el script pregunta al navegador, y si
+                     # el script no llega —bloqueado, caché vieja, un error arriba—
+                     # se queda ahí para siempre diciendo que está comprobando algo
+                     # que nadie está comprobando. Vacío, la tarjeta no miente; y
+                     # push.js pone «Comprobando…» en cuanto arranca, que es cuando
+                     # es verdad. #}
+                    <div class="csa-push">
+                        <div class="csa-push__main">
+                            <div class="csa-push__state" data-push-status></div>
+                            <p class="csa-push__note" data-push-hint hidden></p>
+                        </div>
+                        <button type="button" class="csa-btn csa-btn--secondary csa-btn--sm csa-push__btn" data-push-toggle hidden></button>
+                    </div>
+                {% endblock %}
+            {% endembed %}
+        {% endif %}
+
+    </div>
+
+{% endblock %}

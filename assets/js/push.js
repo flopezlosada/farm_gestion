@@ -90,44 +90,92 @@
      * existe da por hecho que la web está rota.
      */
     var HINTS = {
-        blocked: 'Este navegador tiene bloqueados los avisos de esta web, y desde aquí no se pueden volver a pedir. Para desbloquearlos: pulsa el icono que hay a la izquierda de la dirección (un candado o unos deslizadores), busca «Notificaciones», ponlo en «Permitir» y recarga esta página. Si estás en una ventana de incógnito o privada, no hay nada que desbloquear: ahí los avisos no se pueden activar nunca. Abre la web en una ventana normal.'
+        blocked: 'Este navegador tiene bloqueados los avisos de esta web, y desde aquí no se pueden volver a pedir. Para desbloquearlos: pulsa el icono que hay a la izquierda de la dirección (un candado o unos deslizadores), busca «Notificaciones», ponlo en «Permitir» y recarga esta página. Si estás en una ventana de incógnito o privada, no hay nada que desbloquear: ahí los avisos no se pueden activar nunca. Abre la web en una ventana normal.',
+
+        // Va en el estado ACTIVADO y no en la pantalla, porque sólo le sirve a
+        // quien ya los tiene puestos: al que aún no los ha activado le sobra, y
+        // en la tarjeta se leía como una pega antes siquiera de probar.
+        //
+        // Y hace falta decirlo porque este fallo es MUDO: si el sistema tiene
+        // apagados los avisos del navegador, la web no se entera de nada
+        // —Notification.permission sigue diciendo «granted» y showNotification()
+        // resuelve como si los hubiera pintado—, así que aquí seguiría poniendo
+        // «activados» sin que llegue nunca nada.
+        on: 'Si no te llega ninguno, revisa los ajustes de notificaciones de tu móvil u ordenador: desde aquí no hay forma de saber si el sistema los tiene apagados.',
+
+        // Estado propio para iOS sin instalar, separado de «este navegador no
+        // admite avisos»: aquí SÍ se puede, pero hay que dar un paso más, y
+        // decirle a alguien que su iPhone no admite avisos es mentira y le hace
+        // abandonar.
+        ios: 'En iPhone y iPad, Apple sólo permite los avisos si la web está añadida a la pantalla de inicio: pulsa Compartir (el cuadrado con la flecha hacia arriba), elige «Añadir a pantalla de inicio», y abre la web desde el icono que aparezca. Desde ahí ya podrás activarlos.'
     };
 
     /**
-     * El sitio donde se explica el estado. Se crea al vuelo junto al botón en
-     * vez de pedirlo en cada plantilla: así cualquier pantalla que ponga un
-     * [data-push-toggle] hereda la explicación sin tener que acordarse.
+     * Qué se lee en cada estado: el ESTADO (frase corta, siempre visible), la
+     * ACCIÓN del botón (null = no hay nada que pulsar) y la EXPLICACIÓN (sólo
+     * cuando hace falta).
+     *
+     * Separadas porque antes el botón cargaba con las tres cosas y decía
+     * "Avisos activados": ¿es lo que pasa o lo que va a pasar si lo pulso? Un
+     * botón dice lo que HACE; el estado se lee, no se pulsa.
      */
-    function hintFor(button) {
-        var hint = button.nextElementSibling;
-        if (hint && hint.hasAttribute('data-push-hint')) {
-            return hint;
-        }
+    var STATES = {
+        checking:    { state: 'Comprobando…',                              action: null },
+        off:         { state: 'Desactivado en este dispositivo.',              action: 'Activar' },
+        on:          { state: 'Activado en este dispositivo.',                 action: 'Desactivar',
+                       note: HINTS.on },
+        working:     { state: 'Un momento…',                               action: null },
+        failed:      { state: 'No se pudo activar. Inténtalo otra vez.',   action: 'Activar' },
+        blocked:     { state: 'Bloqueado en este navegador.',              action: null,
+                       note: HINTS.blocked },
+        unsupported: { state: 'Este navegador no admite avisos.',          action: null },
+        ios:         { state: 'Falta un paso en iPhone y iPad.',           action: null,
+                       note: HINTS.ios }
+    };
 
-        hint = document.createElement('p');
-        hint.setAttribute('data-push-hint', '');
-        hint.className = 'csa-muted';
-        hint.hidden = true;
-        button.insertAdjacentElement('afterend', hint);
+    /**
+     * Las tres zonas de un toggle. La plantilla las trae hechas; si faltara
+     * alguna se devuelve null y {@see setState} sigue funcionando con las que
+     * haya, para que una pantalla que sólo ponga el botón no reviente.
+     */
+    function partsOf(button) {
+        var box = button.closest('.csa-push') || button.parentElement;
 
-        return hint;
+        return {
+            status: box ? box.querySelector('[data-push-status]') : null,
+            note: box ? box.querySelector('[data-push-hint]') : null
+        };
     }
 
-    function setState(button, state, message) {
-        button.dataset.pushState = state;
-        if (message) {
-            button.textContent = message;
-        }
-        button.disabled = (state === 'working' || state === 'blocked' || state === 'unsupported');
+    function setState(button, state) {
+        var spec = STATES[state] || STATES.off;
+        var parts = partsOf(button);
 
-        var hint = hintFor(button);
-        hint.textContent = HINTS[state] || '';
-        hint.hidden = !HINTS[state];
+        button.dataset.pushState = state;
+
+        // Sin acción posible, el botón se esconde en vez de quedarse gris: un
+        // botón deshabilitado invita a pulsarlo y no explica nada.
+        if (spec.action) {
+            button.textContent = spec.action;
+            button.hidden = false;
+            button.disabled = false;
+        } else {
+            button.hidden = true;
+        }
+
+        if (parts.status) {
+            parts.status.textContent = spec.state;
+        }
+
+        if (parts.note) {
+            parts.note.textContent = spec.note || '';
+            parts.note.hidden = !spec.note;
+        }
     }
 
     /** Suscribe este navegador y lo registra en el servidor. */
     function subscribe(button) {
-        setState(button, 'working', 'Activando…');
+        setState(button, 'working');
 
         fetch(ENDPOINTS.publicKey, { credentials: 'same-origin' })
             .then(function (response) { return response.json(); })
@@ -155,20 +203,20 @@
                 return postJson(ENDPOINTS.subscribe, subscription.toJSON());
             })
             .then(function () {
-                setState(button, 'on', 'Avisos activados');
+                setState(button, 'on');
             })
             .catch(function (error) {
                 if (error && error.message === 'denied') {
-                    setState(button, 'blocked', 'Avisos bloqueados en este navegador');
+                    setState(button, 'blocked');
                     return;
                 }
-                setState(button, 'off', 'No se pudieron activar');
+                setState(button, 'failed');
             });
     }
 
     /** Da de baja este navegador, en el navegador y en el servidor. */
     function unsubscribe(button) {
-        setState(button, 'working', 'Desactivando…');
+        setState(button, 'working');
 
         navigator.serviceWorker.ready
             .then(function (registration) { return registration.pushManager.getSubscription(); })
@@ -182,38 +230,41 @@
                 });
             })
             .then(function () {
-                setState(button, 'off', 'Activar avisos');
+                setState(button, 'off');
             })
             .catch(function () {
-                setState(button, 'off', 'Activar avisos');
+                setState(button, 'off');
             });
     }
 
     /** Deja el botón reflejando el estado real, sin pedir nada. */
     function refresh(button) {
         if (!isSupported()) {
-            setState(button, 'unsupported', 'Este navegador no admite avisos');
+            setState(button, 'unsupported');
             return;
         }
 
         if (isIos() && !isStandalone()) {
-            // Nada que hacer desde una pestaña: la API no existe aquí.
-            setState(button, 'unsupported', 'Para recibir avisos, añade la web a tu pantalla de inicio');
+            // Estado propio, no 'unsupported': desde esta pestaña la API no
+            // existe, pero en el mismo dispositivo SÍ funciona una vez instalada. El
+            // hint de abajo explica cómo, que es la diferencia entre "no puedo" y
+            // "no sé cómo".
+            setState(button, 'ios');
             return;
         }
 
         if (Notification.permission === 'denied') {
-            setState(button, 'blocked', 'Avisos bloqueados en este navegador');
+            setState(button, 'blocked');
             return;
         }
 
         navigator.serviceWorker.getRegistration().then(function (registration) {
             if (!registration) {
-                setState(button, 'off', 'Activar avisos');
+                setState(button, 'off');
                 return;
             }
             registration.pushManager.getSubscription().then(function (subscription) {
-                setState(button, subscription ? 'on' : 'off', subscription ? 'Avisos activados' : 'Activar avisos');
+                setState(button, subscription ? 'on' : 'off');
             });
         });
     }
@@ -221,6 +272,9 @@
     function init() {
         var buttons = document.querySelectorAll('[data-push-toggle]');
         Array.prototype.forEach.call(buttons, function (button) {
+            // Comprobando… hasta que refresh() resuelva: getSubscription() es
+            // asíncrono y sin esto la tarjeta parpadea el estado equivocado.
+            setState(button, 'checking');
             refresh(button);
             button.addEventListener('click', function () {
                 if (button.dataset.pushState === 'on') {

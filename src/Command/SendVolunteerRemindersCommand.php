@@ -6,6 +6,8 @@ use App\Entity\VolunteerSignup;
 use App\Repository\UserRepository;
 use App\Repository\VolunteerSignupRepository;
 use App\Service\AppSettings;
+use App\Service\Notification\NotificationPreferences;
+use App\Service\Notification\NotificationTopic;
 use App\Service\Push\PushSender;
 use App\Service\Volunteering\VolunteerOfferFormatter;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -45,6 +47,7 @@ class SendVolunteerRemindersCommand extends AbstractCronCommand
         private readonly VolunteerSignupRepository $signups,
         private readonly UserRepository $users,
         private readonly PushSender $push,
+        private readonly NotificationPreferences $preferences,
         private readonly VolunteerOfferFormatter $formatter,
         private readonly AppSettings $settings,
     ) {
@@ -109,6 +112,13 @@ class SendVolunteerRemindersCommand extends AbstractCronCommand
         $partner = $signup->getPartner();
 
         if (null === $offer || null === $partner) {
+            return;
+        }
+
+        // Aunque te hayas apuntado, si has apagado los avisos de voluntariado
+        // en el móvil no se te recuerda por ahí: la tarea sigue estando en tu
+        // panel, que es donde no se pierde.
+        if (!$this->preferences->wants($partner, NotificationTopic::VOLUNTEERING, NotificationTopic::CHANNEL_PUSH)) {
             return;
         }
 

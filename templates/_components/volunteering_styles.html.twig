@@ -407,18 +407,230 @@
         .vol-phase__actions .csa-btn { width: 100%; justify-content: center; }
     }
 
-    /* ---- Las plazas, una a una ----
-       "4 de 6" hay que leerlo y restar; seis casillas con dos huecos se ven sin
-       leer. Decorativas: el dato ya está escrito encima, así que van con
-       aria-hidden y no se anuncian dos veces. */
-    .vol-slots { display: flex; gap: 3px; margin-top: var(--csa-sp-2); }
-    .vol-slots__pip {
-        width: 14px;
-        height: 6px;
-        border-radius: var(--csa-radius-pill);
-        background: var(--csa-rule);
+    /* ---- Lo que se lee | lo que se consulta ----
+       Dos columnas: la descripción manda la altura, y los tres datos de un
+       vistazo van al lado en vez de en una tira que ocupaba dos filas. */
+    .vol-split {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 21rem;
+        gap: var(--csa-sp-4);
+        align-items: start;
+        margin-bottom: var(--csa-sp-4);
     }
-    .vol-slots__pip.is-filled { background: var(--csa-green); }
+    .vol-split .prt-card { margin-bottom: 0; }
+
+    .vol-facts {
+        background: var(--csa-surface);
+        border: 1px solid var(--csa-rule-soft);
+        border-radius: var(--csa-radius-lg);
+        overflow: hidden;
+    }
+    .vol-fact {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--csa-sp-3);
+        padding: var(--csa-sp-4);
+        border-bottom: 1px solid var(--csa-rule-soft);
+    }
+    .vol-fact:last-child { border-bottom: 0; }
+    .vol-fact > i { margin-top: 2px; color: var(--csa-ink-muted); }
+    .vol-fact__value {
+        display: block;
+        font-size: var(--csa-fs-base);
+        font-weight: 600;
+        color: var(--csa-ink);
+    }
+    /* Sólo la PRIMERA letra. Con `text-transform: capitalize` se ponía en
+       mayúscula cada palabra y salía "Lunes, 31 De Agosto De 2026" y "0,5 H". */
+    .vol-fact__value::first-letter { text-transform: uppercase; }
+    .vol-fact__value--muted { font-weight: 500; color: var(--csa-ink-muted); }
+    .vol-fact__sub {
+        display: block;
+        font-size: var(--csa-fs-sm);
+        color: var(--csa-ink-soft);
+    }
+
+    @media (max-width: 900px) {
+        .vol-split { grid-template-columns: 1fr; }
+    }
+
+    /* ---- Quien coordina ----
+       Al pie de lo que hay que hacer, con su teléfono: es a quien se llama si
+       algo pasa ese día. */
+    .vol-owner {
+        display: flex;
+        align-items: center;
+        gap: var(--csa-sp-3);
+        margin-top: var(--csa-sp-4);
+        padding-top: var(--csa-sp-4);
+        border-top: 1px solid var(--csa-rule-soft);
+    }
+    .vol-owner__avatar {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        width: 34px;
+        height: 34px;
+        border-radius: var(--csa-radius-pill);
+        background: var(--csa-ochre-soft);
+        color: var(--csa-amber);
+        font-size: var(--csa-fs-xs);
+        font-weight: 700;
+        letter-spacing: 0.02em;
+    }
+    .vol-owner__who { display: flex; flex-direction: column; min-width: 0; }
+    .vol-owner__role { font-size: var(--csa-fs-xs); color: var(--csa-ink-muted); }
+    .vol-owner__name { font-size: var(--csa-fs-base); font-weight: 600; color: var(--csa-ink); }
+    .vol-owner__hours { font-size: var(--csa-fs-xs); color: var(--csa-ink-muted); }
+    .vol-owner__contact { display: flex; gap: var(--csa-sp-3); margin-left: auto; }
+
+    /* ---- Ocupación ----
+       Quiénes son las plazas, no cuántas: "4 de 6" hay que leerlo y restar,
+       cuatro fichas con iniciales y dos huecos se ven sin leer. */
+    .vol-occupancy {
+        display: flex;
+        align-items: center;
+        gap: var(--csa-sp-5);
+        flex-wrap: wrap;
+        margin-bottom: var(--csa-sp-4);
+        padding: var(--csa-sp-4) var(--csa-sp-5);
+        background: var(--csa-surface);
+        border: 1px solid var(--csa-rule-soft);
+        border-radius: var(--csa-radius-lg);
+    }
+    .vol-occupancy__count { display: flex; align-items: baseline; gap: var(--csa-sp-2); flex-wrap: wrap; }
+    .vol-occupancy__label {
+        flex-basis: 100%;
+        font-size: var(--csa-fs-xs);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--csa-ink-muted);
+    }
+    .vol-occupancy__value {
+        font-family: var(--csa-serif);
+        font-size: var(--csa-fs-2xl);
+        line-height: 1;
+        color: var(--csa-ink);
+    }
+    .vol-occupancy__of { font-size: var(--csa-fs-sm); color: var(--csa-ink-soft); white-space: nowrap; }
+
+    .vol-occupancy__pips { display: flex; gap: var(--csa-sp-2); flex-wrap: wrap; }
+    .vol-pip {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 38px;
+        height: 38px;
+        border-radius: var(--csa-radius-md);
+        font-size: var(--csa-fs-xs);
+        font-weight: 700;
+        letter-spacing: 0.02em;
+    }
+    .vol-pip--filled { background: var(--csa-green-soft); color: #3a5c2a; }
+    /* El hueco va punteado y no relleno: se lee como "aquí falta alguien" y no
+       como una ficha apagada. */
+    .vol-pip--empty {
+        border: 1.5px dashed var(--csa-rule);
+        color: var(--csa-rule);
+        font-weight: 400;
+        font-size: var(--csa-fs-md);
+    }
+
+    .vol-occupancy__note {
+        flex: 1 1 12rem;
+        margin: 0;
+        font-size: var(--csa-fs-sm);
+        line-height: var(--csa-lh-normal);
+        color: var(--csa-ink-soft);
+    }
+    .vol-occupancy__note strong { color: var(--csa-terracotta); font-weight: 600; }
+
+    @media (max-width: 640px) {
+        .vol-occupancy { gap: var(--csa-sp-3); }
+        .vol-occupancy__note { flex-basis: 100%; }
+    }
+
+    /* ---- Una persona en la lista ----
+       Avatar + nombre arriba, contexto debajo. El avatar no es adorno: en una
+       lista de doce filas de texto, las iniciales dan un punto de anclaje para
+       encontrar a alguien sin leer cada renglón. */
+    .vol-person { display: flex; align-items: flex-start; gap: var(--csa-sp-3); }
+    .vol-person__avatar {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        width: 32px;
+        height: 32px;
+        border-radius: var(--csa-radius-pill);
+        background: var(--csa-green-soft);
+        color: #3a5c2a;
+        font-size: var(--csa-fs-xs);
+        font-weight: 700;
+    }
+    .vol-person__body { min-width: 0; }
+    .vol-person__top {
+        display: flex;
+        align-items: center;
+        gap: var(--csa-sp-2);
+        flex-wrap: wrap;
+    }
+    /* En la base de datos muchos nombres están en MAYÚSCULAS: se bajan y se
+       recapitalizan por CSS, que respeta los compuestos ("ANA MARÍA" → "Ana
+       María"). El filtro capitalize de Twig sólo tocaría la primera palabra. */
+    .vol-person__name {
+        font-size: var(--csa-fs-base);
+        font-weight: 600;
+        color: var(--csa-ink);
+        text-transform: capitalize;
+    }
+    .vol-person__meta {
+        display: flex;
+        align-items: center;
+        gap: var(--csa-sp-3);
+        flex-wrap: wrap;
+        margin-top: 2px;
+        font-size: var(--csa-fs-xs);
+        color: var(--csa-ink-muted);
+    }
+    /* La nota la escribe quien se apunta y suele ser un aviso ("llego tarde"):
+       en ocre para que se lea antes que el resto del contexto. */
+    .vol-person__note { color: var(--csa-amber); }
+    .vol-person__note i { margin-right: 3px; }
+
+    /* Fila separadora dentro de la tabla: quien coordina va aparte porque
+       coordinar no es venir, y mezclarlo con la asistencia hace pensar que hay
+       un brazo más del que hay. */
+    .vol-people__sep td {
+        padding-top: var(--csa-sp-4);
+        font-size: var(--csa-fs-xs);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--csa-ink-muted);
+        border-bottom: 0;
+    }
+
+    /* Acciones de la fila: con caja, para que se lean como botones y no como
+       iconos sueltos perdidos entre badges. */
+    .vol-actions { display: flex; gap: var(--csa-sp-2); justify-content: flex-end; }
+    .vol-actions__btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 30px;
+        height: 30px;
+        padding: 0;
+        border: 1px solid var(--csa-rule-soft);
+        border-radius: var(--csa-radius-sm);
+        background: var(--csa-surface);
+        color: var(--csa-ink-muted);
+        font-size: var(--csa-fs-sm);
+        text-decoration: none;
+        cursor: pointer;
+    }
+    .vol-actions__btn:hover { border-color: var(--csa-ink-muted); color: var(--csa-ink); }
+    .vol-actions__btn--danger:hover { border-color: var(--csa-terracotta); color: var(--csa-terracotta); }
 
     /* Cuánto lleva hecho cada quien, bajo su nombre. Terciario a propósito: es
        contexto para quien coordina, no una nota en su expediente. */

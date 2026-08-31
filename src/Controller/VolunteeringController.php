@@ -19,6 +19,8 @@ use App\Repository\VolunteerOfferRepository;
 use App\Repository\VolunteerSignupRepository;
 use App\Security\VolunteerOfferVoter;
 use App\Service\Volunteering\OfferRepeatDates;
+use App\Service\Volunteering\CoordinatorSignup;
+use App\Service\Volunteering\CreditedTime;
 use App\Service\Volunteering\VolunteerAudienceResolver;
 use App\Service\Volunteering\VolunteerCallNotifier;
 use App\Service\Volunteering\VolunteerEventRecorder;
@@ -219,6 +221,7 @@ class VolunteeringController extends AbstractController
         EntityManagerInterface $em,
         VolunteerEventRecorder $events,
         OfferRepeatDates $repeatDates,
+        CoordinatorSignup $coordination,
     ): Response {
         $offer = (new VolunteerOffer())->setCreatedBy($this->getUser());
         $form = $this->createForm(VolunteerOfferType::class, $offer, ['with_repeat' => true]);
@@ -231,6 +234,10 @@ class VolunteeringController extends AbstractController
             $this->denyAccessUnlessGranted(VolunteerOfferVoter::EDIT, $offer);
 
             $em->persist($offer);
+            // Quien coordina consta desde el principio: sale en "quién viene"
+            // con su etiqueta, y al cerrar se le imputan las horas como a todo
+            // el mundo, sin que nadie tenga que acordarse de anotarlo.
+            $coordination->sync($offer);
             $events->forOffer($offer, VolunteerEvent::TYPE_OFFER_CREATED, ['status' => $offer->getStatus()]);
 
             // Repetir en el mismo paso que crear: "voy a dar de alta el reparto
@@ -381,6 +388,7 @@ class VolunteeringController extends AbstractController
         EntityManagerInterface $em,
         VolunteerOfferChangeNotifier $changes,
         VolunteerEventRecorder $events,
+        CoordinatorSignup $coordination,
     ): Response {
         // La foto se toma ANTES de handleRequest: después, la entidad ya lleva
         // los valores nuevos y el original se ha perdido.
@@ -402,6 +410,10 @@ class VolunteeringController extends AbstractController
                     'relocated' => $before->relocatedIn($offer),
                 ]
             );
+
+            // Cambiar de coordinador se refleja en las inscripciones, con el
+            // cuidado de no quitarle las horas a quien ya consta que las hizo.
+            $coordination->sync($offer);
 
             $em->flush();
 
@@ -591,19 +603,47 @@ class VolunteeringController extends AbstractController
             return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
         }
 
-        $coordinated = 'coordinator' === $request->request->get('role');
-        $minutes = $request->request->getInt('minutes') ?: null;
-
         // Reutiliza la inscripción si ya existía: el UNIQUE (offer, partner) no
-        // admite dos, y quien se apuntó y además acabó coordinando es un caso
-        // normal, no un error.
-        $signup = $signups->findOneFor($offer, $partner) ?? (new VolunteerSignup())
+        // admite dos.
+        $existing = $signups->findOneFor($offer, $partner);
+
+        // Quien ya consta como que fue no se vuelve a anotar. Sin esto, un
+        // segundo envío —doble clic, volver atrás en el navegador, o
+        // sencillamente no acordarse— le reescribía las horas en silencio y sin
+        // dejar rastro de que había pasado dos veces.
+        if (null !== $existing && !$existing->isCancelled() && true === $existing->getAttended()) {
+            $this->addFlash('warning', sprintf(
+                '%s %s ya constaba en esta tarea, con %s h. Si hay que corregirle las horas, hazlo en la lista de arriba.',
+                $partner->getName(),
+                $partner->getSurname(),
+                str_replace('.', ',', (string) (($existing->getCreditedMinutes() ?? 0) / 60))
+            ));
+
+            return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
+        }
+
+        // Con getInt() esto reventaba con un 400: `filter_var('', FILTER_VALIDATE_INT)`
+        // falla y InputBag lo convierte en BadRequestException — la página se
+        // caía al dejar el campo vacío.
+        $minutes = CreditedTime::minutesFromHours($request->request->get('hours'));
+
+        // Las horas se dicen, NO se deducen de la tarea. Anotar a alguien a mano
+        // es un acto deliberado —quien lo hace sabe cuánto estuvo esa persona— y
+        // rellenar el hueco por él escondía dos cosas: cuánto se estaba
+        // imputando, y que en una tarea sin fijar lo que vale se anotaba a
+        // alguien aportando cero.
+        if (null === $minutes || $minutes <= 0) {
+            $this->addFlash('error', 'Pon cuántas horas se le computan: sin eso no se puede anotar a nadie.');
+
+            return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
+        }
+
+        $signup = $existing ?? (new VolunteerSignup())
             ->setOffer($offer)
             ->setPartner($partner);
 
         $signup
             ->reopen()
-            ->setRole($coordinated ? VolunteerSignup::ROLE_COORDINATOR : VolunteerSignup::ROLE_PARTICIPANT)
             ->confirmAttendance(VolunteerSignup::SOURCE_MANAGER, $minutes);
 
         $em->persist($signup);
@@ -614,10 +654,75 @@ class VolunteeringController extends AbstractController
         $em->flush();
 
         $this->addFlash('success', sprintf(
-            '%s %s anotadx%s.',
+            '%s %s anotadx.',
             $partner->getName(),
-            $partner->getSurname(),
-            $coordinated ? ' como quien lo organizó' : ''
+            $partner->getSurname()
+        ));
+
+        return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
+    }
+
+    /**
+     * Quitar una inscripción de la tarea.
+     *
+     * NO ES LO MISMO QUE "no fue", y por eso es un gesto aparte. Que alguien se
+     * apuntara y no apareciera es un hecho que conviene conservar: dice que la
+     * plaza se quedó sin cubrir y es el dato que explica por qué una tarea salió
+     * mal. Esto otro es para cuando la inscripción NO DEBERÍA EXISTIR —se anotó
+     * a quien no era, o por duplicado—, y ahí guardarla sería guardar una
+     * mentira.
+     *
+     * Borra de verdad en vez de cancelar, por lo mismo: una baja deja constancia
+     * de que alguien se descolgó, y quien nunca estuvo no se descolgó de nada.
+     *
+     * Comparte el token del formulario de cierre porque el botón vive DENTRO de
+     * ese formulario, como una acción alternativa de la misma fila; pedir un
+     * token propio obligaría a un campo oculto por inscripción para no ganar
+     * nada.
+     */
+    #[Route('/{id}/quitar/{signup}', name: 'volunteering_remove_person', methods: ['POST'], requirements: ['id' => '\d+', 'signup' => '\d+'])]
+    #[IsGranted(VolunteerOfferVoter::EDIT, subject: 'offer')]
+    public function removePerson(
+        Request $request,
+        VolunteerOffer $offer,
+        int $signup,
+        VolunteerSignupRepository $signups,
+        EntityManagerInterface $em,
+        VolunteerEventRecorder $events,
+    ): Response {
+        if (!$this->isCsrfTokenValid('volunteering_close', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
+
+            return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
+        }
+
+        $found = $signups->find($signup);
+
+        // Que la inscripción sea DE ESTA TAREA se comprueba a mano: el voter ha
+        // dado permiso sobre la oferta de la URL, no sobre una inscripción que
+        // podría ser de otra y colarse cambiando el número.
+        if (null === $found || $found->getOffer() !== $offer) {
+            $this->addFlash('error', 'Esa inscripción no es de esta tarea.');
+
+            return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
+        }
+
+        $partner = $found->getPartner();
+
+        // Queda el rastro aunque la fila se vaya: si desaparecen las horas de
+        // alguien, tiene que poder saberse quién las quitó y cuándo.
+        $events->forOffer($offer, VolunteerEvent::TYPE_WITHDRAW, [
+            'removed_by_manager' => true,
+            'minutes' => $found->getCreditedMinutes(),
+        ], $partner);
+
+        $em->remove($found);
+        $em->flush();
+
+        $this->addFlash('success', sprintf(
+            '%s %s ya no consta en esta tarea.',
+            $partner?->getName(),
+            $partner?->getSurname()
         ));
 
         return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
@@ -650,17 +755,52 @@ class VolunteeringController extends AbstractController
         }
 
         $attended = array_map('intval', (array) $request->request->all('attended'));
-        $minutes = (array) $request->request->all('minutes');
+        $hours = (array) $request->request->all('hours');
+
+        // Los acompañantes los ponía SÓLO quien se apunta, desde su panel. Pero
+        // el caso normal es una llamada —"voy con mi pareja"— y quien coordina no
+        // tenía dónde apuntarlo, así que la tarea seguía pidiendo una plaza que
+        // ya estaba ocupada y venía gente de más.
+        $companions = (array) $request->request->all('companions');
         $counted = 0;
+
+        // Cerrar de verdad, o sólo corregir lo ya anotado. La diferencia está en
+        // qué significa una casilla sin marcar: al cerrar, "no fue"; mientras la
+        // tarea no ha pasado, "todavía no ha pasado nada" — y darle por ausente
+        // a quien está apuntado esperando el día sería inventarse un hecho.
+        $closingAll = $request->request->getBoolean('close_all');
 
         foreach ($offer->getSignups() as $signup) {
             if ($signup->isCancelled()) {
                 continue;
             }
 
+            // QUIEN COORDINA LO DECLARA ÉL, en su panel, y diciendo cuántas horas
+            // le llevó. Ni sale en esta lista —lo normal es que no vaya: monta la
+            // tarea, busca gente y está pendiente— ni el cierre se lo imputa por
+            // su cuenta: una tarea vale lo que la asociación decidió, igual para
+            // todo el mundo, pero coordinarla no se parece a la media hora de
+            // bajar cajas y sólo lo sabe quien lo hizo.
+            if ($signup->isCoordination()) {
+                continue;
+            }
+
+            // Los acompañantes se guardan pase lo que pase con la asistencia:
+            // decir "viene con su pareja" no es decir si vino, y son las dos
+            // cosas que se apuntan en esta pantalla antes de que llegue el día.
+            if (isset($companions[$signup->getId()]) && '' !== trim((string) $companions[$signup->getId()])) {
+                $signup->setCompanions(max(0, min(9, (int) $companions[$signup->getId()])));
+            }
+
             $wentThere = \in_array($signup->getId(), $attended, true);
 
             if (!$wentThere) {
+                // Corrigiendo, quien no ha respondido se queda como está: la
+                // casilla vacía no dice "no fue", dice "aún no se sabe".
+                if (!$closingAll && null === $signup->getAttended()) {
+                    continue;
+                }
+
                 // Sólo se toca lo que cambia. Sin esto, cerrar una tarea que
                 // alguien ya había confirmado desde su panel la reescribiría
                 // como "lo puso gestión" y se perdería el rastro de que lo dijo
@@ -687,7 +827,8 @@ class VolunteeringController extends AbstractController
 
             ++$counted;
 
-            $wanted = $this->minutesFor($minutes, $signup->getId()) ?? $offer->getCreditedMinutes();
+            $wanted = CreditedTime::minutesFromHours($hours[$signup->getId()] ?? null)
+                ?? $offer->getCreditedMinutes();
 
             if (true !== $signup->getAttended()) {
                 $signup->confirmAttendance(VolunteerSignup::SOURCE_MANAGER, $wanted);
@@ -714,30 +855,6 @@ class VolunteeringController extends AbstractController
         $this->addFlash('success', sprintf('Tarea cerrada: %d persona(s) con horas computadas.', $counted));
 
         return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
-    }
-
-    /**
-     * Los minutos que el formulario pide para una inscripción, o null si lo dejó
-     * en blanco (que significa "los de la tarea").
-     *
-     * En blanco y cero son cosas distintas y por eso no vale un `?: null`: cero
-     * es una respuesta legítima —vino pero esto no le computa— y convertirla en
-     * null le devolvería los minutos de la tarea, justo lo contrario de lo que
-     * se pidió. El tope es el mismo que el del formulario de anotar a mano; un
-     * día tiene 1440 minutos y todo lo que pase de ahí es un dedo torcido.
-     *
-     * @param array<mixed> $minutes lo que llegó en el POST, indexado por id de inscripción
-     * @param int|null     $id      la inscripción
-     *
-     * @return int|null los minutos pedidos, o null si no se pidió nada
-     */
-    private function minutesFor(array $minutes, ?int $id): ?int
-    {
-        if (null === $id || !isset($minutes[$id]) || '' === trim((string) $minutes[$id])) {
-            return null;
-        }
-
-        return max(0, min(1440, (int) $minutes[$id]));
     }
 
     /**

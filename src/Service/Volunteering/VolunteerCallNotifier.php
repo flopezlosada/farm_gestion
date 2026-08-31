@@ -2,13 +2,20 @@
 
 namespace App\Service\Volunteering;
 
+use App\Entity\Partner;
 use App\Entity\User;
 use App\Entity\VolunteerCall;
 use App\Entity\VolunteerOffer;
 use App\Repository\UserRepository;
 use App\Repository\VolunteerOfferRepository;
 use App\Service\AppSettings;
+use App\Service\Notification\NotificationPreferences;
+use App\Service\Notification\NotificationTopic;
+use App\Security\PartnerAccessPolicy;
 use App\Service\Push\PushSender;
+use Symfony\Bridge\Twig\Mime\TemplatedEmail;
+use Symfony\Component\Mailer\MailerInterface;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
@@ -42,10 +49,14 @@ class VolunteerCallNotifier
         private readonly VolunteerAudienceResolver $audience,
         private readonly VolunteerCallEscalator $escalator,
         private readonly PushSender $push,
+        private readonly NotificationPreferences $preferences,
         private readonly EntityManagerInterface $entityManager,
         private readonly AppSettings $settings,
         private readonly VolunteerOfferFormatter $formatter,
         private readonly LoggerInterface $logger,
+        private readonly MailerInterface $mailer,
+        private readonly PartnerAccessPolicy $accessPolicy,
+        private readonly UrlGeneratorInterface $urlGenerator,
     ) {
     }
 
@@ -98,21 +109,36 @@ class VolunteerCallNotifier
         ?User $triggeredBy,
         \DateTimeImmutable $now,
     ): ?VolunteerCall {
+        // Quiénes encajan con la tarea. Es una pregunta del dominio —a quién le
+        // sirve— y no de canal.
         $partners = $this->audience->resolve($offer, $scope);
         if ([] === $partners) {
             return null;
         }
 
-        $recipients = $this->users->findByPartners($partners);
-        if ([] === $recipients) {
+        // Y de esos, quiénes quieren enterarse por cada vía. Son listas
+        // distintas a propósito: hay quien sólo quiere el correo y quien sólo
+        // quiere el móvil, y mandar a la unión de ambas es exactamente lo que
+        // hace que la gente apague los avisos.
+        $byPush = $this->preferences->filter($partners, NotificationTopic::VOLUNTEERING, NotificationTopic::CHANNEL_PUSH);
+        $byEmail = $this->emailEnabled()
+            ? $this->preferences->filter($partners, NotificationTopic::VOLUNTEERING, NotificationTopic::CHANNEL_EMAIL)
+            : [];
+
+        if ([] === $byPush && [] === $byEmail) {
             return null;
         }
+
+        $recipients = $this->users->findByPartners($byPush);
 
         $call = (new VolunteerCall())
             ->setOffer($offer)
             ->setScope($scope)
             ->setTriggeredBy($triggeredBy)
-            ->setRecipients(\count($recipients));
+            // Cuenta PERSONAS avisadas por cualquier vía, no envíos: quien
+            // recibe correo y push es una sola persona a la que se ha pedido
+            // ayuda, y es lo que la pantalla de gestión enseña.
+            ->setRecipients(\count($this->union($byPush, $byEmail)));
 
         try {
             $this->entityManager->persist($call);
@@ -136,7 +162,104 @@ class VolunteerCallNotifier
             '/panel/voluntariado'
         );
 
+        $this->email($offer, $byEmail);
+
         return $call;
+    }
+
+    /**
+     * Manda el aviso por correo a quienes lo quieren por ahí.
+     *
+     * BEST-EFFORT, igual que el push: un correo que no sale no puede tumbar la
+     * tanda del planificador ni dejar el {@see VolunteerCall} a medias. El
+     * registro ya está escrito cuando se llega aquí, así que un fallo se traga
+     * con su traza y no se reintenta: repetir el aviso es peor que perderlo.
+     *
+     * Uno por persona y no un envío con copia oculta: el cuerpo lleva el enlace
+     * para apuntarse y el pie para cambiar sus avisos, y los dos son de quien lo
+     * recibe.
+     *
+     * @param VolunteerOffer $offer    la oferta
+     * @param list<Partner>  $partners quienes lo quieren por correo
+     */
+    private function email(VolunteerOffer $offer, array $partners): void
+    {
+        if ([] === $partners) {
+            return;
+        }
+
+        $title = $this->title($offer);
+        $when = $this->formatter->date($offer->getStartsAt());
+        $where = $this->formatter->place($offer);
+        $url = $this->urlGenerator->generate('panel_volunteering', [], UrlGeneratorInterface::ABSOLUTE_URL);
+        $notificationsUrl = $this->urlGenerator->generate('panel_notifications', [], UrlGeneratorInterface::ABSOLUTE_URL);
+
+        foreach ($partners as $partner) {
+            $address = $partner->getEmail();
+            if (!$address) {
+                continue;
+            }
+
+            try {
+                $this->mailer->send(
+                    (new TemplatedEmail())
+                        ->to($address)
+                        ->subject($title . ': ' . $offer->getTitle())
+                        ->htmlTemplate('email/volunteer_call.html.twig')
+                        ->textTemplate('email/volunteer_call.txt.twig')
+                        ->context([
+                            'offer' => $offer,
+                            'title' => $title,
+                            'when' => $when,
+                            'where' => $where,
+                            'url' => $url,
+                            'notifications_url' => $notificationsUrl,
+                            // Los enlaces exigen sesión: a quien no puede entrar
+                            // se le da una vía humana en vez de un botón que le
+                            // deja en una pantalla de login.
+                            'can_act' => $this->accessPolicy->canUseActionLinks($partner),
+                        ])
+                );
+            } catch (\Throwable $e) {
+                $this->logger->error('No se pudo enviar el aviso de voluntariado por correo', [
+                    'offer' => $offer->getId(),
+                    'partner' => $partner->getId(),
+                    'exception' => $e,
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Si los avisos de voluntariado por correo están encendidos.
+     *
+     * Se mira aquí y no en el `requires` del cron porque esta tarea entrega por
+     * dos canales: allí inhibiría la ejecución entera y dejaría también sin
+     * aviso a quien lo quiere en el móvil. Y se mira ANTES de resolver la
+     * audiencia de correo para no pagar la consulta cuando está apagado.
+     */
+    private function emailEnabled(): bool
+    {
+        return $this->settings->getBool(AppSettings::EMAIL_ENABLED)
+            && $this->settings->getBool(AppSettings::EMAIL_VOLUNTEERING);
+    }
+
+    /**
+     * Las personas de las dos listas, sin repetir.
+     *
+     * @param list<Partner> $a una lista
+     * @param list<Partner> $b la otra
+     *
+     * @return list<Partner> la unión
+     */
+    private function union(array $a, array $b): array
+    {
+        $all = [];
+        foreach ([...$a, ...$b] as $partner) {
+            $all[(int) $partner->getId()] = $partner;
+        }
+
+        return array_values($all);
     }
 
     /**

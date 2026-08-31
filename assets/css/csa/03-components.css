@@ -616,10 +616,19 @@
   border-radius: var(--csa-radius-md);
   font-family: var(--csa-sans);
   font-size: var(--csa-fs-base);
+  /* Explícito: dentro de un <label> —lo normal en un formulario en línea—
+     Bootstrap 3 impone font-weight:700 a todo lo que cuelga, y lo escrito en el
+     campo salía en negrita como si fuera un titular. */
+  font-weight: 400;
   line-height: 1.4;
   color: var(--csa-ink);
   outline: none;
   transition: border-color var(--csa-t-fast), background var(--csa-t-fast);
+}
+.csa-input::placeholder,
+.csa-textarea::placeholder {
+  color: var(--csa-ink-muted);
+  font-weight: 400;
 }
 .csa-input:focus,
 .csa-select:focus,
@@ -1233,6 +1242,12 @@ input[type="number"].csa-input--compact { width: 4.5rem; padding-right: 4px; }
   border-radius: var(--csa-radius-md);
   font-family: var(--csa-sans);
   font-size: var(--csa-fs-base);
+  /* Explícito y no heredado: cuando el <select> vive dentro de un <label> —el
+     caso normal en un formulario en línea— el componente hereda el
+     `font-weight:700` que Bootstrap 3 le pone a TODO label, y el desplegable
+     entero sale en negrita. Mismo patrón que el `a:visited` que ya pisó estos
+     componentes: el legacy gana por herencia si no se dice lo contrario. */
+  font-weight: 400;
   line-height: 1.4;
   color: var(--csa-ink);
   text-align: left;
@@ -1278,16 +1293,20 @@ input[type="number"].csa-input--compact { width: 4.5rem; padding-right: 4px; }
 }
 .csa-dropdown--open .csa-dropdown__trigger::after { transform: rotate(180deg); }
 
+/* FIXED y no absolute, y el JS le calcula sitio al abrir.
+   Con posicionamiento absoluto, cualquier ancestro con `overflow: hidden`
+   —una .prt-card, por ejemplo— recortaba el menú por el borde de la tarjeta y
+   sólo se veían dos nombres y medio. Sacándolo del flujo con `fixed` deja de
+   depender de dónde esté colgado. Ver placeMenu() en csa-dropdown.js. */
 .csa-dropdown__menu {
-  position: absolute;
-  top: calc(100% + 2px);
-  left: 0; right: 0;
-  z-index: 50;
+  position: fixed;
+  z-index: 1050;
   max-height: 280px;
   overflow-y: auto;
   margin: 0;
   padding: var(--csa-sp-1) 0;
   list-style: none;
+  font-weight: 400;
   background: var(--csa-surface);
   border: 1px solid var(--csa-rule-soft);
   border-radius: var(--csa-radius-md);
@@ -1295,9 +1314,87 @@ input[type="number"].csa-input--compact { width: 4.5rem; padding-right: 4px; }
 }
 .csa-dropdown__menu[hidden] { display: none; }
 
+/* ---- Modo búsqueda (lo activa el JS a partir de 12 opciones) ----
+   El control ES el campo donde se escribe. Un <input> no admite ::after, así
+   que la flecha la pinta el contenedor. */
+/* Ancho suficiente para un nombre con dos apellidos sin que se corte, que es
+   el contenido para el que existe este modo. */
+.csa-dropdown--search { min-width: 20rem; }
+.csa-dropdown__trigger--search {
+  /* Hueco a la derecha para la flecha, que aquí no la dibuja el propio control. */
+  padding-right: var(--csa-sp-8);
+  cursor: text;
+}
+.csa-dropdown__trigger--search::placeholder {
+  color: var(--csa-ink-muted);
+  font-weight: 400;
+}
+.csa-dropdown--search::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: var(--csa-sp-3);
+  width: 0.4rem;
+  height: 0.4rem;
+  margin-top: -0.3rem;
+  border-right: 1.5px solid var(--csa-ink-muted);
+  border-bottom: 1.5px solid var(--csa-ink-muted);
+  transform: rotate(45deg);
+  transition: transform var(--csa-t-fast);
+  pointer-events: none;
+}
+.csa-dropdown--search.csa-dropdown--open::after {
+  transform: rotate(-135deg);
+  margin-top: -0.1rem;
+}
+
+/* En una fila de formulario en línea (.vol-repeat y compañía) el control se
+   queda con el ancho de su etiqueta y el menú, que va a `left:0; right:0`,
+   heredaba una columna donde no cabía un nombre y dos apellidos. */
+.csa-dropdown--search .csa-dropdown__menu { min-width: 18rem; }
+
+/* Lo que falta por rellenar, en castellano y al final del formulario. Al final
+   y no bajo cada campo: en una fila en línea, un párrafo bajo un control empuja
+   a los demás y descoloca la fila entera. Ver assets/js/csa-validate.js. */
+.csa-form-errors {
+  flex-basis: 100%;
+  margin-top: var(--csa-sp-2);
+}
+.csa-form-errors p {
+  margin: 0;
+  font-size: var(--csa-fs-sm);
+  font-weight: 400;
+  line-height: var(--csa-lh-snug);
+  color: var(--csa-terracotta);
+}
+.csa-input.is-invalid,
+.csa-select.is-invalid,
+.csa-textarea.is-invalid {
+  border-color: var(--csa-terracotta);
+}
+
+/* El spinner de un input[type=number] estrecho se come la mitad del hueco y
+   deja el número pegado al borde. En los campos compactos no cabe. */
+.csa-input--compact::-webkit-outer-spin-button,
+.csa-input--compact::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.csa-input--compact[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+
+/* Lo que se dice cuando el filtro no deja nada: una lista vacía sin explicación
+   parece el componente roto. */
+.csa-dropdown__empty {
+  padding: var(--csa-sp-3);
+  font-size: var(--csa-fs-sm);
+  font-style: italic;
+  color: var(--csa-ink-muted);
+}
+
 .csa-dropdown__option {
   padding: 8px var(--csa-sp-3);
   font-size: var(--csa-fs-base);
+  font-weight: 400;
   line-height: 1.4;
   color: var(--csa-ink);
   cursor: pointer;

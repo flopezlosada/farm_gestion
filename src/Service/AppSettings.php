@@ -49,6 +49,16 @@ class AppSettings
      */
     public const EMAIL_PICKUP_REMINDER_LINKS = 'email.pickup_reminder_links';
 
+    /**
+     * Envío por CORREO de los avisos de voluntariado que piden gente
+     * (app:send-volunteer-calls). Independiente del push: el mismo aviso puede
+     * salir sólo al móvil, sólo por correo o por los dos, y cada socix elige lo
+     * suyo en su pantalla de avisos. Apagado por defecto porque el módulo nació
+     * sólo con push y encenderlo empieza a mandar correos a gente que no los
+     * esperaba.
+     */
+    public const EMAIL_VOLUNTEERING = 'email.volunteering';
+
     /** Envío del resumen de cambios a admin (app:send-admin-delivery-changes-summary). */
     public const EMAIL_ADMIN_DELIVERY_SUMMARY = 'email.admin_delivery_summary';
 
@@ -471,7 +481,10 @@ class AppSettings
         // corre una vez al día por mucho que aquí ponga 60 minutos.
         self::CRON_VOLUNTEER_CALLS => [
             'command' => 'app:send-volunteer-calls',
-            'channels' => ['push'],
+            // Multicanal desde que el aviso también sale por correo. Por eso NO
+            // lleva el interruptor de email en `requires`: allí inhibiría la
+            // tarea entera y dejaría sin aviso a quien lo quiere en el móvil.
+            'channels' => ['email', 'push'],
             'needs_recipient' => false,
             'confirm' => true,
             'dry' => true,
@@ -530,6 +543,12 @@ class AppSettings
             'label' => 'Resumen de cambios a administración',
             'help' => 'Digest periódico con los cambios autoservicio de lxs socixs (saltar cesta, mover, cambiar de nodo, huevos…). Configura la dirección de destino en el campo "Destinatario(s)" de abajo; si lo dejas vacío, no se envía.',
             'default' => true,
+        ],
+        self::EMAIL_VOLUNTEERING => [
+            'group' => 'Envío de emails',
+            'label' => 'Avisos de voluntariado por email',
+            'help' => 'Manda también por correo los avisos que piden gente para una tarea (además del aviso al móvil). Quien no tenga cuenta de acceso sólo puede enterarse por aquí. Cada socix decide en su panel si lo quiere por correo, por móvil o por los dos; esto es el interruptor general.',
+            'default' => false,
         ],
         self::EMAIL_ALBERGUE_REMINDER => [
             'group' => 'Emails internos',

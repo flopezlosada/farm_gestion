@@ -12,6 +12,8 @@
  # ============================================================ #}
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
+{% import '_macros/volunteering_row.html.twig' as row %}
+
 
 {% block title %}Voluntariado · {{ offer.title }}{% endblock %}
 
@@ -81,6 +83,18 @@
                     {% if not offer.openToAnyone %}
                         <span class="prt-chip prt-chip--warn">Sólo a quien lo tenga marcado</span>
                     {% endif %}
+
+                    {# El mockup ponía aquí "cada lunes de reparto", pero eso NO existe:
+                     # las copias nacen sueltas a propósito, para que anular una por un
+                     # festivo no toque a las demás, así que una tarea no sabe cada
+                     # cuánto se repite. Lo que sí consta es de cuál salió, y sirve para
+                     # responder "¿de dónde han salido estas doce?". #}
+                    {% if offer.copiedFrom %}
+                        <a class="prt-chip prt-chip--mute" href="{{ path('volunteering_show', { id: offer.copiedFrom.id }) }}"
+                           title="Ver la tarea de la que salió ésta">
+                            <i class="fa fa-repeat"></i> Copia de otra tarea
+                        </a>
+                    {% endif %}
                 </div>
             </div>
 
@@ -149,7 +163,7 @@
                 <div class="vol-phase__body">
                     <p class="vol-phase__title">
                         {%- if full %}Las plazas están cubiertas
-                        {%- elseif offer.slots %}Faltan {{ offer.remainingSlots }} {{ offer.remainingSlots == 1 ? 'persona' : 'personas' }} por cubrir
+                        {%- elseif offer.slots %}Falta{{ offer.remainingSlots == 1 ? '' : 'n' }} {{ offer.remainingSlots }} {{ offer.remainingSlots == 1 ? 'persona' : 'personas' }} por cubrir
                         {%- else %}Sigue abierta a quien quiera venir{% endif -%}
                     </p>
                     <p class="vol-phase__note">
@@ -189,7 +203,7 @@
                 <span class="vol-phase__icon"><i class="fa fa-hourglass-half"></i></span>
                 <div class="vol-phase__body">
                     <p class="vol-phase__title">
-                        Falta{{ pending == 1 ? '' : 'n' }} {{ pending }} {{ pending == 1 ? 'persona' : 'personas' }} por decir si fueron
+                        Falta{{ pending == 1 ? '' : 'n' }} {{ pending }} {{ pending == 1 ? 'persona' : 'personas' }} por decir si {{ pending == 1 ? 'fue' : 'fueron' }}
                     </p>
                     <p class="vol-phase__note">
                         Se les pregunta en su panel. Si no contestan, ciérrala tú abajo: al hacerlo, estas
@@ -242,83 +256,187 @@
          # mirar; antes estaban repartidos entre tres KPIs y una lista de
          # definiciones que además repetía el estado y el tipo de trabajo (que
          # ahora son chips del hero). #}
-        <div class="prt-mini">
-            <div class="prt-mini__cell">
-                <div class="prt-mini__label">Cuándo</div>
-                <div class="prt-mini__value">
-                    {{ offer.startsAt|date('d/m/Y') }}
-                    <small>{{ offer.startsAt|date('H:i') }}{% if offer.endsAt %} — {{ offer.endsAt|date('H:i') }}{% endif %}</small>
-                </div>
-            </div>
-
-            <div class="prt-mini__cell">
-                <div class="prt-mini__label">Dónde</div>
-                {# Texto, no cifra: en Inter. Ver .prt-mini__value--text. #}
-                {% if offer.remote or offer.node or offer.place %}
-                    <div class="prt-mini__value prt-mini__value--text">
-                        {%- if offer.remote %}Desde casa
-                        {%- elseif offer.node %}{{ offer.node }}
-                        {%- else %}{{ offer.place }}{% endif -%}
-                    </div>
-                {% else %}
-                    <div class="prt-mini__value prt-mini__value--muted">Sin indicar</div>
+        {# ============ QUÉ HAY QUE HACER · CUÁNDO Y DÓNDE ============
+         # Dos columnas: a la izquierda lo que se lee entero una vez, a la derecha
+         # los tres datos que se consultan de un vistazo. En una tira horizontal
+         # de cuatro celdas ocupaban dos filas y dejaban un palmo de aire; aquí la
+         # altura la marca la descripción, que es la que la necesita. #}
+        <div class="vol-split">
+            <section class="prt-card">
+                {% if offer.description %}
+                    <div class="prt-card__head"><h2 class="prt-card__title"><span class="accent"></span>Qué hay que hacer</h2></div>
                 {% endif %}
-            </div>
+                <div class="prt-card__body">
+                    {% if offer.description %}
+                        {{ offer.description|nl2br }}
+                    {% else %}
+                        <p class="vol-empty">Esta tarea no dice en qué consiste. Sin eso, quien no ha venido nunca no sabe si puede con ella.</p>
+                    {% endif %}
 
-            <div class="prt-mini__cell">
-                <div class="prt-mini__label">Quién viene</div>
-                <div class="prt-mini__value">
-                    {{ offer.filledSlots }}{% if offer.slots %} de {{ offer.slots }}{% endif %}
-                    {% if offer.slots and offer.remainingSlots > 0 %}
-                        <small>faltan {{ offer.remainingSlots }}</small>
-                    {% elseif offer.slots %}
-                        <small>completa</small>
+                    {# Quien coordina, al pie: es a quien se llama si algo pasa ese día,
+                     # y tenerlo aquí ahorra buscarlo en la ficha de socixs —que quien
+                     # coordina un área ni siquiera puede abrir. #}
+                    {% if offer.coordinator %}
+                        {% set coord_signup = offer.signups|filter(s => s.coordination)|first %}
+                        <div class="vol-owner">
+                            <span class="vol-owner__avatar" aria-hidden="true">
+                                {{ (offer.coordinator.name|first ~ offer.coordinator.surname|first)|upper }}
+                            </span>
+                            <div class="vol-owner__who">
+                                <span class="vol-owner__role">Quien coordina la tarea</span>
+                                <span class="vol-owner__name">{{ offer.coordinator.name }} {{ offer.coordinator.surname }}</span>
+                                {# Sus horas se dicen AQUÍ porque no está en la lista de quién
+                                 # viene: coordinar no es asistir, y lo normal es que no vaya. #}
+                                {% if coord_signup and coord_signup.attended %}
+                                    <span class="vol-owner__hours">Se apuntó {{ csa.qty((coord_signup.creditedMinutes ?: 0) / 60) }} h por coordinarla</span>
+                                {% elseif coord_signup and coord_signup.attended is same as(false) %}
+                                    <span class="vol-owner__hours">Dijo que al final no la coordinó</span>
+                                {% elseif is_past %}
+                                    <span class="vol-owner__hours">Pendiente de que diga cuántas horas le llevó</span>
+                                {% else %}
+                                    <span class="vol-owner__hours">Dirá cuántas horas le llevó cuando pase la tarea</span>
+                                {% endif %}
+                            </div>
+                            <div class="vol-owner__contact">
+                                {% if offer.coordinator.celular %}
+                                    <a class="vol-actions__btn" href="tel:{{ offer.coordinator.celular|replace({' ': ''}) }}"
+                                       title="Llamar a {{ offer.coordinator.name }}"><i class="fa fa-phone"></i></a>
+                                {% endif %}
+                                {% if offer.coordinator.email %}
+                                    <a class="vol-actions__btn" href="mailto:{{ offer.coordinator.email }}"
+                                       title="Escribir a {{ offer.coordinator.name }}"><i class="fa fa-envelope-o"></i></a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+            </section>
+
+            <aside class="vol-facts">
+                <div class="vol-fact">
+                    <i class="fa fa-calendar-o" aria-hidden="true"></i>
+                    <div>
+                        {# format_date y no el filtro `date`: éste usa el locale de PHP y
+                         # devolvía "mon 31 de august de 2026". Es el patrón que ya usa el
+                         # resto del proyecto (Sale/show, Collect/show…). #}
+                        <span class="vol-fact__value">{{ offer.startsAt|format_date('full', locale='es') }}</span>
+                        <span class="vol-fact__sub">
+                            {{ offer.startsAt|date('H:i') }}{% if offer.endsAt %} – {{ offer.endsAt|date('H:i') }}{% endif %}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="vol-fact">
+                    <i class="fa fa-map-marker" aria-hidden="true"></i>
+                    <div>
+                        {% if offer.remote %}
+                            <span class="vol-fact__value">Desde casa</span>
+                            <span class="vol-fact__sub">No hace falta ir a ningún sitio</span>
+                        {% elseif offer.node %}
+                            <span class="vol-fact__value">{{ offer.node }}</span>
+                            {% if offer.place %}<span class="vol-fact__sub">{{ offer.place }}</span>{% endif %}
+                        {% elseif offer.place %}
+                            <span class="vol-fact__value">{{ offer.place }}</span>
+                        {% else %}
+                            <span class="vol-fact__value vol-fact__value--muted">Sin indicar dónde</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="vol-fact">
+                    <i class="fa fa-clock-o" aria-hidden="true"></i>
+                    <div>
+                        {% if is_closing and credited_total %}
+                            <span class="vol-fact__sub">Horas {{ phase == 'closed' ? 'imputadas' : 'ya imputadas' }}</span>
+                            <span class="vol-fact__value">{{ csa.qty(credited_total / 60) }} h</span>
+                        {% elseif offer.creditedMinutes %}
+                            <span class="vol-fact__sub">Computa por persona</span>
+                            <span class="vol-fact__value">{{ csa.qty(offer.creditedMinutes / 60) }} h</span>
+                        {% else %}
+                            <span class="vol-fact__value vol-fact__value--muted">No computa horas</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </aside>
+        </div>
+
+
+        {# ============ OCUPACIÓN ============
+         # Quiénes son las plazas, no cuántas. "4 de 6" hay que leerlo y restar;
+         # cuatro fichas con iniciales y dos huecos se ven sin leer, y además
+         # dicen QUIÉN viene sin bajar a la pestaña. Los acompañantes salen con
+         # icono en vez de iniciales porque no son socixs: ocupan plaza pero no
+         # tienen nombre en el sistema.
+         #
+         # Sólo con tope de plazas: sin número no hay huecos que dibujar, y
+         # llenar la fila de sitios vacíos diría que falta gente cuando lo que
+         # pasa es que cabe la que venga. #}
+        {% if offer.slots and offer.slots <= 20 %}
+            {% set pips = [] %}
+            {% for s in offer.signups|filter(s => not s.cancelled and not s.coordination) %}
+                {% set pips = pips|merge([{ ini: (s.partner.name|first ~ s.partner.surname|first)|upper, name: s.partner.name ~ ' ' ~ s.partner.surname }]) %}
+                {% if s.companions > 0 %}
+                    {% for i in 1..s.companions %}
+                        {% set pips = pips|merge([{ ini: null, name: 'Acompañante de ' ~ s.partner.name }]) %}
+                    {% endfor %}
+                {% endif %}
+            {% endfor %}
+
+            {# La gente de fuera ocupa sus fichas al final: no tienen nombre en el
+             # sistema, así que llevan icono y se identifican por la nota. #}
+            {% if offer.guests > 0 %}
+                {% for i in 1..offer.guests %}
+                    {% set pips = pips|merge([{ ini: null, name: offer.guestsNote ?: 'Alguien de fuera' }]) %}
+                {% endfor %}
+            {% endif %}
+
+            {% set companions_total = offer.signups|filter(s => not s.cancelled)|reduce((acc, s) => acc + s.companions, 0) %}
+
+            <div class="vol-occupancy">
+                <div class="vol-occupancy__count">
+                    <span class="vol-occupancy__label">Ocupación</span>
+                    <span class="vol-occupancy__value">{{ offer.filledSlots }}</span>
+                    <span class="vol-occupancy__of">de {{ offer.slots }} plazas</span>
+                </div>
+
+                {# Se pintan TODAS las personas y luego los huecos que falten. Si
+                 # se recorriera 1..plazas, con más gente que plazas —que pasa:
+                 # alguien trae acompañante de más, o vienen cuatro de fuera para
+                 # tres sitios— desaparecerían fichas sin decir nada. #}
+                <div class="vol-occupancy__pips">
+                    {% for pip in pips %}
+                        <span class="vol-pip vol-pip--filled" title="{{ pip.name }}">
+                            {%- if pip.ini %}{{ pip.ini }}{% else %}<i class="fa fa-user-o"></i>{% endif -%}
+                        </span>
+                    {% endfor %}
+                    {% if offer.slots > pips|length %}
+                        {% for i in 1..(offer.slots - pips|length) %}
+                            <span class="vol-pip vol-pip--empty" aria-hidden="true">+</span>
+                        {% endfor %}
                     {% endif %}
                 </div>
 
-                {# Las plazas, una a una. Una cifra ("4 de 6") hay que leerla y
-                 # restar; seis casillas de las que dos están vacías se ven sin
-                 # leer, que es lo que hace falta cuando lo que se pregunta es
-                 # "¿me falta gente?".
-                 #
-                 # Sólo con tope: una tarea sin número de plazas no tiene
-                 # casillas que pintar, y llenarlas de huecos infinitos diría que
-                 # falta gente cuando lo que pasa es que cabe la que venga. #}
-                {% if offer.slots and offer.slots <= 12 %}
-                    <div class="vol-slots" aria-hidden="true">
-                        {% for i in 1..offer.slots %}
-                            <span class="vol-slots__pip {{ i <= offer.filledSlots ? 'is-filled' : '' }}"></span>
-                        {% endfor %}
-                    </div>
-                {% endif %}
-            </div>
+                {% set de_mas = offer.filledSlots - offer.slots %}
+                <p class="vol-occupancy__note">
+                    {%- if offer.remainingSlots > 0 -%}
+                        Quedan <strong>{{ offer.remainingSlots }}</strong> {{ offer.remainingSlots == 1 ? 'plaza libre' : 'plazas libres' }}.
+                    {%- elseif de_mas > 0 -%}
+                        {# remainingSlots nunca baja de cero, así que "completas" tapaba
+                         # que viene MÁS gente de la que cabe — y eso hay que verlo: o
+                         # sobra gente, o las plazas estaban mal puestas. #}
+                        Hay <strong>{{ de_mas }}</strong> {{ de_mas == 1 ? 'persona más' : 'personas más' }} de las plazas previstas.
+                    {%- else -%}
+                        Plazas completas.
+                    {%- endif -%}
+                    {% if companions_total > 0 %}
+                        {{ companions_total == 1 ? 'Alguien trae acompañante, que ocupa plaza.' : 'Hay ' ~ companions_total ~ ' acompañantes, y ocupan plaza.' }}
+                    {% endif %}
+                    {% if offer.guests > 0 %}
+                        {{ offer.guests }} {{ offer.guests == 1 ? 'persona viene' : 'personas vienen' }} de fuera{% if offer.guestsNote %} ({{ offer.guestsNote }}){% endif %}.
+                    {% endif %}
+                </p>
 
-            {# Cuánto vale el trabajo es CONFIGURACIÓN de la tarea, y hasta que
-             # se cierra es lo único que hay sobre horas. En cuanto se imputa
-             # algo, lo que importa es cuánto se ha imputado de verdad: eso es un
-             # hecho, y los minutos por persona pasan a ser el detalle. #}
-            <div class="prt-mini__cell">
-                {% if is_closing and credited_total %}
-                    <div class="prt-mini__label">Horas {{ phase == 'closed' ? 'imputadas' : 'ya imputadas' }}</div>
-                    <div class="prt-mini__value">
-                        {{ csa.qty(credited_total / 60) }} h
-                        {% if offer.creditedMinutes %}<small>{{ offer.creditedMinutes }} min por persona</small>{% endif %}
-                    </div>
-                {% elseif offer.creditedMinutes %}
-                    <div class="prt-mini__label">Computa</div>
-                    <div class="prt-mini__value">{{ offer.creditedMinutes }} <small>min por persona</small></div>
-                {% else %}
-                    <div class="prt-mini__label">Computa</div>
-                    <div class="prt-mini__value prt-mini__value--muted">No computa horas</div>
-                {% endif %}
             </div>
-        </div>
-
-        {% if offer.description %}
-            <section class="prt-card">
-                <div class="prt-card__head"><h2 class="prt-card__title"><span class="accent"></span>Qué hay que hacer</h2></div>
-                <div class="prt-card__body">{{ offer.description|nl2br }}</div>
-            </section>
         {% endif %}
 
         {# ============ PESTAÑAS ============
@@ -360,137 +478,65 @@
                         {% else %}
                             {# Por FASE y no por "ya pasó la fecha". Una tarea anulada la semana
                              # pasada también es pasada, y ofrecer ahí "cerrar e imputar horas" es
-                             # invitar a computarle horas a gente por una tarea que se canceló. #}
-                            {% set closing_form = is_closing and can_edit %}
+                             # invitar a computarle horas a gente por una tarea que se canceló.
+                             #
+                             # Pero TAMBIÉN si ya consta alguien: anotar a mano funciona en
+                             # cualquier fase, así que en una tarea futura se podía dejar a
+                             # alguien anotado con las horas equivocadas y no había dónde
+                             # corregirlo — la lista sólo aparecía al llegar la fecha. Equivocarse
+                             # de persona era irreversible desde la pantalla. #}
+                            {% set has_settled = offer.signups|filter(s => not s.cancelled and s.attended is not null)|length > 0 %}
+                            {% set closing_form = can_edit and (is_closing or has_settled) %}
 
-                            <form method="post" action="{{ path('volunteering_close', { id: offer.id }) }}"
-                                  {% if closing_form %}data-vol-total="{{ offer.creditedMinutes ?: 0 }}"{% endif %}>
+                            <form method="post" action="{{ path('volunteering_close', { id: offer.id }) }}" data-csa-validate
+                                  {% if closing_form %}data-vol-total="{{ csa.qty((offer.creditedMinutes ?: 0) / 60)|replace({',': '.'}) }}"{% endif %}>
                                 <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_close') }}">
 
+                                {# Cerrar de verdad SÓLO cuando la tarea ha pasado. Sin esta
+                                 # marca, corregir a alguien en una tarea futura daba por ausente
+                                 # a todo el que estuviera apuntado esperando el día: en un cierre
+                                 # "no marcado" significa "no fue", pero aquí significa "todavía
+                                 # no ha pasado nada". #}
+                                {% if is_closing %}<input type="hidden" name="close_all" value="1">{% endif %}
+
+                                {# La tabla es de QUIÉN VIENE. Quien coordina no sale, ni siquiera
+                                 # en una fila aparte: lo normal es que no vaya —monta la tarea,
+                                 # busca gente y está pendiente— y tenerlo en una lista de
+                                 # asistencia hace contar un brazo que no existe. Sus horas se le
+                                 # imputan solas al cerrar y se ven arriba, junto a su nombre. #}
+                                {% set viene = offer.signups|filter(s => not s.coordination) %}
+
                                 <div class="csa-table-wrap">
-                                    <table class="csa-table">
+                                    <table class="csa-table vol-people">
                                         <thead>
                                             <tr>
                                                 {% if closing_form %}
                                                     <th class="csa-table__col-tight">Fue</th>
                                                 {% endif %}
-                                                <th>Socix</th>
-                                                <th class="csa-table__col-tight">Viene con</th>
-                                                {# Antes de la tarea interesa desde cuándo cuentas con
-                                                 # alguien; después ya no, y ese hueco lo necesitan los
-                                                 # minutos, que es donde está el trabajo. #}
+                                                <th>Persona</th>
+                                                {% if can_edit and offer.companionsAllowed %}
+                                                    <th class="csa-table__col-tight">Viene con</th>
+                                                {% endif %}
                                                 {% if closing_form %}
                                                     <th class="csa-table__col-tight">Computa</th>
                                                 {% else %}
                                                     <th class="csa-table__col-tight">Se apuntó</th>
                                                 {% endif %}
-                                                <th>Nota</th>
                                                 <th class="csa-table__col-tight">Estado</th>
+                                                {% if can_edit %}
+                                                    <th class="csa-table__col-tight" aria-label="Acciones"></th>
+                                                {% endif %}
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {% for signup in offer.signups %}
-                                                {% set done = participation[signup.partner.id]|default(null) %}
-                                                <tr{% if signup.cancelled %} class="vol-row--out"{% endif %}>
-                                                    {% if closing_form %}
-                                                        <td class="csa-table__col-tight">
-                                                            {% if not signup.cancelled %}
-                                                                <input type="checkbox" name="attended[]" value="{{ signup.id }}"
-                                                                       data-vol-attended
-                                                                       {% if signup.attended %}checked{% endif %}>
-                                                            {% endif %}
-                                                        </td>
-                                                    {% endif %}
-                                                    <td>
-                                                        {{ signup.partner.name }} {{ signup.partner.surname }}
-                                                        {% if signup.coordination %}
-                                                            {{ csa.badge('lo organizó', 'plum') }}
-                                                        {% endif %}
-
-                                                        {# Cuánto lleva hecho esta persona. No es cotilleo: es
-                                                         # lo que distingue a quien viene por primera vez —y a
-                                                         # quien conviene recibir— de quien lleva todo el año
-                                                         # sosteniendo el reparto. En veces y no en horas: a
-                                                         # quien coordina le sirve igual y no convierte la
-                                                         # tabla en un marcador. #}
-                                                        <span class="vol-track">
-                                                            {%- if done %}
-                                                                {{ done.times }} {{ done.times == 1 ? 'faena' : 'faenas' }} este año
-                                                                {%- if done.last %} · última el {{ done.last|date('d/m') }}{% endif -%}
-                                                            {%- else -%}
-                                                                primera vez este año
-                                                            {%- endif -%}
-                                                        </span>
-                                                    </td>
-                                                    <td class="csa-table__col-tight">{{ signup.companions > 0 ? '+' ~ signup.companions : '—' }}</td>
-
-                                                    {% if closing_form %}
-                                                        {# Los minutos, por persona. El modelo siempre los
-                                                         # guardó por inscripción; era este formulario el que
-                                                         # aplicaba los de la tarea a todo el mundo sin dejar
-                                                         # corregir a quien se fue antes. En blanco = los de
-                                                         # la tarea, que es el caso normal. #}
-                                                        <td class="csa-table__col-tight">
-                                                            {% if signup.cancelled %}
-                                                                —
-                                                            {% else %}
-                                                                <input type="number" name="minutes[{{ signup.id }}]"
-                                                                       class="csa-input csa-input--compact vol-minutes"
-                                                                       min="0" max="1440" step="5"
-                                                                       data-vol-minutes
-                                                                       value="{{ signup.creditedMinutes }}"
-                                                                       placeholder="{{ offer.creditedMinutes ?: 0 }}"
-                                                                       aria-label="Minutos que computan a {{ signup.partner.name }} {{ signup.partner.surname }}">
-                                                                <span class="vol-minutes__unit">min</span>
-                                                            {% endif %}
-                                                        </td>
-                                                    {% else %}
-                                                        <td class="csa-table__col-tight">{{ signup.createdAt|date('d/m/Y') }}</td>
-                                                    {% endif %}
-
-                                                    <td>{{ signup.notes ?: '—' }}</td>
-                                                    <td class="csa-table__col-tight">
-                                                        {% if signup.cancelled %}
-                                                            {{ csa.badge('Se dio de baja', 'terracotta') }}
-                                                        {% elseif signup.attended is same as(true) %}
-                                                            {{ csa.badge('Fue · ' ~ (signup.creditedMinutes ?: 0) ~ ' min', 'green') }}
-                                                        {% elseif signup.attended is same as(false) %}
-                                                            {{ csa.badge('No fue', 'neutral') }}
-                                                        {% elseif is_past %}
-                                                            {{ csa.badge('Sin confirmar', 'sky') }}
-                                                        {% else %}
-                                                            {{ csa.badge('Apuntadx', 'sky') }}
-                                                        {% endif %}
-
-                                                        {# Quién lo dijo. Lo normal es que lo confirme quien
-                                                         # fue desde su panel; que lo haya puesto gestión
-                                                         # indica una tarea que hubo que cerrar a mano, y eso
-                                                         # conviene verlo. #}
-                                                        {% if signup.settled and not signup.selfConfirmed %}
-                                                            {{ csa.badge('lo puso gestión', 'neutral') }}
-                                                        {% endif %}
-
-                                                        {# Contactar es la acción de verdad mientras la tarea
-                                                         # no ha pasado: quien coordina llama, no manda un
-                                                         # aviso del sistema. #}
-                                                        {% if not is_past and not signup.cancelled %}
-                                                            <span class="vol-contact">
-                                                                {% if signup.partner.celular %}
-                                                                    <a href="tel:{{ signup.partner.celular|replace({' ': ''}) }}"
-                                                                       title="Llamar a {{ signup.partner.name }}"><i class="fa fa-phone"></i></a>
-                                                                {% endif %}
-                                                                {% if signup.partner.email %}
-                                                                    <a href="mailto:{{ signup.partner.email }}"
-                                                                       title="Escribir a {{ signup.partner.name }}"><i class="fa fa-envelope-o"></i></a>
-                                                                {% endif %}
-                                                            </span>
-                                                        {% endif %}
-                                                    </td>
-                                                </tr>
+                                            {% for signup in viene %}
+                                                {{ row.persona_row(signup, offer, participation, closing_form, can_edit, is_past) }}
                                             {% endfor %}
+
                                         </tbody>
                                     </table>
                                 </div>
+
 
                                 {# Cerrar sólo tiene sentido cuando la tarea ya ha pasado. Mientras
                                  # no se cierra, no computa horas a nadie: el "no sabemos" es
@@ -510,12 +556,35 @@
                                             en total
                                         </p>
                                         <p class="vol-help">
-                                            Marca quién fue de verdad. Los minutos en blanco toman los de la tarea
-                                            ({{ offer.creditedMinutes ?: 0 }}); cámbialos a quien se fue antes o vino a otra cosa.
-                                            Quien no esté marcadx no computa nada.
+                                            {% if is_closing %}
+                                                Marca quién fue de verdad. Las horas en blanco toman las de la tarea
+                                                ({{ csa.qty((offer.creditedMinutes ?: 0) / 60) }} h); cámbialas a quien se fue antes
+                                                o vino a otra cosa. Quien no esté marcadx no computa nada.
+                                            {% else %}
+                                                La tarea todavía no ha pasado, pero ya consta gente anotada a mano:
+                                                aquí se le corrigen las horas, o se le quita la marca si fue un error.
+                                            {% endif %}
                                         </p>
                                         <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">
-                                            <i class="fa fa-lock"></i><span>Cerrar e imputar</span>
+                                            {% if is_closing %}
+                                                <i class="fa fa-lock"></i><span>Cerrar e imputar</span>
+                                            {% else %}
+                                                <i class="fa fa-pencil"></i><span>Corregir lo anotado</span>
+                                            {% endif %}
+                                        </button>
+                                    </div>
+                                {% elseif can_edit and offer.companionsAllowed %}
+                                    {# Sin fase de cierre no hay horas que imputar, pero sí hay algo
+                                     # editable —los acompañantes—, y unos campos sin botón no se
+                                     # guardan nunca. #}
+                                    <div class="vol-close">
+                                        <p class="vol-help">
+                                            Si alguien avisa de que viene acompañadx, apúntalo aquí: cada
+                                            acompañante ocupa una plaza, así que la tarea deja de pedir gente
+                                            que ya está cubierta.
+                                        </p>
+                                        <button type="submit" class="csa-btn csa-btn--secondary csa-btn--sm">
+                                            <i class="fa fa-check"></i><span>Guardar</span>
                                         </button>
                                     </div>
                                 {% endif %}
@@ -523,26 +592,41 @@
                         {% endif %}
 
                         {# ---- Anotar a alguien ----
-                         # Dos huecos que se notan en cuanto esto se usa de verdad: quien ORGANIZA
-                         # la tarea no se apunta a ella, así que su contador salía a cero — y es la
-                         # gente que más sostiene el voluntariado. Y quien aparece sin haberse
-                         # apuntado tampoco constaba, que pasa constantemente. #}
-                        {% if can_edit %}
+                         # Sólo para quien apareció sin haberse apuntado, que pasa
+                         # constantemente. Quien coordina YA NO se anota aquí: se dice al crear
+                         # la tarea y su inscripción se pone sola, porque preguntarlo en medio
+                         # de pasar lista era pedir una decisión de configuración durante otra
+                         # faena — y así no lo ponía nadie.
+                         #
+                         # SÓLO CUANDO LA TAREA YA HA PASADO. Antes salía siempre, y anotar a
+                         # alguien "que vino" a algo que es dentro de seis días no significa
+                         # nada: pedía horas por un trabajo que no ha ocurrido, y encima la
+                         # lista no tenía dónde enseñarlas. Quien quiera venir se apunta desde
+                         # su panel; esto es para arreglar la lista después. #}
+                        {% if can_edit and is_closing %}
                             <hr class="vol-sep">
 
                             {# Sin título propio en serif: la pestaña ya dice de qué va el
                              # panel, y un cuarto titular Fraunces aquí abajo competía con
                              # el del hero por la misma atención. #}
                             <p class="vol-help">
-                                Anotar a quien organizó esta tarea, o a quien vino sin apuntarse.
+                                Anotar a alguien que vino sin apuntarse.
                             </p>
 
-                            <form method="post" action="{{ path('volunteering_add_person', { id: offer.id }) }}" class="vol-repeat">
+                            {# data-csa-dropdowns: sin él caen los <select> nativos del sistema
+                             # —fondo gris oscuro, tipografía del SO— en medio de una pantalla
+                             # csa. Y con 246 socixs el menú nativo es inusable: hay que
+                             # arrastrar hasta el apellido. El componente añade buscador solo
+                             # cuando la lista es larga. Ver assets/js/csa-dropdown.js. #}
+                            <form method="post" action="{{ path('volunteering_add_person', { id: offer.id }) }}"
+                                  class="vol-repeat" data-csa-dropdowns data-csa-validate>
                                 <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_add_person') }}">
 
                                 <label>
                                     Quién
-                                    <select name="partner" class="csa-select" required>
+                                    <select name="partner" class="csa-select" required
+                                            data-placeholder="Escribe un nombre…"
+                                            data-invalid-message="Escribe un nombre y elígelo de la lista.">
                                         <option value="">— elige —</option>
                                         {% for partner in all_partners %}
                                             <option value="{{ partner.id }}">{{ partner.name }} {{ partner.surname }}</option>
@@ -550,18 +634,15 @@
                                     </select>
                                 </label>
 
+                                {# VACÍO y obligatorio. Ni placeholder con una cifra —parece un
+                                 # valor puesto sin serlo— ni valor por defecto —se envía sin
+                                 # mirarlo—. Anotar a alguien a mano es un acto deliberado: quien
+                                 # lo hace sabe cuánto estuvo esa persona, y decirlo es el trabajo
+                                 # entero de este formulario. #}
                                 <label>
-                                    En calidad de
-                                    <select name="role" class="csa-select">
-                                        <option value="participant">vino a trabajar</option>
-                                        <option value="coordinator">lo organizó</option>
-                                    </select>
-                                </label>
-
-                                <label>
-                                    Minutos
-                                    <input type="number" name="minutes" min="0" max="1440"
-                                           placeholder="{{ offer.creditedMinutes ?: 0 }}" class="csa-input csa-input--compact">
+                                    Horas
+                                    <input type="number" name="hours" min="0.25" max="24" step="any" required
+                                           class="csa-input csa-input--compact">
                                 </label>
 
                                 <button type="submit" class="csa-btn csa-btn--secondary csa-btn--sm">Anotar</button>
@@ -569,8 +650,8 @@
 
                             <p class="vol-help">
                                 Se anota como hecho: si lo estás registrando a mano es porque
-                                sabes que ocurrió. Si dejas los minutos en blanco se usan los
-                                de la tarea ({{ offer.creditedMinutes ?: 0 }}). Quien lo organizó no ocupa plaza.
+                                sabes que ocurrió. Vienen puestas las horas de la tarea; cámbialas
+                                si esa persona estuvo otro rato.
                             </p>
                         {% endif %}
                     </div>

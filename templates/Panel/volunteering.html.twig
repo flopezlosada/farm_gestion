@@ -44,13 +44,23 @@
                 {% import '_macros/volunteering.html.twig' as vol %}
                     <ul class="vol-list">
                         {% for signup in pending_confirmation %}
+                            {# A quien COORDINÓ se le pregunta otra cosa y de otra manera.
+                             # Antes le salía "¿pudiste ir?", que no es lo que hizo: no fue a
+                             # trabajar, sacó la tarea adelante. Y una tarea vale lo que la
+                             # asociación decidió, igual para todo el mundo, pero coordinarla
+                             # —buscar gente, cuadrarla, avisar, estar pendiente toda la
+                             # semana— sólo lo sabe quien lo hizo, así que es el único que
+                             # dice cuántas horas. #}
+                            {% set coordina = signup.coordination %}
                             <li class="vol-item">
                                 <div class="vol-item__main">
                                     <h4 class="vol-item__title">{{ signup.offer.title }}</h4>
                                     <div class="vol-item__meta">
                                         <span><i class="fa fa-calendar" aria-hidden="true"></i>
                                             {{ signup.offer.startsAt|format_datetime('full', 'short', locale='es') }}</span>
-                                        {% if signup.offer.creditedMinutes %}
+                                        {% if coordina %}
+                                            <span><i class="fa fa-star-o" aria-hidden="true"></i> La coordinabas tú</span>
+                                        {% elseif signup.offer.creditedMinutes %}
                                             <span><i class="fa fa-clock-o" aria-hidden="true"></i>
                                                 Cuenta {{ vol.duration(signup.offer.creditedMinutes) }}</span>
                                         {% endif %}
@@ -59,8 +69,20 @@
                                 <div class="vol-item__action">
                                     <form method="post" action="{{ path('panel_volunteering_confirm', {id: signup.offer.id}) }}">
                                         <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_volunteering') }}">
-                                        <button type="submit" name="attended" value="1" class="csa-btn csa-btn--primary csa-btn--sm">Sí, la hice</button>
-                                        <button type="submit" name="attended" value="0" class="csa-btn csa-btn--secondary csa-btn--sm">No pude</button>
+                                        {% if coordina %}
+                                            <label class="vol-item__companions">
+                                                Horas
+                                                <input type="number" name="hours" min="0.25" max="24" step="any"
+                                                       class="csa-input csa-input--compact"
+                                                       placeholder="{{ signup.offer.creditedMinutes ? (signup.offer.creditedMinutes / 60)|round(2) : '' }}"
+                                                       aria-label="Horas que te llevó coordinarla">
+                                            </label>
+                                            <button type="submit" name="attended" value="1" class="csa-btn csa-btn--primary csa-btn--sm">Sí, la coordiné</button>
+                                            <button type="submit" name="attended" value="0" class="csa-btn csa-btn--secondary csa-btn--sm">Al final no</button>
+                                        {% else %}
+                                            <button type="submit" name="attended" value="1" class="csa-btn csa-btn--primary csa-btn--sm">Sí, la hice</button>
+                                            <button type="submit" name="attended" value="0" class="csa-btn csa-btn--secondary csa-btn--sm">No pude</button>
+                                        {% endif %}
                                     </form>
                                 </div>
                             </li>
@@ -205,10 +227,15 @@
             {% endembed %}
         {% endif %}
 
-        {# ============ 3. DE QUÉ AVISAR ============ #}
+        {# ============ 3. QUÉ TAREAS TE INTERESAN ============
+         # AQUÍ Y NO EN «AVISOS», aunque de esto salga a quién se avisa. Lo que
+         # se elige es en qué quiere participar cada cual —su voluntariado—, no
+         # por qué canal quiere enterarse; eso último es lo que vive en Avisos.
+         # Puestas juntas, las dos cosas se leían como la misma y ninguna se
+         # entendía: una habla de huerta y reparto, la otra de correo y móvil. #}
         {% embed '_components/csa_card.html.twig' with {
-            title: 'De qué quieres que te avisemos',
-            icon: 'fa-bell-o'
+            title: 'Qué tareas te interesan',
+            icon: 'fa-hand-paper-o'
         } %}
             {% block body %}
                 {% import '_macros/volunteering.html.twig' as vol %}
@@ -230,77 +257,57 @@
                     {% endif %}
                 </p>
 
+                {# Tras un <details> y no a la vista: se contesta una vez y luego
+                 # se mira cero veces, pero abierto ocupaba media pantalla en cada
+                 # visita por delante de lo único que cambia cada semana. #}
                 <details class="vol-details">
-                    <summary>Cambiar de qué me avisan</summary>
+                    <summary>Cambiar qué tareas me interesan</summary>
 
-                <form method="post" action="{{ path('panel_volunteering_preferences') }}">
-                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_volunteering') }}">
+                    <form method="post" action="{{ path('panel_volunteering_preferences') }}">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_volunteering') }}">
 
-                    {#
-                     # Este texto NO es relleno: de él depende que el escalado de
-                     # avisos sea honesto. Marcar = "avísame de esto". No marcar
-                     # nada = "avísame de lo que sea sencillo". Si dijera otra
-                     # cosa, quien marca dos categorías recibiría avisos de todo
-                     # y dejaría de fiarse de esta pantalla.
-                     #}
-                    <p class="vol-help">
-                        Marca lo que te apetezca hacer y te avisaremos sólo de eso.
-                        Si no marcas nada, te avisaremos únicamente de las tareas
-                        sencillas que puede hacer cualquiera.
-                    </p>
+                        {#
+                         # Este texto NO es relleno: de él depende que el escalado de
+                         # avisos sea honesto. Marcar = "avísame de esto". No marcar
+                         # nada = "avísame de lo que sea sencillo". Si dijera otra
+                         # cosa, quien marca dos categorías recibiría avisos de todo
+                         # y dejaría de fiarse de esta pantalla.
+                         #}
+                        <p class="vol-help">
+                            Marca lo que te apetezca hacer y te avisaremos sólo de eso.
+                            Si no marcas nada, te avisaremos únicamente de las tareas
+                            sencillas que puede hacer cualquiera.
+                        </p>
 
-                    <div class="vol-prefs">
-                        {% for category in categories %}
-                            <label class="vol-pref">
-                                <input type="checkbox" name="categories[]" value="{{ category.id }}"
-                                       {% if category.id in my_category_ids %}checked{% endif %}>
-                                <span class="vol-pref__name">{{ category.name }}</span>
-                                {% if category.description %}
-                                    <span class="vol-pref__desc">{{ category.description }}</span>
-                                {% endif %}
-                            </label>
-                        {% endfor %}
-                    </div>
+                        <div class="vol-prefs">
+                            {% for category in categories %}
+                                <label class="vol-pref">
+                                    <input type="checkbox" name="categories[]" value="{{ category.id }}"
+                                           {% if category.id in my_category_ids %}checked{% endif %}>
+                                    <span class="vol-pref__name">{{ category.name }}</span>
+                                    {% if category.description %}
+                                        <span class="vol-pref__desc">{{ category.description }}</span>
+                                    {% endif %}
+                                </label>
+                            {% endfor %}
+                        </div>
 
-                    {#
-                     # La salida explícita. NO es lo mismo que no marcar nada:
-                     # no marcar nada significa "avísame de lo sencillo". Sin
-                     # esta casilla, quien no quiera saber nada del voluntariado
-                     # sólo podría apagar los avisos del navegador enteros, y
-                     # perdería también los de su cesta.
-                     #
-                     # Se respeta siempre, incluido el aviso a toda la
-                     # asociación. Por eso se puede prometer aquí.
-                     #}
-                    <label class="vol-optout">
-                        <input type="checkbox" name="opt_out" value="1"
-                               {% if partner.volunteeringOptOut %}checked{% endif %}>
-                        <span>No quiero que me avisen de voluntariado</span>
-                    </label>
+                        {#
+                         # La salida explícita. NO es lo mismo que no marcar nada:
+                         # no marcar nada significa "avísame de lo sencillo". Y NO es
+                         # lo mismo que apagar el voluntariado en «Avisos»: aquello
+                         # calla los canales, esto saca a la persona de las
+                         # audiencias — no se la cuenta ni para el aviso general.
+                         #}
+                        <label class="vol-optout">
+                            <input type="checkbox" name="opt_out" value="1"
+                                   {% if partner.volunteeringOptOut %}checked{% endif %}>
+                            <span>No quiero que me avisen de voluntariado</span>
+                        </label>
 
-                    <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">Guardar</button>
-                </form>
+                        <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">Guardar</button>
+                    </form>
                 </details>
-
-                {#
-                 # El botón no pide permiso hasta que se pulsa, y en iOS sin
-                 # instalar ni lo intenta. Un permiso denegado no se puede volver
-                 # a pedir: el navegador ya ni enseña el diálogo.
-                 #
-                 # Y no se pinta si el servidor no tiene claves VAPID: sin ellas
-                 # sólo puede fallar. El mismo guard está en «Mi perfil», que es
-                 # el sitio donde este interruptor vive de verdad —aquí es un
-                 # atajo para quien ya está en esta pantalla—.
-                 #}
-                {% if app_vapid_public_key is not empty %}
-                    <hr class="vol-sep">
-
-                    <p class="vol-help">
-                        Si quieres, te avisamos en el móvil cuando falte gente para algo
-                        que encaje contigo.
-                    </p>
-                    <button type="button" class="csa-btn csa-btn--secondary csa-btn--sm" data-push-toggle>Activar avisos</button>
-                {% endif %}
             {% endblock %}
         {% endembed %}
 

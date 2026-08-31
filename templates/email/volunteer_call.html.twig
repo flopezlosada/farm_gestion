@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Hace falta gente · CSA Vega de Jarama</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #333; max-width: 720px; margin: 0 auto; padding: 24px;">
+
+    <h2 style="color: #4a7c3a; margin-top: 0;">{{ title }}</h2>
+
+    <p style="font-size: 17px; margin-bottom: 4px;"><strong>{{ offer.title }}</strong></p>
+
+    <p style="color: #555; margin-top: 0;">
+        {{ when }}{% if where %} · {{ where }}{% endif %}
+    </p>
+
+    {% if offer.description %}
+        <p>{{ offer.description|nl2br }}</p>
+    {% endif %}
+
+    {# El enlace sólo a quien puede entrar. A quien no tiene cuenta se le dice a
+     # quién escribir: un botón que lleva a una pantalla de login que no puede
+     # pasar es peor que no ponerlo. #}
+    {% if can_act %}
+        <p style="margin: 24px 0;">
+            <a href="{{ url }}"
+               style="background: #4a7c3a; color: #fff; padding: 12px 20px; border-radius: 6px; text-decoration: none; display: inline-block;">
+                Apuntarme
+            </a>
+        </p>
+    {% else %}
+        <p style="margin: 24px 0; color: #555;">
+            Si puedes venir, dilo respondiendo a este correo o escribiendo a
+            <a href="mailto:info@csavegadejarama.org">info@csavegadejarama.org</a>.
+        </p>
+    {% endif %}
+
+    <hr style="border: 0; border-top: 1px solid #e6e2d8; margin: 28px 0 12px;">
+
+    {# El pie NO es adorno: es la única salida para quien no quiere estos correos.
+     # Sin él, la única forma de dejar de recibirlos sería pedírselo a
+     # administración, que es justo lo que este bloque viene a evitar. #}
+    <p style="color: #888; font-size: 13px;">
+        Recibes este correo porque en tus avisos tienes activado el voluntariado.
+        {% if can_act %}
+            Puedes cambiarlo en <a href="{{ notifications_url }}" style="color: #888;">tus avisos</a>.
+        {% else %}
+            Si no quieres recibirlos, dínoslo y lo quitamos.
+        {% endif %}
+    </p>
+
+</body>
+</html>
