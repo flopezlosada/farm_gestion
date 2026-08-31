@@ -100,13 +100,32 @@ class SendDeliverySheetsCommand extends AbstractCronCommand
         }
 
         $io->table(
-            ['Nodo', 'Reparto', 'Cierre del plazo'],
+            ['Nodo', 'Reparto', 'Cierre del plazo', 'Congelado'],
             array_map(static fn (array $row): array => [
                 $row['node']->getName(),
                 $row['physical_date']->format('Y-m-d'),
                 $row['deadline']->format('Y-m-d H:i'),
+                $row['frozen'] ? 'sí' : 'NO, no se manda',
             ], $pending),
         );
+
+        // Sin congelar no se manda, aunque el listado se pudiera dibujar al vuelo:
+        // este correo dice "el plazo se cerró, esto es definitivo", y un dibujo
+        // todavía se mueve. Quien lo necesite igual lo descarga de la pantalla.
+        $thawed = array_values(array_filter($pending, static fn (array $row): bool => !$row['frozen']));
+        $pending = array_values(array_filter($pending, static fn (array $row): bool => $row['frozen']));
+
+        foreach ($thawed as $row) {
+            $io->warning(sprintf(
+                'El reparto de %s del %s ha cerrado su plazo pero su semana NO está congelada: no se manda el listado.',
+                $row['node']->getName(),
+                $row['physical_date']->format('Y-m-d'),
+            ));
+        }
+
+        if ($pending === []) {
+            return $this->nothingToDo(sprintf('%d reparto(s) cerrados pero sin congelar', count($thawed)));
+        }
 
         if ($dryRun) {
             $io->success(sprintf('Dry-run: %d listado(s). No se ha enviado nada.', count($pending)));
