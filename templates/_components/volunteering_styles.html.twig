@@ -707,24 +707,133 @@
         .vol-suggest__contact .csa-btn { flex: 1; justify-content: center; }
     }
 
-    /* Bloque compacto de la home del panel. */
-    .vol-teaser { list-style: none; margin: 0 0 var(--csa-sp-3); padding: 0; }
-    .vol-teaser li {
-        padding: var(--csa-sp-2) 0;
-        border-bottom: 1px solid var(--csa-rule-soft);
-    }
-    .vol-teaser li:last-child { border-bottom: 0; }
-    .vol-teaser__link { display: block; text-decoration: none; }
-    .vol-teaser__title {
-        display: block;
-        font-family: var(--csa-serif);
-        font-size: var(--csa-fs-base);
+    /* ---- Tareas de la home del panel ----
+       Móvil primero: una columna, botones de 46px y nada que dependa del hover.
+       Quien mira esto lo hace de pie y con una mano. */
+
+    /* El aviso de cuánto hace falta. Va antes de las tarjetas porque da la
+       escala: tres tarjetas sin contexto parecen todo lo que hay. */
+    .vol-need { margin-bottom: var(--csa-sp-3); }
+    .vol-need__lead {
+        display: flex; align-items: flex-start; gap: var(--csa-sp-2);
+        margin: 0;
+        font-size: var(--csa-fs-sm); line-height: var(--csa-lh-snug);
         color: var(--csa-ink);
     }
-    .vol-teaser__meta {
-        display: block;
-        font-size: var(--csa-fs-sm);
-        color: var(--csa-ink-muted);
+    .vol-need__lead > i { color: var(--csa-terracotta); margin-top: 2px; flex-shrink: 0; }
+    .vol-need__sub {
+        display: block; margin-top: 2px;
+        font-size: var(--csa-fs-xs); color: var(--csa-ink-muted);
+    }
+
+    .vol-tasks { display: flex; flex-direction: column; gap: var(--csa-sp-3); }
+
+    .vol-task {
+        position: relative; overflow: hidden;
+        background: var(--csa-surface);
+        border: 1px solid var(--csa-rule);
+        border-radius: var(--csa-radius-lg);
+        padding: var(--csa-sp-4) var(--csa-sp-4) var(--csa-sp-4) var(--csa-sp-5);
+    }
+    /* La franja lateral marca la tarea sin teñir la tarjeta entera: un fondo de
+       color en tres tarjetas seguidas convierte la pantalla en una alarma. */
+    .vol-task::before {
+        content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+        width: 3px; background: var(--csa-rule);
+    }
+    .vol-task--urgent { border-color: var(--csa-terracotta-soft); }
+    .vol-task--urgent::before { background: var(--csa-terracotta); }
+
+    .vol-task__tags {
+        display: flex; flex-wrap: wrap; align-items: center; gap: var(--csa-sp-2);
+        margin-bottom: var(--csa-sp-2);
+    }
+    .vol-task__gap {
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 3px 8px; border-radius: var(--csa-radius-pill);
+        background: var(--csa-terracotta-soft); color: #b04e22;
+        font-size: 10.5px; font-weight: 700; letter-spacing: 0.03em;
+    }
+
+    .csa-app .vol-task__title {
+        margin: 0;
+        font-family: var(--csa-serif); font-weight: 500; font-size: var(--csa-fs-md);
+        line-height: var(--csa-lh-snug); letter-spacing: -0.012em;
+        color: var(--csa-ink);
+    }
+    /* El para-qué, no el detalle: es lo que convierte una tarea apuntada por
+       alguien en algo que hace falta. */
+    .vol-task__why {
+        margin: var(--csa-sp-2) 0 0;
+        font-size: var(--csa-fs-sm); line-height: var(--csa-lh-normal);
+        color: var(--csa-ink-soft);
+    }
+
+    .vol-task__facts {
+        list-style: none; margin: var(--csa-sp-3) 0 0; padding: 0;
+        display: flex; flex-direction: column; gap: var(--csa-sp-1);
+        font-size: var(--csa-fs-sm); color: var(--csa-ink-soft);
+    }
+    .vol-task__facts li { display: flex; align-items: baseline; gap: var(--csa-sp-2); }
+    .vol-task__facts i { width: 13px; text-align: center; color: var(--csa-ink-muted); flex-shrink: 0; }
+    .vol-task__facts strong { color: var(--csa-ink); font-weight: 600; text-transform: capitalize; }
+
+    /* Quién va ya: huecos vacíos incluidos, para que se vea el sitio libre y no
+       sólo un número. */
+    .vol-task__cover {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: var(--csa-sp-3);
+        margin-top: var(--csa-sp-3); padding-top: var(--csa-sp-3);
+        border-top: 1px solid var(--csa-rule-soft);
+    }
+    .vol-task__faces { display: flex; }
+    .vol-task__face {
+        width: 26px; height: 26px; border-radius: 50%;
+        background: var(--csa-green-soft); color: var(--csa-green);
+        border: 2px solid var(--csa-surface);
+        display: inline-flex; align-items: center; justify-content: center;
+        font-size: 10px; font-weight: 700;
+    }
+    .vol-task__face + .vol-task__face { margin-left: -8px; }
+    .vol-task__face--empty {
+        background: transparent; border: 2px dashed var(--csa-rule);
+    }
+    .vol-task__count { font-size: var(--csa-fs-sm); color: var(--csa-ink-muted); flex-shrink: 0; }
+
+    /* 46px: el botón es el objetivo de toda la tarjeta y tiene que acertarse sin
+       apuntar. A lo ancho porque no compite con nada. */
+    .vol-task__cta {
+        width: 100%; min-height: 46px; margin-top: var(--csa-sp-3);
+        border: 0; border-radius: var(--csa-radius-md); cursor: pointer;
+        background: var(--csa-green); color: #fff;
+        font-family: var(--csa-sans); font-size: var(--csa-fs-base); font-weight: 600;
+    }
+    .vol-task__cta:hover { background: var(--csa-green); opacity: 0.92; }
+    .vol-task--urgent .vol-task__cta { background: var(--csa-terracotta); }
+
+    /* Ver todo: oscuro y no verde, para que no compita con "me apunto". Apuntarse
+       es la acción; ver la lista es la salida. */
+    .vol-all {
+        display: flex; align-items: center; justify-content: center; gap: var(--csa-sp-2);
+        width: 100%; min-height: 48px; margin-top: var(--csa-sp-3);
+        border-radius: var(--csa-radius-md);
+        background: var(--csa-ink); color: var(--csa-bg);
+        font-size: var(--csa-fs-base); font-weight: 600; text-decoration: none;
+    }
+    .vol-all:hover { color: var(--csa-bg); opacity: 0.92; }
+    .vol-all__count {
+        padding: 1px 7px; border-radius: var(--csa-radius-pill);
+        background: rgba(255, 255, 255, 0.18); font-size: var(--csa-fs-xs); font-weight: 700;
+    }
+    /* Dicho en voz alta porque, si no se dice, se supone lo contrario. */
+    .vol-note {
+        margin: var(--csa-sp-2) 0 0;
+        font-size: var(--csa-fs-xs); color: var(--csa-ink-muted); text-align: center;
+    }
+
+    @media (min-width: 640px) {
+        .vol-tasks { display: grid; grid-template-columns: 1fr 1fr; }
+        .vol-all { width: auto; padding: 0 var(--csa-sp-5); }
     }
 
     /* ---- Quién prepara tu cesta (home del socix) ----
