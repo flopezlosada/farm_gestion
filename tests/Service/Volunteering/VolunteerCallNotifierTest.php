@@ -92,8 +92,18 @@ class VolunteerCallNotifierTest extends TestCase
         $users = $this->createMock(UserRepository::class);
         $users->method('findByPartners')->willReturn([]);
 
+        // Se comprueba a QUIÉN llega el push, no si se llama al enviador: el
+        // notificador le pasa la lista vacía y ahí no se manda nada. Afirmar que
+        // no se le llama ataría el test a un detalle de implementación.
+        $destinatariosPush = null;
         $push = $this->createMock(PushSender::class);
-        $push->expects($this->never())->method('sendToMany');
+        $push->method('sendToMany')->willReturnCallback(
+            static function (array $users) use (&$destinatariosPush): int {
+                $destinatariosPush = $users;
+
+                return 0;
+            }
+        );
 
         $notifier = $this->notifier(
             audience: $this->audienceReturning([$this->partner(1)]),
@@ -109,8 +119,9 @@ class VolunteerCallNotifierTest extends TestCase
             new \DateTimeImmutable('2099-03-01 10:00')
         );
 
-        $this->assertNotNull($call);
+        $this->assertNotNull($call, 'Se registra la llamada: al socix se le avisa por correo.');
         $this->assertSame(1, $call->getRecipients());
+        $this->assertSame([], $destinatariosPush ?? [], 'Sin cuenta no hay push, sólo correo.');
     }
 
     /**
