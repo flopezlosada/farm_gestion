@@ -69,11 +69,9 @@
                         hint: 'se avisa primero a quien lo tenga marcado en su ficha'
                     }) }}
                     {{ csa.field(form.slots, 'Cuánta gente hace falta', { hint: 'vacío = sin tope' }) }}
-                    {{ csa.field(form.creditedMinutes, 'Minutos que computa', { hint: '30 = media hora' }) }}
-                    {{ vol.check(form.companionsAllowed, 'Se puede venir acompañadx') }}
-                    {# Sube la tarea a lo alto del panel de cada socix, por delante
-                     # del orden normal. Si se destaca todo, no destaca nada. #}
-                    {{ vol.check(form.featured, 'Destacar en el panel de socixs', 'por delante del orden normal — para la semana en que una cosa importa más que las demás') }}
+                    {# En HORAS. La etiqueta decía "minutos" y el campo pedía horas
+                     # desde que se cambió: decía una cosa y hacía otra. #}
+                    {{ csa.field(form.creditedMinutes, 'Horas que computa', { hint: '0,5 = media hora' }) }}
                     {{ csa.field(form.status, 'Estado', { widget_class: 'csa-select' }) }}
                 </div>
 
@@ -90,6 +88,38 @@
                 </div>
             {% endblock %}
         {% endembed %}
+
+        {# ---- Lo que casi nunca se toca ----
+         # Detrás de un desplegable, no fuera: son ajustes reales y hay que poder
+         # llegar a ellos, pero de diecinueve campos a la vista sólo se rellenan
+         # ocho en una tarea normal. Los otros piden atención cada vez que se
+         # publica algo, y lo que siempre se contesta igual acaba contestándose
+         # mal.
+         #
+         # Nativo (<details>), sin JavaScript: si el script falla, el desplegable
+         # sigue abriéndose. Mismo componente que usa el panel del socix. #}
+        <details class="vol-details csa-form-section">
+            <summary>Ajustes de esta tarea — quién coordina, acompañantes, gente de fuera</summary>
+
+            <div class="csa-form-grid">
+                {# Vacío se pone solo cuando el área tiene una sola persona
+                 # coordinándola, que es el caso normal. Ver TaskCoordinator. #}
+                {{ csa.field(form.coordinator, 'Quién la coordina', {
+                    hint: 'vacío = quien coordine el área',
+                    widget_class: 'csa-select'
+                }) }}
+                {{ vol.check(form.companionsAllowed, 'Se puede venir acompañadx') }}
+
+                {# Gente que viene sin ser socix y sin acompañar a nadie: ocupa
+                 # plaza pero no computa horas a nadie. #}
+                {{ csa.field(form.guests, 'Gente de fuera', { hint: 'personas que no son socixs; ocupan plaza' }) }}
+                {{ csa.field(form.guestsNote, 'Quiénes son', { hint: 'p. ej. «3 estudiantes del IES»' }) }}
+
+                {# Sube la tarea a lo alto del panel de cada socix, por delante
+                 # del orden normal. Si se destaca todo, no destaca nada. #}
+                {{ vol.check(form.featured, 'Destacar en el panel de socixs', 'por delante del orden normal — para la semana en que una cosa importa más que las demás') }}
+            </div>
+        </details>
 
         {# Sólo en el alta. Repetir una tarea que ya existe se hace desde su ficha,
          # donde además se ve lo que ya tiene apuntado. Y no se guarda nada de la
