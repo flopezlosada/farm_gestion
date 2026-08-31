@@ -9,9 +9,12 @@
     <h2 style="color: #5a8f3d; margin-top: 0;">Hola{% if partner.name %} {{ partner.name }}{% endif %},</h2>
 
     {% if picks %}
+        {# Patrón explícito y no format_date('full'): éste mete una coma
+           ("miércoles, 26 de agosto de 2026") que dentro de la frase queda como
+           un tropiezo. Mismo patrón que el recordatorio de recogida. #}
         <p>
-            Esta semana <strong>sí recoges cesta</strong>:
-            el {{ pickup_date|format_date('full', locale='es') }}{% if node_name %} en {{ node_name }}{% endif %}.
+            Esta semana <strong>sí recoges cesta</strong> el
+            <strong>{{ pickup_date|format_datetime(pattern="EEEE d 'de' MMMM", locale='es') }}</strong>{% if node_name %}, en {{ node_name }}{% endif %}.
         </p>
 
         {% if was_shifted %}
