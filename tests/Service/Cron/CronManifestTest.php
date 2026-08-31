@@ -113,7 +113,12 @@ class CronManifestTest extends KernelTestCase
             $this->assertArrayHasKey('channels', $meta, sprintf('La tarea "%s" no declara canales.', $key));
 
             foreach ($meta['channels'] as $channel) {
-                $this->assertContains($channel, ['email', 'push'], sprintf('Canal desconocido en "%s".', $key));
+                // 'inbox' es la copia en la bandeja de avisos. Se declara aunque
+                // no tenga interruptor —es el suelo, siempre activa— porque es
+                // justo lo que hay que saber antes de meter algo en `requires`:
+                // una tarea que entrega también por la bandeja NUNCA puede llevar
+                // ahí el ajuste de un canal suelto.
+                $this->assertContains($channel, ['email', 'push', 'inbox'], sprintf('Canal desconocido en "%s".', $key));
             }
 
             if ($meta['confirm']) {

@@ -104,7 +104,19 @@ class ClosureShiftNotifierTest extends TestCase
         $logger = $this->createMock(LoggerInterface::class);
         $logger->expects($this->once())->method('warning');
 
-        $sent = (new ClosureShiftNotifier($mailer, $logger))->notifyCancelled([$cae, $ok], $week);
+        // El logger propio de este caso (comprueba que se avisa del fallo de SMTP),
+        // así que no vale el helper: se construye a mano con la firma completa.
+        $repository = $this->createMock(UserRepository::class);
+        $repository->method('findByPartners')->willReturn([]);
+
+        $notifier = new ClosureShiftNotifier(
+            $mailer,
+            $logger,
+            $repository,
+            $this->createMock(NotificationInbox::class),
+        );
+
+        $sent = $notifier->notifyCancelled([$cae, $ok], $week);
 
         $this->assertSame(1, $sent, 'Solo cuenta el envío que tuvo éxito.');
     }

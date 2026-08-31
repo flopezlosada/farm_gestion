@@ -104,6 +104,7 @@ class VolunteerCallNotifierTest extends TestCase
         // notificador le pasa la lista vacía y ahí no se manda nada. Afirmar que
         // no se le llama ataría el test a un detalle de implementación.
         $destinatariosPush = null;
+        $destinatariosBandeja = [];
         $push = $this->createMock(PushSender::class);
         $push->method('sendToMany')->willReturnCallback(
             static function (array $users) use (&$destinatariosPush): int {
@@ -114,16 +115,17 @@ class VolunteerCallNotifierTest extends TestCase
         );
 
         // Y tampoco copia en la bandeja: sin cuenta no hay bandeja donde mirar, y
-        // escribirla sería una fila que nadie puede abrir.
-        $inbox = $this->createMock(NotificationInbox::class);
-        $inbox->expects($this->never())->method('deliver');
+        // escribirla sería una fila que nadie puede abrir. Se comprueba a QUIÉN
+        // llega y no si se llama al servicio, igual que con el push de arriba:
+        // afirmar que no se le llama ataría el test a un detalle (deliver() ya
+        // sabe no hacer nada con la lista vacía).
 
         $notifier = $this->notifier(
             audience: $this->audienceReturning([$this->partner(1)]),
             users: $users,
             entityManager: $entityManager,
             push: $push,
-            inbox: $inbox
+            inbox: $this->recordingInbox($destinatariosBandeja)
         );
 
         $call = $notifier->dispatch(
@@ -136,6 +138,7 @@ class VolunteerCallNotifierTest extends TestCase
         $this->assertNotNull($call, 'Se registra la llamada: al socix se le avisa por correo.');
         $this->assertSame(1, $call->getRecipients());
         $this->assertSame([], $destinatariosPush ?? [], 'Sin cuenta no hay push, sólo correo.');
+        $this->assertSame([], $destinatariosBandeja, 'Sin cuenta tampoco hay bandeja donde escribir.');
     }
 
     /**
@@ -152,8 +155,18 @@ class VolunteerCallNotifierTest extends TestCase
         $entityManager->expects($this->once())->method('persist');
         $entityManager->expects($this->once())->method('flush');
 
+        // Igual que arriba: se comprueba a QUIÉN llega el push, no si se llama al
+        // enviador. Con las preferencias apagadas el notificador le pasa la lista
+        // vacía, y ahí no se manda nada.
+        $destinatariosPush = null;
         $push = $this->createMock(PushSender::class);
-        $push->expects($this->never())->method('sendToMany');
+        $push->method('sendToMany')->willReturnCallback(
+            static function (array $users) use (&$destinatariosPush): int {
+                $destinatariosPush = $users;
+
+                return 0;
+            }
+        );
 
         $escritas = [];
         $inbox = $this->createMock(NotificationInbox::class);
@@ -165,8 +178,14 @@ class VolunteerCallNotifierTest extends TestCase
             }
         );
 
+        // El doble RESPETA EL ARGUMENTO, y aquí es imprescindible: con las
+        // preferencias apagadas el notificador pide las cuentas de una lista
+        // vacía, y un doble que devuelva gente igualmente haría que el push
+        // pareciera tener a quien mandar. El repositorio real devuelve [].
         $users = $this->createMock(UserRepository::class);
-        $users->method('findByPartners')->willReturn([new User(), new User()]);
+        $users->method('findByPartners')->willReturnCallback(
+            static fn (array $partners): array => [] === $partners ? [] : [new User(), new User()]
+        );
 
         $call = $this->notifier(
             audience: $this->audienceReturning([$this->partner(1), $this->partner(2)]),
@@ -179,6 +198,7 @@ class VolunteerCallNotifierTest extends TestCase
         )->dispatch($this->offer(), VolunteerCall::SCOPE_MATCHING, null, new \DateTimeImmutable('2099-03-01 10:00'));
 
         $this->assertNotNull($call, 'La llamada se registra: el aviso salió, aunque sólo a la bandeja.');
+        $this->assertSame([], $destinatariosPush ?? [], 'Con el push apagado no se empuja a nadie.');
         $this->assertCount(1, $escritas);
         $this->assertSame(Notification::KIND_VOLUNTEERING_CALL, $escritas[0]['kind']);
         $this->assertSame(2, $escritas[0]['users'], 'La copia va a toda la audiencia con cuenta.');
@@ -376,5 +396,26 @@ class VolunteerCallNotifierTest extends TestCase
             $this->createMock(PartnerAccessPolicy::class),
             $urlGenerator
         );
+    }
+
+    /**
+     * Una bandeja que apunta a CUÁNTAS cuentas se le pide escribir.
+     *
+     * @param list<int> $destinatarios donde se apunta el tamaño de cada lote
+     */
+    private function recordingInbox(array &$destinatarios): NotificationInbox
+    {
+        $inbox = $this->createMock(NotificationInbox::class);
+        $inbox->method('deliver')->willReturnCallback(
+            static function (array $users) use (&$destinatarios): int {
+                foreach ($users as $user) {
+                    $destinatarios[] = $user;
+                }
+
+                return \count($users);
+            }
+        );
+
+        return $inbox;
     }
 }
