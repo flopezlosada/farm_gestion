@@ -6,6 +6,8 @@ use App\DataFixtures\PartnerUserFixtures;
 use App\Entity\Notification;
 use App\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\BrowserKit\Cookie;
+use Symfony\Component\Security\Core\Authentication\Token\RememberMeToken;
 
 /**
  * La bandeja de avisos y la campanita.
@@ -24,6 +26,37 @@ use Doctrine\ORM\EntityManagerInterface;
  */
 class NotificationInboxTest extends AbstractPartnerAuthenticatedTest
 {
+    /**
+     * CON LA SESIÓN RECORDADA (cookie remember_me) TAMBIÉN SE ABRE, y este caso
+     * existe porque el resto de la batería no lo veía: `loginUser()` crea siempre
+     * una sesión PLENA, así que con `IS_AUTHENTICATED_FULLY` en el controlador los
+     * tests pasaban en verde mientras en el navegador pulsar la campanita rebotaba
+     * al panel — `/avisos` denegaba, el firewall mandaba a `/login`, éste veía
+     * `getUser()` y redirigía a `/post-login`, que reparte a `dashboard` o `panel`.
+     *
+     * El token se mete en la SESIÓN y no en `security.token_storage`: es de donde
+     * lo lee el firewall. Con `setToken()` a secas la petición sale 302 a /login y
+     * el test pasaría por el motivo equivocado.
+     */
+    public function testLaBandejaSeAbreConLaSesionRecordada(): void
+    {
+        $client = static::createClient();
+
+        $user = static::getContainer()->get('doctrine')->getRepository(User::class)
+            ->loadUserByIdentifier(PartnerUserFixtures::USER_SOCIX_USERNAME);
+        self::assertNotNull($user, 'Fixtures sin User socix; carga PartnerUserFixtures en db_test.');
+
+        $session = static::getContainer()->get('session.factory')->createSession();
+        $session->set('_security_main', serialize(new RememberMeToken($user, 'main')));
+        $session->save();
+        $client->getCookieJar()->set(new Cookie($session->getName(), $session->getId()));
+
+        $client->request('GET', '/avisos');
+
+        self::assertResponseIsSuccessful('Con la cookie de sesión recordada la bandeja tiene que abrirse, no rebotar.');
+        self::assertSelectorTextContains('.csa-page-header h1', 'Mis avisos');
+    }
+
     public function testLaBandejaCargaParaUnSocix(): void
     {
         $client = $this->createPartnerAuthenticatedClient();
