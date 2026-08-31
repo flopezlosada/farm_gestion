@@ -78,4 +78,33 @@ class UserRepository extends ServiceEntityRepository implements UserLoaderInterf
             ->getQuery()
             ->getResult();
     }
+
+    /**
+     * Todas las cuentas que pueden entrar. Punto de partida de "quién tiene tal
+     * permiso", que se resuelve DESPUÉS en PHP con el servicio de jerarquía de
+     * Symfony.
+     *
+     * SE TRAEN TODAS Y SE FILTRA FUERA, y no es pereza: no sirve
+     * {@see findByRole()} —un LIKE sobre el array serializado, que sólo encuentra
+     * el rol LITERAL—, porque quien coordina socixs suele tener ROLE_ADMIN, y de
+     * ahí a ROLE_GESTION_SOCIXS hay dos saltos de jerarquía
+     * (ROLE_ADMIN → ROLE_GESTION_SOCIXS_EDIT → ROLE_GESTION_SOCIXS). Buscando el
+     * literal, el aviso no le llegaría a nadie y nadie sabría por qué. Y la
+     * jerarquía vive en `security.yaml`, no en la base, así que en DQL no se puede
+     * resolver.
+     *
+     * Sin filtro por roles vacíos, que era la optimización evidente y no lo es:
+     * de las cuarenta y tres cuentas reales sólo dos llevan el array vacío —las
+     * demás tienen ROLE_PARTNER escrito—, así que ahorraría dos filas a cambio de
+     * una condición contra el formato serializado de PHP metida en una consulta.
+     *
+     * @return User[] las cuentas habilitadas
+     */
+    public function findEnabled(): array
+    {
+        return $this->createQueryBuilder('u')
+            ->where('u.enabled = true')
+            ->getQuery()
+            ->getResult();
+    }
 }

@@ -47,6 +47,18 @@ class Notification
     /** Te toca la tarea de voluntariado a la que te apuntaste. */
     public const KIND_VOLUNTEERING_REMINDER = 'volunteering.reminder';
 
+    /** A tu ficha le faltan datos que puedes rellenar tú (va al socix). */
+    public const KIND_PROFILE_INCOMPLETE = 'profile.incomplete';
+
+    /**
+     * Hay fichas de socix con datos que faltan (va a quien coordina socixs).
+     *
+     * Uno resumen para toda la lista y no uno por socix: con cuarenta fichas
+     * incompletas, una bandeja de cuarenta avisos que vuelven cada semana no se
+     * lee, se ignora. El aviso dice cuántas son y lleva al listado.
+     */
+    public const KIND_PARTNERS_INCOMPLETE = 'partners.incomplete';
+
     /**
      * @ORM\Id
      * @ORM\GeneratedValue

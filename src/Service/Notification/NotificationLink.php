@@ -71,6 +71,16 @@ class NotificationLink
             // llevan a la pantalla de voluntariado del socix, que enseña las dos
             // cosas: lo abierto y lo que llevas apuntado.
             str_starts_with($kind, 'volunteering.') => $this->urlGenerator->generate('panel_volunteering'),
+            // "Faltan datos en tu ficha" lleva a la pantalla donde se rellenan, y
+            // no a la bandeja: el aviso ya dice qué falta, así que lo único que
+            // queda por hacer es el formulario. Un aviso que pide algo tiene que
+            // abrir el sitio donde se hace.
+            str_starts_with($kind, 'profile.') => $this->urlGenerator->generate('panel_profile'),
+            // El de quien coordina lleva al listado de fichas a medias, que es
+            // donde están todas con lo que le falta a cada una. El aviso es un
+            // resumen ("12 fichas..."), así que sin este destino no sería
+            // accionable: diría cuántas son y no cuáles.
+            str_starts_with($kind, 'partners.') => $this->urlGenerator->generate('partner_incomplete_profiles'),
             // Cualquier otro no tiene mejor sitio que la bandeja. Es el caso de
             // un aviso viejo cuyo `kind` ya no se emite, y de uno nuevo al que se
             // le olvidó su línea aquí: molesta, pero no deja a nadie en un 404.

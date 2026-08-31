@@ -58,6 +58,36 @@ class NotificationRepository extends ServiceEntityRepository
     }
 
     /**
+     * Si esta cuenta tiene sin abrir algún aviso de esta clase.
+     *
+     * ES LA CONDICIÓN DE RENOVACIÓN de los avisos que persiguen algo pendiente
+     * (una ficha con datos que faltan). La regla es: se vuelve a avisar si el
+     * anterior YA SE LEYÓ y el problema sigue ahí; si sigue sin leer, no se
+     * repite. Sin esto, el barrido semanal apilaría un aviso más cada lunes sobre
+     * el mismo asunto y la campanita marcaría diez cosas que son una.
+     *
+     * Se resuelve contra esta tabla y no con un apunte en
+     * {@see \App\Service\Cron\EffectLedger}: el ledger sabe si el efecto se
+     * produjo aquella semana, pero no si la persona lo ha leído, que es
+     * precisamente la condición.
+     *
+     * @param User   $user la cuenta
+     * @param string $kind una de las constantes Notification::KIND_*
+     *
+     * @return bool true si tiene alguno de esa clase sin abrir
+     */
+    public function hasUnreadOfKind(User $user, string $kind): bool
+    {
+        return 0 < (int) $this->createQueryBuilder('n')
+            ->select('COUNT(n.id)')
+            ->andWhere('n.recipient = :user')->setParameter('user', $user)
+            ->andWhere('n.kind = :kind')->setParameter('kind', $kind)
+            ->andWhere('n.readAt IS NULL')
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
+    /**
      * Cuántos avisos tiene sin abrir una cuenta. Es el número de la campanita.
      *
      * @param User $user la cuenta

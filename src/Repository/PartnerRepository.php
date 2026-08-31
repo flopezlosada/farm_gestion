@@ -604,4 +604,40 @@ class PartnerRepository extends ServiceEntityRepository
             ->getQuery()
             ->getResult();
     }
+
+    /**
+     * Lxs socixs a quienes tiene sentido perseguirles la ficha: activxs y cabeza
+     * de familia.
+     *
+     * NO FILTRA POR QUÉ FALTA, y es deliberado: cuáles son los datos importantes
+     * lo decide {@see \App\Service\Partner\PartnerProfileCompleteness} en un solo
+     * sitio, y traer aquí esa lista de columnas la duplicaría en DQL — donde
+     * nadie la buscaría el día que se añada o se quite un campo. Son doscientas
+     * filas: se traen y se filtran en PHP.
+     *
+     * Los familiares (con `parent`) quedan fuera aquí y no en el filtro para no
+     * traer de la base de datos lo que se va a descartar entero: comparten
+     * dirección, teléfono y correo con la ficha principal y los llevan vacíos por
+     * diseño.
+     *
+     * Provincia y municipio vienen en el mismo viaje porque el listado de gestión
+     * los PINTA: sin el join serían dos consultas por fila (la comprobación de si
+     * faltan no las necesita —una asociación nula lo es sin ir a la base—, pero
+     * enseñar su nombre sí).
+     *
+     * @return Partner[] lxs candidatxs, ordenadxs como el listado
+     */
+    public function findActiveForProfileReview(): array
+    {
+        return $this->createQueryBuilder('p')
+            ->leftJoin('p.state', 's')->addSelect('s')
+            ->leftJoin('p.city', 'c')->addSelect('c')
+            ->where('p.status = :status')
+            ->andWhere('p.parent IS NULL')
+            ->setParameter('status', Partner::STATUS_ACTIVO)
+            ->orderBy('p.surname', 'ASC')
+            ->addOrderBy('p.name', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
 }

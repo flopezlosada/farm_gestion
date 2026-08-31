@@ -236,6 +236,14 @@ class AppSettings
     public const CRON_PICKUP_REMINDER = 'cron.pickup_reminder';
     public const CRON_ADMIN_DELIVERY_SUMMARY = 'cron.admin_delivery_summary';
     public const CRON_PURGE_USAGE_HITS = 'cron.purge_usage_hits';
+
+    /**
+     * Aviso semanal de las fichas de socix a las que les faltan datos: a cada
+     * socix lo que puede rellenar elle, y a quien coordina socixs cuántas fichas
+     * están a medias (app:notify-incomplete-profiles). SÓLO por la bandeja de
+     * avisos.
+     */
+    public const CRON_INCOMPLETE_PROFILES = 'cron.incomplete_profiles';
     public const CRON_GENERATE_WEEKLY_DELIVERY = 'cron.generate_weekly_delivery';
     public const CRON_ALBERGUE_REMINDER = 'cron.albergue_reminder';
 
@@ -440,6 +448,25 @@ class AppSettings
             'dry' => false,
             'schedule' => ['freq' => 'monthly', 'dom' => 1, 'hour' => 4],
             'max_delay_hours' => 792,
+            'requires' => [],
+            'depends_on' => [],
+        ],
+        // Los lunes temprano y sólo a la bandeja. `confirm` en false aunque
+        // entregue algo a personas: la confirmación de la pantalla existe para lo
+        // que SALE de la asociación —un correo no se puede des-enviar, un push
+        // tampoco—, y una fila en una bandeja se borra. Y `channels` sólo 'inbox':
+        // es lo que impide que alguien meta aquí un `requires` de correo, que
+        // inhibiría la tarea entera sin que --force lo salte.
+        self::CRON_INCOMPLETE_PROFILES => [
+            'command' => 'app:notify-incomplete-profiles',
+            'channels' => ['inbox'],
+            'needs_recipient' => false,
+            'confirm' => false,
+            'dry' => true,
+            'schedule' => ['freq' => 'weekly', 'dow' => 1, 'hour' => 7],
+            'max_delay_hours' => 192,
+            // Sin `requires`: no depende de ningún canal apagable. La bandeja es
+            // el suelo y no tiene interruptor.
             'requires' => [],
             'depends_on' => [],
         ],
@@ -665,6 +692,12 @@ class AppSettings
             'group' => 'Tareas programadas',
             'label' => 'Purgar el rastro de uso',
             'help' => 'Borra periódicamente la telemetría de uso anterior al período de retención (app:purge-usage-hits), por minimización de datos. Apagada, el rastro se acumula sin límite.',
+            'default' => true,
+        ],
+        self::CRON_INCOMPLETE_PROFILES => [
+            'group' => 'Tareas programadas',
+            'label' => 'Avisar de las fichas con datos sin rellenar',
+            'help' => 'Cada lunes deja en la bandeja de cada socix los datos que le faltan y puede rellenar elle, y a quien coordina socixs cuántas fichas están a medias. No manda correo ni avisos al móvil: un dato que falta no es urgente. El aviso se renueva sólo si el anterior se leyó y sigue sin arreglarse.',
             'default' => true,
         ],
         self::CRON_ALBERGUE_REMINDER => [

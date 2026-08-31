@@ -47,6 +47,11 @@ class NotificationLinkTest extends TestCase
         yield 'la cesta lleva al panel' => [Notification::KIND_PICKUP_REMINDER, 'panel'];
         yield 'piden gente lleva a voluntariado' => [Notification::KIND_VOLUNTEERING_CALL, 'panel_volunteering'];
         yield 'te toca lleva a voluntariado' => [Notification::KIND_VOLUNTEERING_REMINDER, 'panel_volunteering'];
+        // Un aviso que PIDE algo abre el sitio donde se hace, no la bandeja.
+        yield 'faltan tus datos lleva a Mis datos' => [Notification::KIND_PROFILE_INCOMPLETE, 'panel_profile'];
+        // El de quien coordina es un resumen ("12 fichas..."), así que sin llevar
+        // al listado diría cuántas son y no cuáles: no sería accionable.
+        yield 'fichas a medias lleva a su listado' => [Notification::KIND_PARTNERS_INCOMPLETE, 'partner_incomplete_profiles'];
         // Un aviso de una familia que aún no existe: cae en la bandeja y no revienta.
         yield 'lo desconocido cae en la bandeja' => ['algo.que.nadie.ha.declarado', 'notification_inbox'];
     }
