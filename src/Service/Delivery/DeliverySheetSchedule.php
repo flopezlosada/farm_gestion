@@ -14,11 +14,17 @@ use Symfony\Component\Clock\ClockInterface;
  * cambios ha cerrado y cuyo reparto todavía no ha ocurrido.
  *
  * CADA NODO A SU HORA. El plazo cierra la noche anterior al reparto de cada nodo
- * ({@see DeliveryDeadline}) y los nodos no reparten el mismo día: Madrid recoge
- * el miércoles, así que cierra el martes por la noche; la Sierra recoge el
- * viernes y cierra el jueves. Preguntar "¿es viernes?" serviría a un nodo y
- * llegaría tarde al otro — es el mismo error Sierra-céntrico que hizo que a
- * socixs de Madrid les llegara "recoge tu cesta el viernes en Torremocha".
+ * ({@see DeliveryDeadline}) y los nodos no reparten el mismo día: Cascorro,
+ * Midori y El Berrueco recogen el MIÉRCOLES, así que cierran el martes por la
+ * noche; Torremocha recoge el VIERNES y cierra el jueves. Preguntar "¿es
+ * viernes?" serviría a uno y llegaría tarde a los otros — es el mismo error
+ * Sierra-céntrico que hizo que a socixs de Madrid (Cascorro/Midori) les llegara
+ * "recoge tu cesta el viernes en Torremocha".
+ *
+ * Y no basta con mirar el día: los tres del miércoles son QUINCENALES, así que
+ * un miércoles cualquiera reparte uno y no los otros. Quién reparte de verdad lo
+ * resuelve {@see NodeDeliveryDate::physicalDateFor()}, que además devuelve null
+ * si una excepción canceló el reparto y la fecha trasladada si lo movió.
  *
  * Vive fuera del comando ({@see \App\Command\SendDeliverySheetsCommand}) porque
  * es la regla de negocio de la tarea, y encerrada en él sólo se podría probar

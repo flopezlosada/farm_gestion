@@ -21,10 +21,11 @@ use Symfony\Component\Mime\Part\DataPart;
  * Manda el listado del reparto en PDF en cuanto se cierra el plazo de cambios de
  * cada nodo. Sustituye al envío a mano que hoy hace administración cada semana.
  *
- * CADA NODO A SU HORA, y de ahí la cadencia diaria: Madrid cierra el martes por
- * la noche y su listado sale el miércoles a primera hora; la Sierra cierra el
- * jueves y sale el viernes. Qué repartos tocan lo decide
- * {@see DeliverySheetSchedule}; aquí sólo se generan los PDF y se mandan.
+ * CADA NODO A SU HORA, y de ahí la cadencia diaria: los nodos del miércoles
+ * (Cascorro, Midori, El Berrueco) cierran el martes por la noche y su listado
+ * sale el miércoles a primera hora; Torremocha cierra el jueves y sale el
+ * viernes. Qué repartos tocan lo decide {@see DeliverySheetSchedule}; aquí sólo
+ * se generan los PDF y se mandan.
  *
  * DIRIGIDA POR ESTADO, no por el instante del disparo: un disparo a deshora da el
  * mismo resultado, dos disparos no duplican nada (el apunte de idempotencia lo
