@@ -77,6 +77,14 @@ class SendDeliverySheetsCommand extends AbstractCronCommand
         $fallback = array_values(array_filter(array_map('trim', explode(',', (string) $to))));
         $forced = (bool) $input->getOption('to');
 
+        // Pasar --to no es gratis y conviene decirlo: el listado NO llega a quien
+        // lo tiene asignado en su punto, y el apunte de idempotencia queda puesto
+        // igual, así que el envío de verdad de hoy ya no saldrá. Para mirar sin
+        // consecuencias está --dry-run.
+        if ($forced && !$dryRun) {
+            $io->warning('Con --to el listado va sólo a esa dirección y NO a quien lo tenga asignado en su punto. El envío queda apuntado como hecho, así que el de esta mañana ya no saldrá.');
+        }
+
         $target = $this->optionalDate($input, $io);
         if ($target === false) {
             return Command::FAILURE;
