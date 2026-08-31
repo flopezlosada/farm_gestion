@@ -128,6 +128,41 @@ class TaskCoordinatorTest extends TestCase
     }
 
     /**
+     * Lo que el formulario ofrece cuando pregunta: las que coordinan el área y
+     * nadie más. El desplegable llegó a listar los 246 socixs, que es pedir que
+     * se elija a dedo justo lo que el sistema ya sabe.
+     */
+    public function testSoloSeOfreceAQuienCoordinaElArea(): void
+    {
+        $ana = $this->partner(1);
+        $berta = $this->partner(2);
+        $offer = $this->offer([$this->area([$this->userFor($ana), $this->userFor($berta)])]);
+
+        $candidates = (new TaskCoordinator())->candidatesFor($offer);
+
+        $this->assertSame([$ana, $berta], array_values($candidates));
+    }
+
+    /**
+     * Quien ya consta como coordinador sigue ofreciéndose aunque haya dejado el
+     * área. Sin esto, editar cualquier otra cosa de la tarea —la hora, el sitio—
+     * le borraría de ella en silencio, porque el desplegable no tendría su
+     * opción; y con él se iría la única constancia de quién la llevó.
+     */
+    public function testQuienYaConstaSigueOfreciendoseAunqueHayaDejadoElArea(): void
+    {
+        $antigua = $this->partner(9);
+        $nueva = $this->partner(1);
+        $offer = $this->offer([$this->area([$this->userFor($nueva)])]);
+        $offer->setCoordinator($antigua);
+
+        $service = new TaskCoordinator();
+
+        $this->assertSame([$nueva, $antigua], array_values($service->candidatesFor($offer)));
+        $this->assertTrue($service->needsChoosing($offer), 'Hay dos opciones reales: se pregunta.');
+    }
+
+    /**
      * @param list<VolunteerCategory> $categories las áreas de la tarea
      */
     private function offer(array $categories): VolunteerOffer

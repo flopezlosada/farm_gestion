@@ -169,6 +169,10 @@
         align-items: flex-start;
         cursor: pointer;
         font-size: var(--csa-fs-base);
+        /* Explícito: es un <label> y Bootstrap 3 le mete font-weight:700, así
+           que salía MÁS negrita que las etiquetas de los campos de al lado
+           —que son 600— y rompía la coherencia del formulario. */
+        font-weight: 400;
         color: var(--csa-ink);
     }
     .vol-check input[type="checkbox"] {
@@ -185,6 +189,30 @@
         color: var(--csa-ink-muted);
         line-height: var(--csa-lh-snug);
     }
+
+    /* ---- Aire dentro de las secciones del formulario ----
+       El callout viene con `margin: 0` del componente global —cada pantalla
+       decide su hueco— y aquí quedaba pegado al campo de arriba y a la casilla
+       de abajo, todo amontonado. Se le da el hueco AQUÍ y no en el componente,
+       que lo usan muchas más pantallas. */
+    .csa-form-section .csa-callout { margin: var(--csa-sp-5) 0; }
+
+    /* Una aclaración en prosa dentro de una sección, para lo que no cabe en el
+       hint de un campo: el hint va en una línea y se corta con puntos
+       suspensivos, así que explicar ahí una idea entera es no explicarla.
+
+       Prefijo `vol-` y no `csa-` a propósito, aunque sirva para cualquier
+       formulario: esto vive en la hoja de voluntariado y sólo se carga en sus
+       pantallas. Con nombre canónico, otra pantalla lo usaría dándolo por
+       global y saldría sin estilo. Si hace falta en más sitios, sube a
+       assets/css/csa/03-components.css y entonces sí se llama csa-form-note. */
+    .vol-note {
+        margin: var(--csa-sp-4) 0 0;
+        font-size: var(--csa-fs-sm);
+        line-height: var(--csa-lh-normal);
+        color: var(--csa-ink-soft);
+    }
+    .vol-note + .csa-form-grid { margin-top: var(--csa-sp-5); }
 
     /* Filtro por área de la bolsa. En línea y envolviendo: son media docena de
        áreas y un desplegable escondería justo lo que hay que ver de un vistazo. */
@@ -333,18 +361,6 @@
     }
     .vol-details[open] > summary::before { transform: rotate(45deg); }
     .vol-details > summary:hover { color: var(--csa-ink); }
-
-    /* Un <details> que ADEMÁS es tarjeta de sección de formulario: el resumen
-       hace de cabecera, así que se lee como los títulos numerados de al lado y
-       no como un enlace pequeño perdido dentro de una caja grande. Cerrado no
-       deja hueco debajo; abierto, separa. */
-    details.csa-form-section > summary {
-        margin-bottom: 0;
-        font-size: var(--csa-fs-md);
-        font-weight: 600;
-        color: var(--csa-ink);
-    }
-    details.csa-form-section[open] > summary { margin-bottom: var(--csa-sp-5); }
 
     /* ---- Qué toca hacer con esta tarea ----
        La franja que abre la ficha. Va antes que los datos porque cuándo y dónde

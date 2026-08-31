@@ -1,11 +1,13 @@
 {# Alta y edición de una tarea de voluntariado. #}
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
-{# `vol` también aquí arriba, y no sólo dentro de cada {% block body %} de los
- # embeds: la sección plegada de ajustes vive en el nivel raíz de la plantilla,
- # donde las importaciones de los bloques no llegan. Sin esto, la pantalla
- # entera revienta con "Variable vol does not exist" — y lint:twig no lo caza,
- # porque comprueba sintaxis y no si las variables existen. #}
+{# `vol` también aquí arriba aunque ahora mismo sólo se use dentro de los
+ # {% block body %} de los embeds, que lo importan por su cuenta: las
+ # importaciones de un bloque NO llegan al nivel raíz de la plantilla, y usar
+ # ahí la macro revienta la pantalla entera con "Variable vol does not exist".
+ # Ya pasó una vez. Es red de seguridad barata para un fallo que lint:twig no
+ # detecta —comprueba sintaxis, no si las variables existen— y que por tanto
+ # sólo se ve abriendo la página. #}
 {% import '_macros/volunteering.html.twig' as vol %}
 
 {% block title %}Voluntariado · {{ is_new ? 'Nueva tarea' : offer.title }}{% endblock %}
@@ -26,7 +28,10 @@
 {% block csa_main %}
     {{ csa.page_header('Voluntariado', is_new ? 'Nueva tarea' : 'Editar tarea') }}
 
-    {{ form_start(form, { attr: { class: 'csa-form-narrow' } }) }}
+    {# data-csa-dropdowns: sin él los <select> caen a los nativos del sistema
+     # —fondo gris oscuro, tipografía del SO— en medio de una pantalla csa. Ver
+     # assets/js/csa-dropdown.js. #}
+    {{ form_start(form, { attr: { class: 'csa-form-narrow', 'data-csa-dropdowns': true } }) }}
 
         {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Qué y cuándo' } %}
             {% block body %}
@@ -104,28 +109,48 @@
          #
          # Nativo (<details>), sin JavaScript: si el script falla, el desplegable
          # sigue abriéndose. Mismo componente que usa el panel del socix. #}
-        <details class="vol-details csa-form-section">
-            <summary>Ajustes de esta tarea — quién coordina, acompañantes, gente de fuera</summary>
+        {% embed '_components/csa_form_section.html.twig' with {
+            num: '4',
+            title: 'Ajustes de esta tarea',
+            subtitle: 'Lo que casi nunca hay que tocar: se rellena solo o se deja como está.'
+        } %}
+            {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
+                {% import '_macros/volunteering.html.twig' as vol %}
+                <div class="csa-form-grid">
+                    {# El campo sólo existe cuando el área la coordinan VARIAS personas:
+                     # con una sola se pone solo al guardar y preguntarlo sería pedir un
+                     # dato que el sistema ya sabe. Ver VolunteerOfferType. #}
+                    {% if form.coordinator is defined %}
+                        {{ csa.field(form.coordinator, 'Quién la coordina', {
+                            full: true,
+                            hint: 'esta área la lleva más de una persona',
+                            widget_class: 'csa-select'
+                        }) }}
+                    {% endif %}
 
-            <div class="csa-form-grid">
-                {# Vacío se pone solo cuando el área tiene una sola persona
-                 # coordinándola, que es el caso normal. Ver TaskCoordinator. #}
-                {{ csa.field(form.coordinator, 'Quién la coordina', {
-                    hint: 'vacío = quien coordine el área',
-                    widget_class: 'csa-select'
-                }) }}
-                {{ vol.check(form.companionsAllowed, 'Se puede venir acompañadx') }}
+                    {# Gente que viene sin ser socix y SIN acompañar a nadie: un grupo de
+                     # estudiantes, gente de otra asociación. Los acompañantes son otra
+                     # cosa y los pone quien se apunta, desde su panel. #}
+                    {{ csa.field(form.guests, 'Gente de fuera', { hint: 'cuántas' }) }}
+                    {{ csa.field(form.guestsNote, 'Quiénes son', { hint: 'p. ej. «3 estudiantes del IES»' }) }}
+                </div>
 
-                {# Gente que viene sin ser socix y sin acompañar a nadie: ocupa
-                 # plaza pero no computa horas a nadie. #}
-                {{ csa.field(form.guests, 'Gente de fuera', { hint: 'personas que no son socixs; ocupan plaza' }) }}
-                {{ csa.field(form.guestsNote, 'Quiénes son', { hint: 'p. ej. «3 estudiantes del IES»' }) }}
+                <p class="vol-note">
+                    «Gente de fuera» son personas que no son socixs y que no vienen
+                    acompañando a nadie. Ocupan plaza —si vienen tres, la tarea ya sólo
+                    pide el resto— y no se les computan horas. Quien viene acompañando a
+                    unx socix no se pone aquí: lo dice quien se apunta, desde su panel.
+                </p>
 
-                {# Sube la tarea a lo alto del panel de cada socix, por delante
-                 # del orden normal. Si se destaca todo, no destaca nada. #}
-                {{ vol.check(form.featured, 'Destacar en el panel de socixs', 'por delante del orden normal — para la semana en que una cosa importa más que las demás') }}
-            </div>
-        </details>
+                <div class="csa-form-grid">
+                    {{ vol.check(form.companionsAllowed, 'Se puede venir acompañadx') }}
+                    {# Sube la tarea a lo alto del panel de cada socix, por delante del
+                     # orden normal. Si se destaca todo, no destaca nada. #}
+                    {{ vol.check(form.featured, 'Destacar en el panel de socixs', 'por delante del orden normal — para la semana en que una cosa importa más que las demás') }}
+                </div>
+            {% endblock %}
+        {% endembed %}
 
         {# Sólo en el alta. Repetir una tarea que ya existe se hace desde su ficha,
          # donde además se ve lo que ya tiene apuntado. Y no se guarda nada de la
@@ -133,7 +158,7 @@
          # deje a las demás mintiendo. #}
         {% if is_new %}
             {% embed '_components/csa_form_section.html.twig' with {
-                num: '4',
+                num: '5',
                 title: 'Se repite',
                 subtitle: 'El reparto es todas las semanas: aquí se crean de una vez, en borrador, para revisarlas antes de publicarlas.'
             } %}
