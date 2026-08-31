@@ -21,12 +21,18 @@
 -- de la mañana.
 --
 -- Aplicar a las TRES bases de trabajo: db, db_prod_snapshot (golden) y db_test.
+--
+-- Los nombres de índice son los que GENERA Doctrine, no unos legibles. Con
+-- nombres propios, `doctrine:schema:update --dump-sql` propone renombrarlos en
+-- cada ejecución, para siempre, y ese ruido permanente tapa los cambios de
+-- esquema de verdad — que es justo la herramienta con la que aquí se caza el
+-- drift.
 
 CREATE TABLE node_sheet_recipient (
     node_id INT NOT NULL,
     partner_id INT NOT NULL,
-    INDEX IDX_node_sheet_recipient_node (node_id),
-    INDEX IDX_node_sheet_recipient_partner (partner_id),
+    INDEX IDX_BFC06743460D9FD7 (node_id),
+    INDEX IDX_BFC067439393F8FE (partner_id),
     PRIMARY KEY(node_id, partner_id)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci` ENGINE = InnoDB;
 
