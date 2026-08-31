@@ -202,6 +202,9 @@ class PickupReminderPusherTest extends TestCase
 
         $preferences = $this->createMock(NotificationPreferences::class);
         $preferences->method('wants')->willReturn(true);
+        // filter() es el que usan de verdad estos servicios —una consulta para
+        // toda la lista en vez de una por socix—: devuelve a todo el mundo.
+        $preferences->method('filter')->willReturnArgument(0);
 
         return new PickupReminderPusher(
             $push,
@@ -232,6 +235,9 @@ class PickupReminderPusherTest extends TestCase
         // política de preferencias, que tiene sus propios tests.
         $preferences = $this->createMock(NotificationPreferences::class);
         $preferences->method('wants')->willReturn(true);
+        // filter() es el que usan de verdad estos servicios —una consulta para
+        // toda la lista en vez de una por socix—: devuelve a todo el mundo.
+        $preferences->method('filter')->willReturnArgument(0);
 
         return new PickupReminderMailer(
             $this->createMock(MailerInterface::class),

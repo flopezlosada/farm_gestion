@@ -202,6 +202,9 @@ class VolunteerCallNotifierTest extends TestCase
         // manda y cuándo, no la política de preferencias, que tiene los suyos.
         $preferences = $this->createMock(NotificationPreferences::class);
         $preferences->method('wants')->willReturn(true);
+        // filter() es el que usan de verdad estos servicios —una consulta para
+        // toda la lista en vez de una por socix—: devuelve a todo el mundo.
+        $preferences->method('filter')->willReturnArgument(0);
 
         $urlGenerator = $this->createMock(UrlGeneratorInterface::class);
         $urlGenerator->method('generate')->willReturn('/panel/voluntariado');
