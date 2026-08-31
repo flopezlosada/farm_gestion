@@ -6,9 +6,9 @@ use App\Entity\Node;
 use App\Entity\Partner;
 use App\Entity\VolunteerCategory;
 use App\Entity\VolunteerOffer;
-use App\Repository\PartnerRepository;
 use App\Service\Volunteering\CreditedTime;
 use App\Service\Volunteering\OfferRepeatDates;
+use App\Service\Volunteering\TaskCoordinator;
 use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\CallbackTransformer;
@@ -37,6 +37,10 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
  */
 class VolunteerOfferType extends AbstractType
 {
+    public function __construct(private readonly TaskCoordinator $coordinators)
+    {
+    }
+
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
         $builder
@@ -113,25 +117,6 @@ class VolunteerOfferType extends AbstractType
                 'attr' => ['step' => 'any', 'min' => 0, 'max' => 24],
                 'help' => 'Lo que la asociación decide que vale este trabajo, que no tiene por qué ser lo que dura. Se puede poner media hora (0,5) o un cuarto (0,25).',
             ])
-            // Se pregunta AQUÍ y no al cerrar la tarea. Es una propiedad del
-            // trabajo, como el sitio o la hora, y preguntarlo después —mientras
-            // se pasa lista— era pedir una decisión de configuración en medio de
-            // otra faena. Como no se preguntaba en ningún sitio obligatorio, lo
-            // normal era que no constara nadie.
-            ->add('coordinator', EntityType::class, [
-                'label' => 'Quién la coordina',
-                'class' => Partner::class,
-                'choice_label' => fn (Partner $p): string => trim($p->getName().' '.$p->getSurname()),
-                'query_builder' => static fn (PartnerRepository $r) => $r->createQueryBuilder('p')
-                    ->where('p.status = :activo')
-                    ->setParameter('activo', Partner::STATUS_ACTIVO)
-                    ->orderBy('p.name', 'ASC')
-                    ->addOrderBy('p.surname', 'ASC'),
-                'required' => false,
-                'placeholder' => '— Quien coordine el área —',
-                'attr' => ['data-placeholder' => 'Escribe un nombre…'],
-                'help' => 'Déjalo vacío y se pone solo, si el área tiene una única persona coordinándola. Sólo hay que elegir cuando hay varias. Se guarda EN la tarea a propósito: si mañana cambia quien coordina el área, las tareas de antes tienen que seguir diciendo quién las llevó.',
-            ])
             // Gente que viene sin ser socix y sin acompañar a nadie. Va en la
             // tarea y no en una inscripción porque no tiene de quién colgar:
             // `companions` cuelga siempre de un socix.
@@ -176,9 +161,69 @@ class VolunteerOfferType extends AbstractType
             static fn ($hours): ?int => CreditedTime::minutesFromHours($hours),
         ));
 
+        // El campo de coordinación sólo existe cuando hay algo que elegir, y
+        // sólo ofrece a quien de verdad coordina el área de la tarea. Antes
+        // ofrecía los 246 socixs, que es pedir que se elija a dedo justo lo que
+        // el sistema ya sabe.
+        //
+        // En PRE_SET_DATA y no en el builder porque las áreas de la tarea no se
+        // conocen hasta que hay datos: al construir el formulario no hay tarea
+        // todavía.
+        $builder->addEventListener(FormEvents::PRE_SET_DATA, $this->addCoordinatorChoice(...));
+
         if ($options['with_repeat']) {
             $this->addRepeatFields($builder);
         }
+    }
+
+    /**
+     * Añade el campo de coordinación, y sólo si hace falta preguntarlo.
+     *
+     * TRES CASOS, y en dos de ellos el campo no aparece:
+     *
+     *  - Tarea nueva: todavía no tiene áreas, así que no hay candidatas que
+     *    ofrecer. Se resuelve al guardar ({@see \App\Service\Volunteering\TaskCoordinator}),
+     *    y si queda ambigua se elige entrando a editarla.
+     *  - Un área con una sola persona coordinándola —el caso de hoy en las
+     *    cuatro—: no hay nada que decidir, y preguntarlo es pedir un dato que
+     *    el sistema ya sabe.
+     *  - Varias: ahí sí, y el desplegable ofrece ESAS y no los 246 socixs.
+     *
+     * Y se pregunta AQUÍ y no al cerrar la tarea: es una propiedad del trabajo,
+     * como el sitio o la hora. Preguntarlo después —mientras se pasa lista— era
+     * pedir una decisión de configuración en medio de otra faena, y como no se
+     * preguntaba en ningún sitio obligatorio, lo normal era que no constara
+     * nadie.
+     *
+     * @param FormEvent $event el evento con la tarea que se va a editar
+     */
+    private function addCoordinatorChoice(FormEvent $event): void
+    {
+        $offer = $event->getData();
+
+        if (!$offer instanceof VolunteerOffer) {
+            return;
+        }
+
+        if (!$this->coordinators->needsChoosing($offer)) {
+            return;
+        }
+
+        // Las mismas candidatas que considera el servicio para asignar solo.
+        // Compartido a propósito: si el desplegable ofreciera un juego de gente
+        // distinto, nadie lo notaría hasta ver una tarea atribuida a quien no la
+        // llevó.
+        $candidates = $this->coordinators->candidatesFor($offer);
+
+        $event->getForm()->add('coordinator', EntityType::class, [
+            'label' => 'Quién la coordina',
+            'class' => Partner::class,
+            'choices' => array_values($candidates),
+            'choice_label' => static fn (Partner $p): string => trim($p->getName().' '.$p->getSurname()),
+            'required' => false,
+            'placeholder' => '— Sin decidir —',
+            'help' => 'Esta área la coordinan varias personas: di cuál lleva esta tarea. Se guarda EN la tarea a propósito — si mañana cambia quien coordina el área, las de antes tienen que seguir diciendo quién las llevó.',
+        ]);
     }
 
     /**
