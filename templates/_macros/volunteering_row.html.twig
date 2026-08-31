@@ -1,0 +1,137 @@
+{# ============================================================
+ # Una fila de la lista de gente.
+ #
+ # En una macro y no repetida dos veces porque quien coordina se pinta igual
+ # pero va aparte, bajo su propio separador: si fueran dos bloques de HTML
+ # gemelos, el día que cambie una columna cambiaría en uno solo.
+ #
+ # El import va DENTRO de la macro y no arriba del fichero, ni como parámetro:
+ # Twig compila las importaciones a un registro de macros propio y no al
+ # contexto, así que `csa` no existe como variable que se pueda pasar de una
+ # plantilla a otra — falla con "Variable csa does not exist".
+ # ============================================================ #}
+{% macro persona_row(signup, offer, participation, closing_form, can_edit, is_past) %}
+    {% import '_macros/csa.html.twig' as ui %}
+    {% set p = signup.partner %}
+    {% set done = participation[p.id]|default(null) %}
+    <tr{% if signup.cancelled %} class="vol-row--out"{% endif %}>
+        {% if closing_form %}
+            <td class="csa-table__col-tight">
+                {% if not signup.cancelled %}
+                    <input type="checkbox" name="attended[]" value="{{ signup.id }}"
+                           data-vol-attended {% if signup.attended %}checked{% endif %}>
+                {% endif %}
+            </td>
+        {% endif %}
+
+        <td>
+            <div class="vol-person">
+                <span class="vol-person__avatar" aria-hidden="true">{{ (p.name|first ~ p.surname|first)|upper }}</span>
+                <div class="vol-person__body">
+                    <div class="vol-person__top">
+                        <span class="vol-person__name">{{ p.name }} {{ p.surname }}</span>
+                        {% if signup.coordination %}{{ ui.badge('lo organizó', 'plum') }}{% endif %}
+                        {% if signup.companions > 0 %}
+                            {{ ui.badge('+' ~ signup.companions ~ (signup.companions == 1 ? ' acompañante' : ' acompañantes'), 'sky') }}
+                        {% endif %}
+                        {# Quien apenas ha venido merece que se le reciba distinto, y eso
+                         # sólo se sabe si se ve. Sin faenas aún no se marca: sería
+                         # señalar a quien todavía no ha tenido ocasión. #}
+                        {% if done and done.times <= 2 %}{{ ui.badge('recién llegadx', 'ochre') }}{% endif %}
+                    </div>
+                    <div class="vol-person__meta">
+                        {%- if done -%}
+                            {{ done.times }} {{ done.times == 1 ? 'faena' : 'faenas' }} este año
+                            {%- if done.last %} · última el {{ done.last|date('d/m') }}{% endif -%}
+                        {%- else -%}
+                            primera vez este año
+                        {%- endif -%}
+                        {% if signup.notes %}
+                            <span class="vol-person__note"><i class="fa fa-comment-o"></i> {{ signup.notes }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </td>
+
+        {# Los acompañantes los ponía SÓLO quien se apunta, desde su panel. Pero
+         # el caso normal es una llamada —"voy con mi pareja"— y quien coordina no
+         # tenía dónde apuntarlo, así que la tarea seguía pidiendo una plaza que
+         # ya estaba ocupada. #}
+        {% if can_edit and offer.companionsAllowed %}
+            <td class="csa-table__col-tight">
+                {% if signup.cancelled or signup.coordination %}
+                    —
+                {% else %}
+                    <input type="number" name="companions[{{ signup.id }}]"
+                           class="csa-input csa-input--compact vol-minutes"
+                           min="0" max="9" step="1" value="{{ signup.companions }}"
+                           aria-label="Acompañantes de {{ p.name }} {{ p.surname }}">
+                {% endif %}
+            </td>
+        {% endif %}
+
+        {% if closing_form %}
+            <td class="csa-table__col-tight">
+                {% if signup.cancelled %}
+                    —
+                {% else %}
+                    <input type="number" name="hours[{{ signup.id }}]"
+                           class="csa-input csa-input--compact vol-minutes"
+                           min="0" max="24" step="any" data-vol-minutes
+                           value="{{ signup.creditedMinutes ? ui.qty(signup.creditedMinutes / 60)|replace({',': '.'}) : '' }}"
+                           aria-label="Horas que computan a {{ p.name }} {{ p.surname }}">
+                    <span class="vol-minutes__unit">h</span>
+                {% endif %}
+            </td>
+        {% else %}
+            <td class="csa-table__col-tight">{{ signup.createdAt|date('d/m/Y') }}</td>
+        {% endif %}
+
+        <td class="csa-table__col-tight">
+            {% if signup.cancelled %}
+                {{ ui.badge('Se dio de baja', 'terracotta') }}
+            {% elseif signup.attended is same as(true) %}
+                {{ ui.badge('Fue · ' ~ ui.qty((signup.creditedMinutes ?: 0) / 60) ~ ' h', 'green') }}
+            {% elseif signup.attended is same as(false) %}
+                {{ ui.badge('No fue', 'neutral') }}
+            {% elseif is_past %}
+                {{ ui.badge('Sin confirmar', 'sky') }}
+            {% else %}
+                {{ ui.badge('Apuntadx', 'sky') }}
+            {% endif %}
+
+            {# Quién lo dijo. Lo normal es que lo confirme quien fue desde su panel;
+             # que lo haya puesto gestión indica una tarea que hubo que cerrar a
+             # mano, y eso conviene verlo. #}
+            {% if signup.settled and not signup.selfConfirmed %}
+                {{ ui.badge('lo puso gestión', 'neutral') }}
+            {% endif %}
+        </td>
+
+        {% if can_edit %}
+            <td class="csa-table__col-tight">
+                <div class="vol-actions">
+                    {% if p.celular %}
+                        <a class="vol-actions__btn" href="tel:{{ p.celular|replace({' ': ''}) }}"
+                           title="Llamar a {{ p.name }}"><i class="fa fa-phone"></i></a>
+                    {% endif %}
+                    {% if p.email %}
+                        <a class="vol-actions__btn" href="mailto:{{ p.email }}"
+                           title="Escribir a {{ p.name }}"><i class="fa fa-envelope-o"></i></a>
+                    {% endif %}
+                    {# Quitar la fila entera, para cuando la inscripción NO DEBERÍA
+                     # EXISTIR: se anotó a quien no era, o dos veces. No es lo mismo que
+                     # "no fue", que es un hecho que conviene conservar. #}
+                    <button type="submit" class="vol-actions__btn vol-actions__btn--danger"
+                            formaction="{{ path('volunteering_remove_person', { id: offer.id, signup: signup.id }) }}"
+                            formnovalidate
+                            title="Quitar a {{ p.name }} de esta tarea"
+                            onclick="return confirm('¿Quitar a {{ p.name }} {{ p.surname }} de esta tarea? Se borra su inscripción y las horas que tuviera. Para decir que no fue, desmarca la casilla en vez de esto.');">
+                        <i class="fa fa-times"></i>
+                    </button>
+                </div>
+            </td>
+        {% endif %}
+    </tr>
+{% endmacro %}

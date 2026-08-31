@@ -504,6 +504,87 @@
         .vol-occupancy__note { flex-basis: 100%; }
     }
 
+    /* ---- Una persona en la lista ----
+       Avatar + nombre arriba, contexto debajo. El avatar no es adorno: en una
+       lista de doce filas de texto, las iniciales dan un punto de anclaje para
+       encontrar a alguien sin leer cada renglón. */
+    .vol-person { display: flex; align-items: flex-start; gap: var(--csa-sp-3); }
+    .vol-person__avatar {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        width: 32px;
+        height: 32px;
+        border-radius: var(--csa-radius-pill);
+        background: var(--csa-green-soft);
+        color: #3a5c2a;
+        font-size: var(--csa-fs-xs);
+        font-weight: 700;
+    }
+    .vol-person__body { min-width: 0; }
+    .vol-person__top {
+        display: flex;
+        align-items: center;
+        gap: var(--csa-sp-2);
+        flex-wrap: wrap;
+    }
+    /* En la base de datos muchos nombres están en MAYÚSCULAS: se bajan y se
+       recapitalizan por CSS, que respeta los compuestos ("ANA MARÍA" → "Ana
+       María"). El filtro capitalize de Twig sólo tocaría la primera palabra. */
+    .vol-person__name {
+        font-size: var(--csa-fs-base);
+        font-weight: 600;
+        color: var(--csa-ink);
+        text-transform: capitalize;
+    }
+    .vol-person__meta {
+        display: flex;
+        align-items: center;
+        gap: var(--csa-sp-3);
+        flex-wrap: wrap;
+        margin-top: 2px;
+        font-size: var(--csa-fs-xs);
+        color: var(--csa-ink-muted);
+    }
+    /* La nota la escribe quien se apunta y suele ser un aviso ("llego tarde"):
+       en ocre para que se lea antes que el resto del contexto. */
+    .vol-person__note { color: var(--csa-amber); }
+    .vol-person__note i { margin-right: 3px; }
+
+    /* Fila separadora dentro de la tabla: quien coordina va aparte porque
+       coordinar no es venir, y mezclarlo con la asistencia hace pensar que hay
+       un brazo más del que hay. */
+    .vol-people__sep td {
+        padding-top: var(--csa-sp-4);
+        font-size: var(--csa-fs-xs);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--csa-ink-muted);
+        border-bottom: 0;
+    }
+
+    /* Acciones de la fila: con caja, para que se lean como botones y no como
+       iconos sueltos perdidos entre badges. */
+    .vol-actions { display: flex; gap: var(--csa-sp-2); justify-content: flex-end; }
+    .vol-actions__btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 30px;
+        height: 30px;
+        padding: 0;
+        border: 1px solid var(--csa-rule-soft);
+        border-radius: var(--csa-radius-sm);
+        background: var(--csa-surface);
+        color: var(--csa-ink-muted);
+        font-size: var(--csa-fs-sm);
+        text-decoration: none;
+        cursor: pointer;
+    }
+    .vol-actions__btn:hover { border-color: var(--csa-ink-muted); color: var(--csa-ink); }
+    .vol-actions__btn--danger:hover { border-color: var(--csa-terracotta); color: var(--csa-terracotta); }
+
     /* Cuánto lleva hecho cada quien, bajo su nombre. Terciario a propósito: es
        contexto para quien coordina, no una nota en su expediente. */
     .vol-track {

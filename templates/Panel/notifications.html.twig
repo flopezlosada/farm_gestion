@@ -18,39 +18,18 @@
     ) }}
 
     {#
-     # EL ORDEN NO ES CASUAL. Primero el interruptor del dispositivo, porque sin
-     # él lo de abajo no llega por ningún sitio y ajustar de qué te avisan sería
-     # decorar una puerta cerrada. Después, de qué.
+     # EL ORDEN NO ES CASUAL, y es el contrario al que tuvo un rato: primero se
+     # elige QUÉ se quiere y por dónde, y sólo después aparece el requisito
+     # técnico de la columna «Móvil». Al revés, lo primero que veía alguien que
+     # entra a silenciar un correo era un botón para activar otra cosa.
+     #
+     # CUIDADO CON LA PALABRA «AVISOS»: es el género de todo lo de esta pantalla,
+     # así que NO puede nombrar además a uno de los canales. El push se llama
+     # «Móvil» en la tabla y se llama «Móvil» abajo; llamarlo «avisos» en la
+     # tarjeta del aparato hacía que la misma cosa tuviera dos nombres en la
+     # misma pantalla.
      #}
     <div class="csa-stack-lg csa-form-narrow">
-
-        {# ============ 1. EL CANAL ============
-         # Un solo interruptor para todo el canal, a propósito: partirlo en una
-         # casilla por tipo de aviso es justo la pantalla que no se entiende. La
-         # granularidad que hace falta está abajo, y sólo donde hace falta.
-         #
-         # Sin claves VAPID no se pinta: ahí activar es imposible y el botón sólo
-         # podría fallar. Se puede ocultar sin dejar a nadie tirado porque sin
-         # claves nunca hubo suscripción posible. #}
-        {% if app_vapid_public_key is not empty %}
-            {% embed '_components/csa_card.html.twig' with {
-                title: 'Avisos en este dispositivo',
-                icon: 'fa-bell-o'
-            } %}
-                {% block body %}
-                    {% import '_macros/csa.html.twig' as csa %}
-                    {# La explicación va en el «?» y no delante del botón: aquí sólo
-                     # se viene a pulsar, y un párrafo de advertencias antes de haber
-                     # probado nada se lee como una pega. Lo específico de cada
-                     # situación —iPhone, bloqueado, activado pero sin llegar— lo
-                     # dice el propio botón según su estado (push.js). #}
-                    <p>
-                        <button type="button" class="csa-btn csa-btn--secondary csa-btn--sm" data-push-toggle>Activar avisos</button>
-                        {{ csa.hint('Se activa en cada dispositivo por separado: si los quieres en el móvil y en el ordenador, hay que darle en los dos. El móvil no hereda lo que actives aquí.') }}
-                    </p>
-                {% endblock %}
-            {% endembed %}
-        {% endif %}
 
         {# ============ 2. QUÉ AVISOS Y POR DÓNDE ============
          # Una fila por tema y una casilla por canal, en vez de un interruptor
@@ -118,6 +97,42 @@
             {% endblock %}
         {% endembed %}
 
+
+
+        {# ============ EL REQUISITO DE LA COLUMNA «MÓVIL» ============
+         # No es un tercer canal ni una preferencia: es el permiso que el
+         # navegador de ESTE aparato tiene que dar para que lo marcado arriba en
+         # «Móvil» pueda llegar. Por eso va después de la tabla y se llama por lo
+         # que hace.
+         #
+         # Sin claves VAPID no se pinta: ahí activar es imposible y el botón sólo
+         # podría fallar. Se puede ocultar sin dejar a nadie tirado porque sin
+         # claves nunca hubo suscripción posible. #}
+        {% if app_vapid_public_key is not empty %}
+            {% embed '_components/csa_card.html.twig' with {
+                title: 'Recibir avisos en este aparato',
+                icon: 'fa-mobile'
+            } %}
+                {% block body %}
+                    {# ESTRUCTURA FIJA, rellenada por push.js. Antes el botón cargaba
+                     # con todo —era a la vez la acción y el estado— y push.js se
+                     # inventaba un <p> con la explicación insertándolo DENTRO del
+                     # <p> del botón: un <p> no puede contener otro, el navegador
+                     # cerraba el primero y la maquetación se deshacía.
+                     #
+                     # Ahora cada cosa tiene su sitio: el estado se lee arriba, el
+                     # botón dice sólo lo que va a hacer y la explicación aparece
+                     # debajo cuando hay algo que explicar. #}
+                    <div class="csa-push">
+                        <div class="csa-push__main">
+                            <div class="csa-push__state" data-push-status>Comprobando…</div>
+                            <p class="csa-push__note" data-push-hint hidden></p>
+                        </div>
+                        <button type="button" class="csa-btn csa-btn--secondary csa-btn--sm csa-push__btn" data-push-toggle hidden></button>
+                    </div>
+                {% endblock %}
+            {% endembed %}
+        {% endif %}
 
     </div>
 

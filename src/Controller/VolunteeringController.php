@@ -756,6 +756,12 @@ class VolunteeringController extends AbstractController
 
         $attended = array_map('intval', (array) $request->request->all('attended'));
         $hours = (array) $request->request->all('hours');
+
+        // Los acompañantes los ponía SÓLO quien se apunta, desde su panel. Pero
+        // el caso normal es una llamada —"voy con mi pareja"— y quien coordina no
+        // tenía dónde apuntarlo, así que la tarea seguía pidiendo una plaza que
+        // ya estaba ocupada y venía gente de más.
+        $companions = (array) $request->request->all('companions');
         $counted = 0;
 
         // Cerrar de verdad, o sólo corregir lo ya anotado. La diferencia está en
@@ -767,6 +773,13 @@ class VolunteeringController extends AbstractController
         foreach ($offer->getSignups() as $signup) {
             if ($signup->isCancelled()) {
                 continue;
+            }
+
+            // Los acompañantes se guardan pase lo que pase con la asistencia:
+            // decir "viene con su pareja" no es decir si vino, y son las dos
+            // cosas que se apuntan en esta pantalla antes de que llegue el día.
+            if (isset($companions[$signup->getId()]) && '' !== trim((string) $companions[$signup->getId()])) {
+                $signup->setCompanions(max(0, min(9, (int) $companions[$signup->getId()])));
             }
 
             $wentThere = \in_array($signup->getId(), $attended, true);
