@@ -4,19 +4,27 @@
  # EL SHELL SE ELIGE SEGÚN QUIÉN ENTRA. Esta pantalla no es del panel del socix:
  # es de la cuenta, y hay avisos que van a cuentas de gestión (el de "a esta gente
  # le faltan datos" va a quien coordina socixs, que puede no ser socix). Con el
- # shell del panel fijo, esa persona navegaría un menú de secciones a las que no
- # tiene acceso.
+ # shell del panel fijo, esa persona navegaría un menú de secciones que no son
+ # suyas.
+ #
+ # SE MIRA SI TIENE FICHA DE SOCIX, NO EL ROL, y ésta es la parte que estuvo mal:
+ # con `is_granted('ROLE_PARTNER')`, el admin entraba por el shell del socix —
+ # porque la jerarquía de security.yaml cuelga ROLE_PARTNER de ROLE_ADMIN, así que
+ # para un admin ese rol SIEMPRE es verdadero—. Le salía «Mi panel» con «Mi
+ # calendario» y «Voluntariado» en el lateral, teniendo partner_id a NULL: un panel
+ # personal sin nada personal que enseñar. La ficha vinculada sí distingue, y es
+ # además lo que el propio layout del panel usa para pintar el nombre.
  #
  # Los dos layouts declaran los mismos bloques (csa_crumbs, csa_main), que es lo
  # que permite el extends condicional.
  # ============================================================ #}
-{% extends is_granted('ROLE_PARTNER') ? '_layouts/csa_panel.html.twig' : '_layouts/csa_shell.html.twig' %}
+{% extends app.user.partner ? '_layouts/csa_panel.html.twig' : '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
 
 {% block title %}Avisos{% endblock %}
 
 {% block csa_crumbs %}
-    <a href="{{ is_granted('ROLE_PARTNER') ? path('panel') : path('dashboard') }}">Inicio</a>
+    <a href="{{ app.user.partner ? path('panel') : path('dashboard') }}">Inicio</a>
     <span class="csa-topbar__crumbs-sep">/</span>
     <span class="csa-topbar__crumb-active">Avisos</span>
 {% endblock %}
@@ -66,10 +74,17 @@
 {% endmacro %}
 
 {% block csa_main %}
+    {#- El texto de apoyo cambia con quien entra, y no es un adorno: la frase sobre
+        el correo y el móvil apagados habla de la pantalla de preferencias, que sólo
+        tienen lxs socixs. A una cuenta de gestión le prometía un ajuste que no
+        existe para ella. -#}
+    {% set soy_socix = app.user.partner is not null %}
     {{ csa.page_header(
-        is_granted('ROLE_PARTNER') ? 'Mi área · Avisos' : 'Mi cuenta · Avisos',
+        soy_socix ? 'Mi área · Avisos' : 'Mi cuenta · Avisos',
         'Mis avisos',
-        'Todo lo que te hemos avisado. Aquí no se pierde nada, aunque tengas el correo y el móvil apagados.'
+        soy_socix
+            ? 'Todo lo que te hemos avisado. Aquí no se pierde nada, aunque tengas el correo y el móvil apagados.'
+            : 'Todo lo que te hemos avisado. Aquí no se pierde nada.'
     ) }}
 
     {% set today = 'now'|date('Y-m-d') %}
@@ -77,7 +92,10 @@
     {% set antes  = notifications|filter(n => n.createdAt|date('Y-m-d') != today) %}
 
     <div class="csa-stack-lg csa-form-narrow">
-        {% embed '_components/csa_card.html.twig' with { title: 'Avisos', icon: 'fa-bell-o' } %}
+        {#- `soy_socix` viaja en el `with` porque un `set` de fuera NO llega al bloque
+            de un embed: es el mismo motivo por el que el macro se importa por ruta
+            unas líneas más abajo. -#}
+        {% embed '_components/csa_card.html.twig' with { title: 'Avisos', icon: 'fa-bell-o', soy_socix: soy_socix } %}
             {% block body %}
                 {#- El macro se importa POR RUTA y no con `_self`: dentro de un embed,
                     `_self` es la tarjeta embebida y no este fichero, y los imports del
@@ -89,8 +107,13 @@
                         primera vez que alguien entra aquí, saber que esto es donde
                         aparecerá su recogida es más útil que confirmarle que está vacío. -#}
                     <p class="csa-muted" style="margin:0;">
-                        Todavía no tienes avisos. Aquí irán apareciendo los de tu cesta
-                        —cuándo y dónde recoges— y los de voluntariado.
+                        {%- if soy_socix %}
+                            Todavía no tienes avisos. Aquí irán apareciendo los de tu cesta
+                            —cuándo y dónde recoges— y los de voluntariado.
+                        {%- else %}
+                            Todavía no tienes avisos. Aquí aparecerán los de las secciones
+                            que gestionas.
+                        {%- endif %}
                     </p>
                 {% else %}
                     {% if hoy is not empty %}
@@ -114,10 +137,11 @@
             {% endblock %}
         {% endembed %}
 
-        {#- El enlace a las preferencias sólo para socixs: es una pantalla de /panel
-            y pide ROLE_PARTNER, así que ofrecérselo a una cuenta de gestión sería
-            mandarla a un "acceso denegado". -#}
-        {% if is_granted('ROLE_PARTNER') %}
+        {#- El enlace a las preferencias sólo para quien tiene ficha de socix: la
+            pantalla vive en /panel y, aunque un admin pueda entrar (ROLE_PARTNER le
+            llega por jerarquía), sin ficha vinculada el panel lo devuelve por donde
+            vino. Ofrecer un enlace que rebota es peor que no ofrecerlo. -#}
+        {% if soy_socix %}
             <p class="csa-muted" style="margin:0;">
                 <i class="fa fa-sliders" aria-hidden="true"></i>
                 <a href="{{ path('panel_notifications') }}">Cómo te avisamos</a>
