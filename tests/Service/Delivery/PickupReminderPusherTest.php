@@ -15,6 +15,7 @@ use App\Service\Cron\EffectLedger;
 use App\Service\Delivery\DeliveryDeadline;
 use App\Service\Delivery\NodeDeliveryDate;
 use App\Service\Delivery\PickupReminderMailer;
+use App\Service\Notification\NotificationPreferences;
 use App\Service\Delivery\PickupReminderPusher;
 use App\Service\Push\PushSender;
 use PHPUnit\Framework\TestCase;
@@ -223,6 +224,11 @@ class PickupReminderPusherTest extends TestCase
         // consume $settings.
         $deadline = new DeliveryDeadline($this->createMock(NodeDeliveryDate::class), $settings);
 
+        // Todo el mundo quiere el aviso: aquí se comprueba el push, no la
+        // política de preferencias, que tiene sus propios tests.
+        $preferences = $this->createMock(NotificationPreferences::class);
+        $preferences->method('wants')->willReturn(true);
+
         return new PickupReminderMailer(
             $this->createMock(MailerInterface::class),
             $settings,
@@ -230,6 +236,7 @@ class PickupReminderPusherTest extends TestCase
             $this->createMock(UrlGeneratorInterface::class),
             $deadline,
             $this->ledger(),
+            $preferences,
         );
     }
 

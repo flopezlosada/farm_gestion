@@ -948,11 +948,16 @@ class VolunteerOffer
     }
 
     /**
-     * @param int $guests cuánta gente de fuera viene
+     * Acepta null aunque la columna no lo admita: el campo del formulario es
+     * opcional, y dejarlo vacío llega aquí como null. Sin esto, guardar una
+     * tarea sin gente de fuera —el caso normal— revienta con "Expected argument
+     * of type int, null given".
+     *
+     * @param int|null $guests cuánta gente de fuera viene; null es ninguna
      */
-    public function setGuests(int $guests): self
+    public function setGuests(?int $guests): self
     {
-        $this->guests = max(0, $guests);
+        $this->guests = max(0, $guests ?? 0);
 
         return $this;
     }
