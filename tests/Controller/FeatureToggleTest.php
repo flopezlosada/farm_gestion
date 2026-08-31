@@ -143,6 +143,84 @@ class FeatureToggleTest extends WebTestCase
         $this->assertResponseIsSuccessful();
     }
 
+    public function testGrupoDeConsumoDaForbiddenEnGestionConElToggleApagado(): void
+    {
+        $client = $this->clientLoggedAs('admin');
+        $client->request('GET', '/gestion/consumer-group/');
+
+        $this->assertSame(403, $client->getResponse()->getStatusCode());
+    }
+
+    public function testGrupoDeConsumoAccesibleEnGestionConElToggleEncendido(): void
+    {
+        $client = $this->clientLoggedAs('admin');
+        $this->settings()->setBool(AppSettings::FEATURE_GRUPO_CONSUMO, true);
+
+        $client->request('GET', '/gestion/consumer-group/');
+
+        $this->assertResponseIsSuccessful();
+    }
+
+    /**
+     * El catálogo (productores y sus productos) cuelga del mismo prefijo pero es
+     * otro controller: se comprueba aparte para que el gateo no dependa de que
+     * alguien recuerde repetir el atributo al añadir pantallas al módulo.
+     */
+    public function testProductoresDanForbiddenConElToggleApagado(): void
+    {
+        $client = $this->clientLoggedAs('admin');
+        $client->request('GET', '/gestion/consumer-group/producers/');
+
+        $this->assertSame(403, $client->getResponse()->getStatusCode());
+    }
+
+    public function testGrupoDeConsumoDaForbiddenEnElPanelConElToggleApagado(): void
+    {
+        $client = $this->clientLoggedAs(PartnerUserFixtures::USER_SOCIX_USERNAME);
+        $client->request('GET', '/panel/consumer-group');
+
+        $this->assertSame(403, $client->getResponse()->getStatusCode());
+    }
+
+    public function testGrupoDeConsumoAccesibleEnElPanelConElToggleEncendido(): void
+    {
+        $client = $this->clientLoggedAs(PartnerUserFixtures::USER_SOCIX_USERNAME);
+        $this->settings()->setBool(AppSettings::FEATURE_GRUPO_CONSUMO, true);
+
+        $client->request('GET', '/panel/consumer-group');
+
+        $this->assertResponseIsSuccessful();
+    }
+
+    /**
+     * El grupo de consumo se asoma a una pantalla que no es suya: el calendario
+     * del socix pinta las entregas del pedido junto a las de la cesta. Apagado,
+     * el controller no debe ni consultarlas y el calendario tiene que cargar
+     * exactamente igual.
+     */
+    public function testElCalendarioDelPanelSigueCargandoConElGrupoDeConsumoApagado(): void
+    {
+        $client = $this->clientLoggedAs(PartnerUserFixtures::USER_SOCIX_USERNAME);
+        $client->request('GET', '/panel/calendar');
+
+        $this->assertResponseIsSuccessful();
+    }
+
+    /**
+     * Y encendido también: aquí sí se ejecuta la consulta de entregas y se pinta
+     * el panel del pedido, así que este test es además el que ejercita de verdad
+     * el esquema nuevo del módulo contra la base de test.
+     */
+    public function testElCalendarioDelPanelSigueCargandoConElGrupoDeConsumoEncendido(): void
+    {
+        $client = $this->clientLoggedAs(PartnerUserFixtures::USER_SOCIX_USERNAME);
+        $this->settings()->setBool(AppSettings::FEATURE_GRUPO_CONSUMO, true);
+
+        $client->request('GET', '/panel/calendar');
+
+        $this->assertResponseIsSuccessful();
+    }
+
     /**
      * Con el módulo apagado, la home del panel sigue funcionando igual: el
      * bloque de voluntariado no debe poder tumbarla. Es la pantalla que más se
