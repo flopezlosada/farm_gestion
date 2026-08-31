@@ -30,14 +30,9 @@
                 <div class="vol-person__body">
                     <div class="vol-person__top">
                         <span class="vol-person__name">{{ p.name }} {{ p.surname }}</span>
-                        {% if signup.coordination %}{{ ui.badge('lo organizó', 'plum') }}{% endif %}
                         {% if signup.companions > 0 %}
                             {{ ui.badge('+' ~ signup.companions ~ (signup.companions == 1 ? ' acompañante' : ' acompañantes'), 'sky') }}
                         {% endif %}
-                        {# Quien apenas ha venido merece que se le reciba distinto, y eso
-                         # sólo se sabe si se ve. Sin faenas aún no se marca: sería
-                         # señalar a quien todavía no ha tenido ocasión. #}
-                        {% if done and done.times <= 2 %}{{ ui.badge('recién llegadx', 'ochre') }}{% endif %}
                     </div>
                     <div class="vol-person__meta">
                         {%- if done -%}

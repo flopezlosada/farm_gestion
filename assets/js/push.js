@@ -121,8 +121,8 @@
      */
     var STATES = {
         checking:    { state: 'Comprobando…',                              action: null },
-        off:         { state: 'Desactivado en este aparato.',              action: 'Activar' },
-        on:          { state: 'Activado en este aparato.',                 action: 'Desactivar',
+        off:         { state: 'Desactivado en este dispositivo.',              action: 'Activar' },
+        on:          { state: 'Activado en este dispositivo.',                 action: 'Desactivar',
                        note: HINTS.on },
         working:     { state: 'Un momento…',                               action: null },
         failed:      { state: 'No se pudo activar. Inténtalo otra vez.',   action: 'Activar' },
@@ -246,7 +246,7 @@
 
         if (isIos() && !isStandalone()) {
             // Estado propio, no 'unsupported': desde esta pestaña la API no
-            // existe, pero en el mismo aparato SÍ funciona una vez instalada. El
+            // existe, pero en el mismo dispositivo SÍ funciona una vez instalada. El
             // hint de abajo explica cómo, que es la diferencia entre "no puedo" y
             // "no sé cómo".
             setState(button, 'ios');

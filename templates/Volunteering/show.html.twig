@@ -320,6 +320,16 @@
                             <div class="vol-owner__who">
                                 <span class="vol-owner__role">Quien coordina la tarea</span>
                                 <span class="vol-owner__name">{{ offer.coordinator.name }} {{ offer.coordinator.surname }}</span>
+                                {# Sus horas se dicen AQUÍ porque no está en la lista de quién
+                                 # viene: coordinar no es asistir, y lo normal es que no vaya. Sin
+                                 # esto, sacarlo de la tabla dejaría sin rastro visible lo que se
+                                 # le computa. #}
+                                {% set coord_signup = offer.signups|filter(s => s.coordination)|first %}
+                                {% if coord_signup and coord_signup.attended %}
+                                    <span class="vol-owner__hours">Se le han computado {{ csa.qty((coord_signup.creditedMinutes ?: 0) / 60) }} h</span>
+                                {% elseif offer.creditedMinutes %}
+                                    <span class="vol-owner__hours">Se le computarán {{ csa.qty(offer.creditedMinutes / 60) }} h al cerrar la tarea</span>
+                                {% endif %}
                             </div>
                             <div class="vol-owner__contact">
                                 {% if offer.coordinator.celular %}
@@ -474,12 +484,12 @@
                                  # no ha pasado nada". #}
                                 {% if is_closing %}<input type="hidden" name="close_all" value="1">{% endif %}
 
-                                {# La tabla: quiénes vienen. Quien COORDINA no sale aquí —va en su
-                                 # fila aparte al final— porque coordinar no es venir: mezclarlo
-                                 # con la lista de asistencia hace pensar que hay un brazo más del
-                                 # que hay. #}
+                                {# La tabla es de QUIÉN VIENE. Quien coordina no sale, ni siquiera
+                                 # en una fila aparte: lo normal es que no vaya —monta la tarea,
+                                 # busca gente y está pendiente— y tenerlo en una lista de
+                                 # asistencia hace contar un brazo que no existe. Sus horas se le
+                                 # imputan solas al cerrar y se ven arriba, junto a su nombre. #}
                                 {% set viene = offer.signups|filter(s => not s.coordination) %}
-                                {% set coord_signup = offer.signups|filter(s => s.coordination)|first %}
 
                                 <div class="csa-table-wrap">
                                     <table class="csa-table vol-people">
@@ -508,15 +518,6 @@
                                                 {{ row.persona_row(signup, offer, participation, closing_form, can_edit, is_past) }}
                                             {% endfor %}
 
-                                            {# Quien coordina, separadx del resto y al final: computa
-                                             # horas y por eso está en la tabla, pero no es una plaza
-                                             # cubierta ni alguien de quien esperar asistencia. #}
-                                            {% if coord_signup %}
-                                                <tr class="vol-people__sep">
-                                                    <td colspan="8">Coordinación</td>
-                                                </tr>
-                                                {{ row.persona_row(coord_signup, offer, participation, closing_form, can_edit, is_past) }}
-                                            {% endif %}
                                         </tbody>
                                     </table>
                                 </div>

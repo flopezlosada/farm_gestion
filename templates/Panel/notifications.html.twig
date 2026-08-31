@@ -26,7 +26,7 @@
      # CUIDADO CON LA PALABRA «AVISOS»: es el género de todo lo de esta pantalla,
      # así que NO puede nombrar además a uno de los canales. El push se llama
      # «Móvil» en la tabla y se llama «Móvil» abajo; llamarlo «avisos» en la
-     # tarjeta del aparato hacía que la misma cosa tuviera dos nombres en la
+     # tarjeta del dispositivo hacía que la misma cosa tuviera dos nombres en la
      # misma pantalla.
      #}
     <div class="csa-stack-lg csa-form-narrow">
@@ -101,7 +101,7 @@
 
         {# ============ EL REQUISITO DE LA COLUMNA «MÓVIL» ============
          # No es un tercer canal ni una preferencia: es el permiso que el
-         # navegador de ESTE aparato tiene que dar para que lo marcado arriba en
+         # navegador de ESTE dispositivo tiene que dar para que lo marcado arriba en
          # «Móvil» pueda llegar. Por eso va después de la tabla y se llama por lo
          # que hace.
          #
@@ -110,7 +110,7 @@
          # claves nunca hubo suscripción posible. #}
         {% if app_vapid_public_key is not empty %}
             {% embed '_components/csa_card.html.twig' with {
-                title: 'Recibir avisos en este aparato',
+                title: 'Recibir avisos en este dispositivo',
                 icon: 'fa-mobile'
             } %}
                 {% block body %}
@@ -123,9 +123,16 @@
                      # Ahora cada cosa tiene su sitio: el estado se lee arriba, el
                      # botón dice sólo lo que va a hacer y la explicación aparece
                      # debajo cuando hay algo que explicar. #}
+                    {# El estado arranca VACÍO y no en «Comprobando…»: ese texto
+                     # sólo es cierto mientras el script pregunta al navegador, y si
+                     # el script no llega —bloqueado, caché vieja, un error arriba—
+                     # se queda ahí para siempre diciendo que está comprobando algo
+                     # que nadie está comprobando. Vacío, la tarjeta no miente; y
+                     # push.js pone «Comprobando…» en cuanto arranca, que es cuando
+                     # es verdad. #}
                     <div class="csa-push">
                         <div class="csa-push__main">
-                            <div class="csa-push__state" data-push-status>Comprobando…</div>
+                            <div class="csa-push__state" data-push-status></div>
                             <p class="csa-push__note" data-push-hint hidden></p>
                         </div>
                         <button type="button" class="csa-btn csa-btn--secondary csa-btn--sm csa-push__btn" data-push-toggle hidden></button>
