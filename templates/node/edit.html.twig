@@ -87,6 +87,34 @@
                 {% endblock %}
             {% endembed %}
 
+            {# Quién recibe el listado se gestiona en la FICHA (son ~150 socixs
+               con correo y aquí serían otras tantas casillas), pero se enseña
+               AQUÍ porque es donde se viene a configurar el punto: sin esto, la
+               opción es invisible para quien la busca donde toca. #}
+            {% embed '_components/csa_form_section.html.twig' with {
+                num: '4',
+                title: 'Quién recibe el listado',
+                subtitle: 'A quién le llega por correo el listado de este punto cuando cierra su plazo de cambios.'
+            } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    {% if node.sheetRecipients|length > 0 %}
+                        <p style="margin: 0 0 var(--csa-sp-3);">
+                            {% for recipient in node.sheetRecipients %}
+                                {{ recipient.nameForDelivery }}{% if not loop.last %} · {% endif %}
+                            {% endfor %}
+                        </p>
+                    {% else %}
+                        <p class="nod-head__sub" style="margin: 0 0 var(--csa-sp-3);">
+                            Nadie todavía. Mientras no haya nadie, el listado de este punto se manda
+                            a la dirección general de Ajustes.
+                        </p>
+                    {% endif %}
+
+                    {{ csa.btn('Gestionar destinatarios', { variant: 'ghost', href: path('node_show', { id: node.id }) ~ '#destinatarios', icon: 'fa-envelope' }) }}
+                {% endblock %}
+            {% endembed %}
+
             <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
                 <div></div>
                 <div class="csa-row">
