@@ -13,8 +13,12 @@
  #
  # El orden es el diseño:
  #   1. Cuándo y dónde es mi próxima cesta — es a lo que se entra.
- #   2. Qué llevo en ella.
- #   3. En qué puedo echar una mano.
+ #   2. Sostener la huerta: lo que llevo aportado y lo que hace falta. Va antes
+ #      que mi cesta porque se lee mejor justo detrás de lo que la huerta me da,
+ #      y porque una petición al final de la página no la ve nadie. La condición
+ #      para que pueda estar tan arriba es que el contador NUNCA vaya solo: las
+ #      tareas concretas van debajo, siempre.
+ #   3. Qué llevo en la cesta.
  #   4. Mi familia.
  #   5. Mis datos, plegados: DNI, dirección y fecha de alta son papeleo que se
  #      mira una vez al año, y ocupaban media pantalla con el mismo peso que la
@@ -194,7 +198,42 @@
             } only %}
         {% endif %}
 
-        {# ============ 2. QUÉ LLEVO ============ #}
+        {# ============ 2. SOSTENER LA HUERTA ============
+         # Sube por delante de "mi cesta" a propósito. Estaba después de todo lo
+         # suyo, donde se leía como un anexo de su ficha; aquí, justo detrás de la
+         # cita de la semana, se lee como lo que es: lo que la huerta necesita de
+         # quien acaba de mirar lo que la huerta le da.
+         #
+         # LO QUE LLEVAS HECHO VA ENCIMA DE LO QUE HACE FALTA, nunca al revés. Un
+         # contador solo es un reproche; con las tareas concretas debajo es una
+         # petición que se atiende de un clic. Ese orden es la condición de que
+         # esto pueda estar arriba.
+         #
+         # A quien aún no ha empezado sólo se le pinta si HAY algo que ofrecer:
+         # "todavía no has echado una mano" sin una sola tarea al lado es
+         # exactamente el reproche sin salida que se quiere evitar. Y a quién se
+         # le enseña el cero, y a quién no, lo decide VolunteerContribution. #}
+        {% if is_granted('FEATURE_VOLUNTEERING') and (
+            my_contribution or volunteering_offers|default([]) is not empty
+        ) %}
+            <section class="pnl-block">
+                <h2 class="pnl-block__title">Sostener la huerta</h2>
+
+                {% if my_contribution and (my_contribution.hasStarted or volunteering_offers|default([]) is not empty) %}
+                    {% include '_components/volunteering_gauge.html.twig' with {
+                        contribution: my_contribution
+                    } only %}
+                {% endif %}
+
+                {% include '_components/volunteering_teaser.html.twig' with {
+                    offers: volunteering_offers|default([]),
+                    total: volunteering_total|default(0),
+                    my_node_id: group and group.node ? group.node.id : null
+                } only %}
+            </section>
+        {% endif %}
+
+        {# ============ 3. QUÉ LLEVO ============ #}
         {% if active_share %}
             {# En una familia la cesta cuelga del principal: si no es la suya
              # propia, se dice de quién es en vez de negársela. #}
@@ -281,32 +320,6 @@
                     <p class="prt-family__intro">No tienes una cesta activa registrada. Si crees que es un error, escribe a <a href="mailto:info@csavegadejarama.org">info@csavegadejarama.org</a>.</p>
                 </div>
             </section>
-        {% endif %}
-
-        {# ============ 3. ECHAR UNA MANO ============
-         # Después de lo suyo y no en medio: antes partía la pantalla entre su
-         # punto de recogida y sus datos, y se leía como parte de su ficha. Sigue
-         # arriba —hay que estar en el camino, no al lado— pero como lo que es,
-         # una petición de la asociación. #}
-        {% if is_granted('FEATURE_VOLUNTEERING') %}
-            {# Lo que llevas hecho, encima de lo que hace falta. Nunca al revés:
-             # el contador arriba y solo es un reproche, con las tareas debajo es
-             # una petición que se puede atender de un clic.
-             #
-             # A quien aún no ha empezado sólo se le pinta si HAY algo que ofrecer:
-             # "todavía no has echado una mano" sin una sola tarea al lado es
-             # exactamente el reproche sin salida que se quiere evitar. #}
-            {% if my_contribution and (my_contribution.hasStarted or volunteering_offers|default([]) is not empty) %}
-                {% include '_components/volunteering_gauge.html.twig' with {
-                    contribution: my_contribution
-                } only %}
-            {% endif %}
-
-            {% include '_components/volunteering_teaser.html.twig' with {
-                offers: volunteering_offers|default([]),
-                total: volunteering_total|default(0),
-                my_node_id: group and group.node ? group.node.id : null
-            } only %}
         {% endif %}
 
         {# ============ 4. MI FAMILIA ============

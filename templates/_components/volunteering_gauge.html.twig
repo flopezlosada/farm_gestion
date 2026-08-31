@@ -39,10 +39,22 @@
         {% set pct_mediana = escala > 0 ? (contribution.medianMinutes / escala) * 100 : 0 %}
 
         <div class="vol-gauge__head">
-            <span class="vol-gauge__label">Tu aportación este año</span>
-            {# A cero se dice "0 h" y no "0 min", que es lo que sale del macro y se
-             # lee como una precisión de cronómetro sobre algo que no ha pasado. #}
-            <span class="vol-gauge__value">{{ contribution.hasStarted ? vol.duration(contribution.minutes) : '0 h' }}</span>
+            <div>
+                <span class="vol-gauge__label">Tu aportación este año</span>
+                {# A cero se dice "0 h" y no "0 min", que es lo que sale del macro y se
+                 # lee como una precisión de cronómetro sobre algo que no ha pasado. #}
+                <span class="vol-gauge__value">{{ contribution.hasStarted ? vol.duration(contribution.minutes) : '0 h' }}</span>
+            </div>
+            {# La referencia del colectivo, al lado de la cifra propia y no sólo
+             # como una marca en la barra: es lo que convierte "6 h" en un dato
+             # con escala. Sólo a quien la puede ver —showMedian()—, que es quien
+             # va por debajo; a quien va sobrado se le callaría igual aquí. #}
+            {% if contribution.showMedian %}
+                <div class="vol-gauge__ref">
+                    <span class="vol-gauge__ref-label">colectivo</span>
+                    <span class="vol-gauge__ref-value">{{ vol.duration(contribution.medianMinutes) }}</span>
+                </div>
+            {% endif %}
         </div>
 
         <div class="vol-gauge__track{% if contribution.showMedian %} vol-gauge__track--marked{% endif %}">

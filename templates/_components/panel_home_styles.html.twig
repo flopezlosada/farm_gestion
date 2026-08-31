@@ -136,4 +136,32 @@
     {# "Quién te la prepara" NO se estila aquí: ya existe .vol-prep en
      # volunteering_styles, resuelve las caras y el texto, y encima cubre el caso
      # que el diseño no contempla —que no se haya apuntado nadie todavía—. #}
+
+    /* ---------- encabezado de bloque ----------
+     * Agrupa varias tarjetas bajo un mismo asunto. Sin él, la aportación y las
+     * tareas se leían como dos cosas sueltas puestas una detrás de otra; con él
+     * son las dos caras de lo mismo, que es lo que justifica que estén arriba.
+     * La barrita de color es el único adorno: no lleva icono ni fondo, para que
+     * no compita con la tarjeta verde de la cita. */
+    .pnl-block { margin-bottom: var(--csa-sp-6); }
+    .csa-app .pnl-block__title {
+        display: flex; align-items: center; gap: var(--csa-sp-3);
+        font-family: var(--csa-serif); font-weight: 500; font-size: var(--csa-fs-lg);
+        letter-spacing: -0.015em; color: var(--csa-ink);
+        margin: 0 0 var(--csa-sp-3);
+    }
+    .csa-app .pnl-block__title::before {
+        content: ''; flex-shrink: 0;
+        width: 3px; height: 16px; border-radius: 2px;
+        background: var(--csa-green);
+    }
+    /* La rúbrica hasta el margen: cierra el bloque por arriba y hace que las
+     * tarjetas de dentro se lean como su contenido, no como vecinas sueltas. */
+    .csa-app .pnl-block__title::after {
+        content: ''; flex: 1; height: 1px; background: var(--csa-rule);
+    }
+
+    @media (min-width: 640px) {
+        .csa-app .pnl-block__title { font-size: var(--csa-fs-xl); }
+    }
 </style>
