@@ -44,13 +44,23 @@
                 {% import '_macros/volunteering.html.twig' as vol %}
                     <ul class="vol-list">
                         {% for signup in pending_confirmation %}
+                            {# A quien COORDINÓ se le pregunta otra cosa y de otra manera.
+                             # Antes le salía "¿pudiste ir?", que no es lo que hizo: no fue a
+                             # trabajar, sacó la tarea adelante. Y una tarea vale lo que la
+                             # asociación decidió, igual para todo el mundo, pero coordinarla
+                             # —buscar gente, cuadrarla, avisar, estar pendiente toda la
+                             # semana— sólo lo sabe quien lo hizo, así que es el único que
+                             # dice cuántas horas. #}
+                            {% set coordina = signup.coordination %}
                             <li class="vol-item">
                                 <div class="vol-item__main">
                                     <h4 class="vol-item__title">{{ signup.offer.title }}</h4>
                                     <div class="vol-item__meta">
                                         <span><i class="fa fa-calendar" aria-hidden="true"></i>
                                             {{ signup.offer.startsAt|format_datetime('full', 'short', locale='es') }}</span>
-                                        {% if signup.offer.creditedMinutes %}
+                                        {% if coordina %}
+                                            <span><i class="fa fa-star-o" aria-hidden="true"></i> La coordinabas tú</span>
+                                        {% elseif signup.offer.creditedMinutes %}
                                             <span><i class="fa fa-clock-o" aria-hidden="true"></i>
                                                 Cuenta {{ vol.duration(signup.offer.creditedMinutes) }}</span>
                                         {% endif %}
@@ -59,8 +69,20 @@
                                 <div class="vol-item__action">
                                     <form method="post" action="{{ path('panel_volunteering_confirm', {id: signup.offer.id}) }}">
                                         <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_volunteering') }}">
-                                        <button type="submit" name="attended" value="1" class="csa-btn csa-btn--primary csa-btn--sm">Sí, la hice</button>
-                                        <button type="submit" name="attended" value="0" class="csa-btn csa-btn--secondary csa-btn--sm">No pude</button>
+                                        {% if coordina %}
+                                            <label class="vol-item__companions">
+                                                Horas
+                                                <input type="number" name="hours" min="0.25" max="24" step="any"
+                                                       class="csa-input csa-input--compact"
+                                                       placeholder="{{ signup.offer.creditedMinutes ? (signup.offer.creditedMinutes / 60)|round(2) : '' }}"
+                                                       aria-label="Horas que te llevó coordinarla">
+                                            </label>
+                                            <button type="submit" name="attended" value="1" class="csa-btn csa-btn--primary csa-btn--sm">Sí, la coordiné</button>
+                                            <button type="submit" name="attended" value="0" class="csa-btn csa-btn--secondary csa-btn--sm">Al final no</button>
+                                        {% else %}
+                                            <button type="submit" name="attended" value="1" class="csa-btn csa-btn--primary csa-btn--sm">Sí, la hice</button>
+                                            <button type="submit" name="attended" value="0" class="csa-btn csa-btn--secondary csa-btn--sm">No pude</button>
+                                        {% endif %}
                                     </form>
                                 </div>
                             </li>

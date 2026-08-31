@@ -1,7 +1,7 @@
 Hola{% if partner.name %} {{ partner.name }}{% endif %},
 
 {% if picks %}
-Esta semana SÍ recoges cesta: el {{ pickup_date|format_date('full', locale='es') }}{% if node_name %} en {{ node_name }}{% endif %}.
+Esta semana SÍ recoges cesta el {{ pickup_date|format_datetime(pattern="EEEE d 'de' MMMM", locale='es') }}{% if node_name %}, en {{ node_name }}{% endif %}.
 {% if was_shifted %}
 
 OJO, NO ES EL DÍA HABITUAL. Este reparto se ha movido de día, así que apunta la

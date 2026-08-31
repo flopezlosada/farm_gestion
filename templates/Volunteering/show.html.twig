@@ -288,9 +288,13 @@
                                 {# Sus horas se dicen AQUÍ porque no está en la lista de quién
                                  # viene: coordinar no es asistir, y lo normal es que no vaya. #}
                                 {% if coord_signup and coord_signup.attended %}
-                                    <span class="vol-owner__hours">Se le han computado {{ csa.qty((coord_signup.creditedMinutes ?: 0) / 60) }} h por coordinarla</span>
-                                {% elseif offer.creditedMinutes %}
-                                    <span class="vol-owner__hours">Al cerrar la tarea se le computarán {{ csa.qty(offer.creditedMinutes / 60) }} h</span>
+                                    <span class="vol-owner__hours">Se apuntó {{ csa.qty((coord_signup.creditedMinutes ?: 0) / 60) }} h por coordinarla</span>
+                                {% elseif coord_signup and coord_signup.attended is same as(false) %}
+                                    <span class="vol-owner__hours">Dijo que al final no la coordinó</span>
+                                {% elseif is_past %}
+                                    <span class="vol-owner__hours">Pendiente de que diga cuántas horas le llevó</span>
+                                {% else %}
+                                    <span class="vol-owner__hours">Dirá cuántas horas le llevó cuando pase la tarea</span>
                                 {% endif %}
                             </div>
                             <div class="vol-owner__contact">
