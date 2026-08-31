@@ -75,30 +75,42 @@ class VolunteerCallNotifierTest extends TestCase
     }
 
     /**
-     * Socixs que todavía no tienen cuenta de acceso tampoco cuentan: un push
-     * necesita una sesión detrás. Se avisa a quien se puede y no se registra
-     * nada si no se puede a nadie.
+     * Quien no tiene cuenta de acceso SÍ recibe el aviso: por correo.
+     *
+     * Antes no, y era correcto mientras esto sólo mandaba push —un push
+     * necesita una sesión detrás—. Desde que el mismo aviso sale también por
+     * correo, dejar fuera a quien no ha entrado nunca a la aplicación sería
+     * excluir justo a la parte del colectivo con menos trato con el software,
+     * que es a la que más cuesta llegar.
      */
-    public function testSocixsSinCuentaNoGeneranAviso(): void
+    public function testQuienNoTieneCuentaRecibeElAvisoPorCorreo(): void
     {
         $entityManager = $this->createMock(EntityManagerInterface::class);
-        $entityManager->expects($this->never())->method('persist');
+        $entityManager->expects($this->once())->method('persist');
 
+        // Nadie con cuenta: no hay a quien mandarle push.
         $users = $this->createMock(UserRepository::class);
         $users->method('findByPartners')->willReturn([]);
 
+        $push = $this->createMock(PushSender::class);
+        $push->expects($this->never())->method('sendToMany');
+
         $notifier = $this->notifier(
-            audience: $this->audienceReturning([new Partner()]),
+            audience: $this->audienceReturning([$this->partner(1)]),
             users: $users,
-            entityManager: $entityManager
+            entityManager: $entityManager,
+            push: $push
         );
 
-        $this->assertNull($notifier->dispatch(
+        $call = $notifier->dispatch(
             $this->offer(),
             VolunteerCall::SCOPE_MATCHING,
             null,
             new \DateTimeImmutable('2099-03-01 10:00')
-        ));
+        );
+
+        $this->assertNotNull($call);
+        $this->assertSame(1, $call->getRecipients());
     }
 
     /**
@@ -145,8 +157,11 @@ class VolunteerCallNotifierTest extends TestCase
         $users = $this->createMock(UserRepository::class);
         $users->method('findByPartners')->willReturn([new User(), new User()]);
 
+        // Con id: la cuenta de destinatarixs une las listas de correo y push
+        // indexando por id, así que dos socixs sin persistir se colapsarían en
+        // uno y el test mediría otra cosa.
         $notifier = $this->notifier(
-            audience: $this->audienceReturning([new Partner(), new Partner()]),
+            audience: $this->audienceReturning([$this->partner(1), $this->partner(2)]),
             users: $users,
             entityManager: $entityManager,
             push: $push
@@ -171,6 +186,19 @@ class VolunteerCallNotifierTest extends TestCase
             ->setStartsAt(new \DateTime('2099-03-15 17:00'))
             ->setStatus(VolunteerOffer::STATUS_PUBLISHED)
             ->setSlots(3);
+    }
+
+    /**
+     * Un socix con id, como los que salen de la base de datos.
+     *
+     * @param int $id el identificador a forzar
+     */
+    private function partner(int $id): Partner
+    {
+        $partner = $this->createMock(Partner::class);
+        $partner->method('getId')->willReturn($id);
+
+        return $partner;
     }
 
     /**
