@@ -44,23 +44,13 @@
                 {% import '_macros/volunteering.html.twig' as vol %}
                     <ul class="vol-list">
                         {% for signup in pending_confirmation %}
-                            {# A quien COORDINÓ se le pregunta otra cosa y de otra manera.
-                             # Antes le salía "¿pudiste ir?", que no es lo que hizo: no fue a
-                             # trabajar, sacó la tarea adelante. Y una tarea vale lo que la
-                             # asociación decidió, igual para todo el mundo, pero coordinarla
-                             # —buscar gente, cuadrarla, avisar, estar pendiente toda la
-                             # semana— sólo lo sabe quien lo hizo, así que es el único que
-                             # dice cuántas horas. #}
-                            {% set coordina = signup.coordination %}
                             <li class="vol-item">
                                 <div class="vol-item__main">
                                     <h4 class="vol-item__title">{{ signup.offer.title }}</h4>
                                     <div class="vol-item__meta">
                                         <span><i class="fa fa-calendar" aria-hidden="true"></i>
                                             {{ signup.offer.startsAt|format_datetime('full', 'short', locale='es') }}</span>
-                                        {% if coordina %}
-                                            <span><i class="fa fa-star-o" aria-hidden="true"></i> La coordinabas tú</span>
-                                        {% elseif signup.offer.creditedMinutes %}
+                                        {% if signup.offer.creditedMinutes %}
                                             <span><i class="fa fa-clock-o" aria-hidden="true"></i>
                                                 Cuenta {{ vol.duration(signup.offer.creditedMinutes) }}</span>
                                         {% endif %}
@@ -69,20 +59,8 @@
                                 <div class="vol-item__action">
                                     <form method="post" action="{{ path('panel_volunteering_confirm', {id: signup.offer.id}) }}">
                                         <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_volunteering') }}">
-                                        {% if coordina %}
-                                            <label class="vol-item__companions">
-                                                Horas
-                                                <input type="number" name="hours" min="0.25" max="24" step="any"
-                                                       class="csa-input csa-input--compact"
-                                                       placeholder="{{ signup.offer.creditedMinutes ? (signup.offer.creditedMinutes / 60)|round(2) : '' }}"
-                                                       aria-label="Horas que te llevó coordinarla">
-                                            </label>
-                                            <button type="submit" name="attended" value="1" class="csa-btn csa-btn--primary csa-btn--sm">Sí, la coordiné</button>
-                                            <button type="submit" name="attended" value="0" class="csa-btn csa-btn--secondary csa-btn--sm">Al final no</button>
-                                        {% else %}
-                                            <button type="submit" name="attended" value="1" class="csa-btn csa-btn--primary csa-btn--sm">Sí, la hice</button>
-                                            <button type="submit" name="attended" value="0" class="csa-btn csa-btn--secondary csa-btn--sm">No pude</button>
-                                        {% endif %}
+                                        <button type="submit" name="attended" value="1" class="csa-btn csa-btn--primary csa-btn--sm">Sí, la hice</button>
+                                        <button type="submit" name="attended" value="0" class="csa-btn csa-btn--secondary csa-btn--sm">No pude</button>
                                     </form>
                                 </div>
                             </li>
@@ -233,6 +211,87 @@
          # por qué canal quiere enterarse; eso último es lo que vive en Avisos.
          # Puestas juntas, las dos cosas se leían como la misma y ninguna se
          # entendía: una habla de huerta y reparto, la otra de correo y móvil. #}
+        {# ---- Horas de coordinar un área ----
+         # Sólo para quien coordina alguna. Coordinar no es una tarea que cerrar:
+         # no ocurre un día concreto, no tiene plazas y nadie se apunta. Es
+         # buscar gente, cuadrarla, avisar y estar pendiente, repartido por la
+         # semana — y hasta ahora no había forma de que esas horas contaran.
+         #
+         # Las apunta quien las hace, como quien va a una tarea dice si fue:
+         # nadie más sabe ese número. #}
+        {% if coordinated is not empty %}
+            {% embed '_components/csa_card.html.twig' with {
+                title: coordinated|length == 1 ? 'Horas de coordinar ' ~ coordinated|first.name : 'Horas de coordinación',
+                icon: 'fa-star-o'
+            } %}
+                {% block body %}
+                    {% import '_macros/volunteering.html.twig' as vol %}
+
+                    <p class="vol-help">
+                        Apunta el tiempo que le dedicas a llevar
+                        {{ coordinated|length == 1 ? 'el área' : 'las áreas' }}: cuadrar turnos,
+                        buscar gente, avisar. No hace falta que sea exacto ni que lo apuntes cada
+                        día — cuenta igual que las horas de las tareas.
+                    </p>
+
+                    <form method="post" action="{{ path('panel_volunteering_log_coordination') }}"
+                          class="vol-repeat" data-csa-validate>
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_volunteering') }}">
+
+                        {# Con una sola área no hay nada que elegir: se manda oculta. #}
+                        {% if coordinated|length == 1 %}
+                            <input type="hidden" name="category" value="{{ coordinated|first.id }}">
+                        {% else %}
+                            <label>
+                                Área
+                                <select name="category" class="csa-select" required>
+                                    {% for category in coordinated %}
+                                        <option value="{{ category.id }}">{{ category.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </label>
+                        {% endif %}
+
+                        <label>
+                            Horas
+                            <input type="number" name="hours" min="0.25" max="24" step="any" required
+                                   class="csa-input csa-input--compact">
+                        </label>
+
+                        <label>
+                            Cuándo
+                            <input type="date" name="happened_on" class="csa-input"
+                                   value="{{ 'now'|date('Y-m-d') }}" max="{{ 'now'|date('Y-m-d') }}">
+                        </label>
+
+                        <label>
+                            En qué
+                            <input type="text" name="notes" class="csa-input" maxlength="255"
+                                   placeholder="opcional: «cuadrar los turnos de septiembre»">
+                        </label>
+
+                        <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">Apuntar</button>
+                    </form>
+
+                    {% if coordination_log is not empty %}
+                        <hr class="vol-sep">
+                        <p class="vol-help">Lo que llevas apuntado este año:</p>
+                        <ul class="vol-mine">
+                            {% for entry in coordination_log %}
+                                <li>
+                                    {{ vol.duration(entry.minutes) }} · {{ entry.category.name }}
+                                    <span class="vol-mine__when">
+                                        {{ entry.happenedOn|format_date('long', locale='es') }}
+                                        {%- if entry.notes %} · {{ entry.notes }}{% endif -%}
+                                    </span>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                {% endblock %}
+            {% endembed %}
+        {% endif %}
+
         {% embed '_components/csa_card.html.twig' with {
             title: 'Qué tareas te interesan',
             icon: 'fa-hand-paper-o'

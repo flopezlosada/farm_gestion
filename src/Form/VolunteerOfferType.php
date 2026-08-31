@@ -128,9 +128,9 @@ class VolunteerOfferType extends AbstractType
                     ->orderBy('p.name', 'ASC')
                     ->addOrderBy('p.surname', 'ASC'),
                 'required' => false,
-                'placeholder' => '— Nadie en concreto —',
+                'placeholder' => '— Quien coordine el área —',
                 'attr' => ['data-placeholder' => 'Escribe un nombre…'],
-                'help' => 'Quien monta esta tarea: busca gente, la cuadra y está pendiente. Se le computan las horas aunque no venga a trabajar, y NO ocupa plaza. No es lo mismo que quien coordina el área.',
+                'help' => 'Déjalo vacío y se pone solo, si el área tiene una única persona coordinándola. Sólo hay que elegir cuando hay varias. Se guarda EN la tarea a propósito: si mañana cambia quien coordina el área, las tareas de antes tienen que seguir diciendo quién las llevó.',
             ])
             // Gente que viene sin ser socix y sin acompañar a nadie. Va en la
             // tarea y no en una inscripción porque no tiene de quién colgar:
