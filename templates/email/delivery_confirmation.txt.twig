@@ -1,0 +1,19 @@
+Hola{% if partner.name %} {{ partner.name }}{% endif %},
+
+{% if picks %}
+Esta semana SÍ recoges cesta: el {{ pickup_date|format_date('full', locale='es') }}{% if node_name %} en {{ node_name }}{% endif %}.
+{% if was_shifted %}
+
+OJO, NO ES EL DÍA HABITUAL. Este reparto se ha movido de día, así que apunta la
+fecha de arriba.
+{% endif %}
+{% else %}
+Esta semana NO recoges cesta. El cambio que pediste quedó registrado, así que no
+tienes que hacer nada más.
+{% endif %}
+
+El plazo para pedir cambios en este reparto ya se ha cerrado. Si esto no es lo que
+esperabas, escribe a administración: todavía se puede arreglar a mano.
+
+--
+Este correo lo manda sola la web de la CSA Vega de Jarama.
