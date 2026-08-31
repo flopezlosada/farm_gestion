@@ -3,6 +3,9 @@
 namespace App\Service\Delivery;
 
 use App\Entity\Basket;
+use App\Entity\Notification;
+use App\Repository\UserRepository;
+use App\Service\Notification\NotificationInbox;
 use App\Entity\Partner;
 use Psr\Log\LoggerInterface;
 use Symfony\Bridge\Twig\Mime\TemplatedEmail;
@@ -24,12 +27,20 @@ use Symfony\Component\Mailer\MailerInterface;
  * cron) porque no es un envío recurrente. El interruptor general
  * {@see \App\Mailer\KillSwitchMailer} (email.enabled) lo sigue gobernando: con
  * él apagado no sale nada. Mismo patrón que {@see \App\Security\MagicLinkMailer}.
+ *
+ * Y DEJA COPIA EN LA BANDEJA, que es lo que hace verdad la frase de arriba sobre
+ * que "sin este aviso el socio no se enteraría". Salía SÓLO por correo, y en el
+ * padrón real la mayoría de las fichas no lo tienen informado: a esa gente se le
+ * anulaba un cambio que había pedido y no se enteraba por ningún sitio. La copia
+ * se escribe antes de mandar nada.
  */
 class ClosureShiftNotifier
 {
     public function __construct(
         private readonly MailerInterface $mailer,
         private readonly LoggerInterface $logger,
+        private readonly UserRepository $users,
+        private readonly NotificationInbox $inbox,
     ) {
     }
 
@@ -45,6 +56,14 @@ class ClosureShiftNotifier
      */
     public function notifyCancelled(array $partners, Basket $closedWeek): int
     {
+        // LA COPIA EN LA BANDEJA VA PRIMERO Y SIN MIRAR EL EMAIL. Este aviso salía
+        // sólo por correo, y en el padrón real la mayoría de las fichas no tienen
+        // correo informado: a esa gente se le anulaba un cambio que había pedido y
+        // no se enteraba por ningún sitio. Quien no tenga cuenta de acceso sigue
+        // sin recibir nada —no hay bandeja donde mirar—, pero ya no se pierde a
+        // quien la tiene y no tiene correo.
+        $this->recordInbox($partners, $closedWeek);
+
         $sent = 0;
         foreach ($partners as $partner) {
             $email = $partner->getemail();
@@ -77,5 +96,32 @@ class ClosureShiftNotifier
         }
 
         return $sent;
+    }
+
+    /**
+     * Deja en la bandeja de cada socix la constancia de que su cambio se anuló.
+     *
+     * En una consulta para toda la lista y no una por socix: un cierre de semana
+     * puede tocar a bastante gente de golpe.
+     *
+     * @param Partner[] $partners   lxs socixs a avisar
+     * @param Basket    $closedWeek la semana que se cerró
+     */
+    private function recordInbox(array $partners, Basket $closedWeek): void
+    {
+        $recipients = $this->users->findByPartners(array_values($partners));
+        if ([] === $recipients) {
+            return;
+        }
+
+        $this->inbox->deliver(
+            $recipients,
+            Notification::KIND_SHIFT_CANCELLED,
+            'Tu cambio de reparto se ha anulado',
+            sprintf(
+                'Se ha cerrado el reparto del %s y tu cambio no se ha podido mantener. Vuelves a tu semana de siempre.',
+                $closedWeek->getDate()?->format('j/n') ?? 'esa semana',
+            ),
+        );
     }
 }

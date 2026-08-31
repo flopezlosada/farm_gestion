@@ -47,6 +47,20 @@ class Notification
     /** Te toca la tarea de voluntariado a la que te apuntaste. */
     public const KIND_VOLUNTEERING_REMINDER = 'volunteering.reminder';
 
+    /**
+     * La tarea a la que te apuntaste se ha anulado, movido o cambiado de sitio.
+     *
+     * El aviso que menos se puede perder de todo el módulo: sin él, alguien se
+     * planta allí para nada, y quien sí colabora no vuelve.
+     */
+    public const KIND_VOLUNTEERING_CHANGE = 'volunteering.change';
+
+    /** Te quedas sin los huevos de este reparto, o cambian de semana. */
+    public const KIND_EGGS_RESCHEDULED = 'pickup.eggs';
+
+    /** Tu cambio puntual de reparto se ha anulado al cerrarse la semana. */
+    public const KIND_SHIFT_CANCELLED = 'pickup.shift_cancelled';
+
     /** A tu ficha le faltan datos que puedes rellenar tú (va al socix). */
     public const KIND_PROFILE_INCOMPLETE = 'profile.incomplete';
 

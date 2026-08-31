@@ -4,7 +4,11 @@ namespace App\Tests\Service\Delivery;
 
 use App\Entity\Basket;
 use App\Entity\Helper;
+use App\Entity\Notification;
 use App\Entity\Partner;
+use App\Entity\User;
+use App\Repository\UserRepository;
+use App\Service\Notification\NotificationInbox;
 use App\Service\Delivery\EggRescheduleNotifier;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
@@ -115,7 +119,15 @@ class EggRescheduleNotifierTest extends TestCase
 
     private function notifier(MailerInterface $mailer): EggRescheduleNotifier
     {
-        return new EggRescheduleNotifier($mailer, $this->createMock(LoggerInterface::class));
+        $repository = $this->createMock(UserRepository::class);
+        $repository->method('findByPartners')->willReturn($this->cuentas);
+
+        return new EggRescheduleNotifier(
+            $mailer,
+            $this->createMock(LoggerInterface::class),
+            $repository,
+            $this->inbox ?? $this->createMock(NotificationInbox::class),
+        );
     }
 
     /**
@@ -140,5 +152,67 @@ class EggRescheduleNotifierTest extends TestCase
         $helper = (new Helper())->setName($name)->setEmail($email);
 
         return ['kind' => 'helper', 'name' => $name, 'partner' => null, 'helper' => $helper];
+    }
+
+    /**
+     * Cuentas de acceso que devuelve el repositorio doblado. Vacío por defecto: los
+     * casos del correo no hablan de la bandeja.
+     *
+     * @var list<User>
+     */
+    private array $cuentas = [];
+
+    /** La bandeja doblada, cuando un caso quiere inspeccionarla. */
+    private ?NotificationInbox $inbox = null;
+
+    /**
+     * LA COPIA SE ESCRIBE AUNQUE EL SOCIX NO TENGA CORREO. Es el agujero que este
+     * aviso tenía: salía sólo por email y la mayoría de las fichas reales no lo
+     * tienen informado, así que a esa gente se le retiraban los huevos y se
+     * plantaba en el punto de recogida esperando su docena.
+     */
+    public function testDejaCopiaEnLaBandejaAunSinEmail(): void
+    {
+        $escritas = [];
+        $this->inbox = $this->createMock(NotificationInbox::class);
+        $this->inbox->method('deliver')->willReturnCallback(
+            static function (array $users, string $kind, string $title, ?string $body) use (&$escritas): int {
+                $escritas[] = ['kind' => $kind, 'title' => $title, 'body' => $body];
+
+                return \count($users);
+            }
+        );
+        $this->cuentas = [new User()];
+
+        $mailer = $this->createMock(MailerInterface::class);
+        $mailer->expects($this->never())->method('send');
+
+        $sent = $this->notifier($mailer)->notify(
+            [$this->partnerRow(null, 'Sin Correo')],
+            (new Basket())->setDate(new \DateTime('2099-07-03')),
+            null,
+        );
+
+        $this->assertSame(0, $sent, 'Sin correo no sale ningún email.');
+        $this->assertCount(1, $escritas, 'Pero la copia sí queda en su bandeja.');
+        $this->assertSame(Notification::KIND_EGGS_RESCHEDULED, $escritas[0]['kind']);
+        $this->assertSame('Esta semana no hay huevos', $escritas[0]['title']);
+    }
+
+    /**
+     * A lxs voluntarixs del albergue no se les deja copia: no son socixs, no tienen
+     * cuenta de acceso ni bandeja. Su vía sigue siendo el correo.
+     */
+    public function testALosVoluntariosDelAlbergueNoSeLesDejaCopia(): void
+    {
+        $this->inbox = $this->createMock(NotificationInbox::class);
+        $this->inbox->expects($this->never())->method('deliver');
+        $this->cuentas = [new User()];
+
+        $this->notifier($this->createMock(MailerInterface::class))->notify(
+            [$this->helperRow('voluntarix@ejemplo.org', 'Alguien de fuera')],
+            (new Basket())->setDate(new \DateTime('2099-07-03')),
+            null,
+        );
     }
 }

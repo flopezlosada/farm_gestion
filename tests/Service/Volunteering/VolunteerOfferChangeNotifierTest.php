@@ -10,6 +10,9 @@ use App\Entity\VolunteerSignup;
 use App\Repository\UserRepository;
 use App\Service\Push\PushSender;
 use App\Service\Volunteering\VolunteerOfferChangeNotifier;
+use App\Entity\Notification;
+use App\Service\Notification\NotificationInbox;
+use App\Service\Notification\NotificationLink;
 use App\Service\Volunteering\VolunteerOfferFormatter;
 use App\Service\Volunteering\VolunteerOfferSnapshot;
 use PHPUnit\Framework\TestCase;
@@ -193,6 +196,64 @@ class VolunteerOfferChangeNotifierTest extends TestCase
         $users = $this->createMock(UserRepository::class);
         $users->method('findByPartners')->willReturn([new User()]);
 
-        return new VolunteerOfferChangeNotifier($users, $push, new VolunteerOfferFormatter());
+        $link = $this->createMock(NotificationLink::class);
+        $link->method('pathForKind')->willReturn('/panel/voluntariado');
+
+        return new VolunteerOfferChangeNotifier(
+            $users,
+            $push,
+            $this->inbox ?? $this->createMock(NotificationInbox::class),
+            $link,
+            new VolunteerOfferFormatter(),
+        );
+    }
+
+    /** La bandeja doblada, cuando un caso quiere inspeccionarla. */
+    private ?NotificationInbox $inbox = null;
+
+    /**
+     * LA COPIA EN LA BANDEJA ES EL ARREGLO DE ESTE SERVICIO. Salía sólo por push,
+     * así que quien no lo tenía activado en ningún navegador —la mayoría— no se
+     * enteraba de que su tarea se había anulado: justo el silencio que el docblock
+     * de la clase llama "peor que no tener módulo".
+     */
+    public function testAnularLaTareaDejaCopiaEnLaBandeja(): void
+    {
+        $offer = $this->offerWithOneSignup();
+        $before = VolunteerOfferSnapshot::of($offer);
+        $offer->setStatus(VolunteerOffer::STATUS_CANCELLED);
+
+        $escritas = [];
+        $this->inbox = $this->createMock(NotificationInbox::class);
+        $this->inbox->method('deliver')->willReturnCallback(
+            static function (array $users, string $kind, string $title, ?string $body) use (&$escritas): int {
+                $escritas[] = ['kind' => $kind, 'title' => $title, 'body' => $body];
+
+                return \count($users);
+            }
+        );
+
+        $this->notifier($this->createMock(PushSender::class))->notifyChanges($offer, $before);
+
+        $this->assertCount(1, $escritas);
+        $this->assertSame(Notification::KIND_VOLUNTEERING_CHANGE, $escritas[0]['kind']);
+        $this->assertSame('Se ha anulado una tarea', $escritas[0]['title']);
+        $this->assertStringContainsString('Ya no hace falta que vayas', (string) $escritas[0]['body']);
+    }
+
+    /**
+     * Un cambio que no merece aviso no deja copia tampoco: la bandeja no puede
+     * llenarse de "se ha guardado la tarea".
+     */
+    public function testUnCambioQueNoAvisaTampocoDejaCopia(): void
+    {
+        $offer = $this->offerWithOneSignup();
+        $before = VolunteerOfferSnapshot::of($offer);
+        $offer->setTitle('Descargar el reparto (corregido)');
+
+        $this->inbox = $this->createMock(NotificationInbox::class);
+        $this->inbox->expects($this->never())->method('deliver');
+
+        $this->assertSame(0, $this->notifier($this->createMock(PushSender::class))->notifyChanges($offer, $before));
     }
 }

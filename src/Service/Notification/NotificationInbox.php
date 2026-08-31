@@ -10,17 +10,23 @@ use Doctrine\ORM\EntityManagerInterface;
  * Deja el aviso en la bandeja de quien lo recibe. La única puerta de escritura de
  * {@see Notification}.
  *
- * NO DECIDE NADA, y menos que nada si avisar. Los cuatro envíos de la asociación
- * —el correo y el push de la cesta, la llamada de voluntariado y el recordatorio
- * de la tarea— ya deciden a quién y qué decirle; aquí sólo se guarda la copia que
- * no se pierde.
+ * NO DECIDE NADA, y menos que nada si avisar. Los envíos de la asociación ya
+ * deciden a quién y qué decirle; aquí sólo se guarda la copia que no se pierde.
+ * Quienes escriben hoy: el aviso de la cesta ({@see \App\Service\Delivery\PickupReminderPusher}),
+ * la llamada de voluntariado ({@see \App\Service\Volunteering\VolunteerCallNotifier}),
+ * el recordatorio de la tarea ({@see \App\Command\SendVolunteerRemindersCommand}),
+ * el cambio o la anulación de una tarea ({@see \App\Service\Volunteering\VolunteerOfferChangeNotifier}),
+ * los huevos retirados o trasladados ({@see \App\Service\Delivery\EggRescheduleNotifier}),
+ * el cambio de reparto anulado por un cierre ({@see \App\Service\Delivery\ClosureShiftNotifier})
+ * y las fichas con datos que faltan ({@see IncompleteProfileNotifier}).
  *
  * NO CONSULTA {@see NotificationPreferences}, y es la regla que hay que respetar
  * al llamarla. La bandeja es el suelo: se escribe aunque el socix haya apagado el
  * correo y el móvil, porque es exactamente lo que hace que apagarlos se pueda
  * permitir. De ahí que en los envíos la llamada vaya SIEMPRE ANTES del filtro de
  * preferencias — después, quien más necesita la copia sería justo el único que no
- * la tendría.
+ * la tendría. Y en los que salen sólo por correo, ANTES de comprobar si hay
+ * dirección: en el padrón real la mayoría de las fichas no la tienen informada.
  *
  * NO ES EL DESPACHADOR DE CANALES, aunque en gestión-centro la clase equivalente
  * sí lo sea. Allí un único sitio persiste el aviso y elige por dónde entregarlo;
