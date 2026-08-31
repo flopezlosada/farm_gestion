@@ -92,16 +92,20 @@
                     <p style="margin-top: var(--csa-sp-4);">
                         <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">Guardar</button>
                         {#
-                         # OJO CON LO QUE SE PROMETE AQUÍ. Antes ponía «sigue
-                         # estando en la web cuando entres», dando por hecha una
-                         # bandeja de avisos que NO existe todavía. Con eso, quien
-                         # apagase los dos canales de su cesta se quedaba sin
-                         # enterarse por ningún sitio creyendo lo contrario.
+                         # LA FRASE HA VUELTO, y ahora es verdad. Durante un tiempo
+                         # dijo «tendrás que entrar tú a mirarlas», porque prometer
+                         # que el aviso «sigue estando en la web» daba por hecha una
+                         # bandeja que no existía: quien apagase los dos canales de
+                         # su cesta se quedaba sin enterarse por ningún sitio
+                         # creyendo lo contrario.
                          #
-                         # El día que haya campanita, esta frase vuelve —y entonces
-                         # será verdad—. Hasta entonces se dice lo que hay.
+                         # Con la campanita, apagar el correo y el móvil sólo quita
+                         # el empujón. Y ése es justo el motivo de que la bandeja NO
+                         # tenga casilla en esta tabla: si se pudiera apagar, esta
+                         # frase volvería a ser mentira y apagar los tres dejaría a
+                         # un socix sin enterarse de su recogida por ningún sitio.
                          #}
-                        {{ csa.hint('Lo que apagues deja de llegarte. Tu cesta y las tareas siguen estando en tu panel, pero tendrás que entrar tú a mirarlas.') }}
+                        {{ csa.hint('Lo que apagues deja de empujarte, pero no se pierde: el aviso te sigue esperando en tu bandeja, en la campanita de arriba. Esa no se apaga.') }}
                     </p>
                 </form>
             {% endblock %}

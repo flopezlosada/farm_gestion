@@ -236,6 +236,14 @@ class AppSettings
     public const CRON_PICKUP_REMINDER = 'cron.pickup_reminder';
     public const CRON_ADMIN_DELIVERY_SUMMARY = 'cron.admin_delivery_summary';
     public const CRON_PURGE_USAGE_HITS = 'cron.purge_usage_hits';
+
+    /**
+     * Aviso semanal de las fichas de socix a las que les faltan datos: a cada
+     * socix lo que puede rellenar elle, y a quien coordina socixs cuántas fichas
+     * están a medias (app:notify-incomplete-profiles). SÓLO por la bandeja de
+     * avisos.
+     */
+    public const CRON_INCOMPLETE_PROFILES = 'cron.incomplete_profiles';
     public const CRON_GENERATE_WEEKLY_DELIVERY = 'cron.generate_weekly_delivery';
     public const CRON_ALBERGUE_REMINDER = 'cron.albergue_reminder';
 
@@ -297,11 +305,16 @@ class AppSettings
      *   confirmación. Significaba "envía correo" cuando el correo era el único
      *   canal; desde que hay avisos push la confirmación la pide el efecto, no
      *   el medio. Para saber POR DÓNDE entrega, está `channels`.
-     * - `channels`: por qué canales entrega ('email', 'push'). Vacío en las
-     *   tareas que no avisan a nadie. Existe porque `confirm` dejó de servir
+     * - `channels`: por qué canales entrega ('email', 'push', 'inbox'). Vacío en
+     *   las tareas que no avisan a nadie. Existe porque `confirm` dejó de servir
      *   para distinguirlo: las reglas de los toggles de correo sólo pueden
      *   exigirse a quien manda correo, y un aviso push no tiene interruptor
      *   general de email que declarar ni un correo que reenviar.
+     *   `inbox` es la copia en la bandeja de avisos, y se declara aunque no tenga
+     *   interruptor ninguno —es el suelo, siempre activa— porque es justo lo que
+     *   hay que saber antes de meter algo en `requires`: una tarea que entrega
+     *   también por la bandeja NUNCA puede llevar ahí el ajuste de un canal
+     *   suelto, o apagar el correo dejaría sin escribir la copia.
      * - `dry`: ofrece botón de previsualización (--dry-run).
      * - `schedule`: CADENCIA declarada — cuándo debería correr. `freq` es
      *   daily|weekly|monthly, con `dow` (1 = lunes) en las semanales y `dom` en
@@ -347,7 +360,7 @@ class AppSettings
         ],
         self::CRON_PICKUP_REMINDER => [
             'command' => 'app:send-pickup-reminders',
-            'channels' => ['email', 'push'],
+            'channels' => ['email', 'push', 'inbox'],
             'needs_recipient' => false,
             'confirm' => true,
             'dry' => true,
@@ -438,6 +451,25 @@ class AppSettings
             'requires' => [],
             'depends_on' => [],
         ],
+        // Los lunes temprano y sólo a la bandeja. `confirm` en false aunque
+        // entregue algo a personas: la confirmación de la pantalla existe para lo
+        // que SALE de la asociación —un correo no se puede des-enviar, un push
+        // tampoco—, y una fila en una bandeja se borra. Y `channels` sólo 'inbox':
+        // es lo que impide que alguien meta aquí un `requires` de correo, que
+        // inhibiría la tarea entera sin que --force lo salte.
+        self::CRON_INCOMPLETE_PROFILES => [
+            'command' => 'app:notify-incomplete-profiles',
+            'channels' => ['inbox'],
+            'needs_recipient' => false,
+            'confirm' => false,
+            'dry' => true,
+            'schedule' => ['freq' => 'weekly', 'dow' => 1, 'hour' => 7],
+            'max_delay_hours' => 192,
+            // Sin `requires`: no depende de ningún canal apagable. La bandeja es
+            // el suelo y no tiene interruptor.
+            'requires' => [],
+            'depends_on' => [],
+        ],
         self::CRON_ALBERGUE_REMINDER => [
             'command' => 'app:send-albergue-arrivals-reminder',
             'channels' => ['email'],
@@ -484,7 +516,8 @@ class AppSettings
             // Multicanal desde que el aviso también sale por correo. Por eso NO
             // lleva el interruptor de email en `requires`: allí inhibiría la
             // tarea entera y dejaría sin aviso a quien lo quiere en el móvil.
-            'channels' => ['email', 'push'],
+            // `inbox` es la copia de la bandeja, que sale siempre y sin toggle.
+            'channels' => ['email', 'push', 'inbox'],
             'needs_recipient' => false,
             'confirm' => true,
             'dry' => true,
@@ -497,7 +530,10 @@ class AppSettings
         // mandarlo, porque gasta el canal sin traer a nadie.
         self::CRON_VOLUNTEER_REMINDERS => [
             'command' => 'app:send-volunteer-reminders',
-            'channels' => ['push'],
+            // El push respeta la preferencia del socix; la copia de la bandeja
+            // sale siempre, que es lo que hace que apagar el móvil no signifique
+            // no enterarse de una tarea a la que uno mismo se apuntó.
+            'channels' => ['push', 'inbox'],
             'needs_recipient' => false,
             'confirm' => true,
             'dry' => true,
@@ -656,6 +692,12 @@ class AppSettings
             'group' => 'Tareas programadas',
             'label' => 'Purgar el rastro de uso',
             'help' => 'Borra periódicamente la telemetría de uso anterior al período de retención (app:purge-usage-hits), por minimización de datos. Apagada, el rastro se acumula sin límite.',
+            'default' => true,
+        ],
+        self::CRON_INCOMPLETE_PROFILES => [
+            'group' => 'Tareas programadas',
+            'label' => 'Avisar de las fichas con datos sin rellenar',
+            'help' => 'Cada lunes deja en la bandeja de cada socix los datos que le faltan y puede rellenar elle, y a quien coordina socixs cuántas fichas están a medias. No manda correo ni avisos al móvil: un dato que falta no es urgente. El aviso se renueva sólo si el anterior se leyó y sigue sin arreglarse.',
             'default' => true,
         ],
         self::CRON_ALBERGUE_REMINDER => [

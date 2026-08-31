@@ -3,7 +3,11 @@
 namespace App\Tests\Service\Delivery;
 
 use App\Entity\Basket;
+use App\Entity\Notification;
 use App\Entity\Partner;
+use App\Entity\User;
+use App\Repository\UserRepository;
+use App\Service\Notification\NotificationInbox;
 use App\Service\Delivery\ClosureShiftNotifier;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
@@ -33,7 +37,7 @@ class ClosureShiftNotifierTest extends TestCase
                 $captured[] = $email;
             });
 
-        $sent = (new ClosureShiftNotifier($mailer, $this->createMock(LoggerInterface::class)))
+        $sent = $this->notifier($mailer)
             ->notifyCancelled([$ana, $bea], $week);
 
         $this->assertSame(2, $sent);
@@ -58,7 +62,7 @@ class ClosureShiftNotifierTest extends TestCase
         $mailer = $this->createMock(MailerInterface::class);
         $mailer->expects($this->once())->method('send');
 
-        $sent = (new ClosureShiftNotifier($mailer, $this->createMock(LoggerInterface::class)))
+        $sent = $this->notifier($mailer)
             ->notifyCancelled([$conEmail, $sinEmail, $vacio], $week);
 
         $this->assertSame(1, $sent, 'Solo cuenta el socio con email válido.');
@@ -73,7 +77,7 @@ class ClosureShiftNotifierTest extends TestCase
 
         $this->assertSame(
             0,
-            (new ClosureShiftNotifier($mailer, $this->createMock(LoggerInterface::class)))->notifyCancelled([], $week),
+            $this->notifier($mailer)->notifyCancelled([], $week),
         );
     }
 
@@ -100,7 +104,19 @@ class ClosureShiftNotifierTest extends TestCase
         $logger = $this->createMock(LoggerInterface::class);
         $logger->expects($this->once())->method('warning');
 
-        $sent = (new ClosureShiftNotifier($mailer, $logger))->notifyCancelled([$cae, $ok], $week);
+        // El logger propio de este caso (comprueba que se avisa del fallo de SMTP),
+        // así que no vale el helper: se construye a mano con la firma completa.
+        $repository = $this->createMock(UserRepository::class);
+        $repository->method('findByPartners')->willReturn([]);
+
+        $notifier = new ClosureShiftNotifier(
+            $mailer,
+            $logger,
+            $repository,
+            $this->createMock(NotificationInbox::class),
+        );
+
+        $sent = $notifier->notifyCancelled([$cae, $ok], $week);
 
         $this->assertSame(1, $sent, 'Solo cuenta el envío que tuvo éxito.');
     }
@@ -113,5 +129,73 @@ class ClosureShiftNotifierTest extends TestCase
         }
 
         return $partner;
+    }
+
+    /**
+     * El notificador con la bandeja doblada.
+     *
+     * La bandeja se dobla y no se comprueba aquí: lo que estos casos fijan es el
+     * correo. Que la copia se escriba tiene su propio caso
+     * ({@see testDejaCopiaEnLaBandejaAunSinEmail()}).
+     *
+     * @param MailerInterface        $mailer el mailer doblado
+     * @param NotificationInbox|null $inbox  la bandeja
+     * @param list<User>             $users  las cuentas que devuelve el repositorio
+     */
+    private function notifier(MailerInterface $mailer, ?NotificationInbox $inbox = null, array $users = []): ClosureShiftNotifier
+    {
+        $repository = $this->createMock(UserRepository::class);
+        $repository->method('findByPartners')->willReturn($users);
+
+        return new ClosureShiftNotifier(
+            $mailer,
+            $this->createMock(LoggerInterface::class),
+            $repository,
+            $inbox ?? $this->createMock(NotificationInbox::class),
+        );
+    }
+
+    /**
+     * LA COPIA SE ESCRIBE AUNQUE EL SOCIX NO TENGA CORREO, que es el agujero que
+     * este aviso tenía: salía sólo por email y la mayoría de las fichas reales no
+     * lo tienen informado, así que a esa gente se le anulaba un cambio que había
+     * pedido y no se enteraba por ningún sitio.
+     */
+    public function testDejaCopiaEnLaBandejaAunSinEmail(): void
+    {
+        $sinEmail = (new Partner())->setname('Sin Correo');
+        $week = (new Basket())->setDate(new \DateTime('2099-07-03'));
+
+        $escritas = [];
+        $inbox = $this->createMock(NotificationInbox::class);
+        $inbox->method('deliver')->willReturnCallback(
+            static function (array $users, string $kind, string $title) use (&$escritas): int {
+                $escritas[] = ['kind' => $kind, 'title' => $title, 'users' => \count($users)];
+
+                return \count($users);
+            }
+        );
+
+        $mailer = $this->createMock(MailerInterface::class);
+        $mailer->expects($this->never())->method('send');
+
+        $sent = $this->notifier($mailer, $inbox, [new User()])->notifyCancelled([$sinEmail], $week);
+
+        $this->assertSame(0, $sent, 'Sin correo no sale ningún email.');
+        $this->assertCount(1, $escritas, 'Pero la copia sí queda en su bandeja.');
+        $this->assertSame(Notification::KIND_SHIFT_CANCELLED, $escritas[0]['kind']);
+    }
+
+    /**
+     * Sin cuenta de acceso no hay bandeja donde mirar: no se escribe una fila que
+     * nadie podría abrir.
+     */
+    public function testSinCuentaDeAccesoNoDejaCopia(): void
+    {
+        $inbox = $this->createMock(NotificationInbox::class);
+        $inbox->expects($this->never())->method('deliver');
+
+        $this->notifier($this->createMock(MailerInterface::class), $inbox, [])
+            ->notifyCancelled([(new Partner())->setname('Nadie')], (new Basket())->setDate(new \DateTime('2099-07-03')));
     }
 }

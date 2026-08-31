@@ -503,6 +503,37 @@
   background: var(--csa-green-soft);
 }
 
+/* Variante "sin leer" — bandeja de avisos.
+ * TRES SEÑALES Y NO UNA: la barra a la izquierda, el peso del título y la
+ * etiqueta "Nuevo". El color solo no vale (hay quien no lo distingue) y el peso
+ * solo tampoco se ve de un golpe de vista en una lista larga. La barra es lo que
+ * permite recorrer la columna izquierda y saber cuántos quedan sin abrir. */
+.csa-list__link--unread {
+  box-shadow: inset 3px 0 0 var(--csa-green);
+}
+.csa-list__link--unread .csa-list__primary { font-weight: 600; }
+
+/* Etiqueta "Nuevo" junto al título. Inline y no absoluta: acompaña al texto y se
+ * va a la línea siguiente con él cuando el título es largo en un móvil. */
+.csa-list__new {
+  display: inline-block;
+  margin-left: var(--csa-sp-2);
+  padding: 1px 6px;
+  border-radius: var(--csa-radius-pill, 999px);
+  background: var(--csa-green-soft);
+  color: var(--csa-green);
+  font-size: var(--csa-fs-xs);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+}
+
+/* La hora del aviso — la línea más callada del item, por debajo del cuerpo. */
+.csa-list__meta {
+  color: var(--csa-ink-muted);
+  font-size: var(--csa-fs-xs);
+}
+
 
 /* ============================================================
  * CALLOUT (mensaje inline destacado dentro de cards/secciones)
@@ -1706,6 +1737,40 @@ a.csa-table__primary:hover {
   text-decoration: none;
 }
 .csa-topbar__util i { font-size: 0.95em; }
+
+/* ---------- Campanita — la bandeja de avisos en la topbar ----------
+ * FUERA DEL MENÚ DE LA CUENTA Y A SU IZQUIERDA, no dentro. Un contador metido en
+ * un desplegable no avisa de nada: hay que abrirlo para ver que había algo, y
+ * entonces ya no hace falta el contador. La campana es la única cosa de la barra
+ * que tiene que llamar la atención sola.
+ *
+ * Es un `csa-topbar__util` con el número encima: mismo tamaño, mismo hover y
+ * mismo comportamiento en móvil (la etiqueta desaparece y queda el icono) que
+ * "Ver web", que es su vecino. */
+.csa-topbar__bell { position: relative; }
+.csa-topbar__bell--unread { color: var(--csa-ink); }
+
+/* El número. Pegado al icono y no a la caja entera: con la etiqueta visible en
+ * escritorio, anclarlo a la esquina del enlace lo dejaba flotando lejos de la
+ * campana, sobre el texto. */
+.csa-topbar__bell-count {
+  position: absolute;
+  top: 0;
+  left: 14px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  box-sizing: border-box;
+  border-radius: var(--csa-radius-pill, 999px);
+  background: var(--csa-terracotta);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+  /* Un borde del color del fondo separa el globo del icono cuando se solapan. */
+  border: 1.5px solid var(--csa-surface);
+}
 
 /* ---------- Bloque "yo" — pill cerrado avatar+nombre+salir ----------
  * Lee como una unidad personal. Salir queda DENTRO porque

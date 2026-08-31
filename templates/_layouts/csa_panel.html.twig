@@ -110,7 +110,15 @@
                         <span class="csa-topbar__util-label">Ver web</span>
                     </a>
 
+                    {# La campanita va ANTES del menú del avatar y fuera de él: un
+                     # contador escondido detrás de un desplegable no avisa de nada.
+                     # La entrada "Mis avisos" del menú se queda igualmente, que es
+                     # donde se buscan cuando no hay ninguno nuevo y la campana está
+                     # apagada y muda. Componente compartido con el shell de gestión. #}
+                    {% include '_components/csa_bell.html.twig' %}
+
                     {% if app.user %}
+                        {# ---------- MENÚ DE LA CUENTA ---------- #}
                         {# En el panel del socix mostramos el nombre del Partner
                          # cuando existe. Caer al userIdentifier solo si el User
                          # no tiene Partner vinculado (caso de fallback). #}
@@ -140,8 +148,17 @@
                                 <a href="{{ path('panel_profile') }}" role="menuitem">
                                     <i class="fa fa-user" aria-hidden="true"></i> Mis datos
                                 </a>
+                                {# Dos entradas y no una, y con estos nombres. Antes
+                                 # "Avisos" llevaba a las preferencias, que era el único
+                                 # sitio que había; con la bandeja existiendo, quien pulsa
+                                 # "Avisos" busca los avisos, no la pantalla para
+                                 # configurarlos. Las preferencias se llaman aquí igual
+                                 # que se titula su propia pantalla, "Cómo te avisamos". #}
+                                <a href="{{ path('notification_inbox') }}" role="menuitem">
+                                    <i class="fa fa-bell-o" aria-hidden="true"></i> Mis avisos
+                                </a>
                                 <a href="{{ path('panel_notifications') }}" role="menuitem">
-                                    <i class="fa fa-bell-o" aria-hidden="true"></i> Avisos
+                                    <i class="fa fa-sliders" aria-hidden="true"></i> Cómo te avisamos
                                 </a>
                                 <a href="{{ path('panel_password') }}" role="menuitem">
                                     <i class="fa fa-key" aria-hidden="true"></i> Contraseña

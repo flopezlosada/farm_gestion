@@ -4,6 +4,7 @@ namespace App\Tests\Service\Delivery;
 
 use App\Entity\BasketShare;
 use App\Entity\Node;
+use App\Entity\Notification;
 use App\Entity\Partner;
 use App\Entity\User;
 use App\Entity\WeeklyBasket;
@@ -15,8 +16,10 @@ use App\Service\Cron\EffectLedger;
 use App\Service\Delivery\DeliveryDeadline;
 use App\Service\Delivery\NodeDeliveryDate;
 use App\Service\Delivery\PickupReminderMailer;
-use App\Service\Notification\NotificationPreferences;
 use App\Service\Delivery\PickupReminderPusher;
+use App\Service\Notification\NotificationInbox;
+use App\Service\Notification\NotificationLink;
+use App\Service\Notification\NotificationPreferences;
 use App\Service\Push\PushSender;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Mailer\MailerInterface;
@@ -30,6 +33,12 @@ use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
  * Usa un {@see PickupReminderMailer} real y no un doble: la promesa del módulo
  * es que los dos canales no puedan divergir, y con el contexto mockeado el test
  * pasaría aunque el push inventara su propia fecha.
+ *
+ * Cubre además la COPIA DE LA BANDEJA ({@see PickupReminderPusher::recordInbox()}),
+ * y la asimetría que la define: el push respeta las preferencias del socix y la
+ * copia NO. Es la promesa que la pantalla de avisos hace por escrito —lo apagado
+ * "sigue estando en tu bandeja"—, así que tiene test propio en las dos
+ * direcciones.
  */
 class PickupReminderPusherTest extends TestCase
 {
@@ -150,6 +159,98 @@ class PickupReminderPusherTest extends TestCase
     }
 
     /**
+     * LA COPIA DE LA BANDEJA SE ESCRIBE AUNQUE EL SOCIX HAYA APAGADO EL MÓVIL, y
+     * es la promesa entera de la campanita: la pantalla de preferencias dice que
+     * lo apagado "sigue estando en tu bandeja", y si este test se rompe esa frase
+     * pasa a ser mentira para justo quien no tiene otra vía.
+     */
+    public function testLaCopiaDeLaBandejaSeEscribeIgnorandoLasPreferencias(): void
+    {
+        $friday = new \DateTimeImmutable('2099-07-03');
+        $wb = $this->weeklyBasket($this->node('Torremocha', 5), $friday, 1);
+
+        $escritas = [];
+        $inbox = $this->createMock(NotificationInbox::class);
+        $inbox->method('deliver')->willReturnCallback(
+            static function (array $users, string $kind, string $title, ?string $body) use (&$escritas): int {
+                $escritas[] = ['kind' => $kind, 'title' => $title, 'body' => $body];
+
+                return \count($users);
+            }
+        );
+
+        // Preferencias que NO dejan pasar a nadie por push.
+        $pusher = $this->pusher($this->createMock(PushSender::class), [1], null, $inbox, $this->preferences([]));
+
+        $result = $pusher->recordInbox([$wb]);
+
+        $this->assertSame(['written' => 1, 'already' => 0], $result);
+        $this->assertCount(1, $escritas);
+        $this->assertSame(Notification::KIND_PICKUP_REMINDER, $escritas[0]['kind']);
+        // El mismo texto corto que el push: fecha física y nodo, no un genérico.
+        $this->assertSame('viernes 3 · Torremocha', $escritas[0]['body']);
+    }
+
+    /**
+     * Quien no tiene cuenta de acceso no tiene bandeja donde mirar, así que no se
+     * le escribe nada: sería una fila que nadie puede abrir.
+     */
+    public function testNoDejaCopiaAQuienNoTieneCuentaDeAcceso(): void
+    {
+        $friday = new \DateTimeImmutable('2099-07-03');
+        $sinCuenta = $this->weeklyBasket($this->node('Torremocha', 5), $friday, 7);
+
+        $inbox = $this->createMock(NotificationInbox::class);
+        $inbox->expects($this->never())->method('deliver');
+
+        // El repositorio sólo devuelve cuentas del socix 1; el 7 no tiene.
+        $result = $this->pusher($this->createMock(PushSender::class), [1], null, $inbox)->recordInbox([$sinCuenta]);
+
+        $this->assertSame(['written' => 0, 'already' => 0], $result);
+    }
+
+    /**
+     * Segunda pasada del reloj: la copia ya consta escrita y no se repite. Sin su
+     * propio apunte, el barrido horario dejaría veinticuatro filas idénticas en la
+     * bandeja de cada socix.
+     */
+    public function testNoRepiteLaCopiaYaEscrita(): void
+    {
+        $friday = new \DateTimeImmutable('2099-07-03');
+        $wb = $this->weeklyBasket($this->node('Torremocha', 5), $friday, 1);
+
+        $inbox = $this->createMock(NotificationInbox::class);
+        $inbox->expects($this->never())->method('deliver');
+
+        $result = $this->pusher(
+            $this->createMock(PushSender::class),
+            [1],
+            $this->ledger(alreadyEmitted: true),
+            $inbox,
+        )->recordInbox([$wb]);
+
+        $this->assertSame(['written' => 0, 'already' => 1], $result);
+    }
+
+    /**
+     * El push SÍ respeta la preferencia, al contrario que la bandeja: quien ha
+     * dicho que no quiere el aviso en el móvil no lo recibe en el móvil.
+     */
+    public function testElPushRespetaLaPreferenciaAunqueLaBandejaNo(): void
+    {
+        $friday = new \DateTimeImmutable('2099-07-03');
+        $wb = $this->weeklyBasket($this->node('Torremocha', 5), $friday, 1);
+
+        $push = $this->createMock(PushSender::class);
+        $push->expects($this->never())->method('sendToMany');
+
+        $result = $this->pusher($push, [1], null, null, $this->preferences([]))->send([$wb]);
+
+        $this->assertSame(0, $result['sent']);
+        $this->assertSame(0, $result['devices']);
+    }
+
+    /**
      * El título que sale para una fecha dada, mandando un aviso de mentira.
      *
      * @param \DateTimeImmutable $date la fecha física de recogida
@@ -182,8 +283,13 @@ class PickupReminderPusherTest extends TestCase
      * @param list<int>         $conCuenta     ids de socix que tienen cuenta de acceso
      * @param EffectLedger|null $ledger        el guardián de idempotencia
      */
-    private function pusher(PushSender $push, array $conCuenta, ?EffectLedger $ledger = null): PickupReminderPusher
-    {
+    private function pusher(
+        PushSender $push,
+        array $conCuenta,
+        ?EffectLedger $ledger = null,
+        ?NotificationInbox $inbox = null,
+        ?NotificationPreferences $preferences = null,
+    ): PickupReminderPusher {
         $users = [];
         foreach ($conCuenta as $partnerId) {
             $partner = $this->createMock(Partner::class);
@@ -197,23 +303,34 @@ class PickupReminderPusherTest extends TestCase
         $repository = $this->createMock(UserRepository::class);
         $repository->method('findByPartners')->willReturn($users);
 
-        $urlGenerator = $this->createMock(UrlGeneratorInterface::class);
-        $urlGenerator->method('generate')->willReturn('/panel');
-
-        $preferences = $this->createMock(NotificationPreferences::class);
-        $preferences->method('wants')->willReturn(true);
-        // filter() es el que usan de verdad estos servicios —una consulta para
-        // toda la lista en vez de una por socix—: devuelve a todo el mundo.
-        $preferences->method('filter')->willReturnArgument(0);
+        $link = $this->createMock(NotificationLink::class);
+        $link->method('pathForKind')->willReturn('/panel');
 
         return new PickupReminderPusher(
             $push,
             $repository,
             $this->mailer(),
             $ledger ?? $this->ledger(),
-            $urlGenerator,
-            $preferences,
+            $inbox ?? $this->createMock(NotificationInbox::class),
+            $link,
+            $preferences ?? $this->preferences(),
         );
+    }
+
+    /**
+     * Preferencias que dejan pasar a todo el mundo, que es el estado por defecto
+     * de la asociación: sin fila de opt-out, el aviso se quiere.
+     *
+     * @param list<Partner>|null $wanted quiénes quieren el push; null = todxs
+     */
+    private function preferences(?array $wanted = null): NotificationPreferences
+    {
+        $preferences = $this->createMock(NotificationPreferences::class);
+        $preferences->method('filter')->willReturnCallback(
+            static fn (array $partners): array => $wanted ?? $partners
+        );
+
+        return $preferences;
     }
 
     /**

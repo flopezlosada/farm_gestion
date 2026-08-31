@@ -1,0 +1,187 @@
+<?php
+
+namespace App\Tests\Controller;
+
+use App\DataFixtures\PartnerUserFixtures;
+use App\Entity\Notification;
+use App\Entity\User;
+use Doctrine\ORM\EntityManagerInterface;
+
+/**
+ * La bandeja de avisos y la campanita.
+ *
+ * Lo que se protege aquí, por orden de gravedad si se rompiera:
+ *  1. que un aviso sólo lo pueda abrir su destinatario (dentro va la fecha y el
+ *     punto de recogida de una persona concreta);
+ *  2. que abrir un aviso lo marque leído y lleve a la pantalla que lo contesta,
+ *     que es lo único que baja el contador;
+ *  3. que entrar en la bandeja NO marque nada leído, porque si lo hiciera
+ *     bastaría pasar por delante para perder de vista un aviso sin haberlo leído.
+ *
+ * El EntityManager se pide FRESCO en cada paso ({@see em()}) y no se guarda en una
+ * propiedad: cada petición del cliente reinicia el kernel y deja cerrado el
+ * manager anterior, que es el patrón del resto de los tests funcionales.
+ */
+class NotificationInboxTest extends AbstractPartnerAuthenticatedTest
+{
+    public function testLaBandejaCargaParaUnSocix(): void
+    {
+        $client = $this->createPartnerAuthenticatedClient();
+        $client->request('GET', '/avisos');
+
+        self::assertResponseIsSuccessful();
+        self::assertSelectorTextContains('.csa-page-header h1', 'Mis avisos');
+    }
+
+    public function testUnAvisoSinLeerSaleMarcadoComoNuevo(): void
+    {
+        $client = $this->createPartnerAuthenticatedClient();
+        $id = $this->givenNotificationForSocix(Notification::KIND_PICKUP_REMINDER, 'TEST El miércoles recoges tu cesta', 'miércoles 3 · Cascorro');
+
+        $client->request('GET', '/avisos');
+
+        self::assertResponseIsSuccessful();
+        self::assertSelectorTextContains('.csa-list__primary', 'TEST El miércoles recoges tu cesta');
+        self::assertSelectorTextContains('.csa-list__secondary', 'Cascorro');
+        // La marca de no leído: la clase que pinta la barra y la etiqueta.
+        self::assertSelectorExists('.csa-list__link--unread');
+        self::assertSelectorTextContains('.csa-list__new', 'Nuevo');
+
+        $this->cleanUp($id);
+    }
+
+    public function testEntrarEnLaBandejaNoMarcaNadaLeido(): void
+    {
+        $client = $this->createPartnerAuthenticatedClient();
+        $id = $this->givenNotificationForSocix(Notification::KIND_PICKUP_REMINDER, 'TEST Sigue sin leer');
+
+        $client->request('GET', '/avisos');
+
+        self::assertResponseIsSuccessful();
+        self::assertNull(
+            $this->em()->find(Notification::class, $id)->getReadAt(),
+            'Abrir la bandeja no puede marcar los avisos como leídos.',
+        );
+
+        $this->cleanUp($id);
+    }
+
+    public function testAbrirUnAvisoLoMarcaLeidoYLlevaASuDestino(): void
+    {
+        $client = $this->createPartnerAuthenticatedClient();
+        $id = $this->givenNotificationForSocix(Notification::KIND_PICKUP_REMINDER, 'TEST Mañana recoges tu cesta');
+
+        $client->request('GET', '/avisos/' . $id);
+
+        // El aviso de la cesta lleva al panel, la pantalla del "qué me toca".
+        self::assertResponseRedirects('/panel');
+        self::assertNotNull($this->em()->find(Notification::class, $id)->getReadAt());
+
+        $this->cleanUp($id);
+    }
+
+    public function testUnAvisoDeVoluntariadoLlevaAVoluntariado(): void
+    {
+        $client = $this->createPartnerAuthenticatedClient();
+        $id = $this->givenNotificationForSocix(Notification::KIND_VOLUNTEERING_CALL, 'TEST Falta una persona');
+
+        $client->request('GET', '/avisos/' . $id);
+
+        self::assertResponseRedirects('/panel/voluntariado');
+
+        $this->cleanUp($id);
+    }
+
+    public function testNoSePuedeAbrirElAvisoDeOtraPersona(): void
+    {
+        $client = $this->createPartnerAuthenticatedClient();
+
+        // Un aviso dirigido a OTRA cuenta: el admin de las fixtures sirve.
+        $em = $this->em();
+        $otra = $em->getRepository(User::class)->loadUserByIdentifier('admin');
+        self::assertNotNull($otra, 'Fixtures sin User admin; carga UserFixtures en db_test.');
+
+        $ajena = new Notification($otra, Notification::KIND_PICKUP_REMINDER, 'TEST La cesta de otra persona');
+        $em->persist($ajena);
+        $em->flush();
+        $id = $ajena->getId();
+
+        $client->request('GET', '/avisos/' . $id);
+
+        self::assertResponseStatusCodeSame(403);
+        self::assertNull(
+            $this->em()->find(Notification::class, $id)->getReadAt(),
+            'Un aviso rechazado no puede quedar marcado como leído.',
+        );
+
+        $this->cleanUp($id);
+    }
+
+    public function testLaCampanitaCuentaLoSinLeerEnElPanel(): void
+    {
+        $client = $this->createPartnerAuthenticatedClient();
+        $id = $this->givenNotificationForSocix(Notification::KIND_PICKUP_REMINDER, 'TEST Uno sin leer');
+
+        $client->request('GET', '/panel');
+
+        self::assertResponseIsSuccessful();
+        // Se comprueba que el globo EXISTE y no su número exacto: la bandeja del
+        // socix de las fixtures puede llevar avisos de otro test de la misma
+        // tanda, y afirmar "1" haría que el test fallara por el orden de
+        // ejecución y no por un fallo de la campanita.
+        self::assertSelectorExists('.csa-topbar__bell-count');
+        self::assertSelectorExists('.csa-topbar__bell--unread');
+
+        $this->cleanUp($id);
+    }
+
+    /**
+     * Deja un aviso sin leer en la bandeja del socix de las fixtures.
+     *
+     * @param string      $kind  una de las constantes Notification::KIND_*
+     * @param string      $title el título
+     * @param string|null $body  el cuerpo
+     *
+     * @return int el id del aviso guardado
+     */
+    private function givenNotificationForSocix(string $kind, string $title, ?string $body = null): int
+    {
+        $em = $this->em();
+        $recipient = $em->getRepository(User::class)->loadUserByIdentifier(PartnerUserFixtures::USER_SOCIX_USERNAME);
+        self::assertNotNull($recipient, 'Fixtures sin User socix; carga PartnerUserFixtures en db_test.');
+
+        $notification = new Notification($recipient, $kind, $title, $body);
+        $em->persist($notification);
+        $em->flush();
+
+        return (int) $notification->getId();
+    }
+
+    /**
+     * Borra un aviso que el test haya creado.
+     *
+     * La bandeja es acumulativa: un aviso olvidado aquí se quedaría en la de las
+     * fixtures y saldría en las pantallas de cualquier test posterior.
+     *
+     * @param int $id el id del aviso
+     */
+    private function cleanUp(int $id): void
+    {
+        $em = $this->em();
+        $notification = $em->find(Notification::class, $id);
+        if (null !== $notification) {
+            $em->remove($notification);
+            $em->flush();
+        }
+    }
+
+    /**
+     * Un EntityManager recién sacado del contenedor.
+     *
+     * @return EntityManagerInterface el manager
+     */
+    private function em(): EntityManagerInterface
+    {
+        return static::getContainer()->get('doctrine')->getManager();
+    }
+}

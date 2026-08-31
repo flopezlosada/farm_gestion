@@ -1,0 +1,129 @@
+{# ============================================================
+ # Bandeja de avisos — la campanita.
+ #
+ # EL SHELL SE ELIGE SEGÚN QUIÉN ENTRA. Esta pantalla no es del panel del socix:
+ # es de la cuenta, y hay avisos que van a cuentas de gestión (el de "a esta gente
+ # le faltan datos" va a quien coordina socixs, que puede no ser socix). Con el
+ # shell del panel fijo, esa persona navegaría un menú de secciones a las que no
+ # tiene acceso.
+ #
+ # Los dos layouts declaran los mismos bloques (csa_crumbs, csa_main), que es lo
+ # que permite el extends condicional.
+ # ============================================================ #}
+{% extends is_granted('ROLE_PARTNER') ? '_layouts/csa_panel.html.twig' : '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Avisos{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ is_granted('ROLE_PARTNER') ? path('panel') : path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Avisos</span>
+{% endblock %}
+
+{#- Una fila de la bandeja.
+
+    ENLAZA A `notification_open` Y NO AL DESTINO DEL AVISO. Ese paso intermedio es
+    lo que marca el aviso leído, y además hace que el destino se decida en un solo
+    sitio del código (App\Service\Notification\NotificationLink, el mismo que usa
+    la notificación del móvil). Escribiendo el destino aquí habría dos versiones
+    de esa decisión y un día dirían cosas distintas.
+
+    Abrir el aviso lo marca leído; abrir la bandeja, no. Pasar por delante de una
+    lista no es haber leído nada. -#}
+{% macro notice(n, today) %}
+    {#- Icono y tono por familia de aviso: la cesta en verde y el voluntariado en
+        ocre, los mismos colores con los que esas dos cosas se pintan en el resto
+        del panel. Un aviso de una familia que aún no tenga su línea aquí sale con
+        la campana genérica en vez de romper la pantalla. -#}
+    {% set look = {
+        'pickup':       { icon: 'fa-shopping-basket', tone: 'green' },
+        'volunteering': { icon: 'fa-hand-paper-o',    tone: 'ochre' },
+    }[n.kind|split('.')|first]|default({ icon: 'fa-bell-o', tone: 'sky' }) %}
+
+    <li class="csa-list__item">
+        <a class="csa-list__link{% if not n.read %} csa-list__link--unread{% endif %}"
+           href="{{ path('notification_open', { id: n.id }) }}">
+            <span class="csa-list__icon csa-list__icon--{{ look.tone }}" aria-hidden="true">
+                <i class="fa {{ look.icon }}"></i>
+            </span>
+            <span class="csa-list__body">
+                <span class="csa-list__primary">
+                    {{ n.title }}
+                    {% if not n.read %}<span class="csa-list__new">Nuevo</span>{% endif %}
+                </span>
+                {% if n.body %}<span class="csa-list__secondary">{{ n.body }}</span>{% endif %}
+                {#- La hora sola cuando es de hoy y el día cuando no: quien mira su
+                    bandeja el viernes no necesita que le repitan la fecha de hoy en
+                    cada línea, y sí saber que ese otro aviso es del lunes. -#}
+                <span class="csa-list__secondary csa-list__meta">
+                    {{ n.createdAt|date('Y-m-d') == today ? n.createdAt|date('H:i') : n.createdAt|date('j/n · H:i') }}
+                </span>
+            </span>
+            <i class="fa fa-angle-right csa-list__chevron" aria-hidden="true"></i>
+        </a>
+    </li>
+{% endmacro %}
+
+{% block csa_main %}
+    {{ csa.page_header(
+        is_granted('ROLE_PARTNER') ? 'Mi área · Avisos' : 'Mi cuenta · Avisos',
+        'Mis avisos',
+        'Todo lo que te hemos avisado. Aquí no se pierde nada, aunque tengas el correo y el móvil apagados.'
+    ) }}
+
+    {% set today = 'now'|date('Y-m-d') %}
+    {% set hoy    = notifications|filter(n => n.createdAt|date('Y-m-d') == today) %}
+    {% set antes  = notifications|filter(n => n.createdAt|date('Y-m-d') != today) %}
+
+    <div class="csa-stack-lg csa-form-narrow">
+        {% embed '_components/csa_card.html.twig' with { title: 'Avisos', icon: 'fa-bell-o' } %}
+            {% block body %}
+                {#- El macro se importa POR RUTA y no con `_self`: dentro de un embed,
+                    `_self` es la tarjeta embebida y no este fichero, y los imports del
+                    bloque de fuera no llegan aquí. -#}
+                {% import 'Notification/inbox.html.twig' as ui %}
+
+                {% if notifications is empty %}
+                    {#- Vacío que explica de qué se va a llenar, no un "no hay nada": la
+                        primera vez que alguien entra aquí, saber que esto es donde
+                        aparecerá su recogida es más útil que confirmarle que está vacío. -#}
+                    <p class="csa-muted" style="margin:0;">
+                        Todavía no tienes avisos. Aquí irán apareciendo los de tu cesta
+                        —cuándo y dónde recoges— y los de voluntariado.
+                    </p>
+                {% else %}
+                    {% if hoy is not empty %}
+                        <div class="csa-list-group">
+                            <div class="csa-list-group__label">Hoy</div>
+                            <ul class="csa-list">
+                                {% for n in hoy %}{{ ui.notice(n, today) }}{% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+
+                    {% if antes is not empty %}
+                        <div class="csa-list-group">
+                            <div class="csa-list-group__label">Anteriores</div>
+                            <ul class="csa-list">
+                                {% for n in antes %}{{ ui.notice(n, today) }}{% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+                {% endif %}
+            {% endblock %}
+        {% endembed %}
+
+        {#- El enlace a las preferencias sólo para socixs: es una pantalla de /panel
+            y pide ROLE_PARTNER, así que ofrecérselo a una cuenta de gestión sería
+            mandarla a un "acceso denegado". -#}
+        {% if is_granted('ROLE_PARTNER') %}
+            <p class="csa-muted" style="margin:0;">
+                <i class="fa fa-sliders" aria-hidden="true"></i>
+                <a href="{{ path('panel_notifications') }}">Cómo te avisamos</a>
+                — elige qué quieres recibir por correo y en el móvil. Esta bandeja no se
+                apaga: lo que apagues sigue llegando aquí.
+            </p>
+        {% endif %}
+    </div>
+{% endblock %}

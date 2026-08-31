@@ -1,0 +1,106 @@
+{# ============================================================
+ # Fichas de socix con datos sin rellenar.
+ #
+ # Es la pantalla a la que lleva el aviso que recibe quien coordina socixs, y por
+ # eso la lista sale del MISMO sitio que el número del aviso
+ # (IncompleteProfileNotifier::incompleteProfiles()). Si cada uno contara por su
+ # cuenta, el aviso diría doce y aquí saldrían nueve.
+ #
+ # El controller pasa `rows`, y cada fila:
+ #   - partner       el socix
+ #   - missing       todo lo que le falta
+ #   - self_service  lo que puede rellenar el socix desde «Mis datos»
+ #   - theirs        lo que sólo puede rellenar administración
+ #
+ # La columna que importa es la última: separa "ya se le ha avisado y está en su
+ # mano" de "esto lo tenemos que arreglar nosotrxs". Sin ella, quien coordina no
+ # sabe cuál de las dos cosas le toca hacer con cada fila.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Fichas con datos sin rellenar{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('partner_index') }}">Socixs</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Datos sin rellenar</span>
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header(
+        'Socixs',
+        'Fichas con datos sin rellenar',
+        'Sólo socixs activxs y cabezas de familia. Las fichas de familiares comparten dirección, teléfono y correo con la principal, así que no cuentan.'
+    ) }}
+
+    {% if rows is empty %}
+        {{ csa.callout('Todas las fichas activas están completas. Nada que perseguir.', 'success', 'check-circle') }}
+    {% else %}
+        {# Los dos números que se miran al entrar: cuántas fichas y de cuántas
+         # depende el propio socix. La segunda es la que dice cuánto trabajo es de
+         # administración y cuánto es esperar. #}
+        {% set pendientes_nuestras = rows|filter(r => r.theirs is not empty)|length %}
+        <div class="csa-kpi-row">
+            {{ csa.kpi('Fichas a medias', rows|length, null, null, null, 'ochre', 'fa-address-card-o') }}
+            {{ csa.kpi('Con algo que arreglar aquí', pendientes_nuestras, null, null, null, 'terracotta', 'fa-wrench') }}
+        </div>
+
+        <div class="csa-table-wrap">
+            <table class="csa-table">
+                <thead>
+                    <tr>
+                        <th>Socix</th>
+                        <th class="csa-table__col-tight">Lo rellena elle</th>
+                        <th class="csa-table__col-tight">Lo rellenamos aquí</th>
+                        <th class="csa-table__actions">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                        <tr>
+                            <td>
+                                <a class="csa-table__primary" href="{{ path('partner_show', { id: row.partner.id }) }}">
+                                    {{ row.partner.surname ? row.partner.surname ~ ', ' : '' }}{{ row.partner.name }}
+                                </a>
+                                <div class="csa-table__sub">
+                                    {#- El correo es el dato con el que se le puede escribir para
+                                        pedirle el resto, así que se enseña aquí aunque también
+                                        pueda estar entre lo que falta. Cuando falta, se dice: es
+                                        la señal de que a esta persona hay que llamarla. -#}
+                                    {{ row.partner.email ?: 'sin correo — hay que llamarle' }}
+                                </div>
+                            </td>
+                            <td>
+                                {% if row.self_service is empty %}
+                                    <span class="csa-muted">—</span>
+                                {% else %}
+                                    {% for label in row.self_service %}{{ csa.badge(label, 'sky') }}{% endfor %}
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if row.theirs is empty %}
+                                    <span class="csa-muted">—</span>
+                                {% else %}
+                                    {% for label in row.theirs %}{{ csa.badge(label, 'terracotta') }}{% endfor %}
+                                {% endif %}
+                            </td>
+                            <td class="csa-table__actions">
+                                {{ csa.btn('Editar', { href: path('partner_edit', { id: row.partner.id }), variant: 'secondary', size: 'sm', icon: 'fa-pencil' }) }}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <p class="csa-muted" style="margin-top: var(--csa-sp-4);">
+            A cada socix se le avisa en su bandeja sólo de lo que puede rellenar elle
+            —el teléfono y el correo los cambia administración—, y el aviso se le
+            renueva cada semana si lo leyó y sigue sin arreglarlo.
+        </p>
+    {% endif %}
+{% endblock %}

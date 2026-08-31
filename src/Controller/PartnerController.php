@@ -37,6 +37,8 @@ use Knp\Component\Pager\PaginatorInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Component\HttpFoundation\Request;
+use App\Service\Notification\IncompleteProfileNotifier;
+use App\Service\Partner\PartnerProfileCompleteness;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\Session\Session;
 use Symfony\Component\Routing\Annotation\Route;
@@ -146,6 +148,53 @@ class PartnerController extends AbstractController
             'modalities_all' => $modalitiesAll,
             'nodes_all'      => $nodesAll,
             'wbgs_all'       => $wbgsAll,
+        ]);
+    }
+
+    /**
+     * Las fichas activas a las que les faltan datos, y qué le falta a cada una.
+     *
+     * Es donde cae el aviso que le llega a quien coordina socixs, y por eso la
+     * lista sale del MISMO sitio que el número del aviso
+     * ({@see IncompleteProfileNotifier::incompleteProfiles()}): si cada uno
+     * contara por su cuenta, el aviso diría doce y la pantalla enseñaría nueve, y
+     * quien lo abriera dejaría de fiarse de los dos.
+     *
+     * Sin paginación a propósito, al revés que el listado general: esto es una
+     * lista de tareas pendientes que se quiere ver entera para saber cuánto queda,
+     * y son doscientas filas en el peor caso.
+     *
+     * Va ANTES de las rutas con parámetro para que ninguna la capture.
+     *
+     * @param IncompleteProfileNotifier  $notifier     de dónde sale la lista
+     * @param PartnerProfileCompleteness $completeness para saber qué arregla el socix
+     *
+     * @return Response el listado
+     */
+    #[Route("/incomplete-profiles", name: "partner_incomplete_profiles", methods: ["GET"])]
+    public function incompleteProfiles(
+        IncompleteProfileNotifier $notifier,
+        PartnerProfileCompleteness $completeness,
+    ): Response {
+        $rows = [];
+        foreach ($notifier->incompleteProfiles() as $row) {
+            $partner = $row['partner'];
+            $mine = $completeness->missingSelfService($partner);
+
+            $rows[] = [
+                'partner' => $partner,
+                'missing' => $row['missing'],
+                // Lo que el socix puede rellenar por su cuenta va marcado: es la
+                // diferencia entre "hay que llamarle" y "ya se le ha avisado y
+                // está en su mano". Sin esta columna, quien coordina no sabe cuál
+                // de las dos cosas le toca hacer con cada fila.
+                'self_service' => $mine,
+                'theirs' => array_values(array_diff($row['missing'], $mine)),
+            ];
+        }
+
+        return $this->render('partner/incomplete_profiles.html.twig', [
+            'rows' => $rows,
         ]);
     }
 

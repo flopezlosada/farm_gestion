@@ -2,9 +2,12 @@
 
 namespace App\Service\Volunteering;
 
+use App\Entity\Notification;
 use App\Entity\VolunteerOffer;
 use App\Entity\VolunteerSignup;
 use App\Repository\UserRepository;
+use App\Service\Notification\NotificationInbox;
+use App\Service\Notification\NotificationLink;
 use App\Service\Push\PushSender;
 
 /**
@@ -25,12 +28,20 @@ use App\Service\Push\PushSender;
  * voluntariado" significa "no me ofrezcáis tareas", no "no me contéis que la
  * tarea a la que me apunté se ha anulado". Quien se apuntó pidió esa información
  * al apuntarse.
+ *
+ * Y DEJA COPIA EN LA BANDEJA, que era el agujero grande de este servicio. Salía
+ * SÓLO por push, así que quien no lo tenía activado en ningún navegador —la
+ * mayoría— no se enteraba de que su tarea se había anulado, justo el silencio que
+ * el párrafo de arriba dice que es peor que no tener módulo. La copia se escribe
+ * primero y sin condiciones: es la que no se pierde.
  */
 class VolunteerOfferChangeNotifier
 {
     public function __construct(
         private readonly UserRepository $users,
         private readonly PushSender $push,
+        private readonly NotificationInbox $inbox,
+        private readonly NotificationLink $link,
         private readonly VolunteerOfferFormatter $formatter,
     ) {
     }
@@ -60,7 +71,19 @@ class VolunteerOfferChangeNotifier
             return 0;
         }
 
-        $this->push->sendToMany($recipients, $message[0], $message[1], '/panel/voluntariado');
+        // La copia PRIMERO: es el suelo del aviso, y escribirla antes es lo que
+        // impide que un push que no sale se lleve por delante la única constancia.
+        $this->inbox->deliver($recipients, Notification::KIND_VOLUNTEERING_CHANGE, $message[0], $message[1]);
+
+        $this->push->sendToMany(
+            $recipients,
+            $message[0],
+            $message[1],
+            // El destino sale de NotificationLink, igual que el de la fila de la
+            // bandeja: era la TERCERA copia de '/panel/voluntariado' escrita a
+            // mano en el módulo.
+            $this->link->pathForKind(Notification::KIND_VOLUNTEERING_CHANGE),
+        );
 
         return \count($recipients);
     }

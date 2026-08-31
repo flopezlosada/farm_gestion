@@ -2,10 +2,13 @@
 
 namespace App\Command;
 
+use App\Entity\Notification;
 use App\Entity\VolunteerSignup;
 use App\Repository\UserRepository;
 use App\Repository\VolunteerSignupRepository;
 use App\Service\AppSettings;
+use App\Service\Notification\NotificationInbox;
+use App\Service\Notification\NotificationLink;
 use App\Service\Notification\NotificationPreferences;
 use App\Service\Notification\NotificationTopic;
 use App\Service\Push\PushSender;
@@ -33,6 +36,12 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  * BBDD, pero aquí no hay ninguna fila que escribir, y el barrido corre cada
  * hora sobre la misma ventana. Sin el ledger, a quien se apuntó le llegaría el
  * mismo recordatorio veinticuatro veces.
+ *
+ * EL RECORDATORIO SALE SIEMPRE A LA BANDEJA, y sólo el empujón al móvil respeta
+ * la preferencia. Antes, quien había apagado los avisos de voluntariado en el
+ * móvil no recibía nada de aquí y el comentario lo justificaba diciendo que la
+ * tarea "sigue estando en tu panel": cierto, pero había que acordarse de entrar a
+ * buscarla, que es justo lo que este recordatorio existe para evitar.
  */
 #[AsCommand(
     name: 'app:send-volunteer-reminders',
@@ -47,6 +56,8 @@ class SendVolunteerRemindersCommand extends AbstractCronCommand
         private readonly VolunteerSignupRepository $signups,
         private readonly UserRepository $users,
         private readonly PushSender $push,
+        private readonly NotificationInbox $inbox,
+        private readonly NotificationLink $link,
         private readonly NotificationPreferences $preferences,
         private readonly VolunteerOfferFormatter $formatter,
         private readonly AppSettings $settings,
@@ -115,30 +126,43 @@ class SendVolunteerRemindersCommand extends AbstractCronCommand
             return;
         }
 
-        // Aunque te hayas apuntado, si has apagado los avisos de voluntariado
-        // en el móvil no se te recuerda por ahí: la tarea sigue estando en tu
-        // panel, que es donde no se pierde.
-        if (!$this->preferences->wants($partner, NotificationTopic::VOLUNTEERING, NotificationTopic::CHANNEL_PUSH)) {
-            return;
-        }
-
         $recipients = $this->users->findByPartners([$partner]);
         if ([] === $recipients) {
             return;
         }
 
         $where = $this->formatter->place($offer);
+        $title = 'Te toca voluntariado';
+        $body = trim(sprintf(
+            '%s · %s%s',
+            $offer->getTitle(),
+            $this->formatter->date($offer->getStartsAt()),
+            null !== $where ? ' · '.$where : ''
+        ));
+
+        // LA COPIA DE LA BANDEJA, PRIMERO Y SIN MIRAR PREFERENCIAS. Antes, quien
+        // había apagado el móvil salía de este método sin nada y el comentario lo
+        // justificaba diciendo que "la tarea sigue estando en tu panel": cierto,
+        // pero había que acordarse de entrar a buscarla, que es exactamente lo que
+        // este recordatorio existe para evitar. Ahora queda dicho en su bandeja.
+        $this->inbox->deliver($recipients, Notification::KIND_VOLUNTEERING_REMINDER, $title, $body);
+
+        // El empujón al móvil sí respeta la preferencia: quien se apuntó ya sabe
+        // que va, y si ha dicho que no quiere que se le avise por ahí, no se le
+        // avisa por ahí.
+        if (!$this->preferences->wants($partner, NotificationTopic::VOLUNTEERING, NotificationTopic::CHANNEL_PUSH)) {
+            return;
+        }
 
         $this->push->sendToMany(
             $recipients,
-            'Te toca voluntariado',
-            trim(sprintf(
-                '%s · %s%s',
-                $offer->getTitle(),
-                $this->formatter->date($offer->getStartsAt()),
-                null !== $where ? ' · '.$where : ''
-            )),
-            '/panel/voluntariado'
+            $title,
+            $body,
+            // Mismo sitio que el destino de la fila de la bandeja: la cadena
+            // '/panel/voluntariado' estaba escrita a mano aquí y en el notifier de
+            // las llamadas, que es cómo dos avisos del mismo módulo acaban un día
+            // llevando a pantallas distintas.
+            $this->link->pathForKind(Notification::KIND_VOLUNTEERING_REMINDER),
         );
     }
 
