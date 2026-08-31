@@ -775,23 +775,13 @@ class VolunteeringController extends AbstractController
                 continue;
             }
 
-            // QUIEN COORDINA NO SALE EN LA LISTA de asistencia —lo normal es que
-            // no vaya: monta la tarea, busca gente y está pendiente—, así que su
-            // casilla no existe y no se le puede preguntar si fue. Sus horas se
-            // le imputan al cerrar, que es cuando consta que la tarea ocurrió.
-            // Sin esto, sacarlo de la tabla le habría dejado el contador a cero,
-            // que es justo el problema que el campo de coordinación resolvía.
+            // QUIEN COORDINA LO DECLARA ÉL, en su panel, y diciendo cuántas horas
+            // le llevó. Ni sale en esta lista —lo normal es que no vaya: monta la
+            // tarea, busca gente y está pendiente— ni el cierre se lo imputa por
+            // su cuenta: una tarea vale lo que la asociación decidió, igual para
+            // todo el mundo, pero coordinarla no se parece a la media hora de
+            // bajar cajas y sólo lo sabe quien lo hizo.
             if ($signup->isCoordination()) {
-                if ($closingAll && !$signup->isSettled()) {
-                    $signup->confirmAttendance(VolunteerSignup::SOURCE_MANAGER);
-                    $events->forOffer(
-                        $offer,
-                        VolunteerEvent::TYPE_ATTENDED,
-                        ['minutes' => $signup->getCreditedMinutes(), 'role' => $signup->getRole()],
-                        $signup->getPartner()
-                    );
-                }
-
                 continue;
             }
 

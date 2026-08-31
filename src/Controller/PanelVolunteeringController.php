@@ -10,6 +10,7 @@ use App\Entity\VolunteerSignup;
 use App\Repository\VolunteerCategoryRepository;
 use App\Repository\VolunteerOfferRepository;
 use App\Repository\VolunteerSignupRepository;
+use App\Service\Volunteering\CreditedTime;
 use App\Service\Volunteering\VolunteerContributions;
 use App\Service\Volunteering\VolunteerEventRecorder;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
@@ -260,10 +261,22 @@ class PanelVolunteeringController extends AbstractController
         }
 
         if ($request->request->getBoolean('attended')) {
-            $signup->confirmAttendance(VolunteerSignup::SOURCE_SELF);
+            // QUIEN COORDINA DICE CUÁNTAS HORAS le llevó; quien va a trabajar, no.
+            // La diferencia no es un capricho: una tarea vale lo que la asociación
+            // decidió que vale y eso es igual para todo el mundo, pero coordinarla
+            // —buscar gente, cuadrarla, avisar, estar pendiente toda la semana— no
+            // se parece a la media hora de bajar cajas, y sólo quien lo hizo sabe
+            // cuánto le llevó. En blanco toma las de la tarea, como siempre.
+            $minutes = $signup->isCoordination()
+                ? CreditedTime::minutesFromHours($request->request->get('hours'))
+                : null;
+
+            $signup->confirmAttendance(VolunteerSignup::SOURCE_SELF, $minutes);
             $events->forOffer($offer, VolunteerEvent::TYPE_ATTENDED, ['minutes' => $signup->getCreditedMinutes(), 'role' => $signup->getRole()], $signup->getPartner());
             $em->flush();
-            $this->addFlash('success', 'Anotado. Gracias por echar una mano.');
+            $this->addFlash('success', $signup->isCoordination()
+                ? 'Anotado. Gracias por sacarla adelante.'
+                : 'Anotado. Gracias por echar una mano.');
         } else {
             $signup->markAbsent(VolunteerSignup::SOURCE_SELF);
             $events->forOffer($offer, VolunteerEvent::TYPE_ABSENT, null, $signup->getPartner());
