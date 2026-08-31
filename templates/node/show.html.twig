@@ -324,11 +324,21 @@
         {% endif %}
 
         {% if sheet_recipient_candidates|length > 0 %}
-            <form method="post" action="{{ path('node_attach_sheet_recipient', { id: node.id }) }}" class="nod-attach">
+            {# Mismo selector que el de anotar a alguien en una tarea de
+             # voluntariado: `csa-select` + opción vacía + data-placeholder. Las
+             # tres cosas hacen falta. Sin la opción vacía el control aparece con
+             # el primer nombre de la lista ya puesto, que parece una elección
+             # hecha sin serlo; sin el placeholder no se ve que se puede escribir.
+             # El buscador lo activa csa-dropdown a partir de 12 opciones. #}
+            <form method="post" action="{{ path('node_attach_sheet_recipient', { id: node.id }) }}"
+                  class="nod-attach" data-csa-validate>
                 <input type="hidden" name="_token" value="{{ csrf_token('attach_sheet_recipient' ~ node.id) }}">
                 <div>
                     <label for="attach-recipient-select">Añadir a alguien</label>
-                    <select id="attach-recipient-select" name="partner_id" required>
+                    <select id="attach-recipient-select" name="partner_id" class="csa-select" required
+                            data-placeholder="Escribe un nombre…"
+                            data-invalid-message="Escribe un nombre y elígelo de la lista.">
+                        <option value="">— elige —</option>
                         {% for partner in sheet_recipient_candidates %}
                             <option value="{{ partner.id }}">{{ partner.nameForDelivery }}</option>
                         {% endfor %}
