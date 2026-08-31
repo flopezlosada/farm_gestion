@@ -334,6 +334,18 @@
     .vol-details[open] > summary::before { transform: rotate(45deg); }
     .vol-details > summary:hover { color: var(--csa-ink); }
 
+    /* Un <details> que ADEMÁS es tarjeta de sección de formulario: el resumen
+       hace de cabecera, así que se lee como los títulos numerados de al lado y
+       no como un enlace pequeño perdido dentro de una caja grande. Cerrado no
+       deja hueco debajo; abierto, separa. */
+    details.csa-form-section > summary {
+        margin-bottom: 0;
+        font-size: var(--csa-fs-md);
+        font-weight: 600;
+        color: var(--csa-ink);
+    }
+    details.csa-form-section[open] > summary { margin-bottom: var(--csa-sp-5); }
+
     /* ---- Qué toca hacer con esta tarea ----
        La franja que abre la ficha. Va antes que los datos porque cuándo y dónde
        ya lo sabe quien abre una tarea suya; lo que no sabe es si queda algo
