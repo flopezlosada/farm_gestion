@@ -127,4 +127,30 @@
     @media (max-width: 600px) {
         .csa-account-menu { right: -8px; min-width: 190px; }
     }
+
+    /* ---------- AVISOS EN ESTE APARATO ----------
+       Estado a la izquierda y acción a la derecha, como cualquier fila de
+       ajustes: lo que pasa se lee, lo que se puede hacer se pulsa. Antes el
+       botón era las dos cosas y no se sabía si "Avisos activados" era un estado
+       o algo que iba a pasar al pulsarlo. */
+    .csa-push {
+        display: flex; align-items: flex-start; justify-content: space-between;
+        gap: var(--csa-sp-4); flex-wrap: wrap;
+    }
+    .csa-push__main { flex: 1; min-width: 220px; }
+    .csa-push__state { font-size: var(--csa-fs-base); color: var(--csa-ink); }
+    /* La explicación sólo aparece cuando hay algo que explicar, y en pequeño:
+       es la salida de un atasco, no el contenido de la tarjeta. */
+    .csa-push__note {
+        margin: var(--csa-sp-2) 0 0; max-width: 60ch;
+        font-size: var(--csa-fs-sm); color: var(--csa-ink-muted);
+    }
+    .csa-push__btn { flex-shrink: 0; }
+
+    /* En móvil el botón baja y ocupa el ancho: a esa anchura, un botón pequeño
+       pegado al borde derecho es el objetivo más incómodo de la pantalla. */
+    @media (max-width: 520px) {
+        .csa-push { flex-direction: column; align-items: stretch; }
+        .csa-push__btn { width: 100%; }
+    }
 </style>
