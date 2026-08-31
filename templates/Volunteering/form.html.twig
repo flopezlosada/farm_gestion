@@ -1,6 +1,12 @@
 {# Alta y edición de una tarea de voluntariado. #}
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
+{# `vol` también aquí arriba, y no sólo dentro de cada {% block body %} de los
+ # embeds: la sección plegada de ajustes vive en el nivel raíz de la plantilla,
+ # donde las importaciones de los bloques no llegan. Sin esto, la pantalla
+ # entera revienta con "Variable vol does not exist" — y lint:twig no lo caza,
+ # porque comprueba sintaxis y no si las variables existen. #}
+{% import '_macros/volunteering.html.twig' as vol %}
 
 {% block title %}Voluntariado · {{ is_new ? 'Nueva tarea' : offer.title }}{% endblock %}
 
