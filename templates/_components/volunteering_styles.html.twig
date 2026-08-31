@@ -407,28 +407,63 @@
         .vol-phase__actions .csa-btn { width: 100%; justify-content: center; }
     }
 
-    /* La tira de datos viene a dos columnas de la ficha de socix, donde son
-       muchos más datos. Aquí son tres —cuándo, dónde, cuánto computa— y en 2×2
-       dejaban una fila coja y un palmo de aire. Override local: la ficha de
-       socix no se toca. */
-    .prt .prt-mini { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-    @media (max-width: 900px) {
-        .prt .prt-mini { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    /* ---- Lo que se lee | lo que se consulta ----
+       Dos columnas: la descripción manda la altura, y los tres datos de un
+       vistazo van al lado en vez de en una tira que ocupaba dos filas. */
+    .vol-split {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 21rem;
+        gap: var(--csa-sp-4);
+        align-items: start;
+        margin-bottom: var(--csa-sp-4);
     }
-    @media (max-width: 560px) {
-        .prt .prt-mini { grid-template-columns: 1fr; }
+    .vol-split .prt-card { margin-bottom: 0; }
+
+    .vol-facts {
+        background: var(--csa-surface);
+        border: 1px solid var(--csa-rule-soft);
+        border-radius: var(--csa-radius-lg);
+        overflow: hidden;
+    }
+    .vol-fact {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--csa-sp-3);
+        padding: var(--csa-sp-4);
+        border-bottom: 1px solid var(--csa-rule-soft);
+    }
+    .vol-fact:last-child { border-bottom: 0; }
+    .vol-fact > i { margin-top: 2px; color: var(--csa-ink-muted); }
+    .vol-fact__value {
+        display: block;
+        font-size: var(--csa-fs-base);
+        font-weight: 600;
+        color: var(--csa-ink);
+        /* Las fechas salen del filtro de Twig en minúscula ("lun 31 de agosto"):
+           la mayúscula inicial por CSS, que no fuerza a formatear a mano. */
+        text-transform: capitalize;
+    }
+    .vol-fact__value--muted { font-weight: 500; color: var(--csa-ink-muted); text-transform: none; }
+    .vol-fact__sub {
+        display: block;
+        font-size: var(--csa-fs-sm);
+        color: var(--csa-ink-soft);
+    }
+
+    @media (max-width: 900px) {
+        .vol-split { grid-template-columns: 1fr; }
     }
 
     /* ---- Quien coordina ----
-       Dentro de la banda de ocupación y no en tarjeta propia: es una línea, y
-       abrirle una sección con titular dejaba media pantalla en blanco. */
+       Al pie de lo que hay que hacer, con su teléfono: es a quien se llama si
+       algo pasa ese día. */
     .vol-owner {
         display: flex;
         align-items: center;
         gap: var(--csa-sp-3);
-        flex: 0 0 auto;
-        padding-left: var(--csa-sp-5);
-        border-left: 1px solid var(--csa-rule-soft);
+        margin-top: var(--csa-sp-4);
+        padding-top: var(--csa-sp-4);
+        border-top: 1px solid var(--csa-rule-soft);
     }
     .vol-owner__avatar {
         display: inline-flex;
@@ -511,17 +546,6 @@
     }
     .vol-occupancy__note strong { color: var(--csa-terracotta); font-weight: 600; }
 
-    @media (max-width: 900px) {
-        /* Apilado, el separador vertical de quien coordina no separa nada: pasa
-           a ser una línea por encima. */
-        .vol-owner {
-            flex-basis: 100%;
-            padding: var(--csa-sp-3) 0 0;
-            border-left: 0;
-            border-top: 1px solid var(--csa-rule-soft);
-        }
-        .vol-owner__contact { margin-left: auto; }
-    }
     @media (max-width: 640px) {
         .vol-occupancy { gap: var(--csa-sp-3); }
         .vol-occupancy__note { flex-basis: 100%; }

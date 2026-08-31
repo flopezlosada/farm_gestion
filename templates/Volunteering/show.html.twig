@@ -84,6 +84,17 @@
                         <span class="prt-chip prt-chip--warn">Sólo a quien lo tenga marcado</span>
                     {% endif %}
 
+                    {# El mockup ponía aquí "cada lunes de reparto", pero eso NO existe:
+                     # las copias nacen sueltas a propósito, para que anular una por un
+                     # festivo no toque a las demás, así que una tarea no sabe cada
+                     # cuánto se repite. Lo que sí consta es de cuál salió, y sirve para
+                     # responder "¿de dónde han salido estas doce?". #}
+                    {% if offer.copiedFrom %}
+                        <a class="prt-chip prt-chip--mute" href="{{ path('volunteering_show', { id: offer.copiedFrom.id }) }}"
+                           title="Ver la tarea de la que salió ésta">
+                            <i class="fa fa-repeat"></i> Copia de otra tarea
+                        </a>
+                    {% endif %}
                 </div>
             </div>
 
@@ -245,64 +256,106 @@
          # mirar; antes estaban repartidos entre tres KPIs y una lista de
          # definiciones que además repetía el estado y el tipo de trabajo (que
          # ahora son chips del hero). #}
-        <div class="prt-mini">
-            <div class="prt-mini__cell">
-                <div class="prt-mini__label">Cuándo</div>
-                <div class="prt-mini__value">
-                    {{ offer.startsAt|date('d/m/Y') }}
-                    <small>{{ offer.startsAt|date('H:i') }}{% if offer.endsAt %} — {{ offer.endsAt|date('H:i') }}{% endif %}</small>
+        {# ============ QUÉ HAY QUE HACER · CUÁNDO Y DÓNDE ============
+         # Dos columnas: a la izquierda lo que se lee entero una vez, a la derecha
+         # los tres datos que se consultan de un vistazo. En una tira horizontal
+         # de cuatro celdas ocupaban dos filas y dejaban un palmo de aire; aquí la
+         # altura la marca la descripción, que es la que la necesita. #}
+        <div class="vol-split">
+            <section class="prt-card">
+                {% if offer.description %}
+                    <div class="prt-card__head"><h2 class="prt-card__title"><span class="accent"></span>Qué hay que hacer</h2></div>
+                {% endif %}
+                <div class="prt-card__body">
+                    {% if offer.description %}
+                        {{ offer.description|nl2br }}
+                    {% else %}
+                        <p class="vol-empty">Esta tarea no dice en qué consiste. Sin eso, quien no ha venido nunca no sabe si puede con ella.</p>
+                    {% endif %}
+
+                    {# Quien coordina, al pie: es a quien se llama si algo pasa ese día,
+                     # y tenerlo aquí ahorra buscarlo en la ficha de socixs —que quien
+                     # coordina un área ni siquiera puede abrir. #}
+                    {% if offer.coordinator %}
+                        {% set coord_signup = offer.signups|filter(s => s.coordination)|first %}
+                        <div class="vol-owner">
+                            <span class="vol-owner__avatar" aria-hidden="true">
+                                {{ (offer.coordinator.name|first ~ offer.coordinator.surname|first)|upper }}
+                            </span>
+                            <div class="vol-owner__who">
+                                <span class="vol-owner__role">Quien coordina la tarea</span>
+                                <span class="vol-owner__name">{{ offer.coordinator.name }} {{ offer.coordinator.surname }}</span>
+                                {# Sus horas se dicen AQUÍ porque no está en la lista de quién
+                                 # viene: coordinar no es asistir, y lo normal es que no vaya. #}
+                                {% if coord_signup and coord_signup.attended %}
+                                    <span class="vol-owner__hours">{{ csa.qty((coord_signup.creditedMinutes ?: 0) / 60) }} h computadas</span>
+                                {% elseif offer.creditedMinutes %}
+                                    <span class="vol-owner__hours">{{ csa.qty(offer.creditedMinutes / 60) }} h al cerrar</span>
+                                {% endif %}
+                            </div>
+                            <div class="vol-owner__contact">
+                                {% if offer.coordinator.celular %}
+                                    <a class="vol-actions__btn" href="tel:{{ offer.coordinator.celular|replace({' ': ''}) }}"
+                                       title="Llamar a {{ offer.coordinator.name }}"><i class="fa fa-phone"></i></a>
+                                {% endif %}
+                                {% if offer.coordinator.email %}
+                                    <a class="vol-actions__btn" href="mailto:{{ offer.coordinator.email }}"
+                                       title="Escribir a {{ offer.coordinator.name }}"><i class="fa fa-envelope-o"></i></a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endif %}
                 </div>
-            </div>
+            </section>
 
-            <div class="prt-mini__cell">
-                <div class="prt-mini__label">Dónde</div>
-                {# Texto, no cifra: en Inter. Ver .prt-mini__value--text. #}
-                {% if offer.remote or offer.node or offer.place %}
-                    <div class="prt-mini__value prt-mini__value--text">
-                        {%- if offer.remote %}Desde casa
-                        {%- elseif offer.node %}{{ offer.node }}
-                        {%- else %}{{ offer.place }}{% endif -%}
+            <aside class="vol-facts">
+                <div class="vol-fact">
+                    <i class="fa fa-calendar-o" aria-hidden="true"></i>
+                    <div>
+                        {# format_date y no el filtro `date`: éste usa el locale de PHP y
+                         # devolvía "mon 31 de august de 2026". Es el patrón que ya usa el
+                         # resto del proyecto (Sale/show, Collect/show…). #}
+                        <span class="vol-fact__value">{{ offer.startsAt|format_date('full', locale='es') }}</span>
+                        <span class="vol-fact__sub">
+                            {{ offer.startsAt|date('H:i') }}{% if offer.endsAt %} – {{ offer.endsAt|date('H:i') }}{% endif %}
+                        </span>
                     </div>
-                {% else %}
-                    <div class="prt-mini__value prt-mini__value--muted">Sin indicar</div>
-                {% endif %}
-            </div>
+                </div>
 
-            {# "Quién viene" ya no está aquí: la banda de ocupación lo dice mejor
-             # —con nombres y huecos— y en la tira sólo repetía la cifra. Además
-             # decía "completa" cuando venía MÁS gente que plazas, porque
-             # remainingSlots no baja de cero. #}
-
-            {# Cuánto vale el trabajo es CONFIGURACIÓN de la tarea, y hasta que
-             # se cierra es lo único que hay sobre horas. En cuanto se imputa
-             # algo, lo que importa es cuánto se ha imputado de verdad: eso es un
-             # hecho, y los minutos por persona pasan a ser el detalle. #}
-            <div class="prt-mini__cell">
-                {% if is_closing and credited_total %}
-                    <div class="prt-mini__label">Horas {{ phase == 'closed' ? 'imputadas' : 'ya imputadas' }}</div>
-                    <div class="prt-mini__value">
-                        {{ csa.qty(credited_total / 60) }} h
-                        {% if offer.creditedMinutes %}<small>{{ csa.qty(offer.creditedMinutes / 60) }} h por persona</small>{% endif %}
+                <div class="vol-fact">
+                    <i class="fa fa-map-marker" aria-hidden="true"></i>
+                    <div>
+                        {% if offer.remote %}
+                            <span class="vol-fact__value">Desde casa</span>
+                            <span class="vol-fact__sub">No hace falta ir a ningún sitio</span>
+                        {% elseif offer.node %}
+                            <span class="vol-fact__value">{{ offer.node }}</span>
+                            {% if offer.place %}<span class="vol-fact__sub">{{ offer.place }}</span>{% endif %}
+                        {% elseif offer.place %}
+                            <span class="vol-fact__value">{{ offer.place }}</span>
+                        {% else %}
+                            <span class="vol-fact__value vol-fact__value--muted">Sin indicar dónde</span>
+                        {% endif %}
                     </div>
-                {% elseif offer.creditedMinutes %}
-                    <div class="prt-mini__label">Computa</div>
-                    <div class="prt-mini__value">{{ csa.qty(offer.creditedMinutes / 60) }} h <small>por persona</small></div>
-                {% else %}
-                    <div class="prt-mini__label">Computa</div>
-                    <div class="prt-mini__value prt-mini__value--muted">No computa horas</div>
-                {% endif %}
-            </div>
+                </div>
+
+                <div class="vol-fact">
+                    <i class="fa fa-clock-o" aria-hidden="true"></i>
+                    <div>
+                        {% if is_closing and credited_total %}
+                            <span class="vol-fact__sub">Horas {{ phase == 'closed' ? 'imputadas' : 'ya imputadas' }}</span>
+                            <span class="vol-fact__value">{{ csa.qty(credited_total / 60) }} h</span>
+                        {% elseif offer.creditedMinutes %}
+                            <span class="vol-fact__sub">Computa por persona</span>
+                            <span class="vol-fact__value">{{ csa.qty(offer.creditedMinutes / 60) }} h</span>
+                        {% else %}
+                            <span class="vol-fact__value vol-fact__value--muted">No computa horas</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </aside>
         </div>
 
-        {# La tarjeta sólo si hay algo que contar. Un titular con un icono para una
-         # sola línea debajo es media pantalla de aire por nada; quien coordina se
-         # ha ido a la banda de ocupación, donde cabe sin abrir una sección. #}
-        {% if offer.description %}
-            <section class="prt-card">
-                <div class="prt-card__head"><h2 class="prt-card__title"><span class="accent"></span>Qué hay que hacer</h2></div>
-                <div class="prt-card__body">{{ offer.description|nl2br }}</div>
-            </section>
-        {% endif %}
 
         {# ============ OCUPACIÓN ============
          # Quiénes son las plazas, no cuántas. "4 de 6" hay que leerlo y restar;
