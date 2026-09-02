@@ -71,21 +71,30 @@ class VolunteerCategoryType extends AbstractType
                 // desplegable se lee, y lo que hacía falta era poder buscar en
                 // él, no recortarlo por permisos.
                 //
-                // Lo único que sí se filtra son las cuentas deshabilitadas:
+                // Se filtran dos cosas. Las cuentas deshabilitadas, porque
                 // nombrar coordinadora a una cuenta desactivada la dejaría con
-                // el encargo y sin poder entrar.
+                // el encargo y sin poder entrar. Y las que no tienen socix
+                // detrás (INNER JOIN), que hoy son exactamente cuatro: `admin`,
+                // que es la cuenta de administración y no una persona, y
+                // `loreto`, `sara` y `monica`, cuyo último acceso es de 2016,
+                // 2015 y 2017 — cuentas de la era vieja del sistema. Ofrecer a
+                // una de ellas para coordinar es ofrecer a alguien que ya no
+                // está, y salían encima con el username en minúsculas en medio
+                // de una lista de nombres reales.
+                //
+                // El javadoc de VolunteerCategory::$coordinators defiende que la
+                // relación cuelgue de User porque "no toda persona que coordina
+                // algo es socia". Sigue siendo verdad como diseño, pero hoy no
+                // hay ni un caso: cero cuentas vinculadas a un Worker. El día
+                // que exista, este INNER JOIN es la línea que hay que revisar.
                 'query_builder' => static fn (UserRepository $repository) => $repository
                     ->createQueryBuilder('u')
-                    // Fetch join del socix: getDisplayName() lo pregunta una vez
-                    // por opción, y sin traerlo aquí son 43 consultas.
-                    ->leftJoin('u.partner', 'p')
+                    // Fetch join: getDisplayName() pregunta por el socix una vez
+                    // por opción, y sin traerlo aquí son cuarenta consultas.
+                    ->innerJoin('u.partner', 'p')
                     ->addSelect('p')
                     ->where('u.enabled = true')
-                    // Por el nombre que se PINTA, que en las cuentas sin socix
-                    // es el username. Ordenar por `p.name` a secas mandaba esas
-                    // cuentas al principio de la lista con el nombre en NULL.
-                    ->addSelect('COALESCE(p.name, u.username) AS HIDDEN shown_name')
-                    ->orderBy('shown_name', 'ASC')
+                    ->orderBy('p.name', 'ASC')
                     ->addOrderBy('p.surname', 'ASC'),
                 // Casillas y no un <select multiple>: el nativo obliga a
                 // ctrl+clic para elegir varias, no deja ver de un vistazo cuáles
