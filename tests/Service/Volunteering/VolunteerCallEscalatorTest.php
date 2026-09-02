@@ -6,6 +6,7 @@ use App\Entity\Partner;
 use App\Entity\VolunteerCall;
 use App\Entity\VolunteerCategory;
 use App\Entity\VolunteerOffer;
+use App\Entity\VolunteerShift;
 use App\Entity\VolunteerSignup;
 use App\Repository\VolunteerCallRepository;
 use App\Service\AppSettings;
@@ -25,16 +26,16 @@ use PHPUnit\Framework\TestCase;
 class VolunteerCallEscalatorTest extends TestCase
 {
     /**
-     * Una oferta publicada, futura y con plazas libres de la que aún no se ha
+     * Un turno publicado, futuro y con plazas libres del que aún no se ha
      * avisado a nadie: el primer paso sale ya, sin esperas.
      */
     public function testPrimerAvisoSaleAlSocixQueLoHaPedido(): void
     {
-        $offer = $this->offer(categorised: true);
+        $shift = $this->shift(categorised: true);
 
         $this->assertSame(
             VolunteerCall::SCOPE_MATCHING,
-            $this->escalator([])->nextScope($offer, $this->moment('2099-03-01 10:00'))
+            $this->escalator([])->nextScope($shift, $this->moment('2099-03-01 10:00'))
         );
     }
 
@@ -44,7 +45,7 @@ class VolunteerCallEscalatorTest extends TestCase
      */
     public function testTrasElMargenSeAmpliaAQuienNoHaDichoNada(): void
     {
-        $offer = $this->offer(openToAnyone: true);
+        $shift = $this->shift(openToAnyone: true);
         $escalator = $this->escalator(
             [VolunteerCall::SCOPE_MATCHING],
             $this->call('2099-03-01 10:00')
@@ -52,7 +53,7 @@ class VolunteerCallEscalatorTest extends TestCase
 
         $this->assertSame(
             VolunteerCall::SCOPE_UNSPECIFIED,
-            $escalator->nextScope($offer, $this->moment('2099-03-02 10:00'))
+            $escalator->nextScope($shift, $this->moment('2099-03-02 10:00'))
         );
     }
 
@@ -62,23 +63,23 @@ class VolunteerCallEscalatorTest extends TestCase
      */
     public function testAntesDelMargenNoSeAmplia(): void
     {
-        $offer = $this->offer(openToAnyone: true);
+        $shift = $this->shift(openToAnyone: true);
         $escalator = $this->escalator(
             [VolunteerCall::SCOPE_MATCHING],
             $this->call('2099-03-01 10:00')
         );
 
-        $this->assertNull($escalator->nextScope($offer, $this->moment('2099-03-01 23:59')));
+        $this->assertNull($escalator->nextScope($shift, $this->moment('2099-03-01 23:59')));
     }
 
     /**
-     * Desbrozar no es para cualquiera: una oferta sin `openToAnyone` se queda en
+     * Desbrozar no es para cualquiera: una tarea sin `openToAnyone` se queda en
      * el primer paso para siempre. Ampliarla mandaría gente a algo que no puede
      * hacer.
      */
-    public function testUnaOfertaQueNoEsParaCualquieraNoSeAmpliaNunca(): void
+    public function testUnaTareaQueNoEsParaCualquieraNoSeAmpliaNunca(): void
     {
-        $offer = $this->offer(openToAnyone: false);
+        $shift = $this->shift(openToAnyone: false);
         $escalator = $this->escalator(
             [VolunteerCall::SCOPE_MATCHING],
             $this->call('2099-03-01 10:00')
@@ -87,8 +88,8 @@ class VolunteerCallEscalatorTest extends TestCase
         // Aunque haya pasado una semana entera. Y tiene que devolver null, no
         // el alcance: proponerlo para que el resolver devuelva cero
         // destinatarios registraría una llamada vacía que gasta el UNIQUE
-        // (offer, scope) y mata la escalada en silencio.
-        $this->assertNull($escalator->nextScope($offer, $this->moment('2099-03-08 10:00')));
+        // (shift, scope) y mata la escalada en silencio.
+        $this->assertNull($escalator->nextScope($shift, $this->moment('2099-03-08 10:00')));
     }
 
     /**
@@ -102,11 +103,11 @@ class VolunteerCallEscalatorTest extends TestCase
      */
     public function testUnaTareaSinCategoriasSaltaAlSegundoPaso(): void
     {
-        $offer = $this->offer(openToAnyone: true);
+        $shift = $this->shift(openToAnyone: true);
 
         $this->assertSame(
             VolunteerCall::SCOPE_UNSPECIFIED,
-            $this->escalator([])->nextScope($offer, $this->moment('2099-03-01 10:00'))
+            $this->escalator([])->nextScope($shift, $this->moment('2099-03-01 10:00'))
         );
     }
 
@@ -117,9 +118,9 @@ class VolunteerCallEscalatorTest extends TestCase
      */
     public function testUnaTareaSinCategoriasNiAperturaNoAvisaANadie(): void
     {
-        $offer = $this->offer(openToAnyone: false);
+        $shift = $this->shift(openToAnyone: false);
 
-        $this->assertNull($this->escalator([])->nextScope($offer, $this->moment('2099-03-01 10:00')));
+        $this->assertNull($this->escalator([])->nextScope($shift, $this->moment('2099-03-01 10:00')));
     }
 
     /**
@@ -128,13 +129,13 @@ class VolunteerCallEscalatorTest extends TestCase
      */
     public function testElAutomatismoNoLlegaATodoElMundo(): void
     {
-        $offer = $this->offer(openToAnyone: true);
+        $shift = $this->shift(openToAnyone: true);
         $escalator = $this->escalator(
             [VolunteerCall::SCOPE_MATCHING, VolunteerCall::SCOPE_UNSPECIFIED],
             $this->call('2099-03-01 10:00')
         );
 
-        $this->assertNull($escalator->nextScope($offer, $this->moment('2099-03-10 10:00')));
+        $this->assertNull($escalator->nextScope($shift, $this->moment('2099-03-10 10:00')));
     }
 
     /**
@@ -143,36 +144,36 @@ class VolunteerCallEscalatorTest extends TestCase
      */
     public function testElAvisoGeneralCierraLaEscalada(): void
     {
-        $offer = $this->offer(openToAnyone: true);
+        $shift = $this->shift(openToAnyone: true);
         $escalator = $this->escalator(
             [VolunteerCall::SCOPE_EVERYONE],
             $this->call('2099-03-01 10:00')
         );
 
-        $this->assertNull($escalator->nextScope($offer, $this->moment('2099-03-05 10:00')));
+        $this->assertNull($escalator->nextScope($shift, $this->moment('2099-03-05 10:00')));
     }
 
     /**
-     * Una oferta ya cubierta no pide gente por muchos pasos que le queden. La
+     * Un turno ya cubierto no pide gente por muchos pasos que le queden. La
      * regla vive en la entidad; aquí se comprueba que el escalador la respeta.
      */
-    public function testUnaOfertaLlenaNoPideGente(): void
+    public function testUnTurnoLlenoNoPideGente(): void
     {
-        $offer = $this->offer(slots: 1, categorised: true);
-        $offer->addSignup((new VolunteerSignup())->setPartner(new Partner()));
+        $shift = $this->shift(slots: 1, categorised: true);
+        $shift->addSignup((new VolunteerSignup())->setPartner(new Partner()));
 
-        $this->assertNull($this->escalator([])->nextScope($offer, $this->moment('2099-03-01 10:00')));
+        $this->assertNull($this->escalator([])->nextScope($shift, $this->moment('2099-03-01 10:00')));
     }
 
     /**
-     * Una oferta que ya ha empezado tampoco: avisar de algo que está pasando no
+     * Un turno que ya ha empezado tampoco: avisar de algo que está pasando no
      * trae a nadie y gasta el canal igual.
      */
-    public function testUnaOfertaPasadaNoPideGente(): void
+    public function testUnTurnoPasadoNoPideGente(): void
     {
-        $offer = $this->offer(categorised: true);
+        $shift = $this->shift(categorised: true);
 
-        $this->assertNull($this->escalator([])->nextScope($offer, $this->moment('2099-03-20 10:00')));
+        $this->assertNull($this->escalator([])->nextScope($shift, $this->moment('2099-03-20 10:00')));
     }
 
     /**
@@ -181,14 +182,14 @@ class VolunteerCallEscalatorTest extends TestCase
      */
     public function testUnBorradorNoPideGente(): void
     {
-        $offer = $this->offer(categorised: true);
-        $offer->setStatus(VolunteerOffer::STATUS_DRAFT);
+        $shift = $this->shift(categorised: true);
+        $shift->getOffer()->setStatus(VolunteerOffer::STATUS_DRAFT);
 
-        $this->assertNull($this->escalator([])->nextScope($offer, $this->moment('2099-03-01 10:00')));
+        $this->assertNull($this->escalator([])->nextScope($shift, $this->moment('2099-03-01 10:00')));
     }
 
     /**
-     * Una oferta publicada, futura, con plazas y sin acompañantes.
+     * Un turno publicado, futuro, con plazas y sin acompañantes.
      *
      * SIN categorías por defecto, a propósito: es el caso que encalla si el
      * escalador no lo contempla, así que conviene que sea el que hay que pedir
@@ -198,11 +199,10 @@ class VolunteerCallEscalatorTest extends TestCase
      * @param int|null $slots        plazas; null para sin tope
      * @param bool     $categorised  si lleva alguna categoría marcada
      */
-    private function offer(bool $openToAnyone = true, ?int $slots = null, bool $categorised = false): VolunteerOffer
+    private function shift(bool $openToAnyone = true, ?int $slots = null, bool $categorised = false): VolunteerShift
     {
         $offer = (new VolunteerOffer())
             ->setTitle('Descargar el reparto en La Cabrera')
-            ->setStartsAt(new \DateTime('2099-03-15 17:00'))
             ->setStatus(VolunteerOffer::STATUS_PUBLISHED)
             ->setOpenToAnyone($openToAnyone)
             ->setSlots($slots);
@@ -211,7 +211,10 @@ class VolunteerCallEscalatorTest extends TestCase
             $offer->addCategory((new VolunteerCategory())->setName('Reparto'));
         }
 
-        return $offer;
+        $shift = (new VolunteerShift())->setStartsAt(new \DateTime('2099-03-15 17:00'));
+        $offer->addShift($shift);
+
+        return $shift;
     }
 
     /**

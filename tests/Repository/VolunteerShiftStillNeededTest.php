@@ -4,8 +4,9 @@ namespace App\Tests\Repository;
 
 use App\Entity\Partner;
 use App\Entity\VolunteerOffer;
+use App\Entity\VolunteerShift;
 use App\Entity\VolunteerSignup;
-use App\Repository\VolunteerOfferRepository;
+use App\Repository\VolunteerShiftRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
@@ -21,11 +22,11 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  * que lista tareas.
  *
  * Va contra la BBDD porque la mitad del comportamiento —el orden, el estado
- * publicado, el recorte— es de la consulta. Autocontenido: crea sus propias
- * tareas y comprueba pertenencia, no conteos, para no depender del estado de
+ * publicado, el recorte— es de la consulta. Autocontenido: crea sus propios
+ * turnos y comprueba pertenencia, no conteos, para no depender del estado de
  * db_test.
  */
-class VolunteerOfferStillNeededTest extends KernelTestCase
+class VolunteerShiftStillNeededTest extends KernelTestCase
 {
     /**
      * Una tarea con todas las plazas cubiertas no se anuncia.
@@ -128,45 +129,51 @@ class VolunteerOfferStillNeededTest extends KernelTestCase
         $this->assertSame(\array_slice($todas, 0, 2), $dos, 'Recortar no puede cambiar el orden.');
     }
 
-    private function repository(EntityManagerInterface $em): VolunteerOfferRepository
+    private function repository(EntityManagerInterface $em): VolunteerShiftRepository
     {
-        /** @var VolunteerOfferRepository $repository */
-        $repository = $em->getRepository(VolunteerOffer::class);
+        /** @var VolunteerShiftRepository $repository */
+        $repository = $em->getRepository(VolunteerShift::class);
 
         return $repository;
     }
 
     /**
-     * Una tarea publicada y futura, que es la única que estas consultas miran.
-     * El estado por defecto de VolunteerOffer es borrador, así que hay que
+     * Un turno publicado y futuro, que es el único que estas consultas miran. El
+     * estado por defecto de VolunteerOffer es borrador, así que hay que
      * publicarla a mano.
+     *
+     * Devuelve el TURNO y no la tarea: es lo que devuelven las consultas desde
+     * que el momento vive en su propia fila.
      */
-    private function makeOffer(EntityManagerInterface $em, string $title, ?int $slots, int $inDays = 7): VolunteerOffer
+    private function makeOffer(EntityManagerInterface $em, string $title, ?int $slots, int $inDays = 7): VolunteerShift
     {
         $offer = (new VolunteerOffer())
             ->setTitle($title)
-            ->setStartsAt(new \DateTime(sprintf('+%d days', $inDays)))
             ->setSlots($slots)
             ->setStatus(VolunteerOffer::STATUS_PUBLISHED);
 
-        $em->persist($offer);
+        $shift = (new VolunteerShift())->setStartsAt(new \DateTime(sprintf('+%d days', $inDays)));
+        $offer->addShift($shift);
 
-        return $offer;
+        $em->persist($offer);
+        $em->persist($shift);
+
+        return $shift;
     }
 
     private function makeSignup(
         EntityManagerInterface $em,
-        VolunteerOffer $offer,
+        VolunteerShift $shift,
         Partner $partner,
         int $companions,
     ): VolunteerSignup {
         $signup = (new VolunteerSignup())
-            ->setOffer($offer)
+            ->setShift($shift)
             ->setPartner($partner)
             ->setCompanions($companions);
 
         $em->persist($signup);
-        $offer->getSignups()->add($signup);
+        $shift->getSignups()->add($signup);
 
         return $signup;
     }

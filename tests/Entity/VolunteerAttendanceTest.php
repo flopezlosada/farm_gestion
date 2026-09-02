@@ -4,6 +4,7 @@ namespace App\Tests\Entity;
 
 use App\Entity\Partner;
 use App\Entity\VolunteerOffer;
+use App\Entity\VolunteerShift;
 use App\Entity\VolunteerSignup;
 use PHPUnit\Framework\TestCase;
 
@@ -209,26 +210,33 @@ class VolunteerAttendanceTest extends TestCase
     }
 
     /**
+     * Un turno con su tarea detrás. Se devuelve el TURNO porque es de quien
+     * cuelgan las inscripciones y quien resuelve lo que computa cada trabajo.
+     *
      * @param int $creditedMinutes minutos que computa la tarea
      */
-    private function offer(int $creditedMinutes): VolunteerOffer
+    private function offer(int $creditedMinutes): VolunteerShift
     {
-        return (new VolunteerOffer())
+        $offer = (new VolunteerOffer())
             ->setTitle('Descargar el reparto')
-            ->setStartsAt(new \DateTime('2099-03-15 17:00'))
             ->setStatus(VolunteerOffer::STATUS_PUBLISHED)
             ->setCreditedMinutes($creditedMinutes);
+
+        $shift = (new VolunteerShift())->setStartsAt(new \DateTime('2099-03-15 17:00'));
+        $offer->addShift($shift);
+
+        return $shift;
     }
 
     /**
-     * Una inscripción viva, ya enganchada a la oferta.
+     * Una inscripción viva, ya enganchada al turno.
      *
-     * @param VolunteerOffer $offer la tarea
+     * @param VolunteerShift $shift el turno
      */
-    private function signupOn(VolunteerOffer $offer): VolunteerSignup
+    private function signupOn(VolunteerShift $shift): VolunteerSignup
     {
         $signup = (new VolunteerSignup())->setPartner(new Partner());
-        $offer->addSignup($signup);
+        $shift->addSignup($signup);
 
         return $signup;
     }

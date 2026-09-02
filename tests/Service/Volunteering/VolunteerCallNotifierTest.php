@@ -7,8 +7,9 @@ use App\Entity\Partner;
 use App\Entity\User;
 use App\Entity\VolunteerCall;
 use App\Entity\VolunteerOffer;
+use App\Entity\VolunteerShift;
 use App\Repository\UserRepository;
-use App\Repository\VolunteerOfferRepository;
+use App\Repository\VolunteerShiftRepository;
 use App\Service\AppSettings;
 use App\Service\Push\PushSender;
 use App\Security\PartnerAccessPolicy;
@@ -47,10 +48,10 @@ class VolunteerCallNotifierTest extends TestCase
      */
     public function testConElModuloApagadoNoHaceNada(): void
     {
-        $offers = $this->createMock(VolunteerOfferRepository::class);
-        $offers->expects($this->never())->method('findUpcoming');
+        $shifts = $this->createMock(VolunteerShiftRepository::class);
+        $shifts->expects($this->never())->method('findUpcoming');
 
-        $notifier = $this->notifier(enabled: false, offers: $offers);
+        $notifier = $this->notifier(enabled: false, shifts: $shifts);
 
         $this->assertSame(0, $notifier->dispatchDue(new \DateTimeImmutable('2099-03-01 10:00')));
     }
@@ -58,7 +59,7 @@ class VolunteerCallNotifierTest extends TestCase
     /**
      * Sin nadie a quien avisar no se registra la llamada: así el alcance sigue
      * disponible si más adelante entra gente que sí encaje. Registrarla gastaría
-     * el UNIQUE (offer, scope) por un aviso que no salió.
+     * el UNIQUE (shift, scope) por un aviso que no salió.
      */
     public function testSinDestinatariosNoRegistraLaLlamada(): void
     {
@@ -75,7 +76,7 @@ class VolunteerCallNotifierTest extends TestCase
         );
 
         $this->assertNull($notifier->dispatch(
-            $this->offer(),
+            $this->shift(),
             VolunteerCall::SCOPE_MATCHING,
             null,
             new \DateTimeImmutable('2099-03-01 10:00')
@@ -129,7 +130,7 @@ class VolunteerCallNotifierTest extends TestCase
         );
 
         $call = $notifier->dispatch(
-            $this->offer(),
+            $this->shift(),
             VolunteerCall::SCOPE_MATCHING,
             null,
             new \DateTimeImmutable('2099-03-01 10:00')
@@ -195,7 +196,7 @@ class VolunteerCallNotifierTest extends TestCase
             inbox: $inbox,
             // Nadie quiere el aviso por ningún canal configurable.
             preferences: $this->preferences([]),
-        )->dispatch($this->offer(), VolunteerCall::SCOPE_MATCHING, null, new \DateTimeImmutable('2099-03-01 10:00'));
+        )->dispatch($this->shift(), VolunteerCall::SCOPE_MATCHING, null, new \DateTimeImmutable('2099-03-01 10:00'));
 
         $this->assertNotNull($call, 'La llamada se registra: el aviso salió, aunque sólo a la bandeja.');
         $this->assertSame([], $destinatariosPush ?? [], 'Con el push apagado no se empuja a nadie.');
@@ -229,7 +230,7 @@ class VolunteerCallNotifierTest extends TestCase
         );
 
         $this->assertNull($notifier->dispatch(
-            $this->offer(),
+            $this->shift(),
             VolunteerCall::SCOPE_MATCHING,
             null,
             new \DateTimeImmutable('2099-03-01 10:00')
@@ -257,7 +258,7 @@ class VolunteerCallNotifierTest extends TestCase
         );
 
         $this->assertNull($notifier->dispatch(
-            $this->offer(),
+            $this->shift(),
             VolunteerCall::SCOPE_MATCHING,
             null,
             new \DateTimeImmutable('2099-03-01 10:00')
@@ -291,7 +292,7 @@ class VolunteerCallNotifierTest extends TestCase
         );
 
         $call = $notifier->dispatch(
-            $this->offer(),
+            $this->shift(),
             VolunteerCall::SCOPE_MATCHING,
             null,
             new \DateTimeImmutable('2099-03-01 10:00')
@@ -324,13 +325,22 @@ class VolunteerCallNotifierTest extends TestCase
         return $preferences;
     }
 
-    private function offer(): VolunteerOffer
+    /**
+     * Un turno futuro con plazas, de una tarea publicada. Se devuelve el TURNO
+     * porque es lo que recibe el notificador: se pide gente para un día, no para
+     * un trabajo en abstracto.
+     */
+    private function shift(): VolunteerShift
     {
-        return (new VolunteerOffer())
+        $offer = (new VolunteerOffer())
             ->setTitle('Descargar el reparto')
-            ->setStartsAt(new \DateTime('2099-03-15 17:00'))
             ->setStatus(VolunteerOffer::STATUS_PUBLISHED)
             ->setSlots(3);
+
+        $shift = (new VolunteerShift())->setStartsAt(new \DateTime('2099-03-15 17:00'));
+        $offer->addShift($shift);
+
+        return $shift;
     }
 
     /**
@@ -359,7 +369,7 @@ class VolunteerCallNotifierTest extends TestCase
 
     private function notifier(
         bool $enabled = true,
-        ?VolunteerOfferRepository $offers = null,
+        ?VolunteerShiftRepository $shifts = null,
         ?UserRepository $users = null,
         ?VolunteerAudienceResolver $audience = null,
         ?EntityManagerInterface $entityManager = null,
@@ -380,7 +390,7 @@ class VolunteerCallNotifierTest extends TestCase
         $urlGenerator->method('generate')->willReturn('/panel/voluntariado');
 
         return new VolunteerCallNotifier(
-            $offers ?? $this->createMock(VolunteerOfferRepository::class),
+            $shifts ?? $this->createMock(VolunteerShiftRepository::class),
             $users ?? $defaultUsers,
             $audience ?? $this->audienceReturning([]),
             $this->createMock(VolunteerCallEscalator::class),

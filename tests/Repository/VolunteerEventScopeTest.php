@@ -172,7 +172,6 @@ class VolunteerEventScopeTest extends KernelTestCase
     {
         $offer = (new VolunteerOffer())
             ->setTitle($title)
-            ->setStartsAt(new \DateTime('+1 day'))
             ->addCategory($category);
         $em->persist($offer);
 
