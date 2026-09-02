@@ -19,6 +19,7 @@ use App\Service\Delivery\NodeShareCoherence;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\FormInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
@@ -220,7 +221,7 @@ class NodeController extends AbstractController
     public function new(Request $request, EntityManagerInterface $entityManager): Response
     {
         $node = new Node();
-        $form = $this->createForm(NodeType::class, $node);
+        $form = $this->nodeForm($node);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
@@ -265,7 +266,7 @@ class NodeController extends AbstractController
         $originalCadence = $node->getCadence();
         $originalWeek = $node->getMonthlyWeek();
 
-        $form = $this->createForm(NodeType::class, $node);
+        $form = $this->nodeForm($node);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
@@ -280,7 +281,7 @@ class NodeController extends AbstractController
 
                 return $this->render('node/edit.html.twig', [
                     'node' => $node,
-                    'form' => $this->createForm(NodeType::class, $node)->createView(),
+                    'form' => $this->nodeForm($node)->createView(),
                     'orphaned_shares' => $orphaned,
                     'attempted_cadence' => Node::CADENCE_LABELS[$form->get('cadence')->getData()] ?? null,
                     'monthly_share_count' => count($coherence->monthlySharesOf($node)),
@@ -313,6 +314,23 @@ class NodeController extends AbstractController
             'form' => $form->createView(),
             // Aviso previo: cambiar la semana del punto arrastra a estas cestas.
             'monthly_share_count' => count($coherence->monthlySharesOf($node)),
+        ]);
+    }
+
+    /**
+     * El formulario del punto, en un sitio: el alta, la edición y el reintento
+     * tras rechazar un cambio de cadencia lo construyen igual, y con tres
+     * llamadas sueltas bastaría con olvidar una para que el bloque del montaje
+     * desapareciera en una de las tres pantallas.
+     *
+     * @param Node $node el punto a editar, o uno nuevo
+     *
+     * @return FormInterface el formulario, con el montaje incluido si el módulo de voluntariado está activo
+     */
+    private function nodeForm(Node $node): FormInterface
+    {
+        return $this->createForm(NodeType::class, $node, [
+            'with_delivery_prep' => $this->isGranted('FEATURE_VOLUNTEERING'),
         ]);
     }
 

@@ -192,6 +192,82 @@ class Node
      */
     private Collection $sheetRecipients;
 
+    /**
+     * Este punto monta sus cestas con voluntariado: cada semana que abre hace
+     * falta gente para prepararlas, y el sistema lo convoca solo.
+     *
+     * VA AQUÍ Y NO EN EL TIPO DE TRABAJO, y ése es el cambio que lo hace
+     * utilizable. Antes lo decía una casilla en {@see VolunteerCategory}, "es el
+     * montaje del reparto", que señalaba UNA cosa en toda la asociación:
+     * marcando cero, la home del socix se quedaba muda sin decir por qué;
+     * marcando dos, señalaba a quien estuviera fregando el suelo. Aquí el
+     * booleano es legítimo, porque hay varios puntos y cada uno decide: que no
+     * lo marque ninguno, o que lo marquen los siete, son respuestas válidas.
+     *
+     * ES UN OPT-IN A PROPÓSITO. Hoy sólo Torremocha lo organiza así; generar la
+     * convocatoria en todos los puntos llenaría de tareas vacías a los que
+     * montan las cestas de otra manera, y una tarea sin nadie apuntado se lee
+     * como un reproche, no como una oportunidad.
+     *
+     * @ORM\Column(name="delivery_prep", type="boolean", options={"default": false})
+     */
+    private bool $deliveryPrep = false;
+
+    /**
+     * Cuánta gente hace falta para montar las cestas de este punto. NULL = sin
+     * tope, que es lo que ya significa en {@see VolunteerOffer::$slots}: se
+     * apunta quien quiera.
+     *
+     * Va en el punto y no en cada convocatoria porque es una propiedad del
+     * sitio —montar cien cestas necesita las manos que necesita— y así no hay
+     * que acordarse cada semana.
+     *
+     * @ORM\Column(name="delivery_prep_slots", type="integer", nullable=true)
+     */
+    #[Assert\Positive(message: 'Si dices cuánta gente hace falta, tiene que ser al menos una persona.')]
+    private ?int $deliveryPrepSlots = null;
+
+    /**
+     * A qué hora empieza el montaje. Sin esto no se puede convocar a nadie:
+     * "el jueves" no es una cita.
+     *
+     * Es la hora, no el día: el día lo dicta el calendario de reparto del punto
+     * ({@see \App\Service\Delivery\NodeDeliveryDate}), corrido por
+     * {@see $deliveryPrepDayOffset}. Escribirlo aquí sería duplicar el
+     * calendario y condenarlo a desincronizarse.
+     *
+     * @ORM\Column(name="delivery_prep_time", type="time", nullable=true)
+     */
+    private ?\DateTimeInterface $deliveryPrepTime = null;
+
+    /**
+     * Cuánto dura el montaje, en minutos. Da la hora de fin de la convocatoria
+     * y, de paso, lo que computa a quien viene.
+     *
+     * NULL = convocatoria sin hora de fin. Se puede vivir con ello —el turno
+     * dice cuándo empieza y ya— y es mejor que inventarse una duración.
+     *
+     * @ORM\Column(name="delivery_prep_minutes", type="integer", nullable=true)
+     */
+    #[Assert\Positive(message: 'Si dices cuánto dura el montaje, tienen que ser más de cero minutos.')]
+    private ?int $deliveryPrepMinutes = null;
+
+    /**
+     * Días de diferencia entre el montaje y la entrega: 0 el mismo día, -1 la
+     * víspera.
+     *
+     * EXISTE PARA MATAR UNA ADIVINANZA. Como el montaje se hace a veces la
+     * tarde anterior, la consulta que buscaba quién prepara tu cesta barría una
+     * ventana de dos días y se quedaba con lo que hubiera dentro. Preguntarle al
+     * punto cuándo monta es más corto y no falla.
+     *
+     * No admite positivos: montar las cestas después de repartirlas no es un
+     * caso de uso, es un dedazo. Lo garantiza {@see validateDeliveryPrep()}.
+     *
+     * @ORM\Column(name="delivery_prep_day_offset", type="smallint", options={"default": 0})
+     */
+    private int $deliveryPrepDayOffset = 0;
+
     public function __construct()
     {
         $this->weeklyBasketGroups = new ArrayCollection();
@@ -249,6 +325,133 @@ class Node
         }
 
         return $emails;
+    }
+
+    /**
+     * @return bool true si este punto monta sus cestas con voluntariado
+     */
+    public function isDeliveryPrep(): bool
+    {
+        return $this->deliveryPrep;
+    }
+
+    /**
+     * @param bool $deliveryPrep true si este punto monta sus cestas con voluntariado
+     */
+    public function setDeliveryPrep(bool $deliveryPrep): self
+    {
+        $this->deliveryPrep = $deliveryPrep;
+
+        return $this;
+    }
+
+    /**
+     * @return int|null cuánta gente hace falta para montar, o null si no hay tope
+     */
+    public function getDeliveryPrepSlots(): ?int
+    {
+        return $this->deliveryPrepSlots;
+    }
+
+    /**
+     * @param int|null $deliveryPrepSlots cuánta gente hace falta; null para no poner tope
+     */
+    public function setDeliveryPrepSlots(?int $deliveryPrepSlots): self
+    {
+        $this->deliveryPrepSlots = $deliveryPrepSlots;
+
+        return $this;
+    }
+
+    /**
+     * @return \DateTimeInterface|null a qué hora empieza el montaje, o null
+     */
+    public function getDeliveryPrepTime(): ?\DateTimeInterface
+    {
+        return $this->deliveryPrepTime;
+    }
+
+    /**
+     * @param \DateTimeInterface|null $deliveryPrepTime a qué hora empieza el montaje
+     */
+    public function setDeliveryPrepTime(?\DateTimeInterface $deliveryPrepTime): self
+    {
+        $this->deliveryPrepTime = $deliveryPrepTime;
+
+        return $this;
+    }
+
+    /**
+     * @return int|null cuánto dura el montaje en minutos, o null si no se dice
+     */
+    public function getDeliveryPrepMinutes(): ?int
+    {
+        return $this->deliveryPrepMinutes;
+    }
+
+    /**
+     * @param int|null $deliveryPrepMinutes cuánto dura el montaje en minutos
+     */
+    public function setDeliveryPrepMinutes(?int $deliveryPrepMinutes): self
+    {
+        $this->deliveryPrepMinutes = $deliveryPrepMinutes;
+
+        return $this;
+    }
+
+    /**
+     * @return int días entre el montaje y la entrega: 0 el mismo día, -1 la víspera
+     */
+    public function getDeliveryPrepDayOffset(): int
+    {
+        return $this->deliveryPrepDayOffset;
+    }
+
+    /**
+     * @param int $deliveryPrepDayOffset 0 el mismo día, -1 la víspera
+     */
+    public function setDeliveryPrepDayOffset(int $deliveryPrepDayOffset): self
+    {
+        $this->deliveryPrepDayOffset = $deliveryPrepDayOffset;
+
+        return $this;
+    }
+
+    /**
+     * Cuándo se montan las cestas que este punto entrega el día que se le pasa:
+     * el par inicio/fin de la convocatoria, ya con el desfase y la hora puestos.
+     *
+     * Es el único sitio donde se hace esta cuenta. Lo consumen quien crea la
+     * convocatoria y quien busca qué convocatoria monta un reparto concreto, y
+     * si cada uno la repitiera bastaría con que uno olvidara el desfase para que
+     * la home del socix dejara de encontrar a quien le prepara la cesta.
+     *
+     * Devuelve null cuando este punto no monta con voluntariado o todavía no
+     * dice a qué hora: sin eso no hay convocatoria posible, y devolver un
+     * momento inventado sería peor que no devolver nada.
+     *
+     * @param \DateTimeInterface $deliveryDate el día en que este punto entrega
+     *
+     * @return array{0: \DateTimeImmutable, 1: \DateTimeImmutable|null}|null inicio y fin, o null
+     */
+    public function deliveryPrepWindowFor(\DateTimeInterface $deliveryDate): ?array
+    {
+        if (!$this->deliveryPrep || null === $this->deliveryPrepTime) {
+            return null;
+        }
+
+        $start = \DateTimeImmutable::createFromInterface($deliveryDate)
+            ->modify(sprintf('%+d days', $this->deliveryPrepDayOffset))
+            ->setTime(
+                (int) $this->deliveryPrepTime->format('H'),
+                (int) $this->deliveryPrepTime->format('i')
+            );
+
+        $end = null === $this->deliveryPrepMinutes
+            ? null
+            : $start->modify(sprintf('+%d minutes', $this->deliveryPrepMinutes));
+
+        return [$start, $end];
     }
 
     /**
@@ -575,6 +778,41 @@ class Node
         if (!in_array($this->monthlyWeek, self::MONTHLY_WEEKS, true)) {
             $context->buildViolation('Semana del mes no válida: elige la 1ª, la 2ª, la 3ª o la última.')
                 ->atPath('monthlyWeek')
+                ->addViolation();
+        }
+    }
+
+    /**
+     * Reglas del montaje con voluntariado: si el punto lo marca, tiene que decir
+     * a qué hora, y el montaje no puede caer después de la entrega.
+     *
+     * Lo primero no es cosmético: la convocatoria se crea sola a partir de estos
+     * campos, y sin hora nacería sin momento al que apuntarse — una tarea
+     * publicada y vacía, que es exactamente lo que este rediseño viene a evitar.
+     *
+     * Lo que NO se valida, a propósito, es que sobren datos con la casilla
+     * desmarcada: quien apaga el montaje unos meses no tiene por qué perder la
+     * hora ni las plazas que ya había configurado.
+     *
+     * @param ExecutionContextInterface $context
+     * @return void
+     */
+    #[Assert\Callback]
+    public function validateDeliveryPrep(ExecutionContextInterface $context): void
+    {
+        if ($this->deliveryPrepDayOffset > 0) {
+            $context->buildViolation('Las cestas se montan antes de entregarlas, no después: elige el mismo día de la entrega o uno anterior.')
+                ->atPath('deliveryPrepDayOffset')
+                ->addViolation();
+        }
+
+        if (!$this->deliveryPrep) {
+            return;
+        }
+
+        if ($this->deliveryPrepTime === null) {
+            $context->buildViolation('Si este punto monta las cestas con voluntariado, hace falta saber a qué hora: sin hora no hay nada a lo que apuntarse.')
+                ->atPath('deliveryPrepTime')
                 ->addViolation();
         }
     }
