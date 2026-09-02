@@ -52,20 +52,17 @@
         {% embed '_components/csa_form_section.html.twig' with {
             num: '2',
             title: 'Quién lo coordina',
-            subtitle: 'Podrán publicar, cerrar y pedir gente para las tareas de esta área, y sólo de ésta.'
+            subtitle: 'Marcar a alguien aquí le da acceso al voluntariado de esta área, y sólo de ésta: podrá publicar tareas, cerrarlas y pedir gente. No hace falta darle ningún permiso aparte.'
         } %}
             {% block body %}
                 {% import '_macros/csa.html.twig' as csa %}
-                {# Sin candidatas, el campo sale vacío y nadie sabe por qué. La
-                 # lista la alimenta Usuarias, no esta pantalla. #}
-                {% if form.coordinators.vars.choices is empty %}
-                    {{ csa.callout('Todavía no hay nadie que pueda coordinar. Se habilita marcando "Voluntariado" en la ficha de cada persona, en Administración › Usuarias.', 'warning', 'exclamation-triangle') }}
-                {% endif %}
-
-                <div class="csa-form-grid">
+                {# Aquí sale cualquier cuenta habilitada de la casa, así que son
+                 # unas quince filas de pills: el buscador que inyecta
+                 # csa-check-filter es lo que las hace navegables. #}
+                <div class="csa-form-grid" data-csa-check-filter>
                     {{ csa.field(form.coordinators, 'Quién coordina esta área', {
                         full: true,
-                        hint: 'sólo aparece quien tenga Voluntariado marcado en Usuarias'
+                        hint: 'al marcar a alguien le concedes el acceso'
                     }) }}
                 </div>
             {% endblock %}

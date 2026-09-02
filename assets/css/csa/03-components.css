@@ -731,6 +731,27 @@ select.csa-input,
   outline-offset: 2px;
 }
 
+/* Buscador que csa-check-filter inyecta sobre una lista larga de esas pills.
+ * No existe en el HTML: si no hay JS no aparece y se ven todas, que es el
+ * estado correcto. */
+.csa-check-filter {
+  /* Acotado: hereda width:100% de .csa-input y un buscador de nombres tan
+     ancho como la ficha parece el campo principal del formulario, que no es. */
+  max-width: 320px;
+  margin-bottom: var(--csa-sp-2);
+}
+.csa-check-filter__status {
+  margin: 0 0 var(--csa-sp-2);
+  font-size: var(--csa-fs-sm);
+  color: var(--csa-ink-muted);
+}
+/* !important porque lo que se esconde puede ser el <label> de la pill, y su
+ * `display: inline-flex` de arriba gana por especificidad a cualquier regla
+ * de una sola clase. */
+.csa-check-filter__hidden {
+  display: none !important;
+}
+
 .csa-input--with-prefix {
   display: flex;
   align-items: center;
