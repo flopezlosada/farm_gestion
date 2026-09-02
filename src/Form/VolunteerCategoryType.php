@@ -39,11 +39,6 @@ class VolunteerCategoryType extends AbstractType
                 'required' => false,
                 'help' => 'Desmárcala para retirarla sin perder el histórico de tareas que la usaron.',
             ])
-            ->add('deliveryPrep', CheckboxType::class, [
-                'label' => 'Es el montaje del reparto',
-                'required' => false,
-                'help' => 'Márcala sólo en el área de montar las cestas. Con ella, a cada socix se le dice en su panel quién le está preparando la cesta de esa semana en su punto de recogida — y se le avisa si no se ha apuntado nadie.',
-            ])
             ->add('coordinators', EntityType::class, [
                 'label' => 'Quién coordina esta área',
                 'class' => User::class,

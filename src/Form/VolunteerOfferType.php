@@ -258,6 +258,7 @@ class VolunteerOfferType extends AbstractType
         // conocen hasta que hay datos: al construir el formulario no hay tarea
         // todavía.
         $builder->addEventListener(FormEvents::PRE_SET_DATA, $this->addCoordinatorChoice(...));
+        $builder->addEventListener(FormEvents::PRE_SET_DATA, $this->dropTimeSlotsIfTheNodeRules(...));
         $builder->addEventListener(FormEvents::PRE_SET_DATA, $this->fillTimeSlots(...));
         $builder->addEventListener(FormEvents::POST_SUBMIT, $this->collectTimeSlots(...));
         $builder->addEventListener(FormEvents::POST_SUBMIT, $this->validateSchedule(...));
@@ -308,6 +309,38 @@ class VolunteerOfferType extends AbstractType
     }
 
     /**
+     * Quita los cuatro campos de hora cuando el horario lo manda el punto de
+     * recogida, o sea en la convocatoria de montaje de las cestas.
+     *
+     * Ahí la hora la gobierna el punto y el sincronizador la reescribe en cada
+     * pasada ({@see \App\Service\Volunteering\DeliveryPrepOffers}), así que
+     * dejarlos editables sería peor que no tenerlos: quien cambiara la hora aquí
+     * creería que la ha cambiado, y la vería volver sin explicación.
+     *
+     * SE QUITAN, no se deshabilitan. Un campo gris invita a preguntarse por qué,
+     * y la plantilla puede decirlo en una línea con enlace a editar el punto;
+     * además un campo deshabilitado tampoco viaja en el envío, así que habría que
+     * blindar los listeners igual.
+     *
+     * Mover el turno de UNA semana concreta sigue siendo posible: eso se hace en
+     * el turno, y el generador respeta los que ha tocado una persona.
+     *
+     * @param FormEvent $event el evento con la tarea
+     */
+    private function dropTimeSlotsIfTheNodeRules(FormEvent $event): void
+    {
+        $offer = $event->getData();
+        if (!$offer instanceof VolunteerOffer || !$offer->isDeliveryPrep()) {
+            return;
+        }
+
+        $form = $event->getForm();
+        foreach (['firstStart', 'firstEnd', 'secondStart', 'secondEnd'] as $field) {
+            $form->remove($field);
+        }
+    }
+
+    /**
      * Rellena los cuatro campos de hora a partir de los tramos guardados, al
      * abrir el formulario de una tarea que ya existe.
      *
@@ -322,6 +355,12 @@ class VolunteerOfferType extends AbstractType
 
         $times = $offer->getRepeatTimes();
         $form = $event->getForm();
+
+        // En la convocatoria de montaje los campos ya no están: los quita
+        // dropTimeSlotsIfTheNodeRules(), que corre antes.
+        if (!$form->has('firstStart')) {
+            return;
+        }
 
         $fields = [['firstStart', 'firstEnd'], ['secondStart', 'secondEnd']];
 
@@ -422,7 +461,10 @@ class VolunteerOfferType extends AbstractType
             return;
         }
 
-        if ([] === $offer->getRepeatTimes()) {
+        // La regla de la hora no aplica a la convocatoria de montaje: ahí el
+        // horario lo pone el punto y los campos ni existen, así que el error
+        // quedaría suelto en la página, señalando a un campo que nadie ve.
+        if ([] === $offer->getRepeatTimes() && $form->has('firstStart')) {
             $this->error($form, 'firstStart', 'Pon al menos la hora a la que empieza.');
         }
 

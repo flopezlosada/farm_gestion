@@ -2,6 +2,7 @@
 
 namespace App\Repository;
 
+use App\Entity\Node;
 use App\Entity\VolunteerCategory;
 use App\Entity\VolunteerOffer;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
@@ -117,6 +118,14 @@ class VolunteerOfferRepository extends ServiceEntityRepository
      * cuando vuelva tiene que tener turnos; lo que la pausa impide es pedir
      * gente, no existir en el calendario.
      *
+     * DEJA FUERA EL MONTAJE DE LAS CESTAS, que no es una tarea con receta
+     * editable sino un derivado de lo que declara su punto de recogida: lo
+     * mantiene {@see \App\Service\Volunteering\DeliveryPrepOffers}, recorriendo
+     * los puntos. Y ahí está la razón de fondo de que se excluya: el montaje
+     * nace EN BORRADOR, así que el filtro de estado de aquí lo dejaría fuera de
+     * todos modos hasta que alguien lo publicara — y entonces su horizonte no se
+     * extendería, sin error y sin aviso.
+     *
      * @return list<VolunteerOffer> las tareas con receta de repetición
      */
     public function findRepeating(): array
@@ -124,10 +133,34 @@ class VolunteerOfferRepository extends ServiceEntityRepository
         return $this->createQueryBuilder('o')
             ->where('o.repeatType != :once')
             ->andWhere('o.status IN (:alive)')
+            ->andWhere('o.deliveryPrep = false')
             ->setParameter('once', VolunteerOffer::REPEAT_ONCE)
             ->setParameter('alive', [VolunteerOffer::STATUS_PUBLISHED, VolunteerOffer::STATUS_PAUSED])
             ->orderBy('o.title', 'ASC')
             ->getQuery()
             ->getResult();
+    }
+
+    /**
+     * La convocatoria de montaje de un punto de recogida, si la tiene.
+     *
+     * Un punto tiene como mucho una: la crea el sistema a partir de lo que el
+     * punto declara y la reutiliza siempre. Que no haya un índice único
+     * garantizándolo es deliberado —haría falta una segunda clave ajena al mismo
+     * nodo, y dos columnas apuntando al mismo sitio pueden discrepar—; quien
+     * garantiza que no se dupliquen es {@see \App\Service\Volunteering\DeliveryPrepOffers},
+     * que busca antes de crear.
+     *
+     * No filtra por estado: la de un punto que dejó de montar está en pausa y
+     * hay que encontrarla igual, o al reencenderlo se crearía una segunda y la
+     * gente apuntada a la primera se quedaría en una convocatoria fantasma.
+     *
+     * @param Node $node el punto de recogida
+     *
+     * @return VolunteerOffer|null su convocatoria de montaje, o null si nunca ha tenido
+     */
+    public function findDeliveryPrepOffer(Node $node): ?VolunteerOffer
+    {
+        return $this->findOneBy(['node' => $node, 'deliveryPrep' => true]);
     }
 }

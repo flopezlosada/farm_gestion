@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\Entity\Node;
 use App\Entity\Partner;
+use App\Entity\VolunteerOffer;
 use App\Entity\WeeklyBasketGroup;
 use App\Form\NodeType;
 use App\Entity\Basket;
@@ -17,6 +18,7 @@ use App\Service\Delivery\EggDeliveryResolver;
 use App\Service\Delivery\NodeDeliveryDate;
 use App\Service\Delivery\NodeShareCoherence;
 use App\Service\Delivery\WeeklyBasketGenerator;
+use App\Service\Volunteering\DeliveryPrepOffers;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Form\FormInterface;
@@ -218,8 +220,11 @@ class NodeController extends AbstractController
      * @return Response
      */
     #[Route('/new', name: 'node_new', methods: ['GET', 'POST'])]
-    public function new(Request $request, EntityManagerInterface $entityManager): Response
-    {
+    public function new(
+        Request $request,
+        EntityManagerInterface $entityManager,
+        DeliveryPrepOffers $deliveryPrep,
+    ): Response {
         $node = new Node();
         $form = $this->nodeForm($node);
         $form->handleRequest($request);
@@ -228,6 +233,7 @@ class NodeController extends AbstractController
             $entityManager->persist($node);
             $entityManager->flush();
             $this->addFlash('success', sprintf('Nodo "%s" creado.', $node->getName()));
+            $this->syncDeliveryPrep($node, $entityManager, $deliveryPrep);
 
             return $this->redirectToRoute('node_index');
         }
@@ -262,6 +268,7 @@ class NodeController extends AbstractController
         Node $node,
         EntityManagerInterface $entityManager,
         NodeShareCoherence $coherence,
+        DeliveryPrepOffers $deliveryPrep,
     ): Response {
         $originalCadence = $node->getCadence();
         $originalWeek = $node->getMonthlyWeek();
@@ -306,6 +313,8 @@ class NodeController extends AbstractController
                 ));
             }
 
+            $this->syncDeliveryPrep($node, $entityManager, $deliveryPrep);
+
             return $this->redirectToRoute('node_index');
         }
 
@@ -332,6 +341,67 @@ class NodeController extends AbstractController
         return $this->createForm(NodeType::class, $node, [
             'with_delivery_prep' => $this->isGranted('FEATURE_VOLUNTEERING'),
         ]);
+    }
+
+    /**
+     * Pone la convocatoria de montaje del punto al día en cuanto se guarda, y
+     * cuenta en una frase lo que ha pasado.
+     *
+     * EL AVISO NO ES DECORACIÓN. Quien marca «este punto monta las cestas con
+     * voluntariado» espera que pase algo, y lo que pasa es medio invisible: se
+     * crea una convocatoria EN BORRADOR con sus turnos, que no le pide gente a
+     * nadie hasta que alguien le ponga un área y la publique. Sin decirlo, la
+     * pantalla se queda callada y la casilla parece rota.
+     *
+     * @param Node                   $node          el punto recién guardado
+     * @param EntityManagerInterface $entityManager quien persiste; el servicio no hace flush
+     * @param DeliveryPrepOffers     $deliveryPrep  quien mantiene la convocatoria
+     */
+    private function syncDeliveryPrep(
+        Node $node,
+        EntityManagerInterface $entityManager,
+        DeliveryPrepOffers $deliveryPrep,
+    ): void {
+        if (!$this->isGranted('FEATURE_VOLUNTEERING')) {
+            return;
+        }
+
+        $result = $deliveryPrep->sync($node);
+        $entityManager->flush();
+
+        $offer = $result['offer'];
+        if ($offer === null) {
+            return;
+        }
+
+        if ($offer->getStatus() === VolunteerOffer::STATUS_PAUSED) {
+            $this->addFlash('info', sprintf(
+                'Este punto ya no monta las cestas con voluntariado: su convocatoria "%s" queda en pausa, sin borrar lo que ya se hizo.',
+                $offer->getTitle(),
+            ));
+
+            return;
+        }
+
+        $opened = count($result['created']);
+
+        if ($offer->getStatus() === VolunteerOffer::STATUS_DRAFT) {
+            $this->addFlash('info', sprintf(
+                'Creada la convocatoria "%s" con %d turno(s), en BORRADOR: ponle un área y publícala para que se le pida gente.',
+                $offer->getTitle(),
+                $opened,
+            ));
+
+            return;
+        }
+
+        if ($opened > 0 || $result['removed'] > 0) {
+            $this->addFlash('info', sprintf(
+                'Actualizado el montaje de las cestas: %d turno(s) abiertos y %d retirados.',
+                $opened,
+                $result['removed'],
+            ));
+        }
     }
 
     /**
