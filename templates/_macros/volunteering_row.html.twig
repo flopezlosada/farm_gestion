@@ -10,7 +10,7 @@
  # contexto, así que `csa` no existe como variable que se pueda pasar de una
  # plantilla a otra — falla con "Variable csa does not exist".
  # ============================================================ #}
-{% macro persona_row(signup, offer, participation, closing_form, can_edit, is_past) %}
+{% macro persona_row(signup, shift, participation, closing_form, can_edit, is_past) %}
     {% import '_macros/csa.html.twig' as ui %}
     {% set p = signup.partner %}
     {% set done = participation[p.id]|default(null) %}
@@ -53,7 +53,7 @@
          # el caso normal es una llamada —"voy con mi pareja"— y quien coordina no
          # tenía dónde apuntarlo, así que la tarea seguía pidiendo una plaza que
          # ya estaba ocupada. #}
-        {% if can_edit and offer.companionsAllowed %}
+        {% if can_edit and shift.offer.companionsAllowed %}
             <td class="csa-table__col-tight">
                 {% if signup.cancelled or signup.coordination %}
                     —
@@ -119,10 +119,10 @@
                      # EXISTIR: se anotó a quien no era, o dos veces. No es lo mismo que
                      # "no fue", que es un hecho que conviene conservar. #}
                     <button type="submit" class="vol-actions__btn vol-actions__btn--danger"
-                            formaction="{{ path('volunteering_remove_person', { id: offer.id, signup: signup.id }) }}"
+                            formaction="{{ path('volunteering_remove_person', { id: shift.id, signup: signup.id }) }}"
                             formnovalidate
-                            title="Quitar a {{ p.name }} de esta tarea"
-                            onclick="return confirm('¿Quitar a {{ p.name }} {{ p.surname }} de esta tarea? Se borra su inscripción y las horas que tuviera. Para decir que no fue, desmarca la casilla en vez de esto.');">
+                            title="Quitar a {{ p.name }} de este turno"
+                            onclick="return confirm('¿Quitar a {{ p.name }} {{ p.surname }} de este turno? Se borra su inscripción y las horas que tuviera. Para decir que no fue, desmarca la casilla en vez de esto.');">
                         <i class="fa fa-times"></i>
                     </button>
                 </div>

@@ -314,20 +314,34 @@
                         <div class="csa-navgroup{{ sec_collapsed }}">
                             <button type="button" class="csa-navgroup__head">Voluntariado <i class="csa-navgroup__chev fa fa-chevron-down" aria-hidden="true"></i></button>
                             <div class="csa-navgroup__items">
-                                {# Cada sección se reconoce por el PREFIJO de su ruta y
-                                 # "Tareas" es lo que no es ninguna de las otras. Antes
+                                {# Cada sección se reconoce por el PREFIJO de su ruta. Antes
                                  # era una lista negra que había que ampliar con cada ruta
                                  # nueva, y ya estaba desfasada: en Actividad se marcaban
                                  # dos secciones a la vez, y la ficha de un área habría
-                                 # marcado Tareas. Con prefijos, añadir una pantalla de
-                                 # área no obliga a tocar el menú. #}
+                                 # marcado Tareas. Con prefijos, añadir una pantalla no
+                                 # obliga a tocar el menú.
+                                 #
+                                 # DOS ENTRADAS PARA EL TRABAJO Y NO UNA, porque son dos
+                                 # preguntas: «qué hay que hacer» son los turnos, con fecha,
+                                 # y es la pantalla del día a día; «tareas» es el catálogo de
+                                 # definiciones, donde se crean y se retocan. Antes eran lo
+                                 # mismo porque la tarea llevaba la fecha encima.
+                                 #
+                                 # El orden de las ramas importa: `volunteering_place*` cae
+                                 # antes que el prefijo genérico, o los sitios marcarían
+                                 # «Qué hay que hacer». #}
                                 {% set vol_section =
                                     route starts with 'volunteering_categor' ? 'areas'
+                                    : route starts with 'volunteering_place' ? 'places'
                                     : route == 'volunteering_pool' ? 'pool'
                                     : route == 'volunteering_activity' ? 'activity'
-                                    : route starts with 'volunteering_' ? 'tasks' : null %}
+                                    : route starts with 'volunteering_shift' ? 'shifts'
+                                    : route in ['volunteering_tasks', 'volunteering_show', 'volunteering_new', 'volunteering_edit'] ? 'tasks'
+                                    : route starts with 'volunteering_' ? 'shifts' : null %}
 
-                                {{ _self.nav_link('Tareas', path('volunteering_index'), 'fa-hand-paper-o',
+                                {{ _self.nav_link('Qué hay que hacer', path('volunteering_index'), 'fa-calendar-o',
+                                   vol_section == 'shifts') }}
+                                {{ _self.nav_link('Tareas', path('volunteering_tasks'), 'fa-hand-paper-o',
                                    vol_section == 'tasks') }}
                                 {{ _self.nav_link('Quién hay', path('volunteering_pool'), 'fa-users',
                                    vol_section == 'pool') }}
@@ -336,6 +350,8 @@
                                 {% if is_granted('ROLE_GESTION_VOLUNTARIADO_EDIT') %}
                                     {{ _self.nav_link('Áreas', path('volunteering_categories'), 'fa-tags',
                                        vol_section == 'areas') }}
+                                    {{ _self.nav_link('Sitios', path('volunteering_places'), 'fa-map-marker',
+                                       vol_section == 'places') }}
                                 {% endif %}
                             </div>
                         </div>

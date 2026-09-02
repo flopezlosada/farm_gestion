@@ -8,6 +8,7 @@ use App\Entity\Notification;
 use App\Entity\Setting;
 use App\Entity\User;
 use App\Entity\VolunteerOffer;
+use App\Entity\VolunteerShift;
 use App\Entity\VolunteerSignup;
 use App\Service\AppSettings;
 use Doctrine\ORM\EntityManagerInterface;
@@ -80,12 +81,16 @@ class SendVolunteerRemindersCommandTest extends KernelTestCase
         // antelación, así que el finder la coge sea cual sea el ajuste.
         $offer = (new VolunteerOffer())
             ->setTitle('TEST Descargar el reparto')
-            ->setStartsAt(new \DateTime('+1 hour'))
             ->setStatus(VolunteerOffer::STATUS_PUBLISHED)
             ->setSlots(3);
-        $em->persist($offer);
 
-        $signup = (new VolunteerSignup())->setOffer($offer)->setPartner($partner);
+        $shift = (new VolunteerShift())->setStartsAt(new \DateTime('+1 hour'));
+        $offer->addShift($shift);
+
+        $em->persist($offer);
+        $em->persist($shift);
+
+        $signup = (new VolunteerSignup())->setShift($shift)->setPartner($partner);
         $em->persist($signup);
         $em->flush();
 
@@ -134,12 +139,16 @@ class SendVolunteerRemindersCommandTest extends KernelTestCase
 
         $offer = (new VolunteerOffer())
             ->setTitle('TEST Sólo una vez')
-            ->setStartsAt(new \DateTime('+1 hour'))
             ->setStatus(VolunteerOffer::STATUS_PUBLISHED)
             ->setSlots(2);
-        $em->persist($offer);
 
-        $signup = (new VolunteerSignup())->setOffer($offer)->setPartner($partner);
+        $shift = (new VolunteerShift())->setStartsAt(new \DateTime('+1 hour'));
+        $offer->addShift($shift);
+
+        $em->persist($offer);
+        $em->persist($shift);
+
+        $signup = (new VolunteerSignup())->setShift($shift)->setPartner($partner);
         $em->persist($signup);
         $em->flush();
 

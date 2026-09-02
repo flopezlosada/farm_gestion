@@ -1,19 +1,21 @@
-{# Listado de tareas de voluntariado.
+{# Listado de TURNOS de voluntariado: qué hay que hacer y cuándo.
+ #
+ # ES DE TURNOS Y NO DE TAREAS, y ése es el cambio de fondo de esta pantalla. Las
+ # cuatro vistas son las cuatro preguntas que se hacen de verdad —qué viene, qué
+ # está sin confirmar, qué se hizo y qué se quedó sin cubrir— y las cuatro se
+ # contestan con fechas. Un listado de definiciones no puede contestarlas: "sacar
+ # al perro" no viene ni pasó, viene mañana a las nueve. El catálogo de
+ # definiciones tiene su propia pantalla (Volunteering/tasks).
  #
  # Sigue el patrón del listado de socixs (Partner/index): tira de cifras
  # clicables, pestañas, barra de filtros con búsqueda y tabla paginada. Reusa
  # sus estilos (partner/_listing_styles) y su JS de filtros, extraído a
- # _components/listing_filters_js para no copiarlo en cada listado.
- #
- # Antes eran tres bloques apilados (pendientes, próximas, hechas). Las mismas
- # tres cosas están ahora en la tira de cifras, que además filtra: se ve el
- # cuadro completo de un vistazo y se entra a cada grupo con un clic, en vez de
- # bajar por una página de tres tablas. #}
+ # _components/listing_filters_js para no copiarlo en cada listado. #}
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
 {% import '_macros/volunteering.html.twig' as vol %}
 
-{% block title %}Voluntariado · Tareas{% endblock %}
+{% block title %}Voluntariado · Qué hay que hacer{% endblock %}
 
 {% block more_css %}
     {{ parent() }}
@@ -35,7 +37,7 @@
 {% block csa_main %}
 <div class="prl">
 
-    {{ csa.page_header('Voluntariado', 'Tareas', 'Lo que la asociación ofrece al voluntariado, y quién se apunta.') }}
+    {{ csa.page_header('Voluntariado', 'Qué hay que hacer', 'Los días concretos en que se trabaja, y quién se apunta a cada uno.') }}
 
     {# Un listado vacío tiene que explicarse. Sin esto, quien está marcada como
      # candidata en Usuarias pero aún no coordina ningún área ve una tabla sin
@@ -43,12 +45,12 @@
     {% if not coordinates_something %}
         {{ csa.callout('No coordinas ninguna área todavía, así que aquí no aparece nada. Pídele a administración que te asigne un área.', 'info') }}
     {% elseif not sees_everything %}
-        {{ csa.callout('Ves sólo las tareas de las áreas que coordinas.', 'info') }}
+        {{ csa.callout('Ves sólo los turnos de las áreas que coordinas.', 'info') }}
     {% endif %}
 
     {# ============ TIRA DE CIFRAS ============ #}
-    {# "Sin cubrir" va con borde de aviso: una tarea que pasó sin que fuera
-     # nadie dice más sobre cómo va esto que cualquier contador de horas. #}
+    {# "Sin cubrir" va con borde de aviso: un turno que pasó sin que fuera nadie
+     # dice más sobre cómo va esto que cualquier contador de horas. #}
     <div class="prl-stats">
         <a class="prl-stat prl-stat--active" href="{{ path('volunteering_index', { ver: 'upcoming' }) }}" style="text-decoration: none;">
             <div class="v">{{ counts.upcoming }}</div>
@@ -60,7 +62,7 @@
         </a>
         <a class="prl-stat" href="{{ path('volunteering_index', { ver: 'done' }) }}" style="text-decoration: none;">
             <div class="v">{{ counts.done }}</div>
-            <div class="l">hechas</div>
+            <div class="l">hechos</div>
         </a>
         {% if counts.missed > 0 %}
             <a class="prl-stat prl-stat--leave" href="{{ path('volunteering_index', { ver: 'missed' }) }}"
@@ -79,9 +81,9 @@
     {% set tabs = {
         'upcoming': 'Por venir',
         'pending': 'Sin confirmar',
-        'done': 'Hechas',
+        'done': 'Hechos',
         'missed': 'Sin cubrir',
-        'all': 'Todas'
+        'all': 'Todos'
     } %}
     <nav class="prl-tabs" role="tablist">
         {% for key, label in tabs %}
@@ -118,6 +120,7 @@
             </div>
 
             <div style="margin-left: auto; display: flex; gap: 8px;">
+                {{ csa.btn('Tareas', { variant: 'ghost', icon: 'fa-list-ul', href: path('volunteering_tasks') }) }}
                 {% if is_granted('ROLE_GESTION_VOLUNTARIADO_EDIT') %}
                     {{ csa.btn('Áreas', { variant: 'ghost', icon: 'fa-tags', href: path('volunteering_categories') }) }}
                 {% endif %}
@@ -140,29 +143,31 @@
                 </tr>
             </thead>
             <tbody>
-                {% for offer in pagination %}
+                {% for shift in pagination %}
+                    {% set offer = shift.offer %}
                     <tr>
                         <td>
-                            <a class="csa-table__primary" href="{{ path('volunteering_show', { id: offer.id }) }}">{{ offer.title }}</a>
+                            <a class="csa-table__primary" href="{{ path('volunteering_shift', { id: shift.id }) }}">{{ offer.title }}</a>
                             {# Lo destacado se ve DESDE AQUÍ o no se puede desmarcar:
                              # marcar algo que luego no aparece en ninguna lista es
                              # una casilla que se queda encendida para siempre. #}
                             {% if offer.featured %}{{ csa.badge('Destacada', 'ochre') }}{% endif %}
                             {% for category in offer.categories %}{{ csa.badge(category.name, 'neutral') }}{% endfor %}
                         </td>
-                        <td class="csa-table__col-tight">{{ offer.startsAt|date('d/m/Y H:i') }}</td>
+                        <td class="csa-table__col-tight">{{ vol.shift_when(shift) }}</td>
                         <td class="csa-table__col-tight">{{ vol.task_place(offer) }}</td>
-                        <td class="csa-table__col-tight">{{ vol.task_slots(offer) }}</td>
-                        <td class="csa-table__col-tight">{{ vol.task_status(offer, now) }}</td>
+                        <td class="csa-table__col-tight">{{ vol.shift_slots(shift) }}</td>
+                        <td class="csa-table__col-tight">{{ vol.shift_status(shift) }}</td>
                         <td class="csa-table__actions">
-                            <a href="{{ path('volunteering_show', { id: offer.id }) }}" title="Ver" aria-label="Ver"><i class="fa fa-eye"></i></a>
-                            {% if is_granted('VOLUNTEER_OFFER_EDIT', offer) %}
-                                <a href="{{ path('volunteering_edit', { id: offer.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>
+                            <a href="{{ path('volunteering_shift', { id: shift.id }) }}" title="Ver el turno" aria-label="Ver el turno"><i class="fa fa-eye"></i></a>
+                            <a href="{{ path('volunteering_show', { id: offer.id }) }}" title="Ver la tarea" aria-label="Ver la tarea"><i class="fa fa-list-ul"></i></a>
+                            {% if is_granted('VOLUNTEER_OFFER_EDIT', shift) %}
+                                <a href="{{ path('volunteering_shift_edit', { id: shift.id }) }}" title="Editar el turno" aria-label="Editar el turno"><i class="fa fa-pencil"></i></a>
                             {% endif %}
                         </td>
                     </tr>
                 {% else %}
-                    <tr><td colspan="6">No hay ninguna tarea que encaje con lo que buscas.</td></tr>
+                    <tr><td colspan="6">No hay ningún turno que encaje con lo que buscas.</td></tr>
                 {% endfor %}
             </tbody>
         </table>

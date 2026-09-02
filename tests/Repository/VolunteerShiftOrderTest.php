@@ -4,7 +4,8 @@ namespace App\Tests\Repository;
 
 use App\Entity\Node;
 use App\Entity\VolunteerOffer;
-use App\Repository\VolunteerOfferRepository;
+use App\Entity\VolunteerShift;
+use App\Repository\VolunteerShiftRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
@@ -21,7 +22,7 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  * futuras de db_test, incluidas las de las fixtures, así que lo que se comprueba
  * es cuál va antes que cuál entre las que crea el propio test.
  */
-class VolunteerOfferOrderTest extends KernelTestCase
+class VolunteerShiftOrderTest extends KernelTestCase
 {
     /**
      * Lo destacado adelanta incluso a lo del punto de recogida propio, que es el
@@ -40,11 +41,11 @@ class VolunteerOfferOrderTest extends KernelTestCase
         $destacada = $this->makeOffer($em, 'Orden destacada lejos', $otro, inDays: 6, featured: true);
         $em->flush();
 
-        $offers = $this->repository($em)->findUpcomingForNode(new \DateTime(), $mio);
+        $shifts = $this->repository($em)->findUpcomingForNode(new \DateTime(), $mio);
 
         $this->assertLessThan(
-            $this->positionOf($offers, $enMiPunto),
-            $this->positionOf($offers, $destacada),
+            $this->positionOf($shifts, $enMiPunto),
+            $this->positionOf($shifts, $destacada),
             'Una tarea destacada va por delante aunque sea de otro punto y más tardía.'
         );
     }
@@ -67,11 +68,11 @@ class VolunteerOfferOrderTest extends KernelTestCase
         $cercaYTarde = $this->makeOffer($em, 'Orden normal cerca', $mio, inDays: 6, featured: false);
         $em->flush();
 
-        $offers = $this->repository($em)->findUpcomingForNode(new \DateTime(), $mio);
+        $shifts = $this->repository($em)->findUpcomingForNode(new \DateTime(), $mio);
 
         $this->assertLessThan(
-            $this->positionOf($offers, $lejosYPronto),
-            $this->positionOf($offers, $cercaYTarde),
+            $this->positionOf($shifts, $lejosYPronto),
+            $this->positionOf($shifts, $cercaYTarde),
             'Sin nada destacado, la de su punto de recogida sigue yendo primero.'
         );
     }
@@ -92,11 +93,11 @@ class VolunteerOfferOrderTest extends KernelTestCase
         $destacadaCerca = $this->makeOffer($em, 'Orden dos cerca', $mio, inDays: 6, featured: true);
         $em->flush();
 
-        $offers = $this->repository($em)->findUpcomingForNode(new \DateTime(), $mio);
+        $shifts = $this->repository($em)->findUpcomingForNode(new \DateTime(), $mio);
 
         $this->assertLessThan(
-            $this->positionOf($offers, $destacadaLejos),
-            $this->positionOf($offers, $destacadaCerca),
+            $this->positionOf($shifts, $destacadaLejos),
+            $this->positionOf($shifts, $destacadaCerca),
         );
     }
 
@@ -116,34 +117,37 @@ class VolunteerOfferOrderTest extends KernelTestCase
         $destacadaTarde = $this->makeOffer($em, 'Orden sin nodo destacada', $node, inDays: 6, featured: true);
         $em->flush();
 
-        $offers = $this->repository($em)->findUpcomingForNode(new \DateTime(), null);
+        $shifts = $this->repository($em)->findUpcomingForNode(new \DateTime(), null);
 
         $this->assertLessThan(
-            $this->positionOf($offers, $pronto),
-            $this->positionOf($offers, $destacadaTarde),
+            $this->positionOf($shifts, $pronto),
+            $this->positionOf($shifts, $destacadaTarde),
         );
     }
 
     /**
      * Dónde ha caído una oferta en el resultado.
      *
-     * @param list<VolunteerOffer> $offers el resultado de la consulta
-     * @param VolunteerOffer       $offer  la que se busca
+     * @param list<VolunteerShift> $shifts el resultado de la consulta
+     * @param VolunteerShift       $shift  el que se busca
      *
      * @return int su posición
      */
-    private function positionOf(array $offers, VolunteerOffer $offer): int
+    private function positionOf(array $shifts, VolunteerShift $shift): int
     {
-        $position = array_search($offer, $offers, true);
-        $this->assertNotFalse($position, sprintf('«%s» no aparece en el resultado.', $offer->getTitle()));
+        $position = array_search($shift, $shifts, true);
+        $this->assertNotFalse($position, sprintf(
+            '«%s» no aparece en el resultado.',
+            $shift->getOffer()?->getTitle() ?? '?'
+        ));
 
         return (int) $position;
     }
 
-    private function repository(EntityManagerInterface $em): VolunteerOfferRepository
+    private function repository(EntityManagerInterface $em): VolunteerShiftRepository
     {
-        /** @var VolunteerOfferRepository $repository */
-        $repository = $em->getRepository(VolunteerOffer::class);
+        /** @var VolunteerShiftRepository $repository */
+        $repository = $em->getRepository(VolunteerShift::class);
 
         return $repository;
     }
@@ -159,22 +163,29 @@ class VolunteerOfferOrderTest extends KernelTestCase
         return $node;
     }
 
+    /**
+     * Una tarea publicada con UN turno futuro, y se devuelve el turno: es lo que
+     * ordenan estas consultas desde que el momento vive en su propia fila.
+     */
     private function makeOffer(
         EntityManagerInterface $em,
         string $title,
         Node $node,
         int $inDays,
         bool $featured,
-    ): VolunteerOffer {
+    ): VolunteerShift {
         $offer = (new VolunteerOffer())
             ->setTitle($title)
-            ->setStartsAt(new \DateTime(sprintf('+%d days', $inDays)))
             ->setNode($node)
             ->setFeatured($featured)
             ->setStatus(VolunteerOffer::STATUS_PUBLISHED);
 
-        $em->persist($offer);
+        $shift = (new VolunteerShift())->setStartsAt(new \DateTime(sprintf('+%d days', $inDays)));
+        $offer->addShift($shift);
 
-        return $offer;
+        $em->persist($offer);
+        $em->persist($shift);
+
+        return $shift;
     }
 }

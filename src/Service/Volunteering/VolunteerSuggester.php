@@ -4,7 +4,7 @@ namespace App\Service\Volunteering;
 
 use App\Entity\Partner;
 use App\Entity\VolunteerCall;
-use App\Entity\VolunteerOffer;
+use App\Entity\VolunteerShift;
 use App\Repository\VolunteerSignupRepository;
 
 /**
@@ -46,9 +46,9 @@ class VolunteerSuggester
     }
 
     /**
-     * Socixs a quienes tiene sentido pedirles que vengan a esta tarea, de quien
+     * Socixs a quienes tiene sentido pedirles que vengan a este turno, de quien
      * menos ha aportado este año a quien más, ya descontadxs quienes están
-     * apuntadxs.
+     * apuntadxs a él.
      *
      * Sale del ámbito MATCHING y no de toda la asociación: son quienes han
      * marcado esta área, es decir, quienes han dicho que de esto sí
@@ -63,15 +63,20 @@ class VolunteerSuggester
      * candidatos posibles en vez de para los ocho que se van a pintar sería
      * cuatrocientas consultas para tirar casi todas.
      *
-     * @param VolunteerOffer          $offer la tarea para la que hace falta gente
+     * @param VolunteerShift          $shift el turno para el que hace falta gente
      * @param int                     $limit cuántas sugerencias como mucho
      * @param \DateTimeInterface|null $now   momento de referencia; por defecto, ahora
      *
      * @return list<array{partner: Partner, same_node: bool}> lxs candidatxs y si recogen donde ocurre la tarea
      */
-    public function forOffer(VolunteerOffer $offer, int $limit = self::DEFAULT_LIMIT, ?\DateTimeInterface $now = null): array
+    public function forShift(VolunteerShift $shift, int $limit = self::DEFAULT_LIMIT, ?\DateTimeInterface $now = null): array
     {
-        $candidates = $this->audience->resolve($offer, VolunteerCall::SCOPE_MATCHING);
+        $offer = $shift->getOffer();
+        if (null === $offer) {
+            return [];
+        }
+
+        $candidates = $this->audience->resolve($shift, VolunteerCall::SCOPE_MATCHING);
 
         if ([] === $candidates) {
             return [];

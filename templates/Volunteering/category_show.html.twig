@@ -144,7 +144,7 @@
                 </div>
                 <div class="prt-card__body">
                     {% include 'Volunteering/_category_tasks.html.twig' with {
-                        offers: pending,
+                        shifts: pending,
                         category: category,
                         now: now
                     } only %}
@@ -173,7 +173,7 @@
                     </p>
                 {% else %}
                     {% include 'Volunteering/_category_tasks.html.twig' with {
-                        offers: upcoming,
+                        shifts: upcoming,
                         category: category,
                         now: now
                     } only %}

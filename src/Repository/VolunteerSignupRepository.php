@@ -4,11 +4,20 @@ namespace App\Repository;
 
 use App\Entity\Partner;
 use App\Entity\VolunteerOffer;
+use App\Entity\VolunteerShift;
 use App\Entity\VolunteerSignup;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
+use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
 
 /**
+ * Consultas sobre quién se apuntó a qué.
+ *
+ * TODA PREGUNTA CON FECHA PASA POR EL TURNO. La inscripción cuelga del turno y
+ * el turno lleva la fecha, así que cada consulta une las dos tablas; el helper
+ * {@see self::joinShift()} centraliza ese salto para que no haya nueve versiones
+ * del mismo JOIN, una de ellas olvidándose de excluir los turnos anulados.
+ *
  * @extends ServiceEntityRepository<VolunteerSignup>
  */
 class VolunteerSignupRepository extends ServiceEntityRepository
@@ -19,25 +28,84 @@ class VolunteerSignupRepository extends ServiceEntityRepository
     }
 
     /**
-     * Si un socix ya está apuntado a una oferta (aunque se diera de baja). Lo
-     * usa la pantalla para enseñar "apuntarse" o "darse de baja", y el alta para
-     * no chocar contra la constraint de unicidad con un error feo.
+     * Base común: la inscripción con su turno (`sh`) y su tarea (`o`).
      *
-     * @param VolunteerOffer $offer   la oferta
+     * @param bool $liveShiftsOnly excluir los turnos anulados
+     *
+     * @return QueryBuilder con los alias `s`, `sh` y `o`
+     */
+    private function joinShift(bool $liveShiftsOnly = true): QueryBuilder
+    {
+        $qb = $this->createQueryBuilder('s')
+            ->innerJoin('s.shift', 'sh')
+            ->innerJoin('sh.offer', 'o');
+
+        if ($liveShiftsOnly) {
+            $qb->andWhere('sh.cancelledAt IS NULL');
+        }
+
+        return $qb;
+    }
+
+    /**
+     * Si un socix ya está apuntado a un turno (aunque se diera de baja). Lo usa
+     * la pantalla para enseñar "apuntarse" o "darse de baja", y el alta para no
+     * chocar contra la constraint de unicidad con un error feo.
+     *
+     * @param VolunteerShift $shift   el turno
      * @param Partner        $partner el socix
      *
      * @return VolunteerSignup|null la inscripción, o null si no existe
      */
-    public function findOneFor(VolunteerOffer $offer, Partner $partner): ?VolunteerSignup
+    public function findOneFor(VolunteerShift $shift, Partner $partner): ?VolunteerSignup
     {
-        return $this->findOneBy(['offer' => $offer, 'partner' => $partner]);
+        return $this->findOneBy(['shift' => $shift, 'partner' => $partner]);
+    }
+
+    /**
+     * Las inscripciones vivas de un socix a varios turnos de golpe, indexadas por
+     * id de turno.
+     *
+     * Existe para que una pantalla con veinte turnos —el calendario, la ficha de
+     * una tarea continua— pueda marcar "ya vas" sin preguntar turno a turno: ese
+     * N+1 era veinte consultas por carga.
+     *
+     * @param Partner            $partner el socix
+     * @param list<VolunteerShift> $shifts los turnos que se van a pintar
+     *
+     * @return array<int, VolunteerSignup> id de turno => su inscripción
+     */
+    public function findForPartnerAndShifts(Partner $partner, array $shifts): array
+    {
+        if ([] === $shifts) {
+            return [];
+        }
+
+        $rows = $this->createQueryBuilder('s')
+            ->where('s.partner = :partner')
+            ->andWhere('s.shift IN (:shifts)')
+            ->setParameter('partner', $partner)
+            ->setParameter('shifts', $shifts)
+            ->getQuery()
+            ->getResult();
+
+        $byShift = [];
+        foreach ($rows as $signup) {
+            /** @var VolunteerSignup $signup */
+            $id = $signup->getShift()?->getId();
+            if (null !== $id) {
+                $byShift[$id] = $signup;
+            }
+        }
+
+        return $byShift;
     }
 
     /**
      * Minutos que un socix lleva reconocidos en un periodo. Sólo cuenta lo
      * confirmado: una inscripción sin cerrar no infla el contador de nadie.
      *
-     * El periodo se mide por la fecha de la OFERTA y no por la de inscripción:
+     * El periodo se mide por la fecha del TURNO y no por la de inscripción:
      * apuntarse en diciembre a algo que es en enero cuenta en enero, que es
      * cuando se trabaja.
      *
@@ -49,12 +117,11 @@ class VolunteerSignupRepository extends ServiceEntityRepository
      */
     public function sumCreditedMinutes(Partner $partner, \DateTimeInterface $from, \DateTimeInterface $to): int
     {
-        $total = $this->createQueryBuilder('s')
+        $total = $this->joinShift(false)
             ->select('COALESCE(SUM(s.creditedMinutes), 0)')
-            ->join('s.offer', 'o')
-            ->where('s.partner = :partner')
+            ->andWhere('s.partner = :partner')
             ->andWhere('s.attended = true')
-            ->andWhere('o.startsAt BETWEEN :from AND :to')
+            ->andWhere('sh.startsAt BETWEEN :from AND :to')
             ->setParameter('partner', $partner)
             ->setParameter('from', $from)
             ->setParameter('to', $to)
@@ -77,15 +144,16 @@ class VolunteerSignupRepository extends ServiceEntityRepository
      */
     public function findDoneFor(Partner $partner, \DateTimeInterface $from, \DateTimeInterface $to): array
     {
-        return $this->createQueryBuilder('s')
-            ->join('s.offer', 'o')
-            ->where('s.partner = :partner')
+        return $this->joinShift(false)
+            ->addSelect('sh')
+            ->addSelect('o')
+            ->andWhere('s.partner = :partner')
             ->andWhere('s.attended = true')
-            ->andWhere('o.startsAt BETWEEN :from AND :to')
+            ->andWhere('sh.startsAt BETWEEN :from AND :to')
             ->setParameter('partner', $partner)
             ->setParameter('from', $from)
             ->setParameter('to', $to)
-            ->orderBy('o.startsAt', 'DESC')
+            ->orderBy('sh.startsAt', 'DESC')
             ->getQuery()
             ->getResult();
     }
@@ -99,8 +167,7 @@ class VolunteerSignupRepository extends ServiceEntityRepository
      * más caro de todo el módulo.
      *
      * Sólo aparece quien ha participado alguna vez; el resto no está en el mapa
-     * y la pantalla lo interpreta como cero. Distinguir "cero" de "no consta" no
-     * aporta nada aquí y ahorra recorrer los 246.
+     * y la pantalla lo interpreta como cero.
      *
      * Los MINUTOS viajan en el mismo mapa aunque casi ninguna pantalla los
      * pinte: son el criterio con el que la ficha de una tarea ordena a quién
@@ -116,11 +183,10 @@ class VolunteerSignupRepository extends ServiceEntityRepository
      */
     public function participationByPartner(\DateTimeInterface $from, \DateTimeInterface $to): array
     {
-        $rows = $this->createQueryBuilder('s')
-            ->select('IDENTITY(s.partner) AS pid, COUNT(s.id) AS times, MAX(o.startsAt) AS last, SUM(s.creditedMinutes) AS minutes')
-            ->join('s.offer', 'o')
-            ->where('s.attended = true')
-            ->andWhere('o.startsAt BETWEEN :from AND :to')
+        $rows = $this->joinShift(false)
+            ->select('IDENTITY(s.partner) AS pid, COUNT(s.id) AS times, MAX(sh.startsAt) AS last, SUM(s.creditedMinutes) AS minutes')
+            ->andWhere('s.attended = true')
+            ->andWhere('sh.startsAt BETWEEN :from AND :to')
             ->setParameter('from', $from)
             ->setParameter('to', $to)
             ->groupBy('s.partner')
@@ -151,8 +217,7 @@ class VolunteerSignupRepository extends ServiceEntityRepository
      * debajo sin haber hecho nada distinto.
      *
      * Por eso el denominador es "quien echa una mano, echa esto", calculado
-     * sobre quienes participan. A quien está a cero le sitúa lo que hace la
-     * gente que participa; a los demás no les mueve el listón bajo los pies.
+     * sobre quienes participan.
      *
      * Se calcula en PHP a propósito: MySQL no tiene función de mediana, las
      * recetas con variables de sesión son ilegibles, y aquí hablamos de unos
@@ -165,11 +230,10 @@ class VolunteerSignupRepository extends ServiceEntityRepository
      */
     public function medianCreditedMinutes(\DateTimeInterface $from, \DateTimeInterface $to): int
     {
-        $rows = $this->createQueryBuilder('s')
+        $rows = $this->joinShift(false)
             ->select('IDENTITY(s.partner) AS partnerId, SUM(s.creditedMinutes) AS total')
-            ->join('s.offer', 'o')
-            ->where('s.attended = true')
-            ->andWhere('o.startsAt BETWEEN :from AND :to')
+            ->andWhere('s.attended = true')
+            ->andWhere('sh.startsAt BETWEEN :from AND :to')
             ->setParameter('from', $from)
             ->setParameter('to', $to)
             ->groupBy('s.partner')
@@ -193,8 +257,8 @@ class VolunteerSignupRepository extends ServiceEntityRepository
     }
 
     /**
-     * Las inscripciones vivas a tareas que empiezan dentro de la ventana dada:
-     * a esa gente hay que recordarle que se apuntó.
+     * Las inscripciones vivas a turnos que empiezan dentro de la ventana dada: a
+     * esa gente hay que recordarle que se apuntó.
      *
      * Por barrido y no programando un aviso al apuntarse (que es como lo hace
      * Karrot): así darse de baja no deja un recordatorio pendiente que haya que
@@ -211,15 +275,16 @@ class VolunteerSignupRepository extends ServiceEntityRepository
      */
     public function findDueForReminder(\DateTimeInterface $from, \DateTimeInterface $until): array
     {
-        return $this->createQueryBuilder('s')
-            ->join('s.offer', 'o')
-            ->where('s.cancelledAt IS NULL')
+        return $this->joinShift()
+            ->addSelect('sh')
+            ->addSelect('o')
+            ->andWhere('s.cancelledAt IS NULL')
             ->andWhere('o.status = :published')
-            ->andWhere('o.startsAt BETWEEN :from AND :until')
+            ->andWhere('sh.startsAt BETWEEN :from AND :until')
             ->setParameter('published', VolunteerOffer::STATUS_PUBLISHED)
             ->setParameter('from', $from)
             ->setParameter('until', $until)
-            ->orderBy('o.startsAt', 'ASC')
+            ->orderBy('sh.startsAt', 'ASC')
             ->getQuery()
             ->getResult();
     }
@@ -228,9 +293,9 @@ class VolunteerSignupRepository extends ServiceEntityRepository
      * Lo que este socix se apuntó, ya ha pasado y todavía no ha dicho si hizo o
      * no. Es lo que se le pregunta en su panel.
      *
-     * Que lo conteste quien fue —y no gestión al cerrar la tarea— es lo que
+     * Que lo conteste quien fue —y no gestión al cerrar el turno— es lo que
      * quita el punto único de fallo: si el contador de horas dependiera de que
-     * administración cierre cada tarea a mano, se olvidarían y se quedaría a
+     * administración cierre cada turno a mano, se olvidarían y se quedaría a
      * cero para todo el mundo sin que nadie supiera por qué.
      *
      * @param Partner            $partner el socix
@@ -240,24 +305,28 @@ class VolunteerSignupRepository extends ServiceEntityRepository
      */
     public function findPendingConfirmationFor(Partner $partner, \DateTimeInterface $until): array
     {
-        return $this->createQueryBuilder('s')
-            ->join('s.offer', 'o')
-            ->where('s.partner = :partner')
+        return $this->joinShift()
+            ->addSelect('sh')
+            ->addSelect('o')
+            ->andWhere('s.partner = :partner')
             ->andWhere('s.cancelledAt IS NULL')
             ->andWhere('s.attended IS NULL')
-            ->andWhere('o.startsAt <= :until')
-            ->andWhere('o.status = :published')
+            ->andWhere('sh.startsAt <= :until')
+            ->andWhere('o.status IN (:alive)')
             ->setParameter('partner', $partner)
             ->setParameter('until', $until)
-            ->setParameter('published', VolunteerOffer::STATUS_PUBLISHED)
-            ->orderBy('o.startsAt', 'DESC')
+            // Publicada o en pausa: si la tarea se para en septiembre, el trabajo
+            // que se hizo en agosto sigue habiéndose hecho y sus horas siguen
+            // haciendo falta.
+            ->setParameter('alive', [VolunteerOffer::STATUS_PUBLISHED, VolunteerOffer::STATUS_PAUSED])
+            ->orderBy('sh.startsAt', 'DESC')
             ->getQuery()
             ->getResult();
     }
 
     /**
-     * Las inscripciones vivas de un socix a ofertas que aún no han pasado, de
-     * la más próxima a la más lejana. Es su "lo que tengo comprometido".
+     * Las inscripciones vivas de un socix a turnos que aún no han pasado, de la
+     * más próxima a la más lejana. Es su "lo que tengo comprometido".
      *
      * @param Partner            $partner el socix
      * @param \DateTimeInterface $from    momento a partir del cual se consideran futuras
@@ -266,16 +335,17 @@ class VolunteerSignupRepository extends ServiceEntityRepository
      */
     public function findUpcomingFor(Partner $partner, \DateTimeInterface $from): array
     {
-        return $this->createQueryBuilder('s')
-            ->join('s.offer', 'o')
-            ->where('s.partner = :partner')
+        return $this->joinShift()
+            ->addSelect('sh')
+            ->addSelect('o')
+            ->andWhere('s.partner = :partner')
             ->andWhere('s.cancelledAt IS NULL')
-            ->andWhere('o.startsAt > :from')
+            ->andWhere('sh.startsAt > :from')
             ->andWhere('o.status = :published')
             ->setParameter('partner', $partner)
             ->setParameter('from', $from)
             ->setParameter('published', VolunteerOffer::STATUS_PUBLISHED)
-            ->orderBy('o.startsAt', 'ASC')
+            ->orderBy('sh.startsAt', 'ASC')
             ->getQuery()
             ->getResult();
     }

@@ -1,0 +1,53 @@
+{# Alta y edición de un sitio de voluntariado. #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% import '_macros/volunteering.html.twig' as vol %}
+
+{% block title %}Voluntariado · {{ is_new ? 'Nuevo sitio' : place.name }}{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include '_components/volunteering_styles.html.twig' %}
+{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('volunteering_index') }}">Voluntariado</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('volunteering_places') }}">Sitios</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ is_new ? 'Nuevo' : place.name }}</span>
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header('Voluntariado', is_new ? 'Nuevo sitio' : 'Editar sitio') }}
+
+    {{ form_start(form, { attr: { class: 'csa-form-narrow' } }) }}
+
+        {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'El sitio' } %}
+            {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
+                {% import '_macros/volunteering.html.twig' as vol %}
+                <div class="csa-form-grid">
+                    {{ csa.field(form.name, 'Nombre', { full: true }) }}
+                    {{ csa.field(form.directions, 'Cómo llegar', {
+                        full: true,
+                        hint: 'opcional',
+                        widget_class: 'csa-textarea'
+                    }) }}
+                </div>
+
+                <div class="csa-form-grid">
+                    {{ vol.check(form.active, 'Se sigue usando', 'desmárcalo para retirarlo: deja de ofrecerse en tareas nuevas y las de antes siguen diciendo dónde fueron') }}
+                </div>
+            {% endblock %}
+        {% endembed %}
+
+        <div class="csa-row-between" style="margin-top: var(--csa-sp-6);">
+            {{ csa.btn('Volver', { variant: 'ghost', href: path('volunteering_places') }) }}
+            <button type="submit" class="csa-btn csa-btn--primary">{{ is_new ? 'Crear el sitio' : 'Guardar cambios' }}</button>
+        </div>
+
+    {{ form_end(form) }}
+{% endblock %}
