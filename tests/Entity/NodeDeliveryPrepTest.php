@@ -219,7 +219,7 @@ class NodeDeliveryPrepTest extends TestCase
 
     /**
      * Una duración de cero minutos daría una convocatoria que acaba cuando
-     * empieza y computaría cero horas a quien fue.
+     * empieza. Para no decir cuánto dura, el campo se deja vacío.
      */
     public function testZeroMinutesIsRejected(): void
     {

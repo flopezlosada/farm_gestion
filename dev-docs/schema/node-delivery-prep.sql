@@ -6,6 +6,11 @@
 -- mano una por una, y de aquí sale también el bloque "quién te prepara la
 -- cesta" del panel del socix.
 --
+-- `delivery_prep_minutes` es cuánto DURA el montaje, de donde sale la hora de
+-- fin. Lo que se le reconoce a quien viene sigue en la convocatoria
+-- (`volunteer_offer.credited_minutes`), que el módulo separa a propósito porque
+-- hay trabajo que vale más de lo que dura.
+--
 -- POR QUÉ EN EL PUNTO Y NO EN EL TIPO DE TRABAJO. Antes lo decía
 -- `volunteer_category.delivery_prep`, una casilla que señalaba UNA cosa en toda
 -- la asociación: marcando cero, el panel del socix se quedaba mudo sin decir

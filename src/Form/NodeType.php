@@ -127,7 +127,7 @@ class NodeType extends AbstractType
             ->add('deliveryPrepMinutes', IntegerType::class, [
                 'label'    => 'Cuánto dura (minutos)',
                 'required' => false,
-                'help'     => 'Da la hora de fin y lo que se le computa a quien viene. Vacío = la convocatoria dice cuándo empieza y nada más.',
+                'help'     => 'De aquí sale la hora de fin. Lo que se le reconoce a quien viene se dice en la convocatoria, y puede ser más de lo que dura. Vacío = la convocatoria dice cuándo empieza y nada más.',
             ])
         ;
     }

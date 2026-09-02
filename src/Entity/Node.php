@@ -241,11 +241,17 @@ class Node
     private ?\DateTimeInterface $deliveryPrepTime = null;
 
     /**
-     * Cuánto dura el montaje, en minutos. Da la hora de fin de la convocatoria
-     * y, de paso, lo que computa a quien viene.
+     * Cuánto dura el montaje, en minutos. De aquí sale la hora de fin de la
+     * convocatoria.
      *
-     * NULL = convocatoria sin hora de fin. Se puede vivir con ello —el turno
-     * dice cuándo empieza y ya— y es mejor que inventarse una duración.
+     * NO ES LO QUE COMPUTA A QUIEN VIENE, y la distinción no es mía: el módulo
+     * de voluntariado separa a propósito la duración de las horas reconocidas
+     * ({@see VolunteerOffer::$creditedMinutes}), porque hay trabajo que vale más
+     * de lo que dura. Lo que se reconoce sigue viviendo en la convocatoria, que
+     * es donde se puede subir sin tocar el horario del punto.
+     *
+     * NULL = convocatoria sin hora de fin. Se puede vivir con ello —dice cuándo
+     * empieza y ya— y es mejor que inventarse una duración.
      *
      * @ORM\Column(name="delivery_prep_minutes", type="integer", nullable=true)
      */
