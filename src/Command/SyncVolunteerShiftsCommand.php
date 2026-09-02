@@ -61,12 +61,16 @@ class SyncVolunteerShiftsCommand extends AbstractCronCommand
 
         $repeating = $this->offers->findRepeating();
 
-        if ([] === $repeating) {
-            return $this->nothingToDo('No hay ninguna tarea de voluntariado que se repita.');
-        }
-
+        // La previsualización se atiende ANTES del atajo de "no hay nada": el
+        // atajo reporta al andamiaje, que en dry-run no imprime nada, y un
+        // comando que se ejecuta y no dice ni una palabra no se distingue de uno
+        // que ha fallado en silencio.
         if ((bool) $input->getOption('dry-run')) {
             return $this->preview($io, $repeating, $now);
+        }
+
+        if ([] === $repeating) {
+            return $this->nothingToDo('No hay ninguna tarea de voluntariado que se repita.');
         }
 
         $opened = 0;
@@ -150,8 +154,17 @@ class SyncVolunteerShiftsCommand extends AbstractCronCommand
             ];
         }
 
+        if ([] === $repeating) {
+            $io->success('No hay ninguna tarea de voluntariado que se repita: nada que abrir.');
+
+            return self::SUCCESS;
+        }
+
         if ([] === $rows) {
-            $io->success('Los turnos ya estaban al día.');
+            $io->success(sprintf(
+                '%d tarea(s) con repetición, y todas con sus turnos al día.',
+                \count($repeating)
+            ));
 
             return self::SUCCESS;
         }
