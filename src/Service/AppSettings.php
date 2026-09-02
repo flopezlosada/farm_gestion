@@ -285,6 +285,16 @@ class AppSettings
     public const CRON_VOLUNTEER_REMINDERS = 'cron.volunteer_reminders';
 
     /**
+     * Abre los turnos de las tareas de voluntariado que se repiten.
+     *
+     * Es la única de las tres del módulo que NO manda nada: sólo mantiene el
+     * calendario. Y es la que no se puede olvidar, porque los turnos se
+     * materializan por tramos —hasta unos meses vista— y sin esta tarea una
+     * tarea repetitiva se queda sin turnos a los cuatro meses en silencio.
+     */
+    public const CRON_VOLUNTEER_SHIFTS = 'cron.volunteer_shifts';
+
+    /**
      * MANIFIESTO DE TAREAS PROGRAMADAS: la fuente única de verdad sobre qué
      * debería ejecutarse, cuándo, y qué la inhibe. Clave del toggle =>
      * metadatos. Lo lee {@see \App\Service\Cron\CronTaskRegistry}.
@@ -519,6 +529,26 @@ class AppSettings
         // OJO AL DESPLIEGUE: el intervalo sólo vale si el reloj externo dispara
         // /cron/tick con esa frecuencia. Con el cron del hosting a diario, esto
         // corre una vez al día por mucho que aquí ponga 60 minutos.
+        // Antes que los avisos en el manifiesto porque va antes en el tiempo: sin
+        // turnos abiertos no hay nada de lo que avisar. La dependencia está
+        // declarada en las otras dos (`depends_on`), no aquí.
+        self::CRON_VOLUNTEER_SHIFTS => [
+            'command' => 'app:sync-volunteer-shifts',
+            // NINGÚN CANAL: esta tarea no entrega nada a nadie, sólo mantiene el
+            // calendario al día. Por eso tampoco pide confirmación.
+            'channels' => [],
+            'needs_recipient' => false,
+            'confirm' => false,
+            'dry' => true,
+            // De madrugada y a diario. El horizonte es de meses, así que la
+            // cadencia exacta da igual; lo que no da igual es que corra todos los
+            // días, porque el día que deje de correr nadie se entera hasta que
+            // una tarea se queda muda.
+            'schedule' => ['freq' => 'daily', 'hour' => 5],
+            'max_delay_hours' => 48,
+            'requires' => [self::FEATURE_VOLUNTEERING],
+            'depends_on' => [],
+        ],
         self::CRON_VOLUNTEER_CALLS => [
             'command' => 'app:send-volunteer-calls',
             // Multicanal desde que el aviso también sale por correo. Por eso NO
@@ -659,6 +689,12 @@ class AppSettings
             'label' => 'Recordar el voluntariado a quien se apuntó',
             'help' => 'Avisa a quien se apuntó a una tarea poco antes de que le toque, con la antelación configurada. Sin esto, alguien se apunta con dos semanas y el día que es no se acuerda. Requiere el módulo de voluntariado encendido.',
             'default' => false,
+        ],
+        self::CRON_VOLUNTEER_SHIFTS => [
+            'group' => 'Tareas programadas',
+            'label' => 'Abrir turnos de voluntariado',
+            'help' => 'Cada madrugada abre los turnos que les toca a las tareas que se repiten, y retira los que su repetición ya no dicta (app:sync-volunteer-shifts). No manda nada a nadie. APAGADA, las tareas repetitivas se quedan sin turnos a los cuatro meses y no hay a qué apuntarse: déjala encendida.',
+            'default' => true,
         ],
         self::CRON_VOLUNTEER_CALLS => [
             'group' => 'Tareas programadas',
