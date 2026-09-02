@@ -1,0 +1,83 @@
+{# Los sitios donde se hace voluntariado.
+ #
+ # Catálogo y no texto libre porque con turnos el sitio se escribiría en cientos
+ # de filas: acabas con "la nave", "nave" y "Nave" siendo el mismo lugar, sin
+ # poder filtrar ni contar por dónde se trabaja. Son cuatro o cinco en toda la
+ # asociación, así que mantenerlos cuesta menos que reconciliarlos después.
+ #
+ # Sin paginar y sin filtros a propósito: una lista de cinco filas con una barra
+ # de búsqueda encima es una barra de búsqueda que nadie va a usar. #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Voluntariado · Sitios{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    {% include '_components/volunteering_styles.html.twig' %}
+{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('volunteering_index') }}">Voluntariado</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Sitios</span>
+{% endblock %}
+
+{% block csa_main %}
+<div class="prl">
+
+    {{ csa.page_header('Voluntariado', 'Sitios', 'Dónde se trabaja. Cada tarea elige uno de aquí.') }}
+
+    <div class="prl-toolbar">
+        <div style="margin-left: auto; display: flex; gap: 8px;">
+            {{ csa.btn('Tareas', { variant: 'ghost', icon: 'fa-list-ul', href: path('volunteering_tasks') }) }}
+            {{ csa.btn('Nuevo sitio', { variant: 'primary', icon: 'fa-plus', href: path('volunteering_place_new') }) }}
+        </div>
+    </div>
+
+    <div class="csa-table-wrap">
+        <table class="csa-table">
+            <thead>
+                <tr>
+                    <th>Sitio</th>
+                    <th>Cómo llegar</th>
+                    <th class="csa-table__col-tight">Estado</th>
+                    <th class="csa-table__actions">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for place in places %}
+                    <tr>
+                        <td>
+                            <a class="csa-table__primary" href="{{ path('volunteering_place_edit', { id: place.id }) }}">{{ place.name }}</a>
+                        </td>
+                        <td>
+                            {% if place.directions %}
+                                {{ place.directions|striptags|u.truncate(120, '…', false) }}
+                            {% else %}
+                                <span class="vol-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="csa-table__col-tight">
+                            {{ place.active ? csa.badge('En uso', 'green') : csa.badge('Retirado', 'neutral') }}
+                        </td>
+                        <td class="csa-table__actions">
+                            <a href="{{ path('volunteering_place_edit', { id: place.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="4">No hay ningún sitio todavía.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <p class="vol-help--muted">
+        Un sitio no se borra: se retira. Las tareas viejas que lo usaron tienen que seguir
+        diciendo dónde fueron.
+    </p>
+</div>
+{% endblock %}

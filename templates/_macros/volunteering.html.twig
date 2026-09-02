@@ -88,6 +88,110 @@
     {{- parts|join(' · ') -}}
 {% endmacro %}
 
+{# ---------- SHIFT_WHEN ----------
+ # Cuándo es un turno, en una línea. "vie 12 sep · 17:00–19:00".
+ #
+ # La hora se calla cuando es medianoche: un turno a las 00:00 es casi siempre
+ # una tarea sin horario ("antes del día 20"), y enseñar "00:00" hace pensar que
+ # hay que ir de madrugada.
+ #
+ #   {{ vol.shift_when(shift) }}
+ #}
+{% macro shift_when(shift) %}
+    {%- if shift.startsAt is null -%}
+        —
+    {%- else -%}
+        {{ shift.startsAt|format_date(pattern="EEE d MMM", locale='es') }}
+        {%- if shift.startsAt|date('H:i') != '00:00' %}
+            · {{ shift.startsAt|date('H:i') }}{% if shift.endsAt %}–{{ shift.endsAt|date('H:i') }}{% endif %}
+        {%- endif -%}
+    {%- endif -%}
+{% endmacro %}
+
+{# ---------- TASK_PLACE ----------
+ # Dónde se hace, en cristiano. El punto de recogida manda sobre el sitio del
+ # catálogo: es el lugar al que esa persona ya va a ir de todas formas.
+ #
+ #   {{ vol.task_place(offer) }}
+ #}
+{% macro task_place(offer) %}
+    {%- if offer is null -%}
+        —
+    {%- elseif offer.remote -%}
+        Desde casa
+    {%- elseif offer.node -%}
+        {{ offer.node }}
+    {%- elseif offer.place -%}
+        {{ offer.place.name }}{% if offer.placeNote %} · {{ offer.placeNote }}{% endif %}
+    {%- elseif offer.placeNote -%}
+        {{ offer.placeNote }}
+    {%- else -%}
+        Por concretar
+    {%- endif -%}
+{% endmacro %}
+
+{# ---------- SHIFT_SLOTS ----------
+ # Cuánta gente hay y cuánta cabe. Sin tope se dice con palabras: "3 (sin tope)"
+ # se lee mucho antes que "3 / ∞".
+ #
+ #   {{ vol.shift_slots(shift) }}
+ #}
+{% macro shift_slots(shift) %}
+    {%- set slots = shift.slots -%}
+    {%- if slots is null -%}
+        {{ shift.filledSlots }} <span class="vol-muted">(sin tope)</span>
+    {%- else -%}
+        {{ shift.filledSlots }} de {{ slots }}
+    {%- endif -%}
+{% endmacro %}
+
+{# ---------- SHIFT_STATUS ----------
+ # En qué momento está un turno, como etiqueta. Sale de getPhase(), que es quien
+ # sabe la regla: aquí sólo se traduce a color y palabra.
+ #
+ #   {{ vol.shift_status(shift) }}
+ #}
+{% macro shift_status(shift) %}
+    {%- import '_macros/csa.html.twig' as csa -%}
+    {%- set phase = shift.phase -%}
+    {%- set map = {
+        'draft':     ['Borrador', 'neutral'],
+        'cancelled': ['Anulado', 'neutral'],
+        'paused':    ['En pausa', 'ochre'],
+        'open':      ['Por venir', 'sky'],
+        'today':     ['Hoy', 'green'],
+        'to_close':  ['Sin confirmar', 'ochre'],
+        'closed':    ['Cerrado', 'neutral'],
+    } -%}
+    {%- set label = map[phase]|default(['—', 'neutral']) -%}
+    {{ csa.badge(label[0], label[1]) }}
+{% endmacro %}
+
+{# ---------- REPEAT ----------
+ # La receta de repetición de una tarea, en una frase. Es lo que hace legible una
+ # tarea continua en un listado: "sábados y domingos, cada semana" dice más que
+ # cualquier contador de turnos.
+ #
+ #   {{ vol.repeat(offer) }}
+ #}
+{% macro repeat(offer) %}
+    {%- set days = {1: 'lunes', 2: 'martes', 3: 'miércoles', 4: 'jueves', 5: 'viernes', 6: 'sábados', 7: 'domingos'} -%}
+    {%- set marked = [] -%}
+    {%- for d in offer.repeatWeekdays -%}
+        {%- set marked = marked|merge([days[d]|default('?')]) -%}
+    {%- endfor -%}
+    {%- if offer.repeatType == 'once' -%}
+        Una sola vez
+    {%- elseif offer.repeatType == 'delivery' -%}
+        Los días que hay reparto
+    {%- elseif offer.repeatType == 'monthly' -%}
+        Una vez al mes{% if marked|length %}, {{ marked|join(' y ') }}{% endif %}
+    {%- else -%}
+        {{ marked|length ? marked|join(' y ') : 'sin días marcados' }}
+        {%- if offer.repeatEvery > 1 %}, cada {{ offer.repeatEvery }} semanas{% endif -%}
+    {%- endif -%}
+{% endmacro %}
+
 {# ---------- CHECK ----------
  # Una casilla con su etiqueta AL LADO.
  #

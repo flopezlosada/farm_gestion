@@ -49,15 +49,15 @@
                                     <h4 class="vol-item__title">{{ signup.offer.title }}</h4>
                                     <div class="vol-item__meta">
                                         <span><i class="fa fa-calendar" aria-hidden="true"></i>
-                                            {{ signup.offer.startsAt|format_datetime('full', 'short', locale='es') }}</span>
-                                        {% if signup.offer.creditedMinutes %}
+                                            {{ signup.startsAt|format_datetime('full', 'short', locale='es') }}</span>
+                                        {% if signup.shift.creditedMinutes %}
                                             <span><i class="fa fa-clock-o" aria-hidden="true"></i>
-                                                Cuenta {{ vol.duration(signup.offer.creditedMinutes) }}</span>
+                                                Cuenta {{ vol.duration(signup.shift.creditedMinutes) }}</span>
                                         {% endif %}
                                     </div>
                                 </div>
                                 <div class="vol-item__action">
-                                    <form method="post" action="{{ path('panel_volunteering_confirm', {id: signup.offer.id}) }}">
+                                    <form method="post" action="{{ path('panel_volunteering_confirm', {id: signup.shift.id}) }}">
                                         <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_volunteering') }}">
                                         <button type="submit" name="attended" value="1" class="csa-btn csa-btn--primary csa-btn--sm">Sí, la hice</button>
                                         <button type="submit" name="attended" value="0" class="csa-btn csa-btn--secondary csa-btn--sm">No pude</button>
@@ -80,14 +80,15 @@
         } %}
             {% block body %}
                 {% import '_macros/volunteering.html.twig' as vol %}
-                {% if offers is empty %}
+                {% if shifts is empty %}
                     <p class="vol-empty">
-                        Ahora mismo no hay ninguna tarea pendiente. Cuando haya algo que
+                        Ahora mismo no hay ningún día pendiente. Cuando haya algo que
                         necesite manos, aparecerá aquí.
                     </p>
                 {% else %}
                     <ul class="vol-list">
-                        {% for offer in offers %}
+                        {% for shift in shifts %}
+                            {% set offer = shift.offer %}
                             {# Lo que ya tienes apuntado no sale aquí: vive en su
                              # propio bloque, con el botón de darte de baja. #}
                             {% set mine_here = my_node_id and offer.node and offer.node.id == my_node_id %}
@@ -98,19 +99,21 @@
 
                                     <div class="vol-item__meta">
                                         <span><i class="fa fa-calendar" aria-hidden="true"></i>
-                                            {{ offer.startsAt|format_datetime('full', 'short', locale='es') }}</span>
+                                            {{ shift.startsAt|format_datetime('full', 'short', locale='es') }}</span>
 
                                         {% if offer.remote %}
                                             <span><i class="fa fa-home" aria-hidden="true"></i> Desde casa</span>
                                         {% elseif offer.node %}
                                             <span><i class="fa fa-map-marker" aria-hidden="true"></i> {{ offer.node }}</span>
                                         {% elseif offer.place %}
-                                            <span><i class="fa fa-map-marker" aria-hidden="true"></i> {{ offer.place }}</span>
+                                            <span><i class="fa fa-map-marker" aria-hidden="true"></i> {{ offer.place.name }}</span>
+                                        {% elseif offer.placeNote %}
+                                            <span><i class="fa fa-map-marker" aria-hidden="true"></i> {{ offer.placeNote }}</span>
                                         {% endif %}
 
-                                        {% if offer.creditedMinutes %}
+                                        {% if shift.creditedMinutes %}
                                             <span><i class="fa fa-clock-o" aria-hidden="true"></i>
-                                                Cuenta {{ vol.duration(offer.creditedMinutes) }}</span>
+                                                Cuenta {{ vol.duration(shift.creditedMinutes) }}</span>
                                         {% endif %}
                                     </div>
 
@@ -130,17 +133,17 @@
                                 </div>
 
                                 <div class="vol-item__action">
-                                    {% if offer.remainingSlots is not null %}
+                                    {% if shift.remainingSlots is not null %}
                                         <p class="vol-item__slots">
-                                            {% if offer.remainingSlots == 1 %}
+                                            {% if shift.remainingSlots == 1 %}
                                                 Falta <strong>1 persona</strong>
                                             {% else %}
-                                                Faltan <strong>{{ offer.remainingSlots }} personas</strong>
+                                                Faltan <strong>{{ shift.remainingSlots }} personas</strong>
                                             {% endif %}
                                         </p>
                                     {% endif %}
 
-                                    <form method="post" action="{{ path('panel_volunteering_signup', {id: offer.id}) }}">
+                                    <form method="post" action="{{ path('panel_volunteering_signup', {id: shift.id}) }}">
                                         <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_volunteering') }}">
                                         {% if offer.companionsAllowed %}
                                             <label class="vol-item__companions">
@@ -155,6 +158,16 @@
                             </li>
                         {% endfor %}
                     </ul>
+
+                    {# El calendario, al pie de la lista corta: aquí sólo se asoman
+                     # unos pocos días, y para comprometerse con "los viernes de
+                     # agosto" hace falta verlos todos y poder marcar varios. #}
+                    <p class="vol-help">
+                        <a href="{{ path('panel_volunteering_calendar') }}">
+                            <i class="fa fa-calendar-o" aria-hidden="true"></i>
+                            Ver el calendario y apuntarme a varios días
+                        </a>
+                    </p>
                 {% endif %}
             {% endblock %}
         {% endembed %}
@@ -178,13 +191,15 @@
                                     <h4 class="vol-item__title">{{ signup.offer.title }}</h4>
                                     <div class="vol-item__meta">
                                         <span><i class="fa fa-calendar" aria-hidden="true"></i>
-                                            {{ signup.offer.startsAt|format_datetime('full', 'short', locale='es') }}</span>
+                                            {{ signup.startsAt|format_datetime('full', 'short', locale='es') }}</span>
                                         {% if signup.offer.remote %}
                                             <span><i class="fa fa-home" aria-hidden="true"></i> Desde casa</span>
                                         {% elseif signup.offer.node %}
                                             <span><i class="fa fa-map-marker" aria-hidden="true"></i> {{ signup.offer.node }}</span>
                                         {% elseif signup.offer.place %}
-                                            <span><i class="fa fa-map-marker" aria-hidden="true"></i> {{ signup.offer.place }}</span>
+                                            <span><i class="fa fa-map-marker" aria-hidden="true"></i> {{ signup.offer.place.name }}</span>
+                                        {% elseif signup.offer.placeNote %}
+                                            <span><i class="fa fa-map-marker" aria-hidden="true"></i> {{ signup.offer.placeNote }}</span>
                                         {% endif %}
                                         {% if signup.companions > 0 %}
                                             <span><i class="fa fa-users" aria-hidden="true"></i>
@@ -193,7 +208,7 @@
                                     </div>
                                 </div>
                                 <div class="vol-item__action">
-                                    <form method="post" action="{{ path('panel_volunteering_withdraw', {id: signup.offer.id}) }}">
+                                    <form method="post" action="{{ path('panel_volunteering_withdraw', {id: signup.shift.id}) }}">
                                         <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_volunteering') }}">
                                         <button type="submit" class="csa-btn csa-btn--secondary csa-btn--sm">No voy a poder ir</button>
                                     </form>
@@ -399,7 +414,7 @@
                                     <span class="csa-badge">lo organizaste</span>
                                 {% endif %}
                                 <span class="vol-mine__when">
-                                    {{ signup.offer.startsAt|format_date('long', locale='es') }}
+                                    {{ signup.startsAt|format_date('long', locale='es') }}
                                     {%- if signup.creditedMinutes %} · {{ vol.duration(signup.creditedMinutes) }}{% endif -%}
                                 </span>
                             </li>
