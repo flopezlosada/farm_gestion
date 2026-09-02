@@ -424,6 +424,38 @@ class Node
     }
 
     /**
+     * El tramo horario del montaje, en "HH:MM", tal como lo espera la receta de
+     * una tarea de voluntariado: inicio y fin, o inicio y null si este punto no
+     * dice cuánto dura.
+     *
+     * Existe porque la receta habla de HORAS y no de fechas —las fechas se las
+     * pregunta al calendario de reparto—, así que quien crea la convocatoria
+     * necesita esto y no un momento concreto. Un tramo que cruza la medianoche
+     * sale con el fin menor que el inicio, que es exactamente lo que el
+     * generador de turnos ya sabe interpretar.
+     *
+     * Devuelve null en el mismo caso que {@see deliveryPrepWindowFor()}: sin
+     * montaje o sin hora no hay tramo que dar.
+     *
+     * @return array{0: string, 1: string|null}|null inicio y fin en "HH:MM", o null
+     */
+    public function deliveryPrepTimeSlot(): ?array
+    {
+        if (!$this->deliveryPrep || null === $this->deliveryPrepTime) {
+            return null;
+        }
+
+        $start = \DateTimeImmutable::createFromInterface($this->deliveryPrepTime);
+
+        return [
+            $start->format('H:i'),
+            null === $this->deliveryPrepMinutes
+                ? null
+                : $start->modify(sprintf('+%d minutes', $this->deliveryPrepMinutes))->format('H:i'),
+        ];
+    }
+
+    /**
      * Cuándo se montan las cestas que este punto entrega el día que se le pasa:
      * el par inicio/fin de la convocatoria, ya con el desfase y la hora puestos.
      *

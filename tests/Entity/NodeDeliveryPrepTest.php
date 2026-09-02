@@ -149,6 +149,46 @@ class NodeDeliveryPrepTest extends TestCase
     }
 
     /**
+     * El tramo que se le pasa a la receta de la convocatoria: horas sueltas, sin
+     * fecha, porque las fechas las pone el calendario de reparto.
+     */
+    public function testTheTimeSlotIsTheRecipesPairOfHours(): void
+    {
+        $node = $this->prepNode(-1, '18:30')->setDeliveryPrepMinutes(90);
+
+        $this->assertSame(['18:30', '20:00'], $node->deliveryPrepTimeSlot());
+    }
+
+    /**
+     * Sin duración, el tramo va sin hora de fin, que es lo que la receta espera.
+     */
+    public function testTheTimeSlotHasNoEndWithoutDuration(): void
+    {
+        $node = $this->prepNode(-1, '18:30');
+
+        $this->assertSame(['18:30', null], $node->deliveryPrepTimeSlot());
+    }
+
+    /**
+     * Un tramo que cruza la medianoche sale con el fin menor que el inicio, y
+     * así es como el generador de turnos sabe que acaba al día siguiente.
+     */
+    public function testTheTimeSlotCanWrapPastMidnight(): void
+    {
+        $node = $this->prepNode(-1, '23:00')->setDeliveryPrepMinutes(120);
+
+        $this->assertSame(['23:00', '01:00'], $node->deliveryPrepTimeSlot());
+    }
+
+    /**
+     * Y un punto que no monta con voluntariado no tiene tramo que dar.
+     */
+    public function testANodeThatDoesNotPrepHasNoTimeSlot(): void
+    {
+        $this->assertNull($this->node()->deliveryPrepTimeSlot());
+    }
+
+    /**
      * Marcar el montaje sin decir la hora dejaría la convocatoria sin momento al
      * que apuntarse: una tarea publicada y vacía, que es justo lo que este
      * rediseño viene a evitar.
