@@ -28,7 +28,10 @@
                         · <a href="{{ path('volunteering_show', { id: event.offer.id }) }}">{{ event.offer.title }}</a>
                     {% endif %}
                     {% if event.partner %}
-                        · {{ event.partner.name }} {{ event.partner.surname }}
+                        {# En minúsculas + csa-name: en la BBDD los nombres están en
+                         # mayúsculas y una línea de historial con dos palabras
+                         # gritando se lee peor que el resto de la frase. #}
+                        · <span class="csa-name">{{ (event.partner.name ~ ' ' ~ event.partner.surname)|lower }}</span>
                     {% endif %}
                     {% if event.payload %}
                         <span class="vol-history__detail">{{ vol.detail(event.payload) }}</span>

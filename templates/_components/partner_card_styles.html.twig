@@ -296,6 +296,13 @@
     border: 1px solid var(--prt-line); border-radius: 6px; overflow: hidden;
     margin-top: 14px;
 }
+/* La tira sólo lleva margen ABAJO cuando le sigue una tarjeta en el mismo
+   flujo. `.prt-card` trae margin-bottom pero no margin-top, así que sin esto la
+   primera tarjeta de una ficha queda pegada a los indicadores. Va con selector
+   de adyacencia y no como margin-bottom de `.prt-mini` porque en la ficha de
+   socix y en la de voluntariado la tira vive DENTRO de un `.prt-card__body`, y
+   ahí ese margen se sumaría al padding del body. */
+.prt-mini + .prt-card { margin-top: 18px; }
 .prt-mini__cell { background: var(--prt-surface); padding: 12px 14px; min-width: 0; }
 .prt-mini__label {
     font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;

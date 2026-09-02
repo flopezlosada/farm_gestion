@@ -198,11 +198,15 @@
                     {% if coordinators is empty %}
                         {{ csa.callout('Nadie coordina esta área todavía, así que nadie puede publicar ni cerrar sus tareas salvo administración.', 'warning', 'exclamation-triangle') }}
                     {% else %}
+                        {# `|lower` + csa-name: en la base de datos los nombres están en
+                         # mayúsculas y en pantalla gritan. Hacen falta los dos: el
+                         # `capitalize` del CSS pone la inicial de cada palabra pero no
+                         # baja el resto. #}
                         <div class="prt-relatives">
                             {% for coordinator in coordinators %}
                                 <div class="prt-relative">
                                     <span class="prt-relative__dot"></span>
-                                    <span class="prt-relative__name">{{ coordinator.displayName }}</span>
+                                    <span class="prt-relative__name csa-name">{{ coordinator.displayName|lower }}</span>
                                 </div>
                             {% endfor %}
                         </div>
@@ -236,7 +240,7 @@
                             {% for partner in interested|slice(0, 12) %}
                                 <div class="prt-relative">
                                     <span class="prt-relative__dot"></span>
-                                    <span class="prt-relative__name">{{ partner.name }} {{ partner.surname }}</span>
+                                    <span class="prt-relative__name csa-name">{{ (partner.name ~ ' ' ~ partner.surname)|lower }}</span>
                                 </div>
                             {% endfor %}
                         </div>

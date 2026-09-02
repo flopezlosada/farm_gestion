@@ -96,14 +96,12 @@
                         </td>
                         <td>{{ category.description ?: '—' }}</td>
                         <td>
-                            {# Nombres en texto y NO en insignias. Una insignia es para un
-                             # estado —una palabra, un color que significa algo—, y un
-                             # nombre y apellidos no cabe en una: en esta columna se
-                             # partía en dos líneas y quedaba un bloque de color más
-                             # grande que la fila, compitiendo con el estado de al lado,
-                             # que sí es un estado. #}
+                            {# Insignia COMPACTA y sin punto: un nombre y apellidos con el
+                             # padding normal se comía la celda y el punto de color delante
+                             # de un nombre no informa de nada. Y en minúsculas + csa-name,
+                             # porque en la base de datos están EN MAYÚSCULAS y así gritan. #}
                             {% for coordinator in category.coordinators %}
-                                {{ coordinator.displayName }}{{ not loop.last ? ',' : '' }}
+                                {{ csa.badge(coordinator.displayName|lower, 'sky', { sm: true, no_dot: true, class: 'csa-name' }) }}
                             {% else %}
                                 <span class="vol-help">Sin coordinar</span>
                             {% endfor %}
