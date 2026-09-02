@@ -133,7 +133,6 @@ class VolunteerOfferVoterTest extends TestCase
     {
         return (new VolunteerOffer())
             ->setTitle('Descargar el reparto')
-            ->setStartsAt(new \DateTime('2099-03-15 17:00'))
             ->addCategory($category);
     }
 

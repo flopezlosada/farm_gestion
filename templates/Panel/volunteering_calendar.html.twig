@@ -1,0 +1,164 @@
+{# El calendario del socix: todo lo que hay por delante, por días, con casillas
+ # para apuntarse a varios de una vez.
+ #
+ # ES LA PANTALLA QUE FALTABA. Con la lista corta de la portada se puede decir sí
+ # a lo de esta semana, pero no "los viernes de agosto": para eso hay que ver el
+ # calendario entero y poder marcar. Y una tarea continua —el reparto, el
+ # invernadero, sacar al perro— sólo se entiende viéndola repetida.
+ #
+ # UNA FILA POR TURNO Y NO UNA POR TAREA. Lo que se marca es un día concreto;
+ # "todos los martes" es marcar los martes que salen, y así darse de baja de UNO
+ # sigue siendo lo normal en vez de una excepción que habría que modelar aparte.
+ #
+ # Se envía en UN formulario con casillas y no con un botón por fila: cuatro
+ # martes son cuatro clics y una recarga, no cuatro recargas. #}
+{% extends '_layouts/csa_panel.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% import '_macros/volunteering.html.twig' as vol %}
+
+{% block title %}Voluntariado · Calendario{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('panel_volunteering') }}">Voluntariado</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Calendario</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include '_components/volunteering_styles.html.twig' %}
+{% endblock %}
+
+{% block csa_main %}
+<div class="csa-stack">
+
+    {% embed '_components/csa_card.html.twig' with {
+        title: 'Calendario de voluntariado',
+        subtitle: 'Lo que hay por delante. Marca los días a los que puedes venir.',
+        icon: 'fa-calendar-o',
+        accent: 'green',
+        variant: 'hero'
+    } %}
+        {% block body %}
+            {% import '_macros/csa.html.twig' as csa %}
+            {% import '_macros/volunteering.html.twig' as vol %}
+
+            {% if by_day is empty %}
+                <p class="vol-empty">
+                    No hay nada convocado en las próximas semanas. Cuando haya algo que
+                    necesite manos, aparecerá aquí.
+                </p>
+            {% else %}
+                <form method="post" action="{{ path('panel_volunteering_signup_many') }}">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_volunteering') }}">
+
+                    {% for day, day_shifts in by_day %}
+                        <h4 class="vol-day">
+                            {{ day|date('D d/m')|capitalize }}
+                            <span class="vol-day__long">{{ day|format_date('full', locale='es') }}</span>
+                        </h4>
+
+                        <ul class="vol-list">
+                            {% for shift in day_shifts %}
+                                {% set offer = shift.offer %}
+                                {% set mine = my_signups[shift.id]|default(null) %}
+                                {% set i_go = mine and not mine.cancelled %}
+                                {% set mine_here = my_node_id and offer.node and offer.node.id == my_node_id %}
+                                {% set can_join = shift.isOpen() and not i_go %}
+
+                                <li class="vol-item{% if shift.cancelled %} vol-row--out{% endif %}">
+                                    <div class="vol-item__main">
+                                        <h4 class="vol-item__title">
+                                            {% if can_join %}
+                                                <label class="vol-check">
+                                                    <input type="checkbox" name="shifts[]" value="{{ shift.id }}">
+                                                    <span>{{ offer.title }}</span>
+                                                </label>
+                                            {% else %}
+                                                {{ offer.title }}
+                                            {% endif %}
+                                        </h4>
+
+                                        <div class="vol-item__meta">
+                                            <span><i class="fa fa-clock-o" aria-hidden="true"></i>
+                                                {{ shift.startsAt|date('H:i') }}{% if shift.endsAt %}–{{ shift.endsAt|date('H:i') }}{% endif %}</span>
+
+                                            {% if offer.remote %}
+                                                <span><i class="fa fa-home" aria-hidden="true"></i> Desde casa</span>
+                                            {% elseif offer.node %}
+                                                <span><i class="fa fa-map-marker" aria-hidden="true"></i> {{ offer.node }}</span>
+                                            {% elseif offer.place %}
+                                                <span><i class="fa fa-map-marker" aria-hidden="true"></i> {{ offer.place.name }}</span>
+                                            {% endif %}
+
+                                            {% if shift.creditedMinutes %}
+                                                <span><i class="fa fa-hourglass-half" aria-hidden="true"></i>
+                                                    Cuenta {{ vol.duration(shift.creditedMinutes) }}</span>
+                                            {% endif %}
+                                        </div>
+
+                                        <div class="vol-item__tags">
+                                            {% if i_go %}
+                                                <span class="csa-badge csa-badge--green">Ya vas</span>
+                                            {% elseif shift.cancelled %}
+                                                {# Un día anulado se ENSEÑA, no se esconde: si desapareciera,
+                                                 # quien mira el calendario pensaría que ese viernes se
+                                                 # olvidaron de convocarlo. #}
+                                                <span class="csa-badge">No se hace{% if shift.cancelledReason %} · {{ shift.cancelledReason }}{% endif %}</span>
+                                            {% elseif not shift.hasRoom() %}
+                                                <span class="csa-badge">Cubierto</span>
+                                            {% elseif shift.remainingSlots is not null %}
+                                                <span class="csa-badge csa-badge--ochre">
+                                                    {{ shift.remainingSlots == 1 ? 'Falta 1' : 'Faltan ' ~ shift.remainingSlots }}
+                                                </span>
+                                            {% endif %}
+
+                                            {% if mine_here %}
+                                                <span class="csa-badge csa-badge--green">En tu punto de recogida</span>
+                                            {% endif %}
+
+                                            {% for category in offer.categories %}
+                                                <span class="csa-badge">{{ category.name }}</span>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+
+                                    {# Darse de baja de UN día, aquí mismo: es lo más normal del
+                                     # mundo y no puede obligar a volver a la portada. Es un botón
+                                     # de otro formulario, así que va con `formaction`. #}
+                                    {% if i_go %}
+                                        <div class="vol-item__action">
+                                            <button type="submit" class="csa-btn csa-btn--secondary csa-btn--sm"
+                                                    formaction="{{ path('panel_volunteering_withdraw', { id: shift.id }) }}"
+                                                    formnovalidate>
+                                                No voy a poder
+                                            </button>
+                                        </div>
+                                    {% endif %}
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% endfor %}
+
+                    <div class="vol-close">
+                        <p class="vol-help">
+                            Marca todos los días a los que puedas venir y dale una sola vez. Si un día
+                            se llena antes de que llegues, ése se queda fuera y los demás se apuntan.
+                        </p>
+                        <button type="submit" class="csa-btn csa-btn--primary">
+                            <i class="fa fa-check"></i><span>Apuntarme a los días marcados</span>
+                        </button>
+                    </div>
+                </form>
+            {% endif %}
+        {% endblock %}
+    {% endembed %}
+
+    <p class="vol-help">
+        <a href="{{ path('panel_volunteering') }}">
+            <i class="fa fa-arrow-left" aria-hidden="true"></i>
+            Volver a mi voluntariado
+        </a>
+    </p>
+</div>
+{% endblock %}

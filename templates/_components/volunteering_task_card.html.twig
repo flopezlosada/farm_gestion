@@ -1,11 +1,14 @@
 {#
- # Una tarea de voluntariado, como tarjeta.
+ # Un TURNO de voluntariado, como tarjeta.
  #
  # SUSTITUYE A UNA LISTA DE ENLACES. El teaser de la home enseñaba título y una
  # línea de meta, y para saber si podías ir había que abrir la tarea: cuándo
  # empieza y acaba, dónde, cuánto cuenta, cuánta gente falta y quién va ya. Cinco
  # datos que caben en la tarjeta y que son exactamente los que deciden si alguien
  # se apunta o no.
+ #
+ # ES DE UN TURNO Y NO DE UNA TAREA: lo que se decide es si puedes ir ESE DÍA. De
+ # "sacar al perro" no se puede decir sí; del domingo por la mañana, sí.
  #
  # Y el botón está AQUÍ. Mandar a otra pantalla para decir que sí convierte un
  # gesto en un trámite, y quien tiene que pensárselo dos veces no vuelve. Es el
@@ -17,26 +20,27 @@
  # hace; con el porqué al lado, la petición deja de ser una tarea que alguien ha
  # apuntado y pasa a ser algo que hace falta.
  #
- # Espera: offer (VolunteerOffer), my_node_id (para señalar la de su punto) y
+ # Espera: shift (VolunteerShift), my_node_id (para señalar el de su punto) y
  # csrf (token de panel_volunteering).
  #}
 {% import '_macros/csa.html.twig' as csa %}
 
-{% set faltan = offer.remainingSlots %}
+{% set offer = shift.offer %}
+{% set faltan = shift.remainingSlots %}
 {% set en_mi_punto = my_node_id and offer.node and offer.node.id == my_node_id %}
-{# URGENTE = le falta gente Y es inminente (o alguien la ha destacado).
+{# URGENTE = le falta gente Y es inminente (o alguien ha destacado la tarea).
  #
  # El primer intento fue "urgente = destacada", con el argumento de que eso lo
  # decide quien organiza y no un umbral. Suena bien y era falso: de las siete
  # tareas publicadas hay CERO destacadas, así que el aviso no se encendía nunca
- # y todas las tarjetas salían iguales. Una tarea a la que le faltan cuatro
+ # y todas las tarjetas salían iguales. Un turno al que le faltan cuatro
  # personas y es pasado mañana es urgente aunque nadie se haya acordado de
- # marcarla.
+ # marcarlo.
  #
  # Siete días porque es el horizonte en el que alguien puede cambiar sus planes:
  # más allá no es urgencia, es agenda. La marca manual se conserva para lo que el
  # calendario no sabe (una helada, una avería). #}
-{% set dias_para = (offer.startsAt|date('U') - 'now'|date('U')) / 86400 %}
+{% set dias_para = (shift.startsAt|date('U') - 'now'|date('U')) / 86400 %}
 {% set urgente = faltan and (offer.featured or dias_para <= 7) %}
 
 <article class="vol-task{% if urgente %} vol-task--urgent{% endif %}">
@@ -58,7 +62,7 @@
     <h3 class="vol-task__title">{{ offer.title }}</h3>
 
     {# Recortada: aquí cabe el motivo, no el parte entero. Quien quiera el detalle
-     # abre la tarea. #}
+     # abre el calendario. #}
     {% if offer.description %}
         <p class="vol-task__why">{{ offer.description|striptags|u.truncate(150, '…', false) }}</p>
     {% endif %}
@@ -67,20 +71,32 @@
         <li>
             <i class="fa fa-calendar-o" aria-hidden="true"></i>
             <span>
-                <strong>{{ offer.startsAt|format_date(pattern="EEE d 'de' MMMM", locale='es') }}</strong>
-                {%- if offer.startsAt|date('H:i') != '00:00' %}
-                    · {{ offer.startsAt|date('H:i') }}{% if offer.endsAt %}–{{ offer.endsAt|date('H:i') }}{% endif %}
+                <strong>{{ shift.startsAt|format_date(pattern="EEE d 'de' MMMM", locale='es') }}</strong>
+                {%- if shift.startsAt|date('H:i') != '00:00' %}
+                    · {{ shift.startsAt|date('H:i') }}{% if shift.endsAt %}–{{ shift.endsAt|date('H:i') }}{% endif %}
                 {%- endif %}
             </span>
         </li>
         <li>
             <i class="fa fa-{{ offer.remote ? 'home' : 'map-marker' }}" aria-hidden="true"></i>
-            <span>{{ offer.remote ? 'Desde casa, a tu ritmo' : (offer.place ?: offer.node|default('Por concretar')) }}</span>
+            <span>
+                {%- if offer.remote -%}
+                    Desde casa, a tu ritmo
+                {%- elseif offer.node -%}
+                    {{ offer.node }}
+                {%- elseif offer.place -%}
+                    {{ offer.place.name }}
+                {%- elseif offer.placeNote -%}
+                    {{ offer.placeNote }}
+                {%- else -%}
+                    Por concretar
+                {%- endif -%}
+            </span>
         </li>
-        {% if offer.creditedMinutes %}
+        {% if shift.creditedMinutes %}
             <li>
                 <i class="fa fa-clock-o" aria-hidden="true"></i>
-                <span>Cuenta {{ (offer.creditedMinutes / 60)|round(1)|number_format(0, ',', '.') }} h</span>
+                <span>Cuenta {{ (shift.creditedMinutes / 60)|round(1)|number_format(0, ',', '.') }} h</span>
             </li>
         {% endif %}
     </ul>
@@ -88,13 +104,13 @@
     {# Quién va ya. Es lo que convierte "hace falta gente" en "estas dos personas
      # van a estar allí": nadie se apunta el primero de buena gana, y ver una cara
      # conocida pesa más que el número de huecos. #}
-    {% if offer.slots %}
-        {% set dentro = offer.filledSlots %}
-        {% set caras = offer.committedSignups|slice(0, 4) %}
-        {# Los huecos libres, con tope de 4 para que una tarea de veinte plazas no
+    {% if shift.slots %}
+        {% set dentro = shift.filledSlots %}
+        {% set caras = shift.committedSignups|slice(0, 4) %}
+        {# Los huecos libres, con tope de 4 para que un turno de veinte plazas no
          # dibuje una fila que se sale. Y con guarda: en Twig `1..0` cuenta hacia
          # atrás y pintaría DOS huecos justo cuando no queda ninguno. #}
-        {% set libres = min(4, max(0, offer.slots - dentro)) %}
+        {% set libres = min(4, max(0, shift.slots - dentro)) %}
         <div class="vol-task__cover">
             <div class="vol-task__faces" aria-hidden="true">
                 {% for signup in caras %}
@@ -106,14 +122,14 @@
                     {% endfor %}
                 {% endif %}
             </div>
-            <span class="vol-task__count">{{ dentro }} de {{ offer.slots }}</span>
+            <span class="vol-task__count">{{ dentro }} de {{ shift.slots }}</span>
         </div>
     {% endif %}
 
-    {# Sin enlace a una ficha propia: en el panel del socix no existe (la ficha de
-     # tarea vive en gestión). La tarjeta ya trae lo que decide, y para lo demás
-     # está el botón de "ver todo" del bloque. #}
-    <form method="post" action="{{ path('panel_volunteering_signup', { id: offer.id }) }}">
+    {# Sin enlace a una ficha propia: en el panel del socix no existe (la ficha del
+     # turno vive en gestión). La tarjeta ya trae lo que decide, y para lo demás
+     # está el calendario. #}
+    <form method="post" action="{{ path('panel_volunteering_signup', { id: shift.id }) }}">
         <input type="hidden" name="_csrf_token" value="{{ csrf }}">
         <button type="submit" class="vol-task__cta">Me apunto</button>
     </form>

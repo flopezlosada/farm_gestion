@@ -1,5 +1,5 @@
 {#
- # Un bloque de tareas dentro de la ficha de un área.
+ # Un bloque de TURNOS dentro de la ficha de un área.
  #
  # En un partial y no repetido dos veces porque la ficha lo pinta dos —lo que
  # falta cerrar y lo que viene— con las mismas columnas: duplicado, el día que se
@@ -8,7 +8,12 @@
  # Sin columna de área, que es la diferencia con el listado general: aquí ya se
  # sabe en qué área estamos y repetirla en cada fila es ruido.
  #
- # Espera: offers (lista de VolunteerOffer), category (el área) y now.
+ # ES DE TURNOS Y NO DE TAREAS desde que el momento vive en su propia fila: «lo
+ # que falta cerrar» y «lo que viene» son preguntas con fecha, y una definición
+ # no tiene fecha. El atajo de estado sigue actuando sobre la TAREA del turno,
+ # que es de quien es el estado.
+ #
+ # Espera: shifts (lista de VolunteerShift), category (el área) y now.
  #}
 {% import '_macros/volunteering.html.twig' as vol %}
 {% import '_macros/csa.html.twig' as csa %}
@@ -26,21 +31,22 @@
             </tr>
         </thead>
         <tbody>
-            {% for offer in offers %}
+            {% for shift in shifts %}
+                {% set offer = shift.offer %}
                 <tr>
                     <td>
-                        <a class="csa-table__primary" href="{{ path('volunteering_show', { id: offer.id }) }}">{{ offer.title }}</a>
+                        <a class="csa-table__primary" href="{{ path('volunteering_shift', { id: shift.id }) }}">{{ offer.title }}</a>
                         {# Lo destacado se ve donde se pueda desmarcar, o queda una
                          # casilla encendida para siempre. #}
                         {% if offer.featured %}{{ csa.badge('Destacada', 'ochre') }}{% endif %}
                     </td>
-                    <td class="csa-table__col-tight">{{ offer.startsAt|date('d/m/Y H:i') }}</td>
+                    <td class="csa-table__col-tight">{{ vol.shift_when(shift) }}</td>
                     <td class="csa-table__col-tight">{{ vol.task_place(offer) }}</td>
-                    <td class="csa-table__col-tight">{{ vol.task_slots(offer) }}</td>
-                    <td class="csa-table__col-tight">{{ vol.task_status(offer, now) }}</td>
+                    <td class="csa-table__col-tight">{{ vol.shift_slots(shift) }}</td>
+                    <td class="csa-table__col-tight">{{ vol.shift_status(shift) }}</td>
                     <td class="csa-table__actions">
-                        {% if is_granted('VOLUNTEER_OFFER_EDIT', offer) %}
-                            {# EL ATAJO DE ESTADO, que es lo que trae a nadie a esta
+                        {% if is_granted('VOLUNTEER_OFFER_EDIT', shift) %}
+                            {# EL ATAJO DE ESTADO, que es lo que trae a alguien a esta
                              # pantalla dos veces. Antes había que abrir la tarea, entrar
                              # a editar, bajar al desplegable y guardar; aquí es un clic.
                              #
@@ -49,33 +55,37 @@
                              # con un prefetch del navegador.
                              #
                              # `from_category` es lo que hace que vuelva aquí en vez de
-                             # irse a la ficha de la tarea. #}
+                             # irse a la ficha de la tarea.
+                             #
+                             # Y actúa sobre LA TAREA, no sobre el turno: el estado es de
+                             # la tarea. Para quitar un día concreto se anula el turno
+                             # desde su ficha, que es otro gesto y avisa a quien iba. #}
                             <form method="post" action="{{ path('volunteering_status', { id: offer.id }) }}" style="display: inline;"
                                   {% if offer.status == 'published' %}onsubmit="return confirm('¿Anular «{{ offer.title|e('js') }}»? Se conserva con lo que tenga apuntado, y se avisa a quien se hubiera apuntado.');"{% endif %}>
                                 <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_status') }}">
                                 <input type="hidden" name="from_category" value="{{ category.id }}">
 
                                 {% if offer.status == 'draft' %}
-                                    <input type="hidden" name="status" value="published">
+                                    <input type="hidden" name="estado" value="published">
                                     <button type="submit" class="csa-table__iconbtn" title="Publicar esta tarea" aria-label="Publicar">
                                         <i class="fa fa-paper-plane"></i>
                                     </button>
-                                {% elseif offer.status == 'cancelled' %}
-                                    <input type="hidden" name="status" value="published">
+                                {% elseif offer.status == 'cancelled' or offer.status == 'paused' %}
+                                    <input type="hidden" name="estado" value="published">
                                     <button type="submit" class="csa-table__iconbtn" title="Volver a publicar esta tarea" aria-label="Volver a publicar">
                                         <i class="fa fa-undo"></i>
                                     </button>
                                 {% else %}
-                                    <input type="hidden" name="status" value="cancelled">
+                                    <input type="hidden" name="estado" value="cancelled">
                                     <button type="submit" class="csa-table__iconbtn" title="Anular esta tarea" aria-label="Anular">
                                         <i class="fa fa-ban"></i>
                                     </button>
                                 {% endif %}
                             </form>
 
-                            <a href="{{ path('volunteering_edit', { id: offer.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>
+                            <a href="{{ path('volunteering_edit', { id: offer.id }) }}" title="Editar la tarea" aria-label="Editar"><i class="fa fa-pencil"></i></a>
                         {% else %}
-                            <a href="{{ path('volunteering_show', { id: offer.id }) }}" title="Ver" aria-label="Ver"><i class="fa fa-eye"></i></a>
+                            <a href="{{ path('volunteering_shift', { id: shift.id }) }}" title="Ver" aria-label="Ver"><i class="fa fa-eye"></i></a>
                         {% endif %}
                     </td>
                 </tr>

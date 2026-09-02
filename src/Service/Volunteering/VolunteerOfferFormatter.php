@@ -46,8 +46,12 @@ class VolunteerOfferFormatter
     }
 
     /**
-     * Dónde es, si se sabe. El nodo manda sobre el texto libre: es el sitio al
-     * que esa persona ya va a ir de todas formas.
+     * Dónde es, si se sabe. El nodo manda sobre el sitio del catálogo: es el
+     * lugar al que esa persona ya va a ir de todas formas.
+     *
+     * La precisión libre se pega detrás del sitio ("El local — puerta de
+     * atrás"), porque sola no dice dónde es y el sitio solo se queda corto justo
+     * cuando alguien se molestó en precisarlo.
      *
      * @param VolunteerOffer $offer la tarea
      *
@@ -63,7 +67,14 @@ class VolunteerOfferFormatter
             return (string) $offer->getNode();
         }
 
-        return $offer->getPlace();
+        $place = $offer->getPlace()?->getName();
+        $note = $offer->getPlaceNote();
+
+        if (null === $place) {
+            return $note;
+        }
+
+        return null === $note ? $place : sprintf('%s — %s', $place, $note);
     }
 
     /**

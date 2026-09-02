@@ -5,7 +5,8 @@ namespace App\Tests\Repository;
 use App\Entity\Node;
 use App\Entity\VolunteerCategory;
 use App\Entity\VolunteerOffer;
-use App\Repository\VolunteerOfferRepository;
+use App\Entity\VolunteerShift;
+use App\Repository\VolunteerShiftRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
@@ -24,7 +25,7 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  * nodo, la ventana de dos días, el estado publicado— es de la consulta.
  * Autocontenido: crea sus propios datos y comprueba pertenencia, no conteos.
  */
-class VolunteerDeliveryPrepTest extends KernelTestCase
+class VolunteerShiftDeliveryPrepTest extends KernelTestCase
 {
     /**
      * El caso que motiva que la categoría lleve marca propia: dos tareas en el
@@ -113,16 +114,16 @@ class VolunteerDeliveryPrepTest extends KernelTestCase
         $node = $this->makeNode($em, 'Prep punto borrador');
 
         $borrador = $this->makeOffer($em, 'Prep borrador', $node, $entrega, $categoria);
-        $borrador->setStatus(VolunteerOffer::STATUS_DRAFT);
+        $borrador->getOffer()->setStatus(VolunteerOffer::STATUS_DRAFT);
         $em->flush();
 
         $this->assertNotContains($borrador, $this->repository($em)->findDeliveryPrepFor($node, $entrega));
     }
 
-    private function repository(EntityManagerInterface $em): VolunteerOfferRepository
+    private function repository(EntityManagerInterface $em): VolunteerShiftRepository
     {
-        /** @var VolunteerOfferRepository $repository */
-        $repository = $em->getRepository(VolunteerOffer::class);
+        /** @var VolunteerShiftRepository $repository */
+        $repository = $em->getRepository(VolunteerShift::class);
 
         return $repository;
     }
@@ -150,8 +151,12 @@ class VolunteerDeliveryPrepTest extends KernelTestCase
     }
 
     /**
-     * Una tarea publicada, en un nodo y con una categoría. El estado por defecto
-     * de VolunteerOffer es borrador, así que hay que publicarla a mano.
+     * Una tarea publicada en un nodo, con una categoría y UN turno a las seis de
+     * la tarde. Devuelve el turno: es lo que devuelve la consulta desde que el
+     * momento vive en su propia fila.
+     *
+     * El estado por defecto de VolunteerOffer es borrador, así que hay que
+     * publicarla a mano.
      */
     private function makeOffer(
         EntityManagerInterface $em,
@@ -159,16 +164,21 @@ class VolunteerDeliveryPrepTest extends KernelTestCase
         Node $node,
         \DateTimeInterface $startsAt,
         VolunteerCategory $category,
-    ): VolunteerOffer {
+    ): VolunteerShift {
         $offer = (new VolunteerOffer())
             ->setTitle($title)
-            ->setStartsAt(\DateTime::createFromInterface($startsAt)->setTime(18, 0))
             ->setNode($node)
             ->setStatus(VolunteerOffer::STATUS_PUBLISHED);
 
         $offer->addCategory($category);
-        $em->persist($offer);
 
-        return $offer;
+        $shift = (new VolunteerShift())
+            ->setStartsAt(\DateTime::createFromInterface($startsAt)->setTime(18, 0));
+        $offer->addShift($shift);
+
+        $em->persist($offer);
+        $em->persist($shift);
+
+        return $shift;
     }
 }

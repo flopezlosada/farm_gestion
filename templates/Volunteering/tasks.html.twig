@@ -1,0 +1,183 @@
+{# El catálogo de trabajos: qué hace la asociación y en qué estado está cada cosa.
+ #
+ # AQUÍ NO HAY FECHAS, y es la diferencia con el otro listado. Una tarea es una
+ # definición —qué es, dónde, cuánta gente, cada cuánto— y se entra a esta
+ # pantalla a retocarla, no a ver qué toca hoy. Por eso se ordena por título y se
+ # filtra por estado, no por "por venir".
+ #
+ # La columna que de verdad se mira es «Se repite»: es lo que distingue una tarea
+ # continua de una suelta, y sin ella un catálogo de veinte filas no dice nada. #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% import '_macros/volunteering.html.twig' as vol %}
+
+{% block title %}Voluntariado · Tareas{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    {% include '_components/volunteering_styles.html.twig' %}
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    {% include '_components/listing_filters_js.html.twig' %}
+{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('volunteering_index') }}">Voluntariado</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Tareas</span>
+{% endblock %}
+
+{% block csa_main %}
+<div class="prl">
+
+    {{ csa.page_header('Voluntariado', 'Tareas', 'Los trabajos que hace la asociación. De cada uno salen sus turnos.') }}
+
+    {% if not coordinates_something %}
+        {{ csa.callout('No coordinas ninguna área todavía, así que aquí no aparece nada. Pídele a administración que te asigne un área.', 'info') }}
+    {% elseif not sees_everything %}
+        {{ csa.callout('Ves sólo las tareas de las áreas que coordinas.', 'info') }}
+    {% endif %}
+
+    {# ============ TIRA DE CIFRAS ============ #}
+    <div class="prl-stats">
+        <a class="prl-stat prl-stat--active" href="{{ path('volunteering_tasks', { ver: 'published' }) }}" style="text-decoration: none;">
+            <div class="v">{{ counts.published }}</div>
+            <div class="l">publicadas</div>
+        </a>
+        <a class="prl-stat" href="{{ path('volunteering_tasks', { ver: 'draft' }) }}" style="text-decoration: none;">
+            <div class="v">{{ counts.draft }}</div>
+            <div class="l">en borrador</div>
+        </a>
+        <a class="prl-stat prl-stat--paused" href="{{ path('volunteering_tasks', { ver: 'paused' }) }}" style="text-decoration: none;">
+            <div class="v">{{ counts.paused }}</div>
+            <div class="l">paradas</div>
+        </a>
+        <a class="prl-stat prl-stat--leave" href="{{ path('volunteering_tasks', { ver: 'cancelled' }) }}" style="text-decoration: none;">
+            <div class="v">{{ counts.cancelled }}</div>
+            <div class="l">anuladas</div>
+        </a>
+        <a class="prl-stat" href="{{ path('volunteering_tasks', { ver: 'all' }) }}" style="text-decoration: none;">
+            <div class="v">{{ counts.all }}</div>
+            <div class="l">en total</div>
+        </a>
+    </div>
+
+    {# ============ PESTAÑAS ============ #}
+    {% set tabs = {
+        'published': 'Publicadas',
+        'draft': 'Borradores',
+        'paused': 'Paradas',
+        'cancelled': 'Anuladas',
+        'all': 'Todas'
+    } %}
+    <nav class="prl-tabs" role="tablist">
+        {% for key, label in tabs %}
+            <a href="{{ path('volunteering_tasks', { ver: key }) }}" class="{{ scope == key ? 'active' : '' }}">
+                {{ label }} <span class="count">{{ counts[key] }}</span>
+            </a>
+        {% endfor %}
+    </nav>
+
+    {# ============ FILTROS ============ #}
+    <form method="get" action="{{ path('volunteering_tasks') }}" id="prl-filter-form">
+        <input type="hidden" name="ver" value="{{ scope }}">
+
+        <div class="prl-toolbar">
+            <div class="prl-search">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
+                <input type="search" name="q" value="{{ q }}" placeholder="Buscar por título o explicación…" autocomplete="off">
+            </div>
+
+            <div class="prl-filt-wrap">
+                <button type="button" class="prl-filt {{ current ? 'has' : '' }}" data-pop-trigger="pop-tipo">
+                    {{ current ? current.name : 'Área' }}
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+                <div class="prl-pop" id="pop-tipo" hidden>
+                    <label><input type="radio" name="tipo" value="" {{ current is null ? 'checked' }}> Cualquiera</label>
+                    {% for category in categories %}
+                        <label>
+                            <input type="radio" name="tipo" value="{{ category.id }}" {{ current and current.id == category.id ? 'checked' }}>
+                            {{ category.name }}
+                        </label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div style="margin-left: auto; display: flex; gap: 8px;">
+                {{ csa.btn('Qué hay que hacer', { variant: 'ghost', icon: 'fa-calendar-o', href: path('volunteering_index') }) }}
+                {% if is_granted('ROLE_GESTION_VOLUNTARIADO_EDIT') %}
+                    {{ csa.btn('Sitios', { variant: 'ghost', icon: 'fa-map-marker', href: path('volunteering_places') }) }}
+                {% endif %}
+                {{ csa.btn('Nueva tarea', { variant: 'primary', icon: 'fa-plus', href: path('volunteering_new') }) }}
+            </div>
+        </div>
+    </form>
+
+    {# ============ TABLA ============ #}
+    <div class="csa-table-wrap">
+        <table class="csa-table">
+            <thead>
+                <tr>
+                    <th>Tarea</th>
+                    <th class="csa-table__col-tight">Se repite</th>
+                    <th class="csa-table__col-tight">Dónde</th>
+                    <th class="csa-table__col-tight">Próximo turno</th>
+                    <th class="csa-table__col-tight">Sin cerrar</th>
+                    <th class="csa-table__actions">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for offer in pagination %}
+                    {% set next = offer.getNextShift(now) %}
+                    {% set to_close = offer.getShiftsToClose(now)|length %}
+                    <tr>
+                        <td>
+                            <a class="csa-table__primary" href="{{ path('volunteering_show', { id: offer.id }) }}">{{ offer.title }}</a>
+                            {% if offer.status != 'published' %}
+                                {{ csa.badge(
+                                    offer.status == 'draft' ? 'Borrador' : (offer.status == 'paused' ? 'En pausa' : 'Anulada'),
+                                    offer.status == 'paused' ? 'ochre' : 'neutral'
+                                ) }}
+                            {% endif %}
+                            {% if offer.featured %}{{ csa.badge('Destacada', 'ochre') }}{% endif %}
+                            {% for category in offer.categories %}{{ csa.badge(category.name, 'neutral') }}{% endfor %}
+                        </td>
+                        <td class="csa-table__col-tight">{{ vol.repeat(offer) }}</td>
+                        <td class="csa-table__col-tight">{{ vol.task_place(offer) }}</td>
+                        <td class="csa-table__col-tight">
+                            {% if next %}
+                                <a href="{{ path('volunteering_shift', { id: next.id }) }}">{{ vol.shift_when(next) }}</a>
+                            {% else %}
+                                <span class="vol-muted">ninguno</span>
+                            {% endif %}
+                        </td>
+                        <td class="csa-table__col-tight">
+                            {% if to_close > 0 %}
+                                {{ csa.badge(to_close ~ ' por cerrar', 'ochre') }}
+                            {% else %}
+                                <span class="vol-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="csa-table__actions">
+                            <a href="{{ path('volunteering_show', { id: offer.id }) }}" title="Ver" aria-label="Ver"><i class="fa fa-eye"></i></a>
+                            {% if is_granted('VOLUNTEER_OFFER_EDIT', offer) %}
+                                <a href="{{ path('volunteering_edit', { id: offer.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="6">No hay ninguna tarea que encaje con lo que buscas.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="csa-dt-bottom">{{ knp_pagination_render(pagination) }}</div>
+</div>
+{% endblock %}

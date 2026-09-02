@@ -5,9 +5,12 @@ namespace App\Service\Volunteering;
 use App\Entity\VolunteerOffer;
 
 /**
- * Cómo estaba una tarea antes de que alguien la editara, en los cuatro datos por
- * los que una persona apuntada querría enterarse: si sigue en pie, cuándo,
- * dónde y si se hace desde casa.
+ * Cómo estaba una tarea antes de que alguien la editara, en los datos por los
+ * que una persona apuntada querría enterarse: si sigue en pie y dónde es.
+ *
+ * NO LLEVA LA FECHA, y antes sí: el momento ya no es de la tarea sino del turno,
+ * y su foto vive en {@see VolunteerShiftSnapshot}. Mover "el reparto" no
+ * significa nada; lo que se mueve es el reparto del viernes 12.
  *
  * Existe como copia y no como comparación contra la BBDD porque para cuando el
  * formulario se ha validado, la entidad ya lleva los valores nuevos: el original
@@ -20,17 +23,17 @@ use App\Entity\VolunteerOffer;
 final class VolunteerOfferSnapshot
 {
     /**
-     * @param string                  $status   el estado en que estaba
-     * @param \DateTimeInterface|null $startsAt cuándo empezaba
-     * @param int|null                $nodeId   en qué punto de recogida era
-     * @param string|null             $place    en qué lugar era
-     * @param bool                    $remote   si se hacía desde casa
+     * @param string      $status    el estado en que estaba
+     * @param int|null    $nodeId    en qué punto de recogida era
+     * @param int|null    $placeId   en qué sitio del catálogo era
+     * @param string|null $placeNote la precisión sobre el sitio
+     * @param bool        $remote    si se hacía desde casa
      */
     private function __construct(
         public readonly string $status,
-        public readonly ?\DateTimeInterface $startsAt,
         public readonly ?int $nodeId,
-        public readonly ?string $place,
+        public readonly ?int $placeId,
+        public readonly ?string $placeNote,
         public readonly bool $remote,
     ) {
     }
@@ -44,12 +47,9 @@ final class VolunteerOfferSnapshot
     {
         return new self(
             $offer->getStatus(),
-            // Clonada: si se guardara la referencia, el formulario mutaría el
-            // mismo objeto DateTime y la "foto" cambiaría con él, así que nunca
-            // se detectaría un cambio de fecha.
-            null !== $offer->getStartsAt() ? \DateTimeImmutable::createFromInterface($offer->getStartsAt()) : null,
             $offer->getNode()?->getId(),
-            $offer->getPlace(),
+            $offer->getPlace()?->getId(),
+            $offer->getPlaceNote(),
             $offer->isRemote(),
         );
     }
@@ -68,25 +68,23 @@ final class VolunteerOfferSnapshot
     }
 
     /**
-     * Si ha cambiado el momento.
+     * Si la tarea se ha puesto en pausa desde esta foto.
+     *
+     * Se avisa igual que de una anulación, aunque sea más suave: quien tenía
+     * apuntado el sábado que viene necesita saber que ese sábado no se hace.
      *
      * @param VolunteerOffer $offer la tarea, ya con los valores nuevos
      *
-     * @return bool true si la fecha u hora de inicio es otra
+     * @return bool true si antes no estaba en pausa y ahora sí
      */
-    public function movedIn(VolunteerOffer $offer): bool
+    public function wasPausedIn(VolunteerOffer $offer): bool
     {
-        $now = $offer->getStartsAt();
-
-        if (null === $this->startsAt || null === $now) {
-            return $this->startsAt !== $now;
-        }
-
-        return $this->startsAt->getTimestamp() !== $now->getTimestamp();
+        return VolunteerOffer::STATUS_PAUSED !== $this->status
+            && VolunteerOffer::STATUS_PAUSED === $offer->getStatus();
     }
 
     /**
-     * Si ha cambiado el sitio, en cualquiera de sus tres formas.
+     * Si ha cambiado el sitio, en cualquiera de sus formas.
      *
      * @param VolunteerOffer $offer la tarea, ya con los valores nuevos
      *
@@ -95,7 +93,8 @@ final class VolunteerOfferSnapshot
     public function relocatedIn(VolunteerOffer $offer): bool
     {
         return $this->nodeId !== $offer->getNode()?->getId()
-            || $this->place !== $offer->getPlace()
+            || $this->placeId !== $offer->getPlace()?->getId()
+            || $this->placeNote !== $offer->getPlaceNote()
             || $this->remote !== $offer->isRemote();
     }
 }
