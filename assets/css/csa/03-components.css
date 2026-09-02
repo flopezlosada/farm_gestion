@@ -2012,13 +2012,16 @@ a.csa-table__primary:hover {
 /* La doble clase (.csa-app .csa-tabs__link) sube especificidad por encima
    de .csa-app a:link/:visited de Bootstrap 3, que pisaba color y
    text-decoration. */
+/* Tamaño de UI (14px), no de contenido: una pestaña es navegación, y a
+   --csa-fs-md (16px) el rótulo salía MÁS GRANDE que el texto de la ficha que
+   abre. */
 .csa-app .csa-tabs__link,
 .csa-app .csa-tabs__link:link,
 .csa-app .csa-tabs__link:visited {
   display: inline-block;
   padding: var(--csa-sp-3) 0;
   font-family: var(--csa-sans);
-  font-size: var(--csa-fs-md);
+  font-size: var(--csa-fs-base);
   font-weight: 500;
   color: var(--csa-ink-soft);
   text-decoration: none;
@@ -2041,8 +2044,11 @@ a.csa-table__primary:hover {
   outline-offset: 2px;
   border-radius: var(--csa-radius-sm);
 }
+/* La activa engorda además de oscurecerse: a 14px el salto de color por sí solo
+   se pierde de vista cuando la fila tiene tres o cuatro rótulos. */
 .csa-app .csa-tabs__item.active > .csa-tabs__link,
 .csa-app .csa-tabs__item.active > .csa-tabs__link:visited {
+  font-weight: 700;
   color: var(--csa-ink);
   border-bottom-color: var(--csa-ink);
   text-decoration: none;
@@ -2081,8 +2087,11 @@ a.csa-table__primary:hover {
   color: var(--csa-ink);
   background: transparent;
 }
+/* Aquí la activa NO engorda: la píldora oscura ya dice cuál es, y el 700 de la
+   variante subrayada tendría que declararse otra vez en serif. */
 .csa-app .csa-tabs--folder .csa-tabs__item.active > .csa-tabs__link,
 .csa-app .csa-tabs--folder .csa-tabs__item.active > .csa-tabs__link:visited {
+  font-weight: 500;
   background: var(--csa-ink);
   color: #fff;
   border-bottom-color: transparent;
@@ -2117,9 +2126,12 @@ a.csa-table__primary:hover {
 [data-csa-tabs].is-ready .csa-tabpanel.is-active {
   display: block;
 }
-/* El contador de cada pestaña ("Quién viene · 3"): mismo tamaño, menos peso. */
+/* El contador de cada pestaña ("Quién viene · 3"): mismo tamaño, menos peso.
+   El font-weight es explícito porque el rótulo de la pestaña activa va en 700 y
+   la cifra lo heredaría: engordar el número compite con el rótulo. */
 .csa-tabs__count {
   margin-left: var(--csa-sp-2);
+  font-weight: 400;
   font-variant-numeric: tabular-nums;
   color: var(--csa-ink-muted);
 }
