@@ -83,7 +83,10 @@ class VolunteerOfferChangeNotifierTest extends TestCase
         $offer = $shift->getOffer();
         $before = VolunteerOfferSnapshot::of($offer);
 
-        $offer->setPlace((new VolunteerPlace())->setName('La nave'));
+        // Con id, porque la foto compara ids: un sitio sin persistir tiene el id
+        // a null y el cambio no se detectaría. En la aplicación el sitio siempre
+        // viene de la base de datos.
+        $offer->setPlace($this->place(3, 'La nave'));
 
         $push = $this->expectPushWithTitle('Cambia una tarea a la que te apuntaste');
 
@@ -106,6 +109,31 @@ class VolunteerOfferChangeNotifierTest extends TestCase
         $push = $this->expectPushWithTitle('Cambia una tarea a la que te apuntaste');
 
         $this->assertSame(1, $this->notifier($push)->notifyChanges($offer, $before));
+    }
+
+    /**
+     * A QUIEN TENÍA UN TURNO YA ANULADO TAMPOCO SE LE AVISA: se le avisó cuando
+     * se anuló ese día, y repetirlo al anular la tarea entera es contarle dos
+     * veces lo mismo.
+     *
+     * Es la otra mitad del fallo que arregló esto: el destinatario se decide por
+     * la anulación PROPIA del turno, no por la que hereda de la tarea — si se
+     * mirara la heredada, anular la tarea escondería sus turnos y el aviso de la
+     * anulación no llegaría a nadie.
+     */
+    public function testAQuienTeniaUnTurnoYaAnuladoNoSeLeAvisaOtraVez(): void
+    {
+        $shift = $this->shiftWithOneSignup();
+        $shift->cancel('festivo');
+
+        $offer = $shift->getOffer();
+        $before = VolunteerOfferSnapshot::of($offer);
+        $offer->setStatus(VolunteerOffer::STATUS_CANCELLED);
+
+        $push = $this->createMock(PushSender::class);
+        $push->expects($this->never())->method('sendToMany');
+
+        $this->assertSame(0, $this->notifier($push)->notifyChanges($offer, $before));
     }
 
     /**
@@ -311,6 +339,23 @@ class VolunteerOfferChangeNotifierTest extends TestCase
             ->setStatus(VolunteerOffer::STATUS_PUBLISHED)
             ->setNode(new Node())
             ->setSlots(4);
+    }
+
+    /**
+     * Un sitio del catálogo con id, como los que salen de la base de datos.
+     *
+     * @param int    $id   el identificador a forzar
+     * @param string $name su nombre
+     */
+    private function place(int $id, string $name): VolunteerPlace
+    {
+        $place = (new VolunteerPlace())->setName($name);
+
+        $reflection = new \ReflectionProperty(VolunteerPlace::class, 'id');
+        $reflection->setAccessible(true);
+        $reflection->setValue($place, $id);
+
+        return $place;
     }
 
     /**

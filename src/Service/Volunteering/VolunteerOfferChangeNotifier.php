@@ -71,16 +71,7 @@ class VolunteerOfferChangeNotifier
             return 0;
         }
 
-        // Sólo quien tiene un turno POR VENIR. A quien vino en mayo no le
-        // importa que en septiembre se cambie el sitio.
-        $partners = [];
-        foreach ($offer->getUpcomingShifts() as $shift) {
-            foreach ($this->activeParticipants($shift) as $partner) {
-                $partners[spl_object_id($partner)] = $partner;
-            }
-        }
-
-        return $this->dispatch(array_values($partners), $message);
+        return $this->dispatch($this->upcomingParticipants($offer), $message);
     }
 
     /**
@@ -231,6 +222,42 @@ class VolunteerOfferChangeNotifier
                 $this->formatter->dateInSentence($shift->getStartsAt()),
             ),
         ];
+    }
+
+    /**
+     * Lxs socixs con algún turno POR VENIR de esta tarea, sin repetir.
+     *
+     * A quien vino en mayo no le importa que en septiembre se cambie el sitio, y
+     * avisarle sería mandarle un push por algo que ya hizo.
+     *
+     * MIRA LA ANULACIÓN PROPIA DEL TURNO Y NO {@see VolunteerShift::isCancelled()},
+     * y ahí estaba el fallo: aquél devuelve true en cuanto la TAREA está
+     * anulada, así que al anularla sus turnos dejaban de contar y el aviso de la
+     * anulación —el que menos se puede saltar— no le llegaba a nadie. Lo cazó el
+     * CI. El estado de la tarea ya lo ha decidido quien llama; aquí sólo hay que
+     * saber a quién le afectaba ese día.
+     *
+     * @param VolunteerOffer $offer la tarea
+     *
+     * @return list<Partner> quienes tenían algún día por venir
+     */
+    private function upcomingParticipants(VolunteerOffer $offer): array
+    {
+        $now = new \DateTime();
+        $partners = [];
+
+        foreach ($offer->getShifts() as $shift) {
+            /** @var VolunteerShift $shift */
+            if (null !== $shift->getCancelledAt() || $shift->isPast($now)) {
+                continue;
+            }
+
+            foreach ($this->activeParticipants($shift) as $partner) {
+                $partners[spl_object_id($partner)] = $partner;
+            }
+        }
+
+        return array_values($partners);
     }
 
     /**

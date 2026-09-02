@@ -25,13 +25,13 @@ class VolunteerAttendanceTest extends TestCase
      */
     public function testConfirmarCongelaLosMinutosDeLaOferta(): void
     {
-        $offer = $this->offer(90);
-        $signup = $this->signupOn($offer);
+        $shift = $this->shift(90);
+        $signup = $this->signupOn($shift);
 
         $signup->confirmAttendance(VolunteerSignup::SOURCE_SELF);
-        $offer->setCreditedMinutes(30);
+        $shift->getOffer()->setCreditedMinutes(30);
 
-        $this->assertSame(90, $signup->getCreditedMinutes(), 'Cambiar la oferta después no debe tocar lo ya reconocido.');
+        $this->assertSame(90, $signup->getCreditedMinutes(), 'Cambiar la tarea después no debe tocar lo ya reconocido.');
     }
 
     /**
@@ -41,7 +41,7 @@ class VolunteerAttendanceTest extends TestCase
      */
     public function testQuienFueLoConfirmaYQuedaRegistrado(): void
     {
-        $signup = $this->signupOn($this->offer(60));
+        $signup = $this->signupOn($this->shift(60));
 
         $signup->confirmAttendance(VolunteerSignup::SOURCE_SELF);
 
@@ -56,7 +56,7 @@ class VolunteerAttendanceTest extends TestCase
      */
     public function testLoQueCierraGestionSeDistingue(): void
     {
-        $signup = $this->signupOn($this->offer(60));
+        $signup = $this->signupOn($this->shift(60));
 
         $signup->confirmAttendance(VolunteerSignup::SOURCE_MANAGER);
 
@@ -70,7 +70,7 @@ class VolunteerAttendanceTest extends TestCase
      */
     public function testMarcarAusenciaBorraLasHorasYaReconocidas(): void
     {
-        $signup = $this->signupOn($this->offer(60));
+        $signup = $this->signupOn($this->shift(60));
         $signup->confirmAttendance(VolunteerSignup::SOURCE_SELF);
 
         $signup->markAbsent(VolunteerSignup::SOURCE_MANAGER);
@@ -85,7 +85,7 @@ class VolunteerAttendanceTest extends TestCase
      */
     public function testNoSePuedenComputarHorasDeQuienSeDioDeBaja(): void
     {
-        $signup = $this->signupOn($this->offer(60))->cancel();
+        $signup = $this->signupOn($this->shift(60))->cancel();
 
         $this->expectException(\LogicException::class);
 
@@ -99,12 +99,12 @@ class VolunteerAttendanceTest extends TestCase
      */
     public function testUnaTareaConAlguienQueConfirmoEstaHecha(): void
     {
-        $offer = $this->offer(60);
-        $this->signupOn($offer)->confirmAttendance(VolunteerSignup::SOURCE_SELF);
+        $shift = $this->shift(60);
+        $this->signupOn($shift)->confirmAttendance(VolunteerSignup::SOURCE_SELF);
 
-        $this->assertTrue($offer->isDone(new \DateTime('2099-03-16 10:00')));
-        $this->assertFalse($offer->wasMissed(new \DateTime('2099-03-16 10:00')));
-        $this->assertSame(1, $offer->getAttendedCount());
+        $this->assertTrue($shift->isDone(new \DateTime('2099-03-16 10:00')));
+        $this->assertFalse($shift->wasMissed(new \DateTime('2099-03-16 10:00')));
+        $this->assertSame(1, $shift->getAttendedCount());
     }
 
     /**
@@ -114,11 +114,11 @@ class VolunteerAttendanceTest extends TestCase
      */
     public function testUnaTareaALaQueNoFueNadieSeMarcaComoTal(): void
     {
-        $offer = $this->offer(60);
-        $this->signupOn($offer)->markAbsent(VolunteerSignup::SOURCE_SELF);
+        $shift = $this->shift(60);
+        $this->signupOn($shift)->markAbsent(VolunteerSignup::SOURCE_SELF);
 
-        $this->assertTrue($offer->wasMissed(new \DateTime('2099-03-16 10:00')));
-        $this->assertFalse($offer->isDone(new \DateTime('2099-03-16 10:00')));
+        $this->assertTrue($shift->wasMissed(new \DateTime('2099-03-16 10:00')));
+        $this->assertFalse($shift->isDone(new \DateTime('2099-03-16 10:00')));
     }
 
     /**
@@ -128,13 +128,13 @@ class VolunteerAttendanceTest extends TestCase
      */
     public function testMientrasFalteAlguienPorContestarLaTareaSigueAbierta(): void
     {
-        $offer = $this->offer(60);
-        $this->signupOn($offer)->confirmAttendance(VolunteerSignup::SOURCE_SELF);
-        $this->signupOn($offer);
+        $shift = $this->shift(60);
+        $this->signupOn($shift)->confirmAttendance(VolunteerSignup::SOURCE_SELF);
+        $this->signupOn($shift);
 
-        $this->assertFalse($offer->isSettled());
-        $this->assertFalse($offer->wasMissed(new \DateTime('2099-03-16 10:00')));
-        $this->assertTrue($offer->isDone(new \DateTime('2099-03-16 10:00')), 'Ya fue alguien, así que hecha sí está.');
+        $this->assertFalse($shift->isSettled());
+        $this->assertFalse($shift->wasMissed(new \DateTime('2099-03-16 10:00')));
+        $this->assertTrue($shift->isDone(new \DateTime('2099-03-16 10:00')), 'Ya fue alguien, así que hecha sí está.');
     }
 
     /**
@@ -143,11 +143,11 @@ class VolunteerAttendanceTest extends TestCase
      */
     public function testQuienSeDioDeBajaNoBloqueaElCierre(): void
     {
-        $offer = $this->offer(60);
-        $this->signupOn($offer)->confirmAttendance(VolunteerSignup::SOURCE_SELF);
-        $this->signupOn($offer)->cancel();
+        $shift = $this->shift(60);
+        $this->signupOn($shift)->confirmAttendance(VolunteerSignup::SOURCE_SELF);
+        $this->signupOn($shift)->cancel();
 
-        $this->assertTrue($offer->isSettled());
+        $this->assertTrue($shift->isSettled());
     }
 
     /**
@@ -157,8 +157,8 @@ class VolunteerAttendanceTest extends TestCase
      */
     public function testCoordinarComputaHoras(): void
     {
-        $offer = $this->offer(60);
-        $signup = $this->signupOn($offer)->setRole(VolunteerSignup::ROLE_COORDINATOR);
+        $shift = $this->shift(60);
+        $signup = $this->signupOn($shift)->setRole(VolunteerSignup::ROLE_COORDINATOR);
 
         $signup->confirmAttendance(VolunteerSignup::SOURCE_MANAGER, 45);
 
@@ -173,11 +173,12 @@ class VolunteerAttendanceTest extends TestCase
      */
     public function testCoordinarNoOcupaPlaza(): void
     {
-        $offer = $this->offer(60)->setSlots(2);
-        $this->signupOn($offer)->setRole(VolunteerSignup::ROLE_COORDINATOR);
+        $shift = $this->shift(60);
+        $shift->getOffer()->setSlots(2);
+        $this->signupOn($shift)->setRole(VolunteerSignup::ROLE_COORDINATOR);
 
-        $this->assertSame(0, $offer->getFilledSlots());
-        $this->assertSame(2, $offer->getRemainingSlots());
+        $this->assertSame(0, $shift->getFilledSlots());
+        $this->assertSame(2, $shift->getRemainingSlots());
     }
 
     /**
@@ -186,13 +187,13 @@ class VolunteerAttendanceTest extends TestCase
      */
     public function testUnaTareaConSoloCoordinacionNoEstaHecha(): void
     {
-        $offer = $this->offer(60);
-        $this->signupOn($offer)
+        $shift = $this->shift(60);
+        $this->signupOn($shift)
             ->setRole(VolunteerSignup::ROLE_COORDINATOR)
             ->confirmAttendance(VolunteerSignup::SOURCE_MANAGER);
 
-        $this->assertFalse($offer->isDone(new \DateTime('2099-03-16 10:00')));
-        $this->assertSame(0, $offer->getAttendedCount());
+        $this->assertFalse($shift->isDone(new \DateTime('2099-03-16 10:00')));
+        $this->assertSame(0, $shift->getAttendedCount());
     }
 
     /**
@@ -202,7 +203,7 @@ class VolunteerAttendanceTest extends TestCase
      */
     public function testReabrirUnaInscripcionCancelada(): void
     {
-        $signup = $this->signupOn($this->offer(60))->cancel();
+        $signup = $this->signupOn($this->shift(60))->cancel();
 
         $signup->reopen();
 
@@ -215,7 +216,7 @@ class VolunteerAttendanceTest extends TestCase
      *
      * @param int $creditedMinutes minutos que computa la tarea
      */
-    private function offer(int $creditedMinutes): VolunteerShift
+    private function shift(int $creditedMinutes): VolunteerShift
     {
         $offer = (new VolunteerOffer())
             ->setTitle('Descargar el reparto')

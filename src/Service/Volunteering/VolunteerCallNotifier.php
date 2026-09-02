@@ -124,10 +124,14 @@ class VolunteerCallNotifier
             return null;
         }
 
-        // Quiénes encajan con la tarea. Es una pregunta del dominio —a quién le
-        // sirve— y no de canal. Las preferencias se marcan por área, que es de la
-        // tarea; el turno sólo dice cuándo.
-        $partners = $this->audience->resolve($offer, $scope);
+        // Quiénes encajan con el trabajo. Es una pregunta del dominio —a quién le
+        // sirve— y no de canal.
+        //
+        // Se le pasa el TURNO y no la tarea: las preferencias se marcan por área
+        // —que es de la tarea, y el resolver la saca de ahí— pero quién ya está
+        // apuntado depende del día. Con la tarea, descontar a quien vino el
+        // martes dejaría sin aviso del sábado justo a la gente que más colabora.
+        $partners = $this->audience->resolve($shift, $scope);
         if ([] === $partners) {
             return null;
         }
