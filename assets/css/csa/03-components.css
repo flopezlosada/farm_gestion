@@ -154,6 +154,30 @@
 }
 .csa-badge--no-dot::before { display: none; }
 
+/* Variante COMPACTA, para cuando la insignia lleva un nombre de persona en vez
+ * de un estado. Un nombre y apellidos es texto largo: con el padding normal la
+ * pastilla se come la celda y compite con el estado de al lado, que sí es un
+ * estado. Se usa junto a --no-dot: el punto de color informa cuando hay verde y
+ * rojo que distinguir, y delante de un nombre sólo ocupa doce píxeles. */
+.csa-badge--sm {
+  padding: 1px 7px;
+  gap: 4px;
+  letter-spacing: 0;
+}
+
+/* Nombres de persona tal y como se teclearon en su día: la mayoría están en la
+ * base de datos EN MAYÚSCULAS ("INÉS BAUTISTA CARRASCOSA"), y en pantalla eso
+ * grita y se lee peor.
+ *
+ * Hacen falta LAS DOS COSAS y por eso esto es sólo la mitad: `capitalize` pone
+ * en mayúscula la inicial de cada palabra pero NO baja el resto, así que sobre
+ * un texto ya en mayúsculas no hace nada. En la plantilla va un `|lower`. Es el
+ * mismo par que ya usa el panel del socix.
+ *
+ * No se arregla en el dato porque ahí es como lo escribió administración, y hay
+ * sitios —el listado impreso del reparto— donde las mayúsculas se quieren. */
+.csa-name { text-transform: capitalize; }
+
 .csa-badge--green      { background: var(--csa-green-soft);      color: var(--csa-green); }
 .csa-badge--ochre      { background: var(--csa-ochre-soft);      color: var(--csa-amber); }
 .csa-badge--terracotta { background: var(--csa-terracotta-soft); color: #b04e22; }
@@ -1565,10 +1589,22 @@ a.csa-table__primary:hover {
   white-space: nowrap;
   width: 1%;
 }
+/* La separación la pone el HIJO, sea del tipo que sea, y no la regla de los
+ * enlaces. Antes el margen vivía en `.csa-table__actions a`, así que una columna
+ * de acciones que mezclara enlaces con un <form> —lo normal en cuanto una acción
+ * cambia datos y tiene que ir por POST— salía con los iconos a distancias
+ * distintas: el del formulario pegado al anterior. Con `:not(:first-child)` la
+ * primera acción no arrastra sangría y las demás se separan igual, sean <a>,
+ * <button> o <form>.
+ *
+ * La especificidad (0,2,0) es a propósito: tiene que ganar a la regla de `a` de
+ * abajo, que es (0,1,1). */
+.csa-table__actions > *:not(:first-child) {
+  margin-left: var(--csa-sp-3);
+}
 .csa-table__actions a {
   color: var(--csa-ink-soft);
   border-bottom: none;
-  margin-left: var(--csa-sp-3);
   font-size: var(--csa-fs-sm);
 }
 .csa-table__actions a:hover { color: var(--csa-ink); border-bottom: none; }
