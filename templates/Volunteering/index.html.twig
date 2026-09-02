@@ -11,6 +11,7 @@
  # bajar por una página de tres tablas. #}
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
+{% import '_macros/volunteering.html.twig' as vol %}
 
 {% block title %}Voluntariado · Tareas{% endblock %}
 
@@ -40,7 +41,7 @@
      # candidata en Usuarias pero aún no coordina ningún área ve una tabla sin
      # filas y no tiene forma de saber por qué. #}
     {% if not coordinates_something %}
-        {{ csa.callout('No coordinas ningún tipo de trabajo todavía, así que aquí no aparece nada. Pídele a administración que te asigne un área.', 'info') }}
+        {{ csa.callout('No coordinas ninguna área todavía, así que aquí no aparece nada. Pídele a administración que te asigne un área.', 'info') }}
     {% elseif not sees_everything %}
         {{ csa.callout('Ves sólo las tareas de las áreas que coordinas.', 'info') }}
     {% endif %}
@@ -102,7 +103,7 @@
 
             <div class="prl-filt-wrap">
                 <button type="button" class="prl-filt {{ current ? 'has' : '' }}" data-pop-trigger="pop-tipo">
-                    {{ current ? current.name : 'Tipo de trabajo' }}
+                    {{ current ? current.name : 'Área' }}
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m6 9 6 6 6-6"/></svg>
                 </button>
                 <div class="prl-pop" id="pop-tipo" hidden>
@@ -118,7 +119,7 @@
 
             <div style="margin-left: auto; display: flex; gap: 8px;">
                 {% if is_granted('ROLE_GESTION_VOLUNTARIADO_EDIT') %}
-                    {{ csa.btn('Tipos de trabajo', { variant: 'ghost', icon: 'fa-tags', href: path('volunteering_categories') }) }}
+                    {{ csa.btn('Áreas', { variant: 'ghost', icon: 'fa-tags', href: path('volunteering_categories') }) }}
                 {% endif %}
                 {{ csa.btn('Nueva tarea', { variant: 'primary', icon: 'fa-plus', href: path('volunteering_new') }) }}
             </div>
@@ -150,35 +151,9 @@
                             {% for category in offer.categories %}{{ csa.badge(category.name, 'neutral') }}{% endfor %}
                         </td>
                         <td class="csa-table__col-tight">{{ offer.startsAt|date('d/m/Y H:i') }}</td>
-                        <td class="csa-table__col-tight">
-                            {%- if offer.remote %}Desde casa
-                            {%- elseif offer.node %}{{ offer.node }}
-                            {%- elseif offer.place %}{{ offer.place }}
-                            {%- else %}—{% endif -%}
-                        </td>
-                        <td class="csa-table__col-tight">
-                            {# Sin tope, "4" a secas se lee como "hay 4 plazas". #}
-                            {% if offer.slots %}
-                                {{ offer.filledSlots }} / {{ offer.slots }}
-                            {% else %}
-                                {{ offer.filledSlots }} <span class="vol-help">(sin tope)</span>
-                            {% endif %}
-                        </td>
-                        <td class="csa-table__col-tight">
-                            {% if offer.status == 'draft' %}
-                                {{ csa.badge('Borrador', 'neutral') }}
-                            {% elseif offer.status == 'cancelled' %}
-                                {{ csa.badge('Anulada', 'terracotta') }}
-                            {% elseif offer.wasMissed(now) %}
-                                {{ csa.badge('No fue nadie', 'terracotta') }}
-                            {% elseif offer.isDone(now) %}
-                                {{ csa.badge('Hecha', 'green') }}
-                            {% elseif offer.startsAt <= now %}
-                                {{ csa.badge('Sin confirmar', 'ochre') }}
-                            {% else %}
-                                {{ csa.badge('Publicada', 'sky') }}
-                            {% endif %}
-                        </td>
+                        <td class="csa-table__col-tight">{{ vol.task_place(offer) }}</td>
+                        <td class="csa-table__col-tight">{{ vol.task_slots(offer) }}</td>
+                        <td class="csa-table__col-tight">{{ vol.task_status(offer, now) }}</td>
                         <td class="csa-table__actions">
                             <a href="{{ path('volunteering_show', { id: offer.id }) }}" title="Ver" aria-label="Ver"><i class="fa fa-eye"></i></a>
                             {% if is_granted('VOLUNTEER_OFFER_EDIT', offer) %}

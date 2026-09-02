@@ -1,0 +1,278 @@
+{# ============================================================
+ # La ficha de un área de voluntariado.
+ #
+ # Mismo lenguaje visual que la ficha de una tarea y la de un socix (hero +
+ # avatar + chips + mini-stats + tarjetas), porque es el mismo gesto: abrir algo
+ # y ver de un vistazo qué es y cómo va.
+ #
+ # EL ORDEN NO ES DECORATIVO. Arriba, lo que responde "¿está viva esta área?":
+ # cuántas tareas hay, cuántas plazas sin cubrir, quién la coordina. Debajo, el
+ # trabajo concreto: primero lo que ya pasó y falta cerrar, luego lo que viene.
+ # Al final, la gente disponible y el rastro, que se consultan a ratos.
+ #
+ # Todo viene LIMITADO y con salida al listado completo filtrado por el área: un
+ # área con dos años dentro llenaría esto de scroll y dejaría de responder de un
+ # vistazo, que es para lo que existe.
+ # ============================================================ #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% import '_macros/volunteering.html.twig' as vol %}
+
+{% block title %}Voluntariado · {{ category.name }}{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include '_components/partner_card_styles.html.twig' %}
+    {% include '_components/volunteering_styles.html.twig' %}
+{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('volunteering_index') }}">Voluntariado</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('volunteering_categories') }}">Áreas</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ category.name }}</span>
+{% endblock %}
+
+{% block csa_main %}
+    {% set coordinators = category.coordinators %}
+    {% set interested = category.partners %}
+
+    <div class="prt">
+
+        {# ============ HERO ============ #}
+        <header class="prt-hero">
+            <span class="prt-avatar prt-avatar--{{ category.active ? 'sage' : 'muted' }}" aria-hidden="true">
+                <i class="fa fa-tags"></i>
+            </span>
+
+            <div>
+                <h1 class="prt-hero__title">{{ category.name }}</h1>
+                <div class="prt-hero__meta">
+                    {% if category.active %}
+                        <span class="prt-chip prt-chip--activo"><span class="dot"></span>Se ofrece</span>
+                    {% else %}
+                        <span class="prt-chip prt-chip--baja"><span class="dot"></span>Retirada</span>
+                    {% endif %}
+
+                    {# Que un área no tenga a nadie al frente no es un detalle: nadie
+                     # puede publicar ni cerrar sus tareas. Se dice aquí arriba. #}
+                    {% if coordinators is empty %}
+                        <span class="prt-chip prt-chip--warn">Sin coordinar</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="prt-hero__actions">
+                {{ csa.btn('Editar', { variant: 'secondary', icon: 'fa-pencil', href: path('volunteering_category_edit', { id: category.id }) }) }}
+
+                {# El estado se cambia desde aquí y desde el catálogo, y en los dos
+                 # sitios por la misma acción: un segundo camino que hiciera otra cosa
+                 # sería una trampa. #}
+                <form method="post" action="{{ path('volunteering_category_toggle', { id: category.id }) }}" style="display: inline;"
+                      onsubmit="return confirm('{{ category.active ? 'Se retira de las tareas nuevas y de la ficha de lxs socixs. El histórico se conserva. ¿Seguimos?' : '¿Volver a ofrecer esta área?' }}');">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_category_toggle') }}">
+                    <input type="hidden" name="back" value="show">
+                    <button type="submit" class="csa-btn csa-btn--ghost">
+                        <i class="fa {{ category.active ? 'fa-archive' : 'fa-undo' }}"></i>
+                        <span>{{ category.active ? 'Retirar' : 'Volver a ofrecer' }}</span>
+                    </button>
+                </form>
+
+                {{ csa.btn('Volver', { variant: 'ghost', href: path('volunteering_categories') }) }}
+            </div>
+        </header>
+
+        {% if not category.active %}
+            {{ csa.callout('Esta área está retirada: no se ofrece al crear tareas nuevas ni aparece en la ficha de lxs socixs. Lo que ya existe sigue entero.', 'info') }}
+        {% endif %}
+
+        {# ============ CÓMO VA ============
+         # Cinco números que responden a la única pregunta que no se puede contestar
+         # mirando una lista: si el área se sostiene. Las plazas sin cubrir van con
+         # aviso en color porque son la que duele. #}
+        <div class="prt-mini">
+            <div class="prt-mini__cell">
+                <div class="prt-mini__value">{{ counts.upcoming }}</div>
+                <div class="prt-mini__label">tareas por venir</div>
+            </div>
+            <div class="prt-mini__cell">
+                <div class="prt-mini__value{{ counts.pending > 0 ? ' prt-mini__value--ochre' : '' }}">{{ counts.pending }}</div>
+                <div class="prt-mini__label">por cerrar</div>
+            </div>
+            <div class="prt-mini__cell">
+                {# Verde sólo si hay tareas Y están cubiertas. Sin tareas, un cero
+                 # en verde felicita por algo que no ha pasado: no es que esté todo
+                 # cubierto, es que no hay nada que cubrir. #}
+                {% set slots_tone = missing_slots > 0
+                    ? ' prt-mini__value--ochre'
+                    : (upcoming is empty ? ' prt-mini__value--muted' : ' prt-mini__value--sage') %}
+                <div class="prt-mini__value{{ slots_tone }}">{{ missing_slots }}</div>
+                <div class="prt-mini__label">plazas sin cubrir</div>
+            </div>
+            <div class="prt-mini__cell">
+                <div class="prt-mini__value{{ interested|length == 0 ? ' prt-mini__value--muted' : '' }}">{{ interested|length }}</div>
+                <div class="prt-mini__label">{{ interested|length == 1 ? 'socix interesadx' : 'socixs interesadxs' }}</div>
+            </div>
+            <div class="prt-mini__cell">
+                <div class="prt-mini__value{{ coordinators|length == 0 ? ' prt-mini__value--ochre' : '' }}">{{ coordinators|length }}</div>
+                <div class="prt-mini__label">{{ coordinators|length == 1 ? 'coordinadora' : 'coordinadoras' }}</div>
+            </div>
+        </div>
+
+        {# ============ QUÉ ENTRA AQUÍ ============ #}
+        {% if category.description %}
+            <div class="prt-card">
+                <div class="prt-card__head"><h2 class="prt-card__title">Qué entra aquí</h2></div>
+                <div class="prt-card__body">
+                    <p>{{ category.description }}</p>
+                    <p class="vol-help">Es lo que se le enseña a cada socix junto a la casilla en su ficha.</p>
+                </div>
+            </div>
+        {% endif %}
+
+        {# ============ TAREAS POR CERRAR ============
+         # Primero, y sólo si hay: es trabajo atrasado. Una tarea que pasó y sigue
+         # sin cerrar no computa horas a nadie de quienes fueron. #}
+        {% if pending is not empty %}
+            <div class="prt-card prt-card--ochre">
+                <div class="prt-card__head">
+                    <h2 class="prt-card__title">Pasaron y falta cerrarlas</h2>
+                    <span class="prt-card__head-meta">{{ counts.pending }} en total</span>
+                </div>
+                <div class="prt-card__body">
+                    {% include 'Volunteering/_category_tasks.html.twig' with {
+                        offers: pending,
+                        category: category,
+                        now: now
+                    } only %}
+                    {% if counts.pending > task_limit %}
+                        <p class="vol-help">
+                            <a href="{{ path('volunteering_index', { ver: 'pending', tipo: category.id }) }}">Ver las {{ counts.pending }} que faltan por cerrar</a>
+                        </p>
+                    {% endif %}
+                </div>
+            </div>
+        {% endif %}
+
+        {# ============ LO QUE VIENE ============ #}
+        <div class="prt-card">
+            <div class="prt-card__head">
+                <h2 class="prt-card__title">Lo que viene</h2>
+                <span class="prt-card__head-meta">{{ counts.upcoming }} en total</span>
+            </div>
+            <div class="prt-card__body">
+                {% if upcoming is empty %}
+                    <p class="vol-help">
+                        No hay ninguna tarea pendiente en esta área.
+                        {% if category.active %}
+                            {{ csa.btn('Crear una tarea', { variant: 'primary', icon: 'fa-plus', href: path('volunteering_new') }) }}
+                        {% endif %}
+                    </p>
+                {% else %}
+                    {% include 'Volunteering/_category_tasks.html.twig' with {
+                        offers: upcoming,
+                        category: category,
+                        now: now
+                    } only %}
+                    {% if counts.upcoming > task_limit %}
+                        <p class="vol-help">
+                            <a href="{{ path('volunteering_index', { tipo: category.id }) }}">Ver las {{ counts.upcoming }} que vienen</a>
+                        </p>
+                    {% endif %}
+                {% endif %}
+            </div>
+            <div class="prt-card__foot">
+                <a href="{{ path('volunteering_index', { ver: 'all', tipo: category.id }) }}">Ver todas las tareas de {{ category.name }} ({{ counts.all }})</a>
+            </div>
+        </div>
+
+        <div class="prt-cols">
+
+            {# ============ QUIÉN COORDINA ============ #}
+            <div class="prt-card">
+                <div class="prt-card__head"><h2 class="prt-card__title">Quién coordina</h2></div>
+                <div class="prt-card__body">
+                    {% if coordinators is empty %}
+                        {{ csa.callout('Nadie coordina esta área todavía, así que nadie puede publicar ni cerrar sus tareas salvo administración.', 'warning', 'exclamation-triangle') }}
+                    {% else %}
+                        <div class="prt-relatives">
+                            {% for coordinator in coordinators %}
+                                <div class="prt-relative">
+                                    <span class="prt-relative__dot"></span>
+                                    <span class="prt-relative__name">{{ coordinator.displayName }}</span>
+                                </div>
+                            {% endfor %}
+                        </div>
+                        <p class="vol-help">Pueden publicar, cerrar y pedir gente para las tareas de esta área, y sólo de ésta.</p>
+                    {% endif %}
+                </div>
+                <div class="prt-card__foot">
+                    <a href="{{ path('volunteering_category_edit', { id: category.id }) }}">Cambiar quién coordina</a>
+                </div>
+            </div>
+
+            {# ============ QUIÉN HAY ============
+             # Los socixs que han marcado esta área en su ficha: "avísame de esto".
+             # No son quienes se han apuntado a nada, son a quienes se puede llamar. #}
+            <div class="prt-card">
+                <div class="prt-card__head">
+                    <h2 class="prt-card__title">A quién se puede llamar</h2>
+                    <span class="prt-card__head-meta">{{ interested|length }}</span>
+                </div>
+                <div class="prt-card__body">
+                    {% if interested is empty %}
+                        <p class="vol-help">
+                            Nadie ha marcado esta área en su ficha. Eso no impide pedir gente: las tareas
+                            abiertas a cualquiera se avisan a todo el mundo.
+                        </p>
+                    {% else %}
+                        <div class="prt-relatives">
+                            {# Limitado en la plantilla y no en la consulta: la colección ya
+                             # viene cargada por la relación, y el número total se pinta
+                             # arriba, así que recortar aquí no esconde información. #}
+                            {% for partner in interested|slice(0, 12) %}
+                                <div class="prt-relative">
+                                    <span class="prt-relative__dot"></span>
+                                    <span class="prt-relative__name">{{ partner.name }} {{ partner.surname }}</span>
+                                </div>
+                            {% endfor %}
+                        </div>
+                        {% if interested|length > 12 %}
+                            <p class="vol-help">y {{ interested|length - 12 }} más</p>
+                        {% endif %}
+                    {% endif %}
+                </div>
+                <div class="prt-card__foot">
+                    <a href="{{ path('volunteering_pool', { tipo: category.id }) }}">Ver la bolsa de gente de {{ category.name }}</a>
+                </div>
+            </div>
+
+        </div>
+
+        {# ============ QUÉ HA PASADO ============
+         # Incluye lo que le pasó al área Y lo que pasa dentro de sus tareas. Antes
+         # este bloque vivía en el formulario de edición y sólo traía lo primero, que
+         # en un área que no se toca son cero filas: se veía siempre vacío. #}
+        <div class="prt-card">
+            <div class="prt-card__head">
+                <h2 class="prt-card__title">Qué ha pasado</h2>
+                <span class="prt-card__head-meta">lo más reciente</span>
+            </div>
+            <div class="prt-card__body">
+                {% include '_components/volunteering_history.html.twig' with {
+                    events: history,
+                    actor_names: actor_names,
+                    with_offer: true,
+                    empty_text: 'Todavía no consta nada en esta área: ni tareas publicadas, ni gente apuntándose, ni relevos de coordinación.'
+                } only %}
+            </div>
+            <div class="prt-card__foot">
+                <a href="{{ path('volunteering_activity', { area: category.id }) }}">Ver toda la actividad de {{ category.name }}</a>
+            </div>
+        </div>
+
+    </div>
+{% endblock %}

@@ -1,9 +1,8 @@
-{# Alta y edición de un tipo de trabajo, en pantalla propia. #}
+{# Alta y edición de un área, en pantalla propia. #}
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
-{% import '_macros/volunteering.html.twig' as vol %}
 
-{% block title %}Voluntariado · {{ is_new ? 'Nuevo tipo de trabajo' : category.name }}{% endblock %}
+{% block title %}Voluntariado · {{ is_new ? 'Nueva área' : category.name }}{% endblock %}
 
 {% block more_css %}
     {{ parent() }}
@@ -15,16 +14,16 @@
     <span class="csa-topbar__crumbs-sep">/</span>
     <a href="{{ path('volunteering_index') }}">Voluntariado</a>
     <span class="csa-topbar__crumbs-sep">/</span>
-    <a href="{{ path('volunteering_categories') }}">Tipos de trabajo</a>
+    <a href="{{ path('volunteering_categories') }}">Áreas</a>
     <span class="csa-topbar__crumbs-sep">/</span>
-    <span class="csa-topbar__crumb-active">{{ is_new ? 'Nuevo' : category.name }}</span>
+    <span class="csa-topbar__crumb-active">{{ is_new ? 'Nueva' : category.name }}</span>
 {% endblock %}
 
 {% block csa_main %}
-    {{ csa.page_header('Voluntariado', is_new ? 'Nuevo tipo de trabajo' : 'Editar tipo de trabajo') }}
+    {{ csa.page_header('Voluntariado', is_new ? 'Nueva área' : 'Editar área') }}
 
     {% if not is_new and not category.active %}
-        {{ csa.callout('Este tipo está retirado: no se ofrece al crear tareas nuevas ni aparece en la ficha de lxs socixs. Las tareas históricas que lo usaron siguen enteras.', 'info') }}
+        {{ csa.callout('Esta área está retirada: no se ofrece al crear tareas nuevas ni aparece en la ficha de lxs socixs. Las tareas históricas que la usaron siguen enteras.', 'info') }}
     {% endif %}
 
     {{ form_start(form, { attr: { class: 'csa-form-narrow' } }) }}
@@ -32,7 +31,6 @@
         {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Qué es' } %}
             {% block body %}
                 {% import '_macros/csa.html.twig' as csa %}
-                {% import '_macros/volunteering.html.twig' as vol %}
                 <div class="csa-form-grid">
                     {{ csa.field(form.name, 'Nombre') }}
                     {{ csa.field(form.description, 'Qué entra aquí', {
@@ -40,18 +38,20 @@
                         hint: 'se le enseña a cada socix junto a la casilla',
                         widget_class: 'csa-textarea'
                     }) }}
-                    {{ vol.check(form.active, 'Se sigue ofreciendo', 'desmárcala para retirarlo sin perder el histórico') }}
-                    {# Sólo el área de montar cestas. De aquí sale el "quién te prepara la
-                     # cesta" del panel del socix; marcarla en dos áreas haría que la home
-                     # señalara a gente que ese día está haciendo otra cosa. #}
-                    {{ vol.check(form.deliveryPrep, 'Es el montaje del reparto', 'con ella, cada socix ve en su panel quién le prepara la cesta en su punto — y el aviso si no hay nadie') }}
+                    {# SIN LAS DOS CASILLAS que había aquí, y el motivo está en
+                     # VolunteerCategoryType: retirar un área se hace a un clic desde
+                     # el catálogo y desde su ficha, así que la casilla era un segundo
+                     # camino más escondido y sin confirmación; y «es el montaje del
+                     # reparto» es un booleano que sirve para señalar exactamente un
+                     # área de la casa, así que permite marcar cero o dos y en los dos
+                     # casos el panel del socix miente. #}
                 </div>
             {% endblock %}
         {% endembed %}
 
         {% embed '_components/csa_form_section.html.twig' with {
             num: '2',
-            title: 'Quién lo coordina',
+            title: 'Quién la coordina',
             subtitle: 'Marcar a alguien aquí le da acceso al voluntariado de esta área, y sólo de ésta: podrá publicar tareas, cerrarlas y pedir gente. No hace falta darle ningún permiso aparte.'
         } %}
             {% block body %}
@@ -69,28 +69,20 @@
         {% endembed %}
 
         <div class="csa-row-between" style="margin-top: var(--csa-sp-6);">
-            {{ csa.btn('Volver', { variant: 'ghost', href: path('volunteering_categories') }) }}
+            {{ csa.btn('Volver', {
+                variant: 'ghost',
+                href: is_new ? path('volunteering_categories') : path('volunteering_category_show', { id: category.id })
+            }) }}
             <button type="submit" class="csa-btn csa-btn--primary">{{ is_new ? 'Crear' : 'Guardar cambios' }}</button>
         </div>
 
     {{ form_end(form) }}
 
-    {# Sólo en edición: un objeto que no existe todavía no tiene historial, y un
-     # bloque vacío en el alta sólo estorba. #}
-    {% if not is_new %}
-        <div class="csa-form-narrow" style="margin-top: var(--csa-sp-6);">
-            {% embed '_components/csa_card.html.twig' with {
-                title: 'Qué ha pasado con este tipo de trabajo',
-                icon: 'fa-history'
-            } %}
-                {% block body %}
-                    {% include '_components/volunteering_history.html.twig' with {
-                        events: history,
-                        actor_names: actor_names,
-                        empty_text: 'Todavía no consta nada. Los cambios y los relevos de coordinación quedan registrados aquí.'
-                    } only %}
-                {% endblock %}
-            {% endembed %}
-        </div>
-    {% endif %}
+    {# EL HISTÓRICO YA NO VIVE AQUÍ, está en la ficha del área. Un formulario es
+     # para cambiar cosas; un registro de lo que pasó debajo del botón de guardar
+     # no se lee y no se puede usar para nada. Y aquí sólo traía lo que le había
+     # pasado al área EN SÍ —se creó, se renombró, cambió la coordinación—, que en
+     # un área que nadie ha tocado son cero filas: el bloque se veía siempre
+     # vacío. En la ficha va junto a las tareas y la gente que le dan sentido, y
+     # con la actividad de dentro incluida. #}
 {% endblock %}

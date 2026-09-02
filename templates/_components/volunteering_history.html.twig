@@ -7,6 +7,11 @@
  #
  # Espera: events (lista de VolunteerEvent), actor_names (mapa código => nombre)
  # y opcionalmente empty_text.
+ #
+ # `with_offer`: pinta de qué tarea es cada evento, enlazada. Va en un flag y no
+ # siempre porque en la ficha de una tarea esa columna es la misma línea repetida
+ # veinte veces, mientras que en la de un área es justo el dato que falta — ahí
+ # el historial mezcla lo del área con lo de todas sus tareas.
  #}
 {% import '_macros/volunteering.html.twig' as vol %}
 
@@ -19,6 +24,9 @@
                 <span class="vol-history__when">{{ event.occurredAt|date('d/m/Y H:i') }}</span>
                 <span class="vol-history__what">
                     <strong>{{ event.label }}</strong>
+                    {% if with_offer|default(false) and event.offer %}
+                        · <a href="{{ path('volunteering_show', { id: event.offer.id }) }}">{{ event.offer.title }}</a>
+                    {% endif %}
                     {% if event.partner %}
                         · {{ event.partner.name }} {{ event.partner.surname }}
                     {% endif %}

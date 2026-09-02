@@ -8,7 +8,7 @@ use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Validator\Constraints as Assert;
 
 /**
- * El tipo de trabajo que pide una oferta de voluntariado: huerta, reparto,
+ * El área que pide una oferta de voluntariado: huerta, reparto,
  * obras, oficina, comunicación… Es a la vez la etiqueta de la oferta y lo que
  * cada socix marca en su ficha para decir "avísame de esto".
  *

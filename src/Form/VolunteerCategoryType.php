@@ -7,7 +7,6 @@ use App\Entity\VolunteerCategory;
 use App\Repository\UserRepository;
 use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
-use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
 use Symfony\Component\Form\Extension\Core\Type\TextareaType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
@@ -35,16 +34,22 @@ class VolunteerCategoryType extends AbstractType
                 'help' => 'Se le enseña a cada socix junto a la casilla, para que sepa qué está marcando.',
                 'attr' => ['rows' => 3],
             ])
-            ->add('active', CheckboxType::class, [
-                'label' => 'Se sigue ofreciendo',
-                'required' => false,
-                'help' => 'Desmárcala para retirarla sin perder el histórico de tareas que la usaron.',
-            ])
-            ->add('deliveryPrep', CheckboxType::class, [
-                'label' => 'Es el montaje del reparto',
-                'required' => false,
-                'help' => 'Márcala sólo en el área de montar las cestas. Con ella, a cada socix se le dice en su panel quién le está preparando la cesta de esa semana en su punto de recogida — y se le avisa si no se ha apuntado nadie.',
-            ])
+            // SIN CASILLA DE ESTADO, y no por hacer sitio. Retirar un área o
+            // volver a ofrecerla ya se hace a un clic desde el listado y desde
+            // la ficha (`volunteering_category_toggle`), que es donde se decide
+            // —mirando el catálogo entero— y no dentro de un formulario que hay
+            // que abrir, recorrer y guardar. Teniendo las dos vías, la casilla
+            // era un segundo camino al mismo dato, más escondido y sin el aviso
+            // de confirmación que sí lleva la acción.
+            //
+            // TAMPOCO LA DE «es el montaje del reparto». Ese booleano sirve para
+            // señalar exactamente un área en toda la asociación, así que permite
+            // dejarlo a cero —y el panel del socix se queda mudo sin decir por
+            // qué— o marcarlo en dos, y entonces la home señala a quien ese día
+            // está haciendo otra cosa. Está decidido que el dato se mude al nodo
+            // y que las tareas de montaje las genere el calendario de reparto;
+            // hasta entonces no se ofrece aquí, porque ofrecer un footgun es
+            // invitar a pisarlo. Ninguna área lo tiene marcado hoy.
             ->add('coordinators', EntityType::class, [
                 'label' => 'Quién coordina esta área',
                 'class' => User::class,
@@ -99,7 +104,7 @@ class VolunteerCategoryType extends AbstractType
                 // Casillas y no un <select multiple>: el nativo obliga a
                 // ctrl+clic para elegir varias, no deja ver de un vistazo cuáles
                 // están marcadas y en una caja de cuatro líneas hay que buscar
-                // con scroll. Es el mismo patrón que ya usa el tipo de trabajo de
+                // con scroll. Es el mismo patrón que ya usa el área de
                 // una tarea, y el CSS del proyecto lo pinta como pills.
                 //
                 // Con las 43 cuentas son unas quince filas de pills, así que la

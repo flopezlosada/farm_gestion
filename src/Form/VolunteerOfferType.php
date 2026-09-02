@@ -55,7 +55,7 @@ class VolunteerOfferType extends AbstractType
                 'attr' => ['rows' => 4],
             ])
             ->add('categories', EntityType::class, [
-                'label' => 'Tipo de trabajo',
+                'label' => 'Área',
                 'class' => VolunteerCategory::class,
                 'query_builder' => static fn ($repository) => $repository
                     ->createQueryBuilder('c')

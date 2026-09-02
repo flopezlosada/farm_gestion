@@ -33,7 +33,7 @@
     {{ csa.page_header('Voluntariado', 'Actividad', 'Qué ha pasado, cuándo y quién lo hizo.') }}
 
     {% if not coordinates_something %}
-        {{ csa.callout('No coordinas ningún tipo de trabajo todavía, así que aquí no aparece nada.', 'info') }}
+        {{ csa.callout('No coordinas ninguna área todavía, así que aquí no aparece nada.', 'info') }}
     {% elseif not sees_everything %}
         {{ csa.callout('Ves sólo la actividad de las áreas que coordinas.', 'info') }}
     {% endif %}
@@ -43,6 +43,9 @@
          # tendría sentido un desplegable con toda la asociación dentro. Se
          # quita con la X del chip, no desde aquí. #}
         {% if who %}<input type="hidden" name="socix" value="{{ who.id }}">{% endif %}
+        {# El área viaja igual de escondida y por el mismo motivo: se entra
+         # filtrado desde su ficha, y se quita con la X de su chip. #}
+        {% if area %}<input type="hidden" name="area" value="{{ area.id }}">{% endif %}
         <div class="prl-toolbar">
             <div class="prl-filt-wrap">
                 <button type="button" class="prl-filt {{ type ? 'has' : '' }}" data-pop-trigger="pop-tipo">
@@ -57,10 +60,21 @@
                 </div>
             </div>
 
+            {# Los chips llevan puesto lo OTRO al quitarse: sin eso, cerrar el
+             # filtro de socix se llevaba también el de área sin avisar. #}
             {% if who %}
                 <span class="vol-chip">
                     {{ who.name }} {{ who.surname }}
-                    <a href="{{ path('volunteering_activity', { tipo: type }) }}" title="Ver la actividad de todo el mundo">&times;</a>
+                    <a href="{{ path('volunteering_activity', { tipo: type, area: area ? area.id : null }) }}"
+                       title="Ver la actividad de todo el mundo">&times;</a>
+                </span>
+            {% endif %}
+
+            {% if area %}
+                <span class="vol-chip">
+                    {{ area.name }}
+                    <a href="{{ path('volunteering_activity', { tipo: type, socix: who ? who.id : null }) }}"
+                       title="Ver la actividad de todas las áreas">&times;</a>
                 </span>
             {% endif %}
         </div>

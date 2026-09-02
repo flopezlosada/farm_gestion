@@ -72,13 +72,29 @@
         'biweekly': 'dos semanas', 'monthly': 'cuatro semanas',
         'draft': 'borrador', 'published': 'publicada', 'cancelled': 'anulada'
     } -%}
+    {#- Claves donde `false` significa "no pasó nada", y decirlo es ruido: nadie
+        quiere leer "cambia de fecha: no" en cada edición. -#}
+    {%- set silent_when_false = ['moved', 'relocated', 'again', 'opt_out'] -%}
+    {#- Claves donde el booleano ES el hecho, y se dice con una frase entera en
+        vez de un "clave: sí/no" que no se entiende. Índice 0 = false, 1 = true.
+
+        Sin esto, retirar un área quedaba registrado como "Área editada · nombre:
+        Obras" y el dato que importaba —que se retiró— se perdía: el filtro de
+        arriba escondía TODOS los `false`, y en `active` el false es la noticia. -#}
+    {%- set as_phrase = { 'active': ['queda retirada', 'vuelve a ofrecerse'] } -%}
     {%- set parts = [] -%}
     {%- for key, value in payload -%}
-        {%- if value is not null and value is not same as(false) -%}
+        {%- if value is null or (value is same as(false) and key in silent_when_false) -%}
+            {#- fuera -#}
+        {%- elseif as_phrase[key] is defined and (value is same as(true) or value is same as(false)) -%}
+            {%- set parts = parts|merge([as_phrase[key][value ? 1 : 0]]) -%}
+        {%- else -%}
             {%- if value is iterable -%}
                 {%- set shown = value is empty ? 'nadie' : value|join(', ') -%}
             {%- elseif value is same as(true) -%}
                 {%- set shown = 'sí' -%}
+            {%- elseif value is same as(false) -%}
+                {%- set shown = 'no' -%}
             {%- else -%}
                 {%- set shown = values[value]|default(value) -%}
             {%- endif -%}
@@ -111,4 +127,68 @@
             <div class="csa-field__error">{{ form_errors(field) }}</div>
         {% endif %}
     </div>
+{% endmacro %}
+
+
+{# ---------- ESTADO DE UNA TAREA ----------
+ # La insignia que resume en qué punto está una tarea.
+ #
+ # En una macro porque son SIETE ramas y se pintan en dos listados —el de tareas
+ # y la ficha de un área—. Copiadas, el día que se añada un estado quedaría uno
+ # de los dos diciendo otra cosa sobre la misma tarea, y eso no da error: sólo
+ # miente.
+ #
+ # No es lo mismo que `VolunteerOffer::getPhase()`, y la diferencia es
+ # deliberada. La fase responde "qué trabajo toca ahora" y gobierna la ficha;
+ # esto responde "cómo salió", que es lo que se lee de un vistazo en una lista:
+ # una tarea pasada a la que no fue nadie y otra que se cerró bien están en la
+ # misma fase y no se parecen en nada.
+ #
+ #   {{ vol.task_status(offer, now) }}
+ #}
+{% macro task_status(offer, now) %}
+    {% import '_macros/csa.html.twig' as ui %}
+    {%- if offer.status == 'draft' -%}
+        {{ ui.badge('Borrador', 'neutral') }}
+    {%- elseif offer.status == 'cancelled' -%}
+        {{ ui.badge('Anulada', 'terracotta') }}
+    {%- elseif offer.wasMissed(now) -%}
+        {{ ui.badge('No fue nadie', 'terracotta') }}
+    {%- elseif offer.isDone(now) -%}
+        {{ ui.badge('Hecha', 'green') }}
+    {%- elseif offer.startsAt <= now -%}
+        {{ ui.badge('Sin confirmar', 'ochre') }}
+    {%- else -%}
+        {{ ui.badge('Publicada', 'sky') }}
+    {%- endif -%}
+{% endmacro %}
+
+
+{# ---------- PLAZAS DE UNA TAREA ----------
+ # Cuánta gente hay de la que hace falta.
+ #
+ # Sin tope, "4" a secas se lee como "hay 4 plazas", así que se dice.
+ #
+ #   {{ vol.task_slots(offer) }}
+ #}
+{% macro task_slots(offer) %}
+    {%- if offer.slots -%}
+        {{ offer.filledSlots }} / {{ offer.slots }}
+    {%- else -%}
+        {{ offer.filledSlots }} <span class="vol-help">(sin tope)</span>
+    {%- endif -%}
+{% endmacro %}
+
+
+{# ---------- DÓNDE SE HACE UNA TAREA ----------
+ # Casa, punto de recogida o un lugar escrito a mano, en ese orden de precedencia
+ # —el mismo que usa el modelo—.
+ #
+ #   {{ vol.task_place(offer) }}
+ #}
+{% macro task_place(offer) %}
+    {%- if offer.remote %}Desde casa
+    {%- elseif offer.node %}{{ offer.node }}
+    {%- elseif offer.place %}{{ offer.place }}
+    {%- else %}—{% endif -%}
 {% endmacro %}
