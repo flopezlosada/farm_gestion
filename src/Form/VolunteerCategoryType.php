@@ -4,6 +4,7 @@ namespace App\Form;
 
 use App\Entity\User;
 use App\Entity\VolunteerCategory;
+use App\Repository\UserRepository;
 use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
@@ -51,40 +52,57 @@ class VolunteerCategoryType extends AbstractType
                 // el username es su correo, y un desplegable que ofrece
                 // "aguilella.vicente@gmail.com" no dice quién es a nadie.
                 'choice_label' => static fn (User $user): string => $user->getDisplayName(),
-                // SÓLO quien tenga marcado "Voluntariado" en su ficha de
-                // Usuarias. En producción hay del orden de doscientas cuentas y
-                // un desplegable con todas es inusable: el paso previo en
-                // Usuarias es lo que lo reduce a las candidatas de verdad, y de
-                // paso evita nombrar coordinadora a una cuenta de servicio
-                // (guest, mancomunidad) por un dedazo.
+                // CUALQUIER CUENTA HABILITADA, y esto se abrió a propósito.
+                // Antes había que marcarle "Voluntariado" en Usuarias para que
+                // apareciese aquí, y eran dos pantallas para un solo encargo.
                 //
-                // LIKE sobre la columna serializada, que es como ya consulta por
-                // rol UserRepository::findByRole(). Feo, pero es el formato en
-                // el que Doctrine guarda el array y no vamos a cambiarlo por
-                // esto. ROLE_ADMIN entra también: lo incluye todo.
+                // Ese pre-paso no protegía nada: marcar a alguien aquí es
+                // justamente lo que le concede ROLE_GESTION_VOLUNTARIADO
+                // ({@see \App\Entity\User::getRoles()}), así que filtrar por
+                // "quien ya tiene el permiso" no evitaba ningún acceso
+                // indebido — sólo obligaba a concederlo antes en otro sitio, y
+                // dejaba el mismo permiso escrito en dos lugares que hay que
+                // mantener a mano. Es lo que ese getRoles() dice querer evitar.
                 //
-                // Y sólo cuentas habilitadas: nombrar coordinadora a una cuenta
-                // desactivada la dejaría con el encargo y sin poder entrar.
-                'query_builder' => static fn ($repository) => $repository
+                // Se sostenía además sobre un dato equivocado ("hay del orden
+                // de doscientas cuentas"): las doscientas y pico son socixs,
+                // pero cuentas hay 43 — el número que ya estaba bien contado en
+                // {@see \App\Entity\Node::$sheetRecipients}. Con esa cifra el
+                // desplegable se lee, y lo que hacía falta era poder buscar en
+                // él, no recortarlo por permisos.
+                //
+                // Lo único que sí se filtra son las cuentas deshabilitadas:
+                // nombrar coordinadora a una cuenta desactivada la dejaría con
+                // el encargo y sin poder entrar.
+                'query_builder' => static fn (UserRepository $repository) => $repository
                     ->createQueryBuilder('u')
+                    // Fetch join del socix: getDisplayName() lo pregunta una vez
+                    // por opción, y sin traerlo aquí son 43 consultas.
                     ->leftJoin('u.partner', 'p')
                     ->addSelect('p')
                     ->where('u.enabled = true')
-                    ->andWhere('u.roles LIKE :vol OR u.roles LIKE :volEdit OR u.roles LIKE :admin')
-                    ->setParameter('vol', '%"ROLE_GESTION_VOLUNTARIADO"%')
-                    ->setParameter('volEdit', '%"ROLE_GESTION_VOLUNTARIADO_EDIT"%')
-                    ->setParameter('admin', '%"ROLE_ADMIN"%')
-                    ->orderBy('p.name', 'ASC')
-                    ->addOrderBy('u.username', 'ASC'),
+                    // Por el nombre que se PINTA, que en las cuentas sin socix
+                    // es el username. Ordenar por `p.name` a secas mandaba esas
+                    // cuentas al principio de la lista con el nombre en NULL.
+                    ->addSelect('COALESCE(p.name, u.username) AS HIDDEN shown_name')
+                    ->orderBy('shown_name', 'ASC')
+                    ->addOrderBy('p.surname', 'ASC'),
                 // Casillas y no un <select multiple>: el nativo obliga a
                 // ctrl+clic para elegir varias, no deja ver de un vistazo cuáles
                 // están marcadas y en una caja de cuatro líneas hay que buscar
                 // con scroll. Es el mismo patrón que ya usa el tipo de trabajo de
                 // una tarea, y el CSS del proyecto lo pinta como pills.
+                //
+                // Con las 43 cuentas son unas quince filas de pills, así que la
+                // plantilla les pone un buscador por encima
+                // (`data-csa-check-filter`). Se filtra lo ya pintado en vez de
+                // cambiar a un desplegable con búsqueda porque lo que aporta la
+                // casilla es ver de un golpe quién está marcado, y un
+                // desplegable esconde justo eso.
                 'expanded' => true,
                 'multiple' => true,
                 'required' => false,
-                'help' => 'Podrán publicar, cerrar y pedir gente para las tareas de esta área, y sólo de ésta. Con esto les basta: no hace falta darles ningún rol aparte, se deriva solo.',
+                'help' => 'Marcar a alguien aquí le da acceso al voluntariado de esta área, y sólo de ésta: podrá publicar tareas, cerrarlas y pedir gente. No hace falta darle ningún permiso aparte en Usuarias.',
             ])
         ;
     }
