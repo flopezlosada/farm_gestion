@@ -45,28 +45,6 @@ class VolunteerEventRepository extends ServiceEntityRepository
     }
 
     /**
-     * El historial de UN área: lo que le ha pasado al tipo de trabajo en sí
-     * (creación, cambios, quién lo coordina), no las tareas que lo usan.
-     *
-     * Esas están en cada tarea, y traerlas aquí convertiría la ficha del área en
-     * un segundo listado de actividad que ya existe y con filtro propio.
-     *
-     * @param VolunteerCategory $category el área
-     *
-     * @return list<VolunteerEvent> su historial
-     */
-    public function historyForCategory(VolunteerCategory $category): array
-    {
-        return $this->createQueryBuilder('e')
-            ->where('e.category = :category')
-            ->setParameter('category', $category)
-            ->orderBy('e.occurredAt', 'DESC')
-            ->addOrderBy('e.id', 'DESC')
-            ->getQuery()
-            ->getResult();
-    }
-
-    /**
      * Traduce los actores de una lista de eventos a nombres de persona.
      *
      * El actor se guarda como texto ("gestor:1") para que el rastro sobreviva al
@@ -120,7 +98,7 @@ class VolunteerEventRepository extends ServiceEntityRepository
      * EL FILTRO POR ÁREA ES EL PUNTO DE LA PANTALLA: quien coordina el reparto
      * ve lo que pasa en el reparto y nada más. Un evento pertenece a un área si
      * la tarea a la que se refiere está en ella, o si el propio evento la
-     * declara (los que no tienen tarea: crear un tipo de trabajo, cambiar quién
+     * declara (los que no tienen tarea: crear un área, cambiar quién
      * lo coordina).
      *
      * Los eventos SIN área ninguna —los de un socix cambiando sus preferencias—

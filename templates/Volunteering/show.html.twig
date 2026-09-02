@@ -254,7 +254,7 @@
         {# ============ LOS CUATRO DATOS ============
          # Cuándo, dónde, cuánta gente y cuánto computa. Es lo que se viene a
          # mirar; antes estaban repartidos entre tres KPIs y una lista de
-         # definiciones que además repetía el estado y el tipo de trabajo (que
+         # definiciones que además repetía el estado y el área (que
          # ahora son chips del hero). #}
         {# ============ QUÉ HAY QUE HACER · CUÁNDO Y DÓNDE ============
          # Dos columnas: a la izquierda lo que se lee entero una vez, a la derecha
@@ -678,7 +678,7 @@
                     <div class="prt-card">
                         <div class="prt-card__body">
                             <p class="vol-help">
-                                Socixs que han marcado este tipo de trabajo y todavía no se han apuntado.
+                                Socixs que han marcado esta área y todavía no se han apuntado.
                                 Primero quien menos ha echado una mano este año, para repartir la carga.
                             </p>
 
@@ -692,7 +692,7 @@
                                                 {%- if candidate.same_node -%}
                                                     Recoge su cesta en {{ offer.node }} — ese día ya va a estar allí
                                                 {%- else -%}
-                                                    Tiene marcado este tipo de trabajo
+                                                    Tiene marcado esta área
                                                 {%- endif -%}
                                             </span>
                                         </div>
@@ -732,7 +732,7 @@
                          # descartado o si hay que hacer algo: se etiqueta con palabras. #}
                         <ul class="vol-scopes">
                             <li>
-                                <span>A quien tiene marcado este tipo de trabajo</span>
+                                <span>A quien tiene marcado esta área</span>
                                 {{ 'matching' in sent_scopes ? csa.badge('Enviado', 'green') : csa.badge('Sin enviar', 'neutral') }}
                             </li>
                             <li>
