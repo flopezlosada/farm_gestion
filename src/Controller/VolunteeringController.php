@@ -80,6 +80,12 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 class VolunteeringController extends AbstractController
 {
     /**
+     * Cuántos turnos por venir enseña la ficha de la tarea antes de remitir a
+     * la lista completa.
+     */
+    private const UPCOMING_ON_SHEET = 10;
+
+    /**
      * Los turnos: lo que viene, lo que falta por cerrar y lo que ya se hizo.
      */
     #[Route('', name: 'volunteering_index', methods: ['GET'])]
@@ -331,12 +337,17 @@ class VolunteeringController extends AbstractController
     ): Response {
         $now = new \DateTime();
         $history = $events->historyFor($offer);
+        $upcoming = $offer->getUpcomingShifts($now);
 
         return $this->render('Volunteering/show.html.twig', [
             'offer' => $offer,
             'now' => $now,
             'to_close' => $offer->getShiftsToClose($now),
-            'upcoming' => $offer->getUpcomingShifts($now),
+            // Sólo los próximos: una tarea diaria tiene doscientos turnos
+            // abiertos y aquí interesa el siguiente puñado. El resto, y todo lo
+            // que ya pasó, está en la lista completa de la tarea.
+            'upcoming' => \array_slice($upcoming, 0, self::UPCOMING_ON_SHEET),
+            'upcoming_total' => \count($upcoming),
             // Cuántos turnos alcanzaría la receta si se abrieran ahora: es lo
             // que dice si merece la pena el botón de extender.
             'horizon_days' => ShiftGenerator::HORIZON_DAYS,
@@ -347,6 +358,38 @@ class VolunteeringController extends AbstractController
             // cuando quieres saber qué le ha pasado a una tarea concreta.
             'history' => $history,
             'actor_names' => $events->actorNames($history),
+        ]);
+    }
+
+    /**
+     * Todos los turnos de UNA tarea: los que vienen y los que ya pasaron.
+     *
+     * Es la lista completa que la ficha no enseña a propósito. La ficha se
+     * queda con el siguiente puñado; aquí está el resto, con las mismas cinco
+     * vistas del listado global —por venir, sin confirmar, hechos, sin cubrir,
+     * todos— porque son las mismas preguntas hechas sobre una sola tarea.
+     */
+    #[Route('/tarea/{id}/turnos', name: 'volunteering_shifts', methods: ['GET'], requirements: ['id' => '\d+'])]
+    #[IsGranted(VolunteerOfferVoter::VIEW, subject: 'offer')]
+    public function shifts(
+        VolunteerOffer $offer,
+        Request $request,
+        VolunteerShiftRepository $shifts,
+        PaginatorInterface $paginator,
+    ): Response {
+        $now = new \DateTime();
+        $scope = $request->query->getAlpha('ver') ?: 'upcoming';
+
+        return $this->render('Volunteering/shifts.html.twig', [
+            'offer' => $offer,
+            'pagination' => $paginator->paginate(
+                $shifts->listQb($scope, null, null, $now, null, $offer)->getQuery(),
+                $request->query->getInt('page', 1),
+                25
+            ),
+            'counts' => $shifts->counts($now, null, $offer),
+            'scope' => $scope,
+            'now' => $now,
         ]);
     }
 

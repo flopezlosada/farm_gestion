@@ -311,6 +311,7 @@ class VolunteerShiftRepository extends ServiceEntityRepository
      * @param string|null                  $query      texto libre sobre título y explicación
      * @param \DateTimeInterface|null      $now        momento de referencia
      * @param list<VolunteerCategory>|null $restrictTo áreas a las que se limita quien mira; null = sin límite
+     * @param VolunteerOffer|null          $offer      sólo los turnos de esta tarea; null = de todas
      */
     public function listQb(
         string $scope = 'upcoming',
@@ -318,12 +319,20 @@ class VolunteerShiftRepository extends ServiceEntityRepository
         ?string $query = null,
         ?\DateTimeInterface $now = null,
         ?array $restrictTo = null,
+        ?VolunteerOffer $offer = null,
     ): QueryBuilder {
         $now ??= new \DateTime();
 
         $qb = $this->createQueryBuilder('s')
             ->innerJoin('s.offer', 'o')
             ->addSelect('o');
+
+        // La misma consulta sirve para el listado global y para la lista de UNA
+        // tarea: las cinco vistas son las mismas preguntas, sólo cambia de
+        // cuántas tareas se hacen.
+        if (null !== $offer) {
+            $qb->andWhere('s.offer = :offer')->setParameter('offer', $offer);
+        }
 
         // EXISTS y no JOIN: con un join sobre signups el turno saldría repetido
         // una vez por persona apuntada.
@@ -406,12 +415,13 @@ class VolunteerShiftRepository extends ServiceEntityRepository
      *
      * @param \DateTimeInterface|null      $now        momento de referencia
      * @param list<VolunteerCategory>|null $restrictTo áreas a las que se limita quien mira
+     * @param VolunteerOffer|null          $offer      sólo los de esta tarea; null = de todas
      *
      * @return array{upcoming: int, pending: int, done: int, missed: int, all: int}
      */
-    public function counts(?\DateTimeInterface $now = null, ?array $restrictTo = null): array
+    public function counts(?\DateTimeInterface $now = null, ?array $restrictTo = null, ?VolunteerOffer $offer = null): array
     {
-        $count = fn (string $scope): int => (int) $this->listQb($scope, null, null, $now, $restrictTo)
+        $count = fn (string $scope): int => (int) $this->listQb($scope, null, null, $now, $restrictTo, $offer)
             ->select('COUNT(DISTINCT s.id)')
             ->resetDQLPart('orderBy')
             ->getQuery()
