@@ -232,66 +232,15 @@
         </div>
     </div>
 
-    <div class="nod-section" style="margin-top: 30px;">
-        <h3 class="nod-section__title">Grupos de recogida</h3>
-        {% if group_stats|length > 0 %}
-            <table class="nod-groups">
-                <thead>
-                    <tr>
-                        <th style="width: 28px;"></th>
-                        <th>Grupo</th>
-                        <th style="width: 110px;">Socios activos</th>
-                        <th style="width: 60px;"></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for row in group_stats %}
-                        <tr>
-                            <td><span class="nod-groups__swatch" style="background: {{ row.group.color }};"></span></td>
-                            <td>
-                                <a class="nod-groups__name" href="{{ path('weekly_basket_group_show', { id: row.group.id }) }}">{{ row.group.name }}</a>
-                            </td>
-                            <td>
-                                <span class="nod-groups__num">{{ row.active }}{% if row.total != row.active %} <small>/ {{ row.total }}</small>{% endif %}</span>
-                            </td>
-                            <td style="text-align: right;">
-                                <form method="post" action="{{ path('node_detach_group', { id: node.id, groupId: row.group.id }) }}" style="display:inline;">
-                                    <input type="hidden" name="_token" value="{{ csrf_token('detach_group' ~ row.group.id) }}">
-                                    <button type="submit" class="nod-detach" title="Desvincular del nodo" aria-label="Desvincular">
-                                        <i class="fa fa-unlink"></i>
-                                    </button>
-                                </form>
-                            </td>
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        {% else %}
-            <div class="nod-empty">Este nodo aún no tiene grupos de recogida asignados.</div>
-        {% endif %}
-
-        {% if unassigned_groups|length > 0 %}
-            <form method="post" action="{{ path('node_attach_group', { id: node.id }) }}" class="nod-attach">
-                <input type="hidden" name="_token" value="{{ csrf_token('attach_group' ~ node.id) }}">
-                <div>
-                    <label for="attach-group-select">Añadir un grupo a este nodo</label>
-                    <select id="attach-group-select" name="group_id" required>
-                        {% for group in unassigned_groups %}
-                            <option value="{{ group.id }}">{{ group.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                {{ csa.btn('Asignar', { variant: 'primary', type: 'submit', icon: 'fa-link' }) }}
-            </form>
-        {% elseif group_stats|length > 0 %}
-            <p class="nod-head__sub" style="margin-top: 14px;">No hay grupos sin nodo disponibles para asignar.</p>
-        {% endif %}
-    </div>
-
     {# Quién recibe el listado de este punto. Va aquí y no en el formulario de
        edición porque son cientos de fichas: el desplegable con buscador
-       ([data-csa-dropdowns] lo activa) es lo único usable a esa escala. #}
-    <div class="csa-card csa-stack" data-csa-dropdowns id="destinatarios">
+       ([data-csa-dropdowns] lo activa) es lo único usable a esa escala.
+
+       Y va ANTES de los grupos de recogida a propósito: Torremocha tiene tantos
+       grupos que, debajo de ellos, esto quedaba fuera de la pantalla y nadie
+       sabía que existía. Los grupos son una lista que se consulta; a quién le
+       llega el listado es una decisión que hay que ver. #}
+    <div class="csa-card csa-stack" data-csa-dropdowns id="destinatarios" style="margin-top: 30px;">
         <div class="nod-head">
             <h2 class="nod-head__title">Quién recibe el listado</h2>
             <p class="nod-head__sub">
@@ -361,6 +310,62 @@
             </form>
         {% else %}
             <p class="nod-head__sub" style="margin-top: 14px;">No hay socixs activxs con correo en su ficha.</p>
+        {% endif %}
+    </div>
+
+    <div class="nod-section" style="margin-top: 30px;">
+        <h3 class="nod-section__title">Grupos de recogida</h3>
+        {% if group_stats|length > 0 %}
+            <table class="nod-groups">
+                <thead>
+                    <tr>
+                        <th style="width: 28px;"></th>
+                        <th>Grupo</th>
+                        <th style="width: 110px;">Socios activos</th>
+                        <th style="width: 60px;"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in group_stats %}
+                        <tr>
+                            <td><span class="nod-groups__swatch" style="background: {{ row.group.color }};"></span></td>
+                            <td>
+                                <a class="nod-groups__name" href="{{ path('weekly_basket_group_show', { id: row.group.id }) }}">{{ row.group.name }}</a>
+                            </td>
+                            <td>
+                                <span class="nod-groups__num">{{ row.active }}{% if row.total != row.active %} <small>/ {{ row.total }}</small>{% endif %}</span>
+                            </td>
+                            <td style="text-align: right;">
+                                <form method="post" action="{{ path('node_detach_group', { id: node.id, groupId: row.group.id }) }}" style="display:inline;">
+                                    <input type="hidden" name="_token" value="{{ csrf_token('detach_group' ~ row.group.id) }}">
+                                    <button type="submit" class="nod-detach" title="Desvincular del nodo" aria-label="Desvincular">
+                                        <i class="fa fa-unlink"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <div class="nod-empty">Este nodo aún no tiene grupos de recogida asignados.</div>
+        {% endif %}
+
+        {% if unassigned_groups|length > 0 %}
+            <form method="post" action="{{ path('node_attach_group', { id: node.id }) }}" class="nod-attach">
+                <input type="hidden" name="_token" value="{{ csrf_token('attach_group' ~ node.id) }}">
+                <div>
+                    <label for="attach-group-select">Añadir un grupo a este nodo</label>
+                    <select id="attach-group-select" name="group_id" required>
+                        {% for group in unassigned_groups %}
+                            <option value="{{ group.id }}">{{ group.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {{ csa.btn('Asignar', { variant: 'primary', type: 'submit', icon: 'fa-link' }) }}
+            </form>
+        {% elseif group_stats|length > 0 %}
+            <p class="nod-head__sub" style="margin-top: 14px;">No hay grupos sin nodo disponibles para asignar.</p>
         {% endif %}
     </div>
 
