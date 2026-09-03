@@ -93,7 +93,9 @@
                      # navega —«los turnos de huerta»— y desde aquí no había forma
                      # de llegar a ella. #}
                     {% for category in offer.categories %}
-                        <span class="prt-chip prt-chip--mute"><i class="fa fa-tag"></i> {{ category.name }}</span>
+                        <a class="prt-chip prt-chip--mute" href="{{ path('volunteering_category_show', { id: category.id }) }}" title="Ver el área">
+                            <i class="fa fa-tag"></i> {{ category.name }}
+                        </a>
                     {% endfor %}
 
                     <span class="prt-chip prt-chip--mute"><i class="fa fa-map-marker"></i> {{ vol.task_place(offer) }}</span>

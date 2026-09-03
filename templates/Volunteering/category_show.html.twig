@@ -83,6 +83,8 @@
                     {{ csa.btn('Nueva tarea en ' ~ category.name, { variant: 'primary', icon: 'fa-plus', href: new_task_url }) }}
                 {% endif %}
                 {{ csa.btn('Editar el área', { variant: 'secondary', icon: 'fa-pencil', href: path('volunteering_category_edit', { id: category.id }) }) }}
+                {# El calendario del área, prefiltrado: «los turnos de huerta» son un enlace. #}
+                {{ csa.btn('Calendario', { variant: 'ghost', icon: 'fa-calendar', href: path('volunteering_calendar', { tipo: category.id }) }) }}
 
                 {# <details> y sin JS, como el «?» de ayuda: funciona en cualquier
                  # pantalla sin depender de un script. #}
