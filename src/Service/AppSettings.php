@@ -326,11 +326,12 @@ class AppSettings
      *   también por la bandeja NUNCA puede llevar ahí el ajuste de un canal
      *   suelto, o apagar el correo dejaría sin escribir la copia.
      * - `dry`: ofrece botón de previsualización (--dry-run).
-     * - `schedule`: CADENCIA declarada — cuándo debería correr. `freq` es
-     *   daily|weekly|monthly, con `dow` (1 = lunes) en las semanales y `dom` en
-     *   las mensuales. Hoy la cadencia real la impone el crontab del hosting y
-     *   esto es su declaración fiel; cuando exista el tick genérico, este campo
-     *   pasa a ser el que MANDA.
+     * - `schedule`: CADENCIA, y es la que MANDA. `freq` es
+     *   daily|weekly|monthly|interval, con `dow` (1 = lunes) en las semanales,
+     *   `dom` en las mensuales y `minutes` en las de intervalo. Ya no es una
+     *   declaración a la espera de nada: {@see \App\Service\Cron\CronTick} cruza
+     *   esto con el registro de ejecuciones y decide él qué toca. El reloj
+     *   externo sólo llama a `/cron/tick` y no sabe qué tareas existen.
      * - `max_delay_hours`: PLAZO MÁXIMO DE RETRASO. Pasado ese tiempo sin
      *   ejecutarse, la tarea se considera caída. Se da margen sobre la cadencia
      *   (un reloj puntual no existe): día y medio para las diarias, ocho días
@@ -351,10 +352,26 @@ class AppSettings
      *   recogida sólo lee cestas ya congeladas, así que con el congelado apagado
      *   corre en verde sin avisar a nadie.
      *
-     * OJO: sólo las cuatro primeras están en el crontab de producción
-     * (`docs/migracion-prod/crons.txt`). Las tres de albergue y jornada laboral
-     * declaran su cadencia aquí pero HOY NADIE LAS DISPARA; se pidieron a cdmon
-     * y están sin montar.
+     * AÑADIR UNA TAREA AQUÍ BASTA PARA QUE SE EJECUTE. No hay que dar de alta
+     * nada en ningún hosting: el reloj —hoy el workflow `cron-tick.yml`— llama
+     * cada hora a `/cron/tick` sin decir qué ejecutar, y
+     * {@see \App\Service\Cron\CronTick::run()} recorre este manifiesto entero.
+     * Y nace ENCENDIDA sin crear ninguna fila, porque {@see self::getBool()} cae
+     * al `default` del catálogo cuando el ajuste no está en `setting`.
+     *
+     * Este comentario decía lo contrario —«sólo las cuatro primeras están en el
+     * crontab de producción, las demás se pidieron a cdmon y están sin montar»—
+     * y era cierto antes del planificador propio, en junio de 2026. Caducó sin
+     * que nadie lo tocara, y de aquí salieron dos notas de despliegue falsas en
+     * septiembre: quien añade una tarea lee esto, así que mantenerlo al día no
+     * es cosmético.
+     *
+     * Lo que SÍ puede dejar una tarea sin correr es que el reloj externo deje de
+     * llamar al tick. Pasó del 20-jul al 4-ago de 2026 y nadie lo notó en dos
+     * semanas; de ahí que el workflow avise ahora por correo y que
+     * `/cron/health` responda 503 cuando una tarea encendida pasa de su
+     * `max_delay_hours`. El puente mientras tanto es el botón de ejecución
+     * manual de `/gestion/settings`, que pasa `--force`.
      */
     public const CRONS = [
         self::CRON_GENERATE_WEEKLY_DELIVERY => [
