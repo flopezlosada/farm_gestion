@@ -151,6 +151,17 @@ class VolunteerOfferType extends AbstractType
                 'widget' => 'single_text',
                 'help' => 'En una tarea de una sola vez, es el día en que se hace.',
             ])
+            // NO MAPEADA: en la tarea, «sin fin» es `repeatUntil` a null. Es una
+            // casilla y no un «hasta» vacío porque un campo vacío puede ser un
+            // olvido y una casilla marcada no: el generador abre turnos para
+            // siempre, y eso no puede pasar por descuido. Se rellena al cargar
+            // (fillOpenEnded) y se aplica al enviar (applyOpenEnded).
+            ->add('openEnded', CheckboxType::class, [
+                'label' => 'No tiene fin definido, por ahora',
+                'mapped' => false,
+                'required' => false,
+                'help' => 'Se siguen abriendo turnos, unos meses por delante, hasta que alguien la pare o la anule.',
+            ])
             ->add('repeatUntil', DateType::class, [
                 'label' => 'Hasta el',
                 'widget' => 'single_text',
@@ -288,6 +299,8 @@ class VolunteerOfferType extends AbstractType
         $builder->addEventListener(FormEvents::PRE_SET_DATA, $this->addCoordinatorChoice(...));
         $builder->addEventListener(FormEvents::PRE_SET_DATA, $this->dropTimeSlotsIfTheNodeRules(...));
         $builder->addEventListener(FormEvents::PRE_SET_DATA, $this->fillTimeSlots(...));
+        $builder->addEventListener(FormEvents::PRE_SET_DATA, $this->fillOpenEnded(...));
+        $builder->addEventListener(FormEvents::POST_SUBMIT, $this->applyOpenEnded(...));
         $builder->addEventListener(FormEvents::POST_SUBMIT, $this->collectTimeSlots(...));
         $builder->addEventListener(FormEvents::POST_SUBMIT, $this->validateTimeSlots(...));
         $builder->addEventListener(FormEvents::POST_SUBMIT, $this->normalizeCadence(...));
@@ -409,6 +422,36 @@ class VolunteerOfferType extends AbstractType
             if ($form->has($endField)) {
                 $form->get($endField)->setData($this->withSeconds($slot[1] ?? null));
             }
+        }
+    }
+
+    /**
+     * Marca «sin fin» al abrir una tarea que se repite y no tiene fecha final.
+     *
+     * @param FormEvent $event el evento con la tarea
+     */
+    private function fillOpenEnded(FormEvent $event): void
+    {
+        $offer = $event->getData();
+        if ($offer instanceof VolunteerOffer && $offer->isRepeating() && null === $offer->getRepeatUntil()) {
+            $event->getForm()->get('openEnded')->setData(true);
+        }
+    }
+
+    /**
+     * Con «sin fin» marcado, la fecha final se descarta aunque viniera puesta.
+     *
+     * Puede venir: el campo se esconde en pantalla al marcar la casilla, pero
+     * un campo escondido viaja igual, y sin JavaScript se ven los dos. Manda
+     * la casilla porque es el gesto explícito.
+     *
+     * @param FormEvent $event el envío del formulario
+     */
+    private function applyOpenEnded(FormEvent $event): void
+    {
+        $offer = $event->getData();
+        if ($offer instanceof VolunteerOffer && true === $event->getForm()->get('openEnded')->getData()) {
+            $offer->setRepeatUntil(null);
         }
     }
 
@@ -602,8 +645,12 @@ class VolunteerOfferType extends AbstractType
             return;
         }
 
+        // Sin fecha final y sin la casilla de «sin fin»: no se sabe qué se
+        // quiso. Con la casilla, null es la respuesta y no hay más que mirar.
         if (null === $until) {
-            $this->error($form, 'repeatUntil', 'Si se repite, dime hasta cuándo.');
+            if (true !== $form->get('openEnded')->getData()) {
+                $this->error($form, 'repeatUntil', 'Si se repite, dime hasta cuándo, o marca que no tiene fin definido.');
+            }
 
             return;
         }

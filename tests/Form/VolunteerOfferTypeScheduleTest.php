@@ -128,6 +128,81 @@ class VolunteerOfferTypeScheduleTest extends KernelTestCase
     }
 
     /**
+     * Una tarea que se repite sin «hasta» y sin la casilla de sin fin no pasa:
+     * no se sabe si se olvidó la fecha o si se quiso para siempre.
+     */
+    public function testRepetirSinFechaFinalNiCasillaDeSinFinNoPasa(): void
+    {
+        $form = $this->submit([
+            'repeatType' => VolunteerOffer::REPEAT_WEEKLY,
+            'repeatWeekdays' => ['1'],
+            'firstStart' => '10:00',
+        ]);
+
+        $this->assertFalse($form->isValid());
+        $this->assertStringContainsString(
+            'marca que no tiene fin definido',
+            (string) $form->get('repeatUntil')->getErrors()[0]->getMessage()
+        );
+    }
+
+    /**
+     * Con la casilla marcada, sin fecha final es la respuesta y la tarea vale:
+     * el generador abre turnos por delante mientras no se pare.
+     */
+    public function testConLaCasillaDeSinFinNoHaceFaltaFechaFinal(): void
+    {
+        $form = $this->submit([
+            'repeatType' => VolunteerOffer::REPEAT_WEEKLY,
+            'repeatWeekdays' => ['1'],
+            'openEnded' => '1',
+            'firstStart' => '10:00',
+        ]);
+
+        $this->assertTrue($form->isValid(), (string) $form->getErrors(true));
+        $this->assertNull($form->getData()->getRepeatUntil());
+    }
+
+    /**
+     * La casilla manda sobre una fecha que viniera puesta: el campo se esconde
+     * al marcarla, pero escondido viaja igual.
+     */
+    public function testLaCasillaDeSinFinDescartaLaFechaFinalQueVenga(): void
+    {
+        $form = $this->submit([
+            'repeatType' => VolunteerOffer::REPEAT_WEEKLY,
+            'repeatWeekdays' => ['1'],
+            'openEnded' => '1',
+            'repeatUntil' => '2026-12-31',
+            'firstStart' => '10:00',
+        ]);
+
+        $this->assertTrue($form->isValid(), (string) $form->getErrors(true));
+        $this->assertNull($form->getData()->getRepeatUntil());
+    }
+
+    /**
+     * Al abrir una tarea que se repite sin fecha final, la casilla sale
+     * marcada: es lo que la tarea dice de sí misma.
+     */
+    public function testAlAbrirUnaTareaSinFinLaCasillaSaleMarcada(): void
+    {
+        self::bootKernel();
+        $offer = (new VolunteerOffer())
+            ->setTitle('Sin fin')
+            ->setRepeatType(VolunteerOffer::REPEAT_WEEKLY)
+            ->setRepeatWeekdays([1])
+            ->setRepeatFrom(new \DateTimeImmutable('2026-09-07'))
+            ->setRepeatUntil(null);
+
+        $form = static::getContainer()->get('form.factory')->create(VolunteerOfferType::class, $offer, [
+            'csrf_protection' => false,
+        ]);
+
+        $this->assertTrue($form->get('openEnded')->getData());
+    }
+
+    /**
      * Una tarea de una sola vez con título, día y hora. Lo que se pasa pisa
      * eso; así cada test dice sólo lo que cambia.
      *

@@ -117,20 +117,31 @@
  # Si necesitas más control sobre el widget, usa el partial
  # _components/csa_field_block.html.twig vía embed.
  #}
+{# ---------- REVEAL ----------
+ # El atributo que hace que un campo sólo se enseñe cuando otro lo pide
+ # (assets/js/csa-reveal.js). Se escribe con el nombre CORTO del hermano —
+ # 'repeatType=weekly|monthly', o varias reglas con ';'— y aquí se traduce al
+ # `name` completo del control, para que la plantilla no tenga que saber cómo se
+ # llama el formulario. Lo usan field() y volunteering.check().
+ #
+ #   <div class="csa-field"{{ csa.reveal(form.repeatEvery, 'repeatType=weekly') }}>
+ #}
+{% macro reveal(field, spec) %}
+    {%- if spec -%}
+        {%- set rules = [] -%}
+        {%- for rule in spec|split(';') -%}
+            {%- set parts = rule|split('=', 2) -%}
+            {%- set rules = rules|merge([field.parent.children[parts[0]].vars.full_name ~ '=' ~ parts[1]]) -%}
+        {%- endfor %} data-csa-show-when="{{ rules|join(';') }}"
+    {%- endif -%}
+{% endmacro %}
+
 {% macro field(field, label, opts = {}) %}
     {%- set required = opts.required ?? field.vars.required ?? false -%}
     {%- set widget_class = opts.widget_class|default('csa-input') -%}
     {%- set is_expanded_multi = (field.vars.expanded|default(false)) and (field.vars.multiple|default(false)) -%}
-    {#- show_when: 'otroCampo=valor|valor' enseña este campo sólo con esos
-        valores del hermano (csa-reveal). Aquí se escribe el nombre corto del
-        hermano y la macro lo traduce al `name` completo del control, para que
-        la plantilla no tenga que saber cómo se llama el formulario. -#}
-    {%- set show_when = null -%}
-    {%- if opts.show_when is defined -%}
-        {%- set rule = opts.show_when|split('=', 2) -%}
-        {%- set show_when = field.parent.children[rule[0]].vars.full_name ~ '=' ~ rule[1] -%}
-    {%- endif -%}
-    <div class="csa-field{% if opts.full|default(false) %} csa-field--full{% endif %}"{% if show_when %} data-csa-show-when="{{ show_when }}"{% endif %}>
+    {%- import _self as csa -%}
+    <div class="csa-field{% if opts.full|default(false) %} csa-field--full{% endif %}"{{ csa.reveal(field, opts.show_when|default(null)) }}>
         <div class="csa-field__label-row">
             <label class="csa-field__label" for="{{ field.vars.id }}">
                 {{ label }}{% if required %}<span class="csa-field__required">*</span>{% endif %}

@@ -12,7 +12,9 @@
  *
  * A la izquierda del «=», el `name` del control del que depende; a la
  * derecha, los valores con los que se enseña, separados por «|». Para una
- * casilla los valores son `checked` y `unchecked`.
+ * casilla los valores son `checked` y `unchecked`. Varias reglas van separadas
+ * por «;» y tienen que cumplirse todas: «hasta el» sólo se enseña si la tarea
+ * se repite Y no está marcada como sin fin.
  *
  * Al esconder un envoltorio se le quita el `required` a lo que lleve dentro,
  * y se le devuelve al enseñarlo: el navegador no deja enviar un formulario
@@ -48,12 +50,22 @@
     }
 
     function parse(spec) {
-        var at = spec.indexOf('=');
+        return spec.split(';').map(function (rule) {
+            var at = rule.indexOf('=');
 
-        return {
-            name: spec.slice(0, at),
-            values: spec.slice(at + 1).split('|')
-        };
+            return {
+                name: rule.slice(0, at),
+                values: rule.slice(at + 1).split('|')
+            };
+        });
+    }
+
+    /* Una regla se cumple con el valor del control, o si el control no está
+       en el formulario: mejor un campo de más que uno imposible de alcanzar. */
+    function holds(form, rule) {
+        var value = valueOf(form, rule.name);
+
+        return value === null || rule.values.indexOf(value) !== -1;
     }
 
     function setRequired(wrapper, on) {
@@ -74,9 +86,9 @@
         Array.prototype.slice
             .call(form.querySelectorAll('[data-csa-show-when]'))
             .forEach(function (wrapper) {
-                var rule = parse(wrapper.dataset.csaShowWhen);
-                var value = valueOf(form, rule.name);
-                var show = value === null || rule.values.indexOf(value) !== -1;
+                var show = parse(wrapper.dataset.csaShowWhen).every(function (rule) {
+                    return holds(form, rule);
+                });
 
                 wrapper.hidden = !show;
                 setRequired(wrapper, show);

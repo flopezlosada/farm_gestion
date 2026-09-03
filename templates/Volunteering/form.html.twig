@@ -74,6 +74,7 @@
         } %}
             {% block body %}
                 {% import '_macros/csa.html.twig' as csa %}
+                {% import '_macros/volunteering.html.twig' as vol %}
                 <div class="csa-form-grid">
                     {# Lo que depende de «cada cuánto» sólo se enseña cuando toca
                      # (show_when, ver csa-reveal): una tarea de una sola vez no
@@ -90,7 +91,10 @@
                         show_when: 'repeatType=weekly|monthly'
                     }) }}
                     {{ csa.field(form.repeatFrom, 'Desde el') }}
-                    {{ csa.field(form.repeatUntil, 'Hasta el', { show_when: 'repeatType=weekly|monthly|delivery' }) }}
+                    {# Sin fin es una casilla y no un «hasta» vacío a propósito: un
+                     # campo vacío puede ser un olvido, una casilla marcada no. #}
+                    {{ vol.check(form.openEnded, 'No tiene fin definido, por ahora', 'se siguen abriendo turnos hasta que alguien la pare', 'repeatType=weekly|monthly|delivery') }}
+                    {{ csa.field(form.repeatUntil, 'Hasta el', { show_when: 'repeatType=weekly|monthly|delivery;openEnded=unchecked' }) }}
                 </div>
 
                 {# Los tramos horarios, en una fila propia: son cuatro campos que se

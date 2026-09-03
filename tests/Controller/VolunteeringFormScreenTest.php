@@ -61,7 +61,9 @@ class VolunteeringFormScreenTest extends AbstractAuthenticatedTest
         $rules = [
             'repeatEvery' => 'volunteer_offer[repeatType]=weekly',
             'repeatWeekdays' => 'volunteer_offer[repeatType]=weekly|monthly',
-            'repeatUntil' => 'volunteer_offer[repeatType]=weekly|monthly|delivery',
+            'openEnded' => 'volunteer_offer[repeatType]=weekly|monthly|delivery',
+            // Dos reglas: se repite Y no está marcada como sin fin.
+            'repeatUntil' => 'volunteer_offer[repeatType]=weekly|monthly|delivery;volunteer_offer[openEnded]=unchecked',
             'place' => 'volunteer_offer[remote]=unchecked',
             'placeNote' => 'volunteer_offer[remote]=unchecked',
             'node' => 'volunteer_offer[remote]=unchecked',
