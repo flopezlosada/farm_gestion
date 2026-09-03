@@ -80,6 +80,23 @@ class Node
     ];
 
     /**
+     * Cuándo se monta, respecto al día de la entrega, en palabras. Punto único:
+     * el formulario del punto lo ofrece como lista y su ficha lo lee, y si cada
+     * uno tuviera el suyo bastaría con que uno dijera «la víspera» y otro «el
+     * día anterior» para que pareciesen dos cosas distintas.
+     *
+     * Llega hasta dos días antes: un punto grande puede empezar el jueves lo que
+     * entrega el sábado. Más atrás no es montar cestas, es otra cosa.
+     *
+     * @var array<int,string>
+     */
+    public const PREP_DAY_LABELS = [
+        0  => 'El mismo día de la entrega',
+        -1 => 'La víspera',
+        -2 => 'Dos días antes',
+    ];
+
+    /**
      * @ORM\Id()
      * @ORM\GeneratedValue()
      * @ORM\Column(type="integer")
@@ -411,6 +428,17 @@ class Node
     public function getDeliveryPrepDayOffset(): int
     {
         return $this->deliveryPrepDayOffset;
+    }
+
+    /**
+     * El desfase del montaje en palabras, para enseñarlo en la ficha del punto.
+     *
+     * @return string una de {@see self::PREP_DAY_LABELS}
+     */
+    public function deliveryPrepDayLabel(): string
+    {
+        return self::PREP_DAY_LABELS[$this->deliveryPrepDayOffset]
+            ?? sprintf('%d días antes', -$this->deliveryPrepDayOffset);
     }
 
     /**

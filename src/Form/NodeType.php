@@ -35,23 +35,6 @@ class NodeType extends AbstractType
         'Última semana del mes' => Node::MONTHLY_WEEK_LAST,
     ];
 
-    /**
-     * Cuándo se monta, respecto al día de la entrega. Se ofrece como lista y no
-     * como un número con signo porque "-1" no lo entiende nadie y un campo libre
-     * invita a escribir "3", que sería montar las cestas tres días antes de
-     * repartirlas.
-     *
-     * Llega hasta dos días antes: un punto grande puede empezar el jueves lo que
-     * entrega el sábado. Más atrás no es montar cestas, es otra cosa.
-     *
-     * @var array<string,int>
-     */
-    private const PREP_DAY_CHOICES = [
-        'El mismo día de la entrega' => 0,
-        'La víspera'                 => -1,
-        'Dos días antes'             => -2,
-    ];
-
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
         $builder
@@ -117,7 +100,10 @@ class NodeType extends AbstractType
             ])
             ->add('deliveryPrepDayOffset', ChoiceType::class, [
                 'label'   => 'Qué día se monta',
-                'choices' => self::PREP_DAY_CHOICES,
+                // Como lista y no como número con signo: "-1" no lo entiende
+                // nadie, y un campo libre invita a escribir "3". Las palabras
+                // son las mismas que enseña la ficha del punto.
+                'choices' => array_flip(Node::PREP_DAY_LABELS),
             ])
             ->add('deliveryPrepSlots', IntegerType::class, [
                 'label'    => 'Cuánta gente hace falta',
