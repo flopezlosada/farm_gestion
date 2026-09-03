@@ -126,6 +126,12 @@ class VolunteerOfferRepository extends ServiceEntityRepository
      * todos modos hasta que alguien lo publicara — y entonces su horizonte no se
      * extendería, sin error y sin aviso.
      *
+     * LA EXCLUSIÓN NO SE LEVANTA AL PUBLICARLA, y es a propósito, no un olvido:
+     * el montaje sigue saliendo por el bucle de puntos aunque esté publicada,
+     * porque su receta la reescribe el punto en cada pasada. Entrar por los dos
+     * sitios sería sincronizarla dos veces, la segunda contra la receta que
+     * acaba de escribir la primera.
+     *
      * @return list<VolunteerOffer> las tareas con receta de repetición
      */
     public function findRepeating(): array
