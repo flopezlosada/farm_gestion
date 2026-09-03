@@ -1018,4 +1018,10 @@
         .vol-prep__body { width: 100%; }
         .vol-prep__body .csa-btn { width: 100%; justify-content: center; }
     }
+
+/* Las pills de coordinación llegan en minúsculas desde el formulario (en la
+ * base de datos los nombres están EN MAYÚSCULAS y así gritan); aquí se les
+ * pone la inicial. Sólo dentro del buscador de casillas: en el resto de pills
+ * —áreas, nodos— el texto ya viene bien escrito. */
+[data-csa-check-filter] .csa-field input[type="checkbox"][name$="[]"] + label { text-transform: capitalize; }
 </style>

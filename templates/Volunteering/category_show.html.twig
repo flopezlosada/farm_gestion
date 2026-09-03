@@ -5,14 +5,18 @@
  # avatar + chips + mini-stats + tarjetas), porque es el mismo gesto: abrir algo
  # y ver de un vistazo qué es y cómo va.
  #
- # EL ORDEN NO ES DECORATIVO. Arriba, lo que responde "¿está viva esta área?":
- # cuántas tareas hay, cuántas plazas sin cubrir, quién la coordina. Debajo, el
- # trabajo concreto: primero lo que ya pasó y falta cerrar, luego lo que viene.
- # Al final, la gente disponible y el rastro, que se consultan a ratos.
+ # RESPONDE A DOS PREGUNTAS Y NADA MÁS: ¿está viva esta área? (cuántas tareas
+ # hay, cuántas plazas faltan, cuánta gente se puede llamar) y ¿quién la lleva?
+ # Debajo, el trabajo concreto: primero lo que ya pasó y falta cerrar, luego lo
+ # que viene.
  #
- # Todo viene LIMITADO y con salida al listado completo filtrado por el área: un
- # área con dos años dentro llenaría esto de scroll y dejaría de responder de un
- # vistazo, que es para lo que existe.
+ # Lo que NO está aquí, a propósito: la lista de gente a la que se puede llamar
+ # y el histórico. Los dos eran una copia recortada de una pantalla que ya
+ # existe —la bolsa de gente y la actividad, filtradas por el área— con menos
+ # columnas y sin filtros, así que cada tarjeta repetía lo que su propio enlace
+ # enseñaba mejor. Tres tarjetas iguales seguidas no se distinguían y la ficha
+ # dejaba de leerse de un vistazo, que es para lo que existe. Quedan los
+ # enlaces, que es lo que aportaban.
  # ============================================================ #}
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
@@ -38,7 +42,7 @@
 
 {% block csa_main %}
     {% set coordinators = category.coordinators %}
-    {% set interested = category.partners %}
+    {% set interested = category.partners|length %}
 
     <div class="prt">
 
@@ -63,6 +67,14 @@
                         <span class="prt-chip prt-chip--warn">Sin coordinar</span>
                     {% endif %}
                 </div>
+
+                {# La descripción es lo que define el área, así que va pegada al
+                 # nombre y no en una tarjeta propia más abajo: un párrafo no
+                 # necesita cabecera. Es el mismo texto que ve cada socix junto a la
+                 # casilla en su ficha. #}
+                {% if category.description %}
+                    <p class="prt-hero__lead">{{ category.description }}</p>
+                {% endif %}
             </div>
 
             <div class="prt-hero__actions">
@@ -90,9 +102,11 @@
         {% endif %}
 
         {# ============ CÓMO VA ============
-         # Cinco números que responden a la única pregunta que no se puede contestar
-         # mirando una lista: si el área se sostiene. Las plazas sin cubrir van con
-         # aviso en color porque son la que duele. #}
+         # Cuatro números —la rejilla es de dos columnas y con cinco quedaba un
+         # hueco vacío— que responden a la única pregunta que no se contesta
+         # mirando una lista: si el área se sostiene. Las plazas sin cubrir van en
+         # color porque son la que duele. Quién coordina no es un número: tiene
+         # su tarjeta abajo y su aviso arriba si no hay nadie. #}
         <div class="prt-mini">
             <div class="prt-mini__cell">
                 <div class="prt-mini__value">{{ counts.upcoming }}</div>
@@ -113,25 +127,17 @@
                 <div class="prt-mini__label">plazas sin cubrir</div>
             </div>
             <div class="prt-mini__cell">
-                <div class="prt-mini__value{{ interested|length == 0 ? ' prt-mini__value--muted' : '' }}">{{ interested|length }}</div>
-                <div class="prt-mini__label">{{ interested|length == 1 ? 'socix interesadx' : 'socixs interesadxs' }}</div>
-            </div>
-            <div class="prt-mini__cell">
-                <div class="prt-mini__value{{ coordinators|length == 0 ? ' prt-mini__value--ochre' : '' }}">{{ coordinators|length }}</div>
-                <div class="prt-mini__label">{{ coordinators|length == 1 ? 'coordinadora' : 'coordinadoras' }}</div>
+                {# Los socixs que han marcado esta área en su ficha: "avísame de
+                 # esto". El número enlaza a la bolsa filtrada, que es donde están
+                 # con su punto de recogida, sus veces este año y las otras áreas
+                 # que tienen marcadas; repetir aquí sólo los nombres no decía nada
+                 # que la bolsa no diga mejor. #}
+                <div class="prt-mini__value{{ interested == 0 ? ' prt-mini__value--muted' : '' }}">
+                    <a href="{{ path('volunteering_pool', { tipo: category.id }) }}">{{ interested }}</a>
+                </div>
+                <div class="prt-mini__label">{{ interested == 1 ? 'socix a quien llamar' : 'socixs a quien llamar' }}</div>
             </div>
         </div>
-
-        {# ============ QUÉ ENTRA AQUÍ ============ #}
-        {% if category.description %}
-            <div class="prt-card">
-                <div class="prt-card__head"><h2 class="prt-card__title">Qué entra aquí</h2></div>
-                <div class="prt-card__body">
-                    <p>{{ category.description }}</p>
-                    <p class="vol-help">Es lo que se le enseña a cada socix junto a la casilla en su ficha.</p>
-                </div>
-            </div>
-        {% endif %}
 
         {# ============ TAREAS POR CERRAR ============
          # Primero, y sólo si hay: es trabajo atrasado. Una tarea que pasó y sigue
@@ -139,7 +145,7 @@
         {% if pending is not empty %}
             <div class="prt-card prt-card--ochre">
                 <div class="prt-card__head">
-                    <h2 class="prt-card__title">Pasaron y falta cerrarlas</h2>
+                    <h2 class="prt-card__title"><span class="accent"></span>Pasaron y falta cerrarlas</h2>
                     <span class="prt-card__head-meta">{{ counts.pending }} en total</span>
                 </div>
                 <div class="prt-card__body">
@@ -160,7 +166,7 @@
         {# ============ LO QUE VIENE ============ #}
         <div class="prt-card">
             <div class="prt-card__head">
-                <h2 class="prt-card__title">Lo que viene</h2>
+                <h2 class="prt-card__title"><span class="accent"></span>Lo que viene</h2>
                 <span class="prt-card__head-meta">{{ counts.upcoming }} en total</span>
             </div>
             <div class="prt-card__body">
@@ -189,94 +195,49 @@
             </div>
         </div>
 
-        <div class="prt-cols">
-
-            {# ============ QUIÉN COORDINA ============ #}
-            <div class="prt-card">
-                <div class="prt-card__head"><h2 class="prt-card__title">Quién coordina</h2></div>
-                <div class="prt-card__body">
-                    {% if coordinators is empty %}
-                        {{ csa.callout('Nadie coordina esta área todavía, así que nadie puede publicar ni cerrar sus tareas salvo administración.', 'warning', 'exclamation-triangle') }}
-                    {% else %}
-                        {# `|lower` + csa-name: en la base de datos los nombres están en
-                         # mayúsculas y en pantalla gritan. Hacen falta los dos: el
-                         # `capitalize` del CSS pone la inicial de cada palabra pero no
-                         # baja el resto. #}
-                        <div class="prt-relatives">
-                            {% for coordinator in coordinators %}
-                                <div class="prt-relative">
-                                    <span class="prt-relative__dot"></span>
-                                    <span class="prt-relative__name csa-name">{{ coordinator.displayName|lower }}</span>
-                                </div>
-                            {% endfor %}
-                        </div>
-                        <p class="vol-help">Pueden publicar, cerrar y pedir gente para las tareas de esta área, y sólo de ésta.</p>
-                    {% endif %}
-                </div>
-                <div class="prt-card__foot">
-                    <a href="{{ path('volunteering_category_edit', { id: category.id }) }}">Cambiar quién coordina</a>
-                </div>
-            </div>
-
-            {# ============ QUIÉN HAY ============
-             # Los socixs que han marcado esta área en su ficha: "avísame de esto".
-             # No son quienes se han apuntado a nada, son a quienes se puede llamar. #}
-            <div class="prt-card">
-                <div class="prt-card__head">
-                    <h2 class="prt-card__title">A quién se puede llamar</h2>
-                    <span class="prt-card__head-meta">{{ interested|length }}</span>
-                </div>
-                <div class="prt-card__body">
-                    {% if interested is empty %}
-                        <p class="vol-help">
-                            Nadie ha marcado esta área en su ficha. Eso no impide pedir gente: las tareas
-                            abiertas a cualquiera se avisan a todo el mundo.
-                        </p>
-                    {% else %}
-                        <div class="prt-relatives">
-                            {# Limitado en la plantilla y no en la consulta: la colección ya
-                             # viene cargada por la relación, y el número total se pinta
-                             # arriba, así que recortar aquí no esconde información. #}
-                            {% for partner in interested|slice(0, 12) %}
-                                <div class="prt-relative">
-                                    <span class="prt-relative__dot"></span>
-                                    <span class="prt-relative__name csa-name">{{ (partner.name ~ ' ' ~ partner.surname)|lower }}</span>
-                                </div>
-                            {% endfor %}
-                        </div>
-                        {% if interested|length > 12 %}
-                            <p class="vol-help">y {{ interested|length - 12 }} más</p>
-                        {% endif %}
-                    {% endif %}
-                </div>
-                <div class="prt-card__foot">
-                    <a href="{{ path('volunteering_pool', { tipo: category.id }) }}">Ver la bolsa de gente de {{ category.name }}</a>
-                </div>
-            </div>
-
-        </div>
-
-        {# ============ QUÉ HA PASADO ============
-         # Incluye lo que le pasó al área Y lo que pasa dentro de sus tareas. Antes
-         # este bloque vivía en el formulario de edición y sólo traía lo primero, que
-         # en un área que no se toca son cero filas: se veía siempre vacío. #}
-        <div class="prt-card">
+        {# ============ QUIÉN COORDINA ============
+         # La única tarjeta de gente, porque es la única que no está en otra
+         # pantalla con esta forma: quién tiene la llave de esta área. Con acento
+         # tinta para que no se confunda con las de tareas. #}
+        <div class="prt-card prt-card--ink">
             <div class="prt-card__head">
-                <h2 class="prt-card__title">Qué ha pasado</h2>
-                <span class="prt-card__head-meta">lo más reciente</span>
+                <h2 class="prt-card__title"><span class="accent"></span>Quién coordina</h2>
+                {% if coordinators is not empty %}
+                    <span class="prt-card__head-meta">{{ coordinators|length }}</span>
+                {% endif %}
             </div>
             <div class="prt-card__body">
-                {% include '_components/volunteering_history.html.twig' with {
-                    events: history,
-                    actor_names: actor_names,
-                    with_offer: true,
-                    empty_text: 'Todavía no consta nada en esta área: ni tareas publicadas, ni gente apuntándose, ni relevos de coordinación.'
-                } only %}
+                {% if coordinators is empty %}
+                    {{ csa.callout('Nadie coordina esta área todavía, así que nadie puede publicar ni cerrar sus tareas salvo administración.', 'warning', 'exclamation-triangle') }}
+                {% else %}
+                    {# `|lower` + csa-name: en la base de datos los nombres están en
+                     # mayúsculas y en pantalla gritan. Hacen falta los dos: el
+                     # `capitalize` del CSS pone la inicial de cada palabra pero no
+                     # baja el resto. #}
+                    <div class="prt-relatives">
+                        {% for coordinator in coordinators %}
+                            <div class="prt-relative">
+                                <span class="prt-relative__dot"><i class="fa fa-user"></i></span>
+                                <span class="prt-relative__name csa-name">{{ coordinator.displayName|lower }}</span>
+                            </div>
+                        {% endfor %}
+                    </div>
+                    <p class="vol-help">Pueden publicar, cerrar y pedir gente para las tareas de esta área, y sólo de ésta.</p>
+                {% endif %}
             </div>
             <div class="prt-card__foot">
-                <a href="{{ path('volunteering_activity', { area: category.id }) }}">Ver toda la actividad de {{ category.name }}</a>
+                <a href="{{ path('volunteering_category_edit', { id: category.id }) }}">Cambiar quién coordina</a>
             </div>
         </div>
+
+        {# ============ SALIDAS ============
+         # Las dos pantallas que antes se previsualizaban aquí en tarjeta. La
+         # actividad del área —lo que le pasó a ella y lo que pasa dentro de sus
+         # tareas— y la bolsa de gente, las dos filtradas por esta área. #}
+        <p class="prt-more">
+            <a href="{{ path('volunteering_activity', { area: category.id }) }}"><i class="fa fa-history"></i> Qué ha pasado en {{ category.name }}</a>
+            <a href="{{ path('volunteering_pool', { tipo: category.id }) }}"><i class="fa fa-users"></i> Bolsa de gente de {{ category.name }}</a>
+        </p>
 
     </div>
 {% endblock %}

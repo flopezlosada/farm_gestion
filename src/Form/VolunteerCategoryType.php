@@ -56,7 +56,11 @@ class VolunteerCategoryType extends AbstractType
                 // Nombre de la persona, no el username: en las cuentas de socixs
                 // el username es su correo, y un desplegable que ofrece
                 // "aguilella.vicente@gmail.com" no dice quién es a nadie.
-                'choice_label' => static fn (User $user): string => $user->getDisplayName(),
+                //
+                // En minúsculas porque en la base de datos están EN MAYÚSCULAS
+                // y cuarenta pills gritando no se leen; la plantilla las
+                // capitaliza por CSS, que pone la inicial pero no baja el resto.
+                'choice_label' => static fn (User $user): string => mb_strtolower($user->getDisplayName()),
                 // CUALQUIER CUENTA HABILITADA, y esto se abrió a propósito.
                 // Antes había que marcarle "Voluntariado" en Usuarias para que
                 // apareciese aquí, y eran dos pantallas para un solo encargo.

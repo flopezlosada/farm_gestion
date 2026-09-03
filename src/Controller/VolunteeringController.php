@@ -82,9 +82,6 @@ class VolunteeringController extends AbstractController
     /** Cuántas tareas se pintan por bloque en la ficha de un área. */
     private const CATEGORY_TASKS = 8;
 
-    /** Cuántos eventos se pintan en el histórico de la ficha de un área. */
-    private const CATEGORY_EVENTS = 15;
-
     /**
      * Los turnos: lo que viene, lo que falta por cerrar y lo que ya se hizo.
      */
@@ -1246,8 +1243,8 @@ class VolunteeringController extends AbstractController
     }
 
     /**
-     * La ficha de un área: quién la coordina, qué se está haciendo dentro, quién
-     * hay disponible y qué ha pasado.
+     * La ficha de un área: si está viva, qué se está haciendo dentro y quién la
+     * coordina.
      *
      * NACE PORQUE EL ÁREA NO TENÍA DÓNDE MIRARSE. Del catálogo sólo se podía ir
      * a editar, y editar es para cambiar el nombre: no dice si el área está
@@ -1257,14 +1254,15 @@ class VolunteeringController extends AbstractController
      *
      * TODO VIENE LIMITADO Y CON SALIDA al listado completo filtrado por el área.
      * Un área con dos años de tareas dentro llenaría la ficha de scroll y
-     * dejaría de servir para lo que sirve, que es responder de un vistazo.
+     * dejaría de servir para lo que sirve, que es responder de un vistazo. Por
+     * lo mismo la gente disponible y el histórico NO se pintan: son un enlace a
+     * la bolsa y a la actividad filtradas por el área, que ya existen.
      */
     #[Route('/categorias/{id}', name: 'volunteering_category_show', methods: ['GET'], requirements: ['id' => '\d+'])]
     #[IsGranted('ROLE_GESTION_VOLUNTARIADO_EDIT')]
     public function showCategory(
         VolunteerCategory $category,
         VolunteerShiftRepository $shifts,
-        VolunteerEventRepository $eventLog,
     ): Response {
         $now = new \DateTime();
 
@@ -1281,17 +1279,12 @@ class VolunteeringController extends AbstractController
         $upcoming = $shifts->listQb('upcoming', $category, null, $now)
             ->setMaxResults(self::CATEGORY_TASKS)->getQuery()->getResult();
 
-        // El histórico pasa por `feedQb`, que es lo que arregla el bloque vacío.
-        // Antes había un `historyForCategory` que sólo traía lo que le pasó al
-        // área EN SÍ —se creó, se renombró, cambió la coordinación—, y en un
-        // área que nadie ha tocado eso son cero filas. `feedQb` incluye además
-        // lo que pasa DENTRO: tareas publicadas, gente apuntándose, avisos
-        // enviados. Eso es la vida del área, y es lo que se venía a ver.
-        //
-        // El método viejo se retiró en vez de dejarlo sin usar: era el único
-        // sitio que lo llamaba.
-        $history = $eventLog->feedQb([$category])
-            ->setMaxResults(self::CATEGORY_EVENTS)->getQuery()->getResult();
+        // SIN HISTÓRICO NI LISTA DE GENTE. Los dos bloques estuvieron aquí y
+        // eran una copia recortada de otra pantalla —la actividad y la bolsa,
+        // filtradas por el área— con menos columnas y sin filtros: cada tarjeta
+        // repetía lo que su propio enlace enseñaba mejor. La ficha enlaza a las
+        // dos y se queda con lo que no está en ningún otro sitio con esta
+        // forma: las tareas del área y quién la coordina.
 
         // Sobre las tareas ya cargadas y no con una consulta aparte: son como
         // mucho veinte objetos que ya están en memoria, y `getRemainingSlots()`
@@ -1308,8 +1301,6 @@ class VolunteeringController extends AbstractController
             'upcoming' => $upcoming,
             'counts' => $shifts->counts($now, [$category]),
             'missing_slots' => $missing,
-            'history' => $history,
-            'actor_names' => $eventLog->actorNames($history),
             'now' => $now,
             'task_limit' => self::CATEGORY_TASKS,
         ]);

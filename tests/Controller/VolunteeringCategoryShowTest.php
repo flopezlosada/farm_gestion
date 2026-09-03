@@ -7,6 +7,7 @@ use App\Entity\User;
 use App\Entity\VolunteerCategory;
 use App\Entity\VolunteerEvent;
 use App\Entity\VolunteerOffer;
+use App\Entity\VolunteerShift;
 use App\Service\AppSettings;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
@@ -19,9 +20,10 @@ use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
  * Lo que se prueba aquí no es que las pantallas carguen —eso lo diría cualquier
  * smoke— sino las tres cosas que pueden romperse EN SILENCIO:
  *
- *  1. Que el histórico del área traiga la actividad de sus tareas. Es el arreglo
- *     de un bloque que se veía siempre vacío, y si se rompiera volvería a verse
- *     vacío sin dar ningún error.
+ *  1. Que la actividad filtrada por área —a donde la ficha manda con «qué ha
+ *     pasado»— traiga lo que pasa DENTRO de sus tareas y no sólo lo que le pasó
+ *     al área en sí. Si se rompiera, un área con vida se vería vacía sin dar
+ *     ningún error.
  *  2. Que el atajo de estado no acepte cualquier cadena. `setStatus()` traga lo
  *     que le den y la validación de la entidad no corre en ese camino: un valor
  *     cualquiera dejaría la tarea en un estado que ninguna consulta reconoce y
@@ -68,13 +70,14 @@ class VolunteeringCategoryShowTest extends WebTestCase
     }
 
     /**
-     * El histórico del área incluye lo que pasa DENTRO de sus tareas.
+     * La actividad de un área incluye lo que pasa DENTRO de sus tareas.
      *
-     * Es el motivo de que este bloque exista. Antes sólo traía lo que le había
-     * pasado al área en sí, y en un área que nadie ha tocado eso son cero filas:
-     * se veía siempre vacío aunque dentro hubiera actividad.
+     * Es a donde la ficha manda con «qué ha pasado». Antes ese bloque vivía en
+     * el formulario y sólo traía lo que le había pasado al área en sí, y en un
+     * área que nadie ha tocado eso son cero filas: se veía siempre vacío aunque
+     * dentro hubiera actividad.
      */
-    public function testElHistoricoDelAreaIncluyeLaActividadDeSusTareas(): void
+    public function testLaActividadDelAreaIncluyeLaDeSusTareas(): void
     {
         $client = $this->adminClient();
         $em = $this->em();
@@ -90,7 +93,7 @@ class VolunteeringCategoryShowTest extends WebTestCase
         );
         $em->flush();
 
-        $client->request('GET', '/gestion/voluntariado/categorias/' . $area->getId());
+        $client->request('GET', '/gestion/voluntariado/actividad?area=' . $area->getId());
 
         $this->assertResponseIsSuccessful();
         $this->assertStringContainsString(
@@ -113,7 +116,7 @@ class VolunteeringCategoryShowTest extends WebTestCase
 
         $client->request('POST', '/gestion/voluntariado/' . $offer->getId() . '/estado', [
             '_csrf_token' => $this->token($client, 'volunteering_status'),
-            'status' => VolunteerOffer::STATUS_PUBLISHED,
+            'estado' => VolunteerOffer::STATUS_PUBLISHED,
             'from_category' => $area->getId(),
         ]);
 
@@ -142,7 +145,7 @@ class VolunteeringCategoryShowTest extends WebTestCase
 
         $client->request('POST', '/gestion/voluntariado/' . $offer->getId() . '/estado', [
             '_csrf_token' => $this->token($client, 'volunteering_status'),
-            'status' => 'archivada-por-la-cara',
+            'estado' => 'archivada-por-la-cara',
             'from_category' => $area->getId(),
         ]);
 
@@ -166,7 +169,7 @@ class VolunteeringCategoryShowTest extends WebTestCase
         $em->flush();
 
         $client->request('POST', '/gestion/voluntariado/' . $offer->getId() . '/estado', [
-            'status' => VolunteerOffer::STATUS_CANCELLED,
+            'estado' => VolunteerOffer::STATUS_CANCELLED,
             'from_category' => $area->getId(),
         ]);
 
@@ -286,9 +289,11 @@ class VolunteeringCategoryShowTest extends WebTestCase
     ): VolunteerOffer {
         $offer = (new VolunteerOffer())
             ->setTitle($title)
-            ->setStartsAt(new \DateTime('+3 days'))
             ->setStatus($status)
             ->addCategory($category);
+        // La fecha vive en el turno, no en la tarea: sin uno, la ficha no
+        // tendría nada que listar en «lo que viene».
+        $offer->addShift((new VolunteerShift())->setStartsAt(new \DateTime('+3 days')));
         $em->persist($offer);
 
         return $offer;
