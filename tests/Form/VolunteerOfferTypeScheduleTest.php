@@ -187,19 +187,64 @@ class VolunteerOfferTypeScheduleTest extends KernelTestCase
      */
     public function testAlAbrirUnaTareaSinFinLaCasillaSaleMarcada(): void
     {
+        $form = $this->open($this->weeklyOffer()->setRepeatUntil(null));
+
+        $this->assertTrue($form->get('openEnded')->getData());
+    }
+
+    public function testAlAbrirUnaTareaConFechaFinalLaCasillaSaleSinMarcar(): void
+    {
+        $form = $this->open($this->weeklyOffer()->setRepeatUntil(new \DateTimeImmutable('2026-12-31')));
+
+        $this->assertNotTrue($form->get('openEnded')->getData());
+    }
+
+    /**
+     * Al abrir una tarea, las horas guardadas están en sus campos. Los campos
+     * no están mapeados y Symfony les pone su valor por defecto al repartir
+     * los datos: rellenarlos ANTES de eso se pisaba, y editar una tarea abría
+     * las horas vacías. Guardar sin volver a teclearlas la dejaba sin tramos.
+     */
+    public function testAlAbrirUnaTareaLasHorasGuardadasEstanEnSusCampos(): void
+    {
+        $form = $this->open($this->weeklyOffer()->setRepeatTimes([['09:00', '10:00'], ['20:00', null]]));
+
+        $this->assertSame('09:00:00', $form->get('firstStart')->getData());
+        $this->assertSame('10:00:00', $form->get('firstEnd')->getData());
+        $this->assertSame('20:00:00', $form->get('secondStart')->getData());
+        $this->assertNull($form->get('secondEnd')->getData());
+    }
+
+    /**
+     * El formulario abierto sobre una tarea existente, sin enviar.
+     *
+     * @param VolunteerOffer $offer la tarea a editar
+     *
+     * @return FormInterface el formulario con los datos cargados
+     */
+    private function open(VolunteerOffer $offer): FormInterface
+    {
         self::bootKernel();
-        $offer = (new VolunteerOffer())
-            ->setTitle('Sin fin')
+
+        return static::getContainer()->get('form.factory')->create(VolunteerOfferType::class, $offer, [
+            'csrf_protection' => false,
+        ]);
+    }
+
+    /**
+     * Una tarea semanal de los lunes, con fecha final: lo que cambia cada test
+     * lo pone encima.
+     *
+     * @return VolunteerOffer la tarea, sin persistir
+     */
+    private function weeklyOffer(): VolunteerOffer
+    {
+        return (new VolunteerOffer())
+            ->setTitle('Semanal')
             ->setRepeatType(VolunteerOffer::REPEAT_WEEKLY)
             ->setRepeatWeekdays([1])
             ->setRepeatFrom(new \DateTimeImmutable('2026-09-07'))
-            ->setRepeatUntil(null);
-
-        $form = static::getContainer()->get('form.factory')->create(VolunteerOfferType::class, $offer, [
-            'csrf_protection' => false,
-        ]);
-
-        $this->assertTrue($form->get('openEnded')->getData());
+            ->setRepeatUntil(new \DateTimeImmutable('2026-12-31'));
     }
 
     /**

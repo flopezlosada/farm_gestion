@@ -298,8 +298,14 @@ class VolunteerOfferType extends AbstractType
         // todavía.
         $builder->addEventListener(FormEvents::PRE_SET_DATA, $this->addCoordinatorChoice(...));
         $builder->addEventListener(FormEvents::PRE_SET_DATA, $this->dropTimeSlotsIfTheNodeRules(...));
-        $builder->addEventListener(FormEvents::PRE_SET_DATA, $this->fillTimeSlots(...));
-        $builder->addEventListener(FormEvents::PRE_SET_DATA, $this->fillOpenEnded(...));
+        // POST_SET_DATA y no PRE, y no es indiferente: entre los dos eventos
+        // Symfony reparte los datos a los campos y a los NO MAPEADOS les pone su
+        // valor por defecto (DataMapper::mapDataToForms), pisando lo que se les
+        // hubiera puesto en PRE. Con los rellenos en PRE, editar una tarea abría
+        // las horas vacías, y guardar sin volver a teclearlas la dejaba sin
+        // tramos y sin turnos.
+        $builder->addEventListener(FormEvents::POST_SET_DATA, $this->fillTimeSlots(...));
+        $builder->addEventListener(FormEvents::POST_SET_DATA, $this->fillOpenEnded(...));
         $builder->addEventListener(FormEvents::POST_SUBMIT, $this->applyOpenEnded(...));
         $builder->addEventListener(FormEvents::POST_SUBMIT, $this->collectTimeSlots(...));
         $builder->addEventListener(FormEvents::POST_SUBMIT, $this->validateTimeSlots(...));
