@@ -121,7 +121,16 @@
     {%- set required = opts.required ?? field.vars.required ?? false -%}
     {%- set widget_class = opts.widget_class|default('csa-input') -%}
     {%- set is_expanded_multi = (field.vars.expanded|default(false)) and (field.vars.multiple|default(false)) -%}
-    <div class="csa-field{% if opts.full|default(false) %} csa-field--full{% endif %}">
+    {#- show_when: 'otroCampo=valor|valor' enseña este campo sólo con esos
+        valores del hermano (csa-reveal). Aquí se escribe el nombre corto del
+        hermano y la macro lo traduce al `name` completo del control, para que
+        la plantilla no tenga que saber cómo se llama el formulario. -#}
+    {%- set show_when = null -%}
+    {%- if opts.show_when is defined -%}
+        {%- set rule = opts.show_when|split('=', 2) -%}
+        {%- set show_when = field.parent.children[rule[0]].vars.full_name ~ '=' ~ rule[1] -%}
+    {%- endif -%}
+    <div class="csa-field{% if opts.full|default(false) %} csa-field--full{% endif %}"{% if show_when %} data-csa-show-when="{{ show_when }}"{% endif %}>
         <div class="csa-field__label-row">
             <label class="csa-field__label" for="{{ field.vars.id }}">
                 {{ label }}{% if required %}<span class="csa-field__required">*</span>{% endif %}

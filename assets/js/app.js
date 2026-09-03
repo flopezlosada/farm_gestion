@@ -25,6 +25,10 @@ require('./csa-tabs.js');
 // del navegador (opt-in por [data-csa-validate]). Ver assets/js/csa-validate.js.
 require('./csa-validate.js');
 
+// Campos que sólo se enseñan cuando el valor de otro lo pide (opt-in por
+// [data-csa-show-when]). Sin JS se ven todos. Ver assets/js/csa-reveal.js.
+require('./csa-reveal.js');
+
 // Suma en vivo de las horas que se van a imputar al cerrar una tarea de
 // voluntariado (opt-in por [data-vol-total]). Ver assets/js/vol-close-total.js.
 require('./vol-close-total.js');

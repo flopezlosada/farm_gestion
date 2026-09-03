@@ -60,6 +60,17 @@ class NodeDeliveryPrepScreenTest extends AbstractAuthenticatedTest
                 sprintf('El campo "%s" debería estar pintado una vez en la pantalla.', $field)
             );
         }
+
+        // Los cuatro de la receta sólo se enseñan con la casilla marcada
+        // (csa-reveal), y la regla tiene que apuntar al `name` completo de la
+        // casilla o el campo se vería siempre.
+        foreach (['deliveryPrepTime', 'deliveryPrepSlots', 'deliveryPrepMinutes', 'deliveryPrepDayOffset'] as $field) {
+            $this->assertCount(
+                1,
+                $crawler->filter(sprintf('[data-csa-show-when="node[deliveryPrep]=checked"] [name="node[%s]"]', $field)),
+                sprintf('El campo "%s" debería depender de la casilla del montaje.', $field)
+            );
+        }
     }
 
     /**

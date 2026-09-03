@@ -79,9 +79,10 @@
             return field.name || 'este campo';
         }
 
+        // El asterisco de «obligatorio» tampoco: el aviso diría «Título*».
         var clone = label.cloneNode(true);
         Array.prototype.slice
-            .call(clone.querySelectorAll('input, select, textarea, .csa-dropdown'))
+            .call(clone.querySelectorAll('input, select, textarea, .csa-dropdown, .csa-field__required'))
             .forEach(function (el) {
                 el.remove();
             });

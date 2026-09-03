@@ -805,6 +805,9 @@ select.csa-input,
 /* ---------- Field (label + input + hint + error) ---------- */
 
 .csa-field { display: block; position: relative; }
+/* `display: block` le gana al `[hidden]` del navegador: sin esto, un campo
+ * que csa-reveal esconde seguiría a la vista. */
+.csa-field[hidden] { display: none; }
 .csa-field + .csa-field { margin-top: var(--csa-sp-4); }
 /* Dentro de csa-form-grid el espaciado lo da `gap` — anular el margin
  * que se aplicaría por sibling order y descuadra las columnas. */

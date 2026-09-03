@@ -44,7 +44,10 @@
     {# data-csa-dropdowns: sin él los <select> caen a los nativos del sistema
      # —fondo gris oscuro, tipografía del SO— en medio de una pantalla csa. Ver
      # assets/js/csa-dropdown.js. #}
-    {{ form_start(form, { attr: { class: 'csa-form-narrow', 'data-csa-dropdowns': true } }) }}
+    {# data-csa-validate: sin él, a quien tenga el navegador en inglés le sale
+     # «Please fill in this field.» en mitad de una pantalla en castellano. Ver
+     # assets/js/csa-validate.js. #}
+    {{ form_start(form, { attr: { class: 'csa-form-narrow', 'data-csa-dropdowns': true, 'data-csa-validate': true } }) }}
 
         {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'El trabajo' } %}
             {% block body %}
@@ -72,14 +75,22 @@
             {% block body %}
                 {% import '_macros/csa.html.twig' as csa %}
                 <div class="csa-form-grid">
+                    {# Lo que depende de «cada cuánto» sólo se enseña cuando toca
+                     # (show_when, ver csa-reveal): una tarea de una sola vez no
+                     # tiene «hasta el», y «qué semanas» sólo tiene sentido en
+                     # días fijos. Sin JS se ve todo y el servidor decide igual. #}
                     {{ csa.field(form.repeatType, 'Cada cuánto', { widget_class: 'csa-select' }) }}
-                    {{ csa.field(form.repeatEvery, 'Cada cuántas semanas', { hint: 'sólo en días fijos' }) }}
+                    {{ csa.field(form.repeatEvery, 'Qué semanas', {
+                        widget_class: 'csa-select',
+                        show_when: 'repeatType=weekly'
+                    }) }}
                     {{ csa.field(form.repeatWeekdays, 'Qué días', {
                         full: true,
-                        hint: 'varios a la vez'
+                        hint: 'varios a la vez',
+                        show_when: 'repeatType=weekly|monthly'
                     }) }}
                     {{ csa.field(form.repeatFrom, 'Desde el') }}
-                    {{ csa.field(form.repeatUntil, 'Hasta el', { hint: 'si se repite' }) }}
+                    {{ csa.field(form.repeatUntil, 'Hasta el', { show_when: 'repeatType=weekly|monthly|delivery' }) }}
                 </div>
 
                 {# Los tramos horarios, en una fila propia: son cuatro campos que se
@@ -132,9 +143,12 @@
                 {% import '_macros/csa.html.twig' as csa %}
                 {% import '_macros/volunteering.html.twig' as vol %}
                 <div class="csa-form-grid">
-                    {{ csa.field(form.place, 'Sitio', { hint: 'del catálogo', widget_class: 'csa-select' }) }}
-                    {{ csa.field(form.placeNote, 'Precisión', { hint: 'opcional' }) }}
-                    {{ csa.field(form.node, 'Punto de recogida', { hint: 'opcional', widget_class: 'csa-select' }) }}
+                    {# Sitio, precisión y punto se esconden si se hace desde casa:
+                     # setRemote() los ignora de todas formas, y pedir un sitio para
+                     # un trabajo que no tiene sitio es pedir que se rellene mal. #}
+                    {{ csa.field(form.place, 'Sitio', { hint: 'del catálogo', widget_class: 'csa-select', show_when: 'remote=unchecked' }) }}
+                    {{ csa.field(form.placeNote, 'Precisión', { hint: 'opcional', show_when: 'remote=unchecked' }) }}
+                    {{ csa.field(form.node, 'Punto de recogida', { hint: 'obligatorio si va con el reparto', widget_class: 'csa-select', show_when: 'remote=unchecked' }) }}
                     {{ csa.field(form.slots, 'Plazas por turno', { hint: 'vacío = sin tope' }) }}
                     {# En HORAS. La etiqueta decía "minutos" y el campo pedía horas
                      # desde que se cambió: decía una cosa y hacía otra. #}
