@@ -327,12 +327,19 @@ class VolunteerOfferType extends AbstractType
 
         foreach ($fields as $index => [$startField, $endField]) {
             $slot = $times[$index] ?? null;
-            if (null === $slot) {
+
+            // Mismo motivo que en {@see self::collectTimeSlots()}: los campos
+            // pueden no existir si el horario lo manda otro, y `$form->get()`
+            // de un campo ausente lanza.
+            if (null === $slot || !$form->has($startField)) {
                 continue;
             }
 
             $form->get($startField)->setData($this->withSeconds($slot[0] ?? null));
-            $form->get($endField)->setData($this->withSeconds($slot[1] ?? null));
+
+            if ($form->has($endField)) {
+                $form->get($endField)->setData($this->withSeconds($slot[1] ?? null));
+            }
         }
     }
 
@@ -354,14 +361,33 @@ class VolunteerOfferType extends AbstractType
             return;
         }
 
+        // SI LOS CAMPOS NO ESTÁN, NO SE TOCA NADA. Hacen falta las dos guardas y
+        // no son estética:
+        //
+        //  - `$form->get()` de un campo ausente LANZA, así que un formulario que
+        //    esconda las horas —porque el horario lo manda otro, como el punto
+        //    de recogida en el montaje de cestas— reventaría al guardar.
+        //  - Y saltar el bucle escribiendo `[]` sería peor que reventar: una
+        //    lista vacía BORRA los tramos guardados, y una tarea sin tramos se
+        //    queda sin turnos. Ausencia de campos significa "esto no se edita
+        //    aquí", no "esto se queda vacío".
+        if (!$form->has('firstStart')) {
+            return;
+        }
+
         $slots = [];
         foreach ([['firstStart', 'firstEnd'], ['secondStart', 'secondEnd']] as [$startField, $endField]) {
+            if (!$form->has($startField)) {
+                continue;
+            }
+
             $start = $this->asHourMinute($form->get($startField)->getData());
             if (null === $start) {
                 continue;
             }
 
-            $slots[] = [$start, $this->asHourMinute($form->get($endField)->getData())];
+            $end = $form->has($endField) ? $this->asHourMinute($form->get($endField)->getData()) : null;
+            $slots[] = [$start, $end];
         }
 
         $offer->setRepeatTimes($slots);
