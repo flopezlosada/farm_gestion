@@ -555,6 +555,56 @@
     }
     .vol-kicker:hover { color: var(--csa-ink); text-decoration: underline; }
     .vol-kicker__time { font-weight: 400; color: var(--csa-ink-soft); }
+
+    /* El calendario del socix: lo de sus áreas resaltado, el resto apagado. */
+    .vol-item--mine { border-left: 3px solid var(--csa-green); }
+    .vol-item--dim { opacity: .55; }
+    .vol-item--dim:hover { opacity: 1; }
+    .vol-filters { display: flex; gap: 6px; margin: 0 0 var(--csa-sp-3); }
+
+    /* ---------- Calendario de turnos (rejilla mensual) ----------
+     * La rejilla es la de month_grid_styles; esto es lo que va dentro de cada
+     * día. Las celdas crecen con los turnos en vez de recortarlos. */
+    .cal-nav { flex-wrap: wrap; }
+    .vcal-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+    .vcal-pill {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 4px 10px; border-radius: 999px;
+        border: 1px solid var(--csa-rule); background: var(--csa-surface);
+        font-size: var(--csa-fs-xs); color: var(--csa-ink-soft); text-decoration: none;
+    }
+    .vcal-pill:hover { border-color: var(--csa-ink-muted); color: var(--csa-ink); }
+    .vcal-pill--on { background: var(--csa-ink); border-color: var(--csa-ink); color: var(--csa-surface); }
+    .vcal-grid .cal-cell { height: auto; min-height: 96px; }
+    .vcal-day { display: flex; flex-direction: column; gap: 3px; min-height: 96px; padding: .35rem .4rem; }
+    .vcal-day .cal-num { margin-bottom: 2px; }
+    .vcal-chip {
+        display: flex; align-items: baseline; gap: 4px; min-width: 0;
+        padding: 2px 6px; border-radius: var(--csa-radius-sm);
+        font-size: .72rem; line-height: 1.3; text-decoration: none; color: inherit;
+        background: var(--csa-sky-soft); border-left: 3px solid var(--csa-sky);
+    }
+    .vcal-chip__time { font-variant-numeric: tabular-nums; font-weight: 600; flex-shrink: 0; }
+    .vcal-chip__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .vcal-chip__slots { margin-left: auto; flex-shrink: 0; font-variant-numeric: tabular-nums; color: var(--csa-ink-soft); }
+    .vcal-chip--open { background: var(--csa-sky-soft); border-left-color: var(--csa-sky); }
+    .vcal-chip--full { background: var(--csa-green-soft, #e6f0e6); border-left-color: var(--csa-green); }
+    .vcal-chip--pending { background: var(--csa-ochre-soft); border-left-color: var(--csa-amber); }
+    .vcal-chip--done { background: var(--csa-surface-alt); border-left-color: var(--csa-ink-muted); color: var(--csa-ink-soft); }
+    .vcal-chip--off { background: var(--csa-surface-alt); border-left-color: var(--csa-rule); color: var(--csa-ink-muted); text-decoration: line-through; }
+    .vcal-chip--movable { cursor: grab; }
+    .vcal-chip--dragging { opacity: .45; cursor: grabbing; }
+    .vcal-chip:hover { filter: brightness(.97); }
+    .cal-cell.vcal-over { outline: 2px dashed var(--csa-green); outline-offset: -3px; background: var(--csa-green-soft, #e6f0e6); }
+    .vcal-busy { opacity: .6; pointer-events: none; }
+    .vcal-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: var(--csa-sp-3); }
+    .vcal-legend .vcal-chip { display: inline-flex; }
+
+    @media (max-width: 560px) {
+        .vcal-grid .cal-cell, .vcal-day { min-height: 64px; }
+        .vcal-chip__title, .vcal-chip__slots { display: none; }
+        .vcal-chip { padding: 1px 4px; }
+    }
     .vol-owner__name { font-size: var(--csa-fs-base); font-weight: 600; color: var(--csa-ink); }
     .vol-owner__hours { font-size: var(--csa-fs-xs); color: var(--csa-ink-muted); }
     .vol-owner__contact { display: flex; gap: var(--csa-sp-3); margin-left: auto; }

@@ -25,6 +25,7 @@ use App\Repository\VolunteerShiftRepository;
 use App\Repository\VolunteerSignupRepository;
 use App\Security\VolunteerOfferVoter;
 use App\Service\Volunteering\CreditedTime;
+use App\Service\Calendar\MonthGrid;
 use App\Service\Volunteering\ShiftGenerator;
 use App\Service\Volunteering\TaskCoordinator;
 use App\Service\Volunteering\VolunteerAudienceResolver;
@@ -394,6 +395,81 @@ class VolunteeringController extends AbstractController
     }
 
     /**
+     * El calendario: los turnos del mes, en rejilla, con lo que cada persona
+     * puede ver y, si puede editarlos, arrastrables de un día a otro.
+     *
+     * LOS FILTROS VAN EN LA URL a propósito: así «el calendario de huerta» o «la
+     * serie de esta tarea» son un enlace, no una pantalla más. Sin filtros, el
+     * calendario enseña TODO lo que esa persona puede ver; con una tarea diaria
+     * y tres áreas eso es ruido, y de ahí que las fichas enlacen prefiltrado.
+     *
+     * Lo que puede ver lo decide el repositorio con las áreas de
+     * {@see VolunteerScope}: quien coordina un área ve la suya, administración
+     * ve todo. Los borradores se enseñan (apagados), porque aquí es donde se
+     * repasan antes de publicar.
+     */
+    #[Route('/calendario', name: 'volunteering_calendar', methods: ['GET'])]
+    public function calendar(
+        Request $request,
+        VolunteerShiftRepository $shifts,
+        VolunteerCategoryRepository $categories,
+        VolunteerOfferRepository $offers,
+        VolunteerScope $scopeOf,
+    ): Response {
+        $now = new \DateTimeImmutable();
+        $month = self::monthFrom($request->query->getString('mes'), $now);
+
+        $categoryId = $request->query->getInt('tipo') ?: null;
+        $category = null !== $categoryId ? $categories->find($categoryId) : null;
+        $offerId = $request->query->getInt('tarea') ?: null;
+        $offer = null !== $offerId ? $offers->find($offerId) : null;
+        $mine = $scopeOf->categories();
+
+        $weeks = MonthGrid::weeks((int) $month->format('Y'), (int) $month->format('n'));
+        $from = $weeks[0][0];
+        $to = end($weeks)[6]->setTime(23, 59, 59);
+
+        // Agrupados por día, que es como se pinta una rejilla. En PHP y no en
+        // la plantilla porque Twig no sabe agrupar sin un bucle con estado.
+        $byDay = [];
+        foreach ($shifts->findBetween($from, $to, false, $category, $offer, $mine) as $shift) {
+            $byDay[$shift->getStartsAt()->format('Y-m-d')][] = $shift;
+        }
+
+        return $this->render('Volunteering/calendar.html.twig', [
+            'weeks' => $weeks,
+            'by_day' => $byDay,
+            'month' => $month,
+            'prev' => $month->modify('-1 month'),
+            'next' => $month->modify('+1 month'),
+            'today' => $now->format('Y-m-d'),
+            'categories' => $mine ?? $categories->findActive(),
+            'current' => $category,
+            'offer' => $offer,
+            'coordinates_something' => $scopeOf->coordinatesSomething(),
+            'sees_everything' => $scopeOf->seesEverything(),
+        ]);
+    }
+
+    /**
+     * El primer día del mes pedido como `AAAA-MM`, o el del mes en curso si no
+     * se pide ninguno o el texto no es una fecha.
+     *
+     * @param string             $requested lo que venía en la URL
+     * @param \DateTimeImmutable $now       ahora
+     *
+     * @return \DateTimeImmutable el día 1 del mes, a medianoche
+     */
+    private static function monthFrom(string $requested, \DateTimeImmutable $now): \DateTimeImmutable
+    {
+        $month = preg_match('/^\d{4}-\d{2}$/', $requested)
+            ? \DateTimeImmutable::createFromFormat('!Y-m-d', $requested.'-01')
+            : false;
+
+        return $month ?: $now->modify('first day of this month')->setTime(0, 0);
+    }
+
+    /**
      * Editar la definición de un trabajo.
      *
      * Al guardar, los turnos se ponen al día con la receta: se abren los que
@@ -667,21 +743,7 @@ class VolunteeringController extends AbstractController
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            // Tocado a mano: a partir de ahora este turno le gana a la receta y
-            // el sync no lo retira. Sin esto, mover el turno de un viernes con
-            // asamblea se deshacía al guardar cualquier cosa de la tarea.
-            $shift->setManual(true);
-
-            if (null !== $offer && $before->movedIn($shift)) {
-                $events->forOffer($offer, VolunteerEvent::TYPE_SHIFT_MOVED, [
-                    'before' => $before->startsAt?->format('d/m/Y H:i'),
-                    'after' => $shift->getStartsAt()?->format('d/m/Y H:i'),
-                ]);
-            }
-
-            $em->flush();
-
-            $notified = $changes->notifyShiftChanges($shift, $before);
+            $notified = $this->settleShiftChange($shift, $before, $em, $events, $changes);
 
             $this->addFlash('success', $this->withNotified('Turno actualizado.', $notified));
 
@@ -694,6 +756,116 @@ class VolunteeringController extends AbstractController
             'form' => $form->createView(),
             'is_new' => false,
         ]);
+    }
+
+    /**
+     * Mover un turno a otro DÍA, arrastrándolo en el calendario.
+     *
+     * Conserva la hora —y la duración— porque lo que se arrastra es «el
+     * viernes pasa al sábado», no un cambio de horario: para eso está el
+     * formulario. Pasa por la misma tubería que aquél, así que queda en el
+     * historial, el turno pasa a manual y se avisa a quien estuviera apuntado.
+     *
+     * Vuelve al calendario del mes de destino: el JavaScript que arrastra
+     * refresca la rejilla con esa respuesta, y sin JavaScript es una recarga.
+     */
+    #[Route('/turno/{id}/mover', name: 'volunteering_shift_move', methods: ['POST'], requirements: ['id' => '\d+'])]
+    #[IsGranted(VolunteerOfferVoter::EDIT, subject: 'shift')]
+    public function moveShift(
+        Request $request,
+        VolunteerShift $shift,
+        EntityManagerInterface $em,
+        VolunteerEventRecorder $events,
+        VolunteerOfferChangeNotifier $changes,
+    ): Response {
+        if (!$this->isCsrfTokenValid('volunteering_shift_move', (string) $request->request->get('_csrf_token'))) {
+            throw $this->createAccessDeniedException('Token CSRF inválido.');
+        }
+
+        $back = fn (\DateTimeInterface $month) => $this->redirectToRoute('volunteering_calendar', array_filter([
+            'mes' => $month->format('Y-m'),
+            'tipo' => $request->request->getInt('tipo') ?: null,
+            'tarea' => $request->request->getInt('tarea') ?: null,
+        ]));
+
+        $target = \DateTimeImmutable::createFromFormat('!Y-m-d', $request->request->getString('fecha'));
+        $startsAt = $shift->getStartsAt();
+
+        if (false === $target || null === $startsAt) {
+            $this->addFlash('error', 'No se entendió a qué día moverlo.');
+
+            return $back($startsAt ?? new \DateTimeImmutable());
+        }
+
+        $today = new \DateTimeImmutable('today');
+        if ($shift->isCancelled()) {
+            $this->addFlash('error', 'Un turno anulado no se mueve: vuelve a ponerlo primero.');
+        } elseif ($shift->isPast()) {
+            $this->addFlash('error', 'Un turno que ya pasó no se mueve.');
+        } elseif ($target < $today) {
+            $this->addFlash('error', 'No se puede mover un turno a un día que ya pasó.');
+        } elseif ($target->format('Y-m-d') === $startsAt->format('Y-m-d')) {
+            // Soltado en su propio día: no es un cambio, y avisar a la gente
+            // de que «se ha movido al mismo día» sería ruido.
+        } else {
+            $before = VolunteerShiftSnapshot::of($shift);
+            $newStart = $target->setTime((int) $startsAt->format('H'), (int) $startsAt->format('i'));
+            $duration = null !== $shift->getEndsAt() ? $startsAt->diff($shift->getEndsAt()) : null;
+
+            $shift->setStartsAt($newStart);
+            if (null !== $duration) {
+                $shift->setEndsAt($newStart->add($duration));
+            }
+
+            $notified = $this->settleShiftChange($shift, $before, $em, $events, $changes);
+
+            $this->addFlash('success', $this->withNotified(
+                sprintf('Turno movido al %s.', $newStart->format('d/m/Y')),
+                $notified
+            ));
+
+            return $back($newStart);
+        }
+
+        return $back($startsAt);
+    }
+
+    /**
+     * Lo que pasa siempre que un turno cambia a mano, venga del formulario o de
+     * arrastrarlo en el calendario: pasa a manual, queda en el historial si se
+     * movió de fecha, se guarda y se avisa a quien estuviera apuntado.
+     *
+     * @param VolunteerShift               $shift   el turno ya modificado
+     * @param VolunteerShiftSnapshot       $before  cómo estaba antes del cambio
+     * @param EntityManagerInterface       $em      para guardar
+     * @param VolunteerEventRecorder       $events  el historial de la tarea
+     * @param VolunteerOfferChangeNotifier $changes quien avisa a la gente apuntada
+     *
+     * @return int cuántas personas recibieron aviso
+     */
+    private function settleShiftChange(
+        VolunteerShift $shift,
+        VolunteerShiftSnapshot $before,
+        EntityManagerInterface $em,
+        VolunteerEventRecorder $events,
+        VolunteerOfferChangeNotifier $changes,
+    ): int {
+        // Tocado a mano: a partir de ahora este turno le gana a la receta y
+        // el sync no lo retira. Sin esto, mover el turno de un viernes con
+        // asamblea se deshacía al guardar cualquier cosa de la tarea.
+        $shift->setManual(true);
+
+        $offer = $shift->getOffer();
+        if (null !== $offer && $before->movedIn($shift)) {
+            $events->forOffer($offer, VolunteerEvent::TYPE_SHIFT_MOVED, [
+                'before' => $before->startsAt?->format('d/m/Y H:i'),
+                'after' => $shift->getStartsAt()?->format('d/m/Y H:i'),
+            ]);
+        }
+
+        $em->flush();
+
+        return $changes->notifyShiftChanges($shift, $before);
     }
 
     /**

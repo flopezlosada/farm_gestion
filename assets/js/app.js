@@ -35,5 +35,10 @@ require('./csa-account-menu.js');
 // pedir. Ver assets/js/push.js.
 require('./push.js');
 
+// Arrastrar un turno de voluntariado a otro día del calendario (opt-in por
+// [data-vcal]). Sin JS los turnos son enlaces y se mueven desde su ficha.
+// Ver assets/js/vol-calendar-dnd.js.
+require('./vol-calendar-dnd.js');
+
 // Need jQuery? Install it with "yarn add jquery", then uncomment to require it.
 // const $ = require('jquery');
