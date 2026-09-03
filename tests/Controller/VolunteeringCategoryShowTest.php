@@ -241,6 +241,32 @@ class VolunteeringCategoryShowTest extends WebTestCase
         $this->assertStringNotContainsString('Tarea de área ajena', $client->getResponse()->getContent());
     }
 
+    /**
+     * Desde la ficha de un área, el alta de tarea llega con esa área marcada.
+     *
+     * Es lo que hace que «Nueva tarea en Huerta» sea eso y no «nueva tarea, y
+     * ahora búscate Huerta en la lista». Un área retirada no se marca: no se
+     * ofrece al crear tareas nuevas, y esto sería ofrecerla por la puerta de
+     * atrás.
+     */
+    public function testElAltaLlegaConElAreaDeLaFichaMarcada(): void
+    {
+        $client = $this->adminClient();
+        $em = $this->em();
+
+        $abierta = $this->makeCategory($em, 'Alta Abierta');
+        $retirada = $this->makeCategory($em, 'Alta Retirada')->setActive(false);
+        $em->flush();
+
+        $client->request('GET', '/gestion/voluntariado/nueva?area=' . $abierta->getId());
+        $this->assertResponseIsSuccessful();
+        $this->assertSelectorExists(sprintf('input[name="volunteer_offer[categories][]"][value="%d"][checked]', $abierta->getId()));
+
+        $client->request('GET', '/gestion/voluntariado/nueva?area=' . $retirada->getId());
+        $this->assertResponseIsSuccessful();
+        $this->assertSelectorNotExists('input[name="volunteer_offer[categories][]"][checked]');
+    }
+
     private function adminClient(): KernelBrowser
     {
         $client = static::createClient();

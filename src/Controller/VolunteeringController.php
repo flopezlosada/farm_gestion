@@ -297,6 +297,19 @@ class VolunteeringController extends AbstractController
         TaskCoordinator $coordination,
     ): Response {
         $offer = (new VolunteerOffer())->setCreatedBy($this->getUser());
+
+        // Desde la ficha de un área se llega con `?area=`: el área ya viene
+        // marcada y no hay que volver a elegirla en una lista. Sólo si existe y
+        // se sigue ofreciendo; una retirada no se ofrece ni por la puerta de
+        // atrás. Se ignora en el POST: ahí manda lo que se envió.
+        $areaId = $request->query->getInt('area');
+        if ($areaId > 0 && !$request->isMethod('POST')) {
+            $area = $em->find(VolunteerCategory::class, $areaId);
+            if (null !== $area && $area->isActive()) {
+                $offer->addCategory($area);
+            }
+        }
+
         $form = $this->createForm(VolunteerOfferType::class, $offer);
         $form->handleRequest($request);
 
@@ -1291,8 +1304,13 @@ class VolunteeringController extends AbstractController
         // vive en la entidad porque una tarea sin tope no tiene plazas que
         // contar y eso no se sabe decir en SQL sin duplicar la regla.
         $missing = 0;
+        $shortHanded = [];
         foreach ($upcoming as $shift) {
-            $missing += $shift->getRemainingSlots() ?? 0;
+            $left = $shift->getRemainingSlots() ?? 0;
+            $missing += $left;
+            if ($left > 0) {
+                $shortHanded[] = $shift;
+            }
         }
 
         return $this->render('Volunteering/category_show.html.twig', [
@@ -1301,6 +1319,7 @@ class VolunteeringController extends AbstractController
             'upcoming' => $upcoming,
             'counts' => $shifts->counts($now, [$category]),
             'missing_slots' => $missing,
+            'short_handed' => $shortHanded,
             'now' => $now,
             'task_limit' => self::CATEGORY_TASKS,
         ]);
