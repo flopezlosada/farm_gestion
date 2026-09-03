@@ -68,7 +68,7 @@
 
                     {% for day, day_shifts in by_day %}
                         <h4 class="vol-day">
-                            {{ day|date('D d/m')|capitalize }}
+                            {{ day|format_date(pattern='EEE dd/MM', locale='es')|capitalize }}
                             <span class="vol-day__long">{{ day|format_date('full', locale='es') }}</span>
                         </h4>
 
