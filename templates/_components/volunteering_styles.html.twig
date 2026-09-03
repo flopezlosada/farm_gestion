@@ -537,6 +537,24 @@
     }
     .vol-owner__who { display: flex; flex-direction: column; min-width: 0; }
     .vol-owner__role { font-size: var(--csa-fs-xs); color: var(--csa-ink-muted); }
+
+    /* La tarea encima de la fecha, en la ficha de un turno: pequeña y enlace,
+     * para que el hero diga «este día» y no vuelva a parecer la ficha de la
+     * tarea. La hora va detrás del día, más ligera que él. */
+    .vol-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 4px;
+        font-size: var(--csa-fs-xs);
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--csa-ink-soft);
+        text-decoration: none;
+    }
+    .vol-kicker:hover { color: var(--csa-ink); text-decoration: underline; }
+    .vol-kicker__time { font-weight: 400; color: var(--csa-ink-soft); }
     .vol-owner__name { font-size: var(--csa-fs-base); font-weight: 600; color: var(--csa-ink); }
     .vol-owner__hours { font-size: var(--csa-fs-xs); color: var(--csa-ink-muted); }
     .vol-owner__contact { display: flex; gap: var(--csa-sp-3); margin-left: auto; }
