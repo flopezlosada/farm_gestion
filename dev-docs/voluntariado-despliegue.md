@@ -5,21 +5,36 @@ antes de encender nada.
 
 ## 1. Esquema (antes que el código)
 
-Aplicar a mano:
+Aplicar a mano, EN ESTE ORDEN:
 
 - `dev-docs/schema/volunteering.sql`
 - `dev-docs/schema/push-subscription.sql`
 - `dev-docs/schema/volunteer-delivery-prep.sql`
 - `dev-docs/schema/volunteer-featured.sql`
+- `dev-docs/schema/volunteer-shifts.sql` ← **el último, y depende de los otros**
+
+El último es el que parte la tarea de su momento: crea `volunteer_shift` y
+`volunteer_place`, repunta las inscripciones y los avisos al turno, y le quita a
+`volunteer_offer` la fecha, el sitio en texto y la gente de fuera. Conserva los
+datos: cada tarea existente se convierte en tarea + un turno con su fecha.
+En el snapshot de producción `volunteer_offer` tiene 0 filas, así que allí no
+migra nada; en las bases de trabajo sí.
 
 **Ya aplicados en las tres bases locales** (`db`, `db_prod_snapshot`, `db_test`)
-—los dos primeros el 27/08/2026 y los dos últimos el 29/08/2026—, con backup del
-golden hecho después. **Quedan staging y producción**, por phpMyAdmin.
+—los dos primeros el 27/08/2026, los dos siguientes el 29/08/2026 y el de turnos
+el 02/09/2026—, con backup del golden hecho después. **Quedan staging y
+producción**, por phpMyAdmin.
 
-Las dos columnas nuevas (`volunteer_category.delivery_prep` y
-`volunteer_offer.featured`) las MAPEA el código: si se despliega antes de
-aplicarlas, Doctrine las espera y revienta cualquier pantalla de voluntariado,
-incluida la home del panel del socix.
+Todo lo nuevo lo MAPEA el código: si se despliega antes de aplicarlo, Doctrine lo
+espera y revienta cualquier pantalla de voluntariado, incluida la home del panel
+del socix. Con el esquema nuevo y el código viejo también falla el módulo, pero
+sólo el módulo, y está detrás de un toggle: ése es el lado seguro en el que
+equivocarse, y por eso el SQL va primero.
+
+Nunca con `doctrine:schema:update --force`: arrastraría el drift preexistente
+del resto del esquema y borraría índices que sólo existen a mano. Los índices de
+clave ajena del SQL de turnos llevan a propósito los nombres `IDX_<hash>` que
+les pone Doctrine, para que `schema:validate` no dé la base por desincronizada.
 
 Nunca con `doctrine:schema:update --force`: arrastraría el drift preexistente
 del resto del esquema y borraría índices que sólo existen a mano.
@@ -143,16 +158,42 @@ particular y no hay forma honesta de repartirlos.
 
 ## 8. ⚠️ El reloj del cron
 
-`cron.volunteer_calls` es la primera tarea del planificador con cadencia por
-**intervalo** (cada 60 minutos). Eso sólo vale si el reloj externo dispara
-`/cron/tick` con esa frecuencia.
+**No hay que dar de alta ninguna tarea en ningún sitio.** El reloj es el workflow
+`.github/workflows/cron-tick.yml`, que llama cada hora a `/cron/tick` y NO le
+dice qué ejecutar: la aplicación cruza su manifiesto (`AppSettings::CRONS`) con
+el registro de ejecuciones y decide ella. Una tarea nueva entra sola por estar
+declarada, y nace encendida porque `AppSettings::getBool()` cae al `default` del
+catálogo cuando el ajuste no existe todavía como fila en `setting`.
 
-Con el cron del hosting a diario, esta tarea corre **una vez al día** por mucho
-que el manifiesto diga 60 minutos, y entonces el segundo paso del escalado
-(ampliar el aviso) puede llegar cuando la tarea ya ha pasado.
+El módulo trae tres tareas:
 
-Si se quiere el comportamiento real, hay que subir la frecuencia del cron de
-cdmon que llama al tick.
+| Tarea | Cadencia | Qué pasa si no corre  |
+|---|---|---|
+| `cron.volunteer_shifts` | diaria, 5:00 | Las tareas repetitivas dejan de abrir turnos nuevos  |
+| `cron.volunteer_calls` | cada 60 min | No se pide gente para los turnos sin cubrir  |
+| `cron.volunteer_reminders` | cada 60 min | Nadie recibe el recordatorio de lo que se apuntó  |
+
+`cron.volunteer_calls` es la primera con cadencia por **intervalo**, y eso sólo
+vale si el reloj llega con esa frecuencia. Con un reloj horario corre una vez por
+hora, que es lo previsto; con uno diario correría una vez al día por mucho que el
+manifiesto diga 60 minutos, y el segundo paso del escalado llegaría cuando el
+turno ya ha pasado.
+
+**Los retrasos se vigilan solos.** El mismo workflow llama después a
+`/cron/health`, que responde **503 si alguna tarea encendida lleva más de su
+`max_delay_hours` sin ejecutarse** (`CronTaskRegistry::isOverdue()`); entonces el
+workflow falla y GitHub manda correo. La de turnos tiene 48 horas de plazo: un
+día de gracia sobre su cadencia diaria.
+
+Un hueco pequeño y conocido: `isOverdue()` devuelve false cuando la tarea NUNCA
+se ha ejecutado (`lastRun` a null), así que una tarea recién desplegada no
+enciende el 503 hasta su primera pasada. Si el reloj estuviera caído justo
+entonces, lo que avisa es el paso del tick, que sí falla.
+
+**Se pueden tener varios relojes en paralelo** —el de GitHub y un servicio
+externo de respaldo— sin miedo a duplicar trabajo: el tick es idempotente y cada
+tarea toma su propio cerrojo (`TaskLock`), así que el segundo en llegar se retira
+sin dar error.
 
 ## 9. Sobre iOS
 
