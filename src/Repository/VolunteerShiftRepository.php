@@ -163,7 +163,10 @@ class VolunteerShiftRepository extends ServiceEntityRepository
      *
      * @param \DateTimeInterface $from            desde, incluido
      * @param \DateTimeInterface $to              hasta, incluido
-     * @param bool               $publishedOnly   sólo turnos de tareas publicadas
+     * @param bool                         $publishedOnly sólo turnos de tareas publicadas
+     * @param VolunteerCategory|null       $category      sólo los de tareas de esta área
+     * @param VolunteerOffer|null          $offer         sólo los de esta tarea
+     * @param list<VolunteerCategory>|null $restrictTo    áreas a las que se limita quien mira; null = sin límite
      *
      * @return list<VolunteerShift> los turnos del rango, por fecha ascendente
      */
@@ -171,6 +174,9 @@ class VolunteerShiftRepository extends ServiceEntityRepository
         \DateTimeInterface $from,
         \DateTimeInterface $to,
         bool $publishedOnly = true,
+        ?VolunteerCategory $category = null,
+        ?VolunteerOffer $offer = null,
+        ?array $restrictTo = null,
     ): array {
         $qb = $this->createQueryBuilder('s')
             ->innerJoin('s.offer', 'o')
@@ -185,7 +191,66 @@ class VolunteerShiftRepository extends ServiceEntityRepository
                 ->setParameter('published', VolunteerOffer::STATUS_PUBLISHED);
         }
 
+        if (null !== $offer) {
+            $qb->andWhere('s.offer = :offer')->setParameter('offer', $offer);
+        }
+
+        $this->inCategory($qb, $category);
+        $this->restrictTo($qb, $restrictTo);
+
         return $qb->getQuery()->getResult();
+    }
+
+    /**
+     * Sólo los turnos de tareas de un área.
+     *
+     * EXISTS y no JOIN: con un join sobre las áreas el turno saldría repetido
+     * una vez por área de su tarea.
+     *
+     * @param QueryBuilder           $qb       consulta con la tarea como alias `o`
+     * @param VolunteerCategory|null $category el área; null = sin filtro
+     */
+    private function inCategory(QueryBuilder $qb, ?VolunteerCategory $category): void
+    {
+        if (null === $category) {
+            return;
+        }
+
+        $qb->andWhere($qb->expr()->exists(
+            'SELECT 1 FROM App\Entity\VolunteerOffer of2 JOIN of2.categories c2'
+            .' WHERE of2 = o AND c2 = :category'
+        ))->setParameter('category', $category);
+    }
+
+    /**
+     * Restricción por áreas propias (quien coordina, no administración).
+     *
+     * Va en el repositorio y no en los controllers para que ninguna vista futura
+     * pueda saltársela por descuido: el fallo de un filtro de permisos no da
+     * error, simplemente enseña lo que no debía.
+     *
+     * Una lista VACÍA no significa "todas": significa que esta persona no
+     * coordina ninguna área, y entonces no ve ningún turno.
+     *
+     * @param QueryBuilder                 $qb         consulta con la tarea como alias `o`
+     * @param list<VolunteerCategory>|null $restrictTo áreas permitidas; null = sin límite
+     */
+    private function restrictTo(QueryBuilder $qb, ?array $restrictTo): void
+    {
+        if (null === $restrictTo) {
+            return;
+        }
+
+        if ([] === $restrictTo) {
+            $qb->andWhere('1 = 0');
+
+            return;
+        }
+
+        $qb->andWhere($qb->expr()->exists(
+            'SELECT 1 FROM App\Entity\VolunteerOffer of3 JOIN of3.categories c3'
+            .' WHERE of3 = o AND c3 IN (:mine)'
+        ))->setParameter('mine', $restrictTo);
     }
 
     /**
@@ -321,6 +386,7 @@ class VolunteerShiftRepository extends ServiceEntityRepository
      * @param string|null                  $query      texto libre sobre título y explicación
      * @param \DateTimeInterface|null      $now        momento de referencia
      * @param list<VolunteerCategory>|null $restrictTo áreas a las que se limita quien mira; null = sin límite
+     * @param VolunteerOffer|null          $offer      sólo los turnos de esta tarea; null = de todas
      */
     public function listQb(
         string $scope = 'upcoming',
@@ -328,12 +394,20 @@ class VolunteerShiftRepository extends ServiceEntityRepository
         ?string $query = null,
         ?\DateTimeInterface $now = null,
         ?array $restrictTo = null,
+        ?VolunteerOffer $offer = null,
     ): QueryBuilder {
         $now ??= new \DateTime();
 
         $qb = $this->createQueryBuilder('s')
             ->innerJoin('s.offer', 'o')
             ->addSelect('o');
+
+        // La misma consulta sirve para el listado global y para la lista de UNA
+        // tarea: las cinco vistas son las mismas preguntas, sólo cambia de
+        // cuántas tareas se hacen.
+        if (null !== $offer) {
+            $qb->andWhere('s.offer = :offer')->setParameter('offer', $offer);
+        }
 
         // EXISTS y no JOIN: con un join sobre signups el turno saldría repetido
         // una vez por persona apuntada.
@@ -378,30 +452,8 @@ class VolunteerShiftRepository extends ServiceEntityRepository
                     ->orderBy('s.startsAt', 'ASC');
         }
 
-        if (null !== $category) {
-            $qb->andWhere($qb->expr()->exists(
-                'SELECT 1 FROM App\Entity\VolunteerOffer of2 JOIN of2.categories c2'
-                .' WHERE of2 = o AND c2 = :category'
-            ))->setParameter('category', $category);
-        }
-
-        // Restricción por áreas propias (quien coordina, no administración).
-        // Va aquí y no en el controller para que ninguna vista futura pueda
-        // saltársela por descuido: el fallo de un filtro de permisos no da
-        // error, simplemente enseña lo que no debía.
-        //
-        // Una lista VACÍA no significa "todas": significa que esta persona no
-        // coordina ninguna área, y entonces no ve ningún turno.
-        if (null !== $restrictTo) {
-            if ([] === $restrictTo) {
-                return $qb->andWhere('1 = 0');
-            }
-
-            $qb->andWhere($qb->expr()->exists(
-                'SELECT 1 FROM App\Entity\VolunteerOffer of3 JOIN of3.categories c3'
-                .' WHERE of3 = o AND c3 IN (:mine)'
-            ))->setParameter('mine', $restrictTo);
-        }
+        $this->inCategory($qb, $category);
+        $this->restrictTo($qb, $restrictTo);
 
         if (null !== $query && '' !== trim($query)) {
             $qb->andWhere('LOWER(o.title) LIKE :q OR LOWER(o.description) LIKE :q OR LOWER(o.placeNote) LIKE :q')
@@ -416,12 +468,13 @@ class VolunteerShiftRepository extends ServiceEntityRepository
      *
      * @param \DateTimeInterface|null      $now        momento de referencia
      * @param list<VolunteerCategory>|null $restrictTo áreas a las que se limita quien mira
+     * @param VolunteerOffer|null          $offer      sólo los de esta tarea; null = de todas
      *
      * @return array{upcoming: int, pending: int, done: int, missed: int, all: int}
      */
-    public function counts(?\DateTimeInterface $now = null, ?array $restrictTo = null): array
+    public function counts(?\DateTimeInterface $now = null, ?array $restrictTo = null, ?VolunteerOffer $offer = null): array
     {
-        $count = fn (string $scope): int => (int) $this->listQb($scope, null, null, $now, $restrictTo)
+        $count = fn (string $scope): int => (int) $this->listQb($scope, null, null, $now, $restrictTo, $offer)
             ->select('COUNT(DISTINCT s.id)')
             ->resetDQLPart('orderBy')
             ->getQuery()

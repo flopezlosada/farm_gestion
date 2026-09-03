@@ -43,10 +43,24 @@
             {% import '_macros/csa.html.twig' as csa %}
             {% import '_macros/volunteering.html.twig' as vol %}
 
+            {# El filtro a sus áreas es un enlace, no un formulario: así «mi
+             # calendario de huerta» se puede guardar y compartir como URL. #}
+            {% if my_category_ids|length %}
+                <p class="vol-filters">
+                    <a class="csa-btn csa-btn--sm {{ only_mine ? 'csa-btn--ghost' : 'csa-btn--secondary' }}" href="{{ path('panel_volunteering_calendar') }}">Todo</a>
+                    <a class="csa-btn csa-btn--sm {{ only_mine ? 'csa-btn--secondary' : 'csa-btn--ghost' }}" href="{{ path('panel_volunteering_calendar', { solo: 'mias' }) }}">Sólo mis áreas</a>
+                </p>
+            {% endif %}
+
             {% if by_day is empty %}
                 <p class="vol-empty">
-                    No hay nada convocado en las próximas semanas. Cuando haya algo que
-                    necesite manos, aparecerá aquí.
+                    {% if only_mine %}
+                        No hay nada de tus áreas en las próximas semanas.
+                        <a href="{{ path('panel_volunteering_calendar') }}">Ver todo</a>.
+                    {% else %}
+                        No hay nada convocado en las próximas semanas. Cuando haya algo que
+                        necesite manos, aparecerá aquí.
+                    {% endif %}
                 </p>
             {% else %}
                 <form method="post" action="{{ path('panel_volunteering_signup_many') }}">
@@ -54,7 +68,7 @@
 
                     {% for day, day_shifts in by_day %}
                         <h4 class="vol-day">
-                            {{ day|date('D d/m')|capitalize }}
+                            {{ day|format_date(pattern='EEE dd/MM', locale='es')|capitalize }}
                             <span class="vol-day__long">{{ day|format_date('full', locale='es') }}</span>
                         </h4>
 
@@ -65,8 +79,12 @@
                                 {% set i_go = mine and not mine.cancelled %}
                                 {% set mine_here = my_node_id and offer.node and offer.node.id == my_node_id %}
                                 {% set can_join = shift.isOpen() and not i_go %}
+                                {# Lo de sus áreas se resalta y el resto se apaga: es SU
+                                 # calendario. Sin áreas marcadas no hay nada que apagar. #}
+                                {% set my_area = my_category_ids|length and offer.categories|filter(c => c.id in my_category_ids)|length %}
+                                {% set dim = my_category_ids|length and not my_area and not i_go %}
 
-                                <li class="vol-item{% if shift.cancelled %} vol-row--out{% endif %}">
+                                <li class="vol-item{% if shift.cancelled %} vol-row--out{% endif %}{% if my_area %} vol-item--mine{% elseif dim %} vol-item--dim{% endif %}">
                                     <div class="vol-item__main">
                                         <h4 class="vol-item__title">
                                             {% if can_join %}

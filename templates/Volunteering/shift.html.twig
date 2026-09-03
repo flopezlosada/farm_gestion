@@ -64,35 +64,48 @@
 
     <div class="prt">
 
-        {# ============ HERO ============ #}
+        {# ============ HERO ============
+         # EL TÍTULO ES LA FECHA, no el nombre de la tarea. Con el mismo título, la
+         # misma explicación y el mismo sitio, esta ficha y la de la tarea eran
+         # gemelas y no se sabía en cuál se estaba. Aquí lo que manda es el día;
+         # la tarea va encima, pequeña y como enlace de vuelta. Y lo que es de la
+         # tarea —explicación, áreas, cómo se repite— no se repite: está a un
+         # clic. #}
         <header class="prt-hero">
-            <span class="prt-avatar prt-avatar--{{ avatar_tone }}" aria-hidden="true"><i class="fa fa-hand-paper-o"></i></span>
+            <span class="prt-avatar prt-avatar--{{ avatar_tone }}" aria-hidden="true"><i class="fa fa-calendar-check-o"></i></span>
 
             <div>
-                <h1 class="prt-hero__title">{{ offer.title }}</h1>
+                <a class="vol-kicker" href="{{ path('volunteering_show', { id: offer.id }) }}" title="Ver la tarea y todos sus turnos">
+                    <i class="fa fa-list-ul"></i> {{ offer.title }}
+                </a>
+                <h1 class="prt-hero__title">
+                    {# format_date y no el filtro `date`: éste usa el locale de PHP y
+                     # devolvía "monday 31 de august". #}
+                    {{ shift.startsAt|format_date(pattern="EEEE d 'de' MMMM", locale='es')|capitalize }}
+                    {%- if shift.startsAt|date('H:i') != '00:00' %}
+                        <span class="vol-kicker__time">· {{ shift.startsAt|date('H:i') }}{% if shift.endsAt %}–{{ shift.endsAt|date('H:i') }}{% endif %}</span>
+                    {%- endif %}
+                </h1>
                 <div class="prt-hero__meta">
                     <span class="prt-chip prt-chip--{{ sc.cls }}"><span class="dot"></span>{{ sc.label }}</span>
 
-                    {# El día es lo que distingue este turno de los otros doscientos
-                     # de la misma tarea: va en el hero, no enterrado en una tira de
-                     # datos. #}
-                    <span class="prt-chip prt-chip--mute"><i class="fa fa-calendar-o"></i> {{ vol.shift_when(shift) }}</span>
-
+                    {# El área sí se queda, aunque sea de la tarea: es por donde se
+                     # navega —«los turnos de huerta»— y desde aquí no había forma
+                     # de llegar a ella. #}
                     {% for category in offer.categories %}
-                        <span class="prt-chip prt-chip--mute">{{ category.name }}</span>
+                        <span class="prt-chip prt-chip--mute"><i class="fa fa-tag"></i> {{ category.name }}</span>
                     {% endfor %}
 
-                    {# Quién puede recibir el aviso es una propiedad de la tarea que
-                     # cambia a quién llega, no un detalle: se ve sin abrir nada. #}
-                    {% if not offer.openToAnyone %}
-                        <span class="prt-chip prt-chip--warn">Sólo a quien lo tenga marcado</span>
+                    <span class="prt-chip prt-chip--mute"><i class="fa fa-map-marker"></i> {{ vol.task_place(offer) }}</span>
+
+                    {% if shift.creditedMinutes %}
+                        <span class="prt-chip prt-chip--mute" title="Lo que computa a cada persona que venga">
+                            <i class="fa fa-clock-o"></i> {{ csa.qty(shift.creditedMinutes / 60) }} h por persona{% if shift.ownCreditedMinutes %} · sólo este turno{% endif %}
+                        </span>
                     {% endif %}
 
-                    {% if offer.isRepeating() %}
-                        <a class="prt-chip prt-chip--mute" href="{{ path('volunteering_show', { id: offer.id }) }}"
-                           title="Ver la tarea y todos sus turnos">
-                            <i class="fa fa-repeat"></i> {{ vol.repeat(offer) }}
-                        </a>
+                    {% if shift.manual %}
+                        <span class="prt-chip prt-chip--mute" title="Lo añadió alguien a mano; no sale de la receta de la tarea">A mano</span>
                     {% endif %}
                 </div>
             </div>
@@ -258,117 +271,6 @@
                 {% endif %}
             </div>
         {% endif %}
-
-        {# ============ QUÉ HAY QUE HACER · CUÁNDO Y DÓNDE ============
-         # Dos columnas: a la izquierda lo que se lee entero una vez, a la derecha
-         # los tres datos que se consultan de un vistazo. #}
-        <div class="vol-split">
-            <section class="prt-card">
-                {% if offer.description %}
-                    <div class="prt-card__head"><h2 class="prt-card__title"><span class="accent"></span>Qué hay que hacer</h2></div>
-                {% endif %}
-                <div class="prt-card__body">
-                    {% if offer.description %}
-                        {{ offer.description|nl2br }}
-                    {% else %}
-                        <p class="vol-empty">Esta tarea no dice en qué consiste. Sin eso, quien no ha venido nunca no sabe si puede con ella.</p>
-                    {% endif %}
-
-                    {# Cómo llegar al sitio, si el catálogo lo dice. Va aquí y no en la
-                     # explicación de la tarea para no repetirlo en las veinte tareas
-                     # que ocurren en el mismo lugar. #}
-                    {% if offer.place and offer.place.directions %}
-                        <p class="vol-help"><i class="fa fa-map-signs"></i> {{ offer.place.directions }}</p>
-                    {% endif %}
-
-                    {# Quien coordina, al pie: es a quien se llama si algo pasa ese día,
-                     # y tenerlo aquí ahorra buscarlo en la ficha de socixs —que quien
-                     # coordina un área ni siquiera puede abrir. #}
-                    {% if offer.coordinator %}
-                        {% set coord_signup = shift.signups|filter(s => s.coordination)|first %}
-                        <div class="vol-owner">
-                            <span class="vol-owner__avatar" aria-hidden="true">
-                                {{ (offer.coordinator.name|first ~ offer.coordinator.surname|first)|upper }}
-                            </span>
-                            <div class="vol-owner__who">
-                                <span class="vol-owner__role">Quien coordina la tarea</span>
-                                <span class="vol-owner__name">{{ offer.coordinator.name }} {{ offer.coordinator.surname }}</span>
-                                {# Sus horas se dicen AQUÍ porque no está en la lista de quién
-                                 # viene: coordinar no es asistir, y lo normal es que no vaya. #}
-                                {% if coord_signup and coord_signup.attended %}
-                                    <span class="vol-owner__hours">Se apuntó {{ csa.qty((coord_signup.creditedMinutes ?: 0) / 60) }} h por coordinarlo</span>
-                                {% elseif coord_signup and coord_signup.attended is same as(false) %}
-                                    <span class="vol-owner__hours">Dijo que al final no lo coordinó</span>
-                                {% elseif is_past %}
-                                    <span class="vol-owner__hours">Pendiente de que diga cuántas horas le llevó</span>
-                                {% else %}
-                                    <span class="vol-owner__hours">Dirá cuántas horas le llevó cuando pase</span>
-                                {% endif %}
-                            </div>
-                            <div class="vol-owner__contact">
-                                {% if offer.coordinator.celular %}
-                                    <a class="vol-actions__btn" href="tel:{{ offer.coordinator.celular|replace({' ': ''}) }}"
-                                       title="Llamar a {{ offer.coordinator.name }}"><i class="fa fa-phone"></i></a>
-                                {% endif %}
-                                {% if offer.coordinator.email %}
-                                    <a class="vol-actions__btn" href="mailto:{{ offer.coordinator.email }}"
-                                       title="Escribir a {{ offer.coordinator.name }}"><i class="fa fa-envelope-o"></i></a>
-                                {% endif %}
-                            </div>
-                        </div>
-                    {% endif %}
-                </div>
-            </section>
-
-            <aside class="vol-facts">
-                <div class="vol-fact">
-                    <i class="fa fa-calendar-o" aria-hidden="true"></i>
-                    <div>
-                        {# format_date y no el filtro `date`: éste usa el locale de PHP y
-                         # devolvía "mon 31 de august de 2026". #}
-                        <span class="vol-fact__value">{{ shift.startsAt|format_date('full', locale='es') }}</span>
-                        <span class="vol-fact__sub">
-                            {{ shift.startsAt|date('H:i') }}{% if shift.endsAt %} – {{ shift.endsAt|date('H:i') }}{% endif %}
-                        </span>
-                    </div>
-                </div>
-
-                <div class="vol-fact">
-                    <i class="fa fa-map-marker" aria-hidden="true"></i>
-                    <div>
-                        {% if offer.remote %}
-                            <span class="vol-fact__value">Desde casa</span>
-                            <span class="vol-fact__sub">No hace falta ir a ningún sitio</span>
-                        {% elseif offer.node %}
-                            <span class="vol-fact__value">{{ offer.node }}</span>
-                            {% if offer.placeNote %}<span class="vol-fact__sub">{{ offer.placeNote }}</span>{% endif %}
-                        {% elseif offer.place %}
-                            <span class="vol-fact__value">{{ offer.place.name }}</span>
-                            {% if offer.placeNote %}<span class="vol-fact__sub">{{ offer.placeNote }}</span>{% endif %}
-                        {% elseif offer.placeNote %}
-                            <span class="vol-fact__value">{{ offer.placeNote }}</span>
-                        {% else %}
-                            <span class="vol-fact__value vol-fact__value--muted">Sin indicar dónde</span>
-                        {% endif %}
-                    </div>
-                </div>
-
-                <div class="vol-fact">
-                    <i class="fa fa-clock-o" aria-hidden="true"></i>
-                    <div>
-                        {% if is_closing and credited_total %}
-                            <span class="vol-fact__sub">Horas {{ phase == 'closed' ? 'imputadas' : 'ya imputadas' }}</span>
-                            <span class="vol-fact__value">{{ csa.qty(credited_total / 60) }} h</span>
-                        {% elseif shift.creditedMinutes %}
-                            <span class="vol-fact__sub">Computa por persona{% if shift.ownCreditedMinutes %} (sólo este turno){% endif %}</span>
-                            <span class="vol-fact__value">{{ csa.qty(shift.creditedMinutes / 60) }} h</span>
-                        {% else %}
-                            <span class="vol-fact__value vol-fact__value--muted">No computa horas</span>
-                        {% endif %}
-                    </div>
-                </div>
-            </aside>
-        </div>
 
         {# ============ OCUPACIÓN ============
          # Quiénes son las plazas, no cuántas. "4 de 6" hay que leerlo y restar;
@@ -581,6 +483,44 @@
                                     </div>
                                 {% endif %}
                             </form>
+                        {% endif %}
+
+                        {# ---- Quien coordina ----
+                         # Al pie de la lista de quién viene y no en el hero: es a
+                         # quien se llama si algo pasa ese día, y sus horas —que no
+                         # son de asistir— se dicen aquí porque no está en la tabla. #}
+                        {% if offer.coordinator %}
+                            {% set coord_signup = shift.signups|filter(s => s.coordination)|first %}
+                            <div class="vol-owner">
+                                <span class="vol-owner__avatar" aria-hidden="true">
+                                    {{ (offer.coordinator.name|first ~ offer.coordinator.surname|first)|upper }}
+                                </span>
+                                <div class="vol-owner__who">
+                                    <span class="vol-owner__role">Quien coordina la tarea</span>
+                                    <span class="vol-owner__name">{{ offer.coordinator.name }} {{ offer.coordinator.surname }}</span>
+                                    {# Sus horas se dicen AQUÍ porque no está en la lista de quién
+                                     # viene: coordinar no es asistir, y lo normal es que no vaya. #}
+                                    {% if coord_signup and coord_signup.attended %}
+                                        <span class="vol-owner__hours">Se apuntó {{ csa.qty((coord_signup.creditedMinutes ?: 0) / 60) }} h por coordinarlo</span>
+                                    {% elseif coord_signup and coord_signup.attended is same as(false) %}
+                                        <span class="vol-owner__hours">Dijo que al final no lo coordinó</span>
+                                    {% elseif is_past %}
+                                        <span class="vol-owner__hours">Pendiente de que diga cuántas horas le llevó</span>
+                                    {% else %}
+                                        <span class="vol-owner__hours">Dirá cuántas horas le llevó cuando pase</span>
+                                    {% endif %}
+                                </div>
+                                <div class="vol-owner__contact">
+                                    {% if offer.coordinator.celular %}
+                                        <a class="vol-actions__btn" href="tel:{{ offer.coordinator.celular|replace({' ': ''}) }}"
+                                           title="Llamar a {{ offer.coordinator.name }}"><i class="fa fa-phone"></i></a>
+                                    {% endif %}
+                                    {% if offer.coordinator.email %}
+                                        <a class="vol-actions__btn" href="mailto:{{ offer.coordinator.email }}"
+                                           title="Escribir a {{ offer.coordinator.name }}"><i class="fa fa-envelope-o"></i></a>
+                                    {% endif %}
+                                </div>
+                            </div>
                         {% endif %}
 
                         {# ---- Anotar a alguien ----

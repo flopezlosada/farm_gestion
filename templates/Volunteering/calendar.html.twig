@@ -1,0 +1,93 @@
+{# El calendario del voluntariado en gestión: los turnos del mes en rejilla.
+ #
+ # ENSEÑA LO QUE ESA PERSONA PUEDE VER, y nada más: quien coordina un área ve la
+ # suya; administración, todo. Y los filtros —área, tarea, mes— viven en la URL,
+ # así que «el calendario de huerta» es un enlace desde la ficha del área y «la
+ # serie de esta tarea» uno desde la ficha de la tarea. Sin eso, con una tarea
+ # diaria y tres áreas la rejilla es ruido.
+ #
+ # SE MUEVE ARRASTRANDO. Un turno futuro se coge y se suelta en otro día; el
+ # servidor lo mueve conservando la hora, lo deja en el historial y avisa a quien
+ # estuviera apuntado, igual que el formulario de mover. El JavaScript
+ # (assets/js/vol-calendar-dnd.js) sólo reemplaza la rejilla con la respuesta;
+ # sin él, los turnos son enlaces y mover se hace desde la ficha.
+ #
+ # La rejilla es la misma de los fichajes (_components/month_grid_styles +
+ # Service/Calendar/MonthGrid): un solo calendario mensual en la casa. #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Voluntariado · Calendario · {{ month|format_date(pattern='MMMM y', locale='es')|capitalize }}{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include '_components/month_grid_styles.html.twig' %}
+    {% include '_components/volunteering_styles.html.twig' %}
+{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('volunteering_index') }}">Voluntariado</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Calendario</span>
+{% endblock %}
+
+{% block csa_main %}
+    {# Los filtros vigentes, para que cada enlace del calendario los conserve. #}
+    {% set keep = { tipo: current ? current.id : null, tarea: offer ? offer.id : null }|filter(v => v is not null) %}
+
+    {{ csa.page_header('Voluntariado', 'Calendario', offer
+        ? 'Sólo los turnos de «' ~ offer.title ~ '». Arrastra uno a otro día para moverlo.'
+        : 'Los turnos del mes. Arrastra uno a otro día para moverlo.') }}
+
+    {% if not coordinates_something %}
+        {{ csa.callout('No coordinas ninguna área todavía, así que aquí no aparece nada. Pídele a administración que te asigne un área.', 'info') }}
+    {% elseif not sees_everything %}
+        {{ csa.callout('Ves sólo los turnos de las áreas que coordinas.', 'info') }}
+    {% endif %}
+
+    {# ============ MES Y FILTROS ============ #}
+    <div class="cal-nav">
+        {{ csa.btn('', { variant: 'ghost', icon: 'fa-chevron-left', href: path('volunteering_calendar', keep|merge({ mes: prev|date('Y-m') })) }) }}
+        <div class="cal-nav__title">{{ month|format_date(pattern='MMMM y', locale='es') }}</div>
+        {{ csa.btn('', { variant: 'ghost', icon: 'fa-chevron-right', href: path('volunteering_calendar', keep|merge({ mes: next|date('Y-m') })) }) }}
+        {% if month|date('Y-m') != today|date('Y-m') %}
+            {{ csa.btn('Hoy', { variant: 'ghost', size: 'sm', href: path('volunteering_calendar', keep) }) }}
+        {% endif %}
+
+        <div class="vcal-filters">
+            {% if offer %}
+                {# Prefiltrado por tarea: se dice cuál y se puede soltar. #}
+                <a class="vcal-pill vcal-pill--on" href="{{ path('volunteering_calendar', { mes: month|date('Y-m') }) }}" title="Ver todas las tareas">
+                    <i class="fa fa-list-ul"></i> {{ offer.title }} <i class="fa fa-times"></i>
+                </a>
+            {% elseif categories|length > 1 %}
+                <a class="vcal-pill{{ current is null ? ' vcal-pill--on' }}" href="{{ path('volunteering_calendar', { mes: month|date('Y-m') }) }}">Todas las áreas</a>
+                {% for category in categories %}
+                    <a class="vcal-pill{{ current and current.id == category.id ? ' vcal-pill--on' }}"
+                       href="{{ path('volunteering_calendar', { mes: month|date('Y-m'), tipo: category.id }) }}">{{ category.name }}</a>
+                {% endfor %}
+            {% endif %}
+        </div>
+    </div>
+
+    {# ============ LA REJILLA ============
+     # data-vcal-* lleva lo que el arrastre necesita para hablar con el servidor
+     # y mantener los filtros al refrescar. #}
+    <div class="vcal" data-vcal
+         data-vcal-csrf="{{ csrf_token('volunteering_shift_move') }}"
+         data-vcal-tipo="{{ keep.tipo|default('') }}"
+         data-vcal-tarea="{{ keep.tarea|default('') }}">
+        {% include 'Volunteering/_calendar_month.html.twig' %}
+    </div>
+
+    <p class="vol-help--muted vcal-legend">
+        <span class="vcal-chip vcal-chip--open">por venir</span>
+        <span class="vcal-chip vcal-chip--full">cubierto</span>
+        <span class="vcal-chip vcal-chip--pending">sin cerrar</span>
+        <span class="vcal-chip vcal-chip--done">hecho</span>
+        <span class="vcal-chip vcal-chip--off">borrador · parado · anulado</span>
+        Sólo se arrastran los turnos por venir; la hora se conserva. Para cambiar la hora, entra en el turno.
+    </p>
+{% endblock %}

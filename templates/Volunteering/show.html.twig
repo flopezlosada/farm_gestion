@@ -82,6 +82,8 @@
                 {% if can_edit %}
                     {{ csa.btn('Editar', { variant: 'secondary', href: path('volunteering_edit', { id: offer.id }), icon: 'fa-pencil' }) }}
                 {% endif %}
+                {# Prefiltrado a esta tarea: la serie entera, sin el ruido del resto. #}
+                {{ csa.btn('Calendario', { variant: 'ghost', href: path('volunteering_calendar', { tarea: offer.id }), icon: 'fa-calendar' }) }}
                 {{ csa.btn('Volver', { variant: 'ghost', href: path('volunteering_tasks') }) }}
             </div>
         </header>
@@ -102,9 +104,8 @@
                         Se cierran uno a uno, desde su ficha.
                     </p>
                 </div>
-                <div class="vol-phase__figure">
-                    <span class="vol-phase__figure-value">{{ to_close|length }}</span>
-                    <span class="vol-phase__figure-label">por cerrar</span>
+                <div class="vol-phase__actions">
+                    {{ csa.btn('Ver cuáles', { variant: 'secondary', href: path('volunteering_shifts', { id: offer.id, ver: 'pending' }), icon: 'fa-check-square-o' }) }}
                 </div>
             </div>
         {% elseif offer.isDraft() %}
@@ -294,51 +295,17 @@
             </aside>
         </div>
 
-        {# ============ TURNOS SIN CERRAR ============
-         # Arriba de los próximos, y no en una pestaña: es el trabajo pendiente, y
-         # una tarea continua acumula turnos sin cerrar hasta que alguien los ve. #}
-        {% if to_close|length %}
-            <section class="prt-card" style="margin-top: var(--csa-sp-6);">
-                <div class="prt-card__head">
-                    <h2 class="prt-card__title"><span class="accent"></span>Sin cerrar</h2>
-                </div>
-                <div class="prt-card__body">
-                    <div class="csa-table-wrap">
-                        <table class="csa-table">
-                            <thead>
-                                <tr>
-                                    <th>Cuándo</th>
-                                    <th class="csa-table__col-tight">Apuntadxs</th>
-                                    <th class="csa-table__col-tight">Sin responder</th>
-                                    <th class="csa-table__actions"></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for shift in to_close %}
-                                    <tr>
-                                        <td><a class="csa-table__primary" href="{{ path('volunteering_shift', { id: shift.id }) }}">{{ vol.shift_when(shift) }}</a></td>
-                                        <td class="csa-table__col-tight">{{ vol.shift_slots(shift) }}</td>
-                                        <td class="csa-table__col-tight">{{ csa.badge(shift.pendingConfirmationCount ~ ' por decir si fue', 'ochre') }}</td>
-                                        <td class="csa-table__actions">
-                                            <a href="{{ path('volunteering_shift', { id: shift.id }) }}" title="Pasar lista">
-                                                <i class="fa fa-check-square-o"></i>
-                                            </a>
-                                        </td>
-                                    </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </section>
-        {% endif %}
-
-        {# ============ LOS TURNOS QUE VIENEN ============ #}
+        {# ============ LOS TURNOS QUE VIENEN ============
+         # Sólo lo que viene, y sólo el siguiente puñado. Lo que ya pasó —cerrado o
+         # sin cerrar— no se mezcla aquí: es histórico y tiene su lista completa,
+         # con sus vistas. Así la ficha no cambia de tamaño con la edad de la
+         # tarea. #}
         <section class="prt-card" style="margin-top: var(--csa-sp-6);">
             <div class="prt-card__head">
-                <h2 class="prt-card__title"><span class="accent"></span>Turnos por venir</h2>
-                {% if can_edit %}
-                    <div style="display: flex; gap: 8px; align-items: center;">
+                <h2 class="prt-card__title"><span class="accent"></span>Próximos turnos</h2>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    {{ csa.btn('Todos los turnos', { variant: 'ghost', icon: 'fa-history', href: path('volunteering_shifts', { id: offer.id, ver: 'all' }), size: 'sm' }) }}
+                    {% if can_edit %}
                         {{ csa.btn('Añadir un turno', { variant: 'ghost', icon: 'fa-plus', href: path('volunteering_shift_new', { id: offer.id }), size: 'sm' }) }}
                         {% if offer.isRepeating() %}
                             <form method="post" action="{{ path('volunteering_open_shifts', { id: offer.id }) }}">
@@ -348,8 +315,8 @@
                                 </button>
                             </form>
                         {% endif %}
-                    </div>
-                {% endif %}
+                    {% endif %}
+                </div>
             </div>
             <div class="prt-card__body">
                 {% if upcoming|length %}
@@ -391,13 +358,17 @@
                         </table>
                     </div>
 
-                    {% if offer.isRepeating() %}
-                        <p class="vol-help--muted">
+                    <p class="vol-help--muted">
+                        {% if upcoming_total > upcoming|length %}
+                            Son los {{ upcoming|length }} siguientes de {{ upcoming_total }} por venir.
+                            <a href="{{ path('volunteering_shifts', { id: offer.id, ver: 'upcoming' }) }}">Ver todos</a>.
+                        {% endif %}
+                        {% if offer.isRepeating() %}
                             Los turnos se abren por tramos, hasta {{ horizon_days }} días vista, y el
                             planificador va abriendo el resto. Así una tarea diaria no nace con
                             setecientas filas de golpe.
-                        </p>
-                    {% endif %}
+                        {% endif %}
+                    </p>
                 {% else %}
                     <p class="vol-empty">
                         No hay turnos por venir.

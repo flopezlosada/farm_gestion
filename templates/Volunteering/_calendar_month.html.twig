@@ -1,0 +1,52 @@
+{# La rejilla del mes con sus turnos. Es lo que el arrastre reemplaza tras mover
+ # un turno, así que aquí dentro no puede vivir nada que necesite reengancharse.
+ #
+ # Espera: weeks, by_day, month, today.
+ #
+ # Cada turno es un enlace a su ficha; los que se pueden mover llevan
+ # `draggable` y la URL a la que soltar. Un día del mes en curso o futuro es
+ # destino de soltar (`data-vcal-drop`); el pasado y el relleno de otros meses,
+ # no. #}
+{% import '_macros/csa.html.twig' as csa %}
+{% set month_n = month|date('n') %}
+
+<table class="cal-grid vcal-grid">
+    <thead>
+        <tr><th>Lun</th><th>Mar</th><th>Mié</th><th>Jue</th><th>Vie</th><th>Sáb</th><th>Dom</th></tr>
+    </thead>
+    <tbody>
+        {% for week in weeks %}
+            <tr>
+                {% for day in week %}
+                    {% set key = day|date('Y-m-d') %}
+                    {% set in_month = day|date('n') == month_n %}
+                    {% set is_past = key < today %}
+                    <td class="cal-cell{{ not in_month ? ' cal-cell--out' }}{{ key == today ? ' cal-cell--today' }}{{ day|date('N') > 5 ? ' cal-cell--weekend' }}"
+                        data-vcal-day="{{ key }}"{% if in_month and not is_past %} data-vcal-drop{% endif %}>
+                        <div class="vcal-day">
+                            <span class="cal-num">{{ day|date('j') }}</span>
+                            {% for shift in by_day[key]|default([]) %}
+                                {% set offer = shift.offer %}
+                                {% set phase = shift.phase %}
+                                {% set tone = phase in ['draft', 'paused', 'cancelled'] ? 'off'
+                                    : phase == 'to_close' ? 'pending'
+                                    : phase == 'closed' ? 'done'
+                                    : (shift.slots and not shift.hasRoom()) ? 'full'
+                                    : 'open' %}
+                                {% set movable = not shift.cancelled and not shift.isPast() and is_granted('VOLUNTEER_OFFER_EDIT', shift) %}
+                                <a class="vcal-chip vcal-chip--{{ tone }}{{ movable ? ' vcal-chip--movable' }}"
+                                   href="{{ path('volunteering_shift', { id: shift.id }) }}"
+                                   title="{{ offer.title }} · {{ shift.startsAt|date('H:i') }}{% if shift.slots %} · {{ shift.filledSlots }} de {{ shift.slots }}{% endif %}{% if shift.cancelled %} · anulado{% endif %}"
+                                   {% if movable %}draggable="true" data-vcal-draggable data-vcal-move-url="{{ path('volunteering_shift_move', { id: shift.id }) }}"{% endif %}>
+                                    {% if shift.startsAt|date('H:i') != '00:00' %}<span class="vcal-chip__time">{{ shift.startsAt|date('H:i') }}</span>{% endif %}
+                                    <span class="vcal-chip__title">{{ offer.title }}</span>
+                                    {% if shift.slots %}<span class="vcal-chip__slots">{{ shift.filledSlots }}/{{ shift.slots }}</span>{% endif %}
+                                </a>
+                            {% endfor %}
+                        </div>
+                    </td>
+                {% endfor %}
+            </tr>
+        {% endfor %}
+    </tbody>
+</table>

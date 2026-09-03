@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\Entity\Node;
 use App\Entity\Partner;
+use App\Entity\VolunteerCategory;
 use App\Entity\VolunteerCoordinationLog;
 use App\Entity\VolunteerEvent;
 use App\Entity\VolunteerShift;
@@ -138,6 +139,7 @@ class PanelVolunteeringController extends AbstractController
      */
     #[Route('/calendario', name: 'panel_volunteering_calendar', methods: ['GET'])]
     public function calendar(
+        Request $request,
         VolunteerShiftRepository $shifts,
         VolunteerSignupRepository $signups,
     ): Response {
@@ -149,7 +151,26 @@ class PanelVolunteeringController extends AbstractController
         $now = new \DateTimeImmutable();
         $until = $now->modify(sprintf('+%d days', self::CALENDAR_DAYS))->setTime(23, 59, 59);
 
+        // Las áreas que ha marcado: lo suyo se resalta y el resto se apaga, y
+        // con `?solo=mias` el resto ni se enseña. Es su calendario de
+        // voluntariado, no el de la asociación: sin esto, quien marcó huerta
+        // ve el reparto de tres nodos por encima de lo que le interesa.
+        $myCategoryIds = array_map(
+            static fn (VolunteerCategory $c): int => $c->getId(),
+            $partner->getVolunteerCategories()->toArray()
+        );
+        $onlyMine = 'mias' === $request->query->getAlpha('solo') && [] !== $myCategoryIds;
+
         $upcoming = $shifts->findBetween($now, $until);
+        if ($onlyMine) {
+            $upcoming = array_values(array_filter(
+                $upcoming,
+                static fn (VolunteerShift $s): bool => [] !== array_intersect(
+                    $myCategoryIds,
+                    array_map(static fn (VolunteerCategory $c): int => $c->getId(), $s->getOffer()->getCategories()->toArray())
+                )
+            ));
+        }
 
         // Agrupados por día, que es como se lee un calendario. En PHP y no en la
         // plantilla porque Twig no sabe agrupar sin inventarse un bucle con
@@ -161,6 +182,8 @@ class PanelVolunteeringController extends AbstractController
 
         return $this->render('Panel/volunteering_calendar.html.twig', [
             'by_day' => $byDay,
+            'my_category_ids' => $myCategoryIds,
+            'only_mine' => $onlyMine,
             'my_node_id' => $this->nodeOf($partner)?->getId(),
             // Mis inscripciones de todos esos turnos, en UNA consulta: preguntar
             // turno a turno serían cincuenta consultas para pintar una pantalla.
