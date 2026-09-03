@@ -189,20 +189,28 @@ class VolunteerShiftRepository extends ServiceEntityRepository
     }
 
     /**
-     * El montaje del reparto de un nodo para una entrega concreta: los turnos de
-     * tareas publicadas de una categoría marcada como
-     * {@see \App\Entity\VolunteerCategory::isDeliveryPrep()}, de ese nodo, que
-     * caen en la víspera o el mismo día de la recogida.
+     * El montaje del reparto de un punto para una entrega concreta: los turnos
+     * publicados de la convocatoria de montaje de ese punto
+     * ({@see VolunteerOffer::isDeliveryPrep()}) que caen entre el día en que ese
+     * punto monta y el de la recogida.
      *
      * Sirve para contarle a cada socix quién le prepara su cesta esa semana, y
      * para avisarle cuando no se ha apuntado nadie. Que el disparador sea LA
-     * TAREA y no la falta de gente es lo que hace que el aviso no aparezca en
-     * los nodos donde el montaje todavía no se organiza así: sin tarea no hay
-     * tarjeta, ni de nombres ni de aviso.
+     * CONVOCATORIA y no la falta de gente es lo que hace que el aviso no
+     * aparezca en los puntos que no organizan así el montaje: sin convocatoria
+     * no hay tarjeta, ni de nombres ni de aviso.
      *
-     * LA VENTANA ES DE DOS DÍAS porque las cestas se montan a veces la tarde
-     * anterior. Ensancharla es seguro justamente porque el filtro de categoría
-     * ya excluye cualquier otra tarea del nodo —limpiar el local, por ejemplo—.
+     * LA VENTANA LA DECLARA EL PUNTO, y ahí está el cambio. Antes eran dos días
+     * fijos, porque las cestas se montan a veces la tarde anterior y había que
+     * abarcar las dos posibilidades: una adivinanza que se sostenía sólo mientras
+     * un filtro de categoría excluyera todo lo demás. Ahora el punto dice cuándo
+     * monta ({@see Node::deliveryPrepWindowFor()}) y la ventana sale de ahí: un
+     * día si monta el mismo día, dos si es la víspera, tres si son dos días
+     * antes.
+     *
+     * SIGUE SIENDO UNA VENTANA Y NO UN INSTANTE, a propósito: un turno suelto se
+     * puede mover a mano —el viernes que hay asamblea se monta a las siete— y la
+     * tarjeta tiene que seguir encontrando a quien montó.
      *
      * @param Node               $node         el punto de recogida donde recoge esa semana
      * @param \DateTimeInterface $deliveryDate el día en que recoge la cesta
@@ -211,19 +219,21 @@ class VolunteerShiftRepository extends ServiceEntityRepository
      */
     public function findDeliveryPrepFor(Node $node, \DateTimeInterface $deliveryDate): array
     {
+        $window = $node->deliveryPrepWindowFor($deliveryDate);
+        if (null === $window) {
+            return [];
+        }
+
         $day = \DateTimeImmutable::createFromInterface($deliveryDate);
 
         return $this->liveQb()
             ->andWhere('o.status = :published')
             ->andWhere('o.node = :node')
+            ->andWhere('o.deliveryPrep = true')
             ->andWhere('s.startsAt BETWEEN :from AND :to')
-            ->andWhere($this->createQueryBuilder('x')->expr()->exists(
-                'SELECT 1 FROM App\Entity\VolunteerOffer op JOIN op.categories cp'
-                .' WHERE op = o AND cp.deliveryPrep = true'
-            ))
             ->setParameter('published', VolunteerOffer::STATUS_PUBLISHED)
             ->setParameter('node', $node)
-            ->setParameter('from', $day->modify('-1 day')->setTime(0, 0))
+            ->setParameter('from', $window[0]->setTime(0, 0))
             ->setParameter('to', $day->setTime(23, 59, 59))
             ->orderBy('s.startsAt', 'ASC')
             ->getQuery()

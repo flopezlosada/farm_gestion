@@ -456,11 +456,16 @@ class ShiftGenerator
      * recortar por la fecha del ciclo perdería repartos en los bordes. El filtro
      * de verdad es el de después, contra la fecha ya resuelta.
      *
+     * NO SIEMPRE ES EL DÍA DEL REPARTO: {@see VolunteerOffer::$repeatOffsetDays}
+     * lo corre, porque hay trabajo que cuelga de la entrega y no cae ese día —el
+     * montaje de las cestas, sin ir más lejos, que a veces es la tarde anterior—.
+     * Ese margen extra de una semana por lado también le da sitio.
+     *
      * @param VolunteerOffer     $offer tarea con nodo
      * @param \DateTimeImmutable $from  desde, incluido
      * @param \DateTimeImmutable $until hasta, incluido
      *
-     * @return list<\DateTimeImmutable> fechas de reparto dentro del rango
+     * @return list<\DateTimeImmutable> fechas de trabajo dentro del rango, ya con el desfase
      */
     private function deliveryDates(VolunteerOffer $offer, \DateTimeImmutable $from, \DateTimeImmutable $until): array
     {
@@ -481,7 +486,14 @@ class ShiftGenerator
                 continue;
             }
 
-            $day = \DateTimeImmutable::createFromInterface($physical)->setTime(0, 0);
+            // El desfase se aplica ANTES de filtrar por la ventana, y ese orden
+            // no es cosmético: el montaje de la víspera de un reparto del día 1
+            // cae el último día del mes anterior, y filtrando primero se perdería
+            // por un día justo en los bordes del rango.
+            $day = \DateTimeImmutable::createFromInterface($physical)
+                ->setTime(0, 0)
+                ->modify(sprintf('%+d days', $offer->getRepeatOffsetDays()));
+
             if ($day >= $from->setTime(0, 0) && $day <= $until) {
                 $dates[] = $day;
             }
