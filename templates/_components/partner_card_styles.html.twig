@@ -97,8 +97,10 @@
 .prt-kebab__item--danger, .prt-kebab__item--danger .fa { color: var(--prt-terra-d); }
 
 /* ---------- indicadores anchos (ficha de área) ----------
- * Cuatro columnas y cada celda explica qué significa y qué hacer con ello. */
-.prt-mini--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+ * Cuatro columnas y cada celda explica qué significa y qué hacer con ello.
+ * Doble clase a propósito: la regla base de .prt-mini (dos columnas) está más
+ * abajo en este fichero y con la misma especificidad ganaría ella. */
+.prt-mini.prt-mini--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .prt-mini__head { display: flex; align-items: baseline; gap: 6px; }
 .prt-mini__head .fa { color: var(--prt-ochre-d); font-size: 12px; align-self: center; }
 .prt-mini--4 .prt-mini__label { margin: 0; font-size: 12px; letter-spacing: 0; text-transform: none; font-weight: 600; color: var(--prt-ink); }
@@ -107,8 +109,8 @@
 .prt-mini__link { display: inline-block; margin-top: 8px; font-size: 12px; font-weight: 500; }
 .prt-mini__link .fa { margin-left: 2px; }
 .prt-mini__cell--warn { background: var(--prt-ochre-l); }
-@media (max-width: 980px) { .prt-mini--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 560px) { .prt-mini--4 { grid-template-columns: 1fr; } }
+@media (max-width: 980px) { .prt-mini.prt-mini--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .prt-mini.prt-mini--4 { grid-template-columns: 1fr; } }
 
 /* Cuerpo de tarjeta sin padding, para que una tabla llegue a los bordes. */
 .prt-card__body--flush { padding: 0; }
