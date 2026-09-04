@@ -103,10 +103,12 @@
                         {% import '_macros/volunteering.html.twig' as vol %}
                         {{ vol.check(form.deliveryPrep, 'Este punto monta las cestas con voluntariado', 'cada semana que abra se convoca sola a la gente que hace falta') }}
                         <div class="csa-form-grid">
-                            {{ csa.field(form.deliveryPrepDayOffset, 'Qué día se monta') }}
-                            {{ csa.field(form.deliveryPrepTime, 'Hora del montaje') }}
-                            {{ csa.field(form.deliveryPrepSlots, 'Cuánta gente hace falta') }}
-                            {{ csa.field(form.deliveryPrepMinutes, 'Cuánto dura (minutos)') }}
+                            {# Sólo con la casilla marcada (csa-reveal): sin montaje, cuatro
+                               campos de hora y gente no tienen nada que decir. #}
+                            {{ csa.field(form.deliveryPrepDayOffset, 'Qué día se monta', { show_when: 'deliveryPrep=checked' }) }}
+                            {{ csa.field(form.deliveryPrepTime, 'Hora del montaje', { show_when: 'deliveryPrep=checked' }) }}
+                            {{ csa.field(form.deliveryPrepSlots, 'Cuánta gente hace falta', { show_when: 'deliveryPrep=checked' }) }}
+                            {{ csa.field(form.deliveryPrepMinutes, 'Cuánto dura (minutos)', { show_when: 'deliveryPrep=checked' }) }}
                         </div>
                     {% endblock %}
                 {% endembed %}

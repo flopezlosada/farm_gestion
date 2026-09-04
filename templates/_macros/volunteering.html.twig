@@ -206,6 +206,11 @@
         {{ marked|length ? marked|join(' y ') : 'sin días marcados' }}
         {%- if offer.repeatEvery > 1 %}, cada {{ offer.repeatEvery }} semanas{% endif -%}
     {%- endif -%}
+    {#- Hasta cuándo, que antes no se decía: una tarea sin fin y otra que acaba
+        en diciembre se leían igual, y sólo la segunda se queda sin turnos. -#}
+    {%- if offer.repeatType != 'once' -%}
+        {{ offer.repeatUntil ? ', hasta el ' ~ offer.repeatUntil|date('d/m/Y') : ', hasta que se pare' }}
+    {%- endif -%}
 {% endmacro %}
 
 {# ---------- CHECK ----------
@@ -218,8 +223,9 @@
  #
  #   {{ vol.check(form.remote, 'Se hace desde casa', 'si lo marcas se ignora el lugar') }}
  #}
-{% macro check(field, label, hint = null) %}
-    <div class="csa-field csa-field--full">
+{% macro check(field, label, hint = null, show_when = null) %}
+    {%- import '_macros/csa.html.twig' as csa -%}
+    <div class="csa-field csa-field--full"{{ csa.reveal(field, show_when) }}>
         <label class="vol-check" for="{{ field.vars.id }}">
             {{ form_widget(field) }}
             <span>
@@ -280,4 +286,24 @@
         <span class="vol-muted">sin turnos por venir</span>
     {%- endif -%}
     {%- if pending %} {{ ui.badge(pending ~ ' por cerrar', 'ochre') }}{% endif -%}
+{% endmacro %}
+
+
+{# ---------- SLOT ----------
+ # Una franja horaria del formulario de tarea: de una hora a otra, y el botón
+ # de quitarla. Es una fila de la colección Y el molde de una nueva
+ # (data-prototype), así que cualquier cambio de aspecto se hace una sola vez.
+ # El botón va oculto: lo enseña csa-collection, que es quien lo hace funcionar.
+ #
+ #   {{ vol.slot(form.repeatTimes.vars.prototype) }}
+ #}
+{% macro slot(slot) %}
+    {% import '_macros/csa.html.twig' as csa %}
+    <div class="vol-slot" data-csa-collection-item>
+        {{ csa.field(slot.start, 'De') }}
+        {{ csa.field(slot.end, 'a', { hint: 'opcional' }) }}
+        <button type="button" class="csa-btn csa-btn--ghost vol-slot__remove" data-csa-collection-remove hidden aria-label="Quitar esta franja">
+            <i class="fa fa-times"></i>
+        </button>
+    </div>
 {% endmacro %}

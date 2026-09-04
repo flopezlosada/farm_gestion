@@ -50,8 +50,13 @@ class ShiftGenerator
      */
     public const MAX = 400;
 
-    /** Hora por defecto cuando la receta no trae tramos horarios. */
-    private const DEFAULT_TIME = '09:00';
+    /**
+     * Hora del turno cuando la receta no trae franjas: medianoche, que es como
+     * las pantallas entienden «sin hora» y lo callan (vol.shift_when y las
+     * tarjetas). Antes eran las nueve, que se enseñaban como una hora real y
+     * hacían pensar que había que estar allí a las nueve.
+     */
+    private const DEFAULT_TIME = '00:00';
 
     /** Cómo se nombra cada posición del mes al pedírsela a PHP. */
     private const ORDINALS = [1 => 'first', 2 => 'second', 3 => 'third', 4 => 'fourth'];
@@ -305,8 +310,9 @@ class ShiftGenerator
 
     /**
      * Los tramos horarios de la receta, normalizados. Si no hay ninguno, uno a
-     * las nueve sin hora de fin: es mejor un turno a una hora discutible que
-     * ninguno, que dejaría la tarea publicada y sin nada a lo que apuntarse.
+     * medianoche sin hora de fin: un turno de todo el día, que las pantallas
+     * enseñan sin hora. Mejor eso que ninguno, que dejaría la tarea publicada
+     * y sin nada a lo que apuntarse.
      *
      * @param VolunteerOffer $offer la tarea
      *
