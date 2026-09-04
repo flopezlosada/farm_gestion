@@ -66,3 +66,7 @@ yarn-error.log
 ###> phpstan/phpstan ###
 phpstan.neon
 ###< phpstan/phpstan ###
+
+# Notas internas de trabajo: viven en local, no en el repositorio.
+/CLAUDE.md
+/CLAUDE.local.md
