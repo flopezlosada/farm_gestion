@@ -54,7 +54,24 @@ class VolunteerOfferTypeScheduleTest extends KernelTestCase
         $form = $this->submit(['repeatTimes' => [$this->slot('09:00', '11:00'), $this->slot('10:30', '12:00')]]);
 
         $this->assertFalse($form->isValid());
-        $this->assertSame('La franja 2 empieza antes de que acabe la anterior.', $this->firstError($form));
+        $this->assertSame('Las franjas 1 y 2 se pisan.', $this->firstError($form));
+    }
+
+    /**
+     * El número de la franja en el error es el de la fila TAL COMO SE TECLEÓ:
+     * la pantalla repinta las filas en ese orden, y numerarlas ya ordenadas
+     * señalaría a otra fila.
+     */
+    public function testElErrorNumeraLasFranjasComoSeTeclearon(): void
+    {
+        $form = $this->submit(['repeatTimes' => [
+            $this->slot('17:00', '19:00'),   // fila 1
+            $this->slot('09:00', '11:00'),   // fila 2
+            $this->slot(null, '14:00'),      // fila 3: sin inicio
+        ]]);
+
+        $this->assertFalse($form->isValid());
+        $this->assertSame('La franja 3 tiene hora de fin pero no de inicio.', $this->firstError($form));
     }
 
     /**

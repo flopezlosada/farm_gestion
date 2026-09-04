@@ -431,7 +431,9 @@ class VolunteerOfferType extends AbstractType
      * todos los dedazos que se le parecen.
      *
      * Los errores se cuelgan de la colección, no de la franja: una franja es
-     * una fila sin sitio para un párrafo debajo, y el número dice cuál es.
+     * una fila sin sitio para un párrafo debajo, y el número dice cuál es. El
+     * número es el de la fila TAL COMO SE TECLEÓ, porque la pantalla repinta
+     * las filas en ese orden; numerarlas ya ordenadas señalaría a otra fila.
      *
      * @param FormEvent $event el envío del formulario
      */
@@ -443,14 +445,16 @@ class VolunteerOfferType extends AbstractType
             return;
         }
 
-        $slots = array_values($offer->getRepeatTimes());
-        usort($slots, static fn (array $a, array $b): int => ($a[0] ?? '') <=> ($b[0] ?? ''));
-        $offer->setRepeatTimes($slots);
+        // Cada franja con el número de fila con que se tecleó, antes de ordenar.
+        $numbered = [];
+        foreach (array_values($offer->getRepeatTimes()) as $index => $slot) {
+            $numbered[] = [$index + 1, $slot];
+        }
+        usort($numbered, static fn (array $a, array $b): int => ($a[1][0] ?? '') <=> ($b[1][0] ?? ''));
+        $offer->setRepeatTimes(array_column($numbered, 1));
 
-        $previousEnd = null;
-        foreach ($slots as $index => [$start, $end]) {
-            $number = $index + 1;
-
+        $previous = null;
+        foreach ($numbered as [$number, [$start, $end]]) {
             if (null === $start) {
                 $this->error($form, 'repeatTimes', sprintf('La franja %d tiene hora de fin pero no de inicio.', $number));
                 continue;
@@ -460,11 +464,11 @@ class VolunteerOfferType extends AbstractType
                 $this->error($form, 'repeatTimes', sprintf('La franja %d acaba antes de empezar: la hora de fin tiene que ser posterior a la de inicio.', $number));
             }
 
-            if (null !== $previousEnd && $start <= $previousEnd) {
-                $this->error($form, 'repeatTimes', sprintf('La franja %d empieza antes de que acabe la anterior.', $number));
+            if (null !== $previous && $start <= $previous[1]) {
+                $this->error($form, 'repeatTimes', sprintf('Las franjas %d y %d se pisan.', min($previous[0], $number), max($previous[0], $number)));
             }
 
-            $previousEnd = $end ?? $start;
+            $previous = [$number, $end ?? $start];
         }
     }
 
