@@ -20,6 +20,9 @@ require('./csa-check-filter.js');
 // Pestañas para partir una ficha larga (opt-in por [data-csa-tabs]). Sin JS
 // los paneles se ven todos. Ver assets/js/csa-tabs.js.
 require('./csa-tabs.js');
+// Menús de acciones con <details> (ficha de área): uno abierto a la vez y
+// cierre al pinchar fuera. Ver assets/js/csa-kebab.js.
+require('./csa-kebab.js');
 
 // Avisos de "falta esto" en castellano y dentro del diseño, en lugar del globo
 // del navegador (opt-in por [data-csa-validate]). Ver assets/js/csa-validate.js.
