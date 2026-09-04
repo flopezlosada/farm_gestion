@@ -56,6 +56,8 @@ class MagicLinkPagesTest extends WebTestCase
     public function testForgotNoMandaEnlaceASocixConElAccesoCerrado(): void
     {
         $client = static::createClient();
+        $this->resetMagicLinkLimiter();
+
         $client->request('POST', '/login/forgot', $this->forgotPayload($client, PartnerUserFixtures::USER_SOCIX_EMAIL));
 
         $this->assertResponseRedirects('/login/sent');
@@ -68,6 +70,7 @@ class MagicLinkPagesTest extends WebTestCase
     public function testForgotMandaEnlaceASocixConElAccesoAbierto(): void
     {
         $client = static::createClient();
+        $this->resetMagicLinkLimiter();
         static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_PARTNER_LOGIN, true);
 
         $client->request('POST', '/login/forgot', $this->forgotPayload($client, PartnerUserFixtures::USER_SOCIX_EMAIL));
@@ -83,6 +86,7 @@ class MagicLinkPagesTest extends WebTestCase
     public function testPrimerAccesoMandaEnlaceConEmailYTelefonoCorrectos(): void
     {
         $client = static::createClient();
+        $this->resetMagicLinkLimiter();
         static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_PARTNER_LOGIN, true);
 
         $client->request('POST', '/login/first-access', $this->firstAccessPayload(
@@ -104,6 +108,7 @@ class MagicLinkPagesTest extends WebTestCase
     public function testPrimerAccesoNoMandaEnlaceSiElTelefonoNoCoincide(): void
     {
         $client = static::createClient();
+        $this->resetMagicLinkLimiter();
         static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_PARTNER_LOGIN, true);
 
         $client->request('POST', '/login/first-access', $this->firstAccessPayload(
@@ -114,6 +119,21 @@ class MagicLinkPagesTest extends WebTestCase
 
         $this->assertResponseRedirects('/login/sent');
         $this->assertEmailCount(0);
+    }
+
+    /**
+     * Devuelve al limitador de enlaces de acceso su cupo entero para la IP del
+     * cliente de test.
+     *
+     * Su ventana deslizante vive en la caché de test y persiste entre casos y
+     * entre ejecuciones: sin esto, la suite acabaría fallando por agotamiento
+     * del límite y no por el código bajo prueba. Se resetea en vez de subir el
+     * límite en la configuración de test, que dejaría sin efecto los límites
+     * reales —{@see ContactFormRateLimitTest} comprueba justamente uno.
+     */
+    private function resetMagicLinkLimiter(): void
+    {
+        static::getContainer()->get('limiter.magic_link')->create('127.0.0.1')->reset();
     }
 
     /**
