@@ -26,6 +26,7 @@ use App\Repository\VolunteerSignupRepository;
 use App\Security\VolunteerOfferVoter;
 use App\Service\Volunteering\CreditedTime;
 use App\Service\Calendar\MonthGrid;
+use App\Service\Volunteering\ShiftCalendar;
 use App\Service\Volunteering\ShiftGenerator;
 use App\Service\Volunteering\TaskCoordinator;
 use App\Service\Volunteering\VolunteerAudienceResolver;
@@ -417,7 +418,7 @@ class VolunteeringController extends AbstractController
         VolunteerScope $scopeOf,
     ): Response {
         $now = new \DateTimeImmutable();
-        $month = self::monthFrom($request->query->getString('mes'), $now);
+        $month = MonthGrid::monthFrom($request->query->getString('mes'), $now);
 
         $categoryId = $request->query->getInt('tipo') ?: null;
         $category = null !== $categoryId ? $categories->find($categoryId) : null;
@@ -429,16 +430,17 @@ class VolunteeringController extends AbstractController
         $from = $weeks[0][0];
         $to = end($weeks)[6]->setTime(23, 59, 59);
 
-        // Agrupados por día, que es como se pinta una rejilla. En PHP y no en
-        // la plantilla porque Twig no sabe agrupar sin un bucle con estado.
-        $byDay = [];
-        foreach ($shifts->findBetween($from, $to, false, $category, $offer, $mine) as $shift) {
-            $byDay[$shift->getStartsAt()->format('Y-m-d')][] = $shift;
-        }
+        $found = $shifts->findBetween($from, $to, false, $category, $offer, $mine);
+        $days = ShiftCalendar::days($found, $now);
 
         return $this->render('Volunteering/calendar.html.twig', [
             'weeks' => $weeks,
-            'by_day' => $byDay,
+            'days' => $days,
+            'states' => ShiftCalendar::statesPresent($days),
+            // Lo que pide algo, encima de la rejilla: por bien resuelto que esté
+            // el color, un turno a tres días vista está a media pantalla de
+            // donde se mira.
+            'attention' => ShiftCalendar::attention($found, $now),
             'month' => $month,
             'prev' => $month->modify('-1 month'),
             'next' => $month->modify('+1 month'),
@@ -449,24 +451,6 @@ class VolunteeringController extends AbstractController
             'coordinates_something' => $scopeOf->coordinatesSomething(),
             'sees_everything' => $scopeOf->seesEverything(),
         ]);
-    }
-
-    /**
-     * El primer día del mes pedido como `AAAA-MM`, o el del mes en curso si no
-     * se pide ninguno o el texto no es una fecha.
-     *
-     * @param string             $requested lo que venía en la URL
-     * @param \DateTimeImmutable $now       ahora
-     *
-     * @return \DateTimeImmutable el día 1 del mes, a medianoche
-     */
-    private static function monthFrom(string $requested, \DateTimeImmutable $now): \DateTimeImmutable
-    {
-        $month = preg_match('/^\d{4}-\d{2}$/', $requested)
-            ? \DateTimeImmutable::createFromFormat('!Y-m-d', $requested.'-01')
-            : false;
-
-        return $month ?: $now->modify('first day of this month')->setTime(0, 0);
     }
 
     /**
