@@ -19,6 +19,13 @@
 -- migra nada; en las bases de trabajo sí (7 tareas, 8 inscripciones).
 --
 -- Aplicar a las TRES bases: db, db_prod_snapshot y db_test.
+--
+-- LOS NOMBRES DE LOS ÍNDICES DE CLAVE AJENA SON LOS QUE GENERA DOCTRINE
+-- (`IDX_<hash>`), no unos legibles. Con nombres propios,
+-- `doctrine:schema:update --dump-sql` propone renombrarlos en cada ejecución,
+-- para siempre, y ese ruido permanente tapa los cambios de esquema de verdad
+-- —que es justo la herramienta con la que aquí se caza el drift—. Es la misma
+-- regla que sigue `migracion-prod-2026-08-31.sql`.
 -- ============================================================
 
 -- ------------------------------------------------------------
@@ -65,7 +72,7 @@ CREATE TABLE IF NOT EXISTS `volunteer_shift` (
   `created_at` DATETIME NOT NULL,
   UNIQUE INDEX `uniq_volunteer_shift_offer_start` (`offer_id`, `starts_at`),
   INDEX `idx_volunteer_shift_starts_at` (`starts_at`),
-  INDEX `idx_volunteer_shift_offer` (`offer_id`),
+  INDEX `IDX_9765E6B753C674EE` (`offer_id`),
   PRIMARY KEY(`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci` ENGINE = InnoDB;
 
@@ -104,7 +111,7 @@ ALTER TABLE `volunteer_signup` DROP `offer_id`;
 ALTER TABLE `volunteer_signup` MODIFY `shift_id` INT NOT NULL;
 ALTER TABLE `volunteer_signup`
   ADD UNIQUE INDEX `uniq_volunteer_signup` (`shift_id`, `partner_id`),
-  ADD INDEX `idx_volunteer_signup_shift` (`shift_id`);
+  ADD INDEX `IDX_1D22E302BB70BC0E` (`shift_id`);
 ALTER TABLE `volunteer_signup`
   ADD CONSTRAINT `fk_volunteer_signup_shift`
   FOREIGN KEY (`shift_id`) REFERENCES `volunteer_shift` (`id`) ON DELETE CASCADE;
@@ -130,7 +137,7 @@ ALTER TABLE `volunteer_call` DROP `offer_id`;
 ALTER TABLE `volunteer_call` MODIFY `shift_id` INT NOT NULL;
 ALTER TABLE `volunteer_call`
   ADD UNIQUE INDEX `uniq_volunteer_call_scope` (`shift_id`, `scope`),
-  ADD INDEX `idx_volunteer_call_shift` (`shift_id`);
+  ADD INDEX `IDX_7A3F3E12BB70BC0E` (`shift_id`);
 ALTER TABLE `volunteer_call`
   ADD CONSTRAINT `fk_volunteer_call_shift`
   FOREIGN KEY (`shift_id`) REFERENCES `volunteer_shift` (`id`) ON DELETE CASCADE;
@@ -173,7 +180,7 @@ SET
   ));
 
 ALTER TABLE `volunteer_offer`
-  ADD INDEX `idx_volunteer_offer_place` (`place_id`);
+  ADD INDEX `IDX_1BB85ACCDA6A219` (`place_id`);
 ALTER TABLE `volunteer_offer`
   ADD CONSTRAINT `fk_volunteer_offer_place`
   FOREIGN KEY (`place_id`) REFERENCES `volunteer_place` (`id`) ON DELETE SET NULL;
