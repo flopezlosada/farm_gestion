@@ -65,14 +65,18 @@ services:
             $maxIdleTime: '%app.session.max_idle_time%'
 
     # Interruptor general del correo: decora el mailer y corta el envío cuando
-    # el ajuste email.enabled está apagado. El resto de argumentos (AppSettings,
-    # logger) se autowire-an.
+    # el ajuste email.enabled está apagado. AppSettings se autowire-a.
     #
     # Decora 'mailer.mailer' (el servicio real), NO el alias 'mailer': el
     # autowiring de MailerInterface resuelve a 'mailer.mailer', así que decorar
     # solo 'mailer' dejaba fuera a todo lo inyectado por tipo (comandos y
     # controllers) y el kill-switch no interceptaba nada.
+    #
+    # El logger va al canal 'access' para que el descarte quede en el mismo
+    # fichero que el envío que lo provocó: leídos seguidos cuentan la historia
+    # completa de por qué un correo no llegó.
     App\Mailer\KillSwitchMailer:
         decorates: mailer.mailer
         arguments:
             $inner: '@.inner'
+            $logger: '@monolog.logger.access'

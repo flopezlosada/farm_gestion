@@ -11,6 +11,7 @@ use App\Security\UserChecker;
 use App\Service\AppSettings;
 use App\Validator\StrongPassword;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Form\Extension\Core\Type\PasswordType;
@@ -126,6 +127,10 @@ class SecurityController extends AbstractController
      *
      * Antifuga: el flujo visual es siempre el mismo, encuentre o no. Así no
      * se puede inventariar qué emails están registrados como socixs.
+     *
+     * Ese mismo silencio deja a la administración sin saber por qué un socix
+     * "pide el enlace y no le llega", así que cada salida sin envío deja una
+     * traza en el canal `access` (fichero propio, ver config/packages/monolog.yaml).
      */
     #[Route('/login/first-access', name: 'app_login_link_first', methods: ['GET', 'POST'])]
     public function firstAccess(
@@ -136,31 +141,47 @@ class SecurityController extends AbstractController
         AppSettings $settings,
         #[Autowire(service: 'limiter.magic_link')]
         RateLimiterFactory $magicLinkLimiter,
+        #[Autowire(service: 'monolog.logger.access')]
+        LoggerInterface $accessLogger,
     ): Response {
         if ($request->isMethod('GET')) {
             return $this->render('Security/first_access.html.twig');
         }
 
         if (!$this->isCsrfTokenValid('login_link_first', (string) $request->request->get('_csrf_token'))) {
+            $accessLogger->warning('Primer acceso: token CSRF inválido, no se envía enlace.');
+
             return $this->redirectToRoute('app_login_link_sent');
         }
+
+        // Se leen antes que los guards para que las trazas de abandono puedan
+        // decir de quién se trata. La validación de formato sigue más abajo.
+        $email = trim((string) $request->request->get('email', ''));
+        $phoneRaw = trim((string) $request->request->get('phone', ''));
 
         // El primer acceso es exclusivo de socixs. Con el acceso de socixs cerrado
         // por configuración (FEATURE_PARTNER_LOGIN), no tiene sentido enviar un
         // magic-link que el UserChecker rechazaría: seguimos el camino antifuga
         // (redirige a "enviado" sin mandar nada), igual que un email no registrado.
         if (!$settings->getBool(AppSettings::FEATURE_PARTNER_LOGIN)) {
+            $accessLogger->info(
+                'Primer acceso: no se envía enlace, el acceso de socixs está cerrado por configuración.',
+                ['email' => $email]
+            );
+
             return $this->redirectToRoute('app_login_link_sent');
         }
 
         // Antifuga: si se rebasa el límite seguimos redirigiendo a /login/sent
         // para no diferenciar el caso "límite excedido" del éxito.
         if (!$magicLinkLimiter->create($request->getClientIp())->consume(1)->isAccepted()) {
+            $accessLogger->warning(
+                'Primer acceso: no se envía enlace, esta IP ha agotado el límite de solicitudes por hora.',
+                ['email' => $email, 'ip' => $request->getClientIp()]
+            );
+
             return $this->redirectToRoute('app_login_link_sent');
         }
-
-        $email = trim((string) $request->request->get('email', ''));
-        $phoneRaw = trim((string) $request->request->get('phone', ''));
 
         // Validamos formato antes de buscar. Errores de formato sí se enseñan
         // — son reglas públicas, no leak de qué emails están registrados.
@@ -183,6 +204,11 @@ class SecurityController extends AbstractController
         }
 
         if (!empty($errors)) {
+            $accessLogger->info(
+                'Primer acceso: el formulario no valida, no se busca socix.',
+                ['email' => $email, 'campos' => array_keys($errors)]
+            );
+
             return $this->render('Security/first_access.html.twig', [
                 'errors' => $errors,
                 'last_email' => $email,
@@ -202,18 +228,57 @@ class SecurityController extends AbstractController
             ->getQuery()
             ->getOneOrNullResult();
 
+        if ($partner === null) {
+            $accessLogger->info(
+                'Primer acceso: sin coincidencia, no se envía enlace.',
+                ['email' => $email, 'motivo' => $this->diagnoseLookupFailure($partnerRepository, $email)]
+            );
+
+            return $this->redirectToRoute('app_login_link_sent');
+        }
+
         // Con el alta de usuarixs cerrada por configuración, resolveOrCreate
         // devuelve null para quien no tenga cuenta: el flujo sigue el camino
         // antifuga (redirige a /login/sent sin enviar nada), igual que un
         // email no registrado.
-        if ($partner !== null) {
-            $user = $provisioner->resolveOrCreate($partner);
-            if ($user !== null) {
-                $magicLinkMailer->send($user);
-            }
+        $user = $provisioner->resolveOrCreate($partner);
+        if ($user === null) {
+            $accessLogger->info(
+                'Primer acceso: socix identificado pero sin cuenta que usar (sin email en ficha, o alta de usuarixs cerrada).',
+                ['email' => $email, 'partner_id' => $partner->getId()]
+            );
+
+            return $this->redirectToRoute('app_login_link_sent');
         }
 
+        $magicLinkMailer->send($user);
+
         return $this->redirectToRoute('app_login_link_sent');
+    }
+
+    /**
+     * Explica por qué el par email+teléfono no encontró socix, para la traza de
+     * diagnóstico. Distinguir "ese email no está" de "el teléfono no cuadra" es
+     * justo lo que ahorra la reproducción del caso, y sale de una consulta que
+     * sólo se hace en el camino de fallo.
+     *
+     * @param PartnerRepository $partnerRepository Repositorio de socixs.
+     * @param string            $email            Email tal cual lo tecleó quien lo intenta.
+     *
+     * @return string Motivo legible para el log.
+     */
+    private function diagnoseLookupFailure(PartnerRepository $partnerRepository, string $email): string
+    {
+        $conEseEmail = (int) $partnerRepository->createQueryBuilder('p')
+            ->select('COUNT(p.id)')
+            ->where('LOWER(p.email) = LOWER(:email)')
+            ->setParameter('email', $email)
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        return $conEseEmail > 0
+            ? sprintf('hay %d socix(s) con ese email, pero el teléfono no coincide con el de la ficha', $conEseEmail)
+            : 'ningún socix tiene ese email en su ficha';
     }
 
     /**
@@ -229,20 +294,29 @@ class SecurityController extends AbstractController
         UserChecker $userChecker,
         #[Autowire(service: 'limiter.magic_link')]
         RateLimiterFactory $magicLinkLimiter,
+        #[Autowire(service: 'monolog.logger.access')]
+        LoggerInterface $accessLogger,
     ): Response {
         if ($request->isMethod('GET')) {
             return $this->render('Security/forgot.html.twig');
         }
 
         if (!$this->isCsrfTokenValid('login_link_forgot', (string) $request->request->get('_csrf_token'))) {
-            return $this->redirectToRoute('app_login_link_sent');
-        }
+            $accessLogger->warning('Recuperar acceso: token CSRF inválido, no se envía enlace.');
 
-        if (!$magicLinkLimiter->create($request->getClientIp())->consume(1)->isAccepted()) {
             return $this->redirectToRoute('app_login_link_sent');
         }
 
         $email = trim((string) $request->request->get('email', ''));
+
+        if (!$magicLinkLimiter->create($request->getClientIp())->consume(1)->isAccepted()) {
+            $accessLogger->warning(
+                'Recuperar acceso: no se envía enlace, esta IP ha agotado el límite de solicitudes por hora.',
+                ['email' => $email, 'ip' => $request->getClientIp()]
+            );
+
+            return $this->redirectToRoute('app_login_link_sent');
+        }
 
         $errors = [];
         if ($email === '') {
@@ -252,6 +326,11 @@ class SecurityController extends AbstractController
         }
 
         if (!empty($errors)) {
+            $accessLogger->info(
+                'Recuperar acceso: el email tecleado no tiene formato válido.',
+                ['email' => $email]
+            );
+
             return $this->render('Security/forgot.html.twig', [
                 'errors' => $errors,
                 'last_email' => $email,
@@ -264,13 +343,24 @@ class SecurityController extends AbstractController
         // (redirige a "enviado" sin mandar nada), igual que un email no registrado.
         // No duplicamos aquí la lista de roles de equipo: la conoce el UserChecker.
         $user = $userRepository->loadUserByIdentifier($email);
-        if ($user !== null) {
-            try {
-                $userChecker->checkPreAuth($user);
-                $magicLinkMailer->send($user);
-            } catch (AccountStatusException) {
-                // No puede entrar: no enviamos enlace. Antifuga intacto.
-            }
+        if ($user === null) {
+            $accessLogger->info(
+                'Recuperar acceso: no hay ninguna cuenta con ese email, no se envía enlace.',
+                ['email' => $email]
+            );
+
+            return $this->redirectToRoute('app_login_link_sent');
+        }
+
+        try {
+            $userChecker->checkPreAuth($user);
+            $magicLinkMailer->send($user);
+        } catch (AccountStatusException $e) {
+            // No puede entrar: no enviamos enlace. Antifuga intacto.
+            $accessLogger->info(
+                'Recuperar acceso: la cuenta existe pero no puede entrar ahora, no se envía enlace.',
+                ['email' => $email, 'motivo' => $e->getMessage()]
+            );
         }
 
         return $this->redirectToRoute('app_login_link_sent');
