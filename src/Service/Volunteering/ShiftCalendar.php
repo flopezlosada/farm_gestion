@@ -183,7 +183,13 @@ final class ShiftCalendar
     {
         $byOffer = [];
         foreach ($items as $item) {
-            $key = $item['shift']->getOffer()?->getId() ?? spl_object_id($item['shift']);
+            // Por IDENTIDAD del objeto tarea, no por su id. Dentro de una
+            // petición Doctrine devuelve el mismo objeto para la misma tarea
+            // (identity map), así que vale igual; y con el id, una tarea sin
+            // guardar —que es como se prueba esto— no tiene y cada turno caía
+            // en su propia clave: nada se juntaba.
+            $offer = $item['shift']->getOffer();
+            $key = null !== $offer ? spl_object_id($offer) : spl_object_id($item['shift']);
             $byOffer[$key][] = $item;
         }
 
