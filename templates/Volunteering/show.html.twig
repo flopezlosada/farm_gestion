@@ -82,6 +82,8 @@
                 {% if can_edit %}
                     {{ csa.btn('Editar', { variant: 'secondary', href: path('volunteering_edit', { id: offer.id }), icon: 'fa-pencil' }) }}
                 {% endif %}
+                {# Prefiltrado a esta tarea: la serie entera, sin el ruido del resto. #}
+                {{ csa.btn('Calendario', { variant: 'ghost', href: path('volunteering_calendar', { tarea: offer.id }), icon: 'fa-calendar' }) }}
                 {{ csa.btn('Volver', { variant: 'ghost', href: path('volunteering_tasks') }) }}
             </div>
         </header>
