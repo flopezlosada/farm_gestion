@@ -1,4 +1,4 @@
-{# La bolsa de voluntariado: quién hay para cada tipo de trabajo.
+{# La bolsa de voluntariado: quién hay para cada área.
  #
  # Mismo patrón que el listado de socixs: tira de cifras, pestañas, buscador y
  # tabla paginada. Con 246 socixs, sin buscador y sin paginar no se encuentra a
@@ -30,10 +30,10 @@
 {% block csa_main %}
 <div class="prl">
 
-    {{ csa.page_header('Voluntariado', 'Quién hay', 'A quién puedes llamar para cada tipo de trabajo.') }}
+    {{ csa.page_header('Voluntariado', 'Quién hay', 'A quién puedes llamar para cada área.') }}
 
     {% if not coordinates_something %}
-        {{ csa.callout('No coordinas ningún tipo de trabajo todavía, así que aquí no aparece nadie. Pídele a administración que te asigne un área.', 'info') }}
+        {{ csa.callout('No coordinas ninguna área todavía, así que aquí no aparece nadie. Pídele a administración que te asigne un área.', 'info') }}
     {% endif %}
 
     <div class="prl-stats">

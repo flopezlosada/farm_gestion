@@ -18,7 +18,7 @@ use Doctrine\ORM\Mapping as ORM;
  * POR QUÉ GUARDA EL ÁREA APARTE de la tarea. Quien coordina un área tiene que
  * ver su actividad y sólo la suya. Los eventos de una tarea se pueden filtrar
  * por las categorías de esa tarea, pero hay eventos que NO tienen tarea —crear
- * un tipo de trabajo, nombrar coordinadora— y ésos necesitan decir a qué área
+ * un área, nombrar coordinadora— y ésos necesitan decir a qué área
  * pertenecen. De ahí que `category` exista además de `offer`.
  *
  * ES UN REGISTRO, NO UN ESTADO. Nada del módulo lee estos eventos para decidir
@@ -86,10 +86,10 @@ class VolunteerEvent
     /** Se mandó un aviso pidiendo gente, con su alcance. */
     public const TYPE_CALL_SENT = 'CALL_SENT';
 
-    /** Se creó un tipo de trabajo. */
+    /** Se creó un área. */
     public const TYPE_CATEGORY_CREATED = 'CATEGORY_CREATED';
 
-    /** Se editó un tipo de trabajo. */
+    /** Se editó un área. */
     public const TYPE_CATEGORY_UPDATED = 'CATEGORY_UPDATED';
 
     /** Cambió quién coordina un área. */
@@ -116,8 +116,8 @@ class VolunteerEvent
         self::TYPE_ABSENT => 'No fue',
         self::TYPE_PERSON_ADDED => 'Anotadx a mano',
         self::TYPE_CALL_SENT => 'Aviso enviado',
-        self::TYPE_CATEGORY_CREATED => 'Tipo de trabajo creado',
-        self::TYPE_CATEGORY_UPDATED => 'Tipo de trabajo editado',
+        self::TYPE_CATEGORY_CREATED => 'Área creada',
+        self::TYPE_CATEGORY_UPDATED => 'Área editada',
         self::TYPE_COORDINATORS_CHANGED => 'Cambio de coordinación',
         self::TYPE_PREFERENCES_CHANGED => 'Cambio de preferencias',
     ];
