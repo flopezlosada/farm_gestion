@@ -1,0 +1,12 @@
+monolog:
+    # Canal propio para todo lo que rodea a entrar en la aplicación: intentos de
+    # login (con contraseña, magic-link o Google), solicitudes de enlace de
+    # acceso, envíos de correo y descartes del interruptor general de email.
+    #
+    # Existe porque el handler principal de producción es `fingers_crossed` con
+    # action_level: error — sólo vuelca al fichero si la petición acaba en
+    # error. Un login fallido o un primer acceso que no encuentra al socix
+    # terminan en un 302 limpio, así que sin un canal aparte con su propio
+    # handler estas trazas se descartarían justo en el entorno donde hacen
+    # falta: producción, con un socix al teléfono diciendo "no puedo entrar".
+    channels: ['access']
