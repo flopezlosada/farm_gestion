@@ -314,8 +314,15 @@
                         <div class="csa-navgroup{{ sec_collapsed }}">
                             <button type="button" class="csa-navgroup__head">Voluntariado <i class="csa-navgroup__chev fa fa-chevron-down" aria-hidden="true"></i></button>
                             <div class="csa-navgroup__items">
-                                {{ _self.nav_link('Tareas', path('volunteering_index'), 'fa-hand-paper-o',
-                                   route starts with 'volunteering_' and route not in ['volunteering_categories', 'volunteering_category_edit', 'volunteering_pool']) }}
+                                {# DOS ENTRADAS Y NO UNA, porque son dos preguntas: «qué hay
+                                 # que hacer» son los turnos, con fecha, y es la pantalla del
+                                 # día a día; «tareas» es el catálogo de definiciones, donde se
+                                 # crean y se retocan. Antes eran lo mismo porque la tarea
+                                 # llevaba la fecha encima. #}
+                                {{ _self.nav_link('Qué hay que hacer', path('volunteering_index'), 'fa-calendar-o',
+                                   route in ['volunteering_index', 'volunteering_shift', 'volunteering_shift_edit']) }}
+                                {{ _self.nav_link('Tareas', path('volunteering_tasks'), 'fa-hand-paper-o',
+                                   route in ['volunteering_tasks', 'volunteering_show', 'volunteering_new', 'volunteering_edit', 'volunteering_shift_new']) }}
                                 {{ _self.nav_link('Quién hay', path('volunteering_pool'), 'fa-users',
                                    route == 'volunteering_pool') }}
                                 {{ _self.nav_link('Actividad', path('volunteering_activity'), 'fa-history',
@@ -323,6 +330,8 @@
                                 {% if is_granted('ROLE_GESTION_VOLUNTARIADO_EDIT') %}
                                     {{ _self.nav_link('Tipos de trabajo', path('volunteering_categories'), 'fa-tags',
                                        route == 'volunteering_categories' or route == 'volunteering_category_edit') }}
+                                    {{ _self.nav_link('Sitios', path('volunteering_places'), 'fa-map-marker',
+                                       route starts with 'volunteering_place') }}
                                 {% endif %}
                             </div>
                         </div>

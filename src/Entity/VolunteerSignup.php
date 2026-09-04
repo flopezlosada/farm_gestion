@@ -6,9 +6,15 @@ use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Validator\Constraints as Assert;
 
 /**
- * Un socix apuntado a una oferta de voluntariado, con los acompañantes que
- * traiga. Es la fila de la que sale todo lo demás: las plazas que quedan libres
- * en la oferta y las horas que cada socix lleva hechas.
+ * Un socix apuntado a un TURNO de voluntariado, con los acompañantes que traiga.
+ * Es la fila de la que sale todo lo demás: las plazas que quedan libres en ese
+ * turno y las horas que cada socix lleva hechas.
+ *
+ * SE APUNTA A UN TURNO, NO A LA TAREA, y ése es el cambio que lo hace utilizable:
+ * "sacar al perro" no es un plan al que apuntarse, es un trabajo que se hace dos
+ * veces al día; a lo que uno se apunta es al domingo por la mañana. Quien quiere
+ * "todos los martes" acaba con una fila por martes, y así pasar lista, contar
+ * plazas y computar horas siguen siendo lo que ya eran.
  *
  * SE APUNTA UN SOCIX, NO UNA FAMILIA. La cesta es de la unidad familiar, pero
  * el trabajo lo hace una persona y el objetivo del módulo es que cada cual vea
@@ -18,20 +24,20 @@ use Symfony\Component\Validator\Constraints as Assert;
  * Agregar por familia, si algún día hace falta, se hace leyendo `parent_id` de
  * {@see Partner}; al revés no se podría.
  *
- * UNICIDAD (offer, partner): sin ella, el doble submit —dar dos veces al botón,
+ * UNICIDAD (shift, partner): sin ella, el doble submit —dar dos veces al botón,
  * volver atrás en el navegador— deja a alguien apuntado dos veces y ocupando
- * dos plazas de una oferta que igual sólo tenía tres. Es exactamente la carrera
+ * dos plazas de un turno que igual sólo tenía tres. Es exactamente la carrera
  * que ya reventó {@see PartnerDeliveryShift} en su día, y se arregla igual: en
  * la BBDD, no por convención del código. Darse de baja NO borra la fila, la
  * marca ({@see $cancelledAt}) — hace falta saber que alguien se descolgó para
  * volver a pedir gente, y borrarla dejaría la plaza libre en silencio.
  *
- * LAS HORAS SE CONGELAN AQUÍ. `creditedMinutes` copia lo que valía la oferta en
- * el momento de darla por hecha. Si se leyera siempre de la oferta, cambiar más
+ * LAS HORAS SE CONGELAN AQUÍ. `creditedMinutes` copia lo que valía el turno en
+ * el momento de darlo por hecho. Si se leyera siempre de la tarea, cambiar más
  * tarde lo que vale ese trabajo reescribiría el histórico de todo el mundo.
  *
  * @ORM\Table(name="volunteer_signup", uniqueConstraints={
- *     @ORM\UniqueConstraint(name="uniq_volunteer_signup", columns={"offer_id", "partner_id"})
+ *     @ORM\UniqueConstraint(name="uniq_volunteer_signup", columns={"shift_id", "partner_id"})
  * }, indexes={
  *     @ORM\Index(name="idx_volunteer_signup_partner", columns={"partner_id"})
  * })
@@ -81,10 +87,10 @@ class VolunteerSignup
     private ?int $id = null;
 
     /**
-     * @ORM\ManyToOne(targetEntity="App\Entity\VolunteerOffer", inversedBy="signups")
-     * @ORM\JoinColumn(name="offer_id", referencedColumnName="id", nullable=false, onDelete="CASCADE")
+     * @ORM\ManyToOne(targetEntity="App\Entity\VolunteerShift", inversedBy="signups")
+     * @ORM\JoinColumn(name="shift_id", referencedColumnName="id", nullable=false, onDelete="CASCADE")
      */
-    private ?VolunteerOffer $offer = null;
+    private ?VolunteerShift $shift = null;
 
     /**
      * @ORM\ManyToOne(targetEntity="App\Entity\Partner")
@@ -252,14 +258,14 @@ class VolunteerSignup
     }
 
     /**
-     * Da la inscripción por cumplida y congela lo que computa, tomándolo de la
-     * oferta si no se indica otra cosa (alguien que se quedó media jornada).
+     * Da la inscripción por cumplida y congela lo que computa, tomándolo del
+     * turno si no se indica otra cosa (alguien que se quedó media jornada).
      *
      * Una inscripción cancelada no se puede dar por cumplida: sería contarle
      * horas a quien avisó de que no iba.
      *
      * @param string   $source  quién lo confirma; uno de self::SOURCES
-     * @param int|null $minutes minutos a reconocer; null para tomar los de la oferta
+     * @param int|null $minutes minutos a reconocer; null para tomar los del turno
      *
      * @throws \LogicException si la inscripción está cancelada
      */
@@ -271,7 +277,9 @@ class VolunteerSignup
 
         $this->attended = true;
         $this->attendanceSource = $source;
-        $this->creditedMinutes = $minutes ?? $this->offer?->getCreditedMinutes();
+        // Del turno, que ya resuelve la herencia con la tarea: un turno puede
+        // valer distinto que el resto ({@see VolunteerShift::getCreditedMinutes()}).
+        $this->creditedMinutes = $minutes ?? $this->shift?->getCreditedMinutes();
 
         return $this;
     }
@@ -331,21 +339,46 @@ class VolunteerSignup
     }
 
     /**
-     * @return VolunteerOffer|null la oferta a la que se apunta
+     * @return VolunteerShift|null el turno al que se apunta
      */
-    public function getOffer(): ?VolunteerOffer
+    public function getShift(): ?VolunteerShift
     {
-        return $this->offer;
+        return $this->shift;
     }
 
     /**
-     * @param VolunteerOffer|null $offer la oferta a la que se apunta
+     * @param VolunteerShift|null $shift el turno al que se apunta
      */
-    public function setOffer(?VolunteerOffer $offer): self
+    public function setShift(?VolunteerShift $shift): self
     {
-        $this->offer = $offer;
+        $this->shift = $shift;
 
         return $this;
+    }
+
+    /**
+     * La tarea de la que es turno esto, para no obligar a cada pantalla a
+     * escribir `signup.shift.offer` — que además revienta si falta el turno.
+     *
+     * DERIVADO, no una segunda columna: una inscripción con `shift_id` de un
+     * turno y `offer_id` de otra tarea es un estado imposible de detectar y
+     * fácil de crear.
+     *
+     * @return VolunteerOffer|null la tarea, o null si no hay turno enganchado
+     */
+    public function getOffer(): ?VolunteerOffer
+    {
+        return $this->shift?->getOffer();
+    }
+
+    /**
+     * Cuándo es el trabajo al que se apuntó, que es lo del turno.
+     *
+     * @return \DateTimeInterface|null la fecha del turno, o null si no hay turno
+     */
+    public function getStartsAt(): ?\DateTimeInterface
+    {
+        return $this->shift?->getStartsAt();
     }
 
     /**

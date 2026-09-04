@@ -1,13 +1,24 @@
-{# Alta y edición de una tarea de voluntariado. #}
+{# Alta y edición de una tarea de voluntariado.
+ #
+ # TRES BLOQUES Y NO CINCO. Antes eran cinco secciones numeradas —qué y cuándo,
+ # dónde, quién y cuánto, ajustes, repetición— con diecinueve campos a la vista
+ # de los que se rellenaban ocho. Ahora: qué es el trabajo, cada cuánto se hace,
+ # y con qué medios. Lo que se ha ido de aquí:
+ #
+ #  - El ESTADO. Era un desplegable con «Publicada» al alcance del ratón en medio
+ #    del formulario, y publicar es lo que dispara los avisos a la asociación:
+ #    no puede pasar por descuido al guardar un cambio de hora. Se publica desde
+ #    la ficha, con un botón que dice a cuánta gente va a avisar.
+ #  - La GENTE DE FUERA. Es un dato del día —que un martes vinieran tres
+ #    estudiantes no dice nada del martes siguiente—, así que vive en el turno,
+ #    como acción de la lista de quién viene.
+ #  - Las FECHAS sueltas. Ahora se dice cada cuánto se hace y de eso salen los
+ #    turnos.
+ #
+ # Y el TIPO DE TRABAJO ha subido al primer bloque: es lo que define la tarea, no
+ # un ajuste. #}
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
-{# `vol` también aquí arriba aunque ahora mismo sólo se use dentro de los
- # {% block body %} de los embeds, que lo importan por su cuenta: las
- # importaciones de un bloque NO llegan al nivel raíz de la plantilla, y usar
- # ahí la macro revienta la pantalla entera con "Variable vol does not exist".
- # Ya pasó una vez. Es red de seguridad barata para un fallo que lint:twig no
- # detecta —comprueba sintaxis, no si las variables existen— y que por tanto
- # sólo se ve abriendo la página. #}
 {% import '_macros/volunteering.html.twig' as vol %}
 
 {% block title %}Voluntariado · {{ is_new ? 'Nueva tarea' : offer.title }}{% endblock %}
@@ -22,7 +33,9 @@
     <span class="csa-topbar__crumbs-sep">/</span>
     <a href="{{ path('volunteering_index') }}">Voluntariado</a>
     <span class="csa-topbar__crumbs-sep">/</span>
-    <span class="csa-topbar__crumb-active">{{ is_new ? 'Nueva tarea' : 'Editar' }}</span>
+    <a href="{{ path('volunteering_tasks') }}">Tareas</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ is_new ? 'Nueva' : 'Editar' }}</span>
 {% endblock %}
 
 {% block csa_main %}
@@ -33,61 +46,88 @@
      # assets/js/csa-dropdown.js. #}
     {{ form_start(form, { attr: { class: 'csa-form-narrow', 'data-csa-dropdowns': true } }) }}
 
-        {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Qué y cuándo' } %}
+        {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'El trabajo' } %}
             {% block body %}
                 {% import '_macros/csa.html.twig' as csa %}
-                {% import '_macros/volunteering.html.twig' as vol %}
                 <div class="csa-form-grid">
-                    {{ csa.field(form.title, 'Qué hay que hacer', { full: true }) }}
-                    {{ csa.field(form.description, 'Explicación', {
+                    {{ csa.field(form.title, 'Título', { full: true }) }}
+                    {{ csa.field(form.description, 'Descripción', {
                         full: true,
                         hint: 'opcional',
                         widget_class: 'csa-textarea'
                     }) }}
-                    {{ csa.field(form.startsAt, 'Cuándo empieza') }}
-                    {{ csa.field(form.endsAt, 'Cuándo acaba', { hint: 'opcional' }) }}
+                    {{ csa.field(form.categories, 'Tipo de trabajo', {
+                        full: true,
+                        hint: 'se avisa primero a quien lo tenga marcado en su ficha'
+                    }) }}
                 </div>
             {% endblock %}
         {% endembed %}
 
         {% embed '_components/csa_form_section.html.twig' with {
             num: '2',
-            title: 'Dónde',
-            subtitle: 'Si ocurre en un punto de recogida, ponlo: a quien recoge ahí le sale la primera, porque ya va a estar allí ese día.'
+            title: 'Cada cuánto',
+            subtitle: 'De aquí salen los turnos: los días concretos a los que la gente se apunta.'
         } %}
             {% block body %}
                 {% import '_macros/csa.html.twig' as csa %}
-                {% import '_macros/volunteering.html.twig' as vol %}
                 <div class="csa-form-grid">
-                    {{ vol.check(form.remote, 'Se hace desde casa', 'si lo marcas, se ignoran el lugar y el punto de recogida') }}
-                    {{ csa.field(form.node, 'Punto de recogida', { hint: 'opcional', widget_class: 'csa-select' }) }}
-                    {{ csa.field(form.place, 'Lugar', { hint: 'si no es un punto de recogida' }) }}
+                    {{ csa.field(form.repeatType, 'Cada cuánto', { widget_class: 'csa-select' }) }}
+                    {{ csa.field(form.repeatEvery, 'Cada cuántas semanas', { hint: 'sólo en días fijos' }) }}
+                    {{ csa.field(form.repeatWeekdays, 'Qué días', {
+                        full: true,
+                        hint: 'varios a la vez'
+                    }) }}
+                    {{ csa.field(form.repeatFrom, 'Desde el') }}
+                    {{ csa.field(form.repeatUntil, 'Hasta el', { hint: 'si se repite' }) }}
                 </div>
+
+                {# Los tramos horarios, en una fila propia: son cuatro campos que se
+                 # leen como dos parejas, y en el grid general quedaban desparejados. #}
+                <p class="vol-help">A qué hora se hace. El segundo tramo es para el trabajo que se hace dos veces al día, como sacar al perro.</p>
+
+                <div class="csa-form-grid">
+                    {{ csa.field(form.firstStart, 'De') }}
+                    {{ csa.field(form.firstEnd, 'a', { hint: 'opcional' }) }}
+                    {{ csa.field(form.secondStart, 'Y también de', { hint: 'opcional' }) }}
+                    {{ csa.field(form.secondEnd, 'a', { hint: 'opcional' }) }}
+                </div>
+
+                {% if not is_new and offer.isRepeating() %}
+                    {{ csa.callout(
+                        'Al guardar, los turnos se ponen al día: se abren los que falten y se retiran los que la repetición ya no dicte. Los que tengan gente apuntada NO se tocan — ésos se anulan a mano desde su ficha, que es el gesto que avisa a quien iba.',
+                        'info',
+                        'calendar-o'
+                    ) }}
+                {% endif %}
             {% endblock %}
         {% endembed %}
 
         {% embed '_components/csa_form_section.html.twig' with {
             num: '3',
-            title: 'Quién y cuánto',
-            subtitle: 'De aquí depende a cuánta gente se le pide la tarea y cuántas horas se le apuntan a quien la hace.'
+            title: 'Dónde y con qué',
+            subtitle: 'De esto depende a cuánta gente se le pide la tarea y cuántas horas se le apuntan a quien la hace.'
         } %}
             {% block body %}
                 {% import '_macros/csa.html.twig' as csa %}
                 {% import '_macros/volunteering.html.twig' as vol %}
                 <div class="csa-form-grid">
-                    {{ csa.field(form.categories, 'Tipo de trabajo', {
-                        full: true,
-                        hint: 'se avisa primero a quien lo tenga marcado en su ficha'
-                    }) }}
-                    {{ csa.field(form.slots, 'Cuánta gente hace falta', { hint: 'vacío = sin tope' }) }}
+                    {{ csa.field(form.place, 'Sitio', { hint: 'del catálogo', widget_class: 'csa-select' }) }}
+                    {{ csa.field(form.placeNote, 'Precisión', { hint: 'opcional' }) }}
+                    {{ csa.field(form.node, 'Punto de recogida', { hint: 'opcional', widget_class: 'csa-select' }) }}
+                    {{ csa.field(form.slots, 'Plazas por turno', { hint: 'vacío = sin tope' }) }}
                     {# En HORAS. La etiqueta decía "minutos" y el campo pedía horas
                      # desde que se cambió: decía una cosa y hacía otra. #}
                     {{ csa.field(form.creditedMinutes, 'Horas que computa', { hint: '0,5 = media hora' }) }}
-                    {{ csa.field(form.status, 'Estado', { widget_class: 'csa-select' }) }}
                 </div>
 
-                {# Esta casilla decide a cuánta gente se molesta, y eso no se ve
-                 # al guardar. El aviso va aquí y no en un hint pequeño. #}
+                <div class="csa-form-grid">
+                    {{ vol.check(form.remote, 'Se hace desde casa', 'si lo marcas, se ignoran el sitio y el punto de recogida') }}
+                    {{ vol.check(form.companionsAllowed, 'Se puede venir acompañadx') }}
+                </div>
+
+                {# Esta casilla decide a cuánta gente se molesta, y eso no se ve al
+                 # guardar. El aviso va aquí y no en un hint pequeño. #}
                 {{ csa.callout(
                     'Marca "lo puede hacer cualquiera" sólo si no hace falta saber nada previo ni tener fuerza: recoger cestas, sí; desbrozar, no. Marcado, si sigue faltando gente el aviso se amplía a socixs que no han dicho de qué quieren que se les avise.',
                     'warning',
@@ -96,87 +136,37 @@
 
                 <div class="csa-form-grid">
                     {{ vol.check(form.openToAnyone, 'Esto lo puede hacer cualquiera') }}
+                    {# Sube la tarea a lo alto del panel de cada socix, por delante del
+                     # orden normal. Si se destaca todo, no destaca nada. #}
+                    {{ vol.check(form.featured, 'Destacar en el panel de socixs', 'por delante del orden normal — para la semana en que una cosa importa más que las demás') }}
+                    {{ vol.check(form.routine, 'Es una tarea de rutina', 'una plaza, poco rato, todos los días — en el calendario sus plazas libres no saltan como aviso') }}
                 </div>
-            {% endblock %}
-        {% endembed %}
 
-        {# ---- Lo que casi nunca se toca ----
-         # Detrás de un desplegable, no fuera: son ajustes reales y hay que poder
-         # llegar a ellos, pero de diecinueve campos a la vista sólo se rellenan
-         # ocho en una tarea normal. Los otros piden atención cada vez que se
-         # publica algo, y lo que siempre se contesta igual acaba contestándose
-         # mal.
-         #
-         # Nativo (<details>), sin JavaScript: si el script falla, el desplegable
-         # sigue abriéndose. Mismo componente que usa el panel del socix. #}
-        {% embed '_components/csa_form_section.html.twig' with {
-            num: '4',
-            title: 'Ajustes de esta tarea',
-            subtitle: 'Lo que casi nunca hay que tocar: se rellena solo o se deja como está.'
-        } %}
-            {% block body %}
-                {% import '_macros/csa.html.twig' as csa %}
-                {% import '_macros/volunteering.html.twig' as vol %}
-                <div class="csa-form-grid">
-                    {# El campo sólo existe cuando el área la coordinan VARIAS personas:
-                     # con una sola se pone solo al guardar y preguntarlo sería pedir un
-                     # dato que el sistema ya sabe. Ver VolunteerOfferType. #}
-                    {% if form.coordinator is defined %}
+                {# El campo sólo existe cuando el área la coordinan VARIAS personas:
+                 # con una sola se pone solo al guardar y preguntarlo sería pedir un
+                 # dato que el sistema ya sabe. Ver VolunteerOfferType. #}
+                {% if form.coordinator is defined %}
+                    <div class="csa-form-grid">
                         {{ csa.field(form.coordinator, 'Quién la coordina', {
                             full: true,
                             hint: 'esta área la lleva más de una persona',
                             widget_class: 'csa-select'
                         }) }}
-                    {% endif %}
-
-                    {# Gente que viene sin ser socix y SIN acompañar a nadie: un grupo de
-                     # estudiantes, gente de otra asociación. Los acompañantes son otra
-                     # cosa y los pone quien se apunta, desde su panel. #}
-                    {{ csa.field(form.guests, 'Gente de fuera', { hint: 'cuántas' }) }}
-                    {{ csa.field(form.guestsNote, 'Quiénes son', { hint: 'p. ej. «3 estudiantes del IES»' }) }}
-                </div>
-
-                <p class="vol-note">
-                    «Gente de fuera» son personas que no son socixs y que no vienen
-                    acompañando a nadie. Ocupan plaza —si vienen tres, la tarea ya sólo
-                    pide el resto— y no se les computan horas. Quien viene acompañando a
-                    unx socix no se pone aquí: lo dice quien se apunta, desde su panel.
-                </p>
-
-                <div class="csa-form-grid">
-                    {{ vol.check(form.companionsAllowed, 'Se puede venir acompañadx') }}
-                    {# Sube la tarea a lo alto del panel de cada socix, por delante del
-                     # orden normal. Si se destaca todo, no destaca nada. #}
-                    {{ vol.check(form.featured, 'Destacar en el panel de socixs', 'por delante del orden normal — para la semana en que una cosa importa más que las demás') }}
-                </div>
+                    </div>
+                {% endif %}
             {% endblock %}
         {% endembed %}
 
-        {# Sólo en el alta. Repetir una tarea que ya existe se hace desde su ficha,
-         # donde además se ve lo que ya tiene apuntado. Y no se guarda nada de la
-         # serie: las copias nacen sueltas para que anular una por un festivo no
-         # deje a las demás mintiendo. #}
         {% if is_new %}
-            {% embed '_components/csa_form_section.html.twig' with {
-                num: '5',
-                title: 'Se repite',
-                subtitle: 'El reparto es todas las semanas: aquí se crean de una vez, en borrador, para revisarlas antes de publicarlas.'
-            } %}
-                {% block body %}
-                    {% import '_macros/csa.html.twig' as csa %}
-                    <div class="csa-form-grid">
-                        {{ csa.field(form.repeatCadence, 'Se repite', {
-                            hint: 'opcional',
-                            widget_class: 'csa-select'
-                        }) }}
-                        {{ csa.field(form.repeatUntil, 'Hasta el', { hint: 'si se repite' }) }}
-                    </div>
-                {% endblock %}
-            {% endembed %}
+            {{ csa.callout(
+                'La tarea nace en BORRADOR, con sus turnos ya abiertos. Repásalos —anula los que caigan en festivo— y publícala desde su ficha: hasta entonces no se pide gente ni se avisa a nadie.',
+                'info',
+                'pencil'
+            ) }}
         {% endif %}
 
         <div class="csa-row-between" style="margin-top: var(--csa-sp-6);">
-            {{ csa.btn('Volver', { variant: 'ghost', href: is_new ? path('volunteering_index') : path('volunteering_show', { id: offer.id }) }) }}
+            {{ csa.btn('Volver', { variant: 'ghost', href: is_new ? path('volunteering_tasks') : path('volunteering_show', { id: offer.id }) }) }}
             <button type="submit" class="csa-btn csa-btn--primary">{{ is_new ? 'Crear tarea' : 'Guardar cambios' }}</button>
         </div>
 

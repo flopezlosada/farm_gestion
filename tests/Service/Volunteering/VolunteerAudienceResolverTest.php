@@ -5,6 +5,7 @@ namespace App\Tests\Service\Volunteering;
 use App\Entity\Partner;
 use App\Entity\VolunteerCall;
 use App\Entity\VolunteerOffer;
+use App\Entity\VolunteerShift;
 use App\Entity\VolunteerSignup;
 use App\Repository\PartnerRepository;
 use App\Service\Volunteering\VolunteerAudienceResolver;
@@ -20,19 +21,19 @@ use PHPUnit\Framework\TestCase;
 class VolunteerAudienceResolverTest extends TestCase
 {
     /**
-     * Una oferta que no es para cualquiera no llega a quien no ha declarado
+     * Una tarea que no es para cualquiera no llega a quien no ha declarado
      * preferencias, por muchas horas que pasen. Es la regla que pidió el caso
      * de desbrozar.
      */
-    public function testUnaOfertaQueNoEsParaCualquieraNoLlegaAQuienNoHaDichoNada(): void
+    public function testUnaTareaQueNoEsParaCualquieraNoLlegaAQuienNoHaDichoNada(): void
     {
-        $offer = $this->offer(openToAnyone: false);
+        $shift = $this->shift(openToAnyone: false);
         $partners = $this->createMock(PartnerRepository::class);
         $partners->expects($this->never())->method('findActiveWithoutVolunteerPreferences');
 
         $resolver = new VolunteerAudienceResolver($partners);
 
-        $this->assertSame([], $resolver->resolve($offer, VolunteerCall::SCOPE_UNSPECIFIED));
+        $this->assertSame([], $resolver->resolve($shift, VolunteerCall::SCOPE_UNSPECIFIED));
     }
 
     /**
@@ -44,12 +45,12 @@ class VolunteerAudienceResolverTest extends TestCase
         $apuntada = $this->partner(1);
         $libre = $this->partner(2);
 
-        $offer = $this->offer();
-        $offer->addSignup((new VolunteerSignup())->setPartner($apuntada));
+        $shift = $this->shift();
+        $shift->addSignup((new VolunteerSignup())->setPartner($apuntada));
 
         $resolver = new VolunteerAudienceResolver($this->repositoryReturning([$apuntada, $libre]));
 
-        $this->assertSame([$libre], $resolver->resolve($offer, VolunteerCall::SCOPE_EVERYONE));
+        $this->assertSame([$libre], $resolver->resolve($shift, VolunteerCall::SCOPE_EVERYONE));
     }
 
     /**
@@ -60,16 +61,16 @@ class VolunteerAudienceResolverTest extends TestCase
     {
         $bajada = $this->partner(1);
 
-        $offer = $this->offer();
-        $offer->addSignup((new VolunteerSignup())->setPartner($bajada)->cancel());
+        $shift = $this->shift();
+        $shift->addSignup((new VolunteerSignup())->setPartner($bajada)->cancel());
 
         $resolver = new VolunteerAudienceResolver($this->repositoryReturning([$bajada]));
 
-        $this->assertSame([$bajada], $resolver->resolve($offer, VolunteerCall::SCOPE_EVERYONE));
+        $this->assertSame([$bajada], $resolver->resolve($shift, VolunteerCall::SCOPE_EVERYONE));
     }
 
     /**
-     * Un socix sin persistir (id null) apuntado a la oferta no puede dejar fuera
+     * Un socix sin persistir (id null) apuntado al turno no puede dejar fuera
      * del aviso a nadie más. PHP convierte la clave null a cadena vacía, así que
      * indexarlo sin comprobar vaciaría la audiencia entera.
      */
@@ -78,12 +79,12 @@ class VolunteerAudienceResolverTest extends TestCase
         $sinId = new Partner();
         $normal = $this->partner(7);
 
-        $offer = $this->offer();
-        $offer->addSignup((new VolunteerSignup())->setPartner($sinId));
+        $shift = $this->shift();
+        $shift->addSignup((new VolunteerSignup())->setPartner($sinId));
 
         $resolver = new VolunteerAudienceResolver($this->repositoryReturning([$normal]));
 
-        $this->assertSame([$normal], $resolver->resolve($offer, VolunteerCall::SCOPE_EVERYONE));
+        $this->assertSame([$normal], $resolver->resolve($shift, VolunteerCall::SCOPE_EVERYONE));
     }
 
     /**
@@ -95,19 +96,27 @@ class VolunteerAudienceResolverTest extends TestCase
     {
         $resolver = new VolunteerAudienceResolver($this->createMock(PartnerRepository::class));
 
-        $this->assertSame([], $resolver->resolve($this->offer(), 'inventado'));
+        $this->assertSame([], $resolver->resolve($this->shift(), 'inventado'));
     }
 
     /**
+     * Un turno, con su tarea publicada detrás. Se devuelve el TURNO porque es lo
+     * que recibe el resolver: las preferencias son del área —de la tarea— pero
+     * quién ya viene depende del día.
+     *
      * @param bool $openToAnyone si el aviso se puede ampliar
      */
-    private function offer(bool $openToAnyone = true): VolunteerOffer
+    private function shift(bool $openToAnyone = true): VolunteerShift
     {
-        return (new VolunteerOffer())
+        $offer = (new VolunteerOffer())
             ->setTitle('Plantar tomates')
-            ->setStartsAt(new \DateTime('2099-04-01 10:00'))
             ->setStatus(VolunteerOffer::STATUS_PUBLISHED)
             ->setOpenToAnyone($openToAnyone);
+
+        $shift = (new VolunteerShift())->setStartsAt(new \DateTime('2099-04-01 10:00'));
+        $offer->addShift($shift);
+
+        return $shift;
     }
 
     /**

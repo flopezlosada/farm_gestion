@@ -1,0 +1,153 @@
+{# El calendario del socix: los turnos del mes, para ver y apuntarse.
+ #
+ # ES LA MISMA REJILLA QUE EN GESTIÓN, en modo socix: sin arrastre, con casilla
+ # para marcar varios y apuntarse de una vez, plazas en palabras, y lo de sus
+ # áreas en color mientras el resto sale apagado —pero pulsable: apagado no es
+ # prohibido. El socix no ve borradores, parados ni anulados.
+ #
+ # En móvil la rejilla de siete columnas no cabe con dos turnos por día: el
+ # mismo HTML se convierte por CSS en una lista por días con la fecha pegajosa y
+ # un único botón grande abajo. Que se lea como la misma cosa lo hace la barra
+ # de color a la izquierda de cada ficha.
+ #
+ # Pulsar una ficha abre el panel «Me apunto» (assets/js/vol-calendar-socix.js);
+ # sin JavaScript la casilla y el botón de abajo siguen funcionando.
+ #
+ # ESTA PANTALLA NO SE MEZCLA con el calendario de recogida de la cesta: son dos
+ # vistas aisladas a propósito. #}
+{% extends '_layouts/csa_panel.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Voluntariado · Turnos de {{ month|format_date(pattern='MMMM', locale='es') }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('panel_volunteering') }}">Voluntariado</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Calendario</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include '_components/shift_calendar_styles.html.twig' %}
+{% endblock %}
+
+{% block csa_main %}
+    {% set keep = { tipo: current ? current.id : null, solo: only_mine ? 'mias' : null }|filter(v => v is not null) %}
+    {% set has_alarm = false %}
+    {% for items in days %}{% for item in items %}{% if item.kind == 'shift' and item.alarm %}{% set has_alarm = true %}{% endif %}{% endfor %}{% endfor %}
+    {% set ctx = { my_signups: my_signups, my_category_ids: my_category_ids, only_mine: only_mine } %}
+    {% set my_areas = my_category_names|join(' y ') %}
+
+    <div class="scal-page" data-scal-socix data-scal-month-name="{{ month|format_date(pattern='MMMM', locale='es') }}">
+        <div class="scal-header">
+            <span class="scal-header__k">Voluntariado</span>
+            <h1 class="scal-header__title">Turnos de {{ month|format_date(pattern='MMMM', locale='es') }}</h1>
+            <p class="scal-header__sub">Los turnos en los que puedes echar una mano. Pulsa uno para verlo y apuntarte.</p>
+        </div>
+
+        {# ============ MES Y FILTROS ============ #}
+        <div class="scal-nav">
+            <div class="scal-nav__month">
+                <a class="scal-nav__btn" href="{{ path('panel_volunteering_calendar', keep|merge({ mes: prev|date('Y-m') })) }}" aria-label="Mes anterior"><i class="fa fa-chevron-left"></i></a>
+                <h2 class="scal-nav__title">{{ month|format_date(pattern='MMMM y', locale='es') }}</h2>
+                <a class="scal-nav__btn" href="{{ path('panel_volunteering_calendar', keep|merge({ mes: next|date('Y-m') })) }}" aria-label="Mes siguiente"><i class="fa fa-chevron-right"></i></a>
+                {% if month|date('Y-m') != today|date('Y-m') %}
+                    <a class="scal-nav__today" href="{{ path('panel_volunteering_calendar', keep) }}">Hoy</a>
+                {% endif %}
+            </div>
+            <div class="scal-nav__pills">
+                {% if my_category_ids|length %}
+                    {# Par con estado real, «Todas» por defecto. #}
+                    <a class="scal-pill scal-pill--big{{ only_mine ? ' scal-pill--on' }}" href="{{ path('panel_volunteering_calendar', { mes: month|date('Y-m'), solo: 'mias' }) }}">Sólo mis áreas</a>
+                    <a class="scal-pill scal-pill--big{{ not only_mine ? ' scal-pill--on' }}" href="{{ path('panel_volunteering_calendar', { mes: month|date('Y-m') }) }}">Todas</a>
+                {% endif %}
+                {% if not only_mine and categories|length > 1 %}
+                    <span class="scal-nav__sep"></span>
+                    {% for category in categories %}
+                        <a class="scal-pill{{ current and current.id == category.id ? ' scal-pill--on' }}"
+                           href="{{ current and current.id == category.id
+                               ? path('panel_volunteering_calendar', { mes: month|date('Y-m') })
+                               : path('panel_volunteering_calendar', { mes: month|date('Y-m'), tipo: category.id }) }}">{{ category.name }}</a>
+                    {% endfor %}
+                {% endif %}
+            </div>
+        </div>
+
+        {# Explicación en una línea, en lenguaje llano y adaptada al filtro. #}
+        {% if my_category_ids|length %}
+            <div class="scal-note">
+                <i class="fa fa-check" aria-hidden="true"></i>
+                <span>
+                    {% if only_mine %}
+                        Estás viendo <strong>sólo tus áreas: {{ my_areas }}</strong>. Pulsa «Todas» para ver también el resto.
+                    {% else %}
+                        En color, <strong>tus áreas: {{ my_areas }}</strong>. Lo demás sale apagado, pero también puedes apuntarte.
+                    {% endif %}
+                    Marca varios turnos con la casilla y apúntate a todos de una vez.
+                </span>
+            </div>
+        {% endif %}
+
+        {% include 'Volunteering/_shift_calendar_legend.html.twig' with { states: states, mode: 'socix', has_alarm: has_alarm } only %}
+
+        {# Un solo formulario: las casillas de toda la rejilla se envían juntas. #}
+        <form method="post" action="{{ path('panel_volunteering_signup_many') }}" class="scal-form">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_volunteering') }}">
+
+            {% if days is empty %}
+                <p class="scal-empty">
+                    {% if only_mine %}
+                        No hay nada de tus áreas este mes. <a href="{{ path('panel_volunteering_calendar', { mes: month|date('Y-m') }) }}">Ver todo</a>.
+                    {% else %}
+                        No hay nada convocado este mes. Cuando haya algo que necesite manos, aparecerá aquí.
+                    {% endif %}
+                </p>
+            {% endif %}
+
+            {% include 'Volunteering/_shift_calendar.html.twig' with { weeks: weeks, days: days, month: month, today: today, mode: 'socix', ctx: ctx } only %}
+
+            <p class="scal-foot scal-foot--socix">Marca los turnos que puedas y pulsa el botón. Si luego no puedes, entra en el turno y dile «no voy a poder».</p>
+
+            {# ============ BARRA DE SELECCIÓN ============
+             # Sin JavaScript el botón va activo y con un texto que vale para
+             # uno o para varios; con él, el recuento y los nombres de lo marcado. #}
+            <div class="scal-bar" data-scal-bar>
+                <span class="scal-bar__n" data-scal-count>0</span>
+                <span class="scal-bar__text"><strong data-scal-label>Marca los días a los que puedas venir</strong><span class="scal-bar__summary" data-scal-summary></span></span>
+                <button type="submit" class="scal-bar__go" data-scal-submit>Apuntarme a los días marcados</button>
+                <button type="button" class="scal-bar__clear" data-scal-clear hidden>Quitar marcas</button>
+            </div>
+        </form>
+
+        {# ============ PANEL «ME APUNTO» ============
+         # Lo rellena el JavaScript con los datos de la ficha pulsada. Dos
+         # botones en palabras; la hora de fin y lo que cuenta salen del turno. #}
+        <dialog class="scal-dialog" data-scal-dialog aria-labelledby="scal-dialog-title">
+            <div class="scal-dialog__head">
+                <div>
+                    <div class="scal-dialog__area" data-f="area"></div>
+                    <div class="scal-dialog__title" id="scal-dialog-title" data-f="title"></div>
+                </div>
+                <button type="button" class="scal-dialog__close" data-scal-close aria-label="Cerrar"><i class="fa fa-times"></i></button>
+            </div>
+            <div class="scal-dialog__body">
+                <div class="scal-dialog__row"><i class="fa fa-clock-o" aria-hidden="true"></i><div><b data-f="date"></b><span data-f="time"></span></div></div>
+                <div class="scal-dialog__row"><i class="fa fa-map-marker" aria-hidden="true"></i><div><b data-f="place"></b></div></div>
+                <div class="scal-dialog__row"><i class="fa fa-users" aria-hidden="true"></i><div><b data-f="slots"></b><span data-f="people"></span></div></div>
+                <div class="scal-dialog__hours" data-scal-hours-row><i class="fa fa-check" aria-hidden="true"></i> Te cuenta <strong data-f="hours"></strong> de voluntariado</div>
+
+                <form method="post" action="{{ path('panel_volunteering_signup_many') }}" data-scal-join>
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_volunteering') }}">
+                    <input type="hidden" name="shifts[]" value="" data-f="id">
+                    <button type="submit" class="scal-dialog__join">Me apunto</button>
+                </form>
+                <form method="post" action="" data-scal-leave hidden>
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_volunteering') }}">
+                    <input type="hidden" name="volver" value="calendario">
+                    <button type="submit" class="scal-dialog__leave">No voy a poder</button>
+                </form>
+                <p class="scal-dialog__closed" data-scal-closed hidden>Este turno ya no admite gente: o está completo o ya pasó.</p>
+            </div>
+        </dialog>
+    </div>
+{% endblock %}

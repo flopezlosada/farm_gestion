@@ -35,5 +35,15 @@ require('./csa-account-menu.js');
 // pedir. Ver assets/js/push.js.
 require('./push.js');
 
+// Arrastrar un turno de voluntariado a otro día del calendario (opt-in por
+// [data-vcal]). Sin JS los turnos son enlaces y se mueven desde su ficha.
+// Ver assets/js/vol-calendar-dnd.js.
+require('./vol-calendar-dnd.js');
+
+// El calendario de turnos en modo socix: recuento de lo marcado y panel «Me
+// apunto» (opt-in por [data-scal-socix]). Sin JS la casilla y el botón siguen
+// funcionando. Ver assets/js/vol-calendar-socix.js.
+require('./vol-calendar-socix.js');
+
 // Need jQuery? Install it with "yarn add jquery", then uncomment to require it.
 // const $ = require('jquery');

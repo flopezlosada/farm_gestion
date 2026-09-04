@@ -191,7 +191,7 @@
          # se pinta donde el montaje se organiza como tarea de voluntariado. #}
         {% if next_delivery and basket_prep|default([]) is not empty %}
             {% include '_components/basket_prep_card.html.twig' with {
-                offers: basket_prep,
+                shifts: basket_prep,
                 partner: partner,
                 place: next_place,
                 delivery_date: next_delivery.date
@@ -214,19 +214,19 @@
          # exactamente el reproche sin salida que se quiere evitar. Y a quién se
          # le enseña el cero, y a quién no, lo decide VolunteerContribution. #}
         {% if is_granted('FEATURE_VOLUNTEERING') and (
-            my_contribution or volunteering_offers|default([]) is not empty
+            my_contribution or volunteering_shifts|default([]) is not empty
         ) %}
             <section class="pnl-block">
                 <h2 class="pnl-block__title">Sostener la huerta</h2>
 
-                {% if my_contribution and (my_contribution.hasStarted or volunteering_offers|default([]) is not empty) %}
+                {% if my_contribution and (my_contribution.hasStarted or volunteering_shifts|default([]) is not empty) %}
                     {% include '_components/volunteering_gauge.html.twig' with {
                         contribution: my_contribution
                     } only %}
                 {% endif %}
 
                 {% include '_components/volunteering_teaser.html.twig' with {
-                    offers: volunteering_offers|default([]),
+                    shifts: volunteering_shifts|default([]),
                     total: volunteering_total|default(0),
                     my_node_id: group and group.node ? group.node.id : null
                 } only %}

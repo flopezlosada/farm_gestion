@@ -2,7 +2,7 @@
 
 namespace App\Command;
 
-use App\Repository\VolunteerOfferRepository;
+use App\Repository\VolunteerShiftRepository;
 use App\Service\Volunteering\VolunteerAudienceResolver;
 use App\Service\Volunteering\VolunteerCallEscalator;
 use App\Service\Volunteering\VolunteerCallNotifier;
@@ -27,7 +27,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  * mañana llegaría cuando ya no sirve.
  *
  * No pasa por {@see \App\Service\Cron\EffectLedger} y no es un olvido: la
- * repetición ya la impide la unicidad (offer, scope) de `volunteer_call`, que es
+ * repetición ya la impide la unicidad (shift, scope) de `volunteer_call`, que es
  * más fuerte que un apunte por día — vale también para el envío a mano desde
  * gestión, que el ledger no vería.
  */
@@ -39,7 +39,7 @@ class SendVolunteerCallsCommand extends AbstractCronCommand
 {
     public function __construct(
         private readonly VolunteerCallNotifier $notifier,
-        private readonly VolunteerOfferRepository $offers,
+        private readonly VolunteerShiftRepository $shifts,
         private readonly VolunteerCallEscalator $escalator,
         private readonly VolunteerAudienceResolver $audience,
     ) {
@@ -57,7 +57,7 @@ class SendVolunteerCallsCommand extends AbstractCronCommand
             // OJO con usarlo: el mismo aviso lleva push, y repetir un push no es
             // gratis — el permiso del navegador se gasta una vez y quien lo apaga
             // no vuelve. Por eso el gobierno de la repetición sigue siendo el
-            // UNIQUE (offer, scope) del dominio y esto es la salida de
+            // UNIQUE (shift, scope) del dominio y esto es la salida de
             // emergencia, no el camino normal.
             ->addOption('resend', null, InputOption::VALUE_NONE, 'Repite el envío aunque ya conste emitido (para un correo que no llegó). Cuidado: repite también el push')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Lista los avisos que saldrían, sin enviar ni registrar nada');
@@ -75,7 +75,7 @@ class SendVolunteerCallsCommand extends AbstractCronCommand
         $sent = $this->notifier->dispatchDue($now);
 
         return 0 === $sent
-            ? $this->nothingToDo('Ninguna tarea de voluntariado necesita aviso ahora mismo.')
+            ? $this->nothingToDo('Ningún turno de voluntariado necesita aviso ahora mismo.')
             : $this->didWork(sprintf('%d aviso(s) de voluntariado enviados.', $sent));
     }
 
@@ -93,24 +93,24 @@ class SendVolunteerCallsCommand extends AbstractCronCommand
     private function preview(SymfonyStyle $io, \DateTimeImmutable $now): int
     {
         $rows = [];
-        foreach ($this->offers->findUpcoming($now) as $offer) {
-            $scope = $this->escalator->nextScope($offer, $now);
+        foreach ($this->shifts->findUpcoming($now) as $shift) {
+            $scope = $this->escalator->nextScope($shift, $now);
             if (null === $scope) {
                 continue;
             }
 
             $rows[] = [
-                $offer->getId(),
-                $offer->getTitle(),
-                $offer->getStartsAt()?->format('d/m/Y H:i') ?? '—',
-                $offer->getRemainingSlots() ?? 'sin tope',
+                $shift->getId(),
+                $shift->getOffer()?->getTitle() ?? '—',
+                $shift->getStartsAt()?->format('d/m/Y H:i') ?? '—',
+                $shift->getRemainingSlots() ?? 'sin tope',
                 $scope,
-                $this->audience->count($offer, $scope),
+                $this->audience->count($shift, $scope),
             ];
         }
 
         if ([] === $rows) {
-            $io->success('Ninguna tarea de voluntariado necesita aviso ahora mismo.');
+            $io->success('Ningún turno de voluntariado necesita aviso ahora mismo.');
 
             return self::SUCCESS;
         }

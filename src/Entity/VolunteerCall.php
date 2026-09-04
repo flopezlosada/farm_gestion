@@ -5,9 +5,15 @@ namespace App\Entity;
 use Doctrine\ORM\Mapping as ORM;
 
 /**
- * Una llamada ya enviada pidiendo gente para una oferta, y a qué alcance se
- * envió. Es el registro que hace posible el escalado del aviso y, sobre todo,
- * que no se repita.
+ * Una llamada ya enviada pidiendo gente para un TURNO, y a qué alcance se envió.
+ * Es el registro que hace posible el escalado del aviso y, sobre todo, que no se
+ * repita.
+ *
+ * VA POR TURNO Y NO POR TAREA, y antes iba por tarea porque tarea y momento eran
+ * la misma fila. Ahora tiene que ser por turno o el módulo se rompe por los dos
+ * lados: con la unicidad por tarea, avisar de que falta gente para el reparto
+ * del viernes 12 gastaría el aviso de "el reparto" para todo el año, y no se
+ * podría volver a pedir gente nunca más.
  *
  * POR QUÉ EL AVISO SE ESCALA EN VEZ DE IR A TODO EL MUNDO. El permiso de
  * notificaciones del navegador se pierde UNA sola vez y para siempre: quien lo
@@ -30,16 +36,16 @@ use Doctrine\ORM\Mapping as ORM;
  * aviso porque "total, es fácil" convierte la ficha de preferencias en una
  * mentira, y entonces ya no la rellena nadie.
  *
- * UNICIDAD (offer, scope): cada alcance se envía una vez por oferta, garantizado
+ * UNICIDAD (shift, scope): cada alcance se envía una vez por turno, garantizado
  * por la BBDD. Es lo que hace que el reintento del planificador —que reintenta
  * al siguiente tick cuando algo falla, por diseño— no mande el mismo aviso dos
  * veces, y lo que protege del doble clic en el botón de avisar. El precio es
- * que insistir a todo el mundo por segunda vez sobre la misma oferta no se
+ * que insistir a todo el mundo por segunda vez sobre el mismo turno no se
  * puede: hay que decidirlo así a propósito, y me parece el lado correcto en el
  * que equivocarse.
  *
  * @ORM\Table(name="volunteer_call", uniqueConstraints={
- *     @ORM\UniqueConstraint(name="uniq_volunteer_call_scope", columns={"offer_id", "scope"})
+ *     @ORM\UniqueConstraint(name="uniq_volunteer_call_scope", columns={"shift_id", "scope"})
  * })
  * @ORM\Entity(repositoryClass="App\Repository\VolunteerCallRepository")
  */
@@ -68,10 +74,10 @@ class VolunteerCall
     private ?int $id = null;
 
     /**
-     * @ORM\ManyToOne(targetEntity="App\Entity\VolunteerOffer")
-     * @ORM\JoinColumn(name="offer_id", referencedColumnName="id", nullable=false, onDelete="CASCADE")
+     * @ORM\ManyToOne(targetEntity="App\Entity\VolunteerShift")
+     * @ORM\JoinColumn(name="shift_id", referencedColumnName="id", nullable=false, onDelete="CASCADE")
      */
-    private ?VolunteerOffer $offer = null;
+    private ?VolunteerShift $shift = null;
 
     /**
      * @ORM\Column(type="string", length=16)
@@ -125,21 +131,32 @@ class VolunteerCall
     }
 
     /**
-     * @return VolunteerOffer|null la oferta por la que se pide gente
+     * @return VolunteerShift|null el turno por el que se pide gente
      */
-    public function getOffer(): ?VolunteerOffer
+    public function getShift(): ?VolunteerShift
     {
-        return $this->offer;
+        return $this->shift;
     }
 
     /**
-     * @param VolunteerOffer|null $offer la oferta por la que se pide gente
+     * @param VolunteerShift|null $shift el turno por el que se pide gente
      */
-    public function setOffer(?VolunteerOffer $offer): self
+    public function setShift(?VolunteerShift $shift): self
     {
-        $this->offer = $offer;
+        $this->shift = $shift;
 
         return $this;
+    }
+
+    /**
+     * La tarea del turno, derivada. Para que quien pinta el historial no tenga
+     * que escribir `call.shift.offer` y reventar si falta el turno.
+     *
+     * @return VolunteerOffer|null la tarea, o null si no hay turno enganchado
+     */
+    public function getOffer(): ?VolunteerOffer
+    {
+        return $this->shift?->getOffer();
     }
 
     /**

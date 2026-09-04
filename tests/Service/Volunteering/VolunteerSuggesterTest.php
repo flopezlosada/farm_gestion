@@ -5,6 +5,7 @@ namespace App\Tests\Service\Volunteering;
 use App\Entity\Partner;
 use App\Entity\VolunteerCall;
 use App\Entity\VolunteerOffer;
+use App\Entity\VolunteerShift;
 use App\Repository\PartnerRepository;
 use App\Repository\VolunteerSignupRepository;
 use App\Service\Volunteering\VolunteerAudienceResolver;
@@ -44,7 +45,7 @@ class VolunteerSuggesterTest extends TestCase
 
         $order = array_map(
             static fn (array $row): ?int => $row['partner']->getId(),
-            $suggester->forOffer($this->offer())
+            $suggester->forShift($this->shift())
         );
 
         $this->assertSame([3, 2, 1], $order);
@@ -64,7 +65,7 @@ class VolunteerSuggesterTest extends TestCase
 
         $order = array_map(
             static fn (array $row): ?int => $row['partner']->getId(),
-            $suggester->forOffer($this->offer())
+            $suggester->forShift($this->shift())
         );
 
         $this->assertSame([2, 1], $order, 'Ana antes que Zoe.');
@@ -83,7 +84,7 @@ class VolunteerSuggesterTest extends TestCase
 
         $suggester = $this->suggester($candidates, []);
 
-        $this->assertCount(3, $suggester->forOffer($this->offer(), 3));
+        $this->assertCount(3, $suggester->forShift($this->shift(), 3));
     }
 
     /**
@@ -95,7 +96,7 @@ class VolunteerSuggesterTest extends TestCase
     {
         $suggester = $this->suggester([], []);
 
-        $this->assertSame([], $suggester->forOffer($this->offer()));
+        $this->assertSame([], $suggester->forShift($this->shift()));
     }
 
     /**
@@ -114,7 +115,7 @@ class VolunteerSuggesterTest extends TestCase
         $signups = $this->createMock(VolunteerSignupRepository::class);
         $suggester = new VolunteerSuggester($resolver, $signups);
 
-        $suggester->forOffer($this->offer());
+        $suggester->forShift($this->shift());
     }
 
     /**
@@ -132,12 +133,20 @@ class VolunteerSuggesterTest extends TestCase
         return new VolunteerSuggester(new VolunteerAudienceResolver($partners), $signups);
     }
 
-    private function offer(): VolunteerOffer
+    /**
+     * Un turno con su tarea detrás: es lo que recibe el sugeridor, porque a
+     * quien se le pide venir se le pide para un día concreto.
+     */
+    private function shift(): VolunteerShift
     {
-        return (new VolunteerOffer())
+        $offer = (new VolunteerOffer())
             ->setTitle('Descargar el reparto')
-            ->setStartsAt(new \DateTime('2026-09-07 18:00'))
             ->setStatus(VolunteerOffer::STATUS_PUBLISHED);
+
+        $shift = (new VolunteerShift())->setStartsAt(new \DateTime('2026-09-07 18:00'));
+        $offer->addShift($shift);
+
+        return $shift;
     }
 
     /**

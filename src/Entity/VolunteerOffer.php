@@ -8,30 +8,39 @@ use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Validator\Constraints as Assert;
 
 /**
- * Un trabajo concreto que la asociación ofrece al voluntariado: qué, cuándo,
- * dónde, cuánta gente hace falta y a quién se le puede pedir. Es la unidad que
- * se publica; quien se apunta crea un {@see VolunteerSignup}.
+ * Un trabajo que la asociación ofrece al voluntariado: qué es, cómo se hace,
+ * dónde, cuánta gente hace falta, cuánto computa y a quién se le puede pedir.
  *
- * OFERTA ≠ INSCRIPCIÓN, y no es ceremonia: es lo que permite que una oferta
- * exista con cero apuntados —que es justo el estado que hay que hacer visible—
- * y que el aviso se pueda repetir sobre la misma oferta sin duplicarla.
+ * NO LLEVA FECHA. Los momentos en que este trabajo se hace son sus turnos
+ * ({@see VolunteerShift}), y es a un turno a lo que se apunta la gente. Antes la
+ * fecha vivía aquí y repetir un trabajo significaba duplicar la ficha entera:
+ * "sacar al perro, mañana y tarde" eran setecientas treinta tareas al año, y
+ * corregir su explicación, setecientas treinta ediciones. La tarea dice QUÉ; el
+ * turno, CUÁNDO.
+ *
+ * LA RECETA DE REPETICIÓN SÍ VIVE AQUÍ ({@see $repeatType} y compañía), al
+ * contrario de lo que se hacía antes. Y puede hacerlo justamente porque ahora
+ * hay un solo sitio donde está escrita: cuando cae un festivo se anula ESE turno
+ * ({@see VolunteerShift::cancel()}) y la receta sigue diciendo la verdad —"esto
+ * se hace los viernes"—, que era el problema que tenía la receta copiada en cada
+ * una de las cincuenta y dos fichas.
  *
  * LAS HORAS QUE COMPUTA NO SON LA DURACIÓN. `creditedMinutes` es lo que la
- * asociación decide que vale este trabajo, y puede no coincidir con
- * `startsAt`/`endsAt`: dos horas de reparto un viernes por la tarde pueden valer
+ * asociación decide que vale este trabajo, y puede no coincidir con la franja
+ * horaria del turno: dos horas de reparto un viernes por la tarde pueden valer
  * lo mismo que tres de oficina si así se acuerda, y una tarea a distancia no
  * tiene horario del que deducir nada. Van en MINUTOS enteros a propósito: un
  * decimal de Doctrine vuelve del driver como string y acaba sumándose con
- * floats, y "media hora" es 30 sin ambigüedad.
+ * floats, y "media hora" es 30 sin ambigüedad. Un turno suelto puede llevar
+ * otros ({@see VolunteerShift::getCreditedMinutes()}).
  *
  * A QUIÉN SE LE AVISA lo gobierna `openToAnyone`, y nace en false a propósito
  * ({@see VolunteerCall}). Marcarlo significa "esto lo puede hacer cualquiera sin
  * saber nada previo": recoger cestas, sí; desbrozar, no. Si el valor por defecto
- * fuera true, toda oferta creada sin pensar acabaría avisando a los 246 socixs,
- * y el permiso de notificaciones del navegador sólo se puede quemar una vez.
+ * fuera true, toda tarea creada sin pensar acabaría avisando a los 246 socixs, y
+ * el permiso de notificaciones del navegador sólo se puede quemar una vez.
  *
  * @ORM\Table(name="volunteer_offer", indexes={
- *     @ORM\Index(name="idx_volunteer_offer_starts_at", columns={"starts_at"}),
  *     @ORM\Index(name="idx_volunteer_offer_status", columns={"status"})
  * })
  * @ORM\Entity(repositoryClass="App\Repository\VolunteerOfferRepository")
@@ -44,26 +53,63 @@ class VolunteerOffer
     /** Publicada: visible para socixs, admite inscripciones y avisos. */
     public const STATUS_PUBLISHED = 'published';
 
-    /** Anulada: se conserva con sus inscripciones, pero ya no se pide gente. */
+    /**
+     * En pausa: sigue existiendo, con su historia y sus turnos, pero no se pide
+     * gente para los que están por venir.
+     *
+     * Existe porque hay trabajo continuo que se para una temporada —el
+     * invernadero en invierno, el perro cuando su familia está en el pueblo— y
+     * anularlo era mentira: la tarea no ha terminado, está parada. Anular
+     * obligaba además a volver a crearla con toda su configuración.
+     */
+    public const STATUS_PAUSED = 'paused';
+
+    /** Anulada: se conserva con su historia, pero ya no se pide gente. */
     public const STATUS_CANCELLED = 'cancelled';
 
-    /** Redactándose. No la ve nadie fuera de gestión: no hay trabajo pendiente. */
-    public const PHASE_DRAFT = 'draft';
+    /** Estados válidos. */
+    public const STATUSES = [
+        self::STATUS_DRAFT,
+        self::STATUS_PUBLISHED,
+        self::STATUS_PAUSED,
+        self::STATUS_CANCELLED,
+    ];
 
-    /** Anulada. Se conserva para consultarla, pero ya no hay nada que hacer. */
-    public const PHASE_CANCELLED = 'cancelled';
+    /**
+     * Se hace una vez y no se repite: una plantación, una reunión. Sigue
+     * teniendo receta —un día y sus tramos— para que crear turnos sea siempre el
+     * mismo camino y no haya dos formas de llegar a lo mismo.
+     */
+    public const REPEAT_ONCE = 'once';
 
-    /** Publicada y aún por llegar: el trabajo es llenar las plazas. */
-    public const PHASE_OPEN = 'open';
+    /** Se repite en los días de la semana marcados, cada N semanas. */
+    public const REPEAT_WEEKLY = 'weekly';
 
-    /** Empezó hoy mismo: el trabajo es pasar lista. */
-    public const PHASE_TODAY = 'today';
+    /**
+     * Una vez al mes, conservando el día de la semana y su posición: si es el
+     * segundo martes, los siguientes son el segundo martes.
+     */
+    public const REPEAT_MONTHLY = 'monthly';
 
-    /** Pasó y falta gente por decir si fue: el trabajo es cerrarla. */
-    public const PHASE_TO_CLOSE = 'to_close';
+    /**
+     * Los días que el punto de recogida de la tarea reparte de verdad.
+     *
+     * Es la cadencia que más importa: el trabajo que más se repite es descargar
+     * el reparto, y el reparto no cae cada siete días — cae los días que ese
+     * punto reparte, que dependen de su cadencia y de las excepciones de
+     * calendario. Preguntárselo al calendario de reparto es la diferencia entre
+     * unas fechas que ya vienen bien y cincuenta y dos turnos que alguien tiene
+     * que repasar a mano.
+     */
+    public const REPEAT_DELIVERY = 'delivery';
 
-    /** Pasó y está todo respondido: sólo queda consultar lo imputado. */
-    public const PHASE_CLOSED = 'closed';
+    /** Formas de repetición válidas. */
+    public const REPEAT_TYPES = [
+        self::REPEAT_ONCE,
+        self::REPEAT_WEEKLY,
+        self::REPEAT_MONTHLY,
+        self::REPEAT_DELIVERY,
+    ];
 
     /**
      * @ORM\Id
@@ -75,13 +121,13 @@ class VolunteerOffer
     /**
      * @ORM\Column(type="string", length=160)
      */
-    #[Assert\NotBlank(message: 'La oferta necesita un título.')]
+    #[Assert\NotBlank(message: 'La tarea necesita un título.')]
     #[Assert\Length(max: 160)]
     private string $title = '';
 
     /**
-     * En qué consiste el trabajo, con detalle suficiente para que alguien que
-     * no ha estado nunca sepa si puede con ello y qué tiene que llevar.
+     * En qué consiste el trabajo, con detalle suficiente para que alguien que no
+     * ha estado nunca sepa si puede con ello y qué tiene que llevar.
      *
      * @ORM\Column(type="text", nullable=true)
      */
@@ -98,34 +144,30 @@ class VolunteerOffer
     private Collection $categories;
 
     /**
-     * @ORM\Column(name="starts_at", type="datetime")
-     */
-    #[Assert\NotNull(message: 'Hace falta saber cuándo es.')]
-    private ?\DateTimeInterface $startsAt = null;
-
-    /**
-     * Fin previsto. Nullable porque una tarea a distancia ("traducir el boletín
-     * antes del día 20") tiene fecha límite pero no franja horaria.
-     *
-     * @ORM\Column(name="ends_at", type="datetime", nullable=true)
-     */
-    private ?\DateTimeInterface $endsAt = null;
-
-    /**
-     * Se hace desde casa. Excluye lugar y nodo: {@see setRemote()} los limpia
-     * para que no quede una oferta "a distancia en La Cabrera".
+     * Se hace desde casa. Excluye sitio y nodo: {@see setRemote()} los limpia
+     * para que no quede una tarea "a distancia en La Cabrera".
      *
      * @ORM\Column(type="boolean", options={"default": false})
      */
     private bool $remote = false;
 
     /**
-     * Dónde, en texto libre, cuando no es un punto de recogida ("la nave",
-     * "parcela de arriba"). Null si es a distancia.
+     * Dónde se hace, del catálogo de sitios. Null si es a distancia o si ocurre
+     * en un punto de recogida.
      *
-     * @ORM\Column(type="string", length=160, nullable=true)
+     * @ORM\ManyToOne(targetEntity="App\Entity\VolunteerPlace")
+     * @ORM\JoinColumn(name="place_id", referencedColumnName="id", nullable=true, onDelete="SET NULL")
      */
-    private ?string $place = null;
+    private ?VolunteerPlace $place = null;
+
+    /**
+     * Precisión sobre el sitio, en texto libre ("parcela de arriba", "por la
+     * puerta de atrás"). Complementa a {@see $place}; no lo sustituye.
+     *
+     * @ORM\Column(name="place_note", type="string", length=160, nullable=true)
+     */
+    #[Assert\Length(max: 160)]
+    private ?string $placeNote = null;
 
     /**
      * Punto de recogida donde ocurre el trabajo, si ocurre en uno.
@@ -141,8 +183,10 @@ class VolunteerOffer
     private ?Node $node = null;
 
     /**
-     * Cuánta gente hace falta. Null = sin tope (una llamada abierta del tipo
-     * "cuanta más gente venga a la plantación, mejor").
+     * Cuánta gente hace falta en cada turno. Null = sin tope (una llamada
+     * abierta del tipo "cuanta más gente venga a la plantación, mejor"). Un
+     * turno suelto puede pedir otra cantidad
+     * ({@see VolunteerShift::getSlots()}).
      *
      * @ORM\Column(type="integer", nullable=true)
      */
@@ -150,17 +194,17 @@ class VolunteerOffer
     private ?int $slots = null;
 
     /**
-     * Si quien se apunta puede traer acompañantes. En una asociación de
-     * unidades familiares el "voy y llevo a los peques" es el caso normal, no
-     * la excepción, pero hay trabajos donde no cabe.
+     * Si quien se apunta puede traer acompañantes. En una asociación de unidades
+     * familiares el "voy y llevo a los peques" es el caso normal, no la
+     * excepción, pero hay trabajos donde no cabe.
      *
      * @ORM\Column(name="companions_allowed", type="boolean", options={"default": false})
      */
     private bool $companionsAllowed = false;
 
     /**
-     * Minutos que computa este trabajo a quien lo hace. Null = no computa
-     * (aún) y hay que fijarlo al cerrarlo.
+     * Minutos que computa este trabajo a quien lo hace. Null = no computa (aún)
+     * y hay que fijarlo al cerrar cada turno.
      *
      * @ORM\Column(name="credited_minutes", type="integer", nullable=true)
      */
@@ -177,66 +221,114 @@ class VolunteerOffer
 
     /**
      * Quien coordina ha decidido que esta tarea sube a lo alto del panel de cada
-     * socix. Es el control editorial sobre la portada: hay semanas en las que una
-     * cosa importa más que el orden natural de fechas.
+     * socix. Es el control editorial sobre la portada: hay semanas en las que
+     * una cosa importa más que el orden natural de fechas.
      *
      * DESTACAR NO ES FILTRAR, y ésa es la decisión. Una portada que enseñara
      * ÚNICAMENTE lo destacado quedaría muda el día —seguro— en que nadie se
      * acuerde de marcar nada, y quedaría muda justo en la pantalla por la que
      * pasa todo el mundo. Así, cuando hay marcas mandan las marcas, y cuando no
-     * las hay sigue funcionando el orden de siempre: lo del punto de recogida
-     * propio primero, después por fecha.
-     *
-     * NO SE COPIA AL REPETIR UNA TAREA ({@see $copiedFrom}). Destacar es una
-     * decisión sobre una semana concreta; arrastrarla a las doce copias de un
-     * trimestre dejaría la portada con doce tareas destacadas, que es lo mismo
-     * que ninguna. Quien copie una oferta deja este campo en false.
+     * las hay sigue funcionando el orden de siempre.
      *
      * @ORM\Column(type="boolean", options={"default": false})
      */
     private bool $featured = false;
 
     /**
-     * Gente de fuera que viene a echar una mano: un grupo de estudiantes, gente
-     * de otra asociación, quien pasaba por allí.
+     * Tarea de rutina: una plaza, poco rato, todos los días. Sacar al perro.
      *
-     * NO CABEN EN `VolunteerSignup::$companions`, que es lo primero que se
-     * piensa: aquello cuelga siempre de la inscripción de un socix, y esta gente
-     * no tiene de quién colgar.
+     * Se cubre sola y NO dispara el aviso de plazas en el calendario: con dos
+     * turnos diarios, el aviso ocre saldría en cincuenta fichas al mes y
+     * dejaría de significar nada justo donde hace falta, en la faena a la que
+     * de verdad tiene que ir alguien. Las plazas que faltan se siguen viendo,
+     * en gris. Es una marca de la TAREA y la pone quien la crea: derivarla de
+     * un umbral sería menos predecible para quien coordina.
      *
-     * Un número y no filas, por lo mismo que los acompañantes: no son personas
-     * del sistema —no tienen ficha, ni cuenta, ni horas— y darles una les
-     * inventaría una identidad que no existe. Lo único que hace falta saber es
-     * cuántos brazos son, para que la tarea deje de pedir gente que ya está
-     * cubierta.
-     *
-     * @ORM\Column(type="integer", options={"default": 0})
+     * @ORM\Column(type="boolean", options={"default": false})
      */
-    #[Assert\PositiveOrZero(message: 'La gente de fuera no puede ser un número negativo.')]
-    private int $guests = 0;
-
-    /**
-     * Quiénes son esos de fuera ("3 estudiantes del IES", "la gente de la
-     * cooperativa"). Sin esto, dentro de tres meses nadie entiende por qué esa
-     * tarea salió adelante con dos socixs.
-     *
-     * @ORM\Column(name="guests_note", type="string", length=160, nullable=true)
-     */
-    #[Assert\Length(max: 160)]
-    private ?string $guestsNote = null;
+    private bool $routine = false;
 
     /**
      * @ORM\Column(type="string", length=16, options={"default": "draft"})
      */
-    #[Assert\Choice(choices: [self::STATUS_DRAFT, self::STATUS_PUBLISHED, self::STATUS_CANCELLED])]
+    #[Assert\Choice(choices: VolunteerOffer::STATUSES)]
     private string $status = self::STATUS_DRAFT;
 
     /**
-     * @ORM\OneToMany(targetEntity="App\Entity\VolunteerSignup", mappedBy="offer", cascade={"persist"})
+     * Cómo se repite este trabajo. Ver las constantes REPEAT_*.
      *
-     * @var Collection<int, VolunteerSignup>
+     * @ORM\Column(name="repeat_type", type="string", length=16, options={"default": "once"})
      */
-    private Collection $signups;
+    #[Assert\Choice(choices: VolunteerOffer::REPEAT_TYPES)]
+    private string $repeatType = self::REPEAT_ONCE;
+
+    /**
+     * Cada cuántas semanas, en la repetición semanal. 1 = todas, 2 = una de cada
+     * dos. Sustituye a la vieja cadencia "cada dos semanas": era el mismo
+     * concepto con otro nombre, y como opción separada no dejaba decir "cada
+     * tres".
+     *
+     * @ORM\Column(name="repeat_every", type="integer", options={"default": 1})
+     */
+    #[Assert\Positive]
+    #[Assert\LessThanOrEqual(8)]
+    private int $repeatEvery = 1;
+
+    /**
+     * Días de la semana en que se hace, en formato ISO-8601 (1 = lunes,
+     * 7 = domingo). Varios a la vez, que es el caso que no se podía expresar:
+     * "abrir el invernadero, sábados y domingos" era una tarea por día.
+     *
+     * `simple_array` y no JSON: son media docena de números y así la columna se
+     * puede leer y consultar a ojo desde la BBDD ("1,6,7").
+     *
+     * @ORM\Column(name="repeat_weekdays", type="simple_array", nullable=true)
+     *
+     * @var list<string>|null
+     */
+    private ?array $repeatWeekdays = null;
+
+    /**
+     * Tramos horarios de cada día, como lista de pares [inicio, fin]. El fin
+     * puede ser null en trabajo sin franja ("antes del día 20").
+     *
+     * VARIOS TRAMOS POR DÍA, que es el otro caso que faltaba: sacar al perro es
+     * mañana y tarde del mismo día, o sea dos turnos por fecha. Cada fecha de la
+     * receta se cruza con cada tramo, y de ahí salen los turnos.
+     *
+     * @ORM\Column(name="repeat_times", type="json", nullable=true)
+     *
+     * @var list<array{0: string, 1: string|null}>|null
+     */
+    private ?array $repeatTimes = null;
+
+    /**
+     * Desde cuándo se hace. En una tarea de una vez, ES el día.
+     *
+     * @ORM\Column(name="repeat_from", type="date", nullable=true)
+     */
+    private ?\DateTimeInterface $repeatFrom = null;
+
+    /**
+     * Hasta cuándo se generan turnos, incluido.
+     *
+     * SE DICE HASTA CUÁNDO, NO CUÁNTAS VECES. "El reparto de los viernes hasta
+     * fin de año" es como se piensa; "cada 7 días, 17 veces" obliga a contar
+     * semanas a mano y a repetir la cuenta cada vez que se amplía.
+     *
+     * @ORM\Column(name="repeat_until", type="date", nullable=true)
+     */
+    private ?\DateTimeInterface $repeatUntil = null;
+
+    /**
+     * Los momentos en que este trabajo se hace.
+     *
+     * @ORM\OneToMany(targetEntity="App\Entity\VolunteerShift", mappedBy="offer", cascade={"persist"}, orphanRemoval=true)
+     * @ORM\OrderBy({"startsAt": "ASC"})
+     *
+     * @var Collection<int, VolunteerShift>
+     */
+    private Collection $shifts;
 
     /**
      * @ORM\ManyToOne(targetEntity="App\Entity\User")
@@ -249,16 +341,15 @@ class VolunteerOffer
      *
      * NO ES EL COORDINADOR DEL ÁREA, y confundirlos era el error. Un área tiene
      * varias personas coordinándola ({@see VolunteerCategory::$coordinators} es
-     * ManyToMany) y el reparto son cincuenta y dos tareas al año: saber quién
-     * lleva "Reparto" no dice quién montó el del 31 de agosto. Además aquéllos
-     * son `User` —hay quien coordina sin ser socix— y las horas se le computan a
-     * un `Partner`, así que no se puede derivar el uno del otro.
+     * ManyToMany) y además aquéllos son `User` —hay quien coordina sin ser
+     * socix— mientras las horas se le computan a un `Partner`, así que no se
+     * puede derivar el uno del otro.
      *
      * SE DICE AL CREAR LA TAREA y no al cerrarla. Es una propiedad del trabajo,
-     * como el sitio o la hora; preguntarlo después, mientras se pasa lista, era
-     * pedir una decisión de configuración en medio de otra faena — y como no se
-     * preguntaba en ningún sitio obligatorio, lo normal era que no constara
-     * nadie y quien más sostiene el voluntariado saliera con el contador a cero.
+     * como el sitio; preguntarlo después, mientras se pasa lista, era pedir una
+     * decisión de configuración en medio de otra faena — y como no se preguntaba
+     * en ningún sitio obligatorio, lo normal era que no constara nadie y quien
+     * más sostiene el voluntariado saliera con el contador a cero.
      *
      * Nullable porque no toda tarea tiene a alguien al mando: una llamada
      * abierta a plantar puede no tenerlo.
@@ -269,19 +360,6 @@ class VolunteerOffer
     private ?Partner $coordinator = null;
 
     /**
-     * De qué tarea salió ésta, si se creó repitiendo otra.
-     *
-     * Sirve para poder responder "¿de dónde salieron estas doce?" cuando alguien
-     * repite el reparto de un trimestre y luego quiere entender por qué hay
-     * doce tareas iguales. `SET NULL` al borrar el original: perder la
-     * referencia es aceptable, perder las copias no.
-     *
-     * @ORM\ManyToOne(targetEntity="App\Entity\VolunteerOffer")
-     * @ORM\JoinColumn(name="copied_from_id", referencedColumnName="id", nullable=true, onDelete="SET NULL")
-     */
-    private ?VolunteerOffer $copiedFrom = null;
-
-    /**
      * @ORM\Column(name="created_at", type="datetime")
      */
     private \DateTimeInterface $createdAt;
@@ -289,353 +367,129 @@ class VolunteerOffer
     public function __construct()
     {
         $this->categories = new ArrayCollection();
-        $this->signups = new ArrayCollection();
+        $this->shifts = new ArrayCollection();
         $this->createdAt = new \DateTime();
     }
 
     /**
-     * Una copia de esta tarea en otra fecha, lista para persistir.
+     * El próximo turno que está por venir y sigue en pie.
      *
-     * Copia lo que define el trabajo y NO lo que pasó con él: ni inscripciones,
-     * ni avisos enviados, ni fecha de creación. Repetir el reparto del viernes
-     * que viene no puede arrastrar a quien se apuntó al de la semana pasada.
-     *
-     * La duración se conserva desplazando el final lo mismo que el principio: si
-     * la tarea duraba dos horas, la copia dura dos horas. Calcularlo con el
-     * intervalo y no copiando `endsAt` tal cual evita que la copia acabe antes
-     * de empezar.
-     *
-     * Nace como BORRADOR aunque el original estuviera publicada, a propósito:
-     * doce tareas creadas de golpe deben poder revisarse —y ajustarse los
-     * festivos, que aquí no se modelan— antes de que empiecen a pedir gente
-     * solas.
-     *
-     * @param \DateTimeInterface $startsAt cuándo empieza la copia
-     *
-     * @return self la copia, sin persistir
-     */
-    public function copyForDate(\DateTimeInterface $startsAt): self
-    {
-        $copy = new self();
-        $copy->title = $this->title;
-        $copy->description = $this->description;
-        $copy->remote = $this->remote;
-        $copy->place = $this->place;
-        $copy->node = $this->node;
-        $copy->slots = $this->slots;
-        $copy->companionsAllowed = $this->companionsAllowed;
-        $copy->creditedMinutes = $this->creditedMinutes;
-        $copy->openToAnyone = $this->openToAnyone;
-        // Quien monta el reparto de los viernes lo monta todos los viernes: la
-        // copia hereda coordinación porque es parte de cómo se hace este
-        // trabajo, no de lo que pasó en una fecha concreta.
-        $copy->coordinator = $this->coordinator;
-        // La gente de fuera NO se copia, por lo contrario: que un martes
-        // vinieran tres estudiantes no dice nada del martes siguiente, y
-        // arrastrarlo daría por cubiertas unas plazas que están vacías.
-        $copy->createdBy = $this->createdBy;
-        $copy->copiedFrom = $this;
-        $copy->status = self::STATUS_DRAFT;
-        $copy->startsAt = $startsAt;
-
-        foreach ($this->categories as $category) {
-            $copy->categories->add($category);
-        }
-
-        if (null !== $this->startsAt && null !== $this->endsAt) {
-            $duration = $this->startsAt->diff($this->endsAt);
-            $copy->endsAt = (\DateTimeImmutable::createFromInterface($startsAt))->add($duration);
-        }
-
-        return $copy;
-    }
-
-    /**
-     * @return self|null la tarea de la que se copió ésta, o null
-     */
-    public function getCopiedFrom(): ?self
-    {
-        return $this->copiedFrom;
-    }
-
-    /**
-     * Plazas ya ocupadas, contando acompañantes y sin contar las inscripciones
-     * canceladas. Es lo que decide si sigue faltando gente, así que vive aquí y
-     * no repartido por cada pantalla que lo necesite.
-     *
-     * @return int personas comprometidas ahora mismo
-     */
-    public function getFilledSlots(): int
-    {
-        // La gente de fuera cuenta como brazos aunque no tenga inscripción: si
-        // vienen tres estudiantes, una tarea de seis ya sólo necesita tres
-        // socixs, y seguir pidiendo seis traería gente para nada.
-        $filled = $this->guests;
-
-        foreach ($this->signups as $signup) {
-            if (!$signup->isCancelled()) {
-                // Vía getHeadcount() y no sumando acompañantes aquí: es ese
-                // método el que sabe que quien coordina no cuenta como brazo.
-                // Duplicar la cuenta haría que una tarea de dos plazas se diera
-                // por llena con una sola persona trabajando.
-                $filled += $signup->getHeadcount();
-            }
-        }
-
-        return $filled;
-    }
-
-    /**
-     * Quién está comprometidx ahora mismo: las inscripciones vivas, sin las
-     * canceladas. Incluye a quien coordina — en el sitio va a estar, y es
-     * justo eso lo que se cuenta cuando se dice quién hay.
-     *
-     * Ojo con confundirlo con {@see getFilledSlots()}: aquél cuenta BRAZOS
-     * (con acompañantes, sin coordinación) para decidir si falta gente; éste
-     * cuenta PERSONAS con nombre para poder decir quiénes son.
-     *
-     * @return list<VolunteerSignup> las inscripciones que siguen en pie
-     */
-    public function getCommittedSignups(): array
-    {
-        $committed = [];
-        foreach ($this->signups as $signup) {
-            // Sin persona no hay nombre que enseñar, y quien consume esto es una
-            // pantalla que va a pedirle el nombre. La columna es nullable.
-            if (!$signup->isCancelled() && null !== $signup->getPartner()) {
-                $committed[] = $signup;
-            }
-        }
-
-        return $committed;
-    }
-
-    /**
-     * Plazas que siguen sin cubrir, o null si la oferta no tiene tope.
-     *
-     * @return int|null plazas libres; null si no hay número de plazas
-     */
-    public function getRemainingSlots(): ?int
-    {
-        if (null === $this->slots) {
-            return null;
-        }
-
-        return max(0, $this->slots - $this->getFilledSlots());
-    }
-
-    /**
-     * Si todavía cabe alguien. Una oferta sin tope siempre admite gente.
-     *
-     * @return bool true si queda sitio
-     */
-    public function hasRoom(): bool
-    {
-        return 0 !== $this->getRemainingSlots();
-    }
-
-    /**
-     * Cuánta gente ha confirmado que fue A TRABAJAR.
-     *
-     * Quien sólo organizó la tarea no cuenta aquí, y de ahí depende que
-     * {@see isDone()} diga la verdad: una tarea en la que consta la persona que
-     * la montó pero no fue nadie a hacerla NO se hizo, y darla por hecha
-     * escondería justo el dato que hay que ver.
-     *
-     * Sus horas sí se le computan; eso es otra cosa y vive en la inscripción.
-     *
-     * @return int inscripciones de participación con asistencia confirmada
-     */
-    public function getAttendedCount(): int
-    {
-        $attended = 0;
-        foreach ($this->signups as $signup) {
-            if (true === $signup->getAttended() && !$signup->isCoordination()) {
-                ++$attended;
-            }
-        }
-
-        return $attended;
-    }
-
-    /**
-     * Si ya no queda nadie por responder si fue o no. Es lo que hace que la
-     * tarea deje de salir en "pendientes de confirmar", tanto en el panel de
-     * quien se apuntó como en la lista de gestión.
-     *
-     * Una tarea sin inscripciones vivas cuenta como respondida: no hay nada que
-     * preguntar.
-     *
-     * @return bool true si todas las inscripciones vivas están respondidas
-     */
-    public function isSettled(): bool
-    {
-        foreach ($this->signups as $signup) {
-            if (!$signup->isCancelled() && !$signup->isSettled()) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /**
-     * Si la tarea se hizo: ya pasó y al menos una persona confirmó que fue.
-     *
-     * Se DERIVA en vez de guardarse en un campo. Un `completed_at` habría que
-     * mantenerlo en sincronía cada vez que alguien confirma, se desapunta o
-     * gestión corrige, y en cuanto se desincronizara mentiría sin que se notara.
-     * Aquí la respuesta sale siempre de los mismos datos que la producen.
+     * Es lo que se enseña en el listado y en el panel del socix: de una tarea
+     * continua no interesan sus doscientos turnos, interesa el siguiente.
      *
      * @param \DateTimeInterface|null $now momento de referencia; por defecto, ahora
      *
-     * @return bool true si la tarea se dio por hecha
+     * @return VolunteerShift|null el siguiente turno, o null si no queda ninguno
      */
-    public function isDone(?\DateTimeInterface $now = null): bool
+    public function getNextShift(?\DateTimeInterface $now = null): ?VolunteerShift
     {
         $now ??= new \DateTime();
+        $next = null;
 
-        return $this->startsAt <= $now && $this->getAttendedCount() > 0;
+        foreach ($this->shifts as $shift) {
+            if ($shift->isCancelled() || $shift->isPast($now)) {
+                continue;
+            }
+
+            if (null === $next || $shift->getStartsAt() < $next->getStartsAt()) {
+                $next = $shift;
+            }
+        }
+
+        return $next;
     }
 
     /**
-     * Si la tarea pasó sin que fuera nadie. Es el dato incómodo y el que
-     * conviene tener: una tarea que nadie cubrió dice más sobre cómo va el
-     * voluntariado que cualquier contador de horas.
+     * Los turnos por venir que siguen en pie, del más próximo al más lejano.
+     *
+     * @param \DateTimeInterface|null $now   momento de referencia; por defecto, ahora
+     * @param int|null                $limit cuántos como máximo; null para todos
+     *
+     * @return list<VolunteerShift> turnos futuros ordenados
+     */
+    public function getUpcomingShifts(?\DateTimeInterface $now = null, ?int $limit = null): array
+    {
+        $now ??= new \DateTime();
+
+        $upcoming = [];
+        foreach ($this->shifts as $shift) {
+            if (!$shift->isCancelled() && !$shift->isPast($now)) {
+                $upcoming[] = $shift;
+            }
+        }
+
+        usort($upcoming, static fn (VolunteerShift $a, VolunteerShift $b): int => $a->getStartsAt() <=> $b->getStartsAt());
+
+        return null === $limit ? $upcoming : \array_slice($upcoming, 0, $limit);
+    }
+
+    /**
+     * Los turnos que ya pasaron y a los que falta pasarles lista. Es el tamaño
+     * exacto del trabajo pendiente de esta tarea, y lo que hace que una tarea
+     * continua no acumule meses de asistencia sin responder.
      *
      * @param \DateTimeInterface|null $now momento de referencia; por defecto, ahora
      *
-     * @return bool true si pasó, está respondida y no fue nadie
+     * @return list<VolunteerShift> turnos pasados sin cerrar, del más antiguo al más reciente
      */
-    public function wasMissed(?\DateTimeInterface $now = null): bool
+    public function getShiftsToClose(?\DateTimeInterface $now = null): array
     {
         $now ??= new \DateTime();
 
-        return $this->startsAt <= $now
-            && $this->isSettled()
-            && 0 === $this->getAttendedCount();
+        $pending = [];
+        foreach ($this->shifts as $shift) {
+            if (!$shift->isCancelled() && $shift->isPast($now) && !$shift->isSettled()) {
+                $pending[] = $shift;
+            }
+        }
+
+        usort($pending, static fn (VolunteerShift $a, VolunteerShift $b): int => $a->getStartsAt() <=> $b->getStartsAt());
+
+        return $pending;
     }
 
     /**
-     * En qué momento de su vida está esta tarea, que es lo mismo que decir QUÉ
-     * TRABAJO TOCA HACER con ella.
-     *
-     * Existe porque los tres momentos de una tarea piden cosas distintas de
-     * quien la gestiona —antes se persiguen plazas, el día se pasa lista,
-     * después se imputan horas— y la pantalla los trataba igual: el formulario
-     * de cerrar colgaba debajo de la tabla estuviera la tarea a cuatro días o
-     * cerrada hace un mes.
-     *
-     * Se DERIVA, como {@see isDone()} y por el mismo motivo: un campo `phase`
-     * habría que moverlo con un cron a medianoche y cada vez que alguien
-     * confirma, y en cuanto se desincronizara mentiría en silencio.
-     *
-     * El orden de las comprobaciones no es cosmético:
-     *
-     *  - Borrador y anulada ganan a todo. Una tarea anulada que ya pasó no está
-     *    "por cerrar": no hay nada que cerrar. El mockup del rediseño sólo
-     *    contemplaba cuatro fases y se dejaba estas dos fuera.
-     *  - La fecha decide antes que {@see isSettled()}, que es true de forma
-     *    vacía cuando no hay nadie apuntado. Sin ese orden, una tarea de la
-     *    semana que viene sin inscripciones saldría "cerrada".
-     *  - TODAY abarca desde que empieza hasta el final del día natural, no sólo
-     *    su franja horaria: quien pasa lista lo hace en el nodo mientras
-     *    descarga, y a veces cuando ya ha recogido.
+     * Si esta tarea admite gente nueva en algún turno: publicada, y con al menos
+     * un turno futuro con sitio.
      *
      * @param \DateTimeInterface|null $now momento de referencia; por defecto, ahora
      *
-     * @return string una de las constantes self::PHASE_*
+     * @return bool true si se puede apuntar alguien
      */
-    public function getPhase(?\DateTimeInterface $now = null): string
+    public function hasOpenShifts(?\DateTimeInterface $now = null): bool
     {
-        if (self::STATUS_DRAFT === $this->status) {
-            return self::PHASE_DRAFT;
+        foreach ($this->shifts as $shift) {
+            if ($shift->isOpen($now)) {
+                return true;
+            }
         }
 
-        if (self::STATUS_CANCELLED === $this->status) {
-            return self::PHASE_CANCELLED;
-        }
-
-        $now ??= new \DateTime();
-
-        if (null === $this->startsAt || $this->startsAt > $now) {
-            return self::PHASE_OPEN;
-        }
-
-        // Ya respondida es "cerrada" aunque sea hoy: si todo el mundo confirmó
-        // desde su panel esta misma tarde, no queda lista que pasar.
-        if ($this->isSettled()) {
-            return self::PHASE_CLOSED;
-        }
-
-        return $this->startsAt->format('Y-m-d') === $now->format('Y-m-d')
-            ? self::PHASE_TODAY
-            : self::PHASE_TO_CLOSE;
+        return false;
     }
 
     /**
-     * Los minutos ya imputados por esta tarea, sumando lo de todo el mundo.
+     * Los minutos que esta tarea ha imputado en total, sumando todos sus turnos.
      *
-     * Es el dato que faltaba en la ficha, y no es un adorno: es lo que esta
-     * tarea aporta a la cuenta de horas de la asociación, y quien la cierra
-     * tiene que poder verlo ANTES de darle al botón. Sale de
-     * `VolunteerSignup::creditedMinutes` —lo congelado en cada inscripción— y no
-     * de multiplicar plazas por lo que vale la tarea, que es otra cosa: hay
-     * quien se queda media hora menos y quien la organizó y computa distinto.
-     *
-     * Los acompañantes NO multiplican. Las horas cuelgan de un socix con ficha,
-     * y quien viene con su criatura no ha trabajado el doble.
-     *
-     * @return int minutos imputados; 0 si no se ha cerrado nada todavía
+     * @return int minutos imputados
      */
     public function getCreditedMinutesTotal(): int
     {
         $total = 0;
-        foreach ($this->signups as $signup) {
-            if (!$signup->isCancelled() && true === $signup->getAttended()) {
-                $total += $signup->getCreditedMinutes() ?? 0;
-            }
+        foreach ($this->shifts as $shift) {
+            $total += $shift->getCreditedMinutesTotal();
         }
 
         return $total;
     }
 
     /**
-     * Cuánta gente sigue sin decir si fue o no. Es el tamaño exacto del trabajo
-     * pendiente en la fase de cierre, y lo que decide si merece la pena
-     * perseguirlo o cerrar la tarea a mano.
+     * Si la tarea se repite de verdad, o es de una sola vez.
      *
-     * @return int inscripciones vivas sin responder
+     * @return bool true si tiene receta de repetición
      */
-    public function getPendingConfirmationCount(): int
+    public function isRepeating(): bool
     {
-        $pending = 0;
-        foreach ($this->signups as $signup) {
-            if (!$signup->isCancelled() && !$signup->isSettled()) {
-                ++$pending;
-            }
-        }
-
-        return $pending;
-    }
-
-    /**
-     * Si la oferta está viva: publicada y sin haber empezado todavía. Sólo
-     * sobre éstas se piden voluntarios y se lanzan avisos.
-     *
-     * @param \DateTimeInterface|null $now momento de referencia; por defecto, ahora
-     *
-     * @return bool true si admite gente nueva
-     */
-    public function isOpen(?\DateTimeInterface $now = null): bool
-    {
-        if (self::STATUS_PUBLISHED !== $this->status) {
-            return false;
-        }
-
-        $now ??= new \DateTime();
-
-        return $this->startsAt > $now && $this->hasRoom();
+        return self::REPEAT_ONCE !== $this->repeatType;
     }
 
     /**
@@ -647,7 +501,7 @@ class VolunteerOffer
     }
 
     /**
-     * @return string el título de la oferta
+     * @return string el título de la tarea
      */
     public function getTitle(): string
     {
@@ -655,7 +509,7 @@ class VolunteerOffer
     }
 
     /**
-     * @param string $title el título de la oferta
+     * @param string $title el título de la tarea
      */
     public function setTitle(string $title): self
     {
@@ -713,42 +567,6 @@ class VolunteerOffer
     }
 
     /**
-     * @return \DateTimeInterface|null cuándo empieza
-     */
-    public function getStartsAt(): ?\DateTimeInterface
-    {
-        return $this->startsAt;
-    }
-
-    /**
-     * @param \DateTimeInterface $startsAt cuándo empieza
-     */
-    public function setStartsAt(\DateTimeInterface $startsAt): self
-    {
-        $this->startsAt = $startsAt;
-
-        return $this;
-    }
-
-    /**
-     * @return \DateTimeInterface|null cuándo acaba, o null si no tiene franja
-     */
-    public function getEndsAt(): ?\DateTimeInterface
-    {
-        return $this->endsAt;
-    }
-
-    /**
-     * @param \DateTimeInterface|null $endsAt cuándo acaba
-     */
-    public function setEndsAt(?\DateTimeInterface $endsAt): self
-    {
-        $this->endsAt = $endsAt;
-
-        return $this;
-    }
-
-    /**
      * @return bool true si se hace desde casa
      */
     public function isRemote(): bool
@@ -757,9 +575,10 @@ class VolunteerOffer
     }
 
     /**
-     * Marca la oferta como remota o presencial. Al marcarla remota se limpian
-     * lugar y nodo: una oferta "a distancia en La Cabrera" es un estado que no
-     * significa nada y que luego el aviso dirigido leería como presencial.
+     * Marca la tarea como remota o presencial. Al marcarla remota se limpian
+     * sitio, precisión y nodo: una tarea "a distancia en La Cabrera" es un
+     * estado que no significa nada y que luego el aviso dirigido leería como
+     * presencial.
      *
      * @param bool $remote true si se hace desde casa
      */
@@ -768,6 +587,7 @@ class VolunteerOffer
         $this->remote = $remote;
         if ($remote) {
             $this->place = null;
+            $this->placeNote = null;
             $this->node = null;
         }
 
@@ -775,19 +595,37 @@ class VolunteerOffer
     }
 
     /**
-     * @return string|null dónde se hace, en texto libre, o null
+     * @return VolunteerPlace|null el sitio del catálogo, o null
      */
-    public function getPlace(): ?string
+    public function getPlace(): ?VolunteerPlace
     {
         return $this->place;
     }
 
     /**
-     * @param string|null $place dónde se hace, en texto libre
+     * @param VolunteerPlace|null $place el sitio del catálogo
      */
-    public function setPlace(?string $place): self
+    public function setPlace(?VolunteerPlace $place): self
     {
         $this->place = $place;
+
+        return $this;
+    }
+
+    /**
+     * @return string|null la precisión sobre el sitio, o null
+     */
+    public function getPlaceNote(): ?string
+    {
+        return $this->placeNote;
+    }
+
+    /**
+     * @param string|null $placeNote la precisión sobre el sitio
+     */
+    public function setPlaceNote(?string $placeNote): self
+    {
+        $this->placeNote = $placeNote;
 
         return $this;
     }
@@ -811,7 +649,7 @@ class VolunteerOffer
     }
 
     /**
-     * @return int|null plazas totales, o null si no hay tope
+     * @return int|null plazas por turno, o null si no hay tope
      */
     public function getSlots(): ?int
     {
@@ -819,7 +657,7 @@ class VolunteerOffer
     }
 
     /**
-     * @param int|null $slots plazas totales; null para no poner tope
+     * @param int|null $slots plazas por turno; null para no poner tope
      */
     public function setSlots(?int $slots): self
     {
@@ -901,7 +739,25 @@ class VolunteerOffer
     }
 
     /**
-     * @return string el estado: draft, published o cancelled
+     * @return bool true si es una tarea de rutina que no dispara el aviso de plazas
+     */
+    public function isRoutine(): bool
+    {
+        return $this->routine;
+    }
+
+    /**
+     * @param bool $routine true para que sus plazas libres no salgan como aviso
+     */
+    public function setRoutine(bool $routine): self
+    {
+        $this->routine = $routine;
+
+        return $this;
+    }
+
+    /**
+     * @return string el estado; una de las constantes STATUS_*
      */
     public function getStatus(): string
     {
@@ -909,7 +765,7 @@ class VolunteerOffer
     }
 
     /**
-     * @param string $status el estado: draft, published o cancelled
+     * @param string $status el estado; una de las constantes STATUS_*
      */
     public function setStatus(string $status): self
     {
@@ -919,63 +775,195 @@ class VolunteerOffer
     }
 
     /**
-     * @return Collection<int, VolunteerSignup> las inscripciones, canceladas incluidas
+     * Si la tarea está publicada y pidiendo gente. Una tarea en pausa NO lo está,
+     * y de eso depende que pausar sirva para algo.
+     *
+     * @return bool true si está publicada
      */
-    public function getSignups(): Collection
+    public function isPublished(): bool
     {
-        return $this->signups;
+        return self::STATUS_PUBLISHED === $this->status;
     }
 
     /**
-     * @param VolunteerSignup $signup la inscripción a enganchar
+     * @return bool true si está en pausa
      */
-    public function addSignup(VolunteerSignup $signup): self
+    public function isPaused(): bool
     {
-        if (!$this->signups->contains($signup)) {
-            $this->signups->add($signup);
-            $signup->setOffer($this);
+        return self::STATUS_PAUSED === $this->status;
+    }
+
+    /**
+     * @return bool true si está anulada
+     */
+    public function isCancelled(): bool
+    {
+        return self::STATUS_CANCELLED === $this->status;
+    }
+
+    /**
+     * @return bool true si sigue en borrador
+     */
+    public function isDraft(): bool
+    {
+        return self::STATUS_DRAFT === $this->status;
+    }
+
+    /**
+     * @return string cómo se repite; una de las constantes REPEAT_*
+     */
+    public function getRepeatType(): string
+    {
+        return $this->repeatType;
+    }
+
+    /**
+     * @param string $repeatType cómo se repite; una de las constantes REPEAT_*
+     */
+    public function setRepeatType(string $repeatType): self
+    {
+        $this->repeatType = $repeatType;
+
+        return $this;
+    }
+
+    /**
+     * @return int cada cuántas semanas, en la repetición semanal
+     */
+    public function getRepeatEvery(): int
+    {
+        return $this->repeatEvery;
+    }
+
+    /**
+     * Acepta null aunque la columna no lo admita: el campo del formulario puede
+     * llegar vacío, y "cada cuántas semanas" vacío significa todas.
+     *
+     * @param int|null $repeatEvery cada cuántas semanas; null es cada una
+     */
+    public function setRepeatEvery(?int $repeatEvery): self
+    {
+        $this->repeatEvery = max(1, $repeatEvery ?? 1);
+
+        return $this;
+    }
+
+    /**
+     * Días de la semana en ISO-8601, como enteros ya normalizados y ordenados.
+     * La columna guarda strings —`simple_array` no conserva el tipo—, así que
+     * quien consuma esto no tiene que acordarse de castear.
+     *
+     * @return list<int> días de la semana (1 = lunes … 7 = domingo)
+     */
+    public function getRepeatWeekdays(): array
+    {
+        $days = array_map('intval', $this->repeatWeekdays ?? []);
+        $days = array_values(array_unique(array_filter($days, static fn (int $d): bool => $d >= 1 && $d <= 7)));
+        sort($days);
+
+        return $days;
+    }
+
+    /**
+     * @param list<int|string>|null $weekdays días de la semana (1 = lunes … 7 = domingo)
+     */
+    public function setRepeatWeekdays(?array $weekdays): self
+    {
+        if (null === $weekdays || [] === $weekdays) {
+            $this->repeatWeekdays = null;
+
+            return $this;
+        }
+
+        $this->repeatWeekdays = array_values(array_map('strval', $weekdays));
+
+        return $this;
+    }
+
+    /**
+     * Tramos horarios de cada día, como lista de pares [inicio, fin|null] en
+     * formato "HH:MM".
+     *
+     * @return list<array{0: string, 1: string|null}> tramos; lista vacía si no hay ninguno
+     */
+    public function getRepeatTimes(): array
+    {
+        return $this->repeatTimes ?? [];
+    }
+
+    /**
+     * @param list<array{0: string, 1: string|null}>|null $times tramos horarios
+     */
+    public function setRepeatTimes(?array $times): self
+    {
+        $this->repeatTimes = ([] === $times) ? null : $times;
+
+        return $this;
+    }
+
+    /**
+     * @return \DateTimeInterface|null desde cuándo se hace, o null
+     */
+    public function getRepeatFrom(): ?\DateTimeInterface
+    {
+        return $this->repeatFrom;
+    }
+
+    /**
+     * @param \DateTimeInterface|null $repeatFrom desde cuándo se hace
+     */
+    public function setRepeatFrom(?\DateTimeInterface $repeatFrom): self
+    {
+        $this->repeatFrom = $repeatFrom;
+
+        return $this;
+    }
+
+    /**
+     * @return \DateTimeInterface|null hasta cuándo se generan turnos, o null
+     */
+    public function getRepeatUntil(): ?\DateTimeInterface
+    {
+        return $this->repeatUntil;
+    }
+
+    /**
+     * @param \DateTimeInterface|null $repeatUntil hasta cuándo se generan turnos
+     */
+    public function setRepeatUntil(?\DateTimeInterface $repeatUntil): self
+    {
+        $this->repeatUntil = $repeatUntil;
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, VolunteerShift> los turnos, anulados incluidos
+     */
+    public function getShifts(): Collection
+    {
+        return $this->shifts;
+    }
+
+    /**
+     * @param VolunteerShift $shift el turno a enganchar
+     */
+    public function addShift(VolunteerShift $shift): self
+    {
+        if (!$this->shifts->contains($shift)) {
+            $this->shifts->add($shift);
+            $shift->setOffer($this);
         }
 
         return $this;
     }
 
     /**
-     * @return int cuánta gente de fuera viene
+     * @param VolunteerShift $shift el turno a soltar
      */
-    public function getGuests(): int
+    public function removeShift(VolunteerShift $shift): self
     {
-        return $this->guests;
-    }
-
-    /**
-     * Acepta null aunque la columna no lo admita: el campo del formulario es
-     * opcional, y dejarlo vacío llega aquí como null. Sin esto, guardar una
-     * tarea sin gente de fuera —el caso normal— revienta con "Expected argument
-     * of type int, null given".
-     *
-     * @param int|null $guests cuánta gente de fuera viene; null es ninguna
-     */
-    public function setGuests(?int $guests): self
-    {
-        $this->guests = max(0, $guests ?? 0);
-
-        return $this;
-    }
-
-    /**
-     * @return string|null quiénes son los de fuera, o null
-     */
-    public function getGuestsNote(): ?string
-    {
-        return $this->guestsNote;
-    }
-
-    /**
-     * @param string|null $guestsNote quiénes son los de fuera
-     */
-    public function setGuestsNote(?string $guestsNote): self
-    {
-        $this->guestsNote = $guestsNote;
+        $this->shifts->removeElement($shift);
 
         return $this;
     }
@@ -999,7 +987,7 @@ class VolunteerOffer
     }
 
     /**
-     * @return User|null quién creó la oferta, o null si se borró esa cuenta
+     * @return User|null quién creó la tarea, o null si se borró esa cuenta
      */
     public function getCreatedBy(): ?User
     {
@@ -1007,7 +995,7 @@ class VolunteerOffer
     }
 
     /**
-     * @param User|null $createdBy quién crea la oferta
+     * @param User|null $createdBy quién crea la tarea
      */
     public function setCreatedBy(?User $createdBy): self
     {
@@ -1017,7 +1005,7 @@ class VolunteerOffer
     }
 
     /**
-     * @return \DateTimeInterface cuándo se creó la oferta
+     * @return \DateTimeInterface cuándo se creó la tarea
      */
     public function getCreatedAt(): \DateTimeInterface
     {

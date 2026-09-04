@@ -167,9 +167,7 @@ class TaskCoordinatorTest extends TestCase
      */
     private function offer(array $categories): VolunteerOffer
     {
-        $offer = (new VolunteerOffer())
-            ->setTitle('Descargar el reparto')
-            ->setStartsAt(new \DateTime('2099-03-15 17:00'));
+        $offer = (new VolunteerOffer())->setTitle('Descargar el reparto');
 
         foreach ($categories as $category) {
             $offer->addCategory($category);

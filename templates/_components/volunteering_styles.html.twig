@@ -323,6 +323,34 @@
         margin: var(--csa-sp-4) 0;
     }
 
+    /* Un dato que falta o que no aplica, dentro de una celda de tabla. En gris y
+       no en blanco: una celda vacía se lee como "se olvidaron de rellenarlo". */
+    .vol-muted { color: var(--csa-ink-muted); }
+
+    /* ---------- CALENDARIO DEL SOCIX ----------
+       Cabecera de día. El día corto va primero y en oscuro porque es lo que se
+       busca al recorrer la lista ("¿qué hay el sábado?"); la fecha larga queda
+       detrás en pequeño, para situarse cuando el mes cambia. */
+    .vol-day {
+        display: flex;
+        align-items: baseline;
+        gap: var(--csa-sp-3);
+        margin: var(--csa-sp-5) 0 var(--csa-sp-2);
+        padding-bottom: var(--csa-sp-2);
+        border-bottom: 1px solid var(--csa-rule-soft);
+        font-family: var(--csa-serif);
+        font-size: var(--csa-fs-lg);
+        font-weight: 500;
+        color: var(--csa-ink);
+    }
+    .vol-day:first-child { margin-top: 0; }
+    .vol-day__long {
+        font-family: var(--csa-sans);
+        font-size: var(--csa-fs-xs);
+        font-weight: 400;
+        color: var(--csa-ink-muted);
+    }
+
     /* Celda de la tira cuyo valor NO es una cifra.
        El componente pinta el valor en Fraunces 600 a 18px, que es lo correcto
        para un número —la fecha, cuánta gente viene, los minutos— y demasiado
@@ -509,6 +537,25 @@
     }
     .vol-owner__who { display: flex; flex-direction: column; min-width: 0; }
     .vol-owner__role { font-size: var(--csa-fs-xs); color: var(--csa-ink-muted); }
+
+    /* La tarea encima de la fecha, en la ficha de un turno: pequeña y enlace,
+     * para que el hero diga «este día» y no vuelva a parecer la ficha de la
+     * tarea. La hora va detrás del día, más ligera que él. */
+    .vol-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 4px;
+        font-size: var(--csa-fs-xs);
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--csa-ink-soft);
+        text-decoration: none;
+    }
+    .vol-kicker:hover { color: var(--csa-ink); text-decoration: underline; }
+    .vol-kicker__time { font-weight: 400; color: var(--csa-ink-soft); }
+
     .vol-owner__name { font-size: var(--csa-fs-base); font-weight: 600; color: var(--csa-ink); }
     .vol-owner__hours { font-size: var(--csa-fs-xs); color: var(--csa-ink-muted); }
     .vol-owner__contact { display: flex; gap: var(--csa-sp-3); margin-left: auto; }

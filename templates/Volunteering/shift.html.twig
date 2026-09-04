@@ -1,0 +1,754 @@
+{# ============================================================
+ # Un TURNO: un día concreto de una tarea.
+ #
+ # Es la pantalla de trabajo del módulo. Todo lo que se hace con gente pasa por
+ # aquí: quién viene, pasar lista, imputar horas, pedir gente y anotar a quien
+ # apareció sin apuntarse. Lo que es de la tarea —qué es, dónde, cada cuánto— se
+ # edita en su ficha, y aquí sólo se lee.
+ #
+ # Mismo lenguaje visual que la ficha de socix (reusa partner_card_styles: hero +
+ # avatar + chips + tarjetas), porque es el mismo gesto: abrir la ficha de algo y
+ # ver de un vistazo qué es y en qué estado está.
+ # ============================================================ #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% import '_macros/volunteering.html.twig' as vol %}
+{% import '_macros/volunteering_row.html.twig' as row %}
+
+{% block title %}Voluntariado · {{ offer.title }} · {{ shift.startsAt|date('d/m/Y') }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('volunteering_index') }}">Voluntariado</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('volunteering_show', { id: offer.id }) }}">{{ offer.title }}</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ shift.startsAt|date('d/m/Y') }}</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include '_components/partner_card_styles.html.twig' %}
+    {% include '_components/volunteering_styles.html.twig' %}
+{% endblock %}
+
+{% block csa_main %}
+    {% set can_edit = is_granted('VOLUNTEER_OFFER_EDIT', shift) %}
+    {% set is_past = shift.isPast() %}
+    {% set signup_count = shift.signups|filter(s => not s.cancelled)|length %}
+
+    {# ============ LA FASE MANDA ============
+     # Un turno pide tres trabajos distintos según el momento: antes se persiguen
+     # plazas, el día se pasa lista, después se imputan horas. La fase la deriva
+     # la entidad (VolunteerShift::getPhase). Aquí sólo se traduce a cómo se ve,
+     # en UN mapa: repartir `phase == '...'` por toda la plantilla haría que
+     # añadir una fase obligara a buscarlos todos. #}
+    {% set phase_chip = {
+        'draft':     { label: 'Borrador',   cls: 'warn'   },
+        'cancelled': { label: 'Anulado',    cls: 'baja'   },
+        'paused':    { label: 'En pausa',   cls: 'warn'   },
+        'open':      { label: 'Por venir',  cls: 'activo' },
+        'today':     { label: 'Es hoy',     cls: 'warn'   },
+        'to_close':  { label: 'Por cerrar', cls: 'info'   },
+        'closed':    { label: 'Cerrado',    cls: 'mute'   }
+    } %}
+    {% set sc = phase_chip[phase]|default({ label: phase, cls: 'mute' }) %}
+
+    {% set pending = shift.pendingConfirmationCount %}
+    {% set credited_total = shift.creditedMinutesTotal %}
+    {% set is_closing = phase in ['today', 'to_close', 'closed'] %}
+
+    {% set avatar_palette = ['sage', 'ochre', 'terra', 'ink'] %}
+    {% set avatar_tone = shift.cancelled ? 'muted' : avatar_palette[(shift.id|default(0)) % 4] %}
+
+    <div class="prt">
+
+        {# ============ HERO ============
+         # EL TÍTULO ES LA FECHA, no el nombre de la tarea. Con el mismo título, la
+         # misma explicación y el mismo sitio, esta ficha y la de la tarea eran
+         # gemelas y no se sabía en cuál se estaba. Aquí lo que manda es el día;
+         # la tarea va encima, pequeña y como enlace de vuelta. Y lo que es de la
+         # tarea —explicación, áreas, cómo se repite— no se repite: está a un
+         # clic. #}
+        <header class="prt-hero">
+            <span class="prt-avatar prt-avatar--{{ avatar_tone }}" aria-hidden="true"><i class="fa fa-calendar-check-o"></i></span>
+
+            <div>
+                <a class="vol-kicker" href="{{ path('volunteering_show', { id: offer.id }) }}" title="Ver la tarea y todos sus turnos">
+                    <i class="fa fa-list-ul"></i> {{ offer.title }}
+                </a>
+                <h1 class="prt-hero__title">
+                    {# format_date y no el filtro `date`: éste usa el locale de PHP y
+                     # devolvía "monday 31 de august". #}
+                    {{ shift.startsAt|format_date(pattern="EEEE d 'de' MMMM", locale='es')|capitalize }}
+                    {%- if shift.startsAt|date('H:i') != '00:00' %}
+                        <span class="vol-kicker__time">· {{ shift.startsAt|date('H:i') }}{% if shift.endsAt %}–{{ shift.endsAt|date('H:i') }}{% endif %}</span>
+                    {%- endif %}
+                </h1>
+                <div class="prt-hero__meta">
+                    <span class="prt-chip prt-chip--{{ sc.cls }}"><span class="dot"></span>{{ sc.label }}</span>
+
+                    {# El área sí se queda, aunque sea de la tarea: es por donde se
+                     # navega —«los turnos de huerta»— y desde aquí no había forma
+                     # de llegar a ella. #}
+                    {% for category in offer.categories %}
+                        <span class="prt-chip prt-chip--mute"><i class="fa fa-tag"></i> {{ category.name }}</span>
+                    {% endfor %}
+
+                    <span class="prt-chip prt-chip--mute"><i class="fa fa-map-marker"></i> {{ vol.task_place(offer) }}</span>
+
+                    {% if shift.creditedMinutes %}
+                        <span class="prt-chip prt-chip--mute" title="Lo que computa a cada persona que venga">
+                            <i class="fa fa-clock-o"></i> {{ csa.qty(shift.creditedMinutes / 60) }} h por persona{% if shift.ownCreditedMinutes %} · sólo este turno{% endif %}
+                        </span>
+                    {% endif %}
+
+                    {% if shift.manual %}
+                        <span class="prt-chip prt-chip--mute" title="Lo añadió alguien a mano; no sale de la receta de la tarea">A mano</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="prt-hero__actions">
+                {% if can_edit %}
+                    {{ csa.btn('Mover', { variant: 'secondary', href: path('volunteering_shift_edit', { id: shift.id }), icon: 'fa-pencil' }) }}
+                {% endif %}
+                {{ csa.btn('La tarea', { variant: 'ghost', href: path('volunteering_show', { id: offer.id }), icon: 'fa-list-ul' }) }}
+            </div>
+        </header>
+
+        {# ============ QUÉ TOCA HACER ============
+         # Va antes que los datos a propósito. Cuándo y dónde es algo que ya se
+         # sabe cuando abres un turno tuyo; lo que no se sabe es si queda algo por
+         # hacer con él. #}
+        {% set marked = signup_count - pending %}
+
+        {# Días NATURALES, no segundos partidos por 86400: con la resta cruda, un
+         # turno que empieza dentro de media hora sale a "1 día" porque el
+         # redondeo hacia arriba no distingue horas de días. #}
+        {% set days_left = shift.startsAt
+            ? ((shift.startsAt|date('Y-m-d')|date('U') - 'now'|date('Y-m-d')|date('U')) / 86400)|round
+            : null %}
+
+        {% if phase == 'draft' %}
+            <div class="vol-phase vol-phase--quiet">
+                <span class="vol-phase__icon"><i class="fa fa-pencil"></i></span>
+                <div class="vol-phase__body">
+                    <p class="vol-phase__title">La tarea todavía es un borrador</p>
+                    <p class="vol-phase__note">Este turno no lo ve nadie fuera de gestión y no se está pidiendo gente. Publica la tarea cuando esté lista.</p>
+                </div>
+                {% if can_edit %}
+                    <div class="vol-phase__actions">
+                        {{ csa.btn('Ir a la tarea', { variant: 'primary', href: path('volunteering_show', { id: offer.id }), icon: 'fa-bullhorn' }) }}
+                    </div>
+                {% endif %}
+            </div>
+
+        {% elseif phase == 'cancelled' %}
+            <div class="vol-phase vol-phase--quiet">
+                <span class="vol-phase__icon"><i class="fa fa-ban"></i></span>
+                <div class="vol-phase__body">
+                    <p class="vol-phase__title">Turno anulado{% if shift.cancelledReason %} · {{ shift.cancelledReason }}{% endif %}</p>
+                    <p class="vol-phase__note">
+                        Se conserva para poder consultarlo, y no se vuelve a crear al abrir turnos.
+                        {% if signup_count %}A quien se había apuntado ya se le avisó.{% endif %}
+                    </p>
+                </div>
+                {% if can_edit and shift.cancelledAt %}
+                    <div class="vol-phase__actions">
+                        <form method="post" action="{{ path('volunteering_shift_cancel', { id: shift.id }) }}">
+                            <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_shift_cancel') }}">
+                            <input type="hidden" name="reactivar" value="1">
+                            <button type="submit" class="csa-btn csa-btn--secondary csa-btn--sm">
+                                <i class="fa fa-undo"></i><span>Volver a ponerlo</span>
+                            </button>
+                        </form>
+                    </div>
+                {% endif %}
+            </div>
+
+        {% elseif phase == 'paused' %}
+            <div class="vol-phase vol-phase--quiet">
+                <span class="vol-phase__icon"><i class="fa fa-pause"></i></span>
+                <div class="vol-phase__body">
+                    <p class="vol-phase__title">La tarea está parada</p>
+                    <p class="vol-phase__note">El turno sigue en el calendario, pero no se pide gente para él. Se reanuda desde la tarea.</p>
+                </div>
+            </div>
+
+        {% elseif phase == 'open' %}
+            {% set full = shift.slots and shift.remainingSlots == 0 %}
+            <div class="vol-phase vol-phase--{{ full ? 'ok' : 'warn' }}">
+                <span class="vol-phase__icon"><i class="fa fa-{{ full ? 'check' : 'exclamation-triangle' }}"></i></span>
+                <div class="vol-phase__body">
+                    <p class="vol-phase__title">
+                        {%- if full %}Las plazas están cubiertas
+                        {%- elseif shift.slots %}Falta{{ shift.remainingSlots == 1 ? '' : 'n' }} {{ shift.remainingSlots }} {{ shift.remainingSlots == 1 ? 'persona' : 'personas' }} por cubrir
+                        {%- else %}Sigue abierto a quien quiera venir{% endif -%}
+                    </p>
+                    <p class="vol-phase__note">
+                        {%- if days_left is not null and days_left <= 0 %}Es hoy mismo.
+                        {%- elseif days_left is not null %}Queda{{ days_left == 1 ? '' : 'n' }} {{ days_left }} día{{ days_left == 1 ? '' : 's' }}.
+                        {%- endif %}
+                        {% if full %}Nada que hacer hasta el día del turno.
+                        {% elseif suggested|length %}Abajo, en «A quién pedírselo», tienes a quién llamar.
+                        {% else %}Cuando se acerque la fecha, el sistema pide gente solo.{% endif %}
+                    </p>
+                </div>
+                {% if not full and can_edit and not everyone_sent %}
+                    <div class="vol-phase__actions">
+                        {{ csa.btn('Ver los avisos', { variant: 'secondary', href: '#avisos', icon: 'fa-send-o' }) }}
+                    </div>
+                {% endif %}
+            </div>
+
+        {% elseif phase == 'today' %}
+            <div class="vol-phase vol-phase--today">
+                <span class="vol-phase__icon"><i class="fa fa-check-square-o"></i></span>
+                <div class="vol-phase__body">
+                    <p class="vol-phase__title">Toca pasar lista</p>
+                    <p class="vol-phase__note">
+                        Marca quién ha venido de verdad. Se puede hacer desde el móvil, en el sitio.
+                        {% if pending %}Quien lo confirme desde su panel se marca solo.{% endif %}
+                    </p>
+                </div>
+                <div class="vol-phase__figure">
+                    <span class="vol-phase__figure-value">{{ marked }}</span>
+                    <span class="vol-phase__figure-label">de {{ signup_count }} {{ signup_count == 1 ? 'marcada' : 'marcadas' }}</span>
+                </div>
+            </div>
+
+        {% elseif phase == 'to_close' %}
+            <div class="vol-phase vol-phase--info">
+                <span class="vol-phase__icon"><i class="fa fa-hourglass-half"></i></span>
+                <div class="vol-phase__body">
+                    <p class="vol-phase__title">
+                        Falta{{ pending == 1 ? '' : 'n' }} {{ pending }} {{ pending == 1 ? 'persona' : 'personas' }} por decir si {{ pending == 1 ? 'fue' : 'fueron' }}
+                    </p>
+                    <p class="vol-phase__note">
+                        Se les pregunta en su panel. Si no contestan, ciérralo tú abajo: al hacerlo, estas
+                        horas se suman a la aportación de cada socix.
+                    </p>
+                </div>
+                {% if credited_total %}
+                    <div class="vol-phase__figure">
+                        <span class="vol-phase__figure-value">{{ csa.qty(credited_total / 60) }} h</span>
+                        <span class="vol-phase__figure-label">ya imputadas</span>
+                    </div>
+                {% endif %}
+            </div>
+
+        {% elseif shift.wasMissed() %}
+            <div class="vol-phase vol-phase--warn">
+                <span class="vol-phase__icon"><i class="fa fa-exclamation-triangle"></i></span>
+                <div class="vol-phase__body">
+                    <p class="vol-phase__title">Pasó y no fue nadie</p>
+                    <p class="vol-phase__note">
+                        {% if signup_count %}Se apuntó gente pero nadie confirmó haber ido.
+                        {% else %}No llegó a apuntarse nadie.{% endif %}
+                    </p>
+                </div>
+            </div>
+
+        {% else %}
+            <div class="vol-phase vol-phase--ok">
+                <span class="vol-phase__icon"><i class="fa fa-check"></i></span>
+                <div class="vol-phase__body">
+                    <p class="vol-phase__title">
+                        Hecho · {{ shift.attendedCount }} {{ shift.attendedCount == 1 ? 'persona confirmó' : 'personas confirmaron' }} que {{ shift.attendedCount == 1 ? 'fue' : 'fueron' }}
+                    </p>
+                    <p class="vol-phase__note">
+                        Las horas ya están imputadas. Corregirlas es cambiar la aportación de alguien, así
+                        que se hace abajo y con cuidado.
+                    </p>
+                </div>
+                {% if credited_total %}
+                    <div class="vol-phase__figure">
+                        <span class="vol-phase__figure-value">{{ csa.qty(credited_total / 60) }} h</span>
+                        <span class="vol-phase__figure-label">imputadas</span>
+                    </div>
+                {% endif %}
+            </div>
+        {% endif %}
+
+        {# ============ OCUPACIÓN ============
+         # Quiénes son las plazas, no cuántas. "4 de 6" hay que leerlo y restar;
+         # cuatro fichas con iniciales y dos huecos se ven sin leer, y además
+         # dicen QUIÉN viene sin bajar a la pestaña. #}
+        {% if shift.slots and shift.slots <= 20 %}
+            {% set pips = [] %}
+            {% for s in shift.signups|filter(s => not s.cancelled and not s.coordination) %}
+                {% set pips = pips|merge([{ ini: (s.partner.name|first ~ s.partner.surname|first)|upper, name: s.partner.name ~ ' ' ~ s.partner.surname }]) %}
+                {% if s.companions > 0 %}
+                    {% for i in 1..s.companions %}
+                        {% set pips = pips|merge([{ ini: null, name: 'Acompañante de ' ~ s.partner.name }]) %}
+                    {% endfor %}
+                {% endif %}
+            {% endfor %}
+
+            {# La gente de fuera ocupa sus fichas al final: no tienen nombre en el
+             # sistema, así que llevan icono y se identifican por la nota. #}
+            {% if shift.guests > 0 %}
+                {% for i in 1..shift.guests %}
+                    {% set pips = pips|merge([{ ini: null, name: shift.guestsNote ?: 'Alguien de fuera' }]) %}
+                {% endfor %}
+            {% endif %}
+
+            {% set companions_total = shift.signups|filter(s => not s.cancelled)|reduce((acc, s) => acc + s.companions, 0) %}
+
+            <div class="vol-occupancy">
+                <div class="vol-occupancy__count">
+                    <span class="vol-occupancy__label">Ocupación</span>
+                    <span class="vol-occupancy__value">{{ shift.filledSlots }}</span>
+                    <span class="vol-occupancy__of">de {{ shift.slots }} plazas</span>
+                </div>
+
+                {# Se pintan TODAS las personas y luego los huecos que falten. Si se
+                 # recorriera 1..plazas, con más gente que plazas —que pasa: alguien
+                 # trae acompañante de más, o vienen cuatro de fuera para tres
+                 # sitios— desaparecerían fichas sin decir nada. #}
+                <div class="vol-occupancy__pips">
+                    {% for pip in pips %}
+                        <span class="vol-pip vol-pip--filled" title="{{ pip.name }}">
+                            {%- if pip.ini %}{{ pip.ini }}{% else %}<i class="fa fa-user-o"></i>{% endif -%}
+                        </span>
+                    {% endfor %}
+                    {% if shift.slots > pips|length %}
+                        {% for i in 1..(shift.slots - pips|length) %}
+                            <span class="vol-pip vol-pip--empty" aria-hidden="true">+</span>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+
+                {% set de_mas = shift.filledSlots - shift.slots %}
+                <p class="vol-occupancy__note">
+                    {%- if shift.remainingSlots > 0 -%}
+                        Quedan <strong>{{ shift.remainingSlots }}</strong> {{ shift.remainingSlots == 1 ? 'plaza libre' : 'plazas libres' }}.
+                    {%- elseif de_mas > 0 -%}
+                        {# remainingSlots nunca baja de cero, así que "completas" tapaba
+                         # que viene MÁS gente de la que cabe — y eso hay que verlo. #}
+                        Hay <strong>{{ de_mas }}</strong> {{ de_mas == 1 ? 'persona más' : 'personas más' }} de las plazas previstas.
+                    {%- else -%}
+                        Plazas completas.
+                    {%- endif -%}
+                    {% if companions_total > 0 %}
+                        {{ companions_total == 1 ? 'Alguien trae acompañante, que ocupa plaza.' : 'Hay ' ~ companions_total ~ ' acompañantes, y ocupan plaza.' }}
+                    {% endif %}
+                    {% if shift.guests > 0 %}
+                        {{ shift.guests }} {{ shift.guests == 1 ? 'persona viene' : 'personas vienen' }} de fuera{% if shift.guestsNote %} ({{ shift.guestsNote }}){% endif %}.
+                    {% endif %}
+                </p>
+            </div>
+        {% endif %}
+
+        {# ============ PESTAÑAS ============
+         # Sin JavaScript los paneles se ven seguidos: la ficha queda larga, que es
+         # lo que era antes, pero nunca vacía. Ver assets/js/csa-tabs.js. #}
+        <div data-csa-tabs style="margin-top: var(--csa-sp-6);">
+            <ul class="csa-tabs" role="tablist">
+                <li class="csa-tabs__item active">
+                    {# El nombre cambia con la fase porque el contenido cambia de
+                     # oficio: antes es la lista de quién viene, después es el parte
+                     # de quién vino. #}
+                    <a class="csa-tabs__link" href="#gente" role="tab" aria-selected="true">
+                        {{ is_closing ? 'Pasar lista' : 'Quién viene' }}{% if signup_count %}<span class="csa-tabs__count">{{ signup_count }}</span>{% endif %}
+                    </a>
+                </li>
+                {% if suggested|length %}
+                    <li class="csa-tabs__item">
+                        <a class="csa-tabs__link" href="#sugeridas" role="tab" aria-selected="false">
+                            A quién pedírselo<span class="csa-tabs__count">{{ suggested|length }}</span>
+                        </a>
+                    </li>
+                {% endif %}
+                <li class="csa-tabs__item">
+                    <a class="csa-tabs__link" href="#avisos" role="tab" aria-selected="false">Avisos</a>
+                </li>
+            </ul>
+
+            {# ---------- QUIÉN VIENE ---------- #}
+            <section class="csa-tabpanel is-active" id="gente" role="tabpanel">
+                <div class="prt-card">
+                    <div class="prt-card__body">
+                        {% if shift.signups is empty %}
+                            <p class="vol-empty">Todavía no se ha apuntado nadie.</p>
+                        {% else %}
+                            {# Por FASE y no por "ya pasó la fecha". Un turno anulado la
+                             # semana pasada también es pasado, y ofrecer ahí "cerrar e
+                             # imputar horas" es invitar a computarle horas a gente por algo
+                             # que se canceló.
+                             #
+                             # Pero TAMBIÉN si ya consta alguien: anotar a mano funciona en
+                             # cualquier fase, así que en un turno futuro se podía dejar a
+                             # alguien anotado con las horas equivocadas y no había dónde
+                             # corregirlo. #}
+                            {% set has_settled = shift.signups|filter(s => not s.cancelled and s.attended is not null)|length > 0 %}
+                            {% set closing_form = can_edit and (is_closing or has_settled) %}
+
+                            <form method="post" action="{{ path('volunteering_close', { id: shift.id }) }}" data-csa-validate
+                                  {% if closing_form %}data-vol-total="{{ csa.qty((shift.creditedMinutes ?: 0) / 60)|replace({',': '.'}) }}"{% endif %}>
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_close') }}">
+
+                                {# Cerrar de verdad SÓLO cuando el turno ha pasado. Sin esta
+                                 # marca, corregir a alguien en un turno futuro daba por
+                                 # ausente a todo el que estuviera apuntado esperando el día:
+                                 # en un cierre "no marcado" significa "no fue", pero aquí
+                                 # significa "todavía no ha pasado nada". #}
+                                {% if is_closing %}<input type="hidden" name="close_all" value="1">{% endif %}
+
+                                {# La tabla es de QUIÉN VIENE. Quien coordina no sale, ni
+                                 # siquiera en una fila aparte: lo normal es que no vaya
+                                 # —monta la tarea, busca gente y está pendiente— y tenerlo en
+                                 # una lista de asistencia hace contar un brazo que no
+                                 # existe. #}
+                                {% set viene = shift.signups|filter(s => not s.coordination) %}
+
+                                <div class="csa-table-wrap">
+                                    <table class="csa-table vol-people">
+                                        <thead>
+                                            <tr>
+                                                {% if closing_form %}
+                                                    <th class="csa-table__col-tight">Fue</th>
+                                                {% endif %}
+                                                <th>Persona</th>
+                                                {% if can_edit and offer.companionsAllowed %}
+                                                    <th class="csa-table__col-tight">Viene con</th>
+                                                {% endif %}
+                                                {% if closing_form %}
+                                                    <th class="csa-table__col-tight">Computa</th>
+                                                {% else %}
+                                                    <th class="csa-table__col-tight">Se apuntó</th>
+                                                {% endif %}
+                                                <th class="csa-table__col-tight">Estado</th>
+                                                {% if can_edit %}
+                                                    <th class="csa-table__col-tight" aria-label="Acciones"></th>
+                                                {% endif %}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for signup in viene %}
+                                                {{ row.persona_row(signup, shift, participation, closing_form, can_edit, is_past) }}
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                {# Cerrar sólo tiene sentido cuando el turno ya ha pasado.
+                                 # Mientras no se cierra, no computa horas a nadie. #}
+                                {% if closing_form %}
+                                    {# El total ANTES del botón, y no después de pulsarlo.
+                                     # Cerrar suma horas a la aportación de gente real: quien lo
+                                     # hace tiene que poder ver cuánto está imputando mientras
+                                     # marca, no enterarse por un flash. Lo recalcula
+                                     # assets/js/vol-close-total.js; sin JS se ve el total ya
+                                     # imputado, que sigue siendo cierto. #}
+                                    <div class="vol-close">
+                                        <p class="vol-close__sum">
+                                            Se imputarán
+                                            <strong data-vol-total-output>{{ csa.qty(credited_total / 60) }} h</strong>
+                                            en total
+                                        </p>
+                                        <p class="vol-help">
+                                            {% if is_closing %}
+                                                Marca quién fue de verdad. Las horas en blanco toman las del turno
+                                                ({{ csa.qty((shift.creditedMinutes ?: 0) / 60) }} h); cámbialas a quien se fue antes
+                                                o vino a otra cosa. Quien no esté marcadx no computa nada.
+                                            {% else %}
+                                                El turno todavía no ha pasado, pero ya consta gente anotada a mano:
+                                                aquí se le corrigen las horas, o se le quita la marca si fue un error.
+                                            {% endif %}
+                                        </p>
+                                        <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">
+                                            {% if is_closing %}
+                                                <i class="fa fa-lock"></i><span>Cerrar e imputar</span>
+                                            {% else %}
+                                                <i class="fa fa-pencil"></i><span>Corregir lo anotado</span>
+                                            {% endif %}
+                                        </button>
+                                    </div>
+                                {% elseif can_edit and offer.companionsAllowed %}
+                                    {# Sin fase de cierre no hay horas que imputar, pero sí hay
+                                     # algo editable —los acompañantes—, y unos campos sin botón
+                                     # no se guardan nunca. #}
+                                    <div class="vol-close">
+                                        <p class="vol-help">
+                                            Si alguien avisa de que viene acompañadx, apúntalo aquí: cada
+                                            acompañante ocupa una plaza, así que el turno deja de pedir gente
+                                            que ya está cubierta.
+                                        </p>
+                                        <button type="submit" class="csa-btn csa-btn--secondary csa-btn--sm">
+                                            <i class="fa fa-check"></i><span>Guardar</span>
+                                        </button>
+                                    </div>
+                                {% endif %}
+                            </form>
+                        {% endif %}
+
+                        {# ---- Quien coordina ----
+                         # Al pie de la lista de quién viene y no en el hero: es a
+                         # quien se llama si algo pasa ese día, y sus horas —que no
+                         # son de asistir— se dicen aquí porque no está en la tabla. #}
+                        {% if offer.coordinator %}
+                            {% set coord_signup = shift.signups|filter(s => s.coordination)|first %}
+                            <div class="vol-owner">
+                                <span class="vol-owner__avatar" aria-hidden="true">
+                                    {{ (offer.coordinator.name|first ~ offer.coordinator.surname|first)|upper }}
+                                </span>
+                                <div class="vol-owner__who">
+                                    <span class="vol-owner__role">Quien coordina la tarea</span>
+                                    <span class="vol-owner__name">{{ offer.coordinator.name }} {{ offer.coordinator.surname }}</span>
+                                    {# Sus horas se dicen AQUÍ porque no está en la lista de quién
+                                     # viene: coordinar no es asistir, y lo normal es que no vaya. #}
+                                    {% if coord_signup and coord_signup.attended %}
+                                        <span class="vol-owner__hours">Se apuntó {{ csa.qty((coord_signup.creditedMinutes ?: 0) / 60) }} h por coordinarlo</span>
+                                    {% elseif coord_signup and coord_signup.attended is same as(false) %}
+                                        <span class="vol-owner__hours">Dijo que al final no lo coordinó</span>
+                                    {% elseif is_past %}
+                                        <span class="vol-owner__hours">Pendiente de que diga cuántas horas le llevó</span>
+                                    {% else %}
+                                        <span class="vol-owner__hours">Dirá cuántas horas le llevó cuando pase</span>
+                                    {% endif %}
+                                </div>
+                                <div class="vol-owner__contact">
+                                    {% if offer.coordinator.celular %}
+                                        <a class="vol-actions__btn" href="tel:{{ offer.coordinator.celular|replace({' ': ''}) }}"
+                                           title="Llamar a {{ offer.coordinator.name }}"><i class="fa fa-phone"></i></a>
+                                    {% endif %}
+                                    {% if offer.coordinator.email %}
+                                        <a class="vol-actions__btn" href="mailto:{{ offer.coordinator.email }}"
+                                           title="Escribir a {{ offer.coordinator.name }}"><i class="fa fa-envelope-o"></i></a>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% endif %}
+
+                        {# ---- Anotar a alguien ----
+                         # Sólo para quien apareció sin haberse apuntado, que pasa
+                         # constantemente. Y sólo cuando el turno ya ha pasado: anotar a
+                         # alguien "que vino" a algo que es dentro de seis días no
+                         # significa nada. #}
+                        {% if can_edit and is_closing %}
+                            <hr class="vol-sep">
+
+                            <p class="vol-help">Anotar a alguien que vino sin apuntarse.</p>
+
+                            {# data-csa-dropdowns: sin él caen los <select> nativos del
+                             # sistema —fondo gris oscuro, tipografía del SO— en medio de una
+                             # pantalla csa. Y con 246 socixs el menú nativo es inusable. El
+                             # componente añade buscador solo cuando la lista es larga. #}
+                            <form method="post" action="{{ path('volunteering_add_person', { id: shift.id }) }}"
+                                  class="vol-repeat" data-csa-dropdowns data-csa-validate>
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_add_person') }}">
+
+                                <label>
+                                    Quién
+                                    <select name="partner" class="csa-select" required
+                                            data-placeholder="Escribe un nombre…"
+                                            data-invalid-message="Escribe un nombre y elígelo de la lista.">
+                                        <option value="">— elige —</option>
+                                        {% for partner in all_partners %}
+                                            <option value="{{ partner.id }}">{{ partner.name }} {{ partner.surname }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </label>
+
+                                {# VACÍO y obligatorio. Ni placeholder con una cifra —parece un
+                                 # valor puesto sin serlo— ni valor por defecto —se envía sin
+                                 # mirarlo—. Anotar a alguien a mano es un acto deliberado. #}
+                                <label>
+                                    Horas
+                                    <input type="number" name="hours" min="0.25" max="24" step="any" required
+                                           class="csa-input csa-input--compact">
+                                </label>
+
+                                <button type="submit" class="csa-btn csa-btn--secondary csa-btn--sm">Anotar</button>
+                            </form>
+                        {% endif %}
+
+                        {# ---- Gente de fuera ----
+                         # Un grupo de estudiantes, gente de otra asociación, quien pasaba
+                         # por allí. VA EN EL TURNO: que un martes vinieran tres estudiantes
+                         # no dice nada del martes siguiente.
+                         #
+                         # Y va aquí, como acción de la lista, no en el formulario de alta de
+                         # la tarea: es un dato del día, y en el alta sólo estorbaba entre
+                         # diecinueve campos. #}
+                        {% if can_edit %}
+                            <hr class="vol-sep">
+
+                            <form method="post" action="{{ path('volunteering_shift_guests', { id: shift.id }) }}" class="vol-repeat">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_shift_guests') }}">
+
+                                <label>
+                                    Gente de fuera
+                                    <input type="number" name="cuantos" min="0" max="99" step="1"
+                                           value="{{ shift.guests }}" class="csa-input csa-input--compact">
+                                </label>
+
+                                <label>
+                                    Quiénes son
+                                    <input type="text" name="quienes" maxlength="160" class="csa-input"
+                                           value="{{ shift.guestsNote }}" placeholder="3 estudiantes del IES">
+                                </label>
+
+                                <button type="submit" class="csa-btn csa-btn--ghost csa-btn--sm">Guardar</button>
+                            </form>
+
+                            <p class="vol-help--muted">
+                                Personas que no son socixs y que no vienen acompañando a nadie. Ocupan plaza
+                                —si vienen tres, el turno ya sólo pide el resto— y no se les computan horas.
+                            </p>
+                        {% endif %}
+                    </div>
+                </div>
+            </section>
+
+            {# ---------- A QUIÉN PEDÍRSELO ----------
+             # Sólo mientras falte gente. Es la herramienta de quien coordina y tiene
+             # que llenar un turno el jueves por la noche: en vez de tirar del grupo
+             # de WhatsApp, aquí están las personas a las que tiene sentido pedírselo,
+             # con su teléfono.
+             #
+             # ORDENADAS POR QUIÉN MENOS HA APORTADO, Y SIN ENSEÑAR LA CIFRA DE NADIE.
+             # La bolsa de gente va por nombre a propósito, porque una tabla ordenada
+             # por aportación es un ranking y un ranking expulsa a quien no puede
+             # competir. Aquí quien lee es quien reparte la carga de UN turno, y
+             # necesita no pedírselo siempre a las mismas cuatro; para eso basta el
+             # orden. #}
+            {% if suggested|length %}
+                <section class="csa-tabpanel" id="sugeridas" role="tabpanel">
+                    <div class="prt-card">
+                        <div class="prt-card__body">
+                            <p class="vol-help">
+                                Socixs que han marcado este tipo de trabajo y todavía no se han apuntado.
+                                Primero quien menos ha echado una mano este año, para repartir la carga.
+                            </p>
+
+                            <ul class="vol-suggest">
+                                {% for candidate in suggested %}
+                                    {% set who = candidate.partner %}
+                                    <li>
+                                        <div class="vol-suggest__who">
+                                            <span class="vol-suggest__name">{{ who.name }} {{ who.surname }}</span>
+                                            <span class="vol-suggest__why">
+                                                {%- if candidate.same_node -%}
+                                                    Recoge su cesta en {{ offer.node }} — ese día ya va a estar allí
+                                                {%- else -%}
+                                                    Tiene marcado este tipo de trabajo
+                                                {%- endif -%}
+                                            </span>
+                                        </div>
+                                        <div class="vol-suggest__contact">
+                                            {% if who.celular %}
+                                                <a class="csa-btn csa-btn--ghost csa-btn--sm" href="tel:{{ who.celular|replace({' ': ''}) }}">
+                                                    <i class="fa fa-phone"></i><span>{{ who.celular }}</span>
+                                                </a>
+                                            {% endif %}
+                                            {% if who.email %}
+                                                <a class="csa-btn csa-btn--ghost csa-btn--sm" href="mailto:{{ who.email }}?subject={{ offer.title|url_encode }}">
+                                                    <i class="fa fa-envelope-o"></i><span>Escribir</span>
+                                                </a>
+                                            {% endif %}
+                                            {% if not who.celular and not who.email %}
+                                                <span class="vol-help--muted">Sin teléfono ni correo en su ficha</span>
+                                            {% endif %}
+                                        </div>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+
+                            <p class="vol-help--muted">
+                                Esto es para pedírselo tú, de persona a persona. El aviso automático del sistema
+                                va por su cuenta y se ve en «Avisos».
+                            </p>
+                        </div>
+                    </div>
+                </section>
+            {% endif %}
+
+            {# ---------- AVISOS ---------- #}
+            <section class="csa-tabpanel" id="avisos" role="tabpanel">
+                <div class="prt-card">
+                    <div class="prt-card__body">
+                        {# Un círculo vacío frente a un check no dice si eso está pendiente,
+                         # descartado o si hay que hacer algo: se etiqueta con palabras. #}
+                        <ul class="vol-scopes">
+                            <li>
+                                <span>A quien tiene marcado este tipo de trabajo</span>
+                                {{ 'matching' in sent_scopes ? csa.badge('Enviado', 'green') : csa.badge('Sin enviar', 'neutral') }}
+                            </li>
+                            <li>
+                                <span>
+                                    A quien no ha declarado preferencias
+                                    {% if not offer.openToAnyone %}
+                                        <small class="vol-help--muted">no se le puede pedir: esta tarea no es para cualquiera</small>
+                                    {% endif %}
+                                </span>
+                                {% if not offer.openToAnyone %}
+                                    {{ csa.badge('No aplica', 'neutral') }}
+                                {% else %}
+                                    {{ 'unspecified' in sent_scopes ? csa.badge('Enviado', 'green') : csa.badge('Sin enviar', 'neutral') }}
+                                {% endif %}
+                            </li>
+                            <li>
+                                <span>A toda la asociación</span>
+                                {{ everyone_sent ? csa.badge('Enviado', 'green') : csa.badge('Sin enviar', 'neutral') }}
+                            </li>
+                        </ul>
+
+                        <p class="vol-help--muted">
+                            Los dos primeros los manda el sistema solo, cuando se acerca la fecha y siguen
+                            faltando plazas. El último se manda a mano. Todo esto es de ESTE turno: el aviso
+                            del sábado no gasta el del domingo.
+                        </p>
+
+                        {% if can_edit and not everyone_sent and shift.isOpen() %}
+                            {# Este botón gasta el canal push de toda la asociación, y el
+                             # permiso del navegador se pierde una vez y para siempre: quien
+                             # lo apaga no vuelve. Por eso se enseña el NÚMERO antes, se exige
+                             # confirmación, y sólo se puede una vez por turno. #}
+                            {{ csa.callout(
+                                'Avisar a toda la asociación llega a ' ~ everyone_count ~ ' socix(s), incluidxs quienes han dicho que de esto no les avisen. Sólo se puede hacer una vez por turno. Úsalo cuando de verdad haga falta.',
+                                'warning',
+                                'exclamation-triangle'
+                            ) }}
+
+                            <form method="post" action="{{ path('volunteering_notify_everyone', { id: shift.id }) }}"
+                                  onsubmit="return confirm('Vas a avisar a {{ everyone_count }} socix(s). Esto no se puede deshacer y sólo se puede hacer una vez. ¿Seguro?');">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_notify') }}">
+                                <button type="submit" class="csa-btn csa-btn--danger-soft csa-btn--sm">
+                                    <i class="fa fa-bullhorn"></i> Avisar a toda la asociación
+                                </button>
+                            </form>
+                        {% endif %}
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        {# ============ ANULAR EL TURNO ============
+         # El gesto del festivo, y el que hace que la receta pueda vivir en la
+         # tarea: "esto se hace los viernes" sigue siendo verdad aunque el viernes
+         # 25 de diciembre no se haga.
+         #
+         # Al final de la pantalla y sin destacar: es poco frecuente y no se puede
+         # dar por error. #}
+        {% if can_edit and not shift.cancelledAt and not is_past %}
+            <form method="post" action="{{ path('volunteering_shift_cancel', { id: shift.id }) }}"
+                  class="vol-repeat" style="margin-top: var(--csa-sp-6);"
+                  onsubmit="return confirm('¿Anular este turno? Se avisa a quien estuviera apuntadx y no se volverá a crear al abrir turnos.');">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_shift_cancel') }}">
+
+                <label>
+                    Por qué se anula
+                    <input type="text" name="motivo" maxlength="160" class="csa-input" placeholder="festivo, llovía…">
+                </label>
+
+                <button type="submit" class="csa-btn csa-btn--ghost csa-btn--sm">
+                    <i class="fa fa-ban"></i><span>Anular este turno</span>
+                </button>
+            </form>
+        {% endif %}
+    </div>
+{% endblock %}
