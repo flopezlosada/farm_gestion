@@ -87,12 +87,37 @@
                 {% endblock %}
             {% endembed %}
 
+            {# Sólo existe con el módulo de voluntariado encendido: NodeType no
+               añade los campos si está apagado, y pedirlos aquí reventaría. #}
+            {% if form.deliveryPrep is defined %}
+                {% embed '_components/csa_form_section.html.twig' with {
+                    num: '4',
+                    title: 'Montaje de las cestas',
+                    subtitle: 'Si las cestas de este punto las monta gente voluntaria, y cuándo.'
+                } %}
+                    {% block body %}
+                        {% import '_macros/csa.html.twig' as csa %}
+                        {# La casilla viene del macro de voluntariado porque es
+                           donde vive hoy; csa.field le pone `csa-input` a los
+                           checkbox y salen como un cuadrado enorme suelto. #}
+                        {% import '_macros/volunteering.html.twig' as vol %}
+                        {{ vol.check(form.deliveryPrep, 'Este punto monta las cestas con voluntariado', 'cada semana que abra se convoca sola a la gente que hace falta') }}
+                        <div class="csa-form-grid">
+                            {{ csa.field(form.deliveryPrepDayOffset, 'Qué día se monta') }}
+                            {{ csa.field(form.deliveryPrepTime, 'Hora del montaje') }}
+                            {{ csa.field(form.deliveryPrepSlots, 'Cuánta gente hace falta') }}
+                            {{ csa.field(form.deliveryPrepMinutes, 'Cuánto dura (minutos)') }}
+                        </div>
+                    {% endblock %}
+                {% endembed %}
+            {% endif %}
+
             {# Quién recibe el listado se gestiona en la FICHA (son ~150 socixs
                con correo y aquí serían otras tantas casillas), pero se enseña
                AQUÍ porque es donde se viene a configurar el punto: sin esto, la
                opción es invisible para quien la busca donde toca. #}
             {% embed '_components/csa_form_section.html.twig' with {
-                num: '4',
+                num: form.deliveryPrep is defined ? '5' : '4',
                 title: 'Quién recibe el listado',
                 subtitle: 'A quién le llega por correo el listado de este punto cuando cierra su plazo de cambios.'
             } %}

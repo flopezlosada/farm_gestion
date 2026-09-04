@@ -9,7 +9,7 @@ use Doctrine\Persistence\ObjectManager;
 
 /**
  * Carga los 4 nodos físicos de reparto, uno por cadencia soportada:
- * - Torremocha (semanal, viernes)
+ * - Torremocha (semanal, viernes; monta sus cestas con voluntariado)
  * - Cascorro (quincenal, miércoles)
  * - Midori (quincenal, miércoles)
  * - El Berrueco (mensual, jueves, 2ª semana del mes)
@@ -27,12 +27,22 @@ class NodeFixtures extends Fixture implements DependentFixtureInterface
         $metadata->setIdGenerator(new \Doctrine\ORM\Id\AssignedGenerator());
         $nodeIdProperty = new \ReflectionProperty(Node::class, 'id');
 
-        // Torremocha: viernes (5), semanal
+        // Torremocha: viernes (5), semanal.
+        //
+        // El ÚNICO que monta sus cestas con voluntariado, porque es el único que
+        // lo hace así de verdad. Que los otros tres no lo marquen no es un
+        // descuido de estas fixtures: es lo que hace visible que el montaje es
+        // un opt-in y que un punto sin él no convoca a nadie.
         $node1 = (new Node())
             ->setName('Torremocha')
             ->setDeliveryWeekday(5)
             ->setCadence(Node::CADENCE_WEEKLY)
-            ->setSchedule('Viernes de 18:00 a 20:00');
+            ->setSchedule('Viernes de 18:00 a 20:00')
+            ->setDeliveryPrep(true)
+            ->setDeliveryPrepDayOffset(-1)
+            ->setDeliveryPrepTime(new \DateTime('18:30'))
+            ->setDeliveryPrepSlots(4)
+            ->setDeliveryPrepMinutes(90);
         $nodeIdProperty->setValue($node1, 1);
         $manager->persist($node1);
 

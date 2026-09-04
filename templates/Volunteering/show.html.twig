@@ -65,7 +65,9 @@
                     <span class="prt-chip prt-chip--mute"><i class="fa fa-repeat"></i> {{ vol.repeat(offer) }}</span>
 
                     {% for category in offer.categories %}
-                        <span class="prt-chip prt-chip--mute">{{ category.name }}</span>
+                        <a class="prt-chip prt-chip--mute" href="{{ path('volunteering_category_show', { id: category.id }) }}" title="Ver el área">
+                            <i class="fa fa-tag"></i> {{ category.name }}
+                        </a>
                     {% endfor %}
 
                     {% if offer.featured %}

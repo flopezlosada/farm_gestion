@@ -66,7 +66,12 @@
  # opts: no_dot (true para badge sin punto)
  #}
 {% macro badge(label, tone = 'neutral', opts = {}) %}
-    <span class="csa-badge csa-badge--{{ tone }}{% if opts.no_dot|default(false) %} csa-badge--no-dot{% endif %}">
+    {#- `sm` para insignias con un nombre de persona dentro; `class` para lo que
+        no da un modificador propio, como csa-name. -#}
+    <span class="csa-badge csa-badge--{{ tone }}
+        {%- if opts.sm|default(false) %} csa-badge--sm{% endif %}
+        {%- if opts.no_dot|default(false) %} csa-badge--no-dot{% endif %}
+        {%- if opts.class is defined %} {{ opts.class }}{% endif %}">
         {{ label }}
     </span>
 {% endmacro %}

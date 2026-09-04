@@ -56,9 +56,9 @@
                         hint: 'opcional',
                         widget_class: 'csa-textarea'
                     }) }}
-                    {{ csa.field(form.categories, 'Tipo de trabajo', {
+                    {{ csa.field(form.categories, 'Área', {
                         full: true,
-                        hint: 'se avisa primero a quien lo tenga marcado en su ficha'
+                        hint: 'se avisa primero a quien la tenga marcada en su ficha'
                     }) }}
                 </div>
             {% endblock %}
@@ -83,15 +83,35 @@
                 </div>
 
                 {# Los tramos horarios, en una fila propia: son cuatro campos que se
-                 # leen como dos parejas, y en el grid general quedaban desparejados. #}
-                <p class="vol-help">A qué hora se hace. El segundo tramo es para el trabajo que se hace dos veces al día, como sacar al perro.</p>
+                 # leen como dos parejas, y en el grid general quedaban desparejados.
+                 #
+                 # En el montaje de las cestas no están: el horario lo manda el punto
+                 # de recogida y el sincronizador lo reescribe, así que un campo aquí
+                 # sólo serviría para que alguien creyera haber cambiado la hora. #}
+                {% if form.firstStart is defined %}
+                    <p class="vol-help">A qué hora se hace. El segundo tramo es para el trabajo que se hace dos veces al día, como sacar al perro.</p>
 
-                <div class="csa-form-grid">
-                    {{ csa.field(form.firstStart, 'De') }}
-                    {{ csa.field(form.firstEnd, 'a', { hint: 'opcional' }) }}
-                    {{ csa.field(form.secondStart, 'Y también de', { hint: 'opcional' }) }}
-                    {{ csa.field(form.secondEnd, 'a', { hint: 'opcional' }) }}
-                </div>
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.firstStart, 'De') }}
+                        {{ csa.field(form.firstEnd, 'a', { hint: 'opcional' }) }}
+                        {{ csa.field(form.secondStart, 'Y también de', { hint: 'opcional' }) }}
+                        {{ csa.field(form.secondEnd, 'a', { hint: 'opcional' }) }}
+                    </div>
+                {% else %}
+                    {{ csa.callout(
+                        'El cuándo de esta convocatoria lo manda su punto de recogida' ~ (offer.node ? ' (' ~ offer.node.name ~ ')' : '') ~
+                        ': los días salen del calendario de reparto y la hora, de lo que ese punto tenga configurado. Para cambiarla siempre, edita el punto; para cambiar sólo una semana, mueve ese turno.',
+                        'info',
+                        'clock-o'
+                    ) }}
+                    {% if offer.node and is_granted('ROLE_GESTION_REPARTO') %}
+                        {{ csa.btn('Editar ' ~ offer.node.name, {
+                            variant: 'ghost',
+                            href: path('node_edit', { id: offer.node.id }),
+                            icon: 'fa-map-marker'
+                        }) }}
+                    {% endif %}
+                {% endif %}
 
                 {% if not is_new and offer.isRepeating() %}
                     {{ csa.callout(

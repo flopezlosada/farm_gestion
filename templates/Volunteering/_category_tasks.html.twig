@@ -1,0 +1,140 @@
+{#
+ # Un bloque de TURNOS dentro de la ficha de un área.
+ #
+ # En un partial y no repetido dos veces porque la ficha lo pinta dos —lo que
+ # falta cerrar y lo que viene— con las mismas columnas: duplicado, el día que se
+ # añada una cambiaría en uno solo.
+ #
+ # Sin columna de área, que es la diferencia con el listado general: aquí ya se
+ # sabe en qué área estamos y repetirla en cada fila es ruido. Y SIN COLUMNA DE
+ # ESTADO: el estado se lee en la acción que toca hacer. Una fila que pide
+ # «Publicar» es un borrador; una que dice «faltan 2» va corta de gente; una que
+ # ofrece «Cerrar» ya pasó. Una insignia al lado repetía eso con otras palabras.
+ #
+ # CADA FILA LLEVA UNA ACCIÓN, la que corresponde a su estado, y el resto va en
+ # un menú. Con cuatro iconos iguales por fila nadie sabía cuál pulsar.
+ #
+ # ES DE TURNOS Y NO DE TAREAS desde que el momento vive en su propia fila: «lo
+ # que falta cerrar» y «lo que viene» son preguntas con fecha, y una definición
+ # no tiene fecha. Publicar y anular actúan sobre la TAREA del turno, que es de
+ # quien es el estado.
+ #
+ # Espera: shifts (lista de VolunteerShift), category (el área), now, y mode
+ # ('pending' = pasaron y falta cerrarlas | 'upcoming' = lo que viene).
+ #}
+{% import '_macros/volunteering.html.twig' as vol %}
+{% import '_macros/csa.html.twig' as csa %}
+
+<div class="csa-table-wrap">
+    <table class="csa-table">
+        <thead>
+            <tr>
+                <th>Tarea</th>
+                <th class="csa-table__col-tight">Cuándo</th>
+                <th class="csa-table__col-tight">Dónde</th>
+                <th class="csa-table__col-tight">{{ mode == 'pending' ? 'Quién vino' : 'Plazas' }}</th>
+                <th class="csa-table__actions" aria-label="Acciones"></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for shift in shifts %}
+                {% set offer = shift.offer %}
+                {% set can_edit = is_granted('VOLUNTEER_OFFER_EDIT', shift) %}
+                {% set shift_url = path('volunteering_shift', { id: shift.id }) %}
+                {% set people = shift.committedSignups|length %}
+                <tr>
+                    <td>
+                        <a class="csa-table__primary" href="{{ shift_url }}">{{ offer.title }}</a>
+                        {# Lo que no es «publicada y en marcha» se dice al lado del
+                         # nombre, en palabras que no obliguen a saber qué es un
+                         # borrador. #}
+                        {% if offer.status == 'draft' %}
+                            {{ csa.badge('Sin publicar', 'neutral', { sm: true, no_dot: true }) }}
+                        {% elseif offer.status == 'paused' %}
+                            {{ csa.badge('En pausa', 'ochre', { sm: true, no_dot: true }) }}
+                        {% elseif offer.status == 'cancelled' %}
+                            {{ csa.badge('Anulada', 'neutral', { sm: true, no_dot: true }) }}
+                        {% endif %}
+                        {% if offer.featured %}{{ csa.badge('Destacada', 'ochre', { sm: true, no_dot: true }) }}{% endif %}
+                        {% if mode == 'pending' %}
+                            {% set days = ((now.timestamp - shift.startsAt.timestamp) / 86400)|round(0, 'floor') %}
+                            <div class="csa-table__sub csa-table__sub--ochre">
+                                {{ days == 0 ? 'Pasó hoy' : (days == 1 ? 'Pasó ayer' : 'Pasó hace ' ~ days ~ ' días') }}
+                            </div>
+                        {% endif %}
+                    </td>
+                    <td class="csa-table__col-tight">{{ vol.shift_when(shift) }}</td>
+                    <td class="csa-table__col-tight">{{ vol.task_place(offer) }}</td>
+                    <td class="csa-table__col-tight">
+                        {% if mode == 'pending' %}
+                            <strong>{{ people }} {{ people == 1 ? 'apuntadx' : 'apuntadxs' }}</strong>
+                            <div class="csa-table__sub">{{ shift.pendingConfirmationCount > 0 ? 'sin confirmar si vino' : 'confirmado' }}</div>
+                        {% else %}
+                            {% set slots = shift.slots %}
+                            {% if slots is null %}
+                                <strong>{{ shift.filledSlots }} {{ shift.filledSlots == 1 ? 'apuntadx' : 'apuntadxs' }}</strong>
+                                <div class="csa-table__sub">sin límite de gente</div>
+                            {% else %}
+                                <strong>{{ shift.filledSlots }} de {{ slots }}</strong>
+                                {% set left = shift.remainingSlots %}
+                                {% if left > 0 %}
+                                    <div class="csa-table__sub csa-table__sub--ochre">{{ left == 1 ? 'falta 1' : 'faltan ' ~ left }}</div>
+                                {% else %}
+                                    <div class="csa-table__sub">completo</div>
+                                {% endif %}
+                            {% endif %}
+                        {% endif %}
+                    </td>
+                    <td class="csa-table__actions">
+                        <div class="prt-rowactions">
+                            {# ---- LA acción de la fila ---- #}
+                            {% if mode == 'pending' %}
+                                {{ csa.btn('Cerrar', { variant: 'secondary', size: 'sm', icon: 'fa-check-square-o', href: shift_url }) }}
+                            {% elseif offer.status == 'draft' and can_edit %}
+                                {# Publicar es el gesto que molesta a la asociación: va por POST
+                                 # y con token, y pasa por el mismo camino que la edición. #}
+                                <form method="post" action="{{ path('volunteering_status', { id: offer.id }) }}" style="display: inline;">
+                                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_status') }}">
+                                    <input type="hidden" name="from_category" value="{{ category.id }}">
+                                    <input type="hidden" name="estado" value="published">
+                                    <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">Publicar</button>
+                                </form>
+                            {% elseif offer.status == 'published' and shift.remainingSlots is not null and shift.remainingSlots > 0 %}
+                                {{ csa.btn('Pedir gente', { variant: 'secondary', size: 'sm', href: shift_url ~ '#avisos' }) }}
+                            {% else %}
+                                {{ csa.btn('Ver', { variant: 'ghost', size: 'sm', href: shift_url }) }}
+                            {% endif %}
+
+                            {# ---- el resto, en un menú ---- #}
+                            {% if can_edit %}
+                                <details class="prt-kebab prt-kebab--right">
+                                    <summary class="csa-table__iconbtn" title="Más acciones" aria-label="Más acciones"><i class="fa fa-ellipsis-v"></i></summary>
+                                    <div class="prt-kebab__menu">
+                                        <a class="prt-kebab__item" href="{{ shift_url }}"><i class="fa fa-eye"></i> Ver el turno</a>
+                                        <a class="prt-kebab__item" href="{{ path('volunteering_edit', { id: offer.id }) }}"><i class="fa fa-pencil"></i> Editar la tarea</a>
+                                        {% if offer.status == 'published' %}
+                                            <form method="post" action="{{ path('volunteering_status', { id: offer.id }) }}"
+                                                  onsubmit="return confirm('¿Anular «{{ offer.title|e('js') }}»? Se conserva con lo que tenga apuntado, y se avisa a quien se hubiera apuntado.');">
+                                                <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_status') }}">
+                                                <input type="hidden" name="from_category" value="{{ category.id }}">
+                                                <input type="hidden" name="estado" value="cancelled">
+                                                <button type="submit" class="prt-kebab__item prt-kebab__item--danger"><i class="fa fa-ban"></i> Anular la tarea</button>
+                                            </form>
+                                        {% elseif offer.status == 'cancelled' or offer.status == 'paused' %}
+                                            <form method="post" action="{{ path('volunteering_status', { id: offer.id }) }}">
+                                                <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_status') }}">
+                                                <input type="hidden" name="from_category" value="{{ category.id }}">
+                                                <input type="hidden" name="estado" value="published">
+                                                <button type="submit" class="prt-kebab__item"><i class="fa fa-undo"></i> Volver a publicar</button>
+                                            </form>
+                                        {% endif %}
+                                    </div>
+                                </details>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>

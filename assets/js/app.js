@@ -13,6 +13,10 @@ require('../css/csa/index.css');
 // [data-csa-dropdowns]). Ver assets/js/csa-dropdown.js.
 require('./csa-dropdown.js');
 
+// Buscador para listas largas de casillas (opt-in por [data-csa-check-filter]).
+// Sin JS se ven todas, que es el estado correcto. Ver assets/js/csa-check-filter.js.
+require('./csa-check-filter.js');
+
 // Pestañas para partir una ficha larga (opt-in por [data-csa-tabs]). Sin JS
 // los paneles se ven todos. Ver assets/js/csa-tabs.js.
 require('./csa-tabs.js');

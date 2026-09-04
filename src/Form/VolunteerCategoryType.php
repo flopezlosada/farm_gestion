@@ -4,9 +4,9 @@ namespace App\Form;
 
 use App\Entity\User;
 use App\Entity\VolunteerCategory;
+use App\Repository\UserRepository;
 use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
-use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
 use Symfony\Component\Form\Extension\Core\Type\TextareaType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
@@ -34,57 +34,93 @@ class VolunteerCategoryType extends AbstractType
                 'help' => 'Se le enseña a cada socix junto a la casilla, para que sepa qué está marcando.',
                 'attr' => ['rows' => 3],
             ])
-            ->add('active', CheckboxType::class, [
-                'label' => 'Se sigue ofreciendo',
-                'required' => false,
-                'help' => 'Desmárcala para retirarla sin perder el histórico de tareas que la usaron.',
-            ])
-            ->add('deliveryPrep', CheckboxType::class, [
-                'label' => 'Es el montaje del reparto',
-                'required' => false,
-                'help' => 'Márcala sólo en el área de montar las cestas. Con ella, a cada socix se le dice en su panel quién le está preparando la cesta de esa semana en su punto de recogida — y se le avisa si no se ha apuntado nadie.',
-            ])
+            // SIN CASILLA DE ESTADO, y no por hacer sitio. Retirar un área o
+            // volver a ofrecerla ya se hace a un clic desde el listado y desde
+            // la ficha (`volunteering_category_toggle`), que es donde se decide
+            // —mirando el catálogo entero— y no dentro de un formulario que hay
+            // que abrir, recorrer y guardar. Teniendo las dos vías, la casilla
+            // era un segundo camino al mismo dato, más escondido y sin el aviso
+            // de confirmación que sí lleva la acción.
+            //
+            // TAMPOCO LA DE «es el montaje del reparto». Ese booleano sirve para
+            // señalar exactamente un área en toda la asociación, así que permite
+            // dejarlo a cero —y el panel del socix se queda mudo sin decir por
+            // qué— o marcarlo en dos, y entonces la home señala a quien ese día
+            // está haciendo otra cosa. Está decidido que el dato se mude al nodo
+            // y que las tareas de montaje las genere el calendario de reparto;
+            // hasta entonces no se ofrece aquí, porque ofrecer un footgun es
+            // invitar a pisarlo. Ninguna área lo tiene marcado hoy.
             ->add('coordinators', EntityType::class, [
                 'label' => 'Quién coordina esta área',
                 'class' => User::class,
                 // Nombre de la persona, no el username: en las cuentas de socixs
                 // el username es su correo, y un desplegable que ofrece
                 // "aguilella.vicente@gmail.com" no dice quién es a nadie.
-                'choice_label' => static fn (User $user): string => $user->getDisplayName(),
-                // SÓLO quien tenga marcado "Voluntariado" en su ficha de
-                // Usuarias. En producción hay del orden de doscientas cuentas y
-                // un desplegable con todas es inusable: el paso previo en
-                // Usuarias es lo que lo reduce a las candidatas de verdad, y de
-                // paso evita nombrar coordinadora a una cuenta de servicio
-                // (guest, mancomunidad) por un dedazo.
                 //
-                // LIKE sobre la columna serializada, que es como ya consulta por
-                // rol UserRepository::findByRole(). Feo, pero es el formato en
-                // el que Doctrine guarda el array y no vamos a cambiarlo por
-                // esto. ROLE_ADMIN entra también: lo incluye todo.
+                // En minúsculas porque en la base de datos están EN MAYÚSCULAS
+                // y cuarenta pills gritando no se leen; la plantilla las
+                // capitaliza por CSS, que pone la inicial pero no baja el resto.
+                'choice_label' => static fn (User $user): string => mb_strtolower($user->getDisplayName()),
+                // CUALQUIER CUENTA HABILITADA, y esto se abrió a propósito.
+                // Antes había que marcarle "Voluntariado" en Usuarias para que
+                // apareciese aquí, y eran dos pantallas para un solo encargo.
                 //
-                // Y sólo cuentas habilitadas: nombrar coordinadora a una cuenta
-                // desactivada la dejaría con el encargo y sin poder entrar.
-                'query_builder' => static fn ($repository) => $repository
+                // Ese pre-paso no protegía nada: marcar a alguien aquí es
+                // justamente lo que le concede ROLE_GESTION_VOLUNTARIADO
+                // ({@see \App\Entity\User::getRoles()}), así que filtrar por
+                // "quien ya tiene el permiso" no evitaba ningún acceso
+                // indebido — sólo obligaba a concederlo antes en otro sitio, y
+                // dejaba el mismo permiso escrito en dos lugares que hay que
+                // mantener a mano. Es lo que ese getRoles() dice querer evitar.
+                //
+                // Se sostenía además sobre un dato equivocado ("hay del orden
+                // de doscientas cuentas"): las doscientas y pico son socixs,
+                // pero cuentas hay 43 — el número que ya estaba bien contado en
+                // {@see \App\Entity\Node::$sheetRecipients}. Con esa cifra el
+                // desplegable se lee, y lo que hacía falta era poder buscar en
+                // él, no recortarlo por permisos.
+                //
+                // Se filtran dos cosas. Las cuentas deshabilitadas, porque
+                // nombrar coordinadora a una cuenta desactivada la dejaría con
+                // el encargo y sin poder entrar. Y las que no tienen socix
+                // detrás (INNER JOIN), que hoy son exactamente cuatro: `admin`,
+                // que es la cuenta de administración y no una persona, y
+                // `loreto`, `sara` y `monica`, cuyo último acceso es de 2016,
+                // 2015 y 2017 — cuentas de la era vieja del sistema. Ofrecer a
+                // una de ellas para coordinar es ofrecer a alguien que ya no
+                // está, y salían encima con el username en minúsculas en medio
+                // de una lista de nombres reales.
+                //
+                // El javadoc de VolunteerCategory::$coordinators defiende que la
+                // relación cuelgue de User porque "no toda persona que coordina
+                // algo es socia". Sigue siendo verdad como diseño, pero hoy no
+                // hay ni un caso: cero cuentas vinculadas a un Worker. El día
+                // que exista, este INNER JOIN es la línea que hay que revisar.
+                'query_builder' => static fn (UserRepository $repository) => $repository
                     ->createQueryBuilder('u')
-                    ->leftJoin('u.partner', 'p')
+                    // Fetch join: getDisplayName() pregunta por el socix una vez
+                    // por opción, y sin traerlo aquí son cuarenta consultas.
+                    ->innerJoin('u.partner', 'p')
                     ->addSelect('p')
                     ->where('u.enabled = true')
-                    ->andWhere('u.roles LIKE :vol OR u.roles LIKE :volEdit OR u.roles LIKE :admin')
-                    ->setParameter('vol', '%"ROLE_GESTION_VOLUNTARIADO"%')
-                    ->setParameter('volEdit', '%"ROLE_GESTION_VOLUNTARIADO_EDIT"%')
-                    ->setParameter('admin', '%"ROLE_ADMIN"%')
                     ->orderBy('p.name', 'ASC')
-                    ->addOrderBy('u.username', 'ASC'),
+                    ->addOrderBy('p.surname', 'ASC'),
                 // Casillas y no un <select multiple>: el nativo obliga a
                 // ctrl+clic para elegir varias, no deja ver de un vistazo cuáles
                 // están marcadas y en una caja de cuatro líneas hay que buscar
-                // con scroll. Es el mismo patrón que ya usa el tipo de trabajo de
+                // con scroll. Es el mismo patrón que ya usa el área de
                 // una tarea, y el CSS del proyecto lo pinta como pills.
+                //
+                // Con las 43 cuentas son unas quince filas de pills, así que la
+                // plantilla les pone un buscador por encima
+                // (`data-csa-check-filter`). Se filtra lo ya pintado en vez de
+                // cambiar a un desplegable con búsqueda porque lo que aporta la
+                // casilla es ver de un golpe quién está marcado, y un
+                // desplegable esconde justo eso.
                 'expanded' => true,
                 'multiple' => true,
                 'required' => false,
-                'help' => 'Podrán publicar, cerrar y pedir gente para las tareas de esta área, y sólo de ésta. Con esto les basta: no hace falta darles ningún rol aparte, se deriva solo.',
+                'help' => 'Marcar a alguien aquí le da acceso al voluntariado de esta área, y sólo de ésta: podrá publicar tareas, cerrarlas y pedir gente. No hace falta darle ningún permiso aparte en Usuarias.',
             ])
         ;
     }

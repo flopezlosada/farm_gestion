@@ -1,0 +1,50 @@
+-- ============================================================================
+-- Retirada de `volunteer_category.delivery_prep`.
+--
+-- La marca del montaje se mudó al punto de recogida
+-- (`dev-docs/schema/node-delivery-prep.sql`), donde tener uno, ninguno o todos
+-- marcados es válido. En el tipo de trabajo no lo era: servía para señalar una
+-- sola cosa en toda la asociación, y aun así permitía cero —panel mudo— y dos
+-- —panel señalando a quien friega el suelo—.
+--
+-- ⚠️⚠️ ESTE VA DESPUÉS DEL CÓDIGO, al revés que casi todos los de esta carpeta,
+-- Y NO ES UNA SUGERENCIA: se ejecutó antes de tiempo el 2026-09-03 y dejó el
+-- escaparate en 500 con
+--
+--     SQLSTATE[42S22]: Column not found: 1054
+--     Unknown column 't0.delivery_prep' in 'field list'
+--
+-- en TODA pantalla que cargara un área de voluntariado. La regla de «el SQL
+-- antes del código» vale para AÑADIR: una columna nueva que el código viejo
+-- ignora no molesta a nadie. Con un DROP el orden se INVIERTE, porque una
+-- columna que la entidad sigue mapeando y ya no existe tumba la aplicación.
+--
+-- Y OJO CON QUÉ CÓDIGO CORRE EN CADA BASE, que es lo que falló: en local, `db`
+-- la sirve el árbol principal —hoy la rama `pruebas`—, no la rama donde se está
+-- trabajando. Que la entidad esté limpia en tu rama no basta: tiene que estarlo
+-- en la rama que sirve esa base.
+--
+-- Orden correcto, entorno por entorno: subir el código que ya no mapea la
+-- columna, comprobar que las pantallas de voluntariado cargan, y entonces
+-- ejecutar esto. En producción, entre las dos cosas hay un mirror por FTP: si se
+-- invierte, voluntariado se queda caído todo ese rato.
+--
+-- NO HAY DATO QUE MIGRAR, y está comprobado, no supuesto: en `db` las cuatro
+-- áreas tienen la columna a 0, en `db_prod_snapshot` la tabla está vacía, y en
+-- producción el módulo de voluntariado se crea desde cero con la migración del
+-- 2026-08-31. Nadie ha llegado a marcar nunca esa casilla.
+--
+-- Aun así, la comprobación de abajo se ejecuta ANTES en cada entorno. Si
+-- devuelve algo, hay un área marcada que alguien usó y toca mirar qué punto
+-- convocaba antes de borrar nada.
+--
+-- Aplicar a las tres locales (db, db_prod_snapshot, db_test) y a prod, cada una
+-- DESPUÉS de que su código deje de mapear la columna. A 2026-09-03 las tres la
+-- tienen puesta a propósito: se quitó, rompió el escaparate y se devolvió.
+-- ============================================================================
+
+-- 1) Comprobación previa. Tiene que devolver CERO filas.
+SELECT id, name FROM volunteer_category WHERE delivery_prep = 1;
+
+-- 2) Sólo si lo anterior salió vacío.
+ALTER TABLE volunteer_category DROP delivery_prep;
