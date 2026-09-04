@@ -273,6 +273,37 @@ Cada fase termina con tests en verde y un tag `vX.Y` en git.
   (los archivos vivos del repo sólo llevan defaults DDEV inocuos), es
   deuda operativa del servidor.
 
+## Reglas de trabajo entre sesiones (git + DDEV) — OBLIGATORIAS
+
+Paco tiene varias sesiones de Claude Code abiertas a la vez sobre este
+repositorio. Estas reglas existen porque se han roto todas al menos una vez
+y cada vez costó trabajo de otra persona: commits ajenos arrastrados en una
+PR, HEAD roto, merges que cayeron en la rama equivocada.
+
+1. **El árbol principal (`/Volumes/CrucialX9/transition/csa-vega`) está
+   SIEMPRE en la rama `pruebas`.** Es lo que sirve DDEV en
+   `csa-vega.ddev.site` y es el escaparate donde Paco mira lo que hacen
+   todas las sesiones. Nadie hace `checkout`/`switch` ahí, ni con permiso.
+   Antes de cualquier merge al escaparate: `git branch --show-current` y si
+   no dice `pruebas`, parar y avisar.
+2. **Todo cambio, sin excepción, nace en su propio worktree con rama
+   propia desde `main`**: `git worktree add .claude/worktrees/<nombre> -b
+   <tipo>/<nombre> origin/main`. Ni commits en el árbol principal, ni dos
+   sesiones en el mismo worktree. Si un cambio necesita otra base (una
+   rama aún sin mergear), se decide en ese momento y se dice en la PR.
+3. **Para que Paco lo vea**: desde el árbol principal, en `pruebas`,
+   `git merge --no-ff <rama>`. Si el cambio toca `assets/`, después
+   `ddev exec "cd /var/www/html && npm run dev"`. `pruebas` es escaparate,
+   no rama de entrega: lo que sólo está ahí se pierde.
+4. **La entrega es una PR contra `main`** desde la rama del worktree. Los
+   conflictos que aparezcan al mergear a `pruebas` se resuelven ahí y OTRA
+   VEZ en la PR: `pruebas` no arregla nada.
+5. **La base `db` la sirve el árbol principal (`pruebas`)**, no tu rama. Un
+   `ALTER ... ADD` va antes del código; un `DROP` va DESPUÉS de que el
+   código que deja de mapear esa columna esté en `pruebas`, o toda la app
+   da 500. Si tu rama espera un esquema que `db` no tiene, tu worktree no
+   puede verificar nada: se trae `pruebas` a la rama, no se rebaja la base.
+
 ## Convenciones
 
 - **Commits en español**, [Conventional Commits](https://www.conventionalcommits.org/es/v1.0.0/)
