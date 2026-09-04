@@ -114,8 +114,8 @@ class VolunteeringCategoryShowTest extends WebTestCase
         $offer = $this->makeOffer($em, 'Borrador a publicar', $area, VolunteerOffer::STATUS_DRAFT);
         $em->flush();
 
-        $client->request('POST', '/gestion/voluntariado/' . $offer->getId() . '/estado', [
-            '_csrf_token' => $this->token($client, 'volunteering_status'),
+        $client->request('POST', '/gestion/voluntariado/tarea/' . $offer->getId() . '/estado', [
+            '_csrf_token' => $this->statusToken($client, $area, $offer),
             'estado' => VolunteerOffer::STATUS_PUBLISHED,
             'from_category' => $area->getId(),
         ]);
@@ -143,8 +143,8 @@ class VolunteeringCategoryShowTest extends WebTestCase
         $offer = $this->makeOffer($em, 'Tarea intacta', $area, VolunteerOffer::STATUS_PUBLISHED);
         $em->flush();
 
-        $client->request('POST', '/gestion/voluntariado/' . $offer->getId() . '/estado', [
-            '_csrf_token' => $this->token($client, 'volunteering_status'),
+        $client->request('POST', '/gestion/voluntariado/tarea/' . $offer->getId() . '/estado', [
+            '_csrf_token' => $this->statusToken($client, $area, $offer),
             'estado' => 'archivada-por-la-cara',
             'from_category' => $area->getId(),
         ]);
@@ -168,7 +168,7 @@ class VolunteeringCategoryShowTest extends WebTestCase
         $offer = $this->makeOffer($em, 'Tarea sin token', $area, VolunteerOffer::STATUS_PUBLISHED);
         $em->flush();
 
-        $client->request('POST', '/gestion/voluntariado/' . $offer->getId() . '/estado', [
+        $client->request('POST', '/gestion/voluntariado/tarea/' . $offer->getId() . '/estado', [
             'estado' => VolunteerOffer::STATUS_CANCELLED,
             'from_category' => $area->getId(),
         ]);
@@ -191,10 +191,11 @@ class VolunteeringCategoryShowTest extends WebTestCase
         $area = $this->makeCategory($em, 'Ficha Editar Limpio');
         $em->flush();
 
-        $client->request('GET', '/gestion/voluntariado/categorias/' . $area->getId() . '/editar');
+        $crawler = $client->request('GET', '/gestion/voluntariado/categorias/' . $area->getId() . '/editar');
 
         $this->assertResponseIsSuccessful();
-        $this->assertStringNotContainsString('vol-history', $client->getResponse()->getContent());
+        // Por elemento y no por texto: la hoja de estilos del módulo menciona la clase.
+        $this->assertCount(0, $crawler->filter('.vol-history'));
     }
 
     /**
@@ -233,6 +234,11 @@ class VolunteeringCategoryShowTest extends WebTestCase
         $mia->addCoordinator($user);
         $em->persist($user);
         $em->flush();
+
+        // El rol sale de la relación y la relación se lee de la BBDD: el objeto
+        // recién creado tiene la colección inversa vacía y daría 403.
+        $em->clear();
+        $user = $em->find(User::class, $user->getId());
 
         $client->loginUser($user);
         $client->request('GET', '/gestion/voluntariado/actividad?area=' . $ajena->getId());
@@ -292,9 +298,20 @@ class VolunteeringCategoryShowTest extends WebTestCase
         return static::getContainer()->get(AppSettings::class);
     }
 
-    private function token(KernelBrowser $client, string $id): string
+    /**
+     * El token CSRF del atajo de estado, leído de la ficha del área como lo
+     * leería el navegador. Pedírselo al gestor de tokens fuera de una petición
+     * no vale: sin sesión no hay token.
+     */
+    private function statusToken(KernelBrowser $client, VolunteerCategory $area, VolunteerOffer $offer): string
     {
-        return static::getContainer()->get('security.csrf.token_manager')->getToken($id)->getValue();
+        $crawler = $client->request('GET', '/gestion/voluntariado/categorias/' . $area->getId());
+        $this->assertResponseIsSuccessful();
+
+        return $crawler
+            ->filter(sprintf('form[action="/gestion/voluntariado/tarea/%d/estado"] input[name="_csrf_token"]', $offer->getId()))
+            ->first()
+            ->attr('value');
     }
 
     private function makeCategory(EntityManagerInterface $em, string $name): VolunteerCategory
