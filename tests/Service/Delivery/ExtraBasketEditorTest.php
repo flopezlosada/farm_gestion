@@ -8,6 +8,7 @@ use App\Entity\BasketShare;
 use App\Entity\Node;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketExtra;
+use App\Entity\PartnerDeliveryShift;
 use App\Entity\PartnerEvent;
 use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketGroup;
@@ -65,6 +66,7 @@ class ExtraBasketEditorTest extends TestCase
      * @param bool                     &$flushed         Se pone a true al hacer flush.
      * @param PartnerBasketExtra[]     $existingExtras   Overrides existentes (findForPartnerAndBasket / hasExtra / removeExtra).
      * @param array<int, object>       &$removed         Recoge lo borrado (em->remove).
+     * @param PartnerDeliveryShift[]   $accumulatedInto  Intents cuya cesta se trasladó SUMANDO a esa semana.
      */
     private function buildEditor(
         WeeklyBasketRepository $wbRepo,
@@ -74,6 +76,7 @@ class ExtraBasketEditorTest extends TestCase
         bool &$flushed,
         array $existingExtras = [],
         array &$removed = [],
+        array $accumulatedInto = [],
     ): ExtraBasketEditor {
         $componentRepo = $this->createMock(EntityRepository::class);
         $componentRepo->method('find')->willReturnCallback(fn ($id) => $this->component((int) $id));
@@ -88,12 +91,20 @@ class ExtraBasketEditorTest extends TestCase
         $extraRepo->method('findOneForPartnerBasketComponent')->willReturn($existingOverride);
         $extraRepo->method('findForPartnerAndBasket')->willReturn($existingExtras);
 
+        // Quitar el añadido de un día tiene que ajustar los intents que habían trasladado
+        // su cesta ahí (o se pierde / se duplica), así que el editor consulta este repo.
+        // Sin su rama en el match caía en $componentRepo, que no tiene el método y devolvía
+        // null → "foreach() argument must be of type array|object".
+        $shiftRepo = $this->createMock(\App\Repository\PartnerDeliveryShiftRepository::class);
+        $shiftRepo->method('findAccumulatedInto')->willReturn($accumulatedInto);
+
         $em = $this->createMock(EntityManagerInterface::class);
         $em->method('getRepository')->willReturnCallback(fn (string $class) => match ($class) {
             WeeklyBasket::class => $wbRepo,
             WeeklyBasketStatus::class => $statusRepo,
             PartnerBasketExtra::class => $extraRepo,
             \App\Entity\PartnerBasketShare::class => $shareRepo,
+            \App\Entity\PartnerDeliveryShift::class => $shiftRepo,
             default => $componentRepo,
         });
         $em->method('persist')->willReturnCallback(function (object $e) use (&$persisted): void {
@@ -335,5 +346,69 @@ class ExtraBasketEditorTest extends TestCase
 
         $this->assertTrue($result);
         $this->assertSame([$extra], $removed); // solo el override, nada de piedra
+    }
+
+    public function testRemoveExtraDevuelveAPendienteLaCestaTrasladadaAEseDia(): void
+    {
+        // Parte del añadido de un día puede ser una cesta que OTRA semana trasladó sumando
+        // ahí. Al quitarlo, su intent deja de estar "colocado": la cesta vuelve a estar
+        // pendiente en la papelera de su semana. Sin esto apuntaría a una entrega que ya no
+        // existe — ni entregada ni recuperable.
+        $wbRepo = $this->createMock(WeeklyBasketRepository::class);
+        $wbRepo->method('findOneBy')->willReturn(null);
+
+        $moved = new PartnerDeliveryShift(new Partner(), new Basket(), null);
+        $moved->setAccumulatedTo(new Basket());
+
+        $persisted = [];
+        $flushed = false;
+        $removed = [];
+        $editor = $this->buildEditor(
+            $wbRepo,
+            $this->createMock(WeeklyBasketComposer::class),
+            null,
+            $persisted,
+            $flushed,
+            [$this->override(BasketComponent::ID_VEGETABLES, '1.00')],
+            $removed,
+            [$moved],
+        );
+
+        $editor->removeExtra(new Partner(), new Basket(), 'gestor:1');
+
+        $this->assertNull($moved->getAccumulatedTo());
+        $this->assertTrue($moved->isParked(), 'La cesta vuelve a estar pendiente, recuperable desde su papelera.');
+    }
+
+    public function testRemoveExtraReApuntaLaCestaTrasladadaCuandoElAnadidoViajaAOtroDia(): void
+    {
+        // El otro caso: el añadido no se quita, VIAJA con la cesta a otra fecha (mover un día
+        // que llevaba cestas trasladadas). Entonces siguen colocadas, ahora allí. Devolverlas
+        // a pendiente las contaría dos veces: sumadas en el nuevo día Y en la papelera.
+        $wbRepo = $this->createMock(WeeklyBasketRepository::class);
+        $wbRepo->method('findOneBy')->willReturn(null);
+
+        $moved = new PartnerDeliveryShift(new Partner(), new Basket(), null);
+        $moved->setAccumulatedTo(new Basket());
+        $newDay = new Basket();
+
+        $persisted = [];
+        $flushed = false;
+        $removed = [];
+        $editor = $this->buildEditor(
+            $wbRepo,
+            $this->createMock(WeeklyBasketComposer::class),
+            null,
+            $persisted,
+            $flushed,
+            [$this->override(BasketComponent::ID_VEGETABLES, '1.00')],
+            $removed,
+            [$moved],
+        );
+
+        $editor->removeExtra(new Partner(), new Basket(), 'gestor:1', $newDay);
+
+        $this->assertSame($newDay, $moved->getAccumulatedTo());
+        $this->assertFalse($moved->isParked(), 'Sigue colocada: no puede volver a la papelera.');
     }
 }

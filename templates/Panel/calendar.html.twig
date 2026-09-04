@@ -55,6 +55,8 @@
        FEATURE_PARTNER_SELFSERVICE. Con él apagado, can_self_serve es false y el
        calendario se reusa en SOLO LECTURA: cal.readonly desactiva arrastre,
        papelera y botones de acción. La protección dura vive en cada endpoint. #}
+    {# Deshacer un traslado sumando SÍ se le ofrece (es su propia cesta); quitar una cesta
+       extra puesta a mano por gestión NO — de ahí que no se pase route_extra_remove. #}
     {% include 'partner/_calendar.html.twig' with {
         cal: {
             dnd: can_self_serve,
@@ -65,10 +67,12 @@
             route_move: 'panel_calendar_move',
             route_recover: 'panel_calendar_recover',
             route_egg_toggle: 'panel_calendar_eggs',
+            route_undo_accumulate: 'panel_calendar_accumulate_undo',
             idp: {},
             csrf_skip: csrf_token('panel_calendar_skip'),
             csrf_move: csrf_token('panel_calendar_move'),
             csrf_egg_toggle: csrf_token('panel_calendar_eggs'),
+            csrf_undo_accumulate: csrf_token('panel_calendar_move'),
         }
     } %}
 

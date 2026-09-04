@@ -35,6 +35,10 @@
 
     {% include '_components/cg_calendar_panel.html.twig' %}
 
+    {# route_undo_accumulate apunta a la MISMA ruta que quitar la extra: ese endpoint mira
+       de dónde viene el añadido del día y, si son cestas trasladadas, las devuelve a su
+       semana en vez de perderlas. Una sola puerta para el añadido de un día = imposible
+       dejar cestas huérfanas. #}
     {% include 'partner/_calendar.html.twig' with {
         cal: {
             dnd: true,
@@ -47,11 +51,13 @@
             idp: { id: partner.id },
             route_egg_toggle: 'partner_delivery_calendar_component',
             route_extra_remove: 'partner_delivery_calendar_extra_remove',
+            route_undo_accumulate: 'partner_delivery_calendar_extra_remove',
             csrf_skip:  csrf_token('calendar_skip_'  ~ partner.id),
             csrf_move:  csrf_token('calendar_move_'  ~ partner.id),
             csrf_reset: csrf_token('calendar_reset_' ~ partner.id),
             csrf_egg_toggle: csrf_token('calendar_component_' ~ partner.id),
             csrf_extra_remove: csrf_token('calendar_extra_' ~ partner.id),
+            csrf_undo_accumulate: csrf_token('calendar_extra_' ~ partner.id),
         }
     } %}
 

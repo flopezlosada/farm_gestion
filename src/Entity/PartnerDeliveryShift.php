@@ -15,11 +15,25 @@ use Gedmo\Mapping\Annotation as Gedmo;
  *     huevo) necesita mover SOLO la verdura sin tocar el huevo semanal.
  *   - `from` = semana origen.
  *   - `to` (nullable): semana destino; null = "no recoge" (sin destino).
+ *   - `accumulatedTo` (nullable): solo en intents SIN destino. Distingue una
+ *     cesta APARCADA (recolocable, sale en la papelera) de una TRASLADADA
+ *     SUMANDO a la entrega de otra semana (ya colocada allí como cesta extra,
+ *     no sale en la papelera). Ver el apartado siguiente.
  *
  * Combinaciones: mover toda la entrega (component null, to≠null) — el caso
  * histórico; mover un componente (component≠null, to≠null); no recoger
  * (component null, to null); quitar un componente esa semana (component≠null,
  * to null).
+ *
+ * POR QUÉ `accumulatedTo` no es un `to`: un día no puede llevar dos
+ * WeeklyBasket del mismo socio (unicidad por (partner, basket)), así que
+ * "trasladar sumando" no se puede modelar como destino — la segunda cesta vive
+ * como {@see PartnerBasketExtra} sobre la entrega que el día ya tenía. El
+ * origen necesita igualmente un intent sin destino para que el generador no
+ * materialice su cesta de patrón. Sin este campo, ese intent era
+ * indistinguible de un "no recoge" y la cesta se contaba DOS veces: sumada en
+ * el destino y pendiente en la papelera del origen, de donde alguien podía
+ * recuperarla y acabar con una cesta de más en el listado.
  *
  * Esta entidad es la fuente de verdad del intent. Crear o cancelar uno dispara,
  * en la misma transacción, los cambios consecuentes sobre WeeklyBasket (ver
@@ -44,7 +58,8 @@ use Gedmo\Mapping\Annotation as Gedmo;
  * }, indexes={
  *     @ORM\Index(name="idx_from_basket", columns={"from_basket_id"}),
  *     @ORM\Index(name="idx_to_basket", columns={"to_basket_id"}),
- *     @ORM\Index(name="idx_pds_component", columns={"component_id"})
+ *     @ORM\Index(name="idx_pds_component", columns={"component_id"}),
+ *     @ORM\Index(name="idx_pds_accumulated_to", columns={"accumulated_to_basket_id"})
  * })
  * @ORM\Entity(repositoryClass="App\Repository\PartnerDeliveryShiftRepository")
  */
@@ -79,6 +94,21 @@ class PartnerDeliveryShift
      * @ORM\JoinColumn(name="to_basket_id", nullable=true, onDelete="CASCADE")
      */
     private ?Basket $toBasket = null;
+
+    /**
+     * Semana a cuya entrega se SUMÓ la cesta de esta semana ("trasladar
+     * sumando"). Solo tiene sentido con `toBasket` null: el día origen no
+     * reparte, pero su cesta no está pendiente —vive como cesta extra
+     * ({@see PartnerBasketExtra}) sobre la entrega de esta semana—. NULL en un
+     * "no recoge" normal, donde la cesta SÍ queda pendiente y recolocable.
+     *
+     * Es también el hilo para deshacer el traslado en un gesto: desde el día
+     * destino se localizan los intents que le sumaron cestas.
+     *
+     * @ORM\ManyToOne(targetEntity="Basket")
+     * @ORM\JoinColumn(name="accumulated_to_basket_id", nullable=true, onDelete="CASCADE")
+     */
+    private ?Basket $accumulatedTo = null;
 
     /**
      * Componente al que se limita el intent. NULL = toda la entrega (caso
@@ -167,7 +197,33 @@ class PartnerDeliveryShift
      */
     public function setToBasket(?Basket $toBasket): self
     {
+        if ($toBasket !== null && $this->accumulatedTo !== null) {
+            throw new \LogicException('Un intent trasladado sumando no puede tener semana destino: su cesta ya está colocada como extra en accumulatedTo.');
+        }
         $this->toBasket = $toBasket;
+        return $this;
+    }
+
+    public function getAccumulatedTo(): ?Basket
+    {
+        return $this->accumulatedTo;
+    }
+
+    /**
+     * Marca el intent como "trasladado sumando" a la semana $accumulatedTo (o lo
+     * desmarca con null, al deshacer el traslado). Excluyente con `toBasket`: la
+     * cesta está colocada como extra en otra semana, no movida a un destino.
+     *
+     * @param Basket|null $accumulatedTo Semana a cuya entrega se sumó la cesta.
+     * @return self
+     * @throws \LogicException Si el intent ya tiene semana destino.
+     */
+    public function setAccumulatedTo(?Basket $accumulatedTo): self
+    {
+        if ($accumulatedTo !== null && $this->toBasket !== null) {
+            throw new \LogicException('Un intent con semana destino no puede además estar trasladado sumando.');
+        }
+        $this->accumulatedTo = $accumulatedTo;
         return $this;
     }
 
@@ -191,11 +247,37 @@ class PartnerDeliveryShift
     }
 
     /**
-     * @return bool Si el intent es "no recoger" (sin semana destino).
+     * ¿El intent deja la semana origen sin entrega (sin semana destino)? Cierto
+     * tanto para un "no recoge" como para un traslado sumando: en ambos casos el
+     * generador NO debe materializar la cesta de patrón de esa semana. Para
+     * distinguirlos, {@see self::isParked()} / {@see self::isAccumulated()}.
+     *
+     * @return bool
      */
     public function isSkip(): bool
     {
         return $this->toBasket === null;
+    }
+
+    /**
+     * ¿La cesta está APARCADA, es decir pendiente y recolocable? Es el "no
+     * recoge" propiamente dicho: el único caso que ocupa sitio en la papelera del
+     * calendario. Un traslado sumando también deja la semana sin entrega, pero su
+     * cesta ya está colocada en otro día y NO está pendiente.
+     *
+     * @return bool
+     */
+    public function isParked(): bool
+    {
+        return $this->toBasket === null && $this->accumulatedTo === null;
+    }
+
+    /**
+     * @return bool Si la cesta de esta semana se trasladó SUMANDO a la entrega de otra.
+     */
+    public function isAccumulated(): bool
+    {
+        return $this->accumulatedTo !== null;
     }
 
     public function getNotes(): ?string

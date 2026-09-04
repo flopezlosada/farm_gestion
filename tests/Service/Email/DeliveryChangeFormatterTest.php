@@ -36,6 +36,34 @@ class DeliveryChangeFormatterTest extends TestCase
         );
     }
 
+    public function testWeekSwapDeUnaSemanaASiMismaEsAparcarLaCestaNoUnCambioDeViernes(): void
+    {
+        // Aparcar ("no recoge") y recuperar se registran como WEEK_SWAP con origen y destino
+        // en la MISMA semana. Antes salían al email como "Cambia de viernes del 4-sep al
+        // 4-sep": administración leía cambios de día que nadie había hecho.
+        $mismaSemana = ['from_basket_id' => 510, 'to_basket_id' => 510, 'from_date' => '2026-09-04', 'to_date' => '2026-09-04'];
+
+        $this->assertSame('No recoge cesta', $this->formatter->humanType(PartnerEvent::TYPE_WEEK_SWAP, $mismaSemana));
+        $this->assertSame('el 2026-09-04', $this->formatter->humanDescription(PartnerEvent::TYPE_WEEK_SWAP, $mismaSemana));
+
+        $this->assertSame(
+            'Vuelve a recoger',
+            $this->formatter->humanType(PartnerEvent::TYPE_WEEK_SWAP, $mismaSemana + ['cancelled' => true]),
+        );
+    }
+
+    public function testWeekSwapEntreSemanasDistintasSigueSiendoCambioDeViernes(): void
+    {
+        $payload = ['from_basket_id' => 510, 'to_basket_id' => 511, 'from_date' => '2026-09-04', 'to_date' => '2026-09-11'];
+
+        $this->assertSame('Cambia de viernes', $this->formatter->humanType(PartnerEvent::TYPE_WEEK_SWAP, $payload));
+        $this->assertSame('del 2026-09-04 al 2026-09-11', $this->formatter->humanDescription(PartnerEvent::TYPE_WEEK_SWAP, $payload));
+        $this->assertSame(
+            'Cancela cambio de viernes',
+            $this->formatter->humanType(PartnerEvent::TYPE_WEEK_SWAP, $payload + ['cancelled' => true]),
+        );
+    }
+
     public function testHumanTypeDesconocidoDevuelveElTipoCrudo(): void
     {
         $this->assertSame('ALGO_RARO', $this->formatter->humanType('ALGO_RARO', []));

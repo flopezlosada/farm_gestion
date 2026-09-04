@@ -168,6 +168,22 @@ final class DeliveryCalendarViewBuilder
             }
         }
 
+        // ¿Hay algún OTRO día a la vista donde el socio ya recoja, futuro y no el
+        // seleccionado? Entonces "trasladar sumando" (apilar la cesta sobre la de ese día)
+        // es un cambio posible aunque no quede ningún día LIBRE. Sin esto, a un socio
+        // semanal —que recoge todas las semanas— el flujo por toque le ocultaba el único
+        // cambio que podía hacer, porque solo miraba $dropDays.
+        $accumulateTargets = false;
+        if ($withDropTargets && $partner->getSharePartner() === null) {
+            foreach ($gridSlots as $s) {
+                if (!empty($s['items']) && $s['date'] > $today
+                    && ($selected === null || $s['basket']->getId() !== $selected['basket']->getId())) {
+                    $accumulateTargets = true;
+                    break;
+                }
+            }
+        }
+
         // "Recoge en X": X es el NODO de reparto (Torremocha, Madrid…), no el grupo
         // de recogida (Pedrezuela…). Fallback al grupo si un dato legacy no tiene nodo.
         $group = $partner->getWeeklyBasketGroup();
@@ -192,6 +208,8 @@ final class DeliveryCalendarViewBuilder
             // ¿Hay días libres a los que mover una entrega? Un socio semanal recoge todas
             // las semanas → sin destino posible; sirve para ocultar el "Mover a otra fecha".
             'has_drop_targets' => $dropDays !== [],
+            // ¿Y días donde YA recoge, a los que trasladar la cesta SUMANDO? (2 cestas ese día)
+            'accumulate_targets' => $accumulateTargets,
             // Compartidas: ¿hay días a los que mover SOLO los huevos? (la cesta no se mueve, R1).
             'has_egg_drop_targets' => $eggDropDays !== [],
             'egg_drop_targets' => $eggDropTargets,

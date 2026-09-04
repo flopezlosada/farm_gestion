@@ -38,9 +38,32 @@ class DeliveryChangeFormatter
             PartnerEvent::TYPE_BASKET_SKIP => 'No recoge cesta',
             PartnerEvent::TYPE_BASKET_UNSKIP => 'Vuelve a recoger',
             PartnerEvent::TYPE_NODE_CHANGE => 'Cambia de nodo',
-            PartnerEvent::TYPE_WEEK_SWAP => ($payload['cancelled'] ?? false) ? 'Cancela cambio de viernes' : 'Cambia de viernes',
+            PartnerEvent::TYPE_WEEK_SWAP => match (true) {
+                // Aparcar y recuperar también se registran como WEEK_SWAP, y ahí origen y
+                // destino son la MISMA semana (ver los recordEvent de applySkipIntent /
+                // cancelSkipIntent / recoverSkipToDay en DeliveryShiftApplier). Llamarlos
+                // "cambia de viernes del 4-sep al 4-sep" le contaba a administración
+                // cambios de día que nadie hizo.
+                $this->isSameWeek($payload) => ($payload['cancelled'] ?? false) ? 'Vuelve a recoger' : 'No recoge cesta',
+                (bool) ($payload['cancelled'] ?? false) => 'Cancela cambio de viernes',
+                default => 'Cambia de viernes',
+            },
             default => $type,
         };
+    }
+
+    /**
+     * ¿El WEEK_SWAP va de la semana a sí misma? Entonces no es un cambio de día, sino
+     * aparcar la cesta ("no recoge") o recuperarla en su propio día.
+     *
+     * @param array<string, mixed> $payload
+     */
+    private function isSameWeek(array $payload): bool
+    {
+        $from = $payload['from_basket_id'] ?? null;
+        $to = $payload['to_basket_id'] ?? null;
+
+        return $from !== null && $from === $to;
     }
 
     /**
@@ -56,11 +79,14 @@ class DeliveryChangeFormatter
                 $payload['from_group_name'] ?? '—',
                 $payload['to_group_name'] ?? '—',
             ),
-            PartnerEvent::TYPE_WEEK_SWAP => sprintf(
-                'del %s al %s',
-                $payload['from_date'] ?? '—',
-                $payload['to_date'] ?? '—',
-            ),
+            PartnerEvent::TYPE_WEEK_SWAP => $this->isSameWeek($payload)
+                // Aparcar / recuperar: una sola semana, no un trayecto. Ver humanType().
+                ? sprintf('el %s', $payload['from_date'] ?? '—')
+                : sprintf(
+                    'del %s al %s',
+                    $payload['from_date'] ?? '—',
+                    $payload['to_date'] ?? '—',
+                ),
             default => '',
         };
     }

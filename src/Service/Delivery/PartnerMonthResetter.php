@@ -31,6 +31,10 @@ use Doctrine\ORM\EntityManagerInterface;
  *  - Mes SIN GENERAR: NO se materializa nada (un WB suelto dispararía la rama
  *    reuseExistingWeeklyBaskets del generador y dejaría fuera al resto) — basta con borrar
  *    los intents del socio; el patrón se proyecta limpio.
+ *  - Un TRASLADO SUMANDO deja su cesta como añadido en OTRA semana, que puede caer fuera del
+ *    mes que se resetea: hay que retirar ese añadido además de borrar el intent, o el reset
+ *    dejaría la cesta contada dos veces (recuperada en su patrón Y sumada allí). Ver el
+ *    paso 1a.
  */
 final class PartnerMonthResetter
 {
@@ -38,6 +42,7 @@ final class PartnerMonthResetter
         private readonly EntityManagerInterface $em,
         private readonly WeeklyBasketGenerator $generator,
         private readonly BasketRepository $basketRepository,
+        private readonly ExtraBasketRemover $extraRemover,
     ) {
     }
 
@@ -76,12 +81,29 @@ final class PartnerMonthResetter
 
         // 1) Borrar TODOS los overrides puntuales del socio que TOQUEN el mes: resetear a
         //    patrón es justamente quitar las desviaciones de una semana.
-        //    a) Cambios de día / no-recoge / recuperar (PartnerDeliveryShift), por origen o destino.
+        //    a) Cambios de día / no-recoge / recuperar (PartnerDeliveryShift), por origen,
+        //       destino o semana a la que se trasladó sumando: las tres puntas del intent
+        //       pueden caer en el mes, y cualquiera de ellas lo convierte en "desviación que
+        //       toca este mes".
         foreach ($shiftRepo->findBy(['partner' => $partner]) as $shift) {
-            if (in_array($shift->getFromBasket()?->getId(), $monthBasketIds, true)
-                || in_array($shift->getToBasket()?->getId(), $monthBasketIds, true)) {
-                $this->em->remove($shift);
+            $touchesMonth = in_array($shift->getFromBasket()?->getId(), $monthBasketIds, true)
+                || in_array($shift->getToBasket()?->getId(), $monthBasketIds, true)
+                || in_array($shift->getAccumulatedTo()?->getId(), $monthBasketIds, true);
+            if (!$touchesMonth) {
+                continue;
             }
+
+            // TRASLADO SUMANDO: su cesta no está en ninguna semana del intent, está sumada
+            // como añadido en `accumulatedTo` —que puede estar en OTRO mes—. Borrar solo el
+            // intent devolvería la cesta a su patrón dejando el añadido puesto: una cesta de
+            // más. Se retira antes (removeExtra revierte también la piedra si esa semana ya
+            // está generada, y desmarca el propio intent, que se borra a continuación).
+            $accumulatedTo = $shift->getAccumulatedTo();
+            if ($accumulatedTo !== null) {
+                $this->extraRemover->removeExtra($partner, $accumulatedTo, 'reset:' . $partner->getId());
+            }
+
+            $this->em->remove($shift);
         }
         //    b) Cestas extra (PartnerBasketExtra) y c) traslados de nodo (PartnerNodeOverride),
         //       ambos de una sola semana → basta comprobar su basket.

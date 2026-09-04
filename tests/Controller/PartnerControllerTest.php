@@ -220,7 +220,9 @@ class PartnerControllerTest extends AbstractAuthenticatedTest
             ->findOneBy(['partner' => $partnerId, 'fromBasket' => $basketId]);
 
         $dayFreed = $wbAfter === null;
-        $intentIsSkip = $intent !== null && $intent->isSkip();
+        // isParked, no isSkip: un "no recoge" deja la cesta PENDIENTE (papelera). Una
+        // trasladada sumando también cumple isSkip, así que esa aserción no distinguiría.
+        $intentIsSkip = $intent !== null && $intent->isParked();
 
         // db_test no tiene rollback transaccional: se restaura ANTES de las
         // aserciones (que podrían lanzar) recorriendo el camino "volver a recoger"

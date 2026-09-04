@@ -24,6 +24,7 @@ use App\Repository\VolunteerSignupRepository;
 use App\Repository\WeeklyBasketGroupRepository;
 use App\Repository\WeeklyBasketRepository;
 use App\Service\ConsumerGroup\PartnerConsumerGroupDeliveries;
+use App\Service\Delivery\AccumulatingMove;
 use App\Service\Delivery\DeliveryCalendarProjector;
 use App\Service\Delivery\DeliveryCalendarViewBuilder;
 use App\Service\Delivery\DeliveryDeadline;
@@ -576,6 +577,18 @@ class PanelController extends AbstractController
             return $this->redirectToRoute('panel_basket');
         }
 
+        // Un TRASLADO SUMANDO no se cancela por aquí: borrar el intent devolvería la cesta a
+        // su semana dejando puesto el añadido del día destino, o sea una cesta de más. Se
+        // deshace desde el día que la recibió, que retira las dos cosas a la vez.
+        if ($shift->isAccumulated()) {
+            $this->addFlash('warning', sprintf(
+                'Esa cesta la trasladaste al %s, sumada a la de ese día. Deshaz el traslado desde ahí, en tu calendario.',
+                $shift->getAccumulatedTo()?->getDate()?->format('d/m/Y') ?? 'otro día',
+            ));
+
+            return $this->redirectToRoute('panel_basket');
+        }
+
         $violations = $validator->validate($partner, $shift->getFromBasket(), $shift->getToBasket());
         $blocking = $validator->blocking($violations);
         if (!empty($blocking)) {
@@ -799,8 +812,10 @@ class PanelController extends AbstractController
         $incoming = $shiftRepository->findIncoming($partner, $basket);
 
         // VOLVER A RECOGER: acción explícita (botón del panel sobre una semana aparcada).
+        // isParked: una cesta trasladada sumando ya está colocada en otro día; recuperarla
+        // aquí la daría dos veces. Se deshace el traslado desde ese día.
         if ($request->request->getBoolean('recover')) {
-            if ($outgoing !== null && $outgoing->isSkip()) {
+            if ($outgoing !== null && $outgoing->isParked()) {
                 $applier->cancelSkipIntent($outgoing, $actor);
                 if ($generated) {
                     $share = $em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner, $basket->getDate());
@@ -810,6 +825,11 @@ class PanelController extends AbstractController
                     }
                 }
                 $this->addFlash('notice', 'Listo: vuelves a recoger esa semana.');
+            } elseif ($outgoing !== null && $outgoing->isAccumulated()) {
+                $this->addFlash('warning', sprintf(
+                    'Esa cesta la trasladaste al %s, sumada a la de ese día. Si quieres deshacerlo, hazlo desde ahí.',
+                    $outgoing->getAccumulatedTo()?->getDate()?->format('d/m/Y') ?? 'otro día',
+                ));
             } else {
                 $this->addFlash('warning', 'Esa semana no tiene ninguna entrega aparcada que recuperar.');
             }
@@ -831,8 +851,16 @@ class PanelController extends AbstractController
 
             return $backToCalendar();
         }
-        if ($outgoing !== null && $outgoing->isSkip()) {
+        if ($outgoing !== null && $outgoing->isParked()) {
             $this->addFlash('warning', 'Esa semana ya está marcada como que no la recoges.');
+
+            return $backToCalendar();
+        }
+        if ($outgoing !== null && $outgoing->isAccumulated()) {
+            $this->addFlash('warning', sprintf(
+                'Esa cesta la trasladaste al %s, sumada a la de ese día: ese día está vacío. Gestiónala desde ahí.',
+                $outgoing->getAccumulatedTo()?->getDate()?->format('d/m/Y') ?? 'otro día',
+            ));
 
             return $backToCalendar();
         }
@@ -947,6 +975,7 @@ class PanelController extends AbstractController
         WeeklyBasketGenerator $generator,
         DeliveryCalendarProjector $projector,
         DeliveryShiftApplier $applier,
+        AccumulatingMove $accumulatingMove,
         PartnerEggScheduleEditor $eggEditor,
         EntityManagerInterface $em,
     ): Response {
@@ -1055,9 +1084,42 @@ class PanelController extends AbstractController
                 continue;
             }
             if (!$isReturn && !empty($s['items'])) {
-                $this->addFlash('error', 'Ya tienes una entrega ese día.');
+                // El destino YA recoge. Igual que en el calendario del gestor: sin confirmar
+                // se rechaza, y con confirmación explícita (el front manda accumulate=1 tras
+                // el modal) se TRASLADA SUMANDO — ese día pasa a llevar 2 cestas y el origen
+                // se queda vacío. Se deshace desde el día destino, en un gesto.
+                if (!$request->request->getBoolean('accumulate')) {
+                    $this->addFlash('error', 'Ya tienes una entrega ese día.');
 
-                return $backToFrom();
+                    return $backToFrom();
+                }
+
+                try {
+                    // En transacción: sumar al destino y vaciar el origen son dos pasos con
+                    // flush propio; envolverlos evita quedarse a medias.
+                    $em->wrapInTransaction(fn () => $accumulatingMove->move($partner, $from, $to, 'partner:' . $partner->getId()));
+                } catch (\LogicException $e) {
+                    $this->addFlash('error', $e->getMessage());
+
+                    return $backToFrom();
+                } catch (\Throwable $e) {
+                    $this->addFlash('error', 'No se pudo trasladar la cesta. No se ha aplicado ningún cambio; inténtalo de nuevo.');
+
+                    return $backToFrom();
+                }
+
+                $this->addFlash('notice', sprintf(
+                    'Listo: esa cesta la recoges el %s, sumada a la que ya tenías ese día (2 cestas).',
+                    $to->getDate()->format('d/m/Y'),
+                ));
+
+                [$year, $month] = $this->returnMonth($request, $to);
+
+                return $this->redirectToRoute('panel_calendar', [
+                    'year' => $year,
+                    'month' => $month,
+                    'sel' => $to->getId(),
+                ]);
             }
             break;
         }
@@ -1169,9 +1231,13 @@ class PanelController extends AbstractController
             return $backToCalendar($origin);
         }
 
+        // isParked, no isSkip: ver la guarda equivalente del calendario del gestor. Una
+        // cesta trasladada sumando ya está colocada en otro día y no se recupera desde aquí.
         $skip = $shiftRepository->findOutgoing($partner, $origin);
-        if ($skip === null || !$skip->isSkip()) {
-            $this->addFlash('warning', 'Esa entrega ya no está aparcada.');
+        if ($skip === null || !$skip->isParked()) {
+            $this->addFlash('warning', $skip?->isAccumulated() === true
+                ? 'Esa cesta no está aparcada: la trasladaste sumada a otro día. Deshaz el traslado desde ahí.'
+                : 'Esa entrega ya no está aparcada.');
 
             return $backToCalendar($origin);
         }
@@ -1229,6 +1295,109 @@ class PanelController extends AbstractController
             'month' => $month,
             'sel' => $to->getId(),
         ]);
+    }
+
+    /**
+     * Deshace el TRASLADO SUMANDO de las cestas que se apilaron en una semana: cada una
+     * vuelve a su semana de origen y el día se queda con lo que le toca por patrón. Es el
+     * camino de vuelta de la acumulación, que no se puede deshacer arrastrando (un día con
+     * dos cestas no sabe cuál vino trasladada).
+     *
+     * A diferencia del gestor, el socix NO puede quitar de aquí una cesta extra GENUINA
+     * (añadida a mano por gestión): eso no lo puso él y puede responder a un acuerdo. Si el
+     * añadido del día no viene de un traslado suyo, la acción se rechaza y se le remite a
+     * administración. Mismo plazo día-anterior que mover.
+     *
+     * @param int                            $basketId Semana que recibió las cestas sumadas.
+     * @param Request                        $request
+     * @param BasketRepository               $basketRepository
+     * @param PartnerDeliveryShiftRepository $shiftRepository
+     * @param AccumulatingMove               $accumulatingMove
+     * @param WeeklyBasketGenerator          $generator
+     * @param EntityManagerInterface         $em
+     * @return Response
+     */
+    #[Route('/calendar/accumulate/{basketId}/undo', name: 'panel_calendar_accumulate_undo', methods: ['POST'], requirements: ['basketId' => '\\d+'])]
+    #[IsGranted('FEATURE_PARTNER_SELFSERVICE')]
+    public function calendarUndoAccumulate(
+        int $basketId,
+        Request $request,
+        BasketRepository $basketRepository,
+        PartnerDeliveryShiftRepository $shiftRepository,
+        AccumulatingMove $accumulatingMove,
+        WeeklyBasketGenerator $generator,
+        EntityManagerInterface $em,
+    ): Response {
+        if (($redirect = $this->ensureReady()) !== null) {
+            return $redirect;
+        }
+
+        $partner = $this->basketOwner($this->getUser()->getPartner());
+
+        $basket = $basketRepository->find($basketId);
+        if ($basket === null) {
+            throw $this->createNotFoundException('Semana de reparto no encontrada.');
+        }
+
+        [$year, $month] = $this->returnMonth($request, $basket);
+        $backToCalendar = fn (): Response => $this->redirectToRoute('panel_calendar', [
+            'year' => $year,
+            'month' => $month,
+            'sel' => $basket->getId(),
+        ]);
+
+        // Comparte token con "mover": los dos gestos son el mismo movimiento de cesta.
+        if (!$this->isCsrfTokenValid('panel_calendar_move', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
+
+            return $backToCalendar();
+        }
+
+        $shifts = $shiftRepository->findAccumulatedInto($partner, $basket);
+        if ($shifts === []) {
+            $this->addFlash('warning', 'Ese día no tiene ninguna cesta que hayas trasladado. Si lleva una cesta de más puesta por administración, contacta con ellas.');
+
+            return $backToCalendar();
+        }
+
+        // Plazo: como mover. Se mide sobre la fecha FÍSICA del día que RECIBIÓ las cestas —es
+        // la entrega que se va a tocar— y también sobre cada semana de origen, que vuelve a
+        // recoger: devolver una cesta a una semana que ya pasó no serviría de nada.
+        $today = new \DateTimeImmutable('today');
+        $share = $em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner, $basket->getDate());
+        $physical = $share !== null
+            ? ($generator->projectShareDelivery($basket, $share)['deliveryDate'] ?? $basket->getDate())
+            : $basket->getDate();
+        if ($physical <= $today) {
+            $this->addFlash('warning', 'Esa entrega se recoge hoy o ya pasó: ya no se puede cambiar.');
+
+            return $backToCalendar();
+        }
+        foreach ($shifts as $shift) {
+            if (($shift->getFromBasket()?->getDate() ?? $today) <= $today) {
+                $this->addFlash('warning', 'Una de esas cestas venía de una semana que ya pasó: para deshacerlo, contacta con administración.');
+
+                return $backToCalendar();
+            }
+        }
+
+        try {
+            $returned = $em->wrapInTransaction(fn (): int => $accumulatingMove->undo($partner, $basket, 'partner:' . $partner->getId()));
+        } catch (\LogicException $e) {
+            $this->addFlash('error', $e->getMessage());
+
+            return $backToCalendar();
+        } catch (\Throwable $e) {
+            $this->addFlash('error', 'No se pudo deshacer el traslado. No se ha aplicado ningún cambio; inténtalo de nuevo.');
+
+            return $backToCalendar();
+        }
+
+        $this->addFlash('notice', $returned === 1
+            ? 'Listo: la cesta vuelve a su semana y este día se queda con la que te toca.'
+            : sprintf('Listo: %d cestas vuelven a sus semanas.', $returned));
+
+        return $backToCalendar();
     }
 
     #[Route('/familia', name: 'panel_family', methods: ['GET'])]
