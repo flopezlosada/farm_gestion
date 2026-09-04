@@ -13,13 +13,13 @@ use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\CallbackTransformer;
 use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
+use Symfony\Component\Form\Extension\Core\Type\CollectionType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\DateType;
 use Symfony\Component\Form\Extension\Core\Type\IntegerType;
 use Symfony\Component\Form\Extension\Core\Type\NumberType;
 use Symfony\Component\Form\Extension\Core\Type\TextareaType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
-use Symfony\Component\Form\Extension\Core\Type\TimeType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\Form\FormError;
 use Symfony\Component\Form\FormEvent;
@@ -45,11 +45,12 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
  * hora. Ahora se publica desde la ficha, con un botón que dice a cuánta gente va
  * a avisar.
  *
- * LOS TRAMOS SON DOS Y FIJOS, y no una colección dinámica. El caso real es "por
- * la mañana" o "mañana y tarde"; una colección con botones de añadir y quitar
- * exige JavaScript, y sin él el formulario se queda sin poder añadir el segundo
- * tramo — que es justo el que hace falta. Con dos pares de horas se cubre lo que
- * hay y el formulario funciona con el navegador pelado.
+ * LAS FRANJAS HORARIAS SON UNA COLECCIÓN, tantas como haga falta: sacar al
+ * perro es mañana y tarde, y una cosecha grande puede ser tres. Se añaden y
+ * quitan con un botón (csa-collection); sin JavaScript se ven las guardadas y
+ * una vacía, que cubre el caso de una sola franja. Y puede no haber ninguna:
+ * hay trabajo sin horario ("antes del día 20"), y entonces el turno es de todo
+ * el día y las pantallas lo enseñan sin hora.
  *
  * Los textos de ayuda de `openToAnyone` y de `creditedMinutes` no son adorno:
  * son las dos casillas que más se van a rellenar mal si nadie explica qué
@@ -86,9 +87,6 @@ class VolunteerOfferType extends AbstractType
         'Una de cada tres' => 3,
         'Una de cada cuatro' => 4,
     ];
-
-    /** Los dos tramos horarios, como pares de campos [inicio, fin]. */
-    private const SLOT_FIELDS = [['firstStart', 'firstEnd'], ['secondStart', 'secondEnd']];
 
     public function __construct(private readonly TaskCoordinator $coordinators)
     {
@@ -168,41 +166,21 @@ class VolunteerOfferType extends AbstractType
                 'required' => false,
                 'help' => 'Los turnos se van abriendo por meses, no todos de golpe: se puede poner una fecha lejana sin miedo.',
             ])
-            // Los cuatro campos de hora NO están mapeados: se componen en
-            // `repeatTimes` al enviar y se descomponen al cargar. Ver los
-            // listeners de abajo.
-            // Obligatorio: sin hora de inicio no hay turno al que apuntarse,
-            // y el servidor lo rechaza (validateSchedule). Cuando el horario lo
-            // manda el punto de recogida el campo ni existe, así que el
-            // `required` no estorba ahí.
-            ->add('firstStart', TimeType::class, [
-                'label' => 'De',
-                'widget' => 'single_text',
-                'mapped' => false,
-                'input' => 'string',
-            ])
-            ->add('firstEnd', TimeType::class, [
-                'label' => 'a',
-                'widget' => 'single_text',
-                'mapped' => false,
-                'required' => false,
-                'input' => 'string',
-                'help' => 'Se puede dejar vacío en trabajo sin horario ("antes del día 20").',
-            ])
-            ->add('secondStart', TimeType::class, [
-                'label' => 'Y también de',
-                'widget' => 'single_text',
-                'mapped' => false,
-                'required' => false,
-                'input' => 'string',
-            ])
-            ->add('secondEnd', TimeType::class, [
-                'label' => 'a',
-                'widget' => 'single_text',
-                'mapped' => false,
-                'required' => false,
-                'input' => 'string',
-                'help' => 'Para el trabajo que se hace dos veces al día, como sacar al perro.',
+            // Las franjas del día. Cada entrada es un par [inicio, fin] en la
+            // tarea, que es lo que lee el generador; la traducción a dos campos
+            // de hora la hace VolunteerTimeSlotType. Sin ninguna, turno de todo
+            // el día.
+            ->add('repeatTimes', CollectionType::class, [
+                'label' => false,
+                'entry_type' => VolunteerTimeSlotType::class,
+                'entry_options' => ['label' => false],
+                'allow_add' => true,
+                'allow_delete' => true,
+                'by_reference' => false,
+                // Una franja sin ninguna hora se descarta al guardar, no se
+                // guarda como turno vacío. Con fin y sin inicio se conserva,
+                // para poder decir que está a medias (validateTimeSlots).
+                'delete_empty' => static fn (?array $slot): bool => null === $slot,
             ])
             ->add('place', EntityType::class, [
                 'label' => 'Sitio',
@@ -301,13 +279,11 @@ class VolunteerOfferType extends AbstractType
         // POST_SET_DATA y no PRE, y no es indiferente: entre los dos eventos
         // Symfony reparte los datos a los campos y a los NO MAPEADOS les pone su
         // valor por defecto (DataMapper::mapDataToForms), pisando lo que se les
-        // hubiera puesto en PRE. Con los rellenos en PRE, editar una tarea abría
-        // las horas vacías, y guardar sin volver a teclearlas la dejaba sin
-        // tramos y sin turnos.
-        $builder->addEventListener(FormEvents::POST_SET_DATA, $this->fillTimeSlots(...));
+        // hubiera puesto en PRE. Pasó con la casilla de «sin fin»: en PRE salía
+        // siempre sin marcar.
+        $builder->addEventListener(FormEvents::POST_SET_DATA, $this->seedOneSlot(...));
         $builder->addEventListener(FormEvents::POST_SET_DATA, $this->fillOpenEnded(...));
         $builder->addEventListener(FormEvents::POST_SUBMIT, $this->applyOpenEnded(...));
-        $builder->addEventListener(FormEvents::POST_SUBMIT, $this->collectTimeSlots(...));
         $builder->addEventListener(FormEvents::POST_SUBMIT, $this->validateTimeSlots(...));
         $builder->addEventListener(FormEvents::POST_SUBMIT, $this->normalizeCadence(...));
         $builder->addEventListener(FormEvents::POST_SUBMIT, $this->validateSchedule(...));
@@ -358,7 +334,7 @@ class VolunteerOfferType extends AbstractType
     }
 
     /**
-     * Quita los cuatro campos de hora cuando el horario lo manda el punto de
+     * Quita las franjas horarias cuando el horario lo manda el punto de
      * recogida, o sea en la convocatoria de montaje de las cestas.
      *
      * Ahí la hora la gobierna el punto y el sincronizador la reescribe en cada
@@ -383,51 +359,24 @@ class VolunteerOfferType extends AbstractType
             return;
         }
 
-        $form = $event->getForm();
-        foreach (['firstStart', 'firstEnd', 'secondStart', 'secondEnd'] as $field) {
-            $form->remove($field);
-        }
+        $event->getForm()->remove('repeatTimes');
     }
 
     /**
-     * Rellena los cuatro campos de hora a partir de los tramos guardados, al
-     * abrir el formulario de una tarea que ya existe.
+     * Deja una franja vacía a la vista en una tarea que no tiene ninguna, para
+     * que quien da de alta vea dónde va la hora sin tener que pulsar «añadir»
+     * —y para que sin JavaScript, donde el botón no funciona, haya al menos una.
+     *
+     * En POST_SET_DATA por lo mismo que los demás rellenos: antes, el reparto
+     * de datos la pisaría.
      *
      * @param FormEvent $event el evento con la tarea
      */
-    private function fillTimeSlots(FormEvent $event): void
+    private function seedOneSlot(FormEvent $event): void
     {
-        $offer = $event->getData();
-        if (!$offer instanceof VolunteerOffer) {
-            return;
-        }
-
-        $times = $offer->getRepeatTimes();
         $form = $event->getForm();
-
-        // En la convocatoria de montaje los campos ya no están: los quita
-        // dropTimeSlotsIfTheNodeRules(), que corre antes.
-        if (!$form->has('firstStart')) {
-            return;
-        }
-
-        $fields = [['firstStart', 'firstEnd'], ['secondStart', 'secondEnd']];
-
-        foreach ($fields as $index => [$startField, $endField]) {
-            $slot = $times[$index] ?? null;
-
-            // Mismo motivo que en {@see self::collectTimeSlots()}: los campos
-            // pueden no existir si el horario lo manda otro, y `$form->get()`
-            // de un campo ausente lanza.
-            if (null === $slot || !$form->has($startField)) {
-                continue;
-            }
-
-            $form->get($startField)->setData($this->withSeconds($slot[0] ?? null));
-
-            if ($form->has($endField)) {
-                $form->get($endField)->setData($this->withSeconds($slot[1] ?? null));
-            }
+        if ($form->has('repeatTimes') && [] === $form->get('repeatTimes')->getData()) {
+            $form->get('repeatTimes')->setData([[null, null]]);
         }
     }
 
@@ -462,98 +411,55 @@ class VolunteerOfferType extends AbstractType
     }
 
     /**
-     * Compone los tramos horarios de los cuatro campos y los guarda en la tarea.
-     *
-     * Un tramo sin hora de inicio no existe: sin ella no hay momento al que
-     * apuntarse, y guardar "hasta las 12:00" sin principio dejaría un turno a
-     * medianoche que nadie pidió.
-     *
-     * @param FormEvent $event el envío del formulario
-     */
-    private function collectTimeSlots(FormEvent $event): void
-    {
-        $offer = $event->getData();
-        $form = $event->getForm();
-
-        if (!$offer instanceof VolunteerOffer) {
-            return;
-        }
-
-        // SI LOS CAMPOS NO ESTÁN, NO SE TOCA NADA. Hacen falta las dos guardas y
-        // no son estética:
-        //
-        //  - `$form->get()` de un campo ausente LANZA, así que un formulario que
-        //    esconda las horas —porque el horario lo manda otro, como el punto
-        //    de recogida en el montaje de cestas— reventaría al guardar.
-        //  - Y saltar el bucle escribiendo `[]` sería peor que reventar: una
-        //    lista vacía BORRA los tramos guardados, y una tarea sin tramos se
-        //    queda sin turnos. Ausencia de campos significa "esto no se edita
-        //    aquí", no "esto se queda vacío".
-        if (!$form->has('firstStart')) {
-            return;
-        }
-
-        $slots = [];
-        foreach (self::SLOT_FIELDS as [$startField, $endField]) {
-            [$start, $end] = $this->slotFrom($form, $startField, $endField);
-            if (null !== $start) {
-                $slots[] = [$start, $end];
-            }
-        }
-
-        $offer->setRepeatTimes($slots);
-    }
-
-    /**
-     * Comprueba que las horas de los tramos tienen sentido entre sí.
+     * Comprueba que las franjas horarias tienen sentido, y las deja ordenadas.
      *
      * Lo que se para aquí son errores de dedo que hasta ahora se guardaban sin
-     * más: un tramo que acaba antes de empezar («de 11:11 a 10:12», y salió
-     * uno así), una hora de fin sin hora de inicio —que se ignoraba en
-     * silencio—, y un segundo tramo que empieza antes de que acabe el primero.
+     * más: una franja que acaba antes de empezar («de 11:11 a 10:12», y salió
+     * una así), una hora de fin sin hora de inicio —que se ignoraba en
+     * silencio—, y dos franjas que se pisan. Se ordenan por hora de inicio
+     * antes de mirar si se pisan, porque el orden en que se teclearon no
+     * significa nada: el generador cruza cada fecha con cada franja.
      *
-     * Un tramo que cruza la medianoche («de 22:00 a 02:00») tampoco pasa por
-     * aquí, aunque el generador de turnos sabría interpretarlo: en esta casa
-     * no hay trabajo de voluntariado a esas horas, y aceptar el caso raro es
-     * aceptar todos los dedazos que se le parecen.
+     * Una franja que cruza la medianoche («de 22:00 a 02:00») tampoco pasa,
+     * aunque el generador de turnos sabría interpretarla: en esta casa no hay
+     * trabajo de voluntariado a esas horas, y aceptar el caso raro es aceptar
+     * todos los dedazos que se le parecen.
+     *
+     * Los errores se cuelgan de la colección, no de la franja: una franja es
+     * una fila sin sitio para un párrafo debajo, y el número dice cuál es.
      *
      * @param FormEvent $event el envío del formulario
      */
     private function validateTimeSlots(FormEvent $event): void
     {
+        $offer = $event->getData();
         $form = $event->getForm();
-        if (!$event->getData() instanceof VolunteerOffer || !$form->has('firstStart')) {
+        if (!$offer instanceof VolunteerOffer || !$form->has('repeatTimes')) {
             return;
         }
 
-        $slots = [];
-        foreach (self::SLOT_FIELDS as [$startField, $endField]) {
-            $slot = $this->slotFrom($form, $startField, $endField);
-            $slots[] = $slot;
-            [$start, $end] = $slot;
+        $slots = array_values($offer->getRepeatTimes());
+        usort($slots, static fn (array $a, array $b): int => ($a[0] ?? '') <=> ($b[0] ?? ''));
+        $offer->setRepeatTimes($slots);
 
-            if (null === $start && null !== $end) {
-                $this->error($form, $startField, 'Has puesto a qué hora acaba, pero no a qué hora empieza.');
+        $previousEnd = null;
+        foreach ($slots as $index => [$start, $end]) {
+            $number = $index + 1;
+
+            if (null === $start) {
+                $this->error($form, 'repeatTimes', sprintf('La franja %d tiene hora de fin pero no de inicio.', $number));
+                continue;
             }
 
-            if (null !== $start && null !== $end && $end <= $start) {
-                $this->error($form, $endField, 'La hora de fin tiene que ser posterior a la de inicio.');
+            if (null !== $end && $end <= $start) {
+                $this->error($form, 'repeatTimes', sprintf('La franja %d acaba antes de empezar: la hora de fin tiene que ser posterior a la de inicio.', $number));
             }
-        }
 
-        [$first, $second] = $slots;
-        if (null === $second[0]) {
-            return;
-        }
+            if (null !== $previousEnd && $start <= $previousEnd) {
+                $this->error($form, 'repeatTimes', sprintf('La franja %d empieza antes de que acabe la anterior.', $number));
+            }
 
-        if (null === $first[0]) {
-            $this->error($form, 'secondStart', 'El segundo tramo es para cuando hay un primero: pon antes las horas de arriba.');
-
-            return;
-        }
-
-        if ($second[0] <= ($first[1] ?? $first[0])) {
-            $this->error($form, 'secondStart', 'El segundo tramo tiene que empezar cuando haya acabado el primero.');
+            $previousEnd = $end ?? $start;
         }
     }
 
@@ -574,28 +480,6 @@ class VolunteerOfferType extends AbstractType
         if ($offer instanceof VolunteerOffer && VolunteerOffer::REPEAT_WEEKLY !== $offer->getRepeatType()) {
             $offer->setRepeatEvery(1);
         }
-    }
-
-    /**
-     * Las horas de un tramo tal y como vienen en el formulario, en "HH:MM".
-     *
-     * Tolera que los campos no existan —los quita
-     * {@see self::dropTimeSlotsIfTheNodeRules()}— porque `$form->get()` de un
-     * campo ausente lanza, y un formulario que esconde las horas no puede
-     * reventar al guardar.
-     *
-     * @param FormInterface $form       el formulario
-     * @param string        $startField el campo de la hora de inicio
-     * @param string        $endField   el campo de la hora de fin
-     *
-     * @return array{0: string|null, 1: string|null} inicio y fin, o null donde no haya hora
-     */
-    private function slotFrom(FormInterface $form, string $startField, string $endField): array
-    {
-        return [
-            $form->has($startField) ? $this->asHourMinute($form->get($startField)->getData()) : null,
-            $form->has($endField) ? $this->asHourMinute($form->get($endField)->getData()) : null,
-        ];
     }
 
     /**
@@ -627,14 +511,11 @@ class VolunteerOfferType extends AbstractType
             return;
         }
 
-        // La regla de la hora no aplica a la convocatoria de montaje: ahí el
-        // horario lo pone el punto y los campos ni existen, así que el error
-        // quedaría suelto en la página, señalando a un campo que nadie ve.
-        if ([] === $offer->getRepeatTimes() && $form->has('firstStart')) {
-            $this->error($form, 'firstStart', 'Pon al menos la hora a la que empieza.');
-        }
-
-        if (VolunteerOffer::REPEAT_WEEKLY === $type && [] === $offer->getRepeatWeekdays()) {
+        // Los días son obligatorios también en la mensual. El generador sabría
+        // apañarse sin ellos —tomaría el día de la semana del «desde el»—, pero
+        // eso es una regla que nadie ve: «el segundo martes» tiene que salir de
+        // haber marcado el martes, no de la fecha que se puso al crearla.
+        if (\in_array($type, [VolunteerOffer::REPEAT_WEEKLY, VolunteerOffer::REPEAT_MONTHLY], true) && [] === $offer->getRepeatWeekdays()) {
             $this->error($form, 'repeatWeekdays', 'Marca al menos un día de la semana.');
         }
 
@@ -691,43 +572,6 @@ class VolunteerOfferType extends AbstractType
     {
         $target = $form->has($field) ? $form->get($field) : $form;
         $target->addError(new FormError($message));
-    }
-
-    /**
-     * "HH:MM" a partir de lo que devuelve un TimeType con `input: string`
-     * ("HH:MM:SS"), o null si no hay hora.
-     *
-     * @param mixed $value lo que trae el campo
-     *
-     * @return string|null la hora en "HH:MM", o null
-     */
-    private function asHourMinute(mixed $value): ?string
-    {
-        if ($value instanceof \DateTimeInterface) {
-            return $value->format('H:i');
-        }
-
-        $value = trim((string) $value);
-        if ('' === $value) {
-            return null;
-        }
-
-        return substr($value, 0, 5);
-    }
-
-    /**
-     * "HH:MM" a "HH:MM:00", que es lo que espera un TimeType con
-     * `input: string`.
-     *
-     * @param string|null $value la hora guardada
-     *
-     * @return string|null la hora con segundos, o null
-     */
-    private function withSeconds(?string $value): ?string
-    {
-        $value = trim((string) $value);
-
-        return '' === $value ? null : substr($value.':00', 0, 8);
     }
 
     public function configureOptions(OptionsResolver $resolver): void

@@ -8,8 +8,8 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Form\FormInterface;
 
 /**
- * Las reglas del formulario de tarea que no están en la entidad: las horas de
- * los tramos entre sí y la cadencia por semanas.
+ * Las reglas del formulario de tarea que no están en la entidad: las franjas
+ * horarias entre sí, la cadencia por semanas, los días y el «sin fin».
  *
  * Se blindan porque hasta ahora no existían y se guardaba cualquier cosa: hay
  * una tarea real «de 11:11 a 10:12». Contra el FormFactory de verdad y no con
@@ -18,83 +18,93 @@ use Symfony\Component\Form\FormInterface;
  */
 class VolunteerOfferTypeScheduleTest extends KernelTestCase
 {
-    public function testUnTramoQueAcabaAntesDeEmpezarNoPasa(): void
+    public function testUnaFranjaQueAcabaAntesDeEmpezarNoPasa(): void
     {
-        $form = $this->submit(['firstStart' => '11:11', 'firstEnd' => '10:12']);
+        $form = $this->submit(['repeatTimes' => [$this->slot('11:11', '10:12')]]);
 
         $this->assertFalse($form->isValid());
         $this->assertSame(
-            'La hora de fin tiene que ser posterior a la de inicio.',
-            (string) $form->get('firstEnd')->getErrors()[0]->getMessage()
+            'La franja 1 acaba antes de empezar: la hora de fin tiene que ser posterior a la de inicio.',
+            $this->firstError($form)
         );
     }
 
-    public function testUnTramoQueEmpiezaYAcabaALaMismaHoraTampoco(): void
+    public function testUnaFranjaQueEmpiezaYAcabaALaMismaHoraTampoco(): void
     {
-        $form = $this->submit(['firstStart' => '10:00', 'firstEnd' => '10:00']);
+        $form = $this->submit(['repeatTimes' => [$this->slot('10:00', '10:00')]]);
 
         $this->assertFalse($form->isValid());
-        $this->assertCount(1, $form->get('firstEnd')->getErrors());
+        $this->assertCount(1, $form->get('repeatTimes')->getErrors());
     }
 
     /**
      * Antes una hora de fin sin inicio se ignoraba sin decir nada: la tarea se
-     * guardaba sin ese tramo y quien la creó no sabía por qué.
+     * guardaba sin esa franja y quien la creó no sabía por qué.
      */
     public function testUnaHoraDeFinSinHoraDeInicioSeSenala(): void
     {
-        $form = $this->submit(['firstStart' => '', 'firstEnd' => '12:00']);
+        $form = $this->submit(['repeatTimes' => [$this->slot(null, '12:00')]]);
 
         $this->assertFalse($form->isValid());
-        $this->assertStringContainsString(
-            'no a qué hora empieza',
-            (string) $form->get('firstStart')->getErrors()[0]->getMessage()
-        );
+        $this->assertSame('La franja 1 tiene hora de fin pero no de inicio.', $this->firstError($form));
     }
 
-    public function testElSegundoTramoNoPuedePisarAlPrimero(): void
+    public function testDosFranjasQueSePisanNoPasan(): void
     {
-        $form = $this->submit([
-            'firstStart' => '09:00', 'firstEnd' => '11:00',
-            'secondStart' => '10:30', 'secondEnd' => '12:00',
-        ]);
+        $form = $this->submit(['repeatTimes' => [$this->slot('09:00', '11:00'), $this->slot('10:30', '12:00')]]);
 
         $this->assertFalse($form->isValid());
-        $this->assertStringContainsString(
-            'cuando haya acabado el primero',
-            (string) $form->get('secondStart')->getErrors()[0]->getMessage()
-        );
+        $this->assertSame('La franja 2 empieza antes de que acabe la anterior.', $this->firstError($form));
     }
 
     /**
-     * Sin hora de fin en el primero, el segundo tiene que empezar después de
-     * que EMPIECE el primero: es lo único que se sabe de él.
+     * Sin hora de fin en la primera, la segunda tiene que empezar después de
+     * que EMPIECE la primera: es lo único que se sabe de ella.
      */
-    public function testSinFinEnElPrimeroElSegundoSeComparaConSuInicio(): void
+    public function testSinFinEnLaPrimeraLaSegundaSeComparaConSuInicio(): void
     {
-        $form = $this->submit(['firstStart' => '09:00', 'secondStart' => '09:00']);
+        $form = $this->submit(['repeatTimes' => [$this->slot('09:00', null), $this->slot('09:00', null)]]);
 
         $this->assertFalse($form->isValid());
-        $this->assertCount(1, $form->get('secondStart')->getErrors());
+        $this->assertCount(1, $form->get('repeatTimes')->getErrors());
     }
 
-    public function testUnSegundoTramoSinPrimeroSeSenala(): void
+    /**
+     * El orden en que se teclearon no significa nada: se guardan ordenadas por
+     * hora de inicio, y así «se pisan» se mira entre vecinas de verdad.
+     */
+    public function testLasFranjasSeGuardanOrdenadasPorHoraDeInicio(): void
     {
-        $form = $this->submit(['firstStart' => '', 'secondStart' => '17:00']);
-
-        $this->assertFalse($form->isValid());
-        $this->assertStringContainsString('pon antes las horas de arriba', (string) $form->get('secondStart')->getErrors()[0]->getMessage());
-    }
-
-    public function testDosTramosBienOrdenadosPasanYSeGuardan(): void
-    {
-        $form = $this->submit([
-            'firstStart' => '09:00', 'firstEnd' => '11:00',
-            'secondStart' => '17:00', 'secondEnd' => '19:00',
-        ]);
+        $form = $this->submit(['repeatTimes' => [$this->slot('17:00', '19:00'), $this->slot('09:00', '11:00')]]);
 
         $this->assertTrue($form->isValid(), (string) $form->getErrors(true));
         $this->assertSame([['09:00', '11:00'], ['17:00', '19:00']], $form->getData()->getRepeatTimes());
+    }
+
+    /**
+     * Tres franjas: antes eran dos y fijas, y «vete a saber» cuántas hacen
+     * falta. Y una sin hora de fin en medio vale.
+     */
+    public function testTresFranjasBienOrdenadasPasanYSeGuardan(): void
+    {
+        $form = $this->submit(['repeatTimes' => [
+            $this->slot('08:00', '09:00'), $this->slot('13:00', null), $this->slot('17:00', '19:00'),
+        ]]);
+
+        $this->assertTrue($form->isValid(), (string) $form->getErrors(true));
+        $this->assertSame([['08:00', '09:00'], ['13:00', null], ['17:00', '19:00']], $form->getData()->getRepeatTimes());
+    }
+
+    /**
+     * Ninguna hora es obligatoria: hay trabajo sin franja («antes del día
+     * 20»). Una franja con las dos horas vacías se descarta y no queda nada.
+     */
+    public function testSinNingunaHoraLaTareaValeYNoTieneFranjas(): void
+    {
+        $form = $this->submit(['repeatTimes' => [$this->slot(null, null)]]);
+
+        $this->assertTrue($form->isValid(), (string) $form->getErrors(true));
+        $this->assertSame([], $form->getData()->getRepeatTimes());
     }
 
     /**
@@ -103,11 +113,7 @@ class VolunteerOfferTypeScheduleTest extends KernelTestCase
      */
     public function testLaCadenciaVuelveAUnoSiNoEsPorDiasFijos(): void
     {
-        $form = $this->submit([
-            'repeatType' => VolunteerOffer::REPEAT_ONCE,
-            'repeatEvery' => '2',
-            'firstStart' => '10:00',
-        ]);
+        $form = $this->submit(['repeatType' => VolunteerOffer::REPEAT_ONCE, 'repeatEvery' => '2']);
 
         $this->assertTrue($form->isValid(), (string) $form->getErrors(true));
         $this->assertSame(1, $form->getData()->getRepeatEvery());
@@ -120,11 +126,25 @@ class VolunteerOfferTypeScheduleTest extends KernelTestCase
             'repeatWeekdays' => ['1'],
             'repeatEvery' => '2',
             'repeatUntil' => '2026-10-07',
-            'firstStart' => '10:00',
         ]);
 
         $this->assertTrue($form->isValid(), (string) $form->getErrors(true));
         $this->assertSame(2, $form->getData()->getRepeatEvery());
+    }
+
+    /**
+     * Los días son obligatorios también en la mensual: «el segundo martes»
+     * sale de haber marcado el martes, no de la fecha del «desde el».
+     */
+    public function testLaMensualSinDiasMarcadosNoPasa(): void
+    {
+        $form = $this->submit([
+            'repeatType' => VolunteerOffer::REPEAT_MONTHLY,
+            'repeatUntil' => '2027-03-01',
+        ]);
+
+        $this->assertFalse($form->isValid());
+        $this->assertSame('Marca al menos un día de la semana.', (string) $form->get('repeatWeekdays')->getErrors()[0]->getMessage());
     }
 
     /**
@@ -133,11 +153,7 @@ class VolunteerOfferTypeScheduleTest extends KernelTestCase
      */
     public function testRepetirSinFechaFinalNiCasillaDeSinFinNoPasa(): void
     {
-        $form = $this->submit([
-            'repeatType' => VolunteerOffer::REPEAT_WEEKLY,
-            'repeatWeekdays' => ['1'],
-            'firstStart' => '10:00',
-        ]);
+        $form = $this->submit(['repeatType' => VolunteerOffer::REPEAT_WEEKLY, 'repeatWeekdays' => ['1']]);
 
         $this->assertFalse($form->isValid());
         $this->assertStringContainsString(
@@ -152,12 +168,7 @@ class VolunteerOfferTypeScheduleTest extends KernelTestCase
      */
     public function testConLaCasillaDeSinFinNoHaceFaltaFechaFinal(): void
     {
-        $form = $this->submit([
-            'repeatType' => VolunteerOffer::REPEAT_WEEKLY,
-            'repeatWeekdays' => ['1'],
-            'openEnded' => '1',
-            'firstStart' => '10:00',
-        ]);
+        $form = $this->submit(['repeatType' => VolunteerOffer::REPEAT_WEEKLY, 'repeatWeekdays' => ['1'], 'openEnded' => '1']);
 
         $this->assertTrue($form->isValid(), (string) $form->getErrors(true));
         $this->assertNull($form->getData()->getRepeatUntil());
@@ -174,7 +185,6 @@ class VolunteerOfferTypeScheduleTest extends KernelTestCase
             'repeatWeekdays' => ['1'],
             'openEnded' => '1',
             'repeatUntil' => '2026-12-31',
-            'firstStart' => '10:00',
         ]);
 
         $this->assertTrue($form->isValid(), (string) $form->getErrors(true));
@@ -200,19 +210,51 @@ class VolunteerOfferTypeScheduleTest extends KernelTestCase
     }
 
     /**
-     * Al abrir una tarea, las horas guardadas están en sus campos. Los campos
-     * no están mapeados y Symfony les pone su valor por defecto al repartir
-     * los datos: rellenarlos ANTES de eso se pisaba, y editar una tarea abría
-     * las horas vacías. Guardar sin volver a teclearlas la dejaba sin tramos.
+     * Al abrir una tarea, las franjas guardadas están en sus campos, una fila
+     * por franja. Los rellenos de campos no mapeados van en POST_SET_DATA
+     * porque en PRE Symfony los pisa al repartir los datos; con la casilla de
+     * sin fin pasó.
      */
-    public function testAlAbrirUnaTareaLasHorasGuardadasEstanEnSusCampos(): void
+    public function testAlAbrirUnaTareaLasFranjasGuardadasEstanEnSusFilas(): void
     {
         $form = $this->open($this->weeklyOffer()->setRepeatTimes([['09:00', '10:00'], ['20:00', null]]));
 
-        $this->assertSame('09:00:00', $form->get('firstStart')->getData());
-        $this->assertSame('10:00:00', $form->get('firstEnd')->getData());
-        $this->assertSame('20:00:00', $form->get('secondStart')->getData());
-        $this->assertNull($form->get('secondEnd')->getData());
+        $rows = $form->get('repeatTimes');
+        $this->assertCount(2, $rows);
+        $this->assertSame('09:00:00', $rows->get('0')->get('start')->getData());
+        $this->assertSame('10:00:00', $rows->get('0')->get('end')->getData());
+        $this->assertSame('20:00:00', $rows->get('1')->get('start')->getData());
+        $this->assertNull($rows->get('1')->get('end')->getData());
+    }
+
+    /**
+     * Una tarea sin franjas se abre con UNA fila vacía, para que se vea dónde
+     * va la hora sin pulsar «añadir» —y para que sin JavaScript haya una.
+     */
+    public function testUnaTareaSinFranjasSeAbreConUnaFilaVacia(): void
+    {
+        $form = $this->open($this->weeklyOffer());
+
+        $this->assertCount(1, $form->get('repeatTimes'));
+        $this->assertNull($form->get('repeatTimes')->get('0')->get('start')->getData());
+    }
+
+    /**
+     * Una franja como la envía el navegador.
+     *
+     * @param string|null $start "HH:MM" o null
+     * @param string|null $end   "HH:MM" o null
+     *
+     * @return array{start: string, end: string} los dos campos
+     */
+    private function slot(?string $start, ?string $end): array
+    {
+        return ['start' => (string) $start, 'end' => (string) $end];
+    }
+
+    private function firstError(FormInterface $form): string
+    {
+        return (string) $form->get('repeatTimes')->getErrors()[0]->getMessage();
     }
 
     /**
@@ -248,8 +290,8 @@ class VolunteerOfferTypeScheduleTest extends KernelTestCase
     }
 
     /**
-     * Una tarea de una sola vez con título, día y hora. Lo que se pasa pisa
-     * eso; así cada test dice sólo lo que cambia.
+     * Una tarea de una sola vez con título y día. Lo que se pasa pisa eso; así
+     * cada test dice sólo lo que cambia.
      *
      * @param array<string,mixed> $overrides campos del formulario a pisar
      *
@@ -257,12 +299,7 @@ class VolunteerOfferTypeScheduleTest extends KernelTestCase
      */
     private function submit(array $overrides): FormInterface
     {
-        self::bootKernel();
-
-        // Sin CSRF: el token lo guarda la sesión y aquí no hay petición.
-        $form = static::getContainer()->get('form.factory')->create(VolunteerOfferType::class, new VolunteerOffer(), [
-            'csrf_protection' => false,
-        ]);
+        $form = $this->open(new VolunteerOffer());
 
         $form->submit(array_merge([
             'title' => 'Prueba de horas',

@@ -29,6 +29,11 @@ require('./csa-validate.js');
 // [data-csa-show-when]). Sin JS se ven todos. Ver assets/js/csa-reveal.js.
 require('./csa-reveal.js');
 
+// Añadir y quitar filas de una colección de formulario (opt-in por
+// [data-csa-collection]). Sin JS se ven las filas que pintó el servidor.
+// Ver assets/js/csa-collection.js.
+require('./csa-collection.js');
+
 // Suma en vivo de las horas que se van a imputar al cerrar una tarea de
 // voluntariado (opt-in por [data-vol-total]). Ver assets/js/vol-close-total.js.
 require('./vol-close-total.js');

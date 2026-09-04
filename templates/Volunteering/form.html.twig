@@ -85,8 +85,12 @@
                         widget_class: 'csa-select',
                         show_when: 'repeatType=weekly'
                     }) }}
+                    {# Obligatorio (required: el widget de casillas no lo lleva solo):
+                     # en la mensual, «el segundo martes» sale de haber marcado el
+                     # martes, no de la fecha del «desde el». #}
                     {{ csa.field(form.repeatWeekdays, 'Qué días', {
                         full: true,
+                        required: true,
                         hint: 'varios a la vez',
                         show_when: 'repeatType=weekly|monthly'
                     }) }}
@@ -97,20 +101,32 @@
                     {{ csa.field(form.repeatUntil, 'Hasta el', { show_when: 'repeatType=weekly|monthly|delivery;openEnded=unchecked' }) }}
                 </div>
 
-                {# Los tramos horarios, en una fila propia: son cuatro campos que se
-                 # leen como dos parejas, y en el grid general quedaban desparejados.
+                {# Las franjas horarias, como colección: se añaden y quitan con
+                 # csa-collection y el molde de una nueva va en data-prototype. Sin
+                 # JavaScript se ven las que hay (una vacía en el alta) y los
+                 # botones no aparecen. Ninguna hora es obligatoria: sin franja, el
+                 # turno es de todo el día.
                  #
                  # En el montaje de las cestas no están: el horario lo manda el punto
                  # de recogida y el sincronizador lo reescribe, así que un campo aquí
                  # sólo serviría para que alguien creyera haber cambiado la hora. #}
-                {% if form.firstStart is defined %}
-                    <p class="vol-help">A qué hora se hace. El segundo tramo es para el trabajo que se hace dos veces al día, como sacar al perro.</p>
+                {% if form.repeatTimes is defined %}
+                    {% import _self as rows %}
+                    <p class="vol-help">A qué hora se hace. Sin hora, el turno es de todo el día («antes del día 20»). Varias franjas son varios turnos cada día: sacar al perro es mañana y tarde.</p>
 
-                    <div class="csa-form-grid">
-                        {{ csa.field(form.firstStart, 'De') }}
-                        {{ csa.field(form.firstEnd, 'a', { hint: 'opcional' }) }}
-                        {{ csa.field(form.secondStart, 'Y también de', { hint: 'opcional' }) }}
-                        {{ csa.field(form.secondEnd, 'a', { hint: 'opcional' }) }}
+                    <div class="vol-slots" data-csa-collection data-prototype="{{ rows.slot(form.repeatTimes.vars.prototype)|e('html_attr') }}">
+                        <div data-csa-collection-items>
+                            {% for slot in form.repeatTimes %}
+                                {{ rows.slot(slot) }}
+                            {% endfor %}
+                        </div>
+                        {% do form.repeatTimes.setRendered %}
+                        {% if not form.repeatTimes.vars.valid %}
+                            <div class="csa-field__error">{{ form_errors(form.repeatTimes) }}</div>
+                        {% endif %}
+                        <button type="button" class="csa-btn csa-btn--ghost" data-csa-collection-add hidden>
+                            <i class="fa fa-plus"></i> Añadir otra franja horaria
+                        </button>
                     </div>
                 {% else %}
                     {{ csa.callout(
@@ -152,7 +168,10 @@
                      # un trabajo que no tiene sitio es pedir que se rellene mal. #}
                     {{ csa.field(form.place, 'Sitio', { hint: 'del catálogo', widget_class: 'csa-select', show_when: 'remote=unchecked' }) }}
                     {{ csa.field(form.placeNote, 'Precisión', { hint: 'opcional', show_when: 'remote=unchecked' }) }}
-                    {{ csa.field(form.node, 'Punto de recogida', { hint: 'obligatorio si va con el reparto', widget_class: 'csa-select', show_when: 'remote=unchecked' }) }}
+                    {# Sólo con «los días que haya reparto»: es de donde salen las
+                     # fechas, y fuera de eso el punto no aporta nada que el sitio del
+                     # catálogo no diga. Las tareas de montaje lo traen puesto. #}
+                    {{ csa.field(form.node, 'Punto de recogida', { required: true, hint: 'de su calendario salen las fechas', widget_class: 'csa-select', show_when: 'repeatType=delivery;remote=unchecked' }) }}
                     {{ csa.field(form.slots, 'Plazas por turno', { hint: 'vacío = sin tope' }) }}
                     {# En HORAS. La etiqueta decía "minutos" y el campo pedía horas
                      # desde que se cambió: decía una cosa y hacía otra. #}
@@ -210,3 +229,17 @@
 
     {{ form_end(form) }}
 {% endblock %}
+
+{# Una franja horaria: de una hora a otra, y el botón de quitarla. Es una fila
+ # de la colección Y el molde de una nueva (data-prototype), así que cualquier
+ # cambio de aspecto se hace una sola vez aquí. #}
+{% macro slot(slot) %}
+    {% import '_macros/csa.html.twig' as csa %}
+    <div class="vol-slot" data-csa-collection-item>
+        {{ csa.field(slot.start, 'De') }}
+        {{ csa.field(slot.end, 'a', { hint: 'opcional' }) }}
+        <button type="button" class="csa-btn csa-btn--ghost vol-slot__remove" data-csa-collection-remove hidden aria-label="Quitar esta franja">
+            <i class="fa fa-times"></i>
+        </button>
+    </div>
+{% endmacro %}

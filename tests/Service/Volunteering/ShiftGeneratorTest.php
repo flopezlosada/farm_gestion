@@ -52,6 +52,22 @@ class ShiftGeneratorTest extends TestCase
      * que no se podía expresar cuando la tarea llevaba la fecha encima: habría
      * hecho falta crear dos tareas iguales con distinta hora.
      */
+    /**
+     * Sin franjas, el turno es de todo el día: a medianoche, que es como las
+     * pantallas entienden «sin hora» y lo callan. Antes eran las nueve, y se
+     * enseñaban como una hora real.
+     */
+    public function testSinFranjasElTurnoEsDeTodoElDia(): void
+    {
+        $offer = $this->offer(VolunteerOffer::REPEAT_ONCE, from: '2026-09-12', times: []);
+
+        $created = $this->generator()->generate($offer, $this->now());
+
+        $this->assertCount(1, $created);
+        $this->assertSame('2026-09-12 00:00', $created[0]->getStartsAt()->format('Y-m-d H:i'));
+        $this->assertNull($created[0]->getEndsAt());
+    }
+
     public function testDosTramosDanDosTurnosElMismoDia(): void
     {
         $offer = $this->offer(

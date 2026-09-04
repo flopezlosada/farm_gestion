@@ -1043,4 +1043,15 @@
  * pone la inicial. Sólo dentro del buscador de casillas: en el resto de pills
  * —áreas, nodos— el texto ya viene bien escrito. */
 [data-csa-check-filter] .csa-field input[type="checkbox"][name$="[]"] + label { text-transform: capitalize; }
+
+/* Franjas horarias del formulario de tarea: dos horas y el botón de quitar en
+   una fila. El botón se alinea con los campos, no con las etiquetas. */
+.vol-slots { display: grid; gap: var(--csa-sp-3); }
+.vol-slot { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: var(--csa-sp-3); align-items: end; }
+.vol-slot .csa-field + .csa-field { margin-top: 0; }
+.vol-slot__remove { height: 40px; }
+@media (max-width: 768px) {
+  .vol-slot { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .vol-slot__remove { grid-column: 1 / -1; }
+}
 </style>

@@ -45,7 +45,7 @@ class VolunteeringFormScreenTest extends AbstractAuthenticatedTest
     {
         $crawler = $this->screen();
 
-        foreach (['title', 'repeatFrom', 'firstStart'] as $field) {
+        foreach (['title', 'repeatFrom'] as $field) {
             $this->assertCount(
                 1,
                 $crawler->filter(sprintf('[name="volunteer_offer[%s]"][required]', $field)),
@@ -66,7 +66,8 @@ class VolunteeringFormScreenTest extends AbstractAuthenticatedTest
             'repeatUntil' => 'volunteer_offer[repeatType]=weekly|monthly|delivery;volunteer_offer[openEnded]=unchecked',
             'place' => 'volunteer_offer[remote]=unchecked',
             'placeNote' => 'volunteer_offer[remote]=unchecked',
-            'node' => 'volunteer_offer[remote]=unchecked',
+            // El punto sólo con «los días que haya reparto» y no desde casa.
+            'node' => 'volunteer_offer[repeatType]=delivery;volunteer_offer[remote]=unchecked',
         ];
 
         foreach ($rules as $field => $rule) {
@@ -80,6 +81,44 @@ class VolunteeringFormScreenTest extends AbstractAuthenticatedTest
                 sprintf('«%s» tendría que estar dentro del envoltorio con la regla «%s».', $field, $rule)
             );
         }
+    }
+
+    /**
+     * Ninguna hora es obligatoria: hay trabajo sin franja («antes del día 20»).
+     */
+    public function testLasHorasNoSonObligatorias(): void
+    {
+        $crawler = $this->screen();
+
+        $this->assertCount(0, $crawler->filter('input[type="time"][required]'));
+    }
+
+    /**
+     * Las franjas son una colección: en el alta hay UNA fila vacía, el molde de
+     * una nueva viaja en data-prototype y hay botón de añadir. Sin él, la
+     * pantalla volvería a tener un número fijo de franjas.
+     */
+    public function testLasFranjasSePuedenAnadir(): void
+    {
+        $crawler = $this->screen();
+
+        $box = $crawler->filter('[data-csa-collection]');
+        $this->assertCount(1, $box);
+        $this->assertCount(1, $box->filter('[data-csa-collection-item]'), 'En el alta tiene que haber una franja vacía.');
+        $this->assertCount(1, $box->filter('[name="volunteer_offer[repeatTimes][0][start]"]'));
+        $this->assertStringContainsString('volunteer_offer[repeatTimes][__name__][start]', $box->attr('data-prototype'));
+        $this->assertCount(1, $box->filter('[data-csa-collection-add]'));
+    }
+
+    /**
+     * «Qué días» lleva el asterisco de obligatorio: el widget de casillas no lo
+     * pone solo, y en la mensual también hace falta marcar el día.
+     */
+    public function testQueDiasSeMarcaComoObligatorio(): void
+    {
+        $crawler = $this->screen();
+
+        $this->assertCount(1, $crawler->filter('label[for="volunteer_offer_repeatWeekdays"] .csa-field__required'));
     }
 
     /**
