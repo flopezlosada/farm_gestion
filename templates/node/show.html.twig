@@ -158,6 +158,20 @@
             {% if node.anchorDate %} · ancla <b>{{ node.anchorDate|date('d/m/Y') }}</b>{% endif %}
             {% if node.monthlyWeek %} · abre la <b>{{ node.monthlyWeek == -1 ? 'última semana' : node.monthlyWeek ~ 'ª semana' }}</b> del mes{% endif %}
             {% if node.schedule %} · horario público <b>{{ node.schedule }}</b>{% endif %}
+            {# El montaje va aquí, con el día de reparto y la cadencia, porque es
+               de la misma clase: cómo funciona este punto. La convocatoria se
+               enlaza con su estado, que es lo que no se ve desde el formulario:
+               marcar la casilla la crea EN BORRADOR y alguien tiene que publicarla. #}
+            {% if is_granted('FEATURE_VOLUNTEERING') and node.deliveryPrep and node.deliveryPrepTimeSlot %}
+                {% set slot = node.deliveryPrepTimeSlot %}
+                · montaje con voluntariado <b>{{ node.deliveryPrepDayLabel|lower }}, {{ slot[0] }}{% if slot[1] %}–{{ slot[1] }}{% endif %}</b>
+                {%- if node.deliveryPrepSlots %}, <b>{{ node.deliveryPrepSlots }}</b> personas{% endif %}
+                {%- if delivery_prep_offer %} ·
+                    <a href="{{ path('volunteering_show', { id: delivery_prep_offer.id }) }}">convocatoria
+                        {%- if delivery_prep_offer.draft %} <b>en borrador</b>{% elseif delivery_prep_offer.paused %} <b>en pausa</b>{% endif -%}
+                    </a>
+                {%- endif %}
+            {% endif %}
         </div>
         <div class="nod-head__actions">
             {% if node.weeklyBasketGroups|length == 0 %}

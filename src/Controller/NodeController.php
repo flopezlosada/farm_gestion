@@ -12,6 +12,7 @@ use App\Entity\PartnerBasketShare;
 use App\Repository\BasketRepository;
 use App\Repository\NodeRepository;
 use App\Repository\PartnerRepository;
+use App\Repository\VolunteerOfferRepository;
 use App\Repository\WeeklyBasketGroupRepository;
 use App\Repository\WeeklyBasketRepository;
 use App\Service\Delivery\EggDeliveryResolver;
@@ -106,7 +107,8 @@ class NodeController extends AbstractController
         WeeklyBasketGenerator $generator,
         WeeklyBasketRepository $weeklyBasketRepository,
         EggDeliveryResolver $eggResolver,
-        PartnerRepository $partnerRepository
+        PartnerRepository $partnerRepository,
+        VolunteerOfferRepository $offers
     ): Response {
         // Próximos repartos: estimación (proyección sin persistir) de cuánto
         // se va a repartir en cada viernes operativo del nodo, huevos incluidos.
@@ -164,6 +166,13 @@ class NodeController extends AbstractController
             // Son cuatrocientas, así que el selector es un desplegable con
             // buscador y no una lista de casillas.
             'sheet_recipient_candidates' => $partnerRepository->findActiveWithEmail(),
+            // La convocatoria de montaje, si la hay, para enlazarla desde la
+            // ficha: es lo que ha pasado al marcar la casilla y, mientras siga
+            // en borrador, lo que falta por hacer. Con el módulo apagado no se
+            // enseña, igual que el bloque del formulario.
+            'delivery_prep_offer' => $this->isGranted('FEATURE_VOLUNTEERING')
+                ? $offers->findDeliveryPrepOffer($node)
+                : null,
         ]);
     }
 

@@ -5,6 +5,7 @@ namespace App\Tests\Controller;
 use App\Entity\Node;
 use App\Entity\Setting;
 use App\Service\AppSettings;
+use App\Service\Volunteering\DeliveryPrepOffers;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
@@ -204,6 +205,86 @@ class NodeDeliveryPrepScreenTest extends AbstractAuthenticatedTest
 
         $em->remove($saved);
         $em->flush();
+    }
+
+    /**
+     * La ficha del punto dice cómo monta y enlaza su convocatoria con el estado
+     * en que está. Es lo que no se ve desde el formulario: marcar la casilla
+     * crea la convocatoria EN BORRADOR, y si la ficha no lo dijera, la casilla
+     * parecería no haber hecho nada. Autocontenido: crea su punto y su
+     * convocatoria, y los borra.
+     */
+    public function testLaFichaDelPuntoDiceComoMontaYEnlazaSuConvocatoria(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->settings()->setBool(AppSettings::FEATURE_VOLUNTEERING, true);
+
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $node = $this->nodeThatAssembles('TEST Ficha montaje ' . uniqid());
+        $em->persist($node);
+        $em->flush();
+        $nodeId = $node->getId();
+        $offer = static::getContainer()->get(DeliveryPrepOffers::class)->sync($node)['offer'];
+        $em->flush();
+
+        $crawler = $client->request('GET', sprintf('/gestion/node/%d', $nodeId));
+
+        $this->assertResponseIsSuccessful();
+        $text = preg_replace('/\s+/', ' ', $crawler->filter('.nod-head__sub')->text());
+        $this->assertStringContainsString('montaje con voluntariado la víspera, 18:30–20:00, 4 personas', $text);
+        $this->assertStringContainsString('convocatoria en borrador', $text);
+
+        $link = $crawler->filter('.nod-head__sub a');
+        $this->assertCount(1, $link, 'La ficha debería enlazar la convocatoria de montaje una vez.');
+        $this->assertSame(sprintf('/gestion/voluntariado/tarea/%d', $offer->getId()), $link->attr('href'));
+
+        $em->remove($offer);
+        $em->remove($node);
+        $em->flush();
+    }
+
+    /**
+     * Con el módulo apagado, la ficha no habla del montaje aunque el punto lo
+     * tenga configurado: el dato se conserva, pero no se ofrece lo que no va a
+     * convocar a nadie.
+     */
+    public function testConElModuloApagadoLaFichaNoHablaDelMontaje(): void
+    {
+        $client = $this->createAuthenticatedClient();
+
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $node = $this->nodeThatAssembles('TEST Ficha montaje apagado ' . uniqid());
+        $em->persist($node);
+        $em->flush();
+
+        $crawler = $client->request('GET', sprintf('/gestion/node/%d', $node->getId()));
+
+        $this->assertResponseIsSuccessful();
+        $this->assertStringNotContainsString('montaje con voluntariado', $crawler->filter('body')->text());
+
+        $em->remove($node);
+        $em->flush();
+    }
+
+    /**
+     * Un punto que reparte los viernes y monta la víspera a las 18:30, con 4
+     * personas y 90 minutos: la misma receta que Torremocha en las fixtures.
+     *
+     * @param string $name nombre del punto, único para no chocar con otros tests
+     *
+     * @return Node el punto, sin persistir
+     */
+    private function nodeThatAssembles(string $name): Node
+    {
+        return (new Node())
+            ->setName($name)
+            ->setDeliveryWeekday(5)
+            ->setCadence(Node::CADENCE_WEEKLY)
+            ->setDeliveryPrep(true)
+            ->setDeliveryPrepDayOffset(-1)
+            ->setDeliveryPrepTime(new \DateTime('18:30'))
+            ->setDeliveryPrepSlots(4)
+            ->setDeliveryPrepMinutes(90);
     }
 
     private function settings(): AppSettings
