@@ -177,6 +177,11 @@ class VolunteerOfferType extends AbstractType
                 'allow_add' => true,
                 'allow_delete' => true,
                 'by_reference' => false,
+                // Sin esto los errores de las franjas suben al formulario raíz,
+                // que la plantilla no pinta: una colección es un campo compuesto
+                // y Symfony los hace subir por defecto. Se quedan aquí, donde
+                // la plantilla los enseña bajo las filas.
+                'error_bubbling' => false,
                 // Una franja sin ninguna hora se descarta al guardar, no se
                 // guarda como turno vacío. Con fin y sin inicio se conserva,
                 // para poder decir que está a medias (validateTimeSlots).
