@@ -122,7 +122,7 @@ class VolunteeringCategoryShowTest extends WebTestCase
 
         $this->assertResponseRedirects('/gestion/voluntariado/categorias/' . $area->getId());
 
-        $em->refresh($offer);
+        $offer = $this->reload($offer);
         $this->assertSame(VolunteerOffer::STATUS_PUBLISHED, $offer->getStatus());
     }
 
@@ -149,7 +149,7 @@ class VolunteeringCategoryShowTest extends WebTestCase
             'from_category' => $area->getId(),
         ]);
 
-        $em->refresh($offer);
+        $offer = $this->reload($offer);
         $this->assertSame(VolunteerOffer::STATUS_PUBLISHED, $offer->getStatus());
     }
 
@@ -173,7 +173,7 @@ class VolunteeringCategoryShowTest extends WebTestCase
             'from_category' => $area->getId(),
         ]);
 
-        $em->refresh($offer);
+        $offer = $this->reload($offer);
         $this->assertSame(VolunteerOffer::STATUS_PUBLISHED, $offer->getStatus());
     }
 
@@ -291,6 +291,28 @@ class VolunteeringCategoryShowTest extends WebTestCase
     private function em(): EntityManagerInterface
     {
         return static::getContainer()->get(EntityManagerInterface::class);
+    }
+
+    /**
+     * La tarea tal y como quedó en la base tras la petición.
+     *
+     * NO `$em->refresh($offer)`: el cliente reinicia el kernel antes de cada
+     * petición salvo la primera, y al apagarse el contenedor el EntityManager
+     * se vacía, así que la tarea creada al principio queda suelta y `refresh()`
+     * lanza «not managed». Por eso el test con UNA petición pasaba y los que
+     * piden antes el token —dos peticiones— fallaban.
+     *
+     * @param VolunteerOffer $offer la tarea creada al principio del test
+     *
+     * @return VolunteerOffer la misma tarea, leída de nuevo
+     */
+    private function reload(VolunteerOffer $offer): VolunteerOffer
+    {
+        $em = $this->em();
+        $em->clear();
+
+        return $em->find(VolunteerOffer::class, $offer->getId())
+            ?? throw new \RuntimeException('La tarea del test ha desaparecido de la base.');
     }
 
     private function settings(): AppSettings
