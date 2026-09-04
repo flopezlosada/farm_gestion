@@ -105,8 +105,10 @@ class PanelVolunteeringCalendarAreasTest extends AbstractPartnerAuthenticatedTes
             ->loadUserByIdentifier(PartnerUserFixtures::USER_SOCIX_USERNAME)
             ->getPartner();
 
-        $mine = (new VolunteerCategory())->setName('Areas marcada');
-        $other = (new VolunteerCategory())->setName('Areas no marcada');
+        // El nombre del área es único en BBDD y cada test crea las suyas.
+        $suffix = ' '.uniqid();
+        $mine = (new VolunteerCategory())->setName('Areas marcada'.$suffix);
+        $other = (new VolunteerCategory())->setName('Areas no marcada'.$suffix);
         $em->persist($mine);
         $em->persist($other);
         $partner->addVolunteerCategory($mine);
