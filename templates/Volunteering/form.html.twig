@@ -111,13 +111,12 @@
                  # de recogida y el sincronizador lo reescribe, así que un campo aquí
                  # sólo serviría para que alguien creyera haber cambiado la hora. #}
                 {% if form.repeatTimes is defined %}
-                    {% import _self as rows %}
                     <p class="vol-help">A qué hora se hace. Sin hora, el turno es de todo el día («antes del día 20»). Varias franjas son varios turnos cada día: sacar al perro es mañana y tarde.</p>
 
-                    <div class="vol-slots" data-csa-collection data-prototype="{{ rows.slot(form.repeatTimes.vars.prototype)|e('html_attr') }}">
+                    <div class="vol-slots" data-csa-collection data-prototype="{{ vol.slot(form.repeatTimes.vars.prototype)|e('html_attr') }}">
                         <div data-csa-collection-items>
                             {% for slot in form.repeatTimes %}
-                                {{ rows.slot(slot) }}
+                                {{ vol.slot(slot) }}
                             {% endfor %}
                         </div>
                         {% do form.repeatTimes.setRendered %}
@@ -229,17 +228,3 @@
 
     {{ form_end(form) }}
 {% endblock %}
-
-{# Una franja horaria: de una hora a otra, y el botón de quitarla. Es una fila
- # de la colección Y el molde de una nueva (data-prototype), así que cualquier
- # cambio de aspecto se hace una sola vez aquí. #}
-{% macro slot(slot) %}
-    {% import '_macros/csa.html.twig' as csa %}
-    <div class="vol-slot" data-csa-collection-item>
-        {{ csa.field(slot.start, 'De') }}
-        {{ csa.field(slot.end, 'a', { hint: 'opcional' }) }}
-        <button type="button" class="csa-btn csa-btn--ghost vol-slot__remove" data-csa-collection-remove hidden aria-label="Quitar esta franja">
-            <i class="fa fa-times"></i>
-        </button>
-    </div>
-{% endmacro %}
