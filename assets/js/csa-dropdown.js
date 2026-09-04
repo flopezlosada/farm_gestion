@@ -45,16 +45,8 @@
        mil píxeles que tapaba la ficha entera. */
     var ALTO_MAXIMO = 280;
 
-    /* Sin acentos y en minúsculas, para que "agustin" encuentre a "Agustín" y
-       "jose" a "JOSÉ" — en la base de datos muchos nombres están en mayúsculas.
-       El rango ̀-ͯ son las marcas diacríticas que deja NFD; se usa en
-       vez de \p{Diacritic} porque no exige soporte de propiedades Unicode. */
-    function fold(text) {
-        return text
-            .normalize('NFD')
-            .replace(/[̀-ͯ]/g, '')
-            .toLowerCase();
-    }
+    /* Compartida con csa-check-filter, que busca sobre los mismos nombres. */
+    var fold = require('./csa-fold.js');
 
     function enhance(select) {
         if (select.dataset.csaEnhanced) {

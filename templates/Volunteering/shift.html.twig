@@ -93,7 +93,9 @@
                      # navega —«los turnos de huerta»— y desde aquí no había forma
                      # de llegar a ella. #}
                     {% for category in offer.categories %}
-                        <span class="prt-chip prt-chip--mute"><i class="fa fa-tag"></i> {{ category.name }}</span>
+                        <a class="prt-chip prt-chip--mute" href="{{ path('volunteering_category_show', { id: category.id }) }}" title="Ver el área">
+                            <i class="fa fa-tag"></i> {{ category.name }}
+                        </a>
                     {% endfor %}
 
                     <span class="prt-chip prt-chip--mute"><i class="fa fa-map-marker"></i> {{ vol.task_place(offer) }}</span>
@@ -621,7 +623,7 @@
                     <div class="prt-card">
                         <div class="prt-card__body">
                             <p class="vol-help">
-                                Socixs que han marcado este tipo de trabajo y todavía no se han apuntado.
+                                Socixs que han marcado esta área y todavía no se han apuntado.
                                 Primero quien menos ha echado una mano este año, para repartir la carga.
                             </p>
 
@@ -635,7 +637,7 @@
                                                 {%- if candidate.same_node -%}
                                                     Recoge su cesta en {{ offer.node }} — ese día ya va a estar allí
                                                 {%- else -%}
-                                                    Tiene marcado este tipo de trabajo
+                                                    Tiene marcada esta área
                                                 {%- endif -%}
                                             </span>
                                         </div>

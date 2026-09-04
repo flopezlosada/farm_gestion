@@ -81,6 +81,9 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[IsGranted('FEATURE_VOLUNTEERING')]
 class VolunteeringController extends AbstractController
 {
+    /** Cuántas tareas se pintan por bloque en la ficha de un área. */
+    private const CATEGORY_TASKS = 8;
+
     /**
      * Cuántos turnos por venir enseña la ficha de la tarea antes de remitir a
      * la lista completa.
@@ -162,7 +165,7 @@ class VolunteeringController extends AbstractController
     }
 
     /**
-     * La bolsa: quién hay para cada tipo de trabajo.
+     * La bolsa: quién hay para cada área.
      *
      * Es lo primero que echa en falta quien coordina un área: la aplicación sabe
      * decir quién se apuntó a UN turno, pero no a quién se puede llamar para
@@ -233,6 +236,7 @@ class VolunteeringController extends AbstractController
         PaginatorInterface $paginator,
         VolunteerScope $scopeOf,
         PartnerRepository $partners,
+        VolunteerCategoryRepository $categories,
     ): Response {
         $type = $request->query->getAlpha('tipo') ?: null;
         $type = null !== $type && isset(VolunteerEvent::LABELS[$type]) ? $type : null;
@@ -242,8 +246,26 @@ class VolunteeringController extends AbstractController
         $who = $request->query->getInt('socix') ?: null;
         $who = null !== $who ? $partners->find($who) : null;
 
+        // Filtro por área, que es por dónde se entra desde su ficha. El
+        // parámetro se llama `area` y no `tipo` porque `tipo` ya es el tipo de
+        // EVENTO en esta pantalla, y reusarlo dejaría dos filtros peleándose por
+        // el mismo nombre.
+        $areaId = $request->query->getInt('area') ?: null;
+        $area = null !== $areaId ? $categories->find($areaId) : null;
+
+        // El alcance de quien mira; null significa que lo ve todo.
+        $mine = $scopeOf->categories();
+
+        // SE INTERSECA con ese alcance, no lo sustituye: pedir por URL un área
+        // que no es tuya tiene que devolver vacío, no abrirla. Un filtro que
+        // amplía permisos no da error, sólo enseña lo que no debía.
+        $restrict = $mine;
+        if (null !== $area) {
+            $restrict = (null === $mine || \in_array($area, $mine, true)) ? [$area] : [];
+        }
+
         $pagination = $paginator->paginate(
-            $events->feedQb($scopeOf->categories(), $type, $who)->getQuery(),
+            $events->feedQb($restrict, $type, $who)->getQuery(),
             $request->query->getInt('page', 1),
             30
         );
@@ -251,6 +273,7 @@ class VolunteeringController extends AbstractController
         return $this->render('Volunteering/activity.html.twig', [
             'pagination' => $pagination,
             'who' => $who,
+            'area' => $area,
             // Los nombres sólo de la página visible: resolver los de toda la
             // tabla sería traer cuentas que no se van a pintar.
             'actor_names' => $events->actorNames(iterator_to_array($pagination)),
@@ -282,6 +305,19 @@ class VolunteeringController extends AbstractController
         TaskCoordinator $coordination,
     ): Response {
         $offer = (new VolunteerOffer())->setCreatedBy($this->getUser());
+
+        // Desde la ficha de un área se llega con `?area=`: el área ya viene
+        // marcada y no hay que volver a elegirla en una lista. Sólo si existe y
+        // se sigue ofreciendo; una retirada no se ofrece ni por la puerta de
+        // atrás. Se ignora en el POST: ahí manda lo que se envió.
+        $areaId = $request->query->getInt('area');
+        if ($areaId > 0 && !$request->isMethod('POST')) {
+            $area = $em->find(VolunteerCategory::class, $areaId);
+            if (null !== $area && $area->isActive()) {
+                $offer->addCategory($area);
+            }
+        }
+
         $form = $this->createForm(VolunteerOfferType::class, $offer);
         $form->handleRequest($request);
 
@@ -531,18 +567,29 @@ class VolunteeringController extends AbstractController
         VolunteerEventRecorder $events,
         VolunteerOfferChangeNotifier $changes,
     ): Response {
+        // Vuelve a la pantalla desde la que se pulsó. Desde la ficha de un área
+        // llega su id; sin él, a la ficha de la tarea.
+        $fromCategory = $request->request->getInt('from_category') ?: null;
+        $back = null !== $fromCategory
+            ? $this->redirectToRoute('volunteering_category_show', ['id' => $fromCategory])
+            : $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
+
         if (!$this->isCsrfTokenValid('volunteering_status', (string) $request->request->get('_csrf_token'))) {
             $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
 
-            return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
+            return $back;
         }
 
         $wanted = (string) $request->request->get('estado');
 
+        // Lista blanca y no confianza en el POST: `setStatus()` acepta cualquier
+        // cadena y la validación de la entidad no corre en este camino, así que
+        // sin esto un valor cualquiera dejaría la tarea en un estado que ninguna
+        // consulta reconoce y desaparecería de todas las pantallas.
         if (!\in_array($wanted, VolunteerOffer::STATUSES, true)) {
             $this->addFlash('error', 'Ese estado no existe.');
 
-            return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
+            return $back;
         }
 
         $before = VolunteerOfferSnapshot::of($offer);
@@ -566,7 +613,7 @@ class VolunteeringController extends AbstractController
             default => 'Tarea vuelta a borrador.',
         });
 
-        return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
+        return $back;
     }
 
     /**
@@ -1349,7 +1396,7 @@ class VolunteeringController extends AbstractController
     }
 
     /**
-     * El catálogo de tipos de trabajo.
+     * El catálogo de áreas.
      */
     #[Route('/categorias', name: 'volunteering_categories', methods: ['GET'])]
     #[IsGranted('ROLE_GESTION_VOLUNTARIADO_EDIT')]
@@ -1374,7 +1421,7 @@ class VolunteeringController extends AbstractController
     }
 
     /**
-     * Crear un tipo de trabajo, en su propia pantalla.
+     * Crear un área, en su propia pantalla.
      *
      * Estaba pegado debajo del listado, y ahí un formulario compite con la
      * tabla por la atención y alarga la página sin motivo: se entra a mirar
@@ -1395,7 +1442,7 @@ class VolunteeringController extends AbstractController
                 'coordinators' => $this->coordinatorNames($category),
             ]);
             $em->flush();
-            $this->addFlash('success', 'Tipo de trabajo creado.');
+            $this->addFlash('success', 'Área creada.');
 
             return $this->redirectToRoute('volunteering_categories');
         }
@@ -1408,7 +1455,83 @@ class VolunteeringController extends AbstractController
     }
 
     /**
-     * Editar una categoría.
+     * La ficha de un área: si está viva, qué se está haciendo dentro y quién la
+     * coordina.
+     *
+     * NACE PORQUE EL ÁREA NO TENÍA DÓNDE MIRARSE. Del catálogo sólo se podía ir
+     * a editar, y editar es para cambiar el nombre: no dice si el área está
+     * viva, si tiene tareas sin cerrar o si la sostiene una sola persona. Eso es
+     * lo que necesita quien coordina, y estaba repartido entre tres pantallas
+     * con el filtro puesto a mano.
+     *
+     * TODO VIENE LIMITADO Y CON SALIDA al listado completo filtrado por el área.
+     * Un área con dos años de tareas dentro llenaría la ficha de scroll y
+     * dejaría de servir para lo que sirve, que es responder de un vistazo. Por
+     * lo mismo la gente disponible y el histórico NO se pintan: son un enlace a
+     * la bolsa y a la actividad filtradas por el área, que ya existen.
+     */
+    #[Route('/categorias/{id}', name: 'volunteering_category_show', methods: ['GET'], requirements: ['id' => '\d+'])]
+    #[IsGranted('ROLE_GESTION_VOLUNTARIADO_EDIT')]
+    public function showCategory(
+        VolunteerCategory $category,
+        VolunteerShiftRepository $shifts,
+    ): Response {
+        $now = new \DateTime();
+
+        // DE TURNOS Y NO DE TAREAS: «lo que falta cerrar» y «lo que viene» son
+        // preguntas con fecha, y desde que el momento vive en su propia fila las
+        // contesta el repositorio de turnos.
+        //
+        // DOS CONSULTAS Y NO UNA, porque el orden que sirve aquí no es el
+        // cronológico: lo que ya pasó y falta por cerrar va ANTES de lo que
+        // viene, aunque sea más viejo. Expresarlo en un solo ORDER BY exigiría
+        // un CASE sobre las subconsultas de asistencia que ya vive en listQb.
+        $pending = $shifts->listQb('pending', $category, null, $now)
+            ->setMaxResults(self::CATEGORY_TASKS)->getQuery()->getResult();
+        $upcoming = $shifts->listQb('upcoming', $category, null, $now)
+            ->setMaxResults(self::CATEGORY_TASKS)->getQuery()->getResult();
+
+        // SIN HISTÓRICO NI LISTA DE GENTE. Los dos bloques estuvieron aquí y
+        // eran una copia recortada de otra pantalla —la actividad y la bolsa,
+        // filtradas por el área— con menos columnas y sin filtros: cada tarjeta
+        // repetía lo que su propio enlace enseñaba mejor. La ficha enlaza a las
+        // dos y se queda con lo que no está en ningún otro sitio con esta
+        // forma: las tareas del área y quién la coordina.
+
+        // Sobre las tareas ya cargadas y no con una consulta aparte: son como
+        // mucho veinte objetos que ya están en memoria, y `getRemainingSlots()`
+        // vive en la entidad porque una tarea sin tope no tiene plazas que
+        // contar y eso no se sabe decir en SQL sin duplicar la regla.
+        $missing = 0;
+        $shortHanded = [];
+        foreach ($upcoming as $shift) {
+            $left = $shift->getRemainingSlots() ?? 0;
+            $missing += $left;
+            if ($left > 0) {
+                $shortHanded[] = $shift;
+            }
+        }
+
+        return $this->render('Volunteering/category_show.html.twig', [
+            'category' => $category,
+            'pending' => $pending,
+            'upcoming' => $upcoming,
+            'counts' => $shifts->counts($now, [$category]),
+            'missing_slots' => $missing,
+            'short_handed' => $shortHanded,
+            'now' => $now,
+            'task_limit' => self::CATEGORY_TASKS,
+        ]);
+    }
+
+    /**
+     * Editar un área: sólo lo que es texto y quién la coordina.
+     *
+     * El histórico ya NO se pinta aquí. Un formulario es para cambiar cosas, y
+     * un registro de lo que pasó debajo de los botones de guardar no se lee ni
+     * se puede usar para nada: su sitio es la ficha
+     * ({@see self::showCategory()}), donde está junto a las tareas y la gente
+     * que le dan sentido.
      */
     #[Route('/categorias/{id}/editar', name: 'volunteering_category_edit', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
     #[IsGranted('ROLE_GESTION_VOLUNTARIADO_EDIT')]
@@ -1417,13 +1540,11 @@ class VolunteeringController extends AbstractController
         VolunteerCategory $category,
         EntityManagerInterface $em,
         VolunteerEventRecorder $events,
-        VolunteerEventRepository $eventLog,
     ): Response {
         // Quién coordinaba ANTES: cambiar la coordinación de un área es el
         // cambio que más conviene tener registrado, y después del submit ya no
         // se puede saber quién estaba.
         $before = $this->coordinatorNames($category);
-        $history = $eventLog->historyForCategory($category);
 
         $form = $this->createForm(VolunteerCategoryType::class, $category);
         $form->handleRequest($request);
@@ -1442,22 +1563,23 @@ class VolunteeringController extends AbstractController
             );
 
             $em->flush();
-            $this->addFlash('success', 'Tipo de trabajo actualizado.');
+            $this->addFlash('success', 'Área actualizada.');
 
-            return $this->redirectToRoute('volunteering_categories');
+            // A la ficha y no al catálogo: se acaba de guardar un cambio sobre
+            // ESTA área y lo siguiente que se quiere es verla, no volver a una
+            // tabla donde hay que buscarla otra vez.
+            return $this->redirectToRoute('volunteering_category_show', ['id' => $category->getId()]);
         }
 
         return $this->render('Volunteering/category_form.html.twig', [
             'category' => $category,
             'form' => $form->createView(),
             'is_new' => false,
-            'history' => $history,
-            'actor_names' => $eventLog->actorNames($history),
         ]);
     }
 
     /**
-     * Retirar o volver a ofrecer un tipo de trabajo, desde el propio listado.
+     * Retirar o volver a ofrecer un área, desde el propio listado.
      *
      * El estado se veía pero no había cómo cambiarlo sin entrar a editar y
      * buscar una casilla. Es la acción más frecuente sobre un catálogo y merece
@@ -1474,10 +1596,16 @@ class VolunteeringController extends AbstractController
         EntityManagerInterface $em,
         VolunteerEventRecorder $events,
     ): Response {
+        // A la pantalla desde la que se pulsó, que es la que se estaba mirando.
+        // Se decide antes del token para que también el error vuelva bien.
+        $back = 'show' === $request->request->get('back')
+            ? $this->redirectToRoute('volunteering_category_show', ['id' => $category->getId()])
+            : $this->redirectToRoute('volunteering_categories');
+
         if (!$this->isCsrfTokenValid('volunteering_category_toggle', (string) $request->request->get('_csrf_token'))) {
             $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
 
-            return $this->redirectToRoute('volunteering_categories');
+            return $back;
         }
 
         $category->setActive(!$category->isActive());
@@ -1491,9 +1619,9 @@ class VolunteeringController extends AbstractController
 
         $this->addFlash('success', $category->isActive()
             ? sprintf('"%s" vuelve a ofrecerse.', $category->getName())
-            : sprintf('"%s" queda retirado. El histórico se conserva.', $category->getName()));
+            : sprintf('"%s" queda retirada. El histórico se conserva.', $category->getName()));
 
-        return $this->redirectToRoute('volunteering_categories');
+        return $back;
     }
 
     /**

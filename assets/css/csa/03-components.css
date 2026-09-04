@@ -154,6 +154,30 @@
 }
 .csa-badge--no-dot::before { display: none; }
 
+/* Variante COMPACTA, para cuando la insignia lleva un nombre de persona en vez
+ * de un estado. Un nombre y apellidos es texto largo: con el padding normal la
+ * pastilla se come la celda y compite con el estado de al lado, que sí es un
+ * estado. Se usa junto a --no-dot: el punto de color informa cuando hay verde y
+ * rojo que distinguir, y delante de un nombre sólo ocupa doce píxeles. */
+.csa-badge--sm {
+  padding: 1px 7px;
+  gap: 4px;
+  letter-spacing: 0;
+}
+
+/* Nombres de persona tal y como se teclearon en su día: la mayoría están en la
+ * base de datos EN MAYÚSCULAS ("INÉS BAUTISTA CARRASCOSA"), y en pantalla eso
+ * grita y se lee peor.
+ *
+ * Hacen falta LAS DOS COSAS y por eso esto es sólo la mitad: `capitalize` pone
+ * en mayúscula la inicial de cada palabra pero NO baja el resto, así que sobre
+ * un texto ya en mayúsculas no hace nada. En la plantilla va un `|lower`. Es el
+ * mismo par que ya usa el panel del socix.
+ *
+ * No se arregla en el dato porque ahí es como lo escribió administración, y hay
+ * sitios —el listado impreso del reparto— donde las mayúsculas se quieren. */
+.csa-name { text-transform: capitalize; }
+
 .csa-badge--green      { background: var(--csa-green-soft);      color: var(--csa-green); }
 .csa-badge--ochre      { background: var(--csa-ochre-soft);      color: var(--csa-amber); }
 .csa-badge--terracotta { background: var(--csa-terracotta-soft); color: #b04e22; }
@@ -729,6 +753,27 @@ select.csa-input,
 .csa-field input[type="checkbox"][name$="[]"]:focus + label {
   outline: 2px solid var(--csa-green);
   outline-offset: 2px;
+}
+
+/* Buscador que csa-check-filter inyecta sobre una lista larga de esas pills.
+ * No existe en el HTML: si no hay JS no aparece y se ven todas, que es el
+ * estado correcto. */
+.csa-check-filter {
+  /* Acotado: hereda width:100% de .csa-input y un buscador de nombres tan
+     ancho como la ficha parece el campo principal del formulario, que no es. */
+  max-width: 320px;
+  margin-bottom: var(--csa-sp-2);
+}
+.csa-check-filter__status {
+  margin: 0 0 var(--csa-sp-2);
+  font-size: var(--csa-fs-sm);
+  color: var(--csa-ink-muted);
+}
+/* !important porque lo que se esconde puede ser el <label> de la pill, y su
+ * `display: inline-flex` de arriba gana por especificidad a cualquier regla
+ * de una sola clase. */
+.csa-check-filter__hidden {
+  display: none !important;
 }
 
 .csa-input--with-prefix {
@@ -1544,10 +1589,22 @@ a.csa-table__primary:hover {
   white-space: nowrap;
   width: 1%;
 }
+/* La separación la pone el HIJO, sea del tipo que sea, y no la regla de los
+ * enlaces. Antes el margen vivía en `.csa-table__actions a`, así que una columna
+ * de acciones que mezclara enlaces con un <form> —lo normal en cuanto una acción
+ * cambia datos y tiene que ir por POST— salía con los iconos a distancias
+ * distintas: el del formulario pegado al anterior. Con `:not(:first-child)` la
+ * primera acción no arrastra sangría y las demás se separan igual, sean <a>,
+ * <button> o <form>.
+ *
+ * La especificidad (0,2,0) es a propósito: tiene que ganar a la regla de `a` de
+ * abajo, que es (0,1,1). */
+.csa-table__actions > *:not(:first-child) {
+  margin-left: var(--csa-sp-3);
+}
 .csa-table__actions a {
   color: var(--csa-ink-soft);
   border-bottom: none;
-  margin-left: var(--csa-sp-3);
   font-size: var(--csa-fs-sm);
 }
 .csa-table__actions a:hover { color: var(--csa-ink); border-bottom: none; }
@@ -2012,13 +2069,16 @@ a.csa-table__primary:hover {
 /* La doble clase (.csa-app .csa-tabs__link) sube especificidad por encima
    de .csa-app a:link/:visited de Bootstrap 3, que pisaba color y
    text-decoration. */
+/* Tamaño de UI (14px), no de contenido: una pestaña es navegación, y a
+   --csa-fs-md (16px) el rótulo salía MÁS GRANDE que el texto de la ficha que
+   abre. */
 .csa-app .csa-tabs__link,
 .csa-app .csa-tabs__link:link,
 .csa-app .csa-tabs__link:visited {
   display: inline-block;
   padding: var(--csa-sp-3) 0;
   font-family: var(--csa-sans);
-  font-size: var(--csa-fs-md);
+  font-size: var(--csa-fs-base);
   font-weight: 500;
   color: var(--csa-ink-soft);
   text-decoration: none;
@@ -2041,8 +2101,11 @@ a.csa-table__primary:hover {
   outline-offset: 2px;
   border-radius: var(--csa-radius-sm);
 }
+/* La activa engorda además de oscurecerse: a 14px el salto de color por sí solo
+   se pierde de vista cuando la fila tiene tres o cuatro rótulos. */
 .csa-app .csa-tabs__item.active > .csa-tabs__link,
 .csa-app .csa-tabs__item.active > .csa-tabs__link:visited {
+  font-weight: 700;
   color: var(--csa-ink);
   border-bottom-color: var(--csa-ink);
   text-decoration: none;
@@ -2081,8 +2144,11 @@ a.csa-table__primary:hover {
   color: var(--csa-ink);
   background: transparent;
 }
+/* Aquí la activa NO engorda: la píldora oscura ya dice cuál es, y el 700 de la
+   variante subrayada tendría que declararse otra vez en serif. */
 .csa-app .csa-tabs--folder .csa-tabs__item.active > .csa-tabs__link,
 .csa-app .csa-tabs--folder .csa-tabs__item.active > .csa-tabs__link:visited {
+  font-weight: 500;
   background: var(--csa-ink);
   color: #fff;
   border-bottom-color: transparent;
@@ -2117,9 +2183,12 @@ a.csa-table__primary:hover {
 [data-csa-tabs].is-ready .csa-tabpanel.is-active {
   display: block;
 }
-/* El contador de cada pestaña ("Quién viene · 3"): mismo tamaño, menos peso. */
+/* El contador de cada pestaña ("Quién viene · 3"): mismo tamaño, menos peso.
+   El font-weight es explícito porque el rótulo de la pestaña activa va en 700 y
+   la cifra lo heredaría: engordar el número compite con el rótulo. */
 .csa-tabs__count {
   margin-left: var(--csa-sp-2);
+  font-weight: 400;
   font-variant-numeric: tabular-nums;
   color: var(--csa-ink-muted);
 }

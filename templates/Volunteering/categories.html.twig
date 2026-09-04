@@ -1,4 +1,4 @@
-{# Catálogo de tipos de trabajo del voluntariado.
+{# Catálogo de áreas del voluntariado.
  #
  # Mismo patrón que el listado de socixs. El formulario de alta ya NO vive aquí:
  # tiene pantalla propia (volunteering_category_new). Un formulario debajo de la
@@ -7,7 +7,7 @@
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
 
-{% block title %}Voluntariado · Tipos de trabajo{% endblock %}
+{% block title %}Voluntariado · Áreas{% endblock %}
 
 {% block more_css %}
     {{ parent() }}
@@ -25,7 +25,7 @@
     <span class="csa-topbar__crumbs-sep">/</span>
     <a href="{{ path('volunteering_index') }}">Voluntariado</a>
     <span class="csa-topbar__crumbs-sep">/</span>
-    <span class="csa-topbar__crumb-active">Tipos de trabajo</span>
+    <span class="csa-topbar__crumb-active">Áreas</span>
 {% endblock %}
 
 {% block csa_main %}
@@ -33,18 +33,18 @@
 
     {{ csa.page_header(
         'Voluntariado',
-        'Tipos de trabajo',
-        'Cada socix marca en su ficha de qué tipos quiere que se le avise. Marcar significa "avísame de esto"; no marcar nada, "avísame de lo que sea sencillo".'
+        'Áreas',
+        'Cada socix marca en su ficha de qué áreas quiere que se le avise. Marcar significa "avísame de esto"; no marcar nada, "avísame de lo que sea sencillo".'
     ) }}
 
     <div class="prl-stats">
         <a class="prl-stat prl-stat--active" href="{{ path('volunteering_categories', { ver: 'active' }) }}" style="text-decoration: none;">
             <div class="v">{{ counts.active }}</div>
-            <div class="l">activos</div>
+            <div class="l">activas</div>
         </a>
         <a class="prl-stat prl-stat--leave" href="{{ path('volunteering_categories', { ver: 'retired' }) }}" style="text-decoration: none;">
             <div class="v">{{ counts.retired }}</div>
-            <div class="l">retirados</div>
+            <div class="l">retiradas</div>
         </a>
         <a class="prl-stat" href="{{ path('volunteering_categories', { ver: 'all' }) }}" style="text-decoration: none;">
             <div class="v">{{ counts.all }}</div>
@@ -52,7 +52,7 @@
         </a>
     </div>
 
-    {% set tabs = { 'active': 'Activos', 'retired': 'Retirados', 'all': 'Todos' } %}
+    {% set tabs = { 'active': 'Activas', 'retired': 'Retiradas', 'all': 'Todas' } %}
     <nav class="prl-tabs" role="tablist">
         {% for key, label in tabs %}
             <a href="{{ path('volunteering_categories', { ver: key }) }}" class="{{ scope == key ? 'active' : '' }}">
@@ -71,7 +71,7 @@
             </div>
 
             <div style="margin-left: auto;">
-                {{ csa.btn('Nuevo tipo de trabajo', { variant: 'primary', icon: 'fa-plus', href: path('volunteering_category_new') }) }}
+                {{ csa.btn('Nueva área', { variant: 'primary', icon: 'fa-plus', href: path('volunteering_category_new') }) }}
             </div>
         </div>
     </form>
@@ -91,11 +91,17 @@
             <tbody>
                 {% for category in pagination %}
                     <tr>
-                        <td class="csa-table__primary">{{ category.name }}</td>
+                        <td>
+                            <a class="csa-table__primary" href="{{ path('volunteering_category_show', { id: category.id }) }}">{{ category.name }}</a>
+                        </td>
                         <td>{{ category.description ?: '—' }}</td>
                         <td>
+                            {# Insignia COMPACTA y sin punto: un nombre y apellidos con el
+                             # padding normal se comía la celda y el punto de color delante
+                             # de un nombre no informa de nada. Y en minúsculas + csa-name,
+                             # porque en la base de datos están EN MAYÚSCULAS y así gritan. #}
                             {% for coordinator in category.coordinators %}
-                                {{ csa.badge(coordinator.displayName, 'sky') }}
+                                {{ csa.badge(coordinator.displayName|lower, 'sky', { sm: true, no_dot: true, class: 'csa-name' }) }}
                             {% else %}
                                 <span class="vol-help">Sin coordinar</span>
                             {% endfor %}
@@ -103,20 +109,21 @@
                         <td class="csa-table__col-tight">{{ category.partners|length }}</td>
                         <td class="csa-table__col-tight">
                             {% if category.active %}
-                                {{ csa.badge('Activo', 'green') }}
+                                {{ csa.badge('Activa', 'green') }}
                             {% else %}
-                                {{ csa.badge('Retirado', 'neutral') }}
+                                {{ csa.badge('Retirada', 'neutral') }}
                             {% endif %}
                         </td>
                         <td class="csa-table__actions">
+                            <a href="{{ path('volunteering_category_show', { id: category.id }) }}" title="Ver" aria-label="Ver"><i class="fa fa-eye"></i></a>
                             <a href="{{ path('volunteering_category_edit', { id: category.id }) }}" title="Editar" aria-label="Editar"><i class="fa fa-pencil"></i></a>
                             {# Cambiar el estado a un clic: es la acción más
                              # frecuente sobre un catálogo y antes obligaba a
                              # entrar a editar y buscar una casilla. Nunca se
-                             # borra: un tipo borrado se llevaría el histórico
+                             # borra: un área borrada se llevaría el histórico
                              # de tareas y las preferencias de quien lo marcó. #}
                             <form method="post" action="{{ path('volunteering_category_toggle', { id: category.id }) }}" style="display: inline;"
-                                  onsubmit="return confirm('{{ category.active ? 'Se retira de las tareas nuevas y de la ficha de socixs. El histórico se conserva. ¿Seguimos?' : '¿Volver a ofrecer este tipo de trabajo?' }}');">
+                                  onsubmit="return confirm('{{ category.active ? 'Se retira de las tareas nuevas y de la ficha de socixs. El histórico se conserva. ¿Seguimos?' : '¿Volver a ofrecer esta área?' }}');">
                                 <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_category_toggle') }}">
                                 <button type="submit" class="csa-table__iconbtn"
                                         title="{{ category.active ? 'Retirar' : 'Volver a ofrecer' }}"
@@ -127,7 +134,7 @@
                         </td>
                     </tr>
                 {% else %}
-                    <tr><td colspan="6">No hay ningún tipo de trabajo que encaje con lo que buscas.</td></tr>
+                    <tr><td colspan="6">No hay ninguna área que encaje con lo que buscas.</td></tr>
                 {% endfor %}
             </tbody>
         </table>

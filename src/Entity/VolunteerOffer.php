@@ -303,6 +303,45 @@ class VolunteerOffer
     private ?array $repeatTimes = null;
 
     /**
+     * Días de diferencia entre el trabajo y la fecha que dicta la receta: 0 el
+     * mismo día, -1 la víspera. Sólo lo usa la cadencia del calendario de
+     * reparto, que es la única cuya fecha viene dada de fuera.
+     *
+     * EXISTE PORQUE EL MONTAJE DE LAS CESTAS SE HACE ANTES DE REPARTIRLAS, a
+     * veces la tarde anterior. Sin esto, "los días que haya reparto" sólo sabe
+     * convocar el día físico de la entrega, que en la mitad de los puntos es
+     * tarde.
+     *
+     * Va en la receta y no se le pregunta al punto: así la receta se basta sola
+     * y sirve para cualquier tarea con cadencia de reparto —recoger las cajas al
+     * día siguiente, por ejemplo—, no sólo para el montaje.
+     *
+     * @ORM\Column(name="repeat_offset_days", type="smallint", options={"default": 0})
+     */
+    private int $repeatOffsetDays = 0;
+
+    /**
+     * Esta tarea es EL MONTAJE DE LAS CESTAS de su punto de recogida, y la ha
+     * creado el sistema a partir de lo que ese punto declara
+     * ({@see \App\Service\Volunteering\DeliveryPrepOffers}).
+     *
+     * De aquí sale el bloque de la home que le dice a cada socix quién le está
+     * preparando la cesta. Antes lo decía una casilla del TIPO DE TRABAJO, que
+     * señalaba una sola cosa en toda la asociación y permitía marcarla cero
+     * veces —panel mudo— o dos —panel señalando a quien friega el suelo—. Ahora
+     * la marca va en la tarea, que es de quien se afirma algo, y la pone quien la
+     * crea: si la ha generado el sistema desde el calendario de reparto, ya sabe
+     * lo que es.
+     *
+     * NO SE MARCA A MANO en ninguna pantalla. Una tarea de montaje aparece
+     * porque su punto dice que monta con voluntariado, y desaparece cuando deja
+     * de decirlo.
+     *
+     * @ORM\Column(name="delivery_prep", type="boolean", options={"default": false})
+     */
+    private bool $deliveryPrep = false;
+
+    /**
      * Desde cuándo se hace. En una tarea de una vez, ES el día.
      *
      * @ORM\Column(name="repeat_from", type="date", nullable=true)
@@ -844,6 +883,42 @@ class VolunteerOffer
     public function setRepeatEvery(?int $repeatEvery): self
     {
         $this->repeatEvery = max(1, $repeatEvery ?? 1);
+
+        return $this;
+    }
+
+    /**
+     * @return int días entre el trabajo y la fecha que dicta la receta: 0 el mismo día, -1 la víspera
+     */
+    public function getRepeatOffsetDays(): int
+    {
+        return $this->repeatOffsetDays;
+    }
+
+    /**
+     * @param int|null $repeatOffsetDays 0 el mismo día, -1 la víspera; null es el mismo día
+     */
+    public function setRepeatOffsetDays(?int $repeatOffsetDays): self
+    {
+        $this->repeatOffsetDays = $repeatOffsetDays ?? 0;
+
+        return $this;
+    }
+
+    /**
+     * @return bool true si esta tarea es el montaje de las cestas de su punto
+     */
+    public function isDeliveryPrep(): bool
+    {
+        return $this->deliveryPrep;
+    }
+
+    /**
+     * @param bool $deliveryPrep true si esta tarea es el montaje de las cestas de su punto
+     */
+    public function setDeliveryPrep(bool $deliveryPrep): self
+    {
+        $this->deliveryPrep = $deliveryPrep;
 
         return $this;
     }

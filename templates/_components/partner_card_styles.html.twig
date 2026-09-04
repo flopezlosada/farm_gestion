@@ -64,6 +64,12 @@
     gap: 6px 12px; font-size: 12px; color: var(--prt-ink-faint);
 }
 .prt-hero__meta .sep { color: var(--prt-line-2); }
+/* Descripción bajo el nombre (ficha de área): lo que define la cosa va pegado
+ * a su nombre, no en una tarjeta con cabecera más abajo. */
+.prt-hero__lead {
+    margin: 8px 0 0; max-width: 62ch; font-size: 13px; line-height: 1.5;
+    color: var(--prt-ink-soft);
+}
 .prt-hero__actions { display: flex; gap: 8px; }
 
 /* ---------- chip (status / modality / generic) ---------- */
@@ -296,6 +302,13 @@
     border: 1px solid var(--prt-line); border-radius: 6px; overflow: hidden;
     margin-top: 14px;
 }
+/* La tira sólo lleva margen ABAJO cuando le sigue una tarjeta en el mismo
+   flujo. `.prt-card` trae margin-bottom pero no margin-top, así que sin esto la
+   primera tarjeta de una ficha queda pegada a los indicadores. Va con selector
+   de adyacencia y no como margin-bottom de `.prt-mini` porque en la ficha de
+   socix y en la de voluntariado la tira vive DENTRO de un `.prt-card__body`, y
+   ahí ese margen se sumaría al padding del body. */
+.prt-mini + .prt-card { margin-top: 18px; }
 .prt-mini__cell { background: var(--prt-surface); padding: 12px 14px; min-width: 0; }
 .prt-mini__label {
     font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
@@ -388,4 +401,110 @@
     .prt-defs { grid-template-columns: 1fr; }
     .prt-mini { grid-template-columns: 1fr; }
 }
+
+/* ============ FICHA DE ÁREA ============
+ * Al FINAL del fichero a propósito: varias de estas reglas modifican clases
+ * base de arriba (.prt-mini__cell, .prt-card__body, .prt-card__foot) con la
+ * misma especificidad, y en CSS a igual especificidad gana la última. Puestas
+ * antes, el fondo ocre del indicador y la rejilla de cuatro columnas perdían
+ * en silencio y la ficha se veía como la vieja con el contenido nuevo dentro. */
+/* Nombre + chips en la misma línea (ficha de área). */
+.prt-hero__titlerow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.prt .prt-hero__titlerow .prt-hero__title { margin: 0; }
+
+/* ---------- menú de acciones (<details>, sin JS) ----------
+ * Como el «?» de ayuda: funciona en cualquier pantalla sin depender de un
+ * script. El menú cae debajo del botón; a la derecha en una celda de tabla. */
+.prt-kebab { position: relative; display: inline-block; }
+.prt-kebab > summary { list-style: none; cursor: pointer; }
+.prt-kebab > summary::-webkit-details-marker { display: none; }
+.prt-kebab__menu {
+    position: absolute; top: calc(100% + 4px); left: 0; z-index: 30; min-width: 220px;
+    padding: 6px; background: var(--prt-surface); border: 1px solid var(--prt-line);
+    border-radius: 8px; box-shadow: 0 8px 24px rgba(30, 28, 20, 0.12);
+}
+.prt-kebab--right .prt-kebab__menu { left: auto; right: 0; }
+.prt-kebab__menu form { margin: 0; }
+.prt-kebab__item {
+    display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+    padding: 8px 10px; border: 0; border-radius: 6px; background: transparent;
+    font: inherit; font-size: 13px; color: var(--prt-ink); text-decoration: none; cursor: pointer;
+}
+.prt-kebab__item .fa { width: 14px; text-align: center; color: var(--prt-ink-faint); }
+.prt-kebab__item:hover { background: var(--prt-bg); color: var(--prt-ink); text-decoration: none; }
+.prt-kebab__item--danger, .prt-kebab__item--danger .fa { color: var(--prt-terra-d); }
+/* La tarjeta y el marco de la tabla recortan lo que se sale (overflow hidden
+ * para las esquinas redondeadas, auto para el scroll horizontal), y un menú
+ * absoluto que cae por debajo del borde —el de la última fila, siempre— se
+ * veía a medias. Mientras haya un menú abierto dentro, dejan de recortar;
+ * cerrado, todo vuelve a como estaba. Sin :has() el menú sigue recortado, que
+ * es lo que había, no algo peor. */
+.prt-card:has(.prt-kebab[open]),
+.prt-card:has(.prt-kebab[open]) .csa-table-wrap { overflow: visible; }
+
+/* ---------- indicadores anchos (ficha de área) ----------
+ * Cuatro columnas y cada celda explica qué significa y qué hacer con ello. */
+.prt-mini--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.prt-mini__head { display: flex; align-items: baseline; gap: 6px; }
+.prt-mini__head .fa { color: var(--prt-ochre-d); font-size: 12px; align-self: center; }
+.prt-mini--4 .prt-mini__label { margin: 0; font-size: 12px; letter-spacing: 0; text-transform: none; font-weight: 600; color: var(--prt-ink); }
+.prt-mini--4 .prt-mini__value { font-size: 22px; }
+.prt-mini__hint { margin: 6px 0 0; font-size: 12px; line-height: 1.45; color: var(--prt-ink-soft); }
+.prt-mini__link { display: inline-block; margin-top: 8px; font-size: 12px; font-weight: 500; }
+.prt-mini__link .fa { margin-left: 2px; }
+.prt-mini__cell--warn { background: var(--prt-ochre-l); }
+@media (max-width: 980px) { .prt-mini--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .prt-mini--4 { grid-template-columns: 1fr; } }
+
+/* Cuerpo de tarjeta sin padding, para que una tabla llegue a los bordes. */
+.prt-card__body--flush { padding: 0; }
+.prt-card__body--flush .csa-table-wrap { margin: 0; border: 0; border-radius: 0; }
+.prt-card__foot--split { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 18px; }
+.prt-card__foot-muted { color: var(--prt-ink-soft); }
+
+/* Acciones de fila: UN botón y un menú, alineados a la derecha. */
+.prt-rowactions { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.csa-table__sub--ochre { color: var(--prt-ochre-d); }
+
+/* ---------- gente: dos mitades ---------- */
+.prt-people { display: grid; grid-template-columns: 1fr 1fr; }
+.prt-people__half { padding: 16px 18px; }
+.prt-people__half + .prt-people__half { border-left: 1px solid var(--prt-line); }
+.prt-people__label {
+    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--prt-ink-faint); font-weight: 600; margin-bottom: 10px;
+}
+.prt-people__action { margin-top: 12px; }
+.prt-person { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.prt-person__name { font-family: 'Fraunces', serif; font-weight: 500; font-size: 15px; color: var(--prt-ink); }
+.prt-person__sub { font-size: 12px; color: var(--prt-ink-soft); }
+.prt-initials {
+    width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+    display: inline-grid; place-items: center; font-size: 11px; font-weight: 600;
+    letter-spacing: 0.02em; text-transform: uppercase;
+    background: var(--prt-sage-l); color: var(--prt-sage-d); border: 2px solid var(--prt-surface);
+}
+.prt-initials--sm { width: 26px; height: 26px; font-size: 9px; }
+.prt-initials-stack { display: inline-flex; flex-shrink: 0; }
+.prt-initials-stack .prt-initials + .prt-initials { margin-left: -8px; }
+@media (max-width: 980px) {
+    .prt-people { grid-template-columns: 1fr; }
+    .prt-people__half + .prt-people__half { border-left: 0; border-top: 1px solid var(--prt-line); }
+}
+
+/* ---------- salida en forma de baldosa ---------- */
+.prt-tile {
+    display: flex; align-items: center; gap: 14px; padding: 14px 18px;
+    background: var(--prt-surface); border: 1px solid var(--prt-line); border-radius: 8px;
+    color: var(--prt-ink); text-decoration: none;
+}
+.prt-tile:hover { border-color: var(--prt-line-2); text-decoration: none; color: var(--prt-ink); }
+.prt-tile__icon {
+    width: 36px; height: 36px; border-radius: 8px; display: grid; place-items: center;
+    background: var(--prt-sage-l); color: var(--prt-sage-d); flex-shrink: 0;
+}
+.prt-tile__text { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.prt-tile__title { font-weight: 600; font-size: 14px; }
+.prt-tile__sub { font-size: 12px; color: var(--prt-ink-soft); }
+.prt-tile__chevron { color: var(--prt-ink-faint); }
 </style>
