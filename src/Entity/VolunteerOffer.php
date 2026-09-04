@@ -235,6 +235,20 @@ class VolunteerOffer
     private bool $featured = false;
 
     /**
+     * Tarea de rutina: una plaza, poco rato, todos los días. Sacar al perro.
+     *
+     * Se cubre sola y NO dispara el aviso de plazas en el calendario: con dos
+     * turnos diarios, el aviso ocre saldría en cincuenta fichas al mes y
+     * dejaría de significar nada justo donde hace falta, en la faena a la que
+     * de verdad tiene que ir alguien. Las plazas que faltan se siguen viendo,
+     * en gris. Es una marca de la TAREA y la pone quien la crea: derivarla de
+     * un umbral sería menos predecible para quien coordina.
+     *
+     * @ORM\Column(type="boolean", options={"default": false})
+     */
+    private bool $routine = false;
+
+    /**
      * @ORM\Column(type="string", length=16, options={"default": "draft"})
      */
     #[Assert\Choice(choices: VolunteerOffer::STATUSES)]
@@ -720,6 +734,24 @@ class VolunteerOffer
     public function setFeatured(bool $featured): self
     {
         $this->featured = $featured;
+
+        return $this;
+    }
+
+    /**
+     * @return bool true si es una tarea de rutina que no dispara el aviso de plazas
+     */
+    public function isRoutine(): bool
+    {
+        return $this->routine;
+    }
+
+    /**
+     * @param bool $routine true para que sus plazas libres no salgan como aviso
+     */
+    public function setRoutine(bool $routine): self
+    {
+        $this->routine = $routine;
 
         return $this;
     }
