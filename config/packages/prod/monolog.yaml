@@ -5,10 +5,26 @@ monolog:
             action_level: error
             handler: nested
             excluded_http_codes: [404, 405]
+            # El canal de acceso tiene su propio handler: aquí se perdería,
+            # porque fingers_crossed sólo escribe si la petición da error.
+            channels: ["!access"]
         nested:
             type: stream
             path: "%kernel.logs_dir%/%kernel.environment%.log"
             level: debug
+        # Accesos y correo: escribe SIEMPRE, sin fingers_crossed. Es el rastro
+        # con el que se diagnostica "he pedido el enlace y no me llega" o "no
+        # me deja entrar" sin tener que reproducir el caso.
+        # rotating_file y no stream: un fichero por día (access-AAAA-MM-DD.log)
+        # con un mes de historia. En un hosting compartido un log que sólo crece
+        # acaba siendo un problema de espacio, y además así se baja por FTP el
+        # día concreto que interesa en vez del fichero entero.
+        access:
+            type: rotating_file
+            path: "%kernel.logs_dir%/access.log"
+            max_files: 30
+            level: info
+            channels: ["access"]
         console:
             type: console
             process_psr_3_messages: false
