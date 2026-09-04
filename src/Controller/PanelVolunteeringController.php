@@ -13,7 +13,9 @@ use App\Repository\VolunteerCategoryRepository;
 use App\Repository\VolunteerCoordinationLogRepository;
 use App\Repository\VolunteerShiftRepository;
 use App\Repository\VolunteerSignupRepository;
+use App\Service\Calendar\MonthGrid;
 use App\Service\Volunteering\CreditedTime;
+use App\Service\Volunteering\ShiftCalendar;
 use App\Service\Volunteering\VolunteerContributions;
 use App\Service\Volunteering\VolunteerEventRecorder;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
@@ -56,9 +58,6 @@ class PanelVolunteeringController extends AbstractController
 {
     /** Cuántos turnos se enseñan de golpe. Una lista larga se lee como un muro y no se lee. */
     private const MAX_SHIFTS = 8;
-
-    /** Cuántos días vista enseña el calendario del socix. */
-    private const CALENDAR_DAYS = 56;
 
     /**
      * Lo que hace falta, lo que tengo comprometido y lo que llevo hecho.
@@ -142,6 +141,7 @@ class PanelVolunteeringController extends AbstractController
         Request $request,
         VolunteerShiftRepository $shifts,
         VolunteerSignupRepository $signups,
+        VolunteerCategoryRepository $categories,
     ): Response {
         if (($redirect = $this->ensureReady()) !== null) {
             return $redirect;
@@ -149,7 +149,11 @@ class PanelVolunteeringController extends AbstractController
 
         $partner = $this->getUser()->getPartner();
         $now = new \DateTimeImmutable();
-        $until = $now->modify(sprintf('+%d days', self::CALENDAR_DAYS))->setTime(23, 59, 59);
+        $month = MonthGrid::monthFrom($request->query->getString('mes'), $now);
+        $weeks = MonthGrid::weeks((int) $month->format('Y'), (int) $month->format('n'));
+
+        $categoryId = $request->query->getInt('tipo') ?: null;
+        $category = null !== $categoryId ? $categories->find($categoryId) : null;
 
         // Las áreas que ha marcado: lo suyo se resalta y el resto se apaga, y
         // con `?solo=mias` el resto ni se enseña. Es su calendario de
@@ -161,33 +165,37 @@ class PanelVolunteeringController extends AbstractController
         );
         $onlyMine = 'mias' === $request->query->getAlpha('solo') && [] !== $myCategoryIds;
 
-        $upcoming = $shifts->findBetween($now, $until);
-        if ($onlyMine) {
-            $upcoming = array_values(array_filter(
-                $upcoming,
-                static fn (VolunteerShift $s): bool => [] !== array_intersect(
-                    $myCategoryIds,
-                    array_map(static fn (VolunteerCategory $c): int => $c->getId(), $s->getOffer()->getCategories()->toArray())
-                )
-            ));
-        }
+        $inMine = static fn (VolunteerShift $s): bool => [] !== array_intersect(
+            $myCategoryIds,
+            array_map(static fn (VolunteerCategory $c): int => $c->getId(), $s->getOffer()->getCategories()->toArray())
+        );
 
-        // Agrupados por día, que es como se lee un calendario. En PHP y no en la
-        // plantilla porque Twig no sabe agrupar sin inventarse un bucle con
-        // variables de estado.
-        $byDay = [];
-        foreach ($upcoming as $shift) {
-            $byDay[$shift->getStartsAt()->format('Y-m-d')][] = $shift;
-        }
+        // El socix no ve lo apagado: ni borradores ni parados (fuera por
+        // «sólo publicadas») ni anulados. Un día anulado se explica en la
+        // ficha de la tarea, no en su calendario.
+        $visible = array_values(array_filter(
+            $shifts->findBetween($weeks[0][0], end($weeks)[6]->setTime(23, 59, 59), true, $category),
+            static fn (VolunteerShift $s): bool => !$s->isCancelled() && (!$onlyMine || $inMine($s))
+        ));
+        $days = ShiftCalendar::days($visible, $now);
 
         return $this->render('Panel/volunteering_calendar.html.twig', [
-            'by_day' => $byDay,
+            'weeks' => $weeks,
+            'days' => $days,
+            'states' => ShiftCalendar::statesPresent($days),
+            'month' => $month,
+            'prev' => $month->modify('-1 month'),
+            'next' => $month->modify('+1 month'),
+            'today' => $now->format('Y-m-d'),
+            'categories' => $categories->findActive(),
+            'current' => $category,
             'my_category_ids' => $myCategoryIds,
+            'my_category_names' => array_map(static fn (VolunteerCategory $c): string => $c->getName(), $partner->getVolunteerCategories()->toArray()),
             'only_mine' => $onlyMine,
             'my_node_id' => $this->nodeOf($partner)?->getId(),
             // Mis inscripciones de todos esos turnos, en UNA consulta: preguntar
             // turno a turno serían cincuenta consultas para pintar una pantalla.
-            'my_signups' => $signups->findForPartnerAndShifts($partner, $upcoming),
+            'my_signups' => $signups->findForPartnerAndShifts($partner, $visible),
         ]);
     }
 
@@ -377,6 +385,11 @@ class PanelVolunteeringController extends AbstractController
 
             $em->flush();
             $this->addFlash('success', 'Te hemos quitado de ese turno. Gracias por avisar.');
+        }
+
+        // Desde el calendario se vuelve al calendario, al mes del turno.
+        if ('calendario' === $request->request->getAlpha('volver')) {
+            return $this->redirectToRoute('panel_volunteering_calendar', ['mes' => $shift->getStartsAt()?->format('Y-m')]);
         }
 
         return $this->redirectToRoute('panel_volunteering');

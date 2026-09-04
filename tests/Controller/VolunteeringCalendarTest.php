@@ -54,13 +54,13 @@ class VolunteeringCalendarTest extends WebTestCase
 
         $client->request('GET', '/gestion/voluntariado/calendario?mes='.self::MONTH);
         $this->assertResponseIsSuccessful();
-        $this->assertSelectorTextContains('.vcal-grid', 'Cal regar');
-        $this->assertSelectorTextContains('.vcal-grid', 'Cal descargar');
+        $this->assertSelectorTextContains('.scal', 'Cal regar');
+        $this->assertSelectorTextContains('.scal', 'Cal descargar');
 
         $client->request('GET', sprintf('/gestion/voluntariado/calendario?mes=%s&tipo=%d', self::MONTH, $huerta->getId()));
         $this->assertResponseIsSuccessful();
-        $this->assertSelectorTextContains('.vcal-grid', 'Cal regar');
-        $this->assertSelectorTextNotContains('.vcal-grid', 'Cal descargar');
+        $this->assertSelectorTextContains('.scal', 'Cal regar');
+        $this->assertSelectorTextNotContains('.scal', 'Cal descargar');
     }
 
     /**
@@ -76,8 +76,8 @@ class VolunteeringCalendarTest extends WebTestCase
         $client->request('GET', sprintf('/gestion/voluntariado/calendario?mes=%s&tarea=%d', self::MONTH, $regar->getOffer()->getId()));
 
         $this->assertResponseIsSuccessful();
-        $this->assertSelectorTextContains('.vcal-grid', 'Cal sólo regar');
-        $this->assertSelectorTextNotContains('.vcal-grid', 'Cal otra cosa');
+        $this->assertSelectorTextContains('.scal', 'Cal sólo regar');
+        $this->assertSelectorTextNotContains('.scal', 'Cal otra cosa');
     }
 
     /**

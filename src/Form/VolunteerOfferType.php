@@ -238,6 +238,11 @@ class VolunteerOfferType extends AbstractType
                 'required' => false,
                 'help' => 'Sube esta tarea a lo alto del panel de cada socix, por delante del orden normal. Es para la semana en la que una cosa importa más que las demás: si se destaca todo, no destaca nada.',
             ])
+            ->add('routine', CheckboxType::class, [
+                'label' => 'Es una tarea de rutina',
+                'required' => false,
+                'help' => 'Una plaza, poco rato, todos los días: sacar al perro. En el calendario sus plazas libres se ven en gris, sin el aviso de «faltan», para que el aviso siga significando algo.',
+            ])
         ;
 
         // Horas arriba, minutos abajo. Un transformer y no dos campos ni un
