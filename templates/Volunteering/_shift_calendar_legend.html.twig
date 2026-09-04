@@ -1,0 +1,28 @@
+{# La leyenda del calendario de turnos. ENCIMA de la rejilla, no debajo: el
+ # código de color se aprende antes de leer la cuadrícula. Y sólo con los
+ # estados que hay en pantalla, para no explicar colores que no se ven.
+ #
+ # Las muestras son el mismo rectángulo con barra izquierda que las fichas
+ # reales, no puntos de color. En modo socix dicen lo que se puede hacer.
+ #
+ # Espera: states (ShiftCalendar::statesPresent), mode, has_alarm. #}
+{% set labels = mode == 'socix'
+    ? { 'porvenir': 'Puedes apuntarte', 'cubierto': 'Completo', 'sincerrar': 'Ya pasó', 'hecho': 'Ya pasó' }
+    : { 'porvenir': 'Por venir', 'cubierto': 'Cubierto', 'sincerrar': 'Sin cerrar', 'hecho': 'Hecho', 'apagado': 'Sin publicar, parado o anulado' } %}
+{% set shown = [] %}
+<div class="scal-legend" aria-label="Qué significa cada color">
+    <span class="scal-legend__k">Colores</span>
+    {% for state, label in labels %}
+        {% if state in states and label not in shown %}
+            {% set shown = shown|merge([label]) %}
+            <span class="scal-legend__item">
+                <span class="scal-legend__sw scal-legend__sw--{{ state }}"></span>{{ label }}
+            </span>
+        {% endif %}
+    {% endfor %}
+    {% if has_alarm %}
+        <span class="scal-legend__item scal-legend__item--alarm">
+            <span class="scal-legend__sw scal-legend__sw--porvenir scal-legend__sw--alarm"></span>{{ mode == 'socix' ? 'Faltan personas' : 'Le faltan plazas' }}
+        </span>
+    {% endif %}
+</div>

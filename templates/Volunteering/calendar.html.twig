@@ -1,0 +1,123 @@
+{# El calendario del voluntariado en gestión: los turnos del mes en rejilla.
+ #
+ # ENSEÑA LO QUE ESA PERSONA PUEDE VER, y nada más: quien coordina un área ve la
+ # suya; administración, todo. Y los filtros —área, tarea, mes— viven en la URL,
+ # así que «el calendario de huerta» es un enlace desde la ficha del área y «la
+ # serie de esta tarea» uno desde la ficha de la tarea. Sin eso, con una tarea
+ # diaria y tres áreas la rejilla es ruido.
+ #
+ # LO QUE PIDE ALGO VA ARRIBA, en la barra de atención: por bien resuelto que
+ # esté el color, un turno a tres días vista está a media pantalla de donde se
+ # mira. Y dentro del día, lo que no pide nada se comprime (ShiftCalendar).
+ #
+ # SE MUEVE ARRASTRANDO. Un turno por venir se coge y se suelta en otro día; el
+ # servidor lo mueve conservando la hora, lo deja en el historial y avisa a quien
+ # estuviera apuntado, igual que el formulario de mover. El JavaScript
+ # (assets/js/vol-calendar-dnd.js) sólo reemplaza la rejilla con la respuesta;
+ # sin él, los turnos son enlaces y mover se hace desde la ficha. #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% import '_macros/volunteering.html.twig' as vol %}
+
+{% block title %}Voluntariado · Calendario · {{ month|format_date(pattern='MMMM y', locale='es')|capitalize }}{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include '_components/shift_calendar_styles.html.twig' %}
+{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('volunteering_index') }}">Voluntariado</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Calendario</span>
+{% endblock %}
+
+{% block csa_main %}
+    {# Los filtros vigentes, para que cada enlace del calendario los conserve. #}
+    {% set keep = { tipo: current ? current.id : null, tarea: offer ? offer.id : null }|filter(v => v is not null) %}
+    {% set has_alarm = false %}
+    {% for items in days %}{% for item in items %}{% if item.kind == 'shift' and item.alarm %}{% set has_alarm = true %}{% endif %}{% endfor %}{% endfor %}
+
+    <div class="scal-page">
+        {{ csa.page_header('Voluntariado', 'Calendario de turnos', offer
+            ? 'Sólo los turnos de «' ~ offer.title ~ '». Arrastra uno a otro día para moverlo.'
+            : 'Los turnos del mes. Arrastra uno a otro día para moverlo.') }}
+
+        {% if not coordinates_something %}
+            {{ csa.callout('No coordinas ninguna área todavía, así que aquí no aparece nada. Pídele a administración que te asigne un área.', 'info') }}
+        {% elseif not sees_everything %}
+            {{ csa.callout('Ves sólo los turnos de las áreas que coordinas.', 'info') }}
+        {% endif %}
+
+        {# ============ MES Y FILTROS ============ #}
+        <div class="scal-nav">
+            <div class="scal-nav__month">
+                <a class="scal-nav__btn" href="{{ path('volunteering_calendar', keep|merge({ mes: prev|date('Y-m') })) }}" aria-label="Mes anterior"><i class="fa fa-chevron-left"></i></a>
+                <h2 class="scal-nav__title">{{ month|format_date(pattern='MMMM y', locale='es') }}</h2>
+                <a class="scal-nav__btn" href="{{ path('volunteering_calendar', keep|merge({ mes: next|date('Y-m') })) }}" aria-label="Mes siguiente"><i class="fa fa-chevron-right"></i></a>
+                {% if month|date('Y-m') != today|date('Y-m') %}
+                    <a class="scal-nav__today" href="{{ path('volunteering_calendar', keep) }}">Hoy</a>
+                {% endif %}
+            </div>
+            <div class="scal-nav__pills">
+                {% if offer %}
+                    {# Prefiltrado por tarea: se dice cuál y se puede soltar. #}
+                    <a class="scal-pill scal-pill--on scal-pill--aspa" href="{{ path('volunteering_calendar', { mes: month|date('Y-m') }) }}" title="Ver todas las tareas">
+                        Tarea: {{ offer.title }} <span class="scal-pill__x"><i class="fa fa-times"></i></span>
+                    </a>
+                {% elseif current %}
+                    <a class="scal-pill scal-pill--on scal-pill--aspa" href="{{ path('volunteering_calendar', { mes: month|date('Y-m') }) }}" title="Ver todas las áreas">
+                        Área: {{ current.name }} <span class="scal-pill__x"><i class="fa fa-times"></i></span>
+                    </a>
+                    {% for category in categories|filter(c => c.id != current.id) %}
+                        <a class="scal-pill" href="{{ path('volunteering_calendar', { mes: month|date('Y-m'), tipo: category.id }) }}">{{ category.name }}</a>
+                    {% endfor %}
+                {% elseif categories|length > 1 %}
+                    {% for category in categories %}
+                        <a class="scal-pill" href="{{ path('volunteering_calendar', { mes: month|date('Y-m'), tipo: category.id }) }}">{{ category.name }}</a>
+                    {% endfor %}
+                    <span class="scal-nav__sep"></span>
+                    <span class="scal-pill scal-pill--on">Todas las áreas</span>
+                {% endif %}
+            </div>
+        </div>
+
+        {# ============ BARRA DE ATENCIÓN ============
+         # Los turnos que piden algo, topada a tres: primero los que hay que
+         # cerrar, luego los que se quedan sin gente y están encima. #}
+        {% if attention.items|length %}
+            <div class="scal-attention">
+                <i class="fa fa-exclamation-triangle" aria-hidden="true"></i>
+                <span class="scal-attention__lead">{{ attention.items|length + attention.rest }} turno{{ attention.items|length + attention.rest == 1 ? ' pide' : 's piden' }} algo</span>
+                <span class="scal-attention__sep"></span>
+                <span class="scal-attention__list">
+                    {% for item in attention.items %}
+                        <a href="{{ path('volunteering_shift', { id: item.shift.id }) }}">
+                            <strong>{{ item.shift.startsAt|format_date(pattern='d MMM', locale='es')|replace({ '.': '' }) }}</strong> · {{ item.shift.offer.title }}
+                            <span class="scal-attention__tag">{{ item.state == 'sincerrar' ? 'pasar lista' : 'falta' ~ (item.missing == 1 ? '' : 'n') ~ ' ' ~ item.missing }}</span>
+                        </a>
+                    {% endfor %}
+                    {% if attention.rest > 0 %}
+                        <a class="scal-attention__more" href="{{ path('volunteering_index', { ver: 'pending' }) }}">y {{ attention.rest }} más</a>
+                    {% endif %}
+                </span>
+            </div>
+        {% endif %}
+
+        {% include 'Volunteering/_shift_calendar_legend.html.twig' with { states: states, mode: 'gestion', has_alarm: has_alarm } only %}
+
+        {# ============ LA REJILLA ============
+         # data-vcal-* lleva lo que el arrastre necesita para hablar con el
+         # servidor y mantener los filtros al refrescar. #}
+        <div data-vcal
+             data-vcal-csrf="{{ csrf_token('volunteering_shift_move') }}"
+             data-vcal-tipo="{{ keep.tipo|default('') }}"
+             data-vcal-tarea="{{ keep.tarea|default('') }}">
+            {% include 'Volunteering/_shift_calendar.html.twig' with { weeks: weeks, days: days, month: month, today: today, mode: 'gestion', ctx: {} } only %}
+        </div>
+
+        <p class="scal-foot">Sólo se arrastran los turnos por venir; la hora se conserva. Para cambiar la hora, entra en el turno.</p>
+    </div>
+{% endblock %}

@@ -1,0 +1,22 @@
+-- ============================================================================
+-- Tareas de rutina — columna volunteer_offer.routine.
+--
+-- Una tarea de rutina (una plaza, poco rato, todos los días: sacar al perro) se
+-- cubre sola y no dispara el aviso de plazas en el calendario. Con dos turnos
+-- diarios, el aviso ocre saldría en cincuenta fichas al mes y dejaría de
+-- significar nada justo donde hace falta. Las plazas libres se siguen viendo,
+-- en gris.
+--
+-- Es una marca de la TAREA y la pone quien la crea desde el formulario. Arrancar
+-- con todo a 0 es el estado correcto: ninguna tarea es de rutina hasta que
+-- alguien lo dice.
+--
+-- El código (VolunteerOffer) MAPEA esta columna: hay que añadirla a la BBDD
+-- ANTES de desplegar el código, o Doctrine la espera y revienta cualquier
+-- pantalla que toque voluntariado.
+--
+-- Aplicar a las tres locales (db, db_prod_snapshot, db_test) y a prod.
+-- Sin datos personales; idempotencia no nativa: correr una sola vez por entorno.
+-- ============================================================================
+
+ALTER TABLE volunteer_offer ADD routine TINYINT(1) DEFAULT 0 NOT NULL;

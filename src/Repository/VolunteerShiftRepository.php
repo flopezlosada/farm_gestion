@@ -163,7 +163,10 @@ class VolunteerShiftRepository extends ServiceEntityRepository
      *
      * @param \DateTimeInterface $from            desde, incluido
      * @param \DateTimeInterface $to              hasta, incluido
-     * @param bool               $publishedOnly   sólo turnos de tareas publicadas
+     * @param bool                         $publishedOnly sólo turnos de tareas publicadas
+     * @param VolunteerCategory|null       $category      sólo los de tareas de esta área
+     * @param VolunteerOffer|null          $offer         sólo los de esta tarea
+     * @param list<VolunteerCategory>|null $restrictTo    áreas a las que se limita quien mira; null = sin límite
      *
      * @return list<VolunteerShift> los turnos del rango, por fecha ascendente
      */
@@ -171,6 +174,9 @@ class VolunteerShiftRepository extends ServiceEntityRepository
         \DateTimeInterface $from,
         \DateTimeInterface $to,
         bool $publishedOnly = true,
+        ?VolunteerCategory $category = null,
+        ?VolunteerOffer $offer = null,
+        ?array $restrictTo = null,
     ): array {
         $qb = $this->createQueryBuilder('s')
             ->innerJoin('s.offer', 'o')
@@ -185,7 +191,66 @@ class VolunteerShiftRepository extends ServiceEntityRepository
                 ->setParameter('published', VolunteerOffer::STATUS_PUBLISHED);
         }
 
+        if (null !== $offer) {
+            $qb->andWhere('s.offer = :offer')->setParameter('offer', $offer);
+        }
+
+        $this->inCategory($qb, $category);
+        $this->restrictTo($qb, $restrictTo);
+
         return $qb->getQuery()->getResult();
+    }
+
+    /**
+     * Sólo los turnos de tareas de un área.
+     *
+     * EXISTS y no JOIN: con un join sobre las áreas el turno saldría repetido
+     * una vez por área de su tarea.
+     *
+     * @param QueryBuilder           $qb       consulta con la tarea como alias `o`
+     * @param VolunteerCategory|null $category el área; null = sin filtro
+     */
+    private function inCategory(QueryBuilder $qb, ?VolunteerCategory $category): void
+    {
+        if (null === $category) {
+            return;
+        }
+
+        $qb->andWhere($qb->expr()->exists(
+            'SELECT 1 FROM App\Entity\VolunteerOffer of2 JOIN of2.categories c2'
+            .' WHERE of2 = o AND c2 = :category'
+        ))->setParameter('category', $category);
+    }
+
+    /**
+     * Restricción por áreas propias (quien coordina, no administración).
+     *
+     * Va en el repositorio y no en los controllers para que ninguna vista futura
+     * pueda saltársela por descuido: el fallo de un filtro de permisos no da
+     * error, simplemente enseña lo que no debía.
+     *
+     * Una lista VACÍA no significa "todas": significa que esta persona no
+     * coordina ninguna área, y entonces no ve ningún turno.
+     *
+     * @param QueryBuilder                 $qb         consulta con la tarea como alias `o`
+     * @param list<VolunteerCategory>|null $restrictTo áreas permitidas; null = sin límite
+     */
+    private function restrictTo(QueryBuilder $qb, ?array $restrictTo): void
+    {
+        if (null === $restrictTo) {
+            return;
+        }
+
+        if ([] === $restrictTo) {
+            $qb->andWhere('1 = 0');
+
+            return;
+        }
+
+        $qb->andWhere($qb->expr()->exists(
+            'SELECT 1 FROM App\Entity\VolunteerOffer of3 JOIN of3.categories c3'
+            .' WHERE of3 = o AND c3 IN (:mine)'
+        ))->setParameter('mine', $restrictTo);
     }
 
     /**
@@ -377,30 +442,8 @@ class VolunteerShiftRepository extends ServiceEntityRepository
                     ->orderBy('s.startsAt', 'ASC');
         }
 
-        if (null !== $category) {
-            $qb->andWhere($qb->expr()->exists(
-                'SELECT 1 FROM App\Entity\VolunteerOffer of2 JOIN of2.categories c2'
-                .' WHERE of2 = o AND c2 = :category'
-            ))->setParameter('category', $category);
-        }
-
-        // Restricción por áreas propias (quien coordina, no administración).
-        // Va aquí y no en el controller para que ninguna vista futura pueda
-        // saltársela por descuido: el fallo de un filtro de permisos no da
-        // error, simplemente enseña lo que no debía.
-        //
-        // Una lista VACÍA no significa "todas": significa que esta persona no
-        // coordina ninguna área, y entonces no ve ningún turno.
-        if (null !== $restrictTo) {
-            if ([] === $restrictTo) {
-                return $qb->andWhere('1 = 0');
-            }
-
-            $qb->andWhere($qb->expr()->exists(
-                'SELECT 1 FROM App\Entity\VolunteerOffer of3 JOIN of3.categories c3'
-                .' WHERE of3 = o AND c3 IN (:mine)'
-            ))->setParameter('mine', $restrictTo);
-        }
+        $this->inCategory($qb, $category);
+        $this->restrictTo($qb, $restrictTo);
 
         if (null !== $query && '' !== trim($query)) {
             $qb->andWhere('LOWER(o.title) LIKE :q OR LOWER(o.description) LIKE :q OR LOWER(o.placeNote) LIKE :q')

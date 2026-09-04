@@ -120,6 +120,7 @@
             </div>
 
             <div style="margin-left: auto; display: flex; gap: 8px;">
+                {{ csa.btn('Calendario', { variant: 'ghost', icon: 'fa-calendar', href: path('volunteering_calendar') }) }}
                 {{ csa.btn('Tareas', { variant: 'ghost', icon: 'fa-list-ul', href: path('volunteering_tasks') }) }}
                 {% if is_granted('ROLE_GESTION_VOLUNTARIADO_EDIT') %}
                     {{ csa.btn('Áreas', { variant: 'ghost', icon: 'fa-tags', href: path('volunteering_categories') }) }}
