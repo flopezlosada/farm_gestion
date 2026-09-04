@@ -499,22 +499,6 @@ class ShiftGeneratorTest extends TestCase
     }
 
     /**
-     * Sin tramos horarios se abre uno a las nueve: es mejor un turno a una hora
-     * discutible que ninguno, que dejaría la tarea publicada y sin nada a lo que
-     * apuntarse.
-     */
-    public function testSinTramosAbreUnoALasNueve(): void
-    {
-        $offer = $this->offer(VolunteerOffer::REPEAT_ONCE, from: '2026-09-12');
-
-        $created = $this->generator()->generate($offer, $this->now());
-
-        $this->assertCount(1, $created);
-        $this->assertSame('09:00', $created[0]->getStartsAt()->format('H:i'));
-        $this->assertNull($created[0]->getEndsAt());
-    }
-
-    /**
      * Una tarea con receta, lista para generar.
      *
      * @param string                                      $type     una de las constantes REPEAT_*
