@@ -163,7 +163,10 @@ class VolunteerShiftRepository extends ServiceEntityRepository
      *
      * @param \DateTimeInterface $from            desde, incluido
      * @param \DateTimeInterface $to              hasta, incluido
-     * @param bool               $publishedOnly   sólo turnos de tareas publicadas
+     * @param bool                         $publishedOnly sólo turnos de tareas publicadas
+     * @param VolunteerCategory|null       $category      sólo los de tareas de esta área
+     * @param VolunteerOffer|null          $offer         sólo los de esta tarea
+     * @param list<VolunteerCategory>|null $restrictTo    áreas a las que se limita quien mira; null = sin límite
      *
      * @return list<VolunteerShift> los turnos del rango, por fecha ascendente
      */
@@ -171,6 +174,9 @@ class VolunteerShiftRepository extends ServiceEntityRepository
         \DateTimeInterface $from,
         \DateTimeInterface $to,
         bool $publishedOnly = true,
+        ?VolunteerCategory $category = null,
+        ?VolunteerOffer $offer = null,
+        ?array $restrictTo = null,
     ): array {
         $qb = $this->createQueryBuilder('s')
             ->innerJoin('s.offer', 'o')
@@ -185,24 +191,91 @@ class VolunteerShiftRepository extends ServiceEntityRepository
                 ->setParameter('published', VolunteerOffer::STATUS_PUBLISHED);
         }
 
+        if (null !== $offer) {
+            $qb->andWhere('s.offer = :offer')->setParameter('offer', $offer);
+        }
+
+        $this->inCategory($qb, $category);
+        $this->restrictTo($qb, $restrictTo);
+
         return $qb->getQuery()->getResult();
     }
 
     /**
-     * El montaje del reparto de un nodo para una entrega concreta: los turnos de
-     * tareas publicadas de una categoría marcada como
-     * {@see \App\Entity\VolunteerCategory::isDeliveryPrep()}, de ese nodo, que
-     * caen en la víspera o el mismo día de la recogida.
+     * Sólo los turnos de tareas de un área.
+     *
+     * EXISTS y no JOIN: con un join sobre las áreas el turno saldría repetido
+     * una vez por área de su tarea.
+     *
+     * @param QueryBuilder           $qb       consulta con la tarea como alias `o`
+     * @param VolunteerCategory|null $category el área; null = sin filtro
+     */
+    private function inCategory(QueryBuilder $qb, ?VolunteerCategory $category): void
+    {
+        if (null === $category) {
+            return;
+        }
+
+        $qb->andWhere($qb->expr()->exists(
+            'SELECT 1 FROM App\Entity\VolunteerOffer of2 JOIN of2.categories c2'
+            .' WHERE of2 = o AND c2 = :category'
+        ))->setParameter('category', $category);
+    }
+
+    /**
+     * Restricción por áreas propias (quien coordina, no administración).
+     *
+     * Va en el repositorio y no en los controllers para que ninguna vista futura
+     * pueda saltársela por descuido: el fallo de un filtro de permisos no da
+     * error, simplemente enseña lo que no debía.
+     *
+     * Una lista VACÍA no significa "todas": significa que esta persona no
+     * coordina ninguna área, y entonces no ve ningún turno.
+     *
+     * @param QueryBuilder                 $qb         consulta con la tarea como alias `o`
+     * @param list<VolunteerCategory>|null $restrictTo áreas permitidas; null = sin límite
+     */
+    private function restrictTo(QueryBuilder $qb, ?array $restrictTo): void
+    {
+        if (null === $restrictTo) {
+            return;
+        }
+
+        if ([] === $restrictTo) {
+            $qb->andWhere('1 = 0');
+
+            return;
+        }
+
+        $qb->andWhere($qb->expr()->exists(
+            'SELECT 1 FROM App\Entity\VolunteerOffer of3 JOIN of3.categories c3'
+            .' WHERE of3 = o AND c3 IN (:mine)'
+        ))->setParameter('mine', $restrictTo);
+    }
+
+    /**
+     * El montaje del reparto de un punto para una entrega concreta: los turnos
+     * publicados de la convocatoria de montaje de ese punto
+     * ({@see VolunteerOffer::isDeliveryPrep()}) que caen entre el día en que ese
+     * punto monta y el de la recogida.
      *
      * Sirve para contarle a cada socix quién le prepara su cesta esa semana, y
      * para avisarle cuando no se ha apuntado nadie. Que el disparador sea LA
-     * TAREA y no la falta de gente es lo que hace que el aviso no aparezca en
-     * los nodos donde el montaje todavía no se organiza así: sin tarea no hay
-     * tarjeta, ni de nombres ni de aviso.
+     * CONVOCATORIA y no la falta de gente es lo que hace que el aviso no
+     * aparezca en los puntos que no organizan así el montaje: sin convocatoria
+     * no hay tarjeta, ni de nombres ni de aviso.
      *
-     * LA VENTANA ES DE DOS DÍAS porque las cestas se montan a veces la tarde
-     * anterior. Ensancharla es seguro justamente porque el filtro de categoría
-     * ya excluye cualquier otra tarea del nodo —limpiar el local, por ejemplo—.
+     * LA VENTANA LA DECLARA EL PUNTO, y ahí está el cambio. Antes eran dos días
+     * fijos, porque las cestas se montan a veces la tarde anterior y había que
+     * abarcar las dos posibilidades: una adivinanza que se sostenía sólo mientras
+     * un filtro de categoría excluyera todo lo demás. Ahora el punto dice cuándo
+     * monta ({@see Node::deliveryPrepWindowFor()}) y la ventana sale de ahí: un
+     * día si monta el mismo día, dos si es la víspera, tres si son dos días
+     * antes.
+     *
+     * SIGUE SIENDO UNA VENTANA Y NO UN INSTANTE, a propósito: un turno suelto se
+     * puede mover a mano —el viernes que hay asamblea se monta a las siete— y la
+     * tarjeta tiene que seguir encontrando a quien montó.
      *
      * @param Node               $node         el punto de recogida donde recoge esa semana
      * @param \DateTimeInterface $deliveryDate el día en que recoge la cesta
@@ -211,19 +284,21 @@ class VolunteerShiftRepository extends ServiceEntityRepository
      */
     public function findDeliveryPrepFor(Node $node, \DateTimeInterface $deliveryDate): array
     {
+        $window = $node->deliveryPrepWindowFor($deliveryDate);
+        if (null === $window) {
+            return [];
+        }
+
         $day = \DateTimeImmutable::createFromInterface($deliveryDate);
 
         return $this->liveQb()
             ->andWhere('o.status = :published')
             ->andWhere('o.node = :node')
+            ->andWhere('o.deliveryPrep = true')
             ->andWhere('s.startsAt BETWEEN :from AND :to')
-            ->andWhere($this->createQueryBuilder('x')->expr()->exists(
-                'SELECT 1 FROM App\Entity\VolunteerOffer op JOIN op.categories cp'
-                .' WHERE op = o AND cp.deliveryPrep = true'
-            ))
             ->setParameter('published', VolunteerOffer::STATUS_PUBLISHED)
             ->setParameter('node', $node)
-            ->setParameter('from', $day->modify('-1 day')->setTime(0, 0))
+            ->setParameter('from', $window[0]->setTime(0, 0))
             ->setParameter('to', $day->setTime(23, 59, 59))
             ->orderBy('s.startsAt', 'ASC')
             ->getQuery()
@@ -377,30 +452,8 @@ class VolunteerShiftRepository extends ServiceEntityRepository
                     ->orderBy('s.startsAt', 'ASC');
         }
 
-        if (null !== $category) {
-            $qb->andWhere($qb->expr()->exists(
-                'SELECT 1 FROM App\Entity\VolunteerOffer of2 JOIN of2.categories c2'
-                .' WHERE of2 = o AND c2 = :category'
-            ))->setParameter('category', $category);
-        }
-
-        // Restricción por áreas propias (quien coordina, no administración).
-        // Va aquí y no en el controller para que ninguna vista futura pueda
-        // saltársela por descuido: el fallo de un filtro de permisos no da
-        // error, simplemente enseña lo que no debía.
-        //
-        // Una lista VACÍA no significa "todas": significa que esta persona no
-        // coordina ninguna área, y entonces no ve ningún turno.
-        if (null !== $restrictTo) {
-            if ([] === $restrictTo) {
-                return $qb->andWhere('1 = 0');
-            }
-
-            $qb->andWhere($qb->expr()->exists(
-                'SELECT 1 FROM App\Entity\VolunteerOffer of3 JOIN of3.categories c3'
-                .' WHERE of3 = o AND c3 IN (:mine)'
-            ))->setParameter('mine', $restrictTo);
-        }
+        $this->inCategory($qb, $category);
+        $this->restrictTo($qb, $restrictTo);
 
         if (null !== $query && '' !== trim($query)) {
             $qb->andWhere('LOWER(o.title) LIKE :q OR LOWER(o.description) LIKE :q OR LOWER(o.placeNote) LIKE :q')

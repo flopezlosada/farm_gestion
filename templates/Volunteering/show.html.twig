@@ -65,7 +65,9 @@
                     <span class="prt-chip prt-chip--mute"><i class="fa fa-repeat"></i> {{ vol.repeat(offer) }}</span>
 
                     {% for category in offer.categories %}
-                        <span class="prt-chip prt-chip--mute">{{ category.name }}</span>
+                        <a class="prt-chip prt-chip--mute" href="{{ path('volunteering_category_show', { id: category.id }) }}" title="Ver el área">
+                            <i class="fa fa-tag"></i> {{ category.name }}
+                        </a>
                     {% endfor %}
 
                     {% if offer.featured %}
@@ -82,6 +84,8 @@
                 {% if can_edit %}
                     {{ csa.btn('Editar', { variant: 'secondary', href: path('volunteering_edit', { id: offer.id }), icon: 'fa-pencil' }) }}
                 {% endif %}
+                {# Prefiltrado a esta tarea: la serie entera, sin el ruido del resto. #}
+                {{ csa.btn('Calendario', { variant: 'ghost', href: path('volunteering_calendar', { tarea: offer.id }), icon: 'fa-calendar' }) }}
                 {{ csa.btn('Volver', { variant: 'ghost', href: path('volunteering_tasks') }) }}
             </div>
         </header>

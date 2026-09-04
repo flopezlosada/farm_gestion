@@ -13,6 +13,10 @@ require('../css/csa/index.css');
 // [data-csa-dropdowns]). Ver assets/js/csa-dropdown.js.
 require('./csa-dropdown.js');
 
+// Buscador para listas largas de casillas (opt-in por [data-csa-check-filter]).
+// Sin JS se ven todas, que es el estado correcto. Ver assets/js/csa-check-filter.js.
+require('./csa-check-filter.js');
+
 // Pestañas para partir una ficha larga (opt-in por [data-csa-tabs]). Sin JS
 // los paneles se ven todos. Ver assets/js/csa-tabs.js.
 require('./csa-tabs.js');
@@ -34,6 +38,16 @@ require('./csa-account-menu.js');
 // permiso hasta que alguien pulsa: un permiso denegado no se puede volver a
 // pedir. Ver assets/js/push.js.
 require('./push.js');
+
+// Arrastrar un turno de voluntariado a otro día del calendario (opt-in por
+// [data-vcal]). Sin JS los turnos son enlaces y se mueven desde su ficha.
+// Ver assets/js/vol-calendar-dnd.js.
+require('./vol-calendar-dnd.js');
+
+// El calendario de turnos en modo socix: recuento de lo marcado y panel «Me
+// apunto» (opt-in por [data-scal-socix]). Sin JS la casilla y el botón siguen
+// funcionando. Ver assets/js/vol-calendar-socix.js.
+require('./vol-calendar-socix.js');
 
 // Need jQuery? Install it with "yarn add jquery", then uncomment to require it.
 // const $ = require('jquery');

@@ -128,7 +128,7 @@ class PartnerRepository extends ServiceEntityRepository
      * píxeles en el que no se encuentra a nadie.
      *
      * Cuatro vistas, y la que importa es la primera:
-     *  - `declared` (por defecto): quien ha marcado algún tipo de trabajo. Es a
+     *  - `declared` (por defecto): quien ha marcado alguna área. Es a
      *    quien se puede llamar, y es lo que quien coordina viene a ver.
      *  - un área concreta: la bolsa de esa área.
      *  - `silent`: quien no ha dicho nada — la reserva para lo sencillo.

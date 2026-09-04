@@ -1,0 +1,133 @@
+{# ============================================================
+ # Las fichas del calendario de turnos, en sus dos modos.
+ #
+ # Una ficha tiene UN estado (porvenir · cubierto · sincerrar · hecho · apagado)
+ # que da el color, y una barra de color a la izquierda que es lo que hace que la
+ # rejilla de escritorio y la lista de móvil se lean como la misma cosa. El aviso
+ # de plazas no es un sexto estado: es un borde ocre y una cifra ENCIMA del
+ # estado que ya tenga.
+ #
+ # Lo que cada macro recibe es lo que calcula ShiftCalendar::describe(): el
+ # turno, su estado, cuánta gente le falta y si eso es un aviso. Aquí sólo se
+ # traduce a HTML.
+ #
+ #   {{ cal.chip_gestion(item) }}          — enlace a la ficha, arrastrable
+ #   {{ cal.chip_socix(item, ctx) }}       — casilla para marcar, plazas en palabras
+ #   {{ cal.group(item, mode, ctx) }}      — N turnos de la misma tarea en una línea
+ # ============================================================ #}
+
+{# ---------- CHIP_GESTION ----------
+ # Asa de arrastre, hora en mono, plazas compactas «2/4» y las etiquetas de lo
+ # que pide: «Faltan N» (ocre si es aviso, encendido si es urgente) y «Pasar
+ # lista». Sólo se arrastran los turnos por venir. #}
+{% macro chip_gestion(item, compact = false) %}
+    {%- set s = item.shift -%}
+    {%- set o = s.offer -%}
+    {%- set time = s.startsAt|date('H:i') -%}
+    {%- set movable = not s.cancelled and not s.isPast() and is_granted('VOLUNTEER_OFFER_EDIT', s) -%}
+    <a class="scal-chip scal-chip--{{ item.state }}{{ item.alarm ? ' scal-chip--alarm' }}{{ item.urgent ? ' scal-chip--urgent' }}{{ movable ? ' scal-chip--movable' }}{{ compact ? ' scal-chip--compact' }}"
+       href="{{ path('volunteering_shift', { id: s.id }) }}"
+       title="{{ o.title }} · {{ time }}{% if s.slots %} · {{ s.filledSlots }} de {{ s.slots }}{% endif %}{% if s.cancelled %} · anulado{% endif %}"
+       {% if movable %}draggable="true" data-vcal-draggable data-vcal-move-url="{{ path('volunteering_shift_move', { id: s.id }) }}" data-vcal-time="{{ time }}"{% endif %}>
+        {%- if movable %}<span class="scal-chip__grip" aria-hidden="true"></span>{% endif -%}
+        <span class="scal-chip__body">
+            <span class="scal-chip__line">
+                {%- if time != '00:00' %}<span class="scal-chip__time">{{ time }}</span>{% endif -%}
+                {%- if not compact %}<span class="scal-chip__title">{{ o.title }}</span>{% endif -%}
+            </span>
+            <span class="scal-chip__meta">
+                <span class="scal-chip__slots{{ item.missing > 0 ? ' is-missing' }}">{{ s.filledSlots }}{% if s.slots %}/{{ s.slots }}{% endif %}</span>
+                {%- if item.missing > 0 -%}
+                    <span class="scal-chip__tag{{ item.urgent ? ' scal-chip__tag--hot' : (item.alarm ? ' scal-chip__tag--warn' : '') }}">Falta{{ item.missing == 1 ? '' : 'n' }} {{ item.missing }}</span>
+                {%- endif -%}
+                {%- if item.state == 'sincerrar' %}<span class="scal-chip__tag scal-chip__tag--warn">Pasar lista</span>{% endif -%}
+            </span>
+        </span>
+    </a>
+{% endmacro %}
+
+{# ---------- CHIP_SOCIX ----------
+ # Pensada para alguien mayor sin costumbre de usar software: plazas en
+ # palabras («Quedan 2 plazas», nunca «2/4»), casilla para marcar, y toda la
+ # ficha se pulsa para abrir el panel de apuntarse. Lo de fuera de sus áreas va
+ # apagado pero sigue siendo pulsable: apagado no es prohibido.
+ #
+ # Los data-scal-* llevan lo que el panel «Me apunto» enseña; sin JavaScript la
+ # casilla sigue funcionando con el botón de abajo. #}
+{% macro chip_socix(item, ctx, compact = false) %}
+    {%- import '_macros/volunteering.html.twig' as vol -%}
+    {%- set s = item.shift -%}
+    {%- set o = s.offer -%}
+    {%- set mine = ctx.my_signups[s.id]|default(null) -%}
+    {%- set i_go = mine is not null and not mine.cancelled -%}
+    {%- set in_my_area = ctx.my_category_ids|length > 0 and o.categories|filter(c => c.id in ctx.my_category_ids)|length > 0 -%}
+    {%- set dim = ctx.my_category_ids|length > 0 and not in_my_area and not ctx.only_mine and not i_go -%}
+    {%- set can_join = item.state == 'porvenir' and not i_go and s.isOpen() -%}
+    {%- set time = s.startsAt|date('H:i') -%}
+    {%- if i_go and item.state in ['porvenir', 'cubierto'] -%}
+        {%- set words = 'Ya vas' -%}{%- set tone = 'ok' -%}
+    {%- elseif item.state == 'porvenir' -%}
+        {%- if item.missing == 1 -%}{%- set words = 'Queda 1 plaza' -%}{%- set tone = 'need' -%}
+        {%- elseif item.missing > 1 -%}{%- set words = 'Quedan ' ~ item.missing ~ ' plazas' -%}{%- set tone = 'need' -%}
+        {%- elseif s.slots -%}{%- set words = 'Ya está completo' -%}{%- set tone = 'ok' -%}
+        {%- else -%}{%- set words = 'Hay sitio' -%}{%- set tone = 'ok' -%}
+        {%- endif -%}
+    {%- elseif item.state == 'cubierto' -%}
+        {%- set words = 'Ya está completo' -%}{%- set tone = 'ok' -%}
+    {%- else -%}
+        {%- set words = 'Ya pasó' -%}{%- set tone = 'past' -%}
+    {%- endif -%}
+    {%- set people = s.filledSlots == 0 ? 'Todavía no va nadie' : (s.filledSlots == 1 ? 'Ya va 1 persona' : 'Ya van ' ~ s.filledSlots ~ ' personas') -%}
+    <div class="scal-chip scal-chip--{{ item.state }}{{ dim ? ' scal-chip--dim' }}{{ in_my_area ? ' scal-chip--mine' }}{{ i_go ? ' scal-chip--going' }}{{ compact ? ' scal-chip--compact' }}"
+         data-scal-turno data-scal-id="{{ s.id }}" data-scal-day="{{ s.startsAt|date('j') }}"
+         data-scal-title="{{ o.title }}" data-scal-area="{{ o.categories|map(c => c.name)|join(' · ') }}"
+         data-scal-date="{{ s.startsAt|format_date(pattern="EEEE d 'de' MMMM", locale='es')|capitalize }}"
+         data-scal-time="{% if time != '00:00' %}De {{ time }}{% if s.endsAt %} a {{ s.endsAt|date('H:i') }}{% endif %}{% else %}Sin hora fija{% endif %}"
+         data-scal-place="{{ vol.task_place(o) }}"
+         data-scal-slots="{{ words }}{% if item.state == 'porvenir' and item.missing > 0 and s.slots %} de {{ s.slots }}{% endif %}"
+         data-scal-people="{{ people }}"
+         data-scal-hours="{{ s.creditedMinutes ? vol.duration(s.creditedMinutes) : '' }}"
+         data-scal-going="{{ i_go ? 1 : 0 }}" data-scal-open="{{ can_join ? 1 : 0 }}"
+         {% if i_go %}data-scal-withdraw-url="{{ path('panel_volunteering_withdraw', { id: s.id }) }}"{% endif %}>
+        {%- if can_join -%}
+            <input type="checkbox" class="scal-chip__check" name="shifts[]" value="{{ s.id }}"
+                   aria-label="Marcar {{ o.title }}, {{ s.startsAt|format_date(pattern='EEEE d', locale='es') }}{% if time != '00:00' %} a las {{ time }}{% endif %}">
+        {%- else -%}
+            <span class="scal-chip__check scal-chip__check--none" aria-hidden="true"></span>
+        {%- endif -%}
+        <span class="scal-chip__body">
+            <span class="scal-chip__line">
+                {%- if time != '00:00' %}<span class="scal-chip__time">{{ time }}</span>{% endif -%}
+                {%- if not compact %}<span class="scal-chip__title">{{ o.title }}</span>{% endif -%}
+            </span>
+            <span class="scal-chip__words">
+                <span class="scal-chip__state scal-chip__state--{{ tone }}">{{ words }}</span>
+                <span class="scal-chip__place">{{ vol.task_place(o) }}</span>
+                {%- if s.creditedMinutes %}<span class="scal-chip__extra">Cuenta {{ vol.duration(s.creditedMinutes) }}</span>{% endif -%}
+            </span>
+        </span>
+    </div>
+{% endmacro %}
+
+{# ---------- GROUP ----------
+ # N turnos de la misma tarea en un día, que comparten estado y ninguno pide
+ # nada: una línea con la cuenta delante, que se despliega sin JavaScript
+ # (<details>). En las rutinas no se imprime el agregado de plazas: repetirlo en
+ # cada celda devolvería el ruido que la compresión viene a quitar. #}
+{% macro group(item, mode, ctx) %}
+    {%- import _self as me -%}
+    {%- set dim = mode == 'socix' and ctx.my_category_ids|length > 0 and not ctx.only_mine and item.offer.categories|filter(c => c.id in ctx.my_category_ids)|length == 0 -%}
+    <details class="scal-group scal-group--{{ item.state }}{{ dim ? ' scal-group--dim' }}">
+        <summary class="scal-group__sum">
+            <span class="scal-group__n">{{ item.shifts|length }}</span>
+            <span class="scal-group__title">{{ item.offer.title }}</span>
+            {%- if not item.routine and item.missing > 0 %}<span class="scal-group__missing">falta{{ item.missing == 1 ? '' : 'n' }} {{ item.missing }}</span>{% endif -%}
+            <span class="scal-group__caret" aria-hidden="true"></span>
+        </summary>
+        <div class="scal-group__list">
+            {%- for sub in item.shifts -%}
+                {%- if mode == 'socix' %}{{ me.chip_socix(sub, ctx, true) }}{% else %}{{ me.chip_gestion(sub, true) }}{% endif -%}
+            {%- endfor -%}
+        </div>
+    </details>
+{% endmacro %}

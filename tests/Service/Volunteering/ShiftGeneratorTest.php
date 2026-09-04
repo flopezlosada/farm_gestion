@@ -354,6 +354,70 @@ class ShiftGeneratorTest extends TestCase
     }
 
     /**
+     * EL DESFASE CORRE LA FECHA QUE DICTA EL CALENDARIO. Las cestas se montan
+     * antes de repartirlas —en Torremocha, la tarde anterior—, así que convocar
+     * el día físico de la entrega llega tarde.
+     */
+    public function testElDesfaseAdelantaElTrabajoALaVisperaDelReparto(): void
+    {
+        $offer = $this->deliveryOffer(from: '2026-09-07', until: '2026-09-30');
+        $offer->setRepeatOffsetDays(-1);
+
+        $created = $this->generator(
+            $this->basketsReturning(2),
+            $this->calendarReturning('2026-09-11', '2026-09-23'),
+        )->generate($offer, $this->now());
+
+        $this->assertSame(
+            ['2026-09-10 17:00', '2026-09-22 17:00'],
+            array_map(static fn (VolunteerShift $s): string => $s->getStartsAt()->format('Y-m-d H:i'), $created)
+        );
+    }
+
+    /**
+     * El desfase se aplica ANTES de filtrar por la ventana, y ese orden no es
+     * cosmético: el montaje de la víspera de un reparto del día 1 cae el último
+     * día del mes anterior. Filtrando primero, un reparto justo después del
+     * final de la ventana perdería su montaje, que sí caía dentro.
+     */
+    public function testElDesfaseSeAplicaAntesDeFiltrarPorLaVentana(): void
+    {
+        // La receta acaba el 22; el reparto es el 23, o sea fuera. Pero su
+        // montaje es el 22, o sea dentro, y tiene que salir.
+        $offer = $this->deliveryOffer(from: '2026-09-07', until: '2026-09-22');
+        $offer->setRepeatOffsetDays(-1);
+
+        $created = $this->generator(
+            $this->basketsReturning(1),
+            $this->calendarReturning('2026-09-23'),
+        )->generate($offer, $this->now());
+
+        $this->assertSame(
+            ['2026-09-22 17:00'],
+            array_map(static fn (VolunteerShift $s): string => $s->getStartsAt()->format('Y-m-d H:i'), $created)
+        );
+    }
+
+    /**
+     * Sin desfase, que es el valor por defecto, el trabajo cae el día del
+     * reparto y todo lo anterior sigue igual.
+     */
+    public function testSinDesfaseElTrabajoCaeElDiaDelReparto(): void
+    {
+        $offer = $this->deliveryOffer(from: '2026-09-07', until: '2026-09-30');
+
+        $created = $this->generator(
+            $this->basketsReturning(1),
+            $this->calendarReturning('2026-09-11'),
+        )->generate($offer, $this->now());
+
+        $this->assertSame(
+            ['2026-09-11 17:00'],
+            array_map(static fn (VolunteerShift $s): string => $s->getStartsAt()->format('Y-m-d H:i'), $created)
+        );
+    }
+
+    /**
      * Y sin punto de recogida esa cadencia no da nada: no hay calendario al que
      * preguntar. El formulario lo caza con un error de validación; aquí se
      * comprueba que el generador no se inventa fechas.
@@ -480,6 +544,55 @@ class ShiftGeneratorTest extends TestCase
      * @param BasketRepository|null $baskets  los ciclos de reparto
      * @param NodeDeliveryDate|null $calendar quién resuelve la fecha física
      */
+    /**
+     * Una tarea con cadencia de reparto, con punto y con tramo de tarde.
+     *
+     * @param string $from  desde cuándo, 'Y-m-d'
+     * @param string $until hasta cuándo, 'Y-m-d'
+     */
+    private function deliveryOffer(string $from, string $until): VolunteerOffer
+    {
+        $offer = $this->offer(
+            VolunteerOffer::REPEAT_DELIVERY,
+            from: $from,
+            until: $until,
+            times: [['17:00', '19:00']]
+        );
+        $offer->setNode(new Node());
+
+        return $offer;
+    }
+
+    /**
+     * Un repositorio de ciclos que devuelve tantos como se le pidan. Su contenido
+     * da igual: quien resuelve la fecha de cada uno es el calendario.
+     *
+     * @param int $howMany cuántos ciclos devolver
+     */
+    private function basketsReturning(int $howMany): BasketRepository
+    {
+        $baskets = $this->createMock(BasketRepository::class);
+        $baskets->method('findBetweenDates')->willReturn(array_fill(0, $howMany, new Basket()));
+
+        return $baskets;
+    }
+
+    /**
+     * Un calendario de reparto que resuelve las fechas físicas que se le digan,
+     * en orden.
+     *
+     * @param string ...$dates las fechas 'Y-m-d' que devuelve, una por llamada
+     */
+    private function calendarReturning(string ...$dates): NodeDeliveryDate
+    {
+        $calendar = $this->createMock(NodeDeliveryDate::class);
+        $calendar->method('physicalDateFor')->willReturnOnConsecutiveCalls(
+            ...array_map(static fn (string $d): \DateTimeImmutable => new \DateTimeImmutable($d), $dates)
+        );
+
+        return $calendar;
+    }
+
     private function generator(
         ?BasketRepository $baskets = null,
         ?NodeDeliveryDate $calendar = null,

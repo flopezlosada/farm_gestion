@@ -51,7 +51,7 @@ class VolunteerSuggester
      * apuntadxs a él.
      *
      * Sale del ámbito MATCHING y no de toda la asociación: son quienes han
-     * marcado este tipo de trabajo, es decir, quienes han dicho que de esto sí
+     * marcado esta área, es decir, quienes han dicho que de esto sí
      * se les avise. Sugerir a quien pidió que no le avisaran sería saltarse su
      * preferencia por la puerta de atrás.
      *

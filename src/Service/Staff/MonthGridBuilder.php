@@ -2,6 +2,8 @@
 
 namespace App\Service\Staff;
 
+use App\Service\Calendar\MonthGrid;
+
 /**
  * Construye la rejilla de un calendario mensual (semanas de lunes a domingo que
  * cubren el mes completo), marcando cada día con su total de horas, su ausencia
@@ -32,22 +34,12 @@ class MonthGridBuilder
         ?\DateTimeImmutable $hireDate,
         array $holidays = [],
     ): array {
-        $monthStart = new \DateTimeImmutable(sprintf('%04d-%02d-01 00:00:00', $year, $month), $tz);
-        $monthEnd = $monthStart->modify('first day of next month');
-
-        $gridStart = $monthStart->modify('monday this week');
-        if ($gridStart > $monthStart) {
-            $gridStart = $monthStart->modify('last monday');
-        }
-        $gridEnd = $monthEnd->modify('-1 day')->modify('sunday this week');
-
         $hireDay = $hireDate?->setTime(0, 0);
 
-        $weeks = [];
-        $week = [];
-        for ($cursor = $gridStart; $cursor <= $gridEnd; $cursor = $cursor->modify('+1 day')) {
+        // Las semanas las da la rejilla común; aquí sólo se decora cada día.
+        return array_map(fn (array $days): array => array_map(function (\DateTimeImmutable $cursor) use ($month, $totals, $covered, $today, $hireDay, $holidays): array {
             $key = $cursor->format('Y-m-d');
-            $inMonth = (int) $cursor->format('n') === $month;
+            $inMonth = MonthGrid::inMonth($cursor, $month);
             $weekday = (int) $cursor->format('N');
             $hasEntries = isset($totals[$key]);
             $isPast = $cursor < $today;
@@ -55,7 +47,7 @@ class MonthGridBuilder
 
             $holiday = $holidays[$key] ?? null;
 
-            $week[] = [
+            return [
                 'date' => $cursor,
                 'inMonth' => $inMonth,
                 'day' => $cursor->format('j'),
@@ -66,13 +58,6 @@ class MonthGridBuilder
                 'isToday' => $key === $today->format('Y-m-d'),
                 'isFuture' => $cursor > $today,
             ];
-
-            if (count($week) === 7) {
-                $weeks[] = $week;
-                $week = [];
-            }
-        }
-
-        return $weeks;
+        }, $days), MonthGrid::weeks($year, $month, $tz));
     }
 }

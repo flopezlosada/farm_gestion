@@ -2,8 +2,11 @@
 
 namespace App\Command;
 
+use App\Entity\Node;
 use App\Entity\VolunteerOffer;
+use App\Repository\NodeRepository;
 use App\Repository\VolunteerOfferRepository;
+use App\Service\Volunteering\DeliveryPrepOffers;
 use App\Service\Volunteering\ShiftGenerator;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -25,6 +28,13 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  * nadie vuelva a editar se queda sin turnos a los cuatro meses, EN SILENCIO: la
  * ficha aparece vacía y no hay a qué apuntarse.
  *
+ * TAMBIÉN MANTIENE EL MONTAJE DE LAS CESTAS, que no es una tarea con receta que
+ * alguien escribiera sino un derivado de lo que declara cada punto de recogida
+ * ({@see DeliveryPrepOffers}). Va por el punto y no por la lista de tareas
+ * porque su convocatoria nace en borrador, y `findRepeating()` sólo mira las
+ * vivas: por ahí no entraría hasta que alguien la publicara, y hasta entonces su
+ * horizonte no se extendería.
+ *
  * NO MANDA NADA A NADIE, y de ahí que no lleve canales ni confirmación. Lo único
  * que hace es mantener el calendario al día; los avisos son de otras tareas.
  *
@@ -43,6 +53,8 @@ class SyncVolunteerShiftsCommand extends AbstractCronCommand
         private readonly VolunteerOfferRepository $offers,
         private readonly ShiftGenerator $generator,
         private readonly EntityManagerInterface $em,
+        private readonly NodeRepository $nodes,
+        private readonly DeliveryPrepOffers $deliveryPrep,
     ) {
         parent::__construct();
     }
@@ -60,22 +72,36 @@ class SyncVolunteerShiftsCommand extends AbstractCronCommand
         $now = new \DateTime();
 
         $repeating = $this->offers->findRepeating();
+        $prepNodes = $this->nodes->findBy(['deliveryPrep' => true], ['name' => 'ASC']);
 
         // La previsualización se atiende ANTES del atajo de "no hay nada": el
         // atajo reporta al andamiaje, que en dry-run no imprime nada, y un
         // comando que se ejecuta y no dice ni una palabra no se distingue de uno
         // que ha fallado en silencio.
         if ((bool) $input->getOption('dry-run')) {
-            return $this->preview($io, $repeating, $now);
+            return $this->preview($io, $repeating, $prepNodes, $now);
         }
 
-        if ([] === $repeating) {
+        if ([] === $repeating && [] === $prepNodes) {
             return $this->nothingToDo('No hay ninguna tarea de voluntariado que se repita.');
         }
 
         $opened = 0;
         $removed = 0;
         $kept = 0;
+
+        // El montaje de las cestas va PRIMERO y por su punto, no por la lista de
+        // tareas: su convocatoria nace en borrador —hasta que alguien le pone
+        // área y la publica—, y `findRepeating()` sólo mira las vivas. Yendo por
+        // el punto, una convocatoria recién creada abre sus turnos en esta misma
+        // pasada en vez de esperar a que alguien se acuerde de publicarla.
+        foreach ($prepNodes as $node) {
+            $sync = $this->deliveryPrep->sync($node, $now);
+
+            $opened += \count($sync['created']);
+            $removed += $sync['removed'];
+            $kept += \count($sync['kept']);
+        }
 
         foreach ($repeating as $offer) {
             $sync = $this->generator->sync($offer, $now);
@@ -111,14 +137,30 @@ class SyncVolunteerShiftsCommand extends AbstractCronCommand
     /**
      * Enseña qué se abriría, sin tocar nada.
      *
+     * Los puntos que montan sus cestas con voluntariado se cuentan aparte y sin
+     * cifra: su convocatoria puede no existir todavía —la crea la ejecución de
+     * verdad—, y las que sí existen se previsualizarían contra la receta
+     * GUARDADA, que es justo la que el sync viene a reescribir si alguien ha
+     * cambiado la hora en el punto. Dar un número ahí sería dar uno falso.
+     *
      * @param SymfonyStyle         $io        la salida
      * @param list<VolunteerOffer> $repeating las tareas con receta
+     * @param list<Node>           $prepNodes los puntos que montan con voluntariado
      * @param \DateTimeInterface   $now       momento de referencia
      *
      * @return int código de salida del comando
      */
-    private function preview(SymfonyStyle $io, array $repeating, \DateTimeInterface $now): int
+    private function preview(SymfonyStyle $io, array $repeating, array $prepNodes, \DateTimeInterface $now): int
     {
+        if ([] !== $prepNodes) {
+            $io->note(sprintf(
+                'Además, %s: se revisará su convocatoria de montaje y se le abrirán los turnos que falten.',
+                1 === \count($prepNodes)
+                    ? sprintf('el punto %s monta sus cestas con voluntariado', $prepNodes[0]->getName())
+                    : sprintf('%d puntos montan sus cestas con voluntariado', \count($prepNodes))
+            ));
+        }
+
         $rows = [];
 
         foreach ($repeating as $offer) {
@@ -155,7 +197,9 @@ class SyncVolunteerShiftsCommand extends AbstractCronCommand
         }
 
         if ([] === $repeating) {
-            $io->success('No hay ninguna tarea de voluntariado que se repita: nada que abrir.');
+            $io->success([] === $prepNodes
+                ? 'No hay ninguna tarea de voluntariado que se repita: nada que abrir.'
+                : 'No hay más tareas con repetición que las del montaje de las cestas.');
 
             return self::SUCCESS;
         }
