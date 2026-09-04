@@ -19,7 +19,7 @@ use App\Repository\BasketRepository;
 use App\Repository\PartnerBasketShareRepository;
 use App\Repository\PartnerDeliveryShiftRepository;
 use App\Repository\VolunteerCategoryRepository;
-use App\Repository\VolunteerOfferRepository;
+use App\Repository\VolunteerShiftRepository;
 use App\Repository\VolunteerSignupRepository;
 use App\Repository\WeeklyBasketGroupRepository;
 use App\Repository\WeeklyBasketRepository;
@@ -64,13 +64,13 @@ class PanelController extends AbstractController
     ) {
     }
 
-    /** Cuántas tareas de voluntariado se asoman en la home antes de mandar a su pantalla. */
+    /** Cuántos turnos de voluntariado se asoman en la home antes de mandar a su pantalla. */
     private const VOLUNTEERING_TEASER = 3;
 
     #[Route('', name: 'panel', methods: ['GET'])]
     public function index(
         PickupRelocationOptions $relocationOptions,
-        VolunteerOfferRepository $volunteerOffers,
+        VolunteerShiftRepository $volunteerShifts,
         VolunteerSignupRepository $volunteerSignups,
         VolunteerContributions $contributions,
         DeliveryCalendarProjector $projector,
@@ -94,11 +94,11 @@ class PanelController extends AbstractController
         // y callar que hay nueve, que es lo que hacía pensar que apenas hace falta
         // nada.
         $stillNeeded = $this->isGranted('FEATURE_VOLUNTEERING')
-            ? $volunteerOffers->findStillNeededFor(
+            ? $volunteerShifts->findStillNeededFor(
                 new \DateTime(),
                 $partner->getWeeklyBasketGroup()?->getNode(),
                 array_map(
-                    static fn ($signup) => $signup->getOffer()?->getId(),
+                    static fn ($signup) => $signup->getShift()?->getId(),
                     $volunteerSignups->findUpcomingFor($partner, new \DateTime())
                 )
             )
@@ -140,7 +140,7 @@ class PanelController extends AbstractController
             // a la vez el sitio donde más barato sale pedir ayuda: a quien va a ir de
             // todos modos ese viernes. Vacío cuando ese nodo no organiza el montaje
             // como tarea de voluntariado, que hoy es todos menos Torremocha.
-            'basket_prep' => $this->basketPrepFor($owner, $partner, $nextDelivery, $volunteerOffers),
+            'basket_prep' => $this->basketPrepFor($owner, $partner, $nextDelivery, $volunteerShifts),
             // Las tareas que hacen falta DE VERDAD, con lo destacado primero y
             // después lo del punto de recogida propio: sin las que ya están
             // cubiertas y sin aquellas a las que ya se apuntó. Con
@@ -149,7 +149,7 @@ class PanelController extends AbstractController
             //
             // En la home se asoman unas pocas: una lista larga se lee como un muro
             // y no se lee.
-            'volunteering_offers' => \array_slice($stillNeeded, 0, self::VOLUNTEERING_TEASER),
+            'volunteering_shifts' => \array_slice($stillNeeded, 0, self::VOLUNTEERING_TEASER),
             // Cuántas hay en total. Enseñar tres y callar que hay nueve deja la
             // impresión de que apenas hace falta ayuda, que es lo contrario de lo
             // que pasa.
@@ -702,15 +702,15 @@ class PanelController extends AbstractController
      * @param Partner                 $owner    dueñx de la cesta (en familias, el principal)
      * @param Partner                 $partner  quien mira el panel
      * @param array|null              $next     el slot de la próxima entrega, o null
-     * @param VolunteerOfferRepository $offers
+     * @param VolunteerShiftRepository $shifts   quién sabe qué turnos hay
      *
-     * @return list<\App\Entity\VolunteerOffer> el montaje de ese reparto
+     * @return list<\App\Entity\VolunteerShift> el montaje de ese reparto
      */
     private function basketPrepFor(
         Partner $owner,
         Partner $partner,
         ?array $next,
-        VolunteerOfferRepository $offers,
+        VolunteerShiftRepository $shifts,
     ): array {
         if ($next === null || !$this->isGranted('FEATURE_VOLUNTEERING')) {
             return [];
@@ -726,7 +726,7 @@ class PanelController extends AbstractController
             return [];
         }
 
-        return $offers->findDeliveryPrepFor($node, $next['date']);
+        return $shifts->findDeliveryPrepFor($node, $next['date']);
     }
 
     /**

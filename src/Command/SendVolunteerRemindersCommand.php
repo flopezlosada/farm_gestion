@@ -96,10 +96,11 @@ class SendVolunteerRemindersCommand extends AbstractCronCommand
                 // dos recordatorios distintos, y la misma persona en dos tareas
                 // el mismo día también.
                 sprintf('signup-%d', $signup->getId()),
-                // Fecha de negocio = la de la tarea, no la de hoy. Así el apunte
-                // identifica el recordatorio de ESA tarea aunque el barrido pase
-                // varios días seguidos por ella.
-                $signup->getOffer()?->getStartsAt() ?? $now,
+                // Fecha de negocio = la del TURNO, no la de hoy. Así el apunte
+                // identifica el recordatorio de ESE día aunque el barrido pase
+                // varios días seguidos por él — y en una tarea que se repite,
+                // el del sábado no se lleva por delante el del domingo.
+                $signup->getStartsAt() ?? $now,
             );
 
             if ($emitted) {
@@ -136,7 +137,7 @@ class SendVolunteerRemindersCommand extends AbstractCronCommand
         $body = trim(sprintf(
             '%s · %s%s',
             $offer->getTitle(),
-            $this->formatter->date($offer->getStartsAt()),
+            $this->formatter->date($signup->getStartsAt()),
             null !== $where ? ' · '.$where : ''
         ));
 
@@ -186,7 +187,7 @@ class SendVolunteerRemindersCommand extends AbstractCronCommand
         foreach ($due as $signup) {
             $rows[] = [
                 $signup->getOffer()?->getTitle() ?? '—',
-                $signup->getOffer()?->getStartsAt()?->format('d/m/Y H:i') ?? '—',
+                $signup->getStartsAt()?->format('d/m/Y H:i') ?? '—',
                 trim(sprintf('%s %s', $signup->getPartner()?->getName(), $signup->getPartner()?->getSurname())),
             ];
         }

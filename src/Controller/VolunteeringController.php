@@ -8,18 +8,24 @@ use App\Entity\VolunteerCall;
 use App\Entity\VolunteerCategory;
 use App\Entity\VolunteerEvent;
 use App\Entity\VolunteerOffer;
+use App\Entity\VolunteerPlace;
+use App\Entity\VolunteerShift;
 use App\Entity\VolunteerSignup;
 use App\Form\VolunteerCategoryType;
 use App\Form\VolunteerOfferType;
+use App\Form\VolunteerPlaceType;
+use App\Form\VolunteerShiftType;
 use App\Repository\PartnerRepository;
 use App\Repository\VolunteerCallRepository;
 use App\Repository\VolunteerCategoryRepository;
 use App\Repository\VolunteerEventRepository;
 use App\Repository\VolunteerOfferRepository;
+use App\Repository\VolunteerPlaceRepository;
+use App\Repository\VolunteerShiftRepository;
 use App\Repository\VolunteerSignupRepository;
 use App\Security\VolunteerOfferVoter;
 use App\Service\Volunteering\CreditedTime;
-use App\Service\Volunteering\OfferRepeatDates;
+use App\Service\Volunteering\ShiftGenerator;
 use App\Service\Volunteering\TaskCoordinator;
 use App\Service\Volunteering\VolunteerAudienceResolver;
 use App\Service\Volunteering\VolunteerCallNotifier;
@@ -27,19 +33,26 @@ use App\Service\Volunteering\VolunteerEventRecorder;
 use App\Service\Volunteering\VolunteerOfferChangeNotifier;
 use App\Service\Volunteering\VolunteerOfferSnapshot;
 use App\Service\Volunteering\VolunteerScope;
+use App\Service\Volunteering\VolunteerShiftSnapshot;
 use App\Service\Volunteering\VolunteerSuggester;
 use Doctrine\ORM\EntityManagerInterface;
 use Knp\Component\Pager\PaginatorInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use Symfony\Component\Form\FormInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
- * Gestión del voluntariado: publicar tareas, ver quién se apunta, cerrarlas y
- * pedir gente.
+ * Gestión del voluntariado: definir trabajos, abrir sus turnos, ver quién se
+ * apunta, pasar lista y pedir gente.
+ *
+ * DOS LISTADOS, PORQUE SON DOS PREGUNTAS. El de la portada del módulo es de
+ * TURNOS: qué viene, qué está sin confirmar, qué se hizo y qué se quedó sin
+ * cubrir — las cuatro se contestan con fechas. El de tareas es el catálogo de
+ * definiciones, y se usa para retocar el trabajo en sí. Mezclarlos era lo que
+ * hacía el módulo antes de tener turnos, y por eso no podía expresar un trabajo
+ * que se hace dos veces al día.
  *
  * ROL PROPIO Y NO EL DE SOCIXS, y es una decisión de privacidad, no de orden.
  * Quien coordina el reparto de los viernes necesita saber quién viene ese
@@ -49,7 +62,8 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  *
  * QUIÉN PUEDE TOCAR QUÉ lo decide {@see VolunteerOfferVoter} por tarea, no este
  * atributo: quien coordina un área puede con las suyas y con ninguna más. El
- * `IsGranted` de la clase sólo abre la puerta.
+ * `IsGranted` de la clase sólo abre la puerta. El voter acepta también un turno
+ * y resuelve su tarea, así que las pantallas de turno no tienen que acordarse.
  *
  * Y LA LECTURA TAMBIÉN VA POR ÁREAS ({@see VolunteerScope}): quien coordina
  * huerta no ve las tareas del reparto ni su gente. "Sin mezcla" es el requisito,
@@ -65,16 +79,19 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[IsGranted('FEATURE_VOLUNTEERING')]
 class VolunteeringController extends AbstractController
 {
-    /** Cuántos días atrás se miran las tareas ya hechas en el listado. */
-    private const RECENT_DAYS = 60;
+    /**
+     * Cuántos turnos por venir enseña la ficha de la tarea antes de remitir a
+     * la lista completa.
+     */
+    private const UPCOMING_ON_SHEET = 10;
 
     /**
-     * Las tareas: lo que falta por cerrar, lo que viene y lo que ya se hizo.
+     * Los turnos: lo que viene, lo que falta por cerrar y lo que ya se hizo.
      */
     #[Route('', name: 'volunteering_index', methods: ['GET'])]
     public function index(
         Request $request,
-        VolunteerOfferRepository $offers,
+        VolunteerShiftRepository $shifts,
         VolunteerCategoryRepository $categories,
         PaginatorInterface $paginator,
         VolunteerScope $scopeOf,
@@ -87,14 +104,14 @@ class VolunteeringController extends AbstractController
         $mine = $scopeOf->categories();
 
         $pagination = $paginator->paginate(
-            $offers->listQb($scope, $category, $query, $now, $mine)->getQuery(),
+            $shifts->listQb($scope, $category, $query, $now, $mine)->getQuery(),
             $request->query->getInt('page', 1),
             25
         );
 
         return $this->render('Volunteering/index.html.twig', [
             'pagination' => $pagination,
-            'counts' => $offers->counts($now, $mine),
+            'counts' => $shifts->counts($now, $mine),
             // El filtro de área sólo ofrece las suyas: enseñar áreas que no
             // puede ver es prometer un filtro que devuelve cero.
             'categories' => $mine ?? $categories->findActive(),
@@ -108,12 +125,47 @@ class VolunteeringController extends AbstractController
     }
 
     /**
+     * El catálogo de trabajos: qué hace la asociación, en qué estado está cada
+     * cosa y cuál hay que retocar.
+     */
+    #[Route('/tareas', name: 'volunteering_tasks', methods: ['GET'])]
+    public function tasks(
+        Request $request,
+        VolunteerOfferRepository $offers,
+        VolunteerCategoryRepository $categories,
+        PaginatorInterface $paginator,
+        VolunteerScope $scopeOf,
+    ): Response {
+        $scope = $request->query->getAlpha('ver') ?: VolunteerOffer::STATUS_PUBLISHED;
+        $categoryId = $request->query->getInt('tipo') ?: null;
+        $category = null !== $categoryId ? $categories->find($categoryId) : null;
+        $query = trim((string) $request->query->get('q'));
+        $mine = $scopeOf->categories();
+
+        return $this->render('Volunteering/tasks.html.twig', [
+            'pagination' => $paginator->paginate(
+                $offers->listQb($scope, $category, $query, $mine)->getQuery(),
+                $request->query->getInt('page', 1),
+                25
+            ),
+            'counts' => $offers->counts($mine),
+            'categories' => $mine ?? $categories->findActive(),
+            'scope' => $scope,
+            'current' => $category,
+            'q' => $query,
+            'now' => new \DateTime(),
+            'coordinates_something' => $scopeOf->coordinatesSomething(),
+            'sees_everything' => $scopeOf->seesEverything(),
+        ]);
+    }
+
+    /**
      * La bolsa: quién hay para cada tipo de trabajo.
      *
-     * Es lo primero que echa en falta quien coordina un área, y hasta ahora no
-     * estaba: la aplicación sabía decir quién se apuntó a UNA tarea, pero no a
-     * quién se puede llamar para huerta. Sin eso, coordinar obliga a salirse de
-     * la herramienta y tirar del grupo de WhatsApp.
+     * Es lo primero que echa en falta quien coordina un área: la aplicación sabe
+     * decir quién se apuntó a UN turno, pero no a quién se puede llamar para
+     * huerta. Sin eso, coordinar obliga a salirse de la herramienta y tirar del
+     * grupo de WhatsApp.
      *
      * Enseña también a quien no ha declarado nada y a quien ha pedido que no le
      * avisen, cada uno en su sitio: el cuadro completo es lo que permite ver si
@@ -208,29 +260,33 @@ class VolunteeringController extends AbstractController
     }
 
     /**
-     * Publicar una tarea nueva.
+     * Definir un trabajo nuevo.
      *
      * Sin gate de rol en la ruta: quien coordina un área también publica tareas
      * suyas, y no tiene el rol global de escritura. El permiso se comprueba
      * DESPUÉS de rellenar el formulario, cuando ya se sabe de qué área es la
      * tarea — antes no hay nada sobre lo que decidir.
+     *
+     * NACE EN BORRADOR SIEMPRE, y los turnos se abren ya: así se pueden repasar
+     * —y anular el que caiga en festivo— antes de que la tarea empiece a pedir
+     * gente. Publicar es el gesto siguiente, y tiene su propio botón.
      */
     #[Route('/nueva', name: 'volunteering_new', methods: ['GET', 'POST'])]
     public function new(
         Request $request,
         EntityManagerInterface $em,
         VolunteerEventRecorder $events,
-        OfferRepeatDates $repeatDates,
+        ShiftGenerator $generator,
         TaskCoordinator $coordination,
     ): Response {
         $offer = (new VolunteerOffer())->setCreatedBy($this->getUser());
-        $form = $this->createForm(VolunteerOfferType::class, $offer, ['with_repeat' => true]);
+        $form = $this->createForm(VolunteerOfferType::class, $offer);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
             // Publicar una tarea de un área que no coordinas es lo mismo que
             // editar la de otra persona. Se comprueba aquí porque hasta ahora la
-            // oferta no tenía categorías que mirar.
+            // tarea no tenía categorías que mirar.
             $this->denyAccessUnlessGranted(VolunteerOfferVoter::EDIT, $offer);
 
             // Si el área tiene una sola persona coordinándola, ya sabemos quién
@@ -241,19 +297,19 @@ class VolunteeringController extends AbstractController
             $em->persist($offer);
             $events->forOffer($offer, VolunteerEvent::TYPE_OFFER_CREATED, ['status' => $offer->getStatus()]);
 
-            // Repetir en el mismo paso que crear: "voy a dar de alta el reparto
-            // de los viernes" es una sola decisión, y obligar a guardar primero y
-            // repetir después desde la ficha la parte en dos sin motivo.
-            $copies = $this->repeatOnCreate($offer, $form, $em, $events, $repeatDates);
+            $created = $generator->generate($offer);
+            if ([] !== $created) {
+                $events->forOffer($offer, VolunteerEvent::TYPE_SHIFTS_OPENED, ['times' => \count($created)]);
+            }
 
             $em->flush();
-            $this->addFlash('success', 0 === $copies
-                ? 'Tarea creada.'
-                : sprintf('Tarea creada, con %d copias más en borrador. Revísalas y publícalas.', $copies));
 
-            return 0 === $copies
-                ? $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()])
-                : $this->redirectToRoute('volunteering_index');
+            $this->addFlash('success', sprintf(
+                'Tarea creada en borrador, con %d turno(s) abiertos. Repásalos y publícala.',
+                \count($created)
+            ));
+
+            return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
         }
 
         return $this->render('Volunteering/form.html.twig', [
@@ -264,107 +320,39 @@ class VolunteeringController extends AbstractController
     }
 
     /**
-     * Crea las copias que pida el formulario de alta, si pide alguna.
+     * Una tarea: qué es, cómo se repite, y sus turnos.
      *
-     * No valida nada: la coherencia de los dos campos —que haya fecha final, y
-     * que la cadencia del reparto sólo se use con punto de recogida— la
-     * comprueba {@see VolunteerOfferType}, así que aquí ya llegan bien o no se
-     * llega.
-     *
-     * @param VolunteerOffer         $offer       la tarea recién creada
-     * @param FormInterface          $form        el formulario de alta, ya validado
-     * @param EntityManagerInterface $em          para persistir las copias
-     * @param VolunteerEventRecorder $events      para dejar rastro de la repetición
-     * @param OfferRepeatDates       $repeatDates quién sabe en qué fechas copiar
-     *
-     * @return int cuántas copias se han creado
+     * LO QUE MANDA ES EL TRABAJO PENDIENTE. De una tarea continua no interesan
+     * sus doscientos turnos: interesan los que hay que cerrar —que si se
+     * acumulan dejan a la gente sin horas— y el siguiente. De ahí el orden de la
+     * pantalla.
      */
-    private function repeatOnCreate(
-        VolunteerOffer $offer,
-        FormInterface $form,
-        EntityManagerInterface $em,
-        VolunteerEventRecorder $events,
-        OfferRepeatDates $repeatDates,
-    ): int {
-        $cadence = $form->get('repeatCadence')->getData();
-        $until = $form->get('repeatUntil')->getData();
-
-        if (null === $cadence || !$until instanceof \DateTimeInterface) {
-            return 0;
-        }
-
-        $dates = $repeatDates->compute($offer, $cadence, $until);
-
-        foreach ($dates as $date) {
-            $em->persist($offer->copyForDate($date));
-        }
-
-        if ([] !== $dates) {
-            $events->forOffer($offer, VolunteerEvent::TYPE_OFFER_REPEATED, [
-                'times' => \count($dates),
-                'cadence' => $cadence,
-                'until' => $until->format('Y-m-d'),
-            ]);
-        }
-
-        return \count($dates);
-    }
-
-    /**
-     * Una tarea: sus datos, quién se ha apuntado y los avisos que se han
-     * mandado por ella.
-     *
-     * La pantalla se organiza por la FASE de la tarea ({@see VolunteerOffer::getPhase()}),
-     * porque los tres momentos piden trabajos distintos: antes se persiguen
-     * plazas, el día se pasa lista, después se imputan horas. Aquí eso se nota
-     * en que hay datos que sólo se cargan cuando sirven para algo — las
-     * sugerencias de a quién pedirle no se calculan para una tarea que ya pasó.
-     */
-    #[Route('/{id}', name: 'volunteering_show', methods: ['GET'], requirements: ['id' => '\d+'])]
+    #[Route('/tarea/{id}', name: 'volunteering_show', methods: ['GET'], requirements: ['id' => '\d+'])]
+    #[IsGranted(VolunteerOfferVoter::VIEW, subject: 'offer')]
     public function show(
         VolunteerOffer $offer,
         VolunteerCallRepository $calls,
-        VolunteerAudienceResolver $audience,
-        PartnerRepository $partners,
         VolunteerEventRepository $events,
-        OfferRepeatDates $repeatDates,
-        VolunteerSignupRepository $signups,
-        VolunteerSuggester $suggester,
+        ShiftGenerator $generator,
     ): Response {
-        $sent = $calls->sentScopes($offer);
+        $now = new \DateTime();
         $history = $events->historyFor($offer);
-        $phase = $offer->getPhase();
-
-        $year = (int) date('Y');
+        $upcoming = $offer->getUpcomingShifts($now);
 
         return $this->render('Volunteering/show.html.twig', [
             'offer' => $offer,
-            'phase' => $phase,
-            'sent_scopes' => $sent,
-            // Qué cadencias admite ESTA tarea: la del calendario de reparto sólo
-            // existe si ocurre en un punto de recogida.
-            'repeat_cadences' => $repeatDates->cadencesFor($offer),
-            // Lo que cada persona lleva hecho, en UNA consulta para toda la
-            // tabla: preguntarlo fila a fila sería un N+1 con tantas consultas
-            // como gente apuntada.
-            'participation' => $signups->participationByPartner(
-                new \DateTime(sprintf('%d-01-01 00:00:00', $year)),
-                new \DateTime(sprintf('%d-12-31 23:59:59', $year))
-            ),
-            // A quién pedírselo. Sólo mientras siga faltando gente: en una tarea
-            // pasada la lista no serviría para nada y costaría dos consultas.
-            'suggested' => VolunteerOffer::PHASE_OPEN === $phase && $offer->hasRoom()
-                ? $suggester->forOffer($offer)
-                : [],
-            // Para anotar a mano a quien organizó la tarea o vino sin apuntarse.
-            'all_partners' => $partners->findBy(
-                ['status' => Partner::STATUS_ACTIVO],
-                ['name' => 'ASC', 'surname' => 'ASC']
-            ),
-            // Cuánta gente recibiría el aviso general, para que quien pulsa el
-            // botón vea el número ANTES de molestar a media asociación.
-            'everyone_count' => $audience->count($offer, VolunteerCall::SCOPE_EVERYONE),
-            'everyone_sent' => \in_array(VolunteerCall::SCOPE_EVERYONE, $sent, true),
+            'now' => $now,
+            'to_close' => $offer->getShiftsToClose($now),
+            // Sólo los próximos: una tarea diaria tiene doscientos turnos
+            // abiertos y aquí interesa el siguiente puñado. El resto, y todo lo
+            // que ya pasó, está en la lista completa de la tarea.
+            'upcoming' => \array_slice($upcoming, 0, self::UPCOMING_ON_SHEET),
+            'upcoming_total' => \count($upcoming),
+            // Cuántos turnos alcanzaría la receta si se abrieran ahora: es lo
+            // que dice si merece la pena el botón de extender.
+            'horizon_days' => ShiftGenerator::HORIZON_DAYS,
+            'pending_moments' => \count($generator->moments($offer, $now)),
+            'calls' => $calls->findForOffer($offer),
             // El historial de ESTA tarea. Sin él, el rastro sólo se podía
             // consultar en el listado global, que es justo donde no estás
             // cuando quieres saber qué le ha pasado a una tarea concreta.
@@ -374,14 +362,50 @@ class VolunteeringController extends AbstractController
     }
 
     /**
-     * Editar una tarea.
+     * Todos los turnos de UNA tarea: los que vienen y los que ya pasaron.
      *
-     * Si el cambio afecta a quien ya se apuntó —se anula, se mueve de fecha o
-     * cambia de sitio— se le avisa. Sin eso, anular una tarea deja a alguien
-     * plantándose allí para nada, y esa persona, que es justo la que sí
-     * colabora, no vuelve.
+     * Es la lista completa que la ficha no enseña a propósito. La ficha se
+     * queda con el siguiente puñado; aquí está el resto, con las mismas cinco
+     * vistas del listado global —por venir, sin confirmar, hechos, sin cubrir,
+     * todos— porque son las mismas preguntas hechas sobre una sola tarea.
      */
-    #[Route('/{id}/editar', name: 'volunteering_edit', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
+    #[Route('/tarea/{id}/turnos', name: 'volunteering_shifts', methods: ['GET'], requirements: ['id' => '\d+'])]
+    #[IsGranted(VolunteerOfferVoter::VIEW, subject: 'offer')]
+    public function shifts(
+        VolunteerOffer $offer,
+        Request $request,
+        VolunteerShiftRepository $shifts,
+        PaginatorInterface $paginator,
+    ): Response {
+        $now = new \DateTime();
+        $scope = $request->query->getAlpha('ver') ?: 'upcoming';
+
+        return $this->render('Volunteering/shifts.html.twig', [
+            'offer' => $offer,
+            'pagination' => $paginator->paginate(
+                $shifts->listQb($scope, null, null, $now, null, $offer)->getQuery(),
+                $request->query->getInt('page', 1),
+                25
+            ),
+            'counts' => $shifts->counts($now, null, $offer),
+            'scope' => $scope,
+            'now' => $now,
+        ]);
+    }
+
+    /**
+     * Editar la definición de un trabajo.
+     *
+     * Al guardar, los turnos se ponen al día con la receta: se abren los que
+     * falten y se retiran los que la receta ya no dicta. Los que tienen gente
+     * apuntada NO se retiran —alguien cuenta con ese día— y se dice cuántos son,
+     * para que quien edita decida si los anula a mano.
+     *
+     * Si el cambio afecta a quien ya se apuntó —se anula, se para o cambia de
+     * sitio— se le avisa. Sin eso, anular una tarea deja a alguien plantándose
+     * allí para nada, y esa persona, que es justo la que sí colabora, no vuelve.
+     */
+    #[Route('/tarea/{id}/editar', name: 'volunteering_edit', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
     #[IsGranted(VolunteerOfferVoter::EDIT, subject: 'offer')]
     public function edit(
         Request $request,
@@ -390,6 +414,7 @@ class VolunteeringController extends AbstractController
         VolunteerOfferChangeNotifier $changes,
         VolunteerEventRecorder $events,
         TaskCoordinator $coordination,
+        ShiftGenerator $generator,
     ): Response {
         // La foto se toma ANTES de handleRequest: después, la entidad ya lleva
         // los valores nuevos y el original se ha perdido.
@@ -399,33 +424,21 @@ class VolunteeringController extends AbstractController
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            // Anular se registra aparte de editar: no es el mismo hecho y en el
-            // rastro se busca de forma distinta.
-            $events->forOffer(
-                $offer,
-                $before->wasCancelledIn($offer)
-                    ? VolunteerEvent::TYPE_OFFER_CANCELLED
-                    : VolunteerEvent::TYPE_OFFER_UPDATED,
-                [
-                    'moved' => $before->movedIn($offer),
-                    'relocated' => $before->relocatedIn($offer),
-                ]
-            );
+            $events->forOffer($offer, VolunteerEvent::TYPE_OFFER_UPDATED, [
+                'relocated' => $before->relocatedIn($offer),
+            ]);
 
             // Al cambiarle el área a una tarea que no tenía coordinador, puede
             // que ahora sí se sepa quién la lleva.
             $coordination->assignIfObvious($offer);
 
+            $sync = $generator->sync($offer);
+
             $em->flush();
 
             $notified = $changes->notifyChanges($offer, $before);
 
-            $this->addFlash(
-                'success',
-                $notified > 0
-                    ? sprintf('Tarea actualizada. Se ha avisado a %d persona(s) que se habían apuntado.', $notified)
-                    : 'Tarea actualizada.'
-            );
+            $this->addFlash('success', $this->describeSync($sync, $notified));
 
             return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
         }
@@ -438,90 +451,346 @@ class VolunteeringController extends AbstractController
     }
 
     /**
-     * Repetir esta tarea hasta una fecha.
+     * Publicar, parar, reanudar o anular una tarea.
      *
-     * Es lo que hace el módulo usable para lo que más se repite: el reparto es
-     * SEMANAL, y crear "descargar cestas en La Cabrera" cincuenta y dos veces a
-     * mano no lo va a hacer nadie.
+     * UN SOLO SITIO PARA LOS CUATRO, porque son la misma decisión con distinto
+     * signo y comparten lo que hay que hacer después: dejar rastro, avisar a
+     * quien esté apuntado y contarlo. Repartirlos en cuatro acciones era tener
+     * cuatro sitios donde olvidarse del aviso.
      *
-     * Cadencia y fecha final, no una regla de recurrencia. Karrot modela series
-     * con RRULE de iCal, potente y caro; OpenOlitor simplemente duplica a una
-     * lista de fechas. Esto es lo segundo: las copias nacen sueltas, así que
-     * cambiar o anular una no toca a las demás — que es justo lo que hace falta
-     * cuando cae un festivo en medio. Por eso tampoco se guarda aquí nada de la
-     * serie: {@see OfferRepeatDates} sólo devuelve fechas.
-     *
-     * Las fechas las calcula ese servicio, no este método. Cuando la tarea
-     * ocurre en un punto de recogida puede pedir las del calendario de reparto
-     * de verdad, y eso ya no es "sumar días" ni cabe en un controller.
+     * PUBLICAR ES EL GESTO QUE MOLESTA A LA ASOCIACIÓN, y por eso no está en el
+     * formulario: se hace desde la ficha, donde la pantalla puede decir a cuánta
+     * gente se le va a pedir esto antes de darle al botón.
      */
-    #[Route('/{id}/repetir', name: 'volunteering_repeat', methods: ['POST'], requirements: ['id' => '\d+'])]
+    #[Route('/tarea/{id}/estado', name: 'volunteering_status', methods: ['POST'], requirements: ['id' => '\d+'])]
     #[IsGranted(VolunteerOfferVoter::EDIT, subject: 'offer')]
-    public function repeat(
+    public function status(
         Request $request,
         VolunteerOffer $offer,
         EntityManagerInterface $em,
         VolunteerEventRecorder $events,
-        OfferRepeatDates $repeatDates,
+        VolunteerOfferChangeNotifier $changes,
     ): Response {
-        if (!$this->isCsrfTokenValid('volunteering_repeat', (string) $request->request->get('_csrf_token'))) {
+        if (!$this->isCsrfTokenValid('volunteering_status', (string) $request->request->get('_csrf_token'))) {
             $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
 
             return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
         }
 
-        if (null === $offer->getStartsAt()) {
-            $this->addFlash('error', 'Esta tarea no tiene fecha, así que no se puede repetir.');
+        $wanted = (string) $request->request->get('estado');
+
+        if (!\in_array($wanted, VolunteerOffer::STATUSES, true)) {
+            $this->addFlash('error', 'Ese estado no existe.');
 
             return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
         }
 
-        $cadence = (string) $request->request->get('cadence');
-        $until = \DateTimeImmutable::createFromFormat('Y-m-d', (string) $request->request->get('until'));
+        $before = VolunteerOfferSnapshot::of($offer);
+        $offer->setStatus($wanted);
 
-        if (false === $until || !\in_array($cadence, $repeatDates->cadencesFor($offer), true)) {
-            $this->addFlash('error', 'Elige cada cuánto se repite y hasta cuándo.');
-
-            return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
-        }
-
-        $dates = $repeatDates->compute($offer, $cadence, $until);
-
-        if ([] === $dates) {
-            // Sin fechas no es un error: puede que la fecha final sea anterior a
-            // la tarea, o que el punto de recogida no vuelva a repartir en ese
-            // plazo. Decirlo es más útil que crear cero copias en silencio.
-            $this->addFlash('warning', 'No hay ninguna fecha que repetir en ese plazo. Revisa hasta cuándo la quieres.');
-
-            return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
-        }
-
-        foreach ($dates as $date) {
-            $em->persist($offer->copyForDate($date));
-        }
-
-        // Un evento por la repetición, no uno por copia: cincuenta y dos filas
-        // diciendo lo mismo enterrarían el resto del rastro.
-        $events->forOffer($offer, VolunteerEvent::TYPE_OFFER_REPEATED, [
-            'times' => \count($dates),
-            'cadence' => $cadence,
-            'until' => $until->format('Y-m-d'),
-        ]);
+        $events->forOffer($offer, match ($wanted) {
+            VolunteerOffer::STATUS_PUBLISHED => VolunteerEvent::TYPE_OFFER_PUBLISHED,
+            VolunteerOffer::STATUS_PAUSED => VolunteerEvent::TYPE_OFFER_PAUSED,
+            VolunteerOffer::STATUS_CANCELLED => VolunteerEvent::TYPE_OFFER_CANCELLED,
+            default => VolunteerEvent::TYPE_OFFER_UPDATED,
+        }, ['status' => $wanted]);
 
         $em->flush();
 
-        $this->addFlash(
-            'success',
-            OfferRepeatDates::CADENCE_DELIVERY === $cadence
-                ? sprintf('Creadas %d copias en borrador, en los días que ese punto reparte. Revísalas y publícalas.', \count($dates))
-                : sprintf('Creadas %d copias, en borrador. Revísalas —ojo a los festivos— y publícalas.', \count($dates))
-        );
+        $notified = $changes->notifyChanges($offer, $before);
 
-        return $this->redirectToRoute('volunteering_index');
+        $this->addFlash('success', match ($wanted) {
+            VolunteerOffer::STATUS_PUBLISHED => 'Tarea publicada: ya se puede apuntar la gente.',
+            VolunteerOffer::STATUS_PAUSED => $this->withNotified('Tarea parada. Sus turnos por venir dejan de pedir gente.', $notified),
+            VolunteerOffer::STATUS_CANCELLED => $this->withNotified('Tarea anulada. Se conserva con su historia.', $notified),
+            default => 'Tarea vuelta a borrador.',
+        });
+
+        return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
     }
 
     /**
-     * Avisar a TODA la asociación de que hace falta gente para esta tarea.
+     * Abrir más turnos de una tarea que se repite: extiende la serie hasta donde
+     * llegue el horizonte.
+     *
+     * Existe porque los turnos se materializan por tramos y no de golpe. Lo
+     * normal es que lo haga el planificador; el botón está para no tener que
+     * esperar al cron cuando alguien acaba de ampliar la fecha final.
+     */
+    #[Route('/tarea/{id}/turnos', name: 'volunteering_open_shifts', methods: ['POST'], requirements: ['id' => '\d+'])]
+    #[IsGranted(VolunteerOfferVoter::EDIT, subject: 'offer')]
+    public function openShifts(
+        Request $request,
+        VolunteerOffer $offer,
+        EntityManagerInterface $em,
+        VolunteerEventRecorder $events,
+        ShiftGenerator $generator,
+    ): Response {
+        if (!$this->isCsrfTokenValid('volunteering_open_shifts', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
+
+            return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
+        }
+
+        $created = $generator->generate($offer);
+
+        if ([] !== $created) {
+            $events->forOffer($offer, VolunteerEvent::TYPE_SHIFTS_OPENED, ['times' => \count($created)]);
+        }
+
+        $em->flush();
+
+        $this->addFlash([] === $created ? 'warning' : 'success', [] === $created
+            ? 'No hay turnos nuevos que abrir: la receta ya está cubierta hasta donde alcanza.'
+            : sprintf('Abiertos %d turno(s).', \count($created)));
+
+        return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
+    }
+
+    /**
+     * Añadir un turno a mano, para el día que la receta no cubre: la plantación
+     * del sábado que viene, la tarde que hay que recuperar.
+     */
+    #[Route('/tarea/{id}/turno-nuevo', name: 'volunteering_shift_new', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
+    #[IsGranted(VolunteerOfferVoter::EDIT, subject: 'offer')]
+    public function newShift(
+        Request $request,
+        VolunteerOffer $offer,
+        EntityManagerInterface $em,
+        VolunteerEventRecorder $events,
+    ): Response {
+        $shift = new VolunteerShift();
+        $form = $this->createForm(VolunteerShiftType::class, $shift);
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted() && $form->isValid()) {
+            // Marcado a mano: la receta no lo dicta, así que el sync no puede
+            // retirarlo la próxima vez que se guarde la tarea.
+            $shift->setManual(true);
+
+            $offer->addShift($shift);
+            $em->persist($shift);
+
+            $events->forOffer($offer, VolunteerEvent::TYPE_SHIFTS_OPENED, [
+                'times' => 1,
+                'by_hand' => true,
+            ]);
+
+            $em->flush();
+            $this->addFlash('success', 'Turno añadido.');
+
+            return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
+        }
+
+        return $this->render('Volunteering/shift_form.html.twig', [
+            'offer' => $offer,
+            'shift' => $shift,
+            'form' => $form->createView(),
+            'is_new' => true,
+        ]);
+    }
+
+    /**
+     * Un turno: quién viene, pasar lista, y los avisos que se han mandado por
+     * él.
+     *
+     * La pantalla se organiza por la FASE del turno
+     * ({@see VolunteerShift::getPhase()}), porque los tres momentos piden
+     * trabajos distintos: antes se persiguen plazas, el día se pasa lista,
+     * después se imputan horas. Aquí eso se nota en que hay datos que sólo se
+     * cargan cuando sirven para algo — las sugerencias de a quién pedirle no se
+     * calculan para un turno que ya pasó.
+     */
+    #[Route('/turno/{id}', name: 'volunteering_shift', methods: ['GET'], requirements: ['id' => '\d+'])]
+    #[IsGranted(VolunteerOfferVoter::VIEW, subject: 'shift')]
+    public function shift(
+        VolunteerShift $shift,
+        VolunteerCallRepository $calls,
+        VolunteerAudienceResolver $audience,
+        PartnerRepository $partners,
+        VolunteerSignupRepository $signups,
+        VolunteerSuggester $suggester,
+    ): Response {
+        $sent = $calls->sentScopes($shift);
+        $phase = $shift->getPhase();
+        $year = (int) date('Y');
+
+        return $this->render('Volunteering/shift.html.twig', [
+            'shift' => $shift,
+            'offer' => $shift->getOffer(),
+            'phase' => $phase,
+            'sent_scopes' => $sent,
+            // Lo que cada persona lleva hecho, en UNA consulta para toda la
+            // tabla: preguntarlo fila a fila sería un N+1 con tantas consultas
+            // como gente apuntada.
+            'participation' => $signups->participationByPartner(
+                new \DateTime(sprintf('%d-01-01 00:00:00', $year)),
+                new \DateTime(sprintf('%d-12-31 23:59:59', $year))
+            ),
+            // A quién pedírselo. Sólo mientras siga faltando gente: en un turno
+            // pasado la lista no serviría para nada y costaría dos consultas.
+            'suggested' => VolunteerShift::PHASE_OPEN === $phase && $shift->hasRoom()
+                ? $suggester->forShift($shift)
+                : [],
+            // Para anotar a mano a quien organizó el turno o vino sin apuntarse.
+            'all_partners' => $partners->findBy(
+                ['status' => Partner::STATUS_ACTIVO],
+                ['name' => 'ASC', 'surname' => 'ASC']
+            ),
+            // Cuánta gente recibiría el aviso general, para que quien pulsa el
+            // botón vea el número ANTES de molestar a media asociación.
+            'everyone_count' => $audience->count($shift, VolunteerCall::SCOPE_EVERYONE),
+            'everyone_sent' => \in_array(VolunteerCall::SCOPE_EVERYONE, $sent, true),
+        ]);
+    }
+
+    /**
+     * Mover un turno de fecha, hora, plazas o minutos.
+     *
+     * A quien esté apuntado se le avisa del cambio de fecha: es el aviso que
+     * menos se puede saltar, porque si no esa persona se planta el día que ya no
+     * es.
+     */
+    #[Route('/turno/{id}/editar', name: 'volunteering_shift_edit', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
+    #[IsGranted(VolunteerOfferVoter::EDIT, subject: 'shift')]
+    public function editShift(
+        Request $request,
+        VolunteerShift $shift,
+        EntityManagerInterface $em,
+        VolunteerEventRecorder $events,
+        VolunteerOfferChangeNotifier $changes,
+    ): Response {
+        $offer = $shift->getOffer();
+        $before = VolunteerShiftSnapshot::of($shift);
+
+        $form = $this->createForm(VolunteerShiftType::class, $shift);
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted() && $form->isValid()) {
+            // Tocado a mano: a partir de ahora este turno le gana a la receta y
+            // el sync no lo retira. Sin esto, mover el turno de un viernes con
+            // asamblea se deshacía al guardar cualquier cosa de la tarea.
+            $shift->setManual(true);
+
+            if (null !== $offer && $before->movedIn($shift)) {
+                $events->forOffer($offer, VolunteerEvent::TYPE_SHIFT_MOVED, [
+                    'before' => $before->startsAt?->format('d/m/Y H:i'),
+                    'after' => $shift->getStartsAt()?->format('d/m/Y H:i'),
+                ]);
+            }
+
+            $em->flush();
+
+            $notified = $changes->notifyShiftChanges($shift, $before);
+
+            $this->addFlash('success', $this->withNotified('Turno actualizado.', $notified));
+
+            return $this->redirectToRoute('volunteering_shift', ['id' => $shift->getId()]);
+        }
+
+        return $this->render('Volunteering/shift_form.html.twig', [
+            'offer' => $offer,
+            'shift' => $shift,
+            'form' => $form->createView(),
+            'is_new' => false,
+        ]);
+    }
+
+    /**
+     * Anular un turno, o volver a ponerlo en pie.
+     *
+     * ES EL GESTO DEL FESTIVO, y el que hace que la receta pueda vivir en la
+     * tarea: "esto se hace los viernes" sigue siendo verdad aunque el viernes 25
+     * de diciembre no se haga. La fila no se borra —quien estuviera apuntado
+     * tiene que poder ver qué pasó— y el generador no la vuelve a crear.
+     */
+    #[Route('/turno/{id}/anular', name: 'volunteering_shift_cancel', methods: ['POST'], requirements: ['id' => '\d+'])]
+    #[IsGranted(VolunteerOfferVoter::EDIT, subject: 'shift')]
+    public function cancelShift(
+        Request $request,
+        VolunteerShift $shift,
+        EntityManagerInterface $em,
+        VolunteerEventRecorder $events,
+        VolunteerOfferChangeNotifier $changes,
+    ): Response {
+        if (!$this->isCsrfTokenValid('volunteering_shift_cancel', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
+
+            return $this->redirectToRoute('volunteering_shift', ['id' => $shift->getId()]);
+        }
+
+        $offer = $shift->getOffer();
+        $before = VolunteerShiftSnapshot::of($shift);
+        $reopen = $request->request->getBoolean('reactivar');
+
+        if ($reopen) {
+            $shift->reopen();
+        } else {
+            $reason = trim((string) $request->request->get('motivo'));
+            $shift->cancel('' !== $reason ? mb_substr($reason, 0, 160) : null);
+        }
+
+        if (null !== $offer) {
+            $events->forOffer($offer, VolunteerEvent::TYPE_SHIFT_CANCELLED, [
+                'when' => $shift->getStartsAt()?->format('d/m/Y H:i'),
+                'again' => $reopen,
+                'name' => $shift->getCancelledReason(),
+            ]);
+        }
+
+        $em->flush();
+
+        $notified = $changes->notifyShiftChanges($shift, $before);
+
+        $this->addFlash('success', $reopen
+            ? 'Turno de nuevo en pie.'
+            : $this->withNotified('Turno anulado.', $notified));
+
+        return $this->redirectToRoute('volunteering_shift', ['id' => $shift->getId()]);
+    }
+
+    /**
+     * Apuntar gente de fuera en un turno: un grupo de estudiantes, gente de otra
+     * asociación, quien pasaba por allí.
+     *
+     * VA EN EL TURNO Y NO EN LA TAREA, y ahí estaba el error: que un martes
+     * vinieran tres estudiantes no dice nada del martes siguiente. Y va como
+     * acción de la lista de quién viene, no como campo del formulario de alta:
+     * es un dato del día, y en el alta sólo estorbaba.
+     */
+    #[Route('/turno/{id}/gente-de-fuera', name: 'volunteering_shift_guests', methods: ['POST'], requirements: ['id' => '\d+'])]
+    #[IsGranted(VolunteerOfferVoter::EDIT, subject: 'shift')]
+    public function guests(
+        Request $request,
+        VolunteerShift $shift,
+        EntityManagerInterface $em,
+    ): Response {
+        if (!$this->isCsrfTokenValid('volunteering_shift_guests', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
+
+            return $this->redirectToRoute('volunteering_shift', ['id' => $shift->getId()]);
+        }
+
+        // Con getInt() un campo vacío revienta con un 400: `filter_var('',
+        // FILTER_VALIDATE_INT)` falla y InputBag lo convierte en
+        // BadRequestException.
+        $howMany = (int) $request->request->get('cuantos');
+        $note = trim((string) $request->request->get('quienes'));
+
+        $shift->setGuests(min(99, max(0, $howMany)));
+        $shift->setGuestsNote('' !== $note ? mb_substr($note, 0, 160) : null);
+
+        $em->flush();
+
+        $this->addFlash('success', 0 === $shift->getGuests()
+            ? 'Quitada la gente de fuera de este turno.'
+            : sprintf('Apuntada gente de fuera: %d.', $shift->getGuests()));
+
+        return $this->redirectToRoute('volunteering_shift', ['id' => $shift->getId()]);
+    }
+
+    /**
+     * Avisar a TODA la asociación de que hace falta gente para este turno.
      *
      * Este alcance no lo abre nunca el automatismo, y no por prudencia técnica:
      * el permiso de notificaciones del navegador se pierde una vez y para
@@ -529,11 +798,11 @@ class VolunteeringController extends AbstractController
      * que la cosa lo merece. Un automatismo no distingue "falta gente para la
      * plantación" de "si no vienen se pierde la cosecha".
      */
-    #[Route('/{id}/avisar-a-todxs', name: 'volunteering_notify_everyone', methods: ['POST'], requirements: ['id' => '\d+'])]
-    #[IsGranted(VolunteerOfferVoter::EDIT, subject: 'offer')]
+    #[Route('/turno/{id}/avisar-a-todxs', name: 'volunteering_notify_everyone', methods: ['POST'], requirements: ['id' => '\d+'])]
+    #[IsGranted(VolunteerOfferVoter::EDIT, subject: 'shift')]
     public function notifyEveryone(
         Request $request,
-        VolunteerOffer $offer,
+        VolunteerShift $shift,
         VolunteerCallNotifier $notifier,
         VolunteerEventRecorder $events,
         EntityManagerInterface $em,
@@ -541,34 +810,37 @@ class VolunteeringController extends AbstractController
         if (!$this->isCsrfTokenValid('volunteering_notify', (string) $request->request->get('_csrf_token'))) {
             $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
 
-            return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
+            return $this->redirectToRoute('volunteering_shift', ['id' => $shift->getId()]);
         }
 
         $call = $notifier->dispatch(
-            $offer,
+            $shift,
             VolunteerCall::SCOPE_EVERYONE,
             $this->getUser(),
             new \DateTimeImmutable()
         );
 
         if (null === $call) {
-            $this->addFlash('warning', 'No se ha avisado a nadie: o ya se avisó a todo el mundo por esta tarea, o no queda nadie a quien avisar.');
+            $this->addFlash('warning', 'No se ha avisado a nadie: o ya se avisó a todo el mundo por este turno, o no queda nadie a quien avisar.');
         } else {
-            $events->forOffer($offer, VolunteerEvent::TYPE_CALL_SENT, [
-                'scope' => $call->getScope(),
-                'recipients' => $call->getRecipients(),
-            ]);
+            $offer = $shift->getOffer();
+            if (null !== $offer) {
+                $events->forOffer($offer, VolunteerEvent::TYPE_CALL_SENT, [
+                    'scope' => $call->getScope(),
+                    'recipients' => $call->getRecipients(),
+                ]);
+            }
             $em->flush();
 
             $this->addFlash('success', sprintf('Aviso enviado a %d socix(s).', $call->getRecipients()));
         }
 
-        return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
+        return $this->redirectToRoute('volunteering_shift', ['id' => $shift->getId()]);
     }
 
     /**
-     * Anotar a alguien en una tarea: quien la organizó, o quien vino sin
-     * haberse apuntado.
+     * Anotar a alguien en un turno: quien lo organizó, o quien vino sin haberse
+     * apuntado.
      *
      * Resuelve dos huecos que se notan en cuanto se usa esto de verdad:
      *
@@ -581,11 +853,11 @@ class VolunteeringController extends AbstractController
      * Se anota ya como asistido: si alguien lo está registrando a mano después,
      * es porque sabe que ocurrió.
      */
-    #[Route('/{id}/anotar', name: 'volunteering_add_person', methods: ['POST'], requirements: ['id' => '\d+'])]
-    #[IsGranted(VolunteerOfferVoter::EDIT, subject: 'offer')]
+    #[Route('/turno/{id}/anotar', name: 'volunteering_add_person', methods: ['POST'], requirements: ['id' => '\d+'])]
+    #[IsGranted(VolunteerOfferVoter::EDIT, subject: 'shift')]
     public function addPerson(
         Request $request,
-        VolunteerOffer $offer,
+        VolunteerShift $shift,
         PartnerRepository $partners,
         VolunteerSignupRepository $signups,
         EntityManagerInterface $em,
@@ -594,19 +866,19 @@ class VolunteeringController extends AbstractController
         if (!$this->isCsrfTokenValid('volunteering_add_person', (string) $request->request->get('_csrf_token'))) {
             $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
 
-            return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
+            return $this->redirectToRoute('volunteering_shift', ['id' => $shift->getId()]);
         }
 
         $partner = $partners->find($request->request->getInt('partner'));
         if (null === $partner) {
             $this->addFlash('error', 'No he encontrado a esa persona.');
 
-            return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
+            return $this->redirectToRoute('volunteering_shift', ['id' => $shift->getId()]);
         }
 
-        // Reutiliza la inscripción si ya existía: el UNIQUE (offer, partner) no
+        // Reutiliza la inscripción si ya existía: el UNIQUE (shift, partner) no
         // admite dos.
-        $existing = $signups->findOneFor($offer, $partner);
+        $existing = $signups->findOneFor($shift, $partner);
 
         // Quien ya consta como que fue no se vuelve a anotar. Sin esto, un
         // segundo envío —doble clic, volver atrás en el navegador, o
@@ -614,13 +886,13 @@ class VolunteeringController extends AbstractController
         // dejar rastro de que había pasado dos veces.
         if (null !== $existing && !$existing->isCancelled() && true === $existing->getAttended()) {
             $this->addFlash('warning', sprintf(
-                '%s %s ya constaba en esta tarea, con %s h. Si hay que corregirle las horas, hazlo en la lista de arriba.',
+                '%s %s ya constaba en este turno, con %s h. Si hay que corregirle las horas, hazlo en la lista de arriba.',
                 $partner->getName(),
                 $partner->getSurname(),
                 str_replace('.', ',', (string) (($existing->getCreditedMinutes() ?? 0) / 60))
             ));
 
-            return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
+            return $this->redirectToRoute('volunteering_shift', ['id' => $shift->getId()]);
         }
 
         // Con getInt() esto reventaba con un 400: `filter_var('', FILTER_VALIDATE_INT)`
@@ -628,7 +900,7 @@ class VolunteeringController extends AbstractController
         // caía al dejar el campo vacío.
         $minutes = CreditedTime::minutesFromHours($request->request->get('hours'));
 
-        // Las horas se dicen, NO se deducen de la tarea. Anotar a alguien a mano
+        // Las horas se dicen, NO se deducen del turno. Anotar a alguien a mano
         // es un acto deliberado —quien lo hace sabe cuánto estuvo esa persona— y
         // rellenar el hueco por él escondía dos cosas: cuánto se estaba
         // imputando, y que en una tarea sin fijar lo que vale se anotaba a
@@ -636,11 +908,11 @@ class VolunteeringController extends AbstractController
         if (null === $minutes || $minutes <= 0) {
             $this->addFlash('error', 'Pon cuántas horas se le computan: sin eso no se puede anotar a nadie.');
 
-            return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
+            return $this->redirectToRoute('volunteering_shift', ['id' => $shift->getId()]);
         }
 
         $signup = $existing ?? (new VolunteerSignup())
-            ->setOffer($offer)
+            ->setShift($shift)
             ->setPartner($partner);
 
         $signup
@@ -648,27 +920,28 @@ class VolunteeringController extends AbstractController
             ->confirmAttendance(VolunteerSignup::SOURCE_MANAGER, $minutes);
 
         $em->persist($signup);
-        $events->forOffer($offer, VolunteerEvent::TYPE_PERSON_ADDED, [
-            'role' => $signup->getRole(),
-            'minutes' => $signup->getCreditedMinutes(),
-        ], $partner);
+
+        $offer = $shift->getOffer();
+        if (null !== $offer) {
+            $events->forOffer($offer, VolunteerEvent::TYPE_PERSON_ADDED, [
+                'role' => $signup->getRole(),
+                'minutes' => $signup->getCreditedMinutes(),
+            ], $partner);
+        }
+
         $em->flush();
 
-        $this->addFlash('success', sprintf(
-            '%s %s anotadx.',
-            $partner->getName(),
-            $partner->getSurname()
-        ));
+        $this->addFlash('success', sprintf('%s %s anotadx.', $partner->getName(), $partner->getSurname()));
 
-        return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
+        return $this->redirectToRoute('volunteering_shift', ['id' => $shift->getId()]);
     }
 
     /**
-     * Quitar una inscripción de la tarea.
+     * Quitar una inscripción del turno.
      *
      * NO ES LO MISMO QUE "no fue", y por eso es un gesto aparte. Que alguien se
      * apuntara y no apareciera es un hecho que conviene conservar: dice que la
-     * plaza se quedó sin cubrir y es el dato que explica por qué una tarea salió
+     * plaza se quedó sin cubrir y es el dato que explica por qué un turno salió
      * mal. Esto otro es para cuando la inscripción NO DEBERÍA EXISTIR —se anotó
      * a quien no era, o por duplicado—, y ahí guardarla sería guardar una
      * mentira.
@@ -681,11 +954,11 @@ class VolunteeringController extends AbstractController
      * token propio obligaría a un campo oculto por inscripción para no ganar
      * nada.
      */
-    #[Route('/{id}/quitar/{signup}', name: 'volunteering_remove_person', methods: ['POST'], requirements: ['id' => '\d+', 'signup' => '\d+'])]
-    #[IsGranted(VolunteerOfferVoter::EDIT, subject: 'offer')]
+    #[Route('/turno/{id}/quitar/{signup}', name: 'volunteering_remove_person', methods: ['POST'], requirements: ['id' => '\d+', 'signup' => '\d+'])]
+    #[IsGranted(VolunteerOfferVoter::EDIT, subject: 'shift')]
     public function removePerson(
         Request $request,
-        VolunteerOffer $offer,
+        VolunteerShift $shift,
         int $signup,
         VolunteerSignupRepository $signups,
         EntityManagerInterface $em,
@@ -694,84 +967,89 @@ class VolunteeringController extends AbstractController
         if (!$this->isCsrfTokenValid('volunteering_close', (string) $request->request->get('_csrf_token'))) {
             $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
 
-            return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
+            return $this->redirectToRoute('volunteering_shift', ['id' => $shift->getId()]);
         }
 
         $found = $signups->find($signup);
 
-        // Que la inscripción sea DE ESTA TAREA se comprueba a mano: el voter ha
-        // dado permiso sobre la oferta de la URL, no sobre una inscripción que
-        // podría ser de otra y colarse cambiando el número.
-        if (null === $found || $found->getOffer() !== $offer) {
-            $this->addFlash('error', 'Esa inscripción no es de esta tarea.');
+        // Que la inscripción sea DE ESTE TURNO se comprueba a mano: el voter ha
+        // dado permiso sobre el turno de la URL, no sobre una inscripción que
+        // podría ser de otro y colarse cambiando el número.
+        if (null === $found || $found->getShift() !== $shift) {
+            $this->addFlash('error', 'Esa inscripción no es de este turno.');
 
-            return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
+            return $this->redirectToRoute('volunteering_shift', ['id' => $shift->getId()]);
         }
 
         $partner = $found->getPartner();
+        $offer = $shift->getOffer();
 
         // Queda el rastro aunque la fila se vaya: si desaparecen las horas de
         // alguien, tiene que poder saberse quién las quitó y cuándo.
-        $events->forOffer($offer, VolunteerEvent::TYPE_WITHDRAW, [
-            'removed_by_manager' => true,
-            'minutes' => $found->getCreditedMinutes(),
-        ], $partner);
+        if (null !== $offer) {
+            $events->forOffer($offer, VolunteerEvent::TYPE_WITHDRAW, [
+                'removed_by_manager' => true,
+                'minutes' => $found->getCreditedMinutes(),
+            ], $partner);
+        }
 
         $em->remove($found);
         $em->flush();
 
         $this->addFlash('success', sprintf(
-            '%s %s ya no consta en esta tarea.',
+            '%s %s ya no consta en este turno.',
             $partner?->getName(),
             $partner?->getSurname()
         ));
 
-        return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
+        return $this->redirectToRoute('volunteering_shift', ['id' => $shift->getId()]);
     }
 
     /**
-     * Cerrar una tarea ya pasada: decir quién fue, quién no, y cuánto se le
+     * Cerrar un turno ya pasado: decir quién fue, quién no, y cuánto se le
      * computa a cada cual.
      *
      * Mientras no se cierra, no computa horas a nadie: el `attended` a null es
-     * significativo, y así olvidarse de cerrar una tarea no infla el contador de
+     * significativo, y así olvidarse de cerrar un turno no infla el contador de
      * nadie a base de gente que se apuntó y no apareció.
      *
-     * LOS MINUTOS VAN POR PERSONA y no por tarea, porque la realidad es ésa:
-     * alguien se queda media hora menos, alguien llega tarde, y quien la
-     * organizó suele computar otra cosa. El modelo ya lo contemplaba
-     * ({@see VolunteerSignup::$creditedMinutes} se congela por inscripción) y el
-     * formulario de anotar a mano ya los pedía; era este cierre el que aplicaba
-     * a todo el mundo los de la tarea sin dejar corregirlo. Dejar el campo en
-     * blanco sigue usando los de la tarea, que es el caso normal.
+     * LOS MINUTOS VAN POR PERSONA y no por turno, porque la realidad es ésa:
+     * alguien se queda media hora menos, alguien llega tarde, y quien lo
+     * organizó suele computar otra cosa. Dejar el campo en blanco usa los del
+     * turno, que es el caso normal.
      */
-    #[Route('/{id}/cerrar', name: 'volunteering_close', methods: ['POST'], requirements: ['id' => '\d+'])]
-    #[IsGranted(VolunteerOfferVoter::EDIT, subject: 'offer')]
-    public function close(Request $request, VolunteerOffer $offer, EntityManagerInterface $em, VolunteerEventRecorder $events): Response
-    {
+    #[Route('/turno/{id}/cerrar', name: 'volunteering_close', methods: ['POST'], requirements: ['id' => '\d+'])]
+    #[IsGranted(VolunteerOfferVoter::EDIT, subject: 'shift')]
+    public function close(
+        Request $request,
+        VolunteerShift $shift,
+        EntityManagerInterface $em,
+        VolunteerEventRecorder $events,
+    ): Response {
         if (!$this->isCsrfTokenValid('volunteering_close', (string) $request->request->get('_csrf_token'))) {
             $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
 
-            return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
+            return $this->redirectToRoute('volunteering_shift', ['id' => $shift->getId()]);
         }
 
+        $offer = $shift->getOffer();
         $attended = array_map('intval', (array) $request->request->all('attended'));
         $hours = (array) $request->request->all('hours');
 
         // Los acompañantes los ponía SÓLO quien se apunta, desde su panel. Pero
         // el caso normal es una llamada —"voy con mi pareja"— y quien coordina no
-        // tenía dónde apuntarlo, así que la tarea seguía pidiendo una plaza que
+        // tenía dónde apuntarlo, así que el turno seguía pidiendo una plaza que
         // ya estaba ocupada y venía gente de más.
         $companions = (array) $request->request->all('companions');
         $counted = 0;
 
         // Cerrar de verdad, o sólo corregir lo ya anotado. La diferencia está en
-        // qué significa una casilla sin marcar: al cerrar, "no fue"; mientras la
-        // tarea no ha pasado, "todavía no ha pasado nada" — y darle por ausente
+        // qué significa una casilla sin marcar: al cerrar, "no fue"; mientras el
+        // turno no ha pasado, "todavía no ha pasado nada" — y darle por ausente
         // a quien está apuntado esperando el día sería inventarse un hecho.
         $closingAll = $request->request->getBoolean('close_all');
 
-        foreach ($offer->getSignups() as $signup) {
+        foreach ($shift->getSignups() as $signup) {
             if ($signup->isCancelled()) {
                 continue;
             }
@@ -802,11 +1080,11 @@ class VolunteeringController extends AbstractController
                     continue;
                 }
 
-                // Sólo se toca lo que cambia. Sin esto, cerrar una tarea que
-                // alguien ya había confirmado desde su panel la reescribiría
+                // Sólo se toca lo que cambia. Sin esto, cerrar un turno que
+                // alguien ya había confirmado desde su panel lo reescribiría
                 // como "lo puso gestión" y se perdería el rastro de que lo dijo
-                // quien fue — que es justo lo que distingue una tarea que se
-                // cerró sola de una que hubo que perseguir.
+                // quien fue — que es justo lo que distingue un turno que se
+                // cerró solo de uno que hubo que perseguir.
                 if (false === $signup->getAttended()) {
                     continue;
                 }
@@ -816,12 +1094,14 @@ class VolunteeringController extends AbstractController
                 // Un evento por persona y no uno por cierre: el rastro tiene que
                 // poder responder "¿a quién se le computaron horas y quién lo
                 // dijo?", y un único evento del cierre no lo responde.
-                $events->forOffer(
-                    $offer,
-                    VolunteerEvent::TYPE_ABSENT,
-                    ['minutes' => null, 'role' => $signup->getRole()],
-                    $signup->getPartner()
-                );
+                if (null !== $offer) {
+                    $events->forOffer(
+                        $offer,
+                        VolunteerEvent::TYPE_ABSENT,
+                        ['minutes' => null, 'role' => $signup->getRole()],
+                        $signup->getPartner()
+                    );
+                }
 
                 continue;
             }
@@ -829,7 +1109,7 @@ class VolunteeringController extends AbstractController
             ++$counted;
 
             $wanted = CreditedTime::minutesFromHours($hours[$signup->getId()] ?? null)
-                ?? $offer->getCreditedMinutes();
+                ?? $shift->getCreditedMinutes();
 
             if (true !== $signup->getAttended()) {
                 $signup->confirmAttendance(VolunteerSignup::SOURCE_MANAGER, $wanted);
@@ -844,18 +1124,72 @@ class VolunteeringController extends AbstractController
                 continue;
             }
 
-            $events->forOffer(
-                $offer,
-                VolunteerEvent::TYPE_ATTENDED,
-                ['minutes' => $signup->getCreditedMinutes(), 'role' => $signup->getRole()],
-                $signup->getPartner()
-            );
+            if (null !== $offer) {
+                $events->forOffer(
+                    $offer,
+                    VolunteerEvent::TYPE_ATTENDED,
+                    ['minutes' => $signup->getCreditedMinutes(), 'role' => $signup->getRole()],
+                    $signup->getPartner()
+                );
+            }
         }
 
         $em->flush();
-        $this->addFlash('success', sprintf('Tarea cerrada: %d persona(s) con horas computadas.', $counted));
+        $this->addFlash('success', sprintf('Turno cerrado: %d persona(s) con horas computadas.', $counted));
 
-        return $this->redirectToRoute('volunteering_show', ['id' => $offer->getId()]);
+        return $this->redirectToRoute('volunteering_shift', ['id' => $shift->getId()]);
+    }
+
+    /**
+     * Los sitios donde se hace voluntariado.
+     *
+     * Catálogo y no texto libre porque con turnos el sitio se escribiría en
+     * cientos de filas: acabas con "la nave", "nave" y "Nave" siendo el mismo
+     * sitio. Son cuatro o cinco en toda la asociación.
+     */
+    #[Route('/sitios', name: 'volunteering_places', methods: ['GET'])]
+    #[IsGranted('ROLE_GESTION_VOLUNTARIADO_EDIT')]
+    public function places(VolunteerPlaceRepository $places): Response
+    {
+        return $this->render('Volunteering/places.html.twig', [
+            'places' => $places->findAllSorted(),
+        ]);
+    }
+
+    /**
+     * Crear o editar un sitio.
+     *
+     * Una sola acción para los dos: el formulario es el mismo y separarlos sería
+     * duplicar seis líneas para no ganar nada.
+     */
+    #[Route('/sitios/nuevo', name: 'volunteering_place_new', methods: ['GET', 'POST'])]
+    #[Route('/sitios/{id}/editar', name: 'volunteering_place_edit', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
+    #[IsGranted('ROLE_GESTION_VOLUNTARIADO_EDIT')]
+    public function placeForm(
+        Request $request,
+        EntityManagerInterface $em,
+        ?VolunteerPlace $place = null,
+    ): Response {
+        $isNew = null === $place;
+        $place ??= new VolunteerPlace();
+
+        $form = $this->createForm(VolunteerPlaceType::class, $place);
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted() && $form->isValid()) {
+            $em->persist($place);
+            $em->flush();
+
+            $this->addFlash('success', $isNew ? 'Sitio creado.' : 'Sitio actualizado.');
+
+            return $this->redirectToRoute('volunteering_places');
+        }
+
+        return $this->render('Volunteering/place_form.html.twig', [
+            'place' => $place,
+            'form' => $form->createView(),
+            'is_new' => $isNew,
+        ]);
     }
 
     /**
@@ -928,8 +1262,7 @@ class VolunteeringController extends AbstractController
         EntityManagerInterface $em,
         VolunteerEventRecorder $events,
         VolunteerEventRepository $eventLog,
-    ): Response
-    {
+    ): Response {
         // Quién coordinaba ANTES: cambiar la coordinación de un área es el
         // cambio que más conviene tener registrado, y después del submit ya no
         // se puede saber quién estaba.
@@ -1005,6 +1338,55 @@ class VolunteeringController extends AbstractController
             : sprintf('"%s" queda retirado. El histórico se conserva.', $category->getName()));
 
         return $this->redirectToRoute('volunteering_categories');
+    }
+
+    /**
+     * Cuenta lo que ha hecho la sincronización de turnos, en una frase.
+     *
+     * @param array{created: list<VolunteerShift>, removed: int, kept: list<VolunteerShift>} $sync     lo que pasó
+     * @param int                                                                           $notified a cuánta gente se avisó
+     *
+     * @return string el mensaje para la barra de avisos
+     */
+    private function describeSync(array $sync, int $notified): string
+    {
+        $parts = ['Tarea actualizada.'];
+
+        if ([] !== $sync['created']) {
+            $parts[] = sprintf('Abiertos %d turno(s).', \count($sync['created']));
+        }
+
+        if ($sync['removed'] > 0) {
+            $parts[] = sprintf('Retirados %d turno(s) que ya no tocaban.', $sync['removed']);
+        }
+
+        if ([] !== $sync['kept']) {
+            $parts[] = sprintf(
+                'Hay %d turno(s) con gente apuntada que ya no encajan con la repetición: no se han tocado, anúlalos a mano si procede.',
+                \count($sync['kept'])
+            );
+        }
+
+        if ($notified > 0) {
+            $parts[] = sprintf('Se ha avisado a %d persona(s).', $notified);
+        }
+
+        return implode(' ', $parts);
+    }
+
+    /**
+     * Le pega al mensaje a cuánta gente se avisó, si se avisó a alguien.
+     *
+     * @param string $message  el mensaje
+     * @param int    $notified a cuánta gente se avisó
+     *
+     * @return string el mensaje, con el aviso si procede
+     */
+    private function withNotified(string $message, int $notified): string
+    {
+        return $notified > 0
+            ? sprintf('%s Se ha avisado a %d persona(s) que se habían apuntado.', $message, $notified)
+            : $message;
     }
 
     /**

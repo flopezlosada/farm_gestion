@@ -6,9 +6,9 @@ use App\Entity\Notification;
 use App\Entity\Partner;
 use App\Entity\User;
 use App\Entity\VolunteerCall;
-use App\Entity\VolunteerOffer;
+use App\Entity\VolunteerShift;
 use App\Repository\UserRepository;
-use App\Repository\VolunteerOfferRepository;
+use App\Repository\VolunteerShiftRepository;
 use App\Service\AppSettings;
 use App\Service\Notification\NotificationInbox;
 use App\Service\Notification\NotificationLink;
@@ -41,13 +41,18 @@ use Psr\Log\LoggerInterface;
  * EL REGISTRO SE ESCRIBE ANTES DE ENVIAR. Si se escribiera después, un fallo a
  * mitad del lote dejaría el aviso mandado a media asociación y sin constancia,
  * y el siguiente tick lo repetiría desde cero. Con la fila escrita primero, el
- * UNIQUE (offer, scope) impide la repetición aunque el envío se tuerza: es
+ * UNIQUE (shift, scope) impide la repetición aunque el envío se tuerza: es
  * preferible un aviso que no salió a un aviso que salió dos veces.
+ *
+ * SE PIDE GENTE PARA UN TURNO, no para una tarea. "Hace falta gente para el
+ * reparto" no se puede contestar; "faltan dos personas el viernes a las cinco",
+ * sí. Y con el registro por tarea, pedir gente para un viernes habría gastado el
+ * aviso de todos los viernes del año.
  */
 class VolunteerCallNotifier
 {
     public function __construct(
-        private readonly VolunteerOfferRepository $offers,
+        private readonly VolunteerShiftRepository $shifts,
         private readonly UserRepository $users,
         private readonly VolunteerAudienceResolver $audience,
         private readonly VolunteerCallEscalator $escalator,
@@ -66,7 +71,7 @@ class VolunteerCallNotifier
     }
 
     /**
-     * Manda los avisos que toquen ahora mismo, recorriendo las ofertas abiertas.
+     * Manda los avisos que toquen ahora mismo, recorriendo los turnos abiertos.
      * Es lo que llama el planificador.
      *
      * @param \DateTimeImmutable $now momento de referencia
@@ -80,13 +85,13 @@ class VolunteerCallNotifier
         }
 
         $sent = 0;
-        foreach ($this->offers->findUpcoming($now) as $offer) {
-            $scope = $this->escalator->nextScope($offer, $now);
+        foreach ($this->shifts->findUpcoming($now) as $shift) {
+            $scope = $this->escalator->nextScope($shift, $now);
             if (null === $scope) {
                 continue;
             }
 
-            if (null !== $this->dispatch($offer, $scope, null, $now)) {
+            if (null !== $this->dispatch($shift, $scope, null, $now)) {
                 ++$sent;
             }
         }
@@ -101,7 +106,7 @@ class VolunteerCallNotifier
      * registra nada, para que el alcance siga disponible si más adelante entra
      * gente nueva que sí encaje.
      *
-     * @param VolunteerOffer     $offer       la oferta por la que se pide gente
+     * @param VolunteerShift     $shift       el turno por el que se pide gente
      * @param string             $scope       uno de VolunteerCall::SCOPE_*
      * @param User|null          $triggeredBy quién lo lanza; null si es automático
      * @param \DateTimeImmutable $now         momento de referencia
@@ -109,14 +114,24 @@ class VolunteerCallNotifier
      * @return VolunteerCall|null la llamada registrada, o null si no había a quien avisar
      */
     public function dispatch(
-        VolunteerOffer $offer,
+        VolunteerShift $shift,
         string $scope,
         ?User $triggeredBy,
         \DateTimeImmutable $now,
     ): ?VolunteerCall {
-        // Quiénes encajan con la tarea. Es una pregunta del dominio —a quién le
+        $offer = $shift->getOffer();
+        if (null === $offer) {
+            return null;
+        }
+
+        // Quiénes encajan con el trabajo. Es una pregunta del dominio —a quién le
         // sirve— y no de canal.
-        $partners = $this->audience->resolve($offer, $scope);
+        //
+        // Se le pasa el TURNO y no la tarea: las preferencias se marcan por área
+        // —que es de la tarea, y el resolver la saca de ahí— pero quién ya está
+        // apuntado depende del día. Con la tarea, descontar a quien vino el
+        // martes dejaría sin aviso del sábado justo a la gente que más colabora.
+        $partners = $this->audience->resolve($shift, $scope);
         if ([] === $partners) {
             return null;
         }
@@ -151,7 +166,7 @@ class VolunteerCallNotifier
         $recipients = $this->users->findByPartners($byPush);
 
         $call = (new VolunteerCall())
-            ->setOffer($offer)
+            ->setShift($shift)
             ->setScope($scope)
             ->setTriggeredBy($triggeredBy)
             // Cuenta PERSONAS EMPUJADAS y no filas escritas: quien recibe correo y
@@ -170,7 +185,7 @@ class VolunteerCallNotifier
             // de esto. La constancia existe igual, así que no se manda nada:
             // repetir el aviso es exactamente lo que el UNIQUE evita.
             $this->logger->info('Aviso de voluntariado ya enviado por otra vía', [
-                'offer' => $offer->getId(),
+                'shift' => $shift->getId(),
                 'scope' => $scope,
             ]);
 
@@ -184,14 +199,14 @@ class VolunteerCallNotifier
         $this->inbox->deliver(
             $inboxRecipients,
             Notification::KIND_VOLUNTEERING_CALL,
-            $this->title($offer),
-            $this->body($offer),
+            $this->title($shift),
+            $this->body($shift),
         );
 
         $this->push->sendToMany(
             $recipients,
-            $this->title($offer),
-            $this->body($offer),
+            $this->title($shift),
+            $this->body($shift),
             // El destino ya no va escrito a mano aquí: sale de NotificationLink,
             // el mismo sitio del que sale el de la fila de la bandeja. Esa cadena
             // '/panel/voluntariado' estaba copiada en dos ficheros, y era
@@ -199,7 +214,7 @@ class VolunteerCallNotifier
             $this->link->pathForKind(Notification::KIND_VOLUNTEERING_CALL),
         );
 
-        $this->email($offer, $byEmail);
+        $this->email($shift, $byEmail);
 
         return $call;
     }
@@ -216,17 +231,22 @@ class VolunteerCallNotifier
      * para apuntarse y el pie para cambiar sus avisos, y los dos son de quien lo
      * recibe.
      *
-     * @param VolunteerOffer $offer    la oferta
+     * @param VolunteerShift $shift    el turno
      * @param list<Partner>  $partners quienes lo quieren por correo
      */
-    private function email(VolunteerOffer $offer, array $partners): void
+    private function email(VolunteerShift $shift, array $partners): void
     {
         if ([] === $partners) {
             return;
         }
 
-        $title = $this->title($offer);
-        $when = $this->formatter->date($offer->getStartsAt());
+        $offer = $shift->getOffer();
+        if (null === $offer) {
+            return;
+        }
+
+        $title = $this->title($shift);
+        $when = $this->formatter->date($shift->getStartsAt());
         $where = $this->formatter->place($offer);
         $url = $this->urlGenerator->generate('panel_volunteering', [], UrlGeneratorInterface::ABSOLUTE_URL);
         $notificationsUrl = $this->urlGenerator->generate('panel_notifications', [], UrlGeneratorInterface::ABSOLUTE_URL);
@@ -246,6 +266,7 @@ class VolunteerCallNotifier
                         ->textTemplate('email/volunteer_call.txt.twig')
                         ->context([
                             'offer' => $offer,
+                            'shift' => $shift,
                             'title' => $title,
                             'when' => $when,
                             'where' => $where,
@@ -259,7 +280,7 @@ class VolunteerCallNotifier
                 );
             } catch (\Throwable $e) {
                 $this->logger->error('No se pudo enviar el aviso de voluntariado por correo', [
-                    'offer' => $offer->getId(),
+                    'shift' => $shift->getId(),
                     'partner' => $partner->getId(),
                     'exception' => $e,
                 ]);
@@ -302,13 +323,13 @@ class VolunteerCallNotifier
     /**
      * El título del aviso: qué hace falta, en cinco palabras.
      *
-     * @param VolunteerOffer $offer la oferta
+     * @param VolunteerShift $shift el turno
      *
      * @return string el título
      */
-    private function title(VolunteerOffer $offer): string
+    private function title(VolunteerShift $shift): string
     {
-        $remaining = $offer->getRemainingSlots();
+        $remaining = $shift->getRemainingSlots();
 
         if (1 === $remaining) {
             return 'Falta una persona';
@@ -323,15 +344,17 @@ class VolunteerCallNotifier
      * El cuerpo: qué, cuándo y dónde. En ese orden porque es el orden en que se
      * decide si puedes ir.
      *
-     * @param VolunteerOffer $offer la oferta
+     * @param VolunteerShift $shift el turno
      *
      * @return string el cuerpo del aviso
      */
-    private function body(VolunteerOffer $offer): string
+    private function body(VolunteerShift $shift): string
     {
-        $parts = [$offer->getTitle(), $this->formatter->date($offer->getStartsAt())];
+        $offer = $shift->getOffer();
 
-        $where = $this->formatter->place($offer);
+        $parts = [$offer?->getTitle() ?? 'Voluntariado', $this->formatter->date($shift->getStartsAt())];
+
+        $where = null !== $offer ? $this->formatter->place($offer) : null;
         if (null !== $where) {
             $parts[] = $where;
         }

@@ -1,0 +1,133 @@
+{# Todos los turnos de UNA tarea: lo que viene y lo que ya pasó.
+ #
+ # La ficha de la tarea enseña sólo el siguiente puñado; el resto —y todo el
+ # histórico— está aquí. Son las mismas cinco vistas del listado global
+ # (Volunteering/index) hechas sobre una sola tarea, y reusa su consulta, sus
+ # estilos y su paginación. Sin la columna «Tarea» ni el filtro de área, que aquí
+ # no distinguen nada. #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% import '_macros/volunteering.html.twig' as vol %}
+
+{% block title %}Voluntariado · {{ offer.title }} · Todos los turnos{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    {% include '_components/volunteering_styles.html.twig' %}
+{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('volunteering_index') }}">Voluntariado</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('volunteering_tasks') }}">Tareas</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('volunteering_show', { id: offer.id }) }}">{{ offer.title }}</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Todos los turnos</span>
+{% endblock %}
+
+{% block csa_main %}
+<div class="prl">
+
+    {{ csa.page_header(offer.title, 'Todos los turnos', 'Los que vienen y los que ya pasaron, con lo que queda por hacer en cada uno.') }}
+
+    {# ============ TIRA DE CIFRAS ============ #}
+    <div class="prl-stats">
+        <a class="prl-stat prl-stat--active" href="{{ path('volunteering_shifts', { id: offer.id, ver: 'upcoming' }) }}" style="text-decoration: none;">
+            <div class="v">{{ counts.upcoming }}</div>
+            <div class="l">por venir</div>
+        </a>
+        <a class="prl-stat prl-stat--paused" href="{{ path('volunteering_shifts', { id: offer.id, ver: 'pending' }) }}" style="text-decoration: none;">
+            <div class="v">{{ counts.pending }}</div>
+            <div class="l">sin confirmar</div>
+        </a>
+        <a class="prl-stat" href="{{ path('volunteering_shifts', { id: offer.id, ver: 'done' }) }}" style="text-decoration: none;">
+            <div class="v">{{ counts.done }}</div>
+            <div class="l">hechos</div>
+        </a>
+        {% if counts.missed > 0 %}
+            <a class="prl-stat prl-stat--leave" href="{{ path('volunteering_shifts', { id: offer.id, ver: 'missed' }) }}"
+               style="text-decoration: none; box-shadow: inset 0 0 0 2px var(--csa-warning, #c89a3a);">
+                <div class="v">{{ counts.missed }}</div>
+                <div class="l">sin cubrir</div>
+            </a>
+        {% endif %}
+        <a class="prl-stat" href="{{ path('volunteering_shifts', { id: offer.id, ver: 'all' }) }}" style="text-decoration: none;">
+            <div class="v">{{ counts.all }}</div>
+            <div class="l">en total</div>
+        </a>
+    </div>
+
+    {# ============ PESTAÑAS ============ #}
+    {% set tabs = {
+        'upcoming': 'Por venir',
+        'pending': 'Sin confirmar',
+        'done': 'Hechos',
+        'missed': 'Sin cubrir',
+        'all': 'Todos'
+    } %}
+    <nav class="prl-tabs" role="tablist">
+        {% for key, label in tabs %}
+            <a href="{{ path('volunteering_shifts', { id: offer.id, ver: key }) }}" class="{{ scope == key ? 'active' : '' }}">
+                {{ label }} <span class="count">{{ counts[key] }}</span>
+            </a>
+        {% endfor %}
+    </nav>
+
+    <div class="prl-toolbar">
+        <div style="margin-left: auto; display: flex; gap: 8px;">
+            {{ csa.btn('La tarea', { variant: 'ghost', icon: 'fa-list-ul', href: path('volunteering_show', { id: offer.id }) }) }}
+            {% if is_granted('VOLUNTEER_OFFER_EDIT', offer) %}
+                {{ csa.btn('Añadir un turno', { variant: 'primary', icon: 'fa-plus', href: path('volunteering_shift_new', { id: offer.id }) }) }}
+            {% endif %}
+        </div>
+    </div>
+
+    {# ============ TABLA ============ #}
+    <div class="csa-table-wrap">
+        <table class="csa-table">
+            <thead>
+                <tr>
+                    <th>Cuándo</th>
+                    <th class="csa-table__col-tight">Apuntadxs</th>
+                    <th class="csa-table__col-tight">Vinieron</th>
+                    <th class="csa-table__col-tight">Horas</th>
+                    <th class="csa-table__col-tight">Estado</th>
+                    <th class="csa-table__actions">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for shift in pagination %}
+                    {% set past = shift.isPast(now) %}
+                    <tr>
+                        <td>
+                            <a class="csa-table__primary" href="{{ path('volunteering_shift', { id: shift.id }) }}">{{ vol.shift_when(shift) }}</a>
+                            {% if shift.manual %}{{ csa.badge('a mano', 'neutral') }}{% endif %}
+                            {% if shift.cancelledReason %}<span class="vol-muted">· {{ shift.cancelledReason }}</span>{% endif %}
+                        </td>
+                        <td class="csa-table__col-tight">{{ vol.shift_slots(shift) }}</td>
+                        {# Quién vino y cuánto computó sólo tienen sentido cuando ya
+                         # pasó: en un turno futuro la celda vacía dice más que un cero. #}
+                        <td class="csa-table__col-tight">{{ past and not shift.cancelled ? shift.attendedCount : '' }}</td>
+                        <td class="csa-table__col-tight">{{ shift.creditedMinutesTotal ? csa.qty(shift.creditedMinutesTotal / 60) ~ ' h' : '' }}</td>
+                        <td class="csa-table__col-tight">{{ vol.shift_status(shift) }}</td>
+                        <td class="csa-table__actions">
+                            <a href="{{ path('volunteering_shift', { id: shift.id }) }}" title="Ver el turno" aria-label="Ver el turno"><i class="fa fa-eye"></i></a>
+                            {% if not past and not shift.cancelled and is_granted('VOLUNTEER_OFFER_EDIT', shift) %}
+                                <a href="{{ path('volunteering_shift_edit', { id: shift.id }) }}" title="Mover" aria-label="Mover"><i class="fa fa-pencil"></i></a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="6">No hay ningún turno en esta vista.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="csa-dt-bottom">{{ knp_pagination_render(pagination) }}</div>
+</div>
+{% endblock %}

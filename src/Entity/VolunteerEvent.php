@@ -43,8 +43,30 @@ class VolunteerEvent
     /** Se anuló una tarea. */
     public const TYPE_OFFER_CANCELLED = 'OFFER_CANCELLED';
 
-    /** Se crearon copias de una tarea en fechas siguientes. */
+    /**
+     * Se crearon copias de una tarea en fechas siguientes.
+     *
+     * HISTÓRICO: así se repetía el trabajo cuando la tarea llevaba la fecha
+     * encima. Ya no se escribe —ahora se abren turnos, {@see self::TYPE_SHIFTS_OPENED}—
+     * pero la constante y su etiqueta se quedan para que las filas de antes
+     * sigan leyéndose en el rastro.
+     */
     public const TYPE_OFFER_REPEATED = 'OFFER_REPEATED';
+
+    /** Se pasó de borrador a publicada, y con ello empezó a pedirse gente. */
+    public const TYPE_OFFER_PUBLISHED = 'OFFER_PUBLISHED';
+
+    /** Se paró una tarea continua sin anularla. */
+    public const TYPE_OFFER_PAUSED = 'OFFER_PAUSED';
+
+    /** Se abrieron turnos de una tarea, a partir de su receta o a mano. */
+    public const TYPE_SHIFTS_OPENED = 'SHIFTS_OPENED';
+
+    /** Se anuló un turno concreto: un festivo, una avería, un día que no se hace. */
+    public const TYPE_SHIFT_CANCELLED = 'SHIFT_CANCELLED';
+
+    /** Se movió un turno de fecha u hora. */
+    public const TYPE_SHIFT_MOVED = 'SHIFT_MOVED';
 
     /** Un socix se apuntó. */
     public const TYPE_SIGNUP = 'SIGNUP';
@@ -83,6 +105,11 @@ class VolunteerEvent
         self::TYPE_OFFER_UPDATED => 'Tarea editada',
         self::TYPE_OFFER_CANCELLED => 'Tarea anulada',
         self::TYPE_OFFER_REPEATED => 'Tarea repetida',
+        self::TYPE_OFFER_PUBLISHED => 'Tarea publicada',
+        self::TYPE_OFFER_PAUSED => 'Tarea parada',
+        self::TYPE_SHIFTS_OPENED => 'Turnos abiertos',
+        self::TYPE_SHIFT_CANCELLED => 'Turno anulado',
+        self::TYPE_SHIFT_MOVED => 'Turno movido',
         self::TYPE_SIGNUP => 'Se apuntó',
         self::TYPE_WITHDRAW => 'Se dio de baja',
         self::TYPE_ATTENDED => 'Confirmó que fue',

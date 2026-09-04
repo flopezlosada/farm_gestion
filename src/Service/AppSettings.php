@@ -285,6 +285,16 @@ class AppSettings
     public const CRON_VOLUNTEER_REMINDERS = 'cron.volunteer_reminders';
 
     /**
+     * Abre los turnos de las tareas de voluntariado que se repiten.
+     *
+     * Es la única de las tres del módulo que NO manda nada: sólo mantiene el
+     * calendario. Y es la que no se puede olvidar, porque los turnos se
+     * materializan por tramos —hasta unos meses vista— y sin esta tarea una
+     * tarea repetitiva se queda sin turnos a los cuatro meses en silencio.
+     */
+    public const CRON_VOLUNTEER_SHIFTS = 'cron.volunteer_shifts';
+
+    /**
      * MANIFIESTO DE TAREAS PROGRAMADAS: la fuente única de verdad sobre qué
      * debería ejecutarse, cuándo, y qué la inhibe. Clave del toggle =>
      * metadatos. Lo lee {@see \App\Service\Cron\CronTaskRegistry}.
@@ -316,11 +326,12 @@ class AppSettings
      *   también por la bandeja NUNCA puede llevar ahí el ajuste de un canal
      *   suelto, o apagar el correo dejaría sin escribir la copia.
      * - `dry`: ofrece botón de previsualización (--dry-run).
-     * - `schedule`: CADENCIA declarada — cuándo debería correr. `freq` es
-     *   daily|weekly|monthly, con `dow` (1 = lunes) en las semanales y `dom` en
-     *   las mensuales. Hoy la cadencia real la impone el crontab del hosting y
-     *   esto es su declaración fiel; cuando exista el tick genérico, este campo
-     *   pasa a ser el que MANDA.
+     * - `schedule`: CADENCIA, y es la que MANDA. `freq` es
+     *   daily|weekly|monthly|interval, con `dow` (1 = lunes) en las semanales,
+     *   `dom` en las mensuales y `minutes` en las de intervalo. Ya no es una
+     *   declaración a la espera de nada: {@see \App\Service\Cron\CronTick} cruza
+     *   esto con el registro de ejecuciones y decide él qué toca. El reloj
+     *   externo sólo llama a `/cron/tick` y no sabe qué tareas existen.
      * - `max_delay_hours`: PLAZO MÁXIMO DE RETRASO. Pasado ese tiempo sin
      *   ejecutarse, la tarea se considera caída. Se da margen sobre la cadencia
      *   (un reloj puntual no existe): día y medio para las diarias, ocho días
@@ -341,10 +352,26 @@ class AppSettings
      *   recogida sólo lee cestas ya congeladas, así que con el congelado apagado
      *   corre en verde sin avisar a nadie.
      *
-     * OJO: sólo las cuatro primeras están en el crontab de producción
-     * (`docs/migracion-prod/crons.txt`). Las tres de albergue y jornada laboral
-     * declaran su cadencia aquí pero HOY NADIE LAS DISPARA; se pidieron a cdmon
-     * y están sin montar.
+     * AÑADIR UNA TAREA AQUÍ BASTA PARA QUE SE EJECUTE. No hay que dar de alta
+     * nada en ningún hosting: el reloj —hoy el workflow `cron-tick.yml`— llama
+     * cada hora a `/cron/tick` sin decir qué ejecutar, y
+     * {@see \App\Service\Cron\CronTick::run()} recorre este manifiesto entero.
+     * Y nace ENCENDIDA sin crear ninguna fila, porque {@see self::getBool()} cae
+     * al `default` del catálogo cuando el ajuste no está en `setting`.
+     *
+     * Este comentario decía lo contrario —«sólo las cuatro primeras están en el
+     * crontab de producción, las demás se pidieron a cdmon y están sin montar»—
+     * y era cierto antes del planificador propio, en junio de 2026. Caducó sin
+     * que nadie lo tocara, y de aquí salieron dos notas de despliegue falsas en
+     * septiembre: quien añade una tarea lee esto, así que mantenerlo al día no
+     * es cosmético.
+     *
+     * Lo que SÍ puede dejar una tarea sin correr es que el reloj externo deje de
+     * llamar al tick. Pasó del 20-jul al 4-ago de 2026 y nadie lo notó en dos
+     * semanas; de ahí que el workflow avise ahora por correo y que
+     * `/cron/health` responda 503 cuando una tarea encendida pasa de su
+     * `max_delay_hours`. El puente mientras tanto es el botón de ejecución
+     * manual de `/gestion/settings`, que pasa `--force`.
      */
     public const CRONS = [
         self::CRON_GENERATE_WEEKLY_DELIVERY => [
@@ -519,6 +546,26 @@ class AppSettings
         // OJO AL DESPLIEGUE: el intervalo sólo vale si el reloj externo dispara
         // /cron/tick con esa frecuencia. Con el cron del hosting a diario, esto
         // corre una vez al día por mucho que aquí ponga 60 minutos.
+        // Antes que los avisos en el manifiesto porque va antes en el tiempo: sin
+        // turnos abiertos no hay nada de lo que avisar. La dependencia está
+        // declarada en las otras dos (`depends_on`), no aquí.
+        self::CRON_VOLUNTEER_SHIFTS => [
+            'command' => 'app:sync-volunteer-shifts',
+            // NINGÚN CANAL: esta tarea no entrega nada a nadie, sólo mantiene el
+            // calendario al día. Por eso tampoco pide confirmación.
+            'channels' => [],
+            'needs_recipient' => false,
+            'confirm' => false,
+            'dry' => true,
+            // De madrugada y a diario. El horizonte es de meses, así que la
+            // cadencia exacta da igual; lo que no da igual es que corra todos los
+            // días, porque el día que deje de correr nadie se entera hasta que
+            // una tarea se queda muda.
+            'schedule' => ['freq' => 'daily', 'hour' => 5],
+            'max_delay_hours' => 48,
+            'requires' => [self::FEATURE_VOLUNTEERING],
+            'depends_on' => [],
+        ],
         self::CRON_VOLUNTEER_CALLS => [
             'command' => 'app:send-volunteer-calls',
             // Multicanal desde que el aviso también sale por correo. Por eso NO
@@ -659,6 +706,12 @@ class AppSettings
             'label' => 'Recordar el voluntariado a quien se apuntó',
             'help' => 'Avisa a quien se apuntó a una tarea poco antes de que le toque, con la antelación configurada. Sin esto, alguien se apunta con dos semanas y el día que es no se acuerda. Requiere el módulo de voluntariado encendido.',
             'default' => false,
+        ],
+        self::CRON_VOLUNTEER_SHIFTS => [
+            'group' => 'Tareas programadas',
+            'label' => 'Abrir turnos de voluntariado',
+            'help' => 'Cada madrugada abre los turnos que les toca a las tareas que se repiten, y retira los que su repetición ya no dicta (app:sync-volunteer-shifts). No manda nada a nadie. APAGADA, las tareas repetitivas se quedan sin turnos a los cuatro meses y no hay a qué apuntarse: déjala encendida.',
+            'default' => true,
         ],
         self::CRON_VOLUNTEER_CALLS => [
             'group' => 'Tareas programadas',

@@ -1,0 +1,84 @@
+{# Un turno suelto: cuándo es y, si difiere del resto, cuánta gente pide y cuánto
+ # computa.
+ #
+ # SÓLO LO QUE ES DEL MOMENTO. El título, la explicación, el sitio y el tipo de
+ # trabajo son de la tarea y se editan allí: repetirlos aquí crearía dos sitios
+ # donde cambiar lo mismo. #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Voluntariado · {{ offer.title }} · {{ is_new ? 'Nuevo turno' : 'Mover turno' }}{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include '_components/volunteering_styles.html.twig' %}
+{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('volunteering_index') }}">Voluntariado</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('volunteering_show', { id: offer.id }) }}">{{ offer.title }}</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ is_new ? 'Nuevo turno' : 'Mover' }}</span>
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header(offer.title, is_new ? 'Añadir un turno' : 'Mover este turno') }}
+
+    {{ form_start(form, { attr: { class: 'csa-form-narrow' } }) }}
+
+        {% embed '_components/csa_form_section.html.twig' with {
+            num: '1',
+            title: 'Cuándo',
+            subtitle: 'El día y la hora concretos a los que se apunta la gente.'
+        } %}
+            {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
+                <div class="csa-form-grid">
+                    {{ csa.field(form.startsAt, 'Cuándo empieza') }}
+                    {{ csa.field(form.endsAt, 'Cuándo acaba', { hint: 'opcional' }) }}
+                </div>
+            {% endblock %}
+        {% endembed %}
+
+        {% embed '_components/csa_form_section.html.twig' with {
+            num: '2',
+            title: 'Sólo para este turno',
+            subtitle: 'Se dejan vacíos salvo que este día pida otra cosa que el resto.'
+        } %}
+            {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
+                <div class="csa-form-grid">
+                    {{ csa.field(form.ownSlots, 'Plazas', { hint: 'vacío = las de la tarea' }) }}
+                    {{ csa.field(form.ownCreditedMinutes, 'Horas que computa', { hint: 'vacío = las de la tarea' }) }}
+                </div>
+
+                <p class="vol-help">
+                    La tarea pide
+                    {{ offer.slots ? offer.slots ~ (offer.slots == 1 ? ' persona' : ' personas') : 'gente sin tope' }}
+                    y computa
+                    {{ offer.creditedMinutes ? csa.qty(offer.creditedMinutes / 60) ~ ' h' : 'cero horas' }}
+                    por persona. Rellena estos campos sólo si este día es distinto — el reparto de
+                    Navidad, la mañana que hace falta el doble de gente.
+                </p>
+            {% endblock %}
+        {% endembed %}
+
+        {{ csa.callout(
+            'Un turno que tocas a mano le gana a la repetición de la tarea: no se retira al guardar la tarea, aunque su receta ya no lo dicte.',
+            'info',
+            'hand-paper-o'
+        ) }}
+
+        <div class="csa-row-between" style="margin-top: var(--csa-sp-6);">
+            {{ csa.btn('Volver', {
+                variant: 'ghost',
+                href: is_new ? path('volunteering_show', { id: offer.id }) : path('volunteering_shift', { id: shift.id })
+            }) }}
+            <button type="submit" class="csa-btn csa-btn--primary">{{ is_new ? 'Añadir el turno' : 'Guardar' }}</button>
+        </div>
+
+    {{ form_end(form) }}
+{% endblock %}

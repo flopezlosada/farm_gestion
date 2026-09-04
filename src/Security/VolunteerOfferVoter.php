@@ -5,6 +5,7 @@ namespace App\Security;
 use App\Entity\User;
 use App\Entity\VolunteerCategory;
 use App\Entity\VolunteerOffer;
+use App\Entity\VolunteerShift;
 use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
 use Symfony\Component\Security\Core\Authorization\AccessDecisionManagerInterface;
 use Symfony\Component\Security\Core\Authorization\Voter\Voter;
@@ -29,6 +30,12 @@ use Symfony\Component\Security\Core\Authorization\Voter\Voter;
  * descuido: sin categoría no hay área, así que no hay nadie de quien se pueda
  * decir que es "su" tarea. Lo contrario —que cualquier coordinador pudiera con
  * ella— haría que crear una tarea sin marcar su tipo abriera la puerta a todos.
+ *
+ * ACEPTA TAMBIÉN UN TURNO ({@see VolunteerShift}) y resuelve su tarea. El
+ * permiso es de la tarea —el área es suya—, pero media docena de pantallas
+ * trabajan sobre un turno, y sin esto cada una tendría que escribir
+ * `$shift->getOffer()` antes de preguntar: seis oportunidades de olvidarse, y un
+ * permiso que falta no da error, sólo deja pasar.
  */
 class VolunteerOfferVoter extends Voter
 {
@@ -45,7 +52,7 @@ class VolunteerOfferVoter extends Voter
     protected function supports(string $attribute, mixed $subject): bool
     {
         return \in_array($attribute, [self::VIEW, self::EDIT], true)
-            && $subject instanceof VolunteerOffer;
+            && ($subject instanceof VolunteerOffer || $subject instanceof VolunteerShift);
     }
 
     protected function voteOnAttribute(string $attribute, mixed $subject, TokenInterface $token): bool
@@ -55,12 +62,20 @@ class VolunteerOfferVoter extends Voter
             return false;
         }
 
-        /** @var VolunteerOffer $subject */
+        $offer = $subject instanceof VolunteerShift ? $subject->getOffer() : $subject;
+
+        // Un turno huérfano no se puede autorizar: sin tarea no hay área, y sin
+        // área no hay nadie de quien decir que es suyo. Deniega en vez de dejar
+        // pasar, que es el lado seguro del error.
+        if (!$offer instanceof VolunteerOffer) {
+            return false;
+        }
+
         if ($this->isGranted($token, 'ROLE_GESTION_VOLUNTARIADO_EDIT')) {
             return true;
         }
 
-        if ($this->coordinates($user, $subject)) {
+        if ($this->coordinates($user, $offer)) {
             return true;
         }
 
