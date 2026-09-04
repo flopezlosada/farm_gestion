@@ -19,6 +19,9 @@ use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
  */
 class MagicLinkPagesTest extends WebTestCase
 {
+    /** Teléfono del socix de {@see PartnerUserFixtures}, tal como está en su ficha. */
+    private const SOCIX_PHONE = '600000000';
+
     protected function tearDown(): void
     {
         $em = static::getContainer()->get(EntityManagerInterface::class);
@@ -74,6 +77,46 @@ class MagicLinkPagesTest extends WebTestCase
     }
 
     /**
+     * Con el acceso de socixs abierto, el primer acceso manda el enlace cuando
+     * el email y el teléfono coinciden con la ficha del socix.
+     */
+    public function testPrimerAccesoMandaEnlaceConEmailYTelefonoCorrectos(): void
+    {
+        $client = static::createClient();
+        static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_PARTNER_LOGIN, true);
+
+        $client->request('POST', '/login/first-access', $this->firstAccessPayload(
+            $client,
+            PartnerUserFixtures::USER_SOCIX_EMAIL,
+            self::SOCIX_PHONE,
+        ));
+
+        $this->assertResponseRedirects('/login/sent');
+        $this->assertEmailCount(1);
+    }
+
+    /**
+     * El teléfono forma parte de la identificación: si no coincide con el de la
+     * ficha no se envía nada, aunque el email sí sea el de un socix real. La
+     * pantalla dice lo mismo en ambos casos (antifuga), de modo que este camino
+     * es la causa más probable de un "he pedido el enlace y no me llega".
+     */
+    public function testPrimerAccesoNoMandaEnlaceSiElTelefonoNoCoincide(): void
+    {
+        $client = static::createClient();
+        static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_PARTNER_LOGIN, true);
+
+        $client->request('POST', '/login/first-access', $this->firstAccessPayload(
+            $client,
+            PartnerUserFixtures::USER_SOCIX_EMAIL,
+            '699999999',
+        ));
+
+        $this->assertResponseRedirects('/login/sent');
+        $this->assertEmailCount(0);
+    }
+
+    /**
      * Arma el POST de recuperación con un token CSRF válido tomado del propio
      * formulario (mismo cliente ⇒ misma sesión).
      */
@@ -84,6 +127,21 @@ class MagicLinkPagesTest extends WebTestCase
         return [
             '_csrf_token' => $crawler->filter('input[name="_csrf_token"]')->attr('value'),
             'email' => $email,
+        ];
+    }
+
+    /**
+     * Arma el POST de primer acceso con un token CSRF válido tomado del propio
+     * formulario (mismo cliente ⇒ misma sesión).
+     */
+    private function firstAccessPayload(KernelBrowser $client, string $email, string $phone): array
+    {
+        $crawler = $client->request('GET', '/login/first-access');
+
+        return [
+            '_csrf_token' => $crawler->filter('input[name="_csrf_token"]')->attr('value'),
+            'email' => $email,
+            'phone' => $phone,
         ];
     }
 }
