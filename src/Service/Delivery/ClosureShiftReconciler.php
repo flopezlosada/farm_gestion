@@ -19,6 +19,10 @@ use App\Repository\WeeklyBasketRepository;
  *
  * Reglas (decididas en docs/redesign/reparto-materializacion-tardia.md):
  *  - Shift que SALE de la semana cerrada (from = W):
+ *      · TRASLADO SUMANDO (to = null, accumulatedTo ≠ null): la cesta ya está
+ *        colocada en otra semana, así que el cierre no la afecta y el intent se
+ *        deja INTACTO. Limpiarlo no cambiaría el reparto pero perdería el rastro
+ *        de por qué ese otro día lleva dos cestas, y con él la acción de deshacer.
  *      · "no recoge" (to = null): redundante con el cierre → se limpia.
  *      · mover (to ≠ W) con destino YA repartido/congelado: NO se toca (la cesta
  *        ya está consumida; anularla daría doble entrega — caso "recojo antes").
@@ -34,6 +38,15 @@ use App\Repository\WeeklyBasketRepository;
  *
  * Idempotente: tras reconciliar, ya no quedan shifts tocando W (los de salida se
  * anularon, los de entrada cambiaron de destino), así que re-ejecutarla no hace nada.
+ *
+ * HUECO CONOCIDO: si W es la semana que RECIBIÓ una cesta trasladada sumando
+ * (`accumulatedTo` = W), esta clase no la ve — `accumulatedTo` no es `toBasket`, así
+ * que no sale en findAllOutgoingFromBasket ni en findAllIncomingToBasket. Cerrar esa
+ * semana deja el añadido en una semana que no reparte y la cesta sin entregar. Lo
+ * vigila L25 (cesta extra solo en semanas en que su nodo reparte) y no se cubre aquí
+ * porque falta decidir a dónde debería ir esa cesta: devolverla a su semana de origen
+ * (que puede haber pasado) o empujarla a la siguiente operativa, como se hace con los
+ * shifts entrantes. Decisión de operativa, no técnica.
  */
 class ClosureShiftReconciler
 {
@@ -83,6 +96,14 @@ class ClosureShiftReconciler
             }
             $to = $shift->getToBasket();
             if ($to === null) {
+                // TRASLADO SUMANDO: la cesta de esta semana ya está colocada (como cesta
+                // extra) en otra, así que el cierre no la afecta — el socix la recibe igual.
+                // Borrar el intent no cambiaría el reparto pero sí perdería el rastro de por
+                // qué ese otro día lleva dos cestas, y con él el "Deshacer el traslado".
+                if ($shift->isAccumulated()) {
+                    $kept++;
+                    continue;
+                }
                 // "no recoge": el cierre ya garantiza que no recoge → limpiar el intent.
                 $this->applier->cancelSkipIntent($shift, self::ACTOR);
                 $cancelled++;

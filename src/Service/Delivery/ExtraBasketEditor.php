@@ -6,9 +6,11 @@ use App\Entity\Basket;
 use App\Entity\BasketComponent;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketExtra;
+use App\Entity\PartnerDeliveryShift;
 use App\Entity\PartnerEvent;
 use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketStatus;
+use App\Repository\PartnerDeliveryShiftRepository;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
@@ -116,11 +118,23 @@ final class ExtraBasketEditor implements ExtraBasketAdder, ExtraBasketRemover
      * @param string|null $actor   Quién lo origina (ver PartnerEvent::$actor).
      * @return bool true si había algún extra que quitar; false si no había nada.
      */
-    public function removeExtra(Partner $partner, Basket $basket, ?string $actor = null): bool
+    public function removeExtra(Partner $partner, Basket $basket, ?string $actor = null, ?Basket $movedTo = null): bool
     {
         $extras = $this->em->getRepository(PartnerBasketExtra::class)->findForPartnerAndBasket($partner, $basket);
         if ($extras === []) {
             return false;
+        }
+
+        // Parte de ese añadido puede ser una cesta TRASLADADA SUMANDO desde otra semana. Al
+        // retirarlo hay que decirle a su intent dónde queda ahora, o la cesta se pierde
+        // (apuntando a una entrega que ya no existe) o se duplica. Va aquí, y no en cada
+        // llamador, porque hay seis caminos que quitan el añadido de un día —"no recoge",
+        // aparcar una cesta movida, el botón del calendario, la ficha del socio, el reparto,
+        // el propio traslado— y acordarse en cada uno es cuestión de tiempo.
+        /** @var PartnerDeliveryShiftRepository $shiftRepo */
+        $shiftRepo = $this->em->getRepository(PartnerDeliveryShift::class);
+        foreach ($shiftRepo->findAccumulatedInto($partner, $basket) as $shift) {
+            $shift->setAccumulatedTo($movedTo);
         }
 
         // Deltas a revertir de la piedra y borrado de los overrides (fuente de verdad).

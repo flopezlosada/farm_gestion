@@ -444,9 +444,15 @@ class PartnerDeliveryCalendarController extends AbstractController
             return $backToCalendar($origin);
         }
 
+        // isParked, no isSkip: una cesta TRASLADADA SUMANDO también deja su semana sin
+        // entrega, pero ya está colocada en otro día. Recuperarla desde aquí la daría por
+        // segunda vez (el añadido del destino sigue puesto). No sale en la papelera, así
+        // que este camino solo se alcanza con una petición fabricada; la guarda es real.
         $skip = $shiftRepository->findOutgoing($partner, $origin);
-        if ($skip === null || !$skip->isSkip()) {
-            $this->addFlash('warning', 'Esa entrega ya no está aparcada.');
+        if ($skip === null || !$skip->isParked()) {
+            $this->addFlash('warning', $skip?->isAccumulated() === true
+                ? 'Esa cesta no está aparcada: se trasladó sumando a otro día. Deshaz el traslado desde ese día.'
+                : 'Esa entrega ya no está aparcada.');
 
             return $backToCalendar($origin);
         }
@@ -642,7 +648,10 @@ class PartnerDeliveryCalendarController extends AbstractController
         // un día puede tener a la vez un "no recoge" saliente y una cesta entrante (tras un
         // swap), y el arrastre de "no recoge" debe aparcar la entrante, no recuperar la otra.
         if ($request->request->getBoolean('recover')) {
-            if ($outgoing !== null && $outgoing->isSkip()) {
+            // isParked: una cesta trasladada sumando NO se recupera desde su origen (está
+            // colocada en otro día; recuperarla la daría dos veces). Se deshace el traslado
+            // desde el día destino.
+            if ($outgoing !== null && $outgoing->isParked()) {
                 $applier->cancelSkipIntent($outgoing, $actor);
                 if ($generated) {
                     $share = $em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner, $basket->getDate());
@@ -652,6 +661,11 @@ class PartnerDeliveryCalendarController extends AbstractController
                     }
                 }
                 $this->addFlash('success', 'Restaurada: el socio vuelve a recoger esa semana.');
+            } elseif ($outgoing !== null && $outgoing->isAccumulated()) {
+                $this->addFlash('warning', sprintf(
+                    'La cesta de esa semana se trasladó sumando al %s: deshaz el traslado desde ese día.',
+                    $outgoing->getAccumulatedTo()?->getDate()?->format('d/m/Y') ?? 'otro día',
+                ));
             } else {
                 $this->addFlash('warning', 'Esa semana no tiene ninguna entrega aparcada que recuperar.');
             }
@@ -686,8 +700,19 @@ class PartnerDeliveryCalendarController extends AbstractController
         // Ya hay un "no recoge" saliente de este día (sin entrante): la cesta ya está
         // aparcada. (Raro de alcanzar desde la UI: un día así sale en la papelera, no en la
         // rejilla; defensivo.)
-        if ($outgoing !== null && $outgoing->isSkip()) {
+        if ($outgoing !== null && $outgoing->isParked()) {
             $this->addFlash('warning', 'Esa semana ya está marcada como NO recoge.');
+
+            return $backToCalendar();
+        }
+
+        // La cesta de este día se trasladó SUMANDO a otro: este día está vacío, no hay
+        // nada que no-recoger aquí. Análogo a la rama de "ya está movida a otro día".
+        if ($outgoing !== null && $outgoing->isAccumulated()) {
+            $this->addFlash('warning', sprintf(
+                'La cesta de esta semana se trasladó sumando al %s: gestiónala desde ese día.',
+                $outgoing->getAccumulatedTo()?->getDate()?->format('d/m/Y') ?? 'otro día',
+            ));
 
             return $backToCalendar();
         }
@@ -709,22 +734,32 @@ class PartnerDeliveryCalendarController extends AbstractController
     }
 
     /**
-     * Quitar la CESTA EXTRA de una semana desde el propio calendario. Es la vía para separar
-     * un día que lleva dos cestas: quitar la extra deja la de patrón, y la que se trasladó
-     * sumando sigue aparcada en la papelera de su semana de origen, lista para recolocarse
-     * donde haga falta. Hasta ahora el único sitio para deshacer una extra era la ficha del
-     * socio (`partner_remove_extra_basket`), que además exige ROLE_GESTION_SOCIXS_EDIT: quien
+     * Quitar el AÑADIDO de una semana desde el propio calendario: la vía para separar un día
+     * que lleva dos cestas. Hace una cosa u otra según de dónde venga ese añadido, porque no
+     * son la misma:
+     *
+     *  - Si alguna cesta se TRASLADÓ SUMANDO a este día, se DESHACE el traslado: cada cesta
+     *    vuelve a su semana de origen y el añadido desaparece ({@see AccumulatingMove::undo}).
+     *    Quitar solo el añadido perdería esas cestas — su semana de origen está vaciada por un
+     *    intent y nadie las volvería a colocar.
+     *  - Si el añadido es una cesta EXTRA genuina (puesta a mano por gestión), se quita y el
+     *    día se queda con lo que le toca por patrón.
+     *
+     * Hasta ahora el único sitio para deshacer una extra era la ficha del socio
+     * (`partner_remove_extra_basket`), que además exige ROLE_GESTION_SOCIXS_EDIT: quien
      * gestiona reparto podía crear días acumulados pero no deshacerlos.
      *
      * NO aplica R1 (compartidas): quitar una extra no elige el día de la cesta —lo que R1
      * protege—, igual que los huevos, que sí se editan en compartidas. Sin deadline: es el
      * gestor. Solo se veta el pasado, como el resto de la edición del calendario.
      *
-     * @param Partner             $partner
-     * @param int                 $basketId Semana (Basket) cuya extra se quita.
-     * @param Request             $request
-     * @param ExtraBasketRemover  $extraRemover
-     * @param EntityManagerInterface $em
+     * @param Partner                        $partner
+     * @param int                            $basketId Semana (Basket) cuyo añadido se quita.
+     * @param Request                        $request
+     * @param ExtraBasketRemover             $extraRemover
+     * @param AccumulatingMove               $accumulatingMove
+     * @param PartnerDeliveryShiftRepository $shiftRepository
+     * @param EntityManagerInterface         $em
      * @return Response
      */
     #[Route("/{id}/calendar/extra/{basketId}/remove", name: "partner_delivery_calendar_extra_remove", methods: ["POST"], requirements: ["id" => "\\d+", "basketId" => "\\d+"])]
@@ -733,6 +768,8 @@ class PartnerDeliveryCalendarController extends AbstractController
         int $basketId,
         Request $request,
         ExtraBasketRemover $extraRemover,
+        AccumulatingMove $accumulatingMove,
+        PartnerDeliveryShiftRepository $shiftRepository,
         EntityManagerInterface $em,
     ): Response {
         $basket = $em->getRepository(Basket::class)->find($basketId);
@@ -760,7 +797,31 @@ class PartnerDeliveryCalendarController extends AbstractController
             return $backToCalendar();
         }
 
-        $removed = $extraRemover->removeExtra($partner, $basket, 'gestor:' . $this->getUser()?->getId());
+        $actor = 'gestor:' . $this->getUser()?->getId();
+
+        // Añadido que viene de un traslado sumando: deshacerlo devuelve cada cesta a su
+        // semana. En transacción, porque undo() son varios pasos con flush propio.
+        if ($shiftRepository->findAccumulatedInto($partner, $basket) !== []) {
+            try {
+                $returned = $em->wrapInTransaction(fn (): int => $accumulatingMove->undo($partner, $basket, $actor));
+            } catch (\LogicException $e) {
+                $this->addFlash('error', $e->getMessage());
+
+                return $backToCalendar();
+            } catch (\Throwable $e) {
+                $this->addFlash('error', 'No se pudo deshacer el traslado. No se ha aplicado ningún cambio; inténtalo de nuevo.');
+
+                return $backToCalendar();
+            }
+
+            $this->addFlash('success', $returned === 1
+                ? 'Traslado deshecho: la cesta vuelve a su semana y este día queda con lo que le toca.'
+                : sprintf('Traslados deshechos: %d cestas vuelven a sus semanas.', $returned));
+
+            return $backToCalendar();
+        }
+
+        $removed = $extraRemover->removeExtra($partner, $basket, $actor);
         $this->addFlash(
             $removed ? 'success' : 'warning',
             $removed

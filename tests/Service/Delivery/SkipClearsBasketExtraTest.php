@@ -117,12 +117,107 @@ class SkipClearsBasketExtraTest extends KernelTestCase
     }
 
     /**
+     * Vaciar un día al que OTRA semana había trasladado su cesta sumando devuelve esa cesta
+     * a PENDIENTE (papelera), en vez de dejarla apuntando a una entrega que ya no existe.
+     *
+     * Sin esto la cesta desaparecía: su semana de origen está vaciada por el intent y el
+     * destino ya no la lleva — ni entregada ni recuperable. Es el caso "trasladar sumando y
+     * luego no recoger ese día", que la batería ejercita de punta a punta.
+     */
+    public function testVaciarUnDiaAcumuladoDevuelveLaCestaTrasladadaAPendiente(): void
+    {
+        self::bootKernel();
+        $em = $this->em();
+
+        [$partner, $origin, $target, $vegetables] = $this->chainFixture($em, 'SkipAcc', '2099-11-06', '2099-11-13', 45);
+
+        // La cesta de $origin se trasladó sumando a $target.
+        $moved = new PartnerDeliveryShift($partner, $origin, null);
+        $moved->setAccumulatedTo($target);
+        $em->persist($moved);
+        $em->persist(new PartnerBasketExtra($partner, $target, $vegetables, '1.00'));
+        $em->flush();
+
+        // "No recoge" en $target: se vacía sin que su contenido viaje a ningún sitio.
+        static::getContainer()->get(DeliveryShiftApplier::class)
+            ->applySkipIntent($partner, $target, null, 'test:unpark');
+
+        $em->refresh($moved);
+
+        $this->assertNull($moved->getAccumulatedTo(), 'La cesta ya no está colocada en ese día: la marca se suelta.');
+        $this->assertTrue($moved->isParked(), 'Vuelve a estar pendiente, recuperable desde la papelera de su semana.');
+
+        $this->cleanUp($em, $partner, $origin, $target);
+    }
+
+    /**
+     * Encadenar dos traslados sumando (A→B y después B→C) re-apunta la cesta de A hasta C,
+     * en vez de devolverla a la papelera.
+     *
+     * Es el caso que reintroducía el bug original: `AccumulatingMove` lee la composición de
+     * B —que YA incluye la cesta de A— y la suma a C. Si el intent de A volviera a
+     * "pendiente", su cantidad estaría a la vez viajada a C y ofrecida como recuperable en
+     * la papelera de A: recuperarla daría una cesta de más.
+     */
+    public function testEncadenarDosTrasladosReApuntaLaPrimeraCestaHastaElUltimoDia(): void
+    {
+        self::bootKernel();
+        $em = $this->em();
+
+        [$partner, $a, $b, $vegetables] = $this->chainFixture($em, 'SkipChain', '2099-11-20', '2099-11-27', 47);
+        $c = (new Basket())->setDate(new \DateTime('2099-12-04'))->setWeek(49)->setAmount(1);
+        $em->persist($c);
+
+        // Primer traslado ya aplicado: la cesta de A está sumada en B.
+        $first = new PartnerDeliveryShift($partner, $a, null);
+        $first->setAccumulatedTo($b);
+        $em->persist($first);
+        $em->persist(new PartnerBasketExtra($partner, $b, $vegetables, '1.00'));
+        $em->flush();
+
+        // Segundo traslado: B se vacía porque su contenido (patrón de B + la cesta de A) va a C.
+        static::getContainer()->get(DeliveryShiftApplier::class)
+            ->applySkipIntent($partner, $b, null, 'test:chain', $c);
+
+        $em->refresh($first);
+
+        $this->assertFalse($first->isParked(), 'La cesta de A sigue colocada: no puede volver a la papelera.');
+        $this->assertSame($c->getId(), $first->getAccumulatedTo()?->getId(), 'Su cesta viajó hasta C, así que ahí apunta el intent.');
+
+        $this->cleanUp($em, $partner, $a, $b, $c);
+    }
+
+    /**
+     * Socio y dos semanas sintéticos, más el componente de verdura del catálogo.
+     *
+     * @return array{0: Partner, 1: Basket, 2: Basket, 3: BasketComponent}
+     */
+    private function chainFixture(EntityManagerInterface $em, string $prefix, string $firstDate, string $secondDate, int $week): array
+    {
+        $vegetables = $em->getRepository(BasketComponent::class)->find(BasketComponent::ID_VEGETABLES);
+        $this->assertNotNull($vegetables);
+
+        $partner = (new Partner())->setName($prefix . ' ' . uniqid('', true));
+        $em->persist($partner);
+
+        $first = (new Basket())->setDate(new \DateTime($firstDate))->setWeek($week)->setAmount(1);
+        $second = (new Basket())->setDate(new \DateTime($secondDate))->setWeek($week + 1)->setAmount(1);
+        $em->persist($first);
+        $em->persist($second);
+        $em->flush();
+
+        return [$partner, $first, $second, $vegetables];
+    }
+
+    /**
      * Borra lo que el test creó (db_test no tiene rollback por test).
      */
-    private function cleanUp(EntityManagerInterface $em, Partner $partner, Basket $basket): void
+    private function cleanUp(EntityManagerInterface $em, Partner $partner, Basket ...$baskets): void
     {
-        foreach ($em->getRepository(PartnerBasketExtra::class)->findForPartnerAndBasket($partner, $basket) as $extra) {
-            $em->remove($extra);
+        foreach ($baskets as $basket) {
+            foreach ($em->getRepository(PartnerBasketExtra::class)->findForPartnerAndBasket($partner, $basket) as $extra) {
+                $em->remove($extra);
+            }
         }
         foreach ($em->getRepository(PartnerDeliveryShift::class)->findBy(['partner' => $partner]) as $shift) {
             $em->remove($shift);
@@ -133,7 +228,9 @@ class SkipClearsBasketExtraTest extends KernelTestCase
         $em->flush();
 
         $em->remove($partner);
-        $em->remove($basket);
+        foreach ($baskets as $basket) {
+            $em->remove($basket);
+        }
         $em->flush();
     }
 }

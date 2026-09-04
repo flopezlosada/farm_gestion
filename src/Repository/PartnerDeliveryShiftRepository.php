@@ -138,6 +138,32 @@ class PartnerDeliveryShiftRepository extends ServiceEntityRepository
     }
 
     /**
+     * Intents cuya cesta se trasladó SUMANDO a la entrega de $to: los que
+     * pusieron una cesta extra encima de lo que ese día ya llevaba. Es el hilo
+     * para explicar el día ("lleva 2 cestas, una del 4-sep") y para deshacer el
+     * traslado devolviendo cada cesta a su semana.
+     *
+     * Puede haber más de uno: nada impide trasladar dos semanas al mismo día.
+     * Ordenados por la fecha de su semana de origen para que la UI los liste en
+     * orden natural.
+     *
+     * @param Partner $partner Socio.
+     * @param Basket  $to      Semana que recibió las cestas sumadas.
+     * @return PartnerDeliveryShift[]
+     */
+    public function findAccumulatedInto(Partner $partner, Basket $to): array
+    {
+        return $this->createQueryBuilder('s')
+            ->where('s.partner = :partner AND s.accumulatedTo = :to')
+            ->setParameter('partner', $partner)
+            ->setParameter('to', $to)
+            ->join('s.fromBasket', 'fb')
+            ->orderBy('fb.date', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
      * Cambio puntual que afecta a un Basket dado (saliendo o entrando)
      * para un socio concreto. Devuelve el shift relevante para mostrar
      * en el panel del socix cuando le toca la próxima cesta.

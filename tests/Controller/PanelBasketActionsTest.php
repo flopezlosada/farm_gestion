@@ -174,7 +174,10 @@ class PanelBasketActionsTest extends AbstractPartnerAuthenticatedTest
             ->findOneBy(['partner' => $partner->getId(), 'fromBasket' => $basketId]);
 
         $dayFreed = $wbAfter === null;
-        $intentIsSkip = $intent !== null && $intent->isSkip();
+        // isParked, no isSkip: un "no recoge" deja la cesta PENDIENTE (papelera). Si saliera
+        // marcada como trasladada sumando, isSkip seguiría siendo true y la aserción no
+        // notaría la diferencia.
+        $intentIsSkip = $intent !== null && $intent->isParked();
 
         // db_test no tiene rollback transaccional: restauramos ANTES de las
         // aserciones (que podrían lanzar) recorriendo "volver a recoger".

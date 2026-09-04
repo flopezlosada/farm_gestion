@@ -63,6 +63,10 @@ final class DeliveryCalendarProjector implements PartnerMonthProjection
      *    ({@see PartnerBasketExtra}). Las cantidades ya van sumadas en 'items' y no se
      *    distinguen de las de patrón, así que es la única forma que tiene la pantalla de
      *    saber que hay un extra que se puede deshacer. Ausente = sin extra.
+     *  - 'accumulated_from': fechas de las semanas cuya cesta se TRASLADÓ SUMANDO a esta
+     *    (lista vacía si el añadido es una extra genuina). Va con 'extra', porque el extra
+     *    es el vehículo del traslado; separa las dos acciones posibles sobre el añadido —
+     *    quitar una extra genuina vs. devolver las cestas trasladadas a su semana—.
      *
      * @param Partner $partner Socio cuyo calendario se proyecta.
      * @param int     $year    Año (p. ej. 2026).
@@ -128,6 +132,14 @@ final class DeliveryCalendarProjector implements PartnerMonthProjection
 
             $isSkip = $outgoing !== null && $outgoing->isSkip();
 
+            // Un intent sin destino tiene DOS sabores y solo uno ocupa la papelera:
+            // APARCADO (la cesta está pendiente y recolocable) o TRASLADADO SUMANDO (la
+            // cesta ya está colocada como extra en otra semana). Los dos dejan este día
+            // libre —de ahí que $isSkip valga para ambos más abajo—, pero pintar el
+            // trasladado en la papelera contaría su cesta dos veces: sumada allí y
+            // pendiente aquí, con la tarjeta invitando a recuperarla.
+            $isParked = $outgoing !== null && $outgoing->isParked();
+
             // PAPELERA: un "no recoge" (intent sin destino, to == null) aparca la cesta
             // NATIVA de esta semana. Se emite SIEMPRE su slot de papelera (skipped=true),
             // AUNQUE el día se haya reutilizado como destino de otra cesta movida — la cesta
@@ -136,7 +148,7 @@ final class DeliveryCalendarProjector implements PartnerMonthProjection
             // perdía de vista (acople día↔papelera). NO se hace continue: el mismo día puede
             // albergar además la cesta movida, cuyo slot de rejilla se emite más abajo. El
             // controller separa los skipped (papelera) de la rejilla.
-            if ($isSkip) {
+            if ($isParked) {
                 $patternShare = $this->candidateShareFor($partner, $basket);
                 $physical = $patternShare !== null
                     ? ($this->generator->projectShareDelivery($basket, $patternShare)['deliveryDate'] ?? $basket->getDate())
@@ -213,9 +225,11 @@ final class DeliveryCalendarProjector implements PartnerMonthProjection
                 continue;
             }
 
-            // "No recoge" SIN destino: su papelera ya se emitió arriba y no llegó cesta
-            // movida (ni materializada ni entrante), así que el día queda LIBRE en la
-            // rejilla — no se pinta la cesta de patrón aquí.
+            // Intent SIN destino y no llegó cesta movida (ni materializada ni entrante):
+            // el día queda LIBRE en la rejilla, no se pinta su cesta de patrón. Vale para
+            // los dos sabores: la APARCADA ya emitió su slot de papelera arriba, y la
+            // TRASLADADA SUMANDO no deja rastro aquí porque está colocada en otra semana
+            // (mismo criterio de "olvidar el origen" que un cambio de día normal).
             if ($isSkip) {
                 continue;
             }
@@ -364,6 +378,33 @@ final class DeliveryCalendarProjector implements PartnerMonthProjection
     }
 
     /**
+     * Fechas de las semanas cuya cesta se trasladó SUMANDO a la entrega de $basket. Vacío
+     * si el añadido de ese día es una cesta extra genuina (puesta a mano por gestión).
+     *
+     * Distinguirlas importa porque las acciones no son las mismas: una extra genuina se
+     * quita y punto; una cesta trasladada hay que DEVOLVERLA a su semana, o se pierde.
+     *
+     * @param Partner $partner Socio.
+     * @param Basket  $basket  Semana que recibió el añadido.
+     * @return list<\DateTimeInterface>
+     */
+    private function accumulatedOriginDates(Partner $partner, Basket $basket): array
+    {
+        /** @var \App\Repository\PartnerDeliveryShiftRepository $shiftRepo */
+        $shiftRepo = $this->em->getRepository(\App\Entity\PartnerDeliveryShift::class);
+
+        $dates = [];
+        foreach ($shiftRepo->findAccumulatedInto($partner, $basket) as $shift) {
+            $date = $shift->getFromBasket()?->getDate();
+            if ($date !== null) {
+                $dates[] = $date;
+            }
+        }
+
+        return $dates;
+    }
+
+    /**
      * Refleja en los slots del calendario los overrides de CESTA EXTRA ({@see PartnerBasketExtra})
      * del socio: suma el delta de cada componente a la entrega de esa semana, creando un slot
      * si su patrón no le daba entrega (extra en una semana libre, p. ej. mensual). Es la
@@ -408,6 +449,7 @@ final class DeliveryCalendarProjector implements PartnerMonthProjection
             // de la cesta de patrón mirando las cantidades, y también se puede deshacer.
             if ($idx !== null) {
                 $slots[$idx]['extra'] = true;
+                $slots[$idx]['accumulated_from'] = $this->accumulatedOriginDates($partner, $basket);
             }
 
             // Si la entrega de esa semana ya está MATERIALIZADA, su WeeklyBasket (piedra) YA
@@ -443,6 +485,7 @@ final class DeliveryCalendarProjector implements PartnerMonthProjection
                     'listed' => $wbRepo->findOneBy(['basket' => $basket->getId()]) !== null,
                     'available' => [],
                     'extra' => true,
+                    'accumulated_from' => $this->accumulatedOriginDates($partner, $basket),
                 ];
                 $idx = array_key_last($slots);
                 $idxByBasket[$basket->getId()] = $idx;

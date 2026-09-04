@@ -170,7 +170,10 @@ final class DeliveryShiftApplier implements ShiftReconciliationActions, PartnerD
         // Los tres pasos son una sola unidad: si el move falla a mitad, el extra no se queda
         // colgado ni desaparece.
         $this->em->wrapInTransaction(function () use ($partner, $current, $target, $actor, $extras): void {
-            $this->extraRemover->removeExtra($partner, $current, $actor);
+            // $target como `movedTo`: el añadido no se está QUITANDO, está VIAJANDO. Si entre
+            // esos extras había una cesta trasladada sumando, sigue colocada — ahora en
+            // $target. Sin ese dato volvería a la papelera y se contaría dos veces.
+            $this->extraRemover->removeExtra($partner, $current, $actor, $target);
             $this->moveWholeDelivery($partner, $current, $target, $actor);
             $this->extraAdder->addToDelivery(
                 $partner,
@@ -414,12 +417,15 @@ final class DeliveryShiftApplier implements ShiftReconciliationActions, PartnerD
      * directo (estado del WB / WeeklyBasketItem), no este intent.
      *
      * @param Partner              $partner
-     * @param Basket               $basket    Semana sobre la que actuar.
-     * @param BasketComponent|null $component null = toda la entrega (no recoge); si no, el componente a quitar.
+     * @param Basket               $basket        Semana sobre la que actuar.
+     * @param BasketComponent|null $component     null = toda la entrega (no recoge); si no, el componente a quitar.
      * @param string|null          $actor
+     * @param Basket|null          $accumulatedTo Semana a cuya entrega se sumó esta cesta (traslado
+     *                                            sumando) en vez de quedar pendiente. Ver
+     *                                            {@see PartnerDeliveryShift::$accumulatedTo}.
      * @return PartnerDeliveryShift
      */
-    public function applySkipIntent(Partner $partner, Basket $basket, ?BasketComponent $component, ?string $actor = null): PartnerDeliveryShift
+    public function applySkipIntent(Partner $partner, Basket $basket, ?BasketComponent $component, ?string $actor = null, ?Basket $accumulatedTo = null): PartnerDeliveryShift
     {
         // "No recoge" de la entrega ENTERA deja el día a CERO, y eso incluye las cestas
         // EXTRA de esa semana ({@see PartnerBasketExtra}): son entrega igual que la de
@@ -432,15 +438,25 @@ final class DeliveryShiftApplier implements ShiftReconciliationActions, PartnerD
         // "no recoge". Cierra también la deuda del ORIGEN acumulado de {@see AccumulatingMove}.
         //
         // ASIMETRÍA deliberada: el skip se deshace (cancelSkipIntent / recoverSkipToDay) pero
-        // la extra NO vuelve — el override se borra, no se aparca. No se pierde nada en el caso
-        // que importa (una cesta trasladada sumando sigue aparcada en la papelera de su semana
-        // de ORIGEN, de donde se recupera); una extra genuina hay que volver a añadirla, y su
-        // baja queda en el histórico del socio (PartnerEvent::TYPE_BASKET_EXTRA_REMOVED).
+        // la extra NO vuelve — el override se borra, no se aparca. Una extra genuina hay que
+        // volver a añadirla, y su baja queda en el histórico del socio
+        // (PartnerEvent::TYPE_BASKET_EXTRA_REMOVED).
+        //
+        // `$accumulatedTo` como cuarto argumento dice A DÓNDE va el contenido de este día, y
+        // eso decide qué pasa con las cestas que OTRAS semanas habían trasladado aquí:
+        //  - "no recoge" ($accumulatedTo null): el día se vacía y esas cestas vuelven a estar
+        //    PENDIENTES, recuperables desde la papelera de su semana de origen.
+        //  - traslado sumando: este día se vacía porque su contenido —incluidas esas cestas,
+        //    que AccumulatingMove lee de la proyección— viaja a $accumulatedTo, así que sus
+        //    intents se re-apuntan allí. Sin esto, encadenar dos traslados (A→B, luego B→C)
+        //    devolvía la cesta de A a la papelera con su cantidad ya viajada a C: contada dos
+        //    veces, que es justo el fallo que `accumulatedTo` viene a cerrar.
         if ($component === null) {
-            $this->extraRemover->removeExtra($partner, $basket, $actor);
+            $this->extraRemover->removeExtra($partner, $basket, $actor, $accumulatedTo);
         }
 
         $shift = new PartnerDeliveryShift($partner, $basket, null, $component);
+        $shift->setAccumulatedTo($accumulatedTo);
         $this->em->persist($shift);
 
         // "No recoge" de la entrega ENTERA (component null): LIBERA el día. Si la semana
@@ -472,10 +488,13 @@ final class DeliveryShiftApplier implements ShiftReconciliationActions, PartnerD
      * el ORIGEN de patrón (O), que es donde el generador la materializaría: así el skip
      * excluye el candidato correcto y la cesta no reaparece.
      *
-     * @param PartnerDeliveryShift $incoming Cambio entrante (to != null) a aparcar.
+     * @param PartnerDeliveryShift $incoming      Cambio entrante (to != null) a aparcar.
      * @param string|null          $actor
+     * @param Basket|null          $accumulatedTo Semana a cuya entrega se sumó esta cesta (traslado
+     *                                            sumando) en vez de quedar pendiente. Ver
+     *                                            {@see PartnerDeliveryShift::$accumulatedTo}.
      */
-    public function skipMovedDelivery(PartnerDeliveryShift $incoming, ?string $actor = null): void
+    public function skipMovedDelivery(PartnerDeliveryShift $incoming, ?string $actor = null, ?Basket $accumulatedTo = null): void
     {
         $partner = $incoming->getPartner();
         $from = $incoming->getFromBasket();
@@ -484,8 +503,11 @@ final class DeliveryShiftApplier implements ShiftReconciliationActions, PartnerD
         // El día donde la cesta estaba ($to) queda a CERO: también sus cestas extra (mismo
         // criterio que applySkipIntent — ver su comentario). Solo las de $to: un extra en el
         // día de patrón ($from) es entrega propia de ese día, ajena a la cesta que se aparca.
+        // `$accumulatedTo` propaga a dónde va el contenido de $to, igual que en
+        // applySkipIntent (ver su comentario): null lo vacía y devuelve a pendientes las
+        // cestas trasladadas aquí; con valor, viajan con él.
         if ($to !== null) {
-            $this->extraRemover->removeExtra($partner, $to, $actor);
+            $this->extraRemover->removeExtra($partner, $to, $actor, $accumulatedTo);
         }
 
         // Liberar de WeeklyBasket TODO el rastro de la cesta: el destino (donde estaba) y el
@@ -504,7 +526,10 @@ final class DeliveryShiftApplier implements ShiftReconciliationActions, PartnerD
             }
         }
 
+        // Orden: primero soltar el destino, luego marcar la acumulación — al revés,
+        // setAccumulatedTo rechazaría el intent por tener todavía semana destino.
         $incoming->setToBasket(null);
+        $incoming->setAccumulatedTo($accumulatedTo);
         $this->recordEvent($partner, $from, $from, $actor, cancelled: false);
         $this->em->flush();
     }
@@ -610,9 +635,20 @@ final class DeliveryShiftApplier implements ShiftReconciliationActions, PartnerD
      * Cancela un cambio puntual existente y revierte la cascada.
      *
      * @param string|null $actor Quien origina la cancelación.
+     * @throws \LogicException Si el intent es un traslado sumando (ver abajo).
      */
     public function cancel(PartnerDeliveryShift $shift, ?string $actor = null): void
     {
+        // Un TRASLADO SUMANDO no se cancela con esto: la cesta está colocada como cesta
+        // extra en otra semana, y borrar el intent la devolvería a la suya dejando el
+        // añadido puesto → una cesta de MÁS en el listado. Se deshace con
+        // {@see AccumulatingMove::undo()}, que retira las dos piezas a la vez. Se lanza en
+        // vez de apañarlo aquí porque este método no sabe nada de extras y llamarlo con un
+        // intent acumulado es siempre un error del llamante.
+        if ($shift->isAccumulated()) {
+            throw new \LogicException('Esa cesta se trasladó sumando a otra semana: hay que deshacer el traslado desde el día que la recibió, no cancelar el cambio.');
+        }
+
         $partner = $shift->getPartner();
         $from = $shift->getFromBasket();
         $to = $shift->getToBasket();
