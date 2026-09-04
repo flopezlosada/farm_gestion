@@ -49,6 +49,25 @@ final class MonthGrid
     }
 
     /**
+     * El primer día del mes pedido como `AAAA-MM`, o el del mes en curso si no
+     * se pide ninguno o el texto no es una fecha. Es cómo todos los calendarios
+     * leen `?mes=` de la URL.
+     *
+     * @param string             $requested lo que venía en la URL
+     * @param \DateTimeImmutable $now       ahora
+     *
+     * @return \DateTimeImmutable el día 1 del mes, a medianoche
+     */
+    public static function monthFrom(string $requested, \DateTimeImmutable $now): \DateTimeImmutable
+    {
+        $month = preg_match('/^\d{4}-\d{2}$/', $requested)
+            ? \DateTimeImmutable::createFromFormat('!Y-m-d', $requested.'-01')
+            : false;
+
+        return $month ?: $now->modify('first day of this month')->setTime(0, 0);
+    }
+
+    /**
      * Si una fecha cae dentro del mes de la rejilla, o es relleno.
      *
      * @param \DateTimeImmutable $date  el día

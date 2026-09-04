@@ -1,0 +1,60 @@
+{# La rejilla del mes con sus turnos, compartida por gestión y por el panel del
+ # socix. Un solo HTML: en escritorio es una rejilla de siete columnas y en
+ # móvil, por CSS, la misma cosa como lista por días con la fecha pegajosa. Así
+ # no hay dos calendarios que mantener a la par.
+ #
+ # Espera: weeks, days (ShiftCalendar::days), month, today, mode ('gestion' |
+ # 'socix') y ctx (my_signups, my_category_ids, only_mine; vacío en gestión).
+ #
+ # En gestión es lo que el arrastre reemplaza tras mover un turno, así que aquí
+ # dentro no puede vivir nada que necesite reengancharse. #}
+{% import '_macros/shift_calendar.html.twig' as cal %}
+{% set socix = mode == 'socix' %}
+{% set month_n = month|date('n') %}
+{% set tomorrow = today|date_modify('+1 day')|date('Y-m-d') %}
+{% set visible_max = constant('App\\Service\\Volunteering\\ShiftCalendar::VISIBLE_PER_DAY') %}
+
+<div class="scal scal--{{ mode }}">
+    <div class="scal__head" aria-hidden="true">
+        {% for d in ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'] %}<div>{{ d }}</div>{% endfor %}
+    </div>
+    {% for week in weeks %}
+        <div class="scal__week">
+            {% for day in week %}
+                {% set key = day|date('Y-m-d') %}
+                {% set in_month = day|date('n') == month_n %}
+                {% set is_past = key < today %}
+                {% set items = days[key]|default([]) %}
+                <div class="scal__cell{{ not in_month ? ' scal__cell--out' }}{{ key == today ? ' scal__cell--today' }}{{ items is empty ? ' scal__cell--empty' }}"
+                     data-vcal-day="{{ key }}"{% if not socix and in_month and not is_past %} data-vcal-drop{% endif %}>
+                    <div class="scal__daybar">
+                        <span class="scal__num">{{ day|date('j') }}</span>
+                        <span class="scal__daylong">{{ day|format_date(pattern="EEEE d", locale='es')|capitalize }} <small>de {{ day|format_date(pattern='MMMM', locale='es') }}</small></span>
+                        {% if not in_month %}<span class="scal__othermonth">{{ day|format_date(pattern='MMM', locale='es')|replace({ '.': '' }) }}</span>{% endif %}
+                        {% if key == today %}<span class="scal__hoy">Hoy</span>{% elseif key == tomorrow %}<span class="scal__hoy scal__hoy--soon">Mañana</span>{% endif %}
+                    </div>
+                    <div class="scal__items">
+                        {% for item in items %}
+                            {% if loop.index == visible_max + 1 %}
+                                <details class="scal__more">
+                                    <summary>{{ items|length - visible_max }} turno{{ items|length - visible_max == 1 ? '' : 's' }} más</summary>
+                                    <div class="scal__moreitems">
+                            {% endif %}
+                            {% if item.kind == 'group' %}
+                                {{ cal.group(item, mode, ctx) }}
+                            {% elseif socix %}
+                                {{ cal.chip_socix(item, ctx) }}
+                            {% else %}
+                                {{ cal.chip_gestion(item) }}
+                            {% endif %}
+                            {% if loop.last and items|length > visible_max %}
+                                    </div>
+                                </details>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% endfor %}
+</div>
