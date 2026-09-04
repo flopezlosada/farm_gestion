@@ -64,7 +64,7 @@
     {%- set dim = ctx.my_category_ids|length > 0 and not in_my_area and not ctx.only_mine and not i_go -%}
     {%- set can_join = item.state == 'porvenir' and not i_go and s.isOpen() -%}
     {%- set time = s.startsAt|date('H:i') -%}
-    {%- if i_go -%}
+    {%- if i_go and item.state in ['porvenir', 'cubierto'] -%}
         {%- set words = 'Ya vas' -%}{%- set tone = 'ok' -%}
     {%- elseif item.state == 'porvenir' -%}
         {%- if item.missing == 1 -%}{%- set words = 'Queda 1 plaza' -%}{%- set tone = 'need' -%}
