@@ -6,7 +6,7 @@
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
 
-{% block title %}Voluntariado · Quién hay{% endblock %}
+{% block title %}Voluntariado · Voluntarixs{% endblock %}
 
 {% block more_css %}
     {{ parent() }}
@@ -24,13 +24,14 @@
     <span class="csa-topbar__crumbs-sep">/</span>
     <a href="{{ path('volunteering_index') }}">Voluntariado</a>
     <span class="csa-topbar__crumbs-sep">/</span>
-    <span class="csa-topbar__crumb-active">Quién hay</span>
+    <span class="csa-topbar__crumb-active">Voluntarixs</span>
 {% endblock %}
 
 {% block csa_main %}
 <div class="prl">
 
-    {{ csa.page_header('Voluntariado', 'Quién hay', 'A quién puedes llamar para cada área.') }}
+    {{ csa.page_header('Voluntariado', 'Voluntarixs', 'A quién puedes llamar para cada área.',
+        { icon: 'fa-users', accent: 'ochre' }) }}
 
     {% if not coordinates_something %}
         {{ csa.callout('No coordinas ninguna área todavía, así que aquí no aparece nadie. Pídele a administración que te asigne un área.', 'info') }}

@@ -197,11 +197,36 @@
 {% macro qty(v) %}{{ v == v|round ? v|number_format(0, ',', '.') : v|number_format(1, ',', '.') }}{% endmacro %}
 
 
-{% macro page_header(kicker = null, title = '', lead = null) %}
-    <div class="csa-page-header">
-        {% if kicker %}<div class="csa-kicker">{{ kicker }}</div>{% endif %}
-        <h1>{{ title }}</h1>
-        {% if lead %}<div class="csa-lead">{{ lead }}</div>{% endif %}
+{# `opts` es opcional y las decenas de llamadas de tres argumentos siguen
+ # valiendo tal cual. Con `icon` la cabecera gana una marca de sección a la
+ # izquierda del título; con `accent` esa marca se colorea.
+ #
+ # PARA QUÉ: un módulo con varios listados los pinta todos iguales —mismo
+ # kicker, mismas pestañas, misma tabla— y al entrar no se sabe en cuál se
+ # está. La marca repite el icono del menú, así que el ojo empareja «lo que
+ # pulsé» con «dónde estoy» sin leer.
+ #
+ # El color NO es semántico aquí: no dice ni OK ni alerta, sólo separa materias.
+ # Es el mismo criterio explícito de `crop_marker` más abajo.
+ #
+ #   {{ csa.page_header('Voluntariado', 'Tareas', 'lead…', { icon: 'fa-hand-paper-o', accent: 'green' }) }}
+ #
+ # opts:
+ #   icon    clase FontAwesome (sin el 'fa' base)
+ #   accent  sky | green | plum | ochre
+ #}
+{% macro page_header(kicker = null, title = '', lead = null, opts = {}) %}
+    {%- set icon = opts.icon|default(null) -%}
+    {%- set accent = opts.accent|default(null) -%}
+    <div class="csa-page-header{{ icon ? ' csa-page-header--marked' : '' }}{{ accent ? ' csa-page-header--' ~ accent : '' }}">
+        {% if icon %}
+            <div class="csa-page-header__mark" aria-hidden="true"><i class="fa {{ icon }}"></i></div>
+        {% endif %}
+        <div class="csa-page-header__text">
+            {% if kicker %}<div class="csa-kicker">{{ kicker }}</div>{% endif %}
+            <h1>{{ title }}</h1>
+            {% if lead %}<div class="csa-lead">{{ lead }}</div>{% endif %}
+        </div>
     </div>
 {% endmacro %}
 

@@ -19,7 +19,7 @@
 {% import '_macros/csa.html.twig' as csa %}
 {% import '_macros/volunteering.html.twig' as vol %}
 
-{% block title %}Voluntariado · Calendario · {{ month|format_date(pattern='MMMM y', locale='es')|capitalize }}{% endblock %}
+{% block title %}Voluntariado · Cuadrante · {{ month|format_date(pattern='MMMM y', locale='es')|capitalize }}{% endblock %}
 
 {% block more_css %}
     {{ parent() }}
@@ -31,7 +31,7 @@
     <span class="csa-topbar__crumbs-sep">/</span>
     <a href="{{ path('volunteering_index') }}">Voluntariado</a>
     <span class="csa-topbar__crumbs-sep">/</span>
-    <span class="csa-topbar__crumb-active">Calendario</span>
+    <span class="csa-topbar__crumb-active">Cuadrante</span>
 {% endblock %}
 
 {% block csa_main %}
@@ -41,9 +41,10 @@
     {% for items in days %}{% for item in items %}{% if item.kind == 'shift' and item.alarm %}{% set has_alarm = true %}{% endif %}{% endfor %}{% endfor %}
 
     <div class="scal-page">
-        {{ csa.page_header('Voluntariado', 'Calendario de turnos', offer
+        {{ csa.page_header('Voluntariado', 'Cuadrante', offer
             ? 'Sólo los turnos de «' ~ offer.title ~ '». Arrastra uno a otro día para moverlo.'
-            : 'Los turnos del mes. Arrastra uno a otro día para moverlo.') }}
+            : 'Los turnos del mes. Arrastra uno a otro día para moverlo.',
+            { icon: 'fa-calendar', accent: 'sky' }) }}
 
         {% if not coordinates_something %}
             {{ csa.callout('No coordinas ninguna área todavía, así que aquí no aparece nada. Pídele a administración que te asigne un área.', 'info') }}
