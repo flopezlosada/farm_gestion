@@ -119,5 +119,19 @@
         </div>
 
         <p class="scal-foot">Sólo se arrastran los turnos por venir; la hora se conserva. Para cambiar la hora, entra en el turno.</p>
+
+        {# La salida a la lista completa vive AQUÍ y no en el menú: el cuadrante es
+         # lo que se viene a ver, y la lista es la herramienta de cuando hace falta
+         # buscar por texto o filtrar por estado.
+         #
+         # Se pasa `tipo` y NO `keep` entero: la lista no entiende `tarea` (sólo el
+         # cuadrante filtra por serie), y mandarlo sería prometer un filtro que al
+         # llegar no está. Por eso el rótulo cambia según lo que se conserve. #}
+        <p class="scal-foot">
+            <a href="{{ path('volunteering_index', keep.tipo is defined ? { tipo: keep.tipo } : {}) }}">
+                {{ offer ? 'Ver todos los turnos en lista' : 'Ver estos turnos en lista' }}
+                <i class="fa fa-angle-right" aria-hidden="true"></i>
+            </a>
+        </p>
     </div>
 {% endblock %}
