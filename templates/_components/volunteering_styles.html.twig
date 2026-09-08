@@ -325,20 +325,42 @@
     }
     .vol-chip a:hover { color: var(--csa-ink); }
 
-    /* Los tres avisos posibles de una tarea y en cuál está cada uno. */
-    .vol-scopes { list-style: none; margin: 0 0 var(--csa-sp-2); padding: 0; }
-    .vol-scopes li {
+    /* Los tres avisos de un turno: qué salió y qué va a salir.
+       Antes era `.vol-scopes`, una fila con una etiqueta «Enviado / Sin enviar»
+       a la derecha. Se leía como una lista de tareas por hacer y no lo es: dos
+       de los tres los abre el planificador solo y no hay botón que los lance.
+       Ahora cada línea es un hecho con su fecha, y lo que manda es la FRASE, no
+       la insignia. */
+    .vol-calls { list-style: none; margin: 0 0 var(--csa-sp-3); padding: 0; }
+    .vol-calls__item {
         display: flex;
         gap: var(--csa-sp-3);
-        align-items: baseline;
-        justify-content: space-between;
-        padding: var(--csa-sp-2) 0;
+        align-items: flex-start;
+        padding: var(--csa-sp-3) 0;
         border-bottom: 1px solid var(--csa-rule-soft);
+    }
+    .vol-calls__item:last-child { border-bottom: 0; }
+    /* El icono es lo único que separa hecho de no hecho, así que carga el color:
+       enviado en verde, pendiente en un gris que no compite. */
+    .vol-calls__item > .fa {
+        flex: none;
+        margin-top: 2px;
+        font-size: 15px;
+        color: var(--csa-ink-muted);
+    }
+    .vol-calls__item.is-sent > .fa { color: var(--csa-green); }
+    .vol-calls__what {
+        margin: 0;
         font-size: var(--csa-fs-sm);
+        font-weight: 500;
         color: var(--csa-ink);
     }
-    .vol-scopes li:last-child { border-bottom: 0; }
-    .vol-scopes .vol-help--muted { display: block; margin: 0; }
+    .vol-calls__when {
+        margin: 2px 0 0;
+        font-size: var(--csa-fs-xs);
+        color: var(--csa-ink-soft);
+        max-width: 62ch;
+    }
 
     .vol-total {
         margin: 0 0 var(--csa-sp-2);

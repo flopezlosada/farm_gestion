@@ -198,9 +198,13 @@
                         {% else %}Cuando se acerque la fecha, el sistema pide gente solo.{% endif %}
                     </p>
                 </div>
-                {% if not full and can_edit and not everyone_sent %}
+                {# Sólo cuando hay algo que DECIDIR. Antes salía siempre que no se
+                 # hubiera avisado a todo el mundo, y lo que había al otro lado no
+                 # era una acción: eran dos avisos automáticos y un botón. Los
+                 # avisos se siguen consultando desde su pestaña. #}
+                {% if can_edit and offer_everyone %}
                     <div class="vol-phase__actions">
-                        {{ csa.btn('Ver los avisos', { variant: 'secondary', href: '#avisos', icon: 'fa-send-o' }) }}
+                        {{ csa.btn('Sigue faltando gente', { variant: 'secondary', href: '#avisos', icon: 'fa-bullhorn' }) }}
                     </div>
                 {% endif %}
             </div>
@@ -670,48 +674,66 @@
             {% endif %}
 
             {# ---------- AVISOS ---------- #}
+            {# Los dos primeros alcances NO son acciones: los abre el planificador
+             # solo. Pintarlos como una lista de casillas «Enviado / Sin enviar»
+             # los hacía parecer tareas pendientes de alguien, y no hay ningún
+             # botón que las haga. Lo único que se puede contar de ellos es qué
+             # pasó y qué va a pasar, y eso se cuenta con una frase.
+             #
+             # El aviso general sí es una decisión de una persona, así que sigue
+             # siendo un botón — pero sólo aparece cuando ya no queda otra
+             # (VolunteerCallEscalator::shouldOfferEveryone). #}
             <section class="csa-tabpanel" id="avisos" role="tabpanel">
                 <div class="prt-card">
                     <div class="prt-card__body">
-                        {# Un círculo vacío frente a un check no dice si eso está pendiente,
-                         # descartado o si hay que hacer algo: se etiqueta con palabras. #}
-                        <ul class="vol-scopes">
-                            <li>
-                                <span>A quien tiene marcado este tipo de trabajo</span>
-                                {{ 'matching' in sent_scopes ? csa.badge('Enviado', 'green') : csa.badge('Sin enviar', 'neutral') }}
-                            </li>
-                            <li>
-                                <span>
-                                    A quien no ha declarado preferencias
-                                    {% if not offer.openToAnyone %}
-                                        <small class="vol-help--muted">no se le puede pedir: esta tarea no es para cualquiera</small>
-                                    {% endif %}
-                                </span>
-                                {% if not offer.openToAnyone %}
-                                    {{ csa.badge('No aplica', 'neutral') }}
-                                {% else %}
-                                    {{ 'unspecified' in sent_scopes ? csa.badge('Enviado', 'green') : csa.badge('Sin enviar', 'neutral') }}
-                                {% endif %}
-                            </li>
-                            <li>
-                                <span>A toda la asociación</span>
-                                {{ everyone_sent ? csa.badge('Enviado', 'green') : csa.badge('Sin enviar', 'neutral') }}
-                            </li>
+                        <ul class="vol-calls">
+                            {% for scope, label in {
+                                'matching': 'A quien tiene marcada esta área',
+                                'unspecified': 'A quien no ha dicho de qué le avisen',
+                                'everyone': 'A toda la asociación'
+                            } %}
+                                {% set call = calls_by_scope[scope]|default(null) %}
+                                <li class="vol-calls__item{{ call ? ' is-sent' : '' }}">
+                                    <i class="fa {{ call ? 'fa-check-circle' : 'fa-circle-o' }}" aria-hidden="true"></i>
+                                    <div>
+                                        <p class="vol-calls__what">{{ label }}</p>
+                                        <p class="vol-calls__when">
+                                            {% if call %}
+                                                Se envió el {{ call.sentAt|format_datetime(pattern="d 'de' MMMM 'a las' HH:mm", locale='es') }}
+                                            {% elseif scope == 'everyone' %}
+                                                No se ha mandado. Es el único que se manda a mano.
+                                            {% elseif scope == 'unspecified' and not offer.openToAnyone %}
+                                                No se mandará: esta tarea no está marcada como apta para cualquiera.
+                                            {% elseif scope == 'matching' and offer.categories is empty %}
+                                                No se mandará: la tarea no tiene área, así que nadie la tiene marcada.
+                                            {% elseif not shift.isOpen() %}
+                                                Ya no hace falta{{ shift.hasRoom ? '' : ': no quedan plazas libres' }}.
+                                            {% elseif pending_scope == scope %}
+                                                {% if escalation_opens_at %}
+                                                    Sale solo a partir del {{ escalation_opens_at|format_datetime(pattern="d 'de' MMMM 'a las' HH:mm", locale='es') }}, si sigue faltando gente.
+                                                {% else %}
+                                                    Sale solo en la próxima hora, si sigue faltando gente.
+                                                {% endif %}
+                                            {% else %}
+                                                Sale después del anterior, si para entonces sigue faltando gente.
+                                            {% endif %}
+                                        </p>
+                                    </div>
+                                </li>
+                            {% endfor %}
                         </ul>
 
                         <p class="vol-help--muted">
-                            Los dos primeros los manda el sistema solo, cuando se acerca la fecha y siguen
-                            faltando plazas. El último se manda a mano. Todo esto es de ESTE turno: el aviso
-                            del sábado no gasta el del domingo.
+                            Todo esto es de ESTE turno: el aviso del sábado no gasta el del domingo.
                         </p>
 
-                        {% if can_edit and not everyone_sent and shift.isOpen() %}
+                        {% if can_edit and offer_everyone %}
                             {# Este botón gasta el canal push de toda la asociación, y el
                              # permiso del navegador se pierde una vez y para siempre: quien
                              # lo apaga no vuelve. Por eso se enseña el NÚMERO antes, se exige
                              # confirmación, y sólo se puede una vez por turno. #}
                             {{ csa.callout(
-                                'Avisar a toda la asociación llega a ' ~ everyone_count ~ ' socix(s), incluidxs quienes han dicho que de esto no les avisen. Sólo se puede hacer una vez por turno. Úsalo cuando de verdad haga falta.',
+                                'Los avisos automáticos ya han salido y el turno sigue sin cubrirse con la fecha encima. Avisar a toda la asociación llega a ' ~ everyone_count ~ ' socix(s), incluidxs quienes han dicho que de esto no les avisen. Sólo se puede hacer una vez por turno.',
                                 'warning',
                                 'exclamation-triangle'
                             ) }}
@@ -719,9 +741,7 @@
                             <form method="post" action="{{ path('volunteering_notify_everyone', { id: shift.id }) }}"
                                   onsubmit="return confirm('Vas a avisar a {{ everyone_count }} socix(s). Esto no se puede deshacer y sólo se puede hacer una vez. ¿Seguro?');">
                                 <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_notify') }}">
-                                <button type="submit" class="csa-btn csa-btn--danger-soft csa-btn--sm">
-                                    <i class="fa fa-bullhorn"></i> Avisar a toda la asociación
-                                </button>
+                                {{ csa.btn('Avisar a toda la asociación', { variant: 'danger-soft', type: 'submit', icon: 'fa-bullhorn' }) }}
                             </form>
                         {% endif %}
                     </div>
