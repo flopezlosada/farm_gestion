@@ -137,6 +137,62 @@ class VolunteeringAskPersonTest extends WebTestCase
     }
 
     /**
+     * UNA VEZ POR TURNO Y PERSONA. El segundo intento no manda nada y no deja un
+     * segundo rastro.
+     *
+     * Insistirle a quien no contestó es tentador, pero cada intento le vuelve a
+     * sonar el móvil por lo mismo, y quien se harta apaga las notificaciones para
+     * siempre: el permiso del navegador no se puede volver a pedir.
+     */
+    public function testSoloSeLePuedePedirUnaVezPorTurno(): void
+    {
+        $client = $this->adminClient();
+        $em = $this->em();
+
+        $area = $this->makeCategory($em, 'Pedir Dos Veces');
+        $shift = $this->makeShift($em, 'Barrer el almacén', $area);
+        $quien = $this->makePartner($em, 'INSISTIDA', $area);
+        $em->flush();
+
+        $token = $this->askToken($client, $shift, $quien);
+        $client->request('POST', $this->askUrl($shift, $quien), ['_csrf_token' => $token]);
+        $this->assertSame(1, $this->askedEvents($em, $quien), 'La primera vez sí.');
+
+        // El mismo POST otra vez: el token sigue siendo válido, así que lo único
+        // que puede pararlo es la comprobación del servidor.
+        $client->request('POST', $this->askUrl($shift, $quien), ['_csrf_token' => $token]);
+        $this->assertSame(1, $this->askedEvents($em, $quien), 'La segunda no añade nada.');
+    }
+
+    /**
+     * Y la ficha lo dice: donde estaba el botón aparece cuándo se le pidió, para
+     * que quien coordina no se quede esperando una respuesta que no pidió.
+     */
+    public function testLaFichaDiceCuandoSeLePidio(): void
+    {
+        $client = $this->adminClient();
+        $em = $this->em();
+
+        $area = $this->makeCategory($em, 'Pedir Fecha');
+        $shift = $this->makeShift($em, 'Ordenar las cajas', $area);
+        $quien = $this->makePartner($em, 'YA PEDIDA', $area);
+        $em->flush();
+
+        $token = $this->askToken($client, $shift, $quien);
+        $client->request('POST', $this->askUrl($shift, $quien), ['_csrf_token' => $token]);
+
+        $crawler = $client->request('GET', '/gestion/voluntariado/turno/' . $shift->getId());
+        $this->assertResponseIsSuccessful();
+
+        $this->assertCount(
+            0,
+            $crawler->filter('form[action="' . $this->askUrl($shift, $quien) . '"]'),
+            'El botón ya no está.'
+        );
+        $this->assertStringContainsString('Se le pidió el', $crawler->filter('#sugeridas')->html());
+    }
+
+    /**
      * Sin token no se manda nada. Va con el resto porque este endpoint escribe y
      * empuja avisos: es exactamente el que no puede aceptar una petición ajena.
      */
@@ -180,6 +236,18 @@ class VolunteeringAskPersonTest extends WebTestCase
         $this->assertSame(0, $this->askedEvents($em, $apuntada));
     }
 
+    /**
+     * ENCIENDE LOS AVISOS DE VOLUNTARIADO POR CORREO, y no es decorado: los
+     * socixs de estos casos tienen correo pero no cuenta en la web, así que el
+     * correo es su única vía. `EMAIL_VOLUNTEERING` viene **apagado de fábrica**
+     * (default false en el catálogo), y con él apagado no hay por dónde
+     * avisarles: la ficha no ofrecería el botón y los casos pasarían o fallarían
+     * por el motivo equivocado.
+     *
+     * Que esto haga falta es justo lo que destapó el footgun de
+     * `canReach()`: la primera versión daba por alcanzable a quien tenía correo
+     * sin mirar si el canal estaba encendido.
+     */
     private function adminClient(): KernelBrowser
     {
         $client = static::createClient();
@@ -191,6 +259,8 @@ class VolunteeringAskPersonTest extends WebTestCase
 
         $client->loginUser($user);
         $this->settings()->setBool(AppSettings::FEATURE_VOLUNTEERING, true);
+        $this->settings()->setBool(AppSettings::EMAIL_ENABLED, true);
+        $this->settings()->setBool(AppSettings::EMAIL_VOLUNTEERING, true);
 
         return $client;
     }

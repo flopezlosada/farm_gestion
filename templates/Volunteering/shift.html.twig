@@ -654,9 +654,23 @@
                                              #
                                              # Sólo si tiene cuenta: sin ella no hay bandeja, ni
                                              # push, ni a dónde llevar el correo del sistema. #}
-                                            {% if can_edit and reachable[who.id]|default(false) %}
-                                                <form method="post" action="{{ path('volunteering_ask', { id: shift.id, partner: who.id }) }}"
-                                                      onsubmit="return confirm('¿Pedirle a {{ who.name }} que venga a este turno? Le llegará un aviso.');">
+                                            {% set asked = already_asked[who.id]|default(null) %}
+                                            {% if asked %}
+                                                {# Ya se le pidió: la fecha, no un botón que volvería a
+                                                 # sonarle el móvil por lo mismo. Para insistir está su
+                                                 # teléfono, que sigue aquí al lado. #}
+                                                <span class="vol-suggest__asked">
+                                                    <i class="fa fa-check" aria-hidden="true"></i>
+                                                    Se le pidió el {{ asked.occurredAt|format_datetime(pattern="d 'de' MMMM", locale='es') }}
+                                                </span>
+                                            {% elseif can_edit and reachable[who.id]|default(false) %}
+                                                {# SIN `confirm()`. El diálogo del navegador no se puede
+                                                 # estilar, corta la pantalla y aquí no aporta: sólo se
+                                                 # puede pedir una vez por turno, así que un clic de más
+                                                 # no manda nada, y lo que pasa se cuenta después. La
+                                                 # fricción se la queda el aviso a toda la asociación,
+                                                 # que sí es irreversible. #}
+                                                <form method="post" action="{{ path('volunteering_ask', { id: shift.id, partner: who.id }) }}">
                                                     <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_ask') }}">
                                                     {{ csa.btn('Pedírselo', { variant: 'secondary', type: 'submit', icon: 'fa-bell-o', size: 'sm' }) }}
                                                 </form>
@@ -716,10 +730,13 @@
                                  # botón. Listarlo siempre hacía que la misma cosa se dijera
                                  # tres veces seguidas. #}
                                 {% if scope != 'everyone' or call %}
+                                {# Los tres hijos son DIRECTOS —marca, qué, cuándo— porque la
+                                 # fila es una rejilla de tres columnas: envolver los textos en
+                                 # un div los metía a los dos en la segunda y dejaba la mitad
+                                 # derecha de la tarjeta vacía. #}
                                 <li class="vol-calls__item{{ call ? ' is-sent' : '' }}">
                                     <i class="fa {{ call ? 'fa-check-circle' : 'fa-circle-o' }}" aria-hidden="true"></i>
-                                    <div>
-                                        <p class="vol-calls__what">{{ label }}</p>
+                                    <p class="vol-calls__what">{{ label }}</p>
                                         <p class="vol-calls__when">
                                             {% if call %}
                                                 Se envió el {{ call.sentAt|format_datetime(pattern="d 'de' MMMM 'a las' HH:mm", locale='es') }}{% if call.recipients %} a {{ call.recipients }} {{ call.recipients == 1 ? 'persona' : 'personas' }}{% endif %}
@@ -756,7 +773,6 @@
                                                 Sale después del anterior, si para entonces sigue faltando gente.
                                             {% endif %}
                                         </p>
-                                    </div>
                                 </li>
                                 {% endif %}
                             {% endfor %}
@@ -781,16 +797,18 @@
                              # Cuántas plazas faltan y cuánto queda ya lo dice la cabecera de la
                              # ficha; repetirlo aquí era lo que hacía el texto ilegible. #}
                             <div class="vol-shout">
-                                <p class="vol-shout__lead">
-                                    <i class="fa fa-bullhorn" aria-hidden="true"></i>
-                                    Los avisos automáticos ya han salido y sigue faltando gente.
-                                </p>
-                                <p class="vol-shout__note">
-                                    Este llega a {{ everyone_count }}
-                                    {{ everyone_count == 1 ? 'persona' : 'personas' }}, incluidas las
-                                    que pidieron que no se les avise de voluntariado. Sólo se puede
-                                    una vez por turno y no se puede deshacer.
-                                </p>
+                                <div class="vol-shout__text">
+                                    <p class="vol-shout__lead">
+                                        <i class="fa fa-bullhorn" aria-hidden="true"></i>
+                                        Los avisos automáticos ya han salido y sigue faltando gente.
+                                    </p>
+                                    <p class="vol-shout__note">
+                                        Este llega a {{ everyone_count }}
+                                        {{ everyone_count == 1 ? 'persona' : 'personas' }}, incluidas las
+                                        que pidieron que no se les avise de voluntariado. Sólo se puede
+                                        una vez por turno y no se puede deshacer.
+                                    </p>
+                                </div>
 
                                 <form method="post" action="{{ path('volunteering_notify_everyone', { id: shift.id }) }}"
                                       onsubmit="return confirm('Vas a avisar a {{ everyone_count }} personas. Esto no se puede deshacer y sólo se puede hacer una vez. ¿Seguro?');">
