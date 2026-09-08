@@ -249,6 +249,40 @@ class VolunteerCallEscalatorTest extends TestCase
     }
 
     /**
+     * SI LA ESPERA CAE DESPUÉS DEL TURNO, EL PASO SIGUIENTE YA NO EXISTE. Es el
+     * caso normal de una tarea urgente: primer aviso al publicar, con menos de
+     * 24 horas de margen, así que el segundo tocaría cuando el turno ya ha
+     * empezado y no llega a tiempo.
+     *
+     * Aquí `nextScope()` con el reloj adelantado devuelve null no porque se hayan
+     * dado todos los pasos, sino porque en ese momento el turno ya no está
+     * abierto — y por eso el aviso general SÍ se ofrece: no queda automatismo del
+     * que esperar nada. La pantalla tiene que contar eso mismo y no «sale después
+     * del anterior», que era lo que decía.
+     */
+    public function testSiLaEsperaCaeDespuesDelTurnoSeOfreceElGeneral(): void
+    {
+        // Turno el 15 a las 17:00; primer aviso el 14 a las 20:00, así que la
+        // ampliación tocaría el 15 a las 20:00: tres horas tarde.
+        $shift = $this->shift(openToAnyone: true, categorised: true);
+        $escalator = $this->escalator(
+            [VolunteerCall::SCOPE_MATCHING],
+            $this->call('2099-03-14 20:00')
+        );
+
+        $now = $this->moment('2099-03-14 21:00');
+
+        $this->assertNull(
+            $escalator->nextScope($shift, $this->moment('2099-03-15 20:00')),
+            'A esa hora el turno ya ha empezado: no hay paso siguiente que dar.'
+        );
+        $this->assertTrue(
+            $escalator->shouldOfferEveryone($shift, $now),
+            'Sin automatismo que espere y con el turno encima, el aviso a mano es la única salida.'
+        );
+    }
+
+    /**
      * Una tarea que no es para cualquiera sólo tiene un paso automático: dado
      * ése, ya no queda nada que ampliar solo, así que el aviso general es la
      * única salida que le queda a quien coordina.
