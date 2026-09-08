@@ -14,6 +14,25 @@
 /** A dónde va un aviso que llegó sin URL (no debería pasar, pero pasa). */
 var DEFAULT_URL = '/panel/voluntariado';
 
+// TOMA EL CONTROL EN CUANTO SE INSTALA, sin esperar a que se cierren todas las
+// pestañas del sitio. Por defecto un service worker nuevo se queda "en espera"
+// mientras el viejo siga atendiendo alguna pestaña abierta, y eso aquí significa
+// que un arreglo del aviso —un icono que faltaba, un enlace mal— tarda días en
+// llegar a quien tiene la web abierta a diario. Se notó al añadir el icono: el
+// aviso siguió saliendo pelado porque lo atendía el service worker anterior.
+//
+// El riesgo habitual de skipWaiting es dejar la página con assets cacheados de
+// una versión y código de otra. Aquí no aplica: este service worker NO cachea
+// nada —no escucha 'fetch'— y sólo atiende 'push' y 'notificationclick', que son
+// autónomos.
+self.addEventListener('install', function () {
+    self.skipWaiting();
+});
+
+self.addEventListener('activate', function (event) {
+    event.waitUntil(self.clients.claim());
+});
+
 self.addEventListener('push', function (event) {
     var data = {};
     try {
