@@ -15,7 +15,7 @@
 {% import '_macros/csa.html.twig' as csa %}
 {% import '_macros/volunteering.html.twig' as vol %}
 
-{% block title %}Voluntariado · Qué hay que hacer{% endblock %}
+{% block title %}Voluntariado · Todos los turnos{% endblock %}
 
 {% block more_css %}
     {{ parent() }}
@@ -37,7 +37,10 @@
 {% block csa_main %}
 <div class="prl">
 
-    {{ csa.page_header('Voluntariado', 'Qué hay que hacer', 'Los días concretos en que se trabaja, y quién se apunta a cada uno.') }}
+    {# El h1 dice lo mismo que el menú a propósito: si el enlace pone «Todos los
+     # turnos» y la pantalla se titula distinto, cuesta saber si se llegó bien. #}
+    {{ csa.page_header('Voluntariado', 'Todos los turnos', 'Los días concretos en que se trabaja, y quién se apunta a cada uno. Para ver el mes de un vistazo, el cuadrante.',
+        { icon: 'fa-list-ul', accent: 'sky' }) }}
 
     {# Un listado vacío tiene que explicarse. Sin esto, quien está marcada como
      # candidata en Usuarias pero aún no coordina ningún área ve una tabla sin
@@ -119,12 +122,10 @@
                 </div>
             </div>
 
+            {# Sólo la acción, no la navegación: «Calendario», «Tareas» y «Áreas»
+             # eran tres botones que repetían el menú de la izquierda, y competían
+             # con el único botón que hace algo aquí. #}
             <div style="margin-left: auto; display: flex; gap: 8px;">
-                {{ csa.btn('Calendario', { variant: 'ghost', icon: 'fa-calendar', href: path('volunteering_calendar') }) }}
-                {{ csa.btn('Tareas', { variant: 'ghost', icon: 'fa-list-ul', href: path('volunteering_tasks') }) }}
-                {% if is_granted('ROLE_GESTION_VOLUNTARIADO_EDIT') %}
-                    {{ csa.btn('Áreas', { variant: 'ghost', icon: 'fa-tags', href: path('volunteering_categories') }) }}
-                {% endif %}
                 {{ csa.btn('Nueva tarea', { variant: 'primary', icon: 'fa-plus', href: path('volunteering_new') }) }}
             </div>
         </div>

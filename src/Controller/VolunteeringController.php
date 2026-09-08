@@ -30,6 +30,7 @@ use App\Service\Volunteering\ShiftCalendar;
 use App\Service\Volunteering\ShiftGenerator;
 use App\Service\Volunteering\TaskCoordinator;
 use App\Service\Volunteering\VolunteerAudienceResolver;
+use App\Service\Volunteering\VolunteerCallEscalator;
 use App\Service\Volunteering\VolunteerCallNotifier;
 use App\Service\Volunteering\VolunteerEventRecorder;
 use App\Service\Volunteering\VolunteerOfferChangeNotifier;
@@ -717,16 +718,27 @@ class VolunteeringController extends AbstractController
         PartnerRepository $partners,
         VolunteerSignupRepository $signups,
         VolunteerSuggester $suggester,
+        VolunteerCallEscalator $escalator,
     ): Response {
-        $sent = $calls->sentScopes($shift);
+        $now = new \DateTimeImmutable();
         $phase = $shift->getPhase();
         $year = (int) date('Y');
+
+        // Qué aviso automático queda por salir y a partir de cuándo. Se pregunta
+        // con el reloj puesto DESPUÉS de la espera pendiente: `nextScope()`
+        // contesta «qué toca ahora», y lo que la pantalla cuenta es «qué va a
+        // pasar», que en pleno margen de espera no es lo mismo.
+        $opensAt = $escalator->escalationOpensAt($shift);
+        $pendingScope = $escalator->nextScope(
+            $shift,
+            null !== $opensAt && $opensAt > $now ? $opensAt : $now
+        );
+        $offerEveryone = $escalator->shouldOfferEveryone($shift, $now);
 
         return $this->render('Volunteering/shift.html.twig', [
             'shift' => $shift,
             'offer' => $shift->getOffer(),
             'phase' => $phase,
-            'sent_scopes' => $sent,
             // Lo que cada persona lleva hecho, en UNA consulta para toda la
             // tabla: preguntarlo fila a fila sería un N+1 con tantas consultas
             // como gente apuntada.
@@ -745,9 +757,20 @@ class VolunteeringController extends AbstractController
                 ['name' => 'ASC', 'surname' => 'ASC']
             ),
             // Cuánta gente recibiría el aviso general, para que quien pulsa el
-            // botón vea el número ANTES de molestar a media asociación.
-            'everyone_count' => $audience->count($shift, VolunteerCall::SCOPE_EVERYONE),
-            'everyone_sent' => \in_array(VolunteerCall::SCOPE_EVERYONE, $sent, true),
+            // botón vea el número ANTES de molestar a media asociación. Sólo se
+            // cuenta si el botón va a salir: es una consulta de agregado y en la
+            // mayoría de las visitas nadie va a leer el número.
+            'everyone_count' => $offerEveryone
+                ? $audience->count($shift, VolunteerCall::SCOPE_EVERYONE)
+                : 0,
+            // Los avisos con su fecha, para poder contar cuándo salió cada uno
+            // en vez de pintar una casilla marcada.
+            'calls_by_scope' => $calls->byScope($shift),
+            'pending_scope' => $pendingScope,
+            'escalation_opens_at' => $opensAt,
+            // El aviso general se ofrece sólo cuando ya no queda otra: la regla
+            // vive en el escalador, con el resto del «cuándo se avisa».
+            'offer_everyone' => $offerEveryone,
         ]);
     }
 

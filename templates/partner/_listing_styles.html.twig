@@ -61,19 +61,28 @@
     display: flex; border-bottom: 2px solid var(--prl-ink);
     margin-bottom: 18px; flex-wrap: wrap;
 }
+/* El borde inferior transparente NO es decorativo: la pestaña se solapa 2px
+   sobre la línea del contenedor (`margin-bottom: -2px`) y su fondo la taparía.
+   Reservándolo aquí, el hover y la activa sólo cambian su COLOR y la línea
+   nunca se rompe ni la caja cambia de alto. Antes la activa era 2px más alta
+   que las demás por declarar el borde ella sola. */
 .prl-tabs a {
-    background: transparent; padding: 12px 22px 10px;
+    background: transparent; padding: 12px 22px 8px;
     cursor: pointer; color: var(--prl-ink-soft);
     border-radius: 6px 6px 0 0; margin-bottom: -2px;
+    border-bottom: 2px solid transparent;
     text-decoration: none; transition: 0.15s;
     display: flex; align-items: center; gap: 8px;
     font-family: 'Fraunces', serif; font-weight: 500; font-size: 15px;
     letter-spacing: -0.005em;
 }
-.prl-tabs a:hover { color: var(--prl-ink); background: var(--prl-surface); }
+.prl-tabs a:hover {
+    color: var(--prl-ink); background: var(--prl-surface);
+    border-bottom-color: var(--prl-ink);
+}
 .prl-tabs a.active {
     background: var(--prl-ink); color: #fff;
-    border-bottom: 2px solid var(--prl-ink);
+    border-bottom-color: var(--prl-ink);
 }
 .prl-tabs a .count {
     font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 600;

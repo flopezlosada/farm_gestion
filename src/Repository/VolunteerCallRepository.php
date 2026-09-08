@@ -40,6 +40,36 @@ class VolunteerCallRepository extends ServiceEntityRepository
     }
 
     /**
+     * Los avisos de un turno indexados por alcance, para poder decir CUÁNDO se
+     * mandó cada uno y no sólo que se mandó.
+     *
+     * {@see sentScopes()} sigue existiendo porque al escalado le basta la lista
+     * de nombres y es una consulta escalar; esto trae las entidades y lo usa la
+     * pantalla, que necesita la fecha.
+     *
+     * @param VolunteerShift $shift el turno
+     *
+     * @return array<string, VolunteerCall> por VolunteerCall::SCOPE_*
+     */
+    public function byScope(VolunteerShift $shift): array
+    {
+        $calls = $this->createQueryBuilder('c')
+            ->where('c.shift = :shift')
+            ->setParameter('shift', $shift)
+            ->orderBy('c.sentAt', 'ASC')
+            ->getQuery()
+            ->getResult();
+
+        $byScope = [];
+        foreach ($calls as $call) {
+            /* @var VolunteerCall $call */
+            $byScope[$call->getScope()] = $call;
+        }
+
+        return $byScope;
+    }
+
+    /**
      * La última llamada enviada por un turno, sea del alcance que sea. El
      * escalado la necesita para respetar el margen de espera antes de abrir el
      * aviso a más gente: sin ese margen, los dos pasos saldrían en el mismo tick

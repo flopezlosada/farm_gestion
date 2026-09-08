@@ -72,6 +72,35 @@ html {
   margin-bottom: var(--csa-sp-2);
 }
 .csa-page-header h1 { margin-bottom: var(--csa-sp-2); }
+
+/* Marca de sección. Sólo aparece si la llamada al macro pide `icon`, así que
+   las cabeceras de siempre no cambian ni un píxel: el wrapper __text se apila
+   igual que antes mientras no haya flex.
+
+   El color NO es semántico —no dice OK, aviso ni peligro— y por eso se queda
+   fuera de los acentos con carga (terracotta es destructivo). Aquí sólo separa
+   materias en un módulo cuyos listados son idénticos entre sí. */
+.csa-page-header--marked {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--csa-sp-4);
+}
+.csa-page-header__mark {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--csa-radius-md);
+  font-size: 20px;
+  background: var(--csa-section-soft, var(--csa-surface-alt));
+  color: var(--csa-section, var(--csa-ink-soft));
+}
+.csa-page-header--sky   { --csa-section: var(--csa-sky);   --csa-section-soft: var(--csa-sky-soft); }
+.csa-page-header--green { --csa-section: var(--csa-green); --csa-section-soft: var(--csa-green-soft); }
+.csa-page-header--plum  { --csa-section: var(--csa-plum);  --csa-section-soft: var(--csa-plum-soft); }
+.csa-page-header--ochre { --csa-section: var(--csa-ochre); --csa-section-soft: var(--csa-ochre-soft); }
+
 .csa-page-header .csa-lead {
   font-family: var(--csa-serif);
   font-style: italic;

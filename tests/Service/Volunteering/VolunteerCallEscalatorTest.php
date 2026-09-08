@@ -189,6 +189,126 @@ class VolunteerCallEscalatorTest extends TestCase
     }
 
     /**
+     * El aviso general se ofrece cuando el automatismo ya ha hecho lo suyo, el
+     * turno sigue sin cubrirse y la fecha está encima.
+     */
+    public function testElAvisoGeneralSeOfreceCuandoYaNoQuedaOtra(): void
+    {
+        $shift = $this->shift(openToAnyone: true, categorised: true);
+        $escalator = $this->escalator(
+            [VolunteerCall::SCOPE_MATCHING, VolunteerCall::SCOPE_UNSPECIFIED],
+            $this->call('2099-03-13 10:00')
+        );
+
+        $this->assertTrue($escalator->shouldOfferEveryone($shift, $this->moment('2099-03-14 10:00')));
+    }
+
+    /**
+     * A dos semanas del turno no se ofrece: todavía se cubre solo, y ofrecerlo
+     * convierte en rutina el gesto que más caro se paga.
+     */
+    public function testElAvisoGeneralNoSeOfreceSiFaltaMucho(): void
+    {
+        $shift = $this->shift(openToAnyone: true, categorised: true);
+        $escalator = $this->escalator(
+            [VolunteerCall::SCOPE_MATCHING, VolunteerCall::SCOPE_UNSPECIFIED],
+            $this->call('2099-02-28 10:00')
+        );
+
+        $this->assertFalse($escalator->shouldOfferEveryone($shift, $this->moment('2099-03-01 10:00')));
+    }
+
+    /**
+     * Y no se ofrece mientras quede un paso automático por dar, aunque la fecha
+     * apriete: para eso está el escalado.
+     */
+    public function testElAvisoGeneralNoSeOfreceSiQuedaUnPasoAutomatico(): void
+    {
+        $shift = $this->shift(openToAnyone: true, categorised: true);
+        $escalator = $this->escalator([VolunteerCall::SCOPE_MATCHING]);
+
+        $this->assertFalse($escalator->shouldOfferEveryone($shift, $this->moment('2099-03-14 10:00')));
+    }
+
+    /**
+     * EL CASO QUE JUSTIFICA MIRAR EL RELOJ ADELANTADO. En pleno margen de espera,
+     * «qué toca ahora» es null porque el siguiente paso aún no puede salir — pero
+     * va a salir. Preguntándolo con el reloj de verdad, la pantalla concluiría
+     * que ya no queda automatismo y ofrecería el aviso general un día antes de
+     * tiempo, gastando el canal de 246 personas por adelantado.
+     */
+    public function testEnPlenoMargenDeEsperaTodaviaNoSeOfrece(): void
+    {
+        $shift = $this->shift(openToAnyone: true, categorised: true);
+        $escalator = $this->escalator(
+            [VolunteerCall::SCOPE_MATCHING],
+            $this->call('2099-03-14 09:00')
+        );
+
+        $this->assertFalse($escalator->shouldOfferEveryone($shift, $this->moment('2099-03-14 10:00')));
+    }
+
+    /**
+     * Una tarea que no es para cualquiera sólo tiene un paso automático: dado
+     * ése, ya no queda nada que ampliar solo, así que el aviso general es la
+     * única salida que le queda a quien coordina.
+     */
+    public function testUnaTareaCerradaOfreceElGeneralTrasSuUnicoPaso(): void
+    {
+        $shift = $this->shift(openToAnyone: false, categorised: true);
+        $escalator = $this->escalator(
+            [VolunteerCall::SCOPE_MATCHING],
+            $this->call('2099-03-13 10:00')
+        );
+
+        $this->assertTrue($escalator->shouldOfferEveryone($shift, $this->moment('2099-03-14 10:00')));
+    }
+
+    /**
+     * Sólo se puede una vez por turno: mandado, el botón desaparece.
+     */
+    public function testElAvisoGeneralNoSeOfreceDosVeces(): void
+    {
+        $shift = $this->shift(openToAnyone: true, categorised: true);
+        $escalator = $this->escalator(
+            [VolunteerCall::SCOPE_MATCHING, VolunteerCall::SCOPE_UNSPECIFIED, VolunteerCall::SCOPE_EVERYONE],
+            $this->call('2099-03-14 09:00')
+        );
+
+        $this->assertFalse($escalator->shouldOfferEveryone($shift, $this->moment('2099-03-14 10:00')));
+    }
+
+    /**
+     * Un turno lleno no pide gente por ninguna vía, tampoco la de a mano.
+     */
+    public function testUnTurnoLlenoNoOfreceElAvisoGeneral(): void
+    {
+        $shift = $this->shift(slots: 1, categorised: true);
+        $shift->addSignup((new VolunteerSignup())->setPartner(new Partner()));
+        $escalator = $this->escalator(
+            [VolunteerCall::SCOPE_MATCHING, VolunteerCall::SCOPE_UNSPECIFIED],
+            $this->call('2099-03-13 10:00')
+        );
+
+        $this->assertFalse($escalator->shouldOfferEveryone($shift, $this->moment('2099-03-14 10:00')));
+    }
+
+    /**
+     * Ni uno que ya empezó: pedir gente para algo que está pasando no trae a
+     * nadie y gasta el canal igual.
+     */
+    public function testUnTurnoPasadoNoOfreceElAvisoGeneral(): void
+    {
+        $shift = $this->shift(openToAnyone: true, categorised: true);
+        $escalator = $this->escalator(
+            [VolunteerCall::SCOPE_MATCHING, VolunteerCall::SCOPE_UNSPECIFIED],
+            $this->call('2099-03-14 10:00')
+        );
+
+        $this->assertFalse($escalator->shouldOfferEveryone($shift, $this->moment('2099-03-20 10:00')));
+    }
+
+    /**
      * Un turno publicado, futuro, con plazas y sin acompañantes.
      *
      * SIN categorías por defecto, a propósito: es el caso que encalla si el
