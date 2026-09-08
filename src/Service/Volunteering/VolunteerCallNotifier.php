@@ -51,15 +51,6 @@ use Psr\Log\LoggerInterface;
  */
 class VolunteerCallNotifier
 {
-    /**
-     * El título de un aviso pedido a mano a una persona ({@see ask()}).
-     *
-     * No dice cuántas plazas faltan, como el de ámbito: a quien se lo piden por
-     * su nombre lo que le importa es que se lo piden a ella. El qué, el cuándo y
-     * el dónde van en el cuerpo, igual que en el otro.
-     */
-    private const ASK_TITLE = 'Te piden ayuda';
-
     public function __construct(
         private readonly VolunteerShiftRepository $shifts,
         private readonly UserRepository $users,
@@ -295,8 +286,8 @@ class VolunteerCallNotifier
             $this->inbox->deliver(
                 $inboxRecipients,
                 Notification::KIND_VOLUNTEERING_CALL,
-                self::ASK_TITLE,
-                $this->body($shift),
+                $this->askTitle($shift),
+                $this->askBody($shift),
             );
             $ways[] = 'inbox';
         }
@@ -312,8 +303,8 @@ class VolunteerCallNotifier
             // entonces no se puede decir que le haya llegado por aquí.
             $reached = $this->push->sendToMany(
                 $inboxRecipients,
-                self::ASK_TITLE,
-                $this->body($shift),
+                $this->askTitle($shift),
+                $this->askBody($shift),
                 $this->link->pathForKind(Notification::KIND_VOLUNTEERING_CALL),
             );
 
@@ -330,7 +321,7 @@ class VolunteerCallNotifier
         if ($this->emailEnabled() && $partner->getEmail()) {
             $byEmail = $this->preferences->filter($partners, NotificationTopic::VOLUNTEERING, NotificationTopic::CHANNEL_EMAIL);
             if ([] !== $byEmail) {
-                $this->email($shift, $byEmail);
+                $this->email($shift, $byEmail, $this->askTitle($shift));
                 $ways[] = 'email';
             }
         }
@@ -358,6 +349,54 @@ class VolunteerCallNotifier
     {
         return !$partner->isVolunteeringOptOut()
             && Partner::STATUS_ACTIVO === $partner->getStatus();
+    }
+
+    /**
+     * El título del aviso que se le pide a mano a una persona.
+     *
+     * LLEVA EL NOMBRE DE LA TAREA, a diferencia del de ámbito («Faltan 2
+     * personas»), y por eso el cuerpo de este aviso NO lo repite: en una
+     * notificación del móvil el título es lo único que se lee seguro, así que
+     * ahí va lo que identifica de qué se trata.
+     *
+     * NO LLEVA «CSA» ni el nombre de la asociación: eso ya lo pone el navegador
+     * —el origen debajo del texto, o el nombre de la app si está instalada— y el
+     * icono del `sw.js` lo dice sin gastar ni una letra. Metido en el título sólo
+     * empujaría el nombre de la tarea fuera de lo que se ve.
+     *
+     * @param VolunteerShift $shift el turno para el que se pide ayuda
+     *
+     * @return string el título
+     */
+    private function askTitle(VolunteerShift $shift): string
+    {
+        $title = $shift->getOffer()?->getTitle();
+
+        return null !== $title
+            ? sprintf('Hace falta gente para la tarea: %s, ¿puedes unirte?', $title)
+            : 'Hace falta gente, ¿puedes unirte?';
+    }
+
+    /**
+     * El cuerpo del aviso pedido a mano: cuándo y dónde, sin repetir la tarea
+     * —que ya va en el título— para no gastar en eco las dos líneas que el móvil
+     * enseña.
+     *
+     * @param VolunteerShift $shift el turno
+     *
+     * @return string el cuerpo
+     */
+    private function askBody(VolunteerShift $shift): string
+    {
+        $offer = $shift->getOffer();
+        $parts = [$this->formatter->date($shift->getStartsAt())];
+
+        $where = null !== $offer ? $this->formatter->place($offer) : null;
+        if (null !== $where) {
+            $parts[] = $where;
+        }
+
+        return implode(' · ', $parts);
     }
 
     /**
@@ -397,8 +436,9 @@ class VolunteerCallNotifier
      *
      * @param VolunteerShift $shift    el turno
      * @param list<Partner>  $partners quienes lo quieren por correo
+     * @param string|null    $subject  título propio; por defecto, el del aviso de ámbito
      */
-    private function email(VolunteerShift $shift, array $partners): void
+    private function email(VolunteerShift $shift, array $partners, ?string $subject = null): void
     {
         if ([] === $partners) {
             return;
@@ -409,7 +449,10 @@ class VolunteerCallNotifier
             return;
         }
 
-        $title = $this->title($shift);
+        // El aviso pedido a mano tiene su propio título y el correo lleva el
+        // mismo: recibir un push que dice una cosa y un correo que dice otra por
+        // la misma petición se lee como dos peticiones distintas.
+        $title = $subject ?? $this->title($shift);
         $when = $this->formatter->date($shift->getStartsAt());
         $where = $this->formatter->place($offer);
         $url = $this->urlGenerator->generate('panel_volunteering', [], UrlGeneratorInterface::ABSOLUTE_URL);
@@ -425,7 +468,11 @@ class VolunteerCallNotifier
                 $this->mailer->send(
                     (new TemplatedEmail())
                         ->to($address)
-                        ->subject($title . ': ' . $offer->getTitle())
+                        // El de ámbito («Faltan 2 personas») necesita que se le
+                        // pegue la tarea para que el asunto diga de qué va; el
+                        // pedido a mano ya la lleva dentro, y pegarla otra vez la
+                        // repetía en la misma línea.
+                        ->subject(null !== $subject ? $subject : $title . ': ' . $offer->getTitle())
                         ->htmlTemplate('email/volunteer_call.html.twig')
                         ->textTemplate('email/volunteer_call.txt.twig')
                         ->context([

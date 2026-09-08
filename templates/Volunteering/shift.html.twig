@@ -664,16 +664,24 @@
                                                     Se le pidió el {{ asked.occurredAt|format_datetime(pattern="d 'de' MMMM", locale='es') }}
                                                 </span>
                                             {% elseif can_edit and reachable[who.id]|default(false) %}
-                                                {# SIN `confirm()`. El diálogo del navegador no se puede
-                                                 # estilar, corta la pantalla y aquí no aporta: sólo se
-                                                 # puede pedir una vez por turno, así que un clic de más
-                                                 # no manda nada, y lo que pasa se cuenta después. La
-                                                 # fricción se la queda el aviso a toda la asociación,
-                                                 # que sí es irreversible. #}
-                                                <form method="post" action="{{ path('volunteering_ask', { id: shift.id, partner: who.id }) }}">
-                                                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_ask') }}">
-                                                    {{ csa.btn('Pedírselo', { variant: 'secondary', type: 'submit', icon: 'fa-bell-o', size: 'sm' }) }}
-                                                </form>
+                                                {# Con el diálogo del proyecto (csa.confirm_dialog) y no
+                                                 # con el del navegador: sólo se puede pedir una vez por
+                                                 # turno, así que conviene que quien pulsa sepa a quién
+                                                 # va a sonarle el móvil antes de gastar ese único
+                                                 # intento. #}
+                                                <button type="button" class="csa-btn csa-btn--secondary csa-btn--sm"
+                                                        onclick="document.getElementById('confirm-ask-{{ who.id }}').showModal()">
+                                                    <i class="fa fa-bell-o"></i><span>Pedírselo</span>
+                                                </button>
+                                                {{ csa.confirm_dialog('confirm-ask-' ~ who.id, {
+                                                    variant: 'info',
+                                                    eyebrow: 'Sólo una vez',
+                                                    title: 'Pedirle a ' ~ who.name|capitalize ~ ' que venga',
+                                                    body: 'Le llega un aviso con la tarea, el día y el sitio. Sólo se le puede pedir una vez por este turno; si luego hace falta insistir, tendrá que ser por teléfono.',
+                                                    confirm_label: 'Pedírselo',
+                                                    action: path('volunteering_ask', { id: shift.id, partner: who.id }),
+                                                    csrf_token: csrf_token('volunteering_ask'),
+                                                }) }}
                                             {% endif %}
                                             {% if who.celular %}
                                                 <a class="csa-btn csa-btn--ghost csa-btn--sm" href="tel:{{ who.celular|replace({' ': ''}) }}">
@@ -810,11 +818,23 @@
                                     </p>
                                 </div>
 
-                                <form method="post" action="{{ path('volunteering_notify_everyone', { id: shift.id }) }}"
-                                      onsubmit="return confirm('Vas a avisar a {{ everyone_count }} personas. Esto no se puede deshacer y sólo se puede hacer una vez. ¿Seguro?');">
-                                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_notify') }}">
-                                    {{ csa.btn('Avisar a toda la asociación', { variant: 'danger-soft', type: 'submit', icon: 'fa-bullhorn' }) }}
-                                </form>
+                                {# El gesto más caro de la pantalla, con el diálogo del
+                                 # proyecto: el del navegador enseñaba el número en un
+                                 # cuadro gris del sistema, sin jerarquía y sin poder
+                                 # distinguir esto de un «¿seguro?» cualquiera. #}
+                                <button type="button" class="csa-btn csa-btn--danger-soft"
+                                        onclick="document.getElementById('confirm-everyone').showModal()">
+                                    <i class="fa fa-bullhorn"></i><span>Avisar a toda la asociación</span>
+                                </button>
+                                {{ csa.confirm_dialog('confirm-everyone', {
+                                    variant: 'danger',
+                                    eyebrow: 'No se puede deshacer',
+                                    title: 'Avisar a ' ~ everyone_count ~ ' ' ~ (everyone_count == 1 ? 'persona' : 'personas'),
+                                    body: 'Les suena el móvil a todas, también a quienes pidieron que no se les avise de voluntariado. Sólo se puede hacer una vez por este turno.',
+                                    confirm_label: 'Avisar a todas',
+                                    action: path('volunteering_notify_everyone', { id: shift.id }),
+                                    csrf_token: csrf_token('volunteering_notify'),
+                                }) }}
                             </div>
                         {% endif %}
                     </div>
@@ -837,9 +857,12 @@
          # uno para anular un turno que hay que anular igual. Pero es lo que lee
          # quien estaba apuntadx en el aviso, así que se explica para qué sirve. #}
         {% if can_edit and not shift.cancelledAt and not is_past %}
-            <form method="post" action="{{ path('volunteering_shift_cancel', { id: shift.id }) }}"
-                  class="vol-cancel"
-                  onsubmit="return confirm('¿Anular este turno? Se avisa a quien estuviera apuntadx y no se volverá a crear al abrir turnos.');">
+            {# El diálogo va por `external_form_id` y no envolviendo su propio
+             # formulario: el motivo se teclea AQUÍ, en la pantalla, así que el
+             # form tiene que ser este y no uno que viva dentro del modal —donde
+             # el campo quedaría fuera y el motivo se perdería al confirmar. #}
+            <form id="vol-cancel-form" method="post" action="{{ path('volunteering_shift_cancel', { id: shift.id }) }}"
+                  class="vol-cancel">
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_shift_cancel') }}">
 
                 <p class="vol-cancel__title"><i class="fa fa-ban" aria-hidden="true"></i> Anular este turno</p>
@@ -855,9 +878,21 @@
                                placeholder="es festivo, llueve, no hay material…">
                     </label>
 
-                    {{ csa.btn('Anular este turno', { variant: 'danger-soft', type: 'submit', icon: 'fa-ban' }) }}
+                    <button type="button" class="csa-btn csa-btn--danger-soft"
+                            onclick="document.getElementById('confirm-cancel-shift').showModal()">
+                        <i class="fa fa-ban"></i><span>Anular este turno</span>
+                    </button>
                 </div>
             </form>
+
+            {{ csa.confirm_dialog('confirm-cancel-shift', {
+                variant: 'danger',
+                eyebrow: 'Se avisa a quien viniera',
+                title: 'Anular el turno del ' ~ shift.startsAt|format_date(pattern="d 'de' MMMM", locale='es'),
+                body: 'Se avisa a quien estuviera apuntadx y este día no se volverá a crear al abrir turnos. La tarea sigue como está: sólo se cae este día.',
+                confirm_label: 'Anular el turno',
+                external_form_id: 'vol-cancel-form',
+            }) }}
         {% endif %}
     </div>
 {% endblock %}
