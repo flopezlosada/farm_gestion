@@ -220,6 +220,209 @@ class VolunteerCallNotifier
     }
 
     /**
+     * Pedírselo a UNA persona concreta, desde la ficha del turno.
+     *
+     * NO ES UN ALCANCE Y NO ESCRIBE {@see VolunteerCall}, y eso es lo que lo
+     * separa de {@see dispatch()}. Aquel registro existe para que el
+     * planificador no repita un aviso masivo, y su UNIQUE (shift, scope) es lo
+     * que lo garantiza; meter aquí un ámbito "personal" que hubiera que exceptuar
+     * de esa unicidad rompería la única invariante que protege a la asociación de
+     * recibir el mismo aviso dos veces. El rastro de esto es un
+     * {@see VolunteerEvent}, que es donde vive el "quién hizo qué" del módulo.
+     *
+     * TAMPOCO ESCALA NADA. La escalada automática se guía por los ámbitos ya
+     * enviados, así que pedírselo a una persona no adelanta ni consume ningún
+     * paso: el aviso a quien tiene marcada el área saldrá igual cuando le toque.
+     * Es deliberado — esto es una conversación, no un canal.
+     *
+     * VA POR LAS TRES VÍAS, como el aviso de ámbito, y respetando las mismas
+     * preferencias: quien pidió que no se le avise por el móvil no recibe push
+     * porque alguien se lo pida a mano. La copia en la bandeja es el suelo, y por
+     * eso es la que hace que esto sirva para quien nunca se suscribió al push.
+     *
+     * SIN CUENTA TODAVÍA PUEDE HABER CORREO, y conviene no confundirlo: la
+     * bandeja y el push cuelgan de la cuenta de acceso, pero la dirección de
+     * correo vive en la ficha del socix. Alguien que nunca ha entrado en la web
+     * pero tiene su correo puesto sí se entera — es el mismo caso que ya cubre el
+     * aviso de ámbito.
+     *
+     * 🔴 COMPRUEBA EL OPT-OUT DURO AUNQUE LA PANTALLA YA LO FILTRE, y no es
+     * redundancia. Son DOS mecanismos distintos y sólo uno de los dos lo miran
+     * las preferencias:
+     *
+     *  - `Partner::isVolunteeringOptOut()` es la columna dedicada, el "no me
+     *    avises de voluntariado" que el socix marca en su panel. La consultan las
+     *    tres consultas que alimentan {@see VolunteerAudienceResolver}, así que
+     *    todo el camino automático lo respeta.
+     *  - `NotificationOptOut`, que es lo que lee {@see NotificationPreferences},
+     *    es otra tabla y es fino por tema y canal. **No mira esa columna.**
+     *
+     * Quien usó el interruptor duro es justo quien no va a tener fila en la tabla
+     * fina, así que confiar sólo en las preferencias dejaba pasar el aviso
+     * precisamente a quien más claro lo había dicho. Y la lista de la pantalla no
+     * sirve de garantía: la filtra un GET, pero el POST recibe un id y basta con
+     * tener la ficha cargada de antes de que esa persona lo marcara.
+     *
+     * Es el daño que todo el escalado existe para evitar —el permiso del
+     * navegador se pierde una vez y para siempre— y llegaba por la puerta de
+     * atrás.
+     *
+     * @param VolunteerShift $shift   el turno para el que se pide ayuda
+     * @param Partner        $partner a quién se le pide
+     *
+     * @return list<string> las vías por las que salió: 'inbox', 'push', 'email'
+     */
+    public function ask(VolunteerShift $shift, Partner $partner): array
+    {
+        if (null === $shift->getOffer() || !$this->canBeAsked($partner)) {
+            return [];
+        }
+
+        $partners = [$partner];
+        $ways = [];
+
+        $inboxRecipients = $this->users->findByPartners($partners);
+        if ([] !== $inboxRecipients) {
+            $this->inbox->deliver(
+                $inboxRecipients,
+                Notification::KIND_VOLUNTEERING_CALL,
+                $this->askTitle($shift),
+                $this->askBody($shift),
+            );
+            $ways[] = 'inbox';
+        }
+
+        // El push cuelga de la CUENTA, no de la persona: sin cuenta no hay
+        // navegador que se haya podido suscribir, y preguntarlo sería una
+        // consulta para no encontrar nada.
+        if ([] !== $inboxRecipients
+            && [] !== $this->preferences->filter($partners, NotificationTopic::VOLUNTEERING, NotificationTopic::CHANNEL_PUSH)
+        ) {
+            // El envío devuelve NAVEGADORES alcanzados, no personas: cero
+            // significa que esta persona no tiene ningún dispositivo suscrito, y
+            // entonces no se puede decir que le haya llegado por aquí.
+            $reached = $this->push->sendToMany(
+                $inboxRecipients,
+                $this->askTitle($shift),
+                $this->askBody($shift),
+                $this->link->pathForKind(Notification::KIND_VOLUNTEERING_CALL),
+            );
+
+            if ($reached > 0) {
+                $ways[] = 'push';
+            }
+        }
+
+        // La dirección se comprueba AQUÍ y no se deja para `email()`, que salta
+        // en silencio a quien no la tiene: con una sola persona delante, esa
+        // comprobación es exacta, y sin ella la pantalla diría «le llega por
+        // correo» a quien no tiene correo en su ficha. Lo que se le cuenta a
+        // quien acaba de pulsar el botón decide si además coge el teléfono.
+        if ($this->emailEnabled() && $partner->getEmail()) {
+            $byEmail = $this->preferences->filter($partners, NotificationTopic::VOLUNTEERING, NotificationTopic::CHANNEL_EMAIL);
+            if ([] !== $byEmail) {
+                $this->email($shift, $byEmail, $this->askTitle($shift));
+                $ways[] = 'email';
+            }
+        }
+
+        return $ways;
+    }
+
+    /**
+     * Si a esta persona se le puede pedir algo, sea quien sea quien lo pida.
+     *
+     * Dos condiciones, las mismas que respetan los finders de
+     * {@see \App\Repository\PartnerRepository} de los que sale la audiencia
+     * automática: que no haya pedido que no se le avise de voluntariado, y que
+     * siga siendo socix activx. A quien se dio de baja no se le pide ayuda.
+     *
+     * Vive aquí y no sólo en el controlador porque es política de a-quién-se-le-
+     * manda, y este servicio es el único que manda: una comprobación en la
+     * pantalla se salta con un POST, una aquí no.
+     *
+     * @param Partner $partner a quién se le iba a pedir
+     *
+     * @return bool true si se le puede pedir
+     */
+    public function canBeAsked(Partner $partner): bool
+    {
+        return !$partner->isVolunteeringOptOut()
+            && Partner::STATUS_ACTIVO === $partner->getStatus();
+    }
+
+    /**
+     * El título del aviso que se le pide a mano a una persona.
+     *
+     * LLEVA EL NOMBRE DE LA TAREA, a diferencia del de ámbito («Faltan 2
+     * personas»), y por eso el cuerpo de este aviso NO lo repite: en una
+     * notificación del móvil el título es lo único que se lee seguro, así que
+     * ahí va lo que identifica de qué se trata.
+     *
+     * NO LLEVA «CSA» ni el nombre de la asociación: eso ya lo pone el navegador
+     * —el origen debajo del texto, o el nombre de la app si está instalada— y el
+     * icono del `sw.js` lo dice sin gastar ni una letra. Metido en el título sólo
+     * empujaría el nombre de la tarea fuera de lo que se ve.
+     *
+     * @param VolunteerShift $shift el turno para el que se pide ayuda
+     *
+     * @return string el título
+     */
+    private function askTitle(VolunteerShift $shift): string
+    {
+        $title = $shift->getOffer()?->getTitle();
+
+        return null !== $title
+            ? sprintf('Hace falta gente para la tarea: %s, ¿puedes unirte?', $title)
+            : 'Hace falta gente, ¿puedes unirte?';
+    }
+
+    /**
+     * El cuerpo del aviso pedido a mano: cuándo y dónde, sin repetir la tarea
+     * —que ya va en el título— para no gastar en eco las dos líneas que el móvil
+     * enseña.
+     *
+     * @param VolunteerShift $shift el turno
+     *
+     * @return string el cuerpo
+     */
+    private function askBody(VolunteerShift $shift): string
+    {
+        $offer = $shift->getOffer();
+        $parts = [$this->formatter->date($shift->getStartsAt())];
+
+        $where = null !== $offer ? $this->formatter->place($offer) : null;
+        if (null !== $where) {
+            $parts[] = $where;
+        }
+
+        return implode(' · ', $parts);
+    }
+
+    /**
+     * Si hay alguna vía por la que pedirle algo a esta persona.
+     *
+     * La pantalla la necesita para no pintar un botón que no puede hacer nada:
+     * quien lo pulsa se queda creyendo que ya se lo pidió y no coge el teléfono.
+     *
+     * 🔴 EL CORREO SÓLO CUENTA SI EL CANAL ESTÁ ENCENDIDO, y ése es el detalle
+     * que se me escapó: `EMAIL_VOLUNTEERING` viene **apagado de fábrica**
+     * (`AppSettings`, default false), así que dar por alcanzable a quien sólo
+     * tiene correo pintaba el botón y al pulsarlo no salía nada. Lo cazó el test
+     * funcional, que corre con los defaults del catálogo igual que producción.
+     *
+     * @param Partner $partner    a quién se le iba a pedir
+     * @param bool    $hasAccount si tiene cuenta para entrar en la web
+     *
+     * @return bool true si le llegaría por algún sitio
+     */
+    public function canReach(Partner $partner, bool $hasAccount): bool
+    {
+        // Con cuenta hay bandeja, que es el suelo y no depende de ningún ajuste.
+        return $hasAccount || ($this->emailEnabled() && (bool) $partner->getEmail());
+    }
+
+    /**
      * Manda el aviso por correo a quienes lo quieren por ahí.
      *
      * BEST-EFFORT, igual que el push: un correo que no sale no puede tumbar la
@@ -233,8 +436,9 @@ class VolunteerCallNotifier
      *
      * @param VolunteerShift $shift    el turno
      * @param list<Partner>  $partners quienes lo quieren por correo
+     * @param string|null    $subject  título propio; por defecto, el del aviso de ámbito
      */
-    private function email(VolunteerShift $shift, array $partners): void
+    private function email(VolunteerShift $shift, array $partners, ?string $subject = null): void
     {
         if ([] === $partners) {
             return;
@@ -245,7 +449,10 @@ class VolunteerCallNotifier
             return;
         }
 
-        $title = $this->title($shift);
+        // El aviso pedido a mano tiene su propio título y el correo lleva el
+        // mismo: recibir un push que dice una cosa y un correo que dice otra por
+        // la misma petición se lee como dos peticiones distintas.
+        $title = $subject ?? $this->title($shift);
         $when = $this->formatter->date($shift->getStartsAt());
         $where = $this->formatter->place($offer);
         $url = $this->urlGenerator->generate('panel_volunteering', [], UrlGeneratorInterface::ABSOLUTE_URL);
@@ -261,7 +468,11 @@ class VolunteerCallNotifier
                 $this->mailer->send(
                     (new TemplatedEmail())
                         ->to($address)
-                        ->subject($title . ': ' . $offer->getTitle())
+                        // El de ámbito («Faltan 2 personas») necesita que se le
+                        // pegue la tarea para que el asunto diga de qué va; el
+                        // pedido a mano ya la lleva dentro, y pegarla otra vez la
+                        // repetía en la misma línea.
+                        ->subject(null !== $subject ? $subject : $title . ': ' . $offer->getTitle())
                         ->htmlTemplate('email/volunteer_call.html.twig')
                         ->textTemplate('email/volunteer_call.txt.twig')
                         ->context([

@@ -35,7 +35,8 @@
 {% block csa_main %}
 <div class="prl">
 
-    {{ csa.page_header('Voluntariado', 'Tareas', 'Los trabajos que hace la asociación. De cada uno salen sus turnos.') }}
+    {{ csa.page_header('Voluntariado', 'Tareas', 'Los trabajos que hace la asociación. De cada uno salen sus turnos.',
+        { icon: 'fa-hand-paper-o', accent: 'green' }) }}
 
     {% if not coordinates_something %}
         {{ csa.callout('No coordinas ninguna área todavía, así que aquí no aparece nada. Pídele a administración que te asigne un área.', 'info') }}

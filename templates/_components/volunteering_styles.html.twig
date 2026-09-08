@@ -160,6 +160,49 @@
     .vol-repeat .csa-input { width: 5rem; }
     .vol-repeat .csa-select { width: auto; }
 
+    /* Anular un turno. Bloque propio y NO .vol-repeat: aquello estrecha su input
+       a 5rem, que es lo que quiere «cada N semanas» y lo que estropeaba el motivo
+       de la anulación. Encuadrado y al pie: se ve, pero no compite con lo que se
+       viene a hacer en esta pantalla. */
+    .vol-cancel {
+        margin-top: var(--csa-sp-8);
+        padding: var(--csa-sp-4) var(--csa-sp-5) var(--csa-sp-5);
+        border: 1px solid var(--csa-rule);
+        border-radius: var(--csa-radius-md);
+        background: var(--csa-surface-alt);
+    }
+    .vol-cancel__title {
+        margin: 0 0 var(--csa-sp-1);
+        font-family: var(--csa-serif);
+        font-size: var(--csa-fs-md);
+        color: var(--csa-ink);
+    }
+    .vol-cancel__title .fa { color: var(--csa-terracotta); margin-right: var(--csa-sp-2); }
+    .vol-cancel__help {
+        margin: 0 0 var(--csa-sp-4);
+        font-size: var(--csa-fs-sm);
+        color: var(--csa-ink-soft);
+        max-width: 62ch;
+    }
+    /* `flex-end` y no `center`: la etiqueta de dos líneas empuja el input hacia
+       abajo y el botón tiene que quedar a la altura del input, no del rótulo. */
+    .vol-cancel__row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--csa-sp-3);
+        align-items: flex-end;
+    }
+    .vol-cancel__field {
+        flex: 1 1 22rem;
+        display: flex;
+        flex-direction: column;
+        gap: var(--csa-sp-2);
+        font-size: var(--csa-fs-sm);
+        color: var(--csa-ink-soft);
+    }
+    .vol-cancel__field em { font-style: normal; color: var(--csa-ink-muted); }
+    .vol-cancel__field .csa-input { width: 100%; }
+
     /* Casilla con etiqueta al lado. Ver la macro vol.check: la macro csa.field
        le pone csa-input al widget y un checkbox acaba como un cuadrado enorme
        centrado, sin relación visual con lo que dice. */
@@ -282,20 +325,101 @@
     }
     .vol-chip a:hover { color: var(--csa-ink); }
 
-    /* Los tres avisos posibles de una tarea y en cuál está cada uno. */
-    .vol-scopes { list-style: none; margin: 0 0 var(--csa-sp-2); padding: 0; }
-    .vol-scopes li {
-        display: flex;
+    /* Los tres avisos de un turno: qué salió y qué va a salir.
+       Antes era `.vol-scopes`, una fila con una etiqueta «Enviado / Sin enviar»
+       a la derecha. Se leía como una lista de tareas por hacer y no lo es: dos
+       de los tres los abre el planificador solo y no hay botón que los lance.
+       Ahora cada línea es un hecho con su fecha, y lo que manda es la FRASE, no
+       la insignia. */
+    .vol-calls { list-style: none; margin: 0 0 var(--csa-sp-3); padding: 0; }
+    /* Tres columnas —marca, qué, cuándo— y el «cuándo» a la derecha. En una
+       tarjeta de mil y pico píxeles, apilar la frase debajo del rótulo dejaba
+       media pantalla vacía; puesta enfrente, la fila se lee de un barrido y el
+       ancho se usa. `minmax(0, …)` para que el texto largo parta en vez de
+       desbordar. */
+    .vol-calls__item {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) minmax(0, auto);
         gap: var(--csa-sp-3);
         align-items: baseline;
-        justify-content: space-between;
-        padding: var(--csa-sp-2) 0;
+        padding: var(--csa-sp-3) 0;
         border-bottom: 1px solid var(--csa-rule-soft);
+    }
+    .vol-calls__item:last-child { border-bottom: 0; }
+    /* El icono es lo único que separa hecho de no hecho, así que carga el color:
+       enviado en verde, pendiente en un gris que no compite. */
+    .vol-calls__item > .fa {
+        flex: none;
+        margin-top: 2px;
+        font-size: 15px;
+        color: var(--csa-ink-muted);
+    }
+    .vol-calls__item.is-sent > .fa { color: var(--csa-green); }
+    .vol-calls__what {
+        margin: 0;
         font-size: var(--csa-fs-sm);
+        font-weight: 500;
         color: var(--csa-ink);
     }
-    .vol-scopes li:last-child { border-bottom: 0; }
-    .vol-scopes .vol-help--muted { display: block; margin: 0; }
+    .vol-calls__when {
+        margin: 0;
+        font-size: var(--csa-fs-xs);
+        color: var(--csa-ink-soft);
+        text-align: right;
+        max-width: 52ch;
+    }
+
+    @media (max-width: 720px) {
+        /* Apilado: enfrentar las dos columnas en un móvil deja el «cuándo» en
+           una tira de tres palabras por línea. */
+        .vol-calls__item { grid-template-columns: auto minmax(0, 1fr); }
+        .vol-calls__when { grid-column: 2; text-align: left; margin-top: 2px; }
+    }
+
+    /* Pedirlo a toda la asociación. Separado por una regla y NO por un recuadro
+       de color: el `csa-callout` es un aviso de ancho de página y aquí, dentro
+       de la tarjeta, estiraba la frase en una línea de más de mil píxeles con la
+       mitad derecha vacía. El color de advertencia lo lleva ya el botón.
+       El botón va ENFRENTE del texto, no debajo: debajo dejaba vacía la mitad
+       derecha de la tarjeta, y además pegado al pie de un párrafo se pulsa sin
+       leerlo. */
+    .vol-shout {
+        display: flex;
+        gap: var(--csa-sp-5);
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        margin-top: var(--csa-sp-5);
+        padding-top: var(--csa-sp-4);
+        border-top: 1px solid var(--csa-rule);
+    }
+    .vol-shout__text { flex: 1 1 24rem; min-width: 0; }
+    .vol-shout form { flex: none; }
+    .vol-shout__lead {
+        margin: 0 0 var(--csa-sp-1);
+        font-family: var(--csa-serif);
+        font-size: var(--csa-fs-md);
+        line-height: var(--csa-lh-snug);
+        color: var(--csa-ink);
+    }
+    .vol-shout__lead .fa { color: var(--csa-ochre); margin-right: var(--csa-sp-2); }
+    .vol-shout__note {
+        margin: 0;
+        font-size: var(--csa-fs-sm);
+        line-height: var(--csa-lh-normal);
+        color: var(--csa-ink-soft);
+    }
+
+    /* «Ya se le pidió», en el sitio donde estaría su botón. */
+    .vol-suggest__asked {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--csa-sp-2);
+        font-size: var(--csa-fs-xs);
+        color: var(--csa-ink-muted);
+        white-space: nowrap;
+    }
+    .vol-suggest__asked .fa { color: var(--csa-green); }
 
     .vol-total {
         margin: 0 0 var(--csa-sp-2);
@@ -775,6 +899,11 @@
         color: var(--csa-ink-muted);
     }
     .vol-suggest__contact { display: flex; gap: var(--csa-sp-2); flex-shrink: 0; }
+    /* El formulario de «pedírselo» no debe formar caja: así su botón es un item
+       flex más, en fila con el teléfono y el correo, y hereda el `flex: 1` que
+       los estira en móvil. Sin esto el form se lleva el ancho y el botón sale
+       descolgado de la fila. */
+    .vol-suggest__contact form { display: contents; }
 
     @media (max-width: 640px) {
         .vol-suggest li { flex-direction: column; align-items: stretch; }

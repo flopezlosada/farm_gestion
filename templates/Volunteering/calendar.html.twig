@@ -19,7 +19,7 @@
 {% import '_macros/csa.html.twig' as csa %}
 {% import '_macros/volunteering.html.twig' as vol %}
 
-{% block title %}Voluntariado · Calendario · {{ month|format_date(pattern='MMMM y', locale='es')|capitalize }}{% endblock %}
+{% block title %}Voluntariado · Cuadrante · {{ month|format_date(pattern='MMMM y', locale='es')|capitalize }}{% endblock %}
 
 {% block more_css %}
     {{ parent() }}
@@ -31,7 +31,7 @@
     <span class="csa-topbar__crumbs-sep">/</span>
     <a href="{{ path('volunteering_index') }}">Voluntariado</a>
     <span class="csa-topbar__crumbs-sep">/</span>
-    <span class="csa-topbar__crumb-active">Calendario</span>
+    <span class="csa-topbar__crumb-active">Cuadrante</span>
 {% endblock %}
 
 {% block csa_main %}
@@ -41,9 +41,10 @@
     {% for items in days %}{% for item in items %}{% if item.kind == 'shift' and item.alarm %}{% set has_alarm = true %}{% endif %}{% endfor %}{% endfor %}
 
     <div class="scal-page">
-        {{ csa.page_header('Voluntariado', 'Calendario de turnos', offer
+        {{ csa.page_header('Voluntariado', 'Cuadrante', offer
             ? 'Sólo los turnos de «' ~ offer.title ~ '». Arrastra uno a otro día para moverlo.'
-            : 'Los turnos del mes. Arrastra uno a otro día para moverlo.') }}
+            : 'Los turnos del mes. Arrastra uno a otro día para moverlo.',
+            { icon: 'fa-calendar', accent: 'sky' }) }}
 
         {% if not coordinates_something %}
             {{ csa.callout('No coordinas ninguna área todavía, así que aquí no aparece nada. Pídele a administración que te asigne un área.', 'info') }}
@@ -119,5 +120,19 @@
         </div>
 
         <p class="scal-foot">Sólo se arrastran los turnos por venir; la hora se conserva. Para cambiar la hora, entra en el turno.</p>
+
+        {# La salida a la lista completa vive AQUÍ y no en el menú: el cuadrante es
+         # lo que se viene a ver, y la lista es la herramienta de cuando hace falta
+         # buscar por texto o filtrar por estado.
+         #
+         # Se pasa `tipo` y NO `keep` entero: la lista no entiende `tarea` (sólo el
+         # cuadrante filtra por serie), y mandarlo sería prometer un filtro que al
+         # llegar no está. Por eso el rótulo cambia según lo que se conserve. #}
+        <p class="scal-foot">
+            <a href="{{ path('volunteering_index', keep.tipo is defined ? { tipo: keep.tipo } : {}) }}">
+                {{ offer ? 'Ver todos los turnos en lista' : 'Ver estos turnos en lista' }}
+                <i class="fa fa-angle-right" aria-hidden="true"></i>
+            </a>
+        </p>
     </div>
 {% endblock %}

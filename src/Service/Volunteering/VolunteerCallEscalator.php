@@ -35,6 +35,20 @@ use App\Service\AppSettings;
  */
 class VolunteerCallEscalator
 {
+    /**
+     * Cuántos días antes del turno tiene sentido ofrecer el aviso a toda la
+     * asociación ({@see shouldOfferEveryone()}).
+     *
+     * Dos y no uno: un turno del sábado por la mañana con un solo día de margen
+     * sólo podría difundirse el viernes, cuando quien tenía el fin de semana
+     * libre ya lo ha ocupado. Y no más, o volvemos a ofrecerlo siempre.
+     *
+     * Constante y no ajuste: es una regla de cuándo se ENSEÑA un botón, no de
+     * cuándo se manda nada, y un ajuste más en la pantalla de configuración
+     * cuesta más de lo que resuelve. Si alguna vez estorba, es una línea.
+     */
+    private const EVERYONE_WINDOW_DAYS = 2;
+
     public function __construct(
         private readonly VolunteerCallRepository $calls,
         private readonly AppSettings $settings,
@@ -111,6 +125,89 @@ class VolunteerCallEscalator
     }
 
     /**
+     * A partir de cuándo se puede ampliar el aviso de este turno: la fecha del
+     * último enviado más el margen de espera, o null si aún no se ha enviado
+     * ninguno (entonces el primero puede salir ya).
+     *
+     * Es público porque la ficha del turno lo enseña: quien coordina no puede
+     * lanzar los avisos automáticos, así que lo único útil que se le puede decir
+     * es cuándo van a salir solos. Y vive aquí, y no en el controlador, para que
+     * el margen se lea de un único sitio — si lo calculase también la pantalla,
+     * el día que cambie el ajuste una de las dos mentiría.
+     *
+     * @param VolunteerShift $shift el turno
+     *
+     * @return \DateTimeImmutable|null el momento, o null si no hay espera que cumplir
+     */
+    public function escalationOpensAt(VolunteerShift $shift): ?\DateTimeImmutable
+    {
+        $last = $this->calls->findLast($shift);
+        if (null === $last) {
+            return null;
+        }
+
+        $hours = $this->settings->getInt(AppSettings::VOLUNTEERING_ESCALATION_HOURS);
+
+        return \DateTimeImmutable::createFromInterface($last->getSentAt())
+            ->modify(sprintf('+%d hours', $hours));
+    }
+
+    /**
+     * Si toca ofrecer el aviso a TODA la asociación en la pantalla de gestión.
+     *
+     * No es lo mismo que poder mandarlo: se puede siempre. Es si merece la pena
+     * enseñar el botón, y la respuesta es «sólo cuando ya no queda otra». Tres
+     * condiciones a la vez:
+     *
+     *  1. El turno sigue pidiendo gente ({@see VolunteerShift::isOpen()} ya cubre
+     *     anulado, pasado, lleno y tarea sin publicar).
+     *  2. El automatismo ya ha hecho lo suyo: no queda ningún alcance automático
+     *     por abrir. Ofrecerlo antes es saltarse el escalado a mano y gastar el
+     *     canal de 246 personas pudiendo esperar al paso siguiente.
+     *  3. Queda poco para el día. Un turno a dos semanas todavía se cubre solo.
+     *
+     * Enseñar este botón siempre —como se hacía— convertía en rutina el gesto
+     * que más caro se paga: el permiso de notificaciones del navegador se pierde
+     * una vez y para siempre.
+     *
+     * @param VolunteerShift          $shift el turno
+     * @param \DateTimeImmutable|null $now   momento de referencia; por defecto, ahora
+     *
+     * @return bool true si la pantalla debe ofrecerlo
+     */
+    public function shouldOfferEveryone(VolunteerShift $shift, ?\DateTimeImmutable $now = null): bool
+    {
+        $now ??= new \DateTimeImmutable();
+
+        if (!$shift->isOpen($now)) {
+            return false;
+        }
+
+        $sent = $this->calls->sentScopes($shift);
+        if (\in_array(VolunteerCall::SCOPE_EVERYONE, $sent, true)) {
+            return false;
+        }
+
+        // Que no quede ningún automático pendiente. Se pregunta a `nextScope()`
+        // con el reloj adelantado hasta después de cualquier espera, porque lo
+        // que importa aquí es si QUEDA alguno, no si toca ahora mismo: con el
+        // reloj de verdad, un turno en pleno margen de espera diría «no queda
+        // ninguno» y ofrecería el aviso general demasiado pronto.
+        $opensAt = $this->escalationOpensAt($shift);
+        $after = null !== $opensAt && $opensAt > $now ? $opensAt : $now;
+        if (null !== $this->nextScope($shift, $after)) {
+            return false;
+        }
+
+        $startsAt = $shift->getStartsAt();
+        if (null === $startsAt) {
+            return false;
+        }
+
+        return $startsAt <= $now->modify(sprintf('+%d days', self::EVERYONE_WINDOW_DAYS));
+    }
+
+    /**
      * Si ha pasado ya el margen de espera desde el último aviso de este turno.
      *
      * @param VolunteerShift     $shift el turno
@@ -120,15 +217,8 @@ class VolunteerCallEscalator
      */
     private function waitedLongEnough(VolunteerShift $shift, \DateTimeImmutable $now): bool
     {
-        $last = $this->calls->findLast($shift);
-        if (null === $last) {
-            return true;
-        }
+        $opensAt = $this->escalationOpensAt($shift);
 
-        $hours = $this->settings->getInt(AppSettings::VOLUNTEERING_ESCALATION_HOURS);
-        $deadline = \DateTimeImmutable::createFromInterface($last->getSentAt())
-            ->modify(sprintf('+%d hours', $hours));
-
-        return $now >= $deadline;
+        return null === $opensAt || $now >= $opensAt;
     }
 }

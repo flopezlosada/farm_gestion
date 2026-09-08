@@ -321,17 +321,23 @@
                                  # marcado Tareas. Con prefijos, añadir una pantalla no
                                  # obliga a tocar el menú.
                                  #
-                                 # DOS ENTRADAS PARA EL TRABAJO Y NO UNA, porque son dos
-                                 # preguntas: «qué hay que hacer» son los turnos, con fecha,
-                                 # y es la pantalla del día a día; «tareas» es el catálogo de
-                                 # definiciones, donde se crean y se retocan. Antes eran lo
-                                 # mismo porque la tarea llevaba la fecha encima.
+                                 # EL CUADRANTE VA PRIMERO porque es lo que se viene a ver:
+                                 # quien coordina un área abre esto para mirar SU mes, y el
+                                 # calendario ya se limita a sus áreas. La lista completa de
+                                 # turnos sigue existiendo —hace falta para buscar y filtrar
+                                 # por estado— pero deja de encabezar el menú y se llega a
+                                 # ella también desde el propio cuadrante.
                                  #
-                                 # El orden de las ramas importa: `volunteering_place*` cae
-                                 # antes que el prefijo genérico, o los sitios marcarían
-                                 # «Qué hay que hacer». #}
+                                 # «Tareas» es otra pregunta distinta: el catálogo de
+                                 # definiciones, donde se crean y se retocan. No es lo mismo
+                                 # que los turnos, que son sus fechas.
+                                 #
+                                 # El orden de las ramas importa: `volunteering_place*` y
+                                 # `volunteering_cal*` caen antes que el prefijo genérico, o
+                                 # los sitios y el cuadrante marcarían «Todos los turnos». #}
                                 {% set vol_section =
                                     route starts with 'volunteering_categor' ? 'areas'
+                                    : route starts with 'volunteering_cal' ? 'calendar'
                                     : route starts with 'volunteering_place' ? 'places'
                                     : route == 'volunteering_pool' ? 'pool'
                                     : route == 'volunteering_activity' ? 'activity'
@@ -339,15 +345,17 @@
                                     : route in ['volunteering_tasks', 'volunteering_show', 'volunteering_new', 'volunteering_edit'] ? 'tasks'
                                     : route starts with 'volunteering_' ? 'shifts' : null %}
 
-                                {{ _self.nav_link('Qué hay que hacer', path('volunteering_index'), 'fa-calendar-o',
-                                   vol_section == 'shifts') }}
+                                {{ _self.nav_link('Cuadrante', path('volunteering_calendar'), 'fa-calendar',
+                                   vol_section == 'calendar') }}
                                 {{ _self.nav_link('Tareas', path('volunteering_tasks'), 'fa-hand-paper-o',
                                    vol_section == 'tasks') }}
-                                {{ _self.nav_link('Quién hay', path('volunteering_pool'), 'fa-users',
+                                {{ _self.nav_link('Voluntarixs', path('volunteering_pool'), 'fa-users',
                                    vol_section == 'pool') }}
-                                {{ _self.nav_link('Actividad', path('volunteering_activity'), 'fa-history',
-                                   vol_section == 'activity') }}
+                                {{ _self.nav_link('Todos los turnos', path('volunteering_index'), 'fa-list-ul',
+                                   vol_section == 'shifts') }}
                                 {% if is_granted('ROLE_GESTION_VOLUNTARIADO_EDIT') %}
+                                    {{ _self.nav_link('Actividad', path('volunteering_activity'), 'fa-history',
+                                       vol_section == 'activity') }}
                                     {{ _self.nav_link('Áreas', path('volunteering_categories'), 'fa-tags',
                                        vol_section == 'areas') }}
                                     {{ _self.nav_link('Sitios', path('volunteering_places'), 'fa-map-marker',

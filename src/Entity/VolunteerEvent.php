@@ -86,6 +86,16 @@ class VolunteerEvent
     /** Se mandó un aviso pidiendo gente, con su alcance. */
     public const TYPE_CALL_SENT = 'CALL_SENT';
 
+    /**
+     * Se le pidió a UNA persona concreta que viniera a un turno, desde la
+     * pantalla de gestión. Distinto de {@see TYPE_CALL_SENT}, que es un aviso de
+     * ámbito a mucha gente: esto es a quién se lo pidió alguien, con nombre, y
+     * es lo que quien coordina necesita recordar la semana siguiente.
+     *
+     * El turno viaja en el payload porque el evento no tiene columna para él.
+     */
+    public const TYPE_ASKED = 'ASKED';
+
     /** Se creó un área. */
     public const TYPE_CATEGORY_CREATED = 'CATEGORY_CREATED';
 
@@ -116,6 +126,7 @@ class VolunteerEvent
         self::TYPE_ABSENT => 'No fue',
         self::TYPE_PERSON_ADDED => 'Anotadx a mano',
         self::TYPE_CALL_SENT => 'Aviso enviado',
+        self::TYPE_ASKED => 'Se le pidió',
         self::TYPE_CATEGORY_CREATED => 'Área creada',
         self::TYPE_CATEGORY_UPDATED => 'Área editada',
         self::TYPE_COORDINATORS_CHANGED => 'Cambio de coordinación',

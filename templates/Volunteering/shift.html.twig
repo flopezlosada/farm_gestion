@@ -198,9 +198,13 @@
                         {% else %}Cuando se acerque la fecha, el sistema pide gente solo.{% endif %}
                     </p>
                 </div>
-                {% if not full and can_edit and not everyone_sent %}
+                {# Sólo cuando hay algo que DECIDIR. Antes salía siempre que no se
+                 # hubiera avisado a todo el mundo, y lo que había al otro lado no
+                 # era una acción: eran dos avisos automáticos y un botón. Los
+                 # avisos se siguen consultando desde su pestaña. #}
+                {% if can_edit and offer_everyone %}
                     <div class="vol-phase__actions">
-                        {{ csa.btn('Ver los avisos', { variant: 'secondary', href: '#avisos', icon: 'fa-send-o' }) }}
+                        {{ csa.btn('Sigue faltando gente', { variant: 'secondary', href: '#avisos', icon: 'fa-bullhorn' }) }}
                     </div>
                 {% endif %}
             </div>
@@ -642,6 +646,43 @@
                                             </span>
                                         </div>
                                         <div class="vol-suggest__contact">
+                                            {# Pedírselo desde aquí va PRIMERO y es lo único que no
+                                             # obliga a salirse de la aplicación. El teléfono y el
+                                             # correo se quedan detrás, en fantasma: siguen siendo
+                                             # la vía para quien no tiene cuenta, y para cuando hace
+                                             # falta hablar y no avisar.
+                                             #
+                                             # Sólo si tiene cuenta: sin ella no hay bandeja, ni
+                                             # push, ni a dónde llevar el correo del sistema. #}
+                                            {% set asked = already_asked[who.id]|default(null) %}
+                                            {% if asked %}
+                                                {# Ya se le pidió: la fecha, no un botón que volvería a
+                                                 # sonarle el móvil por lo mismo. Para insistir está su
+                                                 # teléfono, que sigue aquí al lado. #}
+                                                <span class="vol-suggest__asked">
+                                                    <i class="fa fa-check" aria-hidden="true"></i>
+                                                    Se le pidió el {{ asked.occurredAt|format_datetime(pattern="d 'de' MMMM", locale='es') }}
+                                                </span>
+                                            {% elseif can_edit and reachable[who.id]|default(false) %}
+                                                {# Con el diálogo del proyecto (csa.confirm_dialog) y no
+                                                 # con el del navegador: sólo se puede pedir una vez por
+                                                 # turno, así que conviene que quien pulsa sepa a quién
+                                                 # va a sonarle el móvil antes de gastar ese único
+                                                 # intento. #}
+                                                <button type="button" class="csa-btn csa-btn--secondary csa-btn--sm"
+                                                        onclick="document.getElementById('confirm-ask-{{ who.id }}').showModal()">
+                                                    <i class="fa fa-bell-o"></i><span>Pedírselo</span>
+                                                </button>
+                                                {{ csa.confirm_dialog('confirm-ask-' ~ who.id, {
+                                                    variant: 'info',
+                                                    eyebrow: 'Sólo una vez',
+                                                    title: 'Pedirle a ' ~ who.name|capitalize ~ ' que venga',
+                                                    body: 'Le llega un aviso con la tarea, el día y el sitio. Sólo se le puede pedir una vez por este turno; si luego hace falta insistir, tendrá que ser por teléfono.',
+                                                    confirm_label: 'Pedírselo',
+                                                    action: path('volunteering_ask', { id: shift.id, partner: who.id }),
+                                                    csrf_token: csrf_token('volunteering_ask'),
+                                                }) }}
+                                            {% endif %}
                                             {% if who.celular %}
                                                 <a class="csa-btn csa-btn--ghost csa-btn--sm" href="tel:{{ who.celular|replace({' ': ''}) }}">
                                                     <i class="fa fa-phone"></i><span>{{ who.celular }}</span>
@@ -652,7 +693,7 @@
                                                     <i class="fa fa-envelope-o"></i><span>Escribir</span>
                                                 </a>
                                             {% endif %}
-                                            {% if not who.celular and not who.email %}
+                                            {% if not who.celular and not who.email and not reachable[who.id]|default(false) %}
                                                 <span class="vol-help--muted">Sin teléfono ni correo en su ficha</span>
                                             {% endif %}
                                         </div>
@@ -661,8 +702,9 @@
                             </ul>
 
                             <p class="vol-help--muted">
-                                Esto es para pedírselo tú, de persona a persona. El aviso automático del sistema
-                                va por su cuenta y se ve en «Avisos».
+                                Pedírselo aquí le manda un aviso a esa persona sola, y no gasta ni adelanta
+                                los avisos automáticos, que van por su cuenta y se ven en «Avisos». A quien no
+                                tiene cuenta en la web hay que llamarle.
                             </p>
                         </div>
                     </div>
@@ -670,59 +712,130 @@
             {% endif %}
 
             {# ---------- AVISOS ---------- #}
+            {# Los dos primeros alcances NO son acciones: los abre el planificador
+             # solo. Pintarlos como una lista de casillas «Enviado / Sin enviar»
+             # los hacía parecer tareas pendientes de alguien, y no hay ningún
+             # botón que las haga. Lo único que se puede contar de ellos es qué
+             # pasó y qué va a pasar, y eso se cuenta con una frase.
+             #
+             # El aviso general sí es una decisión de una persona, así que sigue
+             # siendo un botón — pero sólo aparece cuando ya no queda otra
+             # (VolunteerCallEscalator::shouldOfferEveryone). #}
             <section class="csa-tabpanel" id="avisos" role="tabpanel">
                 <div class="prt-card">
                     <div class="prt-card__body">
-                        {# Un círculo vacío frente a un check no dice si eso está pendiente,
-                         # descartado o si hay que hacer algo: se etiqueta con palabras. #}
-                        <ul class="vol-scopes">
-                            <li>
-                                <span>A quien tiene marcado este tipo de trabajo</span>
-                                {{ 'matching' in sent_scopes ? csa.badge('Enviado', 'green') : csa.badge('Sin enviar', 'neutral') }}
-                            </li>
-                            <li>
-                                <span>
-                                    A quien no ha declarado preferencias
-                                    {% if not offer.openToAnyone %}
-                                        <small class="vol-help--muted">no se le puede pedir: esta tarea no es para cualquiera</small>
-                                    {% endif %}
-                                </span>
-                                {% if not offer.openToAnyone %}
-                                    {{ csa.badge('No aplica', 'neutral') }}
-                                {% else %}
-                                    {{ 'unspecified' in sent_scopes ? csa.badge('Enviado', 'green') : csa.badge('Sin enviar', 'neutral') }}
+                        <ul class="vol-calls">
+                            {% for scope, label in {
+                                'matching': 'A quien tiene marcada esta área',
+                                'unspecified': 'A quien no ha dicho de qué le avisen',
+                                'everyone': 'A toda la asociación'
+                            } %}
+                                {% set call = calls_by_scope[scope]|default(null) %}
+                                {# El aviso general sólo se lista si YA salió. Sin mandar no es
+                                 # un pendiente del que informar: o no procede —y decir «no se
+                                 # ha mandado» de algo que nadie va a mandar es ruido— o procede,
+                                 # y entonces lo cuenta el bloque de abajo, que además tiene el
+                                 # botón. Listarlo siempre hacía que la misma cosa se dijera
+                                 # tres veces seguidas. #}
+                                {% if scope != 'everyone' or call %}
+                                {# Los tres hijos son DIRECTOS —marca, qué, cuándo— porque la
+                                 # fila es una rejilla de tres columnas: envolver los textos en
+                                 # un div los metía a los dos en la segunda y dejaba la mitad
+                                 # derecha de la tarjeta vacía. #}
+                                <li class="vol-calls__item{{ call ? ' is-sent' : '' }}">
+                                    <i class="fa {{ call ? 'fa-check-circle' : 'fa-circle-o' }}" aria-hidden="true"></i>
+                                    <p class="vol-calls__what">{{ label }}</p>
+                                        <p class="vol-calls__when">
+                                            {% if call %}
+                                                Se envió el {{ call.sentAt|format_datetime(pattern="d 'de' MMMM 'a las' HH:mm", locale='es') }}{% if call.recipients %} a {{ call.recipients }} {{ call.recipients == 1 ? 'persona' : 'personas' }}{% endif %}
+                                            {% elseif scope == 'unspecified' and not offer.openToAnyone %}
+                                                No se mandará: esta tarea no está marcada como apta para cualquiera.
+                                            {% elseif scope == 'matching' and offer.categories is empty %}
+                                                No se mandará: la tarea no tiene área, así que nadie la tiene marcada.
+                                            {% elseif not shift.isOpen() %}
+                                                Ya no hace falta{{ shift.hasRoom ? '' : ': no quedan plazas libres' }}.
+                                            {% elseif calls_by_scope.everyone is defined %}
+                                                {# El aviso general cierra la escalada: ya lo ha visto
+                                                 # todo el mundo, así que no queda nadie a quien
+                                                 # ampliarlo. Sin esta rama, un paso que no va a salir
+                                                 # nunca decía «sale después del anterior». #}
+                                                Ya no saldrá: se avisó a toda la asociación.
+                                            {% elseif pending_scope == scope %}
+                                                {% if escalation_opens_at %}
+                                                    Sale solo a partir del {{ escalation_opens_at|format_datetime(pattern="d 'de' MMMM 'a las' HH:mm", locale='es') }}, si sigue faltando gente.
+                                                {% else %}
+                                                    Sale solo en la próxima hora, si sigue faltando gente.
+                                                {% endif %}
+                                            {% elseif pending_scope is null %}
+                                                {# NO QUEDA AUTOMATISMO, aunque este paso no se haya
+                                                 # dado. Pasa siempre que la espera para ampliar el
+                                                 # aviso caiga después del turno: con el primer aviso
+                                                 # a menos de 24h —lo normal en una tarea urgente— el
+                                                 # segundo ya no llega a tiempo, y el escalador lo
+                                                 # sabe. Sin esta rama, la ficha decía «sale después
+                                                 # del anterior» al lado de un bloque que dice que los
+                                                 # automáticos ya han salido: dos frases opuestas
+                                                 # sobre lo mismo, en la misma pantalla. #}
+                                                Ya no saldrá solo: el turno llega antes de que toque ampliar el aviso. Si falta gente, hay que pedirla a mano.
+                                            {% else %}
+                                                Sale después del anterior, si para entonces sigue faltando gente.
+                                            {% endif %}
+                                        </p>
+                                </li>
                                 {% endif %}
-                            </li>
-                            <li>
-                                <span>A toda la asociación</span>
-                                {{ everyone_sent ? csa.badge('Enviado', 'green') : csa.badge('Sin enviar', 'neutral') }}
-                            </li>
+                            {% endfor %}
                         </ul>
 
                         <p class="vol-help--muted">
-                            Los dos primeros los manda el sistema solo, cuando se acerca la fecha y siguen
-                            faltando plazas. El último se manda a mano. Todo esto es de ESTE turno: el aviso
-                            del sábado no gasta el del domingo.
+                            Todo esto es de ESTE turno: el aviso del sábado no gasta el del domingo.
                         </p>
 
-                        {% if can_edit and not everyone_sent and shift.isOpen() %}
+                        {% if can_edit and offer_everyone %}
                             {# Este botón gasta el canal push de toda la asociación, y el
                              # permiso del navegador se pierde una vez y para siempre: quien
-                             # lo apaga no vuelve. Por eso se enseña el NÚMERO antes, se exige
-                             # confirmación, y sólo se puede una vez por turno. #}
-                            {{ csa.callout(
-                                'Avisar a toda la asociación llega a ' ~ everyone_count ~ ' socix(s), incluidxs quienes han dicho que de esto no les avisen. Sólo se puede hacer una vez por turno. Úsalo cuando de verdad haga falta.',
-                                'warning',
-                                'exclamation-triangle'
-                            ) }}
+                             # lo apaga no vuelve. Por eso se enseña el NÚMERO antes y se exige
+                             # confirmación.
+                             #
+                             # NO va en `csa.callout`: ése es un aviso de ANCHO DE PÁGINA, y
+                             # aquí dentro de la tarjeta estiraba el texto en una sola línea de
+                             # más de mil píxeles, ilegible y con la mitad derecha vacía. Bloque
+                             # propio, medido en `ch`, con el botón separado de la explicación:
+                             # pegado debajo se lee como el pie del aviso y se pulsa sin leerlo.
+                             #
+                             # Cuántas plazas faltan y cuánto queda ya lo dice la cabecera de la
+                             # ficha; repetirlo aquí era lo que hacía el texto ilegible. #}
+                            <div class="vol-shout">
+                                <div class="vol-shout__text">
+                                    <p class="vol-shout__lead">
+                                        <i class="fa fa-bullhorn" aria-hidden="true"></i>
+                                        Los avisos automáticos ya han salido y sigue faltando gente.
+                                    </p>
+                                    <p class="vol-shout__note">
+                                        Este llega a {{ everyone_count }}
+                                        {{ everyone_count == 1 ? 'persona' : 'personas' }}, incluidas las
+                                        que pidieron que no se les avise de voluntariado. Sólo se puede
+                                        una vez por turno y no se puede deshacer.
+                                    </p>
+                                </div>
 
-                            <form method="post" action="{{ path('volunteering_notify_everyone', { id: shift.id }) }}"
-                                  onsubmit="return confirm('Vas a avisar a {{ everyone_count }} socix(s). Esto no se puede deshacer y sólo se puede hacer una vez. ¿Seguro?');">
-                                <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_notify') }}">
-                                <button type="submit" class="csa-btn csa-btn--danger-soft csa-btn--sm">
-                                    <i class="fa fa-bullhorn"></i> Avisar a toda la asociación
+                                {# El gesto más caro de la pantalla, con el diálogo del
+                                 # proyecto: el del navegador enseñaba el número en un
+                                 # cuadro gris del sistema, sin jerarquía y sin poder
+                                 # distinguir esto de un «¿seguro?» cualquiera. #}
+                                <button type="button" class="csa-btn csa-btn--danger-soft"
+                                        onclick="document.getElementById('confirm-everyone').showModal()">
+                                    <i class="fa fa-bullhorn"></i><span>Avisar a toda la asociación</span>
                                 </button>
-                            </form>
+                                {{ csa.confirm_dialog('confirm-everyone', {
+                                    variant: 'danger',
+                                    eyebrow: 'No se puede deshacer',
+                                    title: 'Avisar a ' ~ everyone_count ~ ' ' ~ (everyone_count == 1 ? 'persona' : 'personas'),
+                                    body: 'Les suena el móvil a todas, también a quienes pidieron que no se les avise de voluntariado. Sólo se puede hacer una vez por este turno.',
+                                    confirm_label: 'Avisar a todas',
+                                    action: path('volunteering_notify_everyone', { id: shift.id }),
+                                    csrf_token: csrf_token('volunteering_notify'),
+                                }) }}
+                            </div>
                         {% endif %}
                     </div>
                 </div>
@@ -734,23 +847,52 @@
          # tarea: "esto se hace los viernes" sigue siendo verdad aunque el viernes
          # 25 de diciembre no se haga.
          #
-         # Al final de la pantalla y sin destacar: es poco frecuente y no se puede
-         # dar por error. #}
+         # Al final de la pantalla y en su propio bloque: es poco frecuente y no se
+         # puede dar por error, pero tampoco puede parecer que no está. Antes
+         # reusaba `.vol-repeat`, que fuerza `width: 5rem` en su input —bien para
+         # «cada N semanas», un cajón de 80px para un motivo de 160 caracteres— y
+         # el botón iba en `ghost`, sin borde ni fondo: no parecía un botón.
+         #
+         # El motivo NO es obligatorio a propósito: pedirlo obligaría a inventar
+         # uno para anular un turno que hay que anular igual. Pero es lo que lee
+         # quien estaba apuntadx en el aviso, así que se explica para qué sirve. #}
         {% if can_edit and not shift.cancelledAt and not is_past %}
-            <form method="post" action="{{ path('volunteering_shift_cancel', { id: shift.id }) }}"
-                  class="vol-repeat" style="margin-top: var(--csa-sp-6);"
-                  onsubmit="return confirm('¿Anular este turno? Se avisa a quien estuviera apuntadx y no se volverá a crear al abrir turnos.');">
+            {# El diálogo va por `external_form_id` y no envolviendo su propio
+             # formulario: el motivo se teclea AQUÍ, en la pantalla, así que el
+             # form tiene que ser este y no uno que viva dentro del modal —donde
+             # el campo quedaría fuera y el motivo se perdería al confirmar. #}
+            <form id="vol-cancel-form" method="post" action="{{ path('volunteering_shift_cancel', { id: shift.id }) }}"
+                  class="vol-cancel">
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_shift_cancel') }}">
 
-                <label>
-                    Por qué se anula
-                    <input type="text" name="motivo" maxlength="160" class="csa-input" placeholder="festivo, llovía…">
-                </label>
+                <p class="vol-cancel__title"><i class="fa fa-ban" aria-hidden="true"></i> Anular este turno</p>
+                <p class="vol-cancel__help">
+                    Se avisa a quien estuviera apuntadx y no se vuelve a crear al abrir turnos.
+                    La tarea sigue como está: sólo se cae este día.
+                </p>
 
-                <button type="submit" class="csa-btn csa-btn--ghost csa-btn--sm">
-                    <i class="fa fa-ban"></i><span>Anular este turno</span>
-                </button>
+                <div class="vol-cancel__row">
+                    <label class="vol-cancel__field">
+                        <span>Por qué se anula <em>(se lo contamos a quien viniera)</em></span>
+                        <input type="text" name="motivo" maxlength="160" class="csa-input"
+                               placeholder="es festivo, llueve, no hay material…">
+                    </label>
+
+                    <button type="button" class="csa-btn csa-btn--danger-soft"
+                            onclick="document.getElementById('confirm-cancel-shift').showModal()">
+                        <i class="fa fa-ban"></i><span>Anular este turno</span>
+                    </button>
+                </div>
             </form>
+
+            {{ csa.confirm_dialog('confirm-cancel-shift', {
+                variant: 'danger',
+                eyebrow: 'Se avisa a quien viniera',
+                title: 'Anular el turno del ' ~ shift.startsAt|format_date(pattern="d 'de' MMMM", locale='es'),
+                body: 'Se avisa a quien estuviera apuntadx y este día no se volverá a crear al abrir turnos. La tarea sigue como está: sólo se cae este día.',
+                confirm_label: 'Anular el turno',
+                external_form_id: 'vol-cancel-form',
+            }) }}
         {% endif %}
     </div>
 {% endblock %}
