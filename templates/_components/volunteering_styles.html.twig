@@ -160,6 +160,49 @@
     .vol-repeat .csa-input { width: 5rem; }
     .vol-repeat .csa-select { width: auto; }
 
+    /* Anular un turno. Bloque propio y NO .vol-repeat: aquello estrecha su input
+       a 5rem, que es lo que quiere «cada N semanas» y lo que estropeaba el motivo
+       de la anulación. Encuadrado y al pie: se ve, pero no compite con lo que se
+       viene a hacer en esta pantalla. */
+    .vol-cancel {
+        margin-top: var(--csa-sp-8);
+        padding: var(--csa-sp-4) var(--csa-sp-5) var(--csa-sp-5);
+        border: 1px solid var(--csa-rule);
+        border-radius: var(--csa-radius-md);
+        background: var(--csa-surface-alt);
+    }
+    .vol-cancel__title {
+        margin: 0 0 var(--csa-sp-1);
+        font-family: var(--csa-serif);
+        font-size: var(--csa-fs-md);
+        color: var(--csa-ink);
+    }
+    .vol-cancel__title .fa { color: var(--csa-terracotta); margin-right: var(--csa-sp-2); }
+    .vol-cancel__help {
+        margin: 0 0 var(--csa-sp-4);
+        font-size: var(--csa-fs-sm);
+        color: var(--csa-ink-soft);
+        max-width: 62ch;
+    }
+    /* `flex-end` y no `center`: la etiqueta de dos líneas empuja el input hacia
+       abajo y el botón tiene que quedar a la altura del input, no del rótulo. */
+    .vol-cancel__row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--csa-sp-3);
+        align-items: flex-end;
+    }
+    .vol-cancel__field {
+        flex: 1 1 22rem;
+        display: flex;
+        flex-direction: column;
+        gap: var(--csa-sp-2);
+        font-size: var(--csa-fs-sm);
+        color: var(--csa-ink-soft);
+    }
+    .vol-cancel__field em { font-style: normal; color: var(--csa-ink-muted); }
+    .vol-cancel__field .csa-input { width: 100%; }
+
     /* Casilla con etiqueta al lado. Ver la macro vol.check: la macro csa.field
        le pone csa-input al widget y un checkbox acaba como un cuadrado enorme
        centrado, sin relación visual con lo que dice. */

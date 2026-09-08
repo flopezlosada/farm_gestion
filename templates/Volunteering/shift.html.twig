@@ -734,22 +734,36 @@
          # tarea: "esto se hace los viernes" sigue siendo verdad aunque el viernes
          # 25 de diciembre no se haga.
          #
-         # Al final de la pantalla y sin destacar: es poco frecuente y no se puede
-         # dar por error. #}
+         # Al final de la pantalla y en su propio bloque: es poco frecuente y no se
+         # puede dar por error, pero tampoco puede parecer que no está. Antes
+         # reusaba `.vol-repeat`, que fuerza `width: 5rem` en su input —bien para
+         # «cada N semanas», un cajón de 80px para un motivo de 160 caracteres— y
+         # el botón iba en `ghost`, sin borde ni fondo: no parecía un botón.
+         #
+         # El motivo NO es obligatorio a propósito: pedirlo obligaría a inventar
+         # uno para anular un turno que hay que anular igual. Pero es lo que lee
+         # quien estaba apuntadx en el aviso, así que se explica para qué sirve. #}
         {% if can_edit and not shift.cancelledAt and not is_past %}
             <form method="post" action="{{ path('volunteering_shift_cancel', { id: shift.id }) }}"
-                  class="vol-repeat" style="margin-top: var(--csa-sp-6);"
+                  class="vol-cancel"
                   onsubmit="return confirm('¿Anular este turno? Se avisa a quien estuviera apuntadx y no se volverá a crear al abrir turnos.');">
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_shift_cancel') }}">
 
-                <label>
-                    Por qué se anula
-                    <input type="text" name="motivo" maxlength="160" class="csa-input" placeholder="festivo, llovía…">
-                </label>
+                <p class="vol-cancel__title"><i class="fa fa-ban" aria-hidden="true"></i> Anular este turno</p>
+                <p class="vol-cancel__help">
+                    Se avisa a quien estuviera apuntadx y no se vuelve a crear al abrir turnos.
+                    La tarea sigue como está: sólo se cae este día.
+                </p>
 
-                <button type="submit" class="csa-btn csa-btn--ghost csa-btn--sm">
-                    <i class="fa fa-ban"></i><span>Anular este turno</span>
-                </button>
+                <div class="vol-cancel__row">
+                    <label class="vol-cancel__field">
+                        <span>Por qué se anula <em>(se lo contamos a quien viniera)</em></span>
+                        <input type="text" name="motivo" maxlength="160" class="csa-input"
+                               placeholder="es festivo, llueve, no hay material…">
+                    </label>
+
+                    {{ csa.btn('Anular este turno', { variant: 'danger-soft', type: 'submit', icon: 'fa-ban' }) }}
+                </div>
             </form>
         {% endif %}
     </div>
