@@ -646,6 +646,21 @@
                                             </span>
                                         </div>
                                         <div class="vol-suggest__contact">
+                                            {# Pedírselo desde aquí va PRIMERO y es lo único que no
+                                             # obliga a salirse de la aplicación. El teléfono y el
+                                             # correo se quedan detrás, en fantasma: siguen siendo
+                                             # la vía para quien no tiene cuenta, y para cuando hace
+                                             # falta hablar y no avisar.
+                                             #
+                                             # Sólo si tiene cuenta: sin ella no hay bandeja, ni
+                                             # push, ni a dónde llevar el correo del sistema. #}
+                                            {% if can_edit and reachable[who.id]|default(false) %}
+                                                <form method="post" action="{{ path('volunteering_ask', { id: shift.id, partner: who.id }) }}"
+                                                      onsubmit="return confirm('¿Pedirle a {{ who.name }} que venga a este turno? Le llegará un aviso.');">
+                                                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_ask') }}">
+                                                    {{ csa.btn('Pedírselo', { variant: 'secondary', type: 'submit', icon: 'fa-bell-o', size: 'sm' }) }}
+                                                </form>
+                                            {% endif %}
                                             {% if who.celular %}
                                                 <a class="csa-btn csa-btn--ghost csa-btn--sm" href="tel:{{ who.celular|replace({' ': ''}) }}">
                                                     <i class="fa fa-phone"></i><span>{{ who.celular }}</span>
@@ -656,7 +671,7 @@
                                                     <i class="fa fa-envelope-o"></i><span>Escribir</span>
                                                 </a>
                                             {% endif %}
-                                            {% if not who.celular and not who.email %}
+                                            {% if not who.celular and not who.email and not reachable[who.id]|default(false) %}
                                                 <span class="vol-help--muted">Sin teléfono ni correo en su ficha</span>
                                             {% endif %}
                                         </div>
@@ -665,8 +680,9 @@
                             </ul>
 
                             <p class="vol-help--muted">
-                                Esto es para pedírselo tú, de persona a persona. El aviso automático del sistema
-                                va por su cuenta y se ve en «Avisos».
+                                Pedírselo aquí le manda un aviso a esa persona sola, y no gasta ni adelanta
+                                los avisos automáticos, que van por su cuenta y se ven en «Avisos». A quien no
+                                tiene cuenta en la web hay que llamarle.
                             </p>
                         </div>
                     </div>

@@ -51,6 +51,15 @@ use Psr\Log\LoggerInterface;
  */
 class VolunteerCallNotifier
 {
+    /**
+     * El título de un aviso pedido a mano a una persona ({@see ask()}).
+     *
+     * No dice cuántas plazas faltan, como el de ámbito: a quien se lo piden por
+     * su nombre lo que le importa es que se lo piden a ella. El qué, el cuándo y
+     * el dónde van en el cuerpo, igual que en el otro.
+     */
+    private const ASK_TITLE = 'Te piden ayuda';
+
     public function __construct(
         private readonly VolunteerShiftRepository $shifts,
         private readonly UserRepository $users,
@@ -217,6 +226,98 @@ class VolunteerCallNotifier
         $this->email($shift, $byEmail);
 
         return $call;
+    }
+
+    /**
+     * Pedírselo a UNA persona concreta, desde la ficha del turno.
+     *
+     * NO ES UN ALCANCE Y NO ESCRIBE {@see VolunteerCall}, y eso es lo que lo
+     * separa de {@see dispatch()}. Aquel registro existe para que el
+     * planificador no repita un aviso masivo, y su UNIQUE (shift, scope) es lo
+     * que lo garantiza; meter aquí un ámbito "personal" que hubiera que exceptuar
+     * de esa unicidad rompería la única invariante que protege a la asociación de
+     * recibir el mismo aviso dos veces. El rastro de esto es un
+     * {@see VolunteerEvent}, que es donde vive el "quién hizo qué" del módulo.
+     *
+     * TAMPOCO ESCALA NADA. La escalada automática se guía por los ámbitos ya
+     * enviados, así que pedírselo a una persona no adelanta ni consume ningún
+     * paso: el aviso a quien tiene marcada el área saldrá igual cuando le toque.
+     * Es deliberado — esto es una conversación, no un canal.
+     *
+     * VA POR LAS TRES VÍAS, como el aviso de ámbito, y respetando las mismas
+     * preferencias: quien pidió que no se le avise por el móvil no recibe push
+     * porque alguien se lo pida a mano. La copia en la bandeja es el suelo, y por
+     * eso es la que hace que esto sirva para quien nunca se suscribió al push.
+     *
+     * SIN CUENTA TODAVÍA PUEDE HABER CORREO, y conviene no confundirlo: la
+     * bandeja y el push cuelgan de la cuenta de acceso, pero la dirección de
+     * correo vive en la ficha del socix. Alguien que nunca ha entrado en la web
+     * pero tiene su correo puesto sí se entera — es el mismo caso que ya cubre el
+     * aviso de ámbito.
+     *
+     * No comprueba el opt-out de voluntariado porque no le toca: quien llega aquí
+     * sale de {@see VolunteerSuggester}, cuyo finder ya lo filtra.
+     *
+     * @param VolunteerShift $shift   el turno para el que se pide ayuda
+     * @param Partner        $partner a quién se le pide
+     *
+     * @return list<string> las vías por las que salió: 'inbox', 'push', 'email'
+     */
+    public function ask(VolunteerShift $shift, Partner $partner): array
+    {
+        if (null === $shift->getOffer()) {
+            return [];
+        }
+
+        $partners = [$partner];
+        $ways = [];
+
+        $inboxRecipients = $this->users->findByPartners($partners);
+        if ([] !== $inboxRecipients) {
+            $this->inbox->deliver(
+                $inboxRecipients,
+                Notification::KIND_VOLUNTEERING_CALL,
+                self::ASK_TITLE,
+                $this->body($shift),
+            );
+            $ways[] = 'inbox';
+        }
+
+        // El push cuelga de la CUENTA, no de la persona: sin cuenta no hay
+        // navegador que se haya podido suscribir, y preguntarlo sería una
+        // consulta para no encontrar nada.
+        if ([] !== $inboxRecipients
+            && [] !== $this->preferences->filter($partners, NotificationTopic::VOLUNTEERING, NotificationTopic::CHANNEL_PUSH)
+        ) {
+            // El envío devuelve NAVEGADORES alcanzados, no personas: cero
+            // significa que esta persona no tiene ningún dispositivo suscrito, y
+            // entonces no se puede decir que le haya llegado por aquí.
+            $reached = $this->push->sendToMany(
+                $inboxRecipients,
+                self::ASK_TITLE,
+                $this->body($shift),
+                $this->link->pathForKind(Notification::KIND_VOLUNTEERING_CALL),
+            );
+
+            if ($reached > 0) {
+                $ways[] = 'push';
+            }
+        }
+
+        // La dirección se comprueba AQUÍ y no se deja para `email()`, que salta
+        // en silencio a quien no la tiene: con una sola persona delante, esa
+        // comprobación es exacta, y sin ella la pantalla diría «le llega por
+        // correo» a quien no tiene correo en su ficha. Lo que se le cuenta a
+        // quien acaba de pulsar el botón decide si además coge el teléfono.
+        if ($this->emailEnabled() && $partner->getEmail()) {
+            $byEmail = $this->preferences->filter($partners, NotificationTopic::VOLUNTEERING, NotificationTopic::CHANNEL_EMAIL);
+            if ([] !== $byEmail) {
+                $this->email($shift, $byEmail);
+                $ways[] = 'email';
+            }
+        }
+
+        return $ways;
     }
 
     /**
