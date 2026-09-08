@@ -16,6 +16,7 @@ use App\Form\VolunteerOfferType;
 use App\Form\VolunteerPlaceType;
 use App\Form\VolunteerShiftType;
 use App\Repository\PartnerRepository;
+use App\Repository\UserRepository;
 use App\Repository\VolunteerCallRepository;
 use App\Repository\VolunteerCategoryRepository;
 use App\Repository\VolunteerEventRepository;
@@ -719,10 +720,41 @@ class VolunteeringController extends AbstractController
         VolunteerSignupRepository $signups,
         VolunteerSuggester $suggester,
         VolunteerCallEscalator $escalator,
+        UserRepository $users,
     ): Response {
         $now = new \DateTimeImmutable();
         $phase = $shift->getPhase();
         $year = (int) date('Y');
+
+        // A quién pedírselo, y de esxs, a quién se le puede pedir DESDE AQUÍ.
+        // Ofrecer un botón que no puede hacer nada es peor que no ofrecerlo:
+        // quien lo pulsa se queda creyendo que ya se lo pidió y no coge el
+        // teléfono.
+        //
+        // Alcanzable es tener CUENTA —que da bandeja y, si se suscribió, push— o
+        // CORREO en la ficha, que son dos cosas distintas: la dirección vive en
+        // el socix, no en la cuenta, así que quien nunca ha entrado en la web
+        // pero tiene su correo puesto sí se entera. Es UNA consulta, y sólo si
+        // hay sugerencias.
+        $suggested = VolunteerShift::PHASE_OPEN === $phase && $shift->hasRoom()
+            ? $suggester->forShift($shift)
+            : [];
+
+        $reachable = [];
+        if ([] !== $suggested) {
+            foreach ($suggested as $candidate) {
+                if ($candidate['partner']->getEmail()) {
+                    $reachable[$candidate['partner']->getId()] = true;
+                }
+            }
+
+            foreach ($users->findByPartners(array_column($suggested, 'partner')) as $user) {
+                $id = $user->getPartner()?->getId();
+                if (null !== $id) {
+                    $reachable[$id] = true;
+                }
+            }
+        }
 
         // Qué aviso automático queda por salir y a partir de cuándo. Se pregunta
         // con el reloj puesto DESPUÉS de la espera pendiente: `nextScope()`
@@ -748,9 +780,8 @@ class VolunteeringController extends AbstractController
             ),
             // A quién pedírselo. Sólo mientras siga faltando gente: en un turno
             // pasado la lista no serviría para nada y costaría dos consultas.
-            'suggested' => VolunteerShift::PHASE_OPEN === $phase && $shift->hasRoom()
-                ? $suggester->forShift($shift)
-                : [],
+            'suggested' => $suggested,
+            'reachable' => $reachable,
             // Para anotar a mano a quien organizó el turno o vino sin apuntarse.
             'all_partners' => $partners->findBy(
                 ['status' => Partner::STATUS_ACTIVO],
@@ -1062,6 +1093,95 @@ class VolunteeringController extends AbstractController
         }
 
         return $this->redirectToRoute('volunteering_shift', ['id' => $shift->getId()]);
+    }
+
+    /**
+     * Pedírselo a UNA persona de las que la ficha sugiere.
+     *
+     * Es el hueco que quedaba en «A quién pedírselo»: la pantalla decía a quién
+     * llamar y ahí se acababa —un `tel:` y un `mailto:`, o sea, sal de la
+     * aplicación y apáñate—. Ahora se le puede pedir desde aquí, y le llega por
+     * donde esa persona haya dicho que quiere enterarse.
+     *
+     * NO GASTA NI ADELANTA LA ESCALADA AUTOMÁTICA, que es lo que hace que esto
+     * sea seguro de ofrecer en cada fila: el escalado se guía por los ámbitos ya
+     * enviados y esto no es un ámbito. Pedírselo a Inés no impide que el aviso a
+     * quien tiene marcada el área salga cuando le toque. Y a diferencia del aviso
+     * general, no hay canal que gastar: va a una persona que ya dijo que de esto
+     * sí se le avise.
+     *
+     * SE PUEDE REPETIR, a propósito y por ahora. Insistirle a alguien que no
+     * contestó es una decisión razonable de quien coordina, y el rastro queda
+     * para que se vea cuántas veces se ha hecho. Un tope duro «una vez por turno
+     * y persona» exigiría consultar los eventos por turno, y el rastro no tiene
+     * columna para el turno: viaja en el payload. Cuando estorbe se resuelve con
+     * esa columna, no con una consulta a un JSON.
+     */
+    #[Route('/turno/{id}/pedirselo/{partner}', name: 'volunteering_ask', methods: ['POST'], requirements: ['id' => '\d+', 'partner' => '\d+'])]
+    #[IsGranted(VolunteerOfferVoter::EDIT, subject: 'shift')]
+    public function askPerson(
+        Request $request,
+        VolunteerShift $shift,
+        int $partner,
+        PartnerRepository $partners,
+        VolunteerCallNotifier $notifier,
+        VolunteerEventRecorder $events,
+        EntityManagerInterface $em,
+    ): Response {
+        $back = $this->redirectToRoute('volunteering_shift', ['id' => $shift->getId()]);
+
+        if (!$this->isCsrfTokenValid('volunteering_ask', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
+
+            return $back;
+        }
+
+        $who = $partners->find($partner);
+        $offer = $shift->getOffer();
+        if (null === $who || null === $offer) {
+            $this->addFlash('error', 'No se ha encontrado a esa persona.');
+
+            return $back;
+        }
+
+        $ways = $notifier->ask($shift, $who);
+        $name = trim($who->getName() . ' ' . $who->getSurname());
+
+        // Sin vía no hay petición, así que no se registra nada: decir que se le
+        // pidió a alguien que no puede haberse enterado sería un rastro falso, y
+        // este rastro se usa para saber a quién ya se le pidió.
+        if ([] === $ways) {
+            $this->addFlash('warning', sprintf(
+                'No se le ha podido pedir a %s: no tiene cuenta en la web ni correo en su ficha, así que no hay por dónde avisarle. Tendrá que ser por teléfono.',
+                $name
+            ));
+
+            return $back;
+        }
+
+        $events->forOffer($offer, VolunteerEvent::TYPE_ASKED, [
+            // El turno va en el payload porque el rastro no tiene columna para
+            // él. Con la fecha al lado, el historial se lee sin ir a buscarlo.
+            'shift' => $shift->getId(),
+            'date' => $shift->getStartsAt()?->format('Y-m-d H:i'),
+            'ways' => $ways,
+        ], $who);
+        $em->flush();
+
+        $labels = [
+            'push' => 'al móvil',
+            'email' => 'por correo',
+            'inbox' => 'a sus avisos de la web',
+        ];
+        $told = array_map(static fn (string $way): string => $labels[$way], $ways);
+
+        $this->addFlash('success', sprintf(
+            'Se le ha pedido a %s: le llega %s.',
+            $name,
+            1 === \count($told) ? $told[0] : implode(' y ', [implode(', ', \array_slice($told, 0, -1)), end($told)])
+        ));
+
+        return $back;
     }
 
     /**

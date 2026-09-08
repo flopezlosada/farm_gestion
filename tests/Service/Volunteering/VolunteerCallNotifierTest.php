@@ -304,6 +304,132 @@ class VolunteerCallNotifierTest extends TestCase
     }
 
     /**
+     * PEDÍRSELO A UNA PERSONA NO ESCRIBE NINGUNA LLAMADA, y es la invariante que
+     * más importa de todo esto: el registro de {@see VolunteerCall} existe para
+     * que el planificador no repita un aviso masivo, y su UNIQUE (turno,
+     * alcance) es lo único que lo garantiza. Si pedírselo a Inés gastara ese
+     * registro, el aviso automático a quien tiene marcada el área no saldría
+     * nunca — y nadie se enteraría de por qué.
+     */
+    public function testPedirseloAUnaPersonaNoGastaElAvisoDeAmbito(): void
+    {
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->expects($this->never())->method('persist');
+        $em->expects($this->never())->method('flush');
+
+        $ways = $this->notifier(entityManager: $em)->ask($this->shift(), $this->partner(7));
+
+        $this->assertNotSame([], $ways, 'Con cuenta y preferencias abiertas, algo tiene que salir.');
+    }
+
+    /**
+     * La copia en la bandeja es el suelo: quien tiene cuenta se entera al
+     * entrar, aunque no se haya suscrito nunca a los avisos del navegador. Es lo
+     * que hace que este botón sirva para casi toda la asociación y no sólo para
+     * quien tiene push.
+     */
+    public function testSinPushLaPeticionLlegaIgualALaBandeja(): void
+    {
+        $users = $this->createMock(UserRepository::class);
+        $users->method('findByPartners')->willReturn([new User()]);
+
+        // Preferencias abiertas, pero ni un navegador suscrito: sendToMany
+        // devuelve NAVEGADORES alcanzados, y cero significa que por ahí no llegó.
+        $push = $this->createMock(PushSender::class);
+        $push->method('sendToMany')->willReturn(0);
+
+        $ways = $this->notifier(users: $users, push: $push)
+            ->ask($this->shift(), $this->partner(7));
+
+        $this->assertContains('inbox', $ways);
+        $this->assertNotContains('push', $ways, 'Sin navegador suscrito no se puede decir que le llegó al móvil.');
+    }
+
+    /**
+     * Con un navegador suscrito sí se dice que le llegó al móvil. La distinción
+     * no es cosmética: es lo que la pantalla le cuenta a quien acaba de pulsar,
+     * y de ahí depende que llame por teléfono o se quede tranquilx.
+     */
+    public function testConNavegadorSuscritoLaPeticionLlegaAlMovil(): void
+    {
+        $push = $this->createMock(PushSender::class);
+        $push->method('sendToMany')->willReturn(1);
+
+        $ways = $this->notifier(push: $push)->ask($this->shift(), $this->partner(7));
+
+        $this->assertContains('push', $ways);
+    }
+
+    /**
+     * Sin cuenta y sin correo no hay por dónde: ni bandeja, ni navegador que se
+     * haya podido suscribir, ni dirección donde escribir. Hay que decirlo en vez
+     * de fingir que se le pidió, o quien coordina no coge el teléfono.
+     */
+    public function testSinCuentaNiCorreoNoHayPorDondePedirselo(): void
+    {
+        $users = $this->createMock(UserRepository::class);
+        $users->method('findByPartners')->willReturn([]);
+
+        $push = $this->createMock(PushSender::class);
+        $push->expects($this->never())->method('sendToMany');
+
+        $inbox = $this->createMock(NotificationInbox::class);
+        $inbox->expects($this->never())->method('deliver');
+
+        $this->assertSame(
+            [],
+            $this->notifier(users: $users, push: $push, inbox: $inbox)
+                ->ask($this->shift(), $this->partner(7))
+        );
+    }
+
+    /**
+     * PERO SIN CUENTA TODAVÍA PUEDE HABER CORREO, y es fácil confundirlo: la
+     * bandeja y el push cuelgan de la cuenta de acceso, la dirección de correo
+     * vive en la ficha del socix. Quien nunca ha entrado en la web pero tiene su
+     * correo puesto sí se entera, igual que con el aviso de ámbito.
+     */
+    public function testSinCuentaPeroConCorreoSeLePuedePedirPorAhi(): void
+    {
+        $users = $this->createMock(UserRepository::class);
+        $users->method('findByPartners')->willReturn([]);
+
+        $ways = $this->notifier(users: $users)
+            ->ask($this->shift(), $this->partner(7, 'ines@example.org'));
+
+        $this->assertSame(['email'], $ways);
+    }
+
+    /**
+     * Y con cuenta pero sin correo en la ficha NO se dice que le llega por
+     * correo. `email()` salta en silencio a quien no tiene dirección, así que
+     * contarlo como vía sería decirle a quien pulsa que el aviso salió por un
+     * sitio por el que no salió.
+     */
+    public function testSinCorreoEnLaFichaNoSeCuentaEsaVia(): void
+    {
+        $ways = $this->notifier()->ask($this->shift(), $this->partner(7));
+
+        $this->assertNotContains('email', $ways);
+    }
+
+    /**
+     * Quien pidió que no se le avise por el móvil no recibe push porque alguien
+     * se lo pida a mano. Pedírselo de persona a persona no es una puerta de
+     * atrás a las preferencias de nadie.
+     */
+    public function testPedirseloRespetaLasPreferenciasDeCanal(): void
+    {
+        $push = $this->createMock(PushSender::class);
+        $push->expects($this->never())->method('sendToMany');
+
+        $ways = $this->notifier(push: $push, preferences: $this->preferences([]))
+            ->ask($this->shift(), $this->partner(7));
+
+        $this->assertSame(['inbox'], $ways, 'Queda la bandeja, que no pasa por preferencias.');
+    }
+
+    /**
      * Preferencias dobladas: por defecto todo el mundo quiere todo, que es el
      * estado real de la asociación (sin fila de opt-out, el aviso se quiere).
      *
@@ -346,12 +472,17 @@ class VolunteerCallNotifierTest extends TestCase
     /**
      * Un socix con id, como los que salen de la base de datos.
      *
-     * @param int $id el identificador a forzar
+     * Sin correo por defecto, a propósito: uno de cada ocho socixs no tiene, y
+     * conviene que el caso normal de los tests sea el que más se olvida.
+     *
+     * @param int         $id    el identificador a forzar
+     * @param string|null $email su dirección, si la tiene en la ficha
      */
-    private function partner(int $id): Partner
+    private function partner(int $id, ?string $email = null): Partner
     {
         $partner = $this->createMock(Partner::class);
         $partner->method('getId')->willReturn($id);
+        $partner->method('getEmail')->willReturn($email);
 
         return $partner;
     }

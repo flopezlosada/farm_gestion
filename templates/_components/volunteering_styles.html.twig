@@ -868,6 +868,11 @@
         color: var(--csa-ink-muted);
     }
     .vol-suggest__contact { display: flex; gap: var(--csa-sp-2); flex-shrink: 0; }
+    /* El formulario de «pedírselo» no debe formar caja: así su botón es un item
+       flex más, en fila con el teléfono y el correo, y hereda el `flex: 1` que
+       los estira en móvil. Sin esto el form se lleva el ancho y el botón sale
+       descolgado de la fila. */
+    .vol-suggest__contact form { display: contents; }
 
     @media (max-width: 640px) {
         .vol-suggest li { flex-direction: column; align-items: stretch; }
