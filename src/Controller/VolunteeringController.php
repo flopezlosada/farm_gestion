@@ -1144,8 +1144,38 @@ class VolunteeringController extends AbstractController
             return $back;
         }
 
-        $ways = $notifier->ask($shift, $who);
         $name = trim($who->getName() . ' ' . $who->getSurname());
+
+        // EL ID LLEGA POR LA URL, así que aquí no vale fiarse de que la lista de
+        // sugerencias ya filtrara: ésa la pinta un GET, y basta con tener la
+        // ficha cargada desde antes de que esta persona cambiara de opinión. El
+        // servicio lo comprueba por su cuenta ({@see VolunteerCallNotifier::ask})
+        // y esto es lo que permite decir POR QUÉ no se le puede pedir, en vez de
+        // devolver un "no hay por dónde" que suena a problema técnico.
+        if (!$notifier->canBeAsked($who)) {
+            $this->addFlash('warning', sprintf(
+                'A %s no se le puede pedir: %s',
+                $name,
+                $who->isVolunteeringOptOut()
+                    ? 'ha pedido que no se le avise de voluntariado.'
+                    : 'ya no consta como socix activx.'
+            ));
+
+            return $back;
+        }
+
+        // Y pedirle ayuda a quien ya se apuntó es un aviso que sólo genera
+        // desconcierto. La lista de sugerencias descuenta a quien está apuntadx,
+        // pero puede haberse apuntado después de cargarse la pantalla.
+        foreach ($shift->getSignups() as $signup) {
+            if ($signup->getPartner()?->getId() === $who->getId()) {
+                $this->addFlash('warning', sprintf('%s ya está apuntadx a este turno.', $name));
+
+                return $back;
+            }
+        }
+
+        $ways = $notifier->ask($shift, $who);
 
         // Sin vía no hay petición, así que no se registra nada: decir que se le
         // pidió a alguien que no puede haberse enterado sería un rastro falso, y

@@ -384,6 +384,59 @@ class VolunteerCallNotifierTest extends TestCase
     }
 
     /**
+     * 🔴 QUIEN PIDIÓ QUE NO SE LE AVISE NO RECIBE NADA, aunque alguien pulse el
+     * botón con su nombre delante.
+     *
+     * Es el caso que justifica que este método compruebe el opt-out por su
+     * cuenta en vez de fiarse de la pantalla. Son dos mecanismos distintos:
+     * `Partner::volunteering_opt_out` es la columna que el socix marca en su
+     * panel, y `NotificationOptOut` —lo único que leen las preferencias— es otra
+     * tabla, fina por tema y canal. Quien usó el interruptor duro es justo quien
+     * NO va a tener fila en la fina, así que confiar sólo en las preferencias
+     * dejaba pasar el aviso a quien más claro lo había dicho.
+     *
+     * Y la lista de la pantalla no vale como garantía: la filtra un GET, pero el
+     * POST recibe un id y basta con tener la ficha cargada de antes.
+     */
+    public function testAQuienPidioQueNoSeLeAviseNoSeLePide(): void
+    {
+        $push = $this->createMock(PushSender::class);
+        $push->expects($this->never())->method('sendToMany');
+
+        $inbox = $this->createMock(NotificationInbox::class);
+        $inbox->expects($this->never())->method('deliver');
+
+        $mailer = $this->createMock(MailerInterface::class);
+        $mailer->expects($this->never())->method('send');
+
+        $notifier = $this->notifier(push: $push, inbox: $inbox, mailer: $mailer);
+
+        // Con correo en la ficha y cuenta en la web: todas las vías abiertas
+        // menos la que importa.
+        $this->assertSame(
+            [],
+            $notifier->ask($this->shift(), $this->partner(7, 'ines@example.org', optOut: true))
+        );
+    }
+
+    /**
+     * A quien se dio de baja tampoco se le pide ayuda. Sale de la misma familia
+     * de invariantes que respetan los finders de los que sale la audiencia
+     * automática, y aquí llegaba sin comprobar porque el id viene por la URL.
+     */
+    public function testAQuienSeDioDeBajaNoSeLePide(): void
+    {
+        $inbox = $this->createMock(NotificationInbox::class);
+        $inbox->expects($this->never())->method('deliver');
+
+        $this->assertSame(
+            [],
+            $this->notifier(inbox: $inbox)
+                ->ask($this->shift(), $this->partner(7, 'x@example.org', status: Partner::STATUS_BAJA))
+        );
+    }
+
+    /**
      * PERO SIN CUENTA TODAVÍA PUEDE HABER CORREO, y es fácil confundirlo: la
      * bandeja y el push cuelgan de la cuenta de acceso, la dirección de correo
      * vive en la ficha del socix. Quien nunca ha entrado en la web pero tiene su
@@ -475,14 +528,27 @@ class VolunteerCallNotifierTest extends TestCase
      * Sin correo por defecto, a propósito: uno de cada ocho socixs no tiene, y
      * conviene que el caso normal de los tests sea el que más se olvida.
      *
-     * @param int         $id    el identificador a forzar
-     * @param string|null $email su dirección, si la tiene en la ficha
+     * El estado se dobla explícitamente a ACTIVO: un mock sin stub devuelve la
+     * cadena vacía, que NO es un estado válido, y entonces `canBeAsked()` diría
+     * que a nadie se le puede pedir nada y los casos pasarían por el motivo
+     * equivocado.
+     *
+     * @param int         $id      el identificador a forzar
+     * @param string|null $email   su dirección, si la tiene en la ficha
+     * @param bool        $optOut  si ha pedido que no se le avise de voluntariado
+     * @param string      $status  su estado como socix
      */
-    private function partner(int $id, ?string $email = null): Partner
-    {
+    private function partner(
+        int $id,
+        ?string $email = null,
+        bool $optOut = false,
+        string $status = Partner::STATUS_ACTIVO,
+    ): Partner {
         $partner = $this->createMock(Partner::class);
         $partner->method('getId')->willReturn($id);
         $partner->method('getEmail')->willReturn($email);
+        $partner->method('isVolunteeringOptOut')->willReturn($optOut);
+        $partner->method('getStatus')->willReturn($status);
 
         return $partner;
     }
@@ -507,6 +573,7 @@ class VolunteerCallNotifierTest extends TestCase
         ?PushSender $push = null,
         ?NotificationInbox $inbox = null,
         ?NotificationPreferences $preferences = null,
+        ?MailerInterface $mailer = null,
     ): VolunteerCallNotifier {
         $settings = $this->createMock(AppSettings::class);
         $settings->method('getBool')->willReturn($enabled);
@@ -533,7 +600,7 @@ class VolunteerCallNotifierTest extends TestCase
             $settings,
             new VolunteerOfferFormatter(),
             new NullLogger(),
-            $this->createMock(MailerInterface::class),
+            $mailer ?? $this->createMock(MailerInterface::class),
             $this->createMock(PartnerAccessPolicy::class),
             $urlGenerator
         );

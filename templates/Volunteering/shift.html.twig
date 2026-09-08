@@ -741,6 +741,17 @@
                                                 {% else %}
                                                     Sale solo en la próxima hora, si sigue faltando gente.
                                                 {% endif %}
+                                            {% elseif pending_scope is null %}
+                                                {# NO QUEDA AUTOMATISMO, aunque este paso no se haya
+                                                 # dado. Pasa siempre que la espera para ampliar el
+                                                 # aviso caiga después del turno: con el primer aviso
+                                                 # a menos de 24h —lo normal en una tarea urgente— el
+                                                 # segundo ya no llega a tiempo, y el escalador lo
+                                                 # sabe. Sin esta rama, la ficha decía «sale después
+                                                 # del anterior» al lado de un bloque que dice que los
+                                                 # automáticos ya han salido: dos frases opuestas
+                                                 # sobre lo mismo, en la misma pantalla. #}
+                                                Ya no saldrá solo: el turno llega antes de que toque ampliar el aviso. Si falta gente, hay que pedirla a mano.
                                             {% else %}
                                                 Sale después del anterior, si para entonces sigue faltando gente.
                                             {% endif %}

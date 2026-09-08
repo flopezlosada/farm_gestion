@@ -255,8 +255,26 @@ class VolunteerCallNotifier
      * pero tiene su correo puesto sí se entera — es el mismo caso que ya cubre el
      * aviso de ámbito.
      *
-     * No comprueba el opt-out de voluntariado porque no le toca: quien llega aquí
-     * sale de {@see VolunteerSuggester}, cuyo finder ya lo filtra.
+     * 🔴 COMPRUEBA EL OPT-OUT DURO AUNQUE LA PANTALLA YA LO FILTRE, y no es
+     * redundancia. Son DOS mecanismos distintos y sólo uno de los dos lo miran
+     * las preferencias:
+     *
+     *  - `Partner::isVolunteeringOptOut()` es la columna dedicada, el "no me
+     *    avises de voluntariado" que el socix marca en su panel. La consultan las
+     *    tres consultas que alimentan {@see VolunteerAudienceResolver}, así que
+     *    todo el camino automático lo respeta.
+     *  - `NotificationOptOut`, que es lo que lee {@see NotificationPreferences},
+     *    es otra tabla y es fino por tema y canal. **No mira esa columna.**
+     *
+     * Quien usó el interruptor duro es justo quien no va a tener fila en la tabla
+     * fina, así que confiar sólo en las preferencias dejaba pasar el aviso
+     * precisamente a quien más claro lo había dicho. Y la lista de la pantalla no
+     * sirve de garantía: la filtra un GET, pero el POST recibe un id y basta con
+     * tener la ficha cargada de antes de que esa persona lo marcara.
+     *
+     * Es el daño que todo el escalado existe para evitar —el permiso del
+     * navegador se pierde una vez y para siempre— y llegaba por la puerta de
+     * atrás.
      *
      * @param VolunteerShift $shift   el turno para el que se pide ayuda
      * @param Partner        $partner a quién se le pide
@@ -265,7 +283,7 @@ class VolunteerCallNotifier
      */
     public function ask(VolunteerShift $shift, Partner $partner): array
     {
-        if (null === $shift->getOffer()) {
+        if (null === $shift->getOffer() || !$this->canBeAsked($partner)) {
             return [];
         }
 
@@ -318,6 +336,28 @@ class VolunteerCallNotifier
         }
 
         return $ways;
+    }
+
+    /**
+     * Si a esta persona se le puede pedir algo, sea quien sea quien lo pida.
+     *
+     * Dos condiciones, las mismas que respetan los finders de
+     * {@see \App\Repository\PartnerRepository} de los que sale la audiencia
+     * automática: que no haya pedido que no se le avise de voluntariado, y que
+     * siga siendo socix activx. A quien se dio de baja no se le pide ayuda.
+     *
+     * Vive aquí y no sólo en el controlador porque es política de a-quién-se-le-
+     * manda, y este servicio es el único que manda: una comprobación en la
+     * pantalla se salta con un POST, una aquí no.
+     *
+     * @param Partner $partner a quién se le iba a pedir
+     *
+     * @return bool true si se le puede pedir
+     */
+    public function canBeAsked(Partner $partner): bool
+    {
+        return !$partner->isVolunteeringOptOut()
+            && Partner::STATUS_ACTIVO === $partner->getStatus();
     }
 
     /**
