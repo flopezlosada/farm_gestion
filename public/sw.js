@@ -33,7 +33,15 @@ self.addEventListener('push', function (event) {
         // EL LOGO, que es lo que dice de quién es el aviso sin gastar ni una
         // letra del título. Es el mismo icono que declara el manifest, así que
         // la notificación y la app instalada se reconocen igual.
-        icon: '/icon-192.png'
+        icon: '/icon-192.png',
+        // Y el badge, que es OTRA COSA: el iconito de la barra de estado de
+        // Android. Va aparte porque allí sólo se usa el canal alfa como máscara
+        // —un icono a color saldría como un cuadrado blanco— así que es el árbol
+        // en silueta sobre transparente. Sale de icon-192.png con el script de
+        // docs/logo/. A tamaño de barra de estado las ramas se pierden y queda
+        // la mancha del árbol; sigue siendo mejor que el icono genérico que pone
+        // Android cuando no se declara ninguno.
+        badge: '/icon-badge-96.png'
         // SIN requireInteraction, a diferencia de gestion-centro. Allí un aviso
         // de guardia se queda en pantalla hasta que se atiende porque si no se
         // queda un aula sin cubrir. Aquí es "hace falta gente para el jueves":
