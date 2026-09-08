@@ -713,6 +713,12 @@
                                                 No se mandará: la tarea no tiene área, así que nadie la tiene marcada.
                                             {% elseif not shift.isOpen() %}
                                                 Ya no hace falta{{ shift.hasRoom ? '' : ': no quedan plazas libres' }}.
+                                            {% elseif calls_by_scope.everyone is defined %}
+                                                {# El aviso general cierra la escalada: ya lo ha visto
+                                                 # todo el mundo, así que no queda nadie a quien
+                                                 # ampliarlo. Sin esta rama, un paso que no va a salir
+                                                 # nunca decía «sale después del anterior». #}
+                                                Ya no saldrá: se avisó a toda la asociación.
                                             {% elseif pending_scope == scope %}
                                                 {% if escalation_opens_at %}
                                                     Sale solo a partir del {{ escalation_opens_at|format_datetime(pattern="d 'de' MMMM 'a las' HH:mm", locale='es') }}, si sigue faltando gente.
