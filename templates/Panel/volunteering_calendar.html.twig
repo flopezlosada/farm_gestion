@@ -20,18 +20,25 @@
 
 {% block title %}Voluntariado · Turnos de {{ month|format_date(pattern='MMMM', locale='es') }}{% endblock %}
 
+{# «Cuadrante» y NO «Calendario», también en la miga: en el menú del panel «Mi
+ # calendario» es el de la cesta, y llamar calendario a esto es fabricar justo la
+ # confusión que las dos vistas aisladas quieren evitar. #}
 {% block csa_crumbs %}
     <a href="{{ path('panel_volunteering') }}">Voluntariado</a>
     <span class="csa-topbar__crumbs-sep">/</span>
-    <span class="csa-topbar__crumb-active">Calendario</span>
+    <span class="csa-topbar__crumb-active">Cuadrante</span>
 {% endblock %}
 
 {% block more_css %}
     {{ parent() }}
+    {% include '_components/volunteering_styles.html.twig' %}
     {% include '_components/shift_calendar_styles.html.twig' %}
 {% endblock %}
 
 {% block csa_main %}
+
+    {% include '_components/volunteering_tabs.html.twig' %}
+
     {% set keep = { tipo: current ? current.id : null, solo: only_mine ? 'mias' : null }|filter(v => v is not null) %}
     {% set has_alarm = false %}
     {% for items in days %}{% for item in items %}{% if item.kind == 'shift' and item.alarm %}{% set has_alarm = true %}{% endif %}{% endfor %}{% endfor %}

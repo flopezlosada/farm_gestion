@@ -1,0 +1,56 @@
+{#
+ # Las cuatro puertas del voluntariado del socix.
+ #
+ # POR QUÉ EXISTEN. Todo esto vivía en UNA pantalla que hacía cinco cosas:
+ # confirmar lo que hiciste, ver lo que falta, ver lo tuyo, elegir tus áreas y
+ # mirar tu aportación. En un móvil eso son cuatro pantallazos de scroll y la
+ # consecuencia práctica es que sólo se ve lo primero.
+ #
+ # Y EL CUADRANTE ESTABA ENTERRADO: se llegaba por un enlace de texto al pie de
+ # un bloque, dentro de esa misma pantalla larga. Es la única vista donde uno se
+ # apunta a varios días de una vez, o sea la más potente, y tenía la peor puerta
+ # posible.
+ #
+ # SE LLAMA «CUADRANTE» Y NO «CALENDARIO», a propósito. En el menú del panel
+ # «Mi calendario» es el de la cesta; meter aquí otro calendario es fabricar
+ # justo la confusión que se quiere evitar. «Cuadrante» es además la palabra que
+ # ya usa gestión para esta misma vista.
+ #
+ # CADA PESTAÑA ES UNA URL, no un panel escondido de la misma página. Con
+ # paneles seguiríamos cargando las cinco cosas de golpe y el problema estaría
+ # igual, sólo que tapado.
+ #
+ # Espera: `pending` (cuántas cosas hay por confirmar; 0 o nada si ninguna).
+ #}
+{% set route = app.request.attributes.get('_route') %}
+
+{# El rótulo corto es el que se ve: a 390px caben cuatro en dos filas si ninguno
+ # se pasa de dos palabras. El largo va en el title, para quien pare encima. #}
+{% set tabs = [
+    { short: 'Hace falta', label: 'Lo que hace falta', url: path('panel_volunteering'),
+      active: route == 'panel_volunteering' },
+    { short: 'Cuadrante', label: 'El cuadrante del mes', url: path('panel_volunteering_calendar'),
+      active: route == 'panel_volunteering_calendar' },
+    { short: 'Lo mío', label: 'A lo que me he apuntado', url: path('panel_volunteering_mine'),
+      active: route == 'panel_volunteering_mine', count: pending|default(0) },
+    { short: 'Mis áreas', label: 'De qué quiero que me avisen', url: path('panel_volunteering_areas'),
+      active: route == 'panel_volunteering_areas' }
+] %}
+
+<ul class="csa-tabs csa-tabs--folder vol-tabs" role="tablist">
+    {% for tab in tabs %}
+        <li class="csa-tabs__item{% if tab.active %} active{% endif %}">
+            <a class="csa-tabs__link" href="{{ tab.url }}" title="{{ tab.label }}"
+               {% if tab.active %}aria-current="page"{% endif %}>
+                {{ tab.short }}
+                {# El contador SÓLO donde hay algo que hacer. Lo que se confirma
+                 # es una pregunta con respuesta de un clic, y hasta que no se
+                 # conteste esas horas no las tiene nadie: si el aviso vive
+                 # dentro de la pestaña, quien no entra nunca se entera. #}
+                {% if tab.count|default(0) > 0 %}
+                    <span class="csa-tabs__count">{{ tab.count }}</span>
+                {% endif %}
+            </a>
+        </li>
+    {% endfor %}
+</ul>

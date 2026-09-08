@@ -1063,6 +1063,28 @@
     .vol-task__companions .csa-input { width: 68px; }
     .vol-task__companions + .vol-task__cta { margin-top: var(--csa-sp-2); }
 
+    /* ---- Las cuatro pestañas del voluntariado del socix ----
+       Sobre el componente canónico (.csa-tabs--folder), que ya envuelve solo por
+       debajo de 768px. Aquí sólo lo que es propio de esta pantalla. */
+    .vol-tabs { margin-bottom: var(--csa-sp-5); }
+    /* Lo que hay por confirmar SÍ tiene que verse: es una pregunta con respuesta
+       de un clic, y hasta que no se conteste esas horas no las tiene nadie. El
+       gris del contador canónico —pensado para "Quién viene · 3"— aquí se pierde. */
+    .vol-tabs .csa-tabs__count {
+        display: inline-flex; align-items: center; justify-content: center;
+        min-width: 18px; height: 18px; padding: 0 5px;
+        border-radius: var(--csa-radius-pill);
+        background: var(--csa-terracotta); color: #fff;
+        font-size: 10.5px; font-weight: 700; opacity: 1;
+    }
+    .vol-tabs .csa-tabs__item.active .csa-tabs__count { color: #fff; opacity: 1; }
+
+    /* Móvil: cuatro rótulos en dos filas. El componente ya las deja envolver;
+       lo que falta es que no queden pegadas al borde ni desalineadas. */
+    @media (max-width: 640px) {
+        .vol-tabs { justify-content: center; }
+    }
+
     /* ---- Montones de la pantalla de voluntariado ----
        El encabezado es una línea, no una tarjeta dentro de otra: separa sin
        añadir un marco más a una pantalla que ya vive dentro de una csa-card. */
