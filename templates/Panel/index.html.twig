@@ -92,7 +92,11 @@
         <header class="pnl-greet">
             <span class="prt-avatar prt-avatar--{{ avatar_tone }} pnl-greet__avatar" aria-hidden="true">{{ initials }}</span>
             <div class="pnl-greet__date">{{ 'now'|format_date(pattern="EEEE d 'de' MMMM", locale='es') }}</div>
-            <h1 class="pnl-greet__title">Hola, {{ partner.name|lower }}</h1>
+            {# |lower|title y no |lower a secas: en la base los nombres están en
+             # mayúsculas y el saludo salía «Hola, laura». `title` y no
+             # `capitalize` porque capitalize sólo toca la primera letra de toda
+             # la cadena, y hay nombres de pila de dos palabras. #}
+            <h1 class="pnl-greet__title">Hola, {{ partner.name|lower|title }}</h1>
             <div class="pnl-greet__chips">
                 <span class="prt-chip prt-chip--{{ sc.cls }}"><span class="dot"></span>{{ sc.label }}</span>
                 {% if active_share %}
@@ -315,14 +319,14 @@
                     {% if is_family_basket %}
                         <div class="prt-share">
                             <i class="fa fa-home"></i>
-                            <span>Es la cesta de {{ owner.name|lower|capitalize }} {{ owner.surname|lower|capitalize }}, de tu familia. La recogéis juntxs.</span>
+                            <span>Es la cesta de {{ (owner.name ~ ' ' ~ owner.surname)|lower|title }}, de tu familia. La recogéis juntxs.</span>
                         </div>
                     {% endif %}
 
                     {% if owner.sharePartner and bs_id in [4, 6, 7] %}
                         <div class="prt-share">
                             <i class="fa fa-handshake-o"></i>
-                            <span>Compartes cesta con {{ owner.sharePartner.name|lower|capitalize }} {{ owner.sharePartner.surname|lower|capitalize }}</span>
+                            <span>Compartes cesta con {{ (owner.sharePartner.name ~ ' ' ~ owner.sharePartner.surname)|lower|title }}</span>
                         </div>
                     {% endif %}
 
@@ -356,13 +360,13 @@
                             {% for relative in partner.relatives %}
                                 <li class="prt-relative">
                                     <span class="prt-relative__dot"><i class="fa fa-user"></i></span>
-                                    <span class="prt-relative__name">{{ relative.name }} {{ relative.surname }}</span>
+                                    <span class="prt-relative__name">{{ (relative.name ~ ' ' ~ relative.surname)|lower|title }}</span>
                                 </li>
                             {% endfor %}
                         </ul>
                     {% else %}
                         <p class="prt-family__intro">
-                            Estás vinculadx a la familia de <strong>{{ partner.parent.name }} {{ partner.parent.surname }}</strong>.
+                            Estás vinculadx a la familia de <strong>{{ (partner.parent.name ~ ' ' ~ partner.parent.surname)|lower|title }}</strong>.
                         </p>
                     {% endif %}
                 </div>
