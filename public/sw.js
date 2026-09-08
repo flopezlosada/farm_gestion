@@ -29,7 +29,11 @@ self.addEventListener('push', function (event) {
         // La URL a abrir viaja en data para poder leerla en notificationclick.
         data: { url: data.url || DEFAULT_URL },
         // Vibración corta en móvil, para que se note en el bolsillo.
-        vibrate: [200, 100, 200]
+        vibrate: [200, 100, 200],
+        // EL LOGO, que es lo que dice de quién es el aviso sin gastar ni una
+        // letra del título. Es el mismo icono que declara el manifest, así que
+        // la notificación y la app instalada se reconocen igual.
+        icon: '/icon-192.png'
         // SIN requireInteraction, a diferencia de gestion-centro. Allí un aviso
         // de guardia se queda en pantalla hasta que se atiende porque si no se
         // queda un aula sin cubrir. Aquí es "hace falta gente para el jueves":
@@ -37,11 +41,11 @@ self.addEventListener('push', function (event) {
         // justo el tipo de insistencia que hace que la gente apague los avisos,
         // y el permiso del navegador no se puede volver a pedir.
         //
-        // SIN icon ni badge mientras no haya PNG que poner: hacen falta un icono
-        // de 192x192 a color y un badge de 96x96 monocromo sobre transparente
-        // (Android usa sólo su canal alfa como máscara, así que un cuadrado a
-        // color saldría como un cuadrado blanco). Apuntar a un fichero que no
-        // existe deja el aviso sin icono igualmente, pero con un 404 por medio.
+        // SIGUE SIN BADGE, que es otra cosa que el icono: Android pide un PNG de
+        // 96x96 MONOCROMO sobre transparente y usa sólo su canal alfa como
+        // máscara, así que el icono a color de 192 saldría ahí como un cuadrado
+        // blanco. Mientras no exista ese fichero, no se declara: apuntar a uno
+        // que no está deja el aviso igual de pelado, pero con un 404 por medio.
     };
 
     event.waitUntil(self.registration.showNotification(data.title || 'Aviso', options));
