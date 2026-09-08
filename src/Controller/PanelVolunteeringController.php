@@ -37,12 +37,23 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * desde el calendario marcando varios ({@see self::signUpMany()}), que es la
  * forma corta de lo que si no serían ocho clics.
  *
- * EL ORDEN DE LA PANTALLA ES EL DISEÑO. Primero lo que hace falta, con fecha y
- * plazas libres; el contador propio va después y en pequeño. Al revés —"llevas
- * 0 horas" arriba y grande— es un reproche sin salida, y un reproche que no se
- * puede resolver de un clic sólo consigue que la gente deje de entrar en la web.
- * Y si dejan de entrar, se pierde también el canal por el que gestionan su
- * cesta, que es el activo de verdad.
+ * CUATRO PESTAÑAS Y NO UNA PANTALLA. Esto era una sola página que hacía cinco
+ * cosas —confirmar lo hecho, ver lo que falta, ver lo tuyo, elegir tus áreas y
+ * mirar tu aportación—, o sea cuatro pantallazos de scroll en un móvil, que en
+ * la práctica significa que sólo se ve lo primero. Ahora: la portada (lo que
+ * hace falta), el cuadrante, lo mío y mis áreas, cada una con su URL.
+ *
+ * El CUADRANTE se llama así y no «calendario» a propósito: en el menú del panel
+ * «Mi calendario» es el de la cesta, y son dos vistas que nunca se mezclan.
+ * Estaba además enterrado en un enlace de texto al pie de un bloque, siendo la
+ * única vista donde uno se apunta a varios días de una vez.
+ *
+ * EL ORDEN DENTRO DE CADA UNA SIGUE SIENDO EL DISEÑO. Primero lo que hace falta,
+ * con fecha y plazas libres; el contador propio va al final de «lo mío» y en
+ * pequeño. Al revés —"llevas 0 horas" arriba y grande— es un reproche sin
+ * salida, y un reproche que no se puede resolver de un clic sólo consigue que la
+ * gente deje de entrar en la web. Y si dejan de entrar, se pierde también el
+ * canal por el que gestionan su cesta, que es el activo de verdad.
  *
  * LO QUE OCURRE EN SU PUNTO DE RECOGIDA VA PRIMERO. Quien recoge en La Cabrera
  * ya va a estar allí el viernes: pedirle media hora es la fricción más baja que
@@ -75,15 +86,15 @@ class PanelVolunteeringController extends AbstractController
     private const MAX_ROUTINE = 4;
 
     /**
-     * Lo que hace falta, lo que tengo comprometido y lo que llevo hecho.
+     * La portada: lo que hace falta, y nada más.
+     *
+     * Contesta UNA pregunta —¿dónde hago falta?— desde que lo demás tiene su
+     * pestaña. Antes esta acción servía las cinco cosas a la vez.
      */
     #[Route('', name: 'panel_volunteering', methods: ['GET'])]
     public function index(
         VolunteerShiftRepository $shifts,
         VolunteerSignupRepository $signups,
-        VolunteerCategoryRepository $categories,
-        VolunteerCoordinationLogRepository $coordinationLog,
-        VolunteerContributions $contributions,
     ): Response {
         if (($redirect = $this->ensureReady()) !== null) {
             return $redirect;
@@ -91,9 +102,6 @@ class PanelVolunteeringController extends AbstractController
 
         $partner = $this->getUser()->getPartner();
         $now = new \DateTime();
-        [$from, $to] = $contributions->period();
-
-        $mine = $contributions->forPartner($partner);
         $node = $this->nodeOf($partner);
         $mySignups = $signups->findUpcomingFor($partner, $now);
         $myShiftIds = array_map(
@@ -141,15 +149,42 @@ class PanelVolunteeringController extends AbstractController
             // El id y no el nodo: la plantilla sólo necesita comparar, y pasarle
             // la entidad invita a navegar relaciones desde Twig.
             'my_node_id' => $node?->getId(),
-            'my_signups' => $mySignups,
-            // Lo que ya pasó y aún no ha dicho si hizo. Va arriba del todo en la
-            // pantalla: es una pregunta concreta, con respuesta de un clic, y
-            // hasta que no la conteste esas horas no las tiene nadie.
+        ] + $this->tabsContext($signups, $partner, $now));
+    }
+
+    /**
+     * Lo mío: a lo que me he apuntado, lo que llevo hecho y lo que me falta por
+     * confirmar.
+     *
+     * PANTALLA PROPIA desde que el voluntariado tiene pestañas. Vivía al final
+     * de una pantalla que hacía cinco cosas, o sea a cuatro pantallazos de
+     * scroll en un móvil, que en la práctica es no estar.
+     */
+    #[Route('/lo-mio', name: 'panel_volunteering_mine', methods: ['GET'])]
+    public function mine(
+        VolunteerSignupRepository $signups,
+        VolunteerCoordinationLogRepository $coordinationLog,
+        VolunteerContributions $contributions,
+    ): Response {
+        if (($redirect = $this->ensureReady()) !== null) {
+            return $redirect;
+        }
+
+        $partner = $this->getUser()->getPartner();
+        $now = new \DateTime();
+        [$from, $to] = $contributions->period();
+        $mine = $contributions->forPartner($partner);
+
+        return $this->render('Panel/volunteering_mine.html.twig', [
+            'partner' => $partner,
+            'my_signups' => $signups->findUpcomingFor($partner, $now),
+            // Lo que ya pasó y aún no ha dicho si hizo. Va arriba del todo: es
+            // una pregunta concreta, con respuesta de un clic, y hasta que no la
+            // conteste esas horas no las tiene nadie.
             'pending_confirmation' => $signups->findPendingConfirmationFor($partner, $now),
             // Qué hizo, no sólo cuánto: "6 h" no dice nada, "6 h: dos repartos y
             // una mañana de plantación" sí.
             'my_done' => $signups->findDoneFor($partner, $from, $to),
-            'my_shift_ids' => $myShiftIds,
             'my_minutes' => $mine->minutes,
             // La mediana de quienes participan (no la media) y a quién se le
             // enseña. Las dos reglas viven en VolunteerContribution, que es
@@ -157,6 +192,35 @@ class PanelVolunteeringController extends AbstractController
             // y esta pantalla no puedan divergir.
             'median_minutes' => $mine->medianMinutes,
             'show_median' => $mine->showMedian(),
+            // Las áreas que coordina esta persona, si coordina alguna. Sólo a
+            // quien coordina se le ofrece apuntar horas de coordinación: al
+            // resto no le dice nada y sería una caja más.
+            'coordinated' => $this->getUser()->getCoordinatedVolunteerCategories()->toArray(),
+            // Lo que lleva apuntado este año, para que no lo apunte dos veces.
+            'coordination_log' => $coordinationLog->findFor($partner, $from, $to),
+        ] + $this->tabsContext($signups, $partner, $now));
+    }
+
+    /**
+     * Mis áreas: de qué quiero que me avisen.
+     *
+     * Se contesta una vez y luego se mira cero veces, así que su sitio es una
+     * pestaña propia y no media pantalla en cada visita por delante de lo único
+     * que cambia cada semana.
+     */
+    #[Route('/mis-areas', name: 'panel_volunteering_areas', methods: ['GET'])]
+    public function areas(
+        VolunteerCategoryRepository $categories,
+        VolunteerSignupRepository $signups,
+    ): Response {
+        if (($redirect = $this->ensureReady()) !== null) {
+            return $redirect;
+        }
+
+        $partner = $this->getUser()->getPartner();
+
+        return $this->render('Panel/volunteering_areas.html.twig', [
+            'partner' => $partner,
             'categories' => $categories->findActive(),
             // Ids y no entidades: comparar objetos Doctrine con el operador `in`
             // de Twig depende de la identidad de instancia y falla en cuanto una
@@ -165,15 +229,30 @@ class PanelVolunteeringController extends AbstractController
                 static fn ($category) => $category->getId(),
                 $partner->getVolunteerCategories()->toArray()
             ),
-            'has_preferences' => !$partner->hasNoVolunteerPreferences(),
-            // Las áreas que coordina esta persona, si coordina alguna. Sólo a
-            // quien coordina se le ofrece apuntar horas de coordinación: al
-            // resto no le dice nada y sería una caja más en una pantalla que ya
-            // tiene bastantes.
-            'coordinated' => $this->getUser()->getCoordinatedVolunteerCategories()->toArray(),
-            // Lo que lleva apuntado este año, para que no lo apunte dos veces.
-            'coordination_log' => $coordinationLog->findFor($partner, $from, $to),
-        ]);
+        ] + $this->tabsContext($signups, $partner, new \DateTime()));
+    }
+
+    /**
+     * Lo que las cuatro pestañas necesitan sepan cuál se está mirando.
+     *
+     * Hoy es sólo el contador de lo que falta por confirmar, y va en TODAS las
+     * pantallas a propósito: es una pregunta con respuesta de un clic, y hasta
+     * que no se conteste esas horas no las tiene nadie. Si el aviso viviera
+     * dentro de su propia pestaña, quien no entra ahí no se entera nunca.
+     *
+     * Está centralizado para que añadir un segundo indicador no obligue a tocar
+     * cuatro acciones y olvidarse de una.
+     *
+     * @return array{pending: int}
+     */
+    private function tabsContext(
+        VolunteerSignupRepository $signups,
+        Partner $partner,
+        \DateTimeInterface $now,
+    ): array {
+        return [
+            'pending' => \count($signups->findPendingConfirmationFor($partner, $now)),
+        ];
     }
 
 
@@ -420,7 +499,7 @@ class PanelVolunteeringController extends AbstractController
         if (!$this->isCsrfTokenValid('panel_volunteering', (string) $request->request->get('_csrf_token'))) {
             $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
 
-            return $this->redirectToRoute('panel_volunteering');
+            return $this->redirectToRoute('panel_volunteering_mine');
         }
 
         $signup = $signups->findOneFor($shift, $this->getUser()->getPartner());
@@ -442,7 +521,7 @@ class PanelVolunteeringController extends AbstractController
             return $this->redirectToRoute('panel_volunteering_calendar', ['mes' => $shift->getStartsAt()?->format('Y-m')]);
         }
 
-        return $this->redirectToRoute('panel_volunteering');
+        return $this->redirectToRoute('panel_volunteering_mine');
     }
 
     /**
@@ -478,7 +557,7 @@ class PanelVolunteeringController extends AbstractController
         if (!$this->isCsrfTokenValid('panel_volunteering', (string) $request->request->get('_csrf_token'))) {
             $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
 
-            return $this->redirectToRoute('panel_volunteering');
+            return $this->redirectToRoute('panel_volunteering_mine');
         }
 
         $signup = $signups->findOneFor($shift, $this->getUser()->getPartner());
@@ -486,7 +565,7 @@ class PanelVolunteeringController extends AbstractController
         if (null === $signup || $signup->isCancelled()) {
             $this->addFlash('warning', 'No constas apuntadx a ese turno.');
 
-            return $this->redirectToRoute('panel_volunteering');
+            return $this->redirectToRoute('panel_volunteering_mine');
         }
 
         // Confirmar antes de que el turno ocurra no significa nada, y dejaría
@@ -494,7 +573,7 @@ class PanelVolunteeringController extends AbstractController
         if ($shift->getStartsAt() > new \DateTime()) {
             $this->addFlash('warning', 'Ese turno todavía no ha llegado.');
 
-            return $this->redirectToRoute('panel_volunteering');
+            return $this->redirectToRoute('panel_volunteering_mine');
         }
 
         $offer = $shift->getOffer();
@@ -515,7 +594,7 @@ class PanelVolunteeringController extends AbstractController
             $this->addFlash('success', 'Anotado, gracias por decirlo.');
         }
 
-        return $this->redirectToRoute('panel_volunteering');
+        return $this->redirectToRoute('panel_volunteering_mine');
     }
 
     /**
@@ -546,7 +625,7 @@ class PanelVolunteeringController extends AbstractController
         if (!$this->isCsrfTokenValid('panel_volunteering', (string) $request->request->get('_csrf_token'))) {
             $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
 
-            return $this->redirectToRoute('panel_volunteering');
+            return $this->redirectToRoute('panel_volunteering_mine');
         }
 
         $user = $this->getUser();
@@ -555,7 +634,7 @@ class PanelVolunteeringController extends AbstractController
         if (null === $category || !$category->isCoordinatedBy($user)) {
             $this->addFlash('error', 'No coordinas esa área.');
 
-            return $this->redirectToRoute('panel_volunteering');
+            return $this->redirectToRoute('panel_volunteering_mine');
         }
 
         $minutes = CreditedTime::minutesFromHours($request->request->get('hours'));
@@ -563,7 +642,7 @@ class PanelVolunteeringController extends AbstractController
         if (null === $minutes || $minutes <= 0) {
             $this->addFlash('error', 'Pon cuántas horas le has dedicado.');
 
-            return $this->redirectToRoute('panel_volunteering');
+            return $this->redirectToRoute('panel_volunteering_mine');
         }
 
         // La fecha se puede echar atrás —"esto fue de la semana pasada"— pero no
@@ -588,7 +667,7 @@ class PanelVolunteeringController extends AbstractController
 
         $this->addFlash('success', 'Anotado. Gracias por llevar esto adelante.');
 
-        return $this->redirectToRoute('panel_volunteering');
+        return $this->redirectToRoute('panel_volunteering_mine');
     }
 
     /**
@@ -610,7 +689,7 @@ class PanelVolunteeringController extends AbstractController
         if (!$this->isCsrfTokenValid('panel_volunteering', (string) $request->request->get('_csrf_token'))) {
             $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
 
-            return $this->redirectToRoute('panel_volunteering');
+            return $this->redirectToRoute('panel_volunteering_areas');
         }
 
         $partner = $this->getUser()->getPartner();
@@ -645,7 +724,7 @@ class PanelVolunteeringController extends AbstractController
                 : 'Guardado. Te avisaremos de lo que has elegido.'
         );
 
-        return $this->redirectToRoute('panel_volunteering');
+        return $this->redirectToRoute('panel_volunteering_areas');
     }
 
     /**

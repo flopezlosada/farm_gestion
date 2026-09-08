@@ -12,63 +12,24 @@
 {% endblock %}
 
 {#
- # EL ORDEN DE ESTA PANTALLA ES EL DISEÑO, no una preferencia estética.
+ # LA PORTADA DEL VOLUNTARIADO: lo que hace falta, y nada más.
  #
- # 1. Lo que hace falta, con fecha, sitio y plazas libres. Es lo que cambia cada
- #    semana, y lo que cambia se lee. "Llevas 0 horas" es el mismo píxel toda la
- #    vida y a las dos semanas es mobiliario.
- # 2. Lo que tengo comprometido.
- # 3. De qué quiero que me avisen.
- # 4. Lo que llevo hecho — al final y en pequeño.
+ # Antes esta pantalla hacía CINCO cosas —confirmar lo hecho, ver lo que falta,
+ # ver lo tuyo, elegir tus áreas y mirar tu aportación—, que en un móvil son
+ # cuatro pantallazos de scroll y en la práctica significa que sólo se ve lo
+ # primero. Ahora cada una tiene su pestaña y esta contesta una sola pregunta:
+ # ¿dónde hago falta?
  #
- # Poner el contador arriba convierte la pantalla en un reproche sin salida, y un
- # reproche que no se resuelve de un clic sólo consigue que la gente deje de
- # entrar en la web. Y con ella se pierde el canal por el que gestionan su cesta.
+ # Se queda de portada porque es lo que cambia cada semana, y lo que cambia se
+ # lee. El cuadrante —la vista del mes entero, donde uno se apunta a varios días
+ # de una vez— está a un clic, en su pestaña, en vez de enterrado en un enlace
+ # de texto al pie de un bloque, que es donde estaba.
  #}
 {% block csa_main %}
 
-    
-    <div class="csa-stack">
+    {% include '_components/volunteering_tabs.html.twig' %}
 
-        {# ============ 0. CONFIRMA LO QUE HICISTE ============ #}
-        {# Va antes que nada porque es una pregunta concreta con respuesta de un
-         # clic, y porque hasta que no se conteste esas horas no las tiene nadie.
-         # Es lo contrario del contador: no reprocha, pregunta. #}
-        {% if pending_confirmation is not empty %}
-            {% embed '_components/csa_card.html.twig' with {
-                title: pending_confirmation|length == 1 ? '¿Pudiste ir?' : '¿Pudiste ir a estas?',
-                icon: 'fa-question-circle-o',
-                accent: 'ochre'
-            } %}
-                {% block body %}
-                {% import '_macros/volunteering.html.twig' as vol %}
-                    <ul class="vol-list">
-                        {% for signup in pending_confirmation %}
-                            <li class="vol-item">
-                                <div class="vol-item__main">
-                                    <h4 class="vol-item__title">{{ signup.offer.title }}</h4>
-                                    <div class="vol-item__meta">
-                                        <span><i class="fa fa-calendar" aria-hidden="true"></i>
-                                            {{ signup.startsAt|format_datetime('full', 'short', locale='es') }}</span>
-                                        {% if signup.shift.creditedMinutes %}
-                                            <span><i class="fa fa-clock-o" aria-hidden="true"></i>
-                                                Cuenta {{ vol.duration(signup.shift.creditedMinutes) }}</span>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                                <div class="vol-item__action">
-                                    <form method="post" action="{{ path('panel_volunteering_confirm', {id: signup.shift.id}) }}">
-                                        <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_volunteering') }}">
-                                        <button type="submit" name="attended" value="1" class="csa-btn csa-btn--primary csa-btn--sm">Sí, la hice</button>
-                                        <button type="submit" name="attended" value="0" class="csa-btn csa-btn--secondary csa-btn--sm">No pude</button>
-                                    </form>
-                                </div>
-                            </li>
-                        {% endfor %}
-                    </ul>
-                {% endblock %}
-            {% endembed %}
-        {% endif %}
+    <div class="csa-stack">
 
         {# ============ 1. LO QUE HACE FALTA ============
          # EN TRES MONTONES Y NO EN UNA LISTA. Plana, una faena de cuatro plazas
@@ -158,291 +119,18 @@
                     {# El calendario, al pie: aquí se asoman unos pocos turnos, y
                      # para comprometerse con "los viernes de agosto" hace falta
                      # verlos todos y poder marcar varios. #}
+                    {# Sigue al pie aunque el cuadrante tenga ya su pestaña
+                     # arriba: quien acaba de recorrer la lista y no ha
+                     # encontrado su día está justo aquí, y volver a subir a la
+                     # pestaña es una acción más. Dice «el cuadrante» y no «el
+                     # calendario», como la pestaña. #}
                     <p class="vol-help">
                         <a href="{{ path('panel_volunteering_calendar') }}">
                             <i class="fa fa-calendar-o" aria-hidden="true"></i>
-                            Ver el calendario y apuntarme a varios días
+                            Ver el cuadrante del mes y apuntarme a varios días
                         </a>
                     </p>
                 {% endif %}
-            {% endblock %}
-        {% endembed %}
-
-        {# ============ 2. LO QUE TENGO COMPROMETIDO ============ #}
-        {% if my_signups is not empty %}
-            {% embed '_components/csa_card.html.twig' with {
-                title: 'A lo que te has apuntado',
-                icon: 'fa-check-square-o',
-                accent: 'sky'
-            } %}
-                {% block body %}
-                {% import '_macros/volunteering.html.twig' as vol %}
-                    {# El botón de darse de baja vive AQUÍ y no arriba: es donde
-                     # está lo tuyo, y así "Lo que hace falta" habla sólo de lo
-                     # que falta. #}
-                    <ul class="vol-list">
-                        {% for signup in my_signups %}
-                            <li class="vol-item">
-                                <div class="vol-item__main">
-                                    <h4 class="vol-item__title">{{ signup.offer.title }}</h4>
-                                    <div class="vol-item__meta">
-                                        <span><i class="fa fa-calendar" aria-hidden="true"></i>
-                                            {{ signup.startsAt|format_datetime('full', 'short', locale='es') }}</span>
-                                        {% if signup.offer.remote %}
-                                            <span><i class="fa fa-home" aria-hidden="true"></i> Desde casa</span>
-                                        {% elseif signup.offer.node %}
-                                            <span><i class="fa fa-map-marker" aria-hidden="true"></i> {{ signup.offer.node }}</span>
-                                        {% elseif signup.offer.place %}
-                                            <span><i class="fa fa-map-marker" aria-hidden="true"></i> {{ signup.offer.place.name }}</span>
-                                        {% elseif signup.offer.placeNote %}
-                                            <span><i class="fa fa-map-marker" aria-hidden="true"></i> {{ signup.offer.placeNote }}</span>
-                                        {% endif %}
-                                        {% if signup.companions > 0 %}
-                                            <span><i class="fa fa-users" aria-hidden="true"></i>
-                                                Vas con {{ signup.companions }} más</span>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                                <div class="vol-item__action">
-                                    <form method="post" action="{{ path('panel_volunteering_withdraw', {id: signup.shift.id}) }}">
-                                        <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_volunteering') }}">
-                                        <button type="submit" class="csa-btn csa-btn--secondary csa-btn--sm">No voy a poder ir</button>
-                                    </form>
-                                </div>
-                            </li>
-                        {% endfor %}
-                    </ul>
-                {% endblock %}
-            {% endembed %}
-        {% endif %}
-
-        {# ============ 3. QUÉ TAREAS TE INTERESAN ============
-         # AQUÍ Y NO EN «AVISOS», aunque de esto salga a quién se avisa. Lo que
-         # se elige es en qué quiere participar cada cual —su voluntariado—, no
-         # por qué canal quiere enterarse; eso último es lo que vive en Avisos.
-         # Puestas juntas, las dos cosas se leían como la misma y ninguna se
-         # entendía: una habla de huerta y reparto, la otra de correo y móvil. #}
-        {# ---- Horas de coordinar un área ----
-         # Sólo para quien coordina alguna. Coordinar no es una tarea que cerrar:
-         # no ocurre un día concreto, no tiene plazas y nadie se apunta. Es
-         # buscar gente, cuadrarla, avisar y estar pendiente, repartido por la
-         # semana — y hasta ahora no había forma de que esas horas contaran.
-         #
-         # Las apunta quien las hace, como quien va a una tarea dice si fue:
-         # nadie más sabe ese número. #}
-        {% if coordinated is not empty %}
-            {% embed '_components/csa_card.html.twig' with {
-                title: coordinated|length == 1 ? 'Horas de coordinar ' ~ coordinated|first.name : 'Horas de coordinación',
-                icon: 'fa-star-o'
-            } %}
-                {% block body %}
-                    {% import '_macros/volunteering.html.twig' as vol %}
-
-                    <p class="vol-help">
-                        Apunta el tiempo que le dedicas a llevar
-                        {{ coordinated|length == 1 ? 'el área' : 'las áreas' }}: cuadrar turnos,
-                        buscar gente, avisar. No hace falta que sea exacto ni que lo apuntes cada
-                        día — cuenta igual que las horas de las tareas.
-                    </p>
-
-                    <form method="post" action="{{ path('panel_volunteering_log_coordination') }}"
-                          class="vol-repeat" data-csa-validate>
-                        <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_volunteering') }}">
-
-                        {# Con una sola área no hay nada que elegir: se manda oculta. #}
-                        {% if coordinated|length == 1 %}
-                            <input type="hidden" name="category" value="{{ coordinated|first.id }}">
-                        {% else %}
-                            <label>
-                                Área
-                                <select name="category" class="csa-select" required>
-                                    {% for category in coordinated %}
-                                        <option value="{{ category.id }}">{{ category.name }}</option>
-                                    {% endfor %}
-                                </select>
-                            </label>
-                        {% endif %}
-
-                        <label>
-                            Horas
-                            <input type="number" name="hours" min="0.25" max="24" step="any" required
-                                   class="csa-input csa-input--compact">
-                        </label>
-
-                        <label>
-                            Cuándo
-                            <input type="date" name="happened_on" class="csa-input"
-                                   value="{{ 'now'|date('Y-m-d') }}" max="{{ 'now'|date('Y-m-d') }}">
-                        </label>
-
-                        <label>
-                            En qué
-                            <input type="text" name="notes" class="csa-input" maxlength="255"
-                                   placeholder="opcional: «cuadrar los turnos de septiembre»">
-                        </label>
-
-                        <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">Apuntar</button>
-                    </form>
-
-                    {% if coordination_log is not empty %}
-                        <hr class="vol-sep">
-                        <p class="vol-help">Lo que llevas apuntado este año:</p>
-                        <ul class="vol-mine">
-                            {% for entry in coordination_log %}
-                                <li>
-                                    {{ vol.duration(entry.minutes) }} · {{ entry.category.name }}
-                                    <span class="vol-mine__when">
-                                        {{ entry.happenedOn|format_date('long', locale='es') }}
-                                        {%- if entry.notes %} · {{ entry.notes }}{% endif -%}
-                                    </span>
-                                </li>
-                            {% endfor %}
-                        </ul>
-                    {% endif %}
-                {% endblock %}
-            {% endembed %}
-        {% endif %}
-
-        {% embed '_components/csa_card.html.twig' with {
-            title: 'Qué tareas te interesan',
-            icon: 'fa-hand-paper-o'
-        } %}
-            {% block body %}
-                {% import '_macros/volunteering.html.twig' as vol %}
-
-                {# Esto se contesta UNA vez y luego se mira cero veces, pero ocupaba
-                 # media pantalla en cada visita, por delante de lo único que cambia
-                 # cada semana. Ahora el estado se dice en una frase y el formulario
-                 # se abre sólo si se va a cambiar. El bloque no se mueve de sitio:
-                 # el orden de la pantalla está pensado y sigue igual. #}
-                {% set my_categories = categories|filter(c => c.id in my_category_ids) %}
-                <p class="vol-total">
-                    {% if partner.volunteeringOptOut %}
-                        No quieres que te avisemos de voluntariado.
-                    {% elseif my_categories is not empty %}
-                        Te avisamos de:
-                        {% for category in my_categories %}{{ category.name }}{% if not loop.last %}, {% endif %}{% endfor %}.
-                    {% else %}
-                        Te avisamos sólo de las tareas sencillas que puede hacer cualquiera.
-                    {% endif %}
-                </p>
-
-                {# Tras un <details> y no a la vista: se contesta una vez y luego
-                 # se mira cero veces, pero abierto ocupaba media pantalla en cada
-                 # visita por delante de lo único que cambia cada semana. #}
-                <details class="vol-details">
-                    <summary>Cambiar qué tareas me interesan</summary>
-
-                    <form method="post" action="{{ path('panel_volunteering_preferences') }}">
-                        <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_volunteering') }}">
-
-                        {#
-                         # Este texto NO es relleno: de él depende que el escalado de
-                         # avisos sea honesto. Marcar = "avísame de esto". No marcar
-                         # nada = "avísame de lo que sea sencillo". Si dijera otra
-                         # cosa, quien marca dos categorías recibiría avisos de todo
-                         # y dejaría de fiarse de esta pantalla.
-                         #}
-                        <p class="vol-help">
-                            Marca lo que te apetezca hacer y te avisaremos sólo de eso.
-                            Si no marcas nada, te avisaremos únicamente de las tareas
-                            sencillas que puede hacer cualquiera.
-                        </p>
-
-                        <div class="vol-prefs">
-                            {% for category in categories %}
-                                <label class="vol-pref">
-                                    <input type="checkbox" name="categories[]" value="{{ category.id }}"
-                                           {% if category.id in my_category_ids %}checked{% endif %}>
-                                    <span class="vol-pref__name">{{ category.name }}</span>
-                                    {% if category.description %}
-                                        <span class="vol-pref__desc">{{ category.description }}</span>
-                                    {% endif %}
-                                </label>
-                            {% endfor %}
-                        </div>
-
-                        {#
-                         # La salida explícita. NO es lo mismo que no marcar nada:
-                         # no marcar nada significa "avísame de lo sencillo". Y NO es
-                         # lo mismo que apagar el voluntariado en «Avisos»: aquello
-                         # calla los canales, esto saca a la persona de las
-                         # audiencias — no se la cuenta ni para el aviso general.
-                         #}
-                        <label class="vol-optout">
-                            <input type="checkbox" name="opt_out" value="1"
-                                   {% if partner.volunteeringOptOut %}checked{% endif %}>
-                            <span>No quiero que me avisen de voluntariado</span>
-                        </label>
-
-                        <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">Guardar</button>
-                    </form>
-                </details>
-            {% endblock %}
-        {% endembed %}
-
-        {# ============ 4. LO QUE LLEVAS HECHO — al final y sin dramatismo ============ #}
-        {% embed '_components/csa_card.html.twig' with {
-            title: 'Tu aportación este año',
-            icon: 'fa-heart-o'
-        } %}
-            {% block body %}
-                {% import '_macros/volunteering.html.twig' as vol %}
-                <p class="vol-total">
-                    {% if my_minutes > 0 %}
-                        Llevas <strong>{{ vol.duration(my_minutes) }}</strong> de voluntariado este año.
-                    {% else %}
-                        Este año todavía no has echado una mano.
-                    {% endif %}
-                </p>
-
-                {# Qué hiciste, no sólo cuánto. Un número suelto no significa
-                 # nada; la lista de lo que hay detrás sí, y además deja ver de
-                 # un vistazo si falta algo por confirmar. #}
-                {% if my_done is not empty %}
-                    <ul class="vol-mine">
-                        {% for signup in my_done %}
-                            <li>
-                                <strong>{{ signup.offer.title }}</strong>
-                                {% if signup.coordination %}
-                                    {# Organizar también es trabajo, y quien lo
-                                     # hace merece verlo nombrado. #}
-                                    <span class="csa-badge">lo organizaste</span>
-                                {% endif %}
-                                <span class="vol-mine__when">
-                                    {{ signup.startsAt|format_date('long', locale='es') }}
-                                    {%- if signup.creditedMinutes %} · {{ vol.duration(signup.creditedMinutes) }}{% endif -%}
-                                </span>
-                            </li>
-                        {% endfor %}
-                    </ul>
-                {% endif %}
-
-                {#
-                 # La referencia se enseña SÓLO a quien va por debajo, y es la
-                 # MEDIANA de quienes participan, no la media.
-                 #
-                 # La media está contaminada por los ceros: con mucha gente que no
-                 # hace nada, se hunde, y quien fue una tarde suelta sale "por
-                 # encima de la media" cuando hace falta bastante más. Y enseñársela
-                 # a quien va sobrado es peor todavía: aprende que hace el doble de
-                 # lo normal y se relaja hasta la media. Es el efecto bumerán que
-                 # documentaron Schultz y Cialdini con el consumo eléctrico, donde
-                 # los hogares que menos gastaban SUBIERON al ver la media del
-                 # barrio. A esa gente, aquí, no se le enseña nada.
-                 #}
-                {% if show_median %}
-                    <p class="vol-help">
-                        Quien echa una mano suele dedicar unas
-                        <strong>{{ vol.duration(median_minutes) }}</strong> al año.
-                    </p>
-                {% elseif my_minutes > 0 %}
-                    <p class="vol-help">Gracias — la asociación se sostiene con esto.</p>
-                {% endif %}
-
-                <p class="vol-help vol-help--muted">
-                    Sólo lo ves tú.
-                </p>
             {% endblock %}
         {% endembed %}
 
