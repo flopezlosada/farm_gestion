@@ -21,6 +21,55 @@ class VolunteerEventRepository extends ServiceEntityRepository
     }
 
     /**
+     * A quién se le ha pedido ya que venga a un turno concreto, y cuándo.
+     *
+     * SE FILTRA EN PHP Y NO EN LA CONSULTA, y es a propósito: el turno viaja en
+     * el `payload` (un JSON) porque `volunteer_event` no tiene columna para él, y
+     * cribar dentro de un JSON en SQL ataría el repositorio a funciones que MySQL
+     * y MariaDB no escriben igual — y en este proyecto el local es MySQL y
+     * producción MariaDB. El coste es despreciable: son los avisos personales de
+     * UNA tarea, unidades, no las 5.000 filas de un histórico.
+     *
+     * Si algún día pesa, la respuesta es una columna `shift_id`, no una consulta
+     * a un JSON.
+     *
+     * @param VolunteerOffer $offer   la tarea de la que cuelgan los avisos
+     * @param int            $shiftId el turno que interesa
+     *
+     * @return array<int, VolunteerEvent> por id de socix, el aviso más reciente
+     */
+    public function askedForShift(VolunteerOffer $offer, int $shiftId): array
+    {
+        $events = $this->createQueryBuilder('e')
+            ->where('e.offer = :offer')
+            ->andWhere('e.type = :type')
+            ->andWhere('e.partner IS NOT NULL')
+            ->setParameter('offer', $offer)
+            ->setParameter('type', VolunteerEvent::TYPE_ASKED)
+            ->orderBy('e.occurredAt', 'ASC')
+            ->getQuery()
+            ->getResult();
+
+        $byPartner = [];
+        foreach ($events as $event) {
+            /* @var VolunteerEvent $event */
+            if (($event->getPayload()['shift'] ?? null) !== $shiftId) {
+                continue;
+            }
+
+            $id = $event->getPartner()?->getId();
+            if (null !== $id) {
+                // El último gana: si se pidió más de una vez —los datos viejos
+                // pueden llevar repetidos—, lo que interesa es la vez más
+                // reciente.
+                $byPartner[$id] = $event;
+            }
+        }
+
+        return $byPartner;
+    }
+
+    /**
      * El historial de UNA tarea, de lo más reciente hacia atrás.
      *
      * Sin filtro por área ni paginación a propósito: quien está viendo la ficha

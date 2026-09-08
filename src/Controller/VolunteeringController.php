@@ -721,6 +721,8 @@ class VolunteeringController extends AbstractController
         VolunteerSuggester $suggester,
         VolunteerCallEscalator $escalator,
         UserRepository $users,
+        VolunteerCallNotifier $notifier,
+        VolunteerEventRepository $events,
     ): Response {
         $now = new \DateTimeImmutable();
         $phase = $shift->getPhase();
@@ -741,19 +743,29 @@ class VolunteeringController extends AbstractController
             : [];
 
         $reachable = [];
+        $alreadyAsked = [];
         if ([] !== $suggested) {
-            foreach ($suggested as $candidate) {
-                if ($candidate['partner']->getEmail()) {
-                    $reachable[$candidate['partner']->getId()] = true;
-                }
-            }
-
+            $withAccount = [];
             foreach ($users->findByPartners(array_column($suggested, 'partner')) as $user) {
                 $id = $user->getPartner()?->getId();
                 if (null !== $id) {
-                    $reachable[$id] = true;
+                    $withAccount[$id] = true;
                 }
             }
+
+            foreach ($suggested as $candidate) {
+                $who = $candidate['partner'];
+                $reachable[$who->getId()] = $notifier->canReach(
+                    $who,
+                    isset($withAccount[$who->getId()])
+                );
+            }
+
+            // Y a quién se le pidió ya, para enseñar la fecha en vez de un botón
+            // que volvería a avisar. Una consulta para toda la lista.
+            $alreadyAsked = null !== $shift->getOffer()
+                ? $events->askedForShift($shift->getOffer(), (int) $shift->getId())
+                : [];
         }
 
         // Qué aviso automático queda por salir y a partir de cuándo. Se pregunta
@@ -782,6 +794,7 @@ class VolunteeringController extends AbstractController
             // pasado la lista no serviría para nada y costaría dos consultas.
             'suggested' => $suggested,
             'reachable' => $reachable,
+            'already_asked' => $alreadyAsked,
             // Para anotar a mano a quien organizó el turno o vino sin apuntarse.
             'all_partners' => $partners->findBy(
                 ['status' => Partner::STATUS_ACTIVO],
@@ -1126,6 +1139,7 @@ class VolunteeringController extends AbstractController
         PartnerRepository $partners,
         VolunteerCallNotifier $notifier,
         VolunteerEventRecorder $events,
+        VolunteerEventRepository $eventLog,
         EntityManagerInterface $em,
     ): Response {
         $back = $this->redirectToRoute('volunteering_shift', ['id' => $shift->getId()]);
@@ -1173,6 +1187,22 @@ class VolunteeringController extends AbstractController
 
                 return $back;
             }
+        }
+
+        // UNA VEZ POR TURNO Y PERSONA. Insistirle a quien no contestó es
+        // tentador, pero cada intento le vuelve a sonar el móvil por lo mismo, y
+        // quien se harta apaga las notificaciones para siempre: el permiso del
+        // navegador no se puede volver a pedir. Si de verdad hay que insistir, en
+        // la ficha está su teléfono.
+        $asked = $eventLog->askedForShift($offer, (int) $shift->getId());
+        if (isset($asked[$who->getId()])) {
+            $this->addFlash('warning', sprintf(
+                'Ya se le pidió a %s el %s. Para insistir, mejor llamarle.',
+                $name,
+                $asked[$who->getId()]->getOccurredAt()->format('d/m/Y H:i')
+            ));
+
+            return $back;
         }
 
         $ways = $notifier->ask($shift, $who);

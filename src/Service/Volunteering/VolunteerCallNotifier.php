@@ -361,6 +361,29 @@ class VolunteerCallNotifier
     }
 
     /**
+     * Si hay alguna vía por la que pedirle algo a esta persona.
+     *
+     * La pantalla la necesita para no pintar un botón que no puede hacer nada:
+     * quien lo pulsa se queda creyendo que ya se lo pidió y no coge el teléfono.
+     *
+     * 🔴 EL CORREO SÓLO CUENTA SI EL CANAL ESTÁ ENCENDIDO, y ése es el detalle
+     * que se me escapó: `EMAIL_VOLUNTEERING` viene **apagado de fábrica**
+     * (`AppSettings`, default false), así que dar por alcanzable a quien sólo
+     * tiene correo pintaba el botón y al pulsarlo no salía nada. Lo cazó el test
+     * funcional, que corre con los defaults del catálogo igual que producción.
+     *
+     * @param Partner $partner    a quién se le iba a pedir
+     * @param bool    $hasAccount si tiene cuenta para entrar en la web
+     *
+     * @return bool true si le llegaría por algún sitio
+     */
+    public function canReach(Partner $partner, bool $hasAccount): bool
+    {
+        // Con cuenta hay bandeja, que es el suelo y no depende de ningún ajuste.
+        return $hasAccount || ($this->emailEnabled() && (bool) $partner->getEmail());
+    }
+
+    /**
      * Manda el aviso por correo a quienes lo quieren por ahí.
      *
      * BEST-EFFORT, igual que el push: un correo que no sale no puede tumbar la
