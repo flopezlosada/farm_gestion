@@ -362,6 +362,34 @@
         max-width: 62ch;
     }
 
+    /* Pedirlo a toda la asociación. Separado por una regla y NO por un recuadro
+       de color: el `csa-callout` es un aviso de ancho de página y aquí, dentro
+       de la tarjeta, estiraba la frase en una línea de más de mil píxeles con la
+       mitad derecha vacía. El color de advertencia lo lleva ya el botón. */
+    .vol-shout {
+        max-width: 54ch;
+        margin-top: var(--csa-sp-5);
+        padding-top: var(--csa-sp-4);
+        border-top: 1px solid var(--csa-rule);
+    }
+    .vol-shout__lead {
+        margin: 0 0 var(--csa-sp-1);
+        font-family: var(--csa-serif);
+        font-size: var(--csa-fs-md);
+        line-height: var(--csa-lh-snug);
+        color: var(--csa-ink);
+    }
+    .vol-shout__lead .fa { color: var(--csa-ochre); margin-right: var(--csa-sp-2); }
+    /* El margen inferior es lo que separa la explicación del botón. Pegado
+       debajo, el botón se lee como el pie del texto y se pulsa sin leerlo — y
+       esto no se puede deshacer. */
+    .vol-shout__note {
+        margin: 0 0 var(--csa-sp-4);
+        font-size: var(--csa-fs-sm);
+        line-height: var(--csa-lh-normal);
+        color: var(--csa-ink-soft);
+    }
+
     .vol-total {
         margin: 0 0 var(--csa-sp-2);
         font-size: var(--csa-fs-md);

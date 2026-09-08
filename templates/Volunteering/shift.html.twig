@@ -693,15 +693,20 @@
                                 'everyone': 'A toda la asociación'
                             } %}
                                 {% set call = calls_by_scope[scope]|default(null) %}
+                                {# El aviso general sólo se lista si YA salió. Sin mandar no es
+                                 # un pendiente del que informar: o no procede —y decir «no se
+                                 # ha mandado» de algo que nadie va a mandar es ruido— o procede,
+                                 # y entonces lo cuenta el bloque de abajo, que además tiene el
+                                 # botón. Listarlo siempre hacía que la misma cosa se dijera
+                                 # tres veces seguidas. #}
+                                {% if scope != 'everyone' or call %}
                                 <li class="vol-calls__item{{ call ? ' is-sent' : '' }}">
                                     <i class="fa {{ call ? 'fa-check-circle' : 'fa-circle-o' }}" aria-hidden="true"></i>
                                     <div>
                                         <p class="vol-calls__what">{{ label }}</p>
                                         <p class="vol-calls__when">
                                             {% if call %}
-                                                Se envió el {{ call.sentAt|format_datetime(pattern="d 'de' MMMM 'a las' HH:mm", locale='es') }}
-                                            {% elseif scope == 'everyone' %}
-                                                No se ha mandado. Es el único que se manda a mano.
+                                                Se envió el {{ call.sentAt|format_datetime(pattern="d 'de' MMMM 'a las' HH:mm", locale='es') }}{% if call.recipients %} a {{ call.recipients }} {{ call.recipients == 1 ? 'persona' : 'personas' }}{% endif %}
                                             {% elseif scope == 'unspecified' and not offer.openToAnyone %}
                                                 No se mandará: esta tarea no está marcada como apta para cualquiera.
                                             {% elseif scope == 'matching' and offer.categories is empty %}
@@ -720,6 +725,7 @@
                                         </p>
                                     </div>
                                 </li>
+                                {% endif %}
                             {% endfor %}
                         </ul>
 
@@ -730,19 +736,35 @@
                         {% if can_edit and offer_everyone %}
                             {# Este botón gasta el canal push de toda la asociación, y el
                              # permiso del navegador se pierde una vez y para siempre: quien
-                             # lo apaga no vuelve. Por eso se enseña el NÚMERO antes, se exige
-                             # confirmación, y sólo se puede una vez por turno. #}
-                            {{ csa.callout(
-                                'Los avisos automáticos ya han salido y el turno sigue sin cubrirse con la fecha encima. Avisar a toda la asociación llega a ' ~ everyone_count ~ ' socix(s), incluidxs quienes han dicho que de esto no les avisen. Sólo se puede hacer una vez por turno.',
-                                'warning',
-                                'exclamation-triangle'
-                            ) }}
+                             # lo apaga no vuelve. Por eso se enseña el NÚMERO antes y se exige
+                             # confirmación.
+                             #
+                             # NO va en `csa.callout`: ése es un aviso de ANCHO DE PÁGINA, y
+                             # aquí dentro de la tarjeta estiraba el texto en una sola línea de
+                             # más de mil píxeles, ilegible y con la mitad derecha vacía. Bloque
+                             # propio, medido en `ch`, con el botón separado de la explicación:
+                             # pegado debajo se lee como el pie del aviso y se pulsa sin leerlo.
+                             #
+                             # Cuántas plazas faltan y cuánto queda ya lo dice la cabecera de la
+                             # ficha; repetirlo aquí era lo que hacía el texto ilegible. #}
+                            <div class="vol-shout">
+                                <p class="vol-shout__lead">
+                                    <i class="fa fa-bullhorn" aria-hidden="true"></i>
+                                    Los avisos automáticos ya han salido y sigue faltando gente.
+                                </p>
+                                <p class="vol-shout__note">
+                                    Este llega a {{ everyone_count }}
+                                    {{ everyone_count == 1 ? 'persona' : 'personas' }}, incluidas las
+                                    que pidieron que no se les avise de voluntariado. Sólo se puede
+                                    una vez por turno y no se puede deshacer.
+                                </p>
 
-                            <form method="post" action="{{ path('volunteering_notify_everyone', { id: shift.id }) }}"
-                                  onsubmit="return confirm('Vas a avisar a {{ everyone_count }} socix(s). Esto no se puede deshacer y sólo se puede hacer una vez. ¿Seguro?');">
-                                <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_notify') }}">
-                                {{ csa.btn('Avisar a toda la asociación', { variant: 'danger-soft', type: 'submit', icon: 'fa-bullhorn' }) }}
-                            </form>
+                                <form method="post" action="{{ path('volunteering_notify_everyone', { id: shift.id }) }}"
+                                      onsubmit="return confirm('Vas a avisar a {{ everyone_count }} personas. Esto no se puede deshacer y sólo se puede hacer una vez. ¿Seguro?');">
+                                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('volunteering_notify') }}">
+                                    {{ csa.btn('Avisar a toda la asociación', { variant: 'danger-soft', type: 'submit', icon: 'fa-bullhorn' }) }}
+                                </form>
+                            </div>
                         {% endif %}
                     </div>
                 </div>
