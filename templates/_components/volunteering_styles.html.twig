@@ -1035,6 +1035,63 @@
         font-size: var(--csa-fs-xs); color: var(--csa-ink-muted); text-align: center;
     }
 
+    /* Acompañantes dentro de la tarjeta: encima del botón y en una línea, para
+       que no se lea como un segundo campo obligatorio. */
+    .vol-task__companions {
+        display: flex; align-items: center; gap: var(--csa-sp-2);
+        margin-top: var(--csa-sp-3);
+        font-size: var(--csa-fs-sm); color: var(--csa-ink-soft);
+    }
+    .vol-task__companions .csa-input { width: 68px; }
+    .vol-task__companions + .vol-task__cta { margin-top: var(--csa-sp-2); }
+
+    /* ---- Montones de la pantalla de voluntariado ----
+       El encabezado es una línea, no una tarjeta dentro de otra: separa sin
+       añadir un marco más a una pantalla que ya vive dentro de una csa-card. */
+    .vol-group + .vol-group { margin-top: var(--csa-sp-5); }
+    .vol-group__head {
+        display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--csa-sp-2);
+        margin-bottom: var(--csa-sp-3);
+    }
+    .vol-group__dot {
+        width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0;
+        background: var(--csa-rule); align-self: center;
+    }
+    .vol-group--urgent .vol-group__dot { background: var(--csa-terracotta); }
+    .vol-group--later .vol-group__dot { background: var(--csa-green); }
+    .csa-app .vol-group__title {
+        margin: 0;
+        font-family: var(--csa-serif); font-weight: 400; font-size: var(--csa-fs-md);
+        letter-spacing: -0.015em; color: var(--csa-ink);
+    }
+    .vol-group__hint { font-size: var(--csa-fs-sm); color: var(--csa-ink-muted); }
+    /* El contador al final y en gris: acompaña, no encabeza. */
+    .vol-group__n { margin-left: auto; font-size: var(--csa-fs-xs); color: var(--csa-ink-muted); }
+    .vol-group__more {
+        margin: var(--csa-sp-3) 0 0;
+        font-size: var(--csa-fs-xs); color: var(--csa-ink-muted);
+    }
+
+    /* ---- Filtros ----
+       Pastillas, y la activa en oscuro: es el único estado que hay que
+       distinguir de un vistazo. 40px de alto porque se tocan con el pulgar. */
+    .vol-filters {
+        display: flex; flex-wrap: wrap; gap: var(--csa-sp-2);
+        margin-bottom: var(--csa-sp-4);
+    }
+    .vol-filter {
+        display: inline-flex; align-items: center; gap: var(--csa-sp-2);
+        min-height: 40px; padding: 0 var(--csa-sp-4);
+        border: 1px solid var(--csa-rule); border-radius: var(--csa-radius-pill);
+        background: var(--csa-surface); color: var(--csa-ink-soft);
+        font-family: var(--csa-sans); font-size: var(--csa-fs-sm); font-weight: 500;
+        cursor: pointer;
+    }
+    .vol-filter--on {
+        background: var(--csa-ink); border-color: var(--csa-ink); color: var(--csa-bg);
+    }
+    .vol-filter__n { font-size: var(--csa-fs-xs); opacity: 0.7; }
+
     @media (min-width: 640px) {
         .vol-tasks { display: grid; grid-template-columns: 1fr 1fr; }
         .vol-all { width: auto; padding: 0 var(--csa-sp-5); }

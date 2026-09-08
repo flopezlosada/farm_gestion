@@ -63,6 +63,9 @@ class VolunteerShift
     /** Pasó y está todo respondido: sólo queda consultar lo imputado. */
     public const PHASE_CLOSED = 'closed';
 
+    /** Días dentro de los cuales un turno sin cubrir se considera urgente. {@see isUrgent()} */
+    public const URGENT_WINDOW_DAYS = 7;
+
     /**
      * @ORM\Id
      * @ORM\GeneratedValue
@@ -320,6 +323,68 @@ class VolunteerShift
     public function hasRoom(): bool
     {
         return 0 !== $this->getRemainingSlots();
+    }
+
+    /**
+     * La fecha está encima: empieza dentro de la ventana en la que alguien
+     * todavía puede cambiar sus planes.
+     *
+     * SIETE DÍAS porque más allá no es urgencia, es agenda.
+     *
+     * ES LA PREGUNTA DEL MONTÓN, y por eso está separada de {@see isUrgent()}:
+     * en qué montón cae un turno lo decide CUÁNDO es, no cuánta gente le falta.
+     * Mezclarlas mandaba a "próximas semanas" un turno de pasado mañana sólo
+     * porque su tarea no tiene número de plazas —el boletín, la llamada a
+     * socias—, y ahí nadie lo iba a ver.
+     *
+     * @param \DateTimeInterface|null $now momento de referencia; null = ahora
+     *
+     * @return bool true si empieza dentro de los próximos URGENT_WINDOW_DAYS días
+     */
+    public function isImminent(?\DateTimeInterface $now = null): bool
+    {
+        $startsAt = $this->getStartsAt();
+        if (null === $startsAt) {
+            return false;
+        }
+
+        $now ??= new \DateTime();
+
+        return $startsAt->getTimestamp() - $now->getTimestamp() <= self::URGENT_WINDOW_DAYS * 86400;
+    }
+
+    /**
+     * Le falta gente Y la fecha está encima (o alguien ha destacado la tarea):
+     * el turno que hay que resolver, no el que simplemente toca pronto.
+     *
+     * ES EL RASGO DE LA TARJETA, no el criterio del montón. Aquí sí pesa cuánta
+     * gente falta: pintar de alarma un turno que ya está cubierto es gastar el
+     * único recurso que no se recupera, que es que la alarma signifique algo.
+     *
+     * NO ES "está destacada" A SECAS. Ése fue el primer intento y era falso: de
+     * las tareas publicadas había CERO destacadas, así que el rasgo no se
+     * encendía nunca y todo salía igual. Un turno al que le faltan cuatro
+     * personas y es pasado mañana es urgente aunque nadie se acordara de
+     * marcarlo. La marca manual se conserva para lo que el calendario no sabe:
+     * una helada, una avería.
+     *
+     * Vive aquí y no en la plantilla porque el umbral lo comparte con
+     * {@see isImminent()}, y dos copias de un umbral es la forma segura de que
+     * un día digan cosas distintas.
+     *
+     * @param \DateTimeInterface|null $now momento de referencia; null = ahora
+     *
+     * @return bool true si le falta gente y es inminente o está destacada
+     */
+    public function isUrgent(?\DateTimeInterface $now = null): bool
+    {
+        // Sin plazas que cubrir no hay alarma que dar: un turno lleno o sin tope
+        // no pide un número concreto de gente.
+        if (!$this->getRemainingSlots()) {
+            return false;
+        }
+
+        return ($this->getOffer()?->isFeatured() ?? false) || $this->isImminent($now);
     }
 
     /**

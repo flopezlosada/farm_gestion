@@ -28,22 +28,19 @@
 {% set offer = shift.offer %}
 {% set faltan = shift.remainingSlots %}
 {% set en_mi_punto = my_node_id and offer.node and offer.node.id == my_node_id %}
-{# URGENTE = le falta gente Y es inminente (o alguien ha destacado la tarea).
- #
- # El primer intento fue "urgente = destacada", con el argumento de que eso lo
- # decide quien organiza y no un umbral. Suena bien y era falso: de las siete
- # tareas publicadas hay CERO destacadas, así que el aviso no se encendía nunca
- # y todas las tarjetas salían iguales. Un turno al que le faltan cuatro
- # personas y es pasado mañana es urgente aunque nadie se haya acordado de
- # marcarlo.
- #
- # Siete días porque es el horizonte en el que alguien puede cambiar sus planes:
- # más allá no es urgencia, es agenda. La marca manual se conserva para lo que el
- # calendario no sabe (una helada, una avería). #}
-{% set dias_para = (shift.startsAt|date('U') - 'now'|date('U')) / 86400 %}
-{% set urgente = faltan and (offer.featured or dias_para <= 7) %}
+{# La regla de "urgente" vive en VolunteerShift::isUrgent(): la usan también el
+ # grupo en el que cae el turno y el orden de la pantalla, y tres copias de un
+ # umbral es la forma segura de que un día digan cosas distintas. #}
+{% set urgente = shift.isUrgent %}
 
-<article class="vol-task{% if urgente %} vol-task--urgent{% endif %}">
+{# Los rasgos por los que se filtra viajan en el HTML: el filtro de la pantalla
+ # de voluntariado es de navegador y no recarga, así que decide con lo que ya
+ # está pintado. En la home no hay filtro y no estorban. #}
+<article class="vol-task{% if urgente %} vol-task--urgent{% endif %}"
+         data-vol-task
+         data-vol-remote="{{ offer.remote ? '1' : '0' }}"
+         data-vol-mine="{{ en_mi_punto ? '1' : '0' }}"
+         data-vol-weekend="{{ shift.startsAt|date('N') >= 6 ? '1' : '0' }}">
 
     <div class="vol-task__tags">
         {% for category in offer.categories|slice(0, 1) %}
@@ -131,6 +128,17 @@
      # está el calendario. #}
     <form method="post" action="{{ path('panel_volunteering_signup', { id: shift.id }) }}">
         <input type="hidden" name="_csrf_token" value="{{ csrf }}">
+        {# "Vengo con N más" donde la tarea lo admite. En una asociación de
+         # unidades familiares llevarse a los peques es el caso normal, y este
+         # campo sólo estaba en la lista vieja: al pasar la pantalla a tarjetas
+         # se habría perdido en silencio. #}
+        {% if offer.companionsAllowed %}
+            <label class="vol-task__companions">
+                Vengo con
+                <input type="number" name="companions" value="0" min="0" max="10" class="csa-input csa-input--compact">
+                más
+            </label>
+        {% endif %}
         <button type="submit" class="vol-task__cta">Me apunto</button>
     </form>
 
