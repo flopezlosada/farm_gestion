@@ -435,6 +435,20 @@
     }
     .vol-help--muted { font-size: var(--csa-fs-xs); color: var(--csa-ink-soft); }
 
+    /* El porqué en la ficha de gestión: destacado sobre la descripción, porque
+       es la frase que va a leer un socix en su tarjeta. */
+    .vol-why {
+        display: flex; gap: var(--csa-sp-2); align-items: baseline;
+        margin: 0 0 var(--csa-sp-3);
+        padding: var(--csa-sp-3) var(--csa-sp-4);
+        border-left: 3px solid var(--csa-terracotta);
+        background: var(--csa-surface-alt);
+        border-radius: 0 var(--csa-radius-md) var(--csa-radius-md) 0;
+        font-size: var(--csa-fs-sm); line-height: var(--csa-lh-normal);
+        color: var(--csa-ink);
+    }
+    .vol-why > i { color: var(--csa-terracotta); flex-shrink: 0; }
+
     .vol-empty {
         margin: 0;
         font-size: var(--csa-fs-sm);
@@ -972,6 +986,10 @@
         font-size: var(--csa-fs-sm); line-height: var(--csa-lh-normal);
         color: var(--csa-ink-soft);
     }
+    /* Cuando corre prisa, la consecuencia se lee con el tono del aviso y no en
+       el gris del resto: es la frase que tiene que pesar. Sólo el texto — teñir
+       la tarjeta entera convierte la pantalla en una alarma y deja de avisar. */
+    .vol-task__why--urgent { color: #8a3a1c; }
 
     .vol-task__facts {
         list-style: none; margin: var(--csa-sp-3) 0 0; padding: 0;

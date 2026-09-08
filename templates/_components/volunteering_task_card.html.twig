@@ -58,9 +58,17 @@
 
     <h3 class="vol-task__title">{{ offer.title }}</h3>
 
-    {# Recortada: aquí cabe el motivo, no el parte entero. Quien quiera el detalle
-     # abre el calendario. #}
-    {% if offer.description %}
+    {# EL PORQUÉ, y por ese orden: si quien organiza ha dicho qué pasa si no lo
+     # hace nadie, eso es lo que va aquí. "Desbrozar el camino de la parcela de
+     # arriba" no le dice nada a quien no sabe qué depende de eso.
+     #
+     # Sin consecuencia se cae a la descripción, recortada: aquí cabe el motivo,
+     # no el parte entero, y quien quiera el detalle abre el calendario. Es
+     # justamente ese recorte el que hacía imposible fiar el porqué a la
+     # descripción — escrito al final, se perdía. #}
+    {% if offer.consequence %}
+        <p class="vol-task__why{% if urgente %} vol-task__why--urgent{% endif %}">{{ offer.consequence }}</p>
+    {% elseif offer.description %}
         <p class="vol-task__why">{{ offer.description|striptags|u.truncate(150, '…', false) }}</p>
     {% endif %}
 
