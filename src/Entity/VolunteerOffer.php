@@ -134,6 +134,33 @@ class VolunteerOffer
     private ?string $description = null;
 
     /**
+     * Qué pasa si no lo hace nadie. Una frase.
+     *
+     * CAMPO PROPIO Y NO UN PÁRRAFO MÁS DE LA DESCRIPCIÓN, porque son dos cosas
+     * distintas y hacen dos trabajos distintos. "Desbrozar el camino de la
+     * parcela de arriba" no le dice nada a quien no sabe qué depende de eso;
+     * "sin desbrozar, el tractor no puede entrar a preparar la siembra de otoño"
+     * convierte una tarea que alguien apuntó en algo que hace falta. Es la
+     * palanca del diseño, y la única que no se puede improvisar desde la
+     * pantalla del socix: la sabe quien organiza.
+     *
+     * Metido en la descripción no funcionaba por dos motivos. Uno, la tarjeta la
+     * recorta a 150 caracteres, así que un porqué escrito al final se perdía
+     * justo donde se decide. Y dos, un campo que el formulario no pide es un
+     * campo que no se rellena: la pregunta escrita —"¿qué pasa si no lo hace
+     * nadie?"— es la mitad del invento.
+     *
+     * Nullable a propósito: hay trabajo que se explica solo, y obligar a
+     * inventarse una consecuencia produciría frases de relleno que es
+     * exactamente lo que se quiere evitar. Sin ella, la tarjeta cae a la
+     * descripción.
+     *
+     * @ORM\Column(type="string", length=200, nullable=true)
+     */
+    #[Assert\Length(max: 200, maxMessage: 'La consecuencia tiene que caber en {{ limit }} caracteres: es una frase, no un parte.')]
+    private ?string $consequence = null;
+
+    /**
      * Categorías del trabajo. Lado propietario de la relación.
      *
      * @ORM\ManyToMany(targetEntity="App\Entity\VolunteerCategory")
@@ -571,6 +598,24 @@ class VolunteerOffer
     public function setDescription(?string $description): self
     {
         $this->description = $description;
+
+        return $this;
+    }
+
+    /**
+     * @return string|null qué pasa si no lo hace nadie
+     */
+    public function getConsequence(): ?string
+    {
+        return $this->consequence;
+    }
+
+    /**
+     * @param string|null $consequence qué pasa si no lo hace nadie
+     */
+    public function setConsequence(?string $consequence): self
+    {
+        $this->consequence = $consequence;
 
         return $this;
     }

@@ -70,98 +70,94 @@
             {% endembed %}
         {% endif %}
 
-        {# ============ 1. LO QUE HACE FALTA ============ #}
+        {# ============ 1. LO QUE HACE FALTA ============
+         # EN TRES MONTONES Y NO EN UNA LISTA. Plana, una faena de cuatro plazas
+         # del sábado pesaba lo mismo que sacar al perro el martes, y con el tope
+         # de ocho por fecha bastaba una semana cargada para que lo de dentro de
+         # quince días no existiera. Los montones son los del diseño: lo que hay
+         # que resolver ya, lo que conviene cerrar, y el día a día.
+         #
+         # LAS MISMAS TARJETAS QUE LA PORTADA. Esta pantalla enseñaba filas con
+         # el título y una línea de meta —peor presentación que el teaser de la
+         # home, que es su resumen— y para saber si podías ir había que abrir la
+         # tarea. La tarjeta trae los cinco datos que deciden y el botón. #}
+        {% set todos = urgent_shifts|merge(later_shifts)|merge(routine_shifts) %}
+
         {% embed '_components/csa_card.html.twig' with {
             title: 'Lo que hace falta',
-            subtitle: 'Tareas de las próximas semanas que siguen sin cubrir',
+            subtitle: 'Turnos de las próximas semanas que siguen sin cubrir',
             icon: 'fa-hand-paper-o',
             accent: 'green',
             variant: 'hero'
         } %}
             {% block body %}
-                {% import '_macros/volunteering.html.twig' as vol %}
-                {% if shifts is empty %}
+                {% if todos is empty %}
                     <p class="vol-empty">
-                        Ahora mismo no hay ningún día pendiente. Cuando haya algo que
+                        Ahora mismo no hay ningún turno pendiente. Cuando haya algo que
                         necesite manos, aparecerá aquí.
                     </p>
                 {% else %}
-                    <ul class="vol-list">
-                        {% for shift in shifts %}
-                            {% set offer = shift.offer %}
-                            {# Lo que ya tienes apuntado no sale aquí: vive en su
-                             # propio bloque, con el botón de darte de baja. #}
-                            {% set mine_here = my_node_id and offer.node and offer.node.id == my_node_id %}
+                    {# ---- FILTROS ----
+                     # Sólo los tres que tienen dato de verdad. «Sin experiencia»
+                     # está en el diseño y no se pone: no hay campo que lo diga
+                     # (open_to_anyone es otra cosa — a quién se le amplía el
+                     # aviso), y un filtro que no filtra por lo que promete es
+                     # peor que no tenerlo.
+                     #
+                     # Filtran en el navegador y sobre lo ya pintado: son unas
+                     # decenas de tarjetas, no hay recarga, y quien no tenga JS
+                     # las sigue viendo todas —que es el estado útil—. Por eso los
+                     # contadores se calculan aquí sobre lo que se pinta y no
+                     # sobre el total: un filtro no puede sacar lo que no está. #}
+                    {% set n_casa = todos|filter(s => s.offer.remote)|length %}
+                    {% set n_mio = my_node_id ? todos|filter(s => s.offer.node and s.offer.node.id == my_node_id)|length : 0 %}
+                    {% set n_finde = todos|filter(s => s.startsAt|date('N') >= 6)|length %}
 
-                            <li class="vol-item">
-                                <div class="vol-item__main">
-                                    <h4 class="vol-item__title">{{ offer.title }}</h4>
+                    <div class="vol-filters" data-vol-filters>
+                        <button type="button" class="vol-filter vol-filter--on" data-vol-filter="todas" aria-pressed="true">
+                            Todas <span class="vol-filter__n">{{ todos|length }}</span>
+                        </button>
+                        {% if n_casa %}
+                            <button type="button" class="vol-filter" data-vol-filter="remote" aria-pressed="false">
+                                Desde casa <span class="vol-filter__n">{{ n_casa }}</span>
+                            </button>
+                        {% endif %}
+                        {% if n_mio %}
+                            <button type="button" class="vol-filter" data-vol-filter="mine" aria-pressed="false">
+                                En mi punto <span class="vol-filter__n">{{ n_mio }}</span>
+                            </button>
+                        {% endif %}
+                        {% if n_finde %}
+                            <button type="button" class="vol-filter" data-vol-filter="weekend" aria-pressed="false">
+                                Fin de semana <span class="vol-filter__n">{{ n_finde }}</span>
+                            </button>
+                        {% endif %}
+                    </div>
 
-                                    <div class="vol-item__meta">
-                                        <span><i class="fa fa-calendar" aria-hidden="true"></i>
-                                            {{ shift.startsAt|format_datetime('full', 'short', locale='es') }}</span>
+                    {# Cuando un filtro deja la pantalla vacía hay que decirlo: si
+                     # no, parece que se ha roto. #}
+                    <p class="vol-empty" data-vol-none hidden>
+                        Nada de eso ahora mismo. Prueba con «Todas» o mira el calendario.
+                    </p>
 
-                                        {% if offer.remote %}
-                                            <span><i class="fa fa-home" aria-hidden="true"></i> Desde casa</span>
-                                        {% elseif offer.node %}
-                                            <span><i class="fa fa-map-marker" aria-hidden="true"></i> {{ offer.node }}</span>
-                                        {% elseif offer.place %}
-                                            <span><i class="fa fa-map-marker" aria-hidden="true"></i> {{ offer.place.name }}</span>
-                                        {% elseif offer.placeNote %}
-                                            <span><i class="fa fa-map-marker" aria-hidden="true"></i> {{ offer.placeNote }}</span>
-                                        {% endif %}
+                    {% include '_components/volunteering_group.html.twig' with {
+                        title: 'Falta gente ya', hint: 'Sin cubrir y con la fecha encima', tone: 'urgent',
+                        shifts: urgent_shifts, total: urgent_total, my_node_id: my_node_id
+                    } only %}
+                    {% include '_components/volunteering_group.html.twig' with {
+                        title: 'Próximas semanas', hint: 'Hay hueco, pero conviene cerrarlo', tone: 'later',
+                        shifts: later_shifts, total: later_total, my_node_id: my_node_id
+                    } only %}
+                    {# El día a día, el último: se cubre solo casi siempre y no
+                     # tiene por qué competir con la faena del sábado. #}
+                    {% include '_components/volunteering_group.html.twig' with {
+                        title: 'Del día a día', hint: 'Un rato corto, todos los días', tone: 'routine',
+                        shifts: routine_shifts, total: routine_total, my_node_id: my_node_id
+                    } only %}
 
-                                        {% if shift.creditedMinutes %}
-                                            <span><i class="fa fa-clock-o" aria-hidden="true"></i>
-                                                Cuenta {{ vol.duration(shift.creditedMinutes) }}</span>
-                                        {% endif %}
-                                    </div>
-
-                                    {% if offer.description %}
-                                        <p class="vol-item__desc">{{ offer.description|nl2br }}</p>
-                                    {% endif %}
-
-                                    <div class="vol-item__tags">
-                                        {% if mine_here %}
-                                            {# Lo que pasa en su punto de recogida: ya va a estar ahí ese día. #}
-                                            <span class="csa-badge csa-badge--green">En tu punto de recogida</span>
-                                        {% endif %}
-                                        {% for category in offer.categories %}
-                                            <span class="csa-badge">{{ category.name }}</span>
-                                        {% endfor %}
-                                    </div>
-                                </div>
-
-                                <div class="vol-item__action">
-                                    {% if shift.remainingSlots is not null %}
-                                        <p class="vol-item__slots">
-                                            {% if shift.remainingSlots == 1 %}
-                                                Falta <strong>1 persona</strong>
-                                            {% else %}
-                                                Faltan <strong>{{ shift.remainingSlots }} personas</strong>
-                                            {% endif %}
-                                        </p>
-                                    {% endif %}
-
-                                    <form method="post" action="{{ path('panel_volunteering_signup', {id: shift.id}) }}">
-                                        <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_volunteering') }}">
-                                        {% if offer.companionsAllowed %}
-                                            <label class="vol-item__companions">
-                                                Vengo con
-                                                <input type="number" name="companions" value="0" min="0" max="10" class="csa-input csa-input--compact">
-                                                más
-                                            </label>
-                                        {% endif %}
-                                        <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">Me apunto</button>
-                                    </form>
-                                </div>
-                            </li>
-                        {% endfor %}
-                    </ul>
-
-                    {# El calendario, al pie de la lista corta: aquí sólo se asoman
-                     # unos pocos días, y para comprometerse con "los viernes de
-                     # agosto" hace falta verlos todos y poder marcar varios. #}
+                    {# El calendario, al pie: aquí se asoman unos pocos turnos, y
+                     # para comprometerse con "los viernes de agosto" hace falta
+                     # verlos todos y poder marcar varios. #}
                     <p class="vol-help">
                         <a href="{{ path('panel_volunteering_calendar') }}">
                             <i class="fa fa-calendar-o" aria-hidden="true"></i>
@@ -451,4 +447,59 @@
         {% endembed %}
 
     </div>
+
+    {# ---- FILTRO DE TURNOS ----
+     # En el navegador y sobre lo ya pintado: son unas decenas de tarjetas, así
+     # que filtrar aquí es instantáneo y no cuesta una recarga que además
+     # perdería el sitio de la página. Sin JS, la pantalla se queda con todas las
+     # tarjetas visibles, que es el estado útil — por eso los botones nacen
+     # pintados como "Todas" y no se esconde nada de entrada.
+     #
+     # Oculta también el ENCABEZADO de un montón que se queda sin tarjetas: un
+     # "Falta gente ya" sobre un hueco anuncia trabajo que no está ahí. Y si no
+     # queda ninguna en toda la pantalla lo dice, porque si no parece rota. #}
+    <script>
+        (function () {
+            var bar = document.querySelector('[data-vol-filters]');
+            if (!bar) { return; }
+
+            var tasks = Array.prototype.slice.call(document.querySelectorAll('[data-vol-task]'));
+            var groups = Array.prototype.slice.call(document.querySelectorAll('[data-vol-group]'));
+            var none = document.querySelector('[data-vol-none]');
+
+            function apply(filter) {
+                tasks.forEach(function (task) {
+                    task.hidden = filter !== 'todas' && task.getAttribute('data-vol-' + filter) !== '1';
+                });
+
+                var visibles = 0;
+                groups.forEach(function (group) {
+                    var dentro = group.querySelectorAll('[data-vol-task]:not([hidden])').length;
+                    group.hidden = dentro === 0;
+                    visibles += dentro;
+
+                    // El contador del encabezado dice lo que se está viendo, no
+                    // lo que había: con el filtro puesto, el número de antes
+                    // contradice a las tarjetas que tiene debajo.
+                    var n = group.querySelector('[data-vol-group-n]');
+                    if (n) { n.textContent = dentro; }
+                });
+
+                if (none) { none.hidden = visibles > 0; }
+            }
+
+            bar.addEventListener('click', function (event) {
+                var button = event.target.closest('[data-vol-filter]');
+                if (!button) { return; }
+
+                bar.querySelectorAll('[data-vol-filter]').forEach(function (other) {
+                    var on = other === button;
+                    other.classList.toggle('vol-filter--on', on);
+                    other.setAttribute('aria-pressed', on ? 'true' : 'false');
+                });
+
+                apply(button.getAttribute('data-vol-filter'));
+            });
+        }());
+    </script>
 {% endblock %}

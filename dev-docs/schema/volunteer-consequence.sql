@@ -1,0 +1,26 @@
+-- ============================================================================
+-- Qué pasa si no lo hace nadie — columna volunteer_offer.consequence.
+--
+-- Una frase por tarea: "sin desbrozar, el tractor no puede entrar a preparar la
+-- siembra de otoño". Es lo que convierte una tarea que alguien apuntó en algo
+-- que hace falta, y sale en la tarjeta del socix justo debajo del título, en el
+-- correo de convocatoria y en la ficha de gestión.
+--
+-- CAMPO PROPIO Y NO UN PÁRRAFO DE LA DESCRIPCIÓN por dos motivos: la tarjeta
+-- recorta la descripción a 150 caracteres, así que un porqué escrito al final se
+-- perdía justo donde se decide; y un campo que el formulario no pide es un campo
+-- que no se rellena — la pregunta escrita entera es la mitad del invento.
+--
+-- Nace NULL en todas las tareas y así se queda hasta que quien organiza la
+-- escriba: sin ella, la tarjeta cae a la descripción, como hasta ahora. La ficha
+-- de gestión avisa de que falta.
+--
+-- El código (VolunteerOffer) MAPEA esta columna: hay que añadirla a la BBDD
+-- ANTES de desplegar el código, o Doctrine la espera y revienta cualquier
+-- pantalla que toque voluntariado.
+--
+-- Aplicar a las tres locales (db, db_prod_snapshot, db_test) y a prod.
+-- Sin datos personales; idempotencia no nativa: correr una sola vez por entorno.
+-- ============================================================================
+
+ALTER TABLE volunteer_offer ADD consequence VARCHAR(200) DEFAULT NULL;

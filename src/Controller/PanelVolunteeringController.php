@@ -56,8 +56,23 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[IsGranted('FEATURE_VOLUNTEERING')]
 class PanelVolunteeringController extends AbstractController
 {
-    /** Cuántos turnos se enseñan de golpe. Una lista larga se lee como un muro y no se lee. */
+    /**
+     * Cuántos turnos se enseñan por grupo. Una lista larga se lee como un muro y
+     * no se lee.
+     *
+     * ES POR GRUPO Y NO DEL TOTAL, que era lo de antes. Un tope global de ocho
+     * sobre una lista ordenada por fecha dejaba fuera todo lo de dentro de dos
+     * semanas en cuanto la semana que viene tuviera ocho turnos: la pantalla
+     * decía "lo que hace falta" y enseñaba únicamente los días más próximos.
+     */
     private const MAX_SHIFTS = 8;
+
+    /**
+     * Cuántas rutinas se asoman. Son dos turnos diarios de una plaza y hay
+     * decenas por delante: con enseñar los próximos días basta, y el resto vive
+     * en el calendario, que es donde se elige "los martes de octubre".
+     */
+    private const MAX_ROUTINE = 4;
 
     /**
      * Lo que hace falta, lo que tengo comprometido y lo que llevo hecho.
@@ -86,9 +101,43 @@ class PanelVolunteeringController extends AbstractController
             $mySignups
         );
 
+        // Lo que hace falta, en los tres montones en los que se lee: lo de esta
+        // semana, lo de más adelante y el día a día. Sin repartir, la pantalla
+        // era una lista plana en la que una faena de cuatro plazas del sábado
+        // pesaba lo mismo que sacar al perro el martes.
+        //
+        // El reparto es por FECHA (isImminent) y no por urgencia: en qué montón
+        // cae un turno lo decide cuándo es. Con isUrgent(), que además mira las
+        // plazas libres, un turno de pasado mañana cuya tarea no tiene número de
+        // plazas —el boletín, llamar a las socias— acababa en "próximas
+        // semanas", donde no lo iba a ver nadie.
+        $stillNeeded = $shifts->findStillNeededFor($now, $node, $myShiftIds);
+        $urgent = array_values(array_filter(
+            $stillNeeded,
+            static fn (VolunteerShift $shift): bool => $shift->isImminent($now)
+        ));
+        $later = array_values(array_filter(
+            $stillNeeded,
+            static fn (VolunteerShift $shift): bool => !$shift->isImminent($now)
+        ));
+        $routine = $shifts->findRoutineStillNeededFor($now, $node, $myShiftIds);
+
         return $this->render('Panel/volunteering.html.twig', [
             'partner' => $partner,
-            'shifts' => $shifts->findStillNeededFor($now, $node, $myShiftIds, self::MAX_SHIFTS),
+            // Los tres grupos, ya cortados. El corte es POR GRUPO: con un tope
+            // global, una semana cargada tapaba entero lo de dentro de quince
+            // días.
+            'urgent_shifts' => \array_slice($shifts->onePerOffer($urgent), 0, self::MAX_SHIFTS),
+            'later_shifts' => \array_slice($shifts->onePerOffer($later), 0, self::MAX_SHIFTS),
+            // El día a día aparte y detrás: dos turnos diarios de una plaza
+            // sumaban más que todo el trabajo de campo junto y copaban la
+            // pantalla donde la gente se apunta.
+            'routine_shifts' => \array_slice($shifts->onePerOffer($routine), 0, self::MAX_ROUTINE),
+            'routine_total' => \count($routine),
+            // Cuánto queda fuera de cada montón, para no enseñar ocho y callar
+            // que hay veinte.
+            'urgent_total' => \count($urgent),
+            'later_total' => \count($later),
             // El id y no el nodo: la plantilla sólo necesita comparar, y pasarle
             // la entidad invita a navegar relaciones desde Twig.
             'my_node_id' => $node?->getId(),
@@ -126,6 +175,7 @@ class PanelVolunteeringController extends AbstractController
             'coordination_log' => $coordinationLog->findFor($partner, $from, $to),
         ]);
     }
+
 
     /**
      * El calendario: todo lo que hay por delante, por semanas, y con casillas

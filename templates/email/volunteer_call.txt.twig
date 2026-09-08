@@ -3,6 +3,10 @@
 {{ offer.title }}
 {{ when }}{% if where %} · {{ where }}{% endif %}
 
+{% if offer.consequence %}
+{{ offer.consequence }}
+
+{% endif %}
 {% if offer.description %}
 {{ offer.description }}
 

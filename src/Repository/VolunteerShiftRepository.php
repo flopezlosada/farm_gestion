@@ -128,6 +128,18 @@ class VolunteerShiftRepository extends ServiceEntityRepository
      * {@see findUpcomingForNode()}, pero quitando los turnos que ya están llenos
      * y aquellos a los que esa persona ya se ha apuntado.
      *
+     * SIN LAS TAREAS DE RUTINA, y ésa es la decisión que hace útil esta lista.
+     * Una rutina son dos turnos diarios de una plaza —sacar al perro— y en tres
+     * semanas suma más turnos que todo el trabajo de campo junto: en la base de
+     * pruebas, 66 de 86. Metidas aquí copaban la mitad de la portada y hacían que
+     * el aviso dijera "hay 85 turnos esperando gente" cuando el trabajo que de
+     * verdad necesita a alguien eran veinte. Es el mismo razonamiento por el que
+     * {@see VolunteerOffer::$routine} ya las deja fuera del aviso de plazas del
+     * calendario; lo que faltaba era aplicarlo también donde la gente se apunta.
+     *
+     * Siguen estando: {@see findRoutineStillNeededFor()} las devuelve para su
+     * propio bloque, después de lo que tiene fecha.
+     *
      * El límite se aplica DESPUÉS de filtrar: pedir tres a la consulta y
      * descartar dos después dejaba la home con una sola tarea habiendo más
      * disponibles, y ése fue un fallo real.
@@ -145,10 +157,103 @@ class VolunteerShiftRepository extends ServiceEntityRepository
         array $excludeShiftIds = [],
         ?int $limit = null,
     ): array {
+        return $this->stillNeeded($from, $node, $excludeShiftIds, $limit, false);
+    }
+
+    /**
+     * Las rutinas que siguen sin nadie: el día a día que se cubre solo casi
+     * siempre —sacar al perro, cerrar el invernadero— y que por eso va en su
+     * propio bloque y no compitiendo con la faena del sábado.
+     *
+     * @param \DateTimeInterface $from            momento a partir del cual se consideran futuros
+     * @param Node|null          $node            el punto de recogida de quien mira, si tiene
+     * @param list<int|null>     $excludeShiftIds ids de turnos a los que ya se apuntó
+     * @param int|null           $limit           número máximo de turnos; null para todos
+     *
+     * @return list<VolunteerShift> las rutinas sin cubrir, por fecha
+     */
+    public function findRoutineStillNeededFor(
+        \DateTimeInterface $from,
+        ?Node $node,
+        array $excludeShiftIds = [],
+        ?int $limit = null,
+    ): array {
+        return $this->stillNeeded($from, $node, $excludeShiftIds, $limit, true);
+    }
+
+    /**
+     * El turno más próximo de cada tarea, en el mismo orden en que venían.
+     *
+     * PORQUE UNA TAREA SEMANAL SE COMÍA LA PANTALLA. "Escardar y recolectar los
+     * sábados" genera un turno cada sábado, así que de los ocho huecos de
+     * "próximas semanas" ocupaba siete: quien miraba veía la misma tarjeta una y
+     * otra vez y ninguna de las otras cinco tareas que también necesitaban
+     * gente. Es el mismo ruido que el de las rutinas, con otra cara.
+     *
+     * Uno por tarea y no dos: lo que se decide en esa tarjeta es "esto me
+     * interesa", y para elegir entre el sábado 19 y el 26 está el calendario,
+     * que es donde se marcan varios de una vez. Quien pinte sigue sabiendo
+     * cuántos turnos quedan fuera —basta contar la lista sin filtrar—, así que
+     * no se esconde nada.
+     *
+     * SE APLICA POR MONTÓN y no sobre la lista entera, y eso es a propósito: una
+     * tarea semanal puede salir en "falta gente ya" con el sábado que viene y en
+     * "próximas semanas" con el siguiente. No es un duplicado, son dos
+     * decisiones distintas —ir este sábado, o comprometerse con el otro—, y
+     * unificarlas dejaría montones enteros vacíos escondiendo que ahí hay
+     * trabajo.
+     *
+     * No consulta nada: ordena lo que ya se ha traído. Está aquí, y no en un
+     * controlador, porque lo usan la portada y la pantalla de voluntariado y dos
+     * copias acabarían diciendo cosas distintas.
+     *
+     * @param list<VolunteerShift> $shifts turnos ya ordenados
+     *
+     * @return list<VolunteerShift> uno por tarea, conservando el orden
+     */
+    public function onePerOffer(array $shifts): array
+    {
+        $seen = [];
+
+        return array_values(array_filter($shifts, static function (VolunteerShift $shift) use (&$seen): bool {
+            // Sin tarea no hay agrupación posible: pasa. No debería ocurrir, y
+            // tragárselo en silencio escondería un turno huérfano.
+            $offerId = $shift->getOffer()?->getId();
+            if (null === $offerId) {
+                return true;
+            }
+
+            if (isset($seen[$offerId])) {
+                return false;
+            }
+
+            $seen[$offerId] = true;
+
+            return true;
+        }));
+    }
+
+    /**
+     * El cuerpo común de las dos listas anteriores: lo que tiene sitio, no es
+     * suyo ya, y cae del lado de la rutina que se pida.
+     *
+     * @param list<int|null> $excludeShiftIds ids de turnos a los que ya se apuntó
+     * @param bool           $routine         true para quedarse SÓLO con las rutinas; false para quitarlas
+     *
+     * @return list<VolunteerShift>
+     */
+    private function stillNeeded(
+        \DateTimeInterface $from,
+        ?Node $node,
+        array $excludeShiftIds,
+        ?int $limit,
+        bool $routine,
+    ): array {
         $needed = array_values(array_filter(
             $this->findUpcomingForNode($from, $node),
             static fn (VolunteerShift $shift): bool => $shift->hasRoom()
                 && !\in_array($shift->getId(), $excludeShiftIds, true)
+                && ($shift->getOffer()?->isRoutine() ?? false) === $routine
         ));
 
         return null === $limit ? $needed : \array_slice($needed, 0, $limit);

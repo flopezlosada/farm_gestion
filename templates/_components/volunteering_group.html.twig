@@ -1,0 +1,51 @@
+{#
+ # Un montón de turnos con su encabezado, en la pantalla de voluntariado.
+ #
+ # POR QUÉ HAY MONTONES. La pantalla era una lista plana ordenada por fecha, y
+ # ahí una faena de cuatro plazas del sábado pesaba lo mismo que sacar al perro
+ # el martes. Separados, cada uno se lee por lo que es: lo que hay que resolver
+ # ya, lo que conviene cerrar, y el día a día.
+ #
+ # EL SUBTÍTULO NO ES ADORNO: dice en qué se diferencia este montón del de al
+ # lado. "Próximas semanas" a secas no explica por qué está debajo de otro.
+ #
+ # Se pinta vacío como nada: un encabezado sobre cero tarjetas es peor que el
+ # silencio, porque anuncia trabajo que no existe.
+ #
+ # Espera: title, hint, tone (urgent|later|routine), shifts, total (cuántos hay
+ # en realidad, para decir cuántos quedan fuera) y my_node_id.
+ #}
+{% if shifts is not empty %}
+    <section class="vol-group vol-group--{{ tone }}" data-vol-group>
+        <div class="vol-group__head">
+            <span class="vol-group__dot" aria-hidden="true"></span>
+            <h4 class="vol-group__title">{{ title }}</h4>
+            <span class="vol-group__hint">{{ hint }}</span>
+            <span class="vol-group__n" data-vol-group-n>{{ shifts|length }}</span>
+        </div>
+
+        <div class="vol-tasks">
+            {% for shift in shifts %}
+                {% include '_components/volunteering_task_card.html.twig' with {
+                    shift: shift,
+                    my_node_id: my_node_id|default(null),
+                    csrf: csrf_token('panel_volunteering')
+                } only %}
+            {% endfor %}
+        </div>
+
+        {# Cuántos quedan fuera. Enseñar cuatro y callar que hay veinte deja la
+         # impresión de que apenas hace falta ayuda, que es lo contrario de lo
+         # que pasa.
+         #
+         # Dice TURNOS porque eso es lo que cuenta `total`: aquí se enseña un
+         # turno por tarea, así que los que faltan son casi siempre otros días de
+         # las mismas —los sábados que vienen—, no seis trabajos distintos. #}
+        {% set fuera = total - shifts|length %}
+        {% if fuera > 0 %}
+            <p class="vol-group__more">
+                Y {{ fuera }} turno{{ fuera == 1 ? '' : 's' }} más en el calendario.
+            </p>
+        {% endif %}
+    </section>
+{% endif %}

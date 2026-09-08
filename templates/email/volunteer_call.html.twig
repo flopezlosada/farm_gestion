@@ -14,6 +14,15 @@
         {{ when }}{% if where %} · {{ where }}{% endif %}
     </p>
 
+    {# El porqué antes que el qué, y con peso: en un correo que se lee de
+     # refilón, "sin desbrozar el tractor no entra" es lo que decide, no el
+     # detalle de qué herramienta llevar. #}
+    {% if offer.consequence %}
+        <p style="margin: 0 0 12px; padding: 10px 14px; border-left: 3px solid #d96e3f; background: #faf7f2; color: #29261b;">
+            {{ offer.consequence }}
+        </p>
+    {% endif %}
+
     {% if offer.description %}
         <p>{{ offer.description|nl2br }}</p>
     {% endif %}

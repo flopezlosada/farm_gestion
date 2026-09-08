@@ -129,6 +129,72 @@ class VolunteerShiftStillNeededTest extends KernelTestCase
         $this->assertSame(\array_slice($todas, 0, 2), $dos, 'Recortar no puede cambiar el orden.');
     }
 
+    /**
+     * Las rutinas no se anuncian entre lo que hace falta: van en su propio
+     * montón.
+     *
+     * Es el ruido que hacía inservible la pantalla. Sacar al perro son dos
+     * turnos diarios de una plaza, y en tres semanas sumaban 66 de los 86 turnos
+     * futuros: copaban la mitad de la portada y hacían que el aviso dijera "hay
+     * 85 turnos esperando gente" cuando el trabajo que de verdad necesitaba a
+     * alguien eran veinte.
+     */
+    public function testUnaRutinaNoSeAnunciaEntreLoQueHaceFalta(): void
+    {
+        self::bootKernel();
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        $rutina = $this->makeOffer($em, 'StillNeeded rutina', slots: 1, routine: true);
+        $faena = $this->makeOffer($em, 'StillNeeded faena', slots: 4);
+        $em->flush();
+
+        $repository = $this->repository($em);
+
+        $this->assertNotContains($rutina, $repository->findStillNeededFor(new \DateTime(), null));
+        $this->assertContains($faena, $repository->findStillNeededFor(new \DateTime(), null));
+
+        // Y no desaparecen: siguen estando donde les toca, para quien quiera
+        // apuntarse. Sacarlas del listado sin dejarlas en ningún sitio sería
+        // esconder trabajo que alguien tiene que hacer igualmente.
+        $rutinas = $repository->findRoutineStillNeededFor(new \DateTime(), null);
+        $this->assertContains($rutina, $rutinas);
+        $this->assertNotContains($faena, $rutinas, 'El montón de rutinas es sólo de rutinas.');
+    }
+
+    /**
+     * Un turno por tarea, y en el mismo orden: una tarea semanal llenaba ella
+     * sola los ocho huecos del montón con ocho sábados seguidos, tapando las
+     * otras cinco cosas que también necesitaban gente.
+     */
+    public function testUnTurnoPorTareaConservandoElOrden(): void
+    {
+        self::bootKernel();
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        // Tres turnos de LA MISMA tarea (el sábado que viene y los dos
+        // siguientes) y uno de otra, en medio por fecha.
+        $semanal = (new VolunteerOffer())
+            ->setTitle('StillNeeded semanal')
+            ->setSlots(4)
+            ->setStatus(VolunteerOffer::STATUS_PUBLISHED);
+
+        $primero = (new VolunteerShift())->setStartsAt(new \DateTime('+2 days'));
+        $segundo = (new VolunteerShift())->setStartsAt(new \DateTime('+9 days'));
+        $tercero = (new VolunteerShift())->setStartsAt(new \DateTime('+16 days'));
+        foreach ([$primero, $segundo, $tercero] as $shift) {
+            $semanal->addShift($shift);
+            $em->persist($shift);
+        }
+        $em->persist($semanal);
+
+        $otra = $this->makeOffer($em, 'StillNeeded otra tarea', slots: 2, inDays: 5);
+        $em->flush();
+
+        $uno = $this->repository($em)->onePerOffer([$primero, $otra, $segundo, $tercero]);
+
+        $this->assertSame([$primero, $otra], $uno, 'Se queda el primero de cada tarea, sin reordenar.');
+    }
+
     private function repository(EntityManagerInterface $em): VolunteerShiftRepository
     {
         /** @var VolunteerShiftRepository $repository */
@@ -145,11 +211,17 @@ class VolunteerShiftStillNeededTest extends KernelTestCase
      * Devuelve el TURNO y no la tarea: es lo que devuelven las consultas desde
      * que el momento vive en su propia fila.
      */
-    private function makeOffer(EntityManagerInterface $em, string $title, ?int $slots, int $inDays = 7): VolunteerShift
-    {
+    private function makeOffer(
+        EntityManagerInterface $em,
+        string $title,
+        ?int $slots,
+        int $inDays = 7,
+        bool $routine = false,
+    ): VolunteerShift {
         $offer = (new VolunteerOffer())
             ->setTitle($title)
             ->setSlots($slots)
+            ->setRoutine($routine)
             ->setStatus(VolunteerOffer::STATUS_PUBLISHED);
 
         $shift = (new VolunteerShift())->setStartsAt(new \DateTime(sprintf('+%d days', $inDays)));

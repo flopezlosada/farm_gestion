@@ -59,6 +59,16 @@
                         hint: 'opcional',
                         widget_class: 'csa-textarea'
                     }) }}
+                    {# Pegado a la descripción y con la pregunta escrita entera:
+                     # un campo llamado "consecuencia" no lo rellena nadie, y
+                     # "¿qué pasa si no lo hace nadie?" se contesta sin pensarlo.
+                     # Es la frase que sale en la tarjeta del socix debajo del
+                     # título, y la que convierte una tarea que alguien apuntó en
+                     # algo que hace falta. #}
+                    {{ csa.field(form.consequence, '¿Qué pasa si no lo hace nadie?', {
+                        full: true,
+                        hint: 'opcional, pero es lo que hace que la gente se apunte'
+                    }) }}
                     {{ csa.field(form.categories, 'Área', {
                         full: true,
                         hint: 'se avisa primero a quien la tenga marcada en su ficha'

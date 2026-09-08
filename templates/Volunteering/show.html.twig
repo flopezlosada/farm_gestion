@@ -211,10 +211,28 @@
                     <div class="prt-card__head"><h2 class="prt-card__title"><span class="accent"></span>Qué hay que hacer</h2></div>
                 {% endif %}
                 <div class="prt-card__body">
+                    {# El porqué, arriba y con peso: es lo que ve un socix en su
+                     # tarjeta, así que quien organiza tiene que poder leerlo
+                     # aquí tal cual y notar cuando falta. #}
+                    {% if offer.consequence %}
+                        <p class="vol-why"><i class="fa fa-exclamation-circle" aria-hidden="true"></i> {{ offer.consequence }}</p>
+                    {% endif %}
+
                     {% if offer.description %}
                         {{ offer.description|nl2br }}
                     {% else %}
                         <p class="vol-empty">Esta tarea no dice en qué consiste. Sin eso, quien no ha venido nunca no sabe si puede con ella.</p>
+                    {% endif %}
+
+                    {# Se dice que falta, y no en silencio: sin el porqué la
+                     # tarjeta del socix enseña una tarea apuntada por alguien en
+                     # vez de algo que hace falta, y eso lo arregla quien
+                     # organiza en diez segundos. #}
+                    {% if not offer.consequence %}
+                        <p class="vol-help vol-help--muted">
+                            <i class="fa fa-lightbulb-o" aria-hidden="true"></i>
+                            No dice qué pasa si no lo hace nadie. Esa frase es lo que hace que la gente se apunte.
+                        </p>
                     {% endif %}
 
                     {% if offer.place and offer.place.directions %}
