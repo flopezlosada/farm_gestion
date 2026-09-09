@@ -44,7 +44,12 @@
       count: pending|default(0) }
 ] %}
 
-<ul class="csa-tabs csa-tabs--folder vol-tabs" role="tablist">
+{# La variante SUBRAYADA del componente, no la de pastillas
+ # (`--folder`). Una pastilla negra rellena es el elemento más pesado
+ # de la pantalla y estaba puesta en la navegación, por encima del
+ # título: pesaba más que el botón donde uno se apunta. El subrayado
+ # dice dónde estás sin gritar, y es lo que pide el diseño. #}
+<ul class="csa-tabs vol-tabs" role="tablist">
     {% for tab in tabs %}
         <li class="csa-tabs__item{% if tab.active %} active{% endif %}">
             <a class="csa-tabs__link" href="{{ tab.url }}" title="{{ tab.label }}"
