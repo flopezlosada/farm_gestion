@@ -160,6 +160,18 @@
                                 <a href="{{ path('panel_notifications') }}" role="menuitem">
                                     <i class="fa fa-sliders" aria-hidden="true"></i> Cómo te avisamos
                                 </a>
+                                {# «Mis áreas» vive AQUÍ y no en las pestañas del
+                                 # voluntariado. Es configuración que se contesta
+                                 # una vez al año, y en la barra tenía el mismo
+                                 # rango que «Hace falta», que se usa cada semana.
+                                 # Su sitio natural es al lado de «Cómo te
+                                 # avisamos»: las dos deciden qué te llega, una
+                                 # por tema y la otra por canal. #}
+                                {% if is_granted('FEATURE_VOLUNTEERING') %}
+                                    <a href="{{ path('panel_volunteering_areas') }}" role="menuitem">
+                                        <i class="fa fa-hand-paper-o" aria-hidden="true"></i> Mis áreas de voluntariado
+                                    </a>
+                                {% endif %}
                                 <a href="{{ path('panel_password') }}" role="menuitem">
                                     <i class="fa fa-key" aria-hidden="true"></i> Contraseña
                                 </a>

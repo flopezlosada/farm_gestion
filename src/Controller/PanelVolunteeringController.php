@@ -168,7 +168,7 @@ class PanelVolunteeringController extends AbstractController
      * de una pantalla que hacía cinco cosas, o sea a cuatro pantallazos de
      * scroll en un móvil, que en la práctica es no estar.
      */
-    #[Route('/lo-mio', name: 'panel_volunteering_mine', methods: ['GET'])]
+    #[Route('/mis-turnos', name: 'panel_volunteering_mine', methods: ['GET'])]
     public function mine(
         VolunteerSignupRepository $signups,
         VolunteerCoordinationLogRepository $coordinationLog,

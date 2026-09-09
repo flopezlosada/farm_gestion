@@ -194,70 +194,74 @@
                 {% endblock %}
             {% endembed %}
         {% endif %}
-        {# ============ 4. LO QUE LLEVAS HECHO — al final y sin dramatismo ============ #}
-        {% embed '_components/csa_card.html.twig' with {
-            title: 'Tu aportación este año',
-            icon: 'fa-heart-o'
-        } %}
-            {% block body %}
-                {% import '_macros/volunteering.html.twig' as vol %}
-                <p class="vol-total">
-                    {% if my_minutes > 0 %}
-                        Llevas <strong>{{ vol.duration(my_minutes) }}</strong> de voluntariado este año.
-                    {% else %}
-                        Este año todavía no has echado una mano.
-                    {% endif %}
-                </p>
+        {# ============ 4. LO QUE LLEVAS HECHO — al final y sin dramatismo ============
+         # SIN TARJETA, como el resto de la pantalla. Con una csa-card alrededor
+         # —icono de corazón, banda gris, título en serif— este bloque pesaba más
+         # que los turnos a los que uno va, que es lo que de verdad importa aquí.
+         # Y el contador es lo único que no cambia de una semana a otra: a los
+         # quince días es mobiliario.
+         #
+         # La cifra en grande y el detalle debajo. Un número suelto no significa
+         # nada; la lista de lo que hay detrás sí. #}
+        <section class="vol-group">
+            <div class="vol-group__head">
+                <h4 class="vol-group__title">Tu aportación este año</h4>
+            </div>
 
-                {# Qué hiciste, no sólo cuánto. Un número suelto no significa
-                 # nada; la lista de lo que hay detrás sí, y además deja ver de
-                 # un vistazo si falta algo por confirmar. #}
-                {% if my_done is not empty %}
-                    <ul class="vol-mine">
-                        {% for signup in my_done %}
-                            <li>
-                                <strong>{{ signup.offer.title }}</strong>
+            {% if my_minutes > 0 %}
+                <p class="vol-sum">{{ vol.duration(my_minutes) }}</p>
+            {% else %}
+                <p class="vol-sum vol-sum--zero">Este año todavía no has echado una mano.</p>
+            {% endif %}
+
+            {% if my_done is not empty %}
+                <ul class="vol-done">
+                    {% for signup in my_done %}
+                        <li class="vol-done__row">
+                            <span class="vol-done__what">
+                                <span class="vol-done__title">{{ signup.offer.title }}</span>
                                 {% if signup.coordination %}
-                                    {# Organizar también es trabajo, y quien lo
-                                     # hace merece verlo nombrado. #}
-                                    <span class="csa-badge">lo organizaste</span>
+                                    {# Organizar también es trabajo, y quien lo hace
+                                     # merece verlo nombrado. #}
+                                    <span class="vol-done__role">lo organizaste</span>
                                 {% endif %}
-                                <span class="vol-mine__when">
-                                    {{ signup.startsAt|format_date('long', locale='es') }}
-                                    {%- if signup.creditedMinutes %} · {{ vol.duration(signup.creditedMinutes) }}{% endif -%}
-                                </span>
-                            </li>
-                        {% endfor %}
-                    </ul>
-                {% endif %}
+                                <span class="vol-done__when">{{ signup.startsAt|format_date('long', locale='es') }}</span>
+                            </span>
+                            {% if signup.creditedMinutes %}
+                                <span class="vol-done__time">{{ vol.duration(signup.creditedMinutes) }}</span>
+                            {% endif %}
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
 
-                {#
-                 # La referencia se enseña SÓLO a quien va por debajo, y es la
-                 # MEDIANA de quienes participan, no la media.
-                 #
-                 # La media está contaminada por los ceros: con mucha gente que no
-                 # hace nada, se hunde, y quien fue una tarde suelta sale "por
-                 # encima de la media" cuando hace falta bastante más. Y enseñársela
-                 # a quien va sobrado es peor todavía: aprende que hace el doble de
-                 # lo normal y se relaja hasta la media. Es el efecto bumerán que
-                 # documentaron Schultz y Cialdini con el consumo eléctrico, donde
-                 # los hogares que menos gastaban SUBIERON al ver la media del
-                 # barrio. A esa gente, aquí, no se le enseña nada.
-                 #}
-                {% if show_median %}
-                    <p class="vol-help">
-                        Quien echa una mano suele dedicar unas
-                        <strong>{{ vol.duration(median_minutes) }}</strong> al año.
-                    </p>
-                {% elseif my_minutes > 0 %}
-                    <p class="vol-help">Gracias — la asociación se sostiene con esto.</p>
-                {% endif %}
-
-                <p class="vol-help vol-help--muted">
-                    Sólo lo ves tú.
+            {#
+             # La referencia se enseña SÓLO a quien va por debajo, y es la
+             # MEDIANA de quienes participan, no la media.
+             #
+             # La media está contaminada por los ceros: con mucha gente que no
+             # hace nada, se hunde, y quien fue una tarde suelta sale "por
+             # encima de la media" cuando hace falta bastante más. Y enseñársela
+             # a quien va sobrado es peor todavía: aprende que hace el doble de
+             # lo normal y se relaja hasta la media. Es el efecto bumerán que
+             # documentaron Schultz y Cialdini con el consumo eléctrico, donde
+             # los hogares que menos gastaban SUBIERON al ver la media del
+             # barrio. A esa gente, aquí, no se le enseña nada.
+             #
+             # Y en TEXTO, sin barra de progreso: una barra hacia la mediana la
+             # convierte en una meta, y esto no es una cuota.
+             #}
+            {% if show_median %}
+                <p class="vol-note">
+                    Quien echa una mano suele dedicar unas <strong>{{ vol.duration(median_minutes) }}</strong> al año.
+                    No es una cuota: es lo que sale de sumar lo que hace la gente.
                 </p>
-            {% endblock %}
-        {% endembed %}
+            {% elseif my_minutes > 0 %}
+                <p class="vol-note">Gracias — la asociación se sostiene con esto.</p>
+            {% endif %}
+
+            <p class="vol-note vol-note--faint">Sólo lo ves tú.</p>
+        </section>
 
 
     </div>

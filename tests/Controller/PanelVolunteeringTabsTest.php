@@ -12,9 +12,9 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 
 /**
- * Las cuatro puertas del voluntariado del socix.
+ * Las tres puertas del voluntariado del socix.
  *
- * Existe porque partir una pantalla en cuatro es exactamente el cambio que se
+ * Existe porque partir una pantalla en varias es exactamente el cambio que se
  * rompe en silencio: una ruta que deja de existir, una pestaña que apunta a
  * donde no es, o —lo más caro— un bloque que se muda de pantalla y se lleva
  * consigo un aviso que ya nadie ve.
@@ -22,18 +22,17 @@ use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 class PanelVolunteeringTabsTest extends AbstractPartnerAuthenticatedTest
 {
     /**
-     * Las cuatro responden y todas llevan la barra: si una se queda sin
+     * Las tres responden y todas llevan la barra: si una se queda sin
      * pestañas, es una pantalla sin salida.
      */
-    public function testLasCuatroPestanasRespondenYLlevanLaBarra(): void
+    public function testLasTresPestanasRespondenYLlevanLaBarra(): void
     {
         $client = $this->socixWithModuleOn();
 
         $rutas = [
             '/panel/voluntariado',
             '/panel/voluntariado/calendario',
-            '/panel/voluntariado/lo-mio',
-            '/panel/voluntariado/mis-areas',
+            '/panel/voluntariado/mis-turnos',
         ];
 
         foreach ($rutas as $ruta) {
@@ -41,16 +40,16 @@ class PanelVolunteeringTabsTest extends AbstractPartnerAuthenticatedTest
 
             $this->assertResponseIsSuccessful(sprintf('%s tiene que responder.', $ruta));
             $this->assertSame(
-                4,
+                3,
                 $crawler->filter('.vol-tabs .csa-tabs__item')->count(),
-                sprintf('%s tiene que llevar las cuatro pestañas.', $ruta)
+                sprintf('%s tiene que llevar las tres pestañas.', $ruta)
             );
         }
     }
 
     /**
      * Cada pantalla marca SU pestaña como activa. Sin esto, la barra sale igual
-     * en las cuatro y deja de decir dónde estás, que es la mitad de su trabajo.
+     * en las tres y deja de decir dónde estás, que es la mitad de su trabajo.
      */
     public function testCadaPantallaMarcaSuPestana(): void
     {
@@ -59,8 +58,7 @@ class PanelVolunteeringTabsTest extends AbstractPartnerAuthenticatedTest
         foreach ([
             '/panel/voluntariado' => 'Hace falta',
             '/panel/voluntariado/calendario' => 'Cuadrante',
-            '/panel/voluntariado/lo-mio' => 'Lo mío',
-            '/panel/voluntariado/mis-areas' => 'Mis áreas',
+            '/panel/voluntariado/mis-turnos' => 'Mis turnos',
         ] as $ruta => $rotulo) {
             $crawler = $client->request('GET', $ruta);
 
@@ -73,7 +71,7 @@ class PanelVolunteeringTabsTest extends AbstractPartnerAuthenticatedTest
     /**
      * Lo que falta por confirmar se avisa desde CUALQUIER pestaña.
      *
-     * Es la razón de que el contador viva en la barra y no dentro de «lo mío»:
+     * Es la razón de que el contador viva en la barra y no dentro de «mis turnos»:
      * es una pregunta con respuesta de un clic, y hasta que no se conteste esas
      * horas no las tiene nadie. Enterrada en su propia pestaña, quien no entra
      * ahí no se entera nunca — y al mudarla de sitio ése era el riesgo real.
@@ -107,7 +105,7 @@ class PanelVolunteeringTabsTest extends AbstractPartnerAuthenticatedTest
         $this->assertGreaterThan(
             0,
             $crawler->filter('.vol-tabs .csa-tabs__count')->count(),
-            'La portada tiene que avisar de que hay algo por confirmar en «lo mío».'
+            'La portada tiene que avisar de que hay algo por confirmar en «mis turnos».'
         );
     }
 
