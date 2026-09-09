@@ -16,12 +16,13 @@
  # en realidad, para decir cuántos quedan fuera) y my_node_id.
  #}
 {% if shifts is not empty %}
+    {# Sin punto de color en el encabezado: eran tres puntos de tres colores para
+     # decir lo que ya dicen el título y el orden. #}
     <section class="vol-group vol-group--{{ tone }}" data-vol-group>
         <div class="vol-group__head">
-            <span class="vol-group__dot" aria-hidden="true"></span>
             <h4 class="vol-group__title">{{ title }}</h4>
-            <span class="vol-group__hint">{{ hint }}</span>
             <span class="vol-group__n" data-vol-group-n>{{ shifts|length }}</span>
+            <span class="vol-group__hint">{{ hint }}</span>
         </div>
 
         <div class="vol-tasks">
@@ -29,6 +30,7 @@
                 {% include '_components/volunteering_task_card.html.twig' with {
                     shift: shift,
                     my_node_id: my_node_id|default(null),
+                    my_category_ids: my_category_ids|default([]),
                     csrf: csrf_token('panel_volunteering')
                 } only %}
             {% endfor %}
@@ -44,7 +46,7 @@
         {% set fuera = total - shifts|length %}
         {% if fuera > 0 %}
             <p class="vol-group__more">
-                Y {{ fuera }} turno{{ fuera == 1 ? '' : 's' }} más en el calendario.
+                Y {{ fuera }} turno{{ fuera == 1 ? '' : 's' }} más en el cuadrante.
             </p>
         {% endif %}
     </section>

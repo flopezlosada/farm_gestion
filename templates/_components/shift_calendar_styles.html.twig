@@ -75,6 +75,10 @@
     .scal-legend__sw { width: 22px; height: 13px; border-radius: 3px; background: var(--bg); border-left: 3px solid var(--line); }
     .scal-legend__sw--apagado { background: transparent; border: 1px dashed var(--line); border-left: 3px solid var(--line); }
     .scal-legend__sw--alarm { border: 1px solid var(--cal-ocre-line); border-left-width: 3px; }
+    /* Las dos muestras del relleno: mismo borde, sólo cambia el fondo. Es la
+       diferencia que hay que aprender de un vistazo. */
+    .scal-legend__sw--mine { background: var(--cal-crema, #efeadb); border: 1px solid #d9d4c4; border-left-width: 1px; }
+    .scal-legend__sw--other { background: #fff; border: 1px solid #d9d4c4; border-left-width: 1px; }
 
     /* ---------- estados: variables por ficha, grupo y muestra ---------- */
     .scal-chip--porvenir, .scal-group--porvenir, .scal-legend__sw--porvenir { --bg: var(--cal-azul-soft); --fg: var(--cal-azul-ink); --line: var(--cal-azul-line); }
@@ -166,6 +170,27 @@
     .scal-chip__state--past { color: var(--fg); }
     .scal-chip__place { font-size: 11.5px; color: var(--cal-ink-muted); }
     .scal-chip__extra { display: none; font-size: 11.5px; color: var(--cal-ink-muted); }
+
+    /* ---------- de mis áreas vs. de otra área ----------
+       RELLENO SÍ / RELLENO NO, y no opacidad. La opacidad baja es el lenguaje
+       universal de «deshabilitado», y aquí decía justo lo contrario: un turno de
+       otra área se puede pulsar y uno se puede apuntar igual, sólo que no es de
+       lo que marcó. Con `opacity: .34` la señal contradecía a la acción.
+
+       Se separan las dos cosas que se estaban diciendo con la misma herramienta:
+       el RELLENO dice de qué área es —los dos igual de nítidos y legibles—, y la
+       opacidad queda reservada para «no se puede», que es lo pasado y lo
+       completo. Nunca bajar el contraste del texto para decir «menos
+       relevante».
+
+       Sólo en modo socix: en gestión el atenuado sí significa «no es tuyo». */
+    .scal--socix .scal-chip--mine { background: var(--cal-crema, #efeadb); }
+    .scal--socix .scal-chip--dim { opacity: 1; background: #fff; }
+    .scal--socix .scal-chip--dim:hover { opacity: 1; }
+
+    /* El atenuado se queda donde de verdad quiere decir «esto ya no se toca». */
+    .scal--socix .scal-chip--hecho { opacity: .55; }
+
     .scal-chip--dim { opacity: .34; }
     .scal-chip--dim:hover { opacity: .85; }
     .scal-chip:has(.scal-chip__check:checked) { box-shadow: 0 0 0 2px var(--cal-salvia); }

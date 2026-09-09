@@ -28,96 +28,90 @@
  #}
 {% block csa_main %}
 
+    {% import '_macros/volunteering.html.twig' as vol %}
+
     {% include '_components/volunteering_tabs.html.twig' %}
 
     <div class="csa-stack">
 
-        {# ============ 0. CONFIRMA LO QUE HICISTE ============ #}
-        {# Va antes que nada porque es una pregunta concreta con respuesta de un
+        {# ============ 0. CONFIRMA LO QUE HICISTE ============
+         # Va antes que nada porque es una pregunta concreta con respuesta de un
          # clic, y porque hasta que no se conteste esas horas no las tiene nadie.
-         # Es lo contrario del contador: no reprocha, pregunta. #}
+         # Es lo contrario del contador: no reprocha, pregunta.
+         #
+         # LOS DOS BOTONES PESAN LO MISMO, y ninguno es verde. Antes «Sí, la
+         # hice» iba en primario y «No pude» en secundario: eso es recomendar una
+         # de las dos respuestas a una pregunta de hecho, y empuja a decir que sí
+         # a quien no fue. Los datos que salen de aquí son las horas del año de
+         # esa persona; inclinarlos es corromper el contador. #}
         {% if pending_confirmation is not empty %}
-            {% embed '_components/csa_card.html.twig' with {
-                title: pending_confirmation|length == 1 ? '¿Pudiste ir?' : '¿Pudiste ir a estas?',
-                icon: 'fa-question-circle-o',
-                accent: 'ochre'
-            } %}
-                {% block body %}
-                {% import '_macros/volunteering.html.twig' as vol %}
-                    <ul class="vol-list">
-                        {% for signup in pending_confirmation %}
-                            <li class="vol-item">
-                                <div class="vol-item__main">
-                                    <h4 class="vol-item__title">{{ signup.offer.title }}</h4>
-                                    <div class="vol-item__meta">
-                                        <span><i class="fa fa-calendar" aria-hidden="true"></i>
-                                            {{ signup.startsAt|format_datetime('full', 'short', locale='es') }}</span>
-                                        {% if signup.shift.creditedMinutes %}
-                                            <span><i class="fa fa-clock-o" aria-hidden="true"></i>
-                                                Cuenta {{ vol.duration(signup.shift.creditedMinutes) }}</span>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                                <div class="vol-item__action">
-                                    <form method="post" action="{{ path('panel_volunteering_confirm', {id: signup.shift.id}) }}">
-                                        <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_volunteering') }}">
-                                        <button type="submit" name="attended" value="1" class="csa-btn csa-btn--primary csa-btn--sm">Sí, la hice</button>
-                                        <button type="submit" name="attended" value="0" class="csa-btn csa-btn--secondary csa-btn--sm">No pude</button>
-                                    </form>
-                                </div>
-                            </li>
-                        {% endfor %}
-                    </ul>
-                {% endblock %}
-            {% endembed %}
+            <section class="vol-group">
+                <div class="vol-group__head">
+                    <h4 class="vol-group__title">{{ pending_confirmation|length == 1 ? '¿Pudiste ir?' : '¿Pudiste ir a estas?' }}</h4>
+                    <span class="vol-group__hint">Hasta que no contestes, esas horas no las tiene nadie.</span>
+                </div>
+
+                <div class="vol-tasks">
+                    {% for signup in pending_confirmation %}
+                        {% set shift = signup.shift %}
+                        <article class="vol-task">
+                            <p class="vol-task__kicker">
+                                {%- for category in signup.offer.categories|slice(0, 1) %}{{ category.name }}{% endfor -%}
+                            </p>
+                            <h3 class="vol-task__title">{{ signup.offer.title }}</h3>
+                            <div class="vol-task__meta">
+                                {# Con el mes, a diferencia de las tarjetas que
+                                 # miran hacia delante: aquí se recuerda algo que
+                                 # ya pasó, y «lunes 31» a día 9 de septiembre no
+                                 # dice de qué mes se habla. #}
+                                <p class="vol-task__when">
+                                    {{- signup.startsAt|format_date(pattern="EEEE d 'de' MMMM", locale='es') -}}
+                                    {%- if signup.startsAt|date('H:i') != '00:00' %}{{ ' · ' }}{{ signup.startsAt|date('H:i') }}{% endif -%}
+                                </p>
+                                {% if shift.creditedMinutes %}
+                                    {# «Contarían» y no «cuenta»: todavía no son suyas. #}
+                                    <p>Contarían {{ vol.duration(shift.creditedMinutes) }}</p>
+                                {% endif %}
+                            </div>
+                            <form method="post" action="{{ path('panel_volunteering_confirm', {id: shift.id}) }}"
+                                  class="vol-task__answers">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_volunteering') }}">
+                                <button type="submit" name="attended" value="1" class="vol-task__answer">Sí, la hice</button>
+                                <button type="submit" name="attended" value="0" class="vol-task__answer">No pude</button>
+                            </form>
+                        </article>
+                    {% endfor %}
+                </div>
+            </section>
         {% endif %}
 
-        {# ============ 2. LO QUE TENGO COMPROMETIDO ============ #}
+        {# ============ 2. LO QUE TENGO COMPROMETIDO ============
+         # La MISMA tarjeta que en «lo que hace falta», en estado «ya vas»: quien
+         # se apuntó reconoce la tarjeta que pulsó. Antes era una fila de otro
+         # componente y parecía otra cosa distinta.
+         #
+         # El botón de darse de baja vive AQUÍ y no en la portada: es donde está
+         # lo tuyo, y así «lo que hace falta» habla sólo de lo que falta. #}
         {% if my_signups is not empty %}
-            {% embed '_components/csa_card.html.twig' with {
-                title: 'A lo que te has apuntado',
-                icon: 'fa-check-square-o',
-                accent: 'sky'
-            } %}
-                {% block body %}
-                {% import '_macros/volunteering.html.twig' as vol %}
-                    {# El botón de darse de baja vive AQUÍ y no arriba: es donde
-                     # está lo tuyo, y así "Lo que hace falta" habla sólo de lo
-                     # que falta. #}
-                    <ul class="vol-list">
-                        {% for signup in my_signups %}
-                            <li class="vol-item">
-                                <div class="vol-item__main">
-                                    <h4 class="vol-item__title">{{ signup.offer.title }}</h4>
-                                    <div class="vol-item__meta">
-                                        <span><i class="fa fa-calendar" aria-hidden="true"></i>
-                                            {{ signup.startsAt|format_datetime('full', 'short', locale='es') }}</span>
-                                        {% if signup.offer.remote %}
-                                            <span><i class="fa fa-home" aria-hidden="true"></i> Desde casa</span>
-                                        {% elseif signup.offer.node %}
-                                            <span><i class="fa fa-map-marker" aria-hidden="true"></i> {{ signup.offer.node }}</span>
-                                        {% elseif signup.offer.place %}
-                                            <span><i class="fa fa-map-marker" aria-hidden="true"></i> {{ signup.offer.place.name }}</span>
-                                        {% elseif signup.offer.placeNote %}
-                                            <span><i class="fa fa-map-marker" aria-hidden="true"></i> {{ signup.offer.placeNote }}</span>
-                                        {% endif %}
-                                        {% if signup.companions > 0 %}
-                                            <span><i class="fa fa-users" aria-hidden="true"></i>
-                                                Vas con {{ signup.companions }} más</span>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                                <div class="vol-item__action">
-                                    <form method="post" action="{{ path('panel_volunteering_withdraw', {id: signup.shift.id}) }}">
-                                        <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_volunteering') }}">
-                                        <button type="submit" class="csa-btn csa-btn--secondary csa-btn--sm">No voy a poder ir</button>
-                                    </form>
-                                </div>
-                            </li>
-                        {% endfor %}
-                    </ul>
-                {% endblock %}
-            {% endembed %}
+            <section class="vol-group">
+                <div class="vol-group__head">
+                    <h4 class="vol-group__title">A lo que te has apuntado</h4>
+                    <span class="vol-group__n">{{ my_signups|length }}</span>
+                </div>
+
+                <div class="vol-tasks">
+                    {% for signup in my_signups %}
+                        {% include '_components/volunteering_task_card.html.twig' with {
+                            shift: signup.shift,
+                            mine: true,
+                            companions: signup.companions,
+                            my_node_id: null,
+                            my_category_ids: [],
+                            csrf: csrf_token('panel_volunteering')
+                        } only %}
+                    {% endfor %}
+                </div>
+            </section>
         {% endif %}
 
         {# ---- Horas de coordinar un área ----

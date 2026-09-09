@@ -149,6 +149,14 @@ class PanelVolunteeringController extends AbstractController
             // El id y no el nodo: la plantilla sólo necesita comparar, y pasarle
             // la entidad invita a navegar relaciones desde Twig.
             'my_node_id' => $node?->getId(),
+            // Las áreas que ha marcado. La tarjeta las usa para decir CON
+            // PALABRAS que un turno es de otra área —«no es de tus áreas, pero
+            // puedes venir»— en vez de bajarle el contraste, que es el lenguaje
+            // universal de «deshabilitado» y diría justo lo contrario.
+            'my_category_ids' => array_map(
+                static fn (VolunteerCategory $category): int => $category->getId(),
+                $partner->getVolunteerCategories()->toArray()
+            ),
         ] + $this->tabsContext($signups, $partner, $now));
     }
 

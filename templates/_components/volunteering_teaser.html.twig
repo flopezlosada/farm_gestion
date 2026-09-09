@@ -53,6 +53,7 @@
             {% include '_components/volunteering_task_card.html.twig' with {
                 shift: shift,
                 my_node_id: my_node_id|default(null),
+                my_category_ids: my_category_ids|default([]),
                 csrf: csrf_token('panel_volunteering')
             } only %}
         {% endfor %}

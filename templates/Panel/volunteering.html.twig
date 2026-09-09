@@ -42,7 +42,10 @@
          # el título y una línea de meta —peor presentación que el teaser de la
          # home, que es su resumen— y para saber si podías ir había que abrir la
          # tarea. La tarjeta trae los cinco datos que deciden y el botón. #}
-        {% set todos = urgent_shifts|merge(later_shifts)|merge(routine_shifts) %}
+        {# Las rutinas NO entran aquí: no se pintan como tarjetas sino como una
+         # fila plegada al pie, y el filtro trabaja sobre lo pintado. Contarlas
+         # dejaría el «Todas 7» prometiendo tarjetas que no están. #}
+        {% set todos = urgent_shifts|merge(later_shifts) %}
 
         {% embed '_components/csa_card.html.twig' with {
             title: 'Lo que hace falta',
@@ -52,12 +55,16 @@
             variant: 'hero'
         } %}
             {% block body %}
-                {% if todos is empty %}
+                {% if todos is empty and routine_shifts is empty %}
                     <p class="vol-empty">
                         Ahora mismo no hay ningún turno pendiente. Cuando haya algo que
                         necesite manos, aparecerá aquí.
                     </p>
                 {% else %}
+                    {# Los filtros sólo tienen sentido con tarjetas que filtrar:
+                     # con el día a día por toda compañía, una barra de filtros es
+                     # un control que no hace nada. #}
+                    {% if todos is not empty %}
                     {# ---- FILTROS ----
                      # Sólo los tres que tienen dato de verdad. «Sin experiencia»
                      # está en el diseño y no se pone: no hay campo que lo diga
@@ -101,20 +108,42 @@
                         Nada de eso ahora mismo. Prueba con «Todas» o mira el calendario.
                     </p>
 
+                    {% endif %}
+
                     {% include '_components/volunteering_group.html.twig' with {
                         title: 'Falta gente ya', hint: 'Sin cubrir y con la fecha encima', tone: 'urgent',
-                        shifts: urgent_shifts, total: urgent_total, my_node_id: my_node_id
+                        shifts: urgent_shifts, total: urgent_total, my_node_id: my_node_id, my_category_ids: my_category_ids
                     } only %}
                     {% include '_components/volunteering_group.html.twig' with {
                         title: 'Próximas semanas', hint: 'Hay hueco, pero conviene cerrarlo', tone: 'later',
-                        shifts: later_shifts, total: later_total, my_node_id: my_node_id
+                        shifts: later_shifts, total: later_total, my_node_id: my_node_id, my_category_ids: my_category_ids
                     } only %}
-                    {# El día a día, el último: se cubre solo casi siempre y no
-                     # tiene por qué competir con la faena del sábado. #}
-                    {% include '_components/volunteering_group.html.twig' with {
-                        title: 'Del día a día', hint: 'Un rato corto, todos los días', tone: 'routine',
-                        shifts: routine_shifts, total: routine_total, my_node_id: my_node_id
-                    } only %}
+                    {# ---- EL DÍA A DÍA, EN UNA LÍNEA ----
+                     # Y no como un tercer montón de tarjetas, que en móvil dejaba
+                     # el trabajo de verdad a cuatro scrolls de distancia. Son
+                     # turnos de una plaza y un rato corto —sacar al perro—: se
+                     # cubren solos casi siempre y quien los hace ya sabe que
+                     # existen. Enseñarlos con el mismo peso que una faena de
+                     # cuatro plazas era darles una importancia que no tienen.
+                     #
+                     # La fila entera es el enlace y mide 44px: se toca con el
+                     # pulgar sin apuntar. #}
+                    {% if routine_shifts is not empty %}
+                        <a class="vol-fold" href="{{ path('panel_volunteering_calendar') }}">
+                            <span class="vol-fold__body">
+                                <span class="vol-fold__title">Del día a día</span>
+                                <span class="vol-fold__hint">
+                                    Un rato corto, todos los días.
+                                    {% for shift in routine_shifts|slice(0, 2) %}
+                                        {{- ' ' }}{{ shift.offer.title }}{{ loop.last ? '.' : ',' }}
+                                    {%- endfor %}
+                                </span>
+                            </span>
+                            <span class="vol-fold__go">
+                                {{ routine_total }} turno{{ routine_total == 1 ? '' : 's' }} →
+                            </span>
+                        </a>
+                    {% endif %}
 
                     {# El calendario, al pie: aquí se asoman unos pocos turnos, y
                      # para comprometerse con "los viernes de agosto" hace falta

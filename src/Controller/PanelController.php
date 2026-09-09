@@ -179,6 +179,14 @@ class PanelController extends AbstractController
             'my_contribution' => $this->isGranted('FEATURE_VOLUNTEERING')
                 ? $contributions->forPartner($partner)
                 : null,
+            // Las áreas que ha marcado. La tarjeta las usa para decir con
+            // palabras que un turno es de otra área en vez de atenuarlo, que es
+            // el lenguaje de «deshabilitado» y diría lo contrario de lo que se
+            // quiere: que puede apuntarse igual.
+            'my_category_ids' => array_map(
+                static fn ($category) => $category->getId(),
+                $partner->getVolunteerCategories()->toArray()
+            ),
         ]);
     }
 
