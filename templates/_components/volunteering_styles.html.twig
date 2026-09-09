@@ -981,12 +981,16 @@
     /* Ya vas: el verde pasa al borde y al fondo, y el botón desaparece — no hay
        nada que pulsar salvo deshacer. Es el único estado que tiñe la tarjeta,
        y puede porque es el que uno tiene de uno en uno, no de nueve en nueve. */
-    .vol-task--mine { border-color: var(--csa-green); background: #f6faf1; }
+    /* SIN FONDO. El verde lavado en cuatro tarjetas seguidas teñía media
+       pantalla de un color que no aporta nada: que un turno sea tuyo ya lo dicen
+       el borde verde, el antetítulo «ya vas» y el botón de deshacer. Y con el
+       fondo puesto, la pantalla entera se veía de un solo color. */
+    .vol-task--mine { border-color: var(--csa-green); }
     /* EL PRÓXIMO, destacado sobre los otros a los que va: con todas iguales
        había que leer las cuatro fechas para saber cuál es el de esta semana. Un
        borde de 2px y un halo suave — no otro color, que el verde ya es el suyo:
        más peso del mismo. */
-    .vol-task--next { border-width: 2px; }
+    .vol-task--next { border-width: 2px; background: var(--csa-surface); }
     .csa-app .vol-task--next .vol-task__title { font-size: var(--csa-fs-xl); }
     /* A LO ANCHO DE LA REJILLA, que es lo que de verdad destaca. Con un borde
        algo más grueso y media columna, como las demás, había que fijarse para
@@ -1097,13 +1101,16 @@
 
        De contorno y no relleno: es destructivo —libera la plaza— y un botón rojo
        a lo ancho en cuatro tarjetas seguidas pesa más que el trabajo. */
+    /* CON FONDO, como «Me apunto»: dos botones a lo ancho, mismo sitio y misma
+       forma, y lo único que cambia es el color. Es lo que hace que las dos
+       pantallas se lean como la misma cosa. */
     .vol-task__undo {
         width: 100%; height: 44px; margin-top: var(--csa-sp-3);
-        border: 1.5px solid var(--csa-terracotta); border-radius: var(--csa-radius-md);
-        background: transparent; color: var(--csa-terracotta); cursor: pointer;
+        border: 0; border-radius: var(--csa-radius-md);
+        background: var(--csa-terracotta); color: #fff; cursor: pointer;
         font-family: var(--csa-sans); font-size: var(--csa-fs-base); font-weight: 600;
     }
-    .vol-task__undo:hover { background: var(--csa-terracotta-soft); }
+    .vol-task__undo:hover { opacity: 0.92; }
 
 
     /* ---- Las cuatro pestañas del voluntariado del socix ----

@@ -67,17 +67,31 @@
                     <a class="scal-nav__today" href="{{ path('panel_volunteering_calendar', keep) }}">Hoy</a>
                 {% endif %}
             </div>
+            {# ---- UNA SOLA FILA DE FILTROS, EXCLUYENTES ----
+             # Eran dos ejes mezclados en la misma tira: «sólo mis áreas / todas»
+             # por un lado y el área concreta por otro, cada uno con su propio
+             # activo. Se podían ver DOS pastillas negras a la vez —«Todas» y
+             # «Reparto»— diciendo cosas que se contradicen, y no había forma de
+             # saber qué estabas mirando.
+             #
+             # Ahora es un solo eje: o todas, o las tuyas, o un área. Una activa
+             # cada vez, y volver a pulsarla la quita. #}
             <div class="scal-nav__pills">
+                {% set sin_filtro = not only_mine and not current %}
+                <a class="scal-pill scal-pill--big{{ sin_filtro ? ' scal-pill--on' }}"
+                   href="{{ path('panel_volunteering_calendar', { mes: month|date('Y-m') }) }}">Todas</a>
+
                 {% if my_category_ids|length %}
-                    {# Par con estado real, «Todas» por defecto. #}
-                    <a class="scal-pill scal-pill--big{{ only_mine ? ' scal-pill--on' }}" href="{{ path('panel_volunteering_calendar', { mes: month|date('Y-m'), solo: 'mias' }) }}">Sólo mis áreas</a>
-                    <a class="scal-pill scal-pill--big{{ not only_mine ? ' scal-pill--on' }}" href="{{ path('panel_volunteering_calendar', { mes: month|date('Y-m') }) }}">Todas</a>
+                    <a class="scal-pill scal-pill--big{{ only_mine ? ' scal-pill--on' }}"
+                       href="{{ path('panel_volunteering_calendar', { mes: month|date('Y-m'), solo: 'mias' }) }}">Sólo mis áreas</a>
                 {% endif %}
-                {% if not only_mine and categories|length > 1 %}
+
+                {% if categories|length > 1 %}
                     <span class="scal-nav__sep"></span>
                     {% for category in categories %}
-                        <a class="scal-pill{{ current and current.id == category.id ? ' scal-pill--on' }}"
-                           href="{{ current and current.id == category.id
+                        {% set activa = current and current.id == category.id %}
+                        <a class="scal-pill{{ activa ? ' scal-pill--on' }}"
+                           href="{{ activa
                                ? path('panel_volunteering_calendar', { mes: month|date('Y-m') })
                                : path('panel_volunteering_calendar', { mes: month|date('Y-m'), tipo: category.id }) }}">{{ category.name }}</a>
                     {% endfor %}
