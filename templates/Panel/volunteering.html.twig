@@ -159,45 +159,27 @@
                     title: 'Próximas semanas', hint: 'Hay hueco, pero conviene cerrarlo', tone: 'later',
                     shifts: later_shifts, total: later_total, my_node_id: my_node_id, my_category_ids: my_category_ids
                 } only %}
-                {# ---- LO QUE QUEDA FUERA, UNA SOLA VEZ ----
-                 # La suma de los dos montones, con su enlace y su aire. Antes
-                 # iba dentro de cada montón, pegada al último botón: se leía
-                 # como el pie de esa tarjeta, no como la salida de la lista, y
-                 # con dos montones salía dos veces seguidas. #}
+                {# ---- LA SALIDA, UNA SOLA ----
+                 # Había DOS enlaces al cuadrante uno debajo del otro: «y 12
+                 # turnos más» y la fila del día a día. Los dos al mismo sitio.
+                 # Ahora es una sola frase que cuenta las dos cosas —lo que queda
+                 # de las tareas con fecha y las rutinas— y un solo enlace. #}
                 {% set fuera = (urgent_total - urgent_shifts|length) + (later_total - later_shifts|length) %}
-                {% if fuera > 0 %}
+                {% if fuera > 0 or routine_total > 0 %}
                     <p class="vol-more">
-                        <a href="{{ path('panel_volunteering_calendar') }}">
-                            Ver los otros {{ fuera }} turno{{ fuera == 1 ? '' : 's' }} en el cuadrante →
-                        </a>
+                        <span class="vol-more__what">
+                            {%- if fuera > 0 -%}
+                                Quedan {{ fuera }} turno{{ fuera == 1 ? '' : 's' }} más
+                            {%- endif -%}
+                            {%- if fuera > 0 and routine_total > 0 %}, y {% endif -%}
+                            {%- if routine_total > 0 -%}
+                                {%- if fuera == 0 %}Hay {% endif -%}
+                                {{ routine_total }} del día a día
+                                {%- if routine_shifts is not empty %} ({{ routine_shifts|first.offer.title|lower }}){% endif -%}
+                            {%- endif -%}.
+                        </span>
+                        <a href="{{ path('panel_volunteering_calendar') }}">Verlo todo en el cuadrante →</a>
                     </p>
-                {% endif %}
-
-                {# ---- EL DÍA A DÍA, EN UNA LÍNEA ----
-                 # Y no como un tercer montón de tarjetas, que en móvil dejaba
-                 # el trabajo de verdad a cuatro scrolls de distancia. Son
-                 # turnos de una plaza y un rato corto —sacar al perro—: se
-                 # cubren solos casi siempre y quien los hace ya sabe que
-                 # existen. Enseñarlos con el mismo peso que una faena de
-                 # cuatro plazas era darles una importancia que no tienen.
-                 #
-                 # La fila entera es el enlace y mide 44px: se toca con el
-                 # pulgar sin apuntar. #}
-                {% if routine_shifts is not empty %}
-                    <a class="vol-fold" href="{{ path('panel_volunteering_calendar') }}">
-                        <span class="vol-fold__body">
-                            <span class="vol-fold__title">Del día a día</span>
-                            <span class="vol-fold__hint">
-                                Un rato corto, todos los días.
-                                {% for shift in routine_shifts|slice(0, 2) %}
-                                    {{- ' ' }}{{ shift.offer.title }}{{ loop.last ? '.' : ',' }}
-                                {%- endfor %}
-                            </span>
-                        </span>
-                        <span class="vol-fold__go">
-                            {{ routine_total }} turno{{ routine_total == 1 ? '' : 's' }} →
-                        </span>
-                    </a>
                 {% endif %}
 
                 {# SIN un tercer enlace al cuadrante al pie. Llegó a haber tres
