@@ -95,6 +95,16 @@ class PanelVolunteeringController extends AbstractController
     private const MAX_PENDING = 3;
 
     /**
+     * Cuántos turnos propios se enseñan en «Mis turnos». Quien se apunta a los
+     * sábados de todo el otoño tendría diez tarjetas iguales; para verlos todos
+     * está el cuadrante.
+     */
+    private const MAX_MINE = 4;
+
+    /** Cuántas de las últimas cosas hechas se asoman en el resumen. */
+    private const MAX_LAST = 3;
+
+    /**
      * La portada: lo que hace falta, y nada más.
      *
      * Contesta UNA pregunta —¿dónde hago falta?— desde que lo demás tiene su
@@ -210,8 +220,10 @@ class PanelVolunteeringController extends AbstractController
 
         return $this->render('Panel/volunteering_mine.html.twig', [
             'partner' => $partner,
-            'next_signup' => $upcoming[0] ?? null,
-            'later_signups' => \array_slice($upcoming, 1),
+            // Con tope: quien se apunta a los sábados de todo el otoño tendría
+            // diez tarjetas iguales. Las demás, en el cuadrante.
+            'my_signups' => \array_slice($upcoming, 0, self::MAX_MINE),
+            'signups_total' => \count($upcoming),
             // Lo que ya pasó y aún no ha dicho si hizo. Es una pregunta concreta
             // con respuesta de un clic, y hasta que no la conteste esas horas no
             // las tiene nadie.
@@ -223,6 +235,10 @@ class PanelVolunteeringController extends AbstractController
                 $answered,
                 static fn (VolunteerSignup $signup): bool => true === $signup->getAttended()
             )),
+            // Las últimas, no sólo la cifra: un número solo es un dato sin
+            // carne, y con dos líneas debajo se ve de qué está hecho. El resto,
+            // en la pantalla de detalle.
+            'my_last' => \array_slice($answered, 0, self::MAX_LAST),
             'my_minutes' => $mine->minutes,
             // La mediana de quienes participan (no la media) y a quién se le
             // enseña. Las dos reglas viven en VolunteerContribution, que es

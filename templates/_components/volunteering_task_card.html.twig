@@ -67,7 +67,11 @@
      # tarjeta. #}
     <p class="vol-task__kicker{% if apuntado %} vol-task__kicker--mine{% endif %}">
         {%- if apuntado -%}
-            Ya vas
+            {# El próximo lo dice él mismo aquí, en vez de partir la lista en dos
+             # secciones: «tu próximo turno» y «después de ése» eran dos
+             # encabezados para una sola lista ordenada por fecha, y el primero
+             # tenía siempre exactamente un elemento. #}
+            {{- next|default(false) ? 'Tu próximo turno' : 'Ya vas' -}}
         {%- else -%}
             {%- for category in areas|slice(0, 1) %}{{ category.name }}{% endfor -%}
             {%- if de_otra_area %}<span class="vol-task__aside"> · no es de tus áreas, pero puedes venir</span>{% endif -%}
