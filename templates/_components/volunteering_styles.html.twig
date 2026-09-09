@@ -1060,7 +1060,14 @@
     /* ---- Las cuatro pestañas del voluntariado del socix ----
        Sobre el componente canónico (.csa-tabs--folder), que ya envuelve solo por
        debajo de 768px. Aquí sólo lo que es propio de esta pantalla. */
-    .vol-tabs { margin-bottom: var(--csa-sp-5); }
+    /* A LA IZQUIERDA, no centradas. El componente canónico centra con
+       `width: fit-content; margin: 0 auto`, que va bien en Ajustes —una rejilla
+       simétrica— pero aquí deja los rótulos flotando en mitad de la pantalla,
+       lejos del contenido que encabezan y con el ojo saltando de un lado a otro
+       al bajar. La navegación de una sección se lee donde empieza el texto. */
+    .vol-tabs {
+        width: 100%; margin: 0 0 var(--csa-sp-5); justify-content: flex-start;
+    }
     /* Lo que hay por confirmar SÍ tiene que verse: es una pregunta con respuesta
        de un clic, y hasta que no se conteste esas horas no las tiene nadie. El
        gris del contador canónico —pensado para "Quién viene · 3"— aquí se pierde. */
@@ -1127,6 +1134,38 @@
         font-family: var(--csa-sans); font-size: var(--csa-fs-base); font-weight: 600;
     }
     .vol-task__answer:hover { background: var(--csa-surface-alt); }
+
+    /* ---- Mis áreas ----
+       Sin tarjeta: la pantalla ES el bloque. Con una csa-card alrededor había
+       dos títulos para lo mismo —«Mis áreas» en la pestaña y «Qué tareas te
+       interesan» en la cabecera de la tarjeta— y un icono y una banda gris para
+       envolver dos párrafos. */
+    .vol-areas { max-width: 54ch; }
+    .csa-app .vol-areas__state {
+        margin: 0;
+        font-size: var(--csa-fs-md); line-height: var(--csa-lh-snug); color: var(--csa-ink);
+    }
+    .vol-areas__note {
+        margin: var(--csa-sp-2) 0 0;
+        font-size: var(--csa-fs-sm); line-height: var(--csa-lh-normal); color: var(--csa-ink-soft);
+    }
+    /* La salida, separada del resto por una regla: no es una casilla más de la
+       lista de áreas, es lo contrario de todas ellas. */
+    .vol-areas__out {
+        margin-top: var(--csa-sp-4); padding-top: var(--csa-sp-4);
+        border-top: 1px solid var(--csa-rule);
+    }
+    .vol-areas__out-hint {
+        margin: 6px 0 0 30px;
+        font-size: var(--csa-fs-sm); color: var(--csa-ink-muted);
+    }
+    .vol-areas__save {
+        height: 44px; margin-top: var(--csa-sp-4); padding: 0 var(--csa-sp-6);
+        border: 0; border-radius: var(--csa-radius-md); cursor: pointer;
+        background: var(--csa-green); color: #fff;
+        font-family: var(--csa-sans); font-size: var(--csa-fs-base); font-weight: 600;
+    }
+    .vol-areas__save:hover { opacity: 0.92; }
 
     /* ---- El día a día, plegado en una fila ----
        Misma regla que un montón (línea arriba, título en versalitas) pero sin
